@@ -1,0 +1,103 @@
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import type { FileContext, SkillInfo } from '../../shared/types'
+import { invoke } from './ipc'
+import { useWorkspace } from './workspace'
+import { readBuffer, readSelection } from './editorBuffers'
+import { buildComposerContext } from '../../shared/composerContext'
+import { notifyError } from './Notifications'
+import { useAppSettings } from './AppSettings'
+import { openReview } from './reviews'
+
+/** Drag payload for a file dragged from the Explorer into a composer: JSON `{ repoId, path }`. */
+export const FILE_DRAG_TYPE = 'application/x-ramu-file'
+/** Most files that can ride along as dropped context on one message. */
+export const MAX_PINNED_FILES = 20
+
+interface Choice { id: string; label: string; description: string; kind: 'Command' | 'Skill' | 'File'; insertion?: string; file?: { repoId: string; path: string }; action?: () => void }
+export function useComposerSuggestions(value: string, caret: number, scopeId?: string) {
+  const listId = useId()
+  const ws = useWorkspace(), scope = scopeId ?? ws.ui.activeTaskId
+  const { preferences } = useAppSettings()
+  const [files, setFiles] = useState<{ repoId: string; path: string }[]>([]), [skills, setSkills] = useState<SkillInfo[]>([])
+  const [loading, setLoading] = useState(false), [loadError, setLoadError] = useState<string | null>(null)
+  const [selected, setSelected] = useState(0), [dismissed, setDismissed] = useState<string | null>(null)
+  const [mentions, setMentions] = useState<{ file: { repoId: string; path: string }; insertion: string }[]>([])
+  // Files dropped on the chat ride along as chips above the text, not as text in the box.
+  const [pinned, setPinned] = useState<{ repoId: string; path: string }[]>([])
+  const prefix = value.slice(0, caret), trigger = prefix.match(/(?:^|\s)([@/])([^\s]*)$/)
+  const mode = trigger?.[1], query = trigger?.[2]?.toLowerCase() ?? ''
+  const signature = `${scope}:${caret}:${mode}:${query}`, visible = !!mode && dismissed !== signature
+  useEffect(() => { setSelected(0); setDismissed(null) }, [scope, mode, query])
+  useEffect(() => { setFiles([]); setSkills([]); setMentions([]); setPinned([]) }, [scope])
+  useEffect(() => {
+    if (!visible || !scope) return
+    let disposed = false
+    setLoading(true); setLoadError(null)
+    void Promise.all([invoke('files.all', scope), invoke('skills.list', scope)]).then(([f, s]) => { if (!disposed) { setFiles(f); setSkills(s) } }, (e) => { if (!disposed) setLoadError(String(e)) }).finally(() => { if (!disposed) setLoading(false) })
+    return () => { disposed = true }
+  }, [scope, mode])
+  const repoName = (repoId: string) => Object.values(ws.repos).flat().find((r) => r.id === repoId)?.name ?? repoId
+  const choices = useMemo(() => {
+    const commands: Choice[] = [
+      { id: 'new', label: '/new', description: 'Start a new chat', kind: 'Command', action: () => ws.newTask() },
+      { id: 'schedule', label: '/schedule', description: 'Create a schedule through the agent', kind: 'Command', insertion: 'Create a schedule for: ' },
+      { id: 'schedules', label: '/schedules', description: 'Open schedules and run history', kind: 'Command', action: () => ws.setSidebar('schedules') },
+      { id: 'changes', label: '/changes', description: 'Open the chat\'s changed files', kind: 'Command', action: () => { void invoke('reviews.list').then((reviews) => { const review = reviews.find((r) => r.taskId === scope); if (review) openReview(ws, { id: review.id, taskId: review.taskId }); else notifyError('This chat has no recorded file changes yet.', 'Changes') }) } },
+      { id: 'recap', label: '/recap', description: 'Open your daily recap', kind: 'Command', action: () => ws.showHome() },
+      { id: 'settings', label: '/settings', description: 'Open app settings', kind: 'Command', action: () => window.dispatchEvent(new Event('ramu:settings')) },
+      { id: 'clear', label: '/clear', description: 'Clear this draft', kind: 'Command', insertion: '' },
+    ]
+    const options: Choice[] = mode === '@' ? files.map((file) => ({ id: `${file.repoId}:${file.path}`, label: `${repoName(file.repoId)}/${file.path}`, description: 'Add file context', kind: 'File', insertion: `@"${repoName(file.repoId)}/${file.path}" `, file })) : [...commands, ...skills.map((s): Choice => ({ id: `skill:${s.path}`, label: `/${s.name}`, description: s.description, kind: 'Skill', insertion: `$${s.name} ` }))]
+    return options.filter((c) => `${c.label} ${c.description}`.toLowerCase().includes(query)).slice(0, 30)
+  }, [mode, query, files, skills, ws])
+  const hydrate = (): FileContext[] => {
+    const state = scope ? ws.taskUi[scope] : undefined
+    return buildComposerContext({
+      views: state?.views ?? [], activeViewId: state?.activeViewId ?? null,
+      explicitFiles: [...pinned, ...mentions.filter((mention) => value.includes(mention.insertion.trim())).map((mention) => mention.file)],
+      includeTabContext: preferences.includeTabContext,
+      readBuffer: (file) => scope ? readBuffer(ws.workspaceOf(scope), file.repoId, file.path) : undefined,
+      readSelection,
+    })
+  }
+  const mention = (file: { repoId: string; path: string }): string => {
+    const insertion = `@"${repoName(file.repoId)}/${file.path}" `
+    setMentions((m) => m.some((entry) => entry.insertion === insertion) ? m : [...m, { file, insertion }])
+    return insertion
+  }
+  const pinnedNow = useRef(pinned); pinnedNow.current = pinned
+  /** Adds files up to the limit and says how many did not fit. */
+  const pinMany = (files: { repoId: string; path: string }[]): number => {
+    const next = [...pinnedNow.current]; let dropped = 0
+    for (const file of files) {
+      if (next.some((entry) => entry.repoId === file.repoId && entry.path === file.path)) continue
+      if (next.length >= MAX_PINNED_FILES) { dropped++; continue }
+      next.push(file)
+    }
+    pinnedNow.current = next; setPinned(next)
+    return dropped
+  }
+  const unpin = (file: { repoId: string; path: string }) => setPinned((current) => current.filter((entry) => entry.repoId !== file.repoId || entry.path !== file.path))
+  return { listId, visible, choices, mention, pinned, pinMany, scope, unpin, clearPinned: () => setPinned([]), selected: Math.min(selected, Math.max(0, choices.length - 1)), loading, loadError, hydrate, repoName,
+    move: (delta: number) => setSelected((i) => (i + delta + choices.length) % Math.max(1, choices.length)),
+    dismiss: () => setDismissed(signature),
+    choose: (choice: Choice) => {
+      const start = prefix.length - (trigger?.[2]?.length ?? 0) - 1
+      const insertion = choice.insertion ?? ''
+      if (choice.file) setMentions((m) => [...m, { file: choice.file!, insertion }])
+      choice.action?.(); setDismissed(signature)
+      return { value: value.slice(0, start) + insertion + value.slice(caret), caret: start + insertion.length }
+    },
+  }
+}
+export function ComposerSuggestions({ suggestions, onChoose }: { suggestions: ReturnType<typeof useComposerSuggestions>; onChoose: (index: number) => void }) {
+  useEffect(() => { document.getElementById(`${suggestions.listId}-${suggestions.selected}`)?.scrollIntoView({ block: 'nearest' }) }, [suggestions.listId, suggestions.selected])
+  return <div className="composer-suggestions" role="listbox" id={suggestions.listId} aria-label="Commands, skills, and files">
+    {suggestions.loading && <div className="suggestion-status muted small">Loading commands, skills and files…</div>}
+    {suggestions.loadError && <div className="suggestion-status error small">{suggestions.loadError}</div>}
+    {suggestions.choices.map((choice, i) => <Button type="button" key={choice.id} id={`${suggestions.listId}-${i}`} role="option" aria-selected={i === suggestions.selected} className={i === suggestions.selected ? 'selected' : ''} onMouseDown={(e) => e.preventDefault()} onClick={() => onChoose(i)}><span><strong>{choice.label}</strong><span className="muted small block">{choice.description}</span></span><Badge variant="outline" className="chip">{choice.kind}</Badge></Button>)}
+    {!suggestions.loading && !suggestions.choices.length && <div className="suggestion-status muted">No matching commands, skills, or files.</div>}
+  </div>
+}

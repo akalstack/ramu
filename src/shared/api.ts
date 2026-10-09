@@ -1,0 +1,243 @@
+import type { ProviderConfiguration, ProviderStatus } from './providers'
+// The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
+import type {
+  PullMode,
+  ChangeReview, ChangeFile, ReviewFileState, ReviewComment, UndoPreview, FileContext, SkillInfo, ScheduleInput, ScheduleRule, Schedule, ScheduleRun, RecapSnapshot, BackgroundStatus,
+  SearchOptions,
+  SearchResults,
+  ReplaceFilePreview,
+  AppPreferences,
+  AgentEvent,
+  Attachment,
+  AgentSettings,
+  ModelPreferences,
+  ProviderCatalog,
+  AgentScope,
+  FolderInspection,
+  AgentSessionInfo,
+  CreateTaskInput,
+  DiffContents,
+  DirEntry,
+  FileContent,
+  GitStatus,
+  GitCommit,
+  GitCommitFile,
+  GitStash,
+  GitBranchInfo,
+  CommitDraft,
+  Project,
+  Repository,
+  RepositoryBinding,
+  SaveResult,
+  FormatResult,
+  CompletionRequest,
+  NextEditRequest,
+  NextEditResult,
+  LspCompletionDetail,
+  LspDiagnostics,
+  LspStatus,
+  LspCompletionList,
+  LspHover,
+  LspLocation,
+  LspSignatureHelp,
+  CompletionResult,
+  CompletionStatus,
+  PullProgress,
+  LintResult,
+  Task,
+  TaskUiState,
+  WorkspaceUiState,
+  WorktreePlanEntry,
+  WorktreeWorkspace,
+} from './types'
+
+export interface TerminalInfo {
+  id: string
+  taskId: string
+  repoId: string | null
+  cwd: string
+  exited: boolean
+}
+
+export interface RamuMethods {
+  'reviews.list'(sessionId?: string): ChangeReview[]
+  'reviews.get'(id: string): ChangeReview
+  'reviews.inspect'(id: string): ReviewFileState[]
+  'reviews.compareCurrent'(id: string, fileId: string): ChangeFile
+  'reviews.locate'(id: string, fileId: string, path: string): void
+  'reviews.comment'(id: string, comment: Pick<ReviewComment, 'fileId' | 'side' | 'line' | 'endLine' | 'text' | 'scope'>, commentId?: string): ChangeReview
+  'reviews.select'(id: string, commentIds: string[], selected: boolean): ChangeReview
+  'reviews.reopenComment'(id: string, commentId: string): ChangeReview
+  'reviews.reply'(id: string, commentId: string, text: string, replyId?: string): ChangeReview
+  'reviews.removeReply'(id: string, commentId: string, replyId: string): ChangeReview
+  'reviews.removeComment'(id: string, commentId: string): ChangeReview
+  'reviews.resolveComment'(id: string, commentId: string): ChangeReview
+  'reviews.sendComments'(id: string, commentIds: string[], note?: string, attachmentIds?: string[]): ChangeReview
+  'reviews.ai'(id: string): ChangeReview
+  'reviews.markReviewed'(id: string, reviewed: boolean): ChangeReview
+  'reviews.undoPreview'(id: string): UndoPreview
+  'reviews.undoApply'(token: string, fileIds: string[]): ChangeReview
+  'completion.complete'(request: CompletionRequest): CompletionResult
+  'completion.cancel'(requestId: string): void
+  'completion.nextEdit'(request: NextEditRequest): NextEditResult
+  'completion.status'(): CompletionStatus
+  'completion.setKey'(key: string | null): void
+  'completion.pull'(model: string): void
+  'completion.cancelPull'(model: string): void
+  'background.status'(): BackgroundStatus
+  'background.stop'(): void
+  'background.start'(): void
+  'background.login'(enabled: boolean): void
+  'skills.list'(taskId: string): SkillInfo[]
+  'schedules.list'(): Schedule[]
+  'schedules.save'(input: ScheduleInput, id?: string): Schedule
+  'schedules.pause'(id: string, paused: boolean): Schedule
+  'schedules.delete'(id: string): void
+  'schedules.runNow'(id: string): ScheduleRun
+  'schedules.runs'(id?: string): ScheduleRun[]
+  'schedules.preview'(rule: ScheduleRule, timezone: string): number[]
+  'recaps.get'(): RecapSnapshot
+  'recaps.refresh'(): RecapSnapshot
+  'recaps.act'(id: string, action: 'open' | 'done' | 'dismissed' | 'snoozed'): void
+  'projects.list'(): Project[]
+  'projects.create'(name: string): Project
+  'projects.inspect'(dir: string): FolderInspection
+  'projects.addFolder'(dir: string): { project: Project; repositories: Repository[] }
+  'repos.list'(projectId: string): Repository[]
+  'repos.add'(projectId: string, dir: string): Repository
+  'repos.pick'(purpose?: 'project' | 'repository'): string | null
+  'workspaces.list'(): WorktreeWorkspace[]
+  'tasks.list'(): Task[]
+  'tasks.plan'(projectId: string, title: string, repoIds: string[]): WorktreePlanEntry[]
+  'tasks.create'(input: CreateTaskInput, plan?: WorktreePlanEntry[]): Task
+  'tasks.setup'(taskId: string): RepositoryBinding[]
+  'tasks.rename'(taskId: string, title: string): Task
+  /** AI-written title. An automatic call leaves a title the user typed alone; `force` replaces it. */
+  'tasks.generateTitle'(taskId: string, settings: AgentSettings, force?: boolean): Task
+  'tasks.archive'(taskId: string, archived: boolean): Task
+  'tasks.pin'(taskId: string, pinned: boolean): Task
+  'tasks.delete'(taskId: string, removeWorktrees: boolean): void
+  'projects.rename'(projectId: string, name: string): Project
+  'projects.reorder'(projectIds: string[]): Project[]
+  'projects.remove'(projectId: string): void
+  'projects.reveal'(projectId: string): void
+  'repos.remove'(repoId: string): void
+  'tasks.bindings'(taskId: string): RepositoryBinding[]
+  'settings.models.get'(): ModelPreferences | null
+  'providers.status'(configuration?: ProviderConfiguration, checkLatest?: boolean): Promise<ProviderStatus[]>
+  'providers.updates'(): Promise<ProviderStatus[]>
+  'providers.dismissUpdate'(provider: ProviderStatus['provider'], binary: string, latestVersion: string): void
+  'providers.pickBinary'(): string | null
+  'settings.app.get'(): AppPreferences
+  'settings.app.set'(preferences: AppPreferences): void
+  'settings.models.set'(preferences: ModelPreferences): void
+  'ui.get'(): { workspace: WorkspaceUiState; tasks: Record<string, TaskUiState> }
+  'ui.setWorkspace'(ui: WorkspaceUiState): void
+  'ui.setTask'(taskId: string, ui: TaskUiState): void
+  'files.search'(taskId: string, options: SearchOptions): SearchResults
+  'files.replacePreview'(taskId: string, options: SearchOptions, replacement: string): ReplaceFilePreview[]
+  'files.replaceApply'(taskId: string, options: SearchOptions, replacement: string, expected: ReplaceFilePreview[]): void
+  'files.create'(taskId: string, repoId: string, path: string, kind: 'file' | 'dir'): void
+  'files.rename'(taskId: string, repoId: string, path: string, destination: string): void
+  'files.copy'(taskId: string, repoId: string, path: string, destination: string): void
+  'files.trash'(taskId: string, repoId: string, path: string): void
+  'files.reveal'(taskId: string, repoId: string, path: string): void
+  'files.list'(taskId: string, repoId: string, path: string): DirEntry[]
+  'files.read'(taskId: string, repoId: string, path: string): FileContent
+  'files.image'(taskId: string, repoId: string, path: string): string
+  'files.write'(taskId: string, repoId: string, path: string, content: string, baseHash: string | null): SaveResult
+  'files.format'(taskId: string, repoId: string, path: string, content: string): FormatResult
+  'files.lint'(taskId: string, repoId: string, path: string, content: string, scope: 'buffer' | 'saved'): LintResult
+  'lsp.open'(taskId: string, repoId: string, path: string, text: string): { server: string | null }
+  'lsp.change'(taskId: string, repoId: string, path: string, text: string): void
+  'lsp.close'(taskId: string, repoId: string, path: string): void
+  'lsp.completion'(requestId: string, taskId: string, repoId: string, path: string, line: number, column: number, trigger: string | null): LspCompletionList
+  'lsp.resolve'(requestId: string, taskId: string, repoId: string, path: string, item: unknown): LspCompletionDetail | null
+  'lsp.hover'(requestId: string, taskId: string, repoId: string, path: string, line: number, column: number): LspHover | null
+  'lsp.definition'(requestId: string, taskId: string, repoId: string, path: string, line: number, column: number): LspLocation[]
+  'lsp.signature'(requestId: string, taskId: string, repoId: string, path: string, line: number, column: number, trigger: string | null): LspSignatureHelp | null
+  'lsp.cancel'(requestId: string): void
+  'git.status'(taskId: string, repoId: string): GitStatus
+  'git.diff'(taskId: string, repoId: string, path: string, staged: boolean): DiffContents
+  'git.stage'(taskId: string, repoId: string, paths: string[]): void
+  'git.unstage'(taskId: string, repoId: string, paths: string[]): void
+  'git.discard'(taskId: string, repoId: string, paths: string[]): void
+  'git.undoCommit'(taskId: string, repoId: string, expectedHead: string): void
+  'git.createBranch'(taskId: string, repoId: string, name: string): void
+  'git.deleteBranch'(taskId: string, repoId: string, name: string): void
+  'git.stashes'(taskId: string, repoId: string): GitStash[]
+  'git.stash'(taskId: string, repoId: string, name: string, stagedOnly?: boolean): void
+  'git.popStash'(taskId: string, repoId: string, oid: string): void
+  'git.applyStash'(taskId: string, repoId: string, oid: string): void
+  'git.dropStash'(taskId: string, repoId: string, oid: string): void
+  'git.commit'(taskId: string, repoId: string, message: string, fingerprint?: string): string
+  'git.history'(taskId: string, repoId: string): GitCommit[]
+  'git.branches'(taskId: string, repoId: string): GitBranchInfo[]
+  'git.checkout'(taskId: string, repoId: string, branch: string): void
+  'git.fetch'(taskId: string, repoId: string): void
+  'git.pull'(taskId: string, repoId: string, mode?: PullMode): void
+  'git.sync'(taskId: string, repoId: string): void
+  'git.continueOperation'(taskId: string, repoId: string): void
+  'git.abortOperation'(taskId: string, repoId: string): void
+  'git.push'(taskId: string, repoId: string): void
+  'git.commitFiles'(taskId: string, repoId: string, oid: string): GitCommitFile[]
+  'git.commitFileDiff'(taskId: string, repoId: string, oid: string, path: string): DiffContents
+  'git.commitDetails'(taskId: string, repoId: string, oid: string): string
+  'git.compareUpstream'(taskId: string, repoId: string): string
+  'git.generateCommit'(taskId: string, repoId: string, settings: AgentSettings): CommitDraft
+  'term.open'(taskId: string, repoId: string | null, cols: number, rows: number): TerminalInfo
+  'term.openSetup'(cols: number, rows: number): TerminalInfo
+  'term.write'(termId: string, data: string): void
+  'term.resize'(termId: string, cols: number, rows: number): void
+  'term.close'(termId: string): void
+  'editor.menu'(options: { selection: string; editable: boolean; comment: boolean; definition: boolean; references: boolean; rename: boolean; format: boolean }, point: { x: number; y: number }): 'cut' | 'undo' | 'redo' | 'selectAll' | 'find' | 'definition' | 'references' | 'rename' | 'format' | 'comment' | { paste: string } | null
+  'clipboard.write'(text: string): void
+  'term.menu'(selection: string, point: { x: number; y: number }): 'selectAll' | 'clear' | { paste: string } | null
+  'agent.list'(taskId: string): AgentSessionInfo[]
+  'agent.get'(sessionId: string): AgentSessionInfo
+  'agent.events'(sessionId: string): AgentEvent[]
+  'agent.scope'(taskId: string): AgentScope
+  'attachments.pick'(): Attachment[]
+  'attachments.add'(name: string, base64: string): Attachment
+  'attachments.text'(attachmentId: string): string | null
+  'attachments.preview'(id: string): string | null
+  'attachments.menu'(id: string, removable: boolean, point: { x: number; y: number }): 'preview' | 'remove' | null
+  'attachments.save'(id: string): boolean
+  'attachments.copy'(id: string): void
+  'attachments.reveal'(id: string): void
+  'agent.start'(taskId: string, prompt: string, settings?: AgentSettings, attachments?: string[], context?: FileContext[]): AgentSessionInfo
+  'agent.catalog'(refresh?: boolean): ProviderCatalog[]
+  'agent.configure'(sessionId: string, settings: AgentSettings): AgentSessionInfo
+  'files.all'(taskId: string): { repoId: string; path: string }[]
+  'files.resolveLink'(taskId: string, href: string): { repoId: string; path: string; line?: number; column?: number } | null
+  'agent.send'(sessionId: string, text: string): void
+  'agent.submit'(sessionId: string, text: string, mode: 'queue' | 'steer', attachments?: string[], context?: FileContext[]): void
+  'agent.removeQueued'(sessionId: string, messageId: string): void
+  'agent.resumeQueue'(sessionId: string): void
+  'agent.interrupt'(sessionId: string): void
+  /** Opening message for a new chat that continues this one, carrying the transcript as context. */
+  'agent.continuationPrompt'(sessionId: string): string
+  'agent.stop'(sessionId: string): void
+  'agent.replyPermission'(sessionId: string, requestId: string, allow: boolean, message?: string): void
+  'agent.replyQuestion'(sessionId: string, requestId: string, answers: Record<string, string>): void
+}
+
+export type PushEvents = {
+  'automation:changed': Record<string, never>
+  'background:connection': { connected: boolean }
+  'providers:updates': ProviderStatus[]
+  'notify:inapp': { sessionId: string; taskId: string; kind: 'done' | 'input' | 'failed'; title: string; body: string }
+  'notify:open': { sessionId: string; taskId: string }
+  'agent:event': { sessionId: string; event: AgentEvent; seq?: number }
+  'term:data': { id: string; data: string }
+  'term:exit': { id: string; code: number }
+  'fs:changed': { cwd: string; path: string }
+  'lsp:diagnostics': LspDiagnostics
+  'lsp:status': LspStatus
+  'completion:pull': PullProgress
+}
+
+export interface RamuBridge {
+  invoke<M extends keyof RamuMethods>(method: M, ...args: Parameters<RamuMethods[M]>): Promise<Awaited<ReturnType<RamuMethods[M]>>>
+  on<E extends keyof PushEvents>(event: E, listener: (payload: PushEvents[E]) => void): () => void
+}

@@ -1,0 +1,24 @@
+import type { AgentProvider } from './types'
+
+export const AGENT_PROVIDERS = ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as const
+export const providerName = (provider: AgentProvider): string => ({ 'claude-code': 'Claude', codex: 'Codex', opencode: 'OpenCode', cursor: 'Cursor', antigravity: 'Antigravity' })[provider]
+export const isAcpProvider = (provider: AgentProvider): provider is 'cursor' | 'antigravity' => provider === 'cursor' || provider === 'antigravity'
+
+export type ProviderConfiguration = Partial<Record<AgentProvider, { binary: string; harness?: string }>>
+export interface ProviderStatus {
+  provider: AgentProvider
+  binary: string
+  installed: boolean
+  version: string | null
+  latestVersion: string | null
+  updateAvailable: boolean
+  checkedAt: string | null
+  error?: string
+  versionError?: string
+  docsUrl: string
+  installCommand: string | null
+  updateCommand: string | null
+  setupCommand: string | null
+  setupNote: string
+  downloadUrl?: string
+}

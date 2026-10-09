@@ -1,0 +1,108 @@
+name: Draft release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing pushed tag matching package.json and releases/<tag>.md
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require a version tag and release notes
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          node --input-type=module -e "import { versionOf } from './scripts/release.mjs'; const t=process.env.RELEASE_TAG; if(t !== 'v'+versionOf(t)) throw new Error('Expected a v-prefixed version tag')"
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "$RELEASE_TAG^{commit}")"
+          node scripts/release.mjs verify "$RELEASE_TAG"
+  build:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg
+      - run: pnpm make --arch=${{ matrix.arch }}
+      - name: Smoke test packaged macOS app
+        if: runner.os == 'macOS'
+        env:
+          RAMU_PACKAGED_EXECUTABLE: ${{ github.workspace }}/dist/Ramu-darwin-${{ matrix.arch }}/Ramu.app/Contents/MacOS/Ramu
+        run: pnpm test:e2e
+      - run: pnpm release:assets ${{ matrix.platform }} ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/release/*
+          if-no-files-found: error
+          retention-days: 14
+  draft:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installers-*
+          path: dist/release
+          merge-multiple: true
+      - name: Verify downloaded checksums
+        working-directory: dist/release
+        run: sha256sum --check SHA256SUMS-*.txt
+      - name: Create or update a draft, then attach installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if gh release view "$RELEASE_TAG" --json isDraft > /tmp/ramu-release.json; then
+            node -e "if (!JSON.parse(require('fs').readFileSync('/tmp/ramu-release.json')).isDraft) throw new Error('Refusing to change a published release')"
+            gh release edit "$RELEASE_TAG" --title "Ramu $RELEASE_TAG" --notes-file "releases/$RELEASE_TAG.md"
+          else
+            prerelease=()
+            if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=(--prerelease); fi
+            gh release create "$RELEASE_TAG" --draft --verify-tag --title "Ramu $RELEASE_TAG" --notes-file "releases/$RELEASE_TAG.md" "${prerelease[@]}"
+          fi
+          gh release upload "$RELEASE_TAG" dist/release/* --clobber
+          echo "Draft ready for review. Publish it manually from GitHub Releases."

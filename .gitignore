@@ -1,0 +1,16 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+*.tsbuildinfo
+output/
+coverage/
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.p8
+.ramu-*
+src/renderer/_debug-*

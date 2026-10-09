@@ -1,0 +1,31 @@
+/* Tailwind utilities without preflight: Monaco and xterm own their resets. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+@source "./";
+@theme inline {
+  --color-background: var(--canvas);
+  --color-foreground: var(--text);
+  --color-card: var(--raised-2);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--raised);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-ink);
+  --color-secondary: var(--raised);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--raised);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--pressed);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--bad);
+  --color-border: var(--line-strong);
+  --color-input: var(--line-strong);
+  --color-ring: var(--accent);
+  /* shadcn's own scale (radius 0.625rem): menus, popovers and inputs use these as designed. */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+}

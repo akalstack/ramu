@@ -1,0 +1,72 @@
+import { Check, CircleAlert, LoaderCircle } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import type { GitBranchInfo, GitStatus, RepositoryBinding } from '../../shared/types'
+import { Checkbox } from '@/components/ui/checkbox'
+import { BranchPicker } from './GitControls'
+import { invoke } from './ipc'
+import { Dialog } from './Menu'
+import { errorText } from './TaskPane'
+import { useWorkspace } from './workspace'
+
+type Row = { status: GitStatus | null; branches: GitBranchInfo[]; result?: 'running' | 'done' | string }
+
+/** Sync every repository in the workspace in one go: see each branch and state first, switch branches, then pull and push the ones you tick. */
+export function WorkspaceSyncDialog({ taskId, bindings, onClose }: { taskId: string; bindings: RepositoryBinding[]; onClose: () => void }) {
+  const ws = useWorkspace()
+  const [rows, setRows] = useState<Record<string, Row>>({})
+  const [picked, setPicked] = useState<Set<string> | null>(null)
+  const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [finished, setFinished] = useState(false)
+  const patch = (repoId: string, change: Partial<Row>) => setRows((current) => ({ ...current, [repoId]: { status: null, branches: [], ...current[repoId], ...change } }))
+  const load = useCallback(async (binding: RepositoryBinding) => {
+    const [status, branches] = await Promise.allSettled([invoke('git.status', taskId, binding.repoId), invoke('git.branches', taskId, binding.repoId)])
+    patch(binding.repoId, { status: status.status === 'fulfilled' ? status.value : null, branches: branches.status === 'fulfilled' ? branches.value : [] })
+  }, [taskId])
+  useEffect(() => { void Promise.all(bindings.map(load)) }, [bindings, load])
+  const canSync = (status: GitStatus | null) => !!status && !status.operation && !status.detached && !!status.branch && !!status.remote
+  // Until the user chooses, every repository that can sync is ticked.
+  const selection = picked ?? new Set(bindings.filter((b) => canSync(rows[b.repoId]?.status ?? null)).map((b) => b.repoId))
+  const toggle = (repoId: string) => { const next = new Set(selection); next.has(repoId) ? next.delete(repoId) : next.add(repoId); setPicked(next) }
+  const unsaved = Object.values(ws.dirty).some(Boolean)
+  const switchBranch = async (binding: RepositoryBinding, branch: string) => {
+    if (unsaved) { setError('Save or close unsaved editor buffers before switching branches or pulling.'); return }
+    setError(null); patch(binding.repoId, { result: undefined })
+    try { await invoke('git.checkout', taskId, binding.repoId, branch) } catch (e) { patch(binding.repoId, { result: errorText(e) }) }
+    await load(binding); window.dispatchEvent(new Event('ramu:git-updated'))
+  }
+  const chosen = bindings.filter((b) => selection.has(b.repoId) && canSync(rows[b.repoId]?.status ?? null))
+  const run = async () => {
+    if (unsaved) { setError('Save or close unsaved editor buffers before switching branches or pulling.'); return }
+    setBusy(true); setError(null)
+    // Repositories are independent (the server locks each checkout), so they sync side by side, a few at a time.
+    const queue = [...chosen]
+    const worker = async () => {
+      for (let binding = queue.shift(); binding; binding = queue.shift()) {
+        patch(binding.repoId, { result: 'running' })
+        try { await invoke('git.sync', taskId, binding.repoId); patch(binding.repoId, { result: 'done' }) } catch (e) { patch(binding.repoId, { result: errorText(e) }) }
+        await load(binding)
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker))
+    setBusy(false); setFinished(true); window.dispatchEvent(new Event('ramu:git-updated'))
+  }
+  return <Dialog title="Sync workspace" confirmLabel={finished ? 'Sync again' : chosen.length ? `Sync ${chosen.length} ${chosen.length === 1 ? 'repository' : 'repositories'}` : 'Nothing to sync'} confirmDisabled={busy || !chosen.length} busy={busy} error={error} onConfirm={() => void run()} onCancel={onClose}>
+    <div className="workspace-sync">
+      <p className="muted small">Pulls, then pushes, each ticked repository, up to four at a time. Change a branch first if a repository is on the wrong one.</p>
+      {bindings.map((binding) => {
+        const row = rows[binding.repoId], status = row?.status ?? null, ok = canSync(status)
+        const note = !status ? 'Loading…' : status.operation ? `${status.operation === 'rebase' ? 'Rebase' : 'Merge'} in progress` : status.detached ? 'Detached HEAD' : !status.remote ? 'No remote' : !status.upstream ? 'Not published' : `${status.behind}↓ ${status.ahead}↑`
+        const changes = status?.entries.length ?? 0
+        return <div key={binding.repoId} className="workspace-sync-row">
+          <Checkbox aria-label={`Sync ${binding.repoName}`} checked={selection.has(binding.repoId) && ok} disabled={!ok || busy} onCheckedChange={() => toggle(binding.repoId)} />
+          <span className="workspace-sync-name strong" title={binding.cwd}>{binding.repoName}</span>
+          <BranchPicker binding={binding} status={status} branches={row?.branches ?? []} busy={busy || !status} className="workspace-sync-branch" onChange={(branch) => void switchBranch(binding, branch)} />
+          <span className="muted small workspace-sync-state">{note}{changes ? ` · ${changes} ${changes === 1 ? 'change' : 'changes'}` : ''}</span>
+          <span className="workspace-sync-result" title={row?.result && row.result !== 'running' && row.result !== 'done' ? row.result : undefined}>
+            {row?.result === 'running' ? <LoaderCircle size={14} className="spin" /> : row?.result === 'done' ? <Check size={14} className="ok" /> : row?.result ? <CircleAlert size={14} className="bad" /> : null}
+          </span>
+          {row?.result && row.result !== 'running' && row.result !== 'done' && <p className="error small workspace-sync-error">{row.result}</p>}
+        </div>
+      })}
+    </div>
+  </Dialog>
+}

@@ -1,0 +1,5 @@
+The Ramu wordmark combines the exact r path from the flat app icon with outlined Manrope Semibold letters (amu). The icon r is scaled uniformly by 1/6, from a 480-unit ink height to an 80-unit height. Its proportions and rounded stroke match the icon exactly. The remaining outlines come from Manrope, distributed under the included SIL Open Font License.
+
+r-shape.svg is the shared r used by the icon and wordmark. wordmark-shapes.svg contains the remaining wordmark outlines; its r is refreshed from r-shape.svg during generation. Run `python3 scripts/make-logo.py assets` to regenerate the dark and light wordmarks, logo lockups, and startup-logo.svg; run `pnpm icons` to regenerate desktop icons. No font installation is needed.
+
+The app icon retains its approved flat charcoal tile (#232327). The startup animation uses the shared r and dot without a tile, then reveals the outlined wordmark over the normal app canvas. Animation styles and loading coordination live in Brand.tsx, main.tsx, and styles.css. Separate icon alternatives are review artifacts in output/branding and are not used by the app.
