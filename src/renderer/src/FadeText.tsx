@@ -41,5 +41,5 @@ export function FadeText({ text, className = '' }: { text: string; className?: s
     row?.addEventListener('focusin', enter); row?.addEventListener('focusout', leave)
     return () => { stop(); observer.disconnect(); row?.removeEventListener('mouseenter', enter); row?.removeEventListener('mouseleave', leave); row?.removeEventListener('focusin', enter); row?.removeEventListener('focusout', leave) }
   }, [text])
-  return <span ref={box} className={`fade-text ${className}`} title={text}>{text}</span>
+  return <span ref={box} className={`fade-text block min-w-0 overflow-hidden whitespace-nowrap [text-overflow:clip] [--fade-l:0px] [--fade-r:0px] [mask-image:linear-gradient(to_right,_transparent_0,_#000_var(--fade-l),_#000_calc(100%_-_var(--fade-r)),_transparent_100%)] [transition:--fade-l_0.14s_ease-out,_--fade-r_0.14s_ease-out] ${className}`} title={text}>{text}</span>
 }

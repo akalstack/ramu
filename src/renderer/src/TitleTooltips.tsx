@@ -58,5 +58,5 @@ export function TitleTooltips() {
       hide()
     }
   }, [id])
-  return <Tooltip open={!!tip}>{tip && <AnchoredTooltip id={id} anchor={tip.anchor} side={tip.side} sideOffset={6} className="ramu-tooltip">{tip.text}</AnchoredTooltip>}</Tooltip>
+  return <Tooltip open={!!tip}>{tip && <AnchoredTooltip id={id} anchor={tip.anchor} side={tip.side} sideOffset={6} className="ramu-tooltip [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgba(255,_255,_255,_0.07)] [&_>_svg]:hidden relative z-1300 max-w-[320px] p-[5px_9px] [border:1px_solid_var(--edge)] rounded-(--radius-s) [background:color-mix(in_srgb,_var(--raised)_80%,_transparent)] [-webkit-backdrop-filter:blur(24px)_saturate(1.6)] [backdrop-filter:blur(24px)_saturate(1.6)] [box-shadow:0_8px_24px_rgba(0,_0,_0,_0.4)] text-foreground text-caption leading-[16px] whitespace-pre-line pointer-events-none [animation:pop_0.1s_var(--ease)]">{tip.text}</AnchoredTooltip>}</Tooltip>
 }

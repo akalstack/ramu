@@ -1,5 +1,5 @@
 import { t, useLanguage } from './../i18n'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { Columns2, Eye, Pencil, WrapText } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { MarkdownPreview } from '../MarkdownPreview'
@@ -338,29 +338,29 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
     }, [comparing, conflict])
 
     return (
-        <div className="file-view">
-            <div className="view-header">
-                <span className="strong">{binding.repoName}</span>
-                <span className="path">{view.path}</span>
-                {aiStatus && preferences.aiCompletion.enabled && <span className="lint-summary has-warnings" title={aiStatus}>{t("AI completion paused")}</span>}
-                {(problems.tools.length > 0 || problems.failures.length > 0) && <span className={`lint-summary${problems.errors ? ' has-errors' : problems.warnings ? ' has-warnings' : ''}`} title={[...problems.failures, `Checked by ${problems.tools.join(', ')}`].filter(Boolean).join('\n')}>
+        <div className="file-view flex flex-col flex-1 min-h-0 min-w-0">
+            <div className="view-header [&_.path]:flex-1 [&_button]:text-control [&_button]:p-[2px_8px] [&_[aria-pressed='true']]:bg-hover [&_[aria-pressed='true']]:text-foreground flex gap-2.5 items-center h-8 p-[0_12px] flex-none min-w-0 text-control text-soft">
+                <span className="strong font-semibold">{binding.repoName}</span>
+                <span className="path text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap min-w-0">{view.path}</span>
+                {aiStatus && preferences.aiCompletion.enabled && <span className="lint-summary [&.has-errors]:text-bad [&.has-warnings]:text-warn text-caption text-muted-foreground whitespace-nowrap has-warnings" title={aiStatus}>{t("AI completion paused")}</span>}
+                {(problems.tools.length > 0 || problems.failures.length > 0) && <span className={`lint-summary [&.has-errors]:text-bad [&.has-warnings]:text-warn text-caption text-muted-foreground whitespace-nowrap${problems.errors ? ' has-errors' : problems.warnings ? ' has-warnings' : ''}`} title={[...problems.failures, `Checked by ${problems.tools.join(', ')}`].filter(Boolean).join('\n')}>
                     {problems.failures.length > 0 ? t("Lint unavailable") : !problems.errors && !problems.warnings ? t("{0} · no problems", { "0": problems.tools.join(' · ') }) : `${problems.errors ? `${problems.errors} error${problems.errors > 1 ? 's' : ''}` : ''}${problems.errors && problems.warnings ? ', ' : ''}${problems.warnings ? `${problems.warnings} warning${problems.warnings > 1 ? 's' : ''}` : ''}`}
                 </span>}
-                {markdown && <span className="view-header-group" role="group" aria-label={t("Markdown view")}>
-                    <Button className="ghost icon small-icon" aria-pressed={mode === 'edit'} aria-label={t("Editor only")} title={t("Editor only")} onClick={() => setMode('edit')}><Pencil size={14} /></Button>
-                    <Button className="ghost icon small-icon" aria-pressed={mode === 'split'} aria-label={t("Editor and preview side by side")} title={t("Preview beside the editor")} onClick={() => setMode('split')}><Columns2 size={14} /></Button>
-                    <Button className="ghost icon small-icon" aria-pressed={mode === 'preview'} aria-label={t("Preview only")} title={t("Preview only")} onClick={() => setMode('preview')}><Eye size={14} /></Button>
+                {markdown && <span className="view-header-group inline-flex gap-px p-0.5 [border:1px_solid_transparent] rounded-(--radius-s) bg-fill" role="group" aria-label={t("Markdown view")}>
+                    <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-pressed={mode === 'edit'} aria-label={t("Editor only")} title={t("Editor only")} onClick={() => setMode('edit')}><Pencil size={14} /></Button>
+                    <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-pressed={mode === 'split'} aria-label={t("Editor and preview side by side")} title={t("Preview beside the editor")} onClick={() => setMode('split')}><Columns2 size={14} /></Button>
+                    <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-pressed={mode === 'preview'} aria-label={t("Preview only")} title={t("Preview only")} onClick={() => setMode('preview')}><Eye size={14} /></Button>
                 </span>}
-                <Button className="ghost icon small-icon" aria-pressed={wrap} aria-label={t("Word wrap")} title={t("Word wrap: {0} (⌥Z)", { "0": wrap ? 'on' : 'off' })} onClick={() => setWrap(!wrap)}><WrapText size={14} /></Button>
+                <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-pressed={wrap} aria-label={t("Word wrap")} title={t("Word wrap: {0} (⌥Z)", { "0": wrap ? 'on' : 'off' })} onClick={() => setWrap(!wrap)}><WrapText size={14} /></Button>
             </div>
-            {error && <div className="error banner">{error}</div>}
+            {error && <div className="error text-bad banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control">{error}</div>}
             {conflict && (
-                <div className="banner warn">
+                <div className="banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control warn text-warn">
                     {conflict.disk === null ? t("This file was deleted on disk.") : t("This file changed on disk while you have unsaved edits.")}
                     {conflict.disk !== null && (
                         <>
-                            <Button onClick={() => setComparing((c) => !c)}>{comparing ? t("Hide comparison") : t("Compare")}</Button>
-                            <Button
+                            <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setComparing((c) => !c)}>{comparing ? t("Hide comparison") : t("Compare")}</Button>
+                            <Button variant="secondary" className="bg-fill hover:bg-fill-hover"
                                 onClick={() => {
                                     replaceBuffer(conflict.disk!)
                                     baseHash.current = conflict.diskHash
@@ -374,7 +374,7 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
                                 {t("Use disk version")}</Button>
                         </>
                     )}
-                    <Button
+                    <Button variant="secondary" className="bg-fill hover:bg-fill-hover"
                         onClick={() => {
                             baseHash.current = conflict.diskHash || null
                             setConflict(null)
@@ -385,10 +385,10 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
                         {t("Keep mine")}</Button>
                 </div>
             )}
-            <div ref={diffHost} className="editor-host" style={{ display: comparing ? 'block' : 'none' }} />
-            <div className="file-body" style={{ display: comparing ? 'none' : 'flex' }}>
-                <div ref={host} className="editor-host" style={{ display: markdown && mode === 'preview' ? 'none' : 'block' }} />
-        {markdown && mode !== 'edit' && <div className="md-preview-pane"><div className="md-preview msg assistant"><MarkdownPreview text={previewText} taskId={taskId} repoId={binding.repoId} path={view.path} onOpenFile={(path) => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path })} /></div></div>}
+            <div ref={diffHost} className="editor-host flex-1 min-h-0" style={{ display: comparing ? 'block' : 'none' }} />
+            <div className="file-body [&_>_.editor-host]:[flex:1_1_0] [&_>_.editor-host]:min-w-0 flex-1 min-h-0 min-w-0 flex" style={{ display: comparing ? 'none' : 'flex' }}>
+                <div ref={host} className="editor-host flex-1 min-h-0" style={{ display: markdown && mode === 'preview' ? 'none' : 'block' }} />
+        {markdown && mode !== 'edit' && <div className="md-preview-pane [flex:1_1_0] min-w-0 overflow-auto [border-left:1px_solid_var(--line)] p-[16px_24px_32px]"><div className="md-preview [&_h1]:text-[length:1.6em] [&_h1]:m-[0_0_12px] [&_h1]:pb-1.5 [&_h1]:[border-bottom:1px_solid_var(--line)] [&_h2]:text-[length:1.3em] [&_h2]:m-[20px_0_8px] [&_h2]:pb-1 [&_h2]:[border-bottom:1px_solid_var(--line)] [&_h3]:text-[length:1.1em] [&_img]:max-w-full [&_.md-frontmatter]:mb-4 [&_.md-frontmatter]:p-[8px_12px] [&_.md-frontmatter]:[border:1px_solid_transparent] [&_.md-frontmatter]:rounded-(--radius-s) [&_.md-frontmatter]:text-soft [&_.md-frontmatter]:bg-fill [&_.md-frontmatter_summary]:cursor-pointer [&_.md-frontmatter_summary]:text-control [&_.md-frontmatter_pre]:mb-0 [&_blockquote]:m-[8px_0] [&_blockquote]:p-[2px_12px] [&_blockquote]:[border-left:3px_solid_var(--line-strong)] [&_blockquote]:text-soft [&_hr]:[border:0] [&_hr]:[border-top:1px_solid_var(--line)] [&_hr]:m-[16px_0] max-w-[820px] m-[0_auto] text-chat leading-[1.65] select-text msg [&.user]:self-end [&.user]:whitespace-pre-wrap [&.user]:max-w-[78%] [&.user]:mt-[18px] [&.user]:w-[fit-content] [&.user]:[background:var(--bubble)] [&.user]:[border:0] [&.user]:[box-shadow:none] [&.user]:text-chat [&.user]:leading-[1.55] [&.user]:p-[10px_16px_11px] [&.user]:rounded-(--radius-l) [&.user]:tracking-[-0.006em] [&.user]:[color:var(--text-body)] [&.assistant]:relative [&.assistant]:tracking-[-0.008em] [&.assistant]:text-chat [&.assistant]:leading-[1.65] [&.assistant]:[color:var(--text-body)] [&.assistant_>_:first-child]:mt-0 [&.assistant_>_:last-child]:mb-0 [&.assistant_p]:m-[0_0_10px] [&.assistant_ul]:pl-5 [&.assistant_ul]:m-[0_0_10px] [&.assistant_ol]:pl-5 [&.assistant_ol]:m-[0_0_10px] [&.assistant_code]:[background:rgba(255,_255,_255,_0.075)] [&.assistant_code]:[border:0] [&.assistant_code]:rounded-(--radius-xs) [&.assistant_code]:p-[0_5px] [&.assistant_code]:[color:var(--text-body)] [&.assistant_code]:text-[length:0.88em] [&.assistant_pre]:overflow-x-auto [&.assistant_pre]:[white-space:pre] [&.assistant_pre]:[background:var(--code-bg)] [&.assistant_pre]:[border:1px_solid_transparent] [&.assistant_pre]:rounded-(--radius-m) [&.assistant_pre]:p-[12px_14px] [&.assistant_pre]:m-[4px_0_12px] [&.assistant_pre]:leading-[1.6] [&.assistant_pre]:[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.02)] [&.assistant_pre]:text-[length:0.88em] [&.assistant_pre_code]:bg-transparent [&.assistant_pre_code]:p-0 [&.assistant_pre_code]:[border:none] [&.assistant_pre_code]:text-[length:inherit] [&.assistant_pre_code]:[color:#dcdce2] [&.assistant_a]:text-brand [&.assistant_a]:[text-decoration:none] [&.assistant_table]:[border-collapse:collapse] [&.assistant_table]:m-[6px_0] [&.assistant_th]:[border:1px_solid_var(--line-strong)] [&.assistant_th]:p-[3px_8px] [&.assistant_td]:[border:1px_solid_var(--line-strong)] [&.assistant_td]:p-[3px_8px] [&.meta]:text-caption [&.meta]:text-muted-foreground [&.error]:text-bad [&.assistant:hover_.msg-actions]:opacity-100 [&.assistant.generating]:[animation:arrive_100ms_var(--ease)] [&.user_.muted.small.block]:mt-0.5 [&.user_.muted.small.block]:[color:rgba(255,_255,_255,_0.7)] [&.assistant_li]:m-[3px_0] [&.assistant_li::marker]:text-muted-foreground [&.assistant_strong]:font-semibold [&.assistant_strong]:[color:#fff] [&.assistant_h1]:text-[length:1em] [&.assistant_h1]:font-semibold [&.assistant_h1]:m-[16px_0_6px] [&.assistant_h1]:tracking-[-0.012em] [&.assistant_h2]:text-[length:1em] [&.assistant_h2]:font-semibold [&.assistant_h2]:m-[16px_0_6px] [&.assistant_h2]:tracking-[-0.012em] [&.assistant_h3]:text-[length:1em] [&.assistant_h3]:font-semibold [&.assistant_h3]:m-[16px_0_6px] [&.assistant_h3]:tracking-[-0.012em] [&.assistant_a:hover]:[text-decoration:underline] [.msg-wrap.user_&.user]:max-w-full [.msg-wrap.user_&.user]:mt-3.5 [&.assistant_.msg-actions]:mt-2 [&.assistant_:is(h1,_h2,_h3,_h4,_strong)]:text-foreground break-words assistant"><MarkdownPreview text={previewText} taskId={taskId} repoId={binding.repoId} path={view.path} onOpenFile={(path) => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path })} /></div></div>}
             </div>
         </div>
     )

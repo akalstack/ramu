@@ -17,7 +17,7 @@ async function fakeTools(text: string, connection?: McpConnection): Promise<void
       const continuation = text.startsWith('Ramu goal continuation:')
       const reply = await client.callTool(continuation
         ? { name: 'update_goal', arguments: { status: 'completed', reason: 'The smoke fixture verified goal tools, persistence and automatic continuation.' } }
-        : { name: 'set_goal', arguments: { objective: 'Verify the goal smoke fixture [goal tool]' } })
+        : { name: 'set_goal', arguments: { objective: 'Verify the goal smoke fixture [goal tool]', continuationReason: 'The smoke fixture checks automatic continuation, so it needs a second turn.' } })
       if (reply.isError) throw new Error(JSON.stringify(reply.content))
     }
     if (text.includes('[questions')) {

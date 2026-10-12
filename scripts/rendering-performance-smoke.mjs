@@ -46,6 +46,10 @@ try {
   console.log('ok - Reviews defer off-screen cards and release diff editors on scroll and tab hide')
 
   step = 'open 5000'; await open(5000)
+  // A docked, narrow review folds its file tree away until asked for.
+  const showTree = page.getByRole('button', { name: 'Show file tree', exact: true })
+  if (await showTree.isVisible()) await showTree.click()
+  await page.locator('.review-tree-row').first().waitFor()
   assert.ok(await page.locator('.review-tree-row').count() < 60, 'Large review trees must bound mounted rows')
   const firstRow = page.locator('.review-tree-row').first()
   step = 'last file'; await firstRow.focus(); await page.keyboard.press('End')

@@ -1,6 +1,6 @@
 import { t, useLanguage } from './i18n'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { FileContext, SkillInfo } from '../../shared/types'
 import { invoke } from './ipc'
@@ -103,10 +103,10 @@ export function ComposerSuggestions({ suggestions, onChoose }: { suggestions: Re
   const language = useLanguage()
 
   useEffect(() => { document.getElementById(`${suggestions.listId}-${suggestions.selected}`)?.scrollIntoView({ block: 'nearest' }) }, [suggestions.listId, suggestions.selected])
-  return <div className="composer-suggestions" role="listbox" id={suggestions.listId} aria-label={t("Commands, skills, and files")}>
-    {suggestions.loading && <div className="suggestion-status muted small">{t("Loading commands, skills and files…")}</div>}
-    {suggestions.loadError && <div className="suggestion-status error small">{suggestions.loadError}</div>}
-    {suggestions.choices.map((choice, i) => <Button type="button" key={choice.id} id={`${suggestions.listId}-${i}`} role="option" aria-selected={i === suggestions.selected} className={i === suggestions.selected ? 'selected' : ''} onMouseDown={(e) => e.preventDefault()} onClick={() => onChoose(i)}><span><strong>{choice.label}</strong><span className="muted small block">{choice.description}</span></span><Badge variant="outline" className="chip">{t(choice.kind)}</Badge></Button>)}
-    {!suggestions.loading && !suggestions.choices.length && <div className="suggestion-status muted">{t("No matching commands, skills, or files.")}</div>}
+  return <div className="composer-suggestions [&_button]:w-full [&_button]:[border:0] [&_button]:bg-transparent [&_button]:text-left [&_button]:flex [&_button]:items-center [&_button]:justify-between [&_button]:gap-3.5 [&_button]:p-[10px_12px] [&_button]:rounded-(--radius-s) [&_button.selected]:[background:#ffffff10] [&_button_strong]:text-caption [&_button_strong]:font-medium [&_button_>_span:first-child]:min-w-0 [&_button_.block]:overflow-hidden [&_button_.block]:text-ellipsis [&_button_.block]:whitespace-nowrap [&_button_.block]:max-w-[600px] [&_button_.block]:mt-[3px] [animation:arrive_120ms_var(--ease)] [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgba(255,_255,_255,_0.07)] absolute z-100 bottom-[calc(100%_+_8px)] left-0 right-0 max-h-[330px] overflow-y-auto bg-raised [border:1px_solid_var(--edge)] rounded-(--radius-row) [box-shadow:0_10px_35px_#0008] p-[5px]" role="listbox" id={suggestions.listId} aria-label={t("Commands, skills, and files")}>
+    {suggestions.loading && <div className="suggestion-status p-3 muted text-muted-foreground small text-caption">{t("Loading commands, skills and files…")}</div>}
+    {suggestions.loadError && <div className="suggestion-status p-3 error text-bad small text-caption">{suggestions.loadError}</div>}
+    {suggestions.choices.map((choice, i) => <Button variant="secondary" type="button" key={choice.id} id={`${suggestions.listId}-${i}`} role="option" aria-selected={i === suggestions.selected} className={i === suggestions.selected ? 'selected' : ''} onMouseDown={(e) => e.preventDefault()} onClick={() => onChoose(i)}><span><strong>{choice.label}</strong><span className="muted text-muted-foreground small text-caption block block">{choice.description}</span></span><Badge variant="outline" className="chip tabular-nums text-caption bg-hover rounded-full p-[1px_8px] text-soft whitespace-nowrap">{t(choice.kind)}</Badge></Button>)}
+    {!suggestions.loading && !suggestions.choices.length && <div className="suggestion-status p-3 muted text-muted-foreground">{t("No matching commands, skills, or files.")}</div>}
   </div>
 }

@@ -239,6 +239,7 @@ export interface RamuMethods {
   'agent.submit'(sessionId: string, text: string, mode: 'queue' | 'steer', attachments?: string[], context?: FileContext[]): void
   'agent.removeQueued'(sessionId: string, messageId: string): void
   'agent.resumeQueue'(sessionId: string): void
+  'agent.sendQueuedNow'(sessionId: string, messageId: string): void
   'agent.interrupt'(sessionId: string): void
   /** Opening message for a new chat that continues this one, carrying the transcript as context. */
   'agent.continuationPrompt'(sessionId: string): string
@@ -278,6 +279,7 @@ export interface RamuMethods {
 }
 
 export type PushEvents = {
+  'menu:action': { action: 'settings' | 'check-updates' }
   'automation:changed': Record<string, never>
   'background:connection': { connected: boolean }
   'updates:changed': AppUpdateStatus

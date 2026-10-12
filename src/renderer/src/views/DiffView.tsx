@@ -1,5 +1,5 @@
 import { t, useLanguage } from './../i18n'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { useEffect, useRef, useState } from 'react'
 import type { RepositoryBinding, ViewDescriptor } from '../../../shared/types'
 import { invoke, ramu } from '../ipc'
@@ -86,15 +86,15 @@ export function DiffView({ taskId, view, binding }: { taskId: string; view: Diff
   useEffect(() => { editorRef.current?.updateOptions({ fontSize: preferences.editorFontSize, lineHeight: Math.round(preferences.editorFontSize * 1.6) }) }, [preferences.editorFontSize])
 
   return (
-    <div className="file-view">
-      <div className="view-header">
-        <span className="strong">{binding.repoName}</span>
-        <span className="path">{view.path}</span>
-        <span className="muted small">{view.oid ? t("{0} · Parent → commit", { "0": view.oid.slice(0, 7) }) : view.staged ? t("Staged changes") : t("Unstaged changes")}</span>
-        <Button onClick={() => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: view.path })}>{t("Open file")}</Button>
+    <div className="file-view flex flex-col flex-1 min-h-0 min-w-0">
+      <div className="view-header [&_.path]:flex-1 [&_button]:text-control [&_button]:p-[2px_8px] [&_[aria-pressed='true']]:bg-hover [&_[aria-pressed='true']]:text-foreground flex gap-2.5 items-center h-8 p-[0_12px] flex-none min-w-0 text-control text-soft">
+        <span className="strong font-semibold">{binding.repoName}</span>
+        <span className="path text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap min-w-0">{view.path}</span>
+        <span className="muted text-muted-foreground small text-caption">{view.oid ? t("{0} · Parent → commit", { "0": view.oid.slice(0, 7) }) : view.staged ? t("Staged changes") : t("Unstaged changes")}</span>
+        <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: view.path })}>{t("Open file")}</Button>
       </div>
-      {error && <div className="error banner">{error}</div>}
-      <div ref={host} className="editor-host" />
+      {error && <div className="error text-bad banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control">{error}</div>}
+      <div ref={host} className="editor-host flex-1 min-h-0" />
     </div>
   )
 }

@@ -7,6 +7,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        tree: "h-7 w-full justify-start rounded-(--radius-s) border-0 bg-transparent px-2 py-0 text-left font-normal text-soft hover:bg-hover hover:text-foreground active:translate-y-0 focus-visible:border-transparent focus-visible:ring-0 focus-visible:outline focus-visible:outline-1 focus-visible:outline-(--line-strong) focus-visible:-outline-offset-1",
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",

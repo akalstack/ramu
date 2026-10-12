@@ -1,5 +1,5 @@
 import { t, useLanguage } from './i18n'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { SearchInput } from './SearchInput'
@@ -59,12 +59,12 @@ export function ChatFind({ root, focusRequest = 0, initialQuery, onClose }: { ro
   useEffect(() => () => { const highlights = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights; highlights?.delete('chat-find'); highlights?.delete('chat-find-current') }, [])
 
   const step = (delta: number) => { if (count) setCurrent((value) => (value + delta + count) % count) }
-  return <div className="chat-find-bar" role="search">
+  return <div className="chat-find-bar [&_.search-input]:flex-1 [&_.search-input]:min-w-0 [&_.search-input]:h-7 [&_.search-input]:min-h-7 [&_.search-input]:[border:0] [&_.search-input]:bg-transparent [&_.search-input]:[box-shadow:none] [&_.search-input_input]:[border:0] [&_.search-input_input]:bg-transparent [&_.search-input_input]:[box-shadow:none] [&_.search-input:focus-within]:h-7 [&_.search-input:focus-within]:min-h-7 [&_.search-input:focus-within]:[border:0] [&_.search-input:focus-within]:bg-transparent [&_.search-input:focus-within]:[box-shadow:none] [&:focus-within]:[border-color:color-mix(in_srgb,_var(--text)_26%,_transparent)] absolute top-10 right-3 z-5 flex items-center gap-1 w-[420px] max-w-[calc(100%_-_24px)] m-0 p-[4px_6px] [border:1px_solid_var(--edge)] rounded-(--radius-s) bg-raised [box-shadow:var(--shadow-float)] [animation:fade-only_120ms_var(--ease)]" role="search">
     <SearchInput ref={input} aria-label={t("Find in conversation")} placeholder={t("Find in conversation")} value={query} onChange={(event) => { setQuery(event.target.value); setCurrent(0) }} onClear={() => setQuery('')}
       onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); step(event.shiftKey ? -1 : 1) } else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() } }} />
-    <span className="chat-find-count muted small" aria-live="polite">{query.trim() ? (count ? t("{0} of {1}", { "0": current + 1, "1": count }) : t("No results")) : ''}</span>
-    <Button className="ghost icon small-icon" aria-label={t("Previous match")} title={t("Previous (⇧Enter)")} disabled={!count} onClick={() => step(-1)}><ChevronUp size={14} /></Button>
-    <Button className="ghost icon small-icon" aria-label={t("Next match")} title={t("Next (Enter)")} disabled={!count} onClick={() => step(1)}><ChevronDown size={14} /></Button>
-    <Button className="ghost icon small-icon" aria-label={t("Close find")} title={t("Close (Esc)")} onClick={onClose}><X size={14} /></Button>
+    <span className="chat-find-count min-w-[44px] text-right whitespace-nowrap muted text-muted-foreground small text-caption" aria-live="polite">{query.trim() ? (count ? t("{0} of {1}", { "0": current + 1, "1": count }) : t("No results")) : ''}</span>
+    <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Previous match")} title={t("Previous (⇧Enter)")} disabled={!count} onClick={() => step(-1)}><ChevronUp size={14} /></Button>
+    <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Next match")} title={t("Next (Enter)")} disabled={!count} onClick={() => step(1)}><ChevronDown size={14} /></Button>
+    <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Close find")} title={t("Close (Esc)")} onClick={onClose}><X size={14} /></Button>
   </div>
 }

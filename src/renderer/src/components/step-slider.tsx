@@ -15,10 +15,10 @@ function StepSlider({ className, value, thumbLabel, valueText, ...props }: Omit<
   return (
     <SliderPrimitive.Root data-slot="slider" data-slider-ready={ready ? '' : undefined} className={cn('data-horizontal:w-full', className)} value={value} thumbAlignment="edge" {...props}>
       <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50">
-        <SliderPrimitive.Track data-slot="slider-track" className="relative grow overflow-hidden rounded-full bg-muted select-none data-horizontal:h-1 data-horizontal:w-full">
+        <SliderPrimitive.Track data-slot="slider-track" className="relative grow flex-1 min-w-0 text-left overflow-hidden rounded-full bg-muted select-none data-horizontal:h-1 data-horizontal:w-full">
           <SliderPrimitive.Indicator data-slot="slider-range" className="bg-primary select-none data-horizontal:h-full" />
         </SliderPrimitive.Track>
-        <SliderPrimitive.Thumb data-slot="slider-thumb" aria-label={thumbLabel} getAriaValueText={valueText ? () => valueText : undefined} className="relative block size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3" />
+        <SliderPrimitive.Thumb data-slot="slider-thumb" aria-label={thumbLabel} getAriaValueText={valueText ? () => valueText : undefined} className="relative block block size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3" />
       </SliderPrimitive.Control>
     </SliderPrimitive.Root>
   )

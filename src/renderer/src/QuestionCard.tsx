@@ -2,7 +2,7 @@ import { t, useLanguage } from './i18n'
 import { Kbd } from '@/components/ui/kbd'
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ShieldQuestion } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { questionKey, questionAnswer, type QuestionRequest, type QuestionState } from '../../shared/questions'
 import { invoke } from './ipc'
@@ -24,19 +24,19 @@ export function QuestionDock({ sessionId, requests, states, open, onOpenChange, 
   const status = states.get(request.requestId) ?? EMPTY
   const blocking = request.responseMode !== 'message' || status.waiting
   const remaining = request.questions.filter((q) => !questionAnswer(status.answers, questionKey(q)))
-  const pager = requests.length > 1 && <span className="question-dock-pager">
-    <Button className="ghost icon small-icon" aria-label={t("Previous question request")} disabled={index === 0} onClick={() => setCurrentId(requests[index - 1]!.requestId)}><ChevronLeft size={13} /></Button>
-    <span className="muted small">{index + 1}/{requests.length}</span>
-    <Button className="ghost icon small-icon" aria-label={t("Next question request")} disabled={index === requests.length - 1} onClick={() => setCurrentId(requests[index + 1]!.requestId)}><ChevronRight size={13} /></Button>
+  const pager = requests.length > 1 && <span className="question-dock-pager inline-flex items-center gap-0.5 tabular-nums">
+    <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Previous question request")} disabled={index === 0} onClick={() => setCurrentId(requests[index - 1]!.requestId)}><ChevronLeft size={13} /></Button>
+    <span className="muted text-muted-foreground small text-caption">{index + 1}/{requests.length}</span>
+    <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Next question request")} disabled={index === requests.length - 1} onClick={() => setCurrentId(requests[index + 1]!.requestId)}><ChevronRight size={13} /></Button>
   </span>
-  if (!open) return <div className={`question-dock collapsed${blocking ? ' blocking' : ''}`} role="region" aria-label={t("Questions from the agent")}>
-    <Button type="button" className="question-dock-bar" aria-expanded={false} onClick={() => onOpenChange(true)}>
+  if (!open) return <div className={`question-dock [&.blocking]:[border-color:color-mix(in_srgb,_var(--warn)_55%,_var(--line-strong))] [&.blocking_.question-dock-header_>_svg]:text-warn [&.blocking_.question-dock-bar_>_svg:first-child]:text-warn w-[calc(100%_-_24px)] max-w-[696px] m-[0_auto_8px] [border:1px_solid_var(--edge)] rounded-(--radius-l) bg-raised [box-shadow:var(--shadow-float)] overflow-hidden [animation:fade-only_120ms_var(--ease)] collapsed${blocking ? ' blocking' : ''}`} role="region" aria-label={t("Questions from the agent")}>
+    <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover question-dock-bar [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&_>_svg:first-child]:flex-none [&_>_svg:first-child]:text-muted-foreground flex items-center justify-start gap-2 w-full h-[36px] p-[0_12px] [border:0] [border-radius:0] bg-transparent text-left text-foreground font-normal" aria-expanded={false} onClick={() => onOpenChange(true)}>
       <ShieldQuestion size={14} />
-      <span className="question-dock-bar-text">{blocking ? t("The agent is waiting for your answer") : t("{0} waiting for your answer", { "0": remaining.length === 1 ? t("1 question") : t("{0} questions", { "0": remaining.length }) })}<span className="muted"> · {request.dependsOn || remaining[0]?.question}</span></span>
-      <ChevronUp size={13} className="caret" />
+      <span className="question-dock-bar-text flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{blocking ? t("The agent is waiting for your answer") : t("{0} waiting for your answer", { "0": remaining.length === 1 ? t("1 question") : t("{0} questions", { "0": remaining.length }) })}<span className="muted text-muted-foreground"> · {request.dependsOn || remaining[0]?.question}</span></span>
+      <ChevronUp size={13} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />
     </Button>
   </div>
-  return <div className={`question-dock${blocking ? ' blocking' : ''}`} role="region" aria-label={t("Questions from the agent")}>
+  return <div className={`question-dock [&.blocking]:[border-color:color-mix(in_srgb,_var(--warn)_55%,_var(--line-strong))] [&.blocking_.question-dock-header_>_svg]:text-warn [&.blocking_.question-dock-bar_>_svg:first-child]:text-warn w-[calc(100%_-_24px)] max-w-[696px] m-[0_auto_8px] [border:1px_solid_var(--edge)] rounded-(--radius-l) bg-raised [box-shadow:var(--shadow-float)] overflow-hidden [animation:fade-only_120ms_var(--ease)] ${blocking ? ' blocking' : ''}`} role="region" aria-label={t("Questions from the agent")}>
     <QuestionForm key={request.requestId} sessionId={sessionId} request={request} status={status} blocking={blocking} pager={pager} focusAt={focus?.requestId === request.requestId ? focus.at : null} onCollapse={() => onOpenChange(false)} />
   </div>
 }
@@ -105,52 +105,53 @@ function QuestionForm({ sessionId, request, status, blocking, pager, focusAt, on
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && (typing || event.target === root.current)) { event.preventDefault(); advance(); return }
     if (!typing && /^[1-9]$/.test(event.key) && !answered) { const option = q.options[Number(event.key) - 1]; if (option) { event.preventDefault(); choose(option.label) } }
   }
-  return <div ref={root} className="question-card question-dock-card" data-question-request={request.requestId} tabIndex={-1} onKeyDown={onKeyDown}>
-    <header className="question-dock-header">
+  return <div ref={root} className="question-card question-dock-card [&_fieldset]:grid [&_fieldset]:gap-2 [&_fieldset]:m-0 [&_fieldset]:p-0 [&_fieldset]:[border:0] [&_fieldset]:min-w-0 [&_legend]:p-0 [&_legend]:mb-1 [&_legend]:font-semibold [&_legend]:text-chat [&_legend]:text-foreground [&_.option]:flex [&_.option]:items-center [&_.option]:gap-2.5 [&_.option]:p-[7px_10px] [&_.option]:[border:1px_solid_transparent] [&_.option]:rounded-(--radius-s) [&_.option]:cursor-pointer [&_.option]:bg-fill [&_.option:hover]:bg-hover [&_.option.selected]:[border-color:var(--line-strong)] [&_.option.selected]:bg-hover [&_.option_input]:absolute [&_.option_input]:opacity-0 [&_.option_input]:pointer-events-none [&_.option.selected_.question-option-key]:[border-color:var(--text)] [&_.option.selected_.question-option-key]:text-foreground flex flex-col gap-2.5 max-h-[min(52vh,_460px)] overflow-auto p-[12px_14px] outline-none" data-question-request={request.requestId} tabIndex={-1} onKeyDown={onKeyDown}>
+    <header className="question-dock-header [&_>_svg]:flex-none [&_>_svg]:text-muted-foreground flex items-center gap-2 text-control text-soft">
       <ShieldQuestion size={14} />
-      <span className="question-dock-title">{blocking ? t("The agent is waiting for your answer") : t("The agent can keep working. You can answer later.")}</span>
-      {questions.length > 1 && <span className="muted small question-dock-step">{t("Question {0} of {1}", { "0": page + 1, "1": questions.length })}</span>}
+      <span className="question-dock-title flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{blocking ? t("The agent is waiting for your answer") : t("The agent can keep working. You can answer later.")}</span>
+      {questions.length > 1 && <span className="muted text-muted-foreground small text-caption question-dock-step flex-none tabular-nums">{t("Question {0} of {1}", { "0": page + 1, "1": questions.length })}</span>}
       {pager}
-      <Button className="ghost icon small-icon" aria-label={t("Answer later")} title={t("Answer later")} onClick={onCollapse}><ChevronDown size={14} /></Button>
+      <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Answer later")} title={t("Answer later")} onClick={onCollapse}><ChevronDown size={14} /></Button>
     </header>
-    {request.dependsOn && <p className="small question-dock-needed"><span className="muted">{t("Answer needed for: ")}</span>{request.dependsOn}</p>}
-    {questions.length > 1 && <p className="muted small question-dock-note">{together ? t("These questions are related; send their answers together.") : t("Each answer can be sent separately.")}</p>}
+    {request.dependsOn && <p className="small text-caption question-dock-needed m-0"><span className="muted text-muted-foreground">{t("Answer needed for: ")}</span>{request.dependsOn}</p>}
+    {questions.length > 1 && <p className="muted text-muted-foreground small text-caption question-dock-note m-0">{together ? t("These questions are related; send their answers together.") : t("Each answer can be sent separately.")}</p>}
     <fieldset key={key} disabled={busy || !!answered}>
       <legend>{q.question}</legend>
-      {q.options.length > 0 && <div className="question-options">{q.options.map((option, index) => <label key={option.label} className={`option${selected.has(option.label) ? ' selected' : ''}`}>
+      {q.options.length > 0 && <div className="question-options grid gap-1">{q.options.map((option, index) => <label key={option.label} className={`option [.question-card_&]:items-center [.question-card_&_input]:w-4 [.question-card_&_input]:h-4 [.question-card_&_input]:flex-none [.question-card_&_input]:p-0 [.question-card_&_input]:m-0 [.question-card_&_>_span]:min-w-0 [.elicitation-card_&]:flex [.elicitation-card_&]:items-center [.elicitation-card_&]:gap-2 [.elicitation-card_&]:m-[8px_0] p-[4px_0] ${selected.has(option.label) ? ' selected' : ''}`}>
         <input type={q.multiSelect ? 'checkbox' : 'radio'} name={`${request.requestId}:${key}`} checked={selected.has(option.label)} onChange={() => choose(option.label)} />
-        {index < 9 && <Kbd className="question-option-key" aria-hidden="true">{index + 1}</Kbd>}
-        <span>{option.label}{option.description && <span className="muted block small">{option.description}</span>}</span>
+        {index < 9 && <Kbd className="question-option-key flex-none min-w-5 h-5 inline-grid place-items-center [border:1px_solid_transparent] rounded-(--radius-xs) [font:500_11px_var(--mono)] text-muted-foreground bg-fill" aria-hidden="true">{index + 1}</Kbd>}
+        <span>{option.label}{option.description && <span className="muted text-muted-foreground block block small text-caption">{option.description}</span>}</span>
       </label>)}</div>}
       <Input aria-label={t("Answer: {0}", { "0": q.question })} placeholder={q.options.length ? t("Or type your own answer") : t("Type your answer")} value={typed} maxLength={10000} onChange={(event) => setDrafts((old) => ({ ...old, [key]: event.target.value }))} />
-      {answered && <p className="outcome">{t("Answer submitted: {0}", { "0": answered })}</p>}
+      {answered && <p className="outcome text-caption text-muted-foreground mt-1.5">{t("Answer submitted: {0}", { "0": answered })}</p>}
     </fieldset>
-    {error && <p className="error" role="alert">{error}</p>}
-    <div className="question-dock-actions">
-      {async && <Button className="ghost" disabled={busy} onClick={() => void dismiss()}>{t("Dismiss")}</Button>}
-      <span className="grow" />
-      {page > 0 && <Button disabled={busy} onClick={() => setPage(page - 1)}>{t("Back")}</Button>}
-      {!together && !answered && <Button className={last ? 'primary' : ''} disabled={busy || !value.trim()} onClick={() => void send([key])}>{t("Send answer")}</Button>}
-      {!last && <Button className={together ? 'primary' : ''} disabled={busy} onClick={() => setPage(page + 1)}>{t("Next")}</Button>}
-      {together && last && <Button className="primary" disabled={!canSendAll} title={canSendAll ? undefined : t("Answer every question first")} onClick={() => void send(unanswered.map(questionKey))}>{questions.length > 1 ? t("Send answers together") : t("Send answer")}</Button>}
+    {error && <p className="error text-bad" role="alert">{error}</p>}
+    <div className="question-dock-actions flex items-center gap-1.5">
+      {async && <Button variant="ghost" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover" disabled={busy} onClick={() => void dismiss()}>{t("Dismiss")}</Button>}
+      <span className="grow flex-1 min-w-0 text-left" />
+      {page > 0 && <Button variant="secondary" className="bg-fill hover:bg-fill-hover" disabled={busy} onClick={() => setPage(page - 1)}>{t("Back")}</Button>}
+      {!together && !answered && <Button variant="secondary" className={last ? 'primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100' : ''} disabled={busy || !value.trim()} onClick={() => void send([key])}>{t("Send answer")}</Button>}
+      {!last && <Button variant="secondary" className={together ? 'primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100' : ''} disabled={busy} onClick={() => setPage(page + 1)}>{t("Next")}</Button>}
+      {together && last && <Button variant="default" className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100" disabled={!canSendAll} title={canSendAll ? undefined : t("Answer every question first")} onClick={() => void send(unanswered.map(questionKey))}>{questions.length > 1 ? t("Send answers together") : t("Send answer")}</Button>}
     </div>
   </div>
 }
 
 /** Where the agent asked, in the transcript. While it waits, a click opens the question above the message box. */
-export function QuestionRow({ request, status, pending, onOpen }: { request: QuestionRequest; status: QuestionState; pending: boolean; onOpen?: (requestId: string) => void }) {
+export function QuestionRow({ request, status, pending, showAnswers = true, onOpen }: { request: QuestionRequest; status: QuestionState; pending: boolean; showAnswers?: boolean; onOpen?: (requestId: string) => void }) {
   useLanguage()
   const summary = request.dependsOn || request.questions[0]?.question
   const count = request.questions.length === 1 ? t("Asked a question") : t("Asked {0} questions", { "0": request.questions.length })
-  if (pending) return <Button type="button" className="question-row pending" data-question-request={request.requestId} onClick={() => onOpen?.(request.requestId)}>
-    <ShieldQuestion size={13} /><span className="question-row-text"><strong>{count}</strong><span className="muted"> · {summary}</span></span><span className="question-row-state">{t("Waiting for your answer")}</span><ChevronRight size={13} className="caret" />
+  if (pending) return <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover question-row [&:is(button).pending]:flex-row [&:is(button).pending]:items-center [&:is(button).pending]:gap-2 [&:is(button).pending]:w-full [&:is(button).pending]:h-auto [&:is(button).pending]:bg-raised [&:is(button).pending]:text-foreground [&:is(button).pending]:font-normal [&:is(button).pending]:text-left [&:is(button).pending]:whitespace-normal [&:is(button).pending:hover]:[border-color:var(--line-strong)] [&_.caret]:flex-none [&_.caret]:text-muted-foreground flex flex-col gap-1.5 m-[8px_0] p-[8px_12px] [border:1px_solid_transparent] rounded-(--radius-m) text-control bg-fill pending" data-question-request={request.requestId} onClick={() => onOpen?.(request.requestId)}>
+    <ShieldQuestion size={13} /><span className="question-row-text flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"><strong>{count}</strong><span className="muted text-muted-foreground"> · {summary}</span></span><span className="question-row-state flex-none text-warn text-caption">{t("Waiting for your answer")}</span><ChevronRight size={13} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />
   </Button>
   const outcome = status.outcome === 'obsolete' ? t("No longer needed") : status.outcome === 'dismissed' ? t("Dismissed") : status.outcome === 'answered' ? t("Answered") : t("Cancelled")
-  return <div className="question-row" data-question-request={request.requestId}>
-    <div className="question-row-head"><ShieldQuestion size={13} /><strong>{count}</strong><span className="muted" aria-hidden="true">·</span><span className="muted">{outcome}{status.reason ? `: ${status.reason}` : ''}</span></div>
-    <dl className="question-row-answers">{request.questions.map((q) => {
+  return <div className="question-row [&:is(button).pending]:flex-row [&:is(button).pending]:items-center [&:is(button).pending]:gap-2 [&:is(button).pending]:w-full [&:is(button).pending]:h-auto [&:is(button).pending]:bg-raised [&:is(button).pending]:text-foreground [&:is(button).pending]:font-normal [&:is(button).pending]:text-left [&:is(button).pending]:whitespace-normal [&:is(button).pending:hover]:[border-color:var(--line-strong)] [&_.caret]:flex-none [&_.caret]:text-muted-foreground flex flex-col gap-1.5 m-[8px_0] p-[8px_12px] [border:1px_solid_transparent] rounded-(--radius-m) text-control bg-fill" data-question-request={request.requestId}>
+    <div className="question-row-head [&_>_svg]:text-muted-foreground flex items-center gap-1.5"><ShieldQuestion size={13} /><strong>{count}</strong><span className="muted text-muted-foreground" aria-hidden="true">·</span><span className="muted text-muted-foreground">{outcome}{status.reason ? `: ${status.reason}` : ''}</span></div>
+    {!showAnswers && <p className="m-0 text-muted-foreground">{summary}</p>}
+    {showAnswers && <dl className="question-row-answers [&_>_div]:grid [&_>_div]:[grid-template-columns:minmax(0,_1fr)_minmax(0,_1fr)] [&_>_div]:gap-3 [&_dt]:text-soft [&_dd]:m-0 grid gap-1 m-0">{request.questions.map((q) => {
       const answer = questionAnswer(status.answers, questionKey(q))
-      return <div key={questionKey(q)}><dt>{q.question}</dt><dd className={answer ? '' : 'muted'}>{answer ?? t("No answer")}</dd></div>
-    })}</dl>
+      return <div key={questionKey(q)}><dt>{q.question}</dt><dd className={answer ? '' : 'muted text-muted-foreground'}>{answer ?? t("No answer")}</dd></div>
+    })}</dl>}
   </div>
 }

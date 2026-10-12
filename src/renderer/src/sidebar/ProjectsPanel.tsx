@@ -1,12 +1,12 @@
 import { t, useLanguage } from './../i18n'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Archive, ArchiveRestore, ChevronRight, MessageCircle, FolderClosed, FolderOpen, FolderPlus, FolderSearch, GitBranch, Link2, Pencil, Pin, PinOff, Plus, Sparkles, SquarePen, Trash2, Unlink, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { NO_PROJECT, type Project, type Task } from '../../../shared/types'
-import { invoke } from '../ipc'
+import { copyText, invoke } from '../ipc'
 import { Dialog, useContextMenu, timeAgo, type MenuEntry } from '../Menu'
 import { errorText } from '../TaskPane'
 import { notifyError } from '../Notifications'
@@ -45,27 +45,27 @@ export function ProjectsPanel() {
   const hasFiles = (event: React.DragEvent) => event.dataTransfer.types.includes('Files')
 
   return (
-    <div className={`panel tasks-panel${folderOver ? ' folder-drop' : ''}`}
+    <div className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] p-[2px_8px_16px] tasks-panel${folderOver ? ' folder-drop' : ''}`}
       onDragOver={(event) => { if (!hasFiles(event) || addProject.busy) return; event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setFolderOver(true) }}
       onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFolderOver(false) }}
       onDrop={(event) => { if (!hasFiles(event)) return; event.preventDefault(); setFolderOver(false); void addProject.addDropped([...event.dataTransfer.files]) }}>
-      <div className="section-head">
+      <div className="section-head [.review-inbox_>_&]:gap-2 [&_button.small-icon]:mr-0 flex items-center justify-between text-control text-muted-foreground p-[5px_8px]">
         <span>{recentMode ? t("Recent chats") : t("Projects")}</span>
-        <Button className="ghost icon small-icon" aria-label={t("Add project")} title={t("Add project…")} disabled={addProject.busy} onClick={() => void addProject.add()}>
+        <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Add project")} title={t("Add project…")} disabled={addProject.busy} onClick={() => void addProject.add()}>
           <FolderPlus size={14} />
         </Button>
       </div>
       {recentMode && latest.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
       {!recentMode && ws.projects.length === 0 && (
-        <div className="add-project">
-          <p className="muted hint">{t("Pick a repository, or a folder that holds several repositories. Ramu groups them into one workspace.")}</p>
-          <Button className="add-project-btn" disabled={addProject.busy} onClick={() => void addProject.add()}><FolderPlus size={14} /> {t(" Add project…")}</Button>
+        <div className="add-project [&_.hint]:m-[6px_0_14px] [&_.hint]:leading-[1.55] p-[2px_8px_8px]">
+          <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">{t("Pick a repository, or a folder that holds several repositories. Ramu groups them into one workspace.")}</p>
+          <Button variant="secondary" className="bg-fill hover:bg-fill-hover add-project-btn [&:hover:not(:disabled)]:[background:var(--fill-hover)] w-full min-h-[30px] rounded-(--radius-s) bg-fill [border-color:transparent] text-foreground justify-start" disabled={addProject.busy} onClick={() => void addProject.add()}><FolderPlus size={14} /> {t(" Add project…")}</Button>
         </div>
       )}
       {!recentMode && ws.projects.map((p) => (
         <ProjectGroup key={p.id} project={p} dnd={dnd} />
       ))}
-      {!recentMode && <><div className="section-head"><span>{t("Chats")}</span><Button className="ghost icon small-icon" aria-label={t("New chat without a project")} onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></div>
+      {!recentMode && <><div className="section-head [.review-inbox_>_&]:gap-2 [&_button.small-icon]:mr-0 flex items-center justify-between text-control text-muted-foreground p-[5px_8px]"><span>{t("Chats")}</span><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("New chat without a project")} onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></div>
       {looseChats.map((t) => <TaskRow key={t.id} task={t} />)}</>}
     </div>
   )
@@ -81,11 +81,11 @@ type ProjectDnd = { enabled: boolean; dragging: string | null; drop: { id: strin
 /** Details for a project, shown to the right of the sidebar after a short hover; it stays open while the pointer is on it. */
 function ProjectHoverCard({ project, folders, chats }: { project: Project; folders: { id: string; name: string; root: string }[]; chats: number }) {
   useLanguage()
-  return <HoverCardContent side="right" align="start" sideOffset={6} alignOffset={-4} className="project-hover-card">
-    <div className="phc-title"><FolderClosed size={15} /><strong>{project.name}</strong></div>
-    <div className="phc-line muted"><MessageCircle size={14} />{chats} {chats === 1 ? t("chat") : t("chats")}</div>
-    <div className="phc-sep" />
-    {(folders.length ? folders.map((f) => ({ key: f.id, name: f.name, root: f.root })) : project.root ? [{ key: 'root', name: project.name, root: project.root }] : []).map((f) => <div key={f.key} className="phc-folder" title={f.root}><FolderClosed size={14} /><span>{f.root}</span></div>)}
+  return <HoverCardContent side="right" align="start" sideOffset={6} alignOffset={-4} className="project-hover-card relative z-1200 w-[320px] max-w-[calc(100vw_-_24px)] p-1.5 [border:1px_solid_var(--edge)] rounded-(--radius-m) [background:color-mix(in_srgb,_var(--raised)_94%,_transparent)] [backdrop-filter:blur(14px)] [box-shadow:0_10px_32px_rgba(0,_0,_0,_0.45)] text-control [animation:fade-only_0.12s_ease-out]">
+    <div className="phc-title [&_strong]:font-semibold [&_strong]:overflow-hidden [&_strong]:text-ellipsis [&_strong]:whitespace-nowrap [&_svg]:flex-none [&_svg]:text-muted-foreground flex items-center gap-[9px] min-h-7 p-[0_8px]"><FolderClosed size={15} /><strong>{project.name}</strong></div>
+    <div className="phc-line [&_svg]:flex-none [&_svg]:text-muted-foreground flex items-center gap-[9px] min-h-7 p-[0_8px] muted text-muted-foreground"><MessageCircle size={14} />{chats} {chats === 1 ? t("chat") : t("chats")}</div>
+    <div className="phc-sep h-px m-[5px_2px] [background:var(--line)]" />
+    {(folders.length ? folders.map((f) => ({ key: f.id, name: f.name, root: f.root })) : project.root ? [{ key: 'root', name: project.name, root: project.root }] : []).map((f) => <div key={f.key} className="phc-folder flex items-center gap-[9px] min-h-7 p-[0_8px] [&_svg]:flex-none [&_svg]:text-muted-foreground [&_span]:[overflow-wrap:anywhere] [&_span]:leading-[1.4] [&_span]:text-caption items-start pt-[5px] pb-[5px] text-soft" title={f.root}><FolderClosed size={14} /><span>{f.root}</span></div>)}
   </HoverCardContent>
 }
 
@@ -140,7 +140,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
       ? [
           { key: 'repos', label: <><GitBranch size={14} /> {t(" Repositories")}</>, submenu: repos.map((r) => ({
             key: r.id,
-            label: <><span className="menu-label">{r.name}</span><span className="muted">{t("Disconnect")}</span></>,
+            label: <><span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis">{r.name}</span><span className="muted text-muted-foreground">{t("Disconnect")}</span></>,
             onSelect: () => void act(() => invoke('repos.remove', r.id)),
           })) } as MenuEntry,
         ]
@@ -160,7 +160,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
 
   return (
     <section
-      className={`project-group${dnd.dragging === project.id ? ' dragging' : ''}${dnd.drop?.id === project.id && dnd.dragging !== project.id ? dnd.drop.after ? ' drop-after' : ' drop-before' : ''}`}
+      className={`project-group [&.dragging]:[opacity:0.45] [&.drop-before::before]:[content:''] [&.drop-before::before]:absolute [&.drop-before::before]:left-1.5 [&.drop-before::before]:right-1.5 [&.drop-before::before]:h-0.5 [&.drop-before::before]:[border-radius:1px] [&.drop-before::before]:[background:var(--accent)] [&.drop-before::before]:pointer-events-none [&.drop-before::before]:z-2 [&.drop-before::before]:top-[-2px] [&.drop-after::after]:[content:''] [&.drop-after::after]:absolute [&.drop-after::after]:left-1.5 [&.drop-after::after]:right-1.5 [&.drop-after::after]:h-0.5 [&.drop-after::after]:[border-radius:1px] [&.drop-after::after]:[background:var(--accent)] [&.drop-after::after]:pointer-events-none [&.drop-after::after]:z-2 [&.drop-after::after]:bottom-[-2px] mb-1.5 relative${dnd.dragging === project.id ? ' dragging' : ''}${dnd.drop?.id === project.id && dnd.dragging !== project.id ? dnd.drop.after ? ' drop-after' : ' drop-before' : ''}`}
       onDragOver={(event) => {
         if (!dnd.enabled || !dnd.dragging || dnd.dragging === project.id || !event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return
         event.preventDefault()
@@ -183,7 +183,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
         draggable={dnd.enabled && !renaming}
         onDragStart={(event) => { event.dataTransfer.setData(PROJECT_DRAG_TYPE, project.id); event.dataTransfer.effectAllowed = 'move'; dnd.setDragging(project.id) }}
         onDragEnd={() => { dnd.setDragging(null); dnd.setDrop(null) }}
-        className={active ? 'project-row active' : 'project-row'}
+        className={active ? 'project-row [&:hover]:bg-hover [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [&_>_:not(.project-name)]:mt-0.5 [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft min-h-[34px] p-[4px_8px_6px] active' : 'project-row [&:hover]:bg-hover [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [&_>_:not(.project-name)]:mt-0.5 [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft min-h-[34px] p-[4px_8px_6px]'}
         role="button"
         tabIndex={0}
         aria-label={t("Open {0}", { "0": project.name })}
@@ -195,7 +195,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
         onKeyDown={(e) => { contextMenu.onKeyDown(e); if (e.key === 'Enter') ws.openProject(project.id) }}
         onMouseDown={() => setHover(false)}
       >
-        {open ? <FolderOpen size={15} className="muted" /> : <FolderClosed size={15} className="muted" />}
+        {open ? <FolderOpen size={15} className="muted text-muted-foreground" /> : <FolderClosed size={15} className="muted text-muted-foreground" />}
         {renaming ? (
           <InlineEdit
             value={project.name}
@@ -205,11 +205,11 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
             }}
           />
         ) : (
-          <FadeText className="project-name" text={project.name} />
+          <FadeText className="project-name font-semibold text-foreground overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0" text={project.name} />
         )}
-        <span className="row-actions">
-          <Button
-            className="ghost icon small-icon"
+        <span className="row-actions [&:has([aria-expanded='true'])]:opacity-100 flex items-center gap-0.5 opacity-0 [transition:opacity_0.1s] flex-none">
+          <Button variant="ghost" size="icon-xs"
+            className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
             aria-label={t("Toggle {0}", { "0": project.name })}
             title={open ? t("Collapse") : t("Expand")}
             onClick={(e) => {
@@ -217,10 +217,10 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
               setOpen((o) => !o)
             }}
           >
-            <ChevronRight size={14} className={open ? 'caret open' : 'caret'} />
+            <ChevronRight size={14} className={open ? 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)] open' : 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]'} />
           </Button>
-          <Button
-            className="ghost icon small-icon"
+          <Button variant="ghost" size="icon-xs"
+            className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
             aria-label={t("New chat in {0}", { "0": project.name })}
             title={t("New chat")}
             onClick={(e) => {
@@ -234,20 +234,20 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
       </HoverCardTrigger>
       <ProjectHoverCard project={project} folders={repos.map((r) => ({ id: r.id, name: r.name, root: r.root }))} chats={all.filter((t) => t.status !== 'archived').length} />
       </HoverCard>
-      {error && <div className="error small row-error">{error}</div>}
+      {error && <div className="error text-bad small text-caption row-error p-[2px_10px_4px_26px]">{error}</div>}
       {open && (
-        <div className="task-list">
-          {tasks.length === 0 && <div className="muted small empty-tasks">{t("No chats yet")}</div>}
+        <div className="task-list flex flex-col gap-px pl-3.5">
+          {tasks.length === 0 && <div className="muted text-muted-foreground small text-caption empty-tasks p-[4px_10px]">{t("No chats yet")}</div>}
           {tasks.map((t) => <TaskRow key={t.id} task={t} />)}
           {others.length > recent && (
-            <Button className="archived-toggle" onClick={() => setShowAll((s) => !s)}>
+            <Button variant="secondary" className="bg-fill hover:bg-fill-hover archived-toggle [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-soft bg-transparent [border:none] text-muted-foreground text-caption p-[4px_10px] gap-1 justify-start" onClick={() => setShowAll((s) => !s)}>
               {showAll ? t("Show less") : t("Show more")}
             </Button>
           )}
           {archived.length > 0 && (
             <>
-              <Button className="archived-toggle" onClick={() => setShowArchived((s) => !s)}>
-                <ChevronRight size={12} className={showArchived ? 'caret open' : 'caret'} /> {t(" Archived (")}{archived.length})
+              <Button variant="secondary" className="bg-fill hover:bg-fill-hover archived-toggle [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-soft bg-transparent [border:none] text-muted-foreground text-caption p-[4px_10px] gap-1 justify-start" onClick={() => setShowArchived((s) => !s)}>
+                <ChevronRight size={12} className={showArchived ? 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)] open' : 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]'} /> {t(" Archived (")}{archived.length})
               </Button>
               {showArchived && archived.map((t) => <TaskRow key={t.id} task={t} />)}
             </>
@@ -283,6 +283,7 @@ function TaskRow({ task, projectName }: { task: Task; projectName?: string }) {
   }
 
   const items: MenuEntry[] = [
+    { key: 'copy-id', label: t("Copy chat ID"), onSelect: () => void copyText(task.id).catch((reason) => notifyError(errorText(reason), 'Copy chat ID')) },
     { key: 'rename', label: <><Pencil size={14} /> {t(" Rename")}</>, onSelect: () => setRenaming(true) },
     { key: 'pin', label: <>{task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />} {task.pinnedAt ? t("Unpin") : t("Pin")}</>, onSelect: () => void run(() => invoke('tasks.pin', task.id, !task.pinnedAt)) },
     { key: 'rename-ai', label: <><Sparkles size={14} /> {t(" Rename with AI")}</>, disabled: naming, onSelect: () => { setNaming(true); void run(() => invoke('tasks.generateTitle', task.id, initialSettings, true)).finally(() => setNaming(false)) } },
@@ -307,7 +308,7 @@ function TaskRow({ task, projectName }: { task: Task; projectName?: string }) {
     <>
       <div
         onContextMenu={contextMenu.onContextMenu}
-        className={`task-row${active ? ' active' : ''}${archived ? ' archived' : ''}`}
+        className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-hover [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-brand-wash [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] min-h-8 rounded-(--radius-s) p-[0_8px_2px_10px] ${active ? ' active' : ''}${archived ? ' archived' : ''}`}
         role="button"
         tabIndex={0}
         onClick={() => !renaming && ws.openTask(task.id)}
@@ -323,24 +324,24 @@ function TaskRow({ task, projectName }: { task: Task; projectName?: string }) {
             }}
           />
         ) : (
-          <>{projectName && <span className="task-project">{projectName}</span>}<FadeText className="grow task-title" text={task.title} /></>
+          <>{projectName && <span className="task-project [&::after]:[content:'·'] [&::after]:ml-1 flex-none max-w-[40%] overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground font-medium">{projectName}</span>}<FadeText className="grow flex-1 min-w-0 text-left task-title overflow-hidden text-ellipsis whitespace-nowrap" text={task.title} /></>
         )}
-        {task.pinnedAt && !archived && <Pin size={11} className="muted mode-icon" aria-label={t("Pinned")} />}
-        {naming && <Sparkles size={12} className="muted mode-icon" aria-label={t("Naming chat")} />}
-        {task.mode === 'worktree' && <span title={ws.workspaces.find((w) => w.id === task.workspaceId)?.name ?? t("Isolated worktrees")}><GitBranch size={12} className="muted mode-icon" aria-label={t("Isolated worktrees")} /></span>}
-        <span className="row-actions task-actions">
-          {!archived && <Button className="ghost icon small-icon" aria-label={task.pinnedAt ? t("Unpin chat") : t("Pin chat")} title={task.pinnedAt ? t("Unpin") : t("Pin")} onClick={(e) => { e.stopPropagation(); void run(() => invoke('tasks.pin', task.id, !task.pinnedAt)) }}>{task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}</Button>}
-          <Button className="ghost icon small-icon" aria-label={archived ? t("Unarchive chat") : t("Archive chat")} title={archived ? t("Unarchive") : t("Archive")} onClick={(e) => { e.stopPropagation(); void run(async () => { await invoke('tasks.archive', task.id, !archived); if (!archived) ws.forgetTask(task.id) }) }}>{archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}</Button>
+        {task.pinnedAt && !archived && <Pin size={11} className="muted text-muted-foreground mode-icon flex-none" aria-label={t("Pinned")} />}
+        {naming && <Sparkles size={12} className="muted text-muted-foreground mode-icon flex-none" aria-label={t("Naming chat")} />}
+        {task.mode === 'worktree' && <span title={ws.workspaces.find((w) => w.id === task.workspaceId)?.name ?? t("Isolated worktrees")}><GitBranch size={12} className="muted text-muted-foreground mode-icon flex-none" aria-label={t("Isolated worktrees")} /></span>}
+        <span className="row-actions [&:has([aria-expanded='true'])]:opacity-100 flex items-center gap-0.5 opacity-0 [transition:opacity_0.1s] flex-none task-actions">
+          {!archived && <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={task.pinnedAt ? t("Unpin chat") : t("Pin chat")} title={task.pinnedAt ? t("Unpin") : t("Pin")} onClick={(e) => { e.stopPropagation(); void run(() => invoke('tasks.pin', task.id, !task.pinnedAt)) }}>{task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}</Button>}
+          <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={archived ? t("Unarchive chat") : t("Archive chat")} title={archived ? t("Unarchive") : t("Archive")} onClick={(e) => { e.stopPropagation(); void run(async () => { await invoke('tasks.archive', task.id, !archived); if (!archived) ws.forgetTask(task.id) }) }}>{archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}</Button>
         </span>
-        {task.status === 'running' ? <span className="task-state spinner" role="img" aria-label={t("Agent working")} title={t("Agent working")} />
-          : task.status === 'needs-input' ? <span className="task-state dot warn" role="img" aria-label={t("Waiting for your input")} title={t("Waiting for your input")} />
-          : task.status === 'failed' ? <span className="task-state dot bad" role="img" aria-label={t("Agent failed")} title={t("Agent failed")} />
-          : ws.unread.has(task.id) ? <span className="task-state dot unread" role="img" aria-label={t("Finished, not viewed yet")} title={t("Finished, not viewed yet")} />
-          : <span className="task-time">{timeAgo(task.lastActiveAt)}</span>}
+        {task.status === 'running' ? <span className="task-state [&.spinner::before]:[content:''] [&.spinner::before]:w-3 [&.spinner::before]:h-3 [&.spinner::before]:[box-sizing:border-box] [&.spinner::before]:rounded-full [&.spinner::before]:[border:2px_solid_var(--line-strong)] [&.spinner::before]:[border-top-color:var(--soft)] [&.spinner::before]:[animation:spin_0.9s_linear_infinite] [&.dot::before]:[content:''] [&.dot::before]:w-2 [&.dot::before]:h-2 [&.dot::before]:rounded-full [&.dot::before]:[background:var(--muted)] [&.unread::before]:[background:var(--accent)] [&.warn::before]:[background:var(--warn)] [&.bad::before]:[background:var(--bad)] w-3.5 h-3.5 flex-none inline-flex items-center justify-center mr-1 spinner" role="img" aria-label={t("Agent working")} title={t("Agent working")} />
+          : task.status === 'needs-input' ? <span className="task-state [&.spinner::before]:[content:''] [&.spinner::before]:w-3 [&.spinner::before]:h-3 [&.spinner::before]:[box-sizing:border-box] [&.spinner::before]:rounded-full [&.spinner::before]:[border:2px_solid_var(--line-strong)] [&.spinner::before]:[border-top-color:var(--soft)] [&.spinner::before]:[animation:spin_0.9s_linear_infinite] [&.dot::before]:[content:''] [&.dot::before]:w-2 [&.dot::before]:h-2 [&.dot::before]:rounded-full [&.dot::before]:[background:var(--muted)] [&.unread::before]:[background:var(--accent)] [&.warn::before]:[background:var(--warn)] [&.bad::before]:[background:var(--bad)] w-3.5 h-3.5 flex-none inline-flex items-center justify-center mr-1 dot warn text-warn" role="img" aria-label={t("Waiting for your input")} title={t("Waiting for your input")} />
+          : task.status === 'failed' ? <span className="task-state [&.spinner::before]:[content:''] [&.spinner::before]:w-3 [&.spinner::before]:h-3 [&.spinner::before]:[box-sizing:border-box] [&.spinner::before]:rounded-full [&.spinner::before]:[border:2px_solid_var(--line-strong)] [&.spinner::before]:[border-top-color:var(--soft)] [&.spinner::before]:[animation:spin_0.9s_linear_infinite] [&.dot::before]:[content:''] [&.dot::before]:w-2 [&.dot::before]:h-2 [&.dot::before]:rounded-full [&.dot::before]:[background:var(--muted)] [&.unread::before]:[background:var(--accent)] [&.warn::before]:[background:var(--warn)] [&.bad::before]:[background:var(--bad)] w-3.5 h-3.5 flex-none inline-flex items-center justify-center mr-1 dot bad" role="img" aria-label={t("Agent failed")} title={t("Agent failed")} />
+          : ws.unread.has(task.id) ? <span className="task-state [&.spinner::before]:[content:''] [&.spinner::before]:w-3 [&.spinner::before]:h-3 [&.spinner::before]:[box-sizing:border-box] [&.spinner::before]:rounded-full [&.spinner::before]:[border:2px_solid_var(--line-strong)] [&.spinner::before]:[border-top-color:var(--soft)] [&.spinner::before]:[animation:spin_0.9s_linear_infinite] [&.dot::before]:[content:''] [&.dot::before]:w-2 [&.dot::before]:h-2 [&.dot::before]:rounded-full [&.dot::before]:[background:var(--muted)] [&.unread::before]:[background:var(--accent)] [&.warn::before]:[background:var(--warn)] [&.bad::before]:[background:var(--bad)] w-3.5 h-3.5 flex-none inline-flex items-center justify-center mr-1 dot unread" role="img" aria-label={t("Finished, not viewed yet")} title={t("Finished, not viewed yet")} />
+          : <span className="task-time text-caption text-muted-foreground flex-none tabular-nums min-w-6 text-right">{timeAgo(task.lastActiveAt)}</span>}
 
       </div>
       {contextMenu.menu}
-      {error && !deleting && <div className="error small row-error">{error}</div>}
+      {error && !deleting && <div className="error text-bad small text-caption row-error p-[2px_10px_4px_26px]">{error}</div>}
       {deleting && (
         <Dialog
           title={t("Delete “{0}”?", { "0": task.title })}
@@ -372,11 +373,11 @@ function TaskRow({ task, projectName }: { task: Task; projectName?: string }) {
             <label>
               <Checkbox checked={removeWorktrees} onCheckedChange={(checked) => setRemoveWorktrees(checked === true)} />
               <span>
-                {t("Also remove its worktrees")}<span className="muted block">{t("Only if they have no uncommitted changes. Branches are kept.")}</span>
+                {t("Also remove its worktrees")}<span className="muted text-muted-foreground block block">{t("Only if they have no uncommitted changes. Branches are kept.")}</span>
               </span>
             </label>
           ) : (
-            <p className="muted">{t("Shared files, terminals, worktrees, and other chats stay open.")}</p>
+            <p className="muted text-muted-foreground">{t("Shared files, terminals, worktrees, and other chats stay open.")}</p>
           )}
         </Dialog>
       )}
@@ -392,7 +393,7 @@ function InlineEdit({ value, onDone }: { value: string; onDone: (v: string | nul
   return (
     <Input
       ref={ref}
-      className="inline-edit"
+      className="inline-edit flex-1 min-w-0 p-[2px_6px] [font:inherit] bg-canvas [border-color:var(--line-strong)]"
       aria-label={t("Name")}
       value={v}
       autoFocus

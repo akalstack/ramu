@@ -31,7 +31,33 @@ export function parseTaskMessage(text: string): { name: string; address: string;
 export function latestTasks(events: AgentEvent[]): AgentTask[] {
   const tasks = new Map<string, AgentTask>()
   for (const event of events) if (event.kind === 'agent') { const task: AgentTask & { kind?: string; at?: number } = { ...event }; delete task.kind; delete task.at; tasks.set(task.agentId, task) }
+  // Older background services saved the delivered advice without a task or its own transcript.
+  // Keep those links usable without changing the saved conversation.
+  for (const event of events) {
+    if (event.kind !== 'user' || event.agentId) continue
+    const advice = parseAdvice(event.text)
+    if (!advice) continue
+    const agentId = advisorAgentId(advice.requestId)
+    if (!tasks.has(agentId)) tasks.set(agentId, {
+      agentId, name: 'Advisor', taskType: 'advisor', status: advice.failed ? 'failed' : 'completed',
+      summary: advice.failed ? undefined : advice.body, error: advice.failed ? advice.body : undefined,
+      background: true, endedAt: event.at, canMessage: false, canStop: false,
+    })
+  }
   return [...tasks.values()]
+}
+
+/** Recover an older consultation's saved answer when it has no separate transcript. */
+export function advisorTranscript(events: AgentEvent[], agentId: string): AgentEvent[] {
+  const own = events.filter((event) => event.agentId === agentId && event.kind !== 'agent')
+  if (own.some((event) => event.kind === 'text' || event.kind === 'error')) return own
+  const delivered = events.find((event) => event.kind === 'user' && !event.agentId && (() => {
+    const advice = parseAdvice(event.text)
+    return advice && advisorAgentId(advice.requestId) === agentId
+  })())
+  if (delivered?.kind !== 'user') return own
+  const advice = parseAdvice(delivered.text)!
+  return [...own, advice.failed ? { kind: 'error', message: advice.body, agentId, at: delivered.at } : { kind: 'text', text: advice.body, agentId, at: delivered.at }]
 }
 
 /** A process that is gone cannot still be running its agents. */

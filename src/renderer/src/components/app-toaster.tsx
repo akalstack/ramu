@@ -41,7 +41,7 @@ function AppToastList({ closeLabel }: { closeLabel: string }) {
 export function AppToaster({ label, closeLabel }: { label: string; closeLabel: string }) {
   return <ToastProvider toastManager={toast} limit={4}>
     <ToastPortal>
-      <ToastViewport aria-label={label} className="app-toast-viewport">
+      <ToastViewport aria-label={label} className="app-toast-viewport right-3 left-auto bottom-[36px] w-[min(380px,_calc(100vw_-_24px))] z-1250">
         <AppToastList closeLabel={closeLabel} />
       </ToastViewport>
     </ToastPortal>

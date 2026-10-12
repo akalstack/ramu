@@ -66,7 +66,25 @@ async function main() {
   // Our own menu: keeps copy/paste and quit, but leaves ⌘W, ⌘N, ⌘P and friends to the app's shortcuts.
   const updateApplicationMenu = () => {
     const menu = Menu.buildFromTemplate([
-      ...(process.platform === 'darwin' ? [{ label: 'Ramu', role: 'appMenu' as const }] : []),
+      {
+        label: process.platform === 'darwin' ? 'Ramu' : t('File'),
+        submenu: [
+          { label: t('About Ramu'), role: 'about' },
+          { label: t('Check for Updates…'), click: () => openSettings('check-updates') },
+          { type: 'separator' },
+          { label: t('Settings…'), accelerator: 'CommandOrControl+,', click: () => openSettings('settings') },
+          { type: 'separator' },
+          ...(process.platform === 'darwin' ? [
+            { label: t('Services'), role: 'services' as const },
+            { type: 'separator' as const },
+            { label: t('Hide Ramu'), role: 'hide' as const },
+            { label: t('Hide others'), role: 'hideOthers' as const },
+            { label: t('Show all'), role: 'unhide' as const },
+            { type: 'separator' as const },
+          ] : []),
+          { label: t('Quit Ramu'), role: 'quit' },
+        ],
+      },
       { label: t('Edit'), role: 'editMenu' },
       {
         label: t('View'),
@@ -82,6 +100,13 @@ async function main() {
     Menu.setApplicationMenu(menu)
   }
 
+  const openSettings = (action: 'settings' | 'check-updates') => {
+    if (win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+    send('menu:action', { action })
+  }
   updateApplicationMenu()
 
   // Packaged macOS builds take the icon from the bundle; development, Linux and Windows read it from assets/.

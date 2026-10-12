@@ -376,6 +376,10 @@ export async function stagedPatch(cwd: string): Promise<{ patch: string; fingerp
   const patch = await git(cwd, ['diff', '--cached', '--no-ext-diff', '--no-textconv', '--'])
   return { patch, fingerprint: createHash('sha256').update(patch).digest('hex') }
 }
+/** Every staged file with its status (A/M/D/R…), so a commit draft sees the whole change even when the patch is cut short. */
+export async function stagedSummary(cwd: string): Promise<string> {
+  return (await git(cwd, ['diff', '--cached', '--no-ext-diff', '--name-status', '-M', '--'])).trim()
+}
 
 async function commitParent(cwd: string, oid: string): Promise<string | null> {
   if (!/^[a-f0-9]{40,64}$/.test(oid)) throw new Error('Invalid commit identifier')

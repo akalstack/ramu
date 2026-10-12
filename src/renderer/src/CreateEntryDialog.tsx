@@ -44,7 +44,7 @@ export function CreateEntryDialog() {
   }
   return <Dialog title={request.kind === 'file' ? t("New file") : t("New folder")} confirmLabel={t("Create")} busy={busy} error={error} onCancel={() => { if (!busy) setRequest(null) }} onConfirm={() => void create()}>
     {repositories.length > 1 && <Dropdown label={t("Repository")} value={repoId} options={repositories.map((binding) => ({ value: binding.repoId, label: binding.repoName }))} onChange={setRepoId} disabled={busy} />}
-    <label className="explorer-name-field">{t("Relative path")}<Input ref={input} placeholder={request.kind === 'file' ? 'src/example.ts' : 'src/components'} value={path} onChange={(event) => setPath(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void create() }} /></label>
-    <p className="muted small">{repositories.find((binding) => binding.repoId === repoId)?.repoName} {t(" · Parent folders must already exist.")}</p>
+    <label className="explorer-name-field [&_input]:w-full flex flex-col items-stretch">{t("Relative path")}<Input ref={input} placeholder={request.kind === 'file' ? 'src/example.ts' : 'src/components'} value={path} onChange={(event) => setPath(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void create() }} /></label>
+    <p className="muted text-muted-foreground small text-caption">{repositories.find((binding) => binding.repoId === repoId)?.repoName} {t(" · Parent folders must already exist.")}</p>
   </Dialog>
 }

@@ -615,11 +615,11 @@ export function createDispatcher(host: RuntimeHost, { lsp, workspace, terminals,
       args: z.tuple([id, id, agentSettings]),
       run: async (t: string, r: string, settings: AgentSettings) => {
         const cwd = gitCwdOf(t, r)
-        const { patch, fingerprint } = await lock.run(`checkout:${cwd}`, () => git.stagedPatch(cwd))
+        const { patch, fingerprint, files } = await lock.run(`checkout:${cwd}`, async () => ({ ...await git.stagedPatch(cwd), files: await git.stagedSummary(cwd) }))
         const prefs = workspace.getAppState<Partial<AppPreferences>>('app-preferences', {})
         const style = prefs.commitStyle ?? DEFAULT_APP_PREFERENCES.commitStyle
         const recentSubjects = style === 'repository' ? (await git.history(cwd).catch(() => [])).slice(0, 20).map((commit) => commit.subject) : []
-        const draft = await agents.draftCommit(patch, settings, { style, instructions: prefs.commitInstructions ?? '', recentSubjects })
+        const draft = await agents.draftCommit(patch, settings, { style, instructions: prefs.commitInstructions ?? '', recentSubjects }, files)
         if ((await git.stagedPatch(cwd)).fingerprint !== fingerprint) throw new Error('Staged changes changed while generating the message. Try again.')
         return { ...draft, fingerprint }
       },
@@ -712,6 +712,7 @@ export function createDispatcher(host: RuntimeHost, { lsp, workspace, terminals,
     'agent.removeQueued': { args: z.tuple([id, id]), run: (s: string, messageId: string) => agents.removeQueued(s, messageId) },
     'agent.send': { args: z.tuple([id, text]), run: (s: string, t: string) => lock.runMany(agents.get(s).covers.map((cwd) => `checkout:${cwd}`), () => agents.send(s, t)) },
     'agent.resumeQueue': { args: z.tuple([id]), run: (s: string) => agents.resumeQueue(s) },
+    'agent.sendQueuedNow': { args: z.tuple([id, id]), run: (s: string, messageId: string) => lock.runMany(agents.get(s).covers.map((cwd) => `checkout:${cwd}`), () => agents.sendQueuedNow(s, messageId)) },
     'agent.continuationPrompt': { args: z.tuple([id]), run: (s: string) => agents.continuationPrompt(s) },
     'agent.interrupt': { args: z.tuple([id]), run: (s: string) => agents.interrupt(s) },
     'agent.stop': { args: z.tuple([id]), run: (s: string) => agents.stopAndWait(s) },

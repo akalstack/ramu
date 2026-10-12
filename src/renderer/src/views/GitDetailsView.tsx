@@ -41,9 +41,9 @@ export function GitDetailsView({ taskId, view, binding }: { taskId: string; view
   }, [taskId, binding.repoId, binding.cwd, view.oid])
   useEffect(() => { editorRef.current?.updateOptions({ fontSize: preferences.editorFontSize, lineHeight: Math.round(preferences.editorFontSize * 1.6) }) }, [preferences.editorFontSize])
 
-  return <div className="file-view">
-    <div className="view-header"><span className="strong">{binding.repoName}</span><span className="git-detail-title" title={view.title}>{view.title}</span>{loading && <span className="muted small">{t("Loading…")}</span>}</div>
-    {error && <div className="error banner">{error}</div>}
-    <div ref={host} className="editor-host" />
+  return <div className="file-view flex flex-col flex-1 min-h-0 min-w-0">
+    <div className="view-header [&_.path]:flex-1 [&_button]:text-control [&_button]:p-[2px_8px] [&_[aria-pressed='true']]:bg-hover [&_[aria-pressed='true']]:text-foreground flex gap-2.5 items-center h-8 p-[0_12px] flex-none min-w-0 text-control text-soft"><span className="strong font-semibold">{binding.repoName}</span><span className="git-detail-title min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={view.title}>{view.title}</span>{loading && <span className="muted text-muted-foreground small text-caption">{t("Loading…")}</span>}</div>
+    {error && <div className="error text-bad banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control">{error}</div>}
+    <div ref={host} className="editor-host flex-1 min-h-0" />
   </div>
 }

@@ -53,21 +53,21 @@ export function WorkspaceSyncDialog({ taskId, bindings, onClose }: { taskId: str
     setBusy(false); setFinished(true); window.dispatchEvent(new Event('ramu:git-updated'))
   }
   return <Dialog title={t("Sync workspace")} confirmLabel={finished ? t("Sync again") : chosen.length ? t("Sync {0} {1}", { "0": chosen.length, "1": chosen.length === 1 ? t('repository') : 'repositories' }) : t("Nothing to sync")} confirmDisabled={busy || !chosen.length} busy={busy} error={error} onConfirm={() => void run()} onCancel={onClose}>
-    <div className="workspace-sync">
-      <p className="muted small">{t("Pulls, then pushes, each ticked repository, up to four at a time. Change a branch first if a repository is on the wrong one.")}</p>
+    <div className="workspace-sync [&_>_p]:m-[0_0_8px] flex flex-col gap-0.5">
+      <p className="muted text-muted-foreground small text-caption">{t("Pulls, then pushes, each ticked repository, up to four at a time. Change a branch first if a repository is on the wrong one.")}</p>
       {bindings.map((binding) => {
         const row = rows[binding.repoId], status = row?.status ?? null, ok = canSync(status)
         const note = !status ? 'Loading…' : status.operation ? `${status.operation === 'rebase' ? 'Rebase' : 'Merge'} in progress` : status.detached ? 'Detached HEAD' : !status.remote ? 'No remote' : !status.upstream ? 'Not published' : `${status.behind}↓ ${status.ahead}↑`
         const changes = status?.entries.length ?? 0
-        return <div key={binding.repoId} className="workspace-sync-row">
+        return <div key={binding.repoId} className="workspace-sync-row [&:hover]:bg-hover grid [grid-template-columns:20px_minmax(80px,_1fr)_minmax(120px,_170px)_minmax(110px,_auto)_18px] items-center gap-2.5 min-h-[36px] p-[2px_4px] rounded-(--radius-s)">
           <Checkbox aria-label={t("Sync {0}", { "0": binding.repoName })} checked={selection.has(binding.repoId) && ok} disabled={!ok || busy} onCheckedChange={() => toggle(binding.repoId)} />
-          <span className="workspace-sync-name strong" title={binding.cwd}>{binding.repoName}</span>
+          <span className="workspace-sync-name overflow-hidden text-ellipsis whitespace-nowrap strong font-semibold" title={binding.cwd}>{binding.repoName}</span>
           <BranchPicker binding={binding} status={status} branches={row?.branches ?? []} busy={busy || !status} className="workspace-sync-branch" onChange={(branch) => void switchBranch(binding, branch)} />
-          <span className="muted small workspace-sync-state">{note}{changes ? ` · ${changes} ${changes === 1 ? 'change' : 'changes'}` : ''}</span>
+          <span className="muted text-muted-foreground small text-caption workspace-sync-state whitespace-nowrap text-right">{note}{changes ? ` · ${changes} ${changes === 1 ? 'change' : 'changes'}` : ''}</span>
           <span className="workspace-sync-result" title={row?.result && row.result !== 'running' && row.result !== 'done' ? row.result : undefined}>
             {row?.result === 'running' ? <Spinner className="size-3.5" /> : row?.result === 'done' ? <Check size={14} className="ok" /> : row?.result ? <CircleAlert size={14} className="bad" /> : null}
           </span>
-          {row?.result && row.result !== 'running' && row.result !== 'done' && <p className="error small workspace-sync-error">{row.result}</p>}
+          {row?.result && row.result !== 'running' && row.result !== 'done' && <p className="error text-bad small text-caption workspace-sync-error [grid-column:2_/_-1] m-[0_0_4px] [overflow-wrap:anywhere]">{row.result}</p>}
         </div>
       })}
     </div>

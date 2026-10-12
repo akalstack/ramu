@@ -232,6 +232,9 @@ describe('AgentService', () => {
     await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:again'))
     svc.stop(s.id)
     expect(svc.get(s.id).state).toBe('stopped')
+    expect(svc.events(s.id).findLast((event) => event.kind === 'state')).toMatchObject({ kind: 'state', state: 'stopped', at: expect.any(Number) })
+    svc.stop(s.id)
+    expect(svc.events(s.id).filter((event) => event.kind === 'state' && event.state === 'stopped')).toHaveLength(1)
   })
 
   it('tracks Claude sub-agents that outlive the turn, keeps their output apart, and relays messages and stops', async () => {
@@ -603,12 +606,22 @@ describe('AI commit message drafts', () => {
     expect(svc.list('t')).toHaveLength(0)
     svc.stopAll()
   })
-  it('refuses empty and oversized diffs before launching a provider', async () => {
+  it('refuses an empty diff before launching a provider', async () => {
     const calls: Options[] = []
     const svc = service(calls)
     await expect(svc.draftCommit('', full)).rejects.toThrow(/Stage changes/)
-    await expect(svc.draftCommit('x'.repeat(120_001), full)).rejects.toThrow(/too large/)
     expect(calls).toHaveLength(0)
+    svc.stopAll()
+  })
+  it('drafts a large commit from every staged file and a cut-short patch', async () => {
+    const calls: Options[] = []
+    const svc = service(calls)
+    const analyze = vi.spyOn(svc as unknown as { analyze: (prompt: string) => Promise<unknown> }, 'analyze').mockResolvedValue({ message: 'feat: big change', provider: 'claude-code', model: 'sonnet' })
+    await svc.draftCommit(`diff --git a/big.ts b/big.ts\n+${'x'.repeat(200_000)}`, full, undefined, 'M\tbig.ts\nA\tsrc/new.ts')
+    const prompt = analyze.mock.calls[0]![0]
+    expect(prompt).toContain('<staged_files>\nM\tbig.ts\nA\tsrc/new.ts\n</staged_files>')
+    expect(prompt).toContain('[truncated]')
+    expect(prompt.length).toBeLessThan(45_000)
     svc.stopAll()
   })
 })
@@ -716,6 +729,32 @@ describe('busy agent messages', () => {
     expect(steer).toHaveBeenCalledWith('redirect now', undefined)
     expect(send).not.toHaveBeenCalled()
     expect(service.queued(session.id).map((m) => m.text)).toEqual(['later'])
+    service.stopAll()
+  })
+
+  it('sends one queued message now by steering the running turn', async () => {
+    const { service, session, steer, send } = setup()
+    await service.submit(session.id, 'later', 'queue')
+    await service.submit(session.id, 'now please', 'queue')
+    await service.sendQueuedNow(session.id, service.queued(session.id)[1]!.id)
+    expect(steer).toHaveBeenCalledWith('now please', undefined)
+    expect(send).not.toHaveBeenCalled()
+    expect(service.queued(session.id).map((m) => m.text)).toEqual(['later'])
+    await expect(service.sendQueuedNow(session.id, 'gone')).rejects.toThrow(/already/)
+    service.stopAll()
+  })
+
+  it('sends a message from a paused queue right away and leaves the rest paused', async () => {
+    const { service, session, send, complete } = setup()
+    const validateFeedback = vi.fn(async (): Promise<void> => { throw new Error('Return to branch main') })
+    service.reviewHooks = { begin: async () => 'r', bind: () => {}, abandon: () => {}, followup: async () => {}, validateFeedback }
+    await service.submit(session.id, 'review feedback', 'queue', [], 'r')
+    await service.submit(session.id, 'plain follow-up', 'queue')
+    complete()
+    await until(() => validateFeedback.mock.calls.length === 1 && service.queued(session.id).length === 2)
+    await service.sendQueuedNow(session.id, service.queued(session.id)[1]!.id)
+    expect(send).toHaveBeenCalledWith('plain follow-up', [])
+    expect(service.events(session.id).findLast((e) => e.kind === 'queue')).toMatchObject({ paused: true, messages: [{ text: 'review feedback' }] })
     service.stopAll()
   })
 

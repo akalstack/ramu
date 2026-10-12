@@ -1,6 +1,6 @@
 import { t, useLanguage, formatLocale } from './i18n'
 import { beginPaneResize } from './paneResize'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { NO_PROJECT, type Attachment, type FileContext } from '../../shared/types'
 import { notifyError } from './Notifications'
 import { useModelSets } from './ModelSets'
@@ -139,29 +139,29 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
   const unfinished = bindings.filter((b) => b.setupState !== 'ready')
 
   return (
-    <section className="task-pane" style={{ display: visible ? 'flex' : 'none' }}>
+    <section className="task-pane flex-1 flex-col min-w-0 min-h-0" style={{ display: visible ? 'flex' : 'none' }}>
       {unfinished.length > 0 && (
-        <div className="banner warn">
+        <div className="banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control warn text-warn">
           <CircleAlert size={14} />
-          <span className="grow">
+          <span className="grow flex-1 min-w-0 text-left">
             {t("Worktree setup didn't finish for ")}{unfinished.map((b) => b.repoName).join(', ')}.
-            {unfinished[0]?.setupError && <span className="muted"> {unfinished[0].setupError}</span>}
+            {unfinished[0]?.setupError && <span className="muted text-muted-foreground"> {unfinished[0].setupError}</span>}
           </span>
-          <Button onClick={retrySetup} disabled={retrying}>
+          <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={retrySetup} disabled={retrying}>
             {retrying ? t("Retrying…") : t("Retry setup")}
           </Button>
         </div>
       )}
-      <div className={`task-body${workspaceOpen ? ' with-editor' : ''}${rightTerminal ? ' terminal-right' : ''}${rightTerminal && editorView ? ' terminal-with-editor' : ''}${bottomTerminal ? ' terminal-bottom' : ''}`} style={{ '--chat-width': state.dockWidth ? `${state.dockWidth}px` : `${defaultChatShare * 100}%`, '--terminal-height': `${state.terminalHeight ?? 260}px` } as CSSProperties} ref={body}>
+      <div className={`task-body [&_>_.view-tabs]:[grid-column:1] [&_>_.view-tabs]:[grid-row:1] [&_>_.editor-area]:[grid-column:1] [&_>_.editor-area]:[grid-row:2] [&_>_.editor-area]:min-h-0 [&_>_.terminal-panel]:[grid-column:1] [&_>_.terminal-panel]:[grid-row:3] [&_>_.terminal-panel]:min-w-0 [&_>_.terminal-panel]:min-h-0 [&_>_.terminal-panel]:w-full [&_>_.terminal-panel]:self-stretch [&_>_.terminal-panel]:h-full! [&_>_.terminal-panel]:max-h-[none] [&_>_.terminal-panel]:overflow-hidden [&_>_.main-chat]:[grid-column:1] [&_>_.main-chat]:[grid-row:1] [&_>_.main-chat]:min-h-0 [&_>_.main-chat]:overflow-hidden [&.with-editor]:[grid-template-columns:minmax(0,_min(var(--chat-width,_55%),_70%))_0_minmax(0,_1fr)] [&.with-editor_>_.view-tabs]:[grid-column:3] [&.with-editor_>_.editor-area]:[grid-column:3] [&.with-editor_>_.terminal-panel]:[grid-column:3] [&.with-editor_>_.splitter]:[justify-self:center] [&.with-editor_>_.splitter]:[grid-column:2] [&.with-editor_>_.splitter]:[grid-row:1] [&.with-editor_>_.main-chat]:[grid-column:1] [&.with-editor_>_.main-chat]:[grid-row:1] [&.with-editor_>_.main-chat]:min-h-0 [&.with-editor_>_.main-chat]:overflow-hidden [&_>_.workspace-panel]:[grid-column:3] [&_>_.workspace-panel]:[grid-row:1] [&_>_.workspace-panel]:flex [&_>_.workspace-panel]:flex-col [&_>_.workspace-panel]:min-w-0 [&_>_.workspace-panel]:min-h-0 [&_>_.workspace-panel]:overflow-hidden [&_>_.terminal-panel.dock-bottom]:[grid-column:1_/_-1] [&_>_.terminal-panel.dock-bottom]:[grid-row:2] [&_>_.terminal-panel.dock-right]:[grid-column:3] [&_>_.terminal-panel.dock-right]:[grid-row:1] [&_>_.terminal-panel.dock-right]:[border-top:0] [&_>_.terminal-panel.dock-right]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] [&.terminal-with-editor_>_.terminal-panel.dock-right]:[grid-column:4] flex-1 grid min-h-0 min-w-0 relative [container-type:inline-size] [--chat-share:100%] [grid-template-columns:minmax(0,_var(--chat-share))_0_minmax(0,_1fr)] [grid-template-rows:minmax(0,_1fr)] [transition:--chat-share_var(--motion-layout)_var(--motion-curve)] ${workspaceOpen ? ' with-editor' : ''}${rightTerminal ? ' terminal-right' : ''}${rightTerminal && editorView ? ' terminal-with-editor' : ''}${bottomTerminal ? ' terminal-bottom' : ''}`} style={{ '--chat-width': state.dockWidth ? `${state.dockWidth}px` : `${defaultChatShare * 100}%`, '--terminal-height': `${state.terminalHeight ?? 260}px` } as CSSProperties} ref={body}>
       <div className="workspace-panel" inert={!editorView || composing} aria-hidden={!editorView || composing}>
-      <div className="view-tabs" role="tablist" aria-label={t("Workspace tabs")} style={{ display: editorView ? 'flex' : 'none' }}>
+      <div className="view-tabs [.workspace-panel_>_&]:flex-none flex items-center flex-none overflow-x-auto [scrollbar-width:none] p-[5px_8px] [border-bottom-color:var(--line)] [border-bottom:0] gap-1" role="tablist" aria-label={t("Workspace tabs")} style={{ display: editorView ? 'flex' : 'none' }}>
         {tabs.filter((v) => v.kind !== 'agent').map((view) => <FileTab key={view.id} taskId={taskId} view={view} tabs={tabs} active={state.activeViewId === view.id} repoName={repoName} />)}
-        <Button className="ghost icon" aria-label={t("Open file")} title={`${t("Open file")} (${formatKeys('mod+p')})`} onClick={() => window.dispatchEvent(new Event('ramu:open-file'))}><FileSearch size={16} /></Button>
-        <div className="grow" />
+        <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Open file")} title={`${t("Open file")} (${formatKeys('mod+p')})`} onClick={() => window.dispatchEvent(new Event('ramu:open-file'))}><FileSearch size={16} /></Button>
+        <div className="grow flex-1 min-w-0 text-left" />
 
         {editorView && !composing && (
-          <Button
-            className="ghost icon"
+          <Button variant="ghost" size="icon-sm"
+            className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
             aria-label={t("Hide workspace")}
             title={t("Hide workspace")}
             onClick={() => { ws.showChat(taskId); ws.setTerminalPanel(taskId, { terminalOpen: false }); ws.setSidebar('projects') }}
@@ -170,7 +170,7 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
           </Button>
         )}
       </div>
-        <div className="editor-area" style={{ display: editorView ? 'flex' : 'none' }}>
+        <div className="editor-area [.workspace-panel_>_&]:flex-1 [.workspace-panel_>_&]:min-h-0 flex-1 min-w-0 flex flex-col" style={{ display: editorView ? 'flex' : 'none' }}>
           {tabs
             .filter((v) => v.kind !== 'agent')
             .map((v) => {
@@ -178,9 +178,9 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
               const binding = v.repoId ? ws.binding(workspaceId, v.repoId) : undefined
               const ready = v.kind === 'review' || binding?.setupState === 'ready'
               return (
-                <div key={v.id} className="view" style={{ display: shown ? 'flex' : 'none' }}>
+                <div key={v.id} className="view flex-1 min-w-0 min-h-0 flex-col" style={{ display: shown ? 'flex' : 'none' }}>
                   {!ready ? (
-                    <div className="empty">{t("This repository isn't ready yet.")}</div>
+                    <div className="empty flex flex-1 items-center justify-center text-muted-foreground p-6 text-center">{t("This repository isn't ready yet.")}</div>
                   ) : (
                     <VisitedView visible={shown}>
                       {v.kind === 'file' && binding && <FileView taskId={workspaceId} view={v} binding={binding} />}
@@ -194,7 +194,7 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
             })}
         </div>
       </div>
-        {workspaceOpen && <div className="splitter" role="separator" tabIndex={0} aria-label={t("Resize chat pane")} aria-orientation="vertical" aria-valuemin={Math.round(minChatWidth)} aria-valuemax={Math.round(maxChatWidth)} aria-valuenow={Math.round(chatWidth)} onPointerDown={startResize} onDoubleClick={() => ws.setDockWidth(taskId, bodyWidth * defaultChatShare)} onKeyDown={(event) => {
+        {workspaceOpen && <div className="splitter [&::after]:[content:''] [&::after]:absolute [&::after]:[transition:background_0.15s] [&::after]:inset-[0_4px] [&::after]:w-[var(--pane-border-width)] [&::after]:[background:var(--pane-border-color)] [&:hover::after]:w-px [&:hover::after]:[background:var(--pane-border-active)] [&.is-resizing::after]:w-px [&.is-resizing::after]:[background:var(--pane-border-active)] [&:focus-visible::after]:[background:var(--pane-border-active)] flex-none cursor-col-resize relative z-2 w-[9px] m-[0_-4px]" role="separator" tabIndex={0} aria-label={t("Resize chat pane")} aria-orientation="vertical" aria-valuemin={Math.round(minChatWidth)} aria-valuemax={Math.round(maxChatWidth)} aria-valuenow={Math.round(chatWidth)} onPointerDown={startResize} onDoubleClick={() => ws.setDockWidth(taskId, bodyWidth * defaultChatShare)} onKeyDown={(event) => {
           if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
           event.preventDefault()
           const max = maxChatWidth
@@ -202,7 +202,7 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
           const value = event.key === 'Home' ? min : event.key === 'End' ? max : chatWidth + (event.key === 'ArrowRight' ? 20 : -20)
           ws.setDockWidth(taskId, Math.max(min, Math.min(max, value)))
         }} />}
-        <div className="main-chat" style={{ display: 'flex' }}>
+        <div className="main-chat [&_>_.home-page]:flex-1 [&_>_.home-page]:min-h-0 flex-1 min-w-0 flex-col bg-canvas" style={{ display: 'flex' }}>
           {(showLauncherMain || (editorView && !chatView)) && isWorkspaceCtx(taskId) && (
             <NewTask projectId={project?.id ?? ''} onProjectChange={(id) => ws.newTask(id)} feed={!editorView} />
           )}
@@ -218,8 +218,8 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
           )}
           {agentViews.map((v) =>
             v.kind === 'agent' ? (
-              <div key={v.id} className="view" style={{ display: chatView?.id === v.id ? 'flex' : 'none' }}>
-                <AgentView view={v} history={sessions.length > 1 ? <Menu label={t("Earlier conversations")} icon={<History size={14} />} className="ghost icon small-icon" align="end" items={[...sessions].sort((a, b) => b.createdAt - a.createdAt).map(session => ({ key: session.id, selected: session.id === v.sessionId, label: <><span className="menu-label grow">{session.title}</span><span className="muted small">{new Date(session.createdAt).toLocaleDateString(formatLocale())}</span></>, onSelect: () => openSession(session) }))} /> : undefined} />
+              <div key={v.id} className="view flex-1 min-w-0 min-h-0 flex-col" style={{ display: chatView?.id === v.id ? 'flex' : 'none' }}>
+                <AgentView view={v} history={sessions.length > 1 ? <Menu label={t("Earlier conversations")} icon={<History size={14} />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" align="end" items={[...sessions].sort((a, b) => b.createdAt - a.createdAt).map(session => ({ key: session.id, selected: session.id === v.sessionId, label: <><span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis grow flex-1 min-w-0 text-left">{session.title}</span><span className="muted text-muted-foreground small text-caption">{new Date(session.createdAt).toLocaleDateString(formatLocale())}</span></>, onSelect: () => openSession(session) }))} /> : undefined} />
               </div>
             ) : null,
           )}
@@ -271,8 +271,8 @@ function NewChat({
   }
 
   return (
-    <div className="new-chat">
-      <div className="new-chat-inner">
+    <div className="new-chat [&_.composer]:w-full flex-1 flex overflow-auto p-6">
+      <div className="new-chat-inner m-[auto_auto_0] w-full max-w-[var(--chat-column-width)] flex flex-col gap-2.5">
         <Composer
           attachments={attachments}
           onAttachmentsChange={setAttachments}
@@ -285,7 +285,7 @@ function NewChat({
           placeholder={t("What should the agent do?")}
           submitLabel="Start session"
         />
-        {error && <div className="error">{error}</div>}
+        {error && <div className="error text-bad">{error}</div>}
       </div>
     </div>
   )
@@ -319,12 +319,12 @@ function FileTab({ taskId, view, tabs, active, repoName }: { taskId: string; vie
       window.dispatchEvent(new Event('ramu:show-explorer'))
     } },
   ])
-  return <div className="tab-slot">
-    <div role="tab" tabIndex={active ? 0 : -1} aria-selected={active} className={`view-tab${active ? ' active' : ''}${isPreviewable(view) && view.preview ? ' preview' : ''}`} title={isPreviewable(view) && view.preview ? t("Preview: opening another file replaces this tab. Double-click or edit to keep it open.") : undefined} onDoubleClick={() => ws.keepView(taskId, view.id)} onContextMenu={context.onContextMenu} onKeyDown={(event) => { context.onKeyDown(event); if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); ws.activateView(taskId, view.id) } }} onClick={() => ws.activateView(taskId, view.id)} onAuxClick={(event) => event.button === 1 && ws.closeView(taskId, view.id)}>
+  return <div className="tab-slot flex items-center flex-none">
+    <div role="tab" tabIndex={active ? 0 : -1} aria-selected={active} className={`view-tab [&:hover_.tab-close]:opacity-100 [&_.tab-title]:max-w-[180px] [&:hover]:bg-hover [&:hover]:text-soft [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&_.kind]:text-muted-foreground [&_.kind]:flex-none [&.partner]:text-soft [&.partner]:[box-shadow:inset_0_-2px_0_var(--line-strong)] [&.pinned]:font-medium [&.active_.kind]:text-foreground [&.preview_.tab-label]:[font-style:italic] [&.preview_.view-label]:[font-style:italic] [&.preview]:[font-style:italic] [border-color:transparent] [&:hover:not(:disabled)]:[border-color:transparent] [&:focus-visible]:[outline-color:var(--line-strong)] [&_.tab-close]:w-[18px] [&_.tab-close]:h-[18px] [&_.tab-close]:min-w-[18px] [&_.tab-close]:min-h-[18px] [&_.tab-close]:p-0 [&_.tab-close]:inline-grid [&_.tab-close]:place-items-center [&_.tab-close]:rounded-(--radius-xs) [&_.tab-close]:bg-transparent [&_.tab-close]:[border:0] [&_.tab-close]:[box-shadow:none] [&_.tab-close]:flex-none [&_.tab-close:hover:not(:disabled)]:bg-accent [&_.tab-close:hover:not(:disabled)]:text-foreground [&_.tab-close_svg]:w-3 [&_.tab-close_svg]:h-3 flex items-center gap-1.5 cursor-default whitespace-nowrap text-muted-foreground text-control [transition:background_0.12s_var(--ease),_color_0.12s_var(--ease)] h-[27px] rounded-(--radius-s) p-[0_5px_0_9px] ${active ? ' active' : ''}${isPreviewable(view) && view.preview ? ' preview' : ''}`} title={isPreviewable(view) && view.preview ? t("Preview: opening another file replaces this tab. Double-click or edit to keep it open.") : undefined} onDoubleClick={() => ws.keepView(taskId, view.id)} onContextMenu={context.onContextMenu} onKeyDown={(event) => { context.onKeyDown(event); if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); ws.activateView(taskId, view.id) } }} onClick={() => ws.activateView(taskId, view.id)} onAuxClick={(event) => event.button === 1 && ws.closeView(taskId, view.id)}>
       <ViewIcon kind={view.kind} />
       <ViewLabel view={view} all={tabs} repoName={repoName} />
-      {ws.dirty[view.id] && <span className="dirty" aria-label={t("Unsaved changes")} />}
-      <Button className="tab-close" aria-label={t("Close view")} onClick={(event) => { event.stopPropagation(); ws.closeView(taskId, view.id) }}><X size={12} /></Button>
+      {ws.dirty[view.id] && <span className="dirty w-[7px] h-[7px] rounded-full [background:var(--soft)] flex-none" aria-label={t("Unsaved changes")} />}
+      <Button variant="secondary" className="bg-fill hover:bg-fill-hover tab-close [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [.active_>_&]:opacity-100 bg-transparent [border:none] rounded-(--radius-s) p-0.5 text-muted-foreground opacity-0" aria-label={t("Close view")} onClick={(event) => { event.stopPropagation(); ws.closeView(taskId, view.id) }}><X size={12} /></Button>
     </div>
     {context.menu}
   </div>
@@ -349,8 +349,8 @@ function ViewLabel({ view: v, all, repoName }: { view: ViewDescriptor; all: View
   const ws = useWorkspace()
   if (v.kind === 'agent') return <>{t("Chat")}</>
   if (v.kind === 'terminal') return <>{v.title ?? repoName(v.repoId)}</>
-  if (v.kind === 'review') return <>{t("Changes")}<span className="tab-repo">{ws.task(v.taskId)?.title ?? t("Chat")}</span></>
-  if (v.kind === 'git') return <>{v.oid ? v.oid.slice(0, 7) : t("Compare with upstream")}<span className="tab-repo">{repoName(v.repoId)}</span></>
+  if (v.kind === 'review') return <>{t("Changes")}<span className="tab-repo text-muted-foreground text-caption">{ws.task(v.taskId)?.title ?? t("Chat")}</span></>
+  if (v.kind === 'git') return <>{v.oid ? v.oid.slice(0, 7) : t("Compare with upstream")}<span className="tab-repo text-muted-foreground text-caption">{repoName(v.repoId)}</span></>
   const name = basename(v.path)
   const clash = all.some(
     (o) => o.id !== v.id && (o.kind === 'file' || o.kind === 'diff') && basename(o.path) === name && o.repoId !== v.repoId,
@@ -358,8 +358,8 @@ function ViewLabel({ view: v, all, repoName }: { view: ViewDescriptor; all: View
   return (
     <>
       {name}
-      {clash && <span className="tab-repo">{repoName(v.repoId)}</span>}
-      {v.kind === 'diff' && <span className="tab-repo">{v.oid ? v.oid.slice(0, 7) : v.staged ? 'staged' : t("changes")}</span>}
+      {clash && <span className="tab-repo text-muted-foreground text-caption">{repoName(v.repoId)}</span>}
+      {v.kind === 'diff' && <span className="tab-repo text-muted-foreground text-caption">{v.oid ? v.oid.slice(0, 7) : v.staged ? 'staged' : t("changes")}</span>}
     </>
   )
 }

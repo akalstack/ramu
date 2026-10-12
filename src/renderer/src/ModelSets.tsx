@@ -8,6 +8,13 @@ import { invoke } from './ipc'
 
 export const modelDisplayName = (name: string) => name.replace(/^gpt-/i, 'GPT-').replace(/-(sol|luna|astra|terra)\b/gi, (_, family: string) => ` ${family[0]!.toUpperCase()}${family.slice(1).toLowerCase()}`)
 export const effortDisplayName = (effort: ReasoningEffort | null, provider: AgentProvider) => effort === 'low' && provider === 'codex' ? t('Light') : effort === 'xhigh' ? t('Extra High') : effort ? t(effort[0]!.toUpperCase() + effort.slice(1)) : provider === 'claude-code' || provider === 'codex' ? '' : t('Default')
+/** The model and effort names Ramu shows for a chat's settings, as the model chip shows them. */
+export function settingsNames(settings: AgentSettings, catalogs: ProviderCatalog[]): { model: string; effort: string } {
+  const models = catalogs.flatMap((catalog) => catalog.models)
+  const entry = models.find((item) => item.provider === settings.provider && item.id === settings.model) ?? (!settings.model ? models.find((item) => item.provider === settings.provider && item.isDefault) : undefined)
+  const explicit = settings.provider === 'claude-code' || settings.provider === 'codex'
+  return { model: modelDisplayName(entry?.name ?? (settings.model || `${providerName(settings.provider)} default`)), effort: effortDisplayName(settings.effort ?? (explicit ? entry?.defaultEffort ?? null : null), settings.provider) }
+}
 
 export function modelStepName(step: ModelStep, catalogs: ProviderCatalog[]) {
   const model = catalogs.flatMap((catalog) => catalog.models).find((entry) => entry.provider === step.provider && (entry.id === step.model || !step.model && entry.isDefault))

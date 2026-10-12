@@ -1,5 +1,5 @@
 import { t, useLanguage } from './i18n'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { AlertTriangle, CloudUpload, GitBranch, RefreshCcw } from 'lucide-react'
 import { useEffect } from 'react'
 import type { GitBranchInfo, GitStatus, PullMode, RepositoryBinding } from '../../shared/types'
@@ -21,12 +21,12 @@ export function SyncButton({ status, busy, pullMode, onSync, className = '', sho
 }) {
   useLanguage()
   if (!status) return null
-  if (status.operation) return <Button className={`ghost sync-button warn ${className}`} disabled title={t("A {0} is in progress. Continue or abort it in Source Control.", { "0": status.operation })}><AlertTriangle size={13} /><span>{status.operation === 'rebase' ? t("Rebasing…") : t("Merging…")}</span></Button>
+  if (status.operation) return <Button variant="secondary" className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover sync-button warn text-warn ${className}`} disabled title={t("A {0} is in progress. Continue or abort it in Source Control.", { "0": status.operation })}><AlertTriangle size={13} /><span>{status.operation === 'rebase' ? t("Rebasing…") : t("Merging…")}</span></Button>
   if (!status.branch || !status.remote) return null
-  if (!status.upstream) return <Button className={`ghost sync-button ${className}`} disabled={busy} aria-label={t("Publish branch")} title={t("Publish {0} to the remote", { "0": status.branch })} onClick={onSync}><CloudUpload size={13} /><span>{showLabel ? t("Publish branch") : t("Publish")}</span></Button>
+  if (!status.upstream) return <Button variant="secondary" className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover sync-button ${className}`} disabled={busy} aria-label={t("Publish branch")} title={t("Publish {0} to the remote", { "0": status.branch })} onClick={onSync}><CloudUpload size={13} /><span>{showLabel ? t("Publish branch") : t("Publish")}</span></Button>
   const counts = `${status.behind}↓ ${status.ahead}↑`
-  return <Button className={`ghost sync-button ${className}`} disabled={busy} aria-label={t("Sync changes")} title={t("Sync changes: pull {0} ({1}), then push {2}", { "0": status.behind, "1": PULL_LABEL[pullMode], "2": status.ahead })} onClick={onSync}>
-    <RefreshCcw size={13} className={busy ? 'spin' : ''} /><span>{showLabel ? t("Sync changes {0}", { "0": counts }) : counts}</span>
+  return <Button variant="secondary" className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover sync-button ${className}`} disabled={busy} aria-label={t("Sync changes")} title={t("Sync changes: pull {0} ({1}), then push {2}", { "0": status.behind, "1": PULL_LABEL[pullMode], "2": status.ahead })} onClick={onSync}>
+    <RefreshCcw size={13} className={busy ? 'spin [animation:spin_0.9s_linear_infinite]' : ''} /><span>{showLabel ? t("Sync changes {0}", { "0": counts }) : counts}</span>
   </Button>
 }
 

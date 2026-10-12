@@ -156,7 +156,7 @@ try {
   await page.getByRole('button', { name: 'Source Control', exact: true }).click()
   await page.locator('.workspace-tools').waitFor()
   await page.waitForTimeout(500)
-  const header = await page.locator('.task-header').evaluate(el => ({ width: el.clientWidth, content: el.scrollWidth, left: el.getBoundingClientRect().left, title: el.querySelector('[aria-label="Switch chat"]')?.getBoundingClientRect().left }))
+  const header = await page.locator('.task-header').evaluate(el => ({ width: el.clientWidth, content: el.scrollWidth, left: el.getBoundingClientRect().left, title: el.querySelector('.header-title')?.getBoundingClientRect().left }))
   assert(header.content <= header.width)
   assert(header.title >= header.left)
 

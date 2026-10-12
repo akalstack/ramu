@@ -92,13 +92,13 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
   }, [active])
 
   return (
-    <div className="terminal-view">
-      <div className="view-header">
-        <span className="strong" title={cwd ?? undefined}>{label}</span>
-        <span className="grow" />{actions}
+    <div className="terminal-view flex flex-col flex-1 min-h-0 min-w-0">
+      <div className="view-header [&_.path]:flex-1 [&_button]:text-control [&_button]:p-[2px_8px] [&_[aria-pressed='true']]:bg-hover [&_[aria-pressed='true']]:text-foreground flex gap-2.5 items-center h-8 p-[0_12px] flex-none min-w-0 text-control text-soft">
+        <span className="strong font-semibold" title={cwd ?? undefined}>{label}</span>
+        <span className="grow flex-1 min-w-0 text-left" />{actions}
       </div>
-      {error && <div className="error banner">{error}</div>}
-      <div ref={host} className="terminal-host" onContextMenu={(event) => {
+      {error && <div className="error text-bad banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control">{error}</div>}
+      <div ref={host} className="terminal-host flex-1 min-h-0 p-[4px_0_0_12px]" onContextMenu={(event) => {
         event.preventDefault(); event.stopPropagation()
         const term = terminal.current
         if (!term) return

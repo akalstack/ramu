@@ -1,7 +1,7 @@
 import { t, useLanguage } from './i18n'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { beginPaneResize } from './paneResize'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { Columns2, PanelBottomClose, Plus, Rows2, SquareTerminal, X } from 'lucide-react'
 import { useEffect, useRef, type PointerEvent } from 'react'
 import { useAppSettings } from './AppSettings'
@@ -43,26 +43,26 @@ export function TerminalPanel({ taskId, visible, hidden = false, dock = 'right' 
   const arrange = (layout: TerminalGroup['layout']) => {
     if (activeGroup && state) ws.setTerminalPanel(taskId, { terminalGroups: groups.map((group) => group.id === activeGroup.id ? { ...group, layout } : group) })
   }
-  const tabList = <TabsList className="terminal-tabs" aria-label={t("Terminal groups")}>
+  const tabList = <TabsList className="terminal-tabs [&[data-slot='tabs-list']]:w-auto [&[data-slot='tabs-list']]:h-auto [&[data-slot='tabs-list']]:[border-radius:0] [&[data-slot='tabs-list']]:p-0 [&[data-slot='tabs-list']]:bg-transparent [&[data-slot='tabs-list']]:justify-start [.tabs-right_&[data-slot='tabs-list']]:flex-col flex flex-none gap-0.5 p-[2px_8px] overflow-auto [border-bottom-color:var(--line)]" aria-label={t("Terminal groups")}>
     {groups.map((group, index) => <TerminalTab key={group.id} taskId={taskId} group={group} groups={groups} index={index} label={label(terminals.find((view) => view.id === group.terminalIds[0]))} active={group.id === activeGroup?.id} activeId={focusedId} />)}
   </TabsList>
   return <Tabs value={activeGroup?.id ?? null} orientation={position === 'top' ? 'horizontal' : 'vertical'} onValueChange={(value) => {
     const group = groups.find((entry) => entry.id === value)
     if (group) ws.activateView(taskId, group.id === activeGroup?.id && focusedId ? focusedId : group.terminalIds[0]!)
-  }} render={<section />} ref={(element) => { panel.current = element }} className={`terminal-panel dock-${dock}`} aria-label={t("Terminal panel")} style={{ display: open && !hidden ? 'flex' : 'none', height }}>
-    {dock === 'bottom' && <div className="terminal-resize" role="separator" tabIndex={0} aria-label={t("Resize terminal panel")} aria-orientation="horizontal" aria-valuemin={120} aria-valuemax={Math.round(maxHeight())} aria-valuenow={height} onPointerDown={resize} onKeyDown={(event) => {
+  }} render={<section />} ref={(element) => { panel.current = element }} className={`terminal-panel [&[data-slot='tabs']]:gap-0 [.workspace-panel_>_&]:flex-none [.workspace-panel_>_&]:max-h-[65%] [.workspace-panel.terminal-only_>_&]:flex-1 [.workspace-panel.terminal-only_>_&]:h-auto! [.workspace-panel.terminal-only_>_&]:max-h-[none] relative flex-none min-h-[120px] max-h-[65%] min-w-0 flex-col bg-canvas [border-top-color:var(--line-strong)] [border-top:0] dock-${dock}`} aria-label={t("Terminal panel")} style={{ display: open && !hidden ? 'flex' : 'none', height }}>
+    {dock === 'bottom' && <div className="terminal-resize [&:hover]:bg-transparent [&::after]:[content:''] [&::after]:absolute [&::after]:left-0 [&::after]:right-0 [&::after]:top-1 [&::after]:bg-transparent [&::after]:[transition:background_0.15s] [&::after]:h-[var(--pane-border-width)] [&:hover::after]:[background:var(--pane-border-active)] [&.is-resizing::after]:[background:var(--pane-border-active)] [&:focus-visible::after]:[background:var(--pane-border-active)] [.workspace-panel.terminal-only_&]:hidden absolute left-0 right-0 cursor-row-resize z-3 top-[-4px] h-[9px] bg-transparent" role="separator" tabIndex={0} aria-label={t("Resize terminal panel")} aria-orientation="horizontal" aria-valuemin={120} aria-valuemax={Math.round(maxHeight())} aria-valuenow={height} onPointerDown={resize} onKeyDown={(event) => {
       if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
       event.preventDefault(); setHeight(event.key === 'Home' ? 120 : event.key === 'End' ? maxHeight() : height + (event.key === 'ArrowUp' ? 20 : -20))
     }} />}
-    <header className="terminal-toolbar">
-      {position === 'top' ? tabList : <span className="terminal-panel-title">Terminal</span>}
-      <Menu label={t("New terminal")} icon={<Plus size={15} />} className="ghost icon small-icon terminal-add" align="start" items={[
+    <header className="terminal-toolbar [&_.terminal-tabs]:flex [&_.terminal-tabs]:gap-0.5 [&_.terminal-tabs]:p-0 [&_.terminal-tabs]:[border:0] [&_.terminal-tabs]:overflow-x-auto [&_.terminal-tabs]:[scrollbar-width:none] [&_.terminal-tabs]:min-w-0 [&_.terminal-tabs]:flex-initial flex items-center flex-none [border-bottom-color:var(--line)] h-[36px] p-[4px_6px] [border-bottom:0] gap-1">
+      {position === 'top' ? tabList : <span className="terminal-panel-title pl-2 text-control font-medium text-soft">Terminal</span>}
+      <Menu label={t("New terminal")} icon={<Plus size={15} />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) terminal-add [&:hover:not(:disabled)]:text-foreground text-muted-foreground" align="start" items={[
         { key: 'workspace', label: <><SquareTerminal size={14} /> {t(" Workspace terminal")}</>, onSelect: () => ws.openView(taskId, { kind: 'terminal' }) },
         ...ready.map((b) => ({ key: b.repoId, label: <><SquareTerminal size={14} /> {t(" Terminal in ")}{b.repoName}</>, onSelect: () => ws.openView(taskId, { kind: 'terminal', repoId: b.repoId }) })),
       ]} />
-      <div className="grow" />
-      <Button className="ghost icon small-icon" aria-label={dock === 'right' ? t("Dock terminal at bottom") : t("Dock terminal on right")} title={dock === 'right' ? t("Dock terminal at bottom") : t("Dock terminal on right")} onClick={() => ws.setTerminalPanel(taskId, { terminalDock: dock === 'right' ? 'bottom' : 'right' })}>{dock === 'right' ? <Rows2 size={14} /> : <Columns2 size={14} />}</Button>
-      <Menu label={t("Terminal layout")} icon={<Columns2 size={14} />} className="ghost icon small-icon" align="end" items={[
+      <div className="grow flex-1 min-w-0 text-left" />
+      <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={dock === 'right' ? t("Dock terminal at bottom") : t("Dock terminal on right")} title={dock === 'right' ? t("Dock terminal at bottom") : t("Dock terminal on right")} onClick={() => ws.setTerminalPanel(taskId, { terminalDock: dock === 'right' ? 'bottom' : 'right' })}>{dock === 'right' ? <Rows2 size={14} /> : <Columns2 size={14} />}</Button>
+      <Menu label={t("Terminal layout")} icon={<Columns2 size={14} />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" align="end" items={[
         { key: 'dock-right', label: t("Dock terminal on right"), selected: dock === 'right', onSelect: () => ws.setTerminalPanel(taskId, { terminalDock: 'right' }) },
         { key: 'dock-bottom', label: t("Dock terminal at bottom"), selected: dock === 'bottom', onSelect: () => ws.setTerminalPanel(taskId, { terminalDock: 'bottom' }) },
         { key: 'dock-separator', separator: true },
@@ -76,17 +76,17 @@ export function TerminalPanel({ taskId, visible, hidden = false, dock = 'right' 
         { key: 'top', label: t("Tabs across the top"), selected: position === 'top', onSelect: () => ws.setTerminalPanel(taskId, { terminalTabPosition: 'top' }) },
         { key: 'right', label: t("Tabs down the right"), selected: position === 'right', onSelect: () => ws.setTerminalPanel(taskId, { terminalTabPosition: 'right' }) },
       ]} />
-      <Button className="ghost icon small-icon" aria-label={t("Hide terminal panel")} title={t("Hide terminal panel")} onClick={() => ws.setTerminalPanel(taskId, { terminalOpen: false })}><PanelBottomClose size={14} /></Button>
+      <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Hide terminal panel")} title={t("Hide terminal panel")} onClick={() => ws.setTerminalPanel(taskId, { terminalOpen: false })}><PanelBottomClose size={14} /></Button>
     </header>
-    <div className={`terminal-panel-body tabs-${position}`}>
+    <div className={`terminal-panel-body [&.tabs-top]:flex-col [&.tabs-right_.terminal-tabs]:[order:1] [&.tabs-right_.terminal-tabs]:w-[164px] [&.tabs-right_.terminal-tabs]:flex-col [&.tabs-right_.terminal-tabs]:[border-bottom:none] [&.tabs-right_.terminal-tabs]:p-1 flex flex-1 min-h-0 min-w-0 tabs-${position}`}>
       {position === 'right' && tabList}
-      <TabsContent value={activeGroup?.id ?? null} keepMounted className={`terminal-panes layout-${activeGroup?.layout ?? 'horizontal'}`} id={`terminal-group-panel-${taskId}`} aria-label={t("Active terminal group")}>
+      <TabsContent value={activeGroup?.id ?? null} keepMounted className={`terminal-panes [&.layout-vertical]:flex-col [&.layout-tabs_.terminal-pane_>_.terminal-view_>_.view-header]:hidden [&:not(:has(.terminal-pane:not([style*='none'])_~_.terminal-pane:not([style*='none'])))_.terminal-view_>_.view-header]:hidden flex flex-1 min-w-0 min-h-0 overflow-auto layout-${activeGroup?.layout ?? 'horizontal'}`} id={`terminal-group-panel-${taskId}`} aria-label={t("Active terminal group")}>
         {terminals.map((view) => {
           const shown = !!activeGroup?.terminalIds.includes(view.id)
-          return <div key={view.id} className={`view terminal-pane${view.id === focusedId ? ' focused' : ''}`} style={{ display: shown ? 'flex' : 'none' }} onFocusCapture={() => view.id !== focusedId && ws.activateView(taskId, view.id)}>
+          return <div key={view.id} className={`view flex-1 min-w-0 min-h-0 flex-col terminal-pane [.layout-horizontal_&_+_.terminal-pane]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] [.layout-vertical_&_+_.terminal-pane]:[border-top:var(--pane-border-width)_solid_var(--pane-border-color)] [&_.view-header]:h-6 [&_.view-header]:p-[0_8px] [&_.view-header]:gap-2 [&_.view-header]:text-caption [&_.view-header]:overflow-hidden [&_.view-header_.path]:text-caption [&_.view-header_.path]:whitespace-nowrap [&_.view-header_.path]:overflow-hidden [&_.view-header_.path]:text-ellipsis [&_.terminal-host]:p-[4px_0_0_8px] [&_.terminal-host]:pt-1.5 [&.focused_.view-header]:text-foreground [&_.view-header_.small-icon]:w-5 [&_.view-header_.small-icon]:h-5 [&_.view-header_.small-icon]:min-h-5 [&.focused]:[box-shadow:none] min-w-[120px] min-h-[80px] ${view.id === focusedId ? ' focused' : ''}`} style={{ display: shown ? 'flex' : 'none' }} onFocusCapture={() => view.id !== focusedId && ws.activateView(taskId, view.id)}>
             <TerminalView taskId={taskId} repoId={view.repoId ?? null} label={label(view)} run={view.command && view.runAt && Date.now() - view.runAt < 15_000 ? view.command : undefined} active={shown && open && visible && !hidden} onExit={() => ws.closeView(taskId, view.id)} actions={<>
-              <Button className="ghost icon small-icon" aria-label={t("Move {0} pane to a new tab", { "0": label(view) })} title={t("Move pane to a new tab")} disabled={!shown || activeGroup!.terminalIds.length < 2} onClick={() => ws.unsplitTerminal(taskId, view.id)}><SquareTerminal size={12} /></Button>
-              <Button className="ghost icon small-icon" aria-label={t("Close {0} terminal pane", { "0": label(view) })} title={t("Close pane")} onClick={() => ws.closeView(taskId, view.id)}><X size={12} /></Button>
+              <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Move {0} pane to a new tab", { "0": label(view) })} title={t("Move pane to a new tab")} disabled={!shown || activeGroup!.terminalIds.length < 2} onClick={() => ws.unsplitTerminal(taskId, view.id)}><SquareTerminal size={12} /></Button>
+              <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Close {0} terminal pane", { "0": label(view) })} title={t("Close pane")} onClick={() => ws.closeView(taskId, view.id)}><X size={12} /></Button>
             </>} />
           </div>
         })}
@@ -113,9 +113,9 @@ function TerminalTab({ taskId, group, groups, index, label, active, activeId }: 
     { key: 'right', label: t("Close groups after this"), disabled: index === groups.length - 1, onSelect: () => close(groups.slice(index + 1)) },
     { key: 'all', label: t("Close all terminals"), onSelect: () => close(groups) },
   ])
-  return <div className={`terminal-tab${active ? ' active' : ''}`} onContextMenu={context.onContextMenu} onKeyDown={context.onKeyDown}>
-    <TabsTrigger value={group.id} title={`${label} · ${group.terminalIds.length} ${group.terminalIds.length === 1 ? 'terminal' : 'panes'}`}><SquareTerminal size={13} /><span>{label}{groups.length > 1 ? ` ${index + 1}` : ''}</span>{group.terminalIds.length > 1 && <span className="terminal-group-count" aria-label={t("{0} panes", { "0": group.terminalIds.length })}>{group.terminalIds.length}</span>}</TabsTrigger>
-    <Button className="ghost icon small-icon terminal-tab-close" aria-label={t("Close terminal group {0}", { "0": index + 1 })} title={t("Close group")} onClick={() => close([group])}><X size={12} /></Button>
+  return <div className={`terminal-tab [&.active]:bg-accent [&.active]:text-foreground [&_>_button[role='tab']]:[border:none] [&_>_button[role='tab']]:bg-transparent [&_>_button[role='tab']]:min-w-0 [&_>_button[role='tab']]:h-[26px] [&_>_button[role='tab']]:min-h-[26px] [&_>_button[role='tab']]:p-[0_4px_0_8px] [&_>_button[role='tab']]:gap-1.5 [&_>_button[role='tab']]:text-control [&_>_button[role='tab']]:text-inherit [&_>_button[role='tab']]:rounded-(--radius-s) [&_>_button[role='tab']_span]:overflow-hidden [&_>_button[role='tab']_span]:text-ellipsis [&_>_button[role='tab']_span]:whitespace-nowrap [&_>_button[role='tab']_svg]:flex-none [.tabs-right_&_>_button[role='tab']]:flex-1 [&_[role='tab']_>_span]:relative [&_[role='tab']_>_span]:top-[-1px] [&:hover]:bg-hover [&:hover]:text-soft [&:hover_.terminal-tab-close]:opacity-100 [&.active_.terminal-tab-close]:opacity-100 [&_[data-slot='tabs-trigger']::after]:hidden flex items-center text-muted-foreground flex-none h-[26px] rounded-(--radius-s) [transition:background_0.12s_var(--ease),_color_0.12s_var(--ease)] ${active ? ' active' : ''}`} onContextMenu={context.onContextMenu} onKeyDown={context.onKeyDown}>
+    <TabsTrigger value={group.id} title={`${label} · ${group.terminalIds.length} ${group.terminalIds.length === 1 ? 'terminal' : 'panes'}`}><SquareTerminal size={13} /><span>{label}{groups.length > 1 ? ` ${index + 1}` : ''}</span>{group.terminalIds.length > 1 && <span className="terminal-group-count min-w-4 p-[0_4px] rounded-(--radius-xs) bg-accent text-muted-foreground text-[length:10px]" aria-label={t("{0} panes", { "0": group.terminalIds.length })}>{group.terminalIds.length}</span>}</TabsTrigger>
+    <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) terminal-tab-close opacity-0 text-muted-foreground" aria-label={t("Close terminal group {0}", { "0": index + 1 })} title={t("Close group")} onClick={() => close([group])}><X size={12} /></Button>
     {context.menu}
   </div>
 }

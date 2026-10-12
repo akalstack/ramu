@@ -1,0 +1,66 @@
+/* Chat surfaces retain the original reading layout and quiet controls. */
+.composer {
+  position: relative;
+  background: var(--raised);
+  border: 0;
+  border-radius: var(--radius-xl);
+  padding: 12px 10px 8px 16px;
+  box-shadow: none;
+}
+.composer:focus-within { background: color-mix(in srgb, var(--raised) 97%, var(--text)); }
+.composer.dragging { background: color-mix(in srgb, var(--raised) 88%, var(--accent)); }
+.composer textarea {
+  display: block;
+  min-height: 26px;
+  max-height: 240px;
+  padding: 2px 4px 6px 0;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  font-size: var(--font-chat);
+  line-height: 1.55;
+  letter-spacing: -0.006em;
+}
+.composer textarea::placeholder { color: var(--placeholder); }
+.composer-bar { display: flex; align-items: center; gap: 4px; margin: 4px 0 0 -8px; min-height: 32px; }
+.composer-bar .composer-controls { flex: 1; min-width: 0; margin: 0; padding: 0; border: 0; gap: 0; }
+.composer-bar .agent-controls, .composer-bar .agent-control-options { gap: 2px; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+.composer-bar .agent-control-options { flex: none; }
+.composer-bar .control-btn {
+  height: 30px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  box-shadow: none;
+  color: var(--soft);
+  font-size: var(--font-control);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.composer-bar .control-btn:hover:not(:disabled), .composer-bar .control-btn.on { background: var(--pressed); color: var(--text); }
+.composer-bar .model-bar-trigger { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.composer-bar .model-bar-trigger > * { min-width: 0; }
+.composer-bar .model-bar-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-bar > button.icon { width: 30px; height: 30px; min-height: 30px; flex: none; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+.composer-bar > button.icon:hover { background: var(--hover); color: var(--text); }
+.composer-bar .send { width: 30px; height: 30px; min-height: 30px; flex: none; align-self: flex-end; padding: 0; border: 0; border-radius: 50%; background: var(--primary); color: #fff; box-shadow: 0 1px 2px #0005, inset 0 1px 0 #ffffff2e; }
+.composer-bar .send:hover:not(:disabled) { background: var(--primary-hover); }
+.composer-bar .send:disabled { background: #ffffff14; color: var(--placeholder); opacity: 1; box-shadow: none; }
+.composer-bar .send.stop, .composer-bar .send.resume { background: var(--text); color: var(--canvas); }
+.composer-bar .send.stop:hover, .composer-bar .send.resume:hover { background: var(--text); color: var(--canvas); }
+.tool-group > [data-slot='collapsible-trigger'] { display: flex; justify-content: flex-start; gap: 8px; height: auto; min-height: 0; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: var(--font-chat); font-weight: 400; }
+.tool-group > [data-slot='collapsible-trigger']:hover { background: transparent; color: var(--soft); }
+.turn-summary-toggle { width: 100%; justify-content: flex-start; gap: 6px; height: auto; min-height: 0; padding: 6px 0 8px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--muted); font-size: var(--font-chat); font-weight: 400; }
+.turn-summary-toggle:hover { background: transparent; color: var(--soft); border-bottom-color: var(--line-strong); }
+.tool-group-label { min-width: 0; white-space: normal; text-align: left; }
+.shimmer { background-clip: text; -webkit-background-clip: text; color: transparent; }
+@media (prefers-reduced-motion: reduce) { .shimmer { animation: none !important; } }
+
+.turn-working { font-size: var(--font-chat); line-height: 1.5; padding: 6px 0 8px; border-bottom: 1px solid var(--line); }
+
+.tool-group-body { margin: 2px 0 0; padding: 0; border: 0; background: transparent; gap: 0; border-radius: 0; }
+.tool-group-body .tool > [data-slot='collapsible-trigger'], .tool-group-body .tool > [data-slot='collapsible-trigger']:hover { margin: 0; padding: 3px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; justify-content: flex-start; gap: 8px; font-size: var(--font-chat); }
+.tool-group.text-destructive > [data-slot='collapsible-trigger'] { color: var(--bad); }

@@ -1,0 +1,16 @@
+/* SVG asset classes need explicit bindings; Tailwind does not scan raw SVG markup. */
+.startup-r {
+  transform: translate(var(--r-end-x), var(--r-end-y));
+  animation: ramu-startup-r 1200ms cubic-bezier(.22, 1, .36, 1) both;
+}
+.startup-letters { animation: ramu-startup-letters 1200ms ease both; }
+.startup-dot {
+  transform: translate(var(--dot-end-x), var(--dot-end-y));
+  animation: ramu-startup-dot 1200ms cubic-bezier(.22, 1, .36, 1) both;
+}
+.shell { grid-template-columns: var(--nav-width) minmax(0, 1fr) minmax(0, var(--tools-share)); transition: grid-template-columns var(--motion-layout) var(--motion-curve); }
+body.resizing .shell { grid-template-columns: var(--nav-width) minmax(0, 1fr) minmax(0, var(--tools-share)); transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .shell, .startup-overlay { transition: none; }
+  .startup-r, .startup-letters, .startup-dot { animation: none; }
+}

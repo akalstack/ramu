@@ -1,7 +1,7 @@
 import { t, useLanguage } from './i18n'
 import { useModelSets } from './ModelSets'
 import { FolderClosed, GitBranch, Laptop, Settings } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/desktop-button'
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_AGENT_SETTINGS, NO_PROJECT, type FileContext, type Attachment, type AgentSettings, type CheckoutMode, type WorktreePlanEntry } from '../../shared/types'
 import { AgentControls } from './AgentControls'
@@ -112,7 +112,7 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
     key: p.id,
     label: (
       <>
-        <FolderClosed size={14} /> <span className="menu-label">{p.name}</span>
+        <FolderClosed size={14} /> <span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis">{p.name}</span>
       </>
     ),
     onSelect: () => onProjectChange(p.id),
@@ -120,33 +120,33 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
   const current = existingWorkspace ? { label: existingWorkspace.name, Icon: GitBranch } : MODES.find((m) => m.id === mode)!
 
   const start = (
-    <div className="start-view">
-      <div className="start-hero">
-        <AnimatedMark className="start-mark" size={56} />
+    <div className="start-view flex-1 flex flex-col min-h-0 min-w-0">
+      <div className="start-hero [&_h1]:m-0 [&_h1]:text-hero [&_h1]:text-center [&_h1]:leading-[1.3] [&_h1]:font-semibold [&_h1]:tracking-[-0.022em] flex-1 flex flex-col items-center justify-center gap-2.5 p-6">
+        <AnimatedMark className="start-mark [&:is(img)]:w-[56px] [&:is(img)]:h-[56px] [&:is(img)]:bg-transparent [&:is(img)]:[border-radius:0] [&:is(img)]:mb-1.5 w-[54px] h-[54px] rounded-(--radius-l) flex items-center justify-center text-muted-foreground bg-hover mb-2" size={56} />
         <h1>
           {general ? t("What should we work on?") : <>{t("What should we work on in")}{' '}
-          <Menu label={t("Project")} icon={<span className="start-project">{project?.name ?? t("a project")}</span>} className="start-project-btn" items={projectItems} />?</>}
+          <Menu label={t("Project")} icon={<span className="start-project">{project?.name ?? t("a project")}</span>} className="start-project-btn [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:[text-decoration-color:var(--text)] inline bg-transparent [border:none] p-0 [font:inherit] text-foreground [text-decoration:underline] [text-decoration-color:rgba(255,_255,_255,_0.35)] [text-underline-offset:5px] [text-decoration-thickness:1px] cursor-pointer" items={projectItems} />?</>}
         </h1>
-        {repos.length > 0 && <p className="muted start-repos">{repos.map((r) => r.name).join(' · ')}</p>}
+        {repos.length > 0 && <p className="muted text-muted-foreground start-repos m-0 text-control">{repos.map((r) => r.name).join(' · ')}</p>}
       </div>
-      <div className="start-dock">
+      <div className="start-dock [&_.plan]:m-[0_6px_8px] [&_.composer-tray]:flex [&_.composer-tray]:items-center [&_.composer-tray]:gap-0.5 [&_.composer-tray]:p-[4px_6px_14px] [&_.composer-tray]:m-[0_auto_-10px] [&_.composer-tray]:w-[calc(100%_-_24px)] [&_.composer-tray]:[border:0] [&_.composer-tray]:[border-radius:var(--radius-l)_var(--radius-l)_0_0] [&_.composer-tray]:[background:var(--composer-tray)] [&_.composer-tray]:relative [&_.composer-tray]:z-0 [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
         {plan && (
-          <div className="plan">
-            <div className="muted">{t("Ramu will create a branch and worktree for each repository:")}</div>
+          <div className="plan bg-brand-wash rounded-(--radius-s) p-[8px_10px] m-[8px_0] text-control">
+            <div className="muted text-muted-foreground">{t("Ramu will create a branch and worktree for each repository:")}</div>
             {plan.map((p) => (
-              <div key={p.repoId} className="plan-row">
-                <span className="strong">{p.repoName}</span>: <code>{p.taskBranch}</code> {t(" from ")}<code>{p.baseRef}</code>
-                <div className="path">{p.path}</div>
+              <div key={p.repoId} className="plan-row m-[6px_0]">
+                <span className="strong font-semibold">{p.repoName}</span>: <code>{p.taskBranch}</code> {t(" from ")}<code>{p.baseRef}</code>
+                <div className="path text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap min-w-0">{p.path}</div>
               </div>
             ))}
-            <div className="muted small">{t("Worktrees separate files and the Git index. They do not sandbox processes, ports or credentials.")}</div>
+            <div className="muted text-muted-foreground small text-caption">{t("Worktrees separate files and the Git index. They do not sandbox processes, ports or credentials.")}</div>
           </div>
         )}
-        <div className="start-chips composer-tray">
-          {general && <Menu label={t("Project")} className="chip-btn" icon={<><FolderClosed size={13} /> <span className="chip-label">{t("No project")}</span></>} items={projectItems} />}
+        <div className="start-chips flex gap-1.5 p-[0_8px_10px] composer-tray">
+          {general && <Menu label={t("Project")} className="chip-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:1px_solid_transparent] [&:hover:not(:disabled)]:text-foreground [&.on]:bg-hover [&.on]:[border:1px_solid_transparent] [&.on]:text-foreground h-7 min-h-7 p-[0_10px] rounded-(--radius-s) bg-transparent [border:1px_solid_transparent] [box-shadow:none] text-soft text-control [.composer-tray_&]:h-7 [.composer-tray_&]:min-h-7 [.composer-tray_&]:p-[0_8px] [.composer-tray_&]:gap-1.5 [.composer-tray_&]:[border:0] [.composer-tray_&]:rounded-full [.composer-tray_&]:bg-transparent [.composer-tray_&]:[box-shadow:none] [.composer-tray_&]:text-soft [.composer-tray_&]:text-caption [.composer-tray_&:hover:not(:disabled)]:[border:0] [.composer-tray_&:hover:not(:disabled)]:bg-hover [.composer-tray_&:hover:not(:disabled)]:text-foreground [.composer-tray_&.on]:[border:0] [.composer-tray_&.on]:bg-hover [.composer-tray_&.on]:text-foreground [.composer-tray_&_svg]:text-muted-foreground [border:none] p-[5px_10px] text-soft text-control gap-1.5 rounded-full bg-hover [box-shadow:inset_0_0_0_1px_var(--line)]" icon={<><FolderClosed size={13} /> <span className="chip-label">{t("No project")}</span></>} items={projectItems} />}
           {!general && <Menu
             label={t("Where the work happens")}
-            className="chip-btn"
+            className="chip-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:1px_solid_transparent] [&:hover:not(:disabled)]:text-foreground [&.on]:bg-hover [&.on]:[border:1px_solid_transparent] [&.on]:text-foreground h-7 min-h-7 p-[0_10px] rounded-(--radius-s) bg-transparent [border:1px_solid_transparent] [box-shadow:none] text-soft text-control [.composer-tray_&]:h-7 [.composer-tray_&]:min-h-7 [.composer-tray_&]:p-[0_8px] [.composer-tray_&]:gap-1.5 [.composer-tray_&]:[border:0] [.composer-tray_&]:rounded-full [.composer-tray_&]:bg-transparent [.composer-tray_&]:[box-shadow:none] [.composer-tray_&]:text-soft [.composer-tray_&]:text-caption [.composer-tray_&:hover:not(:disabled)]:[border:0] [.composer-tray_&:hover:not(:disabled)]:bg-hover [.composer-tray_&:hover:not(:disabled)]:text-foreground [.composer-tray_&.on]:[border:0] [.composer-tray_&.on]:bg-hover [.composer-tray_&.on]:text-foreground [.composer-tray_&_svg]:text-muted-foreground [border:none] p-[5px_10px] text-soft text-control gap-1.5 rounded-full bg-hover [box-shadow:inset_0_0_0_1px_var(--line)]"
             icon={
               <>
                 <current.Icon size={13} /> <span className="chip-label">{existingWorkspace ? current.label : t(current.label)}</span>
@@ -159,7 +159,7 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
                   <m.Icon size={14} />
                   <span>
                     {t(m.label)}
-                    <span className="muted block">{t(m.hint)}</span>
+                    <span className="muted text-muted-foreground block block">{t(m.hint)}</span>
                   </span>
                 </>
               ),
@@ -171,13 +171,13 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
             })),
               ...ws.workspaces.filter((w) => w.projectId === projectId).map((w) => ({
                 key: w.id,
-                label: <><GitBranch size={14} /><span className="menu-label">{w.name}<span className="muted block">{t("Existing isolated worktree")}</span></span></>,
+                label: <><GitBranch size={14} /><span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis">{w.name}<span className="muted text-muted-foreground block block">{t("Existing isolated worktree")}</span></span></>,
                 onSelect: () => { setWorkspaceId(w.id); setMode('worktree'); setPlan(null) },
               })),
             ]}
           />}
-          <span className="grow" />
-          <Button className="ghost icon small-icon tray-settings" aria-label={t("Chat settings")} title={t("Chat settings")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git' } }))}><Settings size={14} /></Button>
+          <span className="grow flex-1 min-w-0 text-left" />
+          <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) tray-settings" aria-label={t("Chat settings")} title={t("Chat settings")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git' } }))}><Settings size={14} /></Button>
         </div>
         <Composer
           scopeId={workspaceId ? `worktree:${workspaceId}` : `project:${projectId}`}
@@ -195,14 +195,14 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
           placeholder={general || repos.length ? t("Message the agent") : t("Add a repository to this project first")}
           submitLabel={plan ? t('Create worktrees and start') : t('Start chat')}
         />
-        {error && <div className="error start-error">{error}</div>}
+        {error && <div className="error text-bad start-error p-[6px_8px_0] text-control">{error}</div>}
       </div>
     </div>
   )
   if (!feed) return start
   return (
-    <div className="home-page">
-      <div className="home-start">{start}</div>
+    <div className="home-page [&_.composer_textarea]:text-chat [&_.composer_textarea]:leading-[1.55] [&_.composer_textarea]:p-[2px_4px_6px_0] [&_.composer_textarea]:min-h-[26px] [&_.composer_textarea]:text-foreground [&_.composer_[data-slot='textarea']]:text-chat [&_.composer_[data-slot='textarea']]:leading-[1.55] [&_.composer_[data-slot='textarea']]:p-[2px_4px_6px_0] [&_.composer_[data-slot='textarea']]:min-h-[26px] [&_.composer_[data-slot='textarea']]:text-foreground [&_.composer-bar_.dropdown-trigger.control-btn]:h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:min-h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:p-[4px_8px] [&_.composer-bar_.dropdown-trigger.control-btn]:bg-transparent [&_.composer-bar_.dropdown-trigger.control-btn]:text-control [&_.composer-bar_.dropdown-trigger.control-btn]:leading-[normal] w-full h-full overflow-auto flex flex-col items-stretch p-[0_24px_24px]">
+      <div className="home-start [&_.start-view]:min-h-[min(560px,_72vh)] [&_.start-view]:pt-2 [&_.start-hero]:mb-[22px] [&_.start-hero_h1]:text-hero [&_.start-mark]:block [&_.start-dock]:pl-0 [&_.start-dock]:pr-0 [&_.start-dock]:max-w-[none] w-full max-w-[760px] m-[0_auto] [border:0]">{start}</div>
       <HomeFeed />
     </div>
   )
