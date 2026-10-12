@@ -7,6 +7,9 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { LspService } from './lsp'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { registerQuestionTools } from './questionTools'
+import { registerAdvisorTools } from './advisor'
+import { registerGoalTools } from './goals'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 import { openDb } from './db'
@@ -67,6 +70,7 @@ const workspace = new Workspace(db, root)
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./fakeAgent') : null
 let reviews!: ReviewService
 const agents = new AgentService(db, (sessionId, event, seq) => { send('agent:event', { sessionId, event, seq }) }, fake?.fakeQuery ?? query, fake?.fakeCodex, fake?.fakeCodex, fake?.fakeCodex)
+if (fake) agents.helperHistory = async () => []
 agents.markRestoredOnBoot()
 const terminals = new TerminalService((id, data) => send('term:data', { id, data }), (id, code) => send('term:exit', { id, code }))
 const schedules = new ScheduleService(db, workspace, agents, changed)
@@ -93,7 +97,9 @@ async function stop(intentional = false) {
   if (stopping) return; stopping = true
   clearInterval(tick)
   await schedules.stop()
-  reviews.stop(); agents.stopAll()
+  // Capture after the scheduler drains, so a chat that finished during that wait is not resumed.
+  if (!intentional) agents.prepareForRestart()
+  reviews.stop(); agents.stopAll(!intentional)
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))
   await Promise.all([recaps.settle(), reviews.settle()])
@@ -122,6 +128,7 @@ const runtime = createServer(async (req, res) => {
       if (request) { clearTimeout(request.timer); nativeRequests.delete(args[0]); args[2] ? request.reject(new Error(String(args[2]))) : request.resolve(args[1]) }
     } else if (method === 'background.status') value = { running: true, pid: process.pid, startedAt, build: serviceBuild }
     else if (method === 'background.stop') { res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}'); void stop(true); return }
+    else if (method === 'background.restart') { res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}'); void stop(); return }
     else value = await dispatcher.invoke(method, args)
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ value }))
   } catch (error) { res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) })) }
@@ -134,6 +141,9 @@ const mcpHttp = createServer(async (req, res) => {
   if (!source || req.url !== '/mcp' || stopping) { res.writeHead(401).end(); return }
   if (req.method !== 'POST') { res.writeHead(405).end(); return }
   const server = new McpServer({ name: 'ramu', version: '0.1.0' })
+  registerQuestionTools(server, agents, source.id)
+  if (!source.parentId) registerGoalTools(server, agents, source.id)
+  if (agents.advisorStep(source.id)) registerAdvisorTools(server, agents, source.id)
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
   const scope = workspace.getTask(source.taskId)
   const input = scheduleSchema.omit({ sourceTaskId: true }).extend({ projectId: scheduleSchema.shape.projectId.optional(), workspaceId: scheduleSchema.shape.workspaceId })
@@ -147,6 +157,12 @@ const mcpHttp = createServer(async (req, res) => {
   server.registerTool('review_add_note', { description: 'Add an explanation or genuine question to a file or line in this session’s review. Prefer replying to an existing thread. New AI notes remain unselected until the human responds or selects them.', inputSchema: { reviewId: z.string(), fileId: z.string(), scope: z.enum(['file', 'line']), side: z.enum(['old', 'new']).default('new'), line: z.number().int().positive().default(1), endLine: z.number().int().positive().default(1), kind: z.enum(['note', 'question']), text: z.string().min(1).max(10000) } }, async ({ reviewId, ...input }) => { checkReview(reviewId); return result(reviews!.agentNote(reviewId, input)) })
   server.registerTool('schedule_create', { description: descriptions.schedule_create, inputSchema: input.shape }, async (value) => { const saved = schedules.save(resolve(value)); agents.scheduleSaved(source.id, saved); return result(saved) })
   server.registerTool('schedule_update', { description: descriptions.schedule_update, inputSchema: { id: z.string(), input } }, async (value) => { const saved = schedules.save(resolve(value.input), value.id); agents.scheduleSaved(source.id, saved); return result(saved) })
+  // Codex asks this before one of its own sub-agents starts (see CODEX_HOOK_CONFIG); the answer is the hook's JSON output.
+  server.registerTool('codex_pre_tool_use', { description: 'Used by Ramu\'s Codex hook; not for the model.', inputSchema: { tool_name: z.string().optional(), tool_input: z.any().optional(), session_id: z.string().optional() } },
+    async (value) => { const decision = await agents.codexSpawnDecision(source.id, value.tool_input).catch(() => null); return result(decision ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: decision.reason } } : {}) })
+  // Sub-agents Ramu runs on another provider or model; a sub-agent itself does not get the tool.
+  if (!agents.get(source.id).parentId) server.registerTool('ramu_agent', { description: 'Start a sub-agent through Ramu, which may run it on a different provider or model than you. Use it when told to, or when the Agent tool is refused. It takes a description, a prompt and optionally a type, a name and background. Without background it waits and returns the sub-agent\'s report; with background it returns at once and the report arrives later as a message.', inputSchema: { description: z.string().min(1).max(200), prompt: z.string().min(1).max(100000), type: z.string().max(80).optional(), name: z.string().max(80).optional(), background: z.boolean().optional() } },
+    async (value, extra) => { try { return result(await agents.spawnSubagent(source.id, value, extra.signal)) } catch (error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }] } } })
   server.registerTool('schedule_list', { description: 'List saved schedules and next execution times.', inputSchema: {} }, async () => result(schedules.list()))
   server.registerTool('schedule_pause', { description: 'Pause or resume a schedule.', inputSchema: { id: z.string(), paused: z.boolean() } }, async ({ id, paused }) => result(schedules.pause(id, paused)))
   server.registerTool('schedule_run_now', { description: 'Run a schedule now without changing its recurrence.', inputSchema: { id: z.string() } }, async ({ id }) => result(schedules.runNow(id)))
@@ -163,6 +179,9 @@ agents.toolConnection = (session) => { const token = randomBytes(32).toString('h
 // Never unlink a socket owned by another live service. The launcher removes stale sockets first.
 await new Promise<void>((resolve, reject) => { runtime.once('error', reject); runtime.listen(socketPath, resolve) })
 chmodSync(socketPath, 0o600)
-const tick = setInterval(() => { void schedules.tick().catch(console.error); void recaps.tick().catch(console.error) }, 5000)
+const tick = setInterval(() => { void agents.resumeInterruptedChats().catch(console.error); void schedules.tick().catch(console.error); void recaps.tick().catch(console.error) }, 5000)
+await agents.restoreHelperTranscripts()
+await agents.resumeInterruptedChats()
+agents.goalsSettingsChanged()
 void schedules.tick().catch(console.error); void recaps.tick().catch(console.error)
 process.on('SIGTERM', () => void stop()); process.on('SIGINT', () => void stop())

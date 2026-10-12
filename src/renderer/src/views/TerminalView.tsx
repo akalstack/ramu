@@ -5,7 +5,7 @@ import { useAppSettings } from '../AppSettings'
 import { invoke, ramu } from '../ipc'
 import { errorText } from '../TaskPane'
 
-export function TerminalView({ taskId, repoId, label, active, onExit, actions, initialCommand }: { taskId: string; repoId: string | null; label: string; active: boolean; onExit?: () => void; actions?: ReactNode; initialCommand?: string }) {
+export function TerminalView({ taskId, repoId, label, active, onExit, actions, initialCommand, run }: { taskId: string; repoId: string | null; label: string; active: boolean; onExit?: () => void; actions?: ReactNode; initialCommand?: string; /** Typed into the task's shell once it opens (project actions). */ run?: string }) {
   const { preferences } = useAppSettings()
   const terminal = useRef<Terminal | null>(null)
   const host = useRef<HTMLDivElement>(null)
@@ -14,6 +14,8 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
   const [error, setError] = useState<string | null>(null)
   const exitRef = useRef(onExit)
   exitRef.current = onExit
+  // Read once: a project action runs when its terminal opens, never on a later re-render.
+  const runOnce = useRef(run)
 
   useEffect(() => {
     if (terminal.current) { terminal.current.options.fontSize = preferences.terminalFontSize; fitRef.current?.fit() }
@@ -60,9 +62,10 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
         const resize = term.onResize(({ cols, rows }) => termId && void invoke('term.resize', termId, Math.max(2, cols), Math.max(2, rows)).catch((e) => setError(errorText(e))))
         offs.push(() => input.dispose(), () => resize.dispose())
         fit.fit()
-        if (initialCommand) {
+        const command = initialCommand ?? runOnce.current
+        if (command) {
           term.focus()
-          void invoke('term.write', info.id, `${initialCommand}\r`).catch((e) => setError(errorText(e)))
+          void invoke('term.write', info.id, `${command}\r`).catch((e) => setError(errorText(e)))
         }
       },
       (e) => setError(errorText(e)),

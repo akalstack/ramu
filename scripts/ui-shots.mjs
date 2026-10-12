@@ -106,22 +106,45 @@ await step('chat', async () => {
   await page.getByRole('button', { name: 'Claude', exact: true }).click()
   await page.getByText('Claude (test)', { exact: true }).click()
   await page.keyboard.press('Escape')
-  await page.locator('textarea:visible[placeholder*="whole workspace"]').fill('Add a password reset flow to the api')
-  await page.keyboard.press('Enter')
+  const prompt = page.locator('textarea:visible[placeholder*="whole workspace"]')
+  await prompt.fill('Add a password reset flow to the api')
+  await prompt.press('Enter')
   await page.waitForTimeout(2500)
   const chat = pane().getByRole('button', { name: /Chat/ }).first()
   if (!await pane().locator('.agent-view:visible').count() && await chat.count()) await chat.click()
   await pane().locator('.agent-view:visible[data-state="idle"] .msg.assistant').waitFor({ timeout: 30_000 })
   await shot('05-chat')
   await pane().locator('.turn-summary-toggle').first().click()
-  await pane().locator('.tool-group > summary').first().click()
+  await pane().locator('.tool-group > [data-slot="collapsible-trigger"]').first().click()
   await shot('06-chat-tools')
-  await pane().locator('.tool-group > summary').first().click()
+  await pane().locator('.tool-group > [data-slot="collapsible-trigger"]').first().click()
   await pane().locator('.turn-summary-toggle').first().click()
+})
+await step('window actions', async () => {
+  await page.locator('.window-actions').getByRole('button', { name: 'Add action' }).click()
+  await page.getByLabel('Name', { exact: true }).fill('Dev server')
+  await page.getByLabel('Command', { exact: true }).fill('echo ramu-action-ran')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await page.locator('.window-actions').getByRole('button', { name: 'Dev server' }).click()
+  await pane().locator('.xterm-rows', { hasText: 'ramu-action-ran' }).first().waitFor({ timeout: 15_000 })
+  await shot('18-window-actions')
+})
+await step('search chats', async () => {
+  await page.locator('.sidebar-top').getByRole('button', { name: 'Search chats', exact: true }).click()
+  await shot('21-search-recent')
+  await page.getByRole('textbox', { name: 'Search chats', exact: true }).fill('single-use')
+  await page.locator('.chat-search-row.message').first().waitFor()
+  await shot('22-search-messages')
+  await page.locator('.chat-search-row.message').first().click()
+  await page.locator('.chat-find-bar input').waitFor()
+  const found = await page.locator('.chat-find-bar input').inputValue()
+  if (found !== 'single-use') throw new Error(`Find in conversation opened with "${found}"`)
+  await shot('23-search-opened')
+  await page.keyboard.press('Escape')
 })
 // Close-ups for spacing review.
 await step('details', async () => {
-  const crop = async (name, locator) => { await locator.first().screenshot({ path: join(SHOTS, `detail-${name}.png`) }); console.log(`shot detail-${name}`) }
+  const crop = async (name, locator) => { if (!await locator.first().isVisible()) return console.log(`skip detail-${name}: not shown`); await locator.first().screenshot({ path: join(SHOTS, `detail-${name}.png`) }); console.log(`shot detail-${name}`) }
   if (process.env.PROBE) console.log(JSON.stringify(await page.evaluate(() => {
     const box = (sel) => [...document.querySelectorAll(sel)].filter((e) => e.checkVisibility()).map((e) => { const r = e.getBoundingClientRect(); return `${Math.round(r.left)}-${Math.round(r.right)} y${Math.round(r.top)} h${Math.round(r.height)}` })
     return { sidebar: box('.sidebar'), kbd: box('.sidebar kbd'), sectionBtn: box('.section-head button svg'), taskTime: box('.task-time'), taskRow: box('.task-row'), navIcon: box('.nav-btn svg'), projIcon: box('.project-row > svg'),
@@ -146,11 +169,15 @@ await step('model picker', async () => {
   await page.keyboard.press('Escape')
 })
 await step('editor with chat', async () => {
-  await pane().locator('.view-tab', { hasText: 'App.tsx' }).first().click()
+  const tab = pane().locator('.view-tab:visible', { hasText: 'App.tsx' }).first()
+  if (await tab.count()) await tab.click()
+  else { await page.keyboard.press('Meta+P'); await page.keyboard.type('App.tsx'); await page.waitForTimeout(400); await page.keyboard.press('Enter') }
+  await page.waitForTimeout(600)
   await shot('08-editor-with-chat')
 })
 await step('terminal', async () => {
-  await pane().getByRole('button', { name: 'New tab' }).click()
+  if (!await pane().locator('.terminal-panel').isVisible()) await page.locator('.task-header').getByRole('button', { name: 'Terminal', exact: true }).click()
+  await pane().getByRole('button', { name: 'New terminal', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Terminal in api', exact: true }).click()
   await pane().locator('.view[style*="flex"] .xterm-rows').waitFor()
   await page.waitForTimeout(1200)
@@ -205,6 +232,16 @@ await step('git sync', async () => {
   await page.getByRole('button', { name: 'Abort rebase' }).click()
   await page.locator('.scm-operation').waitFor({ state: 'detached', timeout: 20_000 })
   await shot('14-rebase-aborted')
+})
+await step('collapsed sidebar', async () => {
+  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click()
+  await shot('16-sidebar-hidden')
+  await page.getByRole('button', { name: 'Show sidebar', exact: true }).click()
+})
+await step('schedules', async () => {
+  await page.locator('.sidebar-nav').getByRole('button', { name: 'Schedules', exact: true }).click()
+  await shot('17-schedules')
+  await page.locator('.sidebar-nav').getByRole('button', { name: 'Schedules', exact: true }).click()
 })
 await step('settings', async () => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click()

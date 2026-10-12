@@ -1,3 +1,4 @@
+import { t, useLanguage } from './../i18n'
 import { useEffect, useRef, useState } from 'react'
 import type { RepositoryBinding, ViewDescriptor } from '../../../shared/types'
 import { invoke, ramu } from '../ipc'
@@ -6,6 +7,7 @@ import { errorText } from '../TaskPane'
 import { useAppSettings } from '../AppSettings'
 
 export function GitDetailsView({ taskId, view, binding }: { taskId: string; view: Extract<ViewDescriptor, { kind: 'git' }>; binding: RepositoryBinding }) {
+  useLanguage()
   const { preferences } = useAppSettings()
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const host = useRef<HTMLDivElement>(null)
@@ -40,7 +42,7 @@ export function GitDetailsView({ taskId, view, binding }: { taskId: string; view
   useEffect(() => { editorRef.current?.updateOptions({ fontSize: preferences.editorFontSize, lineHeight: Math.round(preferences.editorFontSize * 1.6) }) }, [preferences.editorFontSize])
 
   return <div className="file-view">
-    <div className="view-header"><span className="strong">{binding.repoName}</span><span className="git-detail-title" title={view.title}>{view.title}</span>{loading && <span className="muted small">Loading…</span>}</div>
+    <div className="view-header"><span className="strong">{binding.repoName}</span><span className="git-detail-title" title={view.title}>{view.title}</span>{loading && <span className="muted small">{t("Loading…")}</span>}</div>
     {error && <div className="error banner">{error}</div>}
     <div ref={host} className="editor-host" />
   </div>

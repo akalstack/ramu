@@ -178,17 +178,26 @@ export async function discardTracked(cwd: string, paths: string[]): Promise<void
   if (paths.length) await git(cwd, ['--literal-pathspecs', 'restore', '--worktree', '--', ...paths])
 }
 
-export async function undoCommit(cwd: string, expectedHead: string): Promise<void> {
+export async function undoCommit(cwd: string, expectedHead: string): Promise<string> {
   const current = await status(cwd)
   if (current.oid !== expectedHead) throw new Error('The latest commit changed. Refresh before undoing it.')
-  if (current.detached || current.entries.some((entry) => entry.staged === 'unmerged')) throw new Error('Resolve the repository state before undoing a commit.')
+  if (current.detached || current.operation || current.entries.some((entry) => entry.staged === 'unmerged')) throw new Error('Resolve the repository state before undoing a commit.')
   if (current.upstream && current.ahead === 0) throw new Error('This commit is already on the upstream branch. Use a revert instead.')
+  const message = (await git(cwd, ['log', '-1', '--format=%B', expectedHead])).trimEnd()
   await git(cwd, ['reset', '--soft', `${expectedHead}^`])
+  return message
 }
 
-export async function commit(cwd: string, message: string): Promise<string> {
+export async function commit(cwd: string, message: string, amendHead?: string): Promise<string> {
   // The message goes through stdin so it never needs quoting.
-  await git(cwd, ['commit', '--file=-', '--cleanup=strip'], { input: message })
+  if (amendHead) {
+    const current = await status(cwd)
+    if (current.oid !== amendHead) throw new Error('The latest commit changed. Refresh before amending it.')
+    if (current.operation || current.entries.some(entry => entry.staged === 'unmerged')) throw new Error('Finish the Git operation and resolve conflicts before amending.')
+  }
+  if (!message.trim() && !amendHead) throw new Error('A commit message is required.')
+  const args = ['commit', ...(amendHead ? ['--amend'] : []), ...(message.trim() ? ['--file=-', '--cleanup=strip'] : ['--no-edit'])]
+  await git(cwd, args, message.trim() ? { input: message } : undefined)
   return (await headOid(cwd)) ?? ''
 }
 
@@ -215,10 +224,15 @@ export async function worktreePaths(repoRoot: string): Promise<string[]> {
 
 export async function history(cwd: string): Promise<GitCommit[]> {
   if (!await headOid(cwd)) return []
-  const raw = await git(cwd, ['log', '--max-count=30', '--format=%H%x00%h%x00%an%x00%at%x00%s%x00%D'])
+  // Commits not yet on the upstream; without an upstream nothing is marked.
+  const [raw, ahead] = await Promise.all([
+    git(cwd, ['log', '--max-count=30', '--format=%H%x00%h%x00%an%x00%at%x00%s%x00%D']),
+    git(cwd, ['rev-list', '--max-count=30', '@{upstream}..HEAD']).catch(() => ''),
+  ])
+  const outgoing = new Set(ahead.split('\n').filter(Boolean))
   return raw.trimEnd().split('\n').map((line) => {
     const [oid, shortOid, author, timestamp, subject, refs] = line.split('\0')
-    return { oid: oid!, shortOid: shortOid!, author: author!, timestamp: Number(timestamp) * 1000, subject: subject!, refs: refs ?? '' }
+    return { oid: oid!, shortOid: shortOid!, author: author!, timestamp: Number(timestamp) * 1000, subject: subject!, refs: refs ?? '', outgoing: outgoing.has(oid!) }
   })
 }
 export async function branches(cwd: string): Promise<GitBranchInfo[]> {

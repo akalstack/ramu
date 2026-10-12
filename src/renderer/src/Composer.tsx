@@ -1,6 +1,7 @@
+import { t, useLanguage } from './i18n'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { ArrowUp, CornerDownRight, FileText, ListEnd, Paperclip, Play, Square, X } from 'lucide-react'
+import { ArrowUp, FileText, Paperclip, Play, Square, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Attachment, FileContext } from '../../shared/types'
@@ -35,6 +36,7 @@ export function Composer({
   resume,
   chips,
   allowEmpty = false,
+  chat = false,
 }: {
   value: string
   scopeId?: string
@@ -60,9 +62,12 @@ export function Composer({
   chips?: ReactNode
   /** Lets the message go out with no text, because the chips carry the content. */
   allowEmpty?: boolean
+  /** A chat's own composer, which offers chat-only commands such as /aside. */
+  chat?: boolean
 }) {
+  useLanguage()
   const [caret, setCaret] = useState(value.length)
-  const suggestions = useComposerSuggestions(value, caret, scopeId)
+  const suggestions = useComposerSuggestions(value, caret, scopeId, chat)
   const [uploading, setUploading] = useState(false)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   // Notices about files that did not fit go away on their own.
@@ -121,7 +126,8 @@ export function Composer({
   const submit = () => { onSubmit(suggestions.hydrate()); suggestions.clearPinned(); setAttachmentError(null) }
   const alternate = () => { onAlternateSubmit?.(suggestions.hydrate()); suggestions.clearPinned() }
   const hasPinned = suggestions.pinned.length > 0
-  const canAlternate = !alternateDisabled && !uploading && (allowEmpty || hasPinned || value.trim().length > 0 || attachments.length > 0)
+  const hasContent = allowEmpty || hasPinned || value.trim().length > 0 || attachments.length > 0
+  const canAlternate = !alternateDisabled && !uploading && hasContent
   const showStop = !allowEmpty && !hasPinned && !!stop?.active && !value.trim() && attachments.length === 0
   const showResume = !allowEmpty && !hasPinned && !showStop && !!resume?.active && !value.trim() && attachments.length === 0
   const rootRef = useRef<HTMLDivElement>(null)
@@ -163,7 +169,7 @@ export function Composer({
     window.addEventListener('ramu:chat-drop', onChatDrop)
     return () => window.removeEventListener('ramu:chat-drop', onChatDrop)
   }, [])
-  const canSend = !disabled && !uploading && (value.trim().length > 0 || attachments.length > 0)
+  const canSend = !disabled && !uploading && hasContent
   return (<>
     <div ref={rootRef} className={`composer${dragging ? ' dragging' : ''}`}
       onDragOver={(event) => { if (event.dataTransfer.types.includes(FILE_DRAG_TYPE) || onAttachmentsChange && event.dataTransfer.types.includes('Files')) { event.preventDefault(); setDragging(true) } }}
@@ -175,10 +181,10 @@ export function Composer({
       {suggestions.visible && <ComposerSuggestions suggestions={suggestions} onChoose={choose} />}
       {(chips || hasPinned) && <div className="composer-chips">{chips}{(showAllChips ? suggestions.pinned : suggestions.pinned.slice(0, CHIPS_SHOWN)).map((file) => <span key={`${file.repoId}:${file.path}`} className="attachment-chip comments-chip" title={`${suggestions.repoName(file.repoId)}/${file.path}`}>
         <span className="attachment-open file"><FileText size={15} /><span className="attachment-name">{file.path.slice(file.path.lastIndexOf('/') + 1)}</span></span>
-        <Button type="button" className="comments-chip-x" aria-label={`Remove ${file.path}`} onClick={() => { suggestions.unpin(file); setAttachmentError(null) }}><X size={13} /></Button>
+        <Button type="button" className="comments-chip-x" aria-label={t("Remove {0}", { "0": file.path })} onClick={() => { suggestions.unpin(file); setAttachmentError(null) }}><X size={13} /></Button>
       </span>)}
-        {suggestions.pinned.length > CHIPS_SHOWN && <Button type="button" className="chip-more" onClick={() => setShowAllChips((value) => !value)}>{showAllChips ? 'Show less' : `+${suggestions.pinned.length - CHIPS_SHOWN} more`}</Button>}
-        {suggestions.pinned.length + attachments.length > 1 && <Button type="button" className="chip-more clear" onClick={() => { suggestions.clearPinned(); setAttachmentError(null); setShowAllChips(false); if (attachments.length) onAttachmentsChange?.([]) }}>Clear all</Button>}
+        {suggestions.pinned.length > CHIPS_SHOWN && <Button type="button" className="chip-more" onClick={() => setShowAllChips((value) => !value)}>{showAllChips ? t("Show less") : t("+{0} more", { "0": suggestions.pinned.length - CHIPS_SHOWN })}</Button>}
+        {suggestions.pinned.length + attachments.length > 1 && <Button type="button" className="chip-more clear" onClick={() => { suggestions.clearPinned(); setAttachmentError(null); setShowAllChips(false); if (attachments.length) onAttachmentsChange?.([]) }}>{t("Clear all")}</Button>}
       </div>}
       {attachments.length > 0 && <Attachments files={attachments} onRemove={(id) => onAttachmentsChange?.(attachments.filter((file) => file.id !== id))} />}
       {attachmentError && <div className="error small" role="alert">{attachmentError}</div>}
@@ -187,7 +193,7 @@ export function Composer({
         rows={1}
         autoFocus={autoFocus}
         value={value}
-        placeholder={placeholder}
+        placeholder={t(placeholder)}
         onPaste={(event) => {
           if (!onAttachmentsChange) return
           const files = [...event.clipboardData.files]
@@ -229,11 +235,10 @@ export function Composer({
         }}
       />
       <div className="composer-bar">
-        {onAttachmentsChange && <Button className="ghost icon small-icon" aria-label="Attach files" title="Attach files" disabled={uploading || attachments.length >= 10} onClick={() => void importFiles()}><Paperclip size={15} /></Button>}
+        {onAttachmentsChange && <Button className="ghost icon small-icon" aria-label={t("Attach files")} title={t("Attach files")} disabled={uploading || attachments.length >= 10} onClick={() => void importFiles()}><Paperclip size={15} /></Button>}
         {controls ? <div className="composer-controls">{controls}</div> : <span className="grow" />}
         {actions}
-        {onAlternateSubmit && <Button className="ghost icon small-icon" disabled={!canAlternate} aria-label={alternateLabel} title={`${alternateLabel} (⌘Enter / Ctrl+Enter)`} onClick={alternate}>{alternateLabel === 'Queue' ? <ListEnd size={15} /> : <CornerDownRight size={15} />}</Button>}
-        <Button className={showStop ? 'send stop' : showResume ? 'send resume' : 'send'} aria-label={showStop ? 'Stop' : showResume ? 'Resume' : submitLabel} title={showStop ? 'Stop this turn' : showResume ? 'Resume where it stopped' : `${submitLabel} (Enter)`} disabled={showStop || showResume ? false : !canSend} onClick={showStop ? stop!.onStop : showResume ? resume!.onResume : submit}>
+        <Button className={showStop ? 'send stop' : showResume ? 'send resume' : 'send'} aria-label={showStop ? t("Stop") : showResume ? t("Resume") : t(submitLabel)} title={showStop ? t("Stop this turn") : showResume ? t("Resume where it stopped") : `${t(submitLabel)} (Enter)${onAlternateSubmit && alternateLabel ? ` · ${t(alternateLabel)} (⌘Enter / Ctrl+Enter)` : ''}`} disabled={showStop || showResume ? false : !canSend} onClick={showStop ? stop!.onStop : showResume ? resume!.onResume : submit}>
           {showStop ? <Square size={12} fill="currentColor" strokeWidth={0} /> : showResume ? <Play size={13} fill="currentColor" strokeWidth={0} /> : <ArrowUp size={16} strokeWidth={2.25} />}
         </Button>
       </div>

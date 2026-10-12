@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 import { Check, CircleAlert, LoaderCircle } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { GitBranchInfo, GitStatus, RepositoryBinding } from '../../shared/types'
@@ -12,6 +13,7 @@ type Row = { status: GitStatus | null; branches: GitBranchInfo[]; result?: 'runn
 
 /** Sync every repository in the workspace in one go: see each branch and state first, switch branches, then pull and push the ones you tick. */
 export function WorkspaceSyncDialog({ taskId, bindings, onClose }: { taskId: string; bindings: RepositoryBinding[]; onClose: () => void }) {
+  useLanguage()
   const ws = useWorkspace()
   const [rows, setRows] = useState<Record<string, Row>>({})
   const [picked, setPicked] = useState<Set<string> | null>(null)
@@ -49,15 +51,15 @@ export function WorkspaceSyncDialog({ taskId, bindings, onClose }: { taskId: str
     await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker))
     setBusy(false); setFinished(true); window.dispatchEvent(new Event('ramu:git-updated'))
   }
-  return <Dialog title="Sync workspace" confirmLabel={finished ? 'Sync again' : chosen.length ? `Sync ${chosen.length} ${chosen.length === 1 ? 'repository' : 'repositories'}` : 'Nothing to sync'} confirmDisabled={busy || !chosen.length} busy={busy} error={error} onConfirm={() => void run()} onCancel={onClose}>
+  return <Dialog title={t("Sync workspace")} confirmLabel={finished ? t("Sync again") : chosen.length ? t("Sync {0} {1}", { "0": chosen.length, "1": chosen.length === 1 ? t('repository') : 'repositories' }) : t("Nothing to sync")} confirmDisabled={busy || !chosen.length} busy={busy} error={error} onConfirm={() => void run()} onCancel={onClose}>
     <div className="workspace-sync">
-      <p className="muted small">Pulls, then pushes, each ticked repository, up to four at a time. Change a branch first if a repository is on the wrong one.</p>
+      <p className="muted small">{t("Pulls, then pushes, each ticked repository, up to four at a time. Change a branch first if a repository is on the wrong one.")}</p>
       {bindings.map((binding) => {
         const row = rows[binding.repoId], status = row?.status ?? null, ok = canSync(status)
         const note = !status ? 'Loading…' : status.operation ? `${status.operation === 'rebase' ? 'Rebase' : 'Merge'} in progress` : status.detached ? 'Detached HEAD' : !status.remote ? 'No remote' : !status.upstream ? 'Not published' : `${status.behind}↓ ${status.ahead}↑`
         const changes = status?.entries.length ?? 0
         return <div key={binding.repoId} className="workspace-sync-row">
-          <Checkbox aria-label={`Sync ${binding.repoName}`} checked={selection.has(binding.repoId) && ok} disabled={!ok || busy} onCheckedChange={() => toggle(binding.repoId)} />
+          <Checkbox aria-label={t("Sync {0}", { "0": binding.repoName })} checked={selection.has(binding.repoId) && ok} disabled={!ok || busy} onCheckedChange={() => toggle(binding.repoId)} />
           <span className="workspace-sync-name strong" title={binding.cwd}>{binding.repoName}</span>
           <BranchPicker binding={binding} status={status} branches={row?.branches ?? []} busy={busy || !status} className="workspace-sync-branch" onChange={(branch) => void switchBranch(binding, branch)} />
           <span className="muted small workspace-sync-state">{note}{changes ? ` · ${changes} ${changes === 1 ? 'change' : 'changes'}` : ''}</span>

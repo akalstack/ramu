@@ -1,9 +1,11 @@
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { t, useLanguage } from './../i18n'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp, Check, CloudDownload, GitCommitHorizontal, RefreshCcw, Trash2, ChevronDown, ChevronRight, GitCompareArrows, Minus, MoreHorizontal, Plus, RefreshCw, Sparkles, Undo2, FileText, Copy } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowDown, ArrowUp, Check, CloudDownload, CloudUpload, GitBranch, RefreshCcw, Trash2, ChevronDown, ChevronRight, GitCompareArrows, Minus, MoreHorizontal, Plus, RefreshCw, Sparkles, Undo2, FileText, Copy } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type CommitDraft, type GitStash, type GitBranchInfo, type GitCommit, type GitStatus, type GitStatusEntry, type PullMode, type RepositoryBinding } from '../../../shared/types'
@@ -26,6 +28,7 @@ const GIT_HEIGHT_MIN = 120
 const SCM_MIN_HEIGHT = 160
 
 export function ScmPanel() {
+  useLanguage()
   const ws = useWorkspace()
   const taskId = ws.ui.activeTaskId
   const bindings = taskId ? (ws.bindings[taskId] ?? []).filter((b) => b.setupState === 'ready' && !b.folderOnly) : []
@@ -57,14 +60,13 @@ export function ScmPanel() {
   const isOpen = (repoId: string, index: number) => open[repoId] ?? index === 0
   const gitRepo = bindings.find((b) => b.repoId === gitRepoId) ?? bindings.find((b, index) => isOpen(b.repoId, index)) ?? bindings[0]
   return <div className="panel scm-panel" ref={panelRef}>
-    <header className="panel-title scm-title">Source Control</header>
-    {bindings.length === 0 ? <p className="muted hint">No repository available.</p>
+    {bindings.length === 0 ? <p className="muted hint">{t("No repository available.")}</p>
       : many ? <>
-        <div className="scm-repos">{bindings.map((b, index) => {
+        <ScrollArea className="scm-repos overlay-scroll-area">{bindings.map((b, index) => {
           const expanded = isOpen(b.repoId, index)
           return <RepositoryControl key={`${taskId}:${b.repoId}`} taskId={taskId} binding={b} compact collapsed={!expanded} gitHost={gitHost} showGit={gitRepo?.repoId === b.repoId} gitRepos={bindings} onGitRepo={setGitRepoId} onToggle={() => { setOpen((current) => ({ ...current, [b.repoId]: !expanded })); if (!expanded) setGitRepoId(b.repoId) }} />
-        })}</div>
-        <div className="scm-git-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize Git section" title="Drag to resize · double-click to reset" onPointerDown={startResize} onDoubleClick={() => { setGitHeight(GIT_HEIGHT_DEFAULT); localStorage.removeItem(GIT_HEIGHT_KEY) }} />
+        })}</ScrollArea>
+        <div className="scm-git-resizer" role="separator" aria-orientation="horizontal" aria-label={t("Resize Git section")} title={t("Drag to resize · double-click to reset")} onPointerDown={startResize} onDoubleClick={() => { setGitHeight(GIT_HEIGHT_DEFAULT); localStorage.removeItem(GIT_HEIGHT_KEY) }} />
         <div className="scm-git-host" ref={setGitHost} style={{ height: gitHeight }} />
       </>
       : <RepositoryControl key={`${taskId}:${bindings[0]!.repoId}`} taskId={taskId} binding={bindings[0]!} />}
@@ -76,6 +78,7 @@ const PULL_NAME: Record<PullMode, string> = { rebase: 'rebase', merge: 'merge', 
 const LETTER: Record<string, string> = { modified: 'M', added: 'A', deleted: 'D', renamed: 'R', copied: 'C', 'type-changed': 'T', untracked: 'U', unmerged: '!' }
 
 function RepositoryControl({ taskId, binding, compact = false, collapsed = false, gitHost = null, showGit = true, gitRepos = [], onGitRepo, onToggle }: { taskId: string; binding: RepositoryBinding; compact?: boolean; collapsed?: boolean; gitHost?: HTMLElement | null; showGit?: boolean; gitRepos?: RepositoryBinding[]; onGitRepo?: (repoId: string) => void; onToggle?: () => void }) {
+  useLanguage()
   const ws = useWorkspace()
   const { preferences } = useAppSettings()
   const [status, setStatus] = useState<GitStatus | null>(null)
@@ -159,7 +162,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
         'Reply briefly: one line per file on how it was resolved, plus anything you were unsure about. No preamble.',
         '</ramu-context>',
       ].join('\n')
-      const task = await invoke('tasks.create', { projectId: project.id, title: `Resolve ${kind} conflicts in ${binding.repoName}`, mode: isolated ? 'worktree' : 'current', workspaceId: isolated })
+      const task = await invoke('tasks.create', { projectId: project.id, title: t("Resolve {0} conflicts in {1}", { "0": kind, "1": binding.repoName }), mode: isolated ? 'worktree' : 'current', workspaceId: isolated })
       created = task.id
       const session = await invoke('agent.start', task.id, prompt, settings.model ? settings : initialSettings, [], [])
       created = null
@@ -180,19 +183,19 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   const inGitSlot = (node: ReactNode) => compact ? gitHost && createPortal(node, gitHost) : node
   const copyPath = async (path: string) => { try { await copyText(path) } catch (reason) { reportError(errorText(reason)) } }
   const fileContext = useContextMenu('Source control file actions', contextEntry ? [
-    { key: 'diff', label: 'Open changes', onSelect: () => ws.openView(taskId, { kind: 'diff', repoId: binding.repoId, path: contextEntry.entry.path, staged: contextEntry.staged }) },
-    { key: 'open', label: <><FileText size={14} />Open file</>, disabled: (contextEntry.staged ? contextEntry.entry.staged : contextEntry.entry.unstaged) === 'deleted', onSelect: () => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: contextEntry.entry.path }) },
-    { key: 'stage', label: <>{contextEntry.staged ? <Minus size={14} /> : <Plus size={14} />}{contextEntry.staged ? 'Unstage changes' : 'Stage changes'}</>, disabled: busy, onSelect: () => void run(() => invoke(contextEntry.staged ? 'git.unstage' : 'git.stage', taskId, binding.repoId, [contextEntry.entry.path])) },
-    ...(!contextEntry.staged ? [{ key: 'discard', label: <><Undo2 size={14} />Discard changes…</>, danger: true, disabled: busy, onSelect: () => setConfirmation({ kind: 'discard', paths: [contextEntry.entry.path] }) }] : []),
-    { key: 'copy', label: <><Copy size={14} />Copy relative path</>, onSelect: () => void copyPath(contextEntry.entry.path) },
+    { key: 'diff', label: t("Open changes"), onSelect: () => ws.openView(taskId, { kind: 'diff', repoId: binding.repoId, path: contextEntry.entry.path, staged: contextEntry.staged }) },
+    { key: 'open', label: <><FileText size={14} />{t("Open file")}</>, disabled: (contextEntry.staged ? contextEntry.entry.staged : contextEntry.entry.unstaged) === 'deleted', onSelect: () => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: contextEntry.entry.path }) },
+    { key: 'stage', label: <>{contextEntry.staged ? <Minus size={14} /> : <Plus size={14} />}{contextEntry.staged ? t("Unstage changes") : t("Stage changes")}</>, disabled: busy, onSelect: () => void run(() => invoke(contextEntry.staged ? 'git.unstage' : 'git.stage', taskId, binding.repoId, [contextEntry.entry.path])) },
+    ...(!contextEntry.staged ? [{ key: 'discard', label: <><Undo2 size={14} />{t("Discard changes…")}</>, danger: true, disabled: busy, onSelect: () => setConfirmation({ kind: 'discard', paths: [contextEntry.entry.path] }) }] : []),
+    { key: 'copy', label: <><Copy size={14} />{t("Copy relative path")}</>, onSelect: () => void copyPath(contextEntry.entry.path) },
   ] : [])
   const row = (e: GitStatusEntry, isStaged: boolean) => <div key={`${isStaged}:${e.path}`} className="change-row" onContextMenu={(event) => { setContextEntry({ entry: e, staged: isStaged }); fileContext.onContextMenu(event) }} onKeyDown={(event) => { if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') { setContextEntry({ entry: e, staged: isStaged }); fileContext.onKeyDown(event) } }}>
-    <Button className="change-name" title={e.origPath ? `${e.origPath} → ${e.path}` : e.path} onClick={() => ws.openView(taskId, { kind: 'diff', repoId: binding.repoId, path: e.path, staged: isStaged })}><span className="change-base">{e.path.slice(e.path.lastIndexOf('/') + 1)}</span>{e.path.includes('/') && <span className="change-dir">{e.path.slice(0, e.path.lastIndexOf('/'))}</span>}</Button>
+    <Button className="change-name" title={e.origPath ? `${e.origPath} → ${e.path}` : e.path} onClick={() => ws.openView(taskId, { kind: 'diff', repoId: binding.repoId, path: e.path, staged: isStaged })} onDoubleClick={() => ws.openView(taskId, { kind: 'diff', repoId: binding.repoId, path: e.path, staged: isStaged, preview: false })}><span className="change-base">{e.path.slice(e.path.lastIndexOf('/') + 1)}</span>{e.path.includes('/') && <span className="change-dir">{e.path.slice(0, e.path.lastIndexOf('/'))}</span>}</Button>
     <span className="change-actions">
-      {!isStaged && <Button className="ghost icon small-icon" disabled={busy} aria-label={`Discard changes to ${e.path}`} title="Discard changes" onClick={() => setConfirmation({ kind: 'discard', paths: [e.path] })}><Undo2 size={13} /></Button>}
+      {!isStaged && <Button className="ghost icon small-icon" disabled={busy} aria-label={t("Discard changes to {0}", { "0": e.path })} title={t("Discard changes")} onClick={() => setConfirmation({ kind: 'discard', paths: [e.path] })}><Undo2 size={13} /></Button>}
       <Button className="ghost icon small-icon" disabled={busy} aria-label={`${isStaged ? 'Unstage' : 'Stage'} ${e.path}`} title={isStaged ? 'Unstage' : 'Stage'} onClick={() => void run(() => invoke(isStaged ? 'git.unstage' : 'git.stage', taskId, binding.repoId, [e.path]))}>{isStaged ? <Minus size={13} /> : <Plus size={13} />}</Button>
     </span>
-    <span className={`letter ${isStaged ? e.staged : e.unstaged}`} title={e.origPath ? 'Renamed' : undefined}>{LETTER[(isStaged ? e.staged : e.unstaged) ?? '']}</span>
+    <span className={`letter ${isStaged ? e.staged : e.unstaged}`} title={e.origPath ? t("Renamed") : undefined}>{LETTER[(isStaged ? e.staged : e.unstaged) ?? '']}</span>
   </div>
   const draftMessage = async () => {
     setGenerating(true)
@@ -205,119 +208,154 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   }
   const generate = () => void draftMessage()
   // With no message typed, Commit drafts one from the staged changes first and commits it as written.
-  const commit = async () => {
+  const commit = async (action: 'commit' | 'amend' | 'push' | 'sync' = 'commit') => {
     let text = message, fingerprint = draft?.fingerprint
-    if (!text.trim()) {
+    const amendHead = action === 'amend' ? status?.oid ?? undefined : undefined
+    if (action === 'amend' && !amendHead) return
+    if (!text.trim() && action !== 'amend') {
       const value = await draftMessage()
       if (!value?.message.trim()) return
       text = value.message; fingerprint = value.fingerprint
     }
     await run(async () => {
-      await invoke('git.commit', taskId, binding.repoId, text, fingerprint)
+      if (action === 'sync') requireSaved()
+      await invoke('git.commit', taskId, binding.repoId, text, fingerprint, amendHead)
       setMessage(''); setDraft(null)
+      if (action === 'push') await invoke('git.push', taskId, binding.repoId)
+      if (action === 'sync') await invoke('git.sync', taskId, binding.repoId)
     })
   }
 
+  const canCommit = !busy && !generating && !!staged.length && !conflicts.length
+  const canAmend = !busy && !generating && !!status?.oid && !status.operation && !conflicts.length
+  const canUndo = !busy && !generating && !!status?.oid && commits.length > 1 && !status.detached && !status.operation && !conflicts.length && !(status.upstream && status.ahead === 0)
+  const requestUndo = (commit: GitCommit) => setConfirmation({ kind: 'undo', oid: commit.oid, title: commit.subject })
+  const canPublish = canCommit && !!status?.branch && !!status.remote && !status.operation
+
   return <div className={`scm-repo-body${compact ? ' compact' : ''}${collapsed ? ' collapsed' : ''}`}>
     {fileContext.menu}
-    {confirmation && <Dialog title={confirmation.kind === 'discard' ? 'Discard changes?' : confirmation.kind === 'undo' ? 'Undo last commit?' : confirmation.kind === 'branch' ? 'Create branch' : confirmation.kind === 'stash' ? (confirmation.staged ? 'Stash staged changes' : 'Stash changes') : confirmation.kind === 'delete-branch' ? 'Delete branch?' : 'Delete stash?'} confirmLabel={confirmation.kind === 'discard' ? 'Discard changes' : confirmation.kind === 'undo' ? 'Undo commit' : confirmation.kind === 'branch' ? 'Create branch' : confirmation.kind === 'stash' ? 'Stash' : 'Delete'} danger={confirmation.kind === 'discard' || confirmation.kind === 'drop-stash' || confirmation.kind === 'delete-branch'} busy={busy} onCancel={() => { if (!busy) setConfirmation(null) }} onConfirm={() => void run(async () => {
+    {confirmation && <Dialog title={confirmation.kind === 'discard' ? t("Discard changes?") : confirmation.kind === 'undo' ? t("Undo last commit?") : confirmation.kind === 'branch' ? t("Create branch") : confirmation.kind === 'stash' ? (confirmation.staged ? t("Stash staged changes") : t("Stash changes")) : confirmation.kind === 'delete-branch' ? t("Delete branch?") : t("Delete stash?")} confirmLabel={confirmation.kind === 'discard' ? t("Discard changes") : confirmation.kind === 'undo' ? t("Undo commit") : confirmation.kind === 'branch' ? t("Create branch") : confirmation.kind === 'stash' ? t("Stash") : t("Delete")} danger={confirmation.kind === 'discard' || confirmation.kind === 'drop-stash' || confirmation.kind === 'delete-branch'} busy={busy} onCancel={() => { if (!busy) setConfirmation(null) }} onConfirm={() => void run(async () => {
       requireSaved()
       if (confirmation.kind === 'discard') await invoke('git.discard', taskId, binding.repoId, confirmation.paths)
-      else if (confirmation.kind === 'undo') { await invoke('git.undoCommit', taskId, binding.repoId, confirmation.oid); setMessage(confirmation.title); setDraft(null) }
+      else if (confirmation.kind === 'undo') { const message = await invoke('git.undoCommit', taskId, binding.repoId, confirmation.oid); setMessage(message); setDraft(null) }
       else if (confirmation.kind === 'branch') await invoke('git.createBranch', taskId, binding.repoId, operationName.trim())
       else if (confirmation.kind === 'stash') await invoke('git.stash', taskId, binding.repoId, operationName.trim(), confirmation.staged)
       else if (confirmation.kind === 'delete-branch') await invoke('git.deleteBranch', taskId, binding.repoId, confirmation.name)
       else await invoke('git.dropStash', taskId, binding.repoId, confirmation.oid)
       setConfirmation(null)
     })}>
-      {confirmation.kind === 'discard' ? <><p>Tracked edits return to their staged version. Untracked files move to Trash. Staged changes are kept.</p><pre className="confirm-paths">{confirmation.paths.join('\n')}</pre></> : confirmation.kind === 'undo' ? <><p>The last local commit will be undone. Its files stay in your checkout and index.</p><p className="strong">{confirmation.title}</p></> : confirmation.kind === 'branch' || confirmation.kind === 'stash' ? <><label className="explorer-name-field">{confirmation.kind === 'branch' ? 'Branch name' : 'Stash message'}<Input autoFocus value={operationName} onChange={(event) => setOperationName(event.target.value)} /></label><p className="muted small">{confirmation.kind === 'branch' ? 'Creates and switches to a new local branch. The checkout must be clean.' : (confirmation.kind === 'stash' && confirmation.staged ? 'Saves only staged changes and removes them from the checkout. Unstaged edits stay.' : 'Preserves tracked and untracked changes. Ignored files stay in place.')}</p></> : <><p>{confirmation.kind === 'delete-branch' ? 'Deletes the local branch only. Git will refuse an unmerged branch or one in use by a worktree.' : 'This saved stash will be permanently removed.'}</p><p className="strong">{confirmation.kind === 'delete-branch' ? confirmation.name : confirmation.title}</p></>}
+      {confirmation.kind === 'discard' ? <><p>{t("Tracked edits return to their staged version. Untracked files move to Trash. Staged changes are kept.")}</p><pre className="confirm-paths">{confirmation.paths.join('\n')}</pre></> : confirmation.kind === 'undo' ? <><p>{t("The last local commit will be undone. Its files stay in your checkout and index.")}</p><p className="strong">{confirmation.title}</p></> : confirmation.kind === 'branch' || confirmation.kind === 'stash' ? <><label className="explorer-name-field">{confirmation.kind === 'branch' ? t("Branch name") : t("Stash message")}<Input autoFocus value={operationName} onChange={(event) => setOperationName(event.target.value)} /></label><p className="muted small">{confirmation.kind === 'branch' ? t("Creates and switches to a new local branch. The checkout must be clean.") : (confirmation.kind === 'stash' && confirmation.staged ? t("Saves only staged changes and removes them from the checkout. Unstaged edits stay.") : t("Preserves tracked and untracked changes. Ignored files stay in place."))}</p></> : <><p>{confirmation.kind === 'delete-branch' ? t("Deletes the local branch only. Git will refuse an unmerged branch or one in use by a worktree.") : t("This saved stash will be permanently removed.")}</p><p className="strong">{confirmation.kind === 'delete-branch' ? confirmation.name : confirmation.title}</p></>}
     </Dialog>}
-    <div className="scm-content">
+    <ScrollArea className="scm-content overlay-scroll-area">
       <section className="scm-repo">
         <div className="scm-section-head">
           {onToggle ? <Button type="button" className="scm-repo-toggle grow" aria-expanded={!collapsed} onClick={onToggle}>{collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}<span className="strong">{binding.repoName}</span>{collapsed && !!status?.entries.length && <span className="scm-count">{status.entries.length}</span>}</Button> : <><ChevronDown size={14} /><span className="grow strong">{binding.repoName}</span></>}
-          <Button className="ghost icon small-icon" title="Stash all changes…" aria-label="Stash all changes" disabled={busy || !canStash} onClick={() => { setOperationName(''); setConfirmation({ kind: 'stash' }) }}><Archive size={13} /></Button>
-          <Button className="ghost icon small-icon" title="Refresh source control" aria-label="Refresh source control" onClick={() => void load()}><RefreshCw size={13} /></Button>
-          <Menu disabled={busy} label="Source control actions" icon={<MoreHorizontal size={14} />} className="ghost icon small-icon" align="end" items={[
-            { key: 'stage-all', label: <><Plus size={14} />Stage all changes</>, disabled: !unstaged.length, onSelect: () => void run(() => invoke('git.stage', taskId, binding.repoId, unstaged.map((entry) => entry.path))) },
-            { key: 'unstage-all', label: <><Minus size={14} />Unstage all changes</>, disabled: !staged.length, onSelect: () => void run(() => invoke('git.unstage', taskId, binding.repoId, staged.map((entry) => entry.path))) },
-            { key: 'discard-all', label: <><Undo2 size={14} />Discard all unstaged changes…</>, danger: true, disabled: !unstaged.length, onSelect: () => setConfirmation({ kind: 'discard', paths: unstaged.map((entry) => entry.path) }) },
-            { key: 'undo-commit', label: <><Undo2 size={14} />Undo last commit…</>, disabled: commits.length < 2 || !!status?.upstream && !status.ahead || !!status?.detached || !!conflicts.length, onSelect: () => setConfirmation({ kind: 'undo', oid: commits[0]!.oid, title: commits[0]!.subject }) },
-            { key: 'open-all', label: 'Open all changes', disabled: !status?.entries.length, onSelect: () => status?.entries.filter((entry) => entry.staged !== 'unmerged').forEach((entry) => ws.openView(taskId, { kind: 'diff', repoId: binding.repoId, path: entry.path, staged: !!entry.staged && !entry.unstaged })) },
+          <Button className="ghost icon small-icon" title={t("Stash all changes…")} aria-label={t("Stash all changes")} disabled={busy || !canStash} onClick={() => { setOperationName(''); setConfirmation({ kind: 'stash' }) }}><Archive size={13} /></Button>
+          <Button className="ghost icon small-icon" title={t("Refresh source control")} aria-label={t("Refresh source control")} onClick={() => void load()}><RefreshCw size={13} /></Button>
+          <Menu disabled={busy} label={t("Source control actions")} icon={<MoreHorizontal size={14} />} className="ghost icon small-icon" align="end" items={[
+            { key: 'stage-all', label: <><Plus size={14} />{t("Stage all changes")}</>, disabled: !unstaged.length, onSelect: () => void run(() => invoke('git.stage', taskId, binding.repoId, unstaged.map((entry) => entry.path))) },
+            { key: 'unstage-all', label: <><Minus size={14} />{t("Unstage all changes")}</>, disabled: !staged.length, onSelect: () => void run(() => invoke('git.unstage', taskId, binding.repoId, staged.map((entry) => entry.path))) },
+            { key: 'discard-all', label: <><Undo2 size={14} />{t("Discard all unstaged changes…")}</>, danger: true, disabled: !unstaged.length, onSelect: () => setConfirmation({ kind: 'discard', paths: unstaged.map((entry) => entry.path) }) },
+            { key: 'undo-commit', label: <><Undo2 size={14} />{t("Undo last commit…")}</>, disabled: !canUndo, onSelect: () => { const head = commits.find(commit => commit.oid === status?.oid); if (head) requestUndo(head) } },
+            { key: 'open-all', label: t("Open all changes"), disabled: !status?.entries.length, onSelect: () => status?.entries.filter((entry) => entry.staged !== 'unmerged').forEach((entry) => ws.openView(taskId, { kind: 'diff', repoId: binding.repoId, path: entry.path, staged: !!entry.staged && !entry.unstaged, preview: false })) },
             { key: 'branches-sep', separator: true },
-            { key: 'create-branch', label: 'Create branch…', onSelect: () => { setOperationName(''); setConfirmation({ kind: 'branch' }) } },
-            { key: 'delete-branch', label: 'Delete local branch', disabled: !branches.some((branch) => !branch.current && !branch.worktree), submenu: branches.filter((branch) => !branch.current && !branch.worktree).map((branch) => ({ key: branch.name, label: branch.name, onSelect: () => setConfirmation({ kind: 'delete-branch', name: branch.name }) })) },
+            { key: 'create-branch', label: t("Create branch…"), onSelect: () => { setOperationName(''); setConfirmation({ kind: 'branch' }) } },
+            { key: 'delete-branch', label: t("Delete local branch"), disabled: !branches.some((branch) => !branch.current && !branch.worktree), submenu: branches.filter((branch) => !branch.current && !branch.worktree).map((branch) => ({ key: branch.name, label: branch.name, onSelect: () => setConfirmation({ kind: 'delete-branch', name: branch.name }) })) },
             { key: 'stash-sep', separator: true },
-            { key: 'stash', label: <><Archive size={14} />Stash all changes…</>, disabled: !canStash, onSelect: () => { setOperationName(''); setConfirmation({ kind: 'stash' }) } },
-            { key: 'stash-staged', label: <><Archive size={14} />Stash staged changes…</>, disabled: !canStash || !staged.length, onSelect: () => { setOperationName(''); setConfirmation({ kind: 'stash', staged: true }) } },
-            { key: 'pop-latest', label: <><ArchiveRestore size={14} />Pop latest stash</>, disabled: !stashes.length, onSelect: () => void popStash(stashes[0]!) },
-            { key: 'pop-stash', label: 'Pop stash', disabled: !stashes.length, submenu: stashes.map((stash) => ({ key: stash.oid, label: stash.subject, title: stash.subject, onSelect: () => void popStash(stash) })) },
-            { key: 'apply-stash', label: 'Apply stash', disabled: !stashes.length, submenu: stashes.map((stash) => ({ key: stash.oid, label: stash.subject, title: stash.subject, onSelect: () => void applyStash(stash) })) },
-            { key: 'drop-stash', label: 'Delete stash', disabled: !stashes.length, submenu: stashes.map((stash) => ({ key: stash.oid, label: stash.subject, title: stash.subject, onSelect: () => setConfirmation({ kind: 'drop-stash', oid: stash.oid, title: stash.subject }) })) },
+            { key: 'stash', label: <><Archive size={14} />{t("Stash all changes…")}</>, disabled: !canStash, onSelect: () => { setOperationName(''); setConfirmation({ kind: 'stash' }) } },
+            { key: 'stash-staged', label: <><Archive size={14} />{t("Stash staged changes…")}</>, disabled: !canStash || !staged.length, onSelect: () => { setOperationName(''); setConfirmation({ kind: 'stash', staged: true }) } },
+            { key: 'pop-latest', label: <><ArchiveRestore size={14} />{t("Pop latest stash")}</>, disabled: !stashes.length, onSelect: () => void popStash(stashes[0]!) },
+            { key: 'pop-stash', label: t("Pop stash"), disabled: !stashes.length, submenu: stashes.map((stash) => ({ key: stash.oid, label: stash.subject, title: stash.subject, onSelect: () => void popStash(stash) })) },
+            { key: 'apply-stash', label: t("Apply stash"), disabled: !stashes.length, submenu: stashes.map((stash) => ({ key: stash.oid, label: stash.subject, title: stash.subject, onSelect: () => void applyStash(stash) })) },
+            { key: 'drop-stash', label: t("Delete stash"), disabled: !stashes.length, submenu: stashes.map((stash) => ({ key: stash.oid, label: stash.subject, title: stash.subject, onSelect: () => setConfirmation({ kind: 'drop-stash', oid: stash.oid, title: stash.subject }) })) },
             { key: 'sep', separator: true },
-            { key: 'sync', label: <><RefreshCcw size={14} />{status?.upstream ? 'Sync changes' : 'Publish branch'}</>, disabled: !status?.branch || !!status.operation, onSelect: sync },
-            { key: 'pull', label: <><ArrowDown size={14} />Pull ({PULL_NAME[preferences.pullMode]})</>, disabled: !!status?.operation, onSelect: () => pull() },
-            { key: 'pull-with', label: 'Pull with', disabled: !!status?.operation, submenu: (['rebase', 'merge', 'ff-only'] as const).filter((mode) => mode !== preferences.pullMode).map((mode) => ({ key: mode, label: PULL_NAME[mode], onSelect: () => pull(mode) })) },
-            { key: 'push', label: <><ArrowUp size={14} />{status?.upstream ? 'Push' : 'Publish branch'}</>, disabled: !!status?.operation, onSelect: () => void run(() => invoke('git.push', taskId, binding.repoId)) },
-            { key: 'fetch', label: <><ArrowDown size={14} />Fetch</>, onSelect: () => void run(() => invoke('git.fetch', taskId, binding.repoId)) },
+            { key: 'sync', label: <><RefreshCcw size={14} />{status?.upstream ? t("Sync changes") : t("Publish branch")}</>, disabled: !status?.branch || !!status.operation, onSelect: sync },
+            { key: 'pull', label: <><ArrowDown size={14} />{t("Pull ({0})", { "0": PULL_NAME[preferences.pullMode] })}</>, disabled: !!status?.operation, onSelect: () => pull() },
+            { key: 'pull-with', label: t("Pull with"), disabled: !!status?.operation, submenu: (['rebase', 'merge', 'ff-only'] as const).filter((mode) => mode !== preferences.pullMode).map((mode) => ({ key: mode, label: PULL_NAME[mode], onSelect: () => pull(mode) })) },
+            { key: 'push', label: <><ArrowUp size={14} />{status?.upstream ? t("Push") : t("Publish branch")}</>, disabled: !!status?.operation, onSelect: () => void run(() => invoke('git.push', taskId, binding.repoId)) },
+            { key: 'fetch', label: <><CloudDownload size={14} />{t("Fetch")}</>, onSelect: () => void run(() => invoke('git.fetch', taskId, binding.repoId)) },
           ]} />
         </div>
         {status?.operation && <div className="scm-operation" role="status">
-          <span>{status.operation === 'rebase' ? 'Rebase in progress.' : 'Merge in progress.'} {conflicts.length ? `Resolve ${conflicts.length} conflicted ${conflicts.length === 1 ? 'file' : 'files'}, stage them, then continue.` : 'Conflicts are resolved and staged.'}</span>
+          <span>{status.operation === 'rebase' ? t("Rebase in progress.") : t("Merge in progress.")} {conflicts.length ? t("Resolve {0} conflicted {1}, stage them, then continue.", { "0": conflicts.length, "1": conflicts.length === 1 ? 'file' : 'files' }) : t("Conflicts are resolved and staged.")}</span>
           <div className="scm-operation-actions">
-            {!!conflicts.length && <Button className="small" disabled={busy || resolving} onClick={() => void resolveWithAi()}><Sparkles size={13} />{resolving ? 'Starting…' : 'Resolve with AI'}</Button>}
-            <Button className="primary small" disabled={busy || !!conflicts.length} onClick={() => void run(() => invoke('git.continueOperation', taskId, binding.repoId))}>Continue</Button>
-            <Button className="small" disabled={busy} onClick={() => void run(() => invoke('git.abortOperation', taskId, binding.repoId))}>Abort {status.operation}</Button>
+            {!!conflicts.length && <Button className="small" disabled={busy || resolving} onClick={() => void resolveWithAi()}><Sparkles size={13} />{resolving ? t("Starting…") : t("Resolve with AI")}</Button>}
+            <Button className="primary small" disabled={busy || !!conflicts.length} onClick={() => void run(() => invoke('git.continueOperation', taskId, binding.repoId))}>{t("Continue")}</Button>
+            <Button className="small" disabled={busy} onClick={() => void run(() => invoke('git.abortOperation', taskId, binding.repoId))}>{status.operation === 'rebase' ? t("Abort rebase") : t("Abort merge")}</Button>
           </div>
         </div>}
         <div className="commit-input-wrap">
-          <Textarea className="commit-msg" rows={2} value={message} placeholder={`Message for ${binding.repoName} (leave empty to auto-generate with AI)`} aria-label={`Commit message for ${binding.repoName}`} onChange={(e) => { setMessage(e.target.value); if (!e.target.value.trim()) setDraft(null) }} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && staged.length && !conflicts.length && !busy && !generating) void commit() }} />
-          <Button className="ghost icon small-icon commit-ai" title="Draft a commit message from staged changes" aria-label={`AI commit message for ${binding.repoName}`} disabled={busy || generating || !staged.length || !!conflicts.length} onClick={generate}><Sparkles size={14} className={generating ? 'shimmer' : ''} /></Button>
+          <Textarea className="commit-msg" rows={2} value={message} placeholder={t("Message (empty drafts one with AI)")} aria-label={t("Commit message for {0}", { "0": binding.repoName })} onChange={(e) => { setMessage(e.target.value); if (!e.target.value.trim()) setDraft(null) }} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && staged.length && !conflicts.length && !busy && !generating) void commit() }} />
+          <Button className="ghost icon small-icon commit-ai" title={t("Draft a commit message from staged changes")} aria-label={t("AI commit message for {0}", { "0": binding.repoName })} disabled={busy || generating || !staged.length || !!conflicts.length} onClick={generate}><Sparkles size={14} className={generating ? 'shimmer' : ''} /></Button>
         </div>
-        <Button className="scm-commit primary" aria-label={`Commit ${staged.length} staged`} disabled={busy || generating || !staged.length || !!conflicts.length} title={message.trim() ? undefined : 'Drafts a message with AI, then commits'} onClick={() => void commit()}><Check size={14} />{generating ? 'Drafting message…' : busy ? 'Working…' : 'Commit'}</Button>
+        <div className="scm-commit-split">
+          <Button className="scm-commit primary" aria-label={`Commit ${staged.length} staged`} disabled={!canCommit} title={message.trim() ? undefined : t("Drafts a message with AI, then commits")} onClick={() => void commit()}><Check size={14} />{generating ? t("Drafting message…") : busy ? t("Working…") : t("Commit")}</Button>
+          <Menu label={t("Commit options")} icon={<ChevronDown size={14} />} className="scm-commit-menu primary icon" align="end" disabled={busy || generating || !!conflicts.length} items={[
+            { key: 'commit', label: t("Commit"), disabled: !canCommit, onSelect: () => void commit() },
+            { key: 'amend', label: t("Commit (Amend)"), title: t("Replace the latest commit; leave the message empty to keep its message"), disabled: !canAmend, onSelect: () => void commit('amend') },
+            { key: 'separator', separator: true },
+            { key: 'push', label: t("Commit & Push"), disabled: !canPublish, onSelect: () => void commit('push') },
+            { key: 'sync', label: t("Commit & Sync"), disabled: !canPublish, onSelect: () => void commit('sync') },
+          ]} />
+        </div>
         {status && !staged.length && !status.operation && status.branch && status.remote && (!status.upstream || status.ahead > 0 || status.behind > 0) && <SyncButton status={status} busy={busy} pullMode={preferences.pullMode} className="scm-sync" showLabel onSync={sync} />}
-        {draft && <div className="muted small ai-draft-label">Drafted with {providerName(draft.provider)} · Review before committing.</div>}
-        <Collapsible className="scm-ai-settings"><CollapsibleTrigger render={<Button variant="ghost" />}><ChevronRight size={13} />AI message settings</CollapsibleTrigger><CollapsibleContent><div className="composer-controls"><AgentControls settings={settings} onChange={setSettings} disabled={generating} showAccess={false} /></div></CollapsibleContent></Collapsible>
-        {!!conflicts.length && <><div className="sub-title warn"><span>Merge Changes ({conflicts.length})</span>{!status?.operation && <Button className="ghost small" disabled={busy || resolving} onClick={() => void resolveWithAi()}><Sparkles size={12} />{resolving ? 'Starting…' : 'Resolve with AI'}</Button>}</div>{conflicts.map((e) => <div key={e.path} className="change-row"><Button className="change-name" onClick={() => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: e.path })}>{e.path}</Button><Button className="icon" disabled={busy} aria-label={`Mark ${e.path} resolved`} onClick={() => void run(() => invoke('git.stage', taskId, binding.repoId, [e.path]))}><Check size={13} /></Button></div>)}</>}
-        {(!preferences.hideEmptyStaged || !!staged.length) && <><div className="sub-title"><Button className="scm-group-toggle" aria-expanded={stagedOpen} onClick={() => setStagedOpen((open) => !open)}><ChevronRight size={13} className={stagedOpen ? 'caret open' : 'caret'} />Staged <span className="scm-count">{staged.length}</span></Button>{!!staged.length && <Button className="ghost icon small-icon" aria-label="Unstage all" title="Unstage all" disabled={busy} onClick={() => void run(() => invoke('git.unstage', taskId, binding.repoId, staged.map((e) => e.path)))}><Minus size={13} /></Button>}</div>
+        {draft && <div className="muted small ai-draft-label">{t("Drafted with ")}{providerName(draft.provider)} {t(" · Review before committing.")}</div>}
+        <Collapsible className="scm-ai-settings"><CollapsibleTrigger render={<Button variant="ghost" />}><ChevronRight size={13} />{t("AI message settings")}</CollapsibleTrigger><CollapsibleContent><div className="composer-controls"><AgentControls settings={settings} onChange={setSettings} disabled={generating} showAccess={false} /></div></CollapsibleContent></Collapsible>
+        {!!conflicts.length && <><div className="sub-title warn"><span>{t("Merge changes ({0})", { "0": conflicts.length })}</span>{!status?.operation && <Button className="ghost small" disabled={busy || resolving} onClick={() => void resolveWithAi()}><Sparkles size={12} />{resolving ? t("Starting…") : t("Resolve with AI")}</Button>}</div>{conflicts.map((e) => <div key={e.path} className="change-row"><Button className="change-name" onClick={() => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: e.path })}>{e.path}</Button><Button className="icon" disabled={busy} aria-label={t("Mark {0} resolved", { "0": e.path })} onClick={() => void run(() => invoke('git.stage', taskId, binding.repoId, [e.path]))}><Check size={13} /></Button></div>)}</>}
+        {(!preferences.hideEmptyStaged || !!staged.length) && <><div className="sub-title"><Button className="scm-group-toggle" aria-expanded={stagedOpen} onClick={() => setStagedOpen((open) => !open)}><ChevronRight size={13} className={stagedOpen ? 'caret open' : 'caret'} />{t("Staged")}{!!staged.length && <span className="scm-count">{staged.length}</span>}</Button>{!!staged.length && <Button className="ghost icon small-icon" aria-label={t("Unstage all")} title={t("Unstage all")} disabled={busy} onClick={() => void run(() => invoke('git.unstage', taskId, binding.repoId, staged.map((e) => e.path)))}><Minus size={13} /></Button>}</div>
         {stagedOpen && staged.map((e) => row(e, true))}</>}
-        <div className="sub-title"><Button className="scm-group-toggle" aria-expanded={changesOpen} onClick={() => setChangesOpen((open) => !open)}><ChevronRight size={13} className={changesOpen ? 'caret open' : 'caret'} />Changes <span className="scm-count">{unstaged.length}</span></Button>{!!unstaged.length && <Button className="ghost icon small-icon" aria-label="Stage all" title="Stage all" disabled={busy} onClick={() => void run(() => invoke('git.stage', taskId, binding.repoId, unstaged.map((e) => e.path)))}><Plus size={13} /></Button>}</div>
+        <div className="sub-title"><Button className="scm-group-toggle" aria-expanded={changesOpen} onClick={() => setChangesOpen((open) => !open)}><ChevronRight size={13} className={changesOpen ? 'caret open' : 'caret'} />{t("Changes")}{!!unstaged.length && <span className="scm-count">{unstaged.length}</span>}</Button>{!!unstaged.length && <Button className="ghost icon small-icon" aria-label={t("Stage all")} title={t("Stage all")} disabled={busy} onClick={() => void run(() => invoke('git.stage', taskId, binding.repoId, unstaged.map((e) => e.path)))}><Plus size={13} /></Button>}</div>
         {changesOpen && unstaged.map((e) => row(e, false))}
-        {!status?.entries.length && status && <p className="muted small scm-empty">No changes in this checkout.</p>}
+        {!status?.entries.length && status && <p className="muted small scm-empty">{t("No changes in this checkout.")}</p>}
       </section>
-    </div>
+    </ScrollArea>
     {showGit && inGitSlot(<Tabs value={gitTab} onValueChange={(value) => setGitTab(value as 'commits' | 'stashes')} render={<section />} className={`git-inspector${historyOpen ? '' : ' collapsed'}`}>
       <div className="git-inspector-head">
         <Button className="git-inspector-heading" aria-expanded={historyOpen} onClick={() => setHistoryOpen((v) => !v)}><ChevronRight size={13} className={historyOpen ? 'caret open' : 'caret'} />Git</Button>
-        {gitHost && <Dropdown label="Switch repository" value={binding.repoId} className="git-repo-picker" options={gitRepos.map((repo) => ({ value: repo.repoId, label: repo.repoName }))} onChange={(repoId) => onGitRepo?.(repoId)} />}
+        {gitHost && gitRepos.length > 1 && <Dropdown label={t("Switch repository")} value={binding.repoId} className="git-repo-picker" options={gitRepos.map((repo) => ({ value: repo.repoId, label: repo.repoName }))} onChange={(repoId) => onGitRepo?.(repoId)} />}
+        {!historyOpen && status?.branch && <span className="git-head-summary" title={status.upstream ?? undefined}><GitBranch size={12} /><span>{status.branch}</span>{!!status.behind && <span className="git-count">↓{status.behind}</span>}{!!status.ahead && <span className="git-count">↑{status.ahead}</span>}</span>}
+        <span className="grow" />
+        <Button className="ghost icon small-icon" aria-label={t("Fetch repository")} title={t("Fetch from remote")} disabled={busy || !status?.remote} onClick={() => void run(() => invoke('git.fetch', taskId, binding.repoId))}><CloudDownload size={13} /></Button>
+        <Button className="ghost icon small-icon" aria-label={t("Sync repository")} title={status?.upstream ? t("Sync changes: pull {0} ({1}), then push {2}", { "0": status.behind, "1": PULL_NAME[preferences.pullMode], "2": status.ahead }) : t("Publish branch")} disabled={busy || !status?.branch || !!status.operation || !status.remote} onClick={sync}>{status?.upstream || !status?.remote ? <RefreshCcw size={13} className={busy ? 'spin' : ''} /> : <CloudUpload size={13} />}</Button>
       </div>
       {historyOpen && <>
-        <div className="git-toolbar">
-          <TabsList className="git-tabs" aria-label="Git view">
-            <TabsTrigger value="commits" className="ghost icon small-icon git-tab" aria-label="Commits" title="Commits"><GitCommitHorizontal size={14} /></TabsTrigger>
-            <TabsTrigger value="stashes" className="ghost icon small-icon git-tab" aria-label={`Stashes (${stashes.length})`} title={`Stashes (${stashes.length})`}><Archive size={13} /></TabsTrigger>
-          </TabsList>
-          <span className="grow git-tab-title">{gitTab === 'commits' ? 'Commits' : 'Stashes'}</span>
-          {gitTab === 'commits' ? <>
-            <Button className="ghost icon small-icon" aria-label="Fetch repository" title="Fetch" disabled={busy} onClick={() => void run(() => invoke('git.fetch', taskId, binding.repoId))}><CloudDownload size={13} /></Button>
-            <Button className="ghost icon small-icon" aria-label="Sync repository" title={status?.upstream ? `Sync changes: pull ${status.behind} (${PULL_NAME[preferences.pullMode]}), then push ${status.ahead}` : 'Publish branch'} disabled={busy || !status?.branch || !!status.operation || !status.remote} onClick={sync}><RefreshCcw size={13} className={busy ? 'spin' : ''} /></Button>
-          </> : <>
-            <Button className="ghost icon small-icon" aria-label="Stash changes" title="Stash changes…" disabled={busy || !canStash} onClick={() => { setOperationName(''); setConfirmation({ kind: 'stash' }) }}><Plus size={13} /></Button>
-          </>}
+        <div className="git-branch">
+          <div className="git-branch-row">
+            <BranchPicker binding={binding} status={status} branches={branches} busy={busy} className="git-branch-btn" onChange={(branch) => void run(async () => { requireSaved(); await invoke('git.checkout', taskId, binding.repoId, branch) })} />
+            {status?.upstream && <Button className="ghost icon small-icon" aria-label={t("Compare with {0}", { "0": status.upstream })} title={t("Compare with {0}", { "0": status.upstream })} onClick={() => ws.openView(taskId, { kind: 'git', repoId: binding.repoId, title: t("Compare with {0}", { "0": status.upstream }) })}><GitCompareArrows size={13} /></Button>}
+          </div>
+          {status && <div className="git-tracking">{
+            status.upstream ? <>
+              <span className="git-upstream" title={status.upstream}>{status.upstream}</span>
+              {status.ahead || status.behind ? <>
+                {!!status.ahead && <span className="git-count" title={t("{0} commits to push", { "0": status.ahead })}><ArrowUp size={11} />{t("{0} outgoing", { "0": status.ahead })}</span>}
+                {!!status.behind && <span className="git-count" title={t("{0} commits to pull", { "0": status.behind })}><ArrowDown size={11} />{t("{0} incoming", { "0": status.behind })}</span>}
+              </> : <span className="git-synced"><Check size={11} />{t("Up to date")}</span>}
+            </> : status.detached ? <span>{t("Not on a branch. Switch to one to commit and sync.")}</span>
+              : !status.oid ? <span>{t("No commits yet.")}</span>
+              : !status.remote ? <span>{t("Local only. Add a remote to push.")}</span>
+              : <span>{t("Not published yet. Sync to publish it.")}</span>
+          }</div>}
         </div>
-        <TabsContent value="commits">
-          <BranchPicker binding={binding} status={status} branches={branches} busy={busy} className="git-branch-btn" onChange={(branch) => void run(async () => { requireSaved(); await invoke('git.checkout', taskId, binding.repoId, branch) })} />
-          <div className="git-tracking muted">{status?.upstream ? `${status.ahead ? `${status.ahead} outgoing` : ''}${status.ahead && status.behind ? ' · ' : ''}${status.behind ? `${status.behind} incoming` : ''}${!status.ahead && !status.behind ? 'Up to date' : ''} · ${status.upstream}` : 'No upstream configured'}</div>
-          {status?.upstream && <Button className="git-compare" onClick={() => ws.openView(taskId, { kind: 'git', repoId: binding.repoId, title: `Compare with ${status.upstream}` })}><GitCompareArrows size={13} /><span>Compare with {status.upstream}</span></Button>}
-          <div className="git-history">{commits.length ? commits.map((commit) => <CommitHistoryRow key={commit.oid} taskId={taskId} binding={binding} commit={commit} />) : <p className="muted small">No commits yet.</p>}</div>
-        </TabsContent><TabsContent value="stashes" className="git-history git-stashes">
-          {stashes.length ? stashes.map((stash) => <div key={stash.oid} className="change-row stash-row">
-            <span className="change-name stash-name" title={`${stash.ref} · ${stash.subject}`}><Archive size={13} /><span>{stash.subject.replace(/^On [^:]+: /, '')}</span></span>
-            <Button className="ghost icon small-icon" disabled={busy} aria-label={`Apply ${stash.subject}`} title="Apply (keep the stash)" onClick={() => void applyStash(stash)}><Copy size={13} /></Button>
-            <Button className="ghost icon small-icon" disabled={busy} aria-label={`Pop ${stash.subject}`} title="Pop (apply and remove)" onClick={() => void popStash(stash)}><ArchiveRestore size={13} /></Button>
-            <Button className="ghost icon small-icon" disabled={busy} aria-label={`Delete ${stash.subject}`} title="Delete stash" onClick={() => setConfirmation({ kind: 'drop-stash', oid: stash.oid, title: stash.subject })}><Trash2 size={13} /></Button>
-          </div>) : <p className="muted small git-empty">No stashes. Stash saves your working changes so you can switch tasks and bring them back later.</p>}
+        <TabsList className="git-tabs" aria-label={t("Git view")}>
+          <TabsTrigger value="commits" className="git-tab" aria-label={t("Commits")}>{t("Commits")}</TabsTrigger>
+          <TabsTrigger value="stashes" className="git-tab" aria-label={t("Stashes ({0})", { "0": stashes.length })}>{t("Stashes")}{!!stashes.length && <span className="git-tab-count">{stashes.length}</span>}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="commits" className="git-pane">
+          <ScrollArea className="git-history overlay-scroll-area">{commits.length ? <div className="git-graph">{commits.map((commit) => <CommitHistoryRow key={commit.oid} taskId={taskId} binding={binding} commit={commit} branch={status?.branch ?? null} onUndo={commit.oid === status?.oid ? () => requestUndo(commit) : undefined} undoDisabled={!canUndo} />)}</div> : <p className="muted small git-empty">{t("No commits yet.")}</p>}</ScrollArea>
         </TabsContent>
+        <TabsContent value="stashes" className="git-pane git-stashes"><ScrollArea className="git-history overlay-scroll-area">
+          {stashes.map((stash) => <div key={stash.oid} className="stash-row">
+            <span className="stash-name" title={`${stash.ref} · ${stash.subject}`}><Archive size={13} /><span>{stash.subject.replace(/^On [^:]+: /, '')}</span></span>
+            <span className="stash-actions">
+              <Button className="ghost icon small-icon" disabled={busy} aria-label={t("Apply {0}", { "0": stash.subject })} title={t("Apply (keep the stash)")} onClick={() => void applyStash(stash)}><Copy size={13} /></Button>
+              <Button className="ghost icon small-icon" disabled={busy} aria-label={t("Pop {0}", { "0": stash.subject })} title={t("Pop (apply and remove)")} onClick={() => void popStash(stash)}><ArchiveRestore size={13} /></Button>
+              <Button className="ghost icon small-icon" disabled={busy} aria-label={t("Delete {0}", { "0": stash.subject })} title={t("Delete stash")} onClick={() => setConfirmation({ kind: 'drop-stash', oid: stash.oid, title: stash.subject })}><Trash2 size={13} /></Button>
+            </span>
+          </div>)}
+          {!stashes.length && <p className="muted small git-empty">{t("No stashes. Stash your changes to set them aside and bring them back later.")}</p>}
+          <Button className="git-stash-new" disabled={busy || !canStash} title={canStash ? undefined : t("Nothing to stash")} onClick={() => { setOperationName(''); setConfirmation({ kind: 'stash' }) }}><Plus size={13} />{t("Stash changes…")}</Button>
+        </ScrollArea></TabsContent>
       </>}
     </Tabs>)}
   </div>

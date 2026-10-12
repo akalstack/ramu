@@ -21,11 +21,11 @@
   --color-accent-foreground: var(--text);
   --color-destructive: var(--bad);
   --color-border: var(--line-strong);
-  --color-input: var(--line-strong);
+  --color-input: transparent;
   --color-ring: var(--accent);
-  /* shadcn's own scale (radius 0.625rem): menus, popovers and inputs use these as designed. */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.625rem;
-  --radius-xl: 0.875rem;
+  /* shadcn's scale maps onto Ramu's one radius scale (styles.css :root). */
+  --radius-sm: var(--radius-xs);
+  --radius-md: var(--radius-s);
+  --radius-lg: var(--radius-row);
+  --radius-xl: var(--radius-m);
 }

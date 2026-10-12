@@ -35,7 +35,7 @@ beforeEach(() => {
 })
 afterEach(async () => { await runner?.stop(); runner = undefined })
 const start = async (resume: string | null = null, readOnly = false) => {
-  runner = createOpenCodeRunner({ cwd: '/workspace', covers: ['/workspace'], additionalDirs: [] }, { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode', model: 'test/model', access: 'ask' }, (event) => events.push(event), readOnly)
+  runner = createOpenCodeRunner({ cwd: '/workspace', covers: ['/workspace'], additionalDirs: [] }, { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode', model: 'test/model', access: 'edits' }, (event) => events.push(event), readOnly)
   await runner.start('hello', resume)
 }
 it('discovers only connected provider models and releases its server', async () => {

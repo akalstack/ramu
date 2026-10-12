@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandShortcut } from '@/components/ui/command'
 // Commands, keyboard shortcuts and the command palette.
@@ -9,7 +10,7 @@ import { errorText } from './TaskPane'
 import { useModelSets } from './ModelSets'
 import { invoke } from './ipc'
 import { titleFrom } from './NewTask'
-import { isWorkspaceCtx, isWorktreeCtx, tabOrder, type WorkspaceApi } from './workspace'
+import { isPreviewable, isWorkspaceCtx, isWorktreeCtx, tabOrder, type WorkspaceApi } from './workspace'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -24,7 +25,7 @@ export interface Command {
 }
 
 /** Task-scoped UI actions that live in TaskPane's own state. */
-export type TaskAction = 'new-chat' | 'toggle-chat'
+export type TaskAction = 'new-chat'
 export function taskAction(taskId: string, action: TaskAction) {
   window.dispatchEvent(new CustomEvent('ramu:task-action', { detail: { taskId, action } }))
 }
@@ -32,7 +33,6 @@ export function taskAction(taskId: string, action: TaskAction) {
 export interface ShellControls {
   openPalette(mode: PaletteMode): void
   toggleSidebar(): void
-  moveSidebar(): void
   showSearch(): void
   showSidebar?(tab: 'projects' | 'explorer' | 'search' | 'scm'): void
 }
@@ -72,40 +72,42 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
   // Bindings follow VS Code's macOS defaults wherever VS Code has an equivalent. Keys Monaco
   // uses inside the editor (⌘L, ⌘K, ⌘.) are left alone so editing behaves as expected.
   const cmds: Command[] = [
-    { id: 'palette.commands', title: 'Show all commands', category: 'View', keys: 'mod+shift+p', run: () => shell.openPalette('commands') },
-    { id: 'palette.files', title: 'Go to file…', category: 'Go', keys: 'mod+p', run: () => shell.openPalette('files') },
-    { id: 'task.new', title: 'New chat', category: 'Chat', keys: 'mod+n', run: () => ws.newTask(), when: () => true },
-    { id: 'chat.new', title: 'New chat in this project', category: 'Chat', keys: 'ctrl+mod+i', run: () => taskId && ws.newTask(ws.projectOf(taskId)?.id), when: () => !!taskId },
-    { id: 'chat.toggle', title: 'Toggle conversation beside files', category: 'Chat', keys: 'mod+alt+b', run: () => taskId && taskAction(taskId, 'toggle-chat'), when: hasTask },
-    { id: 'task.next', title: 'Next chat', category: 'Chat', run: () => cycleTask(1) },
-    { id: 'task.prev', title: 'Previous chat', category: 'Chat', run: () => cycleTask(-1) },
+    { id: 'palette.commands', title: t("Show all commands"), category: t("View"), keys: 'mod+shift+p', run: () => shell.openPalette('commands') },
+    { id: 'palette.files', title: t("Go to file…"), category: t("Go"), keys: 'mod+p', run: () => shell.openPalette('files') },
+    { id: 'task.new', title: t("New chat"), category: t("Chat"), keys: 'mod+n', run: () => ws.newTask(), when: () => true },
+    { id: 'chat.new', title: t("New chat in this project"), category: t("Chat"), keys: 'ctrl+mod+i', run: () => taskId && ws.newTask(ws.projectOf(taskId)?.id), when: () => !!taskId },
+    // ⌘F finds in the visible chat, unless the editor or a terminal has focus and wants its own find.
+    { id: 'chat.find', title: t("Find in chat"), category: t("Chat"), keys: 'mod+f', run: () => window.dispatchEvent(new Event('ramu:find-in-chat')), when: () => !document.activeElement?.closest('.monaco-editor, .xterm') && [...document.querySelectorAll('.agent-view')].some((el) => el.checkVisibility()) },
+    { id: 'task.next', title: t("Next chat"), category: t("Chat"), run: () => cycleTask(1) },
+    { id: 'task.prev', title: t("Previous chat"), category: t("Chat"), run: () => cycleTask(-1) },
     {
       id: 'agent.interrupt',
-      title: 'Interrupt agent',
-      category: 'Chat',
+      title: t("Interrupt agent"),
+      category: t("Chat"),
       run: () => active?.kind === 'agent' && void invoke('agent.interrupt', active.sessionId),
       when: () => active?.kind === 'agent',
     },
-    { id: 'term.toggle', title: 'Toggle terminal', category: 'Terminal', keys: 'ctrl+`', run: toggleTerminal, when: hasTask },
-    { id: 'term.toggle2', title: 'Toggle panel', category: 'View', keys: 'mod+j', run: toggleTerminal, when: hasTask },
-    { id: 'term.new', title: 'Create new terminal', category: 'Terminal', keys: 'ctrl+shift+`', run: () => newTerminal(), when: hasTask },
+    { id: 'term.toggle', title: t("Toggle terminal"), category: 'Terminal', keys: 'ctrl+`', run: toggleTerminal, when: hasTask },
+    { id: 'term.toggle2', title: t("Toggle panel"), category: t("View"), keys: 'mod+j', run: toggleTerminal, when: hasTask },
+    { id: 'term.new', title: t("Create new terminal"), category: 'Terminal', keys: 'ctrl+shift+`', run: () => newTerminal(), when: hasTask },
     ...bindings.map((b) => ({
       id: `term.new.${b.repoId}`,
-      title: `New terminal in ${b.repoName}`,
+      title: t("New terminal in {0}", { "0": b.repoName }),
       category: 'Terminal',
       run: () => newTerminal(b.repoId),
     })),
-    { id: 'settings.open', title: 'Open settings', category: 'Preferences', keys: 'mod+,', run: () => window.dispatchEvent(new Event('ramu:settings')) },
-    { id: 'settings.models', title: 'Model sets and reasoning defaults', category: 'Preferences', run: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } })) },
-    { id: 'file.new', title: 'New file…', category: 'File', run: () => window.dispatchEvent(new CustomEvent('ramu:create-entry', { detail: { kind: 'file' } })), when: hasTask },
-    { id: 'folder.new', title: 'New folder…', category: 'File', run: () => window.dispatchEvent(new CustomEvent('ramu:create-entry', { detail: { kind: 'dir' } })), when: hasTask },
-    { id: 'file.format', title: 'Format document', category: 'File', keys: 'shift+alt+f', run: () => window.dispatchEvent(new Event('ramu:format')), when: () => active?.kind === 'file' },
-    { id: 'file.save-all', title: 'Save all files', category: 'File', keys: 'mod+alt+s', run: () => window.dispatchEvent(new Event('ramu:save-all')), when: hasTask },
-    { id: 'tab.reopen', title: 'Reopen closed editor', category: 'View', keys: 'mod+shift+t', run: () => taskId && ws.reopenClosedView(taskId), when: hasTask },
-    { id: 'tab.keep', title: 'Keep preview editor open', category: 'View', run: () => { if (taskId && active?.kind === 'file') ws.openView(taskId, { kind: 'file', repoId: active.repoId, path: active.path, preview: false }) }, when: () => active?.kind === 'file' && !!active.preview },
-    { id: 'tab.close-all', title: 'Close all editors', category: 'View', run: () => taskId && ws.closeViews(taskId, tabs.filter((tab) => tab.kind !== 'agent' && tab.kind !== 'terminal').map((tab) => tab.id)), when: hasTask },
-    ...(['horizontal', 'vertical'] as const).map((direction) => ({ id: `term.split.${direction}`, title: `Split terminal ${direction === 'horizontal' ? 'side by side' : 'stacked'}`, category: 'Terminal', run: () => { if (taskId) { ws.splitTerminal(taskId, direction) } }, when: hasTask })),
-    ...(['top', 'right'] as const).map((position) => ({ id: `term.tabs.${position}`, title: `Show terminal tabs on ${position}`, category: 'Terminal', run: () => taskId && ws.setTerminalPanel(taskId, { terminalTabPosition: position }), when: hasTask })),
+    { id: 'settings.open', title: t("Open settings"), category: t("Preferences"), keys: 'mod+,', run: () => window.dispatchEvent(new Event('ramu:settings')) },
+    { id: 'settings.models', title: t("Model sets and reasoning defaults"), category: t("Preferences"), run: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } })) },
+    { id: 'file.new', title: t("New file…"), category: 'File', run: () => window.dispatchEvent(new CustomEvent('ramu:create-entry', { detail: { kind: 'file' } })), when: hasTask },
+    { id: 'folder.new', title: t("New folder…"), category: 'File', run: () => window.dispatchEvent(new CustomEvent('ramu:create-entry', { detail: { kind: 'dir' } })), when: hasTask },
+    { id: 'file.format', title: t("Format document"), category: 'File', keys: 'shift+alt+f', run: () => window.dispatchEvent(new Event('ramu:format')), when: () => active?.kind === 'file' },
+    { id: 'file.save-all', title: t("Save all files"), category: 'File', keys: 'mod+alt+s', run: () => window.dispatchEvent(new Event('ramu:save-all')), when: hasTask },
+    { id: 'tab.reopen', title: t("Reopen closed editor"), category: t("View"), keys: 'mod+shift+t', run: () => taskId && ws.reopenClosedView(taskId), when: hasTask },
+    { id: 'tab.keep', title: t("Keep preview editor open"), category: t("View"), run: () => { if (taskId && active) ws.keepView(taskId, active.id) }, when: () => !!active && isPreviewable(active) && !!active.preview },
+    { id: 'tab.close-all', title: t("Close all editors"), category: t("View"), run: () => taskId && ws.closeViews(taskId, tabs.filter((tab) => tab.kind !== 'agent' && tab.kind !== 'terminal').map((tab) => tab.id)), when: hasTask },
+    ...(['horizontal', 'vertical'] as const).map((direction) => ({ id: `term.split.${direction}`, title: t("Split terminal {0}", { "0": direction === 'horizontal' ? 'side by side' : 'stacked' }), category: 'Terminal', run: () => { if (taskId) { ws.splitTerminal(taskId, direction) } }, when: hasTask })),
+    ...(['right', 'bottom'] as const).map((dock) => ({ id: `term.dock.${dock}`, title: t(dock === 'right' ? "Dock terminal on right" : "Dock terminal at bottom"), category: 'Terminal', run: () => taskId && ws.setTerminalPanel(taskId, { terminalDock: dock }), when: hasTask })),
+    ...(['top', 'right'] as const).map((position) => ({ id: `term.tabs.${position}`, title: t("Show terminal tabs on {0}", { "0": position }), category: 'Terminal', run: () => taskId && ws.setTerminalPanel(taskId, { terminalTabPosition: position }), when: hasTask })),
     ...bindings.filter((binding) => !binding.folderOnly).flatMap((binding) => {
       const action = async (kind: 'sync' | 'fetch' | 'pull' | 'push' | 'stage' | 'unstage') => {
         if (!taskId) return
@@ -119,15 +121,15 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       }
       return (['sync', 'fetch', 'pull', 'push', 'stage', 'unstage'] as const).map((kind) => ({ id: `git.${kind}.${binding.repoId}`, title: `${kind === 'stage' ? 'Stage all changes' : kind === 'unstage' ? 'Unstage all changes' : kind[0]!.toUpperCase() + kind.slice(1)} · ${binding.repoName}`, category: 'Git', run: () => { void action(kind).catch((reason) => notifyError(errorText(reason), `Git · ${binding.repoName}`)) } }))
     }),
-    { id: 'tab.close', title: 'Close editor', category: 'View', keys: 'mod+w', run: () => taskId && active && ws.closeView(taskId, active.id), when: () => !!active },
-    { id: 'tab.next', title: 'Open next editor', category: 'View', keys: 'ctrl+tab', run: () => cycleTab(1), when: hasTask },
-    { id: 'tab.prev', title: 'Open previous editor', category: 'View', keys: 'ctrl+shift+tab', run: () => cycleTab(-1), when: hasTask },
-    { id: 'tab.next2', title: 'Open next editor', category: 'View', keys: 'mod+alt+right', run: () => cycleTab(1), when: hasTask },
-    { id: 'tab.prev2', title: 'Open previous editor', category: 'View', keys: 'mod+alt+left', run: () => cycleTab(-1), when: hasTask },
+    { id: 'tab.close', title: t("Close editor"), category: t("View"), keys: 'mod+w', run: () => taskId && active && ws.closeView(taskId, active.id), when: () => !!active },
+    { id: 'tab.next', title: t("Open next editor"), category: t("View"), keys: 'ctrl+tab', run: () => cycleTab(1), when: hasTask },
+    { id: 'tab.prev', title: t("Open previous editor"), category: t("View"), keys: 'ctrl+shift+tab', run: () => cycleTab(-1), when: hasTask },
+    { id: 'tab.next2', title: t("Open next editor"), category: t("View"), keys: 'mod+alt+right', run: () => cycleTab(1), when: hasTask },
+    { id: 'tab.prev2', title: t("Open previous editor"), category: t("View"), keys: 'mod+alt+left', run: () => cycleTab(-1), when: hasTask },
     ...Array.from({ length: 9 }, (_, i) => ({
       id: `tab.go${i + 1}`,
-      title: `Open editor ${i + 1}`,
-      category: 'View',
+      title: t("Open editor {0}", { "0": i + 1 }),
+      category: t("View"),
       keys: `ctrl+${i + 1}`,
       run: () => {
         const fileTabs = tabs.filter((v) => v.kind === 'file' || v.kind === 'diff' || v.kind === 'git' || v.kind === 'review')
@@ -136,12 +138,11 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       },
       when: () => tabs.filter((v) => v.kind === 'file' || v.kind === 'diff' || v.kind === 'git' || v.kind === 'review').length > i,
     })),
-    { id: 'view.sidebar', title: 'Toggle primary side bar', category: 'View', keys: 'mod+b', run: shell.toggleSidebar },
-    { id: 'view.sidebar.move', title: 'Move side bar to the other side', category: 'View', run: shell.moveSidebar },
-    { id: 'view.chats', title: 'Show chats', category: 'View', run: () => shell.showSidebar ? shell.showSidebar('projects') : ws.setSidebar('projects') },
-    { id: 'view.explorer', title: 'Show explorer', category: 'View', keys: 'mod+shift+e', run: () => shell.showSidebar ? shell.showSidebar('explorer') : ws.setSidebar('explorer') },
-    { id: 'view.search', title: 'Search in project', category: 'View', keys: 'mod+shift+f', run: shell.showSearch },
-    { id: 'view.scm', title: 'Show source control', category: 'View', keys: 'ctrl+shift+g', run: () => shell.showSidebar ? shell.showSidebar('scm') : ws.setSidebar('scm') },
+    { id: 'view.sidebar', title: t("Toggle primary side bar"), category: t("View"), keys: 'mod+b', run: shell.toggleSidebar },
+    { id: 'view.chats', title: t("Show chats"), category: t("View"), run: () => shell.showSidebar ? shell.showSidebar('projects') : ws.setSidebar('projects') },
+    { id: 'view.explorer', title: t("Show explorer"), category: t("View"), keys: 'mod+shift+e', run: () => shell.showSidebar ? shell.showSidebar('explorer') : ws.setSidebar('explorer') },
+    { id: 'view.search', title: t("Search in project"), category: t("View"), keys: 'mod+shift+f', run: shell.showSearch },
+    { id: 'view.scm', title: t("Show source control"), category: t("View"), keys: 'ctrl+shift+g', run: () => shell.showSidebar ? shell.showSidebar('scm') : ws.setSidebar('scm') },
   ]
   return cmds
 }
@@ -169,6 +170,8 @@ function matches(e: KeyboardEvent, keys: string): boolean {
 
 /** Global shortcuts. Capture phase, so they win over Monaco and the terminal. */
 export function useKeybindings(commands: Command[], enabled: boolean) {
+  const language = useLanguage()
+
   const ref = useRef(commands)
   ref.current = commands
   useEffect(() => {
@@ -191,8 +194,8 @@ export function useKeybindings(commands: Command[], enabled: boolean) {
 
 export function formatKeys(keys: string): string {
   const sym: Record<string, string> = isMac
-    ? { mod: '⌘', shift: '⇧', alt: '⌥', ctrl: '⌃', right: '→', left: '←', tab: '⇥' }
-    : { mod: 'Ctrl+', shift: 'Shift+', alt: 'Alt+', ctrl: 'Ctrl+', right: '→', left: '←', tab: 'Tab' }
+    ? { mod: '⌘', shift: '⇧', alt: '⌥', ctrl: '⌃', right: '→', left: '←', tab: '⇥', enter: '↩' }
+    : { mod: 'Ctrl+', shift: 'Shift+', alt: 'Alt+', ctrl: 'Ctrl+', right: '→', left: '←', tab: 'Tab', enter: 'Enter' }
   return keys
     .split('+')
     .map((k) => sym[k] ?? k.toUpperCase())
@@ -217,6 +220,8 @@ interface Item {
  * ">" runs commands. Anything else can be sent straight to the agent.
  */
 export function Palette({ ws, commands, mode, onClose }: { ws: WorkspaceApi; commands: Command[]; mode: PaletteMode; onClose: () => void }) {
+  const language = useLanguage()
+
   const { initialSettings } = useModelSets()
   const [query, setQuery] = useState(mode === 'commands' ? '>' : '')
   const [files, setFiles] = useState<{ repoId: string; path: string }[]>([])
@@ -282,7 +287,7 @@ export function Palette({ ws, commands, mode, onClose }: { ws: WorkspaceApi; com
         key: 'ask',
         icon: <Sparkles size={14} />,
         label: q,
-        detail: chat ? 'Send to the agent' : 'Start a chat with the agent',
+        detail: chat ? t("Send to the agent") : t("Start a chat with the agent"),
         group: 'Agent',
         run: async () => {
           if (chat?.kind === 'agent') {
@@ -303,7 +308,7 @@ export function Palette({ ws, commands, mode, onClose }: { ws: WorkspaceApi; com
       })
     }
     return out
-  }, [query, files, commands, ws, taskId, recent, initialSettings])
+  }, [query, files, commands, ws, taskId, recent, initialSettings, language])
 
   useEffect(() => setSel(0), [query])
   useEffect(() => setSel((current) => Math.max(0, Math.min(current, items.length - 1))), [items.length])
@@ -322,12 +327,12 @@ export function Palette({ ws, commands, mode, onClose }: { ws: WorkspaceApi; com
   const groups: { name: string; items: { item: Item; index: number }[] }[] = []
   items.forEach((item, index) => { const group = groups.find((entry) => entry.name === item.group) ?? (groups.push({ name: item.group, items: [] }), groups.at(-1)!); group.items.push({ item, index }) })
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}><DialogContent className="palette" showCloseButton={false} aria-describedby={undefined}><DialogTitle className="sr-only">Command palette</DialogTitle>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}><DialogContent className="palette" showCloseButton={false} aria-describedby={undefined}><DialogTitle className="sr-only">{t("Command palette")}</DialogTitle>
       <Command shouldFilter={false} value={items[sel]?.key ?? ''} onValueChange={(value) => { const index = items.findIndex((it) => it.key === value); if (index >= 0) setSel(index) }}>
-        <CommandInput autoFocus aria-label="Search files and commands" value={query} placeholder={taskId ? 'Search files, chats, or projects. Type > for commands' : 'Type > for commands'} onValueChange={setQuery} onKeyDown={(e) => { if (e.key === 'Escape') onClose() }} />
+        <CommandInput autoFocus aria-label={t("Search files and commands")} value={query} placeholder={taskId ? t("Search files, chats, or projects. Type > for commands") : t("Type > for commands")} onValueChange={setQuery} onKeyDown={(e) => { if (e.key === 'Escape') onClose() }} />
         <CommandList id="palette-options" ref={list} className="max-h-[min(440px,calc(100vh-180px))]">
-          <CommandEmpty>No matches</CommandEmpty>
-          {groups.map((group) => <CommandGroup key={group.name} heading={group.name}>
+          <CommandEmpty>{t("No matches")}</CommandEmpty>
+          {groups.map((group) => <CommandGroup key={group.name} heading={t(group.name)}>
             {group.items.map(({ item: it, index: i }) => <CommandItem key={it.key} value={it.key} id={`palette-option-${i}`} onSelect={() => choose(it)}>
               <span className="palette-icon">{it.icon}</span>
               <span className="palette-label">{it.hits ? highlight(it.label, it.hits).map((r, j) => (r.hit ? <mark key={j}>{r.text}</mark> : <span key={j}>{r.text}</span>)) : it.label}</span>

@@ -1,3 +1,5 @@
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ChevronRight, FileText, Folder, FolderOpen, FilePlus, FolderPlus, Copy, Pencil, Trash2, SquareTerminal, RefreshCw, ListCollapse, ClipboardPaste, CopyPlus, Scissors } from 'lucide-react'
@@ -26,14 +28,15 @@ function freeName(name: string, taken: Set<string>): string {
 }
 
 export function ExplorerPanel() {
+  useLanguage()
   const ws = useWorkspace()
   const taskId = ws.ui.activeTaskId
   if (!taskId) return <NoTask />
   const bindings = ws.bindings[taskId] ?? []
   return (
     <div className="panel explorer-panel">
-      <header className="panel-title explorer-title"><span className="grow">Explorer</span><Button className="ghost icon small-icon" title="New file" aria-label="New file" onClick={() => window.dispatchEvent(new CustomEvent('ramu:explorer-new', { detail: 'file' }))}><FilePlus size={14} /></Button><Button className="ghost icon small-icon" title="New folder" aria-label="New folder" onClick={() => window.dispatchEvent(new CustomEvent('ramu:explorer-new', { detail: 'dir' }))}><FolderPlus size={14} /></Button><Button className="ghost icon small-icon" title="Refresh explorer" aria-label="Refresh explorer" onClick={() => window.dispatchEvent(new Event('ramu:refresh-explorer'))}><RefreshCw size={14} /></Button><Button className="ghost icon small-icon" title="Collapse folders" aria-label="Collapse explorer folders" onClick={() => window.dispatchEvent(new Event('ramu:collapse-explorer'))}><ListCollapse size={14} /></Button></header>
-      <div className="explorer-tree-scroll">
+      <header className="panel-title explorer-title"><span className="grow" /><Button className="ghost icon small-icon" title={t("New file")} aria-label={t("New file")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:explorer-new', { detail: 'file' }))}><FilePlus size={14} /></Button><Button className="ghost icon small-icon" title={t("New folder")} aria-label={t("New folder")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:explorer-new', { detail: 'dir' }))}><FolderPlus size={14} /></Button><Button className="ghost icon small-icon" title={t("Refresh explorer")} aria-label={t("Refresh explorer")} onClick={() => window.dispatchEvent(new Event('ramu:refresh-explorer'))}><RefreshCw size={14} /></Button><Button className="ghost icon small-icon" title={t("Collapse folders")} aria-label={t("Collapse explorer folders")} onClick={() => window.dispatchEvent(new Event('ramu:collapse-explorer'))}><ListCollapse size={14} /></Button></header>
+      <ScrollArea className="explorer-scroll-area overlay-scroll-area" viewportClassName="explorer-tree-scroll">
       {bindings.map((b, index) =>
         b.setupState === 'ready' ? (
           <RepoTree key={`${ws.workspaceOf(taskId)}:${b.repoId}`} taskId={taskId} binding={b} primary={index === 0} />
@@ -43,20 +46,22 @@ export function ExplorerPanel() {
           </div>
         ),
       )}
-      </div>
+      </ScrollArea>
     </div>
   )
 }
 
 export function NoTask() {
+  useLanguage()
   return (
     <div className="panel">
-      <p className="muted hint">Open a project or chat to see its files here.</p>
+      <p className="muted hint">{t("Open a project or chat to see its files here.")}</p>
     </div>
   )
 }
 
 function RepoTree({ taskId, binding, primary }: { taskId: string; binding: RepositoryBinding; primary: boolean }) {
+  useLanguage()
   const ws = useWorkspace()
   const [children, setChildren] = useState<Record<string, DirEntry[]>>({})
   const [open, setOpen] = useState<Set<string>>(new Set(['']))
@@ -231,33 +236,33 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
   const targets = multi ? pickedEntries : [target]
   const pasteDir = dirOfTarget(target)
   const context = useContextMenu('Explorer actions', multi ? [
-    { key: 'cut', label: <><Scissors size={14} />Cut {targets.length} items</>, onSelect: () => setClip(targets.map((entry) => entry.path), true) },
-    { key: 'copy', label: <><Copy size={14} />Copy {targets.length} items</>, onSelect: () => setClip(targets.map((entry) => entry.path), false) },
-    { key: 'copy-paths', label: 'Copy paths', onSelect: () => void copy(targets.map((entry) => `${binding.cwd}/${entry.path}`).join('\n')) },
-    { key: 'copy-relative', label: 'Copy relative paths', onSelect: () => void copy(targets.map((entry) => entry.path).join('\n')) },
+    { key: 'cut', label: <><Scissors size={14} />{t("Cut ")}{targets.length} {t(" items")}</>, onSelect: () => setClip(targets.map((entry) => entry.path), true) },
+    { key: 'copy', label: <><Copy size={14} />{t("Copy ")}{targets.length} {t(" items")}</>, onSelect: () => setClip(targets.map((entry) => entry.path), false) },
+    { key: 'copy-paths', label: t("Copy paths"), onSelect: () => void copy(targets.map((entry) => `${binding.cwd}/${entry.path}`).join('\n')) },
+    { key: 'copy-relative', label: t("Copy relative paths"), onSelect: () => void copy(targets.map((entry) => entry.path).join('\n')) },
     { key: 'separator', separator: true as const },
-    { key: 'trash', label: <><Trash2 size={14} />Move {targets.length} items to Trash…</>, disabled: busy, danger: true, onSelect: () => trashPicked(target) },
+    { key: 'trash', label: <><Trash2 size={14} />{t("Move ")}{targets.length} {t(" items to Trash…")}</>, disabled: busy, danger: true, onSelect: () => trashPicked(target) },
   ] : [
     ...(target.kind === 'dir' ? [
-      { key: 'new-file', label: <><FilePlus size={14} />New file…</>, disabled: busy, onSelect: () => begin({ type: 'create', parent: target.path, kind: 'file' }) },
-      { key: 'new-folder', label: <><FolderPlus size={14} />New folder…</>, disabled: busy, onSelect: () => begin({ type: 'create', parent: target.path, kind: 'dir' }) },
-      { key: 'terminal', label: <><SquareTerminal size={14} />Open terminal in {binding.folderOnly ? 'folder' : 'repository'}</>, onSelect: () => ws.openView(taskId, { kind: 'terminal', repoId: binding.repoId }) },
-    ] : [{ key: 'open', label: <><FileText size={14} />Open file</>, onSelect: () => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: target.path }) }]),
+      { key: 'new-file', label: <><FilePlus size={14} />{t("New file…")}</>, disabled: busy, onSelect: () => begin({ type: 'create', parent: target.path, kind: 'file' }) },
+      { key: 'new-folder', label: <><FolderPlus size={14} />{t("New folder…")}</>, disabled: busy, onSelect: () => begin({ type: 'create', parent: target.path, kind: 'dir' }) },
+      { key: 'terminal', label: <><SquareTerminal size={14} />{t("Open terminal in ")}{binding.folderOnly ? 'folder' : t("repository")}</>, onSelect: () => ws.openView(taskId, { kind: 'terminal', repoId: binding.repoId }) },
+    ] : [{ key: 'open', label: <><FileText size={14} />{t("Open file")}</>, onSelect: () => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: target.path }) }]),
     { key: 'separator-edit', separator: true as const },
     ...(target.path ? [
-      { key: 'cut', label: <><Scissors size={14} />Cut</>, onSelect: () => setClip([target.path], true) },
-      { key: 'copy', label: <><Copy size={14} />Copy</>, onSelect: () => setClip([target.path], false) },
+      { key: 'cut', label: <><Scissors size={14} />{t("Cut")}</>, onSelect: () => setClip([target.path], true) },
+      { key: 'copy', label: <><Copy size={14} />{t("Copy")}</>, onSelect: () => setClip([target.path], false) },
     ] : []),
-    { key: 'paste', label: <><ClipboardPaste size={14} />Paste{clip ? ` ${clip.paths.length === 1 ? baseName(clip.paths[0]!) : `${clip.paths.length} items`}` : ''}</>, disabled: busy || !clip || clip.repoId !== binding.repoId, onSelect: () => void pasteInto(pasteDir) },
-    ...(target.path ? [{ key: 'duplicate', label: <><CopyPlus size={14} />Duplicate</>, disabled: busy, onSelect: () => void pasteInto(parentOf(target.path), { taskId, repoId: binding.repoId, paths: [target.path], cut: false }) }] : []),
+    { key: 'paste', label: <><ClipboardPaste size={14} />{t("Paste")}{clip ? ` ${clip.paths.length === 1 ? baseName(clip.paths[0]!) : `${clip.paths.length} items`}` : ''}</>, disabled: busy || !clip || clip.repoId !== binding.repoId, onSelect: () => void pasteInto(pasteDir) },
+    ...(target.path ? [{ key: 'duplicate', label: <><CopyPlus size={14} />{t("Duplicate")}</>, disabled: busy, onSelect: () => void pasteInto(parentOf(target.path), { taskId, repoId: binding.repoId, paths: [target.path], cut: false }) }] : []),
     { key: 'separator-paths', separator: true as const },
-    { key: 'reveal', label: <><FolderOpen size={14} />Reveal in Finder</>, onSelect: () => { void invoke('files.reveal', taskId, binding.repoId, target.path).catch(fail) } },
-    { key: 'copy-path', label: <><Copy size={14} />Copy path</>, onSelect: () => void copy(target.path ? `${binding.cwd}/${target.path}` : binding.cwd) },
-    { key: 'copy-relative', label: 'Copy relative path', onSelect: () => void copy(target.path || '.') },
+    { key: 'reveal', label: <><FolderOpen size={14} />{t("Reveal in Finder")}</>, onSelect: () => { void invoke('files.reveal', taskId, binding.repoId, target.path).catch(fail) } },
+    { key: 'copy-path', label: <><Copy size={14} />{t("Copy path")}</>, onSelect: () => void copy(target.path ? `${binding.cwd}/${target.path}` : binding.cwd) },
+    { key: 'copy-relative', label: t("Copy relative path"), onSelect: () => void copy(target.path || '.') },
     ...(target.path ? [
       { key: 'separator', separator: true as const },
-      { key: 'rename', label: <><Pencil size={14} />Rename…</>, disabled: busy, onSelect: () => begin({ type: 'rename', entry: target }) },
-      { key: 'trash', label: <><Trash2 size={14} />Move to Trash…</>, disabled: busy, danger: true, onSelect: () => trashPicked(target) },
+      { key: 'rename', label: <><Pencil size={14} />{t("Rename…")}</>, disabled: busy, onSelect: () => begin({ type: 'rename', entry: target }) },
+      { key: 'trash', label: <><Trash2 size={14} />{t("Move to Trash…")}</>, disabled: busy, danger: true, onSelect: () => trashPicked(target) },
     ] : []),
   ])
   const confirmAction = async () => {
@@ -270,7 +275,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
         await invoke('files.create', taskId, binding.repoId, path, action.kind)
         setOpen((current) => new Set([...current, action.parent, ...(action.kind === 'dir' ? [path] : [])]))
         await load(action.parent)
-        if (action.kind === 'file') ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path })
+        if (action.kind === 'file') ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path, preview: false })
         else await load(path)
       } else if (action.type === 'trash') {
         const inside = (view: { path: string }) => action.entries.some((entry) => view.path === entry.path || view.path.startsWith(`${entry.path}/`))
@@ -349,8 +354,8 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
   return (
     <div className="repo-tree" onKeyDown={onTreeKey} onFocusCapture={() => { lastRepo = binding.repoId }}>
       {context.menu}
-      {action && <Dialog title={action.type === 'create' ? action.kind === 'file' ? 'New file' : 'New folder' : action.type === 'rename' ? 'Rename' : 'Move to Trash?'} confirmLabel={action.type === 'create' ? 'Create' : action.type === 'rename' ? 'Rename' : 'Move to Trash'} danger={action.type === 'trash'} busy={busy} error={error} onCancel={() => { if (!busy) setAction(null) }} onConfirm={() => void confirmAction()}>
-        {action.type === 'trash' ? <><p>{action.entries.length === 1 ? 'This item and its contents will move' : `These ${action.entries.length} items and their contents will move`} to the macOS Trash.</p><pre className="confirm-paths">{action.entries.map((entry) => entry.path).join('\n')}</pre></> : <><label className="explorer-name-field">Name<Input ref={nameInput} value={name} maxLength={255} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void confirmAction() }} /></label><p className="muted small">{binding.repoName}{action.type === 'create' && action.parent ? ` / ${action.parent}` : ''}</p></>}
+      {action && <Dialog title={action.type === 'create' ? action.kind === 'file' ? t("New file") : t("New folder") : action.type === 'rename' ? t("Rename") : t("Move to Trash?")} confirmLabel={action.type === 'create' ? t("Create") : action.type === 'rename' ? t("Rename") : t("Move to Trash")} danger={action.type === 'trash'} busy={busy} error={error} onCancel={() => { if (!busy) setAction(null) }} onConfirm={() => void confirmAction()}>
+        {action.type === 'trash' ? <><p>{action.entries.length === 1 ? t("This item and its contents will move") : t("These {0} items and their contents will move", { "0": action.entries.length })} {t(" to the macOS Trash.")}</p><pre className="confirm-paths">{action.entries.map((entry) => entry.path).join('\n')}</pre></> : <><label className="explorer-name-field">{t("Name")}<Input ref={nameInput} value={name} maxLength={255} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void confirmAction() }} /></label><p className="muted small">{binding.repoName}{action.type === 'create' && action.parent ? ` / ${action.parent}` : ''}</p></>}
       </Dialog>}
       <Button className={`tree-root${dropDir === '' ? ' drop-target' : ''}`} onDragOver={(event) => { if (dragging && dragging.repoId === binding.repoId) { event.preventDefault(); event.dataTransfer.dropEffect = event.altKey ? 'copy' : 'move'; setDropDir('') } }} onDragLeave={() => setDropDir(null)} onDrop={(event) => { if (!dragging || dragging.repoId !== binding.repoId) return; event.preventDefault(); const source = dragging; dragging = null; setDropDir(null); void pasteInto('', { taskId, repoId: binding.repoId, paths: source.paths, cut: !event.altKey }) }} onContextMenu={(event) => { setTarget({ name: binding.repoName, path: '', kind: 'dir' }); context.onContextMenu(event) }} onKeyDown={(event) => { if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') { setTarget({ name: binding.repoName, path: '', kind: 'dir' }); context.onKeyDown(event) } }} onClick={() => toggle('')} title={binding.cwd}>
         <ChevronRight size={12} className={open.has('') ? 'tree-caret open' : 'tree-caret'} />

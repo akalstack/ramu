@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 import { Input } from '@/components/ui/input'
 import { Check, ChevronDown, Folder, FolderPlus, GitBranch, Laptop } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -17,6 +18,7 @@ function readLocations(): { projects: Record<string, string>; workspaces: Record
 
 /** Keep navigation memory mounted, while Chats uses its own project list. */
 export function ProjectSwitcher() {
+  useLanguage()
   const ws = useWorkspace()
   const active = ws.ui.activeTaskId
   const project = active ? ws.projectOf(active) : ws.projects.find((entry) => entry.id === ws.composing)
@@ -33,7 +35,7 @@ export function ProjectSwitcher() {
       try { localStorage.setItem('ramu.navigation-locations', JSON.stringify({ projects: lastProject.current, workspaces: lastWorkspace.current })) } catch { /* Keep navigation memory for this session. */ }
     }
   }, [active, project?.id, workspace])
-  if (['projects', 'schedules', 'changes'].includes(ws.ui.sidebar)) return null
+  if (ws.ui.sidebar === 'schedules' || !project) return null
   const valid = (context: string | undefined, projectId: string) => context && ws.projectOf(context)?.id === projectId && (!ws.task(context) || ws.task(context)?.status !== 'archived')
   const switchProject = (projectId: string) => {
     if (projectId === project?.id) return
@@ -48,15 +50,16 @@ export function ProjectSwitcher() {
     label: <><Folder size={14} /><span className="menu-label grow">{entry.name}{entry.root && <span className="muted block">{entry.root}</span>}</span>{entry.id === project?.id && <Check size={13} />}</>,
     onSelect: () => switchProject(entry.id),
   }))
-  if (!choices.length) items.push({ key: 'empty', label: 'No matching projects', disabled: true })
-  items.push({ key: 'separator', separator: true }, { key: 'add', searchChoice: false, label: <><FolderPlus size={14} />Add project…</>, onSelect: () => void addProject.add() })
+  if (!choices.length) items.push({ key: 'empty', label: t("No matching projects"), disabled: true })
+  items.push({ key: 'separator', separator: true }, { key: 'add', searchChoice: false, label: <><FolderPlus size={14} />{t("Add project…")}</>, onSelect: () => void addProject.add() })
   const isolated = ws.workspaces.filter((entry) => entry.projectId === project?.id)
   const current = project ? projectCtx(project.id) : ''
-  return <div className="sidebar-scope">
-    <Menu label="Switch project" className="dropdown-trigger project-switch-trigger" menuClassName="project-switch-menu" disabled={addProject.busy} icon={<><Folder size={14} /><span className="dropdown-value">{project?.name ?? 'Choose project'}</span><ChevronDown size={12} /></>} header={<div className="project-switch-search"><SearchInput autoFocus aria-label="Search projects" placeholder="Search projects…" value={query} onChange={(event) => setQuery(event.target.value)} /></div>} items={items} />
-    {project && (isolated.length ? <Dropdown label="Switch checkout" className="checkout-switch-trigger" icon={workspace === current ? <Laptop size={13} /> : <GitBranch size={13} />} value={workspace ?? current} options={[{ value: current, label: 'Current checkout' }, ...isolated.map((entry) => ({ value: worktreeCtx(entry.id), label: entry.name }))]} onChange={(context) => {
+  return <div className="workspace-scope">
+    <Menu label={t("Switch project")} className="dropdown-trigger project-switch-trigger" menuClassName="project-switch-menu" disabled={addProject.busy} icon={<><Folder size={14} /><span className="dropdown-value">{project?.name ?? t("Choose project")}</span><ChevronDown size={12} /></>} header={<div className="project-switch-search"><SearchInput autoFocus aria-label={t("Search projects")} placeholder={t("Search projects…")} value={query} onChange={(event) => setQuery(event.target.value)} /></div>} items={items} />
+    {project && (isolated.length ? <Dropdown label={t("Switch checkout")} className="checkout-switch-trigger" icon={workspace === current ? <Laptop size={13} /> : <GitBranch size={13} />} value={workspace ?? current} options={[{ value: current, label: t("Current checkout") }, ...isolated.map((entry) => ({ value: worktreeCtx(entry.id), label: entry.name }))]} onChange={(context) => {
       const previous = lastWorkspace.current[context]
       ws.openTask(valid(previous, project.id) ? previous! : context)
-    }} /> : <div className="sidebar-checkout muted small"><Laptop size={13} />Current checkout</div>)}
+    }} /> : null)}
+    <span className="header-sep" aria-hidden="true">/</span>
   </div>
 }

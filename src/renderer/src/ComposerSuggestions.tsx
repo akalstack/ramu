@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -16,7 +17,9 @@ export const FILE_DRAG_TYPE = 'application/x-ramu-file'
 export const MAX_PINNED_FILES = 20
 
 interface Choice { id: string; label: string; description: string; kind: 'Command' | 'Skill' | 'File'; insertion?: string; file?: { repoId: string; path: string }; action?: () => void }
-export function useComposerSuggestions(value: string, caret: number, scopeId?: string) {
+export function useComposerSuggestions(value: string, caret: number, scopeId?: string, chat = false) {
+  const language = useLanguage()
+
   const listId = useId()
   const ws = useWorkspace(), scope = scopeId ?? ws.ui.activeTaskId
   const { preferences } = useAppSettings()
@@ -41,17 +44,21 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
   const repoName = (repoId: string) => Object.values(ws.repos).flat().find((r) => r.id === repoId)?.name ?? repoId
   const choices = useMemo(() => {
     const commands: Choice[] = [
-      { id: 'new', label: '/new', description: 'Start a new chat', kind: 'Command', action: () => ws.newTask() },
-      { id: 'schedule', label: '/schedule', description: 'Create a schedule through the agent', kind: 'Command', insertion: 'Create a schedule for: ' },
-      { id: 'schedules', label: '/schedules', description: 'Open schedules and run history', kind: 'Command', action: () => ws.setSidebar('schedules') },
-      { id: 'changes', label: '/changes', description: 'Open the chat\'s changed files', kind: 'Command', action: () => { void invoke('reviews.list').then((reviews) => { const review = reviews.find((r) => r.taskId === scope); if (review) openReview(ws, { id: review.id, taskId: review.taskId }); else notifyError('This chat has no recorded file changes yet.', 'Changes') }) } },
-      { id: 'recap', label: '/recap', description: 'Open your daily recap', kind: 'Command', action: () => ws.showHome() },
-      { id: 'settings', label: '/settings', description: 'Open app settings', kind: 'Command', action: () => window.dispatchEvent(new Event('ramu:settings')) },
-      { id: 'clear', label: '/clear', description: 'Clear this draft', kind: 'Command', insertion: '' },
+      { id: 'new', label: '/new', description: t("Start a new chat"), kind: 'Command', action: () => ws.newTask() },
+      { id: 'goal', label: '/goal', description: t('Keep working until a goal is complete'), kind: 'Command', insertion: '/goal ' },
+      ...(chat ? [{ id: 'goal-pause', label: '/goal pause', description: t('Pause goal'), kind: 'Command' as const, insertion: '/goal pause' }, { id: 'goal-resume', label: '/goal resume', description: t('Resume goal'), kind: 'Command' as const, insertion: '/goal resume' }, { id: 'goal-clear', label: '/goal clear', description: t('Clear goal'), kind: 'Command' as const, insertion: '/goal clear' }] : []),
+      { id: 'schedule', label: '/schedule', description: t("Create a schedule through the agent"), kind: 'Command', insertion: 'Create a schedule for: ' },
+      { id: 'schedules', label: '/schedules', description: t("Open schedules and run history"), kind: 'Command', action: () => ws.setSidebar('schedules') },
+      { id: 'changes', label: '/changes', description: t("Open the chat's changed files"), kind: 'Command', action: () => { void invoke('reviews.list').then((reviews) => { const review = reviews.find((r) => r.taskId === scope); if (review) openReview(ws, { id: review.id, taskId: review.taskId }); else notifyError('This chat has no recorded file changes yet.', 'Changes') }) } },
+      { id: 'recap', label: '/recap', description: t("Open your daily recap"), kind: 'Command', action: () => ws.showHome() },
+      { id: 'settings', label: '/settings', description: t("Open app settings"), kind: 'Command', action: () => window.dispatchEvent(new Event('ramu:settings')) },
+      { id: 'clear', label: '/clear', description: t("Clear this draft"), kind: 'Command', insertion: '' },
+      // A chat's composer only: the question goes to an aside, never to the agent.
+      ...(chat ? [{ id: 'aside', label: '/aside', description: t("Ask a side question without interrupting the chat"), kind: 'Command' as const, insertion: '/aside ' }] : []),
     ]
-    const options: Choice[] = mode === '@' ? files.map((file) => ({ id: `${file.repoId}:${file.path}`, label: `${repoName(file.repoId)}/${file.path}`, description: 'Add file context', kind: 'File', insertion: `@"${repoName(file.repoId)}/${file.path}" `, file })) : [...commands, ...skills.map((s): Choice => ({ id: `skill:${s.path}`, label: `/${s.name}`, description: s.description, kind: 'Skill', insertion: `$${s.name} ` }))]
+    const options: Choice[] = mode === '@' ? files.map((file) => ({ id: `${file.repoId}:${file.path}`, label: `${repoName(file.repoId)}/${file.path}`, description: t("Add file context"), kind: 'File', insertion: `@"${repoName(file.repoId)}/${file.path}" `, file })) : [...commands, ...skills.map((s): Choice => ({ id: `skill:${s.path}`, label: `/${s.name}`, description: s.description, kind: 'Skill', insertion: `$${s.name} ` }))]
     return options.filter((c) => `${c.label} ${c.description}`.toLowerCase().includes(query)).slice(0, 30)
-  }, [mode, query, files, skills, ws])
+  }, [mode, query, files, skills, ws, language, chat])
   const hydrate = (): FileContext[] => {
     const state = scope ? ws.taskUi[scope] : undefined
     return buildComposerContext({
@@ -93,11 +100,13 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
   }
 }
 export function ComposerSuggestions({ suggestions, onChoose }: { suggestions: ReturnType<typeof useComposerSuggestions>; onChoose: (index: number) => void }) {
+  const language = useLanguage()
+
   useEffect(() => { document.getElementById(`${suggestions.listId}-${suggestions.selected}`)?.scrollIntoView({ block: 'nearest' }) }, [suggestions.listId, suggestions.selected])
-  return <div className="composer-suggestions" role="listbox" id={suggestions.listId} aria-label="Commands, skills, and files">
-    {suggestions.loading && <div className="suggestion-status muted small">Loading commands, skills and files…</div>}
+  return <div className="composer-suggestions" role="listbox" id={suggestions.listId} aria-label={t("Commands, skills, and files")}>
+    {suggestions.loading && <div className="suggestion-status muted small">{t("Loading commands, skills and files…")}</div>}
     {suggestions.loadError && <div className="suggestion-status error small">{suggestions.loadError}</div>}
-    {suggestions.choices.map((choice, i) => <Button type="button" key={choice.id} id={`${suggestions.listId}-${i}`} role="option" aria-selected={i === suggestions.selected} className={i === suggestions.selected ? 'selected' : ''} onMouseDown={(e) => e.preventDefault()} onClick={() => onChoose(i)}><span><strong>{choice.label}</strong><span className="muted small block">{choice.description}</span></span><Badge variant="outline" className="chip">{choice.kind}</Badge></Button>)}
-    {!suggestions.loading && !suggestions.choices.length && <div className="suggestion-status muted">No matching commands, skills, or files.</div>}
+    {suggestions.choices.map((choice, i) => <Button type="button" key={choice.id} id={`${suggestions.listId}-${i}`} role="option" aria-selected={i === suggestions.selected} className={i === suggestions.selected ? 'selected' : ''} onMouseDown={(e) => e.preventDefault()} onClick={() => onChoose(i)}><span><strong>{choice.label}</strong><span className="muted small block">{choice.description}</span></span><Badge variant="outline" className="chip">{t(choice.kind)}</Badge></Button>)}
+    {!suggestions.loading && !suggestions.choices.length && <div className="suggestion-status muted">{t("No matching commands, skills, or files.")}</div>}
   </div>
 }

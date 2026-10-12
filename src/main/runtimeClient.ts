@@ -29,8 +29,8 @@ export async function ensureRuntime(userData: string, daemonPath: string, execut
     const status = await runtimeInvoke(socketPath, 'background.status')
     if (status?.build === runtimeBuild(daemonPath)) return socketPath
     // The running service predates this build and would answer with old code (missing methods, old settings).
-    // It stops its agents cleanly, then a fresh one starts below.
-    await runtimeInvoke(socketPath, 'background.stop').catch(() => {})
+    // Preserve unfinished chats for the new service. Older services only understand Stop.
+    await runtimeInvoke(socketPath, 'background.restart').catch(() => runtimeInvoke(socketPath, 'background.stop').catch(() => {}))
     for (let i = 0; i < 300; i++) {
       try { await runtimeInvoke(socketPath, 'background.status') } catch { break }
       await new Promise((resolve) => setTimeout(resolve, 100))

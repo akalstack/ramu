@@ -1,5 +1,7 @@
+import { t, useLanguage } from './i18n'
 import { useModelSets } from './ModelSets'
-import { ChevronDown, FolderClosed, GitBranch, Laptop } from 'lucide-react'
+import { FolderClosed, GitBranch, Laptop, Settings } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_AGENT_SETTINGS, NO_PROJECT, type FileContext, type Attachment, type AgentSettings, type CheckoutMode, type WorktreePlanEntry } from '../../shared/types'
 import { AgentControls } from './AgentControls'
@@ -9,6 +11,7 @@ import { Menu } from './Menu'
 import { AnimatedMark } from './Brand'
 import { errorText } from './TaskPane'
 import { useWorkspace } from './workspace'
+import { HomeFeed } from './Home'
 
 /** A task's title is the first line of what you asked for. */
 export function titleFrom(prompt: string): string {
@@ -23,11 +26,19 @@ const MODES: { id: CheckoutMode; label: string; hint: string; Icon: typeof Lapto
   { id: 'worktree', label: 'New isolated worktrees', hint: 'A new branch and worktree for every repository.', Icon: GitBranch },
 ]
 
+/** Home and New chat are one screen: the start box, with what's running and coming up below it. */
+export function HomePage() {
+  const ws = useWorkspace()
+  return <NewTask projectId={ws.composing ?? NO_PROJECT} onProjectChange={(id) => ws.newTask(id)} />
+}
+
 /**
  * Start of a task, Codex-style. A task always covers every repository in the project and the
  * agent works on the whole workspace. Sending the first message creates the task.
+ * `feed` adds the Home feed below; it is off when the box is docked beside an open file.
  */
-export function NewTask({ projectId, onProjectChange }: { projectId: string; onProjectChange: (id: string) => void }) {
+export function NewTask({ projectId, onProjectChange, feed = true }: { projectId: string; onProjectChange: (id: string) => void; feed?: boolean }) {
+  useLanguage()
   const ws = useWorkspace()
   const general = projectId === NO_PROJECT
   const repos = ws.repos[projectId] ?? []
@@ -97,7 +108,7 @@ export function NewTask({ projectId, onProjectChange }: { projectId: string; onP
     }
   }
 
-  const projectItems = [{ key: NO_PROJECT, label: 'No project', onSelect: () => onProjectChange(NO_PROJECT) }, ...ws.projects.map((p) => ({
+  const projectItems = [{ key: NO_PROJECT, label: t("No project"), onSelect: () => onProjectChange(NO_PROJECT) }, ...ws.projects.map((p) => ({
     key: p.id,
     label: (
       <>
@@ -108,34 +119,46 @@ export function NewTask({ projectId, onProjectChange }: { projectId: string; onP
   }))]
   const current = existingWorkspace ? { label: existingWorkspace.name, Icon: GitBranch } : MODES.find((m) => m.id === mode)!
 
-  return (
+  const start = (
     <div className="start-view">
       <div className="start-hero">
         <AnimatedMark className="start-mark" size={56} />
         <h1>
-          {general ? 'What should we work on?' : <>What should we work on in{' '}
-          <Menu label="Project" icon={<span className="start-project">{project?.name ?? 'a project'}</span>} className="start-project-btn" items={projectItems} />?</>}
+          {general ? t("What should we work on?") : <>{t("What should we work on in")}{' '}
+          <Menu label={t("Project")} icon={<span className="start-project">{project?.name ?? t("a project")}</span>} className="start-project-btn" items={projectItems} />?</>}
         </h1>
         {repos.length > 0 && <p className="muted start-repos">{repos.map((r) => r.name).join(' · ')}</p>}
       </div>
       <div className="start-dock">
-        <div className="start-chips">
+        {plan && (
+          <div className="plan">
+            <div className="muted">{t("Ramu will create a branch and worktree for each repository:")}</div>
+            {plan.map((p) => (
+              <div key={p.repoId} className="plan-row">
+                <span className="strong">{p.repoName}</span>: <code>{p.taskBranch}</code> {t(" from ")}<code>{p.baseRef}</code>
+                <div className="path">{p.path}</div>
+              </div>
+            ))}
+            <div className="muted small">{t("Worktrees separate files and the Git index. They do not sandbox processes, ports or credentials.")}</div>
+          </div>
+        )}
+        <div className="start-chips composer-tray">
           <Menu
-            label="Project"
+            label={t("Project")}
             className="chip-btn"
             icon={
               <>
-                <FolderClosed size={13} /> <span className="chip-label">{general ? 'No project' : project?.name}</span> <ChevronDown size={12} />
+                <FolderClosed size={13} /> <span className="chip-label">{general ? t("No project") : project?.name}</span>
               </>
             }
             items={projectItems}
           />
           {!general && <Menu
-            label="Where the work happens"
+            label={t("Where the work happens")}
             className="chip-btn"
             icon={
               <>
-                <current.Icon size={13} /> <span className="chip-label">{current.label}</span> <ChevronDown size={12} />
+                <current.Icon size={13} /> <span className="chip-label">{existingWorkspace ? current.label : t(current.label)}</span>
               </>
             }
             items={[...MODES.map((m) => ({
@@ -144,8 +167,8 @@ export function NewTask({ projectId, onProjectChange }: { projectId: string; onP
                 <>
                   <m.Icon size={14} />
                   <span>
-                    {m.label}
-                    <span className="muted block">{m.hint}</span>
+                    {t(m.label)}
+                    <span className="muted block">{t(m.hint)}</span>
                   </span>
                 </>
               ),
@@ -157,24 +180,14 @@ export function NewTask({ projectId, onProjectChange }: { projectId: string; onP
             })),
               ...ws.workspaces.filter((w) => w.projectId === projectId).map((w) => ({
                 key: w.id,
-                label: <><GitBranch size={14} /><span className="menu-label">{w.name}<span className="muted block">Existing isolated worktree</span></span></>,
+                label: <><GitBranch size={14} /><span className="menu-label">{w.name}<span className="muted block">{t("Existing isolated worktree")}</span></span></>,
                 onSelect: () => { setWorkspaceId(w.id); setMode('worktree'); setPlan(null) },
               })),
             ]}
           />}
+          <span className="grow" />
+          <Button className="ghost icon small-icon tray-settings" aria-label={t("Chat settings")} title={t("Chat settings")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git' } }))}><Settings size={14} /></Button>
         </div>
-        {plan && (
-          <div className="plan">
-            <div className="muted">Ramu will create a branch and worktree for each repository:</div>
-            {plan.map((p) => (
-              <div key={p.repoId} className="plan-row">
-                <span className="strong">{p.repoName}</span>: <code>{p.taskBranch}</code> from <code>{p.baseRef}</code>
-                <div className="path">{p.path}</div>
-              </div>
-            ))}
-            <div className="muted small">Worktrees separate files and the Git index. They do not sandbox processes, ports or credentials.</div>
-          </div>
-        )}
         <Composer
           scopeId={workspaceId ? `worktree:${workspaceId}` : `project:${projectId}`}
           attachments={attachments}
@@ -188,11 +201,18 @@ export function NewTask({ projectId, onProjectChange }: { projectId: string; onP
           }}
           onSubmit={(context) => void send(context)}
           disabled={busy || !general && !repos.length}
-          placeholder={general ? 'Ask anything. Type / for commands and skills, @ for files.' : repos.length ? 'Start a chat. The agent works on the whole workspace.' : 'Add a repository to this project first'}
-          submitLabel={plan ? 'Create worktrees and start' : 'Start chat'}
+          placeholder={general ? t("Ask anything. Type / for commands and skills, @ for files.") : repos.length ? t("Start a chat. The agent works on the whole workspace.") : t("Add a repository to this project first")}
+          submitLabel={plan ? t('Create worktrees and start') : t('Start chat')}
         />
         {error && <div className="error start-error">{error}</div>}
       </div>
+    </div>
+  )
+  if (!feed) return start
+  return (
+    <div className="home-page">
+      <div className="home-start">{start}</div>
+      <HomeFeed />
     </div>
   )
 }

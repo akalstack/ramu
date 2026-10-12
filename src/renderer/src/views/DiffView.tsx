@@ -1,3 +1,4 @@
+import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/ui/button'
 import { useEffect, useRef, useState } from 'react'
 import type { RepositoryBinding, ViewDescriptor } from '../../../shared/types'
@@ -11,6 +12,7 @@ import { registerSelection } from '../editorBuffers'
 type DiffViewDesc = Extract<ViewDescriptor, { kind: 'diff' }>
 
 export function DiffView({ taskId, view, binding }: { taskId: string; view: DiffViewDesc; binding: RepositoryBinding }) {
+  useLanguage()
   const ws = useWorkspace()
   const { preferences } = useAppSettings()
   const editorRef = useRef<monaco.editor.IStandaloneDiffEditor | null>(null)
@@ -88,8 +90,8 @@ export function DiffView({ taskId, view, binding }: { taskId: string; view: Diff
       <div className="view-header">
         <span className="strong">{binding.repoName}</span>
         <span className="path">{view.path}</span>
-        <span className="muted small">{view.oid ? `${view.oid.slice(0, 7)} · Parent → commit` : view.staged ? 'Staged changes' : 'Unstaged changes'}</span>
-        <Button onClick={() => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: view.path })}>Open file</Button>
+        <span className="muted small">{view.oid ? t("{0} · Parent → commit", { "0": view.oid.slice(0, 7) }) : view.staged ? t("Staged changes") : t("Unstaged changes")}</span>
+        <Button onClick={() => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: view.path })}>{t("Open file")}</Button>
       </div>
       {error && <div className="error banner">{error}</div>}
       <div ref={host} className="editor-host" />

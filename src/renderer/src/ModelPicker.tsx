@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 import { Button } from '@/components/ui/button'
 import { moveFavorite } from '../../shared/favorites'
 import { SearchInput } from './SearchInput'
@@ -9,12 +10,14 @@ import { useAppSettings } from './AppSettings'
 import { notifyError } from './Notifications'
 import { modelDisplayName, useModelSets } from './ModelSets'
 import { ProviderIcon } from './ProviderIcon'
+import { peakUsage, usageTone, useUsage, windowLabel } from './Usage'
 
 type Tab = 'all' | 'sets' | AgentProvider
 const keyOf = (model: Pick<AgentModel, 'provider' | 'id'>) => `${model.provider}:${model.id}`
 
 /** The model picker: a rail of All models, Sets and providers beside a searchable list. ⌘1–⌘9 pick the numbered row. */
 export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: AgentSettings; onChange: (settings: AgentSettings) => void; onDone: () => void; onSet: (id: string) => void }) {
+  useLanguage()
   const { catalogs, preferences, reload } = useModelSets()
   const app = useAppSettings()
   const favorites = app.preferences.favoriteModels ?? []
@@ -30,6 +33,9 @@ export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: A
   const input = useRef<HTMLInputElement>(null)
   useLayoutEffect(() => { input.current?.focus() }, [])
   const q = query.trim().toLowerCase()
+  // How much of each provider's plan is left, so a near-limit provider is easy to avoid.
+  const usage = useUsage()
+  const usageLeft = (provider: AgentModel['provider']) => { const peak = peakUsage(usage, provider); return peak ? <span className={`mp-usage ${usageTone(peak)}`} title={t("{0} usage", { "0": windowLabel(peak) })}> · {peak.status === 'limited' ? t("limited") : t("{0}% left", { "0": 100 - peak.usedPercent })}</span> : null }
   const matches = (model: AgentModel) => !q || `${modelDisplayName(model.name)} ${model.name} ${model.id} ${providerName(model.provider)}`.toLowerCase().includes(q)
   const matchingModels = q || tab === 'all' ? all.filter(matches) : tab === 'sets' ? [] : all.filter((model) => model.provider === tab && matches(model))
   const favoriteKeys = new Set(favorites)
@@ -79,35 +85,35 @@ export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: A
 
   const selected = (model: AgentModel) => settings.provider === model.provider && (settings.model === model.id || !settings.model && model.isDefault)
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'all', label: 'All models', icon: <List size={15} /> },
-    { id: 'sets', label: 'Model sets', icon: <Layers size={15} /> },
+    { id: 'all', label: t("All models"), icon: <List size={15} /> },
+    { id: 'sets', label: t("Model sets"), icon: <Layers size={15} /> },
     ...AGENT_PROVIDERS.map((provider) => ({ id: provider, label: providerName(provider), icon: <ProviderIcon provider={provider} size={16} /> })),
   ]
-  return <div className="embedded-model-picker model-picker" role="menu" aria-label="Select model">
-    <nav className="mp-rail" aria-label="Model groups">
+  return <div className="embedded-model-picker model-picker" role="menu" aria-label={t("Select model")}>
+    <nav className="mp-rail" aria-label={t("Model groups")}>
       {tabs.map((entry) => <Button type="button" key={entry.id} className={entry.id === (q ? 'all' : tab) ? 'on' : ''} aria-label={entry.label} aria-pressed={entry.id === (q ? 'all' : tab)} title={entry.label} onClick={() => { setTab(entry.id); setEditingFavorites(false); setDropTarget(null); draggedFavorite.current = null }}>{entry.icon}</Button>)}
     </nav>
     <div className="mp-main">
-      <div className="mp-search"><SearchInput ref={input} aria-label="Search models" placeholder="Search models…" value={query} onChange={(event) => { setQuery(event.target.value); setEditingFavorites(false); setDropTarget(null); draggedFavorite.current = null }} />{!q && favoriteRows.length > 1 && <Button type="button" className={`mp-edit${editingFavorites ? ' on' : ''}`} aria-label={editingFavorites ? 'Finish reordering favorites' : 'Reorder favorites'} title={editingFavorites ? 'Done' : 'Reorder favorites'} aria-pressed={editingFavorites} onClick={() => { setEditingFavorites((value) => !value); setDropTarget(null); draggedFavorite.current = null }}>{editingFavorites ? <Check size={15} /> : <Pencil size={15} />}</Button>}</div>
+      <div className="mp-search"><SearchInput ref={input} aria-label={t("Search models")} placeholder={t("Search models…")} value={query} onChange={(event) => { setQuery(event.target.value); setEditingFavorites(false); setDropTarget(null); draggedFavorite.current = null }} />{!q && favoriteRows.length > 1 && <Button type="button" className={`mp-edit${editingFavorites ? ' on' : ''}`} aria-label={editingFavorites ? t("Finish reordering favorites") : t("Reorder favorites")} title={editingFavorites ? t("Done") : t("Reorder favorites")} aria-pressed={editingFavorites} onClick={() => { setEditingFavorites((value) => !value); setDropTarget(null); draggedFavorite.current = null }}>{editingFavorites ? <Check size={15} /> : <Pencil size={15} />}</Button>}</div>
       <span className="sr-only" role="status" aria-live="polite">{reorderNotice}</span>
       <div className="mp-list">
         {sets.map((set) => <Button type="button" key={set.id} className="mp-row" onClick={() => { onSet(set.id); onDone() }}>
-          <span className="mp-text"><span className="mp-name">{set.name}</span><span className="mp-sub">{set.id === 'recommended' ? 'Recommended set of models' : `${set.steps.length} configured steps`}</span></span>
+          <span className="mp-text"><span className="mp-name">{set.name}</span><span className="mp-sub">{set.id === 'recommended' ? t("Recommended set of models") : t("{0} configured steps", { "0": set.steps.length })}</span></span>
         </Button>)}
         {rows.map((model, index) => <div key={keyOf(model)} role="menuitemradio" aria-checked={selected(model)} tabIndex={0} className={`mp-row${selected(model) ? ' selected' : ''}${dropTarget?.key === keyOf(model) ? dropTarget.after ? ' drop-after' : ' drop-before' : ''}`} onClick={() => choose(model)} onKeyDown={(event) => { if (event.target !== event.currentTarget) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(model) } }}
           onDragOver={(event) => { if (!editingFavorites || !favoriteKeys.has(keyOf(model)) || !draggedFavorite.current || savingFavorites) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; const rect = event.currentTarget.getBoundingClientRect(); setDropTarget({ key: keyOf(model), after: event.clientY >= rect.top + rect.height / 2 }) }}
           onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTarget(null) }}
           onDrop={(event) => { if (!editingFavorites || !draggedFavorite.current || !favoriteKeys.has(keyOf(model)) || savingFavorites) return; event.preventDefault(); event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); reorder(draggedFavorite.current, keyOf(model), event.clientY >= rect.top + rect.height / 2); draggedFavorite.current = null; setDropTarget(null) }}>
-          {favoriteKeys.has(keyOf(model)) && editingFavorites && <Button type="button" className="mp-drag" draggable={!savingFavorites} aria-disabled={savingFavorites} aria-label={`Reorder ${modelDisplayName(model.name)}`} title="Drag to reorder. Alt+↑/↓ moves this favorite." onClick={(event) => event.stopPropagation()}
+          {favoriteKeys.has(keyOf(model)) && editingFavorites && <Button type="button" className="mp-drag" draggable={!savingFavorites} aria-disabled={savingFavorites} aria-label={t("Reorder {0}", { "0": modelDisplayName(model.name) })} title={t("Drag to reorder. Alt+↑/↓ moves this favorite.")} onClick={(event) => event.stopPropagation()}
             onDragStart={(event) => { event.stopPropagation(); draggedFavorite.current = keyOf(model); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-ramu-favorite', keyOf(model)) }}
             onDragEnd={() => { draggedFavorite.current = null; setDropTarget(null) }}
             onKeyDown={(event) => { if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return; event.preventDefault(); event.stopPropagation(); const direction = event.key === 'ArrowUp' ? -1 : 1; const target = favoriteRows[favoriteRows.findIndex((entry) => keyOf(entry) === keyOf(model)) + direction]; if (target) reorder(keyOf(model), keyOf(target), direction > 0) }}><GripVertical size={14} /></Button>}
-          <span className="mp-text"><span className="mp-name">{modelDisplayName(model.name)}</span><span className="mp-sub"><ProviderIcon provider={model.provider} size={13} />{providerName(model.provider)}</span></span>
+          <span className="mp-text"><span className="mp-name">{modelDisplayName(model.name)}</span><span className="mp-sub"><ProviderIcon provider={model.provider} size={13} />{providerName(model.provider)}{usageLeft(model.provider)}</span></span>
           {!editingFavorites && index < 9 && <kbd className="mp-key">⌘{index + 1}</kbd>}
-          {!editingFavorites && <Button type="button" disabled={savingFavorites} className={favorites.includes(keyOf(model)) ? 'mp-star on' : 'mp-star'} aria-label={favorites.includes(keyOf(model)) ? `Remove ${modelDisplayName(model.name)} from favorites` : `Add ${modelDisplayName(model.name)} to favorites`} aria-pressed={favorites.includes(keyOf(model))} onClick={(event) => { event.stopPropagation(); toggleFavorite(model) }}><Star size={15} fill={favorites.includes(keyOf(model)) ? 'currentColor' : 'none'} /></Button>}
+          {!editingFavorites && <Button type="button" disabled={savingFavorites} className={favorites.includes(keyOf(model)) ? 'mp-star on' : 'mp-star'} aria-label={favorites.includes(keyOf(model)) ? t("Remove {0} from favorites", { "0": modelDisplayName(model.name) }) : t("Add {0} to favorites", { "0": modelDisplayName(model.name) })} aria-pressed={favorites.includes(keyOf(model))} onClick={(event) => { event.stopPropagation(); toggleFavorite(model) }}><Star size={15} fill={favorites.includes(keyOf(model)) ? 'currentColor' : 'none'} /></Button>}
         </div>)}
-        {(q || tab !== 'sets') && !rows.length && <p className="mp-empty">{providerError || error || 'No matching models'}</p>}
-        {(providerError || error) && <Button type="button" className="mp-row" onClick={() => { void reload().catch((reason) => setError(String(reason))) }}><span className="mp-text"><span className="mp-name">Reload available models</span></span></Button>}
+        {(q || tab !== 'sets') && !rows.length && <p className="mp-empty">{providerError || error || t("No matching models")}</p>}
+        {(providerError || error) && <Button type="button" className="mp-row" onClick={() => { void reload().catch((reason) => setError(String(reason))) }}><span className="mp-text"><span className="mp-name">{t("Reload available models")}</span></span></Button>}
       </div>
     </div>
   </div>

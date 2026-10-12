@@ -1,3 +1,4 @@
+import { configureDesktopLanguage, desktopLanguage, t } from './localization'
 import { editorMenu, type EditorMenuOptions } from './editorMenu'
 import { existsSync } from 'node:fs'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '../shared/types'
@@ -44,18 +45,30 @@ async function main() {
   }
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
 
+  const languagePreferences = await runtimeInvoke(socketPath, 'settings.app.get') as AppPreferences
+  let languagePreference = languagePreferences.language
+  configureDesktopLanguage(languagePreference, app.getPreferredSystemLanguages())
+
   // Our own menu: keeps copy/paste and quit, but leaves ⌘W, ⌘N, ⌘P and friends to the app's shortcuts.
-  Menu.setApplicationMenu(
-    Menu.buildFromTemplate([
+  const updateApplicationMenu = () => {
+    const menu = Menu.buildFromTemplate([
       ...(process.platform === 'darwin' ? [{ label: 'Ramu', role: 'appMenu' as const }] : []),
-      { role: 'editMenu' },
+      { label: t('Edit'), role: 'editMenu' },
       {
-        label: 'View',
-        submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }],
+        label: t('View'),
+        submenu: [{ label: t('Reload'), role: 'reload' }, { label: t('Developer tools'), role: 'toggleDevTools' }, { type: 'separator' }, { label: t('Actual size'), role: 'resetZoom' }, { label: t('Zoom in'), role: 'zoomIn' }, { label: t('Zoom out'), role: 'zoomOut' }, { type: 'separator' }, { label: t('Full screen'), role: 'togglefullscreen' }],
       },
-      { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' }] },
-    ]),
-  )
+      { label: t('Window'), submenu: [{ label: t('Minimize'), role: 'minimize' }, { label: t('Zoom'), role: 'zoom' }] },
+    ])
+    // Translate Electron's generated items too, preserving platform editing actions and shortcuts.
+    const roleCopy: Record<string, string> = { appMenu: 'Ramu', editMenu: 'Edit', about: 'About Ramu', services: 'Services', hide: 'Hide Ramu', hideOthers: 'Hide others', unhide: 'Show all', quit: 'Quit Ramu', undo: 'Undo', redo: 'Redo', cut: 'Cut', copy: 'Copy', paste: 'Paste', pasteAndMatchStyle: 'Paste and match style', delete: 'Delete', selectAll: 'Select all', startSpeaking: 'Start speaking', stopSpeaking: 'Stop speaking', reload: 'Reload', toggleDevTools: 'Developer tools', resetZoom: 'Actual size', zoomIn: 'Zoom in', zoomOut: 'Zoom out', togglefullscreen: 'Full screen', minimize: 'Minimize', zoom: 'Zoom' }
+    const roles = Object.fromEntries(Object.entries(roleCopy).map(([role, copy]) => [role.toLowerCase(), copy]))
+    const localize = (menu: Menu) => { for (const item of menu.items) { item.label = t(roles[item.role?.toLowerCase() ?? ''] ?? item.label); if (item.submenu) localize(item.submenu) } }
+    localize(menu)
+    Menu.setApplicationMenu(menu)
+  }
+
+  updateApplicationMenu()
 
   // Packaged macOS builds take the icon from the bundle; development, Linux and Windows read it from assets/.
   const icon = join(import.meta.dirname, '../../assets/icon.png')
@@ -97,10 +110,10 @@ async function main() {
         if (payload.method === 'pickDirectory') {
           // Test runs answer the folder dialog through RAMU_TEST_PICK_DIRECTORY instead of a native sheet.
           if (process.env.RAMU_TEST_PICK_DIRECTORY) value = process.env.RAMU_TEST_PICK_DIRECTORY
-          else { const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: payload.path === 'repository' ? 'Connect a repository' : 'Add project', buttonLabel: payload.path === 'repository' ? 'Connect' : 'Add project' }); value = result.canceled ? null : result.filePaths[0] ?? null }
+          else { const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: payload.path === 'repository' ? t('Connect a repository') : t('Add project'), buttonLabel: payload.path === 'repository' ? t('Connect') : t('Add project') }); value = result.canceled ? null : result.filePaths[0] ?? null }
         }
-        else if (payload.method === 'pickExecutable') { const result = await dialog.showOpenDialog(win, { properties: ['openFile'], title: 'Select provider binary', buttonLabel: 'Use binary' }); value = result.canceled ? null : result.filePaths[0] ?? null }
-        else if (payload.method === 'pickAttachments') { const result = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], title: 'Attach files' }); value = result.canceled ? [] : result.filePaths }
+        else if (payload.method === 'pickExecutable') { const result = await dialog.showOpenDialog(win, { properties: ['openFile'], title: t('Select provider binary'), buttonLabel: t('Use binary') }); value = result.canceled ? null : result.filePaths[0] ?? null }
+        else if (payload.method === 'pickAttachments') { const result = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], title: t('Attach files') }); value = result.canceled ? [] : result.filePaths }
         else if (payload.method === 'trash') await shell.trashItem(payload.path)
         else if (payload.method === 'reveal') shell.showItemInFolder(payload.path)
         else throw new Error('Unknown desktop action')
@@ -123,6 +136,19 @@ async function main() {
   ipcMain.handle('ramu:invoke', async (event, method: unknown, args: unknown) => {
     if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw new Error('Untrusted IPC sender')
     if (typeof method !== 'string' || !Array.isArray(args)) throw new Error('Invalid request')
+    if (method === 'app.systemLanguages') {
+      const languages = app.getPreferredSystemLanguages(), before = desktopLanguage()
+      configureDesktopLanguage(languagePreference, languages)
+      if (desktopLanguage() !== before) updateApplicationMenu()
+      return languages
+    }
+    if (method === 'settings.app.set') {
+      const result = await runtimeInvoke(socketPath, method, args)
+      languagePreference = (args[0] as AppPreferences).language
+      configureDesktopLanguage(languagePreference, app.getPreferredSystemLanguages())
+      updateApplicationMenu()
+      return result
+    }
     if (method === 'editor.menu') {
       const options = args[0] as EditorMenuOptions | null, point = args[1] as { x?: unknown; y?: unknown } | null
       if (!options || typeof options.selection !== 'string' || options.selection.length > 1_000_000 || !['editable', 'comment', 'definition', 'references', 'rename', 'format'].every((key) => typeof options[key as keyof EditorMenuOptions] === 'boolean') || !point || typeof point.x !== 'number' || typeof point.y !== 'number' || !Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new Error('Invalid editor menu request')

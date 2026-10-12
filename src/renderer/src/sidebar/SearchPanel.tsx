@@ -1,3 +1,4 @@
+import { t, useLanguage } from './../i18n'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,7 @@ const drafts = new Map<string, SearchOptions>()
 const initial: SearchOptions = { query: '', caseSensitive: false, wholeWord: false, regex: false, include: '', exclude: '' }
 
 export function SearchPanel() {
+  useLanguage()
   const ws = useWorkspace()
   const taskId = ws.ui.activeTaskId
   if (!taskId) return <NoTask />
@@ -25,6 +27,7 @@ export function SearchPanel() {
 }
 
 function WorkspaceSearch() {
+  useLanguage()
   const ws = useWorkspace(), taskId = ws.ui.activeTaskId
   const context = taskId ? ws.workspaceOf(taskId) : ''
   const bindings = taskId ? (ws.bindings[taskId] ?? []).filter((binding) => binding.setupState === 'ready') : []
@@ -130,30 +133,30 @@ function WorkspaceSearch() {
     {[...node.files].sort(([, a], [, b]) => a[0]!.path.localeCompare(b[0]!.path)).map(([key, matches]) => renderFile(key, matches))}
   </>
   return <div className="panel search-panel">
-    {replaceFiles && <Dialog title="Replace search matches?" confirmLabel="Replace matches" danger busy={replaceBusy} error={replaceError} onCancel={() => { if (!replaceBusy) setReplaceFiles(null) }} onConfirm={() => void applyReplace()}><p>{replaceFiles.reduce((total, file) => total + file.count, 0)} replacements in {replaceFiles.length} files. Changes are written to disk.</p><div className="replace-review">{replaceFiles.map((file) => <div key={`${file.repoId}:${file.path}`}><strong>{file.path}</strong><span className="muted small"> · {file.count} matches</span><pre><del>{file.before || '(empty match)'}</del>{'\n'}<ins>{file.after || '(remove match)'}</ins></pre></div>)}</div></Dialog>}
-    <header className="panel-title search-title"><span className="grow">Search</span>
-      <Button className="ghost icon small-icon" title="Refresh search" aria-label="Refresh search" disabled={!options.query || busy} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={14} /></Button>
-      <Button className="ghost icon small-icon" title="Clear search" aria-label="Clear search" disabled={!options.query} onClick={() => { setOptions({ ...options, query: '' }); input.current?.focus() }}><X size={14} /></Button>
-      <Button className="ghost icon small-icon" title={viewMode === 'tree' ? 'View as list' : 'View as tree'} aria-label={viewMode === 'tree' ? 'View search results as list' : 'View search results as tree'} onClick={() => setViewMode((mode) => mode === 'tree' ? 'list' : 'tree')}>{viewMode === 'tree' ? <List size={14} /> : <FolderTree size={14} />}</Button>
+    {replaceFiles && <Dialog title={t("Replace search matches?")} confirmLabel={t("Replace matches")} danger busy={replaceBusy} error={replaceError} onCancel={() => { if (!replaceBusy) setReplaceFiles(null) }} onConfirm={() => void applyReplace()}><p>{replaceFiles.reduce((total, file) => total + file.count, 0)} {t(" replacements in ")}{replaceFiles.length} {t(" files. Changes are written to disk.")}</p><div className="replace-review">{replaceFiles.map((file) => <div key={`${file.repoId}:${file.path}`}><strong>{file.path}</strong><span className="muted small"> · {file.count} {t(" matches")}</span><pre><del>{file.before || t("(empty match)")}</del>{'\n'}<ins>{file.after || t("(remove match)")}</ins></pre></div>)}</div></Dialog>}
+    <header className="panel-title search-title"><span className="grow" />
+      <Button className="ghost icon small-icon" title={t("Refresh search")} aria-label={t("Refresh search")} disabled={!options.query || busy} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={14} /></Button>
+      <Button className="ghost icon small-icon" title={t("Clear search")} aria-label={t("Clear search")} disabled={!options.query} onClick={() => { setOptions({ ...options, query: '' }); input.current?.focus() }}><X size={14} /></Button>
+      <Button className="ghost icon small-icon" title={viewMode === 'tree' ? t("View as list") : t("View as tree")} aria-label={viewMode === 'tree' ? t("View search results as list") : t("View search results as tree")} onClick={() => setViewMode((mode) => mode === 'tree' ? 'list' : 'tree')}>{viewMode === 'tree' ? <List size={14} /> : <FolderTree size={14} />}</Button>
     </header>
     <div className="search-controls">
-      {bindings.length > 1 && <Dropdown label="Search repositories" value={options.repoId ?? ''} options={[{ value: '', label: 'All repositories' }, ...bindings.map((binding) => ({ value: binding.repoId, label: binding.repoName }))]} onChange={(repoId) => setOptions({ ...options, repoId: repoId || undefined })} />}
-      <Button className="ghost search-filter-toggle" aria-expanded={replaceOpen} onClick={() => setReplaceOpen((open) => !open)}><ChevronRight size={13} className={replaceOpen ? 'caret open' : 'caret'} />Replace</Button>
+      {bindings.length > 1 && <Dropdown label={t("Search repositories")} value={options.repoId ?? ''} options={[{ value: '', label: t("All repositories") }, ...bindings.map((binding) => ({ value: binding.repoId, label: binding.repoName }))]} onChange={(repoId) => setOptions({ ...options, repoId: repoId || undefined })} />}
+      <Button className="ghost search-filter-toggle" aria-expanded={replaceOpen} onClick={() => setReplaceOpen((open) => !open)}><ChevronRight size={13} className={replaceOpen ? 'caret open' : 'caret'} />{t("Replace")}</Button>
       <div className="search-input-wrap">
-        <Input ref={input} aria-label="Search project files" placeholder="Search" value={options.query} onChange={(event) => setOptions({ ...options, query: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') setRevision((value) => value + 1) }} />
-        <div className="search-options" role="group" aria-label="Search options">
-          <Button className={`ghost icon small-icon${options.caseSensitive ? ' on' : ''}`} aria-label="Match case" aria-pressed={options.caseSensitive} title="Match case" onClick={() => setOptions({ ...options, caseSensitive: !options.caseSensitive })}><CaseSensitive size={15} /></Button>
-          <Button className={`ghost icon small-icon${options.wholeWord ? ' on' : ''}`} aria-label="Match whole word" aria-pressed={options.wholeWord} title="Match whole word" onClick={() => setOptions({ ...options, wholeWord: !options.wholeWord })}><WholeWord size={15} /></Button>
-          <Button className={`ghost icon small-icon${options.regex ? ' on' : ''}`} aria-label="Use regular expression" aria-pressed={options.regex} title="Use regular expression" onClick={() => setOptions({ ...options, regex: !options.regex })}>.*</Button>
+        <Input ref={input} aria-label={t("Search project files")} placeholder={t("Search")} value={options.query} onChange={(event) => setOptions({ ...options, query: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') setRevision((value) => value + 1) }} />
+        <div className="search-options" role="group" aria-label={t("Search options")}>
+          <Button className={`ghost icon small-icon${options.caseSensitive ? ' on' : ''}`} aria-label={t("Match case")} aria-pressed={options.caseSensitive} title={t("Match case")} onClick={() => setOptions({ ...options, caseSensitive: !options.caseSensitive })}><CaseSensitive size={15} /></Button>
+          <Button className={`ghost icon small-icon${options.wholeWord ? ' on' : ''}`} aria-label={t("Match whole word")} aria-pressed={options.wholeWord} title={t("Match whole word")} onClick={() => setOptions({ ...options, wholeWord: !options.wholeWord })}><WholeWord size={15} /></Button>
+          <Button className={`ghost icon small-icon${options.regex ? ' on' : ''}`} aria-label={t("Use regular expression")} aria-pressed={options.regex} title={t("Use regular expression")} onClick={() => setOptions({ ...options, regex: !options.regex })}>.*</Button>
         </div>
       </div>
-      {replaceOpen && <div className="search-replace-controls"><Input aria-label="Replace with" placeholder="Replace with" value={replacement} onChange={(event) => setReplacement(event.target.value)} /><Button className="primary" disabled={!options.query || !result.matches.length || busy || replaceBusy || result.limited} onClick={() => void reviewReplace()}>{replaceBusy ? 'Preparing…' : 'Review replacement…'}</Button><span className="muted small">{options.regex ? 'Capture groups: $1, $2. Use $$ for a literal dollar.' : 'Replacement is literal text.'}</span></div>}
-      <Button className="ghost search-filter-toggle" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}><SlidersHorizontal size={13} />Files to include / exclude{!filtersOpen && (options.include || options.exclude) && <Badge variant="outline" className="chip">Active</Badge>}</Button>
-      {filtersOpen && <div className="search-filters"><label>Files to include<Input aria-label="Files to include" placeholder="e.g. src/**, *.tsx" value={options.include} onChange={(event) => setOptions({ ...options, include: event.target.value })} /></label><label>Files to exclude<Input aria-label="Files to exclude" placeholder="e.g. **/dist/**" value={options.exclude} onChange={(event) => setOptions({ ...options, exclude: event.target.value })} /></label></div>}
-      <div className="search-summary muted small" role="status">{busy ? 'Searching…' : failed ? 'Search failed. Refresh to retry.' : options.query ? `${result.limited ? 'First ' : ''}${result.matches.length} results in ${groups.size} ${groups.size === 1 ? 'file' : 'files'}` : 'Search files in this workspace.'}</div>
-      <div className="muted small search-scope-note">Files on disk · Files up to 2 MB</div>
+      {replaceOpen && <div className="search-replace-controls"><Input aria-label={t("Replace with")} placeholder={t("Replace with")} value={replacement} onChange={(event) => setReplacement(event.target.value)} /><Button className="primary" disabled={!options.query || !result.matches.length || busy || replaceBusy || result.limited} onClick={() => void reviewReplace()}>{replaceBusy ? t("Preparing…") : t("Review replacement…")}</Button><span className="muted small">{options.regex ? t("Capture groups: $1, $2. Use $$ for a literal dollar.") : t("Replacement is literal text.")}</span></div>}
+      <Button className="ghost search-filter-toggle" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}><SlidersHorizontal size={13} />{t("Files to include / exclude")}{!filtersOpen && (options.include || options.exclude) && <Badge variant="outline" className="chip">{t("Active")}</Badge>}</Button>
+      {filtersOpen && <div className="search-filters"><label>{t("Files to include")}<Input aria-label={t("Files to include")} placeholder="e.g. src/**, *.tsx" value={options.include} onChange={(event) => setOptions({ ...options, include: event.target.value })} /></label><label>{t("Files to exclude")}<Input aria-label={t("Files to exclude")} placeholder="e.g. **/dist/**" value={options.exclude} onChange={(event) => setOptions({ ...options, exclude: event.target.value })} /></label></div>}
+      <div className="search-summary muted small" role="status">{busy ? t("Searching…") : failed ? t("Search failed. Refresh to retry.") : options.query ? t("{0}{1} results in {2} {3}", { "0": result.limited ? 'First ' : '', "1": result.matches.length, "2": groups.size, "3": groups.size === 1 ? 'file' : 'files' }) : t("Search files in this workspace.")}</div>
+      <div className="muted small search-scope-note">{t("Files on disk · Files up to 2 MB")}</div>
     </div>
-    <div className={`search-results search-results-${viewMode}`} aria-label={`Search results in ${viewMode} view`}>{viewMode === 'list' ? [...groups].map(([key, matches]) => renderFile(key, matches)) : [...trees].map(([repoId, tree]) => <section key={repoId}>
+    <div className={`search-results search-results-${viewMode}`} aria-label={t("Search results in {0} view", { "0": viewMode })}>{viewMode === 'list' ? [...groups].map(([key, matches]) => renderFile(key, matches)) : [...trees].map(([repoId, tree]) => <section key={repoId}>
       {bindings.length > 1 && <div className="search-repository-heading"><Folder size={14} /><span>{bindings.find((binding) => binding.repoId === repoId)?.repoName}</span></div>}
       {renderTree(tree, `folder:${repoId}:`)}
     </section>)}</div>

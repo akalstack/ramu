@@ -43,13 +43,14 @@ export class RunUndo {
     if (bytes.includes(0) || bytes.toString('utf8').includes('\ufffd')) throw new Error('Current file is binary')
     return { content: bytes.toString('utf8'), hash: createHash('sha256').update(bytes).digest('hex'), mode: info.mode & 0o777 }
   }
-  async preview(reviewId: string, files: ChangeFile[], roots: { repoId: string; cwd: string }[], undoneIds: string[] = []): Promise<UndoPreview> {
+  async preview(reviewId: string, files: ChangeFile[], roots: { repoId: string; cwd: string }[], undoneIds: string[] = [], blocked: Record<string, string> = {}): Promise<UndoPreview> {
     for (const [token, plan] of this.plans) if (plan.expiresAt < Date.now()) this.plans.delete(token)
     const plan: Plan = { token: randomUUID(), reviewId, expiresAt: Date.now() + 600000, files: [] }
     await mkdir(this.folder, { recursive: true, mode: 0o700 })
     for (const file of files) {
       const entry: PlanFile = { fileId: file.id, path: file.path, repoName: file.repoName, status: 'unavailable', reason: '', currentContent: '', resultContent: '', remove: false, absolute: '', root: '', expected: null, mode: 0o644 }
       plan.files.push(entry)
+      if (Object.hasOwn(blocked, file.id)) { entry.reason = blocked[file.id]!; continue }
       if (undoneIds.includes(file.id)) { entry.status = 'unchanged'; entry.reason = 'Already undone'; continue }
       if (file.binary) { entry.reason = 'Binary or large files require manual review'; continue }
       try {

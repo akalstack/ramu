@@ -1,3 +1,4 @@
+import { t, useLanguage, formatLocale } from './i18n'
 import { Separator } from '@/components/ui/separator'
 import { Dialog as ShadcnDialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -20,6 +21,7 @@ export type MenuEntry =
 export function Menu({ label, icon, items, className = 'ghost icon', align = 'start', header, disabled = false, menuClassName = '', onOpen }: {
   label: string; icon: ReactNode; items: MenuEntry[]; className?: string; align?: 'start' | 'end'; header?: ReactNode | ((close: () => void) => ReactNode); disabled?: boolean; menuClassName?: string; onOpen?: () => void
 }) {
+  useLanguage()
   const [open, setOpen] = useState(false)
   const change = (next: boolean) => { setOpen(next); if (next) onOpen?.() }
   useEffect(() => { const close = () => setOpen(false); window.addEventListener('ramu:settings', close); window.addEventListener('resize', close); return () => { window.removeEventListener('ramu:settings', close); window.removeEventListener('resize', close) } }, [])
@@ -31,6 +33,7 @@ export function Menu({ label, icon, items, className = 'ghost icon', align = 'st
   return <DropdownMenu open={open} onOpenChange={change}><DropdownMenuTrigger render={trigger} /><DropdownMenuContent align={align} className={menuClassName} aria-label={label}><StandardMenuItems items={items} /></DropdownMenuContent></DropdownMenu>
 }
 function StandardMenuItems({ items }: { items: MenuEntry[] }) {
+  useLanguage()
   return <DropdownMenuRadioGroup value={items.find((i) => 'selected' in i && i.selected)?.key}>{items.map((it) => {
     if (it.separator) return <DropdownMenuSeparator key={it.key} />
     if (it.heading !== undefined) return <DropdownMenuLabel key={it.key}>{it.heading}</DropdownMenuLabel>
@@ -42,6 +45,7 @@ function StandardMenuItems({ items }: { items: MenuEntry[] }) {
 
 /** Context actions for a row, without a separate three-dot button. */
 export function useContextMenu(label: string, items: MenuEntry[]) {
+  useLanguage()
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
   const target = useRef<HTMLElement | null>(null)
   const onContextMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -90,6 +94,7 @@ function navigateMenu(event: React.KeyboardEvent) {
 }
 
 export function MenuItems({ items, close }: { items: MenuEntry[]; close: () => void }) {
+  useLanguage()
   const [openSub, setOpenSub] = useState<string | null>(null)
   return (
     <>
@@ -133,6 +138,7 @@ export function MenuItems({ items, close }: { items: MenuEntry[]; close: () => v
 }
 
 function Submenu({ items, close }: { items: MenuEntry[]; close: () => void }) {
+  useLanguage()
   const host = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const element = host.current
@@ -169,26 +175,27 @@ export function Dialog({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  useLanguage()
   return <ShadcnDialog open disablePointerDismissal={busy} onOpenChange={(open, details) => { if (open) return; if (busy) details.cancel(); else onCancel() }}>
     <DialogContent className="dialog" role="alertdialog" showCloseButton={false} aria-describedby={undefined}>
       <DialogTitle>{title}</DialogTitle><div className="dialog-body">{children}</div>
       {error && <div className="error small" role="alert">{error}</div>}
-      <div className="dialog-actions"><Button variant="outline" onClick={onCancel} disabled={busy}>Cancel</Button><Button variant={danger ? 'destructive' : 'default'} className={danger ? 'danger-btn' : 'primary'} onClick={onConfirm} disabled={busy || confirmDisabled}>{confirmLabel}</Button></div>
+      <div className="dialog-actions"><Button variant="outline" onClick={onCancel} disabled={busy}>{t("Cancel")}</Button><Button variant={danger ? 'destructive' : 'default'} className={danger ? 'danger-btn' : 'primary'} onClick={onConfirm} disabled={busy || confirmDisabled}>{confirmLabel}</Button></div>
     </DialogContent>
   </ShadcnDialog>
 }
 
 export function timeAgo(ts: number): string {
   const s = Math.max(0, (Date.now() - ts) / 1000)
-  if (s < 60) return 'now'
-  if (s < 3600) return `${Math.floor(s / 60)}m`
-  if (s < 86400) return `${Math.floor(s / 3600)}h`
-  if (s < 86400 * 7) return `${Math.floor(s / 86400)}d`
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  if (s < 60) return t('now')
+  if (s < 3600) return t('{count}m', { count: Math.floor(s / 60) })
+  if (s < 86400) return t('{count}h', { count: Math.floor(s / 3600) })
+  if (s < 86400 * 7) return t('{count}d', { count: Math.floor(s / 86400) })
+  return new Date(ts).toLocaleDateString(formatLocale(), { month: 'short', day: 'numeric' })
 }
 
 /** Every value picker uses the same compact menu, selection mark and trigger. */
-export function Dropdown({ label, value, options, onChange, icon, placeholder = 'Select…', className = '', disabled = false }: {
+export function Dropdown({ label, value, options, onChange, icon, placeholder = t('Select…'), className = '', disabled = false }: {
   label: string
   value: string
   options: { value: string; label: string; disabled?: boolean }[]
@@ -198,6 +205,7 @@ export function Dropdown({ label, value, options, onChange, icon, placeholder = 
   className?: string
   disabled?: boolean
 }) {
+  useLanguage()
   // Base UI Select treats null as unselected, so an empty option needs a sentinel value.
   const emptyValue = '__ramu_empty_option__'
   return <Select value={value || (options.some((o) => o.value === '') ? emptyValue : '')} items={options.map((o) => ({ value: o.value || emptyValue, label: o.label }))} onValueChange={(next) => { if (next !== null) onChange(next === emptyValue ? '' : next) }} disabled={disabled || !options.length}>

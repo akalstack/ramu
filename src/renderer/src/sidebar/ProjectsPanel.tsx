@@ -1,7 +1,8 @@
+import { t, useLanguage } from './../i18n'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Archive, ArchiveRestore, ChevronRight, MessageCircle, FolderClosed, FolderOpen, FolderPlus, FolderSearch, GitBranch, Link2, Pencil, Pin, PinOff, Plus, Search, Sparkles, SquarePen, Trash2, Unlink, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronRight, MessageCircle, FolderClosed, FolderOpen, FolderPlus, FolderSearch, GitBranch, Link2, Pencil, Pin, PinOff, Plus, Sparkles, SquarePen, Trash2, Unlink, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { NO_PROJECT, type Project, type Task } from '../../../shared/types'
@@ -9,22 +10,17 @@ import { invoke } from '../ipc'
 import { Dialog, useContextMenu, timeAgo, type MenuEntry } from '../Menu'
 import { errorText } from '../TaskPane'
 import { notifyError } from '../Notifications'
-import { formatKeys } from '../commands'
 import { projectCtx, useWorkspace } from '../workspace'
 import { useAppSettings } from '../AppSettings'
 import { useAddProject } from '../addProject'
-import { SearchInput } from '../SearchInput'
 import { FadeText } from '../FadeText'
 import { useModelSets } from '../ModelSets'
 
 export function ProjectsPanel() {
+  useLanguage()
   const ws = useWorkspace()
   const addProject = useAddProject()
-  const [search, setSearch] = useState('')
-  const query = search.trim().toLowerCase()
-  const matches = (t: Task) => !query || t.title.toLowerCase().includes(query)
-  const looseChats = ws.tasks.filter((t) => t.projectId === NO_PROJECT && t.status !== 'archived' && matches(t)).sort(pinnedFirst)
-  const visibleProjects = ws.projects.filter((p) => !query || p.name.toLowerCase().includes(query) || ws.tasks.some((t) => t.projectId === p.id && matches(t)))
+  const looseChats = ws.tasks.filter((t) => t.projectId === NO_PROJECT && t.status !== 'archived').sort(pinnedFirst)
   // Drag a project by its row to put it somewhere else in the list.
   const [dragging, setDragging] = useState<string | null>(null)
   const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null)
@@ -33,33 +29,27 @@ export function ProjectsPanel() {
     ids.splice(ids.indexOf(target.id) + (target.after ? 1 : 0), 0, projectId)
     try { await invoke('projects.reorder', ids); await ws.refresh() } catch (e) { notifyError(errorText(e), 'Projects') }
   }
-  const dnd = { enabled: !query, dragging, drop, setDragging, setDrop, reorder }
-  const nothingFound = !!query && !looseChats.length && !visibleProjects.length
+  const dnd = { enabled: true, dragging, drop, setDragging, setDrop, reorder }
 
   return (
     <div className="panel tasks-panel">
-      <Button className="nav-btn" onClick={() => ws.newTask()}>
-        <SquarePen size={15} /> <span className="grow">New chat</span> <kbd>{formatKeys('mod+n')}</kbd>
-      </Button>
-      <SearchInput className="chat-search" aria-label="Search chats" placeholder="Search chats…" value={search} onChange={(event) => setSearch(event.target.value)} onClear={() => setSearch('')} onKeyDown={(event) => { if (event.key === 'Escape') setSearch('') }} />
       <div className="section-head">
-        <span>Projects</span>
-        <Button className="ghost icon small-icon" aria-label="Add project" title="Add project…" disabled={addProject.busy} onClick={() => void addProject.add()}>
+        <span>{t("Projects")}</span>
+        <Button className="ghost icon small-icon" aria-label={t("Add project")} title={t("Add project…")} disabled={addProject.busy} onClick={() => void addProject.add()}>
           <FolderPlus size={14} />
         </Button>
       </div>
       {ws.projects.length === 0 && (
         <div className="add-project">
-          <p className="muted hint">Pick a repository, or a folder that holds several repositories. Ramu groups them into one workspace.</p>
-          <Button className="add-project-btn" disabled={addProject.busy} onClick={() => void addProject.add()}><FolderPlus size={14} /> Add project…</Button>
+          <p className="muted hint">{t("Pick a repository, or a folder that holds several repositories. Ramu groups them into one workspace.")}</p>
+          <Button className="add-project-btn" disabled={addProject.busy} onClick={() => void addProject.add()}><FolderPlus size={14} /> {t(" Add project…")}</Button>
         </div>
       )}
-      {visibleProjects.map((p) => (
-        <ProjectGroup key={p.id} project={p} query={query} dnd={dnd} />
+      {ws.projects.map((p) => (
+        <ProjectGroup key={p.id} project={p} dnd={dnd} />
       ))}
-      {(!query || looseChats.length > 0) && <div className="section-head"><span>Chats</span><Button className="ghost icon small-icon" aria-label="New chat without a project" onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></div>}
+      <div className="section-head"><span>{t("Chats")}</span><Button className="ghost icon small-icon" aria-label={t("New chat without a project")} onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></div>
       {looseChats.map((t) => <TaskRow key={t.id} task={t} />)}
-      {nothingFound && <p className="muted hint chat-search-empty">No chats match “{search.trim()}”.</p>}
     </div>
   )
 }
@@ -73,27 +63,27 @@ type ProjectDnd = { enabled: boolean; dragging: string | null; drop: { id: strin
 
 /** Details for a project, shown to the right of the sidebar after a short hover; it stays open while the pointer is on it. */
 function ProjectHoverCard({ project, folders, chats }: { project: Project; folders: { id: string; name: string; root: string }[]; chats: number }) {
+  useLanguage()
   return <HoverCardContent side="right" align="start" sideOffset={6} alignOffset={-4} className="project-hover-card">
     <div className="phc-title"><FolderClosed size={15} /><strong>{project.name}</strong></div>
-    <div className="phc-line muted"><MessageCircle size={14} />{chats} {chats === 1 ? 'chat' : 'chats'}</div>
+    <div className="phc-line muted"><MessageCircle size={14} />{chats} {chats === 1 ? t("chat") : t("chats")}</div>
     <div className="phc-sep" />
     {(folders.length ? folders.map((f) => ({ key: f.id, name: f.name, root: f.root })) : project.root ? [{ key: 'root', name: project.name, root: project.root }] : []).map((f) => <div key={f.key} className="phc-folder" title={f.root}><FolderClosed size={14} /><span>{f.root}</span></div>)}
   </HoverCardContent>
 }
 
-function ProjectGroup({ project, query, dnd }: { project: Project; query: string; dnd: ProjectDnd }) {
+function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
+  useLanguage()
   const ws = useWorkspace()
   const repos = ws.repos[project.id] ?? []
   const { preferences } = useAppSettings()
   const recent = preferences.recentChats
-  // A project whose name matches shows all of its chats; otherwise only the chats that match.
-  const projectMatches = !query || project.name.toLowerCase().includes(query)
-  const all = ws.tasks.filter((t) => t.projectId === project.id && (projectMatches || t.title.toLowerCase().includes(query)))
+  const all = ws.tasks.filter((t) => t.projectId === project.id)
   const sorted = all.filter((t) => t.status !== 'archived').sort(pinnedFirst)
   const others = sorted.filter((t) => !t.pinnedAt)
   const [showAll, setShowAll] = useState(false)
-  // Like Codex: the latest few chats, with the rest behind "Show more"; the open chat always shows. Searching shows every match.
-  const tasks = showAll || query ? sorted : sorted.filter((t) => t.pinnedAt || others.indexOf(t) < recent || t.id === ws.ui.activeTaskId)
+  // Like Codex: the latest few chats, with the rest behind "Show more"; the open chat always shows.
+  const tasks = showAll ? sorted : sorted.filter((t) => t.pinnedAt || others.indexOf(t) < recent || t.id === ws.ui.activeTaskId)
   const archived = all.filter((t) => t.status === 'archived')
   const [open, setOpen] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
@@ -124,16 +114,16 @@ function ProjectGroup({ project, query, dnd }: { project: Project; query: string
   }
 
   const items: MenuEntry[] = [
-    { key: 'new', label: <><SquarePen size={14} /> New chat</>, onSelect: () => ws.newTask(project.id) },
-    { key: 'rename', label: <><Pencil size={14} /> Rename</>, onSelect: () => setRenaming(true) },
+    { key: 'new', label: <><SquarePen size={14} /> {t(" New chat")}</>, onSelect: () => ws.newTask(project.id) },
+    { key: 'rename', label: <><Pencil size={14} /> {t(" Rename")}</>, onSelect: () => setRenaming(true) },
     { key: 'sep1', separator: true },
-    { key: 'connect', label: <><Link2 size={14} /> Connect a repository…</>, onSelect: () => void connect() },
-    { key: 'reveal', label: <><FolderSearch size={14} /> Reveal in Finder</>, onSelect: () => void act(() => invoke('projects.reveal', project.id)) },
+    { key: 'connect', label: <><Link2 size={14} /> {t(" Connect a repository…")}</>, onSelect: () => void connect() },
+    { key: 'reveal', label: <><FolderSearch size={14} /> {t(" Reveal in Finder")}</>, onSelect: () => void act(() => invoke('projects.reveal', project.id)) },
     ...(repos.length > 1
       ? [
-          { key: 'repos', label: <><GitBranch size={14} /> Repositories</>, submenu: repos.map((r) => ({
+          { key: 'repos', label: <><GitBranch size={14} /> {t(" Repositories")}</>, submenu: repos.map((r) => ({
             key: r.id,
-            label: <><span className="menu-label">{r.name}</span><span className="muted">Disconnect</span></>,
+            label: <><span className="menu-label">{r.name}</span><span className="muted">{t("Disconnect")}</span></>,
             onSelect: () => void act(() => invoke('repos.remove', r.id)),
           })) } as MenuEntry,
         ]
@@ -141,12 +131,12 @@ function ProjectGroup({ project, query, dnd }: { project: Project; query: string
     { key: 'sep2', separator: true },
     {
       key: 'archive',
-      label: <><Archive size={14} /> Archive chats</>,
+      label: <><Archive size={14} /> {t(" Archive chats")}</>,
       disabled: tasks.length === 0,
       onSelect: () => void act(async () => { for (const t of tasks) { await invoke('tasks.archive', t.id, true); ws.forgetTask(t.id) } }),
     },
     { key: 'sep3', separator: true },
-    { key: 'remove', label: <><X size={14} /> Remove project</>, onSelect: () => void act(() => invoke('projects.remove', project.id)) },
+    { key: 'remove', label: <><X size={14} /> {t(" Remove project")}</>, onSelect: () => void act(() => invoke('projects.remove', project.id)) },
   ]
 
   const contextMenu = useContextMenu(`${project.name} actions`, items)
@@ -179,7 +169,7 @@ function ProjectGroup({ project, query, dnd }: { project: Project; query: string
         className={active ? 'project-row active' : 'project-row'}
         role="button"
         tabIndex={0}
-        aria-label={`Open ${project.name}`}
+        aria-label={t("Open {0}", { "0": project.name })}
         onContextMenu={contextMenu.onContextMenu}
         onClick={() => {
           setOpen(true)
@@ -203,8 +193,8 @@ function ProjectGroup({ project, query, dnd }: { project: Project; query: string
         <span className="row-actions">
           <Button
             className="ghost icon small-icon"
-            aria-label={`Toggle ${project.name}`}
-            title={open ? 'Collapse' : 'Expand'}
+            aria-label={t("Toggle {0}", { "0": project.name })}
+            title={open ? t("Collapse") : t("Expand")}
             onClick={(e) => {
               e.stopPropagation()
               setOpen((o) => !o)
@@ -214,8 +204,8 @@ function ProjectGroup({ project, query, dnd }: { project: Project; query: string
           </Button>
           <Button
             className="ghost icon small-icon"
-            aria-label={`New chat in ${project.name}`}
-            title="New chat"
+            aria-label={t("New chat in {0}", { "0": project.name })}
+            title={t("New chat")}
             onClick={(e) => {
               e.stopPropagation()
               ws.newTask(project.id)
@@ -228,19 +218,19 @@ function ProjectGroup({ project, query, dnd }: { project: Project; query: string
       <ProjectHoverCard project={project} folders={repos.map((r) => ({ id: r.id, name: r.name, root: r.root }))} chats={all.filter((t) => t.status !== 'archived').length} />
       </HoverCard>
       {error && <div className="error small row-error">{error}</div>}
-      {(open || !!query) && (
+      {open && (
         <div className="task-list">
-          {tasks.length === 0 && <div className="muted small empty-tasks">{query ? 'No matching chats' : 'No chats yet'}</div>}
+          {tasks.length === 0 && <div className="muted small empty-tasks">{t("No chats yet")}</div>}
           {tasks.map((t) => <TaskRow key={t.id} task={t} />)}
-          {!query && others.length > recent && (
+          {others.length > recent && (
             <Button className="archived-toggle" onClick={() => setShowAll((s) => !s)}>
-              {showAll ? 'Show less' : 'Show more'}
+              {showAll ? t("Show less") : t("Show more")}
             </Button>
           )}
           {archived.length > 0 && (
             <>
               <Button className="archived-toggle" onClick={() => setShowArchived((s) => !s)}>
-                <ChevronRight size={12} className={showArchived ? 'caret open' : 'caret'} /> Archived ({archived.length})
+                <ChevronRight size={12} className={showArchived ? 'caret open' : 'caret'} /> {t(" Archived (")}{archived.length})
               </Button>
               {showArchived && archived.map((t) => <TaskRow key={t.id} task={t} />)}
             </>
@@ -252,6 +242,7 @@ function ProjectGroup({ project, query, dnd }: { project: Project; query: string
 }
 
 function TaskRow({ task }: { task: Task }) {
+  useLanguage()
   const ws = useWorkspace()
   const [renaming, setRenaming] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -275,14 +266,14 @@ function TaskRow({ task }: { task: Task }) {
   }
 
   const items: MenuEntry[] = [
-    { key: 'rename', label: <><Pencil size={14} /> Rename</>, onSelect: () => setRenaming(true) },
-    { key: 'pin', label: <>{task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />} {task.pinnedAt ? 'Unpin' : 'Pin'}</>, onSelect: () => void run(() => invoke('tasks.pin', task.id, !task.pinnedAt)) },
-    { key: 'rename-ai', label: <><Sparkles size={14} /> Rename with AI</>, disabled: naming, onSelect: () => { setNaming(true); void run(() => invoke('tasks.generateTitle', task.id, initialSettings, true)).finally(() => setNaming(false)) } },
+    { key: 'rename', label: <><Pencil size={14} /> {t(" Rename")}</>, onSelect: () => setRenaming(true) },
+    { key: 'pin', label: <>{task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />} {task.pinnedAt ? t("Unpin") : t("Pin")}</>, onSelect: () => void run(() => invoke('tasks.pin', task.id, !task.pinnedAt)) },
+    { key: 'rename-ai', label: <><Sparkles size={14} /> {t(" Rename with AI")}</>, disabled: naming, onSelect: () => { setNaming(true); void run(() => invoke('tasks.generateTitle', task.id, initialSettings, true)).finally(() => setNaming(false)) } },
     archived
-      ? { key: 'unarchive', label: <><ArchiveRestore size={14} /> Unarchive</>, onSelect: () => void run(() => invoke('tasks.archive', task.id, false)) }
+      ? { key: 'unarchive', label: <><ArchiveRestore size={14} /> {t(" Unarchive")}</>, onSelect: () => void run(() => invoke('tasks.archive', task.id, false)) }
       : {
           key: 'archive',
-          label: <><Archive size={14} /> Archive</>,
+          label: <><Archive size={14} /> {t(" Archive")}</>,
           onSelect: () =>
             void run(async () => {
               await invoke('tasks.archive', task.id, true)
@@ -290,7 +281,7 @@ function TaskRow({ task }: { task: Task }) {
             }),
         },
     { key: 'sep', separator: true },
-    { key: 'delete', label: <><Trash2 size={14} /> Delete…</>, danger: true, onSelect: () => setDeleting(true) },
+    { key: 'delete', label: <><Trash2 size={14} /> {t(" Delete…")}</>, danger: true, onSelect: () => setDeleting(true) },
   ]
 
   const contextMenu = useContextMenu(`${task.title} actions`, items)
@@ -317,17 +308,17 @@ function TaskRow({ task }: { task: Task }) {
         ) : (
           <FadeText className="grow task-title" text={task.title} />
         )}
-        {task.pinnedAt && !archived && <Pin size={11} className="muted mode-icon" aria-label="Pinned" />}
-        {naming && <Sparkles size={12} className="muted mode-icon" aria-label="Naming chat" />}
-        {task.mode === 'worktree' && <span title={ws.workspaces.find((w) => w.id === task.workspaceId)?.name ?? 'Isolated worktrees'}><GitBranch size={12} className="muted mode-icon" aria-label="Isolated worktrees" /></span>}
+        {task.pinnedAt && !archived && <Pin size={11} className="muted mode-icon" aria-label={t("Pinned")} />}
+        {naming && <Sparkles size={12} className="muted mode-icon" aria-label={t("Naming chat")} />}
+        {task.mode === 'worktree' && <span title={ws.workspaces.find((w) => w.id === task.workspaceId)?.name ?? t("Isolated worktrees")}><GitBranch size={12} className="muted mode-icon" aria-label={t("Isolated worktrees")} /></span>}
         <span className="row-actions task-actions">
-          {!archived && <Button className="ghost icon small-icon" aria-label={task.pinnedAt ? 'Unpin chat' : 'Pin chat'} title={task.pinnedAt ? 'Unpin' : 'Pin'} onClick={(e) => { e.stopPropagation(); void run(() => invoke('tasks.pin', task.id, !task.pinnedAt)) }}>{task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}</Button>}
-          <Button className="ghost icon small-icon" aria-label={archived ? 'Unarchive chat' : 'Archive chat'} title={archived ? 'Unarchive' : 'Archive'} onClick={(e) => { e.stopPropagation(); void run(async () => { await invoke('tasks.archive', task.id, !archived); if (!archived) ws.forgetTask(task.id) }) }}>{archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}</Button>
+          {!archived && <Button className="ghost icon small-icon" aria-label={task.pinnedAt ? t("Unpin chat") : t("Pin chat")} title={task.pinnedAt ? t("Unpin") : t("Pin")} onClick={(e) => { e.stopPropagation(); void run(() => invoke('tasks.pin', task.id, !task.pinnedAt)) }}>{task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}</Button>}
+          <Button className="ghost icon small-icon" aria-label={archived ? t("Unarchive chat") : t("Archive chat")} title={archived ? t("Unarchive") : t("Archive")} onClick={(e) => { e.stopPropagation(); void run(async () => { await invoke('tasks.archive', task.id, !archived); if (!archived) ws.forgetTask(task.id) }) }}>{archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}</Button>
         </span>
-        {task.status === 'running' ? <span className="task-state spinner" role="img" aria-label="Agent working" title="Agent working" />
-          : task.status === 'needs-input' ? <span className="task-state dot warn" role="img" aria-label="Waiting for your input" title="Waiting for your input" />
-          : task.status === 'failed' ? <span className="task-state dot bad" role="img" aria-label="Agent failed" title="Agent failed" />
-          : ws.unread.has(task.id) ? <span className="task-state dot unread" role="img" aria-label="Finished, not viewed yet" title="Finished, not viewed yet" />
+        {task.status === 'running' ? <span className="task-state spinner" role="img" aria-label={t("Agent working")} title={t("Agent working")} />
+          : task.status === 'needs-input' ? <span className="task-state dot warn" role="img" aria-label={t("Waiting for your input")} title={t("Waiting for your input")} />
+          : task.status === 'failed' ? <span className="task-state dot bad" role="img" aria-label={t("Agent failed")} title={t("Agent failed")} />
+          : ws.unread.has(task.id) ? <span className="task-state dot unread" role="img" aria-label={t("Finished, not viewed yet")} title={t("Finished, not viewed yet")} />
           : <span className="task-time">{timeAgo(task.lastActiveAt)}</span>}
 
       </div>
@@ -335,8 +326,8 @@ function TaskRow({ task }: { task: Task }) {
       {error && !deleting && <div className="error small row-error">{error}</div>}
       {deleting && (
         <Dialog
-          title={`Delete “${task.title}”?`}
-          confirmLabel="Delete chat"
+          title={t("Delete “{0}”?", { "0": task.title })}
+          confirmLabel={t("Delete chat")}
           danger
           busy={busy}
           error={error}
@@ -359,17 +350,16 @@ function TaskRow({ task }: { task: Task }) {
             }
           }}
         >
-          <p>This removes the chat and its agent transcripts. Its running agents are stopped.</p>
+          <p>{t("This removes the chat and its agent transcripts. Its running agents are stopped.")}</p>
           {task.mode === 'worktree' && !sharedWorktree ? (
             <label>
               <Checkbox checked={removeWorktrees} onCheckedChange={(checked) => setRemoveWorktrees(checked === true)} />
               <span>
-                Also remove its worktrees
-                <span className="muted block">Only if they have no uncommitted changes. Branches are kept.</span>
+                {t("Also remove its worktrees")}<span className="muted block">{t("Only if they have no uncommitted changes. Branches are kept.")}</span>
               </span>
             </label>
           ) : (
-            <p className="muted">Shared files, terminals, worktrees, and other chats stay open.</p>
+            <p className="muted">{t("Shared files, terminals, worktrees, and other chats stay open.")}</p>
           )}
         </Dialog>
       )}
@@ -378,6 +368,7 @@ function TaskRow({ task }: { task: Task }) {
 }
 
 function InlineEdit({ value, onDone }: { value: string; onDone: (v: string | null) => void }) {
+  useLanguage()
   const [v, setV] = useState(value)
   const ref = useRef<HTMLInputElement>(null)
   useEffect(() => ref.current?.select(), [])
@@ -385,7 +376,7 @@ function InlineEdit({ value, onDone }: { value: string; onDone: (v: string | nul
     <Input
       ref={ref}
       className="inline-edit"
-      aria-label="Name"
+      aria-label={t("Name")}
       value={v}
       autoFocus
       onClick={(e) => e.stopPropagation()}

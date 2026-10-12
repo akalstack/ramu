@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 import { SearchInput } from './SearchInput'
 import { Check, ChevronDown, MessageSquare } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -5,7 +6,8 @@ import { NO_PROJECT } from '../../shared/types'
 import { Menu, type MenuEntry } from './Menu'
 import { useWorkspace } from './workspace'
 
-export function ChatSwitcher({ contextId, docked = false }: { contextId: string; docked?: boolean }) {
+export function ChatSwitcher({ contextId }: { contextId: string }) {
+  useLanguage()
   const ws = useWorkspace()
   const project = ws.projectOf(contextId)
   const current = ws.task(contextId)
@@ -29,8 +31,8 @@ export function ChatSwitcher({ contextId, docked = false }: { contextId: string;
       onSelect: () => ws.openTask(chat.id),
     })),
   ])
-  return <Menu label="Switch chat" className="chat-switch-btn no-drag" menuClassName="chat-switch-menu" align={docked ? 'end' : 'start'}
-    icon={<><span className={current ? 'header-title' : 'header-secondary'}>{current?.title ?? 'Chats'}</span><ChevronDown size={13} /></>}
-    header={<div className="chat-switch-search"><SearchInput autoFocus aria-label="Search chats across projects" placeholder="Search chats or projects…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>}
-    items={items.length ? items : [{ key: 'empty', label: search ? 'No matching chats' : 'No chats yet', disabled: true }]} />
+  return <Menu label={t("Switch chat")} className="chat-switch-btn no-drag" menuClassName="chat-switch-menu" align="start"
+    icon={<><span className={current ? 'header-title' : 'header-secondary'}>{current?.title ?? t("Chats")}</span><ChevronDown size={13} /></>}
+    header={<div className="chat-switch-search"><SearchInput autoFocus aria-label={t("Search chats across projects")} placeholder={t("Search chats or projects…")} value={search} onChange={(event) => setSearch(event.target.value)} /></div>}
+    items={items.length ? items : [{ key: 'empty', label: search ? t("No matching chats") : t("No chats yet"), disabled: true }]} />
 }

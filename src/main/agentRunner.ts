@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentScope, AgentSettings, Attachment, McpConnection } from '../shared/types'
+import type { AgentEvent, ElicitationAction, AgentScope, AgentSettings, Attachment, McpConnection } from '../shared/types'
 
 export interface AgentRunner {
   setTools?(connection: McpConnection): void
@@ -8,6 +8,7 @@ export interface AgentRunner {
   interrupt(): Promise<void>
   stop(): Promise<void>
   replyPermission(id: string, allow: boolean): void
+  replyElicitation?(id: string, action: ElicitationAction, answers: Record<string, string>): void
   replyQuestion(id: string, answers: Record<string, string>): void
 }
 export type AgentRunnerFactory = (scope: AgentScope, settings: AgentSettings, emit: (event: AgentEvent, usageLimit?: boolean) => void, readOnly?: boolean) => AgentRunner

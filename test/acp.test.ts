@@ -46,7 +46,7 @@ rl.on('line',line=>{
   vi.stubEnv('RAMU_CURSOR_BIN', bin); vi.stubEnv('RAMU_ANTIGRAVITY_BIN', bin); vi.stubEnv('RAMU_ACP_LOG', join(dir, 'wire'))
 })
 afterEach(async () => { await runner?.stop(); runner = undefined; vi.unstubAllEnvs(); rmSync(dir, { recursive: true, force: true }) })
-const start = async (prompt: string, provider: 'cursor' | 'antigravity' = 'cursor', access: 'ask' | 'full' = 'ask', resume: string | null = null, readOnly = false) => {
+const start = async (prompt: string, provider: 'cursor' | 'antigravity' = 'cursor', access: 'edits' | 'full' = 'edits', resume: string | null = null, readOnly = false) => {
   runner = createAcpRunner({ cwd: dir, additionalDirs: [], covers: [dir] }, { ...DEFAULT_AGENT_SETTINGS, provider, model: 'wire-model', access }, (e) => events.push(e), readOnly)
   await runner.start(prompt, resume)
 }

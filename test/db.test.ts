@@ -40,7 +40,7 @@ it('migrates legacy worktree conversations without losing bindings, transcripts,
     expect(ws.getBinding('worktree:chat', 'repo').cwd).toBe('/isolated/Repo')
     expect(ws.getTaskUi('worktree:chat')).toEqual(JSON.parse(savedUi))
     expect(db.prepare('SELECT event FROM agent_events').get()).toEqual({ event: '{"kind":"user","text":"Keep my conversation"}' })
-    expect(JSON.parse((db.prepare('SELECT settings FROM agent_sessions').get() as { settings: string }).settings).access).toBe('ask')
+    expect(JSON.parse((db.prepare('SELECT settings FROM agent_sessions').get() as { settings: string }).settings).access).toBe('edits')
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
   } finally {
     db.close()

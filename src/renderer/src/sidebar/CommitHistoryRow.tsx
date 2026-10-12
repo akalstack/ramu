@@ -1,5 +1,6 @@
+import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/ui/button'
-import { ChevronRight, Copy, FileDiff, FileText, Folder, FolderOpen, GitCommitHorizontal, MoreHorizontal } from 'lucide-react'
+import { ChevronRight, Copy, FileDiff, FileText, Folder, FolderOpen, MoreHorizontal, Undo2 } from 'lucide-react'
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { GitCommit, GitCommitFile, RepositoryBinding } from '../../../shared/types'
 import { invoke, copyText } from '../ipc'
@@ -7,7 +8,13 @@ import { Menu, timeAgo, useContextMenu, type MenuEntry } from '../Menu'
 import { errorText } from '../TaskPane'
 import { useWorkspace } from '../workspace'
 
-export function CommitHistoryRow({ taskId, binding, commit }: { taskId: string; binding: RepositoryBinding; commit: GitCommit }) {
+/** Refs worth a badge: other branches, remotes and tags. HEAD and the checked-out branch are implied by the list itself. */
+export function commitRefs(refs: string, branch: string | null): string[] {
+  return refs.split(', ').map((ref) => ref.replace(/^HEAD -> /, '').replace(/^tag: /, '')).filter((ref) => ref && ref !== 'HEAD' && ref !== branch && !ref.endsWith('/HEAD'))
+}
+
+export function CommitHistoryRow({ taskId, binding, commit, branch = null, onUndo, undoDisabled = false }: { taskId: string; binding: RepositoryBinding; commit: GitCommit; branch?: string | null; onUndo?: () => void; undoDisabled?: boolean }) {
+  useLanguage()
   const ws = useWorkspace()
   const [expanded, setExpanded] = useState(false)
   const [files, setFiles] = useState<GitCommitFile[] | null>(null)
@@ -23,19 +30,20 @@ export function CommitHistoryRow({ taskId, binding, commit }: { taskId: string; 
     return () => { disposed = true }
   }, [expanded, files, taskId, binding.repoId, commit.oid])
   const details = () => ws.openView(taskId, { kind: 'git', repoId: binding.repoId, oid: commit.oid, title: `${commit.shortOid} · ${commit.subject}` })
-  const diff = (file: GitCommitFile) => ws.openView(taskId, { kind: 'diff', repoId: binding.repoId, oid: commit.oid, path: file.path, staged: false })
+  const diff = (file: GitCommitFile, preview?: false) => ws.openView(taskId, { kind: 'diff', repoId: binding.repoId, oid: commit.oid, path: file.path, staged: false, preview })
   const copy = async (text: string) => {
     try { await copyText(text); setError(null) }
     catch (reason) { setError(errorText(reason)) }
   }
   const actions: MenuEntry[] = [
-    { key: 'details', label: <><FileText size={13} />View full commit</>, onSelect: details },
-    { key: 'all', label: <><FileDiff size={13} />Open all changes</>, onSelect: () => {
-      void (files ? Promise.resolve(files) : invoke('git.commitFiles', taskId, binding.repoId, commit.oid)).then((entries) => entries.forEach(diff), (reason) => setError(errorText(reason)))
+    ...(onUndo ? [{ key: 'undo', label: <><Undo2 size={13} />{t("Undo commit")}</>, disabled: undoDisabled, onSelect: onUndo }] : []),
+    { key: 'details', label: <><FileText size={13} />{t("View full commit")}</>, onSelect: details },
+    { key: 'all', label: <><FileDiff size={13} />{t("Open all changes")}</>, onSelect: () => {
+      void (files ? Promise.resolve(files) : invoke('git.commitFiles', taskId, binding.repoId, commit.oid)).then((entries) => entries.forEach((file) => diff(file, false)), (reason) => setError(errorText(reason)))
     } },
     { key: 'separator', separator: true },
-    { key: 'hash', label: <><Copy size={13} />Copy commit hash</>, onSelect: () => void copy(commit.oid) },
-    { key: 'title', label: 'Copy commit title', onSelect: () => void copy(commit.subject) },
+    { key: 'hash', label: <><Copy size={13} />{t("Copy commit hash")}</>, onSelect: () => void copy(commit.oid) },
+    { key: 'title', label: t("Copy commit title"), onSelect: () => void copy(commit.subject) },
   ]
   const context = useContextMenu('Commit actions', actions)
   const tree = (entries: GitCommitFile[], prefix: string, depth: number) => {
@@ -61,25 +69,29 @@ export function CommitHistoryRow({ taskId, binding, commit }: { taskId: string; 
           {open && <div className="tree-children" style={{ '--tree-guide-left': `${14 + depth * 12}px` } as CSSProperties}>{tree(children, path, depth + 1)}</div>}
         </div>
       })}
-      {leaves.sort((a, b) => a.path.localeCompare(b.path)).map((file) => <Button key={file.path} className={`tree-row commit-file commit-file-${file.status}`} style={{ paddingLeft: 8 + depth * 12 }} title={file.origPath ? `${file.origPath} → ${file.path}` : file.path} onClick={() => diff(file)}>
+      {leaves.sort((a, b) => a.path.localeCompare(b.path)).map((file) => <Button key={file.path} className={`tree-row commit-file commit-file-${file.status}`} style={{ paddingLeft: 8 + depth * 12 }} title={file.origPath ? `${file.origPath} → ${file.path}` : file.path} onClick={() => diff(file)} onDoubleClick={() => diff(file, false)}>
         <span className="tree-caret" /><FileDiff size={14} className="tree-icon" /><span className="tree-name grow">{file.path.slice(prefix.length)}</span><span className="letter">{file.status}</span>
       </Button>)}
     </>
   }
-  return <div className={`commit-history-entry${expanded ? ' expanded' : ''}`}>
+  const refs = commitRefs(commit.refs, branch)
+  return <div className={`commit-history-entry${expanded ? ' expanded' : ''}${commit.outgoing ? ' outgoing' : ''}`}>
     <div className="commit-history-head" onContextMenu={context.onContextMenu}>
-      <Button className="git-commit-row" aria-expanded={expanded} onKeyDown={context.onKeyDown} title={`${commit.subject}\n${commit.author} · ${commit.shortOid}${commit.refs ? `\n${commit.refs}` : ''}`} onClick={() => setExpanded((value) => !value)} onDoubleClick={details}>
-        <ChevronRight size={12} className={expanded ? 'tree-caret open' : 'tree-caret'} /><GitCommitHorizontal size={13} /><span className="grow">{commit.subject}</span><span className="muted commit-age">{timeAgo(commit.timestamp)}</span>
+      <Button className="git-commit-row" aria-expanded={expanded} onKeyDown={context.onKeyDown} title={`${commit.subject}\n${commit.author} · ${commit.shortOid} · ${new Date(commit.timestamp).toLocaleString()}${commit.refs ? `\n${commit.refs}` : ''}${commit.outgoing ? `\n${t("Not pushed yet")}` : ''}`} onClick={() => setExpanded((value) => !value)} onDoubleClick={details}>
+        <ChevronRight size={12} className={expanded ? 'tree-caret open' : 'tree-caret'} /><span className="commit-dot" aria-hidden="true" /><span className="commit-subject">{commit.subject}</span>
+        {refs.map((ref) => <span key={ref} className="commit-ref" title={ref}>{ref}</span>)}
+        <span className="grow" /><span className="commit-age">{timeAgo(commit.timestamp)}</span>
       </Button>
       <div className="commit-history-actions">
-        <Button className="ghost icon small-icon" aria-label="View full commit" title="View full commit" onClick={details}><FileText size={13} /></Button>
-        <Button className="ghost icon small-icon" aria-label="Copy commit hash" title="Copy commit hash" onClick={() => void copy(commit.oid)}><Copy size={13} /></Button>
-        <Menu label="Commit actions" icon={<MoreHorizontal size={13} />} className="ghost icon small-icon" align="end" items={actions} />
+        {onUndo && <Button className="ghost icon small-icon" aria-label={t("Undo commit")} title={t("Undo last commit…")} disabled={undoDisabled} onClick={onUndo}><Undo2 size={13} /></Button>}
+        <Button className="ghost icon small-icon" aria-label={t("View full commit")} title={t("View full commit")} onClick={details}><FileText size={13} /></Button>
+        <Button className="ghost icon small-icon" aria-label={t("Copy commit hash")} title={t("Copy commit hash")} onClick={() => void copy(commit.oid)}><Copy size={13} /></Button>
+        <Menu label={t("Commit actions")} icon={<MoreHorizontal size={13} />} className="ghost icon small-icon" align="end" items={actions} />
       </div>
     </div>
     {error && <div className="error small commit-tree-message" role="alert">{error}</div>}
     {expanded && <div className="tree-children commit-file-tree" style={{ '--tree-guide-left': '14px' } as CSSProperties}>
-      {files ? files.length ? tree(files, '', 1) : <div className="muted small commit-tree-message">No file changes.</div> : !error && <div className="muted small commit-tree-message">Loading changes…</div>}
+      {files ? files.length ? tree(files, '', 1) : <div className="muted small commit-tree-message">{t("No file changes.")}</div> : !error && <div className="muted small commit-tree-message">{t("Loading changes…")}</div>}
     </div>}
     {context.menu}
   </div>

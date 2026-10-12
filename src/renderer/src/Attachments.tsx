@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Copy, Download, File, FolderOpen, Maximize2, Minimize2, RotateCw, Scan, X, ZoomIn, ZoomOut } from 'lucide-react'
@@ -17,6 +18,7 @@ async function attachmentMenu(file: Attachment, event: MouseEvent<HTMLElement> |
 }
 
 function AttachmentPreview({ files, index, onIndexChange, onClose, opener }: { files: Attachment[]; index: number; onIndexChange: (index: number) => void; onClose: () => void; opener: HTMLElement | null }) {
+  useLanguage()
   const file = files[index]!
   const [content, setContent] = useState<{ image?: string | null; text?: string | null } | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -80,7 +82,7 @@ function AttachmentPreview({ files, index, onIndexChange, onClose, opener }: { f
     try { const result = await action(); if (result !== false) setNotice(message) } catch (error) { notifyError(String(error), 'Attachment') }
   }
   const menu = (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => void attachmentMenu(file, event, false).catch((error) => notifyError(String(error), 'Attachment'))
-  const tool = (label: string, action: () => void, icon: React.ReactNode, disabled = false) => <Button className="ghost icon small-icon" aria-label={label} title={label} disabled={disabled} onClick={action}>{icon}</Button>
+  const tool = (label: string, action: () => void, icon: React.ReactNode, disabled = false) => <Button className="ghost icon small-icon" aria-label={t(label)} title={t(label)} disabled={disabled} onClick={action}>{icon}</Button>
   return <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
     <DialogContent className={`attachment-preview${expanded ? ' expanded' : ''}`} showCloseButton finalFocus={() => opener?.isConnected ? opener : false} aria-describedby={undefined} onKeyDown={(event) => {
       if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') { if (content?.text != null && window.getSelection()?.toString()) return; menu(event); return }
@@ -96,29 +98,30 @@ function AttachmentPreview({ files, index, onIndexChange, onClose, opener }: { f
       }
     }}>
       <DialogTitle className="attachment-preview-title">{file.name}<small className="muted"> · {kb(file)}</small></DialogTitle>
-      <div className="attachment-preview-toolbar" role="group" aria-label="Attachment preview actions">
+      <div className="attachment-preview-toolbar" role="group" aria-label={t("Attachment preview actions")}>
         {files.length > 1 && <>{tool('Previous attachment', () => onIndexChange(index - 1), <ChevronLeft size={15} />, index === 0)}<span className="muted small">{index + 1} / {files.length}</span>{tool('Next attachment', () => onIndexChange(index + 1), <ChevronRight size={15} />, index === files.length - 1)}</>}
-        {content?.image && <>{tool('Zoom out (-)', () => zoomBy(1 / 1.25), <ZoomOut size={15} />, scale <= .1)}<span className="preview-zoom" aria-live="polite">{Math.round(scale * 100)}%</span>{tool('Zoom in (+)', () => zoomBy(1.25), <ZoomIn size={15} />, scale >= 8)}{tool('Fit image (0)', () => setZoom('fit'), <Scan size={15} />)}<Button className="ghost small" aria-label="Actual size (1)" title="Actual size (1)" onClick={() => setZoom(1)}>1:1</Button>{tool('Rotate clockwise', () => setRotation((value) => (value + 90) % 360), <RotateCw size={15} />)}</>}
+        {content?.image && <>{tool('Zoom out (-)', () => zoomBy(1 / 1.25), <ZoomOut size={15} />, scale <= .1)}<span className="preview-zoom" aria-live="polite">{Math.round(scale * 100)}%</span>{tool('Zoom in (+)', () => zoomBy(1.25), <ZoomIn size={15} />, scale >= 8)}{tool('Fit image (0)', () => setZoom('fit'), <Scan size={15} />)}<Button className="ghost small" aria-label={t("Actual size (1)")} title={t("Actual size (1)")} onClick={() => setZoom(1)}>1:1</Button>{tool('Rotate clockwise', () => setRotation((value) => (value + 90) % 360), <RotateCw size={15} />)}</>}
         <span className="grow" />
         {tool(expanded ? 'Restore preview size' : 'Expand preview', () => setExpanded((value) => !value), expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />)}
         {tool(isImage(file) ? 'Copy image' : 'Copy filename', () => void act(() => invoke('attachments.copy', file.id), 'Copied'), <Copy size={15} />)}
         {tool('Save attachment as…', () => void act(() => invoke('attachments.save', file.id), 'Saved'), <Download size={15} />)}
         {tool('Show attachment in folder', () => void act(() => invoke('attachments.reveal', file.id)), <FolderOpen size={15} />)}
       </div>
-      <div ref={viewport} className={`attachment-preview-body${content?.image ? ' image' : ''}`} role="region" aria-label={content?.image ? 'Image preview. Use arrow keys to pan, plus and minus to zoom, 0 to fit, 1 for actual size.' : 'Attachment contents'} tabIndex={0} onContextMenu={(event) => { if (content?.text != null && window.getSelection()?.toString()) return; menu(event) }} onDoubleClick={(event) => { if (content?.image) { if (zoom === 'fit') zoomAt(1 / scale, event.clientX, event.clientY); else setZoom('fit') } }} onPointerDown={(event) => {
+      <div ref={viewport} className={`attachment-preview-body${content?.image ? ' image' : ''}`} role="region" aria-label={content?.image ? t("Image preview. Use arrow keys to pan, plus and minus to zoom, 0 to fit, 1 for actual size.") : t("Attachment contents")} tabIndex={0} onContextMenu={(event) => { if (content?.text != null && window.getSelection()?.toString()) return; menu(event) }} onDoubleClick={(event) => { if (content?.image) { if (zoom === 'fit') zoomAt(1 / scale, event.clientX, event.clientY); else setZoom('fit') } }} onPointerDown={(event) => {
         if (!content?.image || event.button !== 0) return
         const el = event.currentTarget
         drag.current = { x: event.clientX, y: event.clientY, left: el.scrollLeft, top: el.scrollTop }
         el.focus(); el.setPointerCapture(event.pointerId); event.preventDefault()
       }} onPointerMove={(event) => { if (drag.current) { event.currentTarget.scrollLeft = drag.current.left + drag.current.x - event.clientX; event.currentTarget.scrollTop = drag.current.top + drag.current.y - event.clientY } }} onPointerUp={(event) => { drag.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }} onPointerCancel={() => { drag.current = null }}>
-        {content === null ? <p className="muted" role="status">Loading…</p> : content.image ? <div className="preview-image-stage" style={{ width: Math.max(frame.width, width * scale + 24), height: Math.max(frame.height, height * scale + 24) }}><img src={content.image} alt={file.name} draggable={false} onLoad={(event) => setNatural({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => { setContent({}); setLoadError(true) }} style={{ width: natural.width * scale, height: natural.height * scale, transform: `translate(-50%, -50%) rotate(${rotation}deg)` }} /></div> : content.text != null ? <pre>{content.text}</pre> : <p className="muted" role={loadError ? 'alert' : undefined}>{loadError ? 'Could not load this preview. You can save the attachment to inspect it.' : 'No preview for this file type. Save it to open in another app.'}</p>}
+        {content === null ? <p className="muted" role="status">{t("Loading…")}</p> : content.image ? <div className="preview-image-stage" style={{ width: Math.max(frame.width, width * scale + 24), height: Math.max(frame.height, height * scale + 24) }}><img src={content.image} alt={file.name} draggable={false} onLoad={(event) => setNatural({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => { setContent({}); setLoadError(true) }} style={{ width: natural.width * scale, height: natural.height * scale, transform: `translate(-50%, -50%) rotate(${rotation}deg)` }} /></div> : content.text != null ? <pre>{content.text}</pre> : <p className="muted" role={loadError ? 'alert' : undefined}>{loadError ? t("Could not load this preview. You can save the attachment to inspect it.") : t("No preview for this file type. Save it to open in another app.")}</p>}
       </div>
-      <div className="attachment-preview-footer"><span>{content?.image ? 'Scroll to zoom · drag to pan · double-click 1:1 · + / − zoom · 0 fit · 1 actual size' : 'Escape to close'}</span><span role="status">{notice}</span></div>
+      <div className="attachment-preview-footer"><span>{content?.image ? t("Scroll to zoom · drag to pan · double-click 1:1 · + / − zoom · 0 fit · 1 actual size") : t("Escape to close")}</span><span role="status">{notice}</span></div>
     </DialogContent>
   </Dialog>
 }
 
 function AttachmentItem({ file, onRemove, size, onPreview }: { file: Attachment; onRemove?: () => void; size: 'normal' | 'small'; onPreview: (opener: HTMLElement) => void }) {
+  useLanguage()
   const [thumb, setThumb] = useState<string | null>(null)
   useEffect(() => {
     let active = true
@@ -129,19 +132,20 @@ function AttachmentItem({ file, onRemove, size, onPreview }: { file: Attachment;
     const opener = event.currentTarget.querySelector<HTMLElement>('.attachment-open') ?? event.currentTarget
     void attachmentMenu(file, event, !!onRemove).then((action) => { if (action === 'preview') onPreview(opener); if (action === 'remove') onRemove?.() }, (error) => notifyError(String(error), 'Attachment'))
   }
-  const remove = onRemove && <Button type="button" className="attachment-remove" aria-label={`Remove attachment ${file.name}`} title="Remove" onClick={(event) => { event.stopPropagation(); onRemove() }}><X size={13} strokeWidth={2.5} /></Button>
+  const remove = onRemove && <Button type="button" className="attachment-remove" aria-label={t("Remove attachment {0}", { "0": file.name })} title={t("Remove")} onClick={(event) => { event.stopPropagation(); onRemove() }}><X size={13} strokeWidth={2.5} /></Button>
   return <span className={isImage(file) ? `attachment-tile ${size}` : 'attachment-chip'} onContextMenu={menu} onKeyDown={(event) => { if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') menu(event) }}>
-    <Button type="button" className={`attachment-open${isImage(file) ? '' : ' file'}`} aria-label={`Preview ${file.name}`} title={`${file.name} · ${kb(file)}`} aria-haspopup="dialog" onClick={(event) => onPreview(event.currentTarget)}>
+    <Button type="button" className={`attachment-open${isImage(file) ? '' : ' file'}`} aria-label={t("Preview {0}", { "0": file.name })} title={`${file.name} · ${kb(file)}`} aria-haspopup="dialog" onClick={(event) => onPreview(event.currentTarget)}>
       {isImage(file) ? thumb ? <img src={thumb} alt="" /> : <File size={20} /> : <><File size={16} /><span className="attachment-name">{file.name}<small className="muted">{kb(file)}</small></span></>}
     </Button>{remove}
   </span>
 }
 
 export function Attachments({ files, onRemove, size = 'normal' }: { files: Attachment[]; onRemove?: (id: string) => void; size?: 'normal' | 'small' }) {
+  useLanguage()
   const [previewId, setPreviewId] = useState<string | null>(null)
   const opener = useRef<HTMLElement | null>(null)
   const index = files.findIndex((file) => file.id === previewId)
-  return <div className="attachment-list" role="group" aria-label="Attachments">{files.map((file) => <AttachmentItem key={file.id} file={file} size={size} onRemove={onRemove ? () => onRemove(file.id) : undefined} onPreview={(element) => { opener.current = element; setPreviewId(file.id) }} />)}
+  return <div className="attachment-list" role="group" aria-label={t("Attachments")}>{files.map((file) => <AttachmentItem key={file.id} file={file} size={size} onRemove={onRemove ? () => onRemove(file.id) : undefined} onPreview={(element) => { opener.current = element; setPreviewId(file.id) }} />)}
     {index >= 0 && <AttachmentPreview files={files} index={index} onIndexChange={(next) => setPreviewId(files[next]?.id ?? null)} onClose={() => setPreviewId(null)} opener={opener.current} />}
   </div>
 }

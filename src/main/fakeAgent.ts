@@ -1,20 +1,44 @@
 // Test-only stand-in for the Claude Agent SDK, enabled with RAMU_FAKE_AGENT=1. It exercises the
 // same event, permission and transcript paths as the real adapter without spending model usage.
+import { randomUUID } from 'node:crypto'
+import { elicitationRequest, elicitationContent } from './elicitation'
 import type { Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { QueryFn } from './agent'
-import type { McpConnection } from '../shared/types'
+import type { McpConnection, AgentElicitation, ElicitationAction } from '../shared/types'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
 async function fakeTools(text: string, connection?: McpConnection): Promise<void> {
-  if (!connection || !text.includes('[schedule tool]') && !text.includes('<review-comments>')) return
+  if (!connection || !text.includes('[schedule tool]') && !text.includes('<review-comments>') && !text.includes('[ramu-agent') && !text.includes('[questions') && !text.includes('[advisor') && !text.includes('[goal tool]')) return
   const client = new Client({ name: 'ramu-smoke', version: '1' })
   try {
     await client.connect(new StreamableHTTPClientTransport(new URL(connection.url), { requestInit: { headers: { Authorization: `Bearer ${connection.token}` } } }))
+    if (text.includes('[goal tool]')) {
+      const continuation = text.startsWith('Ramu goal continuation:')
+      const reply = await client.callTool(continuation
+        ? { name: 'update_goal', arguments: { status: 'completed', reason: 'The smoke fixture verified goal tools, persistence and automatic continuation.' } }
+        : { name: 'set_goal', arguments: { objective: 'Verify the goal smoke fixture [goal tool]' } })
+      if (reply.isError) throw new Error(JSON.stringify(reply.content))
+    }
+    if (text.includes('[questions')) {
+      const reply = await client.callTool({ name: 'ask_user', arguments: { grouping: text.includes('[questions independent]') ? 'independent' : 'together', dependsOn: 'Choose the database and deployment region', questions: [{ id: 'database', question: 'Which database?', options: [{ label: 'SQLite' }, { label: 'Postgres' }] }, { id: 'region', question: 'Which region?', options: [{ label: 'Jakarta' }, { label: 'Singapore' }] }] } })
+      if (reply.isError) throw new Error(JSON.stringify(reply.content))
+      const data = JSON.parse((reply.content as { text: string }[])[0]!.text)
+      if (text.includes('[questions obsolete]')) await client.callTool({ name: 'close_question', arguments: { requestId: data.request.requestId, reason: 'The requested work no longer needs a database.' } })
+      if (text.includes('[questions wait]')) await client.callTool({ name: 'wait_for_answer', arguments: { requestId: data.request.requestId } })
+    }
+    if (text.includes('[advisor')) {
+      const reply = await client.callTool({ name: 'advisor', arguments: { focus: 'Is the plan sound?', wait: !text.includes('[advisor async]') } })
+      if (reply.isError) throw new Error(JSON.stringify(reply.content))
+    }
     if (text.includes('[schedule tool]')) {
       const context = await client.callTool({ name: 'schedule_context', arguments: {} })
       const data = JSON.parse((context.content as { text: string }[])[0]!.text)
       const result = await client.callTool({ name: 'schedule_create', arguments: { name: 'Created through chat tools', prompt: 'Summarize this chat', timezone: data.timezone ?? 'UTC', rule: { kind: 'once', at: new Date(Date.now() + 86400000).toISOString() }, missedPolicy: 'latest', settings: data.currentSettings } })
+      if (result.isError) throw new Error(JSON.stringify(result.content))
+    }
+    if (text.includes('[ramu-agent')) {
+      const result = await client.callTool({ name: 'ramu_agent', arguments: { description: 'Survey the tests', prompt: 'List the test files', type: 'Explore', background: text.includes('[ramu-agent background]') } })
       if (result.isError) throw new Error(JSON.stringify(result.content))
     }
     const body = text.match(/<review-comments>\s*([\s\S]*?)\s*<\/review-comments>/)?.[1]
@@ -27,6 +51,8 @@ async function fakeTools(text: string, connection?: McpConnection): Promise<void
 
 export function fakeAnalysis(prompt: string): string {
   if (prompt.includes('recap-items')) return '{"items":[]}'
+  if (prompt.startsWith('aside:')) return `Side answer: ${prompt.match(/<question>\n([\s\S]*?)\n<\/question>/)?.[1] ?? ''}`.trim()
+  if (prompt.startsWith('advisor:')) return `Advisor review: ${prompt.match(/<agent-focus>\n([\s\S]*?)\n<\/agent-focus>/)?.[1] ?? 'general check'}. Verify the tests before declaring done.`
   if (prompt.startsWith('chat-title:')) return prompt.match(/<first-message>\n([^\n]*)/)?.[1]?.slice(0, 60) ?? 'Chat'
   const data = prompt.match(/<change-data>\s*([\s\S]*?)\s*<\/change-data>/)?.[1]
   if (data) { const files = JSON.parse(data); return JSON.stringify({ summary: 'Test review completed.', findings: [], notes: files.length ? [{ fileId: files[0].id, scope: 'file', kind: 'question', text: 'Test question: should this change preserve compatibility?' }] : [] }) }
@@ -66,13 +92,92 @@ async function* demoTurn(): AsyncGenerator<SDKMessage, void> {
   yield { type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0.042 } as unknown as SDKMessage
 }
 
+const msg = (value: unknown) => value as SDKMessage
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** A turn that starts a background sub-agent which keeps working, and reports back, after the turn ends. */
+async function* agentsTurn(stopped: Set<string>, delayMs: number): AsyncGenerator<SDKMessage, void> {
+  const call = `agent-call-${Date.now()}`, task = `task-${Date.now()}`
+  const sub = (content: unknown[], role: 'assistant' | 'user' = 'assistant') => msg({ type: role, parent_tool_use_id: call, agent_id: task, message: { role, content } })
+  yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: call, name: 'Agent', input: { description: 'Map the auth module', prompt: 'List every file in src/auth and what it exports.', subagent_type: 'Explore', run_in_background: true, name: 'auth-mapper' } }] } })
+  yield msg({ type: 'system', subtype: 'task_started', task_id: task, tool_use_id: call, description: 'Map the auth module', subagent_type: 'Explore', task_type: 'local_agent', is_backgrounded: true, prompt: 'List every file in src/auth and what it exports.' })
+  yield msg({ type: 'user', parent_tool_use_id: null, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: call, content: 'Async agent launched (auth-mapper).' }] } })
+  yield sub([{ type: 'text', text: 'Looking through `src/auth` first.' }, { type: 'tool_use', id: `${task}-read`, name: 'Read', input: { file_path: 'src/auth/session.ts' } }])
+  yield sub([{ type: 'tool_result', tool_use_id: `${task}-read`, content: 'export const session = 1' }], 'user')
+  yield msg({ type: 'system', subtype: 'task_progress', task_id: task, tool_use_id: call, description: 'Map the auth module', usage: { total_tokens: 1800, tool_uses: 1, duration_ms: 900 }, last_tool_name: 'Read', summary: 'Reading session.ts' })
+  yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'I started a background agent to map the auth module. It will report back when it is done.' }] } })
+  yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0.01 })
+  await sleep(delayMs)
+  if (stopped.has(task)) { yield msg({ type: 'system', subtype: 'task_notification', task_id: task, tool_use_id: call, status: 'stopped', output_file: '', summary: 'Stopped' }); return }
+  yield sub([{ type: 'text', text: '`src/auth/session.ts` exports `session`. Nothing else lives there yet.' }])
+  yield msg({ type: 'system', subtype: 'task_notification', task_id: task, tool_use_id: call, status: 'completed', output_file: '', summary: 'src/auth has one file, session.ts, exporting `session`.', usage: { total_tokens: 3200, tool_uses: 1, duration_ms: delayMs + 900 } })
+  yield msg({ type: 'system', subtype: 'init', session_id: `fake-${Date.now()}`, model: 'fake-agent', cwd: '' })
+  yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'The auth-mapper agent finished: `src/auth` has one file, `session.ts`, which exports `session`.' }] } })
+  yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0.01 })
+}
+
 export const fakeQuery: QueryFn = ({ prompt, options }) => {
+  const stopped = new Set<string>()
   async function* run(): AsyncGenerator<SDKMessage, void> {
     yield { type: 'system', subtype: 'init', session_id: `fake-${Date.now()}`, model: 'fake-agent', cwd: options.cwd } as unknown as SDKMessage
     for await (const m of prompt as AsyncIterable<SDKUserMessage>) {
       const text = typeof m.message.content === 'string' ? m.message.content : ''
+      if (options.forkSession) {
+        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: `Fork answer: ${text.match(/<question>\n([\s\S]*?)\n<\/question>/)?.[1] ?? text}` }] } })
+        yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
+        continue
+      }
       if (text.includes('[limit claude]')) {
         yield { type: 'result', subtype: 'success', is_error: true, result: 'usage limit reached', total_cost_usd: 0 } as unknown as SDKMessage
+        continue
+      }
+      // [usage 92] reports Claude plan usage: 92% of the 5-hour window and a third of that weekly.
+      const usage = /\[usage (\d+)\]/.exec(text)
+      if (usage) {
+        const used = Number(usage[1]) / 100, now = Math.floor(Date.now() / 1000)
+        // The shape the real SDK sends: every window in unifiedWindows.
+        yield msg({ type: 'rate_limit_event', rate_limit_info: { status: used >= 1 ? 'rejected' : used >= 0.8 ? 'allowed_warning' : 'allowed', rateLimitType: 'five_hour', resetsAt: now + 2 * 3600 + 840, unifiedWindows: { five_hour: { utilization: used, resetsAt: now + 2 * 3600 + 840 }, seven_day: { utilization: used / 3, resetsAt: now + 4 * 86400 } } } })
+      }
+      if (text.includes('[slow]')) {
+        // A long main turn, so the chat stays working (RAMU_FAKE_AGENT_DELAY ms).
+        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'Reading the codebase before making changes.' }] } })
+        if (text.includes('[todos]')) yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: `todo-${Date.now()}`, name: 'TodoWrite', input: { todos: ['Read the storage code', 'Pick the database', 'Write the migration', 'Cover it with tests'].map((content, i) => ({ content, activeForm: content, status: i === 0 ? 'completed' : i === 1 ? 'in_progress' : 'pending' })) } }] } })
+        // With [questions …] it asks mid-turn and keeps working.
+        const server = options.mcpServers?.ramu
+        if (server && 'url' in server && 'headers' in server) await fakeTools(text, { url: server.url, token: server.headers?.Authorization?.replace(/^Bearer /, '') ?? '' })
+        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: `slow-${Date.now()}`, name: 'Bash', input: { command: 'pnpm test' } }] } })
+        await sleep(Number(process.env.RAMU_FAKE_AGENT_DELAY ?? 2500))
+        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'Done reading.' }] } })
+        yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
+        continue
+      }
+      if (text.includes('[todos]')) {
+        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'thinking', thinking: 'The reset flow needs a token store first, then two endpoints, then tests. I should check how sessions are created before touching the schema.' }] } })
+        const todo = (status: string) => ['Read the session code', 'Add the reset token table', 'Write POST /auth/reset', 'Write POST /auth/reset/confirm', 'Cover it with tests'].map((content, i) => ({ content, activeForm: content, status: i < 2 ? 'completed' : i === 2 ? status : 'pending' }))
+        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: `todo-${Date.now()}`, name: 'TodoWrite', input: { todos: todo('in_progress') } }] } })
+        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'Working through the list.' }] } })
+        yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
+        continue
+      }
+      if (text.includes('[agents]')) {
+        yield* agentsTurn(stopped, Number(process.env.RAMU_FAKE_AGENT_DELAY ?? 2500))
+        continue
+      }
+      const relay = /^Message for the agent "(.+?)" \((.+?)\)\.[^\n]*\n\n([\s\S]*)$/.exec(text)
+      if (relay) {
+        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: `relay-${Date.now()}`, name: 'SendMessage', input: { to: relay[2], message: relay[3] } }] } })
+        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: `Passed your message to ${relay[1]}.` }] } })
+        yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
+        continue
+      }
+      if (text.includes('[tool progress]')) {
+        const ids = [1, 2, 3].map(n => `progress-${Date.now()}-${n}`)
+        for (const [index, id] of ids.entries()) yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name: 'Bash', input: { command: `echo command-${index + 1}` } }] } })
+        for (const id of ids.slice(0, 2)) yield msg({ type: 'user', parent_tool_use_id: null, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'done' }] } })
+        await sleep(2500)
+        yield msg({ type: 'user', parent_tool_use_id: null, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: ids[2], content: 'done' }] } })
+        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'All commands finished.' }] } })
+        yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
         continue
       }
       if (text.includes('[demo]') || process.env.RAMU_FAKE_DEMO === '1') {
@@ -93,7 +198,9 @@ export const fakeQuery: QueryFn = ({ prompt, options }) => {
       yield { type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 } as unknown as SDKMessage
     }
   }
-  return Object.assign(run(), { interrupt: async () => undefined }) as unknown as Query
+  // The context fills with each message, so the meter has something to show.
+  let messages = 0
+  return Object.assign(run(), { interrupt: async () => undefined, backgroundTasks: async () => true, getContextUsage: async () => ({ totalTokens: 12_000 + (messages += 1) * 9_000, maxTokens: 200_000, percentage: 0 }), usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: async () => ({ subscription_type: 'max', rate_limits: null }), stopTask: async (taskId: string) => { stopped.add(taskId) } }) as unknown as Query
 }
 
 /** Test-only Codex adapter; no account or model usage. */
@@ -101,13 +208,31 @@ export const fakeCodex: import('./codex').CodexFactory = (scope, settings, emit)
   let connection: McpConnection | undefined
   let stopped = false
   let resolvePermission: (() => void) | null = null
+  let resolveElicitation: (() => void) | null = null
+  let elicitation: AgentElicitation | null = null
   const send = async (prompt: string) => {
     emit({ kind: 'state', state: 'running' })
     if (prompt.includes('[limit codex]')) {
       emit({ kind: 'result', isError: true, text: 'usageLimitExceeded', costUsd: null }, true)
       return
     }
+    const fill = /\[context (\d+)\]/.exec(prompt)
+    if (fill) emit({ kind: 'context', used: Number(fill[1]) * 1000, max: 400_000 })
+    const used = /\[codex-usage (\d+)\]/.exec(prompt)
+    if (used) emit({ kind: 'usage', readings: [{ provider: 'codex', window: 'five_hour', usedPercent: Number(used[1]), status: Number(used[1]) >= 100 ? 'limited' : 'ok', resetsAt: Date.now() + 3 * 3600_000, updatedAt: Date.now() }, { provider: 'codex', window: 'weekly', usedPercent: Math.round(Number(used[1]) / 2), status: 'ok', resetsAt: Date.now() + 3 * 86_400_000, updatedAt: Date.now() }] })
+    if (prompt.includes('[mcp form]') || prompt.includes('[mcp url]')) {
+      elicitation = elicitationRequest(`fake-mcp-${randomUUID()}`, { serverName: 'Demo connector', message: prompt.includes('[mcp url]') ? 'Connect your account' : 'Configure your workspace', ...(prompt.includes('[mcp url]') ? { mode: 'url', url: 'https://example.com/connect', elicitationId: 'demo' } : { mode: 'form', requestedSchema: { type: 'object', properties: { count: { type: 'integer', title: 'Worker count', minimum: 1, maximum: 5 }, enabled: { type: 'boolean', title: 'Enable caching' }, region: { type: 'string', title: 'Region', oneOf: [{ const: 'id', title: 'Jakarta' }, { const: 'sg', title: 'Singapore' }] }, note: { type: 'string', title: 'Note' } }, required: ['count', 'enabled', 'region'] } }) })
+      await new Promise<void>((resolve) => { resolveElicitation = resolve; emit({ kind: 'elicitation', ...elicitation! }); emit({ kind: 'state', state: 'needs-input' }) })
+      if (!stopped) emit({ kind: 'result', isError: false, text: 'done', costUsd: null })
+      return
+    }
     emit({ kind: 'tool-use', toolUseId: 'fake-codex-tool', name: 'Bash', summary: 'pwd' })
+    if (prompt.includes('[live codex tools]')) {
+      emit({ kind: 'tool-result', toolUseId: 'fake-codex-tool', isError: false, summary: 'First output line', running: true })
+      emit({ kind: 'tool-result', toolUseId: 'fake-codex-tool', isError: false, summary: 'First output line\nSecond output line', running: true })
+      emit({ kind: 'turn-diff', turnId: 'fake-codex-live-turn', diff: 'Old provisional patch' })
+      emit({ kind: 'turn-diff', turnId: 'fake-codex-live-turn', diff: '--- a/app.ts\n+++ b/app.ts\n@@ -1 +1 @@\n-old\n+updated' })
+    }
     if (settings.access !== 'full') await new Promise<void>((resolve) => {
       resolvePermission = resolve
       emit({ kind: 'permission-request', requestId: 'fake-codex-permission', toolName: 'Bash', title: 'Allow command?', detail: 'pwd' })
@@ -125,7 +250,14 @@ export const fakeCodex: import('./codex').CodexFactory = (scope, settings, emit)
     send: async (prompt) => { void send(prompt) },
     steer: async (text) => { emit({ kind: 'text', text: `Steered: ${text}` }) },
     interrupt: async () => { emit({ kind: 'result', isError: false, text: 'interrupted', costUsd: null }) },
-    stop: async () => { stopped = true; resolvePermission?.() },
+    stop: async () => { stopped = true; resolvePermission?.(); if (elicitation) emit({ kind: 'request-resolved', requestId: elicitation.requestId, outcome: 'cancelled' }); elicitation = null; resolveElicitation?.() },
+    replyElicitation: (requestId: string, action: ElicitationAction, answers: Record<string, string>) => {
+      if (!elicitation || elicitation.requestId !== requestId) throw new Error('That input request is no longer pending.')
+      const content = action === 'accept' ? elicitationContent(elicitation, answers) : null
+      emit({ kind: 'request-resolved', requestId, outcome: action === 'accept' ? 'answered' : action === 'decline' ? 'declined' : 'cancelled' })
+      emit({ kind: 'text', text: `Connector response: ${action} ${JSON.stringify(content)}` })
+      emit({ kind: 'state', state: 'running' }); elicitation = null; resolveElicitation?.()
+    },
     replyPermission: (requestId, allow) => { emit({ kind: 'request-resolved', requestId, outcome: allow ? 'allowed' : 'denied' }); resolvePermission?.() },
     replyQuestion: () => {},
   }

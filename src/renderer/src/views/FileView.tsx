@@ -1,3 +1,4 @@
+import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/ui/button'
 import { Columns2, Eye, Pencil, WrapText } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -33,6 +34,7 @@ interface Conflict {
 }
 
 export function FileView({ taskId, view, binding }: { taskId: string; view: FileViewDesc; binding: RepositoryBinding }) {
+  useLanguage()
     const ws = useWorkspace()
     const { preferences } = useAppSettings()
     const changingBuffer = useRef(false)
@@ -222,7 +224,7 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
         window.addEventListener('ramu:save-all', saveAll)
         const sub = model.onDidChangeContent(() => { if (loaded.current && !changingBuffer.current) { setDirty(view.id, isDirty()); dropFileBasedMarkers(); scheduleLint() } })
         const focusSub = editor.onDidFocusEditorText(() => { lastFocused = editor })
-        const nativeFormat = editor.addAction({ id: 'ramu.formatDocument', label: 'Format document', run: () => format() })
+        const nativeFormat = editor.addAction({ id: 'ramu.formatDocument', label: t("Format document"), run: () => format() })
         const formatCommand = () => { if (lastFocused === editor && host.current?.offsetParent !== null) void format() }
         window.addEventListener('ramu:format', formatCommand)
 
@@ -340,24 +342,24 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
             <div className="view-header">
                 <span className="strong">{binding.repoName}</span>
                 <span className="path">{view.path}</span>
-                {aiStatus && preferences.aiCompletion.enabled && <span className="lint-summary has-warnings" title={aiStatus}>AI completion paused</span>}
+                {aiStatus && preferences.aiCompletion.enabled && <span className="lint-summary has-warnings" title={aiStatus}>{t("AI completion paused")}</span>}
                 {(problems.tools.length > 0 || problems.failures.length > 0) && <span className={`lint-summary${problems.errors ? ' has-errors' : problems.warnings ? ' has-warnings' : ''}`} title={[...problems.failures, `Checked by ${problems.tools.join(', ')}`].filter(Boolean).join('\n')}>
-                    {problems.failures.length > 0 ? 'Lint unavailable' : !problems.errors && !problems.warnings ? `${problems.tools.join(' · ')} · no problems` : `${problems.errors ? `${problems.errors} error${problems.errors > 1 ? 's' : ''}` : ''}${problems.errors && problems.warnings ? ', ' : ''}${problems.warnings ? `${problems.warnings} warning${problems.warnings > 1 ? 's' : ''}` : ''}`}
+                    {problems.failures.length > 0 ? t("Lint unavailable") : !problems.errors && !problems.warnings ? t("{0} · no problems", { "0": problems.tools.join(' · ') }) : `${problems.errors ? `${problems.errors} error${problems.errors > 1 ? 's' : ''}` : ''}${problems.errors && problems.warnings ? ', ' : ''}${problems.warnings ? `${problems.warnings} warning${problems.warnings > 1 ? 's' : ''}` : ''}`}
                 </span>}
-                {markdown && <span className="view-header-group" role="group" aria-label="Markdown view">
-                    <Button className="ghost icon small-icon" aria-pressed={mode === 'edit'} aria-label="Editor only" title="Editor only" onClick={() => setMode('edit')}><Pencil size={14} /></Button>
-                    <Button className="ghost icon small-icon" aria-pressed={mode === 'split'} aria-label="Editor and preview side by side" title="Preview beside the editor" onClick={() => setMode('split')}><Columns2 size={14} /></Button>
-                    <Button className="ghost icon small-icon" aria-pressed={mode === 'preview'} aria-label="Preview only" title="Preview only" onClick={() => setMode('preview')}><Eye size={14} /></Button>
+                {markdown && <span className="view-header-group" role="group" aria-label={t("Markdown view")}>
+                    <Button className="ghost icon small-icon" aria-pressed={mode === 'edit'} aria-label={t("Editor only")} title={t("Editor only")} onClick={() => setMode('edit')}><Pencil size={14} /></Button>
+                    <Button className="ghost icon small-icon" aria-pressed={mode === 'split'} aria-label={t("Editor and preview side by side")} title={t("Preview beside the editor")} onClick={() => setMode('split')}><Columns2 size={14} /></Button>
+                    <Button className="ghost icon small-icon" aria-pressed={mode === 'preview'} aria-label={t("Preview only")} title={t("Preview only")} onClick={() => setMode('preview')}><Eye size={14} /></Button>
                 </span>}
-                <Button className="ghost icon small-icon" aria-pressed={wrap} aria-label="Word wrap" title={`Word wrap: ${wrap ? 'on' : 'off'} (⌥Z)`} onClick={() => setWrap(!wrap)}><WrapText size={14} /></Button>
+                <Button className="ghost icon small-icon" aria-pressed={wrap} aria-label={t("Word wrap")} title={t("Word wrap: {0} (⌥Z)", { "0": wrap ? 'on' : 'off' })} onClick={() => setWrap(!wrap)}><WrapText size={14} /></Button>
             </div>
             {error && <div className="error banner">{error}</div>}
             {conflict && (
                 <div className="banner warn">
-                    {conflict.disk === null ? 'This file was deleted on disk.' : 'This file changed on disk while you have unsaved edits.'}
+                    {conflict.disk === null ? t("This file was deleted on disk.") : t("This file changed on disk while you have unsaved edits.")}
                     {conflict.disk !== null && (
                         <>
-                            <Button onClick={() => setComparing((c) => !c)}>{comparing ? 'Hide comparison' : 'Compare'}</Button>
+                            <Button onClick={() => setComparing((c) => !c)}>{comparing ? t("Hide comparison") : t("Compare")}</Button>
                             <Button
                                 onClick={() => {
                                     replaceBuffer(conflict.disk!)
@@ -367,10 +369,9 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
                                     setConflict(null)
                                     setComparing(false)
                                 }}
-                                title="Your edits stay in undo history (⌘Z)"
+                                title={t("Your edits stay in undo history (⌘Z)")}
                             >
-                                Use disk version
-                            </Button>
+                                {t("Use disk version")}</Button>
                         </>
                     )}
                     <Button
@@ -379,16 +380,15 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
                             setConflict(null)
                             setComparing(false)
                         }}
-                        title="The next save overwrites the disk version"
+                        title={t("The next save overwrites the disk version")}
                     >
-                        Keep mine
-                    </Button>
+                        {t("Keep mine")}</Button>
                 </div>
             )}
             <div ref={diffHost} className="editor-host" style={{ display: comparing ? 'block' : 'none' }} />
             <div className="file-body" style={{ display: comparing ? 'none' : 'flex' }}>
                 <div ref={host} className="editor-host" style={{ display: markdown && mode === 'preview' ? 'none' : 'block' }} />
-        {markdown && mode !== 'edit' && <div className="md-preview-pane"><div className="md-preview msg assistant"><MarkdownPreview text={previewText} taskId={taskId} repoId={binding.repoId} path={view.path} onOpenFile={(path) => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path, preview: false })} /></div></div>}
+        {markdown && mode !== 'edit' && <div className="md-preview-pane"><div className="md-preview msg assistant"><MarkdownPreview text={previewText} taskId={taskId} repoId={binding.repoId} path={view.path} onOpenFile={(path) => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path })} /></div></div>}
             </div>
         </div>
     )

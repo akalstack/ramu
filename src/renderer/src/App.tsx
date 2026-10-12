@@ -1,10 +1,10 @@
-import { Separator } from '@/components/ui/separator'
+import { t, useLanguage } from './i18n'
 import { ProviderSetupTerminal } from './ProviderSetupTerminal'
 import { beginPaneResize } from './paneResize'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { CalendarClock, Home, Settings, Archive, Files, FolderClosed, FolderPlus, GitBranch, MessageSquare, Pencil, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RefreshCcw, Search } from 'lucide-react'
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { CalendarClock, Settings, SquarePen, Archive, Files, FolderPlus, GitBranch, Pencil, PanelLeftClose, PanelLeftOpen, PanelRightClose, SquareTerminal, RefreshCcw, Search } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildCommands, formatKeys, Palette, useKeybindings, type PaletteMode } from './commands'
 import { invoke, ramu } from './ipc'
 import { Dropdown, Menu, useContextMenu } from './Menu'
@@ -16,13 +16,17 @@ import { TitleTooltips } from './TitleTooltips'
 import { AppSettingsProvider, useAppSettings } from './AppSettings'
 import { ModelSetsProvider } from './ModelSets'
 import type { SettingsSection } from './SettingsPage'
-import { HomePage, ScheduleNavigation, SchedulesPage } from './Automation'
+import { ScheduleNavigation, SchedulesPage } from './Automation'
 import { DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '../../shared/types'
 import { SettingsPanel } from './SettingsPanel'
+import { UsageFooter, UsageRings } from './Usage'
 import { ChatSwitcher } from './ChatSwitcher'
 import { ProjectSwitcher } from './ProjectSwitcher'
+import { runProjectAction, useProjectActions, WindowActions } from './WindowActions'
+import { SearchChats } from './SearchChats'
+import { useGitChangeCount } from './useGitChangeCount'
 import { CreateEntryDialog } from './CreateEntryDialog'
-import { NewTask } from './NewTask'
+import { HomePage, NewTask } from './NewTask'
 import { AnimatedMark, BootScreen, Wordmark } from './Brand'
 import { useAddProject } from './addProject'
 import { ExplorerPanel } from './sidebar/ExplorerPanel'
@@ -33,30 +37,29 @@ import { errorText, TaskPane } from './TaskPane'
 import { isWorktreeCtx, isWorkspaceCtx, worktreeCtx, projectCtx, useWorkspace, WorkspaceProvider } from './workspace'
 
 export function App({ onReady }: { onReady?: () => void }) {
+  const language = useLanguage()
+
   return <AppSettingsProvider><ModelSetsProvider><WorkspaceProvider>{(loaded) => (loaded ? <ReadyShell onReady={onReady} /> : <BootScreen />)}</WorkspaceProvider></ModelSetsProvider></AppSettingsProvider>
 }
 
 function ReadyShell({ onReady }: { onReady?: () => void }) {
+  const language = useLanguage()
+
   useEffect(() => { onReady?.() }, [onReady])
   return <Shell />
 }
 
-// Top to bottom: the work itself (chats, which opens on the home page, then files, search, git), then what the agents leave for you.
-const RAIL = [
-  { id: 'projects', label: 'Home', keys: undefined, Icon: Home, group: 'start' },
-  { id: 'explorer', label: 'Explorer', keys: 'mod+shift+e', Icon: Files, group: 'work' },
-  { id: 'search', label: 'Search', keys: 'mod+shift+f', Icon: Search, group: 'work' },
-  { id: 'scm', label: 'Source Control', keys: 'ctrl+shift+g', Icon: GitBranch, group: 'work' },
-  { id: 'schedules', label: 'Schedules', keys: undefined, Icon: CalendarClock, group: 'agents' },
-] as const
-
 function Shell() {
+  const language = useLanguage()
+
   const ws = useWorkspace()
   const { ui } = ws
   const [palette, setPalette] = useState<PaletteMode | null>(null)
   const [sidebarHidden, setSidebarHidden] = useState(false)
+  const [toolsWidth, setToolsWidth] = useState(340)
+  const toolsResizeCleanup = useRef<(() => void) | null>(null)
+  useEffect(() => () => toolsResizeCleanup.current?.(), [])
   const { preferences, save } = useAppSettings()
-  const side = preferences.sidebarSide
   const [dragWidth, setDragWidth] = useState<number | null>(null)
   const sidebarWidth = dragWidth ?? preferences.sidebarWidth
   const latest = useRef({ preferences, save })
@@ -69,7 +72,7 @@ function Shell() {
     const startX = event.clientX, startWidth = sidebarWidth
     let width = startWidth
     const move = (e: { clientX: number }) => {
-      const delta = side === 'left' ? e.clientX - startX : startX - e.clientX
+      const delta = e.clientX - startX
       width = Math.round(Math.min(Math.max(startWidth + delta, SIDEBAR_WIDTH_RANGE[0]), Math.min(SIDEBAR_WIDTH_RANGE[1], window.innerWidth * 0.5)))
       setDragWidth(width)
     }
@@ -80,17 +83,31 @@ function Shell() {
   }
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [searchingChats, setSearchingChats] = useState(false)
   useEffect(() => {
     const open = (event: Event) => { setSettingsSection((event as CustomEvent<{ section?: SettingsSection }>).detail?.section ?? 'appearance'); setSettingsOpen(true) }
     window.addEventListener('ramu:settings', open)
     return () => window.removeEventListener('ramu:settings', open)
   }, [])
 
+  // Saved project actions join the command list, so they show in the palette and their shortcuts work everywhere.
+  const actionContext = ui.activeTaskId
+  const projectActions = useProjectActions(actionContext ? ws.projectOf(actionContext)?.id : undefined)
   const commands = useMemo(
-    () => buildCommands(ws, { openPalette: setPalette, toggleSidebar: () => setSidebarHidden((h) => !h), moveSidebar: () => saveLayout({ sidebarSide: latest.current.preferences.sidebarSide === 'left' ? 'right' : 'left' }), showSidebar: (tab) => { setSidebarHidden(false); ws.setSidebar(tab) }, showSearch: () => { setSidebarHidden(false); ws.setSidebar('search'); window.dispatchEvent(new Event('ramu:focus-search')) } }),
-    [ws],
+    () => [
+      ...buildCommands(ws, { openPalette: setPalette, toggleSidebar: () => setSidebarHidden((h) => !h), showSidebar: (tab) => { if (tab === 'projects') setSidebarHidden(false); ws.setSidebar(tab) }, showSearch: () => { ws.setSidebar('search'); window.dispatchEvent(new Event('ramu:focus-search')) } }),
+      // ⌘K is left to the editor's own chords while a file has focus.
+      { id: 'chat.search', title: t("Search chats"), category: t("Chat"), keys: 'mod+k', run: () => setSearchingChats(true), when: () => !document.activeElement?.closest('.monaco-editor') },
+      ...(actionContext ? projectActions.map((action) => ({ id: `action.${action.id}`, title: t("Run action: {0}", { "0": action.name }), category: t("Actions"), keys: action.keys, run: () => runProjectAction(ws, actionContext, action) })) : []),
+    ],
+    [ws, language, actionContext, projectActions],
   )
-  useKeybindings(commands, palette === null && !settingsOpen)
+  useKeybindings(commands, palette === null && !settingsOpen && !searchingChats)
+  useEffect(() => {
+    const openFile = () => setPalette('files')
+    window.addEventListener('ramu:open-file', openFile)
+    return () => window.removeEventListener('ramu:open-file', openFile)
+  }, [])
   // The palette's own shortcuts still close it while it is open.
   useEffect(() => {
     if (palette === null) return
@@ -104,16 +121,11 @@ function Shell() {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [palette])
 
-  useEffect(() => {
-    const showExplorer = () => setSidebarHidden(false)
-    window.addEventListener('ramu:show-explorer', showExplorer)
-    return () => window.removeEventListener('ramu:show-explorer', showExplorer)
-  }, [])
-
   // The start screen shows for New chat, and when nothing is open yet.
   const globalPage = ui.sidebar === 'schedules'
-  // Chats with nothing open is the home page: recaps and the start box.
-  const landing = ui.sidebar === 'projects' && !ui.activeTaskId && !ws.composing
+  const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
+  // Chats with nothing open is the home page: the start box, background chats and recaps. New chat without a project lands here too.
+  const landing = ui.sidebar === 'projects' && !ui.activeTaskId
   const startProject = globalPage || landing ? null : ws.composing ?? (!ui.activeTaskId ? NO_PROJECT : null)
   const panes = new Map<string, string>()
   for (const id of ui.openTaskIds) {
@@ -122,55 +134,73 @@ function Shell() {
   }
   const startContext = startProject ? ws.composingWorkspace ? worktreeCtx(ws.composingWorkspace) : projectCtx(startProject) : null
   if (startContext && panes.has(startContext)) panes.set(startContext, startContext)
-  const showSidebar = (id: (typeof RAIL)[number]['id']) => {
-    setSidebarHidden(false)
-    ws.setSidebar(id)
-  }
 
-  const sidebarToggle = <Button className={`ghost icon sidebar-toggle${sidebarHidden ? '' : ' sidebar-toggle-docked'}`} aria-expanded={!sidebarHidden} aria-controls="workspace-sidebar" aria-label={sidebarHidden ? 'Show sidebar' : 'Hide sidebar'} title={`${sidebarHidden ? 'Show' : 'Hide'} sidebar (${formatKeys('mod+b')})`} onClick={() => setSidebarHidden((hidden) => !hidden)}>
-        {side === 'left' ? (sidebarHidden ? <PanelLeftOpen size={16} strokeWidth={1.6} /> : <PanelLeftClose size={16} strokeWidth={1.6} />) : (sidebarHidden ? <PanelRightOpen size={16} strokeWidth={1.6} /> : <PanelRightClose size={16} strokeWidth={1.6} />)}
+  const gitChanges = useGitChangeCount(ui.activeTaskId, ws.bindings[ui.activeTaskId ?? ''] ?? [])
+  const activeWorkspace = ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : null
+  const unsavedFiles = new Set([...(ws.taskUi[ui.activeTaskId ?? '']?.views ?? []), ...(ws.taskUi[activeWorkspace ?? '']?.views ?? [])].filter(view => view.kind === 'file' && ws.dirty[view.id]).map(view => view.id)).size
+  const attentionChats = ws.tasks.filter(task => task.status !== 'archived' && (ws.unread.has(task.id) || task.status === 'needs-input')).length
+  const badge = (count: number) => count > 0 && <span className="activity-badge" aria-hidden="true">{count > 99 ? '99+' : count}</span>
+
+  const toolButtons = <nav className="workspace-tool-buttons" aria-label={t("Workspace tabs")}>
+    {([
+      { id: 'explorer', label: 'Explorer', keys: 'mod+shift+e', Icon: Files },
+      { id: 'search', label: 'Search', keys: 'mod+shift+f', Icon: Search },
+      { id: 'scm', label: 'Source Control', keys: 'ctrl+shift+g', Icon: GitBranch },
+    ] as const).map(({ id, label, keys, Icon }) => <Button key={id} className={`ghost icon${workspaceTool === id ? ' active' : ''}`} aria-label={t(label)} aria-description={id === 'scm' && gitChanges ? `${gitChanges} ${t('Changes')}` : id === 'explorer' && unsavedFiles ? `${unsavedFiles} ${t('Unsaved changes')}` : undefined} aria-pressed={workspaceTool === id} title={`${t(label)} (${formatKeys(keys)})${id === 'scm' && gitChanges ? ` · ${gitChanges} ${t('Changes')}` : id === 'explorer' && unsavedFiles ? ` · ${unsavedFiles} ${t('Unsaved changes')}` : ''}`} onClick={() => ws.setSidebar(workspaceTool === id ? 'projects' : id)}><Icon size={16} />{badge(id === 'scm' ? gitChanges : id === 'explorer' ? unsavedFiles : 0)}</Button>)}
+    <Button className="ghost icon" aria-label={t("Terminal")} title={t("Terminal")} disabled={!ui.activeTaskId} onClick={() => {
+      const id = ui.activeTaskId
+      if (!id) return
+      const state = ws.taskUi[id]
+      if (state?.terminalOpen) ws.setTerminalPanel(id, { terminalOpen: false })
+      else {
+        const terminal = state?.views.findLast((view) => view.kind === 'terminal')
+        if (terminal) ws.activateView(id, terminal.id)
+        else ws.openView(id, { kind: 'terminal' })
+      }
+    }}><SquareTerminal size={16} /></Button>
+  </nav>
+  // With the sidebar hidden, chats that want attention show on its toggle instead.
+  const sidebarToggle = <Button className="ghost icon sidebar-toggle" aria-expanded={!sidebarHidden} aria-controls="workspace-sidebar" aria-label={sidebarHidden ? t("Show sidebar") : t("Hide sidebar")} aria-description={sidebarHidden && attentionChats ? `${attentionChats} ${t('Chats')}` : undefined} title={t("{0} sidebar ({1})", { "0": sidebarHidden ? t('Show') : t('Hide'), "1": formatKeys('mod+b') })} onClick={() => setSidebarHidden((hidden) => !hidden)}>
+        {sidebarHidden ? <PanelLeftOpen size={16} strokeWidth={1.6} /> : <PanelLeftClose size={16} strokeWidth={1.6} />}{sidebarHidden && badge(attentionChats)}
       </Button>
 
   return (
-    <div className={`shell${sidebarHidden ? ' no-sidebar' : ''}${side === 'right' ? ' side-right' : ''}`} style={{ '--sidebar-w': `${sidebarWidth}px` } as React.CSSProperties}>
-      <nav className="rail" aria-label="Activity">
-        {RAIL.map(({ id, label, keys, Icon, group }, index) => (
-          <Fragment key={id}>
-          {index > 0 && RAIL[index - 1]!.group !== group && <Separator className="rail-sep" />}
-          <Button
-            className={ui.sidebar === id && !sidebarHidden ? 'rail-btn active' : 'rail-btn'}
-            title={keys ? `${label} (${formatKeys(keys)})` : label}
-            aria-label={label}
-            aria-pressed={ui.sidebar === id && !sidebarHidden}
-            onClick={() => (id === 'projects' && ui.sidebar === 'projects' && !sidebarHidden && !landing ? ws.showHome() : showSidebar(id))}
-          >
-            <Icon size={18} strokeWidth={1.6} />
-          </Button>
-          </Fragment>
-        ))}
-        <span className="grow" />
-        <Button className="rail-btn" aria-label="Settings" title="Settings" onClick={() => { setSettingsSection('appearance'); setSettingsOpen(true) }}><Settings size={18} strokeWidth={1.6} /></Button>
-      </nav>
-      {!sidebarHidden && <div className="sidebar-resizer" role="separator" tabIndex={0} aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDEBAR_WIDTH_RANGE[0]} aria-valuemax={SIDEBAR_WIDTH_RANGE[1]} aria-valuenow={sidebarWidth} title="Drag or use arrow keys to resize · double-click to reset" onPointerDown={startResize} onDoubleClick={() => saveLayout({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH })} onKeyDown={(event) => {
+    <div className={`shell${sidebarHidden ? ' no-sidebar' : ''}${workspaceTool ? ' with-workspace-tools' : ''}`} style={{ '--sidebar-w': `${sidebarWidth}px`, '--workspace-tools-w': `${toolsWidth}px` } as React.CSSProperties}>
+      <div className="app-titlebar">
+        {sidebarToggle}
+        {globalPage ? <header className="task-header"><span className="header-title">{t("Schedules")}</span></header> : <TaskHeader starting={!!startProject || landing} tools={toolButtons} />}
+      </div>
+      {!sidebarHidden && <div className="sidebar-resizer" role="separator" tabIndex={0} aria-orientation="vertical" aria-label={t("Resize sidebar")} aria-valuemin={SIDEBAR_WIDTH_RANGE[0]} aria-valuemax={SIDEBAR_WIDTH_RANGE[1]} aria-valuenow={sidebarWidth} title={t("Drag or use arrow keys to resize · double-click to reset")} onPointerDown={startResize} onDoubleClick={() => saveLayout({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH })} onKeyDown={(event) => {
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
         event.preventDefault()
         const max = Math.min(SIDEBAR_WIDTH_RANGE[1], window.innerWidth * .5)
-        const delta = (event.key === 'ArrowRight' ? 20 : -20) * (side === 'left' ? 1 : -1)
+        const delta = event.key === 'ArrowRight' ? 20 : -20
         saveLayout({ sidebarWidth: Math.round(Math.max(SIDEBAR_WIDTH_RANGE[0], Math.min(max, event.key === 'Home' ? SIDEBAR_WIDTH_RANGE[0] : event.key === 'End' ? max : sidebarWidth + delta))) })
       }} />}
-      <aside id="workspace-sidebar" className="sidebar" aria-hidden={sidebarHidden}>
-        <div className="sidebar-top"><Button type="button" className="wordmark-link" aria-label="Chats home" title="Home" onClick={() => ws.showHome()}><Wordmark className="app-wordmark" height={15} /></Button>{!sidebarHidden && sidebarToggle}</div>
-        <ProjectSwitcher />
+      <aside id="workspace-sidebar" className="sidebar" aria-hidden={sidebarHidden} inert={sidebarHidden}>
+        <div className="sidebar-top">
+          <Button type="button" className="wordmark-link" aria-label={t("Home")} title={t("Home")} onClick={() => ws.showHome()}><Wordmark className="app-wordmark" height={15} /></Button>
+          <span className="release-badge">Alpha</span>
+          <Button className="ghost icon sidebar-search" aria-label={t("Search chats")} title={`${t("Search chats")} (${formatKeys('mod+k')})`} onClick={() => setSearchingChats(true)}><Search size={16} /></Button>
+        </div>
+        <nav className="sidebar-nav" aria-label={t("Activity")}>
+          <Button className="nav-btn" onClick={() => ws.newTask()}>
+            <SquarePen size={15} /> <span className="grow">{t("New chat")}</span> <kbd>{formatKeys('mod+n')}</kbd>
+          </Button>
+          <Button className={`nav-btn${globalPage ? ' active' : ''}`} aria-pressed={globalPage} onClick={() => ws.setSidebar(globalPage ? 'projects' : 'schedules')}>
+            <CalendarClock size={15} /> <span className="grow">{t("Schedules")}</span>
+          </Button>
+        </nav>
         <div className="sidebar-body">
-          {ui.sidebar === 'projects' && <ProjectsPanel />}
+          {ui.sidebar !== 'schedules' && <ProjectsPanel />}
           {ui.sidebar === 'schedules' && <ScheduleNavigation />}
-          {ui.sidebar === 'explorer' && <ExplorerPanel />}
-          {ui.sidebar === 'scm' && <ScmPanel />}
-          {ui.sidebar === 'search' && <SearchPanel key={ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : 'empty'} />}
+        </div>
+        <div className="sidebar-footer">
+          {!sidebarHidden && <UsageFooter />}
+          <Button className="nav-btn" aria-label={t("Settings")} title={`${t("Settings")} (${formatKeys('mod+,')})`} onClick={() => { setSettingsSection('appearance'); setSettingsOpen(true) }}><Settings size={15} /> <span className="grow">{t("Settings")}</span> <kbd>{formatKeys('mod+,')}</kbd></Button>
         </div>
       </aside>
       <main className="main">
-        {globalPage || landing ? <header className="task-header">{sidebarHidden && sidebarToggle}<span className="header-title">{ui.sidebar === 'schedules' ? 'Schedules' : 'Home'}</span></header> : <TaskHeader starting={!!startProject} sidebarToggle={sidebarHidden ? sidebarToggle : null} />}
         <div className="task-area">
           {landing && <HomePage />}
           {ui.sidebar === 'schedules' && <SchedulesPage />}
@@ -180,10 +210,31 @@ function Shell() {
             <TaskPane key={workspace} taskId={taskId} visible={!globalPage && !landing && (startProject ? workspace === startContext : ui.activeTaskId === taskId)} />
           ))}
         </div>
-        <StatusBar />
+        <StatusBar usage={sidebarHidden ? <UsageRings /> : null} />
       </main>
+      {workspaceTool && <aside className="workspace-tools" aria-label={t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')}>
+        <div className="workspace-tools-resizer" role="separator" tabIndex={0} aria-label={t("Resize sidebar")} aria-orientation="vertical" aria-valuemin={220} aria-valuemax={480} aria-valuenow={toolsWidth} onDoubleClick={() => setToolsWidth(340)} onPointerDown={(event) => {
+          toolsResizeCleanup.current?.()
+          const startX = event.clientX, startWidth = toolsWidth
+          toolsResizeCleanup.current = beginPaneResize(event, 'column', (next) => setToolsWidth(Math.round(Math.max(220, Math.min(480, window.innerWidth * .35, startWidth + startX - next.clientX)))))
+        }} onKeyDown={(event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+          event.preventDefault()
+          setToolsWidth((width) => Math.max(220, Math.min(480, window.innerWidth * .35, event.key === 'Home' ? 220 : event.key === 'End' ? 480 : width + (event.key === 'ArrowLeft' ? 20 : -20))))
+        }} />
+        <header className="workspace-tools-header">
+          <span className="grow">{t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')}</span>
+          <Button className="ghost icon" aria-label={t("Close")} title={t("Close")} onClick={() => ws.setSidebar('projects')}><PanelRightClose size={15} /></Button>
+        </header>
+        <div className="sidebar-body">
+          {workspaceTool === 'explorer' && <ExplorerPanel />}
+          {workspaceTool === 'scm' && <ScmPanel />}
+          {workspaceTool === 'search' && <SearchPanel key={ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : 'empty'} />}
+        </div>
+      </aside>}
       {settingsOpen && <SettingsPanel initialSection={settingsSection} shortcuts={commands.filter((command) => command.keys).map((command) => ({ title: command.title, category: command.category, keys: command.keys! }))} onClose={() => setSettingsOpen(false)} />}
       {palette && <Palette ws={ws} commands={commands} mode={palette} onClose={() => setPalette(null)} />}
+      {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
       <ProviderSetupTerminal />
       <Notifications />
       <TitleTooltips />
@@ -193,21 +244,24 @@ function Shell() {
 }
 
 function Welcome() {
+  const language = useLanguage()
+
   const addProject = useAddProject()
   return (
     <div className="welcome">
       <AnimatedMark className="welcome-mark" size={72} />
       <Wordmark className="wordmark" height={34} />
-      <p>Your project. Every repo. One workspace.</p>
-      <p className="muted">Add a repository, or a folder that holds several of them.</p>
+      <p>{t("Your project. Every repo. One workspace.")}</p>
+      <p className="muted">{t("Add a repository, or a folder that holds several of them.")}</p>
       <Button className="primary" disabled={addProject.busy} onClick={() => void addProject.add()}>
-        <FolderPlus size={14} /> Add project…
-      </Button>
+        <FolderPlus size={14} /> {t(" Add project…")}</Button>
     </div>
   )
 }
 
-function TaskHeader({ starting, sidebarToggle }: { starting: boolean; sidebarToggle?: ReactNode }) {
+function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode }) {
+  const language = useLanguage()
+
   const ws = useWorkspace()
   const ctx = ws.ui.activeTaskId
   const isProject = !!ctx && isWorkspaceCtx(ctx)
@@ -232,8 +286,8 @@ function TaskHeader({ starting, sidebarToggle }: { starting: boolean; sidebarTog
   }
 
   const contextMenu = useContextMenu('Chat actions', task ? [
-    { key: 'rename', label: <><Pencil size={14} />Rename</>, onSelect: () => setRenaming(true) },
-    { key: 'archive', label: <><Archive size={14} />Archive</>, onSelect: async () => {
+    { key: 'rename', label: <><Pencil size={14} />{t("Rename")}</>, onSelect: () => setRenaming(true) },
+    { key: 'archive', label: <><Archive size={14} />{t("Archive")}</>, onSelect: async () => {
       await invoke('tasks.archive', task.id, true)
       ws.forgetTask(task.id)
       await ws.refresh()
@@ -242,22 +296,16 @@ function TaskHeader({ starting, sidebarToggle }: { starting: boolean; sidebarTog
 
   return (
     <header className="task-header" onContextMenu={task ? contextMenu.onContextMenu : undefined}>
-      {sidebarToggle}
       <div className="header-center">
-      {starting && <span className="header-title">New chat</span>}
-      {!starting && isProject && project && (
-        <>
-          <FolderClosed size={14} className="muted" />
-          <span className="header-title" title={project.root ?? undefined}>{ctx && isWorktreeCtx(ctx) ? ws.titleOf(ctx) : project.name}</span>
-        </>
-      )}
-      {task && <MessageSquare size={14} className="muted" />}
+      <ProjectSwitcher />
+      {starting && <span className="header-title">{t("New chat")}</span>}
+      {!starting && isProject && project && ctx && isWorktreeCtx(ctx) && <span className="header-title" title={project.root ?? undefined}>{ws.titleOf(ctx)}</span>}
       {task &&
         (renaming ? (
           <Input
             ref={input}
             className="inline-edit header-edit no-drag"
-            aria-label="Chat title"
+            aria-label={t("Chat title")}
             defaultValue={task.title}
             onBlur={(e) => void rename(e.target.value)}
             onKeyDown={(e) => {
@@ -269,16 +317,20 @@ function TaskHeader({ starting, sidebarToggle }: { starting: boolean; sidebarTog
           <ChatSwitcher contextId={task.id} />
         ))}
       {!task && project && ctx && <ChatSwitcher contextId={ctx} />}
-      {task && project && <span className="header-meta">{project.name}</span>}
-      {task?.mode === 'worktree' && <span className="chip header-worktree" title="Active isolated worktree">{ws.workspaces.find((workspace) => workspace.id === task.workspaceId)?.name ?? 'Isolated worktree'}</span>}
+      {!starting && ctx && ws.taskUi[ctx]?.views.some(view => view.kind === 'agent') && <Button className="ghost icon chat-find-trigger no-drag" aria-label={t("Find in conversation")} title={t("Find in conversation ({0})", { "0": formatKeys('mod+f') })} onClick={() => window.dispatchEvent(new Event('ramu:find-in-chat'))}><Search size={16} /></Button>}
+      {task?.mode === 'worktree' && <span className="chip header-worktree" title={t("Active isolated worktree")}>{ws.workspaces.find((workspace) => workspace.id === task.workspaceId)?.name ?? t("Isolated worktree")}</span>}
       {error && <span className="error small">{error}</span>}
       </div>
+      {ctx && project && !starting && <WindowActions ctx={ctx} projectId={project.id} />}
+      {tools}
       {contextMenu.menu}
     </header>
   )
 }
 
-function StatusBar() {
+function StatusBar({ usage }: { usage?: ReactNode }) {
+  const language = useLanguage()
+
   const ws = useWorkspace()
   const taskId = ws.ui.activeTaskId
   const state = taskId ? ws.taskUi[taskId] : undefined
@@ -323,7 +375,7 @@ function StatusBar() {
     return () => { disposed = true; off(); clearTimeout(timer); window.removeEventListener('ramu:git-updated', refresh) }
   }, [taskId, binding?.repoId, binding?.cwd, binding?.setupState, revision])
 
-  if (!binding || !taskId) return <footer className="status-bar" />
+  if (!binding || !taskId) return <footer className="status-bar"><span className="grow" />{usage}</footer>
   const run = async (action: () => Promise<unknown>, needsSaved = false) => {
     setBusy(true)
     try {
@@ -336,12 +388,13 @@ function StatusBar() {
   const project = ws.projectOf(taskId)
   return <footer className="status-bar">
     {repos.length > 1
-      ? <Dropdown label="Repository" className="status-repo strong" value={binding.repoId} options={repos.map((b) => ({ value: b.repoId, label: b.repoName }))} onChange={setPicked} />
+      ? <Dropdown label={t("Repository")} className="status-repo strong" value={binding.repoId} options={repos.map((b) => ({ value: b.repoId, label: b.repoName }))} onChange={setPicked} />
       : <span className="strong status-project" title={project?.name}>{project && project.name !== binding.repoName ? `${project.name} / ${binding.repoName}` : binding.repoName}</span>}
     <BranchPicker binding={binding} status={status} branches={branches} busy={busy || !ready} className="status-branch" onChange={(branch) => void run(() => invoke('git.checkout', taskId, binding.repoId, branch), true)} />
     <SyncButton status={status} busy={busy || !ready} pullMode={preferences.pullMode} className="status-sync" onSync={() => void run(() => invoke('git.sync', taskId, binding.repoId), true)} />
-    {repos.length > 1 && <Button className="ghost sync-button status-sync-all" title="Sync every repository in this workspace" onClick={() => setSyncAll(true)}><RefreshCcw size={13} /><span>Sync all</span></Button>}
+    {repos.length > 1 && <Button className="ghost sync-button status-sync-all" title={t("Sync every repository in this workspace")} onClick={() => setSyncAll(true)}><RefreshCcw size={13} /><span>{t("Sync all")}</span></Button>}
     {syncAll && taskId && <WorkspaceSyncDialog taskId={taskId} bindings={repos} onClose={() => setSyncAll(false)} />}
-    <span className="status-checkout" title={binding.cwd}>{binding.mode === 'current' ? 'Current checkout' : 'Isolated worktree'}</span>
+    <span className="status-checkout" title={binding.cwd}>{binding.mode === 'current' ? t("Current checkout") : t("Isolated worktree")}</span>
+    {usage && <><span className="grow" />{usage}</>}
   </footer>
 }

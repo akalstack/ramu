@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 import { Button } from '@/components/ui/button'
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 import icon from '../../../assets/icon.svg'
@@ -9,11 +10,13 @@ let markRevealed = false
 
 /** The approved flat app icon, shared with the desktop and README assets. */
 export function BrandMark({ size, className }: { size: number; className?: string }) {
+  useLanguage()
   return <img className={className} src={icon} width={size} height={size} alt="" draggable={false} />
 }
 
 /** The same r + dot as the app icon, without its tile, for quiet empty states. */
 export function AnimatedMark({ size, className = '' }: { size: number; className?: string }) {
+  useLanguage()
   const [reveal, setReveal] = useState(false)
   const [tap, setTap] = useState(0)
   useLayoutEffect(() => {
@@ -22,7 +25,7 @@ export function AnimatedMark({ size, className = '' }: { size: number; className
     setReveal(true)
   }, [])
 
-  return <Button className="animated-mark-button" type="button" aria-label="Animate Ramu logo" onClick={() => {
+  return <Button className="animated-mark-button" type="button" aria-label={t("Animate Ramu logo")} onClick={() => {
     setReveal(false)
     setTap((count) => count + 1)
   }}>
@@ -34,11 +37,13 @@ export function AnimatedMark({ size, className = '' }: { size: number; className
 }
 
 export function BootScreen() {
-  return <div className="boot" role="status" aria-label="Starting Ramu"><BrandMark className="boot-mark" size={104} /></div>
+  useLanguage()
+  return <div className="boot" role="status" aria-label={t("Starting Ramu")}><BrandMark className="boot-mark" size={104} /></div>
 }
 
 /** Keep one animation mounted while the nested application providers load. */
 export function StartupScreen({ ready, children }: { ready: boolean; children: ReactNode }) {
+  useLanguage()
   const [motionDone, setMotionDone] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [closed, setClosed] = useState(false)
   const released = ready && motionDone
@@ -58,7 +63,7 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
 
   return <>
     <div className="startup-content" inert={!released} aria-hidden={!released} style={{ visibility: released ? 'visible' : 'hidden' }}>{children}</div>
-    {!closed && <div className={`startup-overlay${released ? ' startup-released' : ''}`} role="status" aria-label="Starting Ramu" aria-hidden={released}>
+    {!closed && <div className={`startup-overlay${released ? ' startup-released' : ''}`} role="status" aria-label={t("Starting Ramu")} aria-hidden={released}>
       <div className="startup-logo" dangerouslySetInnerHTML={{ __html: startupLogo }} onAnimationEnd={(event) => {
         if (event.animationName === 'ramu-startup-dot') setMotionDone(true)
       }} />
@@ -68,5 +73,6 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
 
 /** The "ramu." wordmark, drawn for dark surfaces. */
 export function Wordmark({ height, className }: { height: number; className?: string }) {
+  useLanguage()
   return <img className={className} src={wordmark} height={height} alt="Ramu" draggable={false} />
 }

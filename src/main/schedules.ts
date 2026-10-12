@@ -7,7 +7,7 @@ import type { AgentService } from './agent'
 import type { Workspace } from './workspace'
 import { NO_PROJECT, type Schedule, type ScheduleInput, type ScheduleRule, type ScheduleRun } from '../shared/types'
 
-export const settingsSchema = z.object({ provider: z.enum(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity']), model: z.string().max(200), effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable(), serviceTier: z.enum(['standard', 'fast']).default('standard'), access: z.enum(['ask', 'edits', 'auto', 'full']), autoFallback: z.boolean() })
+export const settingsSchema = z.object({ provider: z.enum(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity']), model: z.string().max(200), effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable(), serviceTier: z.enum(['standard', 'fast']).default('standard'), access: z.enum(['edits', 'auto', 'full']), autoFallback: z.boolean() })
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)
 const instant = z.string().refine((s) => /(?:Z|[+-]\d\d:\d\d)$/.test(s) && DateTime.fromISO(s).isValid, 'Use an ISO timestamp with an explicit offset')
 export const ruleSchema = z.discriminatedUnion('kind', [
@@ -97,7 +97,7 @@ export class ScheduleService {
     return this.db.prepare(`SELECT ${RUN_COLUMNS} FROM schedule_runs WHERE schedule_id=? AND due_at=?`).get(id, due) as unknown as ScheduleRun
   }
   recover(): void {
-    this.db.prepare("UPDATE schedule_runs SET status='interrupted', error='Background service restarted. Open the chat to inspect and continue; actions were not replayed.' WHERE status IN ('running','needs-input')").run()
+    this.db.prepare("UPDATE schedule_runs SET status='interrupted', error='Background service restarted. Open the chat to inspect and continue; actions were not replayed.' WHERE status IN ('running','needs-input') AND NOT EXISTS (SELECT 1 FROM agent_recovery WHERE agent_recovery.session_id = schedule_runs.session_id)").run()
   }
   async tick(now = Date.now()): Promise<void> {
     if (this.ticking || this.stopping) return
@@ -146,7 +146,7 @@ export class ScheduleService {
       const active = this.db.prepare(`SELECT ${RUN_COLUMNS} FROM schedule_runs WHERE session_id IS NOT NULL AND status IN ('running','needs-input')`).all() as unknown as ScheduleRun[]
       for (const run of active) {
         const session = this.agents.get(run.sessionId!)
-        const status = session.state === 'needs-input' ? 'needs-input' : session.state === 'idle' ? 'completed' : session.state === 'failed' ? 'failed' : ['stopped', 'restored'].includes(session.state) ? 'interrupted' : 'running'
+        const status = this.agents.isRecoveryPending(session.id) ? 'running' : session.state === 'needs-input' ? 'needs-input' : session.state === 'idle' ? 'completed' : session.state === 'failed' ? 'failed' : ['stopped', 'restored'].includes(session.state) ? 'interrupted' : 'running'
         if (status !== run.status) { this.db.prepare('UPDATE schedule_runs SET status=? WHERE id=?').run(status, run.id); this.changed() }
       }
     } finally { this.ticking = false }

@@ -126,6 +126,15 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE tasks ADD COLUMN pinned_at INTEGER;`,
   // The order projects were dragged into; projects never dragged keep creation order after them.
   `ALTER TABLE projects ADD COLUMN position INTEGER;`,
+  // A sub-agent Ramu runs itself is a session of its own, hidden from the chat list and tied to the chat that started it.
+  `ALTER TABLE agent_sessions ADD COLUMN parent_session_id TEXT; CREATE INDEX sessions_by_parent ON agent_sessions(parent_session_id);`,
+  // Keep restart intent durable even if another restart happens before the provider launches.
+  `CREATE TABLE agent_recovery (session_id TEXT PRIMARY KEY REFERENCES agent_sessions(id) ON DELETE CASCADE, queue_paused INTEGER NOT NULL DEFAULT 0);`,
+  // The Supervised access mode is gone; anything saved with it now asks before commands only, the closest remaining mode.
+  `UPDATE agent_sessions SET settings = replace(settings, '"access":"ask"', '"access":"edits"') WHERE settings LIKE '%"access":"ask"%';
+  UPDATE agent_events SET event = replace(event, '"access":"ask"', '"access":"edits"') WHERE event LIKE '%"access":"ask"%';
+  UPDATE schedules SET data = replace(data, '"access":"ask"', '"access":"edits"') WHERE data LIKE '%"access":"ask"%';
+  UPDATE app_state SET value = replace(replace(value, '"access":"ask"', '"access":"edits"'), '"defaultAccess":"ask"', '"defaultAccess":"edits"') WHERE key = 'app-preferences' OR key = 'model-preferences' OR key LIKE 'asides:%';`,
 ]
 
 export type Db = DatabaseSync

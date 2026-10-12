@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useEffect, useRef, useState, type RefObject } from 'react'
@@ -9,13 +10,18 @@ declare global {
 }
 
 /** Find in the conversation: highlights every match in the visible text, steps through them, and scrolls to the current one. */
-export function ChatFind({ root, onClose }: { root: RefObject<HTMLElement | null>; onClose: () => void }) {
+export function ChatFind({ root, focusRequest = 0, initialQuery, onClose }: { root: RefObject<HTMLElement | null>; focusRequest?: number; /** Filled in when a chat is opened from Search chats. */ initialQuery?: string; onClose: () => void }) {
+  useLanguage()
   const [query, setQuery] = useState('')
   const [count, setCount] = useState(0)
   const [current, setCurrent] = useState(0)
   const ranges = useRef<Range[]>([])
   const input = useRef<HTMLInputElement>(null)
-  useEffect(() => { input.current?.focus(); input.current?.select() }, [])
+  // ⌘F again while open goes back to the field and selects the query, as in a browser.
+  useEffect(() => {
+    if (initialQuery) { setQuery(initialQuery); setCurrent(0) }
+    input.current?.focus(); input.current?.select()
+  }, [focusRequest])
 
   const scan = () => {
     const el = root.current, highlights = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights
@@ -54,11 +60,11 @@ export function ChatFind({ root, onClose }: { root: RefObject<HTMLElement | null
 
   const step = (delta: number) => { if (count) setCurrent((value) => (value + delta + count) % count) }
   return <div className="chat-find-bar" role="search">
-    <SearchInput ref={input} aria-label="Find in conversation" placeholder="Find in conversation" value={query} onChange={(event) => { setQuery(event.target.value); setCurrent(0) }} onClear={() => setQuery('')}
+    <SearchInput ref={input} aria-label={t("Find in conversation")} placeholder={t("Find in conversation")} value={query} onChange={(event) => { setQuery(event.target.value); setCurrent(0) }} onClear={() => setQuery('')}
       onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); step(event.shiftKey ? -1 : 1) } else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() } }} />
-    <span className="chat-find-count muted small" aria-live="polite">{query.trim() ? (count ? `${current + 1} of ${count}` : 'No results') : ''}</span>
-    <Button className="ghost icon small-icon" aria-label="Previous match" title="Previous (⇧Enter)" disabled={!count} onClick={() => step(-1)}><ChevronUp size={14} /></Button>
-    <Button className="ghost icon small-icon" aria-label="Next match" title="Next (Enter)" disabled={!count} onClick={() => step(1)}><ChevronDown size={14} /></Button>
-    <Button className="ghost icon small-icon" aria-label="Close find" title="Close (Esc)" onClick={onClose}><X size={14} /></Button>
+    <span className="chat-find-count muted small" aria-live="polite">{query.trim() ? (count ? t("{0} of {1}", { "0": current + 1, "1": count }) : t("No results")) : ''}</span>
+    <Button className="ghost icon small-icon" aria-label={t("Previous match")} title={t("Previous (⇧Enter)")} disabled={!count} onClick={() => step(-1)}><ChevronUp size={14} /></Button>
+    <Button className="ghost icon small-icon" aria-label={t("Next match")} title={t("Next (Enter)")} disabled={!count} onClick={() => step(1)}><ChevronDown size={14} /></Button>
+    <Button className="ghost icon small-icon" aria-label={t("Close find")} title={t("Close (Esc)")} onClick={onClose}><X size={14} /></Button>
   </div>
 }

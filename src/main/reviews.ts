@@ -11,6 +11,7 @@ import type { AgentService } from './agent'
 import type { Workspace } from './workspace'
 import { resolveInRoot } from './files'
 import { RunUndo } from './undo'
+import { combineChatUndo } from './chatUndo'
 import { readReviewCurrent, reviewCheckout, reviewRenames, type ReviewCheckout } from './reviewLive'
 import { reviewCommentOutdated } from '../shared/reviewOutdated'
 import { reviewLineStats } from './reviewStats'
@@ -26,6 +27,7 @@ export class ReviewService {
   private aiTasks = new Map<string, Promise<void>>()
   private statsTasks = new Map<string, Promise<ChangeReview>>()
   private stopping = false
+  private readonly chatUndoPlans = new Map<string, { sessionId: string; userSeq: number; lastSeq: number; reviewIds: string[]; covers: string[]; members: Record<string, { reviewId: string; fileId: string }[]>; expires: number }>()
   stop(): void { this.stopping = true }
   async settle(): Promise<void> { await Promise.allSettled([...this.completing.values()]); await Promise.allSettled([...this.aiTasks.values(), ...this.statsTasks.values()]) }
   constructor(private readonly db: Db, private readonly workspace: Workspace, private readonly agents: AgentService, private readonly root: string, private readonly changed: () => void) { mkdirSync(root, { recursive: true, mode: 0o700 }); this.undo = new RunUndo(join(root, 'undo')) }
@@ -214,6 +216,48 @@ export class ReviewService {
     return this.undo.preview(id, review.files, review.roots, review.undoFileIds)
   }
   undoReviewId(token: string): string { return this.undo.reviewId(token) }
+  async chatUndoPreview(sessionId: string, userSeq: number) {
+    const events = this.agents.events(sessionId)
+    if (events[userSeq - 1]?.kind !== 'user') throw new Error('Choose a sent chat message to restore from.')
+    const all = this.stored(sessionId).reverse()
+    const start = all.findIndex((review) => (review.startSeq ?? 0) < userSeq && (review.endSeq ?? Number.MAX_SAFE_INTEGER) >= userSeq)
+    if (start < 0) throw new Error('This message has no recorded file snapshot.')
+    const ranges = all.slice(start)
+    if (ranges.some((review) => review.state !== 'ready')) throw new Error('This range includes an unfinished or interrupted capture. Review current files before restoring.')
+    const first = ranges[0]!
+    const firstUser = events.findIndex((event, index) => index + 1 > (first.startSeq ?? 0) && event.kind === 'user' && !event.agentId) + 1
+    if (firstUser !== userSeq) throw new Error('This message shares a file snapshot with earlier input. Choose the first message of that run to restore its files.')
+    for (const review of ranges) await this.requireOriginalCheckout(review.id)
+    const combined = combineChatUndo(ranges.map((review) => this.get(review.id) as ReviewData))
+    const covers = [...new Set(combined.roots.map((root) => root.cwd))]
+    if (this.agents.activeWriter(covers)) throw new Error('Wait for the workspace agent to finish before restoring files.')
+    const preview = await this.undo.preview(first.id, combined.files, combined.roots, [], combined.blocked)
+    for (const [token, plan] of this.chatUndoPlans) if (plan.expires < Date.now()) this.chatUndoPlans.delete(token)
+    this.chatUndoPlans.set(preview.token, { sessionId, userSeq, lastSeq: events.length, reviewIds: ranges.map((review) => review.id), covers, members: combined.members, expires: preview.expiresAt })
+    return preview
+  }
+  chatUndoCovers(token: string): string[] {
+    this.undo.reviewId(token)
+    const plan = this.chatUndoPlans.get(token)
+    if (!plan) throw new Error('Unknown chat restore preview.')
+    return plan.covers
+  }
+  async chatUndoApply(token: string, fileIds: string[]): Promise<void> {
+    const covers = this.chatUndoCovers(token), plan = this.chatUndoPlans.get(token)!
+    if (this.agents.events(plan.sessionId).length !== plan.lastSeq) throw new Error('The chat changed after this preview. Preview again before restoring files.')
+    await this.agents.withWorkspaceReservation(covers, async () => {
+      for (const reviewId of plan.reviewIds) await this.requireOriginalCheckout(reviewId)
+      const result = await this.undo.apply(token, fileIds)
+      this.chatUndoPlans.delete(token)
+      const restored = new Map<string, string[]>()
+      for (const id of result.fileIds) for (const member of plan.members[id] ?? []) restored.set(member.reviewId, [...(restored.get(member.reviewId) ?? []), member.fileId])
+      for (const [id, ids] of restored) {
+        const review = this.get(id), undone = [...new Set([...(review.undoFileIds ?? []), ...ids])]
+        this.update({ ...review, undoneAt: Date.now(), undoFileIds: undone, reviewedAt: review.files.every((file) => undone.includes(file.id)) ? Date.now() : review.reviewedAt })
+      }
+      this.agents.recordFileRestore(plan.sessionId, plan.userSeq, result.fileIds.length)
+    })
+  }
   async undoApply(token: string, fileIds: string[]): Promise<ChangeReview> {
     const id = this.undo.reviewId(token)
     await this.requireOriginalCheckout(id)

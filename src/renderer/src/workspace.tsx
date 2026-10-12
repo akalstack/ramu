@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 // Renderer-side workspace state: projects, tasks, open task tabs and their view tabs.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { NO_PROJECT, type TaskStatus } from '../../shared/types'
@@ -49,19 +50,20 @@ export interface WorkspaceApi {
   activateTask(taskId: string): void
   workspaceOf(taskId: string): string
   openView(taskId: string, view: ViewInput): void
+  /** Turns a preview tab into a regular one, so the next preview no longer replaces it. */
+  keepView(taskId: string, viewId: string): void
   reopenClosedView(taskId: string): void
   renameFileViews(taskId: string, repoId: string, path: string, destination: string): void
   closeView(taskId: string, viewId: string): void
   closeViews(taskId: string, viewIds: string[]): void
   activateView(taskId: string, viewId: string): void
   showChat(taskId: string): void
-  setTerminalPanel(taskId: string, settings: Partial<Pick<TaskUiState, 'terminalOpen' | 'terminalLayout' | 'terminalGroups' | 'terminalTabPosition' | 'terminalHeight'>>): void
+  setTerminalPanel(taskId: string, settings: Partial<Pick<TaskUiState, 'terminalOpen' | 'terminalLayout' | 'terminalGroups' | 'terminalTabPosition' | 'terminalHeight' | 'terminalDock'>>): void
   splitTerminal(taskId: string, direction: 'horizontal' | 'vertical'): void
   unsplitTerminal(taskId: string, terminalId: string): void
   setDockWidth(taskId: string, width: number): void
   /** Forget every dragged editor/chat split and terminal height, in all workspaces. */
   resetLayoutSizes(): void
-  toggleChatDock(taskId: string): void
   setDirty(viewId: string, dirty: boolean): void
   binding(taskId: string, repoId: string): RepositoryBinding | undefined
   task(taskId: string): Task | undefined
@@ -74,6 +76,11 @@ export function useWorkspace(): WorkspaceApi {
   const ws = useContext(Ctx)
   if (!ws) throw new Error('WorkspaceProvider missing')
   return ws
+}
+
+/** Files, diffs and commit views open in one reusable preview tab until edited or kept open. */
+export function isPreviewable(v: ViewInput | ViewDescriptor): v is Extract<ViewInput | ViewDescriptor, { kind: 'file' | 'diff' | 'git' }> {
+  return v.kind === 'file' || v.kind === 'diff' || v.kind === 'git'
 }
 
 function viewKey(v: ViewInput | ViewDescriptor): string {
@@ -115,6 +122,7 @@ export const isProjectCtx = (ctx: string) => ctx.startsWith('project:')
 const EMPTY_TASK_UI: TaskUiState = { views: [], activeViewId: null }
 
 export function WorkspaceProvider({ children }: { children: (loaded: boolean) => ReactNode }) {
+  const language = useLanguage()
   const { preferences } = useAppSettings()
   const closedEditors = useRef<Record<string, ViewInput[]>>({})
   const [loaded, setLoaded] = useState(false)
@@ -260,9 +268,9 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     (viewId: string, d: boolean) => {
       setDirtyMap((m) => (m[viewId] === d ? m : { ...m, [viewId]: d }))
       if (d) setTaskUi((current) => Object.fromEntries(Object.entries(current).map(([owner, state]) => {
-        if (!state.views.some((view) => view.id === viewId && view.kind === 'file' && view.preview)) return [owner, state]
+        if (!state.views.some((view) => view.id === viewId && isPreviewable(view) && view.preview)) return [owner, state]
         dirtyTasks.current.add(owner)
-        return [owner, { ...state, views: state.views.map((view) => view.id === viewId && view.kind === 'file' ? { ...view, preview: false } : view) }]
+        return [owner, { ...state, views: state.views.map((view) => view.id === viewId && isPreviewable(view) ? { ...view, preview: false } : view) }]
       })))
     },
     [],
@@ -282,7 +290,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     for (const task of tasks) {
       const own = taskUi[task.id] ?? EMPTY_TASK_UI
       const shared = taskUi[workspaceOf(task.id)] ?? EMPTY_TASK_UI
-      effectiveUi[task.id] = { ...shared, ...own, activeViewId: shared.activeViewId ?? own.activeAgentViewId ?? own.views.find((view) => view.kind === 'agent')?.id ?? null, dockWidth: shared.dockWidth, dockHidden: shared.dockHidden, views: [...own.views.filter((v) => v.kind === 'agent'), ...shared.views.filter((v) => v.kind !== 'agent')], activeTerminalId: shared.activeTerminalId, terminalOpen: shared.terminalOpen, terminalLayout: shared.terminalLayout, terminalGroups: shared.terminalGroups, terminalTabPosition: shared.terminalTabPosition, terminalHeight: shared.terminalHeight }
+      effectiveUi[task.id] = { ...shared, ...own, activeViewId: shared.activeViewId ?? own.activeAgentViewId ?? own.views.find((view) => view.kind === 'agent')?.id ?? null, dockWidth: shared.dockWidth, dockHidden: shared.dockHidden, views: [...own.views.filter((v) => v.kind === 'agent'), ...shared.views.filter((v) => v.kind !== 'agent')], activeTerminalId: shared.activeTerminalId, terminalOpen: shared.terminalOpen, terminalLayout: shared.terminalLayout, terminalGroups: shared.terminalGroups, terminalTabPosition: shared.terminalTabPosition, terminalHeight: shared.terminalHeight, terminalDock: shared.terminalDock }
     }
     const viewsOf = (taskId: string) => effectiveUi[taskId]?.views ?? []
     const closeViews = (taskId: string, viewIds: string[]) => {
@@ -290,9 +298,9 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       const targets = viewsOf(taskId).filter((view) => requested.has(view.id))
       if (!targets.length) return
       const unsaved = targets.filter((view) => dirty[view.id])
-      if (unsaved.length && !confirm(unsaved.length === 1 ? 'Discard unsaved changes and close this tab?' : `Discard unsaved changes in ${unsaved.length} files and close these tabs?`)) return
+      if (unsaved.length && !confirm(unsaved.length === 1 ? t('Discard unsaved changes and close this tab?') : t('Discard unsaved changes in {count} files and close these tabs?', { count: unsaved.length }))) return
       const owner = workspaceOf(taskId)
-      const remembered = targets.filter((view) => view.kind === 'file' || view.kind === 'diff' || view.kind === 'git' || view.kind === 'review').map((view) => view.kind === 'file' ? { ...view, preview: false } : view)
+      const remembered = targets.filter((view) => isPreviewable(view) || view.kind === 'review').map((view) => isPreviewable(view) ? { ...view, preview: false } : view)
       closedEditors.current[owner] = [...(closedEditors.current[owner] ?? []), ...remembered].slice(-20)
       const closed = new Set(targets.map((view) => view.id))
       setDirtyMap((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !closed.has(id))))
@@ -373,8 +381,8 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         }))
       },
       titleOf(ctx) {
-        if (isWorktreeCtx(ctx)) return workspaces.find((w) => w.id === ctx.slice('worktree:'.length))?.name ?? 'Isolated worktree'
-        if (isProjectCtx(ctx)) return projects.find((p) => p.id === ctx.slice('project:'.length))?.name ?? 'Project'
+        if (isWorktreeCtx(ctx)) return workspaces.find((w) => w.id === ctx.slice('worktree:'.length))?.name ?? t('Isolated worktree')
+        if (isProjectCtx(ctx)) return projects.find((p) => p.id === ctx.slice('project:'.length))?.name ?? t('Project')
         return tasks.find((t) => t.id === ctx)?.title ?? ''
       },
       refresh,
@@ -393,7 +401,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       },
       closeTask(taskId) {
         // Closing a task tab never stops agents or deletes files or worktrees.
-        if (workspaceOf(taskId) === taskId && viewsOf(taskId).some((v) => dirty[v.id]) && !confirm('This workspace has unsaved files. Close it and discard those edits?')) return
+        if (workspaceOf(taskId) === taskId && viewsOf(taskId).some((v) => dirty[v.id]) && !confirm(t('This workspace has unsaved files. Close it and discard those edits?'))) return
         setUi((u) => {
           const openTaskIds = u.openTaskIds.filter((t) => t !== taskId)
           return { ...u, openTaskIds, activeTaskId: u.activeTaskId === taskId ? (openTaskIds.at(-1) ?? null) : u.activeTaskId }
@@ -414,14 +422,23 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         if (view.kind === 'agent') updateTaskUi(workspaceOf(taskId), (state) => ({ ...state, activeViewId: null }))
         const key = viewKey(view)
         const previous = taskUi[owner]?.views.find((v) => viewKey(v) === key)
-        const desc: ViewDescriptor = previous?.kind === 'review' && view.kind === 'review' ? { ...previous, ...view } : previous?.kind === 'agent' && view.kind === 'agent' ? { ...previous, sourceSeq: view.sourceSeq } : previous && previous.kind === 'file' && view.kind === 'file' ? { ...previous, ...(view.selection ? { selection: view.selection } : {}), preview: previous.preview && view.preview === true && preferences.previewTabs } : previous ?? ({ ...view, ...(view.kind === 'file' ? { preview: !!view.preview && preferences.previewTabs } : {}), id: crypto.randomUUID() } as ViewDescriptor)
+        // A first open is a preview unless the caller pins it (preview: false); reopening never turns a kept tab back into a preview.
+        const preview = preferences.previewTabs && isPreviewable(view) && view.preview !== false
+        const desc: ViewDescriptor = previous?.kind === 'review' && view.kind === 'review' ? { ...previous, ...view } : previous?.kind === 'agent' && view.kind === 'agent' ? { ...previous, sourceSeq: view.sourceSeq } : previous && previous.kind === 'file' && view.kind === 'file' ? { ...previous, ...(view.selection ? { selection: view.selection } : {}), preview: !!previous.preview && preview } : previous && isPreviewable(previous) ? { ...previous, preview: !!previous.preview && preview } : previous ?? ({ ...view, ...(isPreviewable(view) ? { preview } : {}), id: crypto.randomUUID() } as ViewDescriptor)
         if (owner !== taskId && desc.kind !== 'terminal') updateTaskUi(taskId, (own) => ({ ...own, activeViewId: desc.id }))
         updateTaskUi(owner, (s) => {
           const existing = s.views.find((v) => v.id === desc.id)
-          const keep = s.views.filter((entry) => existing || desc.kind !== 'file' || !desc.preview || entry.kind !== 'file' || !entry.preview || dirty[entry.id])
+          // The new preview replaces the previous one, unless that one has unsaved edits.
+          const keep = s.views.filter((entry) => existing || !isPreviewable(desc) || !desc.preview || !isPreviewable(entry) || !entry.preview || dirty[entry.id])
           const views = existing ? s.views.map((entry) => entry.id === desc.id ? desc : entry) : [...keep, desc]
           return focus({ ...s, views, ...(desc.kind === 'terminal' ? { terminalGroups: [...terminalGroups(s), { id: desc.id, terminalIds: [desc.id], layout: 'horizontal' as const }] } : {}) }, desc)
         })
+      },
+      keepView(taskId, viewId) {
+        const view = viewsOf(taskId).find((entry) => entry.id === viewId)
+        if (!view || !isPreviewable(view) || !view.preview) return
+        const { id: _id, ...input } = view
+        api.openView(taskId, { ...input, preview: false })
       },
       reopenClosedView(taskId) {
         const view = closedEditors.current[workspaceOf(taskId)]?.pop()
@@ -451,7 +468,6 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       setTerminalPanel: (taskId, settings) => updateTaskUi(workspaceOf(taskId), (s) => ({ ...s, ...settings })),
       splitTerminal: (taskId, direction) => { const id = crypto.randomUUID(); updateTaskUi(workspaceOf(taskId), (s) => splitTerminal(s, direction, id)) },
       unsplitTerminal: (taskId, terminalId) => updateTaskUi(workspaceOf(taskId), (s) => unsplitTerminal(s, terminalId)),
-      toggleChatDock: (taskId) => updateTaskUi(workspaceOf(taskId), (state) => ({ ...state, dockHidden: !(state.dockHidden ?? !preferences.defaultChatDockOpen) })),
       setDockWidth: (taskId, width) => updateTaskUi(workspaceOf(taskId), (s) => ({ ...s, dockWidth: Math.round(width) })),
       resetLayoutSizes: () => setTaskUi((m) => Object.fromEntries(Object.entries(m).map(([id, state]) => { dirtyTasks.current.add(id); const { dockWidth: _dock, terminalHeight: _terminal, ...rest } = state; return [id, rest] }))),
       setDirty,
@@ -464,7 +480,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         return t && projects.find((p) => p.id === t.projectId)
       },
     }
-  }, [projects, repos, tasks, workspaces, composingWorkspace, ui, taskUi, bindings, dirty, composing, refresh, refreshBindings, updateTaskUi, setDirty, unread, preferences.previewTabs, preferences.defaultChatDockOpen])
+  }, [projects, repos, tasks, workspaces, composingWorkspace, ui, taskUi, bindings, dirty, composing, refresh, refreshBindings, updateTaskUi, setDirty, unread, preferences.previewTabs, language])
 
   return <Ctx.Provider value={api}>{children(loaded)}</Ctx.Provider>
 }

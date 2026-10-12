@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 import { Button } from '@/components/ui/button'
 import { MessageSquareText, X } from 'lucide-react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -13,10 +14,11 @@ export function pendingComments(reviews: ChangeReview[], sessionId: string): Pen
     .filter((group) => group.ids.length > 0)
 }
 
-export const commentLabel = (side: 'old' | 'new', line: number, endLine: number, scope?: string) => scope === 'file' ? 'File' : `${side === 'old' ? 'L' : 'R'} ${line}${endLine !== line ? `–${endLine}` : ''}`
+export const commentLabel = (side: 'old' | 'new', line: number, endLine: number, scope?: string) => scope === 'file' ? t('File') : `${side === 'old' ? 'L' : 'R'} ${line}${endLine !== line ? `–${endLine}` : ''}`
 
 /** "2 comments" above the message box; hover for the list, × to take them off this message (they stay on the diff). */
 export function CommentsChip({ groups, onRemove }: { groups: PendingComments[]; onRemove: () => void }) {
+  useLanguage()
   const items = groups.flatMap((group) => group.ids.map((id) => {
     const comment = group.review.comments.find((c) => c.id === id)!
     const file = group.review.files.find((f) => f.id === comment.fileId)
@@ -24,9 +26,9 @@ export function CommentsChip({ groups, onRemove }: { groups: PendingComments[]; 
   }))
   if (!items.length) return null
   return <HoverCard><div className="comments-chip-wrap">
-    <HoverCardTrigger delay={150} closeDelay={120} render={<span className="attachment-chip comments-chip" tabIndex={0} aria-label={`${items.length} review ${items.length === 1 ? 'comment' : 'comments'} attached`} />}>
-      <span className="attachment-open file"><MessageSquareText size={15} /><span className="attachment-name">{items.length} {items.length === 1 ? 'comment' : 'comments'}</span></span>
-      <Button type="button" className="comments-chip-x" aria-label="Remove comments from this message" title="Remove from this message" onClick={onRemove}><X size={13} /></Button>
+    <HoverCardTrigger delay={150} closeDelay={120} render={<span className="attachment-chip comments-chip" tabIndex={0} aria-label={t("{0} review {1} attached", { "0": items.length, "1": items.length === 1 ? t('comment') : t('comments') })} />}>
+      <span className="attachment-open file"><MessageSquareText size={15} /><span className="attachment-name">{items.length} {items.length === 1 ? t("comment") : t("comments")}</span></span>
+      <Button type="button" className="comments-chip-x" aria-label={t("Remove comments from this message")} title={t("Remove from this message")} onClick={onRemove}><X size={13} /></Button>
     </HoverCardTrigger>
     <HoverCardContent side="top" align="start" sideOffset={6} className="comments-popover">{items.map((item) => <div key={item.id} className="comments-popover-item">
       <div className="comments-popover-where"><span className="review-note-where">{item.label}</span><span className="comments-popover-file" title={item.path}>{item.path}</span></div>

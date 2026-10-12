@@ -83,9 +83,10 @@ async function assertOnTop(page, locator, what) {
 }
 
 async function newTerminal(page, repoName) {
-  await pane(page).getByRole('button', { name: 'New tab' }).click()
+  if (!await pane(page).locator('.terminal-panel').isVisible()) await page.locator('.task-header').getByRole('button', { name: 'Terminal', exact: true }).click()
+  await pane(page).getByRole('button', { name: 'New terminal', exact: true }).click()
   const item = page.getByRole('menuitem', { name: `Terminal in ${repoName}`, exact: true })
-  await assertOnTop(page, item, '+ menu item')
+  await assertOnTop(page, item, 'terminal menu item')
   await item.click()
 }
 
@@ -118,7 +119,7 @@ async function startChat(page, prompt, { worktree = false } = {}) {
   const chats = page.getByRole('button', { name: 'Home', exact: true })
   if (await chats.getAttribute('aria-pressed') !== 'true') await chats.click()
   await page.getByRole('button', { name: 'New chat in shop', exact: true }).click()
-  const composingWidth = (await pane(page).locator('.agent-dock').boundingBox()).width
+  const composingWidth = (await pane(page).locator('.main-chat').boundingBox()).width
   const workspaceWidth = (await pane(page).locator('.task-body').boundingBox()).width
   check(Math.abs(composingWidth - workspaceWidth) < 1 && !await pane(page).locator('.terminal-panel').isVisible(), 'project + opens the full-width New chat screen without an editor split')
   if (worktree) {
@@ -168,7 +169,7 @@ try {
   await page.keyboard.press('Meta+s')
   await page.locator('.view-tab.active .dirty').waitFor({ state: 'detached' })
   check(readFileSync(join(web, 'src/App.tsx'), 'utf8').startsWith('// edited in Ramu\n'), 'editor save wrote to the web checkout')
-  await webTree.getByRole('button', { name: 'README.md' }).click()
+  await webTree.getByRole('button', { name: 'README.md' }).dblclick() // pin it, so the next preview does not replace it
   await page.locator('.repo-tree', { hasText: 'api' }).getByRole('button', { name: 'README.md' }).click()
   check((await page.locator('.view-tab', { hasText: 'README.md' }).locator('.tab-repo', { hasText: 'api' }).count()) === 1, 'duplicate file tabs include the repository name')
   await webTree.getByRole('button', { name: 'App.tsx' }).click()
@@ -185,14 +186,19 @@ try {
 
   // Changes: per-repository staging and commit.
   await page.getByRole('button', { name: 'Source Control', exact: true }).click()
-  await page.getByRole('combobox', { name: 'Source control repository' }).selectOption({ label: 'api' })
-  const apiScm = page.locator('.scm-repo')
+  // Each repository is a collapsible section; expand the one under test.
+  const scmRepo = async (name) => {
+    const section = page.locator('.scm-repo').filter({ has: page.locator('.scm-repo-toggle', { hasText: new RegExp(`^${name}\\d*$`) }) })
+    const toggle = section.locator('.scm-repo-toggle')
+    if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+    return section
+  }
+  const apiScm = await scmRepo('api')
   await apiScm.getByRole('button', { name: 'src/server.ts', exact: true }).click()
   await page.locator('.view[style*="flex"] .monaco-diff-editor').waitFor()
   await page.waitForTimeout(600)
   await shot(page, '04-diff')
-  await page.getByRole('combobox', { name: 'Source control repository' }).selectOption({ label: 'shop web' })
-  const webScm = page.locator('.scm-repo')
+  const webScm = await scmRepo('shop web')
   await webScm.getByRole('button', { name: 'Stage src/App.tsx' }).click()
   await webScm.getByText('Staged (1)').waitFor()
   if (!REAL) {
@@ -286,9 +292,12 @@ try {
   await pane(page).locator('.view-tab.active .dirty').waitFor()
   await pane(page).locator('.view[style*="flex"] .monaco-editor .view-lines', { hasText: 'shared unsaved buffer' }).waitFor()
   check(true, 'new current-checkout chat preserves the unsaved project editor buffer')
-  await pane(page).getByRole('button', { name: 'Show chat', exact: true }).click()
-  check(await pane(page).locator('.agent-view:visible').count() === 1 && !await pane(page).locator('.editor-area').isVisible(), 'Chat control returns to the separate conversation view')
-  await pane(page).locator('.view-tab', { hasText: 'App.tsx' }).click()
+  await pane(page).getByRole('button', { name: 'Hide workspace', exact: true }).click()
+  check(await pane(page).locator('.agent-view:visible').count() === 1 && !await pane(page).locator('.editor-area').isVisible(), 'hiding the workspace expands the main conversation')
+  await page.keyboard.press('Meta+P')
+  await page.locator('.palette-input').fill('App.tsx')
+  await page.locator('.palette-item.on', { hasText: 'src/App.tsx' }).waitFor()
+  await page.keyboard.press('Enter')
   await pane(page).locator('.view-tab.active .dirty').waitFor()
   check(true, 'returning from chat preserves the shared unsaved file tab')
   page.once('dialog', (dialog) => dialog.accept())
@@ -329,8 +338,7 @@ try {
   }
 
   // New chat inside a chat must create a project-level sibling, not another session under it.
-  await pane(page).getByRole('button', { name: 'New tab', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'New chat', exact: true }).click()
+  await page.getByRole('button', { name: 'New chat in shop', exact: true }).click()
   await startComposer(page).fill('Sibling chat')
   await page.keyboard.press('Enter')
   await page.locator('.task-header .header-title', { hasText: 'Sibling chat' }).waitFor()
@@ -388,8 +396,7 @@ try {
 
   // A new independent conversation can reuse an isolated workspace and its live shell.
   await runInTerminal(page, 'export RAMU_WORKTREE_TOKEN=shared')
-  await pane(page).getByRole('button', { name: 'New tab', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'New chat', exact: true }).click()
+  await page.getByRole('button', { name: 'New chat in shop', exact: true }).click()
   await page.getByRole('button', { name: 'Where the work happens' }).getByText('Fix checkout').waitFor()
   await startComposer(page).fill('Reuse isolated workspace')
   await page.keyboard.press('Enter')
@@ -444,7 +451,7 @@ try {
   check(await page.getByRole('menuitem', { name: 'Rename', exact: true }).evaluate((el) => el === document.activeElement), 'right-click menus support keyboard opening and navigation')
   await page.keyboard.press('Escape')
   await page.locator('.task-row', { hasText: 'Add password reset' }).click()
-  await pane(page).getByRole('button', { name: 'Show chat', exact: true }).waitFor()
+  await pane(page).locator('.main-chat .agent-view:visible').waitFor()
 } catch (err) {
   await shot(page, 'failure').catch(() => {})
   await app.close()
@@ -463,8 +470,8 @@ await page.mouse.move(resizeHandle.x + resizeHandle.width / 2, resizeHandle.y - 
 await page.mouse.up()
 check((await pane(page).locator('.terminal-panel').boundingBox()).height > 300, 'bottom terminal panel resizes vertically')
 await page.setViewportSize({ width: 1280, height: 800 })
-await pane(page).getByRole('button', { name: 'New tab', exact: true }).click()
-check(await page.getByRole('menuitem', { name: 'New chat', exact: true }).evaluate((el) => el.getBoundingClientRect().height) === 24, 'shared menus use compact 24px rows')
+await pane(page).getByRole('button', { name: 'New terminal', exact: true }).click()
+check(await page.getByRole('menuitem', { name: 'Workspace terminal', exact: true }).isVisible(), 'terminal creation lives in the terminal controls')
 await page.waitForTimeout(150)
 await shot(page, '09b-compact-layout')
 await page.keyboard.press('Escape')
@@ -476,7 +483,7 @@ await app.close()
 ;({ app, page } = await launch())
 try {
   await page.locator('.task-header .header-title', { hasText: 'Add password reset' }).waitFor()
-  await pane(page).getByRole('button', { name: 'Show chat', exact: true }).waitFor()
+  await pane(page).locator('.main-chat .agent-view:visible').waitFor()
   check((await pane(page).locator('.view-tab').count()) >= 1, 'active conversation and shared file tabs restored after restart')
   await pane(page).locator('.tabs-right .terminal-tabs').waitFor()
   check(await pane(page).locator('.layout-horizontal .terminal-pane:visible').count() === 2 && (await pane(page).locator('.terminal-panel').boundingBox()).height > 300, 'shared terminal tabs, split layout, and panel size restore after restart')

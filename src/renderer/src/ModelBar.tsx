@@ -1,3 +1,4 @@
+import { t, useLanguage } from './i18n'
 import { providerName } from '../../shared/providers'
 import { Slider } from '@/components/ui/slider'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import { Menu } from './Menu'
 import { effortDisplayName, modelDisplayName, useModelSets } from './ModelSets'
 
 export function ModelBar({ settings, onChange, disabled }: { settings: AgentSettings; onChange: (settings: AgentSettings) => void; disabled: boolean }) {
+  useLanguage()
   const { preferences, catalogs } = useModelSets()
   const [picker, setPicker] = useState<'bar' | 'model' | 'effort'>('bar')
   const [setId, setSetId] = useState(preferences.defaultSetId)
@@ -57,17 +59,17 @@ export function ModelBar({ settings, onChange, disabled }: { settings: AgentSett
     const target = models.find((entry) => entry.provider === step.provider && (entry.id === step.model || !step.model && entry.isDefault))
     if (target && (!step.effort || target.efforts.includes(step.effort))) onChange({ ...settings, provider: step.provider, model: step.model, effort: step.effort, serviceTier: target.serviceTiers?.some((tier) => tier === 'fast' || tier === 'priority') ? settings.serviceTier : 'standard' })
   }
-  return <Menu label="Model and effort controls" className="control-btn model-bar-trigger" disabled={disabled} onOpen={() => setPicker('bar')} menuClassName={`model-controls-menu ${picker === 'model' ? 'model-menu embedded-model-menu' : picker === 'effort' ? 'reasoning-menu' : 'model-bar-menu'}`} icon={<>{fast ? <Zap size={13} /> : <ProviderIcon provider={settings.provider} size={14} />}<span>{modelName} <span className="muted">{effortName}</span></span><ChevronDown size={12} /></>} items={[]} header={picker === 'model' ? <ModelPicker settings={settings} onChange={(next) => { setMode('effort'); onChange(next) }} onDone={() => setPicker('bar')} onSet={chooseSet} /> : picker === 'effort' ? <ReasoningPicker settings={settings} model={model} onChange={(next) => { if (next.effort !== settings.effort) setMode('effort'); onChange(next) }} onDone={() => setPicker('bar')} /> : <div className="model-bar-content" role="group" aria-label="Model and effort controls">
+  return <Menu label={t("Model and effort controls")} className="control-btn model-bar-trigger" disabled={disabled} onOpen={() => setPicker('bar')} menuClassName={`model-controls-menu ${picker === 'model' ? 'model-menu embedded-model-menu' : picker === 'effort' ? 'reasoning-menu' : 'model-bar-menu'}`} icon={<>{fast ? <Zap size={13} /> : <ProviderIcon provider={settings.provider} size={14} />}<span>{modelName} <span className="muted">{effortName}</span></span><ChevronDown size={12} /></>} items={[]} header={picker === 'model' ? <ModelPicker settings={settings} onChange={(next) => { setMode('effort'); onChange(next) }} onDone={() => setPicker('bar')} onSet={chooseSet} /> : picker === 'effort' ? <ReasoningPicker settings={settings} model={model} onChange={(next) => { if (next.effort !== settings.effort) setMode('effort'); onChange(next) }} onDone={() => setPicker('bar')} /> : <div className="model-bar-content" role="group" aria-label={t("Model and effort controls")}>
     <div className="model-bar-summary">
-      <Button className="ghost icon model-bar-mode model-bar-fast" disabled={disabled || !fastSupported} aria-label="Codex fast mode" aria-pressed={fast} title={settings.provider !== 'codex' ? 'Fast mode is available with Codex' : !fastSupported ? 'Fast mode is unavailable for this model' : fast ? 'Fast mode on · Higher usage · Apply on send' : 'Enable Fast mode · Higher usage · Apply on send'} onClick={() => onChange({ ...settings, serviceTier: fast ? 'standard' : 'fast' })}><Zap size={15} /></Button>
+      <Button className="ghost icon model-bar-mode model-bar-fast" disabled={disabled || !fastSupported} aria-label={t("Codex fast mode")} aria-pressed={fast} title={settings.provider !== 'codex' ? t("Fast mode is available with Codex") : !fastSupported ? t("Fast mode is unavailable for this model") : fast ? t("Fast mode on · Higher usage · Apply on send") : t("Enable Fast mode · Higher usage · Apply on send")} onClick={() => onChange({ ...settings, serviceTier: fast ? 'standard' : 'fast' })}><Zap size={15} /></Button>
       <div className="model-bar-title">
-        <Button disabled={disabled} className="model-bar-model-name" aria-label={`Select model · ${modelName}`} onClick={() => setPicker('model')}><strong>{modelName}</strong><ChevronRight size={13} /></Button>
-        <Button disabled={disabled} className="model-bar-effort-name" aria-label="Reasoning and service tier" onClick={() => setPicker('effort')}>{effortName}</Button>
+        <Button disabled={disabled} className="model-bar-model-name" aria-label={t("Select model · {0}", { "0": modelName })} onClick={() => setPicker('model')}><strong>{modelName}</strong><ChevronRight size={13} /></Button>
+        <Button disabled={disabled} className="model-bar-effort-name" aria-label={t("Reasoning and service tier")} onClick={() => setPicker('effort')}>{effortName}</Button>
       </div>
-      <div className="model-bar-actions" role="group" aria-label="Model bar actions">
-        <div className="model-bar-mode-switch" role="group" aria-label="Slider mode"><Button disabled={disabled} className="ghost icon model-bar-mode" aria-label="Effort only" aria-pressed={mode === 'effort'} title="Effort only · Keep the current model" onClick={() => setMode('effort')}><Gauge size={14} /></Button>
-        <Button disabled={disabled} className="ghost icon model-bar-mode" aria-label="Model and effort" aria-pressed={mode === 'model'} title="Model + effort · Use the configured steps" onClick={() => setMode('model')}><SlidersHorizontal size={14} /></Button></div>
-        <Button disabled={disabled} className="ghost icon model-bar-mode" aria-label="Model set settings" title="Model set settings" onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } }))}><Settings size={14} /></Button>
+      <div className="model-bar-actions" role="group" aria-label={t("Model bar actions")}>
+        <div className="model-bar-mode-switch" role="group" aria-label={t("Slider mode")}><Button disabled={disabled} className="ghost icon model-bar-mode" aria-label={t("Effort only")} aria-pressed={mode === 'effort'} title={t("Effort only · Keep the current model")} onClick={() => setMode('effort')}><Gauge size={14} /></Button>
+        <Button disabled={disabled} className="ghost icon model-bar-mode" aria-label={t("Model and effort")} aria-pressed={mode === 'model'} title={t("Model + effort · Use the configured steps")} onClick={() => setMode('model')}><SlidersHorizontal size={14} /></Button></div>
+        <Button disabled={disabled} className="ghost icon model-bar-mode" aria-label={t("Model set settings")} title={t("Model set settings")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } }))}><Settings size={14} /></Button>
       </div>
     </div>
     <div className="model-bar-track" style={{ '--bar-fill': `calc(${fraction * 100}% + ${14 - 28 * fraction}px)` } as CSSProperties}>

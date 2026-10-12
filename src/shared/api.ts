@@ -7,12 +7,18 @@ import type {
   SearchResults,
   ReplaceFilePreview,
   AppPreferences,
+  ChatGoal,
+  UsageReading,
+  ContextUsage,
+  Aside,
   AgentEvent,
   Attachment,
   AgentSettings,
   ModelPreferences,
   ProviderCatalog,
   AgentScope,
+  ProjectAction,
+  ChatSearchHit,
   FolderInspection,
   AgentSessionInfo,
   CreateTaskInput,
@@ -60,6 +66,7 @@ export interface TerminalInfo {
 }
 
 export interface RamuMethods {
+  'app.systemLanguages': () => string[]
   'reviews.list'(sessionId?: string): ChangeReview[]
   'reviews.get'(id: string): ChangeReview
   'reviews.inspect'(id: string): ReviewFileState[]
@@ -72,11 +79,13 @@ export interface RamuMethods {
   'reviews.removeReply'(id: string, commentId: string, replyId: string): ChangeReview
   'reviews.removeComment'(id: string, commentId: string): ChangeReview
   'reviews.resolveComment'(id: string, commentId: string): ChangeReview
-  'reviews.sendComments'(id: string, commentIds: string[], note?: string, attachmentIds?: string[]): ChangeReview
+  'reviews.sendComments'(id: string, commentIds: string[], note?: string, attachmentIds?: string[], context?: FileContext[]): ChangeReview
   'reviews.ai'(id: string): ChangeReview
   'reviews.markReviewed'(id: string, reviewed: boolean): ChangeReview
   'reviews.undoPreview'(id: string): UndoPreview
   'reviews.undoApply'(token: string, fileIds: string[]): ChangeReview
+  'reviews.chatUndoPreview'(sessionId: string, userSeq: number): UndoPreview
+  'reviews.chatUndoApply'(token: string, fileIds: string[]): void
   'completion.complete'(request: CompletionRequest): CompletionResult
   'completion.cancel'(requestId: string): void
   'completion.nextEdit'(request: NextEditRequest): NextEditResult
@@ -121,6 +130,8 @@ export interface RamuMethods {
   'projects.reorder'(projectIds: string[]): Project[]
   'projects.remove'(projectId: string): void
   'projects.reveal'(projectId: string): void
+  'projects.actions'(projectId: string): ProjectAction[]
+  'projects.setActions'(projectId: string, actions: ProjectAction[]): ProjectAction[]
   'repos.remove'(repoId: string): void
   'tasks.bindings'(taskId: string): RepositoryBinding[]
   'settings.models.get'(): ModelPreferences | null
@@ -162,7 +173,7 @@ export interface RamuMethods {
   'git.stage'(taskId: string, repoId: string, paths: string[]): void
   'git.unstage'(taskId: string, repoId: string, paths: string[]): void
   'git.discard'(taskId: string, repoId: string, paths: string[]): void
-  'git.undoCommit'(taskId: string, repoId: string, expectedHead: string): void
+  'git.undoCommit'(taskId: string, repoId: string, expectedHead: string): string
   'git.createBranch'(taskId: string, repoId: string, name: string): void
   'git.deleteBranch'(taskId: string, repoId: string, name: string): void
   'git.stashes'(taskId: string, repoId: string): GitStash[]
@@ -170,7 +181,7 @@ export interface RamuMethods {
   'git.popStash'(taskId: string, repoId: string, oid: string): void
   'git.applyStash'(taskId: string, repoId: string, oid: string): void
   'git.dropStash'(taskId: string, repoId: string, oid: string): void
-  'git.commit'(taskId: string, repoId: string, message: string, fingerprint?: string): string
+  'git.commit'(taskId: string, repoId: string, message: string, fingerprint?: string, amendHead?: string): string
   'git.history'(taskId: string, repoId: string): GitCommit[]
   'git.branches'(taskId: string, repoId: string): GitBranchInfo[]
   'git.checkout'(taskId: string, repoId: string, branch: string): void
@@ -195,7 +206,11 @@ export interface RamuMethods {
   'term.menu'(selection: string, point: { x: number; y: number }): 'selectAll' | 'clear' | { paste: string } | null
   'agent.list'(taskId: string): AgentSessionInfo[]
   'agent.get'(sessionId: string): AgentSessionInfo
+  'agent.goal'(sessionId: string): ChatGoal | null
+  'agent.goal.control'(sessionId: string, action: 'pause' | 'resume' | 'clear'): ChatGoal | null
   'agent.events'(sessionId: string): AgentEvent[]
+  /** Your messages and the agent's replies that contain `query`, newest first, across every chat. */
+  'agent.searchMessages'(query: string): ChatSearchHit[]
   'agent.scope'(taskId: string): AgentScope
   'attachments.pick'(): Attachment[]
   'attachments.add'(name: string, base64: string): Attachment
@@ -218,8 +233,38 @@ export interface RamuMethods {
   /** Opening message for a new chat that continues this one, carrying the transcript as context. */
   'agent.continuationPrompt'(sessionId: string): string
   'agent.stop'(sessionId: string): void
+  /** Latest plan usage per provider and window. */
+  'usage.get'(): UsageReading[]
+  /** Reads Claude's plan usage now, without a turn, when the stored reading is old. */
+  'usage.refresh'(): UsageReading[]
+  /** The context window usage last reported for a chat, if any. */
+  'agent.context'(sessionId: string): ContextUsage | null
+  /** Whether Codex trusts Ramu's sub-agent hook. */
+  'codex.hook.status'(): { trusted: boolean; error?: string }
+  /** Claude Code's own advisor model from the user's Claude settings, or null when it is off. */
+  'advisor.claude'(): { model: string | null }
+  /** Writes the one trust entry for Ramu's hook into Codex's own config (~/.codex/config.toml). */
+  'codex.hook.trust'(): { trusted: boolean; error?: string }
+  /** Side questions about a chat; they never reach the main conversation. */
+  'aside.list'(sessionId: string): Aside[]
+  /** Starts an aside (asideId null) or continues one. Returns at once; the answer arrives as aside:changed. */
+  'aside.ask'(sessionId: string, asideId: string | null, quote: string, quoteFrom: 'assistant' | 'user', question: string): Aside
+  'aside.delete'(sessionId: string, asideId: string): void
+  /** Keep the chat's current provider despite the usage threshold: for the next message, for this chat until its limit resets, or clear. */
+  'agent.holdProvider'(sessionId: string, scope: 'message' | 'chat' | null): void
+  'agent.providerHold'(sessionId: string): 'message' | 'chat' | null
+  /** Moves one running command to the background so the agent can carry on (Claude only). False when it already finished. */
+  'agent.backgroundTool'(sessionId: string, toolUseId: string): boolean
+  /** Stops one sub-agent or background task; the main agent keeps going. */
+  'agent.stopTask'(sessionId: string, agentId: string): void
+  /** Sends a message to a sub-agent through the main agent (Claude SendMessage, Codex send_input). */
+  'agent.messageTask'(sessionId: string, agentId: string, text: string): void
   'agent.replyPermission'(sessionId: string, requestId: string, allow: boolean, message?: string): void
   'agent.replyQuestion'(sessionId: string, requestId: string, answers: Record<string, string>): void
+  'agent.replyElicitation'(sessionId: string, requestId: string, action: import('./types').ElicitationAction, answers: Record<string, string>): void
+  'agent.elicitationDraft'(sessionId: string, requestId: string, drafts: Record<string, string>): void
+  'agent.questionDraft'(sessionId: string, requestId: string, drafts: Record<string, string>): void
+  'agent.dismissQuestion'(sessionId: string, requestId: string): void
 }
 
 export type PushEvents = {
@@ -229,6 +274,9 @@ export type PushEvents = {
   'notify:inapp': { sessionId: string; taskId: string; kind: 'done' | 'input' | 'failed'; title: string; body: string }
   'notify:open': { sessionId: string; taskId: string }
   'agent:event': { sessionId: string; event: AgentEvent; seq?: number }
+  'usage:changed': UsageReading[]
+  'context:changed': { sessionId: string; context: ContextUsage }
+  'aside:changed': { sessionId: string; aside: Aside | null; asideId: string }
   'term:data': { id: string; data: string }
   'term:exit': { id: string; code: number }
   'fs:changed': { cwd: string; path: string }

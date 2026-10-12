@@ -26,6 +26,8 @@ export function TitleTooltips() {
       hide()
       const text = element?.getAttribute('title')?.trim()
       if (!element || !text || element.closest('[data-slot="tooltip-trigger"]')) return
+      // Focus from a click is not keyboard focus; a tip left behind by it would cover the next row.
+      if (event.type === 'focusin' && !target?.matches(':focus-visible')) return
       current = element; original = element.getAttribute('title') ?? ''
       description = element.getAttribute('aria-describedby')
       element.removeAttribute('title')
