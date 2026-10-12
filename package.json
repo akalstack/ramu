@@ -16,6 +16,7 @@
     "make": "electron-forge make",
     "ui:add": "shadcn add",
     "test:e2e": "node scripts/automation-smoke.mjs",
+    "test:terminal": "node scripts/terminal-smoke.mjs",
     "icons": "electron scripts/render-icon.cjs",
     "check": "pnpm typecheck && pnpm test && pnpm test:scripts && pnpm build",
     "test:scripts": "node --test scripts/release.test.mjs",

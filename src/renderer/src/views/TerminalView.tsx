@@ -9,7 +9,7 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
   const { preferences } = useAppSettings()
   const terminal = useRef<Terminal | null>(null)
   const host = useRef<HTMLDivElement>(null)
-  const fitRef = useRef<FitAddon | null>(null)
+  const scheduleFitRef = useRef<(() => void) | null>(null)
   const [cwd, setCwd] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const exitRef = useRef(onExit)
@@ -18,7 +18,7 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
   const runOnce = useRef(run)
 
   useEffect(() => {
-    if (terminal.current) { terminal.current.options.fontSize = preferences.terminalFontSize; fitRef.current?.fit() }
+    if (terminal.current) { terminal.current.options.fontSize = preferences.terminalFontSize; scheduleFitRef.current?.() }
   }, [preferences.terminalFontSize])
 
   useEffect(() => {
@@ -33,12 +33,31 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
     })
     terminal.current = term
     const fit = new FitAddon()
-    fitRef.current = fit
     term.loadAddon(fit)
     term.open(host.current!)
     let termId: string | null = null
     let disposed = false
     const offs: (() => void)[] = []
+    let fitFrame = 0
+    const scheduleFit = () => {
+      if (disposed || fitFrame) return
+      fitFrame = requestAnimationFrame(() => {
+        fitFrame = 0
+        if (!disposed && host.current?.offsetParent) fit.fit()
+      })
+    }
+    scheduleFitRef.current = scheduleFit
+    // Install input before opening the shell so early typing is not dropped.
+    let pendingInput = ''
+    const input = term.onData((data) => {
+      if (!termId) { pendingInput += data; return }
+      void invoke('term.write', termId, data).catch((e) => setError(errorText(e)))
+    })
+    const resize = term.onResize(({ cols, rows }) => {
+      if (termId) void invoke('term.resize', termId, Math.max(2, cols), Math.max(2, rows)).catch((e) => setError(errorText(e)))
+    })
+    offs.push(() => input.dispose(), () => resize.dispose())
+    if (host.current?.offsetParent) fit.fit()
 
     // A terminal view restored after restart gets a new shell; say so instead of pretending it survived.
     const cols = Math.max(term.cols, 2), rows = Math.max(term.rows, 2)
@@ -58,10 +77,11 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
             else exitRef.current?.()
           }),
         )
-        const input = term.onData((d) => termId && void invoke('term.write', termId, d).catch((e) => setError(errorText(e))))
-        const resize = term.onResize(({ cols, rows }) => termId && void invoke('term.resize', termId, Math.max(2, cols), Math.max(2, rows)).catch((e) => setError(errorText(e))))
-        offs.push(() => input.dispose(), () => resize.dispose())
-        fit.fit()
+        scheduleFit()
+        if (pendingInput) {
+          void invoke('term.write', info.id, pendingInput).catch((e) => setError(errorText(e)))
+          pendingInput = ''
+        }
         const command = initialCommand ?? runOnce.current
         if (command) {
           term.focus()
@@ -71,24 +91,23 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
       (e) => setError(errorText(e)),
     )
 
-    const ro = new ResizeObserver(() => {
-      if (host.current?.offsetParent) fit.fit()
-    })
+    const ro = new ResizeObserver(scheduleFit)
     ro.observe(host.current!)
 
     return () => {
       disposed = true
       ro.disconnect()
+      cancelAnimationFrame(fitFrame)
+      scheduleFitRef.current = null
       for (const off of offs) off()
       if (termId) void invoke('term.close', termId)
+      terminal.current = null
       term.dispose()
     }
   }, [taskId, repoId, initialCommand])
 
   useEffect(() => {
-    if (active) requestAnimationFrame(() => {
-      fitRef.current?.fit()
-    })
+    if (active) scheduleFitRef.current?.()
   }, [active])
 
   return (
@@ -98,7 +117,11 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
         <span className="grow flex-1 min-w-0 text-left" />{actions}
       </div>
       {error && <div className="error text-bad banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control">{error}</div>}
-      <div ref={host} className="terminal-host flex-1 min-h-0 p-[4px_0_0_12px]" onContextMenu={(event) => {
+      <div className="terminal-host flex flex-1 min-h-0 min-w-0 overflow-hidden p-[4px_0_0_12px]" onPointerDown={(event) => {
+        // Padding has no native input target; keep the browser from blurring xterm after focus.
+        if (!(event.target as HTMLElement).closest('.xterm')) event.preventDefault()
+        terminal.current?.focus()
+      }} onContextMenu={(event) => {
         event.preventDefault(); event.stopPropagation()
         const term = terminal.current
         if (!term) return
@@ -118,7 +141,7 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
           else if (action === 'clear') term.clear()
           else if (action && typeof action === 'object') term.paste(action.paste)
         }, (error) => setError(errorText(error)))
-      }} />
+      }}><div ref={host} className="flex-1 min-h-0 min-w-0 overflow-hidden" /></div>
     </div>
   )
 }
