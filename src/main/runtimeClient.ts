@@ -32,6 +32,8 @@ export function runtimeVersion(daemonPath: string): string { try { return JSON.p
 export function pinnedRuntime(userData: string, daemonPath: string, executable = process.execPath) {
   if (process.platform !== 'darwin' || !executable.includes('.app/Contents/MacOS/')) return { daemonPath, executable }
   const bundle = executable.slice(0, executable.indexOf('.app/Contents/MacOS/') + 4)
+  // Development uses Electron.app too, but its daemon lives in the repository.
+  if (!daemonPath.startsWith(`${bundle}/`)) return { daemonPath, executable }
   const destination = join(userData, 'background-runtimes', runtimeBuild(daemonPath), 'Ramu.app')
   if (!existsSync(destination)) {
     const temporary = `${destination}.partial`

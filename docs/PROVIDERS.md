@@ -4,21 +4,25 @@
 
 | Provider | Integration | Setup |
 | --- | --- | --- |
-| Claude | Claude Agent SDK | Install Claude Code and sign in |
-| Codex | Local Codex app-server | Install Codex and sign in |
-| OpenCode | [OpenCode SDK](https://opencode.ai/docs/sdk/) | Install OpenCode and configure a connected model provider |
+| Claude | Ramu ACP host over Claude Agent SDK | Install Claude Code and sign in |
+| Codex | Ramu ACP host over Codex app-server | Install Codex and sign in |
+| OpenCode | Native `opencode acp` | Install OpenCode and configure a connected model provider |
 | Cursor | [Native ACP](https://cursor.com/docs/cli/acp) | Install Cursor CLI and run `agent login` |
 | Antigravity | Official ACP runtime | Download Google's runtime from the [ACP registry](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json), keep its matching `localharness_external` helper alongside it, and sign in through a supported ACP client |
 
 Ramu discovers model IDs from the installed runtime. Cursor uses `agent acp`; Antigravity uses `agy_acp_server.par` on macOS/Linux (`--uid=` on Linux) or `agy_acp_server.exe` on Windows. The Antigravity ACP runtime is separate from its IDE and CLI. Set `ANTIGRAVITY_HARNESS_PATH` to the matching helper when required by that runtime.
 
-Open **Settings → Providers** to choose executable paths, browse for the Antigravity helper, detect installed versions, and run installation and sign-in commands in the integrated terminal, copy commands, or open official setup/download guides. Empty paths use automatic detection of user-installed CLI binaries, including Claude. Saved paths apply to new sessions and model discovery; existing sessions continue running.
+Open **Settings → Providers** for **Login**, **Update CLI**, per-provider **Auto-update CLI**, and account selection where supported. Executable/helper paths are under **Advanced**. The install/setup command panels were removed. Login uses the selected CLI and opens its interactive authentication flow; Ramu does not store passwords or OAuth tokens in its preferences.
 
-Provider update notifications are enabled by default. Ramu checks official release sources daily for installed providers and shows dismissible notices with a link to Providers settings. Turn off **Provider update notifications** to stop automatic checks and notices; **Check latest versions** remains available manually. OpenCode checks stay on the installed v1 or v2 release line. Checks never install or update software automatically.
+Codex and OpenCode support named, isolated credential profiles. Codex uses `CODEX_HOME`; OpenCode uses its XDG data/config/state directories. The original system profile remains **Default CLI account**. Save the chosen account to use it for new chats; existing chats persist their original account ID, including history reads and Codex Aside. Usage windows are kept separately per account. Claude and Cursor offer their supported CLI login without advertising unverified isolated account support; Antigravity retains its official runtime authentication path.
+
+Version checks run in the detached service every six hours after startup, including while the app is closed. Notifications default on; CLI auto-update is opt-in per provider and continues even when notices are off. Claude/Cursor use their native update commands, OpenCode uses `upgrade`, and Codex updates into a Ramu-owned npm prefix rather than rewriting an unrelated global installation. Custom Codex paths and Antigravity require their installation's own update mechanism. Updates affect new provider processes; the updater does not restart active chats.
 
 Executable paths can also be supplied through `RAMU_CLAUDE_BIN`, `RAMU_CODEX_BIN`, `RAMU_CURSOR_BIN`, `RAMU_ANTIGRAVITY_BIN`, and `RAMU_OPENCODE_BIN`. Saved settings take precedence over these variables. Each path names an executable, without shell arguments.
 
-OpenCode supports both the original and native v2 SDK APIs. Its local server binds to loopback on an available port with a per-process password. Cursor, Antigravity and OpenCode queue follow-ups until the current turn completes. Claude and Codex default to Steer: follow-ups stay in the same message queue UI until all active tools finish, then use native steering without interrupting tools. Queue remains available to wait for the entire turn. Background analysis requires a read-only provider mode; unsupported modes fail explicitly. Ramu's scoped MCP connection is injected into ACP and the original OpenCode API; OpenCode v2 currently uses the tools configured in OpenCode itself.
+All active providers now cross an ACP boundary. OpenCode, Cursor, and Antigravity connect directly to their native ACP executables. Claude and Codex use Ramu-maintained local ACP hosts, with the official `@agentclientprotocol/sdk` pinned to `1.8.0` and real newline-JSON transport. The host retains Claude's owning SDK Query and Codex's owning app-server, preserving native policies, usage, async questions, patches/diffs, helper controls, hooks, and stable transcript IDs through scoped extensions. This is a hybrid migration; it does not install the stock Claude/Codex ACP adapters or remove every native implementation. Native history/usage/Aside support is retained deliberately.
+
+OpenCode, Cursor and Antigravity queue follow-ups until the current turn completes. Claude and Codex keep their existing steering behavior. Background analysis requires an advertised read-only mode or the retained native tool/sandbox policy. Ramu's scoped MCP connection is injected into the host/native ACP session. Model discovery, history and account-usage reads may still use native control paths. The legacy OpenCode SDK driver is retained for compatibility tests, but is no longer the active OpenCode connection.
 
 Claude and Codex sub-agents (including background agents that keep running after a turn) appear as cards in the chat, with their own transcript, Stop, and a message box. See [AGENTS-NEXT.md](AGENTS-NEXT.md) for how that works and which provider features are still open.
 

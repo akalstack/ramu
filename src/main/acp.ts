@@ -84,8 +84,8 @@ export function acpSessionModels(provider: AcpProvider, session: Wire): AgentMod
   const current = config?.currentValue ?? session.models?.currentModelId
   return models.map((m) => ({ provider, id: m.id, name: m.name || m.id, efforts: [], defaultEffort: null, isDefault: m.id === current }))
 }
-export async function acpModels(provider: AcpProvider): Promise<AgentModel[]> {
-  const rpc = new AcpRpc(provider, homedir())
+export async function acpModels(provider: AcpProvider, accountId?: string): Promise<AgentModel[]> {
+  const rpc = new AcpRpc(provider, homedir(), accountId)
   rpc.onMessage = (m) => { if (m.id !== undefined && m.method) rpc.write({ id: m.id, error: { code: -32601, message: 'Model discovery cannot run tools or answer questions' } }) }
   try { await rpc.initialize(); return acpSessionModels(provider, await rpc.request('session/new', { cwd: homedir(), mcpServers: [] })) }
   finally { await rpc.close() }

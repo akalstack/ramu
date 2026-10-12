@@ -11,6 +11,7 @@ let dir: string, bin: string, preferences: AppPreferences, store: Map<string, un
 const emit = vi.fn()
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'ramu providers ')); bin = join(dir, 'custom binary')
+  configureProviderAccounts(join(dir, 'accounts'))
   writeFileSync(bin, `#!/usr/bin/env node
 const fs=require('fs');fs.appendFileSync(${JSON.stringify(join(dir, 'calls'))},JSON.stringify({args:process.argv.slice(2),helper:process.env.ANTIGRAVITY_HARNESS_PATH})+'\\n');
 if(process.argv.includes('--version')) console.log('custom-cli 1.2.3');

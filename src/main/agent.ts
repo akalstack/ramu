@@ -1,7 +1,7 @@
 import { providerBinary, providerAccountId } from './providerBinaries'
 import { createAcpRunner, acpModels } from './acp'
 import { acpHostedRunner } from './acpNativeHost'
-import { providerName, isAcpProvider } from '../shared/providers'
+import { providerName, isAcpProvider, supportsProviderAccounts } from '../shared/providers'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 // Structured agent adapter for Claude Code via the Claude Agent SDK.
 // One live SDK query per session, always launched in the session's binding cwd.
@@ -650,6 +650,7 @@ export class AgentService {
 
   async startReviewed(taskId: string, scope: AgentScope, prompt: string, settings: AgentSettings = DEFAULT_AGENT_SETTINGS, attachments: Attachment[] = []): Promise<AgentSessionInfo> {
     if (this.shutdown) throw new Error('Application is shutting down')
+    if (supportsProviderAccounts(settings.provider) && settings.accountId === undefined) settings = { ...settings, accountId: providerAccountId(settings.provider) }
     // A new chat on a provider that is nearly out starts on its fallback instead.
     const route = await this.route(settings)
     const requested = settings
@@ -692,7 +693,7 @@ export class AgentService {
 
   private createSession(taskId: string, scope: AgentScope, settings: AgentSettings, state: AgentSessionState, parentId: string | null = null): AgentSessionInfo {
     const accountId = settings.accountId ?? providerAccountId(settings.provider)
-    if (accountId !== 'default') settings = { ...settings, accountId }
+    if (supportsProviderAccounts(settings.provider)) settings = { ...settings, accountId }
     const row: SessionRow = {
       id: randomUUID(),
       task_id: taskId,
@@ -897,7 +898,12 @@ export class AgentService {
   }
 
   async validateSettings(settings: AgentSettings): Promise<void> {
-    const catalog = (await this.catalog()).find((c) => c.provider === settings.provider)
+    let catalog = (await this.catalog()).find((c) => c.provider === settings.provider)
+    // A retained chat may belong to a different profile than today's default.
+    if (process.env.RAMU_FAKE_AGENT !== '1' && settings.accountId && settings.accountId !== providerAccountId(settings.provider) && supportsProviderAccounts(settings.provider)) {
+      const models = settings.provider === 'codex' ? await codexModels(settings.accountId) : await acpModels('opencode', settings.accountId)
+      catalog = { provider: settings.provider, models }
+    }
     const model = settings.model ? catalog?.models.find((m) => m.id === settings.model) : catalog?.models.find((m) => m.isDefault) ?? catalog?.models[0]
     if (!model) throw new Error(catalog?.error || 'This model is not available')
     if (settings.provider === 'codex' && settings.serviceTier === 'fast' && !model.serviceTiers?.some((tier) => tier === 'fast' || tier === 'priority')) throw new Error('Fast mode is not available for this Codex model.')
@@ -1107,6 +1113,7 @@ export class AgentService {
   /** Isolated inference shared by commit drafts, recaps, and change reviews. */
   async analyze(prompt: string, settings: AgentSettings, maxLength = 100000, { timeoutMs = 90_000, signal }: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<{ message: string; provider: AgentProvider; model: string }> {
     if (this.shutdown) throw new Error('Background service is stopping')
+    if (supportsProviderAccounts(settings.provider) && settings.accountId === undefined) settings = { ...settings, accountId: providerAccountId(settings.provider) }
     if (signal?.aborted) throw new Error('Background analysis stopped')
     const cwd = mkdtempSync(join(tmpdir(), 'ramu-commit-draft-'))
     const tried = new Set<string>()
@@ -1208,7 +1215,7 @@ export class AgentService {
   }
 
   withStep(settings: AgentSettings, step: FallbackStep): AgentSettings {
-    return { ...settings, accountId: step.provider === settings.provider ? settings.accountId : providerAccountId(step.provider), provider: step.provider, model: step.model, effort: step.effort, serviceTier: step.serviceTier ?? 'standard' }
+    return { ...settings, accountId: step.provider === settings.provider ? settings.accountId ?? 'default' : providerAccountId(step.provider), provider: step.provider, model: step.model, effort: step.effort, serviceTier: step.serviceTier ?? 'standard' }
   }
 
   /** Where settings should go instead, when their provider is at the switch threshold and a fallback is open. */
@@ -2163,7 +2170,7 @@ function toInfo(r: SessionRow): AgentSessionInfo {
     taskId: r.task_id,
     repoId: r.repo_id,
     provider: r.provider,
-    settings: { ...DEFAULT_AGENT_SETTINGS, ...JSON.parse(r.settings), provider: r.provider },
+    settings: { ...DEFAULT_AGENT_SETTINGS, ...(supportsProviderAccounts(r.provider) ? { accountId: 'default' } : {}), ...JSON.parse(r.settings), provider: r.provider },
     cwd: r.cwd,
     additionalDirs: JSON.parse(r.additional_dirs) as string[],
     covers: JSON.parse(r.covers) as string[],

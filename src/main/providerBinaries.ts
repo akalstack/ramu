@@ -11,6 +11,9 @@ let runtimesRoot = join(homedir(), '.ramu', 'provider-clis')
 export function configureProviderAccounts(root: string) { accountsRoot = root; runtimesRoot = join(dirname(root), 'provider-clis') }
 export function providerRuntimeHome(provider: AgentProvider) { return join(runtimesRoot, provider) }
 export function providerAccountId(provider: AgentProvider) { return configuration[provider]?.accountId || 'default' }
+export function providerAccountClearedEnv(provider: AgentProvider): string[] {
+  return provider === 'codex' ? ['OPENAI_API_KEY', 'CODEX_API_KEY'] : provider === 'opencode' ? ['OPENCODE_DB', 'OPENCODE_AUTH_CONTENT', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'MISTRAL_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY', 'CEREBRAS_API_KEY', 'XAI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENCODE_API_KEY', 'OPENCODE_ZEN_API_KEY'] : []
+}
 export function providerAccountHome(provider: AgentProvider, id: string): string {
   if (!supportsProviderAccounts(provider) || !/^[a-zA-Z0-9_-]{1,80}$/.test(id) || id === 'default') throw new Error('Invalid provider account')
   return join(accountsRoot, provider, id)
@@ -38,8 +41,9 @@ export function providerEnvironment(provider: AgentProvider, overrides = configu
     if (!overrides[provider]?.accounts?.some((account) => account.id === accountId)) throw new Error('The selected provider account no longer exists')
     const root = providerAccountHome(provider, accountId)
     // Credentials remain in the CLI's own store; Ramu stores only profile names/IDs.
-    if (provider === 'codex') { env.CODEX_HOME = root; delete env.OPENAI_API_KEY; delete env.CODEX_API_KEY }
-    if (provider === 'opencode') { env.XDG_DATA_HOME = join(root, 'data'); env.XDG_CONFIG_HOME = join(root, 'config'); env.XDG_STATE_HOME = join(root, 'state'); delete env.OPENCODE_DB }
+    if (provider === 'codex') env.CODEX_HOME = root
+    if (provider === 'opencode') { env.XDG_DATA_HOME = join(root, 'data'); env.XDG_CONFIG_HOME = join(root, 'config'); env.XDG_STATE_HOME = join(root, 'state') }
+    for (const key of providerAccountClearedEnv(provider)) delete env[key]
   }
   if (provider !== 'antigravity') return env
   const custom = overrides.antigravity?.harness?.trim()

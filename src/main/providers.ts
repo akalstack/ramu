@@ -5,7 +5,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { AGENT_PROVIDERS, supportsProviderAccounts, type ProviderConfiguration, type ProviderStatus } from '../shared/providers'
 import type { AgentProvider, AppPreferences } from '../shared/types'
-import { configureProviderBinaries, findExecutable, providerAccountHome, providerRuntimeHome, providerBinary, providerEnvironment } from './providerBinaries'
+import { configureProviderBinaries, findExecutable, providerAccountClearedEnv, providerAccountHome, providerRuntimeHome, providerBinary, providerEnvironment } from './providerBinaries'
 
 type Release = { version: string; checkedAt: string; downloadUrl?: string }
 type Cache = Partial<Record<AgentProvider, Release>>
@@ -137,7 +137,8 @@ export class ProviderService {
     const quote = (value: string) => `'${value.replaceAll("'", process.platform === 'win32' ? "''" : "'\"'\"'")}'`
     const keys = provider === 'codex' ? ['CODEX_HOME'] : provider === 'opencode' ? ['XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'XDG_STATE_HOME'] : []
     const assignments = id === 'default' ? '' : keys.map((key) => process.platform === 'win32' ? `$env:${key}=${quote(env[key]!)}; ` : `${key}=${quote(env[key]!)}`).join(process.platform === 'win32' ? '' : ' ') + ' '
-    const clean = id === 'default' ? '' : process.platform === 'win32' ? (provider === 'codex' ? 'Remove-Item Env:OPENAI_API_KEY,Env:CODEX_API_KEY -ErrorAction SilentlyContinue; ' : '') : provider === 'codex' ? 'env -u OPENAI_API_KEY -u CODEX_API_KEY ' : 'env -u OPENCODE_DB '
+    const cleared = providerAccountClearedEnv(provider)
+    const clean = id === 'default' || !cleared.length ? '' : process.platform === 'win32' ? `Remove-Item ${cleared.map((key) => `Env:${key}`).join(',')} -ErrorAction SilentlyContinue; ` : `env ${cleared.map((key) => `-u ${key}`).join(' ')} `
     return `${clean}${assignments}${process.platform === 'win32' ? '& ' : ''}${quote(providerBinary(provider, config))} ${args.join(' ')}`
   }
   /** Shell-free updater, shared by manual actions and the detached service timer. */
@@ -149,7 +150,7 @@ export class ProviderService {
       const binary = providerBinary(provider, config)
       if (!findExecutable(binary)) throw new Error('Select an installed CLI before updating it.')
       if (provider === 'antigravity') throw new Error('This runtime requires a manual download from its official release page.')
-      if (provider === 'codex' && config.codex?.binary?.trim()) throw new Error('Update this custom Codex installation with its package manager.')
+      if (provider === 'codex' && (config.codex?.binary?.trim() || process.env.RAMU_CODEX_BIN)) throw new Error('Update this custom Codex installation with its package manager.')
       const command = provider === 'codex' ? (findExecutable(process.platform === 'win32' ? 'npm.cmd' : 'npm') ?? 'npm') : binary
       // Own the npm-managed replacement instead of modifying an unrelated global
       // installation selected by npm's prefix. Existing native processes keep running.

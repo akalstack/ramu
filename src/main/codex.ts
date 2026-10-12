@@ -76,8 +76,8 @@ export class CodexRpc {
   }
 }
 
-export async function codexModels(): Promise<AgentModel[]> {
-  const rpc = new CodexRpc()
+export async function codexModels(accountId?: string): Promise<AgentModel[]> {
+  const rpc = new CodexRpc(undefined, [], accountId)
   try {
     await rpc.initialize()
     const models: AgentModel[] = []

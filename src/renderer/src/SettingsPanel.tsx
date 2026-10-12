@@ -77,7 +77,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
   const resetKeys: Partial<Record<typeof page, (keyof AppPreferences)[]>> = {
     updates: ['appUpdateChecks', 'appAutoUpdate'],
     providers: ['providerBinaries', 'providerUpdateChecks', 'showUsageLimits'],
-    automation: ['keepAwake', 'notifyAgentDone', 'resumeChatsOnRestart', 'asyncQuestions', 'autoBackgroundSeconds', 'recapsEnabled', 'recapTime'],
+    automation: ['keepAwake', 'keepAwakeWhen', 'notifyAgentDone', 'resumeChatsOnRestart', 'asyncQuestions', 'autoBackgroundSeconds', 'recapsEnabled', 'recapTime'],
     appearance: ['language', 'accent', 'fontFamily', 'fontSize', 'sidebarWidth'],
     editor: ['previewTabs', 'formatOnSave', 'languageServers', 'aiCompletion', 'lintWhileEditing', 'editorFontSize', 'terminalFontSize', 'terminalTabPosition'],
     access: ['defaultAccess', 'defaultAutoFallback', 'fallback'],
@@ -87,7 +87,13 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
     git: ['busyMessageAction', 'includeTabContext', 'pullMode', 'commitStyle', 'commitInstructions', 'hideEmptyStaged', 'recentChats'],
   }
   const pageKeys = resetKeys[page]
-  const resetPage = () => { if (pageKeys) setAppDraft((current) => ({ ...current, ...Object.fromEntries(pageKeys.map((key) => [key, DEFAULT_APP_PREFERENCES[key]])) })) }
+  const resetPage = () => {
+    if (!pageKeys) return
+    setAppDraft((current) => ({ ...current, ...Object.fromEntries(pageKeys.map((key) => [key, DEFAULT_APP_PREFERENCES[key]])),
+      // Account identities are recovery metadata, not disposable appearance settings.
+      ...(page === 'providers' ? { providerBinaries: Object.fromEntries(Object.entries(current.providerBinaries).map(([provider, config]) => [provider, { binary: '', accounts: config?.accounts, accountId: 'default', autoUpdate: false }])) } : {}),
+    }))
+  }
   return <SettingsPage section={page} onSection={setPage} busy={busy} error={error} onSave={() => void save()} onClose={() => { if (!busy) onClose() }}>
     {page === 'updates' && <AppUpdates value={appDraft} onChange={setAppDraft} />}
     {page === 'providers' && <><ProviderSettings value={appDraft} onChange={setAppDraft} /><div className="settings-form">{toggle('showUsageLimits', 'Show usage limits', 'Show the 5-hour and weekly plan usage at the bottom of the sidebar, or in the status bar when the sidebar is hidden.')}</div></>}
@@ -98,8 +104,9 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
       {toggle('asyncQuestions', 'Keep working while asking questions', 'Agents can ask and continue independent work. Related answers are sent together; work that needs an answer waits. Existing pending questions keep their behavior when this is changed.')}
       {toggle('recapsEnabled', 'Daily recaps', 'Review unfinished work, decisions, and background results on Home. Automatic generation uses model tokens.')}
       <div className="settings-row"><span><strong>{t("Generate daily at")}</strong><span className="muted block small">{t("When the daily recap is written, using your system timezone.")}</span></span><Input aria-label={t("Generate daily at")} type="time" value={appDraft.recapTime} onChange={(e) => setAppDraft({ ...appDraft, recapTime: e.target.value })} /></div>
-      {toggle('keepAwake', 'Keep computer awake', 'Prevent idle sleep while the local service is running, even without login startup installed. Display sleep and manually putting the computer to sleep still work. Enabled on the first background-service installation; you can turn it off anytime.')}
-      <BackgroundControls />
+      {toggle('keepAwake', 'Keep computer awake', 'On macOS, prevent idle sleep while the local service is running, even without login startup installed. Display sleep and manually putting the computer to sleep still work. Enabled on the first background-service installation; you can turn it off anytime.')}
+      {appDraft.keepAwake && <div className="settings-row"><span><strong>{t('When to keep awake')}</strong><span className="muted block small">{t('Plugged in only saves battery. Choose both power sources to keep working after unplugging.')}</span></span><Dropdown label={t('When to keep awake')} value={appDraft.keepAwakeWhen} options={[{ value: 'plugged-in', label: t('Plugged in only (recommended)') }, { value: 'always', label: t('Plugged in and on battery') }]} onChange={(when) => setAppDraft({ ...appDraft, keepAwakeWhen: when === 'always' ? 'always' : 'plugged-in' })} /></div>}
+      <BackgroundControls onInstalled={() => setAppDraft((current) => ({ ...current, keepAwake: true }))} />
     </div>}
     {page === 'appearance'  && <div className="settings-form">
       <div className="settings-row"><span><strong>{t("Language")}</strong><span className="muted block small">{t("Choose your preferred language. Changes apply after saving.")}</span></span><Dropdown label={t("App language")} value={appDraft.language} options={[{ value: 'system', label: t("Follow system") }, { value: 'id', label: 'Bahasa Indonesia' }, { value: 'en', label: 'English' }]} onChange={(language) => setAppDraft({ ...appDraft, language: language as AppPreferences['language'] })} /></div>

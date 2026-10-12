@@ -56,3 +56,10 @@ it('service identity changes with shared code, independent of filesystem timesta
   writeFileSync(join(dir, 'shared.js'), 'v2')
   expect(runtimeBuild(daemon)).not.toBe(original)
 })
+
+it('does not snapshot a development Electron.app with a daemon outside its bundle', async () => {
+  const { pinnedRuntime } = await import('../src/main/runtimeClient')
+  const { dir } = make()
+  const daemonPath = '/project/out/main/daemon.js', executable = '/project/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'
+  expect(pinnedRuntime(dir, daemonPath, executable)).toEqual({ daemonPath, executable })
+})

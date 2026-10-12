@@ -1,3 +1,4 @@
+import { newerVersion } from './providers'
 import { DesktopUpdater } from './desktopUpdater'
 import { runtimeBuild, unloadLoginService } from './runtimeClient'
 import type { AppUpdateStatus } from '../shared/updates'
@@ -47,6 +48,7 @@ async function main() {
       await runtimeInvoke(socketPath, 'settings.app.set', [{ ...preferences, keepAwake: true }])
       writeFileSync(join(userData, 'background-ever-installed.json'), 'true', { mode: 0o600 })
     }
+    return { firstInstall }
   }
   if (app.isPackaged && !process.env.RAMU_USER_DATA && process.platform === 'darwin' && loginPreferred(userData) !== false && !loginEnabled(userData)) await setLoginService(true)
 
@@ -111,13 +113,17 @@ async function main() {
   })
 
   let updateStatus: AppUpdateStatus | undefined
-  const desktopUpdater = new DesktopUpdater(userData, () => { if (updateStatus) send('updates:changed', { ...updateStatus, currentVersion: app.getVersion(), nativeReady: desktopUpdater.ready, supported: desktopUpdater.supported, error: desktopUpdater.error ?? updateStatus.error }) })
+  const desktopUpdater = new DesktopUpdater(userData, () => { if (updateStatus) send('updates:changed', updateView(updateStatus)) })
+  const updateView = (status: AppUpdateStatus): AppUpdateStatus => {
+    const stale = !!status.release && !newerVersion(status.release.version, app.getVersion())
+    return { ...status, currentVersion: app.getVersion(), ...(stale ? { release: null, phase: 'idle' as const, downloadedBytes: 0 } : {}), nativeReady: !stale && desktopUpdater.ready, supported: desktopUpdater.supported, error: desktopUpdater.error ?? status.error }
+  }
   const send = (channel: string, payload: unknown) => {
     if (!win.isDestroyed()) win.webContents.send(channel, payload)
   }
   const notifier = createAgentNotifier({ window: win, send, invoke: (method, args) => runtimeInvoke(socketPath, method, args) })
   const unsubscribe = subscribeRuntime(socketPath, (channel, payload) => {
-    if (channel === 'updates:changed') { updateStatus = payload; void desktopUpdater.prepare(payload); send(channel, { ...payload, currentVersion: app.getVersion(), nativeReady: desktopUpdater.ready, supported: desktopUpdater.supported, error: desktopUpdater.error ?? payload.error }); return }
+    if (channel === 'updates:changed') { updateStatus = payload; void desktopUpdater.prepare(payload); send(channel, updateView(payload)); return }
     if (channel !== 'host:request') { send(channel, payload); notifier.observe(channel, payload); return }
     void (async () => {
       try {
@@ -189,7 +195,7 @@ async function main() {
     }
     if (method.startsWith('completion.')) return completion.handle(method, args)
     if (method === 'background.start') { await ensureRuntime(userData, daemonPath); return }
-    if (method === 'background.login') { if (typeof args[0] !== 'boolean') throw new Error('Invalid startup setting'); await setLoginService(args[0]); return }
+    if (method === 'background.login') { if (typeof args[0] !== 'boolean') throw new Error('Invalid startup setting'); return setLoginService(args[0]) }
     if (method === 'background.status') { const status = await runtimeInvoke(socketPath, method); return { ...status, loginEnabled: loginEnabled(userData), bundledVersion: app.getVersion(), bundledBuild: runtimeBuild(daemonPath), updateAvailable: status.build !== runtimeBuild(daemonPath) } }
     if (method === 'background.restart') {
       const choice = await dialog.showMessageBox(win, { type: 'question', message: t('Restart Ramu and the background service?'), detail: t('Running agents will stop and unfinished chats will recover using your restart settings. App-only restarts keep the service and chats running.'), buttons: [t('Restart now'), t('Later')], defaultId: 1, cancelId: 1 })
@@ -211,7 +217,7 @@ async function main() {
     if (['updates.status', 'updates.check', 'updates.download'].includes(method)) {
       updateStatus = await runtimeInvoke(socketPath, method, args)
       await desktopUpdater.prepare(updateStatus!)
-      return { ...updateStatus, currentVersion: app.getVersion(), nativeReady: desktopUpdater.ready, supported: desktopUpdater.supported, error: desktopUpdater.error ?? updateStatus?.error }
+      return updateView(updateStatus!)
     }
     return runtimeInvoke(socketPath, method, args)
   })

@@ -91,8 +91,9 @@ function ScheduleEditor({ schedule, onClose, onSaved }: { schedule?: Schedule; o
     {error && <div className="error small" role="alert">{error}</div>}<div className="schedule-form-actions"><Button onClick={onClose} type="button">{t("Cancel")}</Button><Button type="button" className="primary" disabled={busy || !preview.length || !input.name.trim() || !input.prompt.trim()} onClick={() => void save()}>{busy ? t("Saving…") : t("Save schedule")}</Button></div>
   </fieldset></section>
 }
-export function BackgroundControls({ compact = false }: { compact?: boolean }) {
+export function BackgroundControls({ compact = false, onInstalled }: { compact?: boolean; onInstalled?: () => void }) {
   useLanguage()
+  const app = useAppSettings()
   const [status, setStatus] = useState<BackgroundStatus | null>(null), [connected, setConnected] = useState(true), [busy, setBusy] = useState(false)
   const reload = () => invoke('background.status').then((s) => { setStatus(s); setConnected(true) }, () => setConnected(false))
   useEffect(() => { void reload(); return ramu.on('background:connection', ({ connected }) => { setConnected(connected); if (connected) void reload() }) }, [])
@@ -100,7 +101,7 @@ export function BackgroundControls({ compact = false }: { compact?: boolean }) {
   if (compact) return <span className={`background-badge ${connected ? 'connected' : ''}`}><span />{connected ? t("Background service running") : t("Background service stopped")}</span>
   return <>
     <div className="settings-row"><span><strong>{t("Background service")}</strong><span className="muted block small">{t("Chats and schedules continue when you close Ramu. The computer must be awake. Agents waiting for answers remain paused until you return.")}</span><span className="muted block small">{connected ? t("Running · PID {0}", { "0": status?.pid ?? '…' }) : t("Stopped")}</span></span><Button disabled={busy} onClick={() => void act(() => invoke(connected ? 'background.stop' : 'background.start'))}>{connected ? t("Stop") : t("Start")}</Button></div>
-    <div className="settings-row settings-toggle"><span><strong>{t("Start at login")}</strong><span className="muted small block">{t("macOS starts the background service when you sign in.")}</span></span><Switch aria-label={t("Start at login")} checked={status?.loginEnabled ?? false} disabled={busy || !connected} onCheckedChange={(checked) => void act(() => invoke('background.login', checked))} /></div>
+    <div className="settings-row settings-toggle"><span><strong>{t("Start at login")}</strong><span className="muted small block">{t("macOS starts the background service when you sign in.")}</span></span><Switch aria-label={t("Start at login")} checked={status?.loginEnabled ?? false} disabled={busy || !connected} onCheckedChange={(checked) => void act(async () => { const result = await invoke('background.login', checked); if (result?.firstInstall) { onInstalled?.(); await app.reload() } })} /></div>
   </>
 }
 

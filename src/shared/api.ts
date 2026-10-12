@@ -103,7 +103,7 @@ export interface RamuMethods {
   'background.start'(): void
   'background.restart'(): void
   'background.keepAwake'(): { enabled: boolean; active: boolean; supported: boolean; error: string | null }
-  'background.login'(enabled: boolean): void
+  'background.login'(enabled: boolean): { firstInstall: boolean }
   'skills.list'(taskId: string): SkillInfo[]
   'schedules.list'(): Schedule[]
   'schedules.save'(input: ScheduleInput, id?: string): Schedule

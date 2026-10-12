@@ -5,7 +5,7 @@ import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '../../shared/types
 import { invoke } from './ipc'
 import { notifyError } from './Notifications'
 
-const Context = createContext<{ preferences: AppPreferences; save: (preferences: AppPreferences) => Promise<void> } | null>(null)
+const Context = createContext<{ preferences: AppPreferences; reload: () => Promise<void>; save: (preferences: AppPreferences) => Promise<void> } | null>(null)
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [preferences, setPreferences] = useState(DEFAULT_APP_PREFERENCES)
   const [loaded, setLoaded] = useState(false)
@@ -29,6 +29,6 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--sans', preferences.fontFamily === 'system' ? "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif" : "'Geist Variable', -apple-system, BlinkMacSystemFont, sans-serif")
     root.style.setProperty('--ui-font-size', `${preferences.fontSize}px`)
   }, [preferences])
-  return <Context.Provider value={{ preferences, save: async (value) => { await invoke('settings.app.set', value); const languages = value.language === 'system' ? await invoke('app.systemLanguages').catch(() => navigator.languages) : undefined; configureLanguage(value.language, languages); setPreferences(value) } }}>{loaded ? children : <BootScreen />}</Context.Provider>
+  return <Context.Provider value={{ preferences, reload: async () => { setPreferences({ ...DEFAULT_APP_PREFERENCES, ...await invoke('settings.app.get') }) }, save: async (value) => { await invoke('settings.app.set', value); const languages = value.language === 'system' ? await invoke('app.systemLanguages').catch(() => navigator.languages) : undefined; configureLanguage(value.language, languages); setPreferences(value) } }}>{loaded ? children : <BootScreen />}</Context.Provider>
 }
 export function useAppSettings() { const value = useContext(Context); if (!value) throw new Error('AppSettingsProvider missing'); return value }

@@ -5,12 +5,13 @@ import { DEFAULT_APP_PREFERENCES } from '../src/shared/types'
 
 it('defaults to off before first background-service installation', () => {
   expect(DEFAULT_APP_PREFERENCES.keepAwake).toBe(false)
+  expect(DEFAULT_APP_PREFERENCES.keepAwakeWhen).toBe('plugged-in')
   const service = new KeepAwakeService(() => false)
   try { expect(service.status().active).toBe(false) } finally { service.close() }
 })
 it.skipIf(process.platform !== 'darwin')('holds and releases a real macOS idle-sleep assertion without requiring login installation', async () => {
   let enabled = true
-  const service = new KeepAwakeService(() => enabled)
+  const service = new KeepAwakeService(() => enabled, () => 'always')
   try {
     const start = Date.now()
     let asserted = false

@@ -240,7 +240,7 @@ Implementation must verify the first provider's supported APIs, versions and lic
 
 Reviewed on 12 October 2026. Detailed evidence and reproduction scripts live in [ACP-MIGRATION-AUDIT.md](ACP-MIGRATION-AUDIT.md). This section tracks the proposed migration of Claude and Codex; Cursor and Antigravity already use ACP.
 
-**Recommendation: pursue a staged hybrid candidate, but keep the current native integrations until it proves feature parity and a maintenance benefit.** ACP offers a shared client interface; the adapters still wrap the native SDK/app-server and add another versioned dependency. A Claude library host and a maintained Codex adapter extension are feasible ways to preserve Ramu's existing behavior. Their prototypes are not a completed integration. Migration remains subject to the user's explicit go-ahead recorded in the audit.
+**Recommendation: pursue a staged hybrid candidate, but keep the current native integrations until it proves feature parity and a maintenance benefit.** ACP offers a shared client interface; the adapters still wrap the native SDK/app-server and add another versioned dependency. A Claude library host and a maintained Codex adapter extension are feasible ways to preserve Ramu's existing behavior. Their prototypes are not a completed integration. The user explicitly authorized migration on 12 October; the candidate is now implemented with Ramu-owned ACP hosts and native extensions. Stock adapter replacement is not the selected implementation.
 
 ### Evidence already available
 
@@ -266,6 +266,21 @@ Complete the following in order. Every unchecked item needs evidence from the co
 - [ ] **Ramu workflows added since the audit.** Cover Advisor's nonblocking steering and wait/stop behavior, Claude native-advisor suppression, and Goals continuation/pause/limits/restart under the candidate's terminal states. Track existing pending-advice restart and model-compliance limitations separately; a migration must not silently worsen them.
 - [ ] **Workspace and review journey.** Complete the two-repository signature workflow in current checkouts and isolated worktrees: agent edit, manual correction, task switch, restart, review, checks, stage, and commit. Include shared-checkout writer coordination, Undo, child patch application/conflicts, schedules, and recaps. Assert every surface uses its actual binding and background completion cannot release a writer early.
 - [ ] **Packaged runtime and failure recovery.** Verify adapter install/update/version management, configured executable paths, existing login, clean-machine setup, paths with spaces, process crash/restart, and supported-platform packaging. Certify only platforms actually tested. Resolve or explicitly record earlier audit-fixture cleanup uncertainty separately from candidate cleanup checks.
-- [ ] **Candidate acceptance and rollout.** Run `pnpm check`, relevant desktop automation, and live-provider compatibility against the exact candidate revision and pinned adapters. Record each gate's test/fixture, expected outcome, observed result, and platform. Prepare a reversible provider-by-provider rollout with native rollback that preserves settings, session IDs, histories, and pending-question records. Obtain the user's explicit migration instruction before changing active Claude/Codex connections.
+- [ ] **Candidate acceptance and rollout.** Run `pnpm check`, relevant desktop automation, and live-provider compatibility against the exact candidate revision and pinned adapters. Record each gate's test/fixture, expected outcome, observed result, and platform. Prepare a reversible provider-by-provider rollout with native rollback that preserves settings, session IDs, histories, and pending-question records. The user's migration instruction was received on 12 October; packaged rollout validation is still required.
 
-Completion means every candidate gate above has reproducible passing evidence, any retained limitations are explicitly accepted, and the rollout is authorized. Until then the status is **feasible, incomplete**. Avoid removing native paths solely to make the architecture appear uniform.
+Completion means every candidate gate above has reproducible passing evidence, any retained limitations are explicitly accepted, and the rollout is authorized. The integration status is **implemented; extended release acceptance incomplete**. Avoid removing native paths solely to make the architecture appear uniform.
+
+Implementation note (12 October): Claude and Codex now cross the official ACP SDK through local Ramu-owned hosts retaining their native backends. OpenCode switched to native CLI ACP; Cursor/Antigravity remain native ACP. New targeted transport tests and live Claude/Codex/OpenCode turns pass. Provider accounts/update controls, GitHub app-update staging, service build identity/pinned runtime, explicit restart choices, and keep-awake power-source settings are implemented. Unchecked acceptance gates above remain open wherever their full scenario matrix has not been exercised; no stock-adapter or packaged-updater parity is implied.
+
+### Provider settings, updates, and keep-awake implementation
+
+- [x] Replace install/setup panels with Login, Update CLI, optional CLI auto-update, and Advanced paths.
+- [x] Add named Codex/OpenCode credential profiles; pin chats/helpers/history to their original profile and separate account usage windows.
+- [x] Run provider checks/updates and GitHub app-update checks/downloads in the detached service.
+- [x] Identify the service with the app version plus a content hash; preserve its pinned runtime during app-only updates.
+- [x] Require an explicit app restart choice; provide a separate confirmed app-and-service restart.
+- [x] Add keep-awake, initially off and enabled on first login-startup installation. Default to plugged-in-only; allow plugged-in plus battery. Verify the underlying macOS assertion without requiring startup installation.
+- [x] Verify deterministic ACP transport, 3 live provider turns, the full automated checks, and desktop settings/recovery smoke tests.
+- [ ] Validate first-time startup installation and a signed published app update on a separate machine. Unsigned builds and other platforms retain manual app installation.
+
+Detailed migration acceptance scenarios above remain open where their entire matrix has not been exercised.

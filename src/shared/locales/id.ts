@@ -1,6 +1,10 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  "When to keep awake": "Kapan tetap aktif",
+  "Plugged in only (recommended)": "Hanya saat terhubung ke listrik (disarankan)",
+  "Plugged in and on battery": "Saat terhubung ke listrik dan memakai baterai",
+  "Plugged in only saves battery. Choose both power sources to keep working after unplugging.": "Hanya saat terhubung ke listrik menghemat baterai. Pilih kedua sumber daya agar tetap bekerja setelah kabel dicabut.",
   "Updates": "Pembaruan",
   "Updates come from published GitHub releases.": "Pembaruan berasal dari rilis yang dipublikasikan di GitHub.",
   "Check for updates": "Periksa pembaruan",
@@ -47,7 +51,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Restart Ramu to finish updating?": "Restart Ramu untuk menyelesaikan pembaruan?",
   "The background service and its running chats will stay connected. You can update the service separately afterwards.": "Layanan background dan chat yang berjalan tetap terhubung. Anda dapat memperbarui layanan secara terpisah setelahnya.",
   "Keep computer awake": "Jaga komputer tetap aktif",
-  "Prevent idle sleep while the local service is running, even without login startup installed. Display sleep and manually putting the computer to sleep still work. Enabled on the first background-service installation; you can turn it off anytime.": "Cegah sleep saat tidak digunakan selama layanan lokal berjalan, meski startup login belum dipasang. Layar tetap bisa sleep dan sleep manual tetap bekerja. Aktif saat pertama kali memasang layanan background; dapat dimatikan kapan saja.",
+  "On macOS, prevent idle sleep while the local service is running, even without login startup installed. Display sleep and manually putting the computer to sleep still work. Enabled on the first background-service installation; you can turn it off anytime.": "Di macOS, cegah sleep saat tidak digunakan selama layanan lokal berjalan, meski startup login belum dipasang. Layar tetap bisa sleep dan sleep manual tetap bekerja. Aktif saat pertama kali memasang layanan background; dapat dimatikan kapan saja.",
   "Commit on new branch": "Commit di branch baru",
   "Commit & Push to default branch?": "Commit & Push ke branch utama?",
   "Check out feature branch & continue": "Beralih ke branch fitur & lanjutkan",

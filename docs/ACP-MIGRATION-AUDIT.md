@@ -4,7 +4,7 @@ Checked on 2026-10-11 against the working tree, including its existing uncommitt
 
 Completion tracking: [PLAN.md §13](PLAN.md#13-claude-and-codex-acp-migration-completion-plan). On 2026-10-12, the registry still reported Claude `0.89.1` and Codex `2.2.2`. The published Codex event/control/state diagnostics were re-run and reproduced the documented event loss, policy/MCP/fork differences, and canonical child-negotiation gap. The targeted current Ramu baseline passed **7 files / 157 tests, 1 skipped** (ACP, AgentService, Codex, routing, usage, question tools, and helper history). No new live inference checks were run in this review. Advisor and Goals now also need candidate integration coverage; prior audit passes do not certify these newer workflows.
 
-**Decision: no migration without the user's explicit go-ahead.** The user permits investigating hybrid native reads and modifications to existing integrations, but has explicitly instructed us not to migrate yet. The stock released adapters have confirmed differences in subscription limit delivery, live patch previews, native async questions, approval policies, and native helper controls. The follow-up below identifies ways to address them through a library host or adapter changes. Several features still need end-to-end compatibility checks. No production provider connections or dependencies were changed by this audit.
+**Authorization updated on 2026-10-12:** the user explicitly requested migration for all providers. The earlier audit was investigation-only; the implementation below is a Ramu-owned hybrid ACP integration. The stock released adapters have confirmed differences in subscription limit delivery, live patch previews, native async questions, approval policies, and native helper controls. The follow-up below identifies ways to address them through a library host or adapter changes. Several features still need end-to-end compatibility checks. No production provider connections or dependencies were changed by the original stock-adapter audit; the authorized implementation is recorded at the end of this file.
 
 ## Releases actually checked
 
@@ -389,7 +389,7 @@ These are concrete remaining implementation/validation requirements, not a claim
 
 ## Migration gate
 
-Migration requires the user's explicit instruction, even if technical checks later pass. Technical readiness also requires supported replacements for the gaps, integration of the source-supported features, and the following checks:
+The original investigation required the user's explicit instruction; that instruction was received on 2026-10-12. Technical readiness also requires supported replacements for the gaps, integration of the source-supported features, and the following checks:
 
 - Exact access policies, permission/question cancellation, and tool-free background analysis.
 - Streaming/deduplication, steering while tools run, late answers, and native async question metadata.
@@ -401,3 +401,17 @@ Migration requires the user's explicit instruction, even if technical checks lat
 - Ramu's relevant automated checks and live-provider compatibility runs.
 
 An upstream capability claim alone must not reopen this gate. Re-run the probes and update this audit when released adapters change. The user permits considering hybrid native paths and modifications; evaluate parity of the resulting combined integration rather than requiring every feature to pass through stock ACP. Technical readiness does not authorize migration.
+
+## Authorized integration implemented on 2026-10-12
+
+The user authorized the migration along with simpler provider settings, account profiles, provider/app update controls, safe app/service restart separation, and power-source-aware keep-awake settings. The production boundary now uses ACP for all five providers. Claude's owning Query is hosted behind `claudeAcpQuery.ts`; Codex's existing driver is hosted by `acpNativeHost.ts`; both use the official ACP SDK over serialized newline-JSON streams. OpenCode, Cursor and Antigravity use their native ACP CLI. These are Ramu-owned hosts with versioned native-event/owning-control extensions, **not** deployments of the two stock adapters audited above. Their native drivers, histories, usage and Aside paths remain part of the hybrid design.
+
+Deterministic migration tests verify the real ACP transport, permission denial, question replies, owning-Query usage/context/helper Stop, and lossless main/helper event payloads. Existing service/driver tests remain relevant because these hosts retain those drivers. Live inference in new disposable workspaces passed for Claude, Codex and OpenCode. Claude disables persistence; Codex analysis uses an ephemeral thread. The OpenCode CLI owns its disposable audit session persistence; no existing user session was loaded or deleted. Cursor and Antigravity live credentials/executables were not exercised by this pass.
+
+The first OpenCode trial exposed drift between SDK 1.18.35 and the installed v2 API (nested prompt body and missing wait endpoint). The active migration uses the installed CLI's native ACP server, which passed the live turn. The legacy SDK driver remains outside the active production route for rollback/compatibility reference; it must not be described as live-verified against that v2 server.
+
+Reproduction: `RAMU_ACP_MIGRATION_LIVE=1 pnpm exec vitest run test/acpMigration.live.test.ts`; deterministic transport coverage is in `test/acpMigration.test.ts`. `pnpm check` verifies the full baseline and desktop build. Existing stock-adapter diagnostic gaps above remain historical facts about those pinned adapters; they do not describe losses in the retained native payload path.
+
+Full release acceptance still requires representative Ramu history/fallback/helper recovery through the new client boundary, long-lived/nested helper and cancellation races, attachment variants, automatic compaction, and supported-platform packaged validation. The checklist in PLAN §13 distinguishes implemented paths from these remaining acceptance checks. A signed published app update and real multi-account browser authentication have not been simulated into passing claims.
+
+Final verification of the implemented paths: `pnpm check` passed **53 files / 480 tests, 12 skipped**, including **3 release-script checks** and the production build. The opt-in migration suite passed **3 live turns** (Claude, Codex, OpenCode). `pnpm test:e2e` passed the full desktop journey and newly added provider/account/update/power-source settings assertions; no renderer errors occurred. The macOS keep-awake test measured a real owned idle-sleep assertion without login-startup installation and released it. Native app-updater tests use a simulated signing/updater boundary to verify explicit install and downgrade prevention; they do not certify a signed package upgrade. First-time login-startup installation still needs a packaged installation test.

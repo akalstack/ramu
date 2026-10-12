@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import type { AppUpdateStatus } from '../shared/updates'
+import { newerVersion } from './providers'
 
 /** The detached service stages GitHub assets; Electron verifies and installs them.
  * This object never restarts the daemon and never calls quitAndInstall automatically. */
@@ -23,7 +24,7 @@ export class DesktopUpdater {
     autoUpdater.on('error', (error) => { this.error = error.message; this.preparedVersion = ''; this.changed() })
   }
   prepare(status: AppUpdateStatus): Promise<void> {
-    if (!this.supported || status.phase !== 'ready' || !status.release || status.release.version === app.getVersion()) return Promise.resolve()
+    if (!this.supported || status.phase !== 'ready' || !status.release || !newerVersion(status.release.version, app.getVersion())) return Promise.resolve()
     if (this.preparing) return this.preparing
     if (this.preparedVersion === status.release.version) return Promise.resolve()
     this.preparing = (async () => {

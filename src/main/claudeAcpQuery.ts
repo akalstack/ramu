@@ -124,7 +124,12 @@ export function claudeAcpQuery(nativeQuery: QueryFn): QueryFn {
     }
     args.options.abortController?.signal.addEventListener('abort', close, { once: true })
     return new Proxy({ [Symbol.asyncIterator]: () => output[Symbol.asyncIterator](), close, interrupt: async () => { await ready; await client.cancel({ sessionId }) } }, {
-      get(target, key) { if (key in target) return target[key as keyof typeof target]; if (key === 'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET') return (...values: unknown[]) => control('usage', values); return (...values: unknown[]) => control(String(key), values) },
+      get(target, key) {
+        if (key in target) return target[key as keyof typeof target]
+        if (key === 'usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET') return (...values: unknown[]) => control('usage', values)
+        if (['supportedModels', 'getContextUsage', 'backgroundTasks', 'stopTask'].includes(String(key))) return (...values: unknown[]) => control(String(key), values)
+        return undefined
+      },
     }) as unknown as Query
   }
 }
