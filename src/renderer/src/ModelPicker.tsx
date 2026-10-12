@@ -1,4 +1,5 @@
 import { t, useLanguage } from './i18n'
+import { Kbd } from '@/components/ui/kbd'
 import { Button } from '@/components/ui/button'
 import { moveFavorite } from '../../shared/favorites'
 import { SearchInput } from './SearchInput'
@@ -109,7 +110,7 @@ export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: A
             onDragEnd={() => { draggedFavorite.current = null; setDropTarget(null) }}
             onKeyDown={(event) => { if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return; event.preventDefault(); event.stopPropagation(); const direction = event.key === 'ArrowUp' ? -1 : 1; const target = favoriteRows[favoriteRows.findIndex((entry) => keyOf(entry) === keyOf(model)) + direction]; if (target) reorder(keyOf(model), keyOf(target), direction > 0) }}><GripVertical size={14} /></Button>}
           <span className="mp-text"><span className="mp-name">{modelDisplayName(model.name)}</span><span className="mp-sub"><ProviderIcon provider={model.provider} size={13} />{providerName(model.provider)}{usageLeft(model.provider)}</span></span>
-          {!editingFavorites && index < 9 && <kbd className="mp-key">⌘{index + 1}</kbd>}
+          {!editingFavorites && index < 9 && <Kbd className="mp-key">⌘{index + 1}</Kbd>}
           {!editingFavorites && <Button type="button" disabled={savingFavorites} className={favorites.includes(keyOf(model)) ? 'mp-star on' : 'mp-star'} aria-label={favorites.includes(keyOf(model)) ? t("Remove {0} from favorites", { "0": modelDisplayName(model.name) }) : t("Add {0} to favorites", { "0": modelDisplayName(model.name) })} aria-pressed={favorites.includes(keyOf(model))} onClick={(event) => { event.stopPropagation(); toggleFavorite(model) }}><Star size={15} fill={favorites.includes(keyOf(model)) ? 'currentColor' : 'none'} /></Button>}
         </div>)}
         {(q || tab !== 'sets') && !rows.length && <p className="mp-empty">{providerError || error || t("No matching models")}</p>}

@@ -1,6 +1,5 @@
 import { Slider as SliderPrimitive } from "@base-ui/react/slider"
 import { cn } from "cn"
-import { useEffect, useState } from "react"
 
 function Slider({
   className,
@@ -8,33 +7,18 @@ function Slider({
   value,
   min = 0,
   max = 100,
-  thumbLabel,
-  valueText,
   ...props
-}: SliderPrimitive.Root.Props & { thumbLabel?: string; valueText?: string }) {
-  const [ready, setReady] = useState(false)
-  useEffect(() => {
-    // Let the thumb measure its inset before enabling position transitions.
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => setReady(true))
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [])
+}: SliderPrimitive.Root.Props) {
   const _values = Array.isArray(value)
     ? value
-    : typeof value === "number"
-      ? [value]
-      : Array.isArray(defaultValue)
-        ? defaultValue
-        : typeof defaultValue === "number"
-          ? [defaultValue]
-          : [min, max]
+    : Array.isArray(defaultValue)
+      ? defaultValue
+      : [min, max]
 
   return (
     <SliderPrimitive.Root
       className={cn("data-horizontal:w-full data-vertical:h-full", className)}
       data-slot="slider"
-      data-slider-ready={ready ? "" : undefined}
       defaultValue={defaultValue}
       value={value}
       min={min}
@@ -56,8 +40,6 @@ function Slider({
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
             key={index}
-            aria-label={thumbLabel}
-            getAriaValueText={valueText ? () => valueText : undefined}
             className="relative block size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 disabled:pointer-events-none disabled:opacity-50"
           />
         ))}

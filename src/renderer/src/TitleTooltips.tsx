@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react'
-import { Tooltip, TooltipContent } from '@/components/ui/tooltip'
+import { Tooltip } from '@/components/ui/tooltip'
+import { AnchoredTooltip } from '@/components/anchored-tooltip'
 
 interface Tip { text: string; anchor: HTMLElement; side: 'bottom' | 'right' }
 
@@ -57,5 +58,5 @@ export function TitleTooltips() {
       hide()
     }
   }, [id])
-  return <Tooltip open={!!tip}>{tip && <TooltipContent id={id} anchor={tip.anchor} side={tip.side} sideOffset={6} className="ramu-tooltip">{tip.text}</TooltipContent>}</Tooltip>
+  return <Tooltip open={!!tip}>{tip && <AnchoredTooltip id={id} anchor={tip.anchor} side={tip.side} sideOffset={6} className="ramu-tooltip">{tip.text}</AnchoredTooltip>}</Tooltip>
 }

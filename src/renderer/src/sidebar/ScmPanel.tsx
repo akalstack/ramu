@@ -1,4 +1,5 @@
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { OverlayScrollArea } from '@/components/overlay-scroll-area'
+import { ButtonGroup } from '@/components/ui/button-group'
 import { t, useLanguage } from './../i18n'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -15,6 +16,8 @@ import { AgentControls, providerName } from '../AgentControls'
 import { invoke, ramu, copyText } from '../ipc'
 import { Dialog, Dropdown, Menu, useContextMenu } from '../Menu'
 import { errorText } from '../TaskPane'
+import { registerCommitTarget } from '../commitShortcut'
+import { formatKeys } from '../commands'
 import { notifyError } from '../Notifications'
 import { isWorktreeCtx, useWorkspace } from '../workspace'
 import { useModelSets } from '../ModelSets'
@@ -62,10 +65,10 @@ export function ScmPanel() {
   return <div className="panel scm-panel" ref={panelRef}>
     {bindings.length === 0 ? <p className="muted hint">{t("No repository available.")}</p>
       : many ? <>
-        <ScrollArea className="scm-repos overlay-scroll-area">{bindings.map((b, index) => {
+        <OverlayScrollArea className="scm-repos">{bindings.map((b, index) => {
           const expanded = isOpen(b.repoId, index)
           return <RepositoryControl key={`${taskId}:${b.repoId}`} taskId={taskId} binding={b} compact collapsed={!expanded} gitHost={gitHost} showGit={gitRepo?.repoId === b.repoId} gitRepos={bindings} onGitRepo={setGitRepoId} onToggle={() => { setOpen((current) => ({ ...current, [b.repoId]: !expanded })); if (!expanded) setGitRepoId(b.repoId) }} />
-        })}</ScrollArea>
+        })}</OverlayScrollArea>
         <div className="scm-git-resizer" role="separator" aria-orientation="horizontal" aria-label={t("Resize Git section")} title={t("Drag to resize · double-click to reset")} onPointerDown={startResize} onDoubleClick={() => { setGitHeight(GIT_HEIGHT_DEFAULT); localStorage.removeItem(GIT_HEIGHT_KEY) }} />
         <div className="scm-git-host" ref={setGitHost} style={{ height: gitHeight }} />
       </>
@@ -231,8 +234,28 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   const canUndo = !busy && !generating && !!status?.oid && commits.length > 1 && !status.detached && !status.operation && !conflicts.length && !(status.upstream && status.ahead === 0)
   const requestUndo = (commit: GitCommit) => setConfirmation({ kind: 'undo', oid: commit.oid, title: commit.subject })
   const canPublish = canCommit && !!status?.branch && !!status.remote && !status.operation
+  // The Commit & Push shortcut (commitShortcut.ts) runs this section's own commit, typed message included.
+  const publishable = !!status?.branch && !!status.remote && !status.operation && !conflicts.length
+  const shortcut = useRef({ staged: 0, unstaged: [] as string[], publishable: false, commit })
+  shortcut.current = { staged: staged.length, unstaged: unstaged.map((entry) => entry.path), publishable, commit }
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => registerCommitTarget({
+    taskId, repoId: binding.repoId,
+    staged: () => shortcut.current.staged,
+    changes: () => shortcut.current.staged + shortcut.current.unstaged.length,
+    focused: () => !!root.current?.contains(document.activeElement),
+    // Smart commit: with nothing staged, every change is staged first.
+    commitAndPush: async () => {
+      const { staged, unstaged, publishable } = shortcut.current
+      if (!publishable) return reportError(t("This repository has no branch with a remote to push to, or a conflict is unresolved."))
+      if (!staged) {
+        try { await invoke('git.stage', taskId, binding.repoId, unstaged) } catch (reason) { return reportError(errorText(reason)) }
+      }
+      await shortcut.current.commit('push')
+    },
+  }), [taskId, binding.repoId, reportError])
 
-  return <div className={`scm-repo-body${compact ? ' compact' : ''}${collapsed ? ' collapsed' : ''}`}>
+  return <div ref={root} className={`scm-repo-body${compact ? ' compact' : ''}${collapsed ? ' collapsed' : ''}`}>
     {fileContext.menu}
     {confirmation && <Dialog title={confirmation.kind === 'discard' ? t("Discard changes?") : confirmation.kind === 'undo' ? t("Undo last commit?") : confirmation.kind === 'branch' ? t("Create branch") : confirmation.kind === 'stash' ? (confirmation.staged ? t("Stash staged changes") : t("Stash changes")) : confirmation.kind === 'delete-branch' ? t("Delete branch?") : t("Delete stash?")} confirmLabel={confirmation.kind === 'discard' ? t("Discard changes") : confirmation.kind === 'undo' ? t("Undo commit") : confirmation.kind === 'branch' ? t("Create branch") : confirmation.kind === 'stash' ? t("Stash") : t("Delete")} danger={confirmation.kind === 'discard' || confirmation.kind === 'drop-stash' || confirmation.kind === 'delete-branch'} busy={busy} onCancel={() => { if (!busy) setConfirmation(null) }} onConfirm={() => void run(async () => {
       requireSaved()
@@ -246,7 +269,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
     })}>
       {confirmation.kind === 'discard' ? <><p>{t("Tracked edits return to their staged version. Untracked files move to Trash. Staged changes are kept.")}</p><pre className="confirm-paths">{confirmation.paths.join('\n')}</pre></> : confirmation.kind === 'undo' ? <><p>{t("The last local commit will be undone. Its files stay in your checkout and index.")}</p><p className="strong">{confirmation.title}</p></> : confirmation.kind === 'branch' || confirmation.kind === 'stash' ? <><label className="explorer-name-field">{confirmation.kind === 'branch' ? t("Branch name") : t("Stash message")}<Input autoFocus value={operationName} onChange={(event) => setOperationName(event.target.value)} /></label><p className="muted small">{confirmation.kind === 'branch' ? t("Creates and switches to a new local branch. The checkout must be clean.") : (confirmation.kind === 'stash' && confirmation.staged ? t("Saves only staged changes and removes them from the checkout. Unstaged edits stay.") : t("Preserves tracked and untracked changes. Ignored files stay in place."))}</p></> : <><p>{confirmation.kind === 'delete-branch' ? t("Deletes the local branch only. Git will refuse an unmerged branch or one in use by a worktree.") : t("This saved stash will be permanently removed.")}</p><p className="strong">{confirmation.kind === 'delete-branch' ? confirmation.name : confirmation.title}</p></>}
     </Dialog>}
-    <ScrollArea className="scm-content overlay-scroll-area">
+    <OverlayScrollArea className="scm-content">
       <section className="scm-repo">
         <div className="scm-section-head">
           {onToggle ? <Button type="button" className="scm-repo-toggle grow" aria-expanded={!collapsed} onClick={onToggle}>{collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}<span className="strong">{binding.repoName}</span>{collapsed && !!status?.entries.length && <span className="scm-count">{status.entries.length}</span>}</Button> : <><ChevronDown size={14} /><span className="grow strong">{binding.repoName}</span></>}
@@ -288,16 +311,16 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
           <Textarea className="commit-msg" rows={2} value={message} placeholder={t("Message (empty drafts one with AI)")} aria-label={t("Commit message for {0}", { "0": binding.repoName })} onChange={(e) => { setMessage(e.target.value); if (!e.target.value.trim()) setDraft(null) }} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && staged.length && !conflicts.length && !busy && !generating) void commit() }} />
           <Button className="ghost icon small-icon commit-ai" title={t("Draft a commit message from staged changes")} aria-label={t("AI commit message for {0}", { "0": binding.repoName })} disabled={busy || generating || !staged.length || !!conflicts.length} onClick={generate}><Sparkles size={14} className={generating ? 'shimmer' : ''} /></Button>
         </div>
-        <div className="scm-commit-split">
+        <ButtonGroup className="scm-commit-split" aria-label={t("Commit")}>
           <Button className="scm-commit primary" aria-label={`Commit ${staged.length} staged`} disabled={!canCommit} title={message.trim() ? undefined : t("Drafts a message with AI, then commits")} onClick={() => void commit()}><Check size={14} />{generating ? t("Drafting message…") : busy ? t("Working…") : t("Commit")}</Button>
           <Menu label={t("Commit options")} icon={<ChevronDown size={14} />} className="scm-commit-menu primary icon" align="end" disabled={busy || generating || !!conflicts.length} items={[
             { key: 'commit', label: t("Commit"), disabled: !canCommit, onSelect: () => void commit() },
             { key: 'amend', label: t("Commit (Amend)"), title: t("Replace the latest commit; leave the message empty to keep its message"), disabled: !canAmend, onSelect: () => void commit('amend') },
             { key: 'separator', separator: true },
-            { key: 'push', label: t("Commit & Push"), disabled: !canPublish, onSelect: () => void commit('push') },
+            { key: 'push', label: t("Commit & Push"), title: t("Shortcut: {0}", { "0": formatKeys('mod+alt+p') }), disabled: !canPublish, onSelect: () => void commit('push') },
             { key: 'sync', label: t("Commit & Sync"), disabled: !canPublish, onSelect: () => void commit('sync') },
           ]} />
-        </div>
+        </ButtonGroup>
         {status && !staged.length && !status.operation && status.branch && status.remote && (!status.upstream || status.ahead > 0 || status.behind > 0) && <SyncButton status={status} busy={busy} pullMode={preferences.pullMode} className="scm-sync" showLabel onSync={sync} />}
         {draft && <div className="muted small ai-draft-label">{t("Drafted with ")}{providerName(draft.provider)} {t(" · Review before committing.")}</div>}
         <Collapsible className="scm-ai-settings"><CollapsibleTrigger render={<Button variant="ghost" />}><ChevronRight size={13} />{t("AI message settings")}</CollapsibleTrigger><CollapsibleContent><div className="composer-controls"><AgentControls settings={settings} onChange={setSettings} disabled={generating} showAccess={false} /></div></CollapsibleContent></Collapsible>
@@ -308,7 +331,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
         {changesOpen && unstaged.map((e) => row(e, false))}
         {!status?.entries.length && status && <p className="muted small scm-empty">{t("No changes in this checkout.")}</p>}
       </section>
-    </ScrollArea>
+    </OverlayScrollArea>
     {showGit && inGitSlot(<Tabs value={gitTab} onValueChange={(value) => setGitTab(value as 'commits' | 'stashes')} render={<section />} className={`git-inspector${historyOpen ? '' : ' collapsed'}`}>
       <div className="git-inspector-head">
         <Button className="git-inspector-heading" aria-expanded={historyOpen} onClick={() => setHistoryOpen((v) => !v)}><ChevronRight size={13} className={historyOpen ? 'caret open' : 'caret'} />Git</Button>
@@ -342,9 +365,9 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
           <TabsTrigger value="stashes" className="git-tab" aria-label={t("Stashes ({0})", { "0": stashes.length })}>{t("Stashes")}{!!stashes.length && <span className="git-tab-count">{stashes.length}</span>}</TabsTrigger>
         </TabsList>
         <TabsContent value="commits" className="git-pane">
-          <ScrollArea className="git-history overlay-scroll-area">{commits.length ? <div className="git-graph">{commits.map((commit) => <CommitHistoryRow key={commit.oid} taskId={taskId} binding={binding} commit={commit} branch={status?.branch ?? null} onUndo={commit.oid === status?.oid ? () => requestUndo(commit) : undefined} undoDisabled={!canUndo} />)}</div> : <p className="muted small git-empty">{t("No commits yet.")}</p>}</ScrollArea>
+          <OverlayScrollArea className="git-history">{commits.length ? <div className="git-graph">{commits.map((commit) => <CommitHistoryRow key={commit.oid} taskId={taskId} binding={binding} commit={commit} branch={status?.branch ?? null} onUndo={commit.oid === status?.oid ? () => requestUndo(commit) : undefined} undoDisabled={!canUndo} />)}</div> : <p className="muted small git-empty">{t("No commits yet.")}</p>}</OverlayScrollArea>
         </TabsContent>
-        <TabsContent value="stashes" className="git-pane git-stashes"><ScrollArea className="git-history overlay-scroll-area">
+        <TabsContent value="stashes" className="git-pane git-stashes"><OverlayScrollArea className="git-history">
           {stashes.map((stash) => <div key={stash.oid} className="stash-row">
             <span className="stash-name" title={`${stash.ref} · ${stash.subject}`}><Archive size={13} /><span>{stash.subject.replace(/^On [^:]+: /, '')}</span></span>
             <span className="stash-actions">
@@ -355,7 +378,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
           </div>)}
           {!stashes.length && <p className="muted small git-empty">{t("No stashes. Stash your changes to set them aside and bring them back later.")}</p>}
           <Button className="git-stash-new" disabled={busy || !canStash} title={canStash ? undefined : t("Nothing to stash")} onClick={() => { setOperationName(''); setConfirmation({ kind: 'stash' }) }}><Plus size={13} />{t("Stash changes…")}</Button>
-        </ScrollArea></TabsContent>
+        </OverlayScrollArea></TabsContent>
       </>}
     </Tabs>)}
   </div>

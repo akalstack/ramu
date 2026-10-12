@@ -1,4 +1,5 @@
 import { t, useLanguage } from './i18n'
+import { Kbd } from '@/components/ui/kbd'
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ShieldQuestion } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -118,7 +119,7 @@ function QuestionForm({ sessionId, request, status, blocking, pager, focusAt, on
       <legend>{q.question}</legend>
       {q.options.length > 0 && <div className="question-options">{q.options.map((option, index) => <label key={option.label} className={`option${selected.has(option.label) ? ' selected' : ''}`}>
         <input type={q.multiSelect ? 'checkbox' : 'radio'} name={`${request.requestId}:${key}`} checked={selected.has(option.label)} onChange={() => choose(option.label)} />
-        {index < 9 && <kbd className="question-option-key" aria-hidden="true">{index + 1}</kbd>}
+        {index < 9 && <Kbd className="question-option-key" aria-hidden="true">{index + 1}</Kbd>}
         <span>{option.label}{option.description && <span className="muted block small">{option.description}</span>}</span>
       </label>)}</div>}
       <Input aria-label={t("Answer: {0}", { "0": q.question })} placeholder={q.options.length ? t("Or type your own answer") : t("Type your answer")} value={typed} maxLength={10000} onChange={(event) => setDrafts((old) => ({ ...old, [key]: event.target.value }))} />

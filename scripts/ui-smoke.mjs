@@ -408,7 +408,7 @@ try {
   const reusedRow = page.locator('.task-row', { hasText: 'Reuse isolated workspace' })
   await reusedRow.click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Delete…', exact: true }).click()
-  check(await page.getByRole('alertdialog').getByRole('checkbox').count() === 0, 'shared worktrees cannot be removed when deleting one conversation')
+  check(await page.locator('[role=alertdialog]:not([data-slot=toast])').getByRole('checkbox').count() === 0, 'shared worktrees cannot be removed when deleting one conversation')
   await page.getByRole('button', { name: 'Delete chat', exact: true }).click()
   await reusedRow.waitFor({ state: 'detached' })
   check(existsSync(wtApi), 'deleting a shared-worktree conversation preserves the existing worktree')
@@ -421,7 +421,7 @@ try {
   await page.waitForTimeout(300) // let the open animation finish
   await shot(page, '08-task-menu')
   await page.getByRole('menuitem', { name: 'Delete…' }).click()
-  await page.getByRole('alertdialog').waitFor()
+  await page.locator('[role=alertdialog]:not([data-slot=toast])').waitFor()
   await page.waitForTimeout(300) // let the open animation finish
   await shot(page, '09-delete-dialog')
   await page.getByRole('button', { name: 'Delete chat' }).click()
@@ -433,7 +433,7 @@ try {
   await wtRow.click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Delete…' }).click()
   await page.getByRole('button', { name: 'Delete chat' }).click()
-  await page.getByRole('alertdialog').getByText(/uncommitted changes/).waitFor()
+  await page.locator('[role=alertdialog]:not([data-slot=toast])').getByText(/uncommitted changes/).waitFor()
   check(existsSync(join(wtApi, 'README.md')), 'deleting a task with a dirty worktree is refused')
   await page.getByRole('button', { name: 'Cancel' }).click()
 

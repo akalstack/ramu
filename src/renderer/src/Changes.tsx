@@ -1,4 +1,5 @@
 import { t, useLanguage, formatLocale } from './i18n'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dropdown } from './Menu'
 import { SearchInput } from './SearchInput'
@@ -106,7 +107,7 @@ export function ChangeReviewTab({ view, visible = true }: { view: Extract<ViewDe
   const pickFile = (fileId: string) => { if (oneAtATime) { setActiveFileId(fileId); root.current?.scrollTo?.({ top: 0 }) } else root.current?.querySelector<HTMLElement>(`[data-file-id="${fileId}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }
   const openChat = () => { if (review?.sessionId) { ws.openTask(review.taskId); ws.openView(review.taskId, { kind: 'agent', sessionId: review.sessionId }) } }
   return <div ref={root} className="changes-page pair-review changes-tab">
-    {!review && <div className="automation-empty"><ClipboardCheck size={30} /><h2>{id && !error ? t("Loading changes…") : t("No changes to review")}</h2><p className="muted">{t("Changed files will appear here after the agent finishes.")}</p>{error && <p className="error" role="alert">{error}</p>}</div>}
+    {!review && <Empty className="automation-empty"><EmptyHeader><EmptyMedia variant="icon"><ClipboardCheck /></EmptyMedia><EmptyTitle>{id && !error ? t("Loading changes…") : t("No changes to review")}</EmptyTitle><EmptyDescription>{t("Changed files will appear here after the agent finishes.")}</EmptyDescription></EmptyHeader>{error && <EmptyContent><p className="error" role="alert">{error}</p></EmptyContent>}</Empty>}
     {review && <>
       <div className="pair-review-bar">
         {revisions.length > 1 ? <Dropdown label={t("Review revision")} disabled={busy} value={review.id} onChange={(value) => openReview(ws, { id: value })} options={revisions.map((r, i) => ({ value: r.id, label: t("{0}Revision {1} · {2}", { "0": i === 0 ? 'Latest · ' : '', "1": revisions.length - i, "2": new Date(r.createdAt).toLocaleString(formatLocale()) }) }))} /> : <span className="muted small">{new Date(review.createdAt).toLocaleString(formatLocale())}</span>}

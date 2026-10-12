@@ -10,6 +10,7 @@ import { errorText } from './TaskPane'
 import { useModelSets } from './ModelSets'
 import { invoke } from './ipc'
 import { titleFrom } from './NewTask'
+import { commitAndPush } from './commitShortcut'
 import { isPreviewable, isWorkspaceCtx, isWorktreeCtx, tabOrder, type WorkspaceApi } from './workspace'
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -142,6 +143,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     { id: 'view.chats', title: t("Show chats"), category: t("View"), run: () => shell.showSidebar ? shell.showSidebar('projects') : ws.setSidebar('projects') },
     { id: 'view.explorer', title: t("Show explorer"), category: t("View"), keys: 'mod+shift+e', run: () => shell.showSidebar ? shell.showSidebar('explorer') : ws.setSidebar('explorer') },
     { id: 'view.search', title: t("Search in project"), category: t("View"), keys: 'mod+shift+f', run: shell.showSearch },
+    { id: 'git.commit-push', title: t("Commit & Push"), category: t("Source Control"), keys: 'mod+alt+p', run: () => taskId && commitAndPush(ws, taskId), when: hasTask },
     { id: 'view.scm', title: t("Show source control"), category: t("View"), keys: 'ctrl+shift+g', run: () => shell.showSidebar ? shell.showSidebar('scm') : ws.setSidebar('scm') },
   ]
   return cmds
@@ -177,7 +179,8 @@ export function useKeybindings(commands: Command[], enabled: boolean) {
   useEffect(() => {
     if (!enabled) return
     const onKey = (e: KeyboardEvent) => {
-      if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], .menu')) return
+      // Toasts are (alert)dialogs too, but a visible notification must not switch shortcuts off.
+      if (document.querySelector(':is([role="dialog"], [role="alertdialog"]):not([data-slot="toast"]), [role="menu"], [role="listbox"], .menu')) return
       for (const c of ref.current) {
         if (c.keys && matches(e, c.keys) && (!c.when || c.when())) {
           e.preventDefault()

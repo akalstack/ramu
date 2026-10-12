@@ -1,6 +1,6 @@
 import { t, useLanguage } from './i18n'
 import { providerName } from '../../shared/providers'
-import { Slider } from '@/components/ui/slider'
+import { StepSlider } from '@/components/step-slider'
 import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronRight, Gauge, Settings, SlidersHorizontal, Sparkles, Zap } from 'lucide-react'
 import { useEffect, useState, type CSSProperties } from 'react'
@@ -74,7 +74,7 @@ export function ModelBar({ settings, onChange, disabled }: { settings: AgentSett
     </div>
     <div className="model-bar-track" style={{ '--bar-fill': `calc(${fraction * 100}% + ${14 - 28 * fraction}px)` } as CSSProperties}>
       <div className="model-bar-dots" aria-hidden="true">{Array.from({ length: count }, (_, position) => <span key={position} className={available(position) ? '' : 'unavailable'} />)}</div>
-      <Slider thumbLabel={mode === 'effort' ? 'Reasoning effort level' : 'Model set step'} valueText={selectedText} min={0} max={Math.max(1, count - 1)} step={1} value={Math.max(0, index)} disabled={disabled || count < 2} onKeyDown={(event) => event.stopPropagation()} onValueChange={(next) => { const position = typeof next === 'number' ? next : next[0]; if (position !== undefined) setDrag(settingsFor(position) ?? null) }} onValueCommitted={(next) => { const position = typeof next === 'number' ? next : next[0]; setDrag(null); if (position !== undefined) choose(position) }} />
+      <StepSlider thumbLabel={mode === 'effort' ? 'Reasoning effort level' : 'Model set step'} valueText={selectedText} min={0} max={Math.max(1, count - 1)} step={1} value={Math.max(0, index)} disabled={disabled || count < 2} onKeyDown={(event) => event.stopPropagation()} onValueChange={(next) => { const position = typeof next === 'number' ? next : next[0]; if (position !== undefined) setDrag(settingsFor(position) ?? null) }} onValueCommitted={(next) => { const position = typeof next === 'number' ? next : next[0]; setDrag(null); if (position !== undefined) choose(position) }} />
     </div>
   </div>} />
 }

@@ -1,4 +1,4 @@
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,7 +36,7 @@ export function ExplorerPanel() {
   return (
     <div className="panel explorer-panel">
       <header className="panel-title explorer-title"><span className="grow" /><Button className="ghost icon small-icon" title={t("New file")} aria-label={t("New file")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:explorer-new', { detail: 'file' }))}><FilePlus size={14} /></Button><Button className="ghost icon small-icon" title={t("New folder")} aria-label={t("New folder")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:explorer-new', { detail: 'dir' }))}><FolderPlus size={14} /></Button><Button className="ghost icon small-icon" title={t("Refresh explorer")} aria-label={t("Refresh explorer")} onClick={() => window.dispatchEvent(new Event('ramu:refresh-explorer'))}><RefreshCw size={14} /></Button><Button className="ghost icon small-icon" title={t("Collapse folders")} aria-label={t("Collapse explorer folders")} onClick={() => window.dispatchEvent(new Event('ramu:collapse-explorer'))}><ListCollapse size={14} /></Button></header>
-      <ScrollArea className="explorer-scroll-area overlay-scroll-area" viewportClassName="explorer-tree-scroll">
+      <OverlayScrollArea className="explorer-scroll-area" viewportClassName="explorer-tree-scroll">
       {bindings.map((b, index) =>
         b.setupState === 'ready' ? (
           <RepoTree key={`${ws.workspaceOf(taskId)}:${b.repoId}`} taskId={taskId} binding={b} primary={index === 0} />
@@ -46,7 +46,7 @@ export function ExplorerPanel() {
           </div>
         ),
       )}
-      </ScrollArea>
+      </OverlayScrollArea>
     </div>
   )
 }

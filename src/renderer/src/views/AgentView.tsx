@@ -1,4 +1,5 @@
 import { t as translate, useLanguage, currentLanguage, formatLocale } from './../i18n'
+import { Spinner } from '@/components/ui/spinner'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { compactionLabel, isCompacting, isTurnFooter } from '../../../shared/compaction'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,7 @@ import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Attachment, QueuedMessage, AgentEvent, AgentSettings, AgentSessionInfo, AgentSessionState, ViewDescriptor } from '../../../shared/types'
 import { toolIsRunning, toolVerb } from '../../../shared/toolStatus'
+import { agentActivityLabel } from '../../../shared/agentActivity'
 import { GoalBar } from '../GoalBar'
 import { accessName, AgentControls, providerName } from '../AgentControls'
 import { useAppSettings } from '../AppSettings'
@@ -309,6 +311,7 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
   const stopTask = (task: AgentTask) => void act(() => invoke('agent.stopTask', view.sessionId, task.agentId))
   const working = session?.state === 'running' || session?.state === 'starting'
   const compacting = session?.state !== 'stopped' && session?.state !== 'failed' && isCompacting(events)
+  const activityLabel = compacting ? 'Compacting context…' : agentActivityLabel(session?.state, events)
   const turns = useMemo(() => toTurns(blocks), [blocks])
   const turnReviews = useMemo(() => reviewsByTurn(reviews, view.sessionId, turns.map((turn) => ({
     key: turn.key,
@@ -498,9 +501,9 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
               {turnReviews.get(turn.key)?.map((review) => <TurnChanges key={review.id} review={review} />)}
             </div>
           })}
-          {(working || compacting) && (
+          {activityLabel && (
             <div className="working" role="status">
-              <span className="shimmer">{compacting ? translate("Compacting context…") : translate("Thinking")}</span>
+              <span className="shimmer">{translate(activityLabel)}</span>
             </div>
           )}
         </div>
@@ -849,7 +852,7 @@ const TASK_STATUS: Record<AgentTask['status'], string> = { running: 'Running', c
 
 function TaskStatusIcon({ status }: { status: AgentTask['status'] }) {
   useLanguage()
-  if (status === 'running') return <LoaderCircle size={14} className="spin task-status running" aria-hidden="true" />
+  if (status === 'running') return <Spinner className="size-3.5 task-status running" aria-hidden="true" />
   if (status === 'completed') return <CircleCheck size={14} className="task-status completed" aria-hidden="true" />
   if (status === 'failed') return <CircleX size={14} className="task-status failed" aria-hidden="true" />
   return <CircleSlash size={14} className="task-status stopped" aria-hidden="true" />
@@ -1054,7 +1057,7 @@ function AsidePanel({ sessionId, asides, open, taskId, onOpen, onClose, onQuote 
 /** Reasoning the provider shared; folded into the turn's work and open on demand. */
 function ThinkingRow({ text }: { text: string }) {
   useLanguage()
-  return <Collapsible className="thinking">
+  return <Collapsible className="thinking tool-group">
     <CollapsibleTrigger render={<Button variant="ghost" />}><Brain size={14} className="tool-icon" /><span className="tool-summary">{translate("Thought")}</span><ChevronRight size={12} className="caret" /></CollapsibleTrigger>
     <CollapsibleContent className="tool-disclosure-panel"><div className="thinking-body">{text}</div></CollapsibleContent>
   </Collapsible>

@@ -1,8 +1,7 @@
 import { t, useLanguage } from './i18n'
 import { providerName, type ProviderStatus } from '../../shared/providers'
 import { ProviderIcon } from './ProviderIcon'
-import { Toaster } from '@/components/ui/sonner'
-import { toast } from 'sonner'
+import { AppToaster, notify, type AppToastData } from '@/components/app-toaster'
 import { MessageCircleQuestion } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useAppSettings } from './AppSettings'
@@ -27,9 +26,9 @@ export function Notifications() {
   useEffect(() => {
     if (!preferences.providerUpdateChecks) return
     let active = true, receivedPush = false
-    // sonner reports programmatic dismissals through onDismiss too; only a user dismissal is remembered.
-    const updateIds = new Set<string>(), quiet = new Set<string>()
-    const hide = (id: string) => { quiet.add(id); toast.dismiss(id) }
+    // Only the close button reports a user dismissal; hiding an update that no longer applies is not remembered.
+    const updateIds = new Set<string>()
+    const hide = (id: string) => notify.close(id)
     const accept = (statuses: ProviderStatus[]) => {
       if (!active) return
       const currentIds = new Set(statuses.map((status) => `provider-update:${status.provider}`))
@@ -38,15 +37,16 @@ export function Notifications() {
         const key = `${status.provider}:${status.binary}:${status.latestVersion}`
         if (dismissedUpdates.current.has(key)) continue
         const id = `provider-update:${status.provider}`
-        updateIds.add(id); quiet.delete(id)
-        toast(`${providerName(status.provider)}${t(" update available")}`, {
-          id, duration: Infinity, icon: <ProviderIcon provider={status.provider} size={18} />,
+        updateIds.add(id)
+        notify.add<AppToastData>({
+          id, timeout: 0, title: `${providerName(status.provider)}${t(" update available")}`,
           description: `${status.version} → ${status.latestVersion}`,
-          action: { label: t("View update"), onClick: () => {
+          data: { icon: <ProviderIcon provider={status.provider} size={18} />, onDismiss: () => dismissProvider(status) },
+          actionProps: { children: t("View update"), onClick: () => {
             window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'providers' } }))
             dismissProvider(status)
+            notify.close(id)
           } },
-          onDismiss: () => { if (!quiet.delete(id)) dismissProvider(status) },
         })
       }
     }
@@ -72,11 +72,13 @@ export function Notifications() {
     const offToast = ramu.on('notify:inapp', (notice) => {
       // No toast for the chat you are already looking at.
       if (watching.current(notice.taskId, notice.sessionId)) return
-      const show = notice.kind === 'failed' ? toast.error : notice.kind === 'done' ? toast.success : toast.info
-      show(notice.title, {
-        id: `agent:${notice.sessionId}`, description: notice.body, duration: 8000,
-        ...(notice.kind === 'input' ? { icon: <MessageCircleQuestion size={16} /> } : {}),
-        action: { label: t("Open chat"), onClick: () => openChat(notice.taskId, notice.sessionId) },
+      const id = `agent:${notice.sessionId}`
+      notify.add<AppToastData>({
+        id, title: notice.title, description: notice.body, timeout: 8000,
+        type: notice.kind === 'failed' ? 'error' : notice.kind === 'done' ? 'success' : 'info',
+        priority: notice.kind === 'done' ? 'low' : 'high',
+        data: notice.kind === 'input' ? { icon: <MessageCircleQuestion size={16} /> } : undefined,
+        actionProps: { children: t("Open chat"), onClick: () => { openChat(notice.taskId, notice.sessionId); notify.close(id) } },
       })
     })
     const offOpen = ramu.on('notify:open', ({ taskId, sessionId }) => openChat(taskId, sessionId))
@@ -85,15 +87,12 @@ export function Notifications() {
   useEffect(() => {
     const receive = (event: Event) => {
       const { message, source } = (event as CustomEvent<Omit<Notification, 'id'>>).detail
-      toast.error(message, {
-        id: `error:${source}:${message}`, description: source, duration: Infinity,
-      })
+      notify.add({ id: `error:${source}:${message}`, title: message, description: source, type: 'error', timeout: 0, priority: 'high' })
     }
     window.addEventListener('ramu:notification', receive)
     listening = true
     for (const detail of pending.splice(0)) receive(new CustomEvent('ramu:notification', { detail }))
     return () => { listening = false; window.removeEventListener('ramu:notification', receive) }
   }, [])
-  return <Toaster position="bottom-right" offset={{ bottom: 36, right: 12 }} closeButton
-    containerAriaLabel={t("Notifications")} toastOptions={{ closeButtonAriaLabel: t("Dismiss notification") }} />
+  return <AppToaster label={t("Notifications")} closeLabel={t("Dismiss notification")} />
 }

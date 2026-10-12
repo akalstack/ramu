@@ -1,8 +1,11 @@
 import { t, useLanguage } from './i18n'
+import { ButtonGroup } from '@/components/ui/button-group'
+import { Kbd } from '@/components/ui/kbd'
 import { Dialog as ShadcnDialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { ChevronDown, Pencil, Play, Plus, SquareTerminal } from 'lucide-react'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { ProjectAction } from '../../shared/types'
@@ -22,10 +25,10 @@ export function WindowActions({ ctx, projectId }: { ctx: string; projectId?: str
 
 /** One button with a separate menu trigger; both halves share a single filled shape. */
 function SplitButton({ icon, label, title, onClick, disabled, menuLabel, items, primary }: { icon: ReactNode; label: string; title?: string; onClick: () => void; disabled?: boolean; menuLabel: string; items: MenuEntry[]; primary?: boolean }) {
-  return <div className={`split-button${primary ? ' primary' : ''}`}>
+  return <ButtonGroup className={`split-button${primary ? ' primary' : ''}`} aria-label={label}>
     <Button className="split-main" title={title} disabled={disabled} onClick={onClick}>{icon}<span>{label}</span></Button>
     <Menu label={menuLabel} icon={<ChevronDown size={13} />} className="split-menu" align="end" items={items} />
-  </div>
+  </ButtonGroup>
 }
 
 // ---- Project actions ----------------------------------------------------------------------------
@@ -73,7 +76,7 @@ function ActionsControl({ ctx, projectId }: { ctx: string; projectId: string }) 
     <SplitButton
       icon={<Play size={13} />} label={main.name} title={`${main.command}${main.keys ? ` (${formatKeys(main.keys)})` : ''}`} onClick={() => run(main)} menuLabel={t("Project actions")}
       items={[
-        ...actions.map((action): MenuEntry => ({ key: action.id, label: <><SquareTerminal size={14} /><span className="menu-label grow">{action.name}</span>{action.keys && <kbd>{formatKeys(action.keys)}</kbd>}</>, title: action.command, onSelect: () => run(action) })),
+        ...actions.map((action): MenuEntry => ({ key: action.id, label: <><SquareTerminal size={14} /><span className="menu-label grow">{action.name}</span>{action.keys && <Kbd>{formatKeys(action.keys)}</Kbd>}</>, title: action.command, onSelect: () => run(action) })),
         { key: 'separator', separator: true },
         { key: 'add', label: <><Plus size={14} />{t("Add action…")}</>, onSelect: () => setEditing('new') },
         { key: 'edit', label: <><Pencil size={14} />{t("Edit action")}</>, submenu: actions.map((action) => ({ key: `edit:${action.id}`, label: action.name, onSelect: () => setEditing(action) })) },
@@ -117,10 +120,10 @@ function ActionDialog({ projectId, actions, action, onClose }: { projectId: stri
     <DialogContent className="dialog action-dialog" showCloseButton={false} aria-describedby={undefined}>
       <DialogTitle>{action ? t("Edit action") : t("Add action")}</DialogTitle>
       <form className="dialog-body action-form" onSubmit={(event) => { event.preventDefault(); submit() }}>
-        <label>{t("Name")}<Input autoFocus value={name} placeholder={t("Dev server")} onChange={(event) => setName(event.target.value)} /></label>
-        <label>{t("Command")}<Textarea className="mono" rows={3} value={command} placeholder="pnpm dev" onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit() } }} /></label>
-        <label>{t("Shortcut")}<span className="action-keys">
-          <Input readOnly value={keys ? formatKeys(keys) : ''} placeholder={t("Press a shortcut, e.g. {0}", { "0": formatKeys('mod+shift+r') })} onKeyDown={(event) => {
+        <Field><FieldLabel htmlFor="action-name">{t("Name")}</FieldLabel><Input id="action-name" autoFocus value={name} placeholder={t("Dev server")} onChange={(event) => setName(event.target.value)} /></Field>
+        <Field><FieldLabel htmlFor="action-command">{t("Command")}</FieldLabel><Textarea id="action-command" className="mono" rows={3} value={command} placeholder="pnpm dev" onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit() } }} /><FieldDescription>{t("Runs in a new terminal at the chat's workspace.")}</FieldDescription></Field>
+        <Field><FieldLabel htmlFor="action-keys">{t("Shortcut")}</FieldLabel><span className="action-keys">
+          <Input id="action-keys" readOnly value={keys ? formatKeys(keys) : ''} placeholder={t("Press a shortcut, e.g. {0}", { "0": formatKeys('mod+shift+r') })} onKeyDown={(event) => {
             if (event.key === 'Tab' || event.key === 'Escape') return
             event.preventDefault()
             if (event.key === 'Backspace' || event.key === 'Delete') return setKeys('')
@@ -128,8 +131,7 @@ function ActionDialog({ projectId, actions, action, onClose }: { projectId: stri
             if (next) setKeys(next)
           }} />
           {keys && <Button type="button" className="ghost small" onClick={() => setKeys('')}>{t("Clear")}</Button>}
-        </span></label>
-        <p className="muted small">{t("Runs in a new terminal at the chat's workspace.")}</p>
+        </span></Field>
         {error && <div className="error small" role="alert">{error}</div>}
         <div className="dialog-actions">
           {action && <Button type="button" className="ghost danger-text" disabled={busy} onClick={() => void save(actions.filter((current) => current.id !== action.id))}>{t("Delete")}</Button>}

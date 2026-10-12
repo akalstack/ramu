@@ -1,4 +1,5 @@
 import { t, useLanguage } from './i18n'
+import { Kbd } from '@/components/ui/kbd'
 import { ProviderSetupTerminal } from './ProviderSetupTerminal'
 import { beginPaneResize } from './paneResize'
 import { Button } from '@/components/ui/button'
@@ -185,7 +186,7 @@ function Shell() {
         </div>
         <nav className="sidebar-nav" aria-label={t("Activity")}>
           <Button className="nav-btn" onClick={() => ws.newTask()}>
-            <SquarePen size={15} /> <span className="grow">{t("New chat")}</span> <kbd>{formatKeys('mod+n')}</kbd>
+            <SquarePen size={15} /> <span className="grow">{t("New chat")}</span> <Kbd>{formatKeys('mod+n')}</Kbd>
           </Button>
           <Button className={`nav-btn${globalPage ? ' active' : ''}`} aria-pressed={globalPage} onClick={() => ws.setSidebar(globalPage ? 'projects' : 'schedules')}>
             <CalendarClock size={15} /> <span className="grow">{t("Schedules")}</span>
@@ -197,7 +198,7 @@ function Shell() {
         </div>
         <div className="sidebar-footer">
           {!sidebarHidden && <UsageFooter />}
-          <Button className="nav-btn" aria-label={t("Settings")} title={`${t("Settings")} (${formatKeys('mod+,')})`} onClick={() => { setSettingsSection('appearance'); setSettingsOpen(true) }}><Settings size={15} /> <span className="grow">{t("Settings")}</span> <kbd>{formatKeys('mod+,')}</kbd></Button>
+          <Button className="nav-btn" aria-label={t("Settings")} title={`${t("Settings")} (${formatKeys('mod+,')})`} onClick={() => { setSettingsSection('appearance'); setSettingsOpen(true) }}><Settings size={15} /> <span className="grow">{t("Settings")}</span> <Kbd>{formatKeys('mod+,')}</Kbd></Button>
         </div>
       </aside>
       <main className="main">

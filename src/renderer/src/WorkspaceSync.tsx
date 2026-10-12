@@ -1,5 +1,6 @@
 import { t, useLanguage } from './i18n'
-import { Check, CircleAlert, LoaderCircle } from 'lucide-react'
+import { Spinner } from '@/components/ui/spinner'
+import { Check, CircleAlert } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { GitBranchInfo, GitStatus, RepositoryBinding } from '../../shared/types'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -64,7 +65,7 @@ export function WorkspaceSyncDialog({ taskId, bindings, onClose }: { taskId: str
           <BranchPicker binding={binding} status={status} branches={row?.branches ?? []} busy={busy || !status} className="workspace-sync-branch" onChange={(branch) => void switchBranch(binding, branch)} />
           <span className="muted small workspace-sync-state">{note}{changes ? ` · ${changes} ${changes === 1 ? 'change' : 'changes'}` : ''}</span>
           <span className="workspace-sync-result" title={row?.result && row.result !== 'running' && row.result !== 'done' ? row.result : undefined}>
-            {row?.result === 'running' ? <LoaderCircle size={14} className="spin" /> : row?.result === 'done' ? <Check size={14} className="ok" /> : row?.result ? <CircleAlert size={14} className="bad" /> : null}
+            {row?.result === 'running' ? <Spinner className="size-3.5" /> : row?.result === 'done' ? <Check size={14} className="ok" /> : row?.result ? <CircleAlert size={14} className="bad" /> : null}
           </span>
           {row?.result && row.result !== 'running' && row.result !== 'done' && <p className="error small workspace-sync-error">{row.result}</p>}
         </div>
