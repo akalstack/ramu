@@ -6,6 +6,11 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
 const require = createRequire(import.meta.url)
+// Electron 44 downloads its binary lazily, but electron-vite requires path.txt
+// before launching. Install it here so a clean pnpm install is ready for dev.
+const electronRoot = dirname(require.resolve('electron/package.json'))
+execFileSync(process.execPath, [join(electronRoot, 'install.js')], { stdio: 'inherit' })
+
 const ptyRoot = dirname(require.resolve('node-pty/package.json'))
 const candidates = [join(ptyRoot, 'build', 'Release', 'spawn-helper')]
 const prebuilds = join(ptyRoot, 'prebuilds')
@@ -19,7 +24,6 @@ for (const file of candidates) {
 // macOS reads the development host's bundle identity for the Dock and app switcher.
 // Only patch the local Electron host; Forge sets these values in release bundles.
 if (process.platform === 'darwin') {
-  const electronRoot = dirname(require.resolve('electron/package.json'))
   const plist = join(electronRoot, 'dist', 'Electron.app', 'Contents', 'Info.plist')
   if (existsSync(plist)) for (const key of ['CFBundleName', 'CFBundleDisplayName']) {
     execFileSync('/usr/bin/plutil', ['-replace', key, '-string', 'Ramu', plist])

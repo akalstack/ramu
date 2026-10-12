@@ -3,6 +3,10 @@ import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+// Electron-based terminals may export this flag; the desktop app needs GUI mode.
+// Background runners set it explicitly in their own child environments.
+delete process.env.ELECTRON_RUN_AS_NODE
+
 export default defineConfig({
   main: {
     build: {

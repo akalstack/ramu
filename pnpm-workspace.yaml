@@ -1,4 +1,6 @@
 nodeLinker: hoisted
+# The Claude SDK platform tarball is ~100 MB; allow slow connections to finish.
+fetchTimeout: 600000
 allowBuilds:
   electron: true
   electron-winstaller: true
