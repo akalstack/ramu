@@ -70,10 +70,8 @@ The UI for the planned sections below is in place. Some parts already work end t
 - **Handoff separator:** "Switch back to <provider>" calls `agent.configure` with the new `previous` field on `settings` events. `fallback()` now records `previous`.
 
 **Also built (UI and adapters)**
-- **Checklist:** Claude `TodoWrite` and Codex `turn/plan/updated` become one in-place `todos` event, pinned above the composer as "3/5 · current step" and expandable (`TodoDock`).
 - **Thinking:** Claude thinking blocks and Codex reasoning summaries become `thinking` events, shown as a collapsed "Thought" row inside the turn's folded work (`ThinkingRow`). Sub-agent thinking is not kept.
 - **Sidebar:** a chat shows the working spinner while any live session still has running sub-agents or background tasks (`syncTaskStatus` in `agent.ts`), and settles when they finish.
-- Fake-agent prompt `[todos]` replays a thinking block plus a checklist.
 
 **Backend, done (2026-10-11)**
 1. **Usage readings.**

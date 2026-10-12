@@ -548,7 +548,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   " Each answer can be sent separately.": " Tiap jawaban bisa dikirim terpisah.",
   "Waiting: ": "Menunggu: ",
   "Pending: ": "Menunggu: ",
-  "All steps done": "Semua langkah selesai",
   "Background commands do not take messages.": "Perintah di latar belakang tidak menerima pesan.",
   "No output": "Belum ada keluaran",
   "Run in terminal": "Jalankan di terminal",

@@ -248,7 +248,6 @@ export interface QueuedMessage { id: string; text: string; mode?: 'queue' | 'ste
  *  `agentId` marks text and tool events that a sub-agent produced; they belong to that agent's own transcript, not the main one. */
 export type AgentEvent = AgentEventBody & { at?: number; agentId?: string }
 
-export interface TodoItem { text: string; status: 'pending' | 'active' | 'done' }
 export type AgentTaskStatus = 'running' | 'completed' | 'failed' | 'stopped'
 /** A sub-agent or background task the main agent started. Recorded once and updated in place as it progresses. */
 export interface AgentTask {
@@ -303,8 +302,6 @@ type AgentEventBody =
   | { kind: 'tool-result'; toolUseId: string; isError: boolean; summary: string; running?: boolean }
   | { kind: 'turn-diff'; turnId: string; diff: string }
   | { kind: 'permission-request'; requestId: string; toolName: string; title: string; detail: string; }
-  /** The agent's own checklist (Claude TodoWrite, Codex plan). One event per chat, updated in place. */
-  | { kind: 'todos'; items: TodoItem[] }
   /** Plan usage a provider reported. Handed to the usage store and never recorded in the chat. */
   | { kind: 'usage'; readings: UsageReading[] }
   /** How full the model's context window is. Pushed to the chat's view and never recorded. */

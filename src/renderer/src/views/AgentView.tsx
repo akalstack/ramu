@@ -5,7 +5,7 @@ import { compactionLabel, isCompacting, isTurnFooter } from '../../../shared/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { FileContext } from '../../../shared/types'
-import { ArrowDown, ArrowLeft, Bot, Brain, Circle, ListChecks, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb } from 'lucide-react'
+import { ArrowDown, ArrowLeft, Bot, Brain, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb } from 'lucide-react'
 import { Children, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -21,7 +21,7 @@ import { FILE_DRAG_TYPE } from '../ComposerSuggestions'
 import { ChatFind } from '../ChatFind'
 import { formatKeys } from '../commands'
 import { advisorAgentId, effectiveStatus, latestTasks, parseAdvice, parseTaskMessage, parseTaskReport, parseTaskStop } from '../../../shared/agentTasks'
-import type { AgentTask, Aside, TodoItem } from '../../../shared/types'
+import type { AgentTask, Aside } from '../../../shared/types'
 import { createPortal } from 'react-dom'
 import { ProviderRouteChip } from '../ProviderRoute'
 import { ContextMeter } from '../Usage'
@@ -69,7 +69,7 @@ function toBlocks(events: AgentEvent[]): Block[] {
     if (event.kind === 'compaction' && event.state === 'started') continue
     // The advisor's card stands for its tool calls.
     if (event.kind === 'tool-use' && isAdvisorTool(event)) continue
-    if (event.kind === 'goal' || event.kind === 'todos' || event.kind === 'queue' || event.kind === 'tool-result' || event.kind === 'state' || event.kind === 'request-resolved' || event.kind === 'question-state') continue
+    if (event.kind === 'goal' || event.kind === 'queue' || event.kind === 'tool-result' || event.kind === 'state' || event.kind === 'request-resolved' || event.kind === 'question-state') continue
     const last = blocks.at(-1)
     if (event.kind === 'tool-use') {
       if (last?.kind === 'tools') last.tools.push(event)
@@ -305,7 +305,6 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
   const tasks = useMemo(() => latestTasks(events), [events])
   const goalEvent = events.findLast((event) => event.kind === 'goal')
   const goal = goalEvent?.kind === 'goal' ? goalEvent.goal : null
-  const todos = useMemo(() => { const last = events.findLast((e) => e.kind === 'todos'); return last?.kind === 'todos' ? last.items : null }, [events])
   const runningTasks = tasks.filter((task) => effectiveStatus(task, live) === 'running')
   const backgroundTool = (toolUseId: string) => void act(() => invoke('agent.backgroundTool', view.sessionId, toolUseId))
   const stopTask = (task: AgentTask) => void act(() => invoke('agent.stopTask', view.sessionId, task.agentId))
@@ -522,7 +521,6 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
           {!editRestored && <UndoRun sessionId={view.sessionId} userSeq={editTarget} onRestored={() => setEditRestored(true)} />}
         </div>}
         {dockQuestions.length > 0 && <QuestionDock sessionId={view.sessionId} requests={dockQuestions} states={questionStates} open={questionDockOpen} onOpenChange={setQuestionDockOpen} focus={questionFocus} />}
-        {todos && <TodoDock items={todos} active={busyAgent} crowded={dockQuestions.length > 0 && questionDockOpen} />}
         {error && <div className="error">{error}</div>}
         {queued.length > 0 && <div className="message-queue" aria-label={translate("Queued messages")}>
           {queuePaused && <div className="message-queue-heading"><span className="muted small">{translate("Paused")}</span><Button className="ghost small" onClick={() => void act(() => invoke('agent.resumeQueue', view.sessionId))}>{translate("Resume messages")}</Button></div>}
@@ -1061,25 +1059,4 @@ function ThinkingRow({ text }: { text: string }) {
     <CollapsibleTrigger render={<Button variant="ghost" />}><Brain size={14} className="tool-icon" /><span className="tool-summary">{translate("Thought")}</span><ChevronRight size={12} className="caret" /></CollapsibleTrigger>
     <CollapsibleContent className="tool-disclosure-panel"><div className="thinking-body">{text}</div></CollapsibleContent>
   </Collapsible>
-}
-
-/** The agent's own checklist, pinned above the message box so progress is visible while it works. */
-/** crowded: a question is open above it, so the list starts folded to its summary line. */
-function TodoDock({ items, active, crowded = false }: { items: TodoItem[]; active: boolean; crowded?: boolean }) {
-  useLanguage()
-  const done = items.filter((item) => item.status === 'done').length
-  const current = items.find((item) => item.status === 'active') ?? items.find((item) => item.status === 'pending')
-  const finished = done === items.length
-  const [open, setOpen] = useState<boolean | null>(null)
-  const expanded = open ?? (active && !finished && !crowded)
-  return <div className={`todo-dock${finished ? ' finished' : ''}`}>
-    <Button type="button" className="todo-summary" aria-expanded={expanded} onClick={() => setOpen(!expanded)}>
-      <ListChecks size={14} /><span className="todo-count">{done}/{items.length}</span>
-      <span className="todo-current">{finished ? translate("All steps done") : current?.text}</span>
-      <ChevronDown size={13} className={`caret${expanded ? ' open' : ''}`} />
-    </Button>
-    {expanded && <ol className="todo-list">{items.map((item, index) => <li key={index} className={`todo-item ${item.status}`}>
-      {item.status === 'done' ? <CircleCheck size={14} /> : item.status === 'active' ? <LoaderCircle size={14} className={active ? 'spin' : ''} /> : <Circle size={14} />}<span>{item.text}</span>
-    </li>)}</ol>}
-  </div>
 }

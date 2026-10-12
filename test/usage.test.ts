@@ -32,16 +32,6 @@ describe('Messages relayed to sub-agents', () => {
   })
 })
 
-describe('Agent checklists', () => {
-  it('maps Claude TodoWrite and Codex plan steps', async () => {
-    const { todoItems } = await import('../src/main/agent')
-    const { codexPlanItems } = await import('../src/main/codex')
-    expect(todoItems([{ content: 'Read', status: 'completed' }, { content: 'Write', activeForm: 'Writing', status: 'in_progress' }, { content: 'Test', status: 'pending' }, { status: 'pending' }])).toEqual([{ text: 'Read', status: 'done' }, { text: 'Write', status: 'active' }, { text: 'Test', status: 'pending' }])
-    expect(todoItems('nope')).toBeNull()
-    expect(codexPlanItems([{ step: ' Survey ', status: 'completed' }, { step: 'Edit', status: 'inProgress' }, { step: 'Verify', status: 'pending' }, { step: '' }])).toEqual([{ text: 'Survey', status: 'done' }, { text: 'Edit', status: 'active' }, { text: 'Verify', status: 'pending' }])
-  })
-})
-
 describe('Claude on-demand usage', () => {
   it('maps the usage endpoint: percentages as given, ISO reset times, plan, unknown windows ignored', () => {
     const readings = claudeUsageReadings({ subscription_type: 'team', rate_limits: { five_hour: { utilization: 75, resets_at: '2026-10-11T04:29:59.905286+00:00' }, seven_day: { utilization: 61, resets_at: '2026-10-14T05:59:59.905309+00:00' }, seven_day_opus: null, extra_usage: { utilization: 100 }, tangelo: null } as never }, 9)

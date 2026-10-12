@@ -375,10 +375,6 @@ class CodexSession implements CodexRunner {
         else this.emit({ kind: 'tool-result', toolUseId: item.id, isError: item.status === 'failed' || (item.exitCode != null && item.exitCode !== 0), summary: this.toolResult(this.threadId, item) })
       }
     }
-    if (m.method === 'turn/plan/updated' && Array.isArray(p.plan)) {
-      const items = codexPlanItems(p.plan)
-      if (items.length) this.emit({ kind: 'todos', items })
-    }
     if (m.method === 'serverRequest/resolved') {
       const id = [...this.pending].find(([, request]) => String(request.id) === String(p.requestId))?.[0] ?? String(p.requestId)
       if (this.pending.delete(id)) { this.emit({ kind: 'request-resolved', requestId: id, outcome: 'cancelled' }); if (!this.pending.size) this.emit({ kind: 'state', state: this.turnId ? 'running' : 'idle' }) }
@@ -501,11 +497,6 @@ export async function codexHookTrust(grant: boolean, cwd = tmpdir()): Promise<{ 
     return { trusted: !!hook?.trusted }
   } catch (error) { return { trusted: false, error: error instanceof Error ? error.message : String(error) } }
   finally { await rpc.close() }
-}
-
-/** Codex plan steps as checklist items: `inProgress` is the one being worked on. */
-export function codexPlanItems(plan: { step?: unknown; status?: unknown }[]): { text: string; status: 'pending' | 'active' | 'done' }[] {
-  return plan.flatMap((entry) => typeof entry?.step === 'string' && entry.step.trim() ? [{ text: entry.step.trim(), status: entry.status === 'completed' ? 'done' as const : entry.status === 'inProgress' ? 'active' as const : 'pending' as const }] : [])
 }
 
 /** Maps Codex's sub-agent states onto ours; unknown states count as running. */

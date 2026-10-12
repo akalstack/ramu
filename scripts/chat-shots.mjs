@@ -84,9 +84,9 @@ try {
   check(await page.locator('.question-dock .option.selected').innerText().then((text) => text.includes('SQLite')), 'Number keys pick an option')
   await page.screenshot({ path: join(shots, 'question-mid-run-selected.png') })
 
-  // Everything that sits on the message box at once: question, checklist, and a steering message waiting for the running command.
+  // Everything that sits on the message box at once: question and a steering message waiting for the running command.
   const sTask = await api('tasks.create', [{ projectId: 'no-project', title: 'Busy message box', mode: 'current' }])
-  const sSession = await api('agent.start', [sTask.id, '[slow] [todos] [questions together] set up storage', claude])
+  const sSession = await api('agent.start', [sTask.id, '[slow] [questions together] set up storage', claude])
   await until(async () => (await api('agent.events', [sSession.id])).some((e) => e.kind === 'question'), 'Agent did not ask')
   await openChat(sTask, sSession)
   await page.locator('.question-dock .question-card:visible').waitFor()
@@ -94,11 +94,9 @@ try {
   await stackBox.fill('Also keep the old table for a week')
   await stackBox.press('Enter')
   await page.locator('.message-queue:visible').waitFor()
-  await page.locator('.todo-dock:visible').waitFor()
-  check(await page.locator('.todo-dock:visible .todo-list').count() === 0, 'The checklist folds to its summary while a question is open')
-  const boxes = await Promise.all(['.question-dock', '.todo-dock', '.message-queue', '.composer'].map((selector) => page.locator(`${selector}:visible`).first().boundingBox()))
+  const boxes = await Promise.all(['.question-dock', '.message-queue', '.composer'].map((selector) => page.locator(`${selector}:visible`).first().boundingBox()))
   const overlaps = boxes.slice(0, -1).flatMap((box, i) => boxes.slice(i + 1).filter((other) => box.y + box.height > other.y + 12).map(() => i))
-  check(overlaps.length === 0, `Question, checklist, queue and message box stack without covering each other (${boxes.map((b) => `${Math.round(b.y)}+${Math.round(b.height)}`).join(', ')})`)
+  check(overlaps.length === 0, `Question, queue and message box stack without covering each other (${boxes.map((b) => `${Math.round(b.y)}+${Math.round(b.height)}`).join(', ')})`)
   await sleep(300)
   await page.screenshot({ path: join(shots, 'message-box-stack.png') })
   // A single send control; the alternate action stays available by keyboard.

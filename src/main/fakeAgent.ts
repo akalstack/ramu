@@ -141,21 +141,12 @@ export const fakeQuery: QueryFn = ({ prompt, options }) => {
       if (text.includes('[slow]')) {
         // A long main turn, so the chat stays working (RAMU_FAKE_AGENT_DELAY ms).
         yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'Reading the codebase before making changes.' }] } })
-        if (text.includes('[todos]')) yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: `todo-${Date.now()}`, name: 'TodoWrite', input: { todos: ['Read the storage code', 'Pick the database', 'Write the migration', 'Cover it with tests'].map((content, i) => ({ content, activeForm: content, status: i === 0 ? 'completed' : i === 1 ? 'in_progress' : 'pending' })) } }] } })
         // With [questions …] it asks mid-turn and keeps working.
         const server = options.mcpServers?.ramu
         if (server && 'url' in server && 'headers' in server) await fakeTools(text, { url: server.url, token: server.headers?.Authorization?.replace(/^Bearer /, '') ?? '' })
         yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: `slow-${Date.now()}`, name: 'Bash', input: { command: 'pnpm test' } }] } })
         await sleep(Number(process.env.RAMU_FAKE_AGENT_DELAY ?? 2500))
         yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'Done reading.' }] } })
-        yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
-        continue
-      }
-      if (text.includes('[todos]')) {
-        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'thinking', thinking: 'The reset flow needs a token store first, then two endpoints, then tests. I should check how sessions are created before touching the schema.' }] } })
-        const todo = (status: string) => ['Read the session code', 'Add the reset token table', 'Write POST /auth/reset', 'Write POST /auth/reset/confirm', 'Cover it with tests'].map((content, i) => ({ content, activeForm: content, status: i < 2 ? 'completed' : i === 2 ? status : 'pending' }))
-        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: `todo-${Date.now()}`, name: 'TodoWrite', input: { todos: todo('in_progress') } }] } })
-        yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'Working through the list.' }] } })
         yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
         continue
       }

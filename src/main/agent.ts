@@ -18,7 +18,7 @@ import type {
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk'
 import type { Db } from './db'
-import { DEFAULT_AGENT_SETTINGS, DEFAULT_FALLBACK_PREFERENCES, type AdviceStatus, type ContextUsage, type SwitchThreshold, type UsageReading, type FallbackStep, type AppPreferences, type TodoItem, type AgentTask, type AgentTaskStatus, type AgentEvent, type AgentQuestion, type AgentScope, type AgentSessionInfo, type AgentSessionState, type AgentSettings, type AgentProvider, type CommitStyle, type ProviderCatalog, type QueuedMessage, type Attachment, type McpConnection, type Schedule } from '../shared/types'
+import { DEFAULT_AGENT_SETTINGS, DEFAULT_FALLBACK_PREFERENCES, type AdviceStatus, type ContextUsage, type SwitchThreshold, type UsageReading, type FallbackStep, type AppPreferences, type AgentTask, type AgentTaskStatus, type AgentEvent, type AgentQuestion, type AgentScope, type AgentSessionInfo, type AgentSessionState, type AgentSettings, type AgentProvider, type CommitStyle, type ProviderCatalog, type QueuedMessage, type Attachment, type McpConnection, type Schedule } from '../shared/types'
 import { attachmentPrompt } from './attachments'
 import { defaultChain, resolveStep, subagentChain, subagentTarget, settingsKey, isOver, limitReason, nextStep, peakFor, planRoute, stepKey, type RouteDecision } from '../shared/routing'
 import { claudeReadings, claudeUsageReadings, type ClaudeUsageResponse, type ClaudeRateLimitInfo, type UsageService } from './usage'
@@ -1966,7 +1966,6 @@ export class AgentService {
             if (result) this.record(id, { kind: 'tool-result', ...result })
           } else if (block.type === 'tool_use') {
             const input = block.input as Record<string, unknown>
-            if (block.name === 'TodoWrite' && !agentId) { const items = todoItems(input.todos); if (items) { this.record(id, { kind: 'todos', items }); continue } }
             if (block.name === 'Agent' || block.name === 'Task') {
               const calls = this.agentCalls.get(id) ?? new Map()
               calls.set(block.id, { name: str(input.name), description: str(input.description), prompt: str(input.prompt), subagentType: str(input.subagent_type) })
@@ -2074,14 +2073,12 @@ export class AgentService {
         return
       }
     }
-    if (event.kind === 'tool-result' || event.kind === 'turn-diff' || (event.kind === 'text' && event.messageId) || (event.kind === 'thinking' && event.messageId) || event.kind === 'agent' || event.kind === 'todos') {
+    if (event.kind === 'tool-result' || event.kind === 'turn-diff' || (event.kind === 'text' && event.messageId) || (event.kind === 'thinking' && event.messageId) || event.kind === 'agent') {
       // Streamed text and sub-agent progress update their earlier event in place.
       const previous = (event.kind === 'tool-result'
         ? this.db.prepare("SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'tool-result' AND json_extract(event, '$.toolUseId') = ? AND COALESCE(json_extract(event, '$.agentId'), '') = ? LIMIT 1").get(id, event.toolUseId, event.agentId ?? '')
         : event.kind === 'turn-diff'
         ? this.db.prepare("SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'turn-diff' AND json_extract(event, '$.turnId') = ? LIMIT 1").get(id, event.turnId)
-        : event.kind === 'todos'
-        ? this.db.prepare("SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'todos' LIMIT 1").get(id)
         : event.kind === 'agent'
         ? this.db.prepare("SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'agent' AND json_extract(event, '$.agentId') = ? LIMIT 1").get(id, event.agentId)
         : this.db.prepare("SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.messageId') IN (?, ?) LIMIT 1").get(id, (event as { messageId: string }).messageId, replacesMessageId ?? null)) as { seq: number } | undefined
@@ -2250,16 +2247,6 @@ const str = (value: unknown): string | undefined => typeof value === 'string' &&
 /** Claude's permission mode for a chat's access setting, outside plan mode. */
 function baseMode(settings: AgentSettings): 'bypassPermissions' | 'acceptEdits' | 'auto' {
   return settings.access === 'full' ? 'bypassPermissions' : settings.access === 'edits' ? 'acceptEdits' : 'auto'
-}
-/** TodoWrite input to checklist items; anything else is not a checklist. */
-export function todoItems(value: unknown): TodoItem[] | null {
-  if (!Array.isArray(value)) return null
-  const items = value.flatMap((entry): TodoItem[] => {
-    const e = entry as { content?: unknown; activeForm?: unknown; status?: unknown }
-    const text = typeof e?.content === 'string' ? e.content : typeof e?.activeForm === 'string' ? e.activeForm : ''
-    return text ? [{ text, status: e.status === 'completed' ? 'done' : e.status === 'in_progress' ? 'active' : 'pending' }] : []
-  })
-  return items.length ? items : null
 }
 
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error) }
