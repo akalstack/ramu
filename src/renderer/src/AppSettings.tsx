@@ -28,6 +28,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--accent', colors[2]!)
     root.style.setProperty('--sans', preferences.fontFamily === 'system' ? "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif" : "'Geist Variable', -apple-system, BlinkMacSystemFont, sans-serif")
     root.style.setProperty('--ui-font-size', `${preferences.fontSize}px`)
+    root.dataset.fontSmoothing = preferences.fontSmoothing ? 'grayscale' : 'system'
   }, [preferences])
   return <Context.Provider value={{ preferences, reload: async () => { setPreferences({ ...DEFAULT_APP_PREFERENCES, ...await invoke('settings.app.get') }) }, save: async (value) => { await invoke('settings.app.set', value); const languages = value.language === 'system' ? await invoke('app.systemLanguages').catch(() => navigator.languages) : undefined; configureLanguage(value.language, languages); setPreferences(value) } }}>{loaded ? children : <BootScreen />}</Context.Provider>
 }

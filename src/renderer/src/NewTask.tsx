@@ -143,16 +143,7 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
           </div>
         )}
         <div className="start-chips composer-tray">
-          <Menu
-            label={t("Project")}
-            className="chip-btn"
-            icon={
-              <>
-                <FolderClosed size={13} /> <span className="chip-label">{general ? t("No project") : project?.name}</span>
-              </>
-            }
-            items={projectItems}
-          />
+          {general && <Menu label={t("Project")} className="chip-btn" icon={<><FolderClosed size={13} /> <span className="chip-label">{t("No project")}</span></>} items={projectItems} />}
           {!general && <Menu
             label={t("Where the work happens")}
             className="chip-btn"
@@ -201,7 +192,7 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
           }}
           onSubmit={(context) => void send(context)}
           disabled={busy || !general && !repos.length}
-          placeholder={general ? t("Ask anything. Type / for commands and skills, @ for files.") : repos.length ? t("Start a chat. The agent works on the whole workspace.") : t("Add a repository to this project first")}
+          placeholder={general || repos.length ? t("Message the agent") : t("Add a repository to this project first")}
           submitLabel={plan ? t('Create worktrees and start') : t('Start chat')}
         />
         {error && <div className="error start-error">{error}</div>}

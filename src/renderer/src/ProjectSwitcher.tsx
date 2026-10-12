@@ -39,6 +39,8 @@ export function ProjectSwitcher() {
   const valid = (context: string | undefined, projectId: string) => context && ws.projectOf(context)?.id === projectId && (!ws.task(context) || ws.task(context)?.status !== 'archived')
   const switchProject = (projectId: string) => {
     if (projectId === project?.id) return
+    // On the new-chat screen the project changes in place, so the Explorer and the message box stay together.
+    if (ws.composing) { ws.newTask(projectId); setQuery(''); return }
     const previous = lastProject.current[projectId]
     if (valid(previous, projectId)) ws.openTask(previous!)
     else ws.openProject(projectId)

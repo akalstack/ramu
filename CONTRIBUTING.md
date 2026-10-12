@@ -16,6 +16,8 @@ Git must be on PATH. Native dependencies may need Python 3 and a C/C++ toolchain
 
 Run `pnpm check` before submitting. On macOS, also run `pnpm test:e2e` after building for changes to desktop behavior. It uses an isolated profile and simulated providers without paid model calls. Live provider tests are opt-in and are not part of CI. Build and test installers with `pnpm make` when changing packaging.
 
+For changes to large lists, review rendering, or editor lifecycle, also run `node scripts/rendering-performance-smoke.mjs` after building. It seeds a disposable 5,000-file review and checks bounded rendering, scrolling, keyboard navigation, draft preservation, and editor cleanup without model calls.
+
 ## Project layout
 
 - `src/main`: Electron host, background runtime, providers and repository operations.

@@ -81,7 +81,7 @@ export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: A
   const focusRow = (index: number) => {
     const el = list.current
     if (!el || index < 0 || index >= rows.length) return
-    const top = index * rowHeight
+    const top = index * rowHeight + 4
     if (top < el.scrollTop) el.scrollTop = top
     else if (top + rowHeight > el.scrollTop + el.clientHeight) el.scrollTop = top + rowHeight - el.clientHeight
     pendingFocus.current = index
@@ -106,8 +106,8 @@ export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: A
   const reorder = (key: string, target: string, after: boolean) => {
     const next = moveFavorite(favorites, key, target, after)
     if (next.join('\0') === favorites.join('\0')) return
-    const model = all.find((model) => keyOf(model) === key)
-    const visible = next.filter((key) => all.some((model) => keyOf(model) === key))
+    const model = modelByKey.get(key)
+    const visible = next.filter((key) => modelByKey.has(key))
     void saveFavorites(next, `Moved ${model ? modelDisplayName(model.name) : 'favorite'} to position ${visible.indexOf(key) + 1} of ${visible.length}.`)
   }
   const toggleFavorite = (model: AgentModel) => {

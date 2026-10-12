@@ -23,7 +23,6 @@ import { ScheduleNavigation, SchedulesPage } from './Automation'
 import { DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '../../shared/types'
 import { SettingsPanel } from './SettingsPanel'
 import { UsageFooter, UsageRings } from './Usage'
-import { ChatSwitcher } from './ChatSwitcher'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import { runProjectAction, useProjectActions, WindowActions } from './WindowActions'
 import { SearchChats } from './SearchChats'
@@ -319,10 +318,8 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
             }}
           />
         ) : (
-          <ChatSwitcher contextId={task.id} />
+          <span className="header-title no-drag" title={`${task.title} (${t("Double-click to rename")})`} onDoubleClick={() => setRenaming(true)}>{task.title}</span>
         ))}
-      {!task && project && ctx && <ChatSwitcher contextId={ctx} />}
-      {!starting && ctx && ws.taskUi[ctx]?.views.some(view => view.kind === 'agent') && <Button className="ghost icon chat-find-trigger no-drag" aria-label={t("Find in conversation")} title={t("Find in conversation ({0})", { "0": formatKeys('mod+f') })} onClick={() => window.dispatchEvent(new Event('ramu:find-in-chat'))}><Search size={16} /></Button>}
       {task?.mode === 'worktree' && <span className="chip header-worktree" title={t("Active isolated worktree")}>{ws.workspaces.find((workspace) => workspace.id === task.workspaceId)?.name ?? t("Isolated worktree")}</span>}
       {error && <span className="error small">{error}</span>}
       </div>

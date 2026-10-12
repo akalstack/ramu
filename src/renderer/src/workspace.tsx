@@ -364,7 +364,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
           const ctx = selectedWorkspace ? worktreeCtx(selectedWorkspace) : projectCtx(target)
           void refreshBindings(ctx)
           updateTaskUi(ctx, (state) => ({ ...state, activeViewId: null }))
-          setUi((u) => ({ ...u, openTaskIds: [...new Set([...u.openTaskIds, ctx])], activeTaskId: ctx, sidebar: 'projects' }))
+          setUi((u) => ({ ...u, openTaskIds: [...new Set([...u.openTaskIds, ctx])], activeTaskId: ctx, sidebar: u.sidebar === 'schedules' ? 'projects' : u.sidebar }))
           setComposing(target)
         }
       },

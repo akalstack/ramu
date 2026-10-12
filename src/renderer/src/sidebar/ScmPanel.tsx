@@ -65,15 +65,14 @@ export function ScmPanel() {
   const gitRepo = bindings.find((b) => b.repoId === gitRepoId) ?? bindings.find((b, index) => isOpen(b.repoId, index)) ?? bindings[0]
   return <div className="panel scm-panel" ref={panelRef}>
     {bindings.length === 0 ? <p className="muted hint">{t("No repository available.")}</p>
-      : many ? <>
+      : <>
         <OverlayScrollArea className="scm-repos">{bindings.map((b, index) => {
           const expanded = isOpen(b.repoId, index)
-          return <RepositoryControl key={`${taskId}:${b.repoId}`} taskId={taskId} binding={b} compact collapsed={!expanded} gitHost={gitHost} showGit={gitRepo?.repoId === b.repoId} gitRepos={bindings} onGitRepo={setGitRepoId} onToggle={() => { setOpen((current) => ({ ...current, [b.repoId]: !expanded })); if (!expanded) setGitRepoId(b.repoId) }} />
+          return <RepositoryControl key={`${taskId}:${b.repoId}`} taskId={taskId} binding={b} compact collapsed={many && !expanded} gitHost={gitHost} showGit={gitRepo?.repoId === b.repoId} gitRepos={bindings} onGitRepo={setGitRepoId} onToggle={many ? () => { setOpen((current) => ({ ...current, [b.repoId]: !expanded })); if (!expanded) setGitRepoId(b.repoId) } : undefined} />
         })}</OverlayScrollArea>
         <div className="scm-git-resizer" role="separator" aria-orientation="horizontal" aria-label={t("Resize Git section")} title={t("Drag to resize · double-click to reset")} onPointerDown={startResize} onDoubleClick={() => { setGitHeight(GIT_HEIGHT_DEFAULT); localStorage.removeItem(GIT_HEIGHT_KEY) }} />
         <div className="scm-git-host" ref={setGitHost} style={{ height: gitHeight }} />
-      </>
-      : <RepositoryControl key={`${taskId}:${bindings[0]!.repoId}`} taskId={taskId} binding={bindings[0]!} />}
+      </>}
   </div>
 }
 

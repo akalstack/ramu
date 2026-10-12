@@ -1,7 +1,7 @@
 import { t, useLanguage, formatLocale } from './i18n'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { ChevronUp, Gauge } from 'lucide-react'
+import { ChevronDown, ChevronUp, Gauge } from 'lucide-react'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { AgentProvider, ContextUsage, UsageReading } from '../../shared/types'
 import { providerName } from '../../shared/providers'
@@ -107,23 +107,42 @@ function UsagePopover({ trigger, side = 'top', align = 'start' }: { trigger: Rea
   </PopoverContent></Popover>
 }
 
-/** Pinned to the bottom of the sidebar: two thin bars per provider, the 5-hour window above the weekly one. */
+const COLLAPSED_KEY = 'ramu.usageFooterCollapsed'
+function useCollapsed(): [boolean, (next: boolean) => void] {
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem(COLLAPSED_KEY) === '1' } catch { return false } })
+  return [collapsed, (next) => { setCollapsed(next); try { localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0') } catch {} }]
+}
+
+/** Pinned to the bottom of the sidebar: two thin bars per provider, or one compact line (icon and peak percent each) when collapsed, so extra providers don't squeeze the chat list. */
 export function UsageFooter() {
   useLanguage()
   const { preferences } = useAppSettings()
-  const groups = byProvider(useUsage())
+  const all = useUsage()
+  const groups = byProvider(all)
+  const [collapsed, setCollapsed] = useCollapsed()
   if (!preferences.showUsageLimits || !groups.length) return null
   const label = groups.map(({ provider, five, weekly }) => `${providerName(provider)}: ${[five && `5-hour ${five.usedPercent}%`, weekly && `weekly ${weekly.usedPercent}%`].filter(Boolean).join(', ')}`).join('; ')
-  return <UsagePopover trigger={<Button type="button" variant="ghost" className="usage-footer" aria-label={t("Plan usage. {0}", { "0": label })}>
-    <span className="usage-footer-heading"><Gauge size={13} /><span>{t("Plan usage")}</span><ChevronUp size={13} /></span>
-    {groups.map(({ provider, five, weekly }) => <span key={provider} className="usage-row">
-      <span className="usage-provider-name"><ProviderIcon provider={provider} size={15} /><span>{providerName(provider)}</span></span>
-      <span className="usage-bars">{[five, weekly].map((reading, index) => <span className="usage-mini-window" key={index}>
-        <span className="usage-window-label">{index === 0 ? t('5h') : t('wk')}</span><Bar reading={reading} />
-        <span className={`usage-value ${reading ? usageTone(reading) : 'unknown'}`}>{reading ? `${reading.usedPercent}%` : '–'}</span>
-      </span>)}</span>
-    </span>)}
-  </Button>} />
+  const toggle = <Button type="button" variant="ghost" className="usage-footer-toggle" aria-expanded={!collapsed} aria-label={collapsed ? t("Expand plan usage") : t("Collapse plan usage")} title={collapsed ? t("Expand plan usage") : t("Collapse plan usage")} onClick={() => setCollapsed(!collapsed)}>{collapsed ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</Button>
+  if (collapsed) return <div className="usage-footer compact">
+    <UsagePopover trigger={<Button type="button" variant="ghost" className="usage-compact" aria-label={t("Plan usage. {0}", { "0": label })}>
+      <Gauge size={13} className="usage-compact-icon" />
+      {groups.map(({ provider }) => { const peak = peakUsage(all, provider)!
+        return <span key={provider} className="usage-compact-item" title={`${providerName(provider)} ${windowLabel(peak)} ${peak.usedPercent}%`}><ProviderIcon provider={provider} size={13} /><span className={`usage-value ${usageTone(peak)}`}>{peak.usedPercent}%</span></span> })}
+    </Button>} />
+    {toggle}
+  </div>
+  return <div className="usage-footer">
+    <div className="usage-footer-heading"><Gauge size={13} /><span>{t("Plan usage")}</span>{toggle}</div>
+    <UsagePopover trigger={<Button type="button" variant="ghost" className="usage-rows" aria-label={t("Plan usage. {0}", { "0": label })}>
+      {groups.map(({ provider, five, weekly }) => <span key={provider} className="usage-row">
+        <span className="usage-provider-name"><ProviderIcon provider={provider} size={15} /><span>{providerName(provider)}</span></span>
+        <span className="usage-bars">{[five, weekly].map((reading, index) => <span className="usage-mini-window" key={index}>
+          <span className="usage-window-label">{index === 0 ? t('5h') : t('wk')}</span><Bar reading={reading} />
+          <span className={`usage-value ${reading ? usageTone(reading) : 'unknown'}`}>{reading ? `${reading.usedPercent}%` : '–'}</span>
+        </span>)}</span>
+      </span>)}
+    </Button>} />
+  </div>
 }
 
 /** With the sidebar hidden: one small ring per provider at the end of the status bar. */

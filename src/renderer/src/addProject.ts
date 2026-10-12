@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { invoke } from './ipc'
+import { invoke, ramu } from './ipc'
 import { notifyError } from './Notifications'
 import { errorText } from './TaskPane'
 import { useWorkspace } from './workspace'
@@ -8,21 +8,24 @@ import { useWorkspace } from './workspace'
 export function useAddProject() {
   const ws = useWorkspace()
   const [busy, setBusy] = useState(false)
-  const add = async () => {
+  const open = async (dirs: string[]) => {
+    let last: string | null = null
+    for (const dir of dirs) {
+      try { last = (await invoke('projects.addFolder', dir)).project.id }
+      catch (e) { notifyError(errorText(e), 'Add project') }
+    }
+    if (!last) return
+    await ws.refresh()
+    ws.openProject(last)
+    ws.setSidebar('explorer')
+  }
+  const guarded = async (run: () => Promise<void>) => {
     if (busy) return
     setBusy(true)
-    try {
-      const dir = await invoke('repos.pick', 'project')
-      if (!dir) return
-      const { project } = await invoke('projects.addFolder', dir)
-      await ws.refresh()
-      ws.openProject(project.id)
-      ws.setSidebar('explorer')
-    } catch (e) {
-      notifyError(errorText(e), 'Add project')
-    } finally {
-      setBusy(false)
-    }
+    try { await run() } catch (e) { notifyError(errorText(e), 'Add project') } finally { setBusy(false) }
   }
-  return { add, busy }
+  const add = () => guarded(async () => { const dir = await invoke('repos.pick', 'project'); if (dir) await open([dir]) })
+  /** Folders dropped onto the project list; each becomes a project (a plain file reports that it holds no repository). */
+  const addDropped = (files: File[]) => guarded(() => open(files.map((file) => ramu.pathForFile(file)).filter(Boolean)))
+  return { add, addDropped, busy }
 }

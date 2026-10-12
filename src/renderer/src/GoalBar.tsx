@@ -6,12 +6,13 @@ import { t } from './i18n'
 import { useAppSettings } from './AppSettings'
 
 const LABELS: Record<ChatGoal['status'], string> = { active: 'Working toward goal', completed: 'Goal completed', blocked: 'Goal needs input', paused: 'Goal paused', 'turn-limit': 'Goal turn limit reached', 'waiting-provider': 'Waiting for provider' }
-export function GoalBar({ goal, onControl }: { goal: ChatGoal; onControl: (action: 'pause' | 'resume' | 'clear') => void }) {
+// A finished goal sits in the transcript where the work ended; a goal still in progress stays pinned above the composer as a slim bar.
+export function GoalBar({ goal, inline = false, onControl }: { goal: ChatGoal; inline?: boolean; onControl: (action: 'pause' | 'resume' | 'clear') => void }) {
   const { preferences } = useAppSettings()
   const disabled = preferences.goals.mode === 'off'
   const active = goal.status === 'active' || goal.status === 'waiting-provider'
   const Icon = disabled ? CirclePause : goal.status === 'completed' ? CircleCheck : goal.status === 'blocked' || goal.status === 'turn-limit' ? CircleAlert : goal.status === 'paused' ? CirclePause : goal.status === 'waiting-provider' ? Clock3 : Target
-  return <div className="goal-dock">
+  return <div className={inline ? 'goal-row' : 'goal-dock'}>
     <Collapsible className="goal-bar" data-status={disabled ? 'paused' : goal.status} aria-label={t('Chat goal')}>
       <div className="goal-bar-header">
         <CollapsibleTrigger render={<Button variant="ghost" className="ghost goal-summary" />}>
@@ -21,7 +22,7 @@ export function GoalBar({ goal, onControl }: { goal: ChatGoal; onControl: (actio
         </CollapsibleTrigger>
         <div className="goal-actions">
           {goal.status !== 'completed' && <Button variant="ghost" size="sm" className="ghost small" disabled={disabled && !active} onClick={() => onControl(active ? 'pause' : 'resume')}>{active ? t('Pause goal') : t('Resume goal')}</Button>}
-          <Button variant="ghost" size="sm" className="ghost small" onClick={() => onControl('clear')}>{t('Clear goal')}</Button>
+          {goal.status !== 'completed' && <Button variant="ghost" size="sm" className="ghost small" onClick={() => onControl('clear')}>{t('Clear goal')}</Button>}
         </div>
       </div>
       <CollapsibleContent>

@@ -21,6 +21,9 @@ export function ProjectsPanel() {
   const ws = useWorkspace()
   const addProject = useAddProject()
   const looseChats = ws.tasks.filter((t) => t.projectId === NO_PROJECT && t.status !== 'archived').sort(pinnedFirst)
+  const { preferences } = useAppSettings()
+  // The latest chats across every project, each led by its project's name.
+  const latest = preferences.showRecentChats ? ws.tasks.filter((t) => t.status !== 'archived').sort((a, b) => b.lastActiveAt - a.lastActiveAt).slice(0, 5) : []
   // Drag a project by its row to put it somewhere else in the list.
   const [dragging, setDragging] = useState<string | null>(null)
   const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null)
@@ -30,9 +33,19 @@ export function ProjectsPanel() {
     try { await invoke('projects.reorder', ids); await ws.refresh() } catch (e) { notifyError(errorText(e), 'Projects') }
   }
   const dnd = { enabled: true, dragging, drop, setDragging, setDrop, reorder }
+  // Dropping folders from Finder adds them as projects.
+  const [folderOver, setFolderOver] = useState(false)
+  const hasFiles = (event: React.DragEvent) => event.dataTransfer.types.includes('Files')
 
   return (
-    <div className="panel tasks-panel">
+    <div className={`panel tasks-panel${folderOver ? ' folder-drop' : ''}`}
+      onDragOver={(event) => { if (!hasFiles(event) || addProject.busy) return; event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setFolderOver(true) }}
+      onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFolderOver(false) }}
+      onDrop={(event) => { if (!hasFiles(event)) return; event.preventDefault(); setFolderOver(false); void addProject.addDropped([...event.dataTransfer.files]) }}>
+      {latest.length > 0 && <>
+        <div className="section-head"><span>{t("Recent chats")}</span></div>
+        {latest.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
+      </>}
       <div className="section-head">
         <span>{t("Projects")}</span>
         <Button className="ghost icon small-icon" aria-label={t("Add project")} title={t("Add project…")} disabled={addProject.busy} onClick={() => void addProject.add()}>
@@ -241,7 +254,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
   )
 }
 
-function TaskRow({ task }: { task: Task }) {
+function TaskRow({ task, projectName }: { task: Task; projectName?: string }) {
   useLanguage()
   const ws = useWorkspace()
   const [renaming, setRenaming] = useState(false)
@@ -306,7 +319,7 @@ function TaskRow({ task }: { task: Task }) {
             }}
           />
         ) : (
-          <FadeText className="grow task-title" text={task.title} />
+          <>{projectName && <span className="task-project">{projectName}</span>}<FadeText className="grow task-title" text={task.title} /></>
         )}
         {task.pinnedAt && !archived && <Pin size={11} className="muted mode-icon" aria-label={t("Pinned")} />}
         {naming && <Sparkles size={12} className="muted mode-icon" aria-label={t("Naming chat")} />}

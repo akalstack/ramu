@@ -299,4 +299,6 @@ export type PushEvents = {
 export interface RamuBridge {
   invoke<M extends keyof RamuMethods>(method: M, ...args: Parameters<RamuMethods[M]>): Promise<Awaited<ReturnType<RamuMethods[M]>>>
   on<E extends keyof PushEvents>(event: E, listener: (payload: PushEvents[E]) => void): () => void
+  /** The on-disk path of a file or folder dropped onto the window ('' when it has none). */
+  pathForFile(file: File): string
 }

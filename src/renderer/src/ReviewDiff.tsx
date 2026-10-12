@@ -8,20 +8,30 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import type { ChangeFile, ReviewComment } from '../../shared/types'
 import { monaco } from './monaco'
 import { reviewCommentMenu } from './monacoMenu'
+import { useNearViewport } from './useNearViewport'
 
 // Set when stepping past the last change of a file: the next file's diff takes it and lands on its first (or last) change.
 const reviewEntry: { current: { fileId: string; direction: 'next' | 'previous' } | null } = { current: null }
 export function enterReviewFile(fileId: string, direction: 'next' | 'previous') { reviewEntry.current = { fileId, direction }; window.dispatchEvent(new CustomEvent('ramu:review-enter', { detail: { fileId } })) }
+// Last measured height per file, so an editor that is remounted after scrolling away does not jump the page.
+const flowHeights = new Map<string, number>()
 export interface InlineReviewBlock { key: string; side: 'old' | 'new'; line: number; content: ReactNode }
-export function ReviewDiff({ file, comments, onSelect, onComment, flow = false, inlineBlocks = [], sideBySide: layout }: { file: ChangeFile; comments: ReviewComment[]; onSelect: (side: 'old' | 'new', line: number, endLine: number) => void; onComment?: (side: 'old' | 'new', line: number, endLine: number) => void; flow?: boolean; inlineBlocks?: InlineReviewBlock[]; sideBySide?: boolean }) {
+export function ReviewDiff({ file, comments, onSelect, onComment, flow = false, inlineBlocks = [], sideBySide: layout, visible = true }: { file: ChangeFile; comments: ReviewComment[]; onSelect: (side: 'old' | 'new', line: number, endLine: number) => void; onComment?: (side: 'old' | 'new', line: number, endLine: number) => void; flow?: boolean; inlineBlocks?: InlineReviewBlock[]; sideBySide?: boolean; visible?: boolean }) {
   useLanguage()
   const { preferences } = useAppSettings()
-  const [localSideBySide, setSideBySide] = useState(true), [hasChanges, setHasChanges] = useState(false), [computed, setComputed] = useState(false), [height, setHeight] = useState(300)
+  const [localSideBySide, setSideBySide] = useState(true), [hasChanges, setHasChanges] = useState(false), [computed, setComputed] = useState(false), [height, setHeight] = useState(() => flowHeights.get(file.id) ?? 300), [capped, setCapped] = useState(false)
   const sideBySide = layout ?? localSideBySide
   const [lineChanges, setLineChanges] = useState<monaco.editor.ILineChange[]>([])
   const changeIndex = useRef(-1)
+  const viewState = useRef<monaco.editor.IDiffEditorViewState | null>(null)
   const [zoneHosts, setZoneHosts] = useState<Map<string, HTMLElement>>(new Map())
   const host = useRef<HTMLDivElement>(null), editor = useRef<monaco.editor.IStandaloneDiffEditor | null>(null)
+  const near = useNearViewport(host, visible)
+  const [requested, setRequested] = useState(false)
+  const mounted = visible && (near || requested)
+  const pendingLine = useRef<{ side: 'old' | 'new'; line: number; endLine: number } | null>(null)
+  const pendingNavigation = useRef<'next' | 'previous' | null>(null)
+  useEffect(() => { if (near) setRequested(false) }, [near])
   const clearZones = useRef<(() => void) | null>(null)
   const activeSide = useRef<'old' | 'new'>('new')
   const navigateRef = useRef<(direction: 'next' | 'previous') => void>(() => {}), commentRef = useRef<(side: 'old' | 'new') => void>(() => {})
@@ -34,12 +44,19 @@ export function ReviewDiff({ file, comments, onSelect, onComment, flow = false, 
   const comment = (side: 'old' | 'new') => { const range = selection(side); if (range) handlers.current.onComment?.(range.side, range.line, range.endLine) }
   const size = () => {
     const diff = editor.current
-    if (flow && diff) setHeight(Math.max(100, diff.getOriginalEditor().getContentHeight(), diff.getModifiedEditor().getContentHeight()))
+    if (!flow || !diff) return
+    // A big diff scrolls inside its own bounded box instead of stretching the page, so the layout and sticky headings stay stable.
+    const content = Math.max(100, diff.getOriginalEditor().getContentHeight(), diff.getModifiedEditor().getContentHeight()), next = Math.min(content, Math.max(320, Math.round(window.innerHeight * .8)))
+    flowHeights.set(file.id, next); setHeight(next); setCapped(content > next)
   }
   useLayoutEffect(() => {
+    if (!mounted) return
+    setComputed(false)
     const original = monaco.editor.createModel(file.oldContent, undefined, monaco.Uri.from({ scheme: 'inmemory', path: `/${crypto.randomUUID()}/${file.path}` })), modified = monaco.editor.createModel(file.newContent, original.getLanguageId())
     const diff = monaco.editor.createDiffEditor(host.current!, { theme: 'ramu', readOnly: true, originalEditable: false, automaticLayout: true, renderSideBySide: sideBySide, useInlineViewWhenSpaceIsLimited: false, glyphMargin: true, minimap: { enabled: false }, fontSize: preferences.editorFontSize, accessibilityVerbose: true, scrollBeyondLastLine: false, ...(flow ? { hideUnchangedRegions: { enabled: true, contextLineCount: 4, minimumLineCount: 10, revealLineCount: 20 }, scrollbar: { vertical: 'hidden', alwaysConsumeMouseWheel: false } } : {}) })
-    diff.setModel({ original, modified }); editor.current = diff
+    const viewModel = diff.createViewModel({ original, modified })
+    diff.setModel(viewModel); editor.current = diff
+    if (viewState.current) diff.restoreViewState(viewState.current)
     const updated = diff.onDidUpdateDiff(() => { const changes = diff.getLineChanges() ?? []; setHasChanges(!!changes.length); setComputed(true); setLineChanges((previous) => JSON.stringify(previous) === JSON.stringify(changes) ? previous : changes); size() })
     const disposables = [(['old', diff.getOriginalEditor()] as const), (['new', diff.getModifiedEditor()] as const)].flatMap(([side, pane]) => {
       const hover = pane.createDecorationsCollection()
@@ -64,9 +81,19 @@ export function ReviewDiff({ file, comments, onSelect, onComment, flow = false, 
       }), pane.onMouseLeave(() => hover.clear()), { dispose: () => { window.removeEventListener('mouseup', up); unregister(); hover.clear() } }]
     })
     size()
-    return () => { clearZones.current?.(); clearZones.current = null; updated.dispose(); disposables.forEach((d) => d.dispose()); diff.setModel(null); diff.dispose(); original.dispose(); modified.dispose(); editor.current = null }
-  }, [file.id, flow])
-  useLayoutEffect(() => { editor.current?.updateOptions({ renderSideBySide: sideBySide, fontSize: preferences.editorFontSize }); size() }, [sideBySide, preferences.editorFontSize])
+    return () => {
+      viewState.current = diff.saveViewState()
+      clearZones.current?.(); clearZones.current = null; updated.dispose(); disposables.forEach((d) => d.dispose())
+      // Cancel the owning view model before releasing text models. Monaco's implicit
+      // model release can defer cancellation past a rapid viewport/tab teardown.
+      // A Monaco disposal error must not leak the text models or leave a dead editor behind while scrolling.
+      try { diff.setModel(null); viewModel.dispose(); diff.dispose() }
+      catch (error) { console.warn('Review diff teardown failed', (error as { errors?: unknown[] }).errors ?? error) }
+      finally { editor.current = null; original.dispose(); modified.dispose() }
+    }
+  }, [file.id, flow, mounted])
+  useLayoutEffect(() => { editor.current?.updateOptions({ renderSideBySide: sideBySide, fontSize: preferences.editorFontSize }); size() }, [sideBySide, preferences.editorFontSize, mounted])
+  useLayoutEffect(() => { if (flow) editor.current?.updateOptions({ scrollbar: { vertical: capped ? 'auto' : 'hidden', alwaysConsumeMouseWheel: false } }) }, [capped, flow, mounted])
   const zoneSpec = inlineBlocks.map((block) => `${block.key}:${block.side}:${block.line}`).join('|')
   useLayoutEffect(() => {
     const diff = editor.current; if (!diff) return
@@ -93,12 +120,17 @@ export function ReviewDiff({ file, comments, onSelect, onComment, flow = false, 
     const cleanup = () => { if (cleared) return; cleared = true; disposables.forEach((dispose) => dispose()); accessibility.forEach((hidden, parent) => { if (hidden === null) parent.removeAttribute('aria-hidden'); else parent.setAttribute('aria-hidden', hidden) }) }
     clearZones.current = cleanup
     return () => { cleanup(); if (clearZones.current === cleanup) clearZones.current = null }
-  }, [file.id, zoneSpec, sideBySide, lineChanges])
+  }, [file.id, zoneSpec, sideBySide, lineChanges, mounted])
+  const revealLine = (target: { side: 'old' | 'new'; line: number; endLine: number }) => {
+    if (!editor.current?.getLineChanges()) { pendingLine.current = target; setRequested(true); return }
+    const pane = target.side === 'old' ? editor.current.getOriginalEditor() : editor.current.getModifiedEditor()
+    pane.setSelection(new monaco.Range(target.line, 1, target.endLine, pane.getModel()!.getLineMaxColumn(target.endLine)))
+    pane.revealLineInCenter(target.line); pane.focus()
+    if (flow && host.current) { const root = host.current.closest('.changes-page'); if (root) root.scrollBy({ top: host.current.getBoundingClientRect().top - root.getBoundingClientRect().top + pane.getTopForLineNumber(target.line) - 100, behavior: 'smooth' }) }
+  }
   useEffect(() => {
     const reveal = (event: Event) => {
-      const target = (event as CustomEvent).detail; if (target?.fileId !== file.id || !editor.current) return
-      const pane = target.side === 'old' ? editor.current.getOriginalEditor() : editor.current.getModifiedEditor(); pane.setSelection(new monaco.Range(target.line, 1, target.endLine, pane.getModel()!.getLineMaxColumn(target.endLine))); pane.revealLineInCenter(target.line); pane.focus()
-      if (flow && host.current) { const root = host.current.closest('.changes-page'); if (root) root.scrollBy({ top: host.current.getBoundingClientRect().top - root.getBoundingClientRect().top + pane.getTopForLineNumber(target.line) - 100, behavior: 'smooth' }) }
+      const target = (event as CustomEvent).detail; if (target?.fileId === file.id) revealLine(target)
     }
     window.addEventListener('ramu:review-line', reveal); return () => window.removeEventListener('ramu:review-line', reveal)
   }, [file.id, flow])
@@ -106,9 +138,9 @@ export function ReviewDiff({ file, comments, onSelect, onComment, flow = false, 
     const diff = editor.current; if (!diff) return
     const collections = [(['old', diff.getOriginalEditor()] as const), (['new', diff.getModifiedEditor()] as const)].map(([side, pane]) => pane.createDecorationsCollection(comments.filter((c) => c.side === side && c.scope !== 'file' && c.state !== 'resolved').map((c) => ({ range: new monaco.Range(c.line, 1, c.endLine, 1), options: { isWholeLine: true, className: 'review-comment-line', glyphMarginClassName: 'review-comment-glyph', glyphMarginHoverMessage: { value: `${c.author === 'ai' ? 'AI' : 'You'}: ${c.text}` } } }))))
     return () => collections.forEach((c) => c.clear())
-  }, [comments])
+  }, [comments, mounted])
   useEffect(() => {
-    const onNav = (event: Event) => { const detail = (event as CustomEvent).detail; if (detail?.fileId === file.id && !detail.handled) { detail.handled = true; navigateRef.current(detail.direction) } }
+    const onNav = (event: Event) => { const detail = (event as CustomEvent).detail; if (detail?.fileId === file.id && !detail.handled) { detail.handled = true; if (!editor.current) { pendingNavigation.current = detail.direction; setRequested(true) } else navigateRef.current(detail.direction) } }
     const onComment = (event: Event) => { if ((event as CustomEvent).detail?.fileId === file.id) commentRef.current(activeSide.current) }
     window.addEventListener('ramu:review-nav', onNav); window.addEventListener('ramu:review-comment-selection', onComment)
     return () => { window.removeEventListener('ramu:review-nav', onNav); window.removeEventListener('ramu:review-comment-selection', onComment) }
@@ -121,6 +153,7 @@ export function ReviewDiff({ file, comments, onSelect, onComment, flow = false, 
   // Past the last change of a file, keep going in the next one; ReviewFileCards in Changes.tsx pick the neighbouring file.
   const leaveFile = (direction: 'next' | 'previous') => window.dispatchEvent(new CustomEvent('ramu:review-nav-file', { detail: { fileId: file.id, direction } }))
   const navigate = (direction: 'next' | 'previous') => {
+    if (!editor.current?.getLineChanges()) { pendingNavigation.current = direction; setRequested(true); return }
     if (!flow) { editor.current?.goToDiff(direction); return }
     if (!lineChanges.length) { leaveFile(direction); return }
     const last = lineChanges.length - 1, next = changeIndex.current < 0 ? (direction === 'next' ? 0 : last) : changeIndex.current + (direction === 'next' ? 1 : -1)
@@ -133,11 +166,16 @@ export function ReviewDiff({ file, comments, onSelect, onComment, flow = false, 
     if (lineChanges.length) goToChange(entry.direction === 'next' ? 0 : lineChanges.length - 1)
   }
   const enterRef = useRef(enter); enterRef.current = enter
+  useEffect(() => {
+    if (!editor.current) return
+    if (pendingLine.current) { const target = pendingLine.current; pendingLine.current = null; revealLine(target) }
+    if (pendingNavigation.current && computed) { const direction = pendingNavigation.current; pendingNavigation.current = null; navigateRef.current(direction) }
+  }, [mounted, computed, lineChanges])
   useEffect(() => { enterRef.current() }, [computed, lineChanges, file.id])
   useEffect(() => {
     const onEnter = (event: Event) => { if ((event as CustomEvent).detail?.fileId === file.id) enterRef.current() }
     window.addEventListener('ramu:review-enter', onEnter); return () => window.removeEventListener('ramu:review-enter', onEnter)
   }, [file.id])
   navigateRef.current = navigate; commentRef.current = comment
-  return <div className={`review-diff-wrap${flow ? ' flowing-diff' : ''}`}><div className="review-diff-controls">{layout === undefined && <div role="group" aria-label={t("Diff layout")}><Button className="ghost small" aria-pressed={!sideBySide} onClick={() => setSideBySide(false)}>{t("Inline")}</Button><Button className="ghost small" aria-pressed={sideBySide} onClick={() => setSideBySide(true)}>{t("Split")}</Button></div>}{onComment && <Button className="ghost small" onClick={() => comment(activeSide.current)}><MessageSquarePlus size={13} />{t("Comment on selection")}</Button>}<span className="grow" /><Button className="ghost icon small-icon" aria-label={t("Previous change")} disabled={!hasChanges} onClick={() => navigate('previous')}><ChevronUp size={14} /></Button><Button className="ghost icon small-icon" aria-label={t("Next change")} disabled={!hasChanges} onClick={() => navigate('next')}><ChevronDown size={14} /></Button></div><div ref={host} className="review-diff" style={flow ? { height } : undefined} aria-label={t("Changes to {0}", { "0": file.path })} />{inlineBlocks.map((block) => { const target = zoneHosts.get(block.key); return target ? createPortal(<div className="review-inline-interaction" onKeyDown={(event) => event.stopPropagation()}>{block.content}</div>, target, block.key) : null })}</div>
+  return <div className={`review-diff-wrap${flow ? ' flowing-diff' : ''}`}><div className="review-diff-controls">{layout === undefined && <div role="group" aria-label={t("Diff layout")}><Button className="ghost small" aria-pressed={!sideBySide} onClick={() => setSideBySide(false)}>{t("Inline")}</Button><Button className="ghost small" aria-pressed={sideBySide} onClick={() => setSideBySide(true)}>{t("Split")}</Button></div>}{onComment && <Button className="ghost small" onClick={() => comment(activeSide.current)}><MessageSquarePlus size={13} />{t("Comment on selection")}</Button>}<span className="grow" /><Button className="ghost icon small-icon" aria-label={t("Previous change")} disabled={!hasChanges} onClick={() => navigate('previous')}><ChevronUp size={14} /></Button><Button className="ghost icon small-icon" aria-label={t("Next change")} disabled={!hasChanges} onClick={() => navigate('next')}><ChevronDown size={14} /></Button></div><div ref={host} className="review-diff" style={flow ? { height } : undefined} aria-label={t("Changes to {0}", { "0": file.path })} />{mounted && inlineBlocks.map((block) => { const target = zoneHosts.get(block.key); return target ? createPortal(<div className="review-inline-interaction" onKeyDown={(event) => event.stopPropagation()}>{block.content}</div>, target, block.key) : null })}</div>
 }

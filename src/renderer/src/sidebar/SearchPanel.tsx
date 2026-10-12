@@ -3,13 +3,15 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CaseSensitive, ChevronRight, FileText, Folder, FolderTree, List, RefreshCw, SlidersHorizontal, WholeWord, X } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SearchMatch, SearchOptions, SearchResults, ReplaceFilePreview } from '../../../shared/types'
 import { Dialog, Dropdown } from '../Menu'
 import { invoke } from '../ipc'
 import { notifyError } from '../Notifications'
 import { errorText } from '../TaskPane'
 import { useWorkspace } from '../workspace'
+import { VirtualList } from '../VirtualList'
+import { useAppSettings } from '../AppSettings'
 import { NoTask } from './ExplorerPanel'
 
 interface SearchTree { folders: Map<string, SearchTree>; files: Map<string, SearchMatch[]> }
@@ -23,12 +25,12 @@ export function SearchPanel() {
   const ws = useWorkspace()
   const taskId = ws.ui.activeTaskId
   if (!taskId) return <NoTask />
-  return <WorkspaceSearch key={ws.workspaceOf(taskId)} />
+  return <WorkspaceSearch key={ws.workspaceOf(taskId)} taskId={taskId} />
 }
 
-function WorkspaceSearch() {
+function WorkspaceSearch({ taskId }: { taskId: string }) {
   useLanguage()
-  const ws = useWorkspace(), taskId = ws.ui.activeTaskId
+  const ws = useWorkspace()
   const context = taskId ? ws.workspaceOf(taskId) : ''
   const bindings = taskId ? (ws.bindings[taskId] ?? []).filter((binding) => binding.setupState === 'ready') : []
   const project = taskId ? ws.projectOf(taskId) : undefined
@@ -73,12 +75,7 @@ function WorkspaceSearch() {
     }, 300)
     return () => { cancelled = true; clearTimeout(timer) }
   }, [taskId, options, revision])
-  if (!taskId) return <NoTask />
-  const groups = new Map<string, typeof result.matches>()
-  for (const match of result.matches) {
-    const key = `${match.repoId}:${match.path}`
-    groups.set(key, [...(groups.get(key) ?? []), match])
-  }
+  const groups = useMemo(() => { const groups = new Map<string, SearchMatch[]>(); for (const match of result.matches) { const key = `${match.repoId}:${match.path}`, group = groups.get(key) ?? []; group.push(match); groups.set(key, group) } return groups }, [result.matches])
   const reviewReplace = async () => {
     setReplaceBusy(true)
     try {
@@ -101,37 +98,51 @@ function WorkspaceSearch() {
     finally { setReplaceBusy(false) }
   }
   const toggle = (key: string) => setCollapsed((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next })
-  const renderFile = (key: string, matches: SearchMatch[]) => {
-    const first = matches[0]!, open = !collapsed.has(key)
-    const slash = first.path.lastIndexOf('/'), name = first.path.slice(slash + 1)
-    const repo = bindings.find((binding) => binding.repoId === first.repoId)
-    return <section key={key} className="search-file">
-      <Button className="search-file-heading" aria-expanded={open} title={`${repo?.repoName}/${first.path}`} onClick={() => toggle(key)}><ChevronRight size={13} className={open ? 'caret open' : 'caret'} /><FileText size={14} /><span className="grow search-file-name">{name}{viewMode === 'list' && <span className="muted small">{bindings.length > 1 ? `${repo?.repoName} · ` : ''}{slash >= 0 ? first.path.slice(0, slash) : ''}</span>}</span><span className="scm-count">{matches.length}</span></Button>
-      {open && <div className="search-file-matches">{matches.map((match, index) => <Button key={`${match.line}:${match.column}:${index}`} className="search-match" title={`${match.path}:${match.line}:${match.column}\n${match.text}`} onClick={() => ws.openView(taskId, { kind: 'file', repoId: match.repoId, path: match.path, preview: true, selection: { line: match.line, column: match.column, endColumn: match.endColumn, requestId: crypto.randomUUID() } })}><span className="muted search-line-number">{match.line}</span><span className="search-match-text">{match.text.slice(0, match.start)}<mark>{match.text.slice(match.start, match.end) || ' '}</mark>{match.text.slice(match.end)}</span></Button>)}</div>}
-    </section>
-  }
-  const trees = new Map<string, SearchTree>()
-  for (const [key, matches] of groups) {
-    const first = matches[0]!
-    let node: SearchTree = trees.get(first.repoId) ?? emptyTree()
-    trees.set(first.repoId, node)
-    for (const folder of first.path.split('/').slice(0, -1)) {
-      let child: SearchTree | undefined = node.folders.get(folder)
-      if (!child) { child = emptyTree(); node.folders.set(folder, child) }
-      node = child
+  const { preferences } = useAppSettings()
+  type Row = { kind: 'repo'; key: string; repoId: string; depth: number }
+    | { kind: 'folder'; key: string; name: string; depth: number; open: boolean }
+    | { kind: 'file'; key: string; matches: SearchMatch[]; depth: number; open: boolean }
+    | { kind: 'match'; key: string; match: SearchMatch; depth: number }
+  const trees = useMemo(() => {
+    const result = new Map<string, SearchTree>()
+    for (const [key, matches] of groups) {
+      const first = matches[0]!
+      let node = result.get(first.repoId) ?? emptyTree(); result.set(first.repoId, node)
+      for (const folder of first.path.split('/').slice(0, -1)) { let child = node.folders.get(folder); if (!child) { child = emptyTree(); node.folders.set(folder, child) }; node = child }
+      node.files.set(key, matches)
     }
-    node.files.set(key, matches)
+    return result
+  }, [groups])
+  const rows = useMemo(() => {
+    const rows: Row[] = []
+    const file = (key: string, matches: SearchMatch[], depth: number) => {
+      const open = !collapsed.has(key)
+      rows.push({ kind: 'file', key, matches, depth, open })
+      if (open) matches.forEach((match, index) => rows.push({ kind: 'match', key: `${key}:${index}`, match, depth: depth + 1 }))
+    }
+    const visit = (node: SearchTree, prefix: string, depth: number) => {
+      for (const [name, child] of [...node.folders].sort(([a], [b]) => a.localeCompare(b))) {
+        const key = `${prefix}${name}/`, open = !collapsed.has(key)
+        rows.push({ kind: 'folder', key, name, depth, open }); if (open) visit(child, key, depth + 1)
+      }
+      for (const [key, matches] of [...node.files].sort(([,a],[,b]) => a[0]!.path.localeCompare(b[0]!.path))) file(key, matches, depth)
+    }
+    if (viewMode === 'list') for (const [key, matches] of groups) file(key, matches, 0)
+    else for (const [repoId, tree] of trees) { if (bindings.length > 1) rows.push({ kind: 'repo', key: `repo:${repoId}`, repoId, depth: 0 }); visit(tree, `folder:${repoId}:`, 0) }
+    return rows
+  }, [groups, trees, collapsed, viewMode, bindings.length])
+  const rowHeight = useCallback((row: Row) => viewMode === 'list' && row.kind === 'file' ? Math.max(44, preferences.fontSize * 2 + 16) : Math.max(28, preferences.fontSize + 12), [viewMode, preferences.fontSize])
+  const renderRow = (row: Row) => {
+    const style = { paddingLeft: 12 + row.depth * 12, height: '100%' }
+    if (row.kind === 'repo') return <div className="search-repository-heading" style={style}><Folder size={14}/><span>{bindings.find((binding) => binding.repoId === row.repoId)?.repoName}</span></div>
+    if (row.kind === 'folder') return <Button className="search-folder-heading" style={style} aria-expanded={row.open} onClick={() => toggle(row.key)}><ChevronRight size={13} className={row.open ? 'caret open' : 'caret'}/><Folder size={14}/><span>{row.name}</span></Button>
+    if (row.kind === 'file') {
+      const first = row.matches[0]!, slash = first.path.lastIndexOf('/'), repo = bindings.find((binding) => binding.repoId === first.repoId)
+      return <Button className="search-file-heading" style={style} aria-expanded={row.open} title={`${repo?.repoName}/${first.path}`} onClick={() => toggle(row.key)}><ChevronRight size={13} className={row.open ? 'caret open' : 'caret'}/><FileText size={14}/><span className="grow search-file-name">{first.path.slice(slash + 1)}{viewMode === 'list' && <span className="muted small">{bindings.length > 1 ? `${repo?.repoName} · ` : ''}{slash >= 0 ? first.path.slice(0, slash) : ''}</span>}</span><span className="scm-count">{row.matches.length}</span></Button>
+    }
+    const match = row.match
+    return <Button className="search-match" style={style} title={`${match.path}:${match.line}:${match.column}\n${match.text}`} onClick={() => ws.openView(taskId, { kind: 'file', repoId: match.repoId, path: match.path, preview: true, selection: { line: match.line, column: match.column, endColumn: match.endColumn, requestId: crypto.randomUUID() } })}><span className="muted search-line-number">{match.line}</span><span className="search-match-text">{match.text.slice(0, match.start)}<mark>{match.text.slice(match.start, match.end) || ' '}</mark>{match.text.slice(match.end)}</span></Button>
   }
-  const renderTree = (node: SearchTree, prefix: string): ReactNode => <>
-    {[...node.folders].sort(([a], [b]) => a.localeCompare(b)).map(([name, child]) => {
-      const key = `${prefix}${name}/`, open = !collapsed.has(key)
-      return <div key={key} className="search-folder">
-        <Button className="search-folder-heading" aria-expanded={open} onClick={() => toggle(key)}><ChevronRight size={13} className={open ? 'caret open' : 'caret'} /><Folder size={14} /><span>{name}</span></Button>
-        {open && <div className="search-folder-children">{renderTree(child, key)}</div>}
-      </div>
-    })}
-    {[...node.files].sort(([, a], [, b]) => a[0]!.path.localeCompare(b[0]!.path)).map(([key, matches]) => renderFile(key, matches))}
-  </>
   return <div className="panel search-panel">
     {replaceFiles && <Dialog title={t("Replace search matches?")} confirmLabel={t("Replace matches")} danger busy={replaceBusy} error={replaceError} onCancel={() => { if (!replaceBusy) setReplaceFiles(null) }} onConfirm={() => void applyReplace()}><p>{replaceFiles.reduce((total, file) => total + file.count, 0)} {t(" replacements in ")}{replaceFiles.length} {t(" files. Changes are written to disk.")}</p><div className="replace-review">{replaceFiles.map((file) => <div key={`${file.repoId}:${file.path}`}><strong>{file.path}</strong><span className="muted small"> · {file.count} {t(" matches")}</span><pre><del>{file.before || t("(empty match)")}</del>{'\n'}<ins>{file.after || t("(remove match)")}</ins></pre></div>)}</div></Dialog>}
     <header className="panel-title search-title"><span className="grow" />
@@ -156,9 +167,6 @@ function WorkspaceSearch() {
       <div className="search-summary muted small" role="status">{busy ? t("Searching…") : failed ? t("Search failed. Refresh to retry.") : options.query ? t("{0}{1} results in {2} {3}", { "0": result.limited ? 'First ' : '', "1": result.matches.length, "2": groups.size, "3": groups.size === 1 ? 'file' : 'files' }) : t("Search files in this workspace.")}</div>
       <div className="muted small search-scope-note">{t("Files on disk · Files up to 2 MB")}</div>
     </div>
-    <div className={`search-results search-results-${viewMode}`} aria-label={t("Search results in {0} view", { "0": viewMode })}>{viewMode === 'list' ? [...groups].map(([key, matches]) => renderFile(key, matches)) : [...trees].map(([repoId, tree]) => <section key={repoId}>
-      {bindings.length > 1 && <div className="search-repository-heading"><Folder size={14} /><span>{bindings.find((binding) => binding.repoId === repoId)?.repoName}</span></div>}
-      {renderTree(tree, `folder:${repoId}:`)}
-    </section>)}</div>
+    <VirtualList items={rows} rowHeight={rowHeight} itemKey={(row) => row.key} renderItem={renderRow} isFocusable={(row) => row.kind !== 'repo'} resetKey={`${options.query}:${viewMode}`} className={`search-results search-results-${viewMode}`} />
   </div>
 }

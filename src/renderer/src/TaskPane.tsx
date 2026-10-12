@@ -182,12 +182,12 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
                   {!ready ? (
                     <div className="empty">{t("This repository isn't ready yet.")}</div>
                   ) : (
-                    <>
+                    <VisitedView visible={shown}>
                       {v.kind === 'file' && binding && <FileView taskId={workspaceId} view={v} binding={binding} />}
                       {v.kind === 'diff' && binding && <DiffView taskId={workspaceId} view={v} binding={binding} />}
                       {v.kind === 'review' && <ChangeReviewTab view={v} visible={shown} />}
                       {v.kind === 'git' && binding && <GitDetailsView taskId={workspaceId} view={v} binding={binding} />}
-                    </>
+                    </VisitedView>
                   )}
                 </div>
               )
@@ -228,6 +228,13 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
       </div>
     </section>
   )
+}
+
+/** Restore tab state without constructing editors for tabs the user has not opened. */
+function VisitedView({ visible, children }: { visible: boolean; children: ReactNode }) {
+  const [visited, setVisited] = useState(visible)
+  useEffect(() => { if (visible) setVisited(true) }, [visible])
+  return visible || visited ? children : null
 }
 
 function NewChat({

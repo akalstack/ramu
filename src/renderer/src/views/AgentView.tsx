@@ -5,11 +5,11 @@ import { compactionLabel, isCompacting, isTurnFooter } from '../../../shared/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { FileContext } from '../../../shared/types'
-import { ArrowDown, ArrowLeft, Bot, Brain, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb } from 'lucide-react'
+import { ArrowDown, ArrowLeft, Plus, Bot, Brain, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb } from 'lucide-react'
 import { Children, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { Attachment, QueuedMessage, AgentEvent, AgentSettings, AgentSessionInfo, AgentSessionState, ViewDescriptor } from '../../../shared/types'
+import type { Attachment, ChatGoal, QueuedMessage, AgentEvent, AgentSettings, AgentSessionInfo, AgentSessionState, ViewDescriptor } from '../../../shared/types'
 import { toolIsRunning, toolVerb } from '../../../shared/toolStatus'
 import { agentActivityLabel } from '../../../shared/agentActivity'
 import { GoalBar } from '../GoalBar'
@@ -37,7 +37,7 @@ import { UndoRun } from '../UndoRun'
 import { Composer } from '../Composer'
 import { invoke, ramu, copyText } from '../ipc'
 import { errorText } from '../TaskPane'
-import { Menu } from '../Menu'
+import { Dialog, Menu } from '../Menu'
 import { useWorkspace } from '../workspace'
 import { formatChatDate, needsChatDate } from '../../../shared/chatDates'
 import { ElicitationCard } from '../ElicitationCard'
@@ -67,6 +67,8 @@ function toBlocks(events: AgentEvent[]): Block[] {
     // A sub-agent's own output lives in its panel; its card stands for it here.
     if (event.agentId && event.kind !== 'agent') continue
     if (event.kind === 'compaction' && event.state === 'started') continue
+    // A background command is the Bash row that started it, not a sub-agent card.
+    if (event.kind === 'agent' && event.taskType === 'local_bash') continue
     // The advisor's card stands for its tool calls.
     if (event.kind === 'tool-use' && isAdvisorTool(event)) continue
     if (event.kind === 'goal' || event.kind === 'queue' || event.kind === 'tool-result' || event.kind === 'state' || event.kind === 'request-resolved' || event.kind === 'question-state') continue
@@ -194,6 +196,10 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
   const setOpenAgent = (value: string | null | ((current: string | null) => string | null)) => { setOpenAsideState(null); setOpenAgentState(value) }
   const setOpenAside = (value: typeof openAside) => { setOpenAgentState(null); setOpenAsideState(value) }
   const [asides, setAsides] = useState<Aside[]>([])
+  // Panels stay mounted while their slide-out plays; the one just opened wins over one still leaving.
+  const keptAside = useExitPresence(openAside), keptAgent = useExitPresence(openAgent)
+  const shownAside = openAside ?? (openAgent ? null : keptAside), shownAgent = openAgent ?? (openAside ? null : keptAgent)
+  const panelOpen = openAside !== null || openAgent !== null
   useEffect(() => {
     let cancelled = false
     setAsides([])
@@ -313,7 +319,9 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
   const dockKey = dockQuestions.map((e) => e.requestId).join(',')
   const seenQuestions = useRef(new Set<string>())
   useEffect(() => { if (dockQuestions.some((e) => !seenQuestions.current.has(e.requestId))) setQuestionDockOpen(true); dockQuestions.forEach((e) => seenQuestions.current.add(e.requestId)) }, [dockKey])
-  const tasks = useMemo(() => latestTasks(events), [events])
+  const allTasks = useMemo(() => latestTasks(events), [events])
+  const tasks = useMemo(() => allTasks.filter((task) => task.taskType !== 'local_bash'), [allTasks])
+  const commands = allTasks.filter((task) => task.taskType === 'local_bash' && task.background && effectiveStatus(task, live) === 'running')
   const goalEvent = events.findLast((event) => event.kind === 'goal')
   const goal = goalEvent?.kind === 'goal' ? goalEvent.goal : null
   const runningTasks = tasks.filter((task) => effectiveStatus(task, live) === 'running')
@@ -323,6 +331,16 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
   const compacting = session?.state !== 'stopped' && session?.state !== 'failed' && isCompacting(events)
   const activityLabel = compacting ? 'Compacting context…' : agentActivityLabel(session?.state, events)
   const turns = useMemo(() => toTurns(blocks), [blocks])
+  // A finished goal stays in the turn where it completed, after that turn's answer.
+  const completedGoals = useMemo(() => {
+    const byTurn = new Map<AgentEvent | null, ChatGoal[]>(), seen = new Set<string>()
+    let user: AgentEvent | null = null
+    for (const event of events) {
+      if (event.kind === 'user' && !event.agentId) user = event
+      else if (event.kind === 'goal' && event.goal?.status === 'completed' && !seen.has(event.goal.id)) { seen.add(event.goal.id); byTurn.set(user, [...(byTurn.get(user) ?? []), event.goal]) }
+    }
+    return byTurn
+  }, [events])
   const turnReviews = useMemo(() => reviewsByTurn(reviews, view.sessionId, turns.map((turn) => ({
     key: turn.key,
     sequences: [...(turn.user ? [turn.user] : []), ...turn.items].flatMap((block) => (block.kind === 'event' ? [block.event] : block.tools).flatMap((event) => { const seq = eventSequences.get(event); return seq === undefined ? [] : [seq] })),
@@ -363,7 +381,7 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
   const stopped = interrupted || (!!lastResult && events.lastIndexOf(lastResult) > lastUserIndex && /interrupt|abort/i.test(lastResult.kind === 'result' ? lastResult.text : ''))
   useEffect(() => { if (working) setInterrupted(false) }, [working])
   const ws = useWorkspace()
-  const [continuing, setContinuing] = useState(false)
+  const [continuing, setContinuing] = useState(false), [confirmContinue, setConfirmContinue] = useState(false)
   // A fresh chat in the same checkout that opens with this one's transcript as hidden context.
   const continueInNewChat = async () => {
     const previous = session && ws.task(session.taskId)
@@ -382,7 +400,7 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
     } catch (e) {
       if (created) { await invoke('tasks.delete', created, false).catch(() => {}); await ws.refresh().catch(() => {}) }
       setError(errorText(e))
-    } finally { setContinuing(false) }
+    } finally { setContinuing(false); setConfirmContinue(false) }
   }
   const supportsSteering = session?.provider === 'claude-code' || session?.provider === 'codex'
   const action = supportsSteering ? preferences.busyMessageAction : 'queue'
@@ -414,6 +432,20 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
     setDraft((current) => current === submitted ? '' : current)
     setOpenAside({ id: aside.id, quote: aside.quote, from: aside.quoteFrom, keepFocus: true })
   })
+  /** With nothing to quote, the aside is about the whole chat: type the question straight away. Existing asides stay listed. */
+  const newAside: AsideTarget = { id: null, quote: '', from: 'assistant' }
+  const toggleAside = () => setOpenAside(openAside ? null : asides.length === 0 ? newAside : asides.length === 1 ? { id: asides[0]!.id, quote: '', from: 'assistant' } : '*')
+  const toggleAsideRef = useRef(toggleAside); toggleAsideRef.current = toggleAside
+  // ⌘⇧A with no text selected opens an aside on the whole chat (a selection is handled by SelectionActions).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.code !== 'KeyA' || event.defaultPrevented) return
+      if (!root.current?.checkVisibility() || document.getSelection()?.toString().trim()) return
+      event.preventDefault(); toggleAsideRef.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   const send = (mode: 'queue' | 'steer' = action, context: FileContext[] = []) => {
     const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(draft.trim())
     return side && !attachments.length && !attached.length ? askAside(side[1]!.trim()) : sendToAgent(mode, context)
@@ -458,11 +490,18 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
         {session && STATE_LABEL[session.state] && <span className={`state ${session.state}`}>{STATE_LABEL[session.state]}</span>}
         <span className="grow" />
         {pendingQuestions.length > 0 && <Button className="ghost small" aria-pressed={showQuestions} onClick={() => setShowQuestions((open) => !open)}><ShieldQuestion size={14} />{translate("Questions · ")}{pendingQuestions.length}</Button>}
-        {asides.length > 0 && <Button className="ghost small asides-chip" aria-pressed={openAside !== null} title={translate("Side questions about this chat")} onClick={() => setOpenAside(openAside ? null : asides.length === 1 ? { id: asides[0]!.id, quote: '', from: 'assistant' } : '*')}><MessageCircle size={13} />{translate("Asides · ")}{asides.length}</Button>}
+        <Button className="ghost small asides-chip" aria-pressed={openAside !== null} title={`${translate("Side questions about this chat")} (${formatKeys('mod+shift+a')})`} onClick={toggleAside}><MessageCircle size={13} />{asides.length > 0 ? `${translate("Aside")} · ${asides.length}` : translate("Aside")}</Button>
+        {commands.length > 0 && <Menu label={translate("Background commands")} icon={<><LoaderCircle size={13} className="spin" />{translate("{0} background {1}", { "0": commands.length, "1": commands.length === 1 ? 'command' : 'commands' })}</>} className="ghost small agents-chip running" align="end" items={commands.map((task) => ({ key: task.agentId, label: <><Square size={12} /> {translate("Stop")} · {task.name}</>, onSelect: () => stopTask(task) }))} />}
         {tasks.length > 0 && <Button className={`ghost small agents-chip${runningTasks.length ? ' running' : ''}`} aria-pressed={openAgent !== null} title={runningTasks.length ? translate("Sub-agents still working; they can keep going after the turn ends") : translate("Sub-agents in this chat")} onClick={() => setOpenAgent((current) => current ? null : runningTasks.length === 1 ? runningTasks[0]!.agentId : '*')}>{runningTasks.length ? <LoaderCircle size={13} className="spin" /> : <Bot size={14} />}{runningTasks.length ? translate("{0} {1} running", { "0": runningTasks.length, "1": runningTasks.length === 1 ? 'agent' : 'agents' }) : translate("Agents · {0}", { "0": tasks.length })}</Button>}
-        {session && events.length > 0 && <Button className="ghost small" disabled={continuing} aria-label={translate("Continue in new chat")} title={continuing ? translate("Starting…") : translate("Continue in new chat (starts with this chat as context)")} onClick={() => void continueInNewChat()}><GitFork size={14} />{continuing ? translate("Starting…") : translate("Continue in new chat")}</Button>}
+        <Button className="ghost icon small-icon" aria-label={translate("Find in conversation")} title={translate("Find in conversation ({0})", { "0": formatKeys('mod+f') })} onClick={() => openFind()}><Search size={14} /></Button>
+        {session && events.length > 0 && <Button className="ghost icon small-icon" disabled={continuing} aria-label={translate("Continue in new chat")} title={continuing ? translate("Starting…") : translate("Continue in new chat (starts with this chat as context)")} onClick={() => setConfirmContinue(true)}>{continuing ? <LoaderCircle size={14} className="spin" /> : <GitFork size={14} />}</Button>}
       </div>
-      {goal && <GoalBar goal={goal} onControl={(action) => { void act(() => invoke('agent.goal.control', view.sessionId, action)) }} />}
+      <div className="agent-split">
+      <div className="agent-main">
+      {confirmContinue && <Dialog title={translate("Continue in a new chat?")} confirmLabel={translate("Continue in new chat")} busy={continuing} onCancel={() => { if (!continuing) setConfirmContinue(false) }} onConfirm={() => void continueInNewChat()}>
+        <p>{translate("A new chat opens in the same checkout and starts with this conversation as context. This chat stays as it is.")}</p>
+      </Dialog>}
+      {goal && goal.status !== 'completed' && <GoalBar goal={goal} onControl={(action) => { void act(() => invoke('agent.goal.control', view.sessionId, action)) }} />}
       {finding && <ChatFind root={scroller} focusRequest={findRequest} initialQuery={findQuery} onClose={closeFind} />}
       {showQuestions && pendingQuestions.length > 0 && <div className="pending-questions" aria-label={translate("Pending questions")}>
         {pendingQuestions.map((question) => <Button key={question.requestId} className="ghost small" onClick={() => {
@@ -509,6 +548,7 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
               {kept.map((b) => render(b))}
               {answer.map((b) => render(b, finished, isLast && b === answer.at(-1)))}
               {turnReviews.get(turn.key)?.map((review) => <TurnChanges key={review.id} review={review} />)}
+              {completedGoals.get(turn.user?.kind === 'event' ? turn.user.event : null)?.map((done) => <GoalBar key={done.id} goal={done} inline onControl={() => {}} />)}
             </div>
           })}
           {activityLabel && (
@@ -522,9 +562,6 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
         {working ? <span className="ramu-loader" aria-hidden="true"><i /><i /><i /></span> : <ArrowDown size={14} />}
       </Button>}
       <SelectionActions scroller={scroller} onQuote={quoteIntoDraft} onAside={(quote, from) => setOpenAside({ id: null, quote, from })} />
-      {openAside && <AsidePanel sessionId={view.sessionId} asides={asides} open={openAside} taskId={session?.taskId} onOpen={setOpenAside} onClose={() => setOpenAside(null)} onQuote={quoteIntoDraft} />}
-      {openAgent && <AgentTaskPanel tasks={tasks} openId={openAgent} events={events} results={results} cwd={session?.cwd ?? ''} live={live} taskId={session?.taskId} onSelect={setOpenAgent} onClose={() => setOpenAgent(null)} onStop={stopTask}
-        onMessage={(task, text) => act(() => invoke('agent.messageTask', view.sessionId, task.agentId, text))} />}
       </div>
       <div className="composer-dock">
         {editTarget && <div className="chat-edit" role="region" aria-label={translate("Editing message")}>
@@ -568,12 +605,31 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
           onAlternateSubmit={busyAgent && supportsSteering ? (context) => void send(opposite, context) : undefined}
           alternateDisabled={configuring || !session}
           alternateLabel={opposite === 'queue' ? 'Queue' : 'Steer'}
-          placeholder={live || busyAgent ? translate("Reply to the agent") : translate("Resume with a message")}
+          placeholder={live || busyAgent ? translate("Reply to the agent") : translate("Message the agent")}
           submitLabel={busyAgent ? action === 'queue' ? 'Queue' : 'Steer' : 'Send'}
         />
       </div>
+      </div>
+      <div className={`agent-dock${panelOpen ? ' open' : ''}`} inert={!panelOpen} aria-hidden={!panelOpen}>
+        {shownAside && <AsidePanel sessionId={view.sessionId} asides={asides} open={shownAside} taskId={session?.taskId} onOpen={setOpenAside} onClose={() => setOpenAside(null)} onQuote={quoteIntoDraft} />}
+        {shownAgent && <AgentTaskPanel tasks={tasks} openId={shownAgent} events={events} results={results} cwd={session?.cwd ?? ''} live={live} taskId={session?.taskId} onSelect={setOpenAgent} onClose={() => setOpenAgent(null)} onStop={stopTask}
+          onMessage={(task, text) => act(() => invoke('agent.messageTask', view.sessionId, task.agentId, text))} />}
+      </div>
+      </div>
     </div>
   )
+}
+
+/** Keeps the last non-null value around for `ms` after it goes null, so a closing panel can animate out before it unmounts. */
+function useExitPresence<T>(value: T | null, ms = 220): T | null {
+  const [kept, setKept] = useState<T | null>(value)
+  if (value !== null && value !== kept) setKept(value)
+  useEffect(() => {
+    if (value !== null) return
+    const timer = setTimeout(() => setKept(null), ms)
+    return () => clearTimeout(timer)
+  }, [value, ms])
+  return kept
 }
 
 /** Shows paths inside the agent's directory relative to it; the header carries the full path. */
@@ -645,7 +701,7 @@ function ToolGroup({ tools, results, cwd, active, onBackground }: { tools: ToolU
   const failed = tools.some((t) => results.get(t.toolUseId)?.isError)
   const Icon = tools.some((t) => t.name === 'Bash') ? SquareTerminal : BookOpen
   return (
-    <Collapsible className={failed ? 'tool-group error' : 'tool-group'} defaultOpen={running}>
+    <Collapsible className={failed ? 'tool-group error' : 'tool-group'}>
       <CollapsibleTrigger render={<Button variant="ghost" />}>
         <Icon size={14} className={running ? 'tool-icon running' : 'tool-icon'} />
         <span className="tool-group-label">{describeTools(tools, results, active)}</span>
@@ -882,7 +938,7 @@ function AgentTaskCard({ task, live, onOpen, onStop }: { task: AgentTask; live: 
   const detail = status === 'running' ? task.summary ?? (task.lastTool ? `Using ${toolLabel(task.lastTool)}` : 'Starting…') : final && final.toLowerCase() !== TASK_STATUS[status].toLowerCase() ? final : undefined
   return <div className={`agent-task-card ${status}`}>
     <Button type="button" className="agent-task-open" aria-label={translate("Open agent {0}", { "0": task.name })} onClick={onOpen}>
-      <span className="agent-task-icon">{task.provider ? <ProviderIcon provider={task.provider} size={14} /> : <Bot size={15} />}</span>
+      <span className="agent-task-icon">{task.taskType === 'local_bash' ? <SquareTerminal size={15} /> : task.provider ? <ProviderIcon provider={task.provider} size={14} /> : <Bot size={15} />}</span>
       <span className="agent-task-text">
         <span className="agent-task-title"><span className="agent-task-name">{task.name}</span><span className={`agent-task-state ${status}`}><TaskStatusIcon status={status} />{translate(TASK_STATUS[status])}</span></span>
         {detail && <span className="agent-task-detail">{detail}</span>}
@@ -908,6 +964,8 @@ function AgentTaskPanel({ tasks, openId, events, results, cwd, live, taskId, onS
   const own = useMemo(() => {
     if (!task) return []
     const address = task.address ?? task.agentId
+    // A background command has no conversation; its transcript is the Bash call that started it and that call's output.
+    if (task.taskType === 'local_bash') return toBlocks(events.filter((event) => event.kind === 'tool-use' && event.toolUseId === task.toolUseId))
     return toBlocks(events.flatMap((event): AgentEvent[] => {
       if (event.kind === 'user' && event.agentId === task.agentId) { const { agentId: _, ...rest } = event; return [rest as AgentEvent] }
       if (event.kind === 'user') { const relay = parseTaskMessage(event.text); return relay?.address === address ? [{ ...event, text: relay.body }] : [] }
@@ -915,7 +973,7 @@ function AgentTaskPanel({ tasks, openId, events, results, cwd, live, taskId, onS
       const { agentId: _, ...rest } = event
       return [rest as AgentEvent]
     }))
-  }, [events, task?.agentId, task?.address])
+  }, [events, task?.agentId, task?.address, task?.taskType, task?.toolUseId])
   useEffect(() => { const el = body.current; if (el) el.scrollTop = el.scrollHeight }, [own.length])
   const status = task ? effectiveStatus(task, live) : 'stopped'
   const send = async () => {
@@ -939,7 +997,7 @@ function AgentTaskPanel({ tasks, openId, events, results, cwd, live, taskId, onS
         {task.recoveryError && <p className="muted small" role="status">{translate("Saved provider history could not be fully recovered. Previously received output is still shown.")} {task.recoveryError}</p>}
         {task.prompt && <div className="agent-panel-prompt"><span className="agent-panel-label">{translate("Task")}</span><div className="agent-panel-prompt-text">{task.prompt}</div></div>}
         {own.map((block, index) => <div key={index}>{block.kind === 'tools' ? <ToolGroup tools={block.tools} results={results} cwd={cwd} active={status === 'running' && live} /> : block.event.kind === 'text' ? <AssistantText event={block.event} generating={false} actions={false} taskId={taskId} /> : block.event.kind === 'turn-diff' ? <TurnDiff diff={block.event.diff} /> : block.event.kind === 'user' ? <div className="msg-wrap user"><div className="msg user">{block.event.text}</div></div> : block.event.kind === 'thinking' ? <ThinkingRow text={block.event.text} /> : block.event.kind === 'error' ? <div className="msg error">{block.event.message}</div> : null}</div>)}
-        {!own.length && <p className="muted small">{status === 'running' ? translate("Working… its messages and tool calls appear here.") : translate("This agent left no transcript.")}</p>}
+        {!own.length && <p className="muted small">{status === 'running' ? translate("Working… its messages and tool calls appear here.") : task.taskType === 'local_bash' ? translate("This command left no output.") : translate("This agent left no transcript.")}</p>}
         {status !== 'running' && (task.error || task.summary && task.summary.toLowerCase() !== TASK_STATUS[status].toLowerCase() && !own.some((block) => block.kind === 'event' && block.event.kind === 'text' && block.event.text.trim() === task.summary!.trim())) && <div className={`agent-panel-report${task.error ? ' error' : ''}`}><span className="agent-panel-label">{task.error ? translate("Error") : translate("Report")}</span><Markdown remarkPlugins={[remarkGfm]}>{task.error ?? task.summary ?? ''}</Markdown></div>}
       </div>
       {task.canMessage && live ? <form className="agent-panel-compose" onSubmit={(event) => { event.preventDefault(); void send() }}>
@@ -1034,10 +1092,12 @@ function AsidePanel({ sessionId, asides, open, taskId, onOpen, onClose, onQuote 
       <MessageCircle size={14} /><span className="agent-panel-title">{open === '*' ? translate("Asides") : translate("Aside")}</span>
       {open !== '*' && quote && <span className="aside-title-quote muted" title={quote}>{firstLine(quote)}</span>}
       <span className="grow" />
+      {aside && <Button className="ghost icon small-icon" aria-label={translate("New aside")} title={translate("New aside")} onClick={() => onOpen({ id: null, quote: '', from: 'assistant' })}><Plus size={14} /></Button>}
       {aside && <Button className="ghost icon small-icon" aria-label={translate("Delete aside")} title={translate("Delete aside")} onClick={() => remove(aside.id)}><Trash2 size={13} /></Button>}
       <Button className="ghost icon small-icon" aria-label={translate("Close aside")} title={translate("Close (Esc)")} onClick={onClose}><X size={14} /></Button>
     </header>
     {open === '*' ? <div className="agent-panel-body agent-panel-list">
+      <Button type="button" className="aside-row aside-new" onClick={() => onOpen({ id: null, quote: '', from: 'assistant' })}><span className="aside-row-quote"><Plus size={13} />{translate("New aside")}</span><span className="muted small">{translate("Ask about the whole chat without interrupting it.")}</span></Button>
       {asides.map((entry) => <Button key={entry.id} type="button" className="aside-row" onClick={() => onOpen({ id: entry.id, quote: entry.quote, from: entry.quoteFrom })}>
         <span className="aside-row-quote">{firstLine(entry.quote) || translate("Whole chat")}</span>
         <span className="muted small">{firstLine(entry.messages[0]?.text ?? '')}</span>

@@ -1,5 +1,5 @@
 // Exposes a narrow bridge; the renderer never sees ipcRenderer or Node APIs.
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import type { PushEvents, RamuBridge } from '../shared/api'
 
 const PUSH_EVENTS = new Set<string>(['updates:changed', 'providers:updates', 'automation:changed', 'notify:inapp', 'notify:open', 'background:connection', 'agent:event', 'term:data', 'term:exit', 'fs:changed', 'lsp:diagnostics', 'lsp:status', 'completion:pull', 'usage:changed', 'aside:changed', 'context:changed'])
@@ -12,6 +12,7 @@ const bridge: RamuBridge = {
     ipcRenderer.on(event, wrapped)
     return () => ipcRenderer.removeListener(event, wrapped)
   },
+  pathForFile: (file) => { try { return webUtils.getPathForFile(file) } catch { return '' } },
 }
 
 contextBridge.exposeInMainWorld('ramu', bridge)
