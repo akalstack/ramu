@@ -430,6 +430,33 @@ describe('chat titles', () => {
   })
 })
 
+describe('chat activity timestamps', () => {
+  it('follows user messages across sessions, ignoring assistant and helper activity', async () => {
+    const db = openDb(':memory:')
+    try {
+      const workspace = new Workspace(db, join(tmp, 'activity-worktrees'))
+      const task = await workspace.createTask({ projectId: NO_PROJECT, title: 'Activity', mode: 'current' })
+      expect(workspace.getTask(task.id).lastActiveAt).toBe(task.createdAt)
+      const start = task.createdAt + 1000
+      const session = (id: string, at: number, parent: string | null = null) => db.prepare('INSERT INTO agent_sessions (id, task_id, provider, cwd, state, created_at, parent_session_id) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, task.id, 'codex', tmp, 'idle', at, parent)
+      const event = (id: string, seq: number, body: object) => db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)').run(id, seq, JSON.stringify(body))
+      session('main', start)
+      event('main', 1, { kind: 'user', text: 'First', at: start })
+      event('main', 2, { kind: 'user', text: 'Follow-up', at: start + 1000 })
+      event('main', 3, { kind: 'text', text: 'Reply', at: start + 2000 })
+      event('main', 4, { kind: 'user', text: 'Helper prompt', agentId: 'helper', at: start + 3000 })
+      session('helper', start + 4000, 'main')
+      event('helper', 1, { kind: 'user', text: 'Internal prompt', at: start + 4000 })
+      session('empty', start + 5000)
+      expect(workspace.getTask(task.id).lastActiveAt).toBe(start + 1000)
+      expect(workspace.listTasks()[0]!.lastActiveAt).toBe(start + 1000)
+      session('legacy', start + 6000)
+      event('legacy', 1, { kind: 'user', text: 'Old timestamp-free message' })
+      expect(workspace.getTask(task.id).lastActiveAt).toBe(start + 6000)
+    } finally { db.close() }
+  })
+})
+
 describe('pinning', () => {
   it('pins and unpins a chat', async () => {
     const project = ws.createProject('Shop')

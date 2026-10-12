@@ -36,7 +36,11 @@ interface BindingRow {
 }
 
 const TASK_COLUMNS = `t.id, t.project_id AS projectId, t.title, t.mode, t.workspace_id AS workspaceId, t.status, t.created_at AS createdAt, t.pinned_at AS pinnedAt,
-  MAX(t.created_at, COALESCE((SELECT MAX(created_at) FROM agent_sessions s WHERE s.task_id = t.id), 0)) AS lastActiveAt`
+  COALESCE((SELECT MAX(COALESCE(json_extract(e.event, '$.at'), s.created_at))
+    FROM agent_sessions s JOIN agent_events e ON e.session_id = s.id
+    WHERE s.task_id = t.id AND s.parent_session_id IS NULL
+      AND json_extract(e.event, '$.kind') = 'user'
+      AND json_extract(e.event, '$.agentId') IS NULL), t.created_at) AS lastActiveAt`
 
 export const PROJECT_PREFIX = 'project:'
 export const WORKTREE_PREFIX = 'worktree:'

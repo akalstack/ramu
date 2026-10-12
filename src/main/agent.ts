@@ -32,6 +32,7 @@ import { ADVISOR_PREAMBLE, ADVISOR_TIMEOUT_MS, advisorPrompt } from './advisor'
 import { latestTasks, adviceMessage, advisorAgentId } from '../shared/agentTasks'
 import { DEFAULT_GOAL_PREFERENCES, type ChatGoal, type ChatSearchHit } from '../shared/types'
 import { goalInstructions, goalContinuation } from './goals'
+import { USER_MESSAGE_PREAMBLE } from './agentInstructions'
 
 export type QueryFn = (params: { prompt: AsyncIterable<SDKUserMessage>; options: Options }) => Query
 
@@ -1791,7 +1792,8 @@ export class AgentService {
       const questions = this.preferences?.().asyncQuestions === false
         ? `${QUESTION_PREAMBLE}\nAsync questions are disabled. Use ask_user (Ramu will wait for an answer) or a native blocking question. Do not use request_user_input_async.`
         : QUESTION_PREAMBLE
-      connection.instructions = (this.preferences?.().autoBackgroundSeconds ?? 1) === 0 ? questions : `${questions}\n\n${BACKGROUND_PREAMBLE}`
+      connection.instructions = `${USER_MESSAGE_PREAMBLE}\n\n${questions}`
+      if ((this.preferences?.().autoBackgroundSeconds ?? 1) !== 0) connection.instructions += `\n\n${BACKGROUND_PREAMBLE}`
       if (this.advisorStep(id)) connection.instructions += `\n\n${ADVISOR_PREAMBLE}`
       if (!s.parentId) connection.instructions += `\n\n${goalInstructions(this.goalPreferences(), this.getGoal(id))}`
     }

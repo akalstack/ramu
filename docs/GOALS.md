@@ -6,7 +6,7 @@ Ramu keeps a chat working toward the user's requested outcome across agent turns
 
 Open **Settings → Goals**:
 
-- **Goal detection:** Auto (default) lets the working agent identify a goal at the start or later in the conversation. Manual requires `/goal <objective>`. Off disables automatic continuation and new goals.
+- **Goal detection:** Auto (default) lets the working agent identify a goal at the start or later in the conversation, but only for substantial work that likely needs several turns, not small tasks. Manual requires `/goal <objective>`. Off disables automatic continuation and new goals.
 - **Maximum continuation turns:** 10 by default. Choose a preset, enter a custom limit from 1 to 1000, or select Unlimited. Only automatic follow-up turns count; initial work and user messages do not. A quota retry resumes the interrupted turn without consuming another turn.
 - Changes apply to existing goals. Raising the cap or choosing Unlimited reactivates a goal that reached its limit. Resuming a goal at its turn limit allows another batch.
 
@@ -30,9 +30,11 @@ An existing chat can set a goal while working. Ramu queues the updated objective
 
 ## Completion and continuation
 
-The working agent receives instructions to identify actionable goals and audit all user requirements before ending a turn. Questions, brainstorming and plan-only discussion should not become goals. The agent reports through the provider-neutral `set_goal`, `get_goal` and `update_goal` tools. It reports concrete evidence when complete, remaining work while active, or the missing input/obstacle when blocked.
+The working agent defaults to doing tasks directly. Auto mode creates a goal only after inspecting the task and finding concrete evidence that it needs multiple agent turns and automatic continuation, or when the user explicitly requests a goal. Multiple steps, files, tool calls or tests do not by themselves justify a goal. Questions, brainstorming and plan-only discussion should not become goals. With an active goal, the agent audits all user requirements before ending a turn and reports through the provider-neutral `set_goal`, `get_goal` and `update_goal` tools. It reports concrete evidence when complete, remaining work while active, or the missing input/obstacle when blocked.
 
 There is no separate periodic AI judge. After a turn ends, an active goal starts another turn containing its objective and progress plus an explicit completion audit. This also covers an agent that forgot to report completion. Automatic detection and evidence assessment depend on the working model following those instructions.
+
+Detection instructions run in the background service. After rebuilding or updating them, use **Settings → Updates → Restart app & service** to load the new service. App-only restarts retain the running service. Existing goals remain saved; clear an unwanted goal in the chat before checking detection on a new task.
 
 Queued user input takes priority. Ramu waits for required approvals/answers, running helpers, change snapshots, and other writers in the same workspace. User controls and Stop win over pending automatic dispatch. Completed goals stop; blocked goals can be resumed explicitly or by a user reply.
 

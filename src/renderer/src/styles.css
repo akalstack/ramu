@@ -3077,4 +3077,10 @@ button.question-row.pending:hover { border-color: var(--line-strong); }
 
 /* Recent chats lead with their project name. */
 .task-project { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-weight: 500; }
-.task-project::after { content: '·'; margin: 0 6px; }
+.task-row:has(.task-project) { gap: 4px; }
+.task-project::after { content: '·'; margin-left: 4px; }
+
+/* Sidebar header: the chat list mode toggle sits beside search. */
+.sidebar-top .sidebar-mode { -webkit-app-region: no-drag; color: var(--muted); }
+.sidebar-top .sidebar-mode:hover:not(:disabled), .sidebar-top .sidebar-mode.active { color: var(--text); }
+.sidebar-top .sidebar-mode + .sidebar-search { margin-left: -6px; }

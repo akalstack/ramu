@@ -22,8 +22,15 @@ export function ProjectsPanel() {
   const addProject = useAddProject()
   const looseChats = ws.tasks.filter((t) => t.projectId === NO_PROJECT && t.status !== 'archived').sort(pinnedFirst)
   const { preferences } = useAppSettings()
-  // The latest chats across every project, each led by its project's name.
-  const latest = preferences.showRecentChats ? ws.tasks.filter((t) => t.status !== 'archived').sort((a, b) => b.lastActiveAt - a.lastActiveAt).slice(0, 5) : []
+  // Relative labels keep aging even when no provider event re-renders the list.
+  const [, setTimeTick] = useState(0)
+  useEffect(() => {
+    const timer = window.setInterval(() => setTimeTick((tick) => tick + 1), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  // Recent mode: every chat in one list by activity, each led by its project's name.
+  const recentMode = preferences.recentChatMode
+  const latest = recentMode ? ws.tasks.filter((t) => t.status !== 'archived').sort((a, b) => b.lastActiveAt - a.lastActiveAt) : []
   // Drag a project by its row to put it somewhere else in the list.
   const [dragging, setDragging] = useState<string | null>(null)
   const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null)
@@ -42,27 +49,24 @@ export function ProjectsPanel() {
       onDragOver={(event) => { if (!hasFiles(event) || addProject.busy) return; event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setFolderOver(true) }}
       onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFolderOver(false) }}
       onDrop={(event) => { if (!hasFiles(event)) return; event.preventDefault(); setFolderOver(false); void addProject.addDropped([...event.dataTransfer.files]) }}>
-      {latest.length > 0 && <>
-        <div className="section-head"><span>{t("Recent chats")}</span></div>
-        {latest.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
-      </>}
       <div className="section-head">
-        <span>{t("Projects")}</span>
+        <span>{recentMode ? t("Recent chats") : t("Projects")}</span>
         <Button className="ghost icon small-icon" aria-label={t("Add project")} title={t("Add project…")} disabled={addProject.busy} onClick={() => void addProject.add()}>
           <FolderPlus size={14} />
         </Button>
       </div>
-      {ws.projects.length === 0 && (
+      {recentMode && latest.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
+      {!recentMode && ws.projects.length === 0 && (
         <div className="add-project">
           <p className="muted hint">{t("Pick a repository, or a folder that holds several repositories. Ramu groups them into one workspace.")}</p>
           <Button className="add-project-btn" disabled={addProject.busy} onClick={() => void addProject.add()}><FolderPlus size={14} /> {t(" Add project…")}</Button>
         </div>
       )}
-      {ws.projects.map((p) => (
+      {!recentMode && ws.projects.map((p) => (
         <ProjectGroup key={p.id} project={p} dnd={dnd} />
       ))}
-      <div className="section-head"><span>{t("Chats")}</span><Button className="ghost icon small-icon" aria-label={t("New chat without a project")} onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></div>
-      {looseChats.map((t) => <TaskRow key={t.id} task={t} />)}
+      {!recentMode && <><div className="section-head"><span>{t("Chats")}</span><Button className="ghost icon small-icon" aria-label={t("New chat without a project")} onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></div>
+      {looseChats.map((t) => <TaskRow key={t.id} task={t} />)}</>}
     </div>
   )
 }

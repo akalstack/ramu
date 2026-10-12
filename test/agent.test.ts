@@ -10,6 +10,7 @@ import { AgentService, claudeDefaultEffort, cleanTitle, conversationHandoff, ser
 import { openDb, type Db } from '../src/main/db'
 import { DEFAULT_AGENT_SETTINGS, DEFAULT_APP_PREFERENCES, type AgentEvent, type AgentSessionInfo, type AgentTask, type AppPreferences, type ProviderCatalog, type UsageReading } from '../src/shared/types'
 import { fakeCodex, fakeQuery as demoQuery } from '../src/main/fakeAgent'
+import { USER_MESSAGE_PREAMBLE } from '../src/main/agentInstructions'
 
 /** Minimal stand-in for the SDK: echoes each user message, asks permission once for the first one. */
 function fakeQuery(calls: Options[]): QueryFn {
@@ -318,6 +319,40 @@ describe('AgentService', () => {
     expect(seen[0]).toContain('Long-running commands')
     expect(seen[1]).not.toContain('Long-running commands')
     expect(seen[1]).toContain('ask_user')
+    expect(seen.every((instructions) => instructions.includes(USER_MESSAGE_PREAMBLE))).toBe(true)
+    svc.stopAll()
+  })
+
+  it('supplies user-message delivery instructions to new and resumed Codex threads', async () => {
+    const connections: import('../src/shared/types').McpConnection[] = []
+    const resumes: (string | null)[] = []
+    const factory: import('../src/main/codex').CodexFactory = (_scope, _settings, emit) => {
+      let connection!: import('../src/shared/types').McpConnection
+      return {
+        setTools: (value) => { connection = value },
+        start: async (_prompt, resume) => {
+          connections.push({ ...connection })
+          resumes.push(resume)
+          emit({ kind: 'init', providerSessionId: 'delivery-thread', model: 'fake', cwd })
+          emit({ kind: 'state', state: 'running' })
+          emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
+        },
+        send: async () => {}, steer: async () => {}, interrupt: async () => {},
+        stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {},
+      }
+    }
+    const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
+    vi.spyOn(svc, 'catalog').mockResolvedValue([])
+    svc.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 't' })
+    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions: false, autoBackgroundSeconds: 0, goals: { mode: 'off', maxTurns: 10 } })
+    const session = svc.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' })
+    await until(() => svc.get(session.id).state === 'idle')
+    await svc.stopAndWait(session.id)
+    await svc.send(session.id, 'follow-up')
+    await until(() => svc.get(session.id).state === 'idle')
+    expect(resumes).toEqual([null, 'delivery-thread'])
+    expect(connections).toHaveLength(2)
+    for (const connection of connections) expect(connection.instructions).toContain(USER_MESSAGE_PREAMBLE)
     svc.stopAll()
   })
 

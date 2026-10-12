@@ -5,7 +5,7 @@ import { ProviderSetupTerminal } from './ProviderSetupTerminal'
 import { beginPaneResize } from './paneResize'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { CalendarClock, Settings, SquarePen, Archive, Files, FolderPlus, GitBranch, Pencil, PanelLeftClose, PanelLeftOpen, PanelRightClose, SquareTerminal, RefreshCcw, Search } from 'lucide-react'
+import { CalendarClock, Settings, SquarePen, Archive, Files, History, Folders, FolderPlus, GitBranch, Pencil, PanelLeftClose, PanelLeftOpen, PanelRightClose, SquareTerminal, RefreshCcw, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildCommands, formatKeys, Palette, useKeybindings, type PaletteMode } from './commands'
 import { invoke, ramu } from './ipc'
@@ -183,6 +183,7 @@ function Shell() {
         <div className="sidebar-top">
           <Button type="button" className="wordmark-link" aria-label={t("Home")} title={t("Home")} onClick={() => ws.showHome()}><Wordmark className="app-wordmark" height={15} /></Button>
           <span className="release-badge">Alpha</span>
+          <Button className={`ghost icon sidebar-mode${preferences.recentChatMode ? ' active' : ''}`} aria-pressed={preferences.recentChatMode} aria-label={preferences.recentChatMode ? t("Group chats by project") : t("Show chats by recent activity")} title={preferences.recentChatMode ? t("Group chats by project") : t("Show chats by recent activity")} onClick={() => void save({ ...preferences, recentChatMode: !preferences.recentChatMode })}>{preferences.recentChatMode ? <Folders size={16} /> : <History size={16} />}</Button>
           <Button className="ghost icon sidebar-search" aria-label={t("Search chats")} title={`${t("Search chats")} (${formatKeys('mod+k')})`} onClick={() => setSearchingChats(true)}><Search size={16} /></Button>
         </div>
         <nav className="sidebar-nav" aria-label={t("Activity")}>

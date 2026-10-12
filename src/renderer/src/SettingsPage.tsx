@@ -34,7 +34,6 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'appearance', title: 'Primary color', words: 'accent blue violet teal theme' },
   { section: 'appearance', title: 'Interface font', words: 'system geist typeface' },
   { section: 'appearance', title: 'Interface font size', words: 'text size zoom' },
-  { section: 'appearance', title: 'Recent chats in sidebar', words: 'sidebar latest hide show' },
   { section: 'appearance', title: 'Crisper text', words: 'font smoothing antialiasing grayscale' },
   { section: 'appearance', title: 'Layout sizes', words: 'reset width height split terminal' },
   { section: 'editor', title: 'Preview tabs', words: 'single click open file' },

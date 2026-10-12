@@ -248,7 +248,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     let request = 0
     const automation = ramu.on('automation:changed', () => { void refresh() })
     const off = ramu.on('agent:event', ({ event }) => {
-      if (event.kind !== 'state') return
+      if (event.kind !== 'state' && event.kind !== 'user') return
       clearTimeout(timer)
       timer = setTimeout(() => {
         const current = ++request

@@ -43,6 +43,10 @@ describe('Ramu goals', () => {
   it('detects through instructions at the start or later, without an interval AI judge', () => {
     const prompt = goalInstructions(prefs.goals, null)
     expect(prompt).toContain('at the start or later')
+    expect(prompt).toContain('Inspect the task first before creating an implicit goal')
+    expect(prompt).toContain('multiple steps or files, tests, a verifiable outcome')
+    expect(prompt).toContain('do not by themselves justify a goal')
+    expect(prompt).toContain('When in doubt, continue the task normally without a goal')
     expect(prompt).toContain('audit ALL requirements')
     expect(goalInstructions({ mode: 'manual', maxTurns: 10 }, null)).toContain('explicitly requests')
     expect(goalInstructions({ mode: 'off', maxTurns: null }, null)).toContain('disabled')
@@ -191,9 +195,14 @@ describe('Ramu goals', () => {
 
   it('registers provider-neutral goal tools and reports tool errors without throwing', () => {
     const calls = new Map<string, (args: any) => any>()
-    registerGoalTools({ registerTool: (name: string, _schema: unknown, call: (args: any) => any) => calls.set(name, call) } as unknown as McpServer, service, id)
+    const descriptions = new Map<string, string>()
+    registerGoalTools({ registerTool: (name: string, schema: { description: string }, call: (args: any) => any) => { calls.set(name, call); descriptions.set(name, schema.description) } } as unknown as McpServer, service, id)
     expect([...calls.keys()]).toEqual(['set_goal', 'get_goal', 'update_goal'])
-    expect(calls.get('set_goal')!({ objective: 'Login' }).isError).toBeUndefined()
+    expect(descriptions.get('set_goal')).toContain('Inspect the task first before creating an implicit goal')
+    expect(descriptions.get('set_goal')).toContain('do not by themselves justify a goal')
+    expect(calls.get('set_goal')!({ objective: 'Check a timestamp' }).isError).toBe(true)
+    expect(service.getGoal(id)).toBeNull()
+    expect(calls.get('set_goal')!({ objective: 'Login', continuationReason: 'User explicitly requested: create a goal to implement login.' }).isError).toBeUndefined()
     expect(calls.get('update_goal')!({ status: 'completed', reason: 'Tests pass' }).isError).toBeUndefined()
     expect(calls.get('update_goal')!({ status: 'active', reason: 'Restart' }).isError).toBe(true)
   })
