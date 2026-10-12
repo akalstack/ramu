@@ -111,3 +111,17 @@ it('uses SDK v2 session, prompt, wait, and interrupt calls', async () => {
   await runner!.interrupt()
   expect(events).toContainEqual(expect.objectContaining({ kind: 'result', isError: false }))
 })
+
+it('preserves reasoning, tool descriptions, inputs, and image results from assistant parts', async () => {
+  await start()
+  const send = (type: string, properties: any) => mock.deliver({ type, properties: { sessionID: 'session', ...properties } })
+  send('message.updated', { info: { id: 'assistant', role: 'assistant' } })
+  send('message.part.updated', { part: { id: 'reason', messageID: 'assistant', type: 'reasoning', text: 'Inspect', time: { start: 1 } } })
+  send('message.part.delta', { messageID: 'assistant', partID: 'reason', field: 'text', delta: ' carefully' })
+  send('message.part.updated', { part: { id: 'tool', messageID: 'assistant', callID: 'call', type: 'tool', tool: 'shell', state: { status: 'completed', title: 'Render preview', input: { command: 'render' }, output: 'Done', attachments: [{ type: 'file', mime: 'image/png', url: 'data:image/png;base64,aGVsbG8=', filename: 'preview.png' }] } } })
+  await until(() => events.some(e => e.kind === 'tool-result'))
+  expect(events.findLast(e => e.kind === 'thinking')).toMatchObject({ text: 'Inspect carefully' })
+  expect(events.find(e => e.kind === 'tool-use')).toMatchObject({ title: 'Render preview', input: expect.stringContaining('render') })
+  expect(events.find(e => e.kind === 'tool-result')).toMatchObject({ content: [expect.objectContaining({ type: 'text' }), expect.objectContaining({ type: 'image', mimeType: 'image/png' })] })
+  mock.finish(); await until(() => events.some(e => e.kind === 'result'))
+})

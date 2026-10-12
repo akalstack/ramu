@@ -5,10 +5,9 @@ import type { AppUpdateStatus } from '../shared/updates'
 import { configureDesktopLanguage, desktopLanguage, t } from './localization'
 import { editorMenu, type EditorMenuOptions } from './editorMenu'
 import { existsSync, writeFileSync } from 'node:fs'
-import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '../shared/types'
+import { type AppPreferences } from '../shared/types'
 import { join } from 'node:path'
-import { app, BrowserWindow, Menu, safeStorage, session, shell, dialog, ipcMain, clipboard } from 'electron'
-import { CompletionService } from './completion'
+import { app, BrowserWindow, Menu, session, shell, dialog, ipcMain, clipboard } from 'electron'
 import { editMenuItems } from './editMenu'
 import { AttachmentStore } from './attachments'
 import { attachmentActions } from './attachmentActions'
@@ -29,6 +28,7 @@ const CSP = [
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
+  "media-src 'self' data:",
   "img-src 'self' data:",
   "worker-src 'self' blob:",
   "connect-src 'self'",
@@ -167,17 +167,6 @@ async function main() {
       } catch (error) { await runtimeInvoke(socketPath, 'host.reply', [payload.requestId, null, String(error)]).catch(() => {}) }
     })()
   })
-  // Completion runs here, not in the daemon: the API key is decrypted with the OS keychain, which only the main process can reach.
-  const completion = new CompletionService({
-    preferences: async () => ({ ...DEFAULT_APP_PREFERENCES, ...(await runtimeInvoke(socketPath, 'settings.app.get') as Partial<AppPreferences>) }),
-    notify: send,
-    readFile: async (taskId, repoId, path) => { try { return (await runtimeInvoke(socketPath, 'files.read', [taskId, repoId, path]) as { content: string }).content } catch { return null } },
-    search: async (taskId, repoId, pattern) => { try { return ((await runtimeInvoke(socketPath, 'files.search', [taskId, { query: pattern, caseSensitive: true, wholeWord: false, regex: true, include: '', exclude: '', repoId }]) as { matches: { path: string; line: number }[] }).matches).map((m) => ({ path: m.path, line: m.line })) } catch { return [] } },
-    keyFile: join(userData, 'completion-key.json'),
-    // Lets tests point the local provider at a mock server.
-    ollamaUrl: process.env.RAMU_OLLAMA_URL,
-    crypto: { available: () => safeStorage.isEncryptionAvailable(), encrypt: (text) => safeStorage.encryptString(text), decrypt: (data) => safeStorage.decryptString(data) },
-  })
   const attachment = attachmentActions(win, new AttachmentStore(join(userData, 'attachments')))
   ipcMain.handle('ramu:invoke', async (event, method: unknown, args: unknown) => {
     if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw new Error('Untrusted IPC sender')
@@ -197,7 +186,7 @@ async function main() {
     }
     if (method === 'editor.menu') {
       const options = args[0] as EditorMenuOptions | null, point = args[1] as { x?: unknown; y?: unknown } | null
-      if (!options || typeof options.selection !== 'string' || options.selection.length > 1_000_000 || !['editable', 'comment', 'definition', 'references', 'rename', 'format'].every((key) => typeof options[key as keyof EditorMenuOptions] === 'boolean') || !point || typeof point.x !== 'number' || typeof point.y !== 'number' || !Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new Error('Invalid editor menu request')
+      if (!options || typeof options.selection !== 'string' || options.selection.length > 1_000_000 || !['editable', 'comment'].every((key) => typeof options[key as keyof EditorMenuOptions] === 'boolean') || !point || typeof point.x !== 'number' || typeof point.y !== 'number' || !Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new Error('Invalid editor menu request')
       return editorMenu(win, options, { x: point.x, y: point.y })
     }
     if (method === 'clipboard.write') {
@@ -218,7 +207,6 @@ async function main() {
       if (typeof args[1] !== 'boolean' || !point || typeof point.x !== 'number' || typeof point.y !== 'number' || !Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new Error('Invalid menu request')
       return attachment.menu(args[0], args[1], { x: point.x, y: point.y })
     }
-    if (method.startsWith('completion.')) return completion.handle(method, args)
     if (method === 'background.start') { await ensureRuntime(userData, daemonPath); return }
     if (method === 'background.login') { if (typeof args[0] !== 'boolean') throw new Error('Invalid startup setting'); return setLoginService(args[0]) }
     if (method === 'background.status') { const status = await runtimeInvoke(socketPath, method); return { ...status, loginEnabled: loginEnabled(userData), bundledVersion: app.getVersion(), bundledBuild: runtimeBuild(daemonPath), updateAvailable: status.build !== runtimeBuild(daemonPath) } }

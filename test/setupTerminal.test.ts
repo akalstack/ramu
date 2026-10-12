@@ -30,3 +30,18 @@ it('migrates the busy-message default to Steer while preserving a newly saved Qu
     expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ busyMessageAction: 'queue', messageBehaviorVersion: 4 })
   } finally { dispatcher.close(); configureProviderBinaries({}) }
 })
+
+it('ignores removed editor settings and preserves an explicit font smoothing choice', () => {
+  let saved: Record<string, unknown> = { formatOnSave: true, languageServers: true, aiCompletion: { enabled: true } }
+  const dispatcher = createDispatcher({ userData: '/tmp/ramu-test', send: () => {}, native: async () => null }, {
+    workspace: { getAppState: (key: string, fallback: unknown) => key === 'app-preferences' ? saved : fallback, setAppState: vi.fn() },
+  } as unknown as Services)
+  try {
+    const preferences = dispatcher.invoke('settings.app.get', [])
+    expect(preferences).toMatchObject({ fontSmoothing: true })
+    for (const key of ['formatOnSave', 'languageServers', 'aiCompletion']) expect(preferences).not.toHaveProperty(key)
+    saved = { ...saved, fontSmoothing: false }
+    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fontSmoothing: false })
+    for (const method of ['files.format', 'lsp.open', 'completion.complete']) expect(() => dispatcher.invoke(method, [])).toThrow()
+  } finally { dispatcher.close(); configureProviderBinaries({}) }
+})

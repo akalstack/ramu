@@ -17,13 +17,12 @@ import { randomUUID } from 'node:crypto'
 import { UsageService } from './usage'
 import { goalPreferencesSchema } from './goals'
 import { codexHookTrust } from './codex'
-import { isAbsolute, join, relative } from 'node:path'
+import { join } from 'node:path'
 import { AttachmentStore, MAX_ATTACHMENT_BYTES } from './attachments'
 import { z } from 'zod'
 import type { AgentService } from './agent'
 import * as files from './files'
 import * as tooling from './tooling'
-import type { LspService } from './lsp'
 import * as git from './git'
 import type { TerminalService } from './pty'
 import type { Workspace } from './workspace'
@@ -51,7 +50,7 @@ const fallbackPreferences = z.object({ switchAt: threshold.default(90), returnAf
 const subagentPreferences = z.object({ mode: z.enum(['native', 'single', 'per-provider']).default('native'), single: fallbackStep.nullable().default(null), perProvider: z.partialRecord(providerId, fallbackStep.nullable()).default({}), byType: z.array(z.object({ id: z.string().min(1).max(100), type: z.string().max(80), step: fallbackStep.nullable() })).max(20).default([]), fallback: z.enum(['same', 'separate']).default('same'), chains: chains.default({}), switchAt: z.union([threshold, z.literal('same')]).default('same'), continueNative: z.boolean().default(true), isolate: z.boolean().default(false), codexHook: z.boolean().default(false), maxConcurrent: z.number().int().min(1).max(8).default(3), shareContext: z.boolean().default(false) })
 const advisorPreferences = z.object({ enabled: z.boolean().default(false), step: fallbackStep.nullable().default(null), wait: z.boolean().default(false) })
 const projectAction = z.object({ id: z.string().min(1).max(64), name: z.string().trim().min(1).max(60), command: z.string().trim().min(1).max(4000), keys: z.string().max(40).optional() })
-const appPreferences = z.object({ language: z.enum(['system', 'en', 'id']).default('system'), recapsEnabled: z.boolean().default(true), recapTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'), accent: z.enum(['blue', 'violet', 'teal']), fontFamily: z.enum(['system', 'geist']), fontSize: z.number().int().min(12).max(18), fontSmoothing: z.boolean().default(true), recentChatMode: z.boolean().default(false), editorFontSize: z.number().int().min(12).max(22), formatOnSave: z.boolean().default(true), languageServers: z.boolean().default(true), aiCompletion: z.object({ enabled: z.boolean(), provider: z.enum(['ollama', 'codestral']), ollamaModel: z.string().max(100), codestralModel: z.string().max(100), codestralUrl: z.string().url().max(200), nextEdit: z.boolean().default(false), nextEditAck: z.boolean().default(false) }).default(DEFAULT_APP_PREFERENCES.aiCompletion), lintWhileEditing: z.boolean().default(true), terminalFontSize: z.number().int().min(12).max(22), previewTabs: z.boolean(), hideEmptyStaged: z.boolean(), pullMode: pullMode.default('rebase'), autoPull: z.boolean().default(true), commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'), commitInstructions: z.string().max(2000).default(''), recentChats: z.number().int().min(3).max(20), terminalTabPosition: z.enum(['top', 'right']), defaultAccess: agentSettings.shape.access, defaultAutoFallback: z.boolean(), busyMessageAction: z.enum(['queue', 'steer']).default('steer'), includeTabContext: z.boolean().default(true), sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH), messageBehaviorVersion: z.literal(4).default(4), defaultChatDockOpen: z.boolean(), favoriteModels: z.array(z.string().max(200)).max(100).default([]), notifyAgentDone: z.boolean().default(true), resumeChatsOnRestart: z.boolean().default(true), asyncQuestions: z.boolean().default(true), autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60), providerBinaries: providerBinaries.default({}), providerUpdateChecks: z.boolean().default(true), appUpdateChecks: z.boolean().default(true), appAutoUpdate: z.boolean().default(false), keepAwake: z.boolean().default(false), keepAwakeWhen: z.enum(['plugged-in', 'always']).default('plugged-in'), showUsageLimits: z.boolean().default(true), fallback: fallbackPreferences.default(DEFAULT_FALLBACK_PREFERENCES), subagents: subagentPreferences.default(DEFAULT_SUBAGENT_PREFERENCES), advisor: advisorPreferences.default(DEFAULT_ADVISOR_PREFERENCES), goals: goalPreferencesSchema.default({ mode: 'auto', maxTurns: 10 }) })
+const appPreferences = z.object({ language: z.enum(['system', 'en', 'id']).default('system'), recapsEnabled: z.boolean().default(true), recapTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'), accent: z.enum(['blue', 'violet', 'teal']), fontFamily: z.enum(['system', 'geist']), fontSize: z.number().int().min(12).max(18), fontSmoothing: z.boolean().default(true), recentChatMode: z.boolean().default(false), editorFontSize: z.number().int().min(12).max(22), lintWhileEditing: z.boolean().default(true), terminalFontSize: z.number().int().min(12).max(22), previewTabs: z.boolean(), hideEmptyStaged: z.boolean(), pullMode: pullMode.default('rebase'), autoPull: z.boolean().default(true), commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'), commitInstructions: z.string().max(2000).default(''), recentChats: z.number().int().min(3).max(20), terminalTabPosition: z.enum(['top', 'right']), defaultAccess: agentSettings.shape.access, defaultAutoFallback: z.boolean(), busyMessageAction: z.enum(['queue', 'steer']).default('steer'), includeTabContext: z.boolean().default(true), sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH), messageBehaviorVersion: z.literal(4).default(4), defaultChatDockOpen: z.boolean(), favoriteModels: z.array(z.string().max(200)).max(100).default([]), notifyAgentDone: z.boolean().default(true), resumeChatsOnRestart: z.boolean().default(true), asyncQuestions: z.boolean().default(true), autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60), providerBinaries: providerBinaries.default({}), providerUpdateChecks: z.boolean().default(true), appUpdateChecks: z.boolean().default(true), appAutoUpdate: z.boolean().default(false), keepAwake: z.boolean().default(false), keepAwakeWhen: z.enum(['plugged-in', 'always']).default('plugged-in'), showUsageLimits: z.boolean().default(true), fallback: fallbackPreferences.default(DEFAULT_FALLBACK_PREFERENCES), subagents: subagentPreferences.default(DEFAULT_SUBAGENT_PREFERENCES), advisor: advisorPreferences.default(DEFAULT_ADVISOR_PREFERENCES), goals: goalPreferencesSchema.default({ mode: 'auto', maxTurns: 10 }) })
 
 const searchOptions = z.object({ query: z.string().min(1).max(1000), caseSensitive: z.boolean(), wholeWord: z.boolean(), regex: z.boolean(), include: z.string().max(2000), exclude: z.string().max(2000), repoId: id.optional() })
 const replacePreview = z.array(z.object({ repoId: id, path: relPath, hash: z.string().regex(/^[a-f0-9]{64}$/), count: z.number().int().positive(), before: z.string().max(160), after: z.string().max(160) })).max(500)
@@ -119,7 +118,6 @@ class KeyedLock {
 }
 
 export interface Services {
-  lsp: LspService
   workspace: Workspace
   terminals: TerminalService
   agents: AgentService
@@ -134,7 +132,7 @@ export interface RuntimeHost {
 }
 
 
-export function createDispatcher(host: RuntimeHost, { lsp, workspace, terminals, agents, schedules, recaps, reviews }: Services) {
+export function createDispatcher(host: RuntimeHost, { workspace, terminals, agents, schedules, recaps, reviews }: Services) {
   configureProviderAccounts(join(host.userData, 'provider-accounts'))
   const providers = new ProviderService(
     () => ({ ...DEFAULT_APP_PREFERENCES, ...workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}) }),
@@ -482,31 +480,10 @@ export function createDispatcher(host: RuntimeHost, { lsp, workspace, terminals,
       args: z.tuple([id, id, relPath]),
       run: (taskId: string, repoId: string, path: string) => files.readImage(cwdOf(taskId, repoId), path),
     },
-    'files.format': {
-      args: z.tuple([id, id, relPath, text]),
-      run: async (taskId: string, repoId: string, path: string, content: string) => { const cwd = cwdOf(taskId, repoId); return tooling.formatBuffer(cwd, await files.resolveInRoot(cwd, path), content) },
-    },
     'files.lint': {
       args: z.tuple([id, id, relPath, text, z.enum(['buffer', 'saved'])]),
       run: async (taskId: string, repoId: string, path: string, content: string, scope: 'buffer' | 'saved') => { const cwd = cwdOf(taskId, repoId); return tooling.lintBuffer(cwd, await files.resolveInRoot(cwd, path), content, scope) },
     },
-    // Language servers see the same unsaved text as the editor, keyed by the real file path.
-    'lsp.open': { args: z.tuple([id, id, relPath, text]), run: async (t: string, r: string, path: string, content: string) => { const cwd = cwdOf(t, r); return lsp.open(`${t}/${r}/${path}`, cwd, await files.resolveInRoot(cwd, path), content) } },
-    'lsp.change': { args: z.tuple([id, id, relPath, text]), run: async (t: string, r: string, path: string, content: string) => { const cwd = cwdOf(t, r); lsp.change(await files.resolveInRoot(cwd, path), content) } },
-    'lsp.close': { args: z.tuple([id, id, relPath]), run: async (t: string, r: string, path: string) => { const cwd = cwdOf(t, r); lsp.close(`${t}/${r}/${path}`, await files.resolveInRoot(cwd, path)) } },
-    'lsp.completion': { args: z.tuple([id, id, id, relPath, z.number().int().min(1), z.number().int().min(1), z.string().max(4).nullable()]), run: async (q: string, t: string, r: string, path: string, line: number, column: number, trigger: string | null) => { const cwd = cwdOf(t, r); return lsp.completion(await files.resolveInRoot(cwd, path), q, line, column, trigger) } },
-    'lsp.resolve': { args: z.tuple([id, id, id, relPath, z.unknown()]), run: async (q: string, t: string, r: string, path: string, item: unknown) => { const cwd = cwdOf(t, r); return lsp.resolve(await files.resolveInRoot(cwd, path), q, item) } },
-    'lsp.hover': { args: z.tuple([id, id, id, relPath, z.number().int().min(1), z.number().int().min(1)]), run: async (q: string, t: string, r: string, path: string, line: number, column: number) => { const cwd = cwdOf(t, r); return lsp.hover(await files.resolveInRoot(cwd, path), q, line, column) } },
-    'lsp.definition': {
-      args: z.tuple([id, id, id, relPath, z.number().int().min(1), z.number().int().min(1)]),
-      run: async (q: string, t: string, r: string, path: string, line: number, column: number) => {
-        const cwd = cwdOf(t, r), found = await lsp.definition(await files.resolveInRoot(cwd, path), q, line, column), bindings = workspace.fileBindings(t)
-        // Only places inside this task's repositories can be opened; library typings elsewhere on disk are dropped.
-        return found.flatMap((hit) => { const binding = bindings.find((b) => { const rel = relative(b.cwd, hit.file); return !rel.startsWith('..') && !isAbsolute(rel) }); return binding ? [{ repoId: binding.repoId, path: relative(binding.cwd, hit.file), range: hit.range }] : [] })
-      },
-    },
-    'lsp.signature': { args: z.tuple([id, id, id, relPath, z.number().int().min(1), z.number().int().min(1), z.string().max(4).nullable()]), run: async (q: string, t: string, r: string, path: string, line: number, column: number, trigger: string | null) => { const cwd = cwdOf(t, r); return lsp.signature(await files.resolveInRoot(cwd, path), q, line, column, trigger) } },
-    'lsp.cancel': { args: z.tuple([id]), run: (requestId: string) => lsp.cancel(requestId) },
     'files.write': {
       args: z.tuple([id, id, relPath, text, z.string().max(128).nullable()]),
       run: (taskId: string, repoId: string, path: string, content: string, baseHash: string | null) => {

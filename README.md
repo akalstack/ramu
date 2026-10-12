@@ -44,12 +44,11 @@
 
 ### Edit, review, and ship
 
-- **An editor beside the chat.** Monaco, project-aware TypeScript/JavaScript language support, and formatting and linting with your repository's own tools.
+- **An editor beside the chat.** Monaco with syntax highlighting, find/replace, diffs, Markdown preview, and linting with your repository's own tools. Saves preserve your buffer exactly.
 - **Review each run.** Browse recorded revisions, compare them with current files, and comment on a file or line. Comments stay local until you send them back to the agent.
 - **Preview file restoration.** Undo from a sent message with a proposed diff and conflict checks that preserve nonoverlapping later edits.
 - **Git in the workspace.** Stage changes, inspect diffs and history, manage branches, stashes, and rebases, and choose a branch when committing and pushing.
 - **Terminals that stay with you.** Run shells in tabs and split panes alongside your code.
-- **Optional AI suggestions.** Enable inline completion with local Ollama or cloud Codestral, and next-edit predictions with Codestral. Both features are off by default.
 
 ### Pick up where you left off
 
@@ -119,10 +118,12 @@ For project layout, development conventions, and validation requirements, read [
 | [Background workflows](docs/AUTOMATION.md) | Schedules, recaps, questions, reviews, undo, and restart recovery |
 | [Goals](docs/GOALS.md) | Automatic continuation, limits, quota waiting, and chat controls |
 | [Agents and routing](docs/AGENTS-NEXT.md) | Helpers, asides, usage limits, fallback, and remaining work |
-| [Editor tooling](docs/EDITOR-TOOLING.md) | Project formatters, linters, language servers, and AI completion |
+| [ACP chat UI](docs/ACP-CHAT-UI.md) | Shared tool descriptions, thinking, rich content, and protocol UI checks |
+| [Editor tooling](docs/EDITOR-TOOLING.md) | Simple editor, project linters, and font smoothing |
 | [Languages](docs/LOCALIZATION.md) | English, Bahasa Indonesia, and translation conventions |
 | [UI and packaging](docs/UI-AND-RELEASES.md) | Components, branding, terminals, and desktop packaging |
 | [Releasing](docs/RELEASING.md) | Release preparation, CI targets, checksums, and signing |
+| [Mobile and remote computers plan](docs/MOBILE-AND-REMOTE.md) | Proposed Android/iOS stack, account-linked computers, relay, and mobile flow |
 
 ## Contributing
 

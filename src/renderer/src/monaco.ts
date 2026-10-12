@@ -1,34 +1,29 @@
 import { nativeMonacoMenu } from './monacoMenu'
-// Monaco with its web workers bundled by Vite (no CDN, no eval).
-import * as monaco from 'monaco-editor'
+// Editor core and text-editing features, without language services or completion providers.
+import * as monaco from 'monaco-editor/editor/editor.api.js'
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker'
-import CssWorker from 'monaco-editor/language/css/css.worker?worker'
-import HtmlWorker from 'monaco-editor/language/html/html.worker?worker'
-import JsonWorker from 'monaco-editor/language/json/json.worker?worker'
-import TsWorker from 'monaco-editor/language/typescript/ts.worker?worker'
+import './monacoLanguages'
+import 'monaco-editor/editor/browser/coreCommands.js'
+import 'monaco-editor/editor/contrib/bracketMatching/browser/bracketMatching.js'
+import 'monaco-editor/editor/contrib/caretOperations/browser/caretOperations.js'
+import 'monaco-editor/editor/contrib/clipboard/browser/clipboard.js'
+import 'monaco-editor/editor/contrib/comment/browser/comment.js'
+import 'monaco-editor/editor/contrib/cursorUndo/browser/cursorUndo.js'
+import 'monaco-editor/editor/contrib/find/browser/findController.js'
+import 'monaco-editor/editor/contrib/folding/browser/folding.js'
+import 'monaco-editor/editor/contrib/hover/browser/hoverContribution.js'
+import 'monaco-editor/editor/contrib/indentation/browser/indentation.js'
+import 'monaco-editor/editor/contrib/lineSelection/browser/lineSelection.js'
+import 'monaco-editor/editor/contrib/linesOperations/browser/linesOperations.js'
+import 'monaco-editor/editor/contrib/links/browser/links.js'
+import 'monaco-editor/editor/contrib/multicursor/browser/multicursor.js'
+import 'monaco-editor/editor/contrib/readOnlyMessage/browser/contribution.js'
+import 'monaco-editor/editor/contrib/tokenization/browser/tokenization.js'
+import 'monaco-editor/editor/contrib/wordOperations/browser/wordOperations.js'
+import 'monaco-editor/editor/contrib/wordPartOperations/browser/wordPartOperations.js'
+import 'monaco-editor/editor/contrib/dropOrPasteInto/browser/copyPasteContribution.js'
 
-self.MonacoEnvironment = {
-  getWorker(_id: string, label: string) {
-    if (label === 'json') return new JsonWorker()
-    if (label === 'css' || label === 'scss' || label === 'less') return new CssWorker()
-    if (label === 'html' || label === 'handlebars' || label === 'razor') return new HtmlWorker()
-    if (label === 'typescript' || label === 'javascript') return new TsWorker()
-    return new EditorWorker()
-  },
-}
-
-// Fallback only: with language servers on (see lsp.ts) Monaco's TypeScript features are switched off and the
-// project's own TypeScript answers instead, including semantic errors. Without a server, files are checked one at a
-// time without the project's tsconfig or node_modules, so unresolved imports would be noise; syntax errors stay on.
-for (const defaults of [monaco.typescript.typescriptDefaults, monaco.typescript.javascriptDefaults]) {
-  defaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: false })
-  defaults.setCompilerOptions({
-    target: monaco.typescript.ScriptTarget.ESNext,
-    jsx: monaco.typescript.JsxEmit.Preserve,
-    allowJs: true,
-    allowNonTsExtensions: true,
-  })
-}
+self.MonacoEnvironment = { getWorker: () => new EditorWorker() }
 
 monaco.editor.defineTheme('ramu', {
   base: 'vs-dark',

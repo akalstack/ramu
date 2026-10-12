@@ -36,20 +36,6 @@ import type {
   Repository,
   RepositoryBinding,
   SaveResult,
-  FormatResult,
-  CompletionRequest,
-  NextEditRequest,
-  NextEditResult,
-  LspCompletionDetail,
-  LspDiagnostics,
-  LspStatus,
-  LspCompletionList,
-  LspHover,
-  LspLocation,
-  LspSignatureHelp,
-  CompletionResult,
-  CompletionStatus,
-  PullProgress,
   LintResult,
   Task,
   TaskUiState,
@@ -87,13 +73,6 @@ export interface RamuMethods {
   'reviews.undoApply'(token: string, fileIds: string[]): ChangeReview
   'reviews.chatUndoPreview'(sessionId: string, userSeq: number): UndoPreview
   'reviews.chatUndoApply'(token: string, fileIds: string[]): void
-  'completion.complete'(request: CompletionRequest): CompletionResult
-  'completion.cancel'(requestId: string): void
-  'completion.nextEdit'(request: NextEditRequest): NextEditResult
-  'completion.status'(): CompletionStatus
-  'completion.setKey'(key: string | null): void
-  'completion.pull'(model: string): void
-  'completion.cancelPull'(model: string): void
   'updates.status'(): Promise<AppUpdateStatus>
   'updates.check'(): Promise<AppUpdateStatus>
   'updates.download'(): Promise<AppUpdateStatus>
@@ -166,17 +145,7 @@ export interface RamuMethods {
   'files.read'(taskId: string, repoId: string, path: string): FileContent
   'files.image'(taskId: string, repoId: string, path: string): string
   'files.write'(taskId: string, repoId: string, path: string, content: string, baseHash: string | null): SaveResult
-  'files.format'(taskId: string, repoId: string, path: string, content: string): FormatResult
   'files.lint'(taskId: string, repoId: string, path: string, content: string, scope: 'buffer' | 'saved'): LintResult
-  'lsp.open'(taskId: string, repoId: string, path: string, text: string): { server: string | null }
-  'lsp.change'(taskId: string, repoId: string, path: string, text: string): void
-  'lsp.close'(taskId: string, repoId: string, path: string): void
-  'lsp.completion'(requestId: string, taskId: string, repoId: string, path: string, line: number, column: number, trigger: string | null): LspCompletionList
-  'lsp.resolve'(requestId: string, taskId: string, repoId: string, path: string, item: unknown): LspCompletionDetail | null
-  'lsp.hover'(requestId: string, taskId: string, repoId: string, path: string, line: number, column: number): LspHover | null
-  'lsp.definition'(requestId: string, taskId: string, repoId: string, path: string, line: number, column: number): LspLocation[]
-  'lsp.signature'(requestId: string, taskId: string, repoId: string, path: string, line: number, column: number, trigger: string | null): LspSignatureHelp | null
-  'lsp.cancel'(requestId: string): void
   'git.status'(taskId: string, repoId: string): GitStatus
   'git.diff'(taskId: string, repoId: string, path: string, staged: boolean): DiffContents
   'git.stage'(taskId: string, repoId: string, paths: string[]): void
@@ -212,7 +181,7 @@ export interface RamuMethods {
   'term.write'(termId: string, data: string): void
   'term.resize'(termId: string, cols: number, rows: number): void
   'term.close'(termId: string): void
-  'editor.menu'(options: { selection: string; editable: boolean; comment: boolean; definition: boolean; references: boolean; rename: boolean; format: boolean }, point: { x: number; y: number }): 'cut' | 'undo' | 'redo' | 'selectAll' | 'find' | 'definition' | 'references' | 'rename' | 'format' | 'comment' | { paste: string } | null
+  'editor.menu'(options: { selection: string; editable: boolean; comment: boolean }, point: { x: number; y: number }): 'cut' | 'undo' | 'redo' | 'selectAll' | 'find' | 'comment' | { paste: string } | null
   'clipboard.write'(text: string): void
   'term.menu'(selection: string, point: { x: number; y: number }): 'selectAll' | 'clear' | { paste: string } | null
   'agent.list'(taskId: string): AgentSessionInfo[]
@@ -294,9 +263,6 @@ export type PushEvents = {
   'term:data': { id: string; data: string }
   'term:exit': { id: string; code: number }
   'fs:changed': { cwd: string; path: string }
-  'lsp:diagnostics': LspDiagnostics
-  'lsp:status': LspStatus
-  'completion:pull': PullProgress
 }
 
 export interface RamuBridge {

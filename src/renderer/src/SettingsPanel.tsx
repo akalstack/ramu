@@ -13,7 +13,6 @@ import { ArrowDown, ArrowUp, GripVertical, Plus, RotateCcw, Trash2 } from 'lucid
 import { useEffect, useState } from 'react'
 import { DEFAULT_APP_PREFERENCES, DEFAULT_SIDEBAR_WIDTH, type AppPreferences, type ModelPreferences, type ModelStep } from '../../shared/types'
 import { GoalSettings } from './GoalSettings'
-import { AiCompletionSettings } from './AiCompletionSettings'
 import { AdvisorSettings, FallbackSettings, SubagentSettings } from './FallbackSettings'
 import { BackgroundControls } from './Automation'
 import { Dropdown } from './Menu'
@@ -77,13 +76,13 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
     finally { setBusy(false) }
   }
   const sizes = (min: number, max: number) => Array.from({ length: max - min + 1 }, (_, index) => ({ value: String(min + index), label: `${min + index} px` }))
-  const toggle = (key: 'previewTabs' | 'formatOnSave' | 'lintWhileEditing' | 'languageServers' | 'hideEmptyStaged' | 'autoPull' | 'defaultAutoFallback' | 'includeTabContext' | 'recapsEnabled' | 'notifyAgentDone' | 'resumeChatsOnRestart' | 'asyncQuestions' | 'showUsageLimits' | 'keepAwake' | 'fontSmoothing', title: string, description: string) => <SettingsRow className="settings-toggle"><span><strong>{t(title)}</strong><span className="muted text-muted-foreground block block small text-caption">{t(description)}</span></span><Switch aria-label={t(title)} checked={appDraft[key]} disabled={busy} onCheckedChange={(checked) => setAppDraft({ ...appDraft, [key]: checked })} /></SettingsRow>
+  const toggle = (key: 'previewTabs' | 'lintWhileEditing' | 'hideEmptyStaged' | 'autoPull' | 'defaultAutoFallback' | 'includeTabContext' | 'recapsEnabled' | 'notifyAgentDone' | 'resumeChatsOnRestart' | 'asyncQuestions' | 'showUsageLimits' | 'keepAwake' | 'fontSmoothing', title: string, description: string) => <SettingsRow className="settings-toggle"><span><strong>{t(title)}</strong><span className="muted text-muted-foreground block block small text-caption">{t(description)}</span></span><Switch aria-label={t(title)} checked={appDraft[key]} disabled={busy} onCheckedChange={(checked) => setAppDraft({ ...appDraft, [key]: checked })} /></SettingsRow>
   const resetKeys: Partial<Record<typeof page, (keyof AppPreferences)[]>> = {
     updates: ['appUpdateChecks', 'appAutoUpdate'],
     providers: ['providerBinaries', 'providerUpdateChecks', 'showUsageLimits'],
     automation: ['keepAwake', 'keepAwakeWhen', 'notifyAgentDone', 'resumeChatsOnRestart', 'asyncQuestions', 'autoBackgroundSeconds', 'recapsEnabled', 'recapTime'],
     appearance: ['language', 'accent', 'fontFamily', 'fontSize', 'fontSmoothing', 'sidebarWidth'],
-    editor: ['previewTabs', 'formatOnSave', 'languageServers', 'aiCompletion', 'lintWhileEditing', 'editorFontSize', 'terminalFontSize', 'terminalTabPosition'],
+    editor: ['previewTabs', 'lintWhileEditing', 'editorFontSize', 'terminalFontSize', 'terminalTabPosition'],
     access: ['defaultAccess', 'defaultAutoFallback', 'fallback'],
     subagents: ['subagents'],
     advisor: ['advisor'],
@@ -124,9 +123,6 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
     </div>}
     {page === 'editor' && <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0">
       {toggle('previewTabs', 'Preview tabs', 'Single-click previews a file. Double-click or edit to keep it open.')}
-      {toggle('formatOnSave', 'Format on save', 'Format with the project\'s own formatter (Prettier, Biome or Oxfmt) before saving. Without one, Monaco formats supported languages.')}
-      {toggle('languageServers', 'Language servers', 'Project-aware completion, hover, go to definition and type errors from the project\'s own TypeScript.')}
-      <AiCompletionSettings value={appDraft.aiCompletion} busy={busy} onChange={(aiCompletion) => setAppDraft({ ...appDraft, aiCompletion })} />
       {toggle('lintWhileEditing', 'Lint while editing', 'Show problems from the project\'s ESLint, Biome or Oxlint as you type. When off, files are checked when opened and saved.')}
       <SettingsRow className=""><strong>{t("Editor font size")}</strong><Dropdown label={t("Editor font size")} value={String(appDraft.editorFontSize)} options={sizes(12, 22)} onChange={(value) => setAppDraft({ ...appDraft, editorFontSize: Number(value) })} /></SettingsRow>
       <SettingsRow className=""><strong>{t("Terminal font size")}</strong><Dropdown label={t("Terminal font size")} value={String(appDraft.terminalFontSize)} options={sizes(12, 22)} onChange={(value) => setAppDraft({ ...appDraft, terminalFontSize: Number(value) })} /></SettingsRow>

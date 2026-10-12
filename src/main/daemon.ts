@@ -4,7 +4,6 @@ import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, rmSync, 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { randomBytes, randomUUID } from 'node:crypto'
-import { LspService } from './lsp'
 import { claudeAcpQuery } from './claudeAcpQuery'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -81,7 +80,6 @@ reviews = new ReviewService(db, workspace, agents, join(userData, 'reviews'), ch
 reviews.recover()
 agents.reviewHooks = { begin: (taskId, scope) => reviews!.begin(taskId, scope), bind: (id, sessionId) => reviews!.bind(id, sessionId), abandon: (id, error) => reviews!.abandon(id, error), followup: (sessionId) => reviews!.beforeFollowup(sessionId), complete: (sessionId) => reviews!.complete(sessionId), validateFeedback: (reviewId) => reviews!.requireOriginalCheckout(reviewId) }
 const recaps = new RecapService(db, workspace, agents, changed)
-const lsp = new LspService(send)
 const dispatcher = createDispatcher({ userData, send, native: (method, path) => {
   if (!clients.size) return Promise.reject(new Error('Open Ramu to use this desktop action'))
   const requestId = randomUUID()
@@ -91,7 +89,7 @@ const dispatcher = createDispatcher({ userData, send, native: (method, path) => 
     // Exactly one UI owns a desktop dialog/action.
     clients.values().next().value?.write(`data: ${JSON.stringify({ channel: 'host:request', payload: { requestId, method, path } })}\n\n`)
   })
-} }, { lsp, workspace, terminals, agents, schedules, recaps, reviews })
+} }, { workspace, terminals, agents, schedules, recaps, reviews })
 const startedAt = Date.now()
 let stopping = false
 async function stop(intentional = false) {
@@ -105,7 +103,7 @@ async function stop(intentional = false) {
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))
   await Promise.all([recaps.settle(), reviews.settle()])
-  terminals.closeAll(); dispatcher.close(); await lsp.stop()
+  terminals.closeAll(); dispatcher.close()
   for (const c of clients) c.end()
   for (const r of nativeRequests.values()) { clearTimeout(r.timer); r.reject(new Error('Service stopping')) }
   mcpHttp.close(); runtime.close(); db.close()
@@ -120,7 +118,7 @@ async function body(req: import('node:http').IncomingMessage): Promise<any> {
 const runtime = createServer(async (req, res) => {
   try {
     if (req.url === '/events' && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' }); res.write(': connected\n\n'); clients.add(res); res.on('close', () => { clients.delete(res); if (!clients.size) lsp.releaseAll() }); return
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' }); res.write(': connected\n\n'); clients.add(res); res.on('close', () => { clients.delete(res) }); return
     }
     if (req.method !== 'POST' || req.url !== '/invoke') { res.writeHead(404).end(); return }
     const { method, args } = await body(req)

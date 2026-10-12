@@ -1,11 +1,9 @@
-// Formats and lints files with the project's own tools (Prettier, Biome, Oxc, ESLint), so the editor
-// follows each repository's configuration. Nothing here writes to disk: formatters read the unsaved
-// buffer from stdin and return text, and linters either read the buffer or inspect the saved file.
+// Lints files with the project’s own tools, using the buffer or saved file.
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, extname, join, relative, sep } from 'node:path'
-import type { FormatResult, LintDiagnostic, LintResult } from '../shared/types'
+import type { LintDiagnostic, LintResult } from '../shared/types'
 
 interface ToolSpec {
   id: string
@@ -15,7 +13,7 @@ interface ToolSpec {
   /** Config file names; a `package.json` key or a direct dependency also counts. */
   configs: string[]
   packageKey?: string
-  /** Native executable (Python, Go, Rust) instead of a Node package. */
+  /** Native executable (Ruff) instead of a Node package. */
   native?: { exe: string }
   /** A `[tool.<name>]` table in pyproject.toml counts as configuration. */
   pyprojectTable?: string
@@ -26,18 +24,12 @@ const SCRIPT = ['js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs', 'mts', 'cts']
 const configNames = (stem: string, extensions: string[]) => extensions.map((extension) => `${stem}.${extension}`)
 
 const TOOLS: Record<string, ToolSpec> = {
-  prettier: { id: 'prettier', label: 'Prettier', pkg: 'prettier', bin: 'prettier', packageKey: 'prettier', configs: ['.prettierrc', ...configNames('.prettierrc', ['json', 'json5', 'yaml', 'yml', 'toml', ...SCRIPT]), ...configNames('prettier.config', SCRIPT)], extensions: [...SCRIPT, 'json', 'jsonc', 'json5', 'css', 'scss', 'less', 'html', 'vue', 'md', 'mdx', 'yaml', 'yml', 'graphql'] },
   biome: { id: 'biome', label: 'Biome', pkg: '@biomejs/biome', bin: 'biome', configs: ['biome.json', 'biome.jsonc'], extensions: [...SCRIPT, 'json', 'jsonc', 'css'] },
-  oxfmt: { id: 'oxfmt', label: 'Oxfmt', pkg: 'oxfmt', bin: 'oxfmt', configs: ['.oxfmtrc.json', '.oxfmtrc.jsonc', ...configNames('oxfmt.config', SCRIPT)], extensions: [...SCRIPT, 'json', 'jsonc', 'json5', 'css', 'scss', 'less', 'html', 'vue', 'md', 'mdx', 'yaml', 'yml', 'toml', 'graphql'] },
   eslint: { id: 'eslint', label: 'ESLint', pkg: 'eslint', bin: 'eslint', packageKey: 'eslintConfig', configs: [...configNames('eslint.config', SCRIPT), '.eslintrc', ...configNames('.eslintrc', ['js', 'cjs', 'json', 'yaml', 'yml'])], extensions: [...SCRIPT, 'vue'] },
   ruff: { id: 'ruff', label: 'Ruff', pkg: 'ruff', bin: 'ruff', native: { exe: 'ruff' }, pyprojectTable: 'tool.ruff', configs: ['ruff.toml', '.ruff.toml'], extensions: ['py', 'pyi'] },
-  gofmt: { id: 'gofmt', label: 'gofmt', pkg: 'gofmt', bin: 'gofmt', native: { exe: 'gofmt' }, configs: ['go.mod'], extensions: ['go'] },
-  rustfmt: { id: 'rustfmt', label: 'rustfmt', pkg: 'rustfmt', bin: 'rustfmt', native: { exe: 'rustfmt' }, configs: ['Cargo.toml'], extensions: ['rs'] },
   oxlint: { id: 'oxlint', label: 'Oxlint', pkg: 'oxlint', bin: 'oxlint', configs: ['.oxlintrc.json', ...configNames('oxlint.config', SCRIPT)], extensions: [...SCRIPT, 'vue'] },
 }
 
-// When a project has several, the first match formats; every detected linter runs and the results merge.
-const FORMATTERS = ['oxfmt', 'biome', 'prettier', 'ruff', 'gofmt', 'rustfmt']
 const LINTERS = ['eslint', 'ruff', 'biome', 'oxlint']
 /** Linters that can read the unsaved buffer from stdin. The others only inspect the saved file. */
 const LIVE_LINTERS = new Set(['eslint', 'ruff'])
@@ -134,22 +126,6 @@ function failure(label: string, result: RunResult, timeoutMs: number): string {
   if (result.timedOut) return `${label} took longer than ${Math.round(timeoutMs / 1000)} seconds.`
   if (result.overflow) return `${label} produced too much output.`
   return firstLines(result.stderr || result.stdout) || `${label} failed.`
-}
-
-export async function formatBuffer(root: string, file: string, content: string, options: ToolingOptions = {}): Promise<FormatResult> {
-  const timeoutMs = options.timeoutMs ?? 10_000
-  const tool = FORMATTERS.map((id) => TOOLS[id]!).filter((spec) => supports(spec, file)).map((spec) => detect(spec, root, file)).find((found) => found)
-  if (!tool) return { tool: null, label: null, content: null, error: null }
-  const id0 = tool.spec.id
-  // rustfmt reads stdin as edition 2015 unless told otherwise, so the crate's own edition is passed.
-  const edition = id0 === 'rustfmt' ? /^\s*edition\s*=\s*"(\d{4})"/m.exec(readText(join(tool.cwd, 'Cargo.toml')) ?? '')?.[1] ?? '2021' : ''
-  const args = id0 === 'biome' ? ['format', `--stdin-file-path=${file}`] : id0 === 'ruff' ? ['format', '--stdin-filename', file, '-'] : id0 === 'gofmt' ? [] : id0 === 'rustfmt' ? ['--emit', 'stdout', '--edition', edition] : ['--stdin-filepath', file]
-  const result = await run(tool, args, content, timeoutMs)
-  const { id, label } = tool.spec
-  if (result.code !== 0 || result.timedOut || result.overflow) return { tool: id, label, content: null, error: failure(label, result, timeoutMs) }
-  // A formatter that prints nothing for a non-empty file has not understood the request; never blank the buffer.
-  if (result.stdout === '' && content !== '') return { tool: id, label, content: null, error: `${label} returned no output.` }
-  return { tool: id, label, content: result.stdout, error: null }
 }
 
 type Severity = LintDiagnostic['severity']

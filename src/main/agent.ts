@@ -1,5 +1,7 @@
 import { providerBinary, providerAccountId } from './providerBinaries'
 import { createAcpRunner, acpModels } from './acp'
+import { toolDescription, toolInput } from './acpEvents'
+import { agentContent } from '../shared/agentContent'
 import { acpHostedRunner } from './acpNativeHost'
 import { providerName, isAcpProvider, supportsProviderAccounts } from '../shared/providers'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
@@ -1442,11 +1444,13 @@ export class AgentService {
     switch (e.kind) {
       case 'user': if (run.promptSeen) this.record(parent, { kind: 'user', text: e.text, agentId: id }); else run.promptSeen = true; break
       case 'text': run.lastText = e.text; this.record(parent, { kind: 'text', text: e.text, agentId: id, ...(e.messageId ? { messageId: `${id}:${e.messageId}` } : {}) }, replacesMessageId ? `${id}:${replacesMessageId}` : undefined); break
+      case 'content': this.record(parent, { ...e, agentId: id, ...(e.messageId ? { messageId: `${id}:${e.messageId}` } : {}) }); break;
+      case 'plan': this.record(parent, { ...e, agentId: id, messageId: `${id}:${e.messageId}` }); break;
       case 'turn-diff': this.record(parent, { ...e, turnId: `${id}:${e.turnId}`, agentId: id }); break
       case 'thinking': this.record(parent, { kind: 'thinking', text: e.text, agentId: id, ...(e.messageId ? { messageId: `${id}:${e.messageId}` } : {}) }, replacesMessageId ? `${id}:${replacesMessageId}` : undefined); break
       case 'error': this.record(parent, { kind: 'error', message: e.message, agentId: id }); break
-      case 'tool-use': run.toolUses++; this.record(parent, { kind: 'tool-use', toolUseId: `${id}:${e.toolUseId}`, name: e.name, summary: e.summary, agentId: id }); this.updateTask(parent, id, { lastTool: e.name, toolUses: run.toolUses }); break
-      case 'tool-result': this.record(parent, { kind: 'tool-result', toolUseId: `${id}:${e.toolUseId}`, isError: e.isError, summary: e.summary, ...(e.running ? { running: true } : {}), agentId: id }); break
+      case 'tool-use': if (!this.events(parent).some(old => old.kind === 'tool-use' && old.toolUseId === `${id}:${e.toolUseId}`)) run.toolUses++; this.record(parent, { ...e, toolUseId: `${id}:${e.toolUseId}`, agentId: id }); this.updateTask(parent, id, { lastTool: e.name, toolUses: run.toolUses }); break
+      case 'tool-result': this.record(parent, { ...e, toolUseId: `${id}:${e.toolUseId}`, agentId: id }); break
       case 'permission-request': this.childRequests.set(e.requestId, id); this.record(parent, { ...e, title: `${run.name}: ${e.title}` }); break
       case 'elicitation': this.childRequests.set(e.requestId, id); this.record(parent, e); break
       case 'question': this.childRequests.set(e.requestId, id); this.record(parent, e); break
@@ -1919,7 +1923,7 @@ export class AgentService {
 
   private async pump(id: string, query: Query): Promise<void> {
     const textStream = new ClaudeTextStream()
-    const partials = new Map<string, Extract<AgentEvent, { kind: 'text' }>>()
+    const partials = new Map<string, Extract<AgentEvent, { kind: 'text' | 'thinking' }>>()
     let timer: ReturnType<typeof setTimeout> | undefined
     const flush = () => {
       if (timer) clearTimeout(timer)
@@ -1927,7 +1931,7 @@ export class AgentService {
       if (this.live.get(id)?.query === query) for (const event of partials.values()) this.record(id, event)
       partials.clear()
     }
-    const streamText = (event: Extract<AgentEvent, { kind: 'text' }>) => {
+    const streamText = (event: Extract<AgentEvent, { kind: 'text' | 'thinking' }>) => {
       partials.set(event.messageId!, event)
       // Keep token bursts from causing a database write and renderer update per token.
       timer ??= setTimeout(flush, 50)
@@ -1962,13 +1966,13 @@ export class AgentService {
     } finally { flush() }
   }
 
-  private handle(id: string, msg: SDKMessage, textStream: ClaudeTextStream, streamText: (event: Extract<AgentEvent, { kind: 'text' }>) => void): void {
+  private handle(id: string, msg: SDKMessage, textStream: ClaudeTextStream, streamText: (event: Extract<AgentEvent, { kind: 'text' | 'thinking' }>) => void): void {
     switch (msg.type) {
       case 'stream_event': {
         const block = textStream.partial(msg)
         if (block) {
           const agentId = msg.parent_tool_use_id ? this.claudeAgentId(id, msg) : undefined
-          streamText({ kind: 'text', text: block.text, messageId: block.messageId, nativeMessageId: block.nativeMessageId, ...(agentId ? { agentId } : {}) })
+          streamText(block.kind === 'thinking' ? { kind: 'thinking', text: block.text, messageId: block.messageId, ...(agentId ? { agentId } : {}) } : { kind: 'text', text: block.text, messageId: block.messageId, nativeMessageId: block.nativeMessageId, ...(agentId ? { agentId } : {}) })
         }
         return
       }
@@ -1990,7 +1994,8 @@ export class AgentService {
         const tag = agentId ? { agentId } : {}
         for (const [index, block] of msg.message.content.entries()) {
           if (block.type === 'text' && block.text.trim()) this.record(id, { kind: 'text', text: block.text, ...(msg.message.id ? { nativeMessageId: msg.message.id } : {}), ...(msg.uuid ? { messageId: `claude:${msg.uuid}:${index}` } : {}), ...tag }, replacements.get(index))
-          else if ((block as { type: string }).type === 'thinking' && (block as { thinking?: string }).thinking?.trim()) { if (!agentId) this.record(id, { kind: 'thinking', text: (block as { thinking: string }).thinking.trim() }) }
+          else if (['image', 'audio', 'resource', 'resource_link'].includes((block as { type: string }).type)) this.record(id, { kind: 'content', content: agentContent(block), messageId: `claude:${msg.uuid}:${index}`, ...tag })
+          else if ((block as { type: string }).type === 'thinking' && (block as { thinking?: string }).thinking?.trim()) { this.record(id, { kind: 'thinking', text: (block as { thinking: string }).thinking.trim(), messageId: `claude:${msg.uuid}:${index}`, ...tag }, replacements.get(index)) }
           else if ((block as { type: string }).type === 'server_tool_use' || (block as { type: string }).type === 'mcp_tool_use') {
             const call = serverToolUse(block as unknown as Record<string, unknown>)
             if (call) this.record(id, { kind: 'tool-use', ...call })
@@ -2009,6 +2014,8 @@ export class AgentService {
               toolUseId: block.id,
               name: block.name,
               summary: summarizeInput(input),
+              title: toolDescription(input),
+              input: toolInput(input),
               ...tag,
             })
           }
@@ -2026,6 +2033,7 @@ export class AgentService {
               toolUseId: block.tool_use_id,
               isError: Boolean(block.is_error),
               summary: summarizeToolResult(block.content),
+              ...(block.content ? { content: agentContent(block.content) } : {}),
               ...(agentId ? { agentId } : {}),
             })
           }
@@ -2106,16 +2114,19 @@ export class AgentService {
         return
       }
     }
-    if (event.kind === 'tool-result' || event.kind === 'turn-diff' || (event.kind === 'text' && event.messageId) || (event.kind === 'thinking' && event.messageId) || event.kind === 'agent') {
+    if (event.kind === 'tool-use' || event.kind === 'tool-result' || (event.kind === 'content' && event.messageId) || event.kind === 'plan' || event.kind === 'turn-diff' || (event.kind === 'text' && event.messageId) || (event.kind === 'thinking' && event.messageId) || event.kind === 'agent') {
       // Streamed text and sub-agent progress update their earlier event in place.
-      const previous = (event.kind === 'tool-result'
+      const previous = (event.kind === 'tool-use'
+        ? this.db.prepare("SELECT seq, event FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'tool-use' AND json_extract(event, '$.toolUseId') = ? AND COALESCE(json_extract(event, '$.agentId'), '') = ? LIMIT 1").get(id, event.toolUseId, event.agentId ?? '')
+        : event.kind === 'tool-result'
         ? this.db.prepare("SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'tool-result' AND json_extract(event, '$.toolUseId') = ? AND COALESCE(json_extract(event, '$.agentId'), '') = ? LIMIT 1").get(id, event.toolUseId, event.agentId ?? '')
         : event.kind === 'turn-diff'
         ? this.db.prepare("SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'turn-diff' AND json_extract(event, '$.turnId') = ? LIMIT 1").get(id, event.turnId)
         : event.kind === 'agent'
         ? this.db.prepare("SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'agent' AND json_extract(event, '$.agentId') = ? LIMIT 1").get(id, event.agentId)
-        : this.db.prepare("SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.messageId') IN (?, ?) LIMIT 1").get(id, (event as { messageId: string }).messageId, replacesMessageId ?? null)) as { seq: number } | undefined
+        : this.db.prepare("SELECT seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.messageId') IN (?, ?) LIMIT 1").get(id, (event as { messageId: string }).messageId, replacesMessageId ?? null)) as { seq: number; event?: string } | undefined
       if (previous) {
+        if (event.kind === 'tool-use' && previous.event) event.at = (JSON.parse(previous.event) as AgentEvent).at
         this.db.prepare('UPDATE agent_events SET event = ? WHERE session_id = ? AND seq = ?').run(JSON.stringify(event), id, previous.seq)
         this.emit(id, event, previous.seq)
         return

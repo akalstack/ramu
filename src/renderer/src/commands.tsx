@@ -101,7 +101,6 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     { id: 'settings.models', title: t("Model sets and reasoning defaults"), category: t("Preferences"), run: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } })) },
     { id: 'file.new', title: t("New file…"), category: 'File', run: () => window.dispatchEvent(new CustomEvent('ramu:create-entry', { detail: { kind: 'file' } })), when: hasTask },
     { id: 'folder.new', title: t("New folder…"), category: 'File', run: () => window.dispatchEvent(new CustomEvent('ramu:create-entry', { detail: { kind: 'dir' } })), when: hasTask },
-    { id: 'file.format', title: t("Format document"), category: 'File', keys: 'shift+alt+f', run: () => window.dispatchEvent(new Event('ramu:format')), when: () => active?.kind === 'file' },
     { id: 'file.save-all', title: t("Save all files"), category: 'File', keys: 'mod+alt+s', run: () => window.dispatchEvent(new Event('ramu:save-all')), when: hasTask },
     { id: 'tab.reopen', title: t("Reopen closed editor"), category: t("View"), keys: 'mod+shift+t', run: () => taskId && ws.reopenClosedView(taskId), when: hasTask },
     { id: 'tab.keep', title: t("Keep preview editor open"), category: t("View"), run: () => { if (taskId && active) ws.keepView(taskId, active.id) }, when: () => !!active && isPreviewable(active) && !!active.preview },
@@ -268,7 +267,7 @@ export function Palette({ ws, commands, mode, onClose }: { ws: WorkspaceApi; com
           hits: m.hits,
           detail: multiRepo ? repoName(f.repoId) : undefined,
           group: 'Files',
-          run: () => taskId && ws.openView(taskId, { kind: 'file', repoId: f.repoId, path: f.path, preview: true, ...(location ? { selection: { line: Math.max(1, Math.min(Number(location[1]), 1_000_000)), column: Math.max(1, Math.min(Number(location[2] ?? 1), 1_000_000)), endColumn: Math.max(1, Math.min(Number(location[2] ?? 1), 1_000_000)), requestId: crypto.randomUUID() } } : {}) }),
+          run: () => taskId && ws.openView(taskId, { kind: 'file', repoId: f.repoId, path: f.path, preview: false, ...(location ? { selection: { line: Math.max(1, Math.min(Number(location[1]), 1_000_000)), column: Math.max(1, Math.min(Number(location[2] ?? 1), 1_000_000)), endColumn: Math.max(1, Math.min(Number(location[2] ?? 1), 1_000_000)), requestId: crypto.randomUUID() } } : {}) }),
           score: m.score,
         })
       }

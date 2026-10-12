@@ -2,7 +2,7 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import type { PushEvents, RamuBridge } from '../shared/api'
 
-const PUSH_EVENTS = new Set<string>(['menu:action', 'updates:changed', 'providers:updates', 'automation:changed', 'notify:inapp', 'notify:open', 'background:connection', 'agent:event', 'term:data', 'term:exit', 'fs:changed', 'lsp:diagnostics', 'lsp:status', 'completion:pull', 'usage:changed', 'aside:changed', 'context:changed'])
+const PUSH_EVENTS = new Set<string>(['menu:action', 'updates:changed', 'providers:updates', 'automation:changed', 'notify:inapp', 'notify:open', 'background:connection', 'agent:event', 'term:data', 'term:exit', 'fs:changed', 'usage:changed', 'aside:changed', 'context:changed'])
 
 const bridge: RamuBridge = {
   invoke: (method, ...args) => ipcRenderer.invoke('ramu:invoke', method, args),

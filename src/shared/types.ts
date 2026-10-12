@@ -124,8 +124,6 @@ export interface FileContent {
   hash: string
 }
 
-/** Result of running the project's formatter on an editor buffer. `tool` is null when the project has none. */
-export interface FormatResult { tool: string | null; label: string | null; content: string | null; error: string | null }
 export interface LintDiagnostic { tool: string; severity: 'error' | 'warning' | 'info'; message: string; code: string | null; url: string | null; line: number; column: number; endLine: number; endColumn: number }
 /** `live` tools lint the unsaved buffer; the rest only describe the saved file. */
 export interface LintResult { tools: { id: string; label: string; live: boolean }[]; diagnostics: LintDiagnostic[]; errors: string[] }
@@ -292,6 +290,25 @@ export interface AgentTask {
   /** Provider switches along the way, oldest first. */
   steps?: { provider: AgentProvider; model?: string; reason: string; at: number }[]
 }
+/** The shared ACP tool taxonomy; native adapters can supply the same metadata. */
+export type AgentToolKind = 'read' | 'edit' | 'delete' | 'move' | 'search' | 'execute' | 'think' | 'fetch' | 'switch_mode' | 'other'
+export type AgentToolStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
+export type AgentContent =
+  | { type: 'text'; text: string }
+  | { type: 'image'; mimeType: string; data?: string; uri?: string; alt?: string }
+  | { type: 'audio'; mimeType: string; data: string }
+  | { type: 'resource'; uri: string; name: string; mimeType?: string; text?: string; blob?: string; description?: string }
+  | { type: 'diff'; path: string; oldText: string | null; newText: string }
+  | { type: 'terminal'; terminalId: string; output?: string }
+  | { type: 'unsupported'; label: string; detail?: string }
+export interface AgentToolDetails {
+  toolKind?: AgentToolKind
+  status?: AgentToolStatus
+  title?: string
+  input?: string
+  content?: AgentContent[]
+  locations?: { path: string; line?: number }[]
+}
 type AgentEventBody =
   | { kind: 'goal'; goal: ChatGoal | null }
   | { kind: 'schedule'; schedule: Schedule }
@@ -300,8 +317,10 @@ type AgentEventBody =
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
   | { kind: 'init'; model: string; cwd: string; providerSessionId: string; provider?: AgentProvider }
   | { kind: 'text'; text: string; messageId?: string; nativeMessageId?: string }
-  | { kind: 'tool-use'; toolUseId: string; name: string; summary: string }
-  | { kind: 'tool-result'; toolUseId: string; isError: boolean; summary: string; running?: boolean }
+  | { kind: 'content'; content: AgentContent[]; messageId?: string }
+  | { kind: 'plan'; messageId: string; entries: { content: string; status: 'pending' | 'in_progress' | 'completed'; priority: 'low' | 'medium' | 'high' }[] }
+  | ({ kind: 'tool-use'; toolUseId: string; name: string; summary: string } & AgentToolDetails)
+  | ({ kind: 'tool-result'; toolUseId: string; isError: boolean; summary: string; running?: boolean } & AgentToolDetails)
   | { kind: 'turn-diff'; turnId: string; diff: string }
   | { kind: 'permission-request'; requestId: string; toolName: string; title: string; detail: string; }
   /** Plan usage a provider reported. Handed to the usage store and never recorded in the chat. */
@@ -394,33 +413,6 @@ export interface SearchMatch { repoId: string; path: string; line: number; colum
 export interface SearchResults { matches: SearchMatch[]; limited: boolean }
 export interface ReplaceFilePreview { repoId: string; path: string; hash: string; count: number; before: string; after: string }
 
-/** 1-based lines and columns, as Monaco uses. */
-export interface LspRange { startLine: number; startColumn: number; endLine: number; endColumn: number }
-export interface LspCompletionItem { label: string; labelDetail: string | null; kind: number; detail: string | null; documentation: string | null; insertText: string; snippet: boolean; range: LspRange | null; sortText: string | null; filterText: string | null; commitCharacters: string[]; deprecated: boolean; raw: unknown }
-export interface LspCompletionList { incomplete: boolean; items: LspCompletionItem[] }
-export interface LspCompletionDetail { detail: string | null; documentation: string | null; additionalEdits: { range: LspRange; text: string }[] }
-export interface LspHover { contents: string[]; range: LspRange | null }
-export interface LspSignatureHelp { activeSignature: number; activeParameter: number; signatures: { label: string; documentation: string | null; parameters: { label: string | [number, number]; documentation: string | null }[] }[] }
-export interface LspLocation { repoId: string; path: string; range: LspRange }
-export interface LspDiagnostic { severity: 'error' | 'warning' | 'info' | 'hint'; message: string; code: string | null; source: string | null; range: LspRange }
-export interface LspDiagnostics { cwd: string; path: string; diagnostics: LspDiagnostic[] }
-export interface LspStatus { cwd: string; server: string; label: string; state: 'ready' | 'failed'; message: string | null }
-
-export type CompletionProviderId = 'ollama' | 'codestral'
-/** Inline (ghost text) completion. Off by default, because a cloud provider receives the code around the cursor. */
-/** An empty `ollamaModel` means the model recommended for this machine; models are kept per provider so they cannot cross over. */
-export interface AiCompletionPreferences { enabled: boolean; provider: CompletionProviderId; ollamaModel: string; codestralModel: string; codestralUrl: string; nextEdit: boolean; /** The user has confirmed that Codestral may receive the file being edited for next-edit predictions. */ nextEditAck: boolean }
-/** `taskId`/`repoId` let the main process read files the current file imports; `context` holds the user's other open files. */
-export interface CompletionRequest { requestId: string; taskId: string; repoId: string; path: string; prefix: string; suffix: string; context: { path: string; content: string }[] }
-export interface CompletionResult { text: string; status: 'ok' | 'disabled' | 'no-key' | 'rate-limited' | 'unavailable' | 'skipped'; message: string | null; retryAfterMs: number | null }
-export interface HardwareInfo { platform: string; arch: string; chip: string; memoryGb: number; unifiedMemory: boolean; gpu: string | null; gpuMemoryGb: number | null }
-/** How well a local model suits this machine: `recommended` is Ramu's pick, `tight` may crowd memory, `too-large` is not advised. */
-export interface OllamaModelOption { id: string; label: string; sizeGb: number; note: string; fit: 'recommended' | 'fits' | 'tight' | 'too-large'; installed: boolean; curated: boolean }
-export interface NextEditRequest { requestId: string; path: string; lines: string[]; cursorLine: number; edits: { line: number; before: string[]; after: string[] }[] }
-export interface NextEditResult { status: 'ok' | 'disabled' | 'unavailable' | 'skipped'; edit: { startLine: number; endLine: number; text: string } | null; message: string | null }
-export interface CompletionStatus { hasKey: boolean; keyHost: string | null; ollama: { running: boolean; models: string[] }; hardware: HardwareInfo; recommended: string; options: OllamaModelOption[] }
-export interface PullProgress { model: string; status: string; completed: number; total: number; done: boolean; error: string | null }
-
 export interface AppPreferences {
   language: 'system' | 'en' | 'id'
   recapsEnabled: boolean
@@ -429,9 +421,6 @@ export interface AppPreferences {
   fontFamily: 'system' | 'geist'
   fontSize: number
   editorFontSize: number
-  formatOnSave: boolean
-  languageServers: boolean
-  aiCompletion: AiCompletionPreferences
   lintWhileEditing: boolean
   terminalFontSize: number
   previewTabs: boolean
@@ -570,7 +559,7 @@ export interface AsideMessage { id: string; role: 'user' | 'assistant'; text: st
 export interface Aside { id: string; sessionId: string; quote: string; quoteFrom: 'assistant' | 'user'; messages: AsideMessage[]; createdAt: number }
 export const DEFAULT_SIDEBAR_WIDTH = 268
 export const SIDEBAR_WIDTH_RANGE = [200, 520] as const
-export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, recentChatMode: false, editorFontSize: 14, formatOnSave: true, languageServers: true, aiCompletion: { enabled: false, provider: 'ollama', ollamaModel: '', codestralModel: '', codestralUrl: 'https://codestral.mistral.ai', nextEdit: false, nextEditAck: false }, lintWhileEditing: true, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', recentChats: 10, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
+export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, recentChatMode: false, editorFontSize: 14, lintWhileEditing: true, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', recentChats: 10, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
 
 
 /** Internal scope ID; omitted from the user project list. */

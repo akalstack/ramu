@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import type { Agent, AgentSideConnection, ContentBlock, SessionNotification } from '@agentclientprotocol/sdk'
+import type { Agent, AgentSideConnection, ContentBlock } from '@agentclientprotocol/sdk'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 import type { AgentEvent, Attachment, ElicitationAction, McpConnection } from '../shared/types'
 import { localAcp } from './acpTransport'
+import { AcpEventEncoder, AcpEvents } from './acpEvents'
 
 /** Ramu-maintained ACP agents retain native extensions missing from stock adapters.
  * The provider drivers own native processes; the app-facing runner only speaks ACP. */
@@ -12,18 +13,12 @@ export function acpHostedRunner(nativeFactory: AgentRunnerFactory): AgentRunnerF
     let sessionId = '', resume: string | null = null, tools: McpConnection | undefined
     let finish: ((reason: 'end_turn' | 'cancelled' | 'refusal') => void) | undefined
     let updates = Promise.resolve()
-    const textSnapshots = new Map<string, string>()
+    const encoder = new AcpEventEncoder(), decoder = new AcpEvents(true)
     const permissions = new Map<string, (allow: boolean | null) => void>()
     const checked = (id: unknown) => { if (id !== sessionId || !sessionId || stopped) throw new Error('ACP session is unavailable') }
     const publish = (server: AgentSideConnection, event: AgentEvent, limit?: boolean) => {
       if (stopped) return
-      let update: SessionNotification['update'] = { sessionUpdate: 'session_info_update' }
-      if (event.kind === 'text') {
-        const key = `${event.agentId ?? ''}:${event.messageId ?? ''}`, previous = textSnapshots.get(key) ?? ''
-        textSnapshots.set(key, event.text)
-        if (event.text.startsWith(previous)) update = { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: event.text.slice(previous.length) } }
-      }
-      update._meta = { ramu: { version: 1, event, usageLimit: !!limit } }
+      const update = encoder.encode(event, !!limit)
       updates = updates.then(() => server.sessionUpdate({ sessionId, update })).catch(() => {})
       if (event.kind === 'result' || event.kind === 'error' || (event.kind === 'state' && event.state === 'failed')) {
         const done = finish; finish = undefined
@@ -42,8 +37,7 @@ export function acpHostedRunner(nativeFactory: AgentRunnerFactory): AgentRunnerF
       },
       sessionUpdate: (notification) => {
         if (notification.sessionId !== sessionId || stopped) return
-        const payload = notification.update._meta?.ramu as { version?: number; event?: AgentEvent; usageLimit?: boolean } | undefined
-        if (payload?.version === 1 && payload.event) emit(payload.event, payload.usageLimit)
+        for (const event of decoder.consume(notification.update)) emit(event, !!(notification.update._meta?.ramu as { usageLimit?: boolean } | undefined)?.usageLimit)
       },
     }, (server): Agent => ({
       initialize: () => ({ protocolVersion: 1, agentCapabilities: { loadSession: true, promptCapabilities: { image: true }, _meta: { ramu: { nativeEvents: 1, steering: true } } }, authMethods: [] }),

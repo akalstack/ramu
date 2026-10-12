@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { createInterface } from 'node:readline'
-import { randomUUID } from 'node:crypto'
+import { AcpEvents } from './acpEvents'
 import type { AgentEvent, AgentModel, AgentScope, AgentSettings, Attachment, McpConnection } from '../shared/types'
 import { providerName } from '../shared/providers'
 import { attachmentPrompt } from './attachments'
@@ -98,10 +98,8 @@ class AcpSession implements AgentRunner {
   private active?: Promise<void>
   private stopped = false
   private loading = false
-  private text = ''
-  private messageId = ''
+  private events = new AcpEvents()
   private pending = new Map<string, Wire>()
-  private tools = new Set<string>()
   private session: Wire = {}
   constructor(private scope: AgentScope, private settings: AgentSettings, private emit: (event: AgentEvent, limit?: boolean) => void, private readOnly = false) {}
   setTools(connection: McpConnection): void { this.connection = connection }
@@ -136,7 +134,7 @@ class AcpSession implements AgentRunner {
   async send(prompt: string, attachments: Attachment[] = []): Promise<void> {
     if (this.active) throw new Error('Wait for the current turn to finish, or interrupt it first.')
     if (!this.rpc || this.stopped) throw new Error('ACP session is not running')
-    this.text = ''; this.messageId = randomUUID(); this.tools.clear()
+    this.events.beginTurn()
     const content: Wire[] = [{ type: 'text', text: attachmentPrompt(prompt, attachments) }]
     for (const file of attachments.filter((f) => f.mimeType.startsWith('image/'))) content.push({ type: 'image', mimeType: file.mimeType, data: readFileSync(file.path).toString('base64') })
     this.emit({ kind: 'state', state: 'running' })
@@ -188,17 +186,13 @@ class AcpSession implements AgentRunner {
     if (m.method === 'session/update') {
       if (this.loading || p.sessionId !== this.sessionId) return
       const u = p.update ?? {}
-      if (u.sessionUpdate === 'agent_message_chunk' && u.content?.type === 'text') { this.text += u.content.text; this.emit({ kind: 'text', text: this.text, messageId: this.messageId }) }
-      if (u.sessionUpdate === 'tool_call' || u.sessionUpdate === 'tool_call_update') {
-        const id = u.toolCallId
-        if (!this.tools.has(id)) { this.tools.add(id); this.emit({ kind: 'tool-use', toolUseId: id, name: u.kind || 'Tool', summary: u.title || '' }) }
-        if (u.status === 'completed' || u.status === 'failed') this.emit({ kind: 'tool-result', toolUseId: id, isError: u.status === 'failed', summary: (u.content ?? []).map((c: Wire) => c.content?.text || c.path || '').join('\n') || u.title || '' })
-      }
+      for (const event of this.events.consume(u)) this.emit(event)
       return
     }
     if (m.id === undefined) return
     if (m.method === 'session/request_permission' || m.method === 'cursor/ask_question' || m.method === 'cursor/create_plan') {
       const id = String(m.id)
+      if (p.toolCall?.toolCallId) for (const event of this.events.consume({ ...p.toolCall, sessionUpdate: 'tool_call_update' })) this.emit(event)
       const interaction = m.method === 'session/request_permission' && this.settings.provider === 'antigravity' && String(p.toolCall?.toolCallId).startsWith('interaction_')
       const question = interaction || m.method === 'cursor/ask_question'
       this.pending.set(id, { ...m, question })

@@ -32,7 +32,7 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
 it('offers review comments and copy in read-only editors without edit actions', async () => {
-  const result = editorMenu(window, { selection: 'selected code', editable: false, comment: true, definition: false, references: false, rename: false, format: false }, { x: 10, y: 10 })
+  const result = editorMenu(window, { selection: 'selected code', editable: false, comment: true }, { x: 10, y: 10 })
   expect(desktop.items.map((item) => item.label)).not.toContain('Paste')
   expect(desktop.items.map((item) => item.label)).not.toContain('Cut')
   desktop.items.find((item) => item.label === 'Add review comment')!.click!()
@@ -42,7 +42,7 @@ it('offers review comments and copy in read-only editors without edit actions', 
 it('waits for native clipboard cut before editing the Monaco buffer', async () => {
   let finish!: () => void
   desktop.writeText.mockReturnValue(new Promise<void>((resolve) => { finish = resolve }))
-  const result = editorMenu(window, { selection: 'selected code', editable: true, comment: false, definition: true, references: true, rename: true, format: true }, { x: 10, y: 10 })
+  const result = editorMenu(window, { selection: 'selected code', editable: true, comment: false }, { x: 10, y: 10 })
   desktop.items.find((item) => item.label === 'Cut')!.click!()
   desktop.closed()
   expect(desktop.writeText).toHaveBeenCalledWith('selected code')
@@ -52,7 +52,7 @@ it('waits for native clipboard cut before editing the Monaco buffer', async () =
 
 it('returns native editor paste after menu dismissal without truncating it', async () => {
   desktop.readText.mockResolvedValue('pasted code')
-  const result = editorMenu(window, { selection: '', editable: true, comment: false, definition: false, references: false, rename: false, format: false }, { x: 10, y: 10 })
+  const result = editorMenu(window, { selection: '', editable: true, comment: false }, { x: 10, y: 10 })
   desktop.items.find((item) => item.label === 'Paste')!.click!()
   desktop.closed()
   expect(await result).toEqual({ paste: 'pasted code' })

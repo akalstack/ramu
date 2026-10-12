@@ -36,7 +36,7 @@
   --font-caption: calc(var(--ui-font-size) - 2px);
   --font-control: calc(var(--ui-font-size) - 1px);
   --font-body: var(--ui-font-size);
-  --font-chat: calc(var(--ui-font-size) + 1px);
+  --font-chat: var(--ui-font-size);
   --font-heading: calc(var(--ui-font-size) + 4px);
   --font-hero: calc(var(--ui-font-size) + 12px);
   --chat-column-width: 760px;
@@ -68,7 +68,7 @@
   @apply [color-scheme:dark];
 }
 /* Grayscale antialiasing is the default; the Appearance setting switches back to the heavier macOS rendering. */
-:root:not([data-font-smoothing='system']) body { @apply [-webkit-font-smoothing:antialiased]; @apply [-moz-osx-font-smoothing:grayscale]; }
+:root:not([data-font-smoothing='system']) { @apply [-webkit-font-smoothing:antialiased]; @apply [-moz-osx-font-smoothing:grayscale]; }
 body.resizing { @apply cursor-col-resize; }
 body.resizing * { @apply pointer-events-none; }
 
@@ -478,9 +478,6 @@ button.scm-sync:hover:not(:disabled) { @apply [background:var(--pressed)]; }
 /* Messages and the composer share the reading size; work summaries use the control scale. */
 .msg-wrap.user { @apply max-w-[82%]; }
 
-/* Working indicator drawn from the logo: two dots and the ring-dot, rolling in a wave; the ring fills as the wave lands on it. */
-@keyframes ramu-ring { 0%, 60%, 100% { transform: translateY(0) scale(1); background: transparent; } 25% { transform: translateY(-4px) scale(1.15); background: var(--accent); } }
-
 /* One border per surface, like the chat composer: the card holds the text box, which has no frame of its own. */
 @keyframes fade-only { from { opacity: 0; } }
 
@@ -514,8 +511,16 @@ button.scm-sync:hover:not(:disabled) { @apply [background:var(--pressed)]; }
 ::highlight(chat-find) { @apply [background-color:color-mix(in_srgb,_var(--accent)_32%,_transparent)]; @apply text-inherit; }
 ::highlight(chat-find-current) { @apply [background-color:var(--accent)]; @apply [color:#fff]; }
 
-/* The working loader is three equal white dots in a wave; inside the small round jump button they stay well inside the circle. */
-@keyframes ramu-wave { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 25% { transform: translateY(-3px); opacity: 1; } }
+/* A small, slow bounce keeps loading visible without distracting from the conversation. */
+@keyframes loading-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.35; } 30% { transform: translateY(-1.5px); opacity: 1; } }
+.jump-bottom {
+  border: 1px solid var(--edge);
+  color: var(--soft);
+  background: color-mix(in srgb, var(--canvas) 88%, transparent);
+  transition: background-color 120ms var(--ease);
+}
+.jump-bottom:hover:not(:disabled) { border-color: var(--edge); color: var(--soft); background: var(--raised); }
+.jump-bottom:active { translate: none; }
 /* The chat title is left-aligned inside its switcher, with the chevron right after the text. */
 
 .provider-binary-input { @apply flex; @apply items-center; @apply gap-2.5; }
@@ -670,3 +675,6 @@ button.git-stash-new:hover:not(:disabled) { @apply [background:var(--hover)]; @a
 /* Reset confirmations sit above the Settings dialog that opened them. */
 [data-slot='alert-dialog-overlay'] { @apply z-1180; }
 [data-slot='alert-dialog-content'] { @apply z-1181; }
+
+/* Monaco and diff surfaces follow the same smoothing preference as the interface. */
+.monaco-editor, .monaco-diff-editor, .monaco-component { -webkit-font-smoothing: inherit; -moz-osx-font-smoothing: inherit; }

@@ -1,12 +1,14 @@
 import { elicitationRequest, elicitationContent } from './elicitation'
 import { attachmentPrompt } from './attachments'
+import { agentContent } from '../shared/agentContent'
+import { toolDescription, toolInput } from './acpEvents'
 // Codex's local app-server protocol, using the user's existing CLI login.
 import { randomUUID } from 'node:crypto'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { createInterface } from 'node:readline'
-import type { UsageReading, Attachment, AgentEvent, AgentElicitation, ElicitationAction, AgentModel, AgentScope, AgentSettings, AgentSessionInfo, AgentTask, McpConnection } from '../shared/types'
+import type { UsageReading, Attachment, AgentEvent, AgentElicitation, ElicitationAction, AgentContent, AgentModel, AgentScope, AgentSettings, AgentSessionInfo, AgentTask, McpConnection } from '../shared/types'
 import type { HelperHistory } from './helperHistory'
 
 // Wire messages are validated by the app-server. Only the consumed fields cross into our domain.
@@ -114,6 +116,7 @@ class CodexSession implements CodexRunner {
   private readonly toolPatches = new Map<string, Wire[]>()
   private readonly completedTools = new Set<string>()
   private readonly messages = new Map<string, string>()
+  private readonly thoughts = new Map<string, string>()
   /** Sub-agent threads this thread spawned, so their events can be shown as theirs. */
   private readonly agents = new Set<string>()
   private readonly pending = new Map<string, { id: number | string; questions?: Wire[]; permissions?: Wire; elicitation?: AgentElicitation }>()
@@ -276,9 +279,9 @@ class CodexSession implements CodexRunner {
     const item = p.item ?? {}, complete = method === 'item/completed'
     if (item.type === 'agentMessage' && complete && item.text) { this.messages.delete(`${threadId}:${item.id}`); this.emit({ kind: 'text', text: item.text, messageId: `${threadId}:${item.id}`, ...tag }) }
     const extra = toolOfOtherItem(item)
-    if (extra) this.emit(complete ? { kind: 'tool-result', toolUseId: this.toolId(threadId, item.id), isError: item.status === 'failed', summary: extra.result, ...tag } : { kind: 'tool-use', toolUseId: this.toolId(threadId, item.id), name: extra.name, summary: extra.summary, ...tag })
+    if (extra) this.emit(complete ? { kind: 'tool-result', toolUseId: this.toolId(threadId, item.id), isError: item.status === 'failed', summary: extra.result, content: extra.content, ...tag } : { kind: 'tool-use', toolUseId: this.toolId(threadId, item.id), name: extra.name, summary: extra.summary, title: extra.title, content: extra.content, ...tag })
     if (item.type === 'commandExecution' || item.type === 'fileChange' || item.type === 'mcpToolCall') {
-      if (!complete) this.emit({ kind: 'tool-use', toolUseId: this.toolId(threadId, item.id), name: item.type === 'commandExecution' ? 'Bash' : item.type === 'fileChange' ? 'Edit' : item.tool || 'Tool', summary: item.command || (item.changes ?? []).map((c: Wire) => c.path).join(', ') || item.server || '', ...tag })
+      if (!complete) this.emit({ kind: 'tool-use', toolUseId: this.toolId(threadId, item.id), name: item.type === 'commandExecution' ? 'Bash' : item.type === 'fileChange' ? 'Edit' : item.tool || 'Tool', summary: item.command || (item.changes ?? []).map((c: Wire) => c.path).join(', ') || item.server || '', title: typeof item.description === 'string' ? item.description : toolDescription(item.arguments), input: toolInput(item.arguments ?? item.command), ...tag })
       else this.emit({ kind: 'tool-result', toolUseId: this.toolId(threadId, item.id), isError: item.status === 'failed' || (item.exitCode != null && item.exitCode !== 0), summary: this.toolResult(threadId, item), ...tag })
     }
   }
@@ -294,6 +297,7 @@ class CodexSession implements CodexRunner {
     if (this.stopped || !m.method) return
     const p = m.params ?? {}
     const sub = !!p.threadId && !!this.threadId && p.threadId !== this.threadId
+    if (m.method === 'item/reasoning/summaryTextDelta' && typeof p.itemId === 'string' && typeof p.delta === 'string' && (!sub || this.agents.has(p.threadId))) { const key = `${p.threadId ?? this.threadId}:${p.itemId}`; const text = (this.thoughts.get(key) ?? '') + p.delta; this.thoughts.set(key, text); this.emit({ kind: 'thinking', text, messageId: this.toolId(p.threadId ?? this.threadId, p.itemId), ...(sub ? { agentId: p.threadId } : {}) }); return }
     // Requests from a sub-agent thread need an answer like any other, or that agent waits forever.
     if (sub && m.id === undefined) { if (this.agents.has(p.threadId)) this.handleAgent(p.threadId, m.method, p); return }
     if (m.id !== undefined) {
@@ -368,12 +372,12 @@ class CodexSession implements CodexRunner {
       if (item.type === 'collabAgentToolCall') this.trackAgents(item)
       const extra = toolOfOtherItem(item)
       if (extra) {
-        if (!complete) this.emit({ kind: 'tool-use', toolUseId: item.id, name: extra.name, summary: extra.summary })
-        else this.emit({ kind: 'tool-result', toolUseId: item.id, isError: item.status === 'failed', summary: extra.result })
+        if (!complete) this.emit({ kind: 'tool-use', toolUseId: item.id, name: extra.name, summary: extra.summary, title: extra.title, content: extra.content })
+        else this.emit({ kind: 'tool-result', toolUseId: item.id, isError: item.status === 'failed', summary: extra.result, content: extra.content })
       }
       if (item.type === 'commandExecution' || item.type === 'fileChange' || item.type === 'mcpToolCall') {
-        if (!complete) this.emit({ kind: 'tool-use', toolUseId: item.id, name: item.type === 'commandExecution' ? 'Bash' : item.type === 'fileChange' ? 'Edit' : item.tool || 'Tool', summary: item.command || (item.changes ?? []).map((c: Wire) => c.path).join(', ') || item.server || '' })
-        else this.emit({ kind: 'tool-result', toolUseId: item.id, isError: item.status === 'failed' || (item.exitCode != null && item.exitCode !== 0), summary: this.toolResult(this.threadId, item) })
+        if (!complete) this.emit({ kind: 'tool-use', toolUseId: item.id, name: item.type === 'commandExecution' ? 'Bash' : item.type === 'fileChange' ? 'Edit' : item.tool || 'Tool', summary: item.command || (item.changes ?? []).map((c: Wire) => c.path).join(', ') || item.server || '', title: typeof item.description === 'string' ? item.description : toolDescription(item.arguments), input: toolInput(item.arguments ?? item.command) })
+        else this.emit({ kind: 'tool-result', toolUseId: item.id, isError: item.status === 'failed' || (item.exitCode != null && item.exitCode !== 0), summary: this.toolResult(this.threadId, item), ...(Array.isArray(item.result?.content) ? { content: agentContent(item.result.content) } : {}) })
       }
     }
     if (m.method === 'serverRequest/resolved') {
@@ -510,7 +514,7 @@ export function codexAgentStatus(value: unknown): 'running' | 'completed' | 'fai
 }
 
 /** Codex items that are tool calls but not commands, edits or MCP calls. */
-export function toolOfOtherItem(item: Wire): { name: string; summary: string; result: string } | null {
+export function toolOfOtherItem(item: Wire): { name: string; summary: string; result: string; title?: string; content?: AgentContent[] } | null {
   if (item.type === 'webSearch') {
     const action = item.action ?? {}
     if (action.type === 'openPage') return { name: 'WebFetch', summary: String(action.url ?? item.query ?? ''), result: String(action.url ?? 'Opened page') }
@@ -518,8 +522,8 @@ export function toolOfOtherItem(item: Wire): { name: string; summary: string; re
     const query = String(action.query ?? item.query ?? '')
     return { name: 'WebSearch', summary: query, result: query ? `Searched: ${query}` : 'Searched the web' }
   }
-  if (item.type === 'imageView') return { name: 'Read', summary: String(item.path ?? ''), result: String(item.path ?? 'Viewed image') }
-  if (item.type === 'dynamicToolCall') return { name: String(item.tool ?? 'Tool'), summary: item.arguments ? JSON.stringify(item.arguments).slice(0, 200) : '', result: JSON.stringify(item.contentItems ?? item.success ?? '').slice(0, 2000) }
+  if (item.type === 'imageView') return { name: 'Read', title: 'View image', summary: String(item.path ?? ''), result: String(item.path ?? 'Viewed image'), content: [{ type: 'image', mimeType: 'image/png', uri: String(item.path ?? '') }] }
+  if (item.type === 'dynamicToolCall') return { name: String(item.tool ?? 'Tool'), summary: item.arguments ? JSON.stringify(item.arguments).slice(0, 200) : '', result: JSON.stringify(item.contentItems ?? item.success ?? '').slice(0, 2000), ...(Array.isArray(item.contentItems) ? { content: agentContent(item.contentItems) } : {}), ...(typeof item.description === 'string' ? { title: item.description } : {}) }
   if (item.type === 'collabAgentToolCall') return { name: 'Agent', summary: String(item.tool ?? item.prompt ?? ''), result: String(item.status ?? '') }
   return null
 }

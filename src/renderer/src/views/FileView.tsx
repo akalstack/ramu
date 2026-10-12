@@ -6,11 +6,8 @@ import { MarkdownPreview } from '../MarkdownPreview'
 import type { LintResult, RepositoryBinding, ViewDescriptor } from '../../../shared/types'
 import { useAppSettings } from '../AppSettings'
 import { invoke, ramu } from '../ipc'
-import { setAiCompletionEnabled, setNextEditEnabled } from '../aiCompletion'
-import { openLspDocument, setFileOpener, setLanguageServersEnabled } from '../lsp'
 import { registerBuffer, registerSelection } from '../editorBuffers'
 import { monaco } from '../monaco'
-import { notifyError } from '../Notifications'
 import { errorText } from '../TaskPane'
 import { useWorkspace } from '../workspace'
 
@@ -22,9 +19,6 @@ const isMarkdown = (path: string) => /\.(md|markdown|mdx)$/i.test(path)
 type FileViewDesc = Extract<ViewDescriptor, { kind: 'file' }>
 
 const SEVERITY = { error: monaco.MarkerSeverity.Error, warning: monaco.MarkerSeverity.Warning, info: monaco.MarkerSeverity.Info }
-/** Only the editor the user last typed in answers the Format Document command. */
-let lastFocused: monaco.editor.IStandaloneCodeEditor | null = null
-
 interface Problems { errors: number; warnings: number; tools: string[]; failures: string[] }
 const NO_PROBLEMS: Problems = { errors: 0, warnings: 0, tools: [], failures: [] }
 
@@ -58,9 +52,7 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
     const [error, setError] = useState<string | null>(null)
     const [conflict, setConflict] = useState<Conflict | null>(null)
     const [comparing, setComparing] = useState(false)
-    const [aiStatus, setAiStatus] = useState<string | null>(null)
     const [problems, setProblems] = useState<Problems>(NO_PROBLEMS)
-    const syncLspRef = useRef<() => void>(() => { })
     const prefsRef = useRef(preferences)
     prefsRef.current = preferences
     const conflictRef = useRef(conflict)
@@ -107,14 +99,6 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
             // Read-only until the disk content arrives, so early keystrokes cannot be clobbered by the load.
             readOnly: true,
         })
-        // The language server follows the editor buffer once the file has loaded, and only while servers are enabled.
-        let closeLsp: (() => void) | null = null
-        const syncLsp = () => {
-            if (disposed || !loaded.current) return
-            if (prefsRef.current.languageServers && !closeLsp) closeLsp = openLspDocument(model, { taskId, repoId: binding.repoId, path: view.path, cwd: binding.cwd })
-            else if (!prefsRef.current.languageServers && closeLsp) { closeLsp(); closeLsp = null }
-        }
-        syncLspRef.current = syncLsp
         const unregisterBuffer = registerBuffer(ws.workspaceOf(taskId), binding.repoId, view.path, () => loaded.current ? model.getValue() : undefined)
         const unregisterSelection = registerSelection(view.id, () => {
             const range = editor.getSelection()
@@ -170,35 +154,9 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
             if (changed) publish([])
         }
 
-        /** Applies formatted text as one undoable edit that touches only the changed middle, so the cursor stays put. */
-        const applyFormatted = (text: string) => {
-            const before = model.getValue()
-            let start = 0
-            while (start < before.length && start < text.length && before[start] === text[start]) start++
-            let endBefore = before.length, endText = text.length
-            while (endBefore > start && endText > start && before[endBefore - 1] === text[endText - 1]) { endBefore--; endText-- }
-            const from = model.getPositionAt(start), to = model.getPositionAt(endBefore)
-            editor.pushUndoStop()
-            editor.executeEdits('ramu-format', [{ range: new monaco.Range(from.lineNumber, from.column, to.lineNumber, to.column), text: text.slice(start, endText) }])
-            editor.pushUndoStop()
-        }
-        /** Formats with the project's own formatter, or Monaco's built-in one when the project has none. */
-        const format = async () => {
-            if (!loaded.current || disposed) return
-            const version = model.getVersionId()
-            let result
-            try { result = await invoke('files.format', taskId, binding.repoId, view.path, model.getValue()) } catch (e) { notifyError(errorText(e), 'Format'); return }
-            if (disposed || model.getVersionId() !== version) return
-            if (result.error) { notifyError(`${result.label}: ${result.error}`, 'Format'); return }
-            if (result.tool === null) { await editor.getAction('editor.action.formatDocument')?.run(); return }
-            if (result.content !== null && result.content !== model.getValue()) applyFormatted(result.content)
-        }
-
         const save = async () => {
             if (saving || !loaded.current || disposed) return
             saving = true
-            if (prefsRef.current.formatOnSave) try { await format() } catch { /* saving continues without formatting */ }
-            if (disposed) { saving = false; return }
             const version = model.getAlternativeVersionId()
             const content = model.getValue()
             try {
@@ -223,10 +181,6 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
         const saveAll = () => { if (isDirty()) void save() }
         window.addEventListener('ramu:save-all', saveAll)
         const sub = model.onDidChangeContent(() => { if (loaded.current && !changingBuffer.current) { setDirty(view.id, isDirty()); dropFileBasedMarkers(); scheduleLint() } })
-        const focusSub = editor.onDidFocusEditorText(() => { lastFocused = editor })
-        const nativeFormat = editor.addAction({ id: 'ramu.formatDocument', label: t("Format document"), run: () => format() })
-        const formatCommand = () => { if (lastFocused === editor && host.current?.offsetParent !== null) void format() }
-        window.addEventListener('ramu:format', formatCommand)
 
         invoke('files.read', taskId, binding.repoId, view.path).then(
             (f) => {
@@ -240,7 +194,6 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
                 setLoadedTick((tick) => tick + 1)
                 revealMatch()
                 void lint('saved')
-                syncLsp()
             },
             (e) => { if (!disposed) setError(errorText(e)) },
         )
@@ -268,13 +221,8 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
             disposed = true
             off()
             window.removeEventListener('ramu:save-all', saveAll)
-            window.removeEventListener('ramu:format', formatCommand)
             clearTimeout(lintTimer)
             for (const id of owners.keys()) monaco.editor.setModelMarkers(model, `ramu-lint:${id}`, [])
-            if (lastFocused === editor) lastFocused = null
-            nativeFormat.dispose()
-            focusSub.dispose()
-            closeLsp?.(); syncLspRef.current = () => { }
             sub.dispose()
             editor.dispose()
             unregisterBuffer()
@@ -283,22 +231,6 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
             editorRef.current = null
         }
     }, [taskId, binding.repoId, binding.cwd, view.path, view.id, setDirty])
-
-    useEffect(() => { setLanguageServersEnabled(preferences.languageServers); syncLspRef.current() }, [preferences.languageServers])
-    useEffect(() => {
-        setFileOpener((openTaskId, repoId, path, selection) => ws.openView(openTaskId, { kind: 'file', repoId, path, selection: { ...selection, requestId: crypto.randomUUID() } }))
-        return () => setFileOpener(null)
-    }, [ws])
-    useEffect(() => {
-        setAiCompletionEnabled(preferences.aiCompletion.enabled)
-        setNextEditEnabled(preferences.aiCompletion.enabled && preferences.aiCompletion.nextEdit && preferences.aiCompletion.nextEditAck && preferences.aiCompletion.provider === 'codestral')
-        if (!preferences.aiCompletion.enabled) setAiStatus(null)
-    }, [preferences.aiCompletion.enabled, preferences.aiCompletion.nextEdit, preferences.aiCompletion.nextEditAck, preferences.aiCompletion.provider])
-    useEffect(() => {
-        const onStatus = (event: Event) => setAiStatus((event as CustomEvent<string | null>).detail)
-        window.addEventListener('ramu:completion-status', onStatus)
-        return () => window.removeEventListener('ramu:completion-status', onStatus)
-    }, [])
 
     const [wrap, setWrapState] = useState(readWrap)
     const setWrap = (on: boolean) => { try { localStorage.setItem(WRAP_KEY, on ? 'on' : 'off') } catch { /* private mode */ } window.dispatchEvent(new CustomEvent('ramu:word-wrap', { detail: on })) }
@@ -342,7 +274,6 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
             <div className="view-header [&_.path]:flex-1 [&_button]:text-control [&_button]:p-[2px_8px] [&_[aria-pressed='true']]:bg-hover [&_[aria-pressed='true']]:text-foreground flex gap-2.5 items-center h-8 p-[0_12px] flex-none min-w-0 text-control text-soft">
                 <span className="strong font-semibold">{binding.repoName}</span>
                 <span className="path text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap min-w-0">{view.path}</span>
-                {aiStatus && preferences.aiCompletion.enabled && <span className="lint-summary [&.has-errors]:text-bad [&.has-warnings]:text-warn text-caption text-muted-foreground whitespace-nowrap has-warnings" title={aiStatus}>{t("AI completion paused")}</span>}
                 {(problems.tools.length > 0 || problems.failures.length > 0) && <span className={`lint-summary [&.has-errors]:text-bad [&.has-warnings]:text-warn text-caption text-muted-foreground whitespace-nowrap${problems.errors ? ' has-errors' : problems.warnings ? ' has-warnings' : ''}`} title={[...problems.failures, `Checked by ${problems.tools.join(', ')}`].filter(Boolean).join('\n')}>
                     {problems.failures.length > 0 ? t("Lint unavailable") : !problems.errors && !problems.warnings ? t("{0} · no problems", { "0": problems.tools.join(' · ') }) : `${problems.errors ? `${problems.errors} error${problems.errors > 1 ? 's' : ''}` : ''}${problems.errors && problems.warnings ? ', ' : ''}${problems.warnings ? `${problems.warnings} warning${problems.warnings > 1 ? 's' : ''}` : ''}`}
                 </span>}

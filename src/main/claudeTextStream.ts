@@ -1,9 +1,9 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 
-interface TextBlock { nativeMessageId: string; index: number; text: string; messageId: string; completed: boolean }
+interface TextBlock { kind?: 'thinking'; nativeMessageId: string; index: number; text: string; messageId: string; completed: boolean }
 interface Message { nativeMessageId: string; parent: string | null; blocks: Map<number, TextBlock>; stopped: boolean }
 
-/** Keep interleaved main/helper streams separate. Only text is exposed; tools wait for complete blocks. */
+/** Keep interleaved main/helper streams separate. Text and provider-exposed thinking stay separate; tools wait for complete blocks. */
 export class ClaudeTextStream {
   private readonly completed = new Map<string, string | null>()
   private readonly lanes = new Map<string, string>()
@@ -28,6 +28,17 @@ export class ClaudeTextStream {
       this.lanes.delete(lane)
       return
     }
+    if (event.type === 'content_block_start' && event.content_block.type === 'thinking' && typeof event.content_block.thinking === 'string') {
+      const block: TextBlock = { kind: 'thinking', nativeMessageId: message.nativeMessageId, index: event.index, text: event.content_block.thinking, messageId: `claude-stream:${key}:${event.index}`, completed: false }
+      message.blocks.set(event.index, block)
+      return block.text.trim() ? { ...block } : undefined
+    }
+    if (event.type === 'content_block_delta' && event.delta.type === 'thinking_delta') {
+      const block = message.blocks.get(event.index)
+      if (!block || block.kind !== 'thinking' || block.completed) return
+      block.text += event.delta.thinking
+      return block.text.trim() ? { ...block } : undefined
+    }
     if (event.type === 'content_block_start' && event.content_block.type === 'text') {
       const block = { nativeMessageId: message.nativeMessageId, index: event.index, text: event.content_block.text, messageId: `claude-stream:${key}:${event.index}`, completed: false }
       message.blocks.set(event.index, block)
@@ -35,7 +46,7 @@ export class ClaudeTextStream {
     }
     if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
       const block = message.blocks.get(event.index)
-      if (!block || block.completed) return
+      if (!block || block.kind || block.completed) return
       block.text += event.delta.text
       return block.text.trim() ? { ...block } : undefined
     }
@@ -50,9 +61,10 @@ export class ClaudeTextStream {
     const replacements = new Map<number, string>()
     if (!message) return replacements
     for (const [index, content] of msg.message.content.entries()) {
-      if (content.type !== 'text') continue
-      const pending = [...message.blocks.values()].filter((block) => !block.completed)
-      const block = pending.find((block) => block.text === content.text) ?? pending.find((block) => block.index === index) ?? pending[0]
+      if (content.type !== 'text' && content.type !== 'thinking') continue
+      const value = content.type === 'text' ? content.text : content.thinking
+      const pending = [...message.blocks.values()].filter((block) => !block.completed && (content.type === 'thinking' ? block.kind === 'thinking' : !block.kind))
+      const block = pending.find((block) => block.text === value) ?? pending.find((block) => block.index === index) ?? pending[0]
       if (!block) continue
       block.completed = true
       replacements.set(index, block.messageId)

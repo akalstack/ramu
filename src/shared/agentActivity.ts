@@ -10,6 +10,8 @@ export function agentActivityLabel(state: AgentSessionState | undefined, events:
     switch (event.kind) {
       case 'user':
       case 'result':
+      case 'content':
+      case 'plan':
       case 'tool-use':
       case 'tool-result':
       case 'error':

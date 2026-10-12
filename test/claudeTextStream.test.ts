@@ -30,3 +30,13 @@ describe('Claude streaming blocks', () => {
     }
   })
 })
+
+it('keeps exposed thinking in its own stream and replaces it with the completed block', () => {
+  const stream = new ClaudeTextStream(); start(stream, null)
+  stream.partial(partial(null, { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } }))
+  const thought = stream.partial(partial(null, { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Inspect the module.' } }))!
+  expect(thought).toMatchObject({ kind: 'thinking', text: 'Inspect the module.' })
+  const frame = { type: 'assistant', parent_tool_use_id: null, uuid: 'thinking-done', message: { id: 'native', content: [{ type: 'thinking', thinking: 'Inspect the module.', signature: 'private signature' }] } } as unknown as Extract<SDKMessage, { type: 'assistant' }>
+  expect(stream.complete(frame).get(0)).toBe(thought.messageId)
+  expect(stream.partial(partial(null, { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'private signature' } }))).toBeUndefined()
+})

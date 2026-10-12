@@ -19,6 +19,10 @@ it('sends prompts over ACP and retains usage, patches, helper ownership and term
   await until(() => native.start.mock.calls.length === 1)
   expect(native.start).toHaveBeenCalledWith('first', 'native-history', [])
   const preserved: AgentEvent[] = [
+    { kind: 'thinking', text: 'Exposed provider reasoning', messageId: 'reason' },
+    { kind: 'content', messageId: 'image', content: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }] },
+    { kind: 'tool-use', toolUseId: 'rich-tool', name: 'Bash', summary: 'pnpm test', title: 'Run the tests', input: '{"command":"pnpm test"}', toolKind: 'execute' },
+    { kind: 'tool-result', toolUseId: 'rich-tool', summary: 'a.ts', isError: false, content: [{ type: 'diff', path: '/workspace/a.ts', oldText: 'old', newText: 'new' }] },
     { kind: 'usage', readings: [{ provider: 'codex', window: 'five_hour', usedPercent: 95, resetsAt: 1900000000000, updatedAt: Date.now(), status: 'limited' }] } as AgentEvent,
     { kind: 'tool-result', toolUseId: 'child:patch', summary: 'live patch', isError: false, running: true, agentId: 'child' },
     { kind: 'turn-diff', turnId: 'child:turn', diff: 'diff --git a/a b/a', agentId: 'child' },

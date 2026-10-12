@@ -70,6 +70,28 @@ beforeEach(() => {
 afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
 describe('AgentService', () => {
+  it('updates tool descriptions in one durable row and keeps rich results after restart', async () => {
+    let output!: (event: AgentEvent) => void
+    const delivered: { event: AgentEvent; seq?: number }[] = []
+    const factory: import('../src/main/codex').CodexFactory = (_scope, _settings, emit) => {
+      output = emit
+      return { start: async () => { emit({ kind: 'state', state: 'running' }) }, send: async () => {}, steer: async () => {}, interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
+    }
+    const svc = new AgentService(db, (_id, event, seq) => delivered.push({ event, seq }), fakeQuery([]), factory)
+    const chat = svc.start('t', scopeOf(cwd), 'Inspect', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'full' })
+    await until(() => !!output)
+    output({ kind: 'tool-use', toolUseId: 'one', name: 'shell', summary: 'pnpm test', input: '{"command":"pnpm test"}', title: 'Run tests', status: 'pending' })
+    const firstAt = svc.events(chat.id).find(e => e.kind === 'tool-use')!.at
+    output({ kind: 'tool-use', toolUseId: 'one', name: 'shell', summary: 'pnpm test', input: '{"command":"pnpm test"}', title: 'Check the unit tests', status: 'in_progress' })
+    output({ kind: 'tool-result', toolUseId: 'one', summary: 'Image', isError: false, content: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }] })
+    output({ kind: 'result', text: 'Done', isError: false, costUsd: null })
+    expect(svc.events(chat.id).filter(e => e.kind === 'tool-use')).toEqual([expect.objectContaining({ title: 'Check the unit tests', at: firstAt })])
+    expect(new Set(delivered.filter(e => e.event.kind === 'tool-use').map(e => e.seq)).size).toBe(1)
+    svc.stopAll()
+    const restored = new AgentService(db, () => {}, fakeQuery([]))
+    expect(restored.events(chat.id).find(e => e.kind === 'tool-result')).toMatchObject({ content: [{ type: 'image', data: 'aGVsbG8=' }] })
+  })
+
   it('passes the configured user Claude CLI to the SDK', async () => {
     const calls: Options[] = []
     configureProviderBinaries({ 'claude-code': { binary: '/custom user bin/claude' } })
@@ -167,7 +189,7 @@ describe('AgentService', () => {
         for (const parent of [null, 'spawn']) {
           yield partial(parent, { type: 'message_start', message: { id: 'shared-native-id' } })
           yield partial(parent, { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } })
-          yield partial(parent, { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Private reasoning' } })
+          yield partial(parent, { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Provider-visible reasoning' } })
           yield partial(parent, { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } })
           yield partial(parent, { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: parent ? 'Helper partial' : 'Main partial' } })
         }
@@ -189,7 +211,7 @@ describe('AgentService', () => {
     await until(() => svc.events(chat.id).filter((event) => event.kind === 'text').length === 2)
     expect(options?.includePartialMessages).toBe(true)
     expect(svc.events(chat.id).filter((event) => event.kind === 'text').map((event) => [event.text, event.agentId])).toEqual([['Main partial', undefined], ['Helper partial', 'helper']])
-    expect(svc.events(chat.id).some((event) => event.kind === 'thinking')).toBe(false)
+    expect(svc.events(chat.id).filter((event) => event.kind === 'thinking').map(event => [event.text, event.agentId])).toEqual([['Provider-visible reasoning', undefined], ['Provider-visible reasoning', 'helper']])
     const positions = delivered.filter(({ event }) => event.kind === 'text').map(({ seq }) => seq)
     release()
     await until(() => svc.events(chat.id).some((event) => event.kind === 'result'))

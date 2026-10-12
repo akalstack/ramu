@@ -5,6 +5,8 @@ import { homedir } from 'node:os'
 import { readFileSync } from 'node:fs'
 import type { AgentEvent, AgentModel, AgentScope, AgentSettings, Attachment, McpConnection } from '../shared/types'
 import { attachmentPrompt } from './attachments'
+import { toolDescription, toolInput } from './acpEvents'
+import { agentContent } from '../shared/agentContent'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 
 export function openCodePermissions(settings: AgentSettings, readOnly: boolean): PermissionRuleset {
@@ -54,6 +56,7 @@ class OpenCodeSession implements AgentRunner {
   private connection?: McpConnection
   private pending = new Map<string, { kind: 'permission' | 'question'; questions?: QuestionInfo[] }>()
   private texts = new Map<string, string>()
+  private reasoning = new Set<string>()
   private tools = new Set<string>()
   private completedTools = new Set<string>()
   private roles = new Map<string, string>()
@@ -177,9 +180,11 @@ class OpenCodeSession implements AgentRunner {
       const text = (this.texts.get(textID) || '') + delta
       this.texts.set(textID, text); this.emit({ kind: 'text', messageId: textID, text })
     }
+    if (event.type === 'session.next.reasoning.delta') { const { reasoningID, delta } = event.data; const text = (this.texts.get(reasoningID) ?? '') + delta; this.reasoning.add(reasoningID); this.texts.set(reasoningID, text); this.emit({ kind: 'thinking', messageId: reasoningID, text }) }
+    if (event.type === 'session.next.reasoning.ended') { const { reasoningID, text } = event.data; this.texts.set(reasoningID, text); this.emit({ kind: 'thinking', messageId: reasoningID, text }) }
     if (event.type === 'session.next.text.ended') { const { textID, text } = event.data; this.texts.set(textID, text); this.emit({ kind: 'text', messageId: textID, text }) }
-    if (event.type === 'session.next.tool.called') { const { callID, tool, input } = event.data; this.emit({ kind: 'tool-use', toolUseId: callID, name: tool, summary: JSON.stringify(input) }) }
-    if (event.type === 'session.next.tool.success') { const { callID, content } = event.data; this.emit({ kind: 'tool-result', toolUseId: callID, isError: false, summary: content.map((c) => c.type === 'text' ? c.text : c.uri).join('\n') }) }
+    if (event.type === 'session.next.tool.called') { const { callID, tool, input } = event.data; this.emit({ kind: 'tool-use', toolUseId: callID, name: tool, summary: JSON.stringify(input), title: toolDescription(input), input: toolInput(input) }) }
+    if (event.type === 'session.next.tool.success') { const { callID, content } = event.data; this.emit({ kind: 'tool-result', toolUseId: callID, isError: false, summary: content.map((c) => c.type === 'text' ? c.text : c.uri).join('\n'), content: agentContent(content) }) }
     if (event.type === 'session.next.tool.failed') { const { callID, error } = event.data; this.emit({ kind: 'tool-result', toolUseId: callID, isError: true, summary: error.message }) }
     if (event.type === 'session.next.step.failed') this.turnError = event.data.error.message
     if (event.type === 'session.next.step.ended') this.turnCost += event.data.cost
@@ -201,9 +206,12 @@ class OpenCodeSession implements AgentRunner {
       if (this.texts.get(part.id) === part.text) return
       this.texts.set(part.id, part.text); this.emit({ kind: 'text', messageId: part.id, text: part.text })
     }
+    if (part.type === 'reasoning') { this.reasoning.add(part.id); if (this.texts.get(part.id) !== part.text) { this.texts.set(part.id, part.text); this.emit({ kind: 'thinking', messageId: part.id, text: part.text }) } }
+    if (part.type === 'file') this.emit({ kind: 'content', messageId: part.id, content: part.mime.startsWith('image/') ? [{ type: 'image', mimeType: part.mime, uri: part.url, alt: part.filename }] : [{ type: 'resource', uri: part.url, name: part.filename ?? part.url, mimeType: part.mime }] })
     if (part.type === 'tool') {
-      if (!this.tools.has(part.callID)) { this.tools.add(part.callID); this.emit({ kind: 'tool-use', toolUseId: part.callID, name: part.tool, summary: JSON.stringify(part.state.input) }) }
-      if ((part.state.status === 'completed' || part.state.status === 'error') && !this.completedTools.has(part.callID)) { this.completedTools.add(part.callID); this.emit({ kind: 'tool-result', toolUseId: part.callID, isError: part.state.status === 'error', summary: part.state.status === 'completed' ? part.state.output : part.state.error }) }
+      this.tools.add(part.callID)
+      this.emit({ kind: 'tool-use', toolUseId: part.callID, name: part.tool, summary: JSON.stringify(part.state.input), input: toolInput(part.state.input), title: ('title' in part.state ? part.state.title : undefined) ?? toolDescription(part.state.input) })
+      if ((part.state.status === 'completed' || part.state.status === 'error') && !this.completedTools.has(part.callID)) { this.completedTools.add(part.callID); this.emit({ kind: 'tool-result', toolUseId: part.callID, isError: part.state.status === 'error', summary: part.state.status === 'completed' ? part.state.output : part.state.error, ...(part.state.status === 'completed' ? { content: [{ type: 'text', text: part.state.output }, ...(part.state.attachments ?? []).map(f => f.mime.startsWith('image/') ? { type: 'image' as const, mimeType: f.mime, uri: f.url, alt: f.filename } : { type: 'resource' as const, uri: f.url, name: f.filename ?? f.url, mimeType: f.mime })] } : {}) }) }
     }
   }
   private handle(event: Event): void {
@@ -221,7 +229,7 @@ class OpenCodeSession implements AgentRunner {
     }
     if (event.type === 'message.part.delta') {
       const { partID, messageID, field, delta } = event.properties
-      if (field === 'text' && this.roles.get(messageID) === 'assistant') { const text = (this.texts.get(partID) || '') + delta; this.texts.set(partID, text); this.emit({ kind: 'text', messageId: partID, text }) }
+      if (field === 'text' && this.roles.get(messageID) === 'assistant') { const text = (this.texts.get(partID) || '') + delta; this.texts.set(partID, text); this.emit({ kind: this.reasoning.has(partID) ? 'thinking' : 'text', messageId: partID, text }) }
     }
     if (event.type === 'permission.asked') {
       const req = event.properties

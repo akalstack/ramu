@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { request, createServer } from 'node:http'
+import { request } from 'node:http'
 import { createHash } from 'node:crypto'
 import { _electron as electron } from 'playwright-core'
 const appDir = process.env.RAMU_E2E_APP_DIR ? resolve(process.env.RAMU_E2E_APP_DIR) : resolve(import.meta.dirname, '..'), dir = mkdtempSync(join(tmpdir(), 'ramu-automation-'))
@@ -12,25 +12,17 @@ const shots = process.env.RAMU_E2E_SCREENSHOTS ? resolve(process.env.RAMU_E2E_SC
 mkdirSync(repo); execFileSync('git', ['init', '-q'], { cwd: repo })
 writeFileSync(join(repo, 'notes.md'), 'Saved project notes\n')
 writeFileSync(join(repo, 'other.ts'), 'export const example = 1\n')
-writeFileSync(join(repo, 'lsp-probe.ts'), "const n: number = 'x'\nexam\n")
 writeFileSync(join(repo, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true, module: 'esnext', target: 'esnext', moduleResolution: 'bundler' } }))
 mkdirSync(join(repo, 'src', 'orders'), { recursive: true })
 writeFileSync(join(repo, 'src', 'orders', 'queue.ts'), 'export class OrderQueue {\n  enqueueUrgent(order: Order): void {\n    this.items.unshift(order)\n  }\n}\n')
-writeFileSync(join(repo, 'rename-me.ts'), 'function area(w, h) {\n  const result = w * h\n  return result\n}\n')
 writeFileSync(join(repo, 'format-me.ts'), 'const   x=1\ndebugger\n')
-// Stand-ins for a project's own tools, so the editor's format and lint integration runs without network access.
+// A stand-in for the project's linter; no network access is needed.
 const fakeTool = (pkg, bin, body) => { const dir = join(repo, 'node_modules', pkg); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: pkg, bin: { [bin]: 'cli.js' } })); writeFileSync(join(dir, 'cli.js'), `let i='';process.stdin.on('data',c=>i+=c);process.stdin.on('end',()=>{${body}})`) }
-writeFileSync(join(repo, '.prettierrc'), '{}'); writeFileSync(join(repo, 'eslint.config.js'), 'export default []')
-fakeTool('prettier', 'prettier', `process.stdout.write(i.replace(/ +/g,' ').replace('x=1','x = 1'))`)
+writeFileSync(join(repo, 'eslint.config.js'), 'export default []')
 fakeTool('eslint', 'eslint', `const m=[];i.split('\\n').forEach((l,n)=>{const c=l.indexOf('debugger');if(c>=0)m.push({ruleId:'no-debugger',severity:2,message:'Unexpected debugger statement.',line:n+1,column:c+1,endLine:n+1,endColumn:c+9})});process.stdout.write(JSON.stringify([{messages:m}]));process.exit(m.length?1:0)`)
 mkdirSync(join(repo, '.agents', 'skills', 'smoke-skill'), { recursive: true })
 writeFileSync(join(repo, '.agents', 'skills', 'smoke-skill', 'SKILL.md'), '---\nname: smoke-skill\ndescription: Review the smoke fixture notes\n---\nRead notes.md and summarize it.\n')
-// A stand-in for a local Ollama: answers fill-in-the-middle requests with a fixed completion.
-const completionCalls = []
-const chatCalls = []
-const ollama = createServer((req, res) => { let raw = ''; req.on('data', (c) => raw += c); req.on('end', () => { if (req.url === '/api/generate') completionCalls.push(JSON.parse(raw)); if (req.url === '/v1/chat/completions') { chatCalls.push({ auth: req.headers.authorization, body: JSON.parse(raw) }); res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: JSON.stringify({ edit: true, startLine: 2, endLine: 2, replacement: '  const result = width * height' }) } }] })); return } if (req.url === '/v1/fim/completions') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ choices: [{ message: { content: '' } }] })); return } res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(req.url === '/api/tags' ? { models: [{ name: 'qwen2.5-coder:1.5b-base' }] } : { response: 'return a + b' })) }) })
-await new Promise((resolve) => ollama.listen(0, '127.0.0.1', resolve))
-const env = { ...process.env, RAMU_OLLAMA_URL: `http://127.0.0.1:${ollama.address().port}`, RAMU_USER_DATA: profile, RAMU_WORKTREES: join(dir, 'worktrees'), RAMU_FAKE_AGENT: '1' }; delete env.ELECTRON_RENDERER_URL
+const env = { ...process.env, RAMU_USER_DATA: profile, RAMU_WORKTREES: join(dir, 'worktrees'), RAMU_FAKE_AGENT: '1' }; delete env.ELECTRON_RENDERER_URL
 const socketPath = join(tmpdir(), `ramu-${process.getuid()}-${createHash('sha256').update(profile).digest('hex').slice(0, 20)}.sock`)
 const api = (method, args = []) => new Promise((resolve, reject) => { const req = request({ socketPath, path: '/invoke', method: 'POST' }, (res) => { let data = ''; res.on('data', (c) => data += c); res.on('end', () => { try { const response = JSON.parse(data); response.error ? reject(new Error(response.error)) : resolve(response.value) } catch (e) { reject(e) } }) }); req.on('error', reject); req.end(JSON.stringify({ method, args })) })
 let lastStep = 'start'
@@ -47,7 +39,7 @@ async function launch() {
   page = await app.firstWindow(); page.on('pageerror', (e) => !MONACO_NOISE.test(e.message) && errors.push(process.env.RAMU_E2E_STACKS ? `[after: ${lastStep}] ${e.message}\n${e.stack}` : e.message))
   await page.waitForSelector('.shell', { timeout: 20000 })
 }
-try {
+async function runJourney() {
   await launch()
   check(await app.evaluate(({ app }) => app.getName()) === 'Ramu', 'Native app identity is Ramu')
   if (process.platform === 'darwin') check(await app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.items[0]?.label) === 'Ramu', 'macOS app menu is Ramu')
@@ -132,14 +124,22 @@ try {
   { const chats = page.getByRole('button', { name: 'Home', exact: true }); if (await chats.getAttribute('aria-pressed') !== 'true') await chats.click() }
   await page.getByRole('button', { name: `Open ${project.name}`, exact: true }).click()
   await page.getByRole('button', { name: 'Explorer', exact: true }).click()
+  const savedFileTab = async (path) => Object.values((await api('ui.get')).tasks ?? {}).flatMap((state) => state.views ?? []).find((view) => view.kind === 'file' && view.path === path)
+  await page.locator('.explorer-panel').getByRole('button', { name: /other.ts/ }).click()
+  await until(async () => (await savedFileTab('other.ts'))?.preview === true, 'Explorer opens a file as a preview')
+  check(true, 'Single-click in Explorer still opens a preview tab')
+  await page.keyboard.press('Meta+p')
+  await page.locator('[data-slot=command-input]').fill('other.ts')
+  await page.getByRole('dialog', { name: 'Command palette', exact: true }).getByRole('option', { name: 'other.ts', exact: true }).click()
+  await until(async () => (await savedFileTab('other.ts'))?.preview === false, 'Command palette keeps an existing preview open')
+  check(true, 'Command palette file selection promotes a preview to a kept-open tab')
   // Open an existing file from Explorer after its directory has loaded.
   await page.locator('.explorer-panel').getByRole('button', { name: /notes.md/ }).click()
-  await page.locator('.monaco-editor').first().waitFor()
-  await page.locator('.monaco-editor .view-lines').getByText('Saved project notes', { exact: true }).waitFor()
-  await page.locator('.monaco-editor .view-lines').first().click(); await page.keyboard.press('Meta+a'); await page.keyboard.insertText('Unsaved buffer context')
-  await page.locator('.monaco-editor .view-lines').getByText('Unsaved buffer context', { exact: true }).waitFor()
-  const draft = page.locator('textarea:visible').filter({ hasNot: page.locator('.inputarea') })
-  const prompt = page.locator('textarea:visible[placeholder*="whole workspace"]').first()
+  await page.locator('.monaco-editor:visible').first().waitFor()
+  await page.locator('.monaco-editor:visible .view-lines').getByText('Saved project notes', { exact: true }).waitFor()
+  await page.locator('.monaco-editor:visible .view-lines').first().click(); await page.keyboard.press('Meta+a'); await page.keyboard.insertText('Unsaved buffer context')
+  await page.locator('.monaco-editor:visible .view-lines').getByText('Unsaved buffer context', { exact: true }).waitFor()
+  const prompt = page.locator('.composer textarea:visible').first()
   await prompt.fill('/smoke')
   await page.getByRole('option', { name: /smoke-skill/ }).waitFor()
   await page.screenshot({ path: join(shots, 'skills.png') })
@@ -154,83 +154,55 @@ try {
   const projectSessions = await api('agent.list', [projectChat.id]); const evs = await api('agent.events', [projectSessions[0].id])
   check(evs.some((e) => e.kind === 'user' && e.text.includes('Unsaved buffer context')), 'Open tabs send unsaved buffer content')
   check(readFileSync(join(repo, 'notes.md'), 'utf8') === 'Saved project notes\n', 'Sending context does not save or overwrite files')
-  // Format and lint follow the project's own tools and never touch the file until it is saved.
+  // Lint follows the project's own tools and never touches the file.
   await page.locator('.explorer-panel').getByRole('button', { name: /format-me.ts/ }).click()
   await page.locator('.lint-summary').getByText('1 error').waitFor()
   await page.locator('.monaco-editor:visible .squiggly-error').first().waitFor()
   check(true, 'Lint markers come from the project linter')
-  // A project-aware language server answers what Monaco's built-in worker cannot: errors from the real type checker, and
-  // completions that come from another file (with the import added), in a file that never mentions the name.
-  await page.locator('.explorer-panel').getByRole('button', { name: /lsp-probe.ts/ }).click()
-  await page.locator('.monaco-editor:visible .squiggly-error').first().waitFor({ timeout: 30000 })
-  await page.locator('.monaco-editor:visible .squiggly-error').first().hover({ force: true })
-  await page.locator('.monaco-hover').getByText(/not assignable to type 'number'/).first().waitFor({ timeout: 10000 })
-  check(true, 'Language server reports type errors from the project compiler')
-  await page.locator('.monaco-editor:visible .view-lines').first().click(); await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.press('ArrowUp'); await page.keyboard.press('End'); await page.keyboard.press('Control+Space')
-  const suggestion = page.locator('.suggest-widget .monaco-list-row').filter({ hasText: 'example' }).first()
-  await suggestion.waitFor({ timeout: 20000 })
-  check(true, 'Language server completes a symbol exported from another file')
-  await page.keyboard.press('Enter')
-  await page.locator('.monaco-editor:visible .view-lines').getByText(/import\s+\{\s*example\s*\}/).first().waitFor({ timeout: 10000 })
-  check(readFileSync(join(repo, 'lsp-probe.ts'), 'utf8') === "const n: number = 'x'\nexam\n", 'Accepting a completion adds the import to the buffer only')
-  await page.locator('.explorer-panel').getByRole('button', { name: /format-me.ts/ }).click()
-  await page.locator('.monaco-editor:visible .view-lines').first().click(); await page.keyboard.press('Shift+Alt+F')
-  await page.locator('.monaco-editor:visible .view-lines').getByText('const x = 1', { exact: true }).waitFor()
-  check(readFileSync(join(repo, 'format-me.ts'), 'utf8') === 'const   x=1\ndebugger\n', 'Format Document leaves the saved file untouched')
-  // Inline AI completion is off until the user turns it on in Settings; then ghost text appears and Tab accepts it.
-  await page.locator('.monaco-editor:visible .view-lines').first().click(); await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.insertText('// sum')
-  await sleep(900)
-  check(completionCalls.length === 0 && await page.locator('.monaco-editor:visible .ghost-text-decoration').count() === 0, 'Inline completion makes no requests while it is off')
+  const smoothing = () => page.evaluate(() => ({
+    root: getComputedStyle(document.documentElement).webkitFontSmoothing,
+    editor: getComputedStyle(document.querySelector('.monaco-editor')).webkitFontSmoothing,
+  }))
+  check((await api('settings.app.get')).fontSmoothing === true, 'Font smoothing is enabled by default')
+  check(Object.values(await smoothing()).every((value) => value === 'antialiased'), 'Interface and editor inherit grayscale font smoothing')
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'appearance' } })))
+  await page.getByRole('switch', { name: 'Crisper text' }).click()
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
+  check(Object.values(await smoothing()).every((value) => value === 'auto'), 'Turning smoothing off restores platform rendering in the interface and editor')
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'appearance' } })))
+  await page.getByRole('switch', { name: 'Crisper text' }).click()
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
+  check(Object.values(await smoothing()).every((value) => value === 'antialiased'), 'Font smoothing can be re-enabled')
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'editor' } })))
-  await page.getByRole('switch', { name: /AI inline completion/ }).click()
-  await page.getByText(/This device:/).waitFor()
-  await page.getByRole('combobox', { name: 'Local model', exact: true }).click()
-  await page.getByRole('option').first().waitFor()
-  check(await page.getByRole('option', { name: /Recommended for this device/ }).isVisible() && await page.getByRole('option', { name: /Qwen2.5-Coder 32B.*(Too large|May be slow)/ }).count() === 1, 'Local model list shows the hardware recommendation and fit')
-  await page.screenshot({ path: join(shots, 'model-list.png') })
-  await page.getByRole('option', { name: /Qwen2.5-Coder 1.5B/ }).click()
-  await page.getByText(/qwen2.5-coder:1.5b-base\s+is installed and ready/).waitFor()
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click(); await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
-  await page.locator('.monaco-editor:visible .view-lines').first().click(); await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.insertText(' it')
-  await page.locator('.monaco-editor:visible .ghost-text-decoration').first().waitFor({ timeout: 10000 })
-  check(completionCalls.at(-1)?.prompt.includes('// sum it') && completionCalls.at(-1)?.model === 'qwen2.5-coder:1.5b-base', 'Inline completion sends the code before the cursor to the local model')
-  check(/<\|file_sep\|>[^\n]+\n/.test(completionCalls.at(-1).prompt) && completionCalls.at(-1).prompt.endsWith('// sum it'), 'Inline completion sends the user\'s other open files as context for a Qwen model')
-  await page.keyboard.press('Tab')
-  await page.locator('.monaco-editor:visible .view-lines').getByText('return a + b', { exact: false }).first().waitFor()
-  check(readFileSync(join(repo, 'format-me.ts'), 'utf8').includes('return a + b') === false, 'Accepting a suggestion edits the buffer, not the file')
-  // Definitions are found across the repository even in files that are not open or imported.
-  await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.press('Enter'); await page.keyboard.insertText('queue.enqueueUr')
-  await until(() => completionCalls.at(-1)?.prompt.endsWith('queue.enqueueUr'), 'A request for the new line')
-  check(completionCalls.at(-1).prompt.includes('<|file_sep|>src/orders/queue.ts\n  enqueueUrgent(order: Order): void {'), 'Inline completion finds definitions in files that are not open or imported')
-  await page.keyboard.press('Escape')
+  check(await page.getByRole('switch', { name: /Format on save|Language servers|AI inline completion/ }).count() === 0, 'Editor settings contain no formatter, language server or AI completion controls')
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
+  await page.locator('.monaco-editor:visible .view-lines').first().click()
+  await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.press('End'); await page.keyboard.insertText('// keep   spacing')
   await page.keyboard.press('Meta+s')
-  await until(() => readFileSync(join(repo, 'format-me.ts'), 'utf8').startsWith('const x = 1'), 'Saving writes the formatted buffer')
-  console.log('ok - Saving writes the formatted buffer')
-  // Next edit: Codestral predicts the follow-up to an edit, and only after the user has allowed it to read the code.
-  const savedPrefs = await api('settings.app.get')
-  await api('settings.app.set', [{ ...savedPrefs, aiCompletion: { ...savedPrefs.aiCompletion, enabled: true, provider: 'codestral', codestralUrl: `http://127.0.0.1:${ollama.address().port}`, nextEdit: true, nextEditAck: false } }])
-  await page.evaluate(() => window.ramu.invoke('completion.setKey', 'e2e-key-12345678'))
-  await page.reload(); await page.waitForSelector('.shell')
-  await page.getByRole('button', { name: `Open ${project.name}`, exact: true }).click()
-  await page.getByRole('button', { name: 'Explorer', exact: true }).click()
-  await page.locator('.explorer-panel').getByRole('button', { name: /rename-me.ts/ }).click()
-  await page.locator('.monaco-editor:visible .view-lines').getByText('function area(w, h) {').first().waitFor()
-  const renameParameters = async () => { await page.locator('.monaco-editor:visible .view-lines').first().click(); await page.keyboard.press('Meta+ArrowUp'); await page.keyboard.press('Shift+End'); await page.keyboard.insertText('function area(width, height) {') }
-  await renameParameters(); await sleep(2500)
-  check(chatCalls.length === 0, 'Next edit sends nothing until the user allows Codestral to read the code')
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'editor' } })))
-  await page.getByRole('switch', { name: 'Allow Codestral to read my code' }).click()
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click(); await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
-  await page.locator('.monaco-editor:visible .view-lines').first().click(); await page.keyboard.press('Meta+ArrowUp'); await page.keyboard.press('Shift+End'); await page.keyboard.insertText('function area(width, height = 1) {')
-  await until(() => chatCalls.length > 0, 'A next edit request after the user allowed it')
-  check(chatCalls[0].auth === 'Bearer e2e-key-12345678' && chatCalls[0].body.messages[1].content.includes('+ function area(width, height = 1) {'), 'Next edit sends the recent edit to Codestral')
-  await page.locator('.monaco-editor:visible .inline-edits-custom-view, .monaco-editor:visible .inline-edits-collapsed-view').first().waitFor({ state: 'attached', timeout: 15000 })
-  await sleep(500)
-  await page.screenshot({ path: join(shots, 'next-edit.png') })
-  check(await page.locator('.monaco-editor:visible .inline-edits-custom-view, .monaco-editor:visible .inline-edits-collapsed-view').count() > 0, 'The predicted edit is shown as an inline diff with a Tab marker')
-  await page.keyboard.press('Tab')
-  await page.locator('.monaco-editor:visible .view-lines').filter({ hasText: /const\s+result\s*=\s*width\s*\*\s*height/ }).first().waitFor({ timeout: 10000 })
-  check(readFileSync(join(repo, 'rename-me.ts'), 'utf8').includes('w * h'), 'Tab applies the predicted edit to the buffer, not the file')
+  await until(() => readFileSync(join(repo, 'format-me.ts'), 'utf8').includes('// keep   spacing'), 'Saving writes the edited buffer')
+  check(readFileSync(join(repo, 'format-me.ts'), 'utf8').startsWith('const   x=1\n'), 'Saving preserves existing formatting exactly')
+  check(await page.locator('.ghost-text-decoration, .suggest-widget').count() === 0, 'Editing has no completion UI')
+  if (process.env.RAMU_E2E_EDITOR_ONLY) {
+    await page.keyboard.press('Meta+f')
+    await page.locator('.monaco-editor:visible .find-widget.visible').waitFor()
+    check(true, 'Editor find remains available')
+    await page.keyboard.press('Escape')
+    await page.locator('.monaco-editor:visible .view-lines').first().click()
+    await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.insertText(' unsaved')
+    writeFileSync(join(repo, 'format-me.ts'), 'const disk = 2\n')
+    await page.locator('.banner.warn').filter({ hasText: 'This file changed on disk while you have unsaved edits.' }).waitFor()
+    await page.getByRole('button', { name: 'Compare', exact: true }).click()
+    await page.locator('.monaco-diff-editor:visible').waitFor()
+    check(await page.locator('.monaco-diff-editor:visible .editor.original .view-lines').textContent().then((text) => text.includes('disk')), 'Conflict comparison renders disk content')
+    check(await page.evaluate(() => [...document.querySelectorAll('.monaco-diff-editor .monaco-editor')].every((editor) => getComputedStyle(editor).webkitFontSmoothing === 'antialiased')), 'Diff editors inherit font smoothing')
+    await page.screenshot({ path: join(shots, 'simple-editor.png') })
+    check(errors.length === 0, `No renderer errors: ${errors.join(', ')}`)
+    console.log(`Screenshots: ${shots}`)
+    return
+  }
   await page.getByRole('button', { name: 'Schedules', exact: true }).click()
   await page.getByRole('button', { name: 'New schedule', exact: true }).last().click()
   await page.getByLabel('Name', { exact: true }).fill('One-time smoke run')
@@ -518,7 +490,8 @@ try {
   await api('settings.app.set', [restartPreferences])
   check(errors.length === 0, `No renderer errors: ${errors.join(', ')}`)
   console.log(`Screenshots: ${shots}`)
-} catch (error) {
+}
+try { await runJourney() } catch (error) {
   console.error('Renderer errors:', errors)
   try { const ts = await api('tasks.list'); for (const t of ts) { const ss = await api('agent.list', [t.id]); console.error('sessions', ss); for (const s of ss) console.error('events', await api('agent.events', [s.id])) } console.error('ui', await api('ui.get')) } catch {}
   await page?.screenshot({ path: join(shots, 'failure.png') }).catch(() => {})
@@ -529,6 +502,5 @@ try {
   await app?.close().catch(() => {})
   await api('background.stop').catch(() => {})
   await sleep(300)
-  ollama.closeAllConnections(); ollama.close()
   rmSync(dir, { recursive: true, force: true })
 }

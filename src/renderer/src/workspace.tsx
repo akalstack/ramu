@@ -78,7 +78,7 @@ export function useWorkspace(): WorkspaceApi {
   return ws
 }
 
-/** Files, diffs and commit views open in one reusable preview tab until edited or kept open. */
+/** Previewable views can reuse a tab when opened for browsing. */
 export function isPreviewable(v: ViewInput | ViewDescriptor): v is Extract<ViewInput | ViewDescriptor, { kind: 'file' | 'diff' | 'git' }> {
   return v.kind === 'file' || v.kind === 'diff' || v.kind === 'git'
 }
@@ -422,8 +422,9 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         if (view.kind === 'agent') updateTaskUi(workspaceOf(taskId), (state) => ({ ...state, activeViewId: null }))
         const key = viewKey(view)
         const previous = taskUi[owner]?.views.find((v) => viewKey(v) === key)
-        // A first open is a preview unless the caller pins it (preview: false); reopening never turns a kept tab back into a preview.
-        const preview = preferences.previewTabs && isPreviewable(view) && view.preview !== false
+        // File opens are kept unless explicitly requested as previews (Explorer/search browsing).
+        // Reopening never turns a kept tab back into a preview.
+        const preview = preferences.previewTabs && isPreviewable(view) && (view.kind === 'file' ? view.preview === true : view.preview !== false)
         const desc: ViewDescriptor = previous?.kind === 'review' && view.kind === 'review' ? { ...previous, ...view } : previous?.kind === 'agent' && view.kind === 'agent' ? { ...previous, sourceSeq: view.sourceSeq } : previous && previous.kind === 'file' && view.kind === 'file' ? { ...previous, ...(view.selection ? { selection: view.selection } : {}), preview: !!previous.preview && preview } : previous && isPreviewable(previous) ? { ...previous, preview: !!previous.preview && preview } : previous ?? ({ ...view, ...(isPreviewable(view) ? { preview } : {}), id: crypto.randomUUID() } as ViewDescriptor)
         if (owner !== taskId && desc.kind !== 'terminal') updateTaskUi(taskId, (own) => ({ ...own, activeViewId: desc.id }))
         updateTaskUi(owner, (s) => {

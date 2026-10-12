@@ -40,7 +40,7 @@ try {
   assert(await pane.locator('.pinned-summary').count() === 0)
   assert(await page.getByRole('button', { name: 'Toggle pinned summary' }).count() === 0)
   assert(await page.locator('#workspace-sidebar .workspace-scope').count() === 0)
-  assert(await page.locator('.task-header .workspace-scope').getByRole('button', { name: 'Switch project' }).isVisible())
+  assert(await page.locator('.workspace-tool-buttons .workspace-scope').getByRole('button', { name: 'Switch project' }).isVisible())
   assert(await page.getByRole('button', { name: 'Source Control', exact: true }).locator('.activity-badge').count() === 0)
   const scrollAreaBounds = await pane.locator('.main-chat .agent-view:visible .transcript').boundingBox()
   const chatBounds = await pane.locator('.main-chat').boundingBox()

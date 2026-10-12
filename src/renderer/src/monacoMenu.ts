@@ -1,4 +1,4 @@
-import * as monaco from 'monaco-editor'
+import * as monaco from 'monaco-editor/editor/editor.api.js'
 import { invoke } from './ipc'
 import { notifyError } from './Notifications'
 
@@ -9,15 +9,13 @@ export function reviewCommentMenu(editor: monaco.editor.ICodeEditor, action: () 
 }
 export function nativeMonacoMenu(editor: monaco.editor.ICodeEditor): void {
   editor.updateOptions({ contextmenu: false })
-  const actions = { find: 'actions.find', definition: 'editor.action.revealDefinition', references: 'editor.action.referenceSearch.trigger', rename: 'editor.action.rename', format: 'editor.action.formatDocument' }
-  const supported = (id: string) => !!editor.getAction(id)?.isSupported()
+  const actions = { find: 'actions.find' }
   const show = async (point: { x: number; y: number }) => {
     const model = editor.getModel(), selection = editor.getSelection()
     if (!model || !selection) return
     const version = model.getVersionId()
-    const format = supported('ramu.formatDocument') ? 'ramu.formatDocument' : actions.format
     const editable = !editor.getOption(monaco.editor.EditorOption.readOnly)
-    const result = await invoke('editor.menu', { selection: model.getValueInRange(selection), editable, comment: comments.has(editor), definition: supported(actions.definition), references: supported(actions.references), rename: supported(actions.rename), format: supported(format) }, point)
+    const result = await invoke('editor.menu', { selection: model.getValueInRange(selection), editable, comment: comments.has(editor) }, point)
     if (!result || editor.getModel() !== model) return
     editor.focus()
     if (typeof result === 'object' || result === 'cut') {
@@ -27,7 +25,7 @@ export function nativeMonacoMenu(editor: monaco.editor.ICodeEditor): void {
     } else if (result === 'comment') comments.get(editor)?.()
     else if (result === 'selectAll') editor.setSelection(model.getFullModelRange())
     else if (result === 'undo' || result === 'redo') editor.trigger('native-menu', result, null)
-    else await editor.getAction(result === 'format' ? format : actions[result])?.run()
+    else await editor.getAction(actions[result])?.run()
   }
   const mouse = editor.onContextMenu((event) => {
     const target = event.event.browserEvent.target
