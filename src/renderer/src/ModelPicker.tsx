@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { moveFavorite } from '../../shared/favorites'
 import { SearchInput } from './SearchInput'
 import { Check, GripVertical, Layers, List, Pencil, Star } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AGENT_PROVIDERS, providerName } from '../../shared/providers'
 import type { AgentProvider, AgentModel, AgentSettings } from '../../shared/types'
 import { useAppSettings } from './AppSettings'
@@ -18,11 +18,13 @@ const keyOf = (model: Pick<AgentModel, 'provider' | 'id'>) => `${model.provider}
 
 /** The model picker: a rail of All models, Sets and providers beside a searchable list. ⌘1–⌘9 pick the numbered row. */
 export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: AgentSettings; onChange: (settings: AgentSettings) => void; onDone: () => void; onSet: (id: string) => void }) {
-  useLanguage()
+  const language = useLanguage()
   const { catalogs, preferences, reload } = useModelSets()
   const app = useAppSettings()
   const favorites = app.preferences.favoriteModels ?? []
-  const all = catalogs.flatMap((catalog) => catalog.models)
+  const all = useMemo(() => catalogs.flatMap((catalog) => catalog.models), [catalogs])
+  const modelByKey = useMemo(() => new Map(all.map((model) => [keyOf(model), model])), [all])
+  const searchable = useMemo(() => new Map(all.map((model) => [model, `${modelDisplayName(model.name)} ${model.name} ${model.id} ${providerName(model.provider)}`.toLowerCase()])), [all])
   const [tab, setTab] = useState<Tab>('all')
   const [query, setQuery] = useState('')
   const [editingFavorites, setEditingFavorites] = useState(false)
@@ -33,17 +35,60 @@ export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: A
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
   useLayoutEffect(() => { input.current?.focus() }, [])
-  const q = query.trim().toLowerCase()
+  const deferredQuery = useDeferredValue(query)
+  const q = deferredQuery.trim().toLowerCase()
   // How much of each provider's plan is left, so a near-limit provider is easy to avoid.
   const usage = useUsage()
-  const usageLeft = (provider: AgentModel['provider']) => { const peak = peakUsage(usage, provider); return peak ? <span className={`mp-usage ${usageTone(peak)}`} title={t("{0} usage", { "0": windowLabel(peak) })}> · {peak.status === 'limited' ? t("limited") : t("{0}% left", { "0": 100 - peak.usedPercent })}</span> : null }
-  const matches = (model: AgentModel) => !q || `${modelDisplayName(model.name)} ${model.name} ${model.id} ${providerName(model.provider)}`.toLowerCase().includes(q)
-  const matchingModels = q || tab === 'all' ? all.filter(matches) : tab === 'sets' ? [] : all.filter((model) => model.provider === tab && matches(model))
-  const favoriteKeys = new Set(favorites)
-  const favoriteRows = favorites.flatMap((key) => matchingModels.filter((model) => keyOf(model) === key))
-  const rows = [...favoriteRows, ...matchingModels.filter((model) => !favoriteKeys.has(keyOf(model)))]
+  const usageByProvider = useMemo(() => new Map(AGENT_PROVIDERS.map((provider) => {
+    const peak = peakUsage(usage, provider)
+    return [provider, peak ? <span className={`mp-usage ${usageTone(peak)}`} title={t("{0} usage", { "0": windowLabel(peak) })}> · {peak.status === 'limited' ? t("limited") : t("{0}% left", { "0": 100 - peak.usedPercent })}</span> : null]
+  })), [usage, language])
+  const matchingModels = useMemo(() => all.filter((model) => (q || tab === 'all' || model.provider === tab) && (!q || searchable.get(model)!.includes(q))), [all, searchable, q, tab])
+  const favoriteKeys = useMemo(() => new Set(favorites), [favorites])
+  const matchingKeys = useMemo(() => new Set(matchingModels.map(keyOf)), [matchingModels])
+  const favoriteRows = useMemo(() => favorites.flatMap((key) => matchingKeys.has(key) ? [modelByKey.get(key)!] : []), [favorites, matchingKeys, modelByKey])
+  const rows = useMemo(() => [...favoriteRows, ...matchingModels.filter((model) => !favoriteKeys.has(keyOf(model)))], [favoriteRows, matchingModels, favoriteKeys])
   const sets = tab === 'sets' ? preferences.sets.filter((set) => !q || set.name.toLowerCase().includes(q)) : []
   const providerError = !q && tab !== 'all' && tab !== 'sets' ? catalogs.find((catalog) => catalog.provider === tab)?.error : undefined
+
+  // Large provider catalogs mount only the visible rows, while search still covers every model.
+  const list = useRef<HTMLDivElement>(null)
+  const [scrollTop, setScrollTop] = useState(0)
+  const [listHeight, setListHeight] = useState(420)
+  const pendingFocus = useRef<number | null>(null)
+  const rowHeight = Math.max(48, Math.ceil((app.preferences.fontSize * 2 - 3) * 1.4 + 12))
+  const virtual = rows.length > 100
+  const start = virtual ? Math.max(0, Math.min(rows.length - 1, Math.floor(scrollTop / rowHeight)) - 5) : 0
+  const end = virtual ? Math.min(rows.length, start + Math.ceil(listHeight / rowHeight) + 11) : rows.length
+  useLayoutEffect(() => {
+    const el = list.current
+    if (!el) return
+    const observer = new ResizeObserver(() => setListHeight(el.clientHeight))
+    setListHeight(el.clientHeight)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  useLayoutEffect(() => {
+    if (list.current) list.current.scrollTop = 0
+    setScrollTop(0)
+    pendingFocus.current = null
+  }, [q, tab])
+  useLayoutEffect(() => {
+    if (pendingFocus.current === null) return
+    const row = list.current?.querySelector<HTMLElement>(`[data-model-index="${pendingFocus.current}"]`)
+    if (row) { row.focus({ preventScroll: true }); pendingFocus.current = null }
+  })
+  const focusRow = (index: number) => {
+    const el = list.current
+    if (!el || index < 0 || index >= rows.length) return
+    const top = index * rowHeight
+    if (top < el.scrollTop) el.scrollTop = top
+    else if (top + rowHeight > el.scrollTop + el.clientHeight) el.scrollTop = top + rowHeight - el.clientHeight
+    pendingFocus.current = index
+    setScrollTop(el.scrollTop)
+    const row = el.querySelector<HTMLElement>(`[data-model-index="${index}"]`)
+    if (row) { row.focus({ preventScroll: true }); pendingFocus.current = null }
+  }
 
   // Changing the model starts from that model's own default effort, not the previous model's.
   const choose = (model: AgentModel) => {
@@ -97,11 +142,12 @@ export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: A
     <div className="mp-main">
       <div className="mp-search"><SearchInput ref={input} aria-label={t("Search models")} placeholder={t("Search models…")} value={query} onChange={(event) => { setQuery(event.target.value); setEditingFavorites(false); setDropTarget(null); draggedFavorite.current = null }} />{!q && favoriteRows.length > 1 && <Button type="button" className={`mp-edit${editingFavorites ? ' on' : ''}`} aria-label={editingFavorites ? t("Finish reordering favorites") : t("Reorder favorites")} title={editingFavorites ? t("Done") : t("Reorder favorites")} aria-pressed={editingFavorites} onClick={() => { setEditingFavorites((value) => !value); setDropTarget(null); draggedFavorite.current = null }}>{editingFavorites ? <Check size={15} /> : <Pencil size={15} />}</Button>}</div>
       <span className="sr-only" role="status" aria-live="polite">{reorderNotice}</span>
-      <div className="mp-list">
+      <div className="mp-list" ref={list} aria-busy={query !== deferredQuery} onScroll={(event) => { if (virtual) setScrollTop(event.currentTarget.scrollTop) }}>
         {sets.map((set) => <Button type="button" key={set.id} className="mp-row" onClick={() => { onSet(set.id); onDone() }}>
           <span className="mp-text"><span className="mp-name">{set.name}</span><span className="mp-sub">{set.id === 'recommended' ? t("Recommended set of models") : t("{0} configured steps", { "0": set.steps.length })}</span></span>
         </Button>)}
-        {rows.map((model, index) => <div key={keyOf(model)} role="menuitemradio" aria-checked={selected(model)} tabIndex={0} className={`mp-row${selected(model) ? ' selected' : ''}${dropTarget?.key === keyOf(model) ? dropTarget.after ? ' drop-after' : ' drop-before' : ''}`} onClick={() => choose(model)} onKeyDown={(event) => { if (event.target !== event.currentTarget) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(model) } }}
+        {virtual && <div aria-hidden="true" style={{ height: start * rowHeight }} />}
+        {rows.slice(start, end).map((model, visibleIndex) => { const index = start + visibleIndex; return <div key={keyOf(model)} data-model-index={index} role="menuitemradio" aria-checked={selected(model)} aria-posinset={index + 1} aria-setsize={rows.length} tabIndex={0} style={{ height: rowHeight }} className={`mp-row mp-model-row${selected(model) ? ' selected' : ''}${dropTarget?.key === keyOf(model) ? dropTarget.after ? ' drop-after' : ' drop-before' : ''}`} onClick={() => choose(model)} onKeyDown={(event) => { if (event.target !== event.currentTarget) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(model) } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); focusRow(event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 : index + (event.key === 'ArrowDown' ? 1 : -1)) } }}
           onDragOver={(event) => { if (!editingFavorites || !favoriteKeys.has(keyOf(model)) || !draggedFavorite.current || savingFavorites) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; const rect = event.currentTarget.getBoundingClientRect(); setDropTarget({ key: keyOf(model), after: event.clientY >= rect.top + rect.height / 2 }) }}
           onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTarget(null) }}
           onDrop={(event) => { if (!editingFavorites || !draggedFavorite.current || !favoriteKeys.has(keyOf(model)) || savingFavorites) return; event.preventDefault(); event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); reorder(draggedFavorite.current, keyOf(model), event.clientY >= rect.top + rect.height / 2); draggedFavorite.current = null; setDropTarget(null) }}>
@@ -109,10 +155,11 @@ export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: A
             onDragStart={(event) => { event.stopPropagation(); draggedFavorite.current = keyOf(model); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-ramu-favorite', keyOf(model)) }}
             onDragEnd={() => { draggedFavorite.current = null; setDropTarget(null) }}
             onKeyDown={(event) => { if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return; event.preventDefault(); event.stopPropagation(); const direction = event.key === 'ArrowUp' ? -1 : 1; const target = favoriteRows[favoriteRows.findIndex((entry) => keyOf(entry) === keyOf(model)) + direction]; if (target) reorder(keyOf(model), keyOf(target), direction > 0) }}><GripVertical size={14} /></Button>}
-          <span className="mp-text"><span className="mp-name">{modelDisplayName(model.name)}</span><span className="mp-sub"><ProviderIcon provider={model.provider} size={13} />{providerName(model.provider)}{usageLeft(model.provider)}</span></span>
+          <span className="mp-text"><span className="mp-name">{modelDisplayName(model.name)}</span><span className="mp-sub"><ProviderIcon provider={model.provider} size={13} />{providerName(model.provider)}{usageByProvider.get(model.provider)}</span></span>
           {!editingFavorites && index < 9 && <Kbd className="mp-key">⌘{index + 1}</Kbd>}
           {!editingFavorites && <Button type="button" disabled={savingFavorites} className={favorites.includes(keyOf(model)) ? 'mp-star on' : 'mp-star'} aria-label={favorites.includes(keyOf(model)) ? t("Remove {0} from favorites", { "0": modelDisplayName(model.name) }) : t("Add {0} to favorites", { "0": modelDisplayName(model.name) })} aria-pressed={favorites.includes(keyOf(model))} onClick={(event) => { event.stopPropagation(); toggleFavorite(model) }}><Star size={15} fill={favorites.includes(keyOf(model)) ? 'currentColor' : 'none'} /></Button>}
-        </div>)}
+        </div> })}
+        {virtual && <div aria-hidden="true" style={{ height: (rows.length - end) * rowHeight }} />}
         {(q || tab !== 'sets') && !rows.length && <p className="mp-empty">{providerError || error || t("No matching models")}</p>}
         {(providerError || error) && <Button type="button" className="mp-row" onClick={() => { void reload().catch((reason) => setError(String(reason))) }}><span className="mp-text"><span className="mp-name">{t("Reload available models")}</span></span></Button>}
       </div>
