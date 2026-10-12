@@ -1,6 +1,20 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  "Commit on new branch": "Commit di branch baru",
+  "Commit & Push to default branch?": "Commit & Push ke branch utama?",
+  "Check out feature branch & continue": "Beralih ke branch fitur & lanjutkan",
+  "Create a feature branch from the current checkout, then commit your staged changes.": "Buat branch fitur dari checkout saat ini, lalu commit perubahan yang di-stage.",
+  "You are on {0}. Continue on this branch or create a feature branch before committing and pushing.": "Anda berada di {0}. Lanjutkan di branch ini atau buat branch fitur sebelum commit dan push.",
+  "Staged and unstaged changes are preserved. The new branch stays checked out.": "Perubahan yang di-stage dan belum di-stage tetap tersimpan. Branch baru tetap aktif.",
+  "Continue on {0}": "Lanjutkan di {0}",
+  "Edited {0}": "Mengedit {0}",
+  "Edited {0} files": "Mengedit {0} file",
+  "Changes undone": "Perubahan dibatalkan",
+  "Show fewer files": "Tampilkan lebih sedikit file",
+  "Show {0} more files": "Tampilkan {0} file lainnya",
+  "Undo these changes": "Batalkan perubahan ini",
+  "Undo selected changes from this turn. Later edits are preserved when possible. Chat history stays available.": "Batalkan perubahan yang dipilih dari giliran ini. Perubahan berikutnya dipertahankan jika memungkinkan. Riwayat obrolan tetap tersedia.",
   "Goals": "Tujuan",
   "Goal detection": "Deteksi tujuan",
   "Auto (recommended)": "Otomatis (disarankan)",

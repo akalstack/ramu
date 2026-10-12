@@ -11,31 +11,41 @@ import { useWorkspace } from './workspace'
 import { ReviewDiff } from './ReviewDiff'
 import { errorText } from './TaskPane'
 
-export function UndoRun({ sessionId, userSeq, onRestored }: { sessionId: string; userSeq: number; onRestored: () => void }) {
+export function UndoRun(props: { sessionId: string; userSeq: number; onRestored: () => void }) {
+  return <UndoFiles {...props} />
+}
+
+export function UndoReview({ reviewId, disabled = false }: { reviewId: string; disabled?: boolean }) {
+  return <UndoFiles reviewId={reviewId} disabled={disabled} onRestored={() => {}} />
+}
+
+function UndoFiles({ sessionId, userSeq, reviewId, disabled = false, onRestored }: { sessionId?: string; userSeq?: number; reviewId?: string; disabled?: boolean; onRestored: () => void }) {
   useLanguage()
   const ws = useWorkspace()
   const [preview, setPreview] = useState<UndoPreview | null>(null), [selected, setSelected] = useState<Set<string>>(new Set())
   const [fileId, setFileId] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null)
   const generation = useRef(0)
   const dirty = Object.values(ws.dirty).some(Boolean)
-  useEffect(() => { generation.current++; setPreview(null); setError(null); setBusy(false); return () => { generation.current++ } }, [sessionId, userSeq])
+  useEffect(() => { generation.current++; setPreview(null); setError(null); setBusy(false); return () => { generation.current++ } }, [sessionId, userSeq, reviewId])
   const load = async () => { const request = ++generation.current; setBusy(true); setError(null); try {
     if (dirty) throw new Error('Save or close unsaved files before previewing a restore.')
-    const plan = await invoke('reviews.chatUndoPreview', sessionId, userSeq); if (request !== generation.current) return; setPreview(plan); setSelected(new Set(plan.files.filter((f) => f.status === 'ready').map((f) => f.fileId))); setFileId(plan.files[0]?.fileId ?? null)
+    const plan = reviewId ? await invoke('reviews.undoPreview', reviewId) : await invoke('reviews.chatUndoPreview', sessionId!, userSeq!); if (request !== generation.current) return; setPreview(plan); setSelected(new Set(plan.files.filter((f) => f.status === 'ready').map((f) => f.fileId))); setFileId(plan.files[0]?.fileId ?? null)
   } catch (e) { if (request === generation.current) setError(errorText(e)) } finally { if (request === generation.current) setBusy(false) } }
   const apply = async () => { if (!preview || !selected.size) return; setBusy(true); setError(null); try {
     if (Object.values(ws.dirty).some(Boolean)) throw new Error('Save or close unsaved files before restoring files.')
-    await invoke('reviews.chatUndoApply', preview.token, [...selected]); onRestored()
+    if (reviewId) await invoke('reviews.undoApply', preview.token, [...selected])
+    else await invoke('reviews.chatUndoApply', preview.token, [...selected])
+    onRestored()
     setPreview(null)
     window.dispatchEvent(new Event('ramu:git-updated'))
   } catch (e) { setError(errorText(e)) } finally { setBusy(false) } }
   const file = preview?.files.find((f) => f.fileId === fileId)
   const ready = preview?.files.filter((f) => f.status === 'ready') ?? []
   const statusLabel = { ready: t('Ready'), conflict: t('Conflict'), unchanged: t('No changes'), unavailable: t('Unavailable') }
-  return <><Button className="ghost small" disabled={busy} onClick={() => void load()}><RotateCcw size={13} />{busy && !preview ? t('Preparing restore…') : t('Preview restore')}</Button>{error && !preview && <span className="error small" role="alert">{error}</span>}
-    {preview && <Dialog title={t('Restore files before this message')} confirmLabel={t('Restore selected files · {0}', { '0': selected.size })} confirmDisabled={!selected.size || dirty} danger busy={busy} error={error} onConfirm={() => void apply()} onCancel={() => { if (!busy) setPreview(null) }}>
+  return <><Button className="ghost small" disabled={busy || disabled} onClick={() => void load()}>{busy && !preview ? t('Preparing restore…') : reviewId ? t('Undo') : t('Preview restore')}<RotateCcw size={13} /></Button>{error && !preview && <span className="error small" role="alert">{error}</span>}
+    {preview && <Dialog title={reviewId ? t('Undo these changes') : t('Restore files before this message')} confirmLabel={t('Restore selected files · {0}', { '0': selected.size })} confirmDisabled={!selected.size || dirty} danger busy={busy} error={error} onConfirm={() => void apply()} onCancel={() => { if (!busy) setPreview(null) }}>
       <div className="undo-preview">
-        <p className="undo-description">{t('Restore selected file changes from this message and later runs, then send your revised message. Chat history stays available.')}</p>
+        <p className="undo-description">{reviewId ? t('Undo selected changes from this turn. Later edits are preserved when possible. Chat history stays available.') : t('Restore selected file changes from this message and later runs, then send your revised message. Chat history stays available.')}</p>
         <div className="undo-toolbar"><label className="row"><Checkbox aria-label={t('Select all eligible files')} disabled={busy || !ready.length} indeterminate={selected.size > 0 && selected.size < ready.length} checked={!!ready.length && selected.size === ready.length} onCheckedChange={(checked) => setSelected(new Set(checked === true ? ready.map((f) => f.fileId) : []))} /><span className="muted small">{t('{0} of {1} eligible files selected', { '0': selected.size, '1': ready.length })}</span></label><Button className="ghost small" disabled={busy} onClick={() => void load()}><RefreshCw size={13} />{t('Refresh preview')}</Button></div>
         <div className="undo-layout"><div className="undo-files" aria-label={t('Files to restore')}>{preview.files.map((f) => <div key={f.fileId} className={`undo-file ${f.status}${fileId === f.fileId ? ' active' : ''}`}><Checkbox aria-label={t('Restore {0}', { '0': f.path })} disabled={busy || f.status !== 'ready'} checked={selected.has(f.fileId)} onCheckedChange={(checked) => setSelected((s) => { const next = new Set(s); checked === true ? next.add(f.fileId) : next.delete(f.fileId); return next })} /><Button className="ghost" aria-pressed={fileId === f.fileId} onClick={() => setFileId(f.fileId)}><span className="undo-file-path">{f.path}</span><span className="muted small">{f.repoName}</span><Badge variant="outline" className="chip">{statusLabel[f.status]}</Badge></Button></div>)}{!preview.files.length && <div className="undo-empty"><FileText size={20} /><span>{t('No file changes to restore')}</span></div>}</div>
           <div className="undo-detail">{file ? <><div className="undo-detail-heading"><strong>{file.path}</strong><span className="muted small">{t('Current → after restore')}</span></div>{file.status === 'ready' ? <ReviewDiff file={{ id: `${preview.token}:${file.fileId}`, repoId: '', repoName: file.repoName, path: file.path, status: file.remove ? 'deleted' : 'modified', binary: false, oldContent: file.currentContent, newContent: file.remove ? '' : file.resultContent }} comments={[]} onSelect={() => {}} /> : <div className="undo-empty"><FileText size={20} /><strong>{statusLabel[file.status]}</strong><p>{file.reason}</p></div>}</> : <div className="undo-empty">{t('Select a file to preview its changes')}</div>}</div>

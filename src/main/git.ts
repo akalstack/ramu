@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { execFile } from 'node:child_process'
-import type { DiffContents, GitCommitFile, GitBranchInfo, GitCommit, GitFileState, GitStatus, GitStatusEntry, GitStash, GitOperation, PullMode } from '../shared/types'
+import type { DiffContents, GitCommitFile, GitBranchInfo, GitCommit, GitFileState, GitStatus, GitStatusEntry, GitStash, GitOperation, PullMode, CommitBranchOptions } from '../shared/types'
 
 export class GitError extends Error {
   constructor(
@@ -188,7 +188,7 @@ export async function undoCommit(cwd: string, expectedHead: string): Promise<str
   return message
 }
 
-export async function commit(cwd: string, message: string, amendHead?: string): Promise<string> {
+export async function commit(cwd: string, message: string, amendHead?: string, branchOptions?: CommitBranchOptions): Promise<string> {
   // The message goes through stdin so it never needs quoting.
   if (amendHead) {
     const current = await status(cwd)
@@ -196,9 +196,34 @@ export async function commit(cwd: string, message: string, amendHead?: string): 
     if (current.operation || current.entries.some(entry => entry.staged === 'unmerged')) throw new Error('Finish the Git operation and resolve conflicts before amending.')
   }
   if (!message.trim() && !amendHead) throw new Error('A commit message is required.')
+  if (branchOptions) {
+    if (await currentBranch(cwd) !== branchOptions.expectedBranch) throw new Error('The current branch changed. Review the commit destination again.')
+    if (branchOptions.newBranch) {
+      if (amendHead) throw new Error('Amend cannot create a feature branch.')
+      const current = await status(cwd)
+      if (current.operation || current.entries.some(entry => entry.staged === 'unmerged')) throw new Error('Finish the Git operation and resolve conflicts before creating a feature branch.')
+      if (!current.entries.some(entry => entry.staged)) throw new Error('Stage changes before committing on a feature branch.')
+      await git(cwd, ['check-ref-format', '--branch', branchOptions.newBranch])
+      // Starting at HEAD preserves both the index and working tree, including dirty files.
+      await git(cwd, ['-c', 'branch.autoSetupMerge=false', 'switch', '-c', branchOptions.newBranch])
+    }
+  }
   const args = ['commit', ...(amendHead ? ['--amend'] : []), ...(message.trim() ? ['--file=-', '--cleanup=strip'] : ['--no-edit'])]
   await git(cwd, args, message.trim() ? { input: message } : undefined)
   return (await headOid(cwd)) ?? ''
+}
+
+/** Prefer the remote's recorded HEAD; common names cover repositories without one. No network request. */
+export async function commitBranchInfo(cwd: string): Promise<{ branch: string | null; defaultBranch: string | null }> {
+  const branch = await currentBranch(cwd)
+  const remotes = (await git(cwd, ['remote'])).trim().split('\n').filter(Boolean)
+  const remote = remotes.includes('origin') ? 'origin' : remotes.length === 1 ? remotes[0] : null
+  if (remote) {
+    const ref = (await git(cwd, ['symbolic-ref', '--quiet', `refs/remotes/${remote}/HEAD`]).catch(() => '')).trim()
+    if (ref.startsWith(`refs/remotes/${remote}/`)) return { branch, defaultBranch: ref.slice(`refs/remotes/${remote}/`.length) }
+  }
+  for (const name of ['main', 'master']) if (await branchExists(cwd, name) || branch === name) return { branch, defaultBranch: name }
+  return { branch, defaultBranch: null }
 }
 
 export async function worktreeAdd(repoRoot: string, path: string, branch: string, baseRef: string): Promise<void> {
@@ -328,8 +353,9 @@ export async function abortOperation(cwd: string): Promise<void> {
   if (!op) throw new Error('No rebase or merge is in progress.')
   await git(cwd, [op, '--abort'])
 }
-export async function push(cwd: string): Promise<void> {
+export async function push(cwd: string, expectedBranch?: string): Promise<void> {
   const s = await status(cwd)
+  if (expectedBranch !== undefined && s.branch !== expectedBranch) throw new Error('The current branch changed after committing. Nothing was pushed. Review the branch before pushing.')
   if (!s.branch) throw new Error('Switch to a branch before pushing')
   if (s.upstream) { await git(cwd, ['push']); return }
   const remotes = (await git(cwd, ['remote'])).trim().split('\n').filter(Boolean)

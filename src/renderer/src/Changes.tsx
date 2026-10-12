@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
-import { ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardCheck, ExternalLink, Info, MessageSquarePlus, Pencil, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardCheck, FileDiff, ExternalLink, Info, MessageSquarePlus, Pencil, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeFile, ChangeReview, ReviewComment, ReviewFileState, ViewDescriptor } from '../../shared/types'
 import { invoke, ramu } from './ipc'
 import { useWorkspace } from './workspace'
 import { ReviewDiff, enterReviewFile, type InlineReviewBlock } from './ReviewDiff'
+import { UndoReview } from './UndoRun'
 import { LineStats } from './LineStats'
 import { useReviews, openReview } from './reviews'
 
@@ -248,5 +249,26 @@ export function SessionChangesButton({ sessionId }: { sessionId: string }) {
 export function TurnChanges({ review }: { review: ChangeReview }) {
   useLanguage()
   const ws = useWorkspace()
-  return <section className="chat-changes" aria-label={t("Files changed in this turn")}><div className="chat-changes-heading"><strong>{review.files.length} {review.files.length === 1 ? 'file' : 'files'} {t(" changed")}</strong><LineStats files={review.files} /><span className="grow" /><Button className="ghost small" onClick={() => openReview(ws, { id: review.id, taskId: review.taskId })}><ClipboardCheck size={13} />{t("View changes")}</Button></div><ul>{review.files.map((file) => <li key={file.id}><Button className="ghost small" title={`${file.repoName}/${file.path}`} onClick={() => openReview(ws, { id: review.id, taskId: review.taskId, fileId: file.id })}><span className={`chat-change-status ${file.status}`}>{file.status === 'added' ? '+' : file.status === 'deleted' ? '−' : 'M'}</span><span className="chat-change-path">{file.path}</span><LineStats files={[file]} />{file.binary && <span className="muted small">{t("Binary")}</span>}{review.comments.some((c) => c.fileId === file.id && c.state !== 'resolved') && <span className="review-discussion-count" title={t("Open discussions")}>{review.comments.filter((c) => c.fileId === file.id && c.state !== 'resolved').length}</span>}</Button></li>)}</ul></section>
+  const [expanded, setExpanded] = useState(false)
+  if (!review.files.length) return null
+  const single = review.files.length === 1
+  const visible = expanded ? review.files : review.files.slice(0, 3)
+  const undone = review.files.every((file) => review.undoFileIds?.includes(file.id))
+  const manyRepos = new Set(review.files.map((file) => file.repoId)).size > 1
+  return <section className="chat-changes" aria-label={t("Files changed in this turn")}>
+    <div className="chat-changes-heading">
+      <span className="chat-changes-icon" aria-hidden="true"><FileDiff size={21} strokeWidth={1.6} /></span>
+      <div className="chat-changes-summary"><strong title={single ? review.files[0]!.path : undefined}>{single ? t('Edited {0}', { '0': review.files[0]!.path.split('/').pop()! }) : t('Edited {0} files', { '0': review.files.length })}</strong><LineStats files={review.files} />{undone && <span className="muted small">{t('Changes undone')}</span>}</div>
+      <div className="chat-changes-actions"><UndoReview reviewId={review.id} disabled={undone || review.state !== 'ready'} /><Button variant="outline" className="small" onClick={() => openReview(ws, { id: review.id, taskId: review.taskId })}>{t("View changes")}</Button></div>
+    </div>
+    {!single && <ul>{visible.map((file) => {
+      const slash = file.path.lastIndexOf('/')
+      return <li key={file.id}><Button variant="ghost" className="chat-change-file" title={`${file.repoName}/${file.path}`} onClick={() => openReview(ws, { id: review.id, taskId: review.taskId, fileId: file.id })}>
+        <span className="chat-change-path">{manyRepos && <span className="muted">{file.repoName}/</span>}{slash >= 0 && <span className="muted">{file.path.slice(0, slash + 1)}</span>}<span>{file.path.slice(slash + 1)}</span></span>
+        <LineStats files={[file]} />{file.binary && <span className="muted small">{t("Binary")}</span>}
+        {review.comments.some((c) => c.fileId === file.id && c.state !== 'resolved') && <span className="review-discussion-count" title={t("Open discussions")}>{review.comments.filter((c) => c.fileId === file.id && c.state !== 'resolved').length}</span>}
+      </Button></li>
+    })}</ul>}
+    {!single && review.files.length > 3 && <Button variant="ghost" className="chat-changes-expand" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? t('Show fewer files') : t('Show {0} more files', { '0': review.files.length - 3 })}<ChevronDown size={14} className={expanded ? 'expanded' : ''} /></Button>}
+  </section>
 }

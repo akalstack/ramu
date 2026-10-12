@@ -12,6 +12,7 @@ import { Dropdown, Menu, useContextMenu } from './Menu'
 import { WorkspaceSyncDialog } from './WorkspaceSync'
 import type { GitBranchInfo, GitStatus } from '../../shared/types'
 import { BranchPicker, SyncButton, useAutoFetch } from './GitControls'
+import { CommitBranchDialog } from './CommitBranchDialog'
 import { Notifications, notifyError } from './Notifications'
 import { TitleTooltips } from './TitleTooltips'
 import { AppSettingsProvider, useAppSettings } from './AppSettings'
@@ -238,6 +239,7 @@ function Shell() {
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
       <ProviderSetupTerminal />
       <Notifications />
+      <CommitBranchDialog />
       <TitleTooltips />
       <CreateEntryDialog />
     </div>

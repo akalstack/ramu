@@ -1,0 +1,127 @@
+- generic [ref=f1e1]:
+  - generic [ref=f1e3]:
+    - region [ref=f1e51]:
+      - generic [ref=f1e5]:
+        - generic [ref=f1e9]:
+          - strong [ref=f1e10]: Edited release-directory-form.tsx
+          - generic [ref=f1e52]:
+            - generic [ref=f1e12]: "+15"
+            - generic [ref=f1e13]: −1
+        - generic [ref=f1e14]:
+          - button [ref=f1e53] [cursor=pointer]: Undo
+          - button [ref=f1e54] [cursor=pointer]: View changes
+    - region [ref=f1e55]:
+      - generic [ref=f1e18]:
+        - generic [ref=f1e22]:
+          - strong [ref=f1e23]: Edited 5 files
+          - generic [ref=f1e56]:
+            - generic [ref=f1e25]: "+40"
+            - generic [ref=f1e26]: −23
+        - generic [ref=f1e27]:
+          - button [ref=f1e57] [cursor=pointer]: Undo
+          - button [ref=f1e58] [cursor=pointer]: View changes
+      - list [ref=f1e30]:
+        - listitem [ref=f1e31]:
+          - button [ref=f1e59] [cursor=pointer]:
+            - generic [ref=f1e33]: frontend/src/components/lioclaw/epic-list-view.tsx
+            - generic [ref=f1e60]:
+              - generic [ref=f1e35]: "+2"
+              - generic [ref=f1e36]: −14
+        - listitem [ref=f1e37]:
+          - button [ref=f1e61] [cursor=pointer]:
+            - generic [ref=f1e39]: frontend/src/components/lioclaw/lioclaw-page.tsx
+            - generic [ref=f1e62]:
+              - generic [ref=f1e41]: "+11"
+              - generic [ref=f1e42]: −3
+        - listitem [ref=f1e43]:
+          - button [ref=f1e63] [cursor=pointer]:
+            - generic [ref=f1e45]: frontend/src/components/lioclaw/my-epics-view.tsx
+            - generic [ref=f1e64]:
+              - generic [ref=f1e47]: "+21"
+              - generic [ref=f1e48]: −0
+      - button [ref=f1e65] [cursor=pointer]: Show 2 more files
+    - button [ref=f1e66] [cursor=pointer]: Test Commit & Push
+  - alertdialog [ref=f1e70]:
+    - heading "Undo these changes" [level=2] [ref=f1e71]
+    - generic [ref=f1e73]:
+      - paragraph [ref=f1e74]: Undo selected changes from this turn. Later edits are preserved when possible. Chat history stays available.
+      - generic [ref=f1e75]:
+        - generic [ref=f1e76] [cursor=pointer]:
+          - checkbox "Select all eligible files 5 of 5 eligible files selected" [checked] [active] [ref=f1e77]
+          - checkbox [checked] [aria-hidden] [ref=f1e81]
+          - generic [ref=f1e82]: 5 of 5 eligible files selected
+        - button "Refresh preview" [ref=f1e83] [cursor=pointer]
+      - generic [ref=f1e84]:
+        - generic "Files to restore" [ref=f1e85]:
+          - generic [ref=f1e86]:
+            - checkbox "Restore frontend/src/components/lioclaw/epic-list-view.tsx" [checked] [ref=f1e87]
+            - checkbox [checked] [aria-hidden] [ref=f1e91]
+            - button "frontend/src/components/lioclaw/epic-list-view.tsx ramu Ready" [pressed] [ref=f1e92] [cursor=pointer]:
+              - generic [ref=f1e93]: frontend/src/components/lioclaw/epic-list-view.tsx
+              - generic [ref=f1e94]: ramu
+              - generic [ref=f1e95]: Ready
+          - generic [ref=f1e96]:
+            - checkbox "Restore frontend/src/components/lioclaw/lioclaw-page.tsx" [checked] [ref=f1e97]
+            - checkbox [checked] [aria-hidden] [ref=f1e101]
+            - button "frontend/src/components/lioclaw/lioclaw-page.tsx ramu Ready" [ref=f1e102] [cursor=pointer]:
+              - generic [ref=f1e103]: frontend/src/components/lioclaw/lioclaw-page.tsx
+              - generic [ref=f1e104]: ramu
+              - generic [ref=f1e105]: Ready
+          - generic [ref=f1e106]:
+            - checkbox "Restore frontend/src/components/lioclaw/my-epics-view.tsx" [checked] [ref=f1e107]
+            - checkbox [checked] [aria-hidden] [ref=f1e111]
+            - button "frontend/src/components/lioclaw/my-epics-view.tsx ramu Ready" [ref=f1e112] [cursor=pointer]:
+              - generic [ref=f1e113]: frontend/src/components/lioclaw/my-epics-view.tsx
+              - generic [ref=f1e114]: ramu
+              - generic [ref=f1e115]: Ready
+          - generic [ref=f1e116]:
+            - checkbox "Restore frontend/src/components/lioclaw/settings.tsx" [checked] [ref=f1e117]
+            - checkbox [checked] [aria-hidden] [ref=f1e121]
+            - button "frontend/src/components/lioclaw/settings.tsx ramu Ready" [ref=f1e122] [cursor=pointer]:
+              - generic [ref=f1e123]: frontend/src/components/lioclaw/settings.tsx
+              - generic [ref=f1e124]: ramu
+              - generic [ref=f1e125]: Ready
+          - generic [ref=f1e126]:
+            - checkbox "Restore frontend/src/components/lioclaw/types.ts" [checked] [ref=f1e127]
+            - checkbox [checked] [aria-hidden] [ref=f1e131]
+            - button "frontend/src/components/lioclaw/types.ts ramu Ready" [ref=f1e132] [cursor=pointer]:
+              - generic [ref=f1e133]: frontend/src/components/lioclaw/types.ts
+              - generic [ref=f1e134]: ramu
+              - generic [ref=f1e135]: Ready
+        - generic [ref=f1e136]:
+          - generic [ref=f1e137]:
+            - strong [ref=f1e138]: frontend/src/components/lioclaw/epic-list-view.tsx
+            - generic [ref=f1e139]: Current → after restore
+          - generic [ref=f1e140]:
+            - generic [ref=f1e141]:
+              - group "Diff layout" [ref=f1e142]:
+                - button "Inline" [ref=f1e143] [cursor=pointer]
+                - button "Split" [pressed] [ref=f1e144] [cursor=pointer]
+              - button "Previous change" [ref=f1e145] [cursor=pointer]
+              - button "Next change" [ref=f1e146] [cursor=pointer]
+            - generic "Changes to frontend/src/components/lioclaw/epic-list-view.tsx" [ref=f1e147]:
+              - generic [ref=f1e148]:
+                - code [ref=f1e150]:
+                  - generic [ref=f1e151]:
+                    - textbox "use undefined to open the accessibility help."
+                    - textbox [aria-hidden] [ref=f1e152]
+                    - generic [aria-hidden] [ref=f1e155]:
+                      - generic [ref=f1e156]:
+                        - generic [ref=f1e159]: 
+                        - generic [ref=f1e160]: "1"
+                      - generic [ref=f1e161]: "2"
+                    - generic [ref=f1e163]: after
+                - code [ref=f1e175]:
+                  - generic [ref=f1e176]:
+                    - textbox "use undefined to open the accessibility help."
+                    - textbox [aria-hidden] [ref=f1e177]
+                    - generic [aria-hidden] [ref=f1e180]:
+                      - generic [ref=f1e181]:
+                        - generic [ref=f1e184]: 
+                        - generic [ref=f1e185]: "1"
+                      - generic [ref=f1e186]: "2"
+                    - generic [ref=f1e188]: before
+      - paragraph [ref=f1e200]: Later edits are preserved when they merge cleanly. Conflicted files stay untouched. Files are checked again before restoring; local backups are retained.
+    - generic [ref=f1e201]:
+      - button "Cancel" [ref=f1e202] [cursor=pointer]
+      - button "Restore selected files · 5" [ref=f1e203] [cursor=pointer]

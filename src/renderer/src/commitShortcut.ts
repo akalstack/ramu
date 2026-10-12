@@ -1,3 +1,4 @@
+import { chooseCommitBranch } from './CommitBranchDialog'
 import { t } from './i18n'
 import { notify } from '@/components/app-toaster'
 import { DEFAULT_AGENT_SETTINGS } from '../../shared/types'
@@ -55,19 +56,22 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
   const { binding, status } = target
   if (status.operation || status.entries.some((entry) => entry.staged === 'unmerged' || entry.unstaged === 'unmerged')) return showScm(t("Resolve the conflicts in {0} first.", { "0": binding.repoName }))
   if (!status.branch || !status.remote) return showScm(t("{0} has no branch with a remote to push to.", { "0": binding.repoName }))
+  const branchOptions = await chooseCommitBranch(ctx, binding.repoId)
+  if (!branchOptions) return
+  if (branchOptions.newBranch && Object.values(ws.dirty).some(Boolean)) return showScm(t('Save or close unsaved editor buffers before changing files or branches.'))
   const stageAll = !hasStaged(target)
   const run = async () => {
     if (stageAll) await invoke('git.stage', ctx, binding.repoId, status.entries.filter((entry) => entry.unstaged).map((entry) => entry.path))
     const draft = await invoke('git.generateCommit', ctx, binding.repoId, DEFAULT_AGENT_SETTINGS)
     if (!draft.message.trim()) throw new Error(t('Could not draft a commit message.'))
-    await invoke('git.commit', ctx, binding.repoId, draft.message, draft.fingerprint)
-    await invoke('git.push', ctx, binding.repoId)
+    await invoke('git.commit', ctx, binding.repoId, draft.message, draft.fingerprint, undefined, branchOptions)
+    await invoke('git.push', ctx, binding.repoId, branchOptions.newBranch ?? branchOptions.expectedBranch ?? undefined)
     return draft.message.split('\n')[0]!
   }
   const work = run().finally(() => window.dispatchEvent(new Event('ramu:git-updated')))
   void notify.promise(work, {
     loading: { title: t("Committing and pushing {0}…", { "0": binding.repoName }), type: 'loading' },
-    success: (subject) => ({ title: t("Pushed “{0}” to {1}", { "0": subject, "1": status.branch! }), type: 'success' }),
+    success: (subject) => ({ title: t("Pushed “{0}” to {1}", { "0": subject, "1": branchOptions.newBranch ?? status.branch! }), type: 'success' }),
     error: (reason) => ({ title: errorText(reason), description: t("Commit & Push"), type: 'error', timeout: 0 }),
   }).catch(() => {})
   await work.catch(() => {})

@@ -8,7 +8,7 @@ import { resolveFileLink } from './fileLinks'
 import { scheduleSchema, ruleSchema, previewOccurrences, type ScheduleService } from './schedules'
 import type { ReviewService } from './reviews'
 import type { RecapService } from './recaps'
-import type { Aside, AsideMessage, FileContext, ProjectAction, ScheduleInput, UsageReading } from '../shared/types'
+import type { Aside, AsideMessage, FileContext, ProjectAction, ScheduleInput, UsageReading, CommitBranchOptions } from '../shared/types'
 import { randomUUID } from 'node:crypto'
 import { UsageService } from './usage'
 import { goalPreferencesSchema } from './goals'
@@ -574,15 +574,17 @@ export function createDispatcher(host: RuntimeHost, { lsp, workspace, terminals,
       run: (t: string, r: string, oid: string) => { const cwd = gitCwdOf(t, r); return lock.runMany([`checkout:${cwd}`, `repo:${workspace.getRepository(r).root}`], () => git.undoCommit(cwd, oid)) },
     },
     'git.commit': {
-      args: z.tuple([id, id, z.string().max(100_000), z.string().regex(/^[a-f0-9]{64}$/).optional(), z.string().regex(/^[a-f0-9]{40,64}$/).optional()]),
-      run: (taskId: string, repoId: string, message: string, fingerprint?: string, amendHead?: string) => {
+      args: z.tuple([id, id, z.string().max(100_000), z.string().regex(/^[a-f0-9]{64}$/).optional(), z.string().regex(/^[a-f0-9]{40,64}$/).optional(), z.object({ expectedBranch: z.string().nullable(), newBranch: z.string().min(1).max(200).optional() }).optional()]),
+      run: (taskId: string, repoId: string, message: string, fingerprint?: string, amendHead?: string, branchOptions?: CommitBranchOptions) => {
         const cwd = gitCwdOf(taskId, repoId)
         return lock.runMany([`checkout:${cwd}`, `repo:${workspace.getRepository(repoId).root}`], async () => {
           if (fingerprint && (await git.stagedPatch(cwd)).fingerprint !== fingerprint) throw new Error('Staged changes changed after the AI draft. Regenerate the message or clear the field to write a new one.')
-          return git.commit(cwd, message, amendHead)
+          if (branchOptions?.newBranch && agents.activeWriter([cwd])) throw new Error('Stop the agent in this checkout before creating a feature branch.')
+          return git.commit(cwd, message, amendHead, branchOptions)
         })
       },
     },
+    'git.commitBranchInfo': { args: z.tuple([id, id]), run: (t: string, r: string) => git.commitBranchInfo(gitCwdOf(t, r)) },
     'git.createBranch': { args: z.tuple([id, id, z.string().min(1).max(200)]), run: (t: string, r: string, name: string) => { const cwd = gitCwdOf(t, r); return lock.runMany([`checkout:${cwd}`, `repo:${workspace.getRepository(r).root}`], () => git.createBranch(cwd, name)) } },
     'git.deleteBranch': { args: z.tuple([id, id, z.string().min(1).max(200)]), run: (t: string, r: string, name: string) => lock.run(`repo:${workspace.getRepository(r).root}`, () => git.deleteBranch(gitCwdOf(t, r), name)) },
     'git.stashes': { args: z.tuple([id, id]), run: (t: string, r: string) => git.stashes(gitCwdOf(t, r)) },
@@ -610,7 +612,7 @@ export function createDispatcher(host: RuntimeHost, { lsp, workspace, terminals,
       },
     },
     'git.fetch': { args: z.tuple([id, id]), run: (t: string, r: string) => lock.run(`repo:${workspace.getRepository(r).root}`, () => git.fetch(gitCwdOf(t, r))) },
-    'git.push': { args: z.tuple([id, id]), run: (t: string, r: string) => lock.run(`repo:${workspace.getRepository(r).root}`, () => git.push(gitCwdOf(t, r))) },
+    'git.push': { args: z.tuple([id, id, z.string().min(1).max(200).optional()]), run: (t: string, r: string, expectedBranch?: string) => { const cwd = gitCwdOf(t, r); return lock.runMany([`checkout:${cwd}`, `repo:${workspace.getRepository(r).root}`], () => git.push(cwd, expectedBranch)) } },
     'git.pull': {
       args: z.tuple([id, id, pullMode.optional()]), run: (t: string, r: string, mode?: PullMode) => {
         const cwd = gitCwdOf(t, r)

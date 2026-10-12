@@ -16,6 +16,7 @@ import { AgentControls, providerName } from '../AgentControls'
 import { invoke, ramu, copyText } from '../ipc'
 import { Dialog, Dropdown, Menu, useContextMenu } from '../Menu'
 import { errorText } from '../TaskPane'
+import { chooseCommitBranch } from '../CommitBranchDialog'
 import { registerCommitTarget } from '../commitShortcut'
 import { formatKeys } from '../commands'
 import { notifyError } from '../Notifications'
@@ -211,7 +212,11 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   }
   const generate = () => void draftMessage()
   // With no message typed, Commit drafts one from the staged changes first and commits it as written.
-  const commit = async (action: 'commit' | 'amend' | 'push' | 'sync' = 'commit') => {
+  const commit = async (action: 'commit' | 'amend' | 'push' | 'sync' | 'new-branch' = 'commit', stagePaths?: string[]) => {
+    const branchOptions = action === 'push' || action === 'sync' || action === 'new-branch' ? await chooseCommitBranch(taskId, binding.repoId, action === 'new-branch') : undefined
+    if (branchOptions === null) return
+    if (branchOptions?.newBranch) requireSaved()
+    if (stagePaths?.length) await invoke('git.stage', taskId, binding.repoId, stagePaths)
     let text = message, fingerprint = draft?.fingerprint
     const amendHead = action === 'amend' ? status?.oid ?? undefined : undefined
     if (action === 'amend' && !amendHead) return
@@ -222,9 +227,9 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
     }
     await run(async () => {
       if (action === 'sync') requireSaved()
-      await invoke('git.commit', taskId, binding.repoId, text, fingerprint, amendHead)
+      await invoke('git.commit', taskId, binding.repoId, text, fingerprint, amendHead, branchOptions)
       setMessage(''); setDraft(null)
-      if (action === 'push') await invoke('git.push', taskId, binding.repoId)
+      if (action === 'push') await invoke('git.push', taskId, binding.repoId, branchOptions?.newBranch ?? branchOptions?.expectedBranch ?? undefined)
       if (action === 'sync') await invoke('git.sync', taskId, binding.repoId)
     })
   }
@@ -248,10 +253,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
     commitAndPush: async () => {
       const { staged, unstaged, publishable } = shortcut.current
       if (!publishable) return reportError(t("This repository has no branch with a remote to push to, or a conflict is unresolved."))
-      if (!staged) {
-        try { await invoke('git.stage', taskId, binding.repoId, unstaged) } catch (reason) { return reportError(errorText(reason)) }
-      }
-      await shortcut.current.commit('push')
+      try { await shortcut.current.commit('push', staged ? undefined : unstaged) } catch (reason) { reportError(errorText(reason)) }
     },
   }), [taskId, binding.repoId, reportError])
 
@@ -315,10 +317,11 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
           <Button className="scm-commit primary" aria-label={`Commit ${staged.length} staged`} disabled={!canCommit} title={message.trim() ? undefined : t("Drafts a message with AI, then commits")} onClick={() => void commit()}><Check size={14} />{generating ? t("Drafting message…") : busy ? t("Working…") : t("Commit")}</Button>
           <Menu label={t("Commit options")} icon={<ChevronDown size={14} />} className="scm-commit-menu primary icon" align="end" disabled={busy || generating || !!conflicts.length} items={[
             { key: 'commit', label: t("Commit"), disabled: !canCommit, onSelect: () => void commit() },
+            { key: 'new-branch', label: t("Commit on new branch"), disabled: !canCommit || !!status?.operation, onSelect: () => void commit('new-branch').catch((reason) => reportError(errorText(reason))) },
             { key: 'amend', label: t("Commit (Amend)"), title: t("Replace the latest commit; leave the message empty to keep its message"), disabled: !canAmend, onSelect: () => void commit('amend') },
             { key: 'separator', separator: true },
-            { key: 'push', label: t("Commit & Push"), title: t("Shortcut: {0}", { "0": formatKeys('mod+alt+p') }), disabled: !canPublish, onSelect: () => void commit('push') },
-            { key: 'sync', label: t("Commit & Sync"), disabled: !canPublish, onSelect: () => void commit('sync') },
+            { key: 'push', label: t("Commit & Push"), title: t("Shortcut: {0}", { "0": formatKeys('mod+alt+p') }), disabled: !canPublish, onSelect: () => void commit('push').catch((reason) => reportError(errorText(reason))) },
+            { key: 'sync', label: t("Commit & Sync"), disabled: !canPublish, onSelect: () => void commit('sync').catch((reason) => reportError(errorText(reason))) },
           ]} />
         </ButtonGroup>
         {status && !staged.length && !status.operation && status.branch && status.remote && (!status.upstream || status.ahead > 0 || status.behind > 0) && <SyncButton status={status} busy={busy} pullMode={preferences.pullMode} className="scm-sync" showLabel onSync={sync} />}

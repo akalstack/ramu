@@ -108,3 +108,64 @@ describe('Stashes', () => {
     expect((await git.stashes(mine))[0]?.subject).toContain('Staged only')
   })
 })
+
+
+describe('Commit on a feature branch', () => {
+  it('creates from HEAD, commits only the index, and publishes without changing main', async () => {
+    const main = sh(mine, 'rev-parse', 'main')
+    writeFileSync(join(mine, 'shared.txt'), 'staged feature\n'); await git.stage(mine, ['shared.txt'])
+    writeFileSync(join(mine, 'shared.txt'), 'unstaged edit\n')
+    writeFileSync(join(mine, 'untracked.txt'), 'keep me\n')
+    const head = await git.commit(mine, 'Feature commit', undefined, { expectedBranch: 'main', newBranch: 'feature/example' })
+    expect(await git.currentBranch(mine)).toBe('feature/example')
+    expect(sh(mine, 'rev-parse', 'main')).toBe(main)
+    expect(sh(mine, 'show', 'HEAD:shared.txt')).toBe('staged feature')
+    expect(readFileSync(join(mine, 'shared.txt'), 'utf8')).toBe('unstaged edit\n')
+    expect(readFileSync(join(mine, 'untracked.txt'), 'utf8')).toBe('keep me\n')
+    expect((await git.status(mine)).upstream).toBeNull()
+    await git.push(mine)
+    expect(sh(remote, 'rev-parse', 'feature/example')).toBe(head)
+    expect(sh(remote, 'rev-parse', 'main')).toBe(main)
+    expect((await git.status(mine)).upstream).toBe('origin/feature/example')
+  })
+  it('detects a custom remote default and falls back to main without remote HEAD', async () => {
+    expect(await git.commitBranchInfo(mine)).toEqual({ branch: 'main', defaultBranch: 'main' })
+    sh(mine, 'branch', 'trunk')
+    sh(mine, 'update-ref', 'refs/remotes/origin/trunk', 'HEAD')
+    sh(mine, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk')
+    expect(await git.commitBranchInfo(mine)).toEqual({ branch: 'main', defaultBranch: 'trunk' })
+  })
+  it('rejects stale, invalid, and existing branch choices without changing HEAD or the index', async () => {
+    writeFileSync(join(mine, 'shared.txt'), 'staged\n'); await git.stage(mine, ['shared.txt'])
+    const head = await git.headOid(mine), index = sh(mine, 'write-tree')
+    for (const choice of [{ expectedBranch: 'stale', newBranch: 'feature/new' }, { expectedBranch: 'main', newBranch: 'invalid name' }, { expectedBranch: 'main', newBranch: 'main' }]) {
+      await expect(git.commit(mine, 'Feature', undefined, choice)).rejects.toThrow()
+      expect(await git.currentBranch(mine)).toBe('main')
+      expect(await git.headOid(mine)).toBe(head)
+      expect(sh(mine, 'write-tree')).toBe(index)
+    }
+  })
+  it('requires staged changes and rejects a merge in progress before switching', async () => {
+    await expect(git.commit(mine, 'Feature', undefined, { expectedBranch: 'main', newBranch: 'feature/new' })).rejects.toThrow(/Stage changes/)
+    writeFileSync(join(mine, 'shared.txt'), 'staged\n'); await git.stage(mine, ['shared.txt'])
+    writeFileSync(join(mine, '.git', 'MERGE_HEAD'), `${sh(mine, 'rev-parse', 'HEAD')}\n`)
+    await expect(git.commit(mine, 'Feature', undefined, { expectedBranch: 'main', newBranch: 'feature/new' })).rejects.toThrow(/Git operation/)
+    expect(await git.currentBranch(mine)).toBe('main')
+  })
+  it('continues on main when explicitly chosen', async () => {
+    writeFileSync(join(mine, 'shared.txt'), 'staged\n'); await git.stage(mine, ['shared.txt'])
+    await git.commit(mine, 'Direct commit', undefined, { expectedBranch: 'main' })
+    await git.push(mine)
+    expect(await git.currentBranch(mine)).toBe('main')
+    expect(sh(remote, 'log', '-1', '--format=%s', 'main')).toBe('Direct commit')
+  })
+})
+
+
+it('does not push a different branch after committing', async () => {
+  sh(mine, 'switch', '-q', '-c', 'feature/original')
+  commit(mine, 'topic.txt', 'topic\n', 'Topic')
+  sh(mine, 'switch', '-q', 'main')
+  await expect(git.push(mine, 'feature/original')).rejects.toThrow(/Nothing was pushed/)
+  expect(sh(remote, 'log', '-1', '--format=%s', 'main')).toBe('Base')
+})

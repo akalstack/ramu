@@ -644,3 +644,6 @@ export interface ChangeReview {
 }
 export interface UndoFile { fileId: string; path: string; repoName: string; status: 'ready' | 'conflict' | 'unchanged' | 'unavailable'; reason: string; currentContent: string; resultContent: string; remove: boolean }
 export interface UndoPreview { token: string; reviewId: string; expiresAt: number; files: UndoFile[] }
+
+/** Branch choice captured before a commit, checked again under the repository lock. */
+export interface CommitBranchOptions { expectedBranch: string | null; newBranch?: string }

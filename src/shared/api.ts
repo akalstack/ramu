@@ -1,7 +1,7 @@
 import type { ProviderConfiguration, ProviderStatus } from './providers'
 // The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
 import type {
-  PullMode,
+  PullMode, CommitBranchOptions,
   ChangeReview, ChangeFile, ReviewFileState, ReviewComment, UndoPreview, FileContext, SkillInfo, ScheduleInput, ScheduleRule, Schedule, ScheduleRun, RecapSnapshot, BackgroundStatus,
   SearchOptions,
   SearchResults,
@@ -174,6 +174,7 @@ export interface RamuMethods {
   'git.unstage'(taskId: string, repoId: string, paths: string[]): void
   'git.discard'(taskId: string, repoId: string, paths: string[]): void
   'git.undoCommit'(taskId: string, repoId: string, expectedHead: string): string
+  'git.commitBranchInfo'(taskId: string, repoId: string): { branch: string | null; defaultBranch: string | null }
   'git.createBranch'(taskId: string, repoId: string, name: string): void
   'git.deleteBranch'(taskId: string, repoId: string, name: string): void
   'git.stashes'(taskId: string, repoId: string): GitStash[]
@@ -181,7 +182,7 @@ export interface RamuMethods {
   'git.popStash'(taskId: string, repoId: string, oid: string): void
   'git.applyStash'(taskId: string, repoId: string, oid: string): void
   'git.dropStash'(taskId: string, repoId: string, oid: string): void
-  'git.commit'(taskId: string, repoId: string, message: string, fingerprint?: string, amendHead?: string): string
+  'git.commit'(taskId: string, repoId: string, message: string, fingerprint?: string, amendHead?: string, branchOptions?: CommitBranchOptions): string
   'git.history'(taskId: string, repoId: string): GitCommit[]
   'git.branches'(taskId: string, repoId: string): GitBranchInfo[]
   'git.checkout'(taskId: string, repoId: string, branch: string): void
@@ -190,7 +191,7 @@ export interface RamuMethods {
   'git.sync'(taskId: string, repoId: string): void
   'git.continueOperation'(taskId: string, repoId: string): void
   'git.abortOperation'(taskId: string, repoId: string): void
-  'git.push'(taskId: string, repoId: string): void
+  'git.push'(taskId: string, repoId: string, expectedBranch?: string): void
   'git.commitFiles'(taskId: string, repoId: string, oid: string): GitCommitFile[]
   'git.commitFileDiff'(taskId: string, repoId: string, oid: string, path: string): DiffContents
   'git.commitDetails'(taskId: string, repoId: string, oid: string): string
