@@ -267,10 +267,10 @@ export async function branches(cwd: string): Promise<GitBranchInfo[]> {
     return { name: name!, current: current === '*', upstream: upstream ?? '', worktree: worktree ?? '' }
   })
 }
-export async function requireClean(cwd: string): Promise<void> {
+export async function requireClean(cwd: string, autostash = false): Promise<void> {
   const current = await status(cwd)
   if (current.operation) throw new Error(`A ${current.operation} is in progress. Continue or abort it in Source Control first.`)
-  if (current.entries.length) throw new Error('Commit or stash your working changes before switching branches or pulling. Ramu does not stash them automatically.')
+  if (current.entries.length && (!autostash || current.entries.some((entry) => entry.staged === 'unmerged'))) throw new Error('Commit or stash your working changes before switching branches or pulling. Ramu does not stash them automatically.')
 }
 export async function createBranch(cwd: string, name: string): Promise<void> {
   await requireClean(cwd)
@@ -315,21 +315,34 @@ export async function checkout(cwd: string, branch: string): Promise<void> {
   await git(cwd, ['switch', '--', branch])
 }
 export async function fetch(cwd: string): Promise<void> { await git(cwd, ['fetch', '--all']) }
+/** Integrate fetched commits only when no local work needs to be reconciled. */
+export async function autoPull(cwd: string): Promise<boolean> {
+  const current = await status(cwd)
+  if (!current.branch || !current.upstream || !current.behind || current.ahead || current.entries.length || current.operation) return false
+  const target = (await git(cwd, ['rev-parse', '--verify', '@{upstream}'])).trim()
+  // Do not inherit merge.autoStash, pull.rebase, or pull.ff from user configuration.
+  await git(cwd, ['merge', '--ff-only', '--no-autostash', '--no-overwrite-ignore', '--no-edit', target])
+  return true
+}
 const PULL_FLAGS: Record<PullMode, string[]> = {
-  rebase: ['--rebase'],
+  rebase: ['--rebase', '--autostash'],
   // --ff overrides a global pull.ff=only so merge mode can create a merge commit.
-  merge: ['--no-rebase', '--ff'],
-  'ff-only': ['--ff-only'],
+  merge: ['--no-rebase', '--ff', '--autostash'],
+  'ff-only': ['--ff-only', '--autostash'],
 }
 /** Explicit flags: recent Git refuses divergent pulls when no mode is configured. */
 export async function pull(cwd: string, mode: PullMode = 'rebase'): Promise<void> {
-  await requireClean(cwd)
+  await requireClean(cwd, true)
   try { await git(cwd, ['pull', ...PULL_FLAGS[mode]]) } catch (error) {
     // A conflict leaves the checkout mid-rebase or mid-merge; say what to do instead of echoing Git's hints.
     const op = await operation(cwd)
     if (!op) throw error
     const conflicted = (await status(cwd)).entries.filter((entry) => entry.staged === 'unmerged').length
     throw new Error(`Pull stopped on ${conflicted === 1 ? 'a conflict in 1 file' : `conflicts in ${conflicted} files`}. Resolve and stage ${conflicted === 1 ? 'it' : 'them'} in Source Control, then Continue, or Abort the ${op}. Nothing was pushed.`)
+  }
+  // Git can exit successfully when restoring the autostash leaves conflicts.
+  if ((await status(cwd)).entries.some((entry) => entry.staged === 'unmerged')) {
+    throw new Error('Remote commits were pulled, but restoring your autostashed changes caused conflicts. Resolve them in Source Control. Git kept the autostash in Stashes. Nothing was pushed.')
   }
 }
 /** VS Code's Sync: publish a branch without an upstream; otherwise pull, then push only if still ahead. A failed pull never pushes. */

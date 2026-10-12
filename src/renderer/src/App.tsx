@@ -356,10 +356,17 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
   const [revision, setRevision] = useState(0)
   const { preferences } = useAppSettings()
   const [syncAll, setSyncAll] = useState(false)
+  const autoPullContext = useRef({ taskId, repoId, allowed: false })
+  autoPullContext.current = { taskId, repoId, allowed: preferences.autoPull && !busy && !Object.values(ws.dirty).some(Boolean) }
   const autoFetch = useCallback(async () => {
     if (!taskId || !binding || binding.setupState !== 'ready') return
     await invoke('git.fetch', taskId, binding.repoId)
-    window.dispatchEvent(new Event('ramu:git-updated'))
+    try {
+      const current = autoPullContext.current
+      if (current.allowed && current.taskId === taskId && current.repoId === binding.repoId) await invoke('git.autoPull', taskId, binding.repoId)
+    } finally {
+      window.dispatchEvent(new Event('ramu:git-updated'))
+    }
   }, [taskId, binding?.repoId, binding?.setupState])
   useAutoFetch(binding?.setupState === 'ready' ? autoFetch : null)
 

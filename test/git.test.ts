@@ -113,10 +113,10 @@ describe('Git management', () => {
     expect(readFileSync(join(repo, 'hello.txt'), 'utf8')).toBe('two\n')
     expect((await git.history(repo))[0]!.subject).toBe('Remote edit')
   })
-  it('refuses a pull on dirty files and refuses divergent history without merging', async () => {
+  it('preserves dirty files through autostash and refuses divergent fast-forward pulls', async () => {
     const remote = join(tmp, 'remote.git'); sh(tmp, 'init', '-q', '--bare', remote); sh(repo, 'remote', 'add', 'origin', remote); await git.push(repo)
     writeFileSync(join(repo, 'hello.txt'), 'dirty\n')
-    await expect(git.pull(repo)).rejects.toThrow(/working changes/)
+    await git.pull(repo)
     expect(readFileSync(join(repo, 'hello.txt'), 'utf8')).toBe('dirty\n')
     sh(repo, 'restore', 'hello.txt')
     const other = join(tmp, 'other'); sh(tmp, 'clone', '-q', '-b', 'main', remote, other)

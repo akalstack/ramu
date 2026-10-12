@@ -197,6 +197,7 @@ export interface RamuMethods {
   'git.checkout'(taskId: string, repoId: string, branch: string): void
   'git.fetch'(taskId: string, repoId: string): void
   'git.pull'(taskId: string, repoId: string, mode?: PullMode): void
+  'git.autoPull'(taskId: string, repoId: string): boolean
   'git.sync'(taskId: string, repoId: string): void
   'git.continueOperation'(taskId: string, repoId: string): void
   'git.abortOperation'(taskId: string, repoId: string): void

@@ -36,7 +36,12 @@ export function useAutoFetch(fetch: (() => Promise<unknown>) | null) {
   useEffect(() => {
     if (!fetch) return
     let last = 0
-    const run = () => { if (Date.now() - last < 60_000) return; last = Date.now(); void fetch().catch(() => {}) }
+    let running = false
+    const run = () => {
+      if (running || Date.now() - last < 60_000) return
+      last = Date.now(); running = true
+      void fetch().catch(() => {}).finally(() => { running = false })
+    }
     run()
     const timer = setInterval(run, 3 * 60_000)
     window.addEventListener('focus', run)
