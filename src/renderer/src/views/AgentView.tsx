@@ -239,6 +239,17 @@ export function AgentView({ view, history }: { view: AgentViewDesc; history?: Re
     setEdges((current) => current.top === top && current.bottom === bottom ? current : { top, bottom })
   }
 
+  // Match the transcript's usable width, including non-overlay OS scrollbars.
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    const measure = () => root.current?.style.setProperty('--chat-scrollbar-width', `${el.offsetWidth - el.clientWidth}px`)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
   useEffect(() => {
     let cancelled = false, revision = 0, latestState: AgentSessionState | undefined
     const stored = new Map<number, { event: AgentEvent; revision: number }>()

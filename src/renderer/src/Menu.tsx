@@ -2,7 +2,7 @@ import { t, useLanguage, formatLocale } from './i18n'
 import { Separator } from '@/components/ui/separator'
 import { Dialog as ShadcnDialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { ChevronRight } from 'lucide-react'
@@ -210,6 +210,6 @@ export function Dropdown({ label, value, options, onChange, icon, placeholder = 
   const emptyValue = '__ramu_empty_option__'
   return <Select value={value || (options.some((o) => o.value === '') ? emptyValue : '')} items={options.map((o) => ({ value: o.value || emptyValue, label: o.label }))} onValueChange={(next) => { if (next !== null) onChange(next === emptyValue ? '' : next) }} disabled={disabled || !options.length}>
     <SelectTrigger className={`dropdown-trigger ${className}`} aria-label={label}>{icon}<SelectValue placeholder={placeholder} /></SelectTrigger>
-    <SelectContent alignItemWithTrigger={false} align="start">{options.map((option) => <SelectItem key={option.value || emptyValue} value={option.value || emptyValue} disabled={option.disabled}>{option.label}</SelectItem>)}</SelectContent>
+    <SelectContent alignItemWithTrigger={false} align="start"><SelectGroup className="p-0">{options.map((option) => <SelectItem key={option.value || emptyValue} value={option.value || emptyValue} disabled={option.disabled}>{option.label}</SelectItem>)}</SelectGroup></SelectContent>
   </Select>
 }
