@@ -1,12 +1,13 @@
 import { t, useLanguage } from './i18n'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Bell, Bot, CalendarClock, Code, Cpu, GitBranch, Keyboard, Lightbulb, Palette, Plug, ShieldCheck, Target, X, type LucideIcon } from 'lucide-react'
+import { Bell, Bot, CalendarClock, Code, Cpu, GitBranch, Keyboard, Lightbulb, Palette, Plug, RefreshCw, ShieldCheck, Target, X, type LucideIcon } from 'lucide-react'
 import { SearchInput } from './SearchInput'
 import { fuzzy } from './fuzzy'
 import { useRef, useState, type ReactNode } from 'react'
 
 export const SETTINGS_SECTIONS = [
+  { id: 'updates', label: 'Updates', Icon: RefreshCw },
   { id: 'goals', label: 'Goals', Icon: Target },
   { id: 'automation', label: 'Background & Recaps', Icon: CalendarClock },
   { id: 'appearance', label: 'Appearance', Icon: Palette }, { id: 'editor', label: 'Editor & Terminal', Icon: Code },
@@ -17,6 +18,7 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
+  { section: 'updates', title: 'Auto-update Ramu', words: 'app update github release download restart background service version' },
   { section: 'goals', title: 'Goal detection', words: 'goal auto manual off automatic completion continue unfinished' },
   { section: 'goals', title: 'Maximum continuation turns', words: 'goal max limit budget unlimited retry available quota reset' },
   { section: 'goals', title: 'Custom turn limit', words: 'goal max number turns' },
@@ -26,6 +28,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'automation', title: 'Keep working while asking questions', words: 'async asynchronous optional blocking related grouped answers pending input' },
   { section: 'automation', title: 'Daily recaps', words: 'recap summary home tokens' },
   { section: 'automation', title: 'Generate daily at', words: 'recap time schedule timezone' },
+  { section: 'automation', title: 'Keep computer awake', words: 'sleep awake caffeinate power battery background installed login' },
   { section: 'automation', title: 'Background service', words: 'daemon login startup' },
   { section: 'appearance', title: 'Language', words: 'bahasa indonesia english system perangkat' },
   { section: 'appearance', title: 'Primary color', words: 'accent blue violet teal theme' },

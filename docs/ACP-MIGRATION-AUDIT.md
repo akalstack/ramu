@@ -2,6 +2,8 @@
 
 Checked on 2026-10-11 against the working tree, including its existing uncommitted agent features.
 
+Completion tracking: [PLAN.md §13](PLAN.md#13-claude-and-codex-acp-migration-completion-plan). On 2026-10-12, the registry still reported Claude `0.89.1` and Codex `2.2.2`. The published Codex event/control/state diagnostics were re-run and reproduced the documented event loss, policy/MCP/fork differences, and canonical child-negotiation gap. The targeted current Ramu baseline passed **7 files / 157 tests, 1 skipped** (ACP, AgentService, Codex, routing, usage, question tools, and helper history). No new live inference checks were run in this review. Advisor and Goals now also need candidate integration coverage; prior audit passes do not certify these newer workflows.
+
 **Decision: no migration without the user's explicit go-ahead.** The user permits investigating hybrid native reads and modifications to existing integrations, but has explicitly instructed us not to migrate yet. The stock released adapters have confirmed differences in subscription limit delivery, live patch previews, native async questions, approval policies, and native helper controls. The follow-up below identifies ways to address them through a library host or adapter changes. Several features still need end-to-end compatibility checks. No production provider connections or dependencies were changed by this audit.
 
 ## Releases actually checked
@@ -20,7 +22,7 @@ Versions, publication times, tarballs, and `gitHead` came from the npm registry.
 3. Ran `scripts/acp-event-compatibility.mjs` against the published Codex `2.2.2` bundle. It omits the CLI entry point, exports the unchanged event translator, and feeds synthetic notifications. It does not start Codex or use an account. Both ordinary and AIR-extension configurations produced the same gaps below. Positive controls confirmed that token context was emitted and rate limits/turn diffs were received and cached internally.
 4. Compared native calls and options in `src/main/agent.ts`, `codex.ts`, `helperHistory.ts`, `usage.ts`, `questionTools.ts`, and the existing ACP runner with release implementations, schemas, and extension docs.
 
-Passing a capability advertisement or reading an implementation is **not** equivalent to testing a real agent turn. The deeper verification below adds synthetic contracts, limited live turns, a real Claude helper stop, and direct-native session recovery. Steering during tools, real approvals/questions, historical helper recovery, and fallback through the combined ACP integration remain unverified. This audit does not establish complete migration readiness.
+Passing a capability advertisement or reading an implementation is **not** equivalent to testing a real agent turn. The deeper verification below adds synthetic contracts and isolated live turns, including steering during tools, permission cancellation, MCP questions, helper Stop/replay, direct-native session recovery, images, and manual compaction. Their integration with Ramu's mappings, durable state, routing, and fallback remains unverified. This audit does not establish complete migration readiness.
 
 ## Feature comparison
 

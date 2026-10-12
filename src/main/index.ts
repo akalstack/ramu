@@ -1,6 +1,9 @@
+import { DesktopUpdater } from './desktopUpdater'
+import { runtimeBuild, unloadLoginService } from './runtimeClient'
+import type { AppUpdateStatus } from '../shared/updates'
 import { configureDesktopLanguage, desktopLanguage, t } from './localization'
 import { editorMenu, type EditorMenuOptions } from './editorMenu'
-import { existsSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '../shared/types'
 import { join } from 'node:path'
 import { app, BrowserWindow, Menu, safeStorage, session, shell, dialog, ipcMain, clipboard } from 'electron'
@@ -36,7 +39,16 @@ async function main() {
   const userData = app.getPath('userData')
   const daemonPath = join(import.meta.dirname, 'daemon.js')
   const socketPath = await ensureRuntime(userData, daemonPath)
-  if (app.isPackaged && !process.env.RAMU_USER_DATA && process.platform === 'darwin' && loginPreferred(userData) !== false && !loginEnabled(userData)) loginService(userData, daemonPath, true)
+  const setLoginService = async (enabled: boolean) => {
+    const firstInstall = enabled && !existsSync(join(userData, 'background-ever-installed.json'))
+    loginService(userData, daemonPath, enabled)
+    if (firstInstall) {
+      const preferences = await runtimeInvoke(socketPath, 'settings.app.get')
+      await runtimeInvoke(socketPath, 'settings.app.set', [{ ...preferences, keepAwake: true }])
+      writeFileSync(join(userData, 'background-ever-installed.json'), 'true', { mode: 0o600 })
+    }
+  }
+  if (app.isPackaged && !process.env.RAMU_USER_DATA && process.platform === 'darwin' && loginPreferred(userData) !== false && !loginEnabled(userData)) await setLoginService(true)
 
   if (!process.env.ELECTRON_RENDERER_URL) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -98,11 +110,14 @@ async function main() {
     if (items.length) Menu.buildFromTemplate(items).popup({ window: win, ...(params.frame ? { frame: params.frame } : {}) })
   })
 
+  let updateStatus: AppUpdateStatus | undefined
+  const desktopUpdater = new DesktopUpdater(userData, () => { if (updateStatus) send('updates:changed', { ...updateStatus, currentVersion: app.getVersion(), nativeReady: desktopUpdater.ready, supported: desktopUpdater.supported, error: desktopUpdater.error ?? updateStatus.error }) })
   const send = (channel: string, payload: unknown) => {
     if (!win.isDestroyed()) win.webContents.send(channel, payload)
   }
   const notifier = createAgentNotifier({ window: win, send, invoke: (method, args) => runtimeInvoke(socketPath, method, args) })
   const unsubscribe = subscribeRuntime(socketPath, (channel, payload) => {
+    if (channel === 'updates:changed') { updateStatus = payload; void desktopUpdater.prepare(payload); send(channel, { ...payload, currentVersion: app.getVersion(), nativeReady: desktopUpdater.ready, supported: desktopUpdater.supported, error: desktopUpdater.error ?? payload.error }); return }
     if (channel !== 'host:request') { send(channel, payload); notifier.observe(channel, payload); return }
     void (async () => {
       try {
@@ -174,8 +189,30 @@ async function main() {
     }
     if (method.startsWith('completion.')) return completion.handle(method, args)
     if (method === 'background.start') { await ensureRuntime(userData, daemonPath); return }
-    if (method === 'background.login') { if (typeof args[0] !== 'boolean') throw new Error('Invalid startup setting'); loginService(userData, daemonPath, args[0]); return }
-    if (method === 'background.status') return { ...await runtimeInvoke(socketPath, method), loginEnabled: loginEnabled(userData) }
+    if (method === 'background.login') { if (typeof args[0] !== 'boolean') throw new Error('Invalid startup setting'); await setLoginService(args[0]); return }
+    if (method === 'background.status') { const status = await runtimeInvoke(socketPath, method); return { ...status, loginEnabled: loginEnabled(userData), bundledVersion: app.getVersion(), bundledBuild: runtimeBuild(daemonPath), updateAvailable: status.build !== runtimeBuild(daemonPath) } }
+    if (method === 'background.restart') {
+      const choice = await dialog.showMessageBox(win, { type: 'question', message: t('Restart Ramu and the background service?'), detail: t('Running agents will stop and unfinished chats will recover using your restart settings. App-only restarts keep the service and chats running.'), buttons: [t('Restart now'), t('Later')], defaultId: 1, cancelId: 1 })
+      if (choice.response !== 0) return
+      const startup = loginEnabled(userData)
+      // Unload the old supervisor so it cannot race the replacement back into existence.
+      if (startup) { loginService(userData, daemonPath, false); unloadLoginService(userData) }
+      await runtimeInvoke(socketPath, 'background.restart').catch(() => {})
+      for (let attempt = 0; attempt < 300; attempt++) { try { await runtimeInvoke(socketPath, 'background.status') } catch { break }; await new Promise((resolve) => setTimeout(resolve, 100)) }
+      await ensureRuntime(userData, daemonPath)
+      if (startup) loginService(userData, daemonPath, true)
+      app.relaunch(); app.quit(); return
+    }
+    if (method === 'updates.restart') {
+      const choice = await dialog.showMessageBox(win, { type: 'question', message: t('Restart Ramu to finish updating?'), detail: t('The background service and its running chats will stay connected. You can update the service separately afterwards.'), buttons: [t('Restart now'), t('Later')], defaultId: 1, cancelId: 1 })
+      if (choice.response === 0) desktopUpdater.install()
+      return
+    }
+    if (['updates.status', 'updates.check', 'updates.download'].includes(method)) {
+      updateStatus = await runtimeInvoke(socketPath, method, args)
+      await desktopUpdater.prepare(updateStatus!)
+      return { ...updateStatus, currentVersion: app.getVersion(), nativeReady: desktopUpdater.ready, supported: desktopUpdater.supported, error: desktopUpdater.error ?? updateStatus?.error }
+    }
     return runtimeInvoke(socketPath, method, args)
   })
 
@@ -192,6 +229,7 @@ async function main() {
   else await win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
 
   app.on('before-quit', () => {
+    desktopUpdater.close()
     unsubscribe()
     ipcMain.removeHandler('ramu:invoke')
   })

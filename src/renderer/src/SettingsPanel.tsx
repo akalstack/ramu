@@ -1,3 +1,4 @@
+import { AppUpdates } from './AppUpdates'
 import { t, useLanguage } from './i18n'
 import { Kbd } from '@/components/ui/kbd'
 import { ProviderSettings } from './ProviderSettings'
@@ -72,10 +73,11 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
     finally { setBusy(false) }
   }
   const sizes = (min: number, max: number) => Array.from({ length: max - min + 1 }, (_, index) => ({ value: String(min + index), label: `${min + index} px` }))
-  const toggle = (key: 'previewTabs' | 'formatOnSave' | 'lintWhileEditing' | 'languageServers' | 'hideEmptyStaged' | 'defaultAutoFallback' | 'includeTabContext' | 'recapsEnabled' | 'notifyAgentDone' | 'resumeChatsOnRestart' | 'asyncQuestions' | 'showUsageLimits', title: string, description: string) => <div className="settings-row settings-toggle"><span><strong>{t(title)}</strong><span className="muted block small">{t(description)}</span></span><Switch aria-label={t(title)} checked={appDraft[key]} disabled={busy} onCheckedChange={(checked) => setAppDraft({ ...appDraft, [key]: checked })} /></div>
+  const toggle = (key: 'previewTabs' | 'formatOnSave' | 'lintWhileEditing' | 'languageServers' | 'hideEmptyStaged' | 'defaultAutoFallback' | 'includeTabContext' | 'recapsEnabled' | 'notifyAgentDone' | 'resumeChatsOnRestart' | 'asyncQuestions' | 'showUsageLimits' | 'keepAwake', title: string, description: string) => <div className="settings-row settings-toggle"><span><strong>{t(title)}</strong><span className="muted block small">{t(description)}</span></span><Switch aria-label={t(title)} checked={appDraft[key]} disabled={busy} onCheckedChange={(checked) => setAppDraft({ ...appDraft, [key]: checked })} /></div>
   const resetKeys: Partial<Record<typeof page, (keyof AppPreferences)[]>> = {
+    updates: ['appUpdateChecks', 'appAutoUpdate'],
     providers: ['providerBinaries', 'providerUpdateChecks', 'showUsageLimits'],
-    automation: ['notifyAgentDone', 'resumeChatsOnRestart', 'asyncQuestions', 'autoBackgroundSeconds', 'recapsEnabled', 'recapTime'],
+    automation: ['keepAwake', 'notifyAgentDone', 'resumeChatsOnRestart', 'asyncQuestions', 'autoBackgroundSeconds', 'recapsEnabled', 'recapTime'],
     appearance: ['language', 'accent', 'fontFamily', 'fontSize', 'sidebarWidth'],
     editor: ['previewTabs', 'formatOnSave', 'languageServers', 'aiCompletion', 'lintWhileEditing', 'editorFontSize', 'terminalFontSize', 'terminalTabPosition'],
     access: ['defaultAccess', 'defaultAutoFallback', 'fallback'],
@@ -87,6 +89,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
   const pageKeys = resetKeys[page]
   const resetPage = () => { if (pageKeys) setAppDraft((current) => ({ ...current, ...Object.fromEntries(pageKeys.map((key) => [key, DEFAULT_APP_PREFERENCES[key]])) })) }
   return <SettingsPage section={page} onSection={setPage} busy={busy} error={error} onSave={() => void save()} onClose={() => { if (!busy) onClose() }}>
+    {page === 'updates' && <AppUpdates value={appDraft} onChange={setAppDraft} />}
     {page === 'providers' && <><ProviderSettings value={appDraft} onChange={setAppDraft} /><div className="settings-form">{toggle('showUsageLimits', 'Show usage limits', 'Show the 5-hour and weekly plan usage at the bottom of the sidebar, or in the status bar when the sidebar is hidden.')}</div></>}
     {page === 'automation' && <div className="settings-form">
       {toggle('notifyAgentDone', 'Agent notifications', 'Tell me when an agent finishes, needs input, or fails. Ramu shows a system notification when it is in the background and a toast when it is open. Clicking either opens the chat.')}
@@ -95,6 +98,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
       {toggle('asyncQuestions', 'Keep working while asking questions', 'Agents can ask and continue independent work. Related answers are sent together; work that needs an answer waits. Existing pending questions keep their behavior when this is changed.')}
       {toggle('recapsEnabled', 'Daily recaps', 'Review unfinished work, decisions, and background results on Home. Automatic generation uses model tokens.')}
       <div className="settings-row"><span><strong>{t("Generate daily at")}</strong><span className="muted block small">{t("When the daily recap is written, using your system timezone.")}</span></span><Input aria-label={t("Generate daily at")} type="time" value={appDraft.recapTime} onChange={(e) => setAppDraft({ ...appDraft, recapTime: e.target.value })} /></div>
+      {toggle('keepAwake', 'Keep computer awake', 'Prevent idle sleep while the local service is running, even without login startup installed. Display sleep and manually putting the computer to sleep still work. Enabled on the first background-service installation; you can turn it off anytime.')}
       <BackgroundControls />
     </div>}
     {page === 'appearance'  && <div className="settings-form">

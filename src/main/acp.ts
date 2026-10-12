@@ -1,4 +1,4 @@
-// Native Cursor and Google Antigravity ACP runtimes; JSON-RPC 2.0, newline framing.
+// Native OpenCode, Cursor and Google Antigravity ACP runtimes; JSON-RPC 2.0, newline framing.
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -11,9 +11,9 @@ import { attachmentPrompt } from './attachments'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 
 type Wire = Record<string, any>
-type AcpProvider = 'cursor' | 'antigravity'
+type AcpProvider = 'cursor' | 'antigravity' | 'opencode'
 export function acpCommand(provider: AcpProvider): { command: string; args: string[] } {
-  return { command: providerBinary(provider), args: provider === 'cursor' ? ['acp'] : process.platform === 'linux' ? ['--uid='] : [] }
+  return { command: providerBinary(provider), args: provider === 'cursor' || provider === 'opencode' ? ['acp'] : process.platform === 'linux' ? ['--uid='] : [] }
 }
 export class AcpRpc {
   private child: ChildProcessWithoutNullStreams
@@ -24,9 +24,9 @@ export class AcpRpc {
   readonly exited: Promise<void>
   onMessage: (message: Wire) => void = () => {}
   onExit: (error: Error) => void = () => {}
-  constructor(private provider: AcpProvider, cwd: string) {
+  constructor(private provider: AcpProvider, cwd: string, accountId?: string) {
     const { command, args } = acpCommand(provider)
-    this.child = spawn(command, args, { cwd, stdio: 'pipe', env: providerEnvironment(provider) })
+    this.child = spawn(command, args, { cwd, stdio: 'pipe', env: providerEnvironment(provider, undefined, accountId) })
     this.child.stderr.resume()
     this.child.stdin.on('error', () => {})
     const lines = createInterface({ input: this.child.stdout })
@@ -107,14 +107,14 @@ class AcpSession implements AgentRunner {
   setTools(connection: McpConnection): void { this.connection = connection }
   async start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void> {
     const provider = this.settings.provider as AcpProvider
-    this.rpc = new AcpRpc(provider, this.scope.cwd)
+    this.rpc = new AcpRpc(provider, this.scope.cwd, this.settings.accountId ?? 'default')
     this.rpc.onMessage = (m) => this.handle(m)
     this.rpc.onExit = (e) => { if (!this.stopped) { this.emit({ kind: 'error', message: e.message }); this.emit({ kind: 'state', state: 'failed' }) } }
     const init = await this.rpc.initialize()
     if (resume && !init.agentCapabilities?.loadSession) throw new Error(`${providerName(provider)} does not support resuming this session. Start a new chat.`)
     this.loading = true
     try {
-      this.session = await this.rpc.request(resume ? 'session/load' : 'session/new', { ...(resume ? { sessionId: resume } : {}), cwd: this.scope.cwd, mcpServers: this.connection ? [{ type: 'http', name: 'ramu', url: this.connection.url, headers: [{ name: 'Authorization', value: `Bearer ${this.connection.token}` }] }] : [] })
+      this.session = await this.rpc.request(resume ? 'session/load' : 'session/new', { ...(resume ? { sessionId: resume } : {}), cwd: this.scope.cwd, additionalDirectories: this.scope.additionalDirs, mcpServers: this.connection ? [{ type: 'http', name: 'ramu', url: this.connection.url, headers: [{ name: 'Authorization', value: `Bearer ${this.connection.token}` }] }] : [] })
     } finally { this.loading = false }
     this.sessionId = resume || this.session.sessionId
     if (!this.sessionId) throw new Error('ACP runtime did not return a session ID')

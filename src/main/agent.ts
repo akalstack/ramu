@@ -1,6 +1,6 @@
-import { providerBinary } from './providerBinaries'
+import { providerBinary, providerAccountId } from './providerBinaries'
 import { createAcpRunner, acpModels } from './acp'
-import { createOpenCodeRunner, openCodeModels } from './opencode'
+import { acpHostedRunner } from './acpNativeHost'
 import { providerName, isAcpProvider } from '../shared/providers'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 // Structured agent adapter for Claude Code via the Claude Agent SDK.
@@ -235,7 +235,7 @@ export class AgentService {
     if (goal.status !== 'waiting-provider' && cap !== null && goal.turns >= cap) {
       this.saveGoal(id, { ...goal, status: 'turn-limit', reason: `Reached ${cap} automatic continuation turns. Resume to allow another batch, or change the limit in Settings.`, updatedAt: Date.now() }); return
     }
-    const readings = this.usage?.list() ?? []
+    const readings = this.usage?.list({ [session.provider]: session.settings.accountId ?? 'default' }) ?? []
     let freshAvailability = readings.some((r) => r.provider === session.provider && (r.updatedAt > goal!.updatedAt || r.resetsAt && r.resetsAt > goal!.updatedAt && r.resetsAt <= Date.now())) && !isOver(peakFor(readings, session.provider, session.settings.model), null)
     if (goal.status === 'waiting-provider' && session.settings.autoFallback && !freshAvailability && readings.length) {
       const chain = this.policyOf(session, await this.catalog(), this.preferences?.()).chain
@@ -260,7 +260,7 @@ export class AgentService {
     const goal = this.getGoal(id)
     if (!goal || !['active', 'waiting-provider'].includes(goal.status) || this.goalPreferences().mode === 'off') return false
     const session = this.get(id), now = Date.now()
-    const applicable = (this.usage?.list() ?? []).filter((r) => peakFor([r], session.provider, session.settings.model, now) && isOver(r, null))
+    const applicable = (this.usage?.list({ [session.provider]: session.settings.accountId ?? 'default' }) ?? []).filter((r) => peakFor([r], session.provider, session.settings.model, now) && isOver(r, null))
     const reset = Math.max(0, ...applicable.map((r) => r.resetsAt ?? 0))
     const retryDelay = Math.min(15 * 60_000, Math.max(60_000, (goal.retryDelay ?? 30_000) * 2))
     this.saveGoal(id, { ...goal, status: 'waiting-provider', retryAt: reset > now ? reset + 1000 : now + retryDelay, retryDelay, reason: 'Waiting for provider availability after a usage limit. Ramu will resume automatically.', updatedAt: now })
@@ -462,9 +462,9 @@ export class AgentService {
     private readonly db: Db,
     private readonly emit: (sessionId: string, event: AgentEvent, seq?: number) => void,
     private readonly queryFn: QueryFn,
-    private readonly codexFactory: CodexFactory = createCodexRunner,
+    private readonly codexFactory: CodexFactory = acpHostedRunner(createCodexRunner),
     private readonly acpFactory: AgentRunnerFactory = createAcpRunner,
-    private readonly openCodeFactory: AgentRunnerFactory = createOpenCodeRunner,
+    private readonly openCodeFactory: AgentRunnerFactory = createAcpRunner,
   ) {}
 
   /** After a restart no SDK process survives: anything not terminal becomes "restored" (transcript only). */
@@ -691,6 +691,8 @@ export class AgentService {
   }
 
   private createSession(taskId: string, scope: AgentScope, settings: AgentSettings, state: AgentSessionState, parentId: string | null = null): AgentSessionInfo {
+    const accountId = settings.accountId ?? providerAccountId(settings.provider)
+    if (accountId !== 'default') settings = { ...settings, accountId }
     const row: SessionRow = {
       id: randomUUID(),
       task_id: taskId,
@@ -888,7 +890,7 @@ export class AgentService {
         finally { input.close(); query?.close() }
       })(),
       ...(['cursor', 'antigravity'] as const).map((provider) => acpModels(provider).then((models): ProviderCatalog => ({ provider, models }), (e): ProviderCatalog => ({ provider, models: [], error: errorMessage(e) }))),
-      openCodeModels().then((models): ProviderCatalog => ({ provider: 'opencode', models }), (e): ProviderCatalog => ({ provider: 'opencode', models: [], error: errorMessage(e) })),
+      acpModels('opencode').then((models): ProviderCatalog => ({ provider: 'opencode', models }), (e): ProviderCatalog => ({ provider: 'opencode', models: [], error: errorMessage(e) })),
       codexModels().then((models): ProviderCatalog => ({ provider: 'codex', models }), (e): ProviderCatalog => ({ provider: 'codex', models: [], error: errorMessage(e) })),
     ])
     return this.catalogs
@@ -912,6 +914,9 @@ export class AgentService {
   private async applySettings(id: string, settings: AgentSettings, reason?: string): Promise<AgentSessionInfo> {
     if (this.transitioning.has(id)) throw new Error('Provider switch already in progress')
     const s = this.get(id)
+    const accountId = settings.accountId ?? (settings.provider === s.provider ? s.settings.accountId : providerAccountId(settings.provider))
+    if (accountId && accountId !== 'default') settings = { ...settings, accountId }
+    const sameIdentity = settings.provider === s.provider && (settings.accountId ?? 'default') === (s.settings.accountId ?? 'default')
     if (JSON.stringify(s.settings) === JSON.stringify(settings)) return s
     const revision = this.revisions.get(id) ?? 0
     this.transitioning.add(id)
@@ -923,11 +928,11 @@ export class AgentService {
       await this.draining.get(id)
       if (this.shutdown || revision !== (this.revisions.get(id) ?? 0)) throw new Error('Provider switch cancelled')
       this.db.prepare('UPDATE agent_sessions SET provider = ?, settings = ?, provider_session_id = ? WHERE id = ?')
-        .run(settings.provider, JSON.stringify(settings), settings.provider === s.provider ? s.providerSessionId : null, id)
-      this.record(id, { kind: 'settings', settings, reason: reason ?? (WRITING_STATES.includes(s.state) ? 'Changed settings — continuing the current request' : 'Changed conversation settings'), handoff: settings.provider !== s.provider, previous: s.settings })
+        .run(settings.provider, JSON.stringify(settings), sameIdentity ? s.providerSessionId : null, id)
+      this.record(id, { kind: 'settings', settings, reason: reason ?? (WRITING_STATES.includes(s.state) ? 'Changed settings — continuing the current request' : 'Changed conversation settings'), handoff: !sameIdentity, previous: s.settings })
       if (WRITING_STATES.includes(s.state)) {
         this.transitioning.delete(id)
-        this.launch(id, 'Continue the unfinished user request with the updated conversation settings. Check existing files and tool results before repeating any completed action.', settings.provider === s.provider ? s.providerSessionId : null, false)
+        this.launch(id, 'Continue the unfinished user request with the updated conversation settings. Check existing files and tool results before repeating any completed action.', sameIdentity ? s.providerSessionId : null, false)
       } else this.setState(id, 'restored')
       return this.get(id)
     } finally { this.transitioning.delete(id); this.settleChild(id) }
@@ -973,7 +978,7 @@ export class AgentService {
       const controller = new AbortController()
       const stop = () => controller.abort()
       this.analysisStops.add(stop)
-      try { return { text: await codexAside({ threadId: s.providerSessionId, cwd: s.cwd, model: s.settings.model, effort: s.settings.effort, prompt, signal: controller.signal }), provider: 'codex', model: s.settings.model } }
+      try { return { text: await codexAside({ accountId: s.settings.accountId ?? 'default', threadId: s.providerSessionId, cwd: s.cwd, model: s.settings.model, effort: s.settings.effort, prompt, signal: controller.signal }), provider: 'codex', model: s.settings.model } }
       catch { return null }
       finally { this.analysisStops.delete(stop) }
     }
@@ -1165,7 +1170,7 @@ export class AgentService {
         } catch (e) {
           if (!settings.autoFallback || !isUsageLimit(e)) throw e
           const catalogs = await this.catalog()
-          const routing = this.routing()
+          const routing = this.routing(chosen)
           const step = nextStep(this.chainOf(chosen.provider, catalogs, routing?.prefs), { usage: routing?.usage ?? [], catalogs, switchAt: routing?.prefs.fallback.switchAt ?? DEFAULT_FALLBACK_PREFERENCES.switchAt, attempted: tried })
           if (!step) throw e
           chosen = this.withStep(settings, step)
@@ -1185,9 +1190,9 @@ export class AgentService {
   }
 
   /** Preferences and usage, once the app has provided them; tests run without. */
-  private routing(): { prefs: AppPreferences; usage: UsageReading[] } | null {
+  private routing(settings?: AgentSettings): { prefs: AppPreferences; usage: UsageReading[] } | null {
     if (!this.preferences || !this.usage) return null
-    return { prefs: this.preferences(), usage: this.usage.list() }
+    return { prefs: this.preferences(), usage: this.usage.list(settings ? { [settings.provider]: settings.accountId ?? 'default' } : {}) }
   }
 
   /** Fallback chain and threshold for a session: a sub-agent may use its own list and an earlier threshold. */
@@ -1203,12 +1208,12 @@ export class AgentService {
   }
 
   withStep(settings: AgentSettings, step: FallbackStep): AgentSettings {
-    return { ...settings, provider: step.provider, model: step.model, effort: step.effort, serviceTier: step.serviceTier ?? 'standard' }
+    return { ...settings, accountId: step.provider === settings.provider ? settings.accountId : providerAccountId(step.provider), provider: step.provider, model: step.model, effort: step.effort, serviceTier: step.serviceTier ?? 'standard' }
   }
 
   /** Where settings should go instead, when their provider is at the switch threshold and a fallback is open. */
   async route(settings: AgentSettings): Promise<RouteDecision | null> {
-    const routing = this.routing()
+    const routing = this.routing(settings)
     if (!routing || !settings.autoFallback) return null
     const catalogs = await this.catalog()
     return planRoute(settings, this.chainOf(settings.provider, catalogs, routing.prefs), { usage: routing.usage, catalogs, switchAt: routing.prefs.fallback.switchAt })
@@ -1222,7 +1227,7 @@ export class AgentService {
 
   private rememberOrigin(id: string, from: AgentSettings, _reason: string): void {
     if (this.origins.has(id) || !this.preferences?.().fallback.returnAfterReset) return
-    const peak = peakFor(this.usage?.list() ?? [], from.provider, from.model)
+    const peak = peakFor(this.usage?.list({ [from.provider]: from.accountId ?? 'default' }) ?? [], from.provider, from.model)
     this.origins.set(id, { settings: from, ...(peak?.resetsAt ? { resetsAt: peak.resetsAt } : {}) })
   }
 
@@ -1231,7 +1236,7 @@ export class AgentService {
    * provider is over the threshold. A hold from the composer chip keeps the provider for one message or the chat.
    */
   private async switchBeforeSend(id: string): Promise<boolean> {
-    const routing = this.routing()
+    const routing = this.routing(this.get(id).settings)
     if (!routing) return false
     const s = this.get(id)
     const catalogs = await this.catalog()
@@ -1275,7 +1280,7 @@ export class AgentService {
       const catalogs = await this.catalog()
       if (this.shutdown || revision !== (this.revisions.get(id) ?? 0)) return
       resolveAttempted(catalogs)
-      const routing = this.routing()
+      const routing = this.routing(s.settings)
       const configured = !!routing?.prefs.fallback.chains[s.provider] || (!!s.parentId && routing?.prefs.subagents.fallback === 'separate')
       const policy = this.policyOf(s, catalogs, routing?.prefs)
       const step = nextStep(policy.chain, { usage: routing?.usage ?? [], catalogs, switchAt: policy.switchAt, attempted })
@@ -1310,7 +1315,7 @@ export class AgentService {
     let settings = resolved ? this.withStep(parent.settings, resolved) : parent.settings
     let reason: string | undefined
     let redirect = !!resolved
-    const routing = this.routing()
+    const routing = this.routing(settings)
     if (routing) {
       const policy = this.policyOf({ provider: settings.provider, parentId }, catalogs, routing.prefs)
       const decision = planRoute(settings, policy.chain, { usage: routing.usage, catalogs, switchAt: policy.switchAt })

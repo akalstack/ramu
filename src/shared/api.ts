@@ -1,3 +1,4 @@
+import type { AppUpdateStatus } from './updates'
 import type { ProviderConfiguration, ProviderStatus } from './providers'
 // The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
 import type {
@@ -93,9 +94,15 @@ export interface RamuMethods {
   'completion.setKey'(key: string | null): void
   'completion.pull'(model: string): void
   'completion.cancelPull'(model: string): void
+  'updates.status'(): Promise<AppUpdateStatus>
+  'updates.check'(): Promise<AppUpdateStatus>
+  'updates.download'(): Promise<AppUpdateStatus>
+  'updates.restart'(): Promise<void>
   'background.status'(): BackgroundStatus
   'background.stop'(): void
   'background.start'(): void
+  'background.restart'(): void
+  'background.keepAwake'(): { enabled: boolean; active: boolean; supported: boolean; error: string | null }
   'background.login'(enabled: boolean): void
   'skills.list'(taskId: string): SkillInfo[]
   'schedules.list'(): Schedule[]
@@ -136,6 +143,8 @@ export interface RamuMethods {
   'tasks.bindings'(taskId: string): RepositoryBinding[]
   'settings.models.get'(): ModelPreferences | null
   'providers.status'(configuration?: ProviderConfiguration, checkLatest?: boolean): Promise<ProviderStatus[]>
+  'providers.loginCommand'(provider: ProviderStatus['provider'], configuration?: ProviderConfiguration): Promise<string | null>
+  'providers.update'(provider: ProviderStatus['provider']): Promise<ProviderStatus>
   'providers.updates'(): Promise<ProviderStatus[]>
   'providers.dismissUpdate'(provider: ProviderStatus['provider'], binary: string, latestVersion: string): void
   'providers.pickBinary'(): string | null
@@ -271,6 +280,7 @@ export interface RamuMethods {
 export type PushEvents = {
   'automation:changed': Record<string, never>
   'background:connection': { connected: boolean }
+  'updates:changed': AppUpdateStatus
   'providers:updates': ProviderStatus[]
   'notify:inapp': { sessionId: string; taskId: string; kind: 'done' | 'input' | 'failed'; title: string; body: string }
   'notify:open': { sessionId: string; taskId: string }

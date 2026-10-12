@@ -1,3 +1,4 @@
+import { AppUpdateNotice } from './AppUpdates'
 import { t, useLanguage } from './i18n'
 import { Kbd } from '@/components/ui/kbd'
 import { ProviderSetupTerminal } from './ProviderSetupTerminal'
@@ -237,6 +238,7 @@ function Shell() {
       {settingsOpen && <SettingsPanel initialSection={settingsSection} shortcuts={commands.filter((command) => command.keys).map((command) => ({ title: command.title, category: command.category, keys: command.keys! }))} onClose={() => setSettingsOpen(false)} />}
       {palette && <Palette ws={ws} commands={commands} mode={palette} onClose={() => setPalette(null)} />}
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
+      <AppUpdateNotice />
       <ProviderSetupTerminal />
       <Notifications />
       <CommitBranchDialog />

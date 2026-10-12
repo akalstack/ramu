@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { LspService } from './lsp'
+import { claudeAcpQuery } from './claudeAcpQuery'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { registerQuestionTools } from './questionTools'
@@ -18,7 +19,7 @@ import { AgentService } from './agent'
 import { TerminalService } from './pty'
 import { createDispatcher } from './ipc'
 import { ScheduleService, scheduleSchema } from './schedules'
-import { runtimeBuild, runtimeInvoke } from './runtimeClient'
+import { runtimeBuild, runtimeVersion, runtimeInvoke } from './runtimeClient'
 import { ReviewService } from './reviews'
 import { RecapService } from './recaps'
 import type { AgentSessionInfo, ScheduleInput } from '../shared/types'
@@ -31,6 +32,7 @@ const socketPath = process.env.RAMU_SOCKET ?? join(userData, 'runtime.sock')
 // Intentional stops exit successfully; crashes let launchd restart or take over execution.
 const stoppedPath = join(userData, 'background.stopped')
 const serviceBuild = runtimeBuild(process.argv[1] ?? '')
+const serviceVersion = runtimeVersion(process.argv[1] ?? '')
 if (process.env.RAMU_SUPERVISOR === '1') {
   try { unlinkSync(stoppedPath) } catch {}
   for (;;) {
@@ -69,7 +71,7 @@ mkdirSync(root, { recursive: true })
 const workspace = new Workspace(db, root)
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./fakeAgent') : null
 let reviews!: ReviewService
-const agents = new AgentService(db, (sessionId, event, seq) => { send('agent:event', { sessionId, event, seq }) }, fake?.fakeQuery ?? query, fake?.fakeCodex, fake?.fakeCodex, fake?.fakeCodex)
+const agents = new AgentService(db, (sessionId, event, seq) => { send('agent:event', { sessionId, event, seq }) }, fake?.fakeQuery ?? claudeAcpQuery(query), fake?.fakeCodex, fake?.fakeCodex, fake?.fakeCodex)
 if (fake) agents.helperHistory = async () => []
 agents.markRestoredOnBoot()
 const terminals = new TerminalService((id, data) => send('term:data', { id, data }), (id, code) => send('term:exit', { id, code }))
@@ -126,7 +128,7 @@ const runtime = createServer(async (req, res) => {
     if (method === 'host.reply') {
       const request = nativeRequests.get(args?.[0])
       if (request) { clearTimeout(request.timer); nativeRequests.delete(args[0]); args[2] ? request.reject(new Error(String(args[2]))) : request.resolve(args[1]) }
-    } else if (method === 'background.status') value = { running: true, pid: process.pid, startedAt, build: serviceBuild }
+    } else if (method === 'background.status') value = { running: true, pid: process.pid, startedAt, build: serviceBuild, version: serviceVersion }
     else if (method === 'background.stop') { res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}'); void stop(true); return }
     else if (method === 'background.restart') { res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}'); void stop(); return }
     else value = await dispatcher.invoke(method, args)

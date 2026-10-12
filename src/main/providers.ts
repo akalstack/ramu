@@ -1,9 +1,11 @@
 import { execFile, spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { homedir } from 'node:os'
-import { AGENT_PROVIDERS, type ProviderConfiguration, type ProviderStatus } from '../shared/providers'
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { AGENT_PROVIDERS, supportsProviderAccounts, type ProviderConfiguration, type ProviderStatus } from '../shared/providers'
 import type { AgentProvider, AppPreferences } from '../shared/types'
-import { configureProviderBinaries, findExecutable, providerBinary, providerEnvironment } from './providerBinaries'
+import { configureProviderBinaries, findExecutable, providerAccountHome, providerRuntimeHome, providerBinary, providerEnvironment } from './providerBinaries'
 
 type Release = { version: string; checkedAt: string; downloadUrl?: string }
 type Cache = Partial<Record<AgentProvider, Release>>
@@ -92,6 +94,8 @@ export class ProviderService {
   private generation = 0
   private releases: Cache
   private dismissed: Record<string, boolean>
+  private updating = new Map<AgentProvider, Promise<ProviderStatus>>()
+  private updateErrors = new Map<AgentProvider, string>()
   constructor(private preferences: () => Pick<AppPreferences, 'providerBinaries' | 'providerUpdateChecks'>, private read: <T>(key: string, fallback: T) => T, private write: (key: string, value: unknown) => void, private emit: (statuses: ProviderStatus[]) => void) {
     this.releases = read<Cache>('provider-releases', {})
     this.dismissed = read<Record<string, boolean>>('provider-updates-dismissed', {})
@@ -100,17 +104,62 @@ export class ProviderService {
   settingsChanged() {
     configureProviderBinaries(this.preferences().providerBinaries ?? {})
     this.generation++; clearTimeout(this.timer)
-    if (this.preferences().providerUpdateChecks && !this.closed) { this.timer = setTimeout(() => void this.automatic(), 30_000); this.timer.unref() }
+    if (this.shouldCheck() && !this.closed) { this.timer = setTimeout(() => void this.automatic(), 30_000); this.timer.unref() }
     else this.emit([])
   }
   private async automatic() {
-    if (this.closed || !this.preferences().providerUpdateChecks) return
+    if (this.closed || !this.shouldCheck()) return
     if (!this.automaticRunning) {
       this.automaticRunning = true
       const generation = this.generation
-      try { const statuses = await this.status(undefined, true, false); if (!this.closed && generation === this.generation && this.preferences().providerUpdateChecks) this.emit(this.notices(statuses)) } catch {} finally { this.automaticRunning = false }
+      try {
+        let statuses = await this.status(undefined, true, false)
+        if (!this.closed && generation === this.generation) {
+          for (const status of statuses) if (status.updateAvailable && this.preferences().providerBinaries[status.provider]?.autoUpdate) await this.update(status.provider).catch(() => {})
+          if (statuses.some((status) => this.preferences().providerBinaries[status.provider]?.autoUpdate)) statuses = await this.status()
+          if (!this.closed && generation === this.generation && this.preferences().providerUpdateChecks) this.emit(this.notices(statuses))
+        }
+      } catch {} finally { this.automaticRunning = false }
     }
-    if (!this.closed && this.preferences().providerUpdateChecks) { clearTimeout(this.timer); this.timer = setTimeout(() => void this.automatic(), 6 * 60 * 60 * 1000); this.timer.unref() }
+    if (!this.closed && this.shouldCheck()) { clearTimeout(this.timer); this.timer = setTimeout(() => void this.automatic(), 6 * 60 * 60 * 1000); this.timer.unref() }
+  }
+  private shouldCheck() { return this.preferences().providerUpdateChecks || Object.values(this.preferences().providerBinaries).some((config) => config?.autoUpdate) }
+  loginCommand(provider: AgentProvider, config = this.preferences().providerBinaries): string | null {
+    const args = provider === 'claude-code' ? ['auth', 'login'] : provider === 'codex' || provider === 'cursor' ? ['login'] : provider === 'opencode' ? ['auth', 'login'] : null
+    if (!args) return null
+    const id = config[provider]?.accountId || 'default'
+    const env = providerEnvironment(provider, config, id)
+    if (id !== 'default') {
+      const root = providerAccountHome(provider, id)
+      mkdirSync(root, { recursive: true, mode: 0o700 })
+      if (provider === 'opencode') for (const dir of ['data', 'config', 'state']) mkdirSync(join(root, dir), { recursive: true, mode: 0o700 })
+    }
+    const quote = (value: string) => `'${value.replaceAll("'", process.platform === 'win32' ? "''" : "'\"'\"'")}'`
+    const keys = provider === 'codex' ? ['CODEX_HOME'] : provider === 'opencode' ? ['XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'XDG_STATE_HOME'] : []
+    const assignments = id === 'default' ? '' : keys.map((key) => process.platform === 'win32' ? `$env:${key}=${quote(env[key]!)}; ` : `${key}=${quote(env[key]!)}`).join(process.platform === 'win32' ? '' : ' ') + ' '
+    const clean = id === 'default' ? '' : process.platform === 'win32' ? (provider === 'codex' ? 'Remove-Item Env:OPENAI_API_KEY,Env:CODEX_API_KEY -ErrorAction SilentlyContinue; ' : '') : provider === 'codex' ? 'env -u OPENAI_API_KEY -u CODEX_API_KEY ' : 'env -u OPENCODE_DB '
+    return `${clean}${assignments}${process.platform === 'win32' ? '& ' : ''}${quote(providerBinary(provider, config))} ${args.join(' ')}`
+  }
+  /** Shell-free updater, shared by manual actions and the detached service timer. */
+  update(provider: AgentProvider): Promise<ProviderStatus> {
+    const pending = this.updating.get(provider)
+    if (pending) return pending
+    const work = (async () => {
+      const config = this.preferences().providerBinaries
+      const binary = providerBinary(provider, config)
+      if (!findExecutable(binary)) throw new Error('Select an installed CLI before updating it.')
+      if (provider === 'antigravity') throw new Error('This runtime requires a manual download from its official release page.')
+      if (provider === 'codex' && config.codex?.binary?.trim()) throw new Error('Update this custom Codex installation with its package manager.')
+      const command = provider === 'codex' ? (findExecutable(process.platform === 'win32' ? 'npm.cmd' : 'npm') ?? 'npm') : binary
+      // Own the npm-managed replacement instead of modifying an unrelated global
+      // installation selected by npm's prefix. Existing native processes keep running.
+      const args = provider === 'codex' ? ['install', '--prefix', providerRuntimeHome(provider), '--no-audit', '--no-fund', '@openai/codex@latest'] : provider === 'opencode' ? ['upgrade'] : ['update']
+      this.updateErrors.delete(provider)
+      await new Promise<void>((resolve, reject) => execFile(command, args, { timeout: 5 * 60_000, maxBuffer: 1024 * 1024, windowsHide: true, env: providerEnvironment(provider, config) }, (error) => error ? reject(new Error('CLI update failed. Check permissions, network access, and how this CLI was installed.')) : resolve()))
+      return (await this.status()).find((status) => status.provider === provider)!
+    })().catch((error) => { this.updateErrors.set(provider, (error as Error).message); throw error }).finally(() => this.updating.delete(provider))
+    this.updating.set(provider, work)
+    return work
   }
   private key(s: ProviderStatus) { return `${s.provider}:${s.binary}:${s.latestVersion}` }
   notices(statuses: ProviderStatus[]) { return statuses.filter((s) => s.updateAvailable && !this.dismissed[this.key(s)]) }
@@ -133,7 +182,7 @@ export class ProviderService {
       const useBinary = (command: string | null) => command?.replace(/^(claude|codex|agent|opencode)(?= |$)/, () => quoted) ?? null
       setup.setupCommand = useBinary(setup.setupCommand)
       setup.updateCommand = useBinary(setup.updateCommand)
-      return { provider, binary, installed, version, latestVersion: release?.version ?? null, checkedAt: release?.checkedAt ?? null, updateAvailable: !!(installed && version && release && newerVersion(release.version, version)), ...(error ? { error } : {}), ...(versionError ? { versionError } : {}), ...(release?.downloadUrl ? { downloadUrl: release.downloadUrl } : {}), ...setup }
+      return { provider, binary, installed, version, accountsSupported: supportsProviderAccounts(provider), updating: this.updating.has(provider), ...(this.updateErrors.has(provider) ? { updateError: this.updateErrors.get(provider) } : {}), latestVersion: release?.version ?? null, checkedAt: release?.checkedAt ?? null, updateAvailable: !!(installed && version && release && newerVersion(release.version, version)), ...(error ? { error } : {}), ...(versionError ? { versionError } : {}), ...(release?.downloadUrl ? { downloadUrl: release.downloadUrl } : {}), ...setup }
     }))
     if (checkLatest && !this.closed) this.write('provider-releases', this.releases)
     return statuses

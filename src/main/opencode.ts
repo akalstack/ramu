@@ -61,7 +61,7 @@ class OpenCodeSession implements AgentRunner {
   constructor(private scope: AgentScope, private settings: AgentSettings, private emit: (event: AgentEvent, limit?: boolean) => void, private readOnly = false) {}
   setTools(connection: McpConnection): void { this.connection = connection }
   async start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void> {
-    this.server = await startOpenCodeServer(this.scope.cwd, this.abort.signal)
+    this.server = await startOpenCodeServer(this.scope.cwd, this.abort.signal, this.settings.accountId ?? 'default')
     this.client = createOpencodeClient({ baseUrl: this.server.url, headers: this.server.headers, directory: this.scope.cwd })
     if (this.stopped) { await this.server.close(); return }
     this.apiV2 = await openCodeUsesV2(this.client)

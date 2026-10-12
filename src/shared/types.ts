@@ -174,6 +174,8 @@ export type AgentProvider = 'claude-code' | 'codex' | 'opencode' | 'cursor' | 'a
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
 export interface AgentSettings {
   provider: AgentProvider
+  /** Pinned credential profile. Existing chats without this field use the original CLI account. */
+  accountId?: string
   /** Empty means the provider's default. */
   model: string
   effort: ReasoningEffort | null
@@ -462,6 +464,9 @@ export interface AppPreferences {
   autoBackgroundSeconds: number
   providerBinaries: ProviderConfiguration
   providerUpdateChecks: boolean
+  appUpdateChecks: boolean
+  appAutoUpdate: boolean
+  keepAwake: boolean
   /** Show the 5-hour and weekly plan usage gauges. */
   showUsageLimits: boolean
   fallback: FallbackPreferences
@@ -492,6 +497,7 @@ export interface ChatGoal {
 /** One plan usage window as the provider last reported it. Account-wide, not per chat. */
 export interface UsageReading {
   provider: AgentProvider
+  accountId?: string
   window: 'five_hour' | 'weekly'
   /** Set for a model-specific window, e.g. Claude's Opus weekly limit. */
   scope?: string
@@ -558,7 +564,7 @@ export interface AsideMessage { id: string; role: 'user' | 'assistant'; text: st
 export interface Aside { id: string; sessionId: string; quote: string; quoteFrom: 'assistant' | 'user'; messages: AsideMessage[]; createdAt: number }
 export const DEFAULT_SIDEBAR_WIDTH = 268
 export const SIDEBAR_WIDTH_RANGE = [200, 520] as const
-export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, editorFontSize: 14, formatOnSave: true, languageServers: true, aiCompletion: { enabled: false, provider: 'ollama', ollamaModel: '', codestralModel: '', codestralUrl: 'https://codestral.mistral.ai', nextEdit: false, nextEditAck: false }, lintWhileEditing: true, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', commitStyle: 'conventional', commitInstructions: '', recentChats: 5, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
+export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, editorFontSize: 14, formatOnSave: true, languageServers: true, aiCompletion: { enabled: false, provider: 'ollama', ollamaModel: '', codestralModel: '', codestralUrl: 'https://codestral.mistral.ai', nextEdit: false, nextEditAck: false }, lintWhileEditing: true, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', commitStyle: 'conventional', commitInstructions: '', recentChats: 5, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
 
 
 /** Internal scope ID; omitted from the user project list. */
@@ -601,7 +607,7 @@ export interface RecapItem {
   status: 'open' | 'done' | 'dismissed' | 'snoozed'; snoozedUntil: number | null; updatedAt: number
 }
 export interface RecapSnapshot { items: RecapItem[]; generatedAt: number | null; generating: boolean; error: string | null }
-export interface BackgroundStatus { running: boolean; pid: number; startedAt: number; loginEnabled: boolean }
+export interface BackgroundStatus { running: boolean; pid: number; startedAt: number; loginEnabled: boolean; version?: string; build?: string; bundledVersion?: string; bundledBuild?: string; updateAvailable?: boolean }
 
 export interface ChangeFile {
   id: string; repoId: string; repoName: string; path: string

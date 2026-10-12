@@ -1,4 +1,5 @@
 import type { AgentProvider, UsageReading } from '../shared/types'
+import { providerAccountId } from './providerBinaries'
 
 /** The latest plan usage per provider and window, kept across restarts. Readings only arrive while a provider runs. */
 export class UsageService {
@@ -9,16 +10,16 @@ export class UsageService {
     if (process.env.RAMU_FAKE_USAGE) try { this.update((JSON.parse(process.env.RAMU_FAKE_USAGE) as Partial<UsageReading>[]).map((r) => ({ status: 'ok', updatedAt: Date.now(), ...r }) as UsageReading)) } catch {}
   }
 
-  list(): UsageReading[] { return this.readings }
+  list(accounts: Partial<Record<AgentProvider, string>> = {}): UsageReading[] { return this.readings.filter((reading) => (reading.accountId ?? 'default') === (accounts[reading.provider] ?? providerAccountId(reading.provider))) }
 
   update(next: UsageReading[]): void {
     if (!next.length) return
-    const key = (r: UsageReading) => `${r.provider}:${r.window}:${r.scope ?? ''}`
+    const key = (r: UsageReading) => `${r.provider}:${r.accountId ?? 'default'}:${r.window}:${r.scope ?? ''}`
     const merged = new Map(this.readings.map((r) => [key(r), r]))
     for (const reading of next) merged.set(key(reading), reading)
     this.readings = [...merged.values()]
     this.persist(this.readings)
-    this.broadcast(this.readings)
+    this.broadcast(this.list())
   }
 }
 

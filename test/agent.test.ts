@@ -1652,3 +1652,19 @@ describe('AgentService.searchMessages', () => {
     svc.stop(first.id); svc.stop(second.id)
   })
 })
+
+it('pins provider accounts for existing chats when the default account changes', async () => {
+  const accounts = [{ id: 'work', name: 'Work' }, { id: 'personal', name: 'Personal' }]
+  const svc = new AgentService(db, () => {}, fakeQuery([]), fakeCodex)
+  try {
+    configureProviderBinaries({ codex: { binary: '', accounts, accountId: 'work' } })
+    const first = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' })
+    await until(() => svc.get(first.id).state === 'idle')
+    expect(svc.get(first.id).settings.accountId).toBe('work')
+    configureProviderBinaries({ codex: { binary: '', accounts, accountId: 'personal' } })
+    expect(svc.get(first.id).settings.accountId).toBe('work')
+    const second = svc.start('t2', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' })
+    await until(() => svc.get(second.id).state === 'idle')
+    expect(svc.get(second.id).settings.accountId).toBe('personal')
+  } finally { svc.stopAll(); configureProviderBinaries({}) }
+})

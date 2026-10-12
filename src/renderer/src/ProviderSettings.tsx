@@ -1,11 +1,12 @@
-import { t, useLanguage, formatLocale } from './i18n'
+import { t, useLanguage } from './i18n'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useEffect, useRef, useState } from 'react'
-import { Check, Copy, FolderOpen, RefreshCw, SquareTerminal } from 'lucide-react'
+import { FolderOpen, LogIn, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { AGENT_PROVIDERS, providerName, type ProviderStatus } from '../../shared/providers'
+import { Dropdown } from './Menu'
+import { AGENT_PROVIDERS, providerName, supportsProviderAccounts, type ProviderStatus } from '../../shared/providers'
 import type { AgentProvider, AppPreferences } from '../../shared/types'
 import { ProviderIcon } from './ProviderIcon'
 import { runProviderCommand } from './ProviderSetupTerminal'
@@ -14,11 +15,9 @@ import { ramu } from './ipc'
 export function ProviderSettings({ value, onChange }: { value: AppPreferences; onChange: (value: AppPreferences) => void }) {
   useLanguage()
   const [statuses, setStatuses] = useState<ProviderStatus[]>([])
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState<string | null>(null)
-  const sequence = useRef(0)
-  const config = value.providerBinaries
+  const [busy, setBusy] = useState(false), [updating, setUpdating] = useState<AgentProvider | null>(null)
+  const [error, setError] = useState<string | null>(null), [adding, setAdding] = useState<AgentProvider | null>(null), [name, setName] = useState('')
+  const sequence = useRef(0), config = value.providerBinaries
   const refresh = async (latest = false) => {
     const request = ++sequence.current
     setBusy(true); setError(null)
@@ -27,25 +26,45 @@ export function ProviderSettings({ value, onChange }: { value: AppPreferences; o
     finally { if (request === sequence.current) setBusy(false) }
   }
   useEffect(() => { const timer = setTimeout(() => void refresh(), 350); return () => { clearTimeout(timer); sequence.current++ } }, [config])
-  const update = (provider: AgentProvider, key: 'binary' | 'harness', path: string) => onChange({ ...value, providerBinaries: { ...config, [provider]: { binary: config[provider]?.binary ?? '', ...config[provider], [key]: path } } })
-  const browse = async (provider: AgentProvider, key: 'binary' | 'harness') => { try { const path = await ramu.invoke('providers.pickBinary'); if (path) update(provider, key, path) } catch (reason) { setError(String(reason)) } }
-  const copy = async (command: string) => { try { await ramu.invoke('clipboard.write', command); setCopied(command); setTimeout(() => setCopied((current) => current === command ? null : current), 2000) } catch (reason) { setError(String(reason)) } }
-  const command = (provider: AgentProvider, title: string, text: string | null) => text && <div className="provider-command"><span className="muted small">{title}</span><code>{text}</code><Button className="ghost icon small-icon" aria-label={t("Copy {0} command", { "0": title.toLowerCase() })} onClick={() => void copy(text)}>{copied === text ? <Check size={14} /> : <Copy size={14} />}</Button><Button className="small" aria-label={t("Run {0} {1} in terminal", { "0": providerName(provider), "1": title.toLowerCase() })} onClick={() => runProviderCommand(`${providerName(provider)} · ${title}`, text)}><SquareTerminal size={14} />{t("Run in terminal")}</Button></div>
+  const change = (provider: AgentProvider, patch: Partial<NonNullable<typeof config[AgentProvider]>>) => onChange({ ...value, providerBinaries: { ...config, [provider]: { binary: '', ...config[provider], ...patch } } })
+  const browse = async (provider: AgentProvider, key: 'binary' | 'harness') => { try { const path = await ramu.invoke('providers.pickBinary'); if (path) change(provider, { [key]: path }) } catch (reason) { setError(String(reason)) } }
+  const login = async (provider: AgentProvider) => {
+    try { const command = await ramu.invoke('providers.loginCommand', provider, config); if (command) runProviderCommand(`${providerName(provider)} · ${t('Login')}`, command) }
+    catch (reason) { setError(String(reason)) }
+  }
+  const update = async (provider: AgentProvider) => {
+    setUpdating(provider); setError(null)
+    try { await ramu.invoke('providers.update', provider); await refresh() }
+    catch (reason) { setError(String(reason)) }
+    finally { setUpdating(null) }
+  }
+  const add = (provider: AgentProvider) => {
+    if (!name.trim()) return
+    const id = crypto.randomUUID()
+    change(provider, { accounts: [...(config[provider]?.accounts ?? []), { id, name: name.trim() }], accountId: id })
+    setAdding(null); setName('')
+  }
   return <div className="settings-form provider-settings">
-    <div className="settings-row settings-toggle"><span><strong>{t("Provider update notifications")}</strong><span className="muted block small">{t("Check daily and show an in-app notice when an installed provider has a newer version.")}</span></span><Switch aria-label={t("Provider update notifications")} checked={value.providerUpdateChecks} onCheckedChange={(checked) => onChange({ ...value, providerUpdateChecks: checked })} /></div>
-    <div className="provider-settings-actions"><Button disabled={busy} onClick={() => void refresh()}><RefreshCw size={14} className={busy ? 'spin' : ''} />{t("Refresh installed")}</Button><Button disabled={busy} onClick={() => void refresh(true)}>{t("Check latest versions")}</Button>{busy && <span className="muted small" role="status">{t("Checking providers…")}</span>}</div>
+    <div className="settings-row settings-toggle"><span><strong>{t('Check provider updates')}</strong><span className="muted block small">{t('Checks run in the background service, including while Ramu is closed.')}</span></span><Switch aria-label={t('Check provider updates')} checked={value.providerUpdateChecks} onCheckedChange={(checked) => onChange({ ...value, providerUpdateChecks: checked })} /></div>
+    <div className="provider-settings-actions"><Button disabled={busy} onClick={() => void refresh(true)}><RefreshCw size={14} className={busy ? 'spin' : ''} />{busy ? t('Checking providers…') : t('Check for updates')}</Button></div>
     {error && <p className="error small" role="alert">{error}</p>}
     {AGENT_PROVIDERS.map((provider) => {
-      const status = statuses.find((item) => item.provider === provider)
-      return <section className="provider-settings-card" key={provider} aria-label={t("{0} settings", { "0": providerName(provider) })}>
-        <header><ProviderIcon provider={provider} size={22} /><strong>{providerName(provider)}</strong><span className="grow" /><span className={`small ${status?.updateAvailable ? 'provider-update-label' : 'muted'}`}>{!status ? t("Detecting…") : !status.installed ? t("Not installed") : status.updateAvailable ? t("Update available") : t("Installed")}</span></header>
-        <label className="provider-binary-label" htmlFor={`provider-${provider}`}>{t("Binary path")}</label><div className="provider-binary-input"><Input id={`provider-${provider}`} placeholder={t("Automatic detection")} value={config[provider]?.binary ?? ''} onChange={(event) => update(provider, 'binary', event.target.value)} /><Button className="icon" aria-label={t("Browse {0} binary", { "0": providerName(provider) })} onClick={() => void browse(provider, 'binary')}><FolderOpen size={16} /></Button></div>
-        {status && <div className="muted small provider-detected">{status.installed ? t("Using") : t("Looking for")} <code>{status.binary}</code></div>}
-        {provider === 'antigravity' && <><label className="provider-binary-label" htmlFor="provider-harness">{t("Harness helper path")}</label><div className="provider-binary-input"><Input id="provider-harness" placeholder={t("Detect localharness_external beside the runtime")} value={config.antigravity?.harness ?? ''} onChange={(event) => update(provider, 'harness', event.target.value)} /><Button className="icon" aria-label={t("Browse Antigravity harness helper")} onClick={() => void browse(provider, 'harness')}><FolderOpen size={16} /></Button></div></>}
-        {status && <><div className="provider-versions small"><span>{t("Installed ")}<strong>{status.version ?? (status.installed ? t("Unknown") : '—')}</strong></span><span>{t("Latest ")}<strong>{status.latestVersion ?? t("Not checked")}</strong></span>{status.checkedAt && <span className="muted">{t("Checked ")}{new Date(status.checkedAt).toLocaleString(formatLocale())}</span>}</div>
-          {status.versionError && <p className="error small">{status.versionError}</p>}{status.error && <p className="error small" role="alert">{status.error}</p>}
-          <Collapsible className="provider-setup" defaultOpen={!status.installed || status.updateAvailable}><CollapsibleTrigger render={<Button variant="ghost" />}>{status.updateAvailable ? t("Update & setup") : t("Install & setup")}</CollapsibleTrigger><CollapsibleContent><p className="muted small">{status.setupNote}</p>{command(provider, status.installed ? 'Update' : 'Install', status.installed ? status.updateCommand : status.installCommand)}{command(provider, 'Sign in / configure', status.setupCommand)}<div className="provider-setup-links"><a href={status.docsUrl} target="_blank" rel="noreferrer">{t("Open setup guide ↗")}</a>{status.downloadUrl && <a href={status.downloadUrl} target="_blank" rel="noreferrer">{t("Download ACP runtime ↗")}</a>}{provider === 'antigravity' && !status.downloadUrl && <Button className="small" disabled={busy} onClick={() => void refresh(true)}>{t("Find runtime download")}</Button>}</div><p className="muted small">{t("After setup finishes, refresh installed providers. Save changes to apply binary paths to new sessions.")}</p></CollapsibleContent></Collapsible>
-        </>}
+      const status = statuses.find((item) => item.provider === provider), preferences = config[provider]
+      const accounts = supportsProviderAccounts(provider), canUpdate = provider !== 'antigravity' && !(provider === 'codex' && preferences?.binary?.trim())
+      return <section className="provider-settings-card" key={provider} aria-label={t('{0} settings', { '0': providerName(provider) })}>
+        <header><ProviderIcon provider={provider} size={22} /><strong>{providerName(provider)}</strong><span className="muted small">{status?.version ?? ''}</span><span className="grow" /><span className={`small ${status?.updateAvailable ? 'provider-update-label' : 'muted'}`}>{!status ? t('Detecting…') : !status.installed ? t('CLI not found') : status.updateAvailable ? t('Update available') : t('Ready')}</span></header>
+        {accounts && <div className="provider-settings-actions"><Dropdown label={t('{0} account', { '0': providerName(provider) })} value={preferences?.accountId ?? 'default'} options={[{ value: 'default', label: t('Default CLI account') }, ...(preferences?.accounts ?? []).map((account) => ({ value: account.id, label: account.name }))]} onChange={(accountId) => change(provider, { accountId })} /><Button className="small" disabled={(preferences?.accounts?.length ?? 0) >= 20} onClick={() => { setAdding(provider); setName('') }}><Plus size={14} />{t('Add account')}</Button></div>}
+        {adding === provider && <div className="provider-settings-actions"><Input aria-label={t('Account name')} placeholder={t('Account name')} value={name} maxLength={80} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); add(provider) } }} /><Button disabled={!name.trim()} onClick={() => add(provider)}>{t('Add')}</Button><Button variant="ghost" onClick={() => setAdding(null)}>{t('Cancel')}</Button></div>}
+        {accounts && <p className="muted small">{t('Save to use this account for new chats. Existing chats keep their original account. Login opens the selected account’s CLI flow.')}</p>}
+        <div className="provider-settings-actions">{provider !== 'antigravity' && <Button disabled={!status?.installed} onClick={() => void login(provider)}><LogIn size={14} />{t('Login')}</Button>}{canUpdate ? <Button disabled={!status?.installed || updating !== null || status.updating} onClick={() => void update(provider)}><RefreshCw size={14} className={updating === provider ? 'spin' : ''} />{updating === provider ? t('Updating…') : t('Update CLI')}</Button> : <a href={status?.downloadUrl ?? status?.docsUrl} target="_blank" rel="noreferrer">{t('Provider website ↗')}</a>}</div>
+        {canUpdate && <div className="settings-row settings-toggle"><span className="small">{t('Auto-update CLI')}<span className="muted block small">{t('Updates apply to new provider processes. Running chats stay connected.')}</span></span><Switch aria-label={t('Auto-update {0} CLI', { '0': providerName(provider) })} checked={preferences?.autoUpdate ?? false} onCheckedChange={(autoUpdate) => change(provider, { autoUpdate })} /></div>}
+        {status?.latestVersion && status.updateAvailable && <p className="muted small">{t('Available version: {0}', { '0': status.latestVersion })}</p>}
+        {[status?.versionError, status?.error, status?.updateError].filter(Boolean).map((message) => <p key={message} className="error small" role="alert">{message}</p>)}
+        <Collapsible><CollapsibleTrigger render={<Button variant="ghost" className="small" />}>{t('Advanced')}</CollapsibleTrigger><CollapsibleContent>
+          <label className="provider-binary-label" htmlFor={`provider-${provider}`}>{t('Binary path')}</label><div className="provider-binary-input"><Input id={`provider-${provider}`} placeholder={t('Automatic detection')} value={preferences?.binary ?? ''} onChange={(event) => change(provider, { binary: event.target.value })} /><Button className="icon" aria-label={t('Browse {0} binary', { '0': providerName(provider) })} onClick={() => void browse(provider, 'binary')}><FolderOpen size={16} /></Button></div>
+          {status && <p className="muted small"><code>{status.binary}</code></p>}
+          {provider === 'antigravity' && <><label htmlFor="provider-harness">{t('Harness helper path')}</label><div className="provider-binary-input"><Input id="provider-harness" value={preferences?.harness ?? ''} onChange={(event) => change(provider, { harness: event.target.value })} /><Button className="icon" aria-label={t('Browse Antigravity harness helper')} onClick={() => void browse(provider, 'harness')}><FolderOpen size={16} /></Button></div></>}
+        </CollapsibleContent></Collapsible>
       </section>
     })}
   </div>

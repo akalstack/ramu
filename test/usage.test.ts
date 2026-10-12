@@ -1,5 +1,6 @@
+import type { UsageReading } from '../src/shared/types'
 import { describe, expect, it } from 'vitest'
-import { claudeReadings, claudeUsageReadings } from '../src/main/usage'
+import { UsageService, claudeReadings, claudeUsageReadings } from '../src/main/usage'
 import { parseTaskMessage, taskMessagePrompt } from '../src/shared/agentTasks'
 
 describe('Claude plan usage', () => {
@@ -41,4 +42,20 @@ describe('Claude on-demand usage', () => {
     ])
     expect(claudeUsageReadings({ rate_limits: null })).toEqual([])
   })
+})
+
+it('keeps account windows separate and only exposes the selected account', async () => {
+  const { configureProviderBinaries } = await import('../src/main/providerBinaries')
+  const stored: UsageReading[][] = []
+  const service = new UsageService(() => [], (readings) => stored.push(readings), () => {})
+  const base = { provider: 'codex' as const, window: 'five_hour' as const, status: 'ok' as const, updatedAt: Date.now() }
+  try {
+    configureProviderBinaries({})
+    service.update([{ ...base, usedPercent: 99 }, { ...base, usedPercent: 10, accountId: 'work' }])
+    expect(service.list().map((reading) => reading.usedPercent)).toEqual([99])
+    configureProviderBinaries({ codex: { binary: '', accountId: 'work', accounts: [{ id: 'work', name: 'Work' }] } })
+    expect(service.list().map((reading) => reading.usedPercent)).toEqual([10])
+    expect(service.list({ codex: 'default' }).map((reading) => reading.usedPercent)).toEqual([99])
+    expect(stored.at(-1)).toHaveLength(2)
+  } finally { configureProviderBinaries({}) }
 })

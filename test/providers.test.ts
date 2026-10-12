@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { latestProviderRelease, newerVersion, parseProviderVersion, ProviderService } from '../src/main/providers'
-import { configureProviderBinaries, findExecutable, providerBinary, providerEnvironment } from '../src/main/providerBinaries'
+import { configureProviderAccounts, configureProviderBinaries, findExecutable, providerBinary, providerEnvironment } from '../src/main/providerBinaries'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '../src/shared/types'
 import type { ProviderStatus } from '../src/shared/providers'
 
@@ -101,4 +101,35 @@ describe('automatic checks', () => {
     finish([update]); await Promise.resolve(); await Promise.resolve()
     expect(emit).toHaveBeenLastCalledWith([])
   })
+})
+
+it('isolates supported account login commands and rejects unknown profiles', () => {
+  configureProviderAccounts(join(dir, 'accounts'))
+  create()
+  preferences.providerBinaries.codex = { binary: bin, accountId: 'work', accounts: [{ id: 'work', name: 'Work' }] }
+  service.settingsChanged()
+  const env = providerEnvironment('codex')
+  expect(env.CODEX_HOME).toContain('/codex/work')
+  expect(service.loginCommand('codex')).toContain('CODEX_HOME=')
+  expect(service.loginCommand('codex')).toContain(bin)
+  expect(() => providerEnvironment('codex', preferences.providerBinaries, 'unknown')).toThrow('no longer exists')
+  expect(service.loginCommand('antigravity')).toBeNull()
+})
+it('auto-updates in the daemon even when provider notices are disabled', async () => {
+  vi.useFakeTimers()
+  preferences.providerUpdateChecks = false
+  preferences.providerBinaries.cursor = { binary: bin, autoUpdate: true }
+  create()
+  const available = { provider: 'cursor', binary: bin, updateAvailable: true, latestVersion: '2.0.0' } as ProviderStatus
+  vi.spyOn(service, 'status').mockResolvedValue([available])
+  const update = vi.spyOn(service, 'update').mockResolvedValue(available)
+  await vi.advanceTimersByTimeAsync(30_000)
+  expect(update).toHaveBeenCalledExactlyOnceWith('cursor')
+  service.close()
+  await vi.advanceTimersByTimeAsync(6 * 60 * 60_000)
+  expect(update).toHaveBeenCalledOnce()
+})
+it('refuses to replace a custom Codex binary with an unrelated npm installation', async () => {
+  create()
+  await expect(service.update('codex')).rejects.toThrow('custom Codex')
 })

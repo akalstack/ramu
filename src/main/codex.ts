@@ -4,7 +4,7 @@ import { attachmentPrompt } from './attachments'
 import { randomUUID } from 'node:crypto'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { providerBinary } from './providerBinaries'
+import { providerBinary, providerEnvironment } from './providerBinaries'
 import { createInterface } from 'node:readline'
 import type { UsageReading, Attachment, AgentEvent, AgentElicitation, ElicitationAction, AgentModel, AgentScope, AgentSettings, AgentSessionInfo, AgentTask, McpConnection } from '../shared/types'
 import type { HelperHistory } from './helperHistory'
@@ -20,8 +20,8 @@ export class CodexRpc {
   onExit: (error: Error) => void = () => {}
   readonly exited: Promise<void>
 
-  constructor(connection?: McpConnection, extraConfig: string[] = []) {
-    this.process = spawn(providerBinary('codex'), ['app-server', '--stdio', ...extraConfig.flatMap((entry) => ['-c', entry]), ...(connection ? ['-c', `mcp_servers.ramu.url=${JSON.stringify(connection.url)}`, '-c', 'mcp_servers.ramu.bearer_token_env_var="RAMU_MCP_TOKEN"', '-c', 'mcp_servers.ramu.tool_timeout_sec=3600', ...(connection.nativeSubagents === false ? ['-c', 'features.multi_agent=false'] : [])] : [])], { stdio: 'pipe', env: { ...process.env, ...(connection ? { RAMU_MCP_TOKEN: connection.token } : {}) } })
+  constructor(connection?: McpConnection, extraConfig: string[] = [], accountId?: string) {
+    this.process = spawn(providerBinary('codex'), ['app-server', '--stdio', ...extraConfig.flatMap((entry) => ['-c', entry]), ...(connection ? ['-c', `mcp_servers.ramu.url=${JSON.stringify(connection.url)}`, '-c', 'mcp_servers.ramu.bearer_token_env_var="RAMU_MCP_TOKEN"', '-c', 'mcp_servers.ramu.tool_timeout_sec=3600', ...(connection.nativeSubagents === false ? ['-c', 'features.multi_agent=false'] : [])] : [])], { stdio: 'pipe', env: { ...providerEnvironment('codex', undefined, accountId), ...(connection ? { RAMU_MCP_TOKEN: connection.token } : {}) } })
     this.process.stderr.resume()
     const lines = createInterface({ input: this.process.stdout })
     lines.on('line', (line) => {
@@ -128,7 +128,7 @@ class CodexSession implements CodexRunner {
       : { approvalPolicy: this.settings.access === 'auto' ? 'on-request' : 'untrusted', sandboxPolicy: { type: 'workspaceWrite', writableRoots: [this.scope.cwd, ...this.scope.additionalDirs], networkAccess: false } }
   }
   async start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void> {
-    this.rpc = new CodexRpc(this.connection, this.connection?.interceptSubagents ? [CODEX_HOOK_CONFIG] : [])
+    this.rpc = new CodexRpc(this.connection, this.connection?.interceptSubagents ? [CODEX_HOOK_CONFIG] : [], this.settings.accountId ?? 'default')
     this.rpc.onMessage = (m) => this.handle(m)
     this.rpc.onExit = (e) => { if (!this.stopped) { this.emit({ kind: 'error', message: e.message }); this.emit({ kind: 'state', state: 'failed' }) } }
     await this.rpc.initialize()
@@ -137,6 +137,7 @@ class CodexSession implements CodexRunner {
     const full = this.settings.access === 'full'
     const result = await this.rpc.request(resume ? 'thread/resume' : 'thread/start', {
       ...(resume ? { threadId: resume } : {}), cwd: this.scope.cwd,
+      ...(!resume && this.readOnly ? { ephemeral: true } : {}),
       ...(this.settings.model ? { model: this.settings.model } : {}),
       ...(this.connection?.instructions ? { developerInstructions: this.connection.instructions } : {}),
       serviceTier: this.settings.serviceTier === 'fast' ? 'fast' : 'default',
@@ -198,7 +199,7 @@ class CodexSession implements CodexRunner {
     if (!this.pending.size) this.emit({ kind: 'state', state: this.turnId ? 'running' : 'idle' })
   }
   private reportUsage(snapshot: Wire | undefined): void {
-    const readings = codexReadings(snapshot)
+    const readings = codexReadings(snapshot).map((reading) => ({ ...reading, ...(this.settings.accountId && this.settings.accountId !== 'default' ? { accountId: this.settings.accountId } : {}) }))
     if (readings.length) this.emit({ kind: 'usage', readings })
   }
 
@@ -393,7 +394,7 @@ class CodexSession implements CodexRunner {
 
 /** Read persisted helper threads without thread/resume or turn/start. */
 export async function codexHelperHistory(session: AgentSessionInfo, tasks: AgentTask[]): Promise<HelperHistory[]> {
-  const rpc = new CodexRpc()
+  const rpc = new CodexRpc(undefined, [], session.settings.accountId ?? 'default')
   try {
     await rpc.initialize()
     const root = await rpc.request('thread/read', { threadId: session.providerSessionId, includeTurns: true })
@@ -423,8 +424,8 @@ export async function codexHelperHistory(session: AgentSessionInfo, tasks: Agent
  * A side question answered on a throwaway fork of a Codex thread: it sees the whole conversation, can only read,
  * asks nothing, and the original thread is never touched.
  */
-export async function codexAside(options: { threadId: string; cwd: string; model?: string; effort?: string | null; prompt: string; signal?: AbortSignal; timeoutMs?: number }): Promise<string> {
-  const rpc = new CodexRpc()
+export async function codexAside(options: { accountId?: string; threadId: string; cwd: string; model?: string; effort?: string | null; prompt: string; signal?: AbortSignal; timeoutMs?: number }): Promise<string> {
+  const rpc = new CodexRpc(undefined, [], options.accountId ?? 'default')
   const abort = () => void rpc.close()
   options.signal?.addEventListener('abort', abort, { once: true })
   try {

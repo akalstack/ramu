@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@agentclientprotocol/sdk':
+        specifier: 1.8.0
+        version: 1.8.0(zod@4.6.5)
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.295
         version: 0.3.295(@anthropic-ai/sdk@0.132.1(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.1(zod@4.6.5))(zod@4.6.5)
@@ -143,6 +146,11 @@ importers:
         version: 5.0.3(@types/node@24.19.1)(vite@7.3.7(@types/node@24.19.1)(jiti@2.7.0)(lightningcss@1.32.0))
 
 packages:
+
+  '@agentclientprotocol/sdk@1.8.0':
+    resolution: {integrity: sha512-fbP7qHZsFyTJVT0/RPrcWJ8An26qLXHEuGCHHEKDyxD1xpXV+Ejyh2LAE6vBAFePkpVjZeeohnbgvuEhZ7wLMg==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
 
   '@alcalzone/ansi-tokenize@0.3.1':
     resolution: {integrity: sha512-cUD0PT0YX+rImRhfn7BfMRduP/tX/Zqt/N0dHlAyn2RlcJssCb5KsCJkhln61eh9vuJDkH8wKn3L8zJzzWXPFg==}
@@ -3801,6 +3809,10 @@ packages:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
 snapshots:
+
+  '@agentclientprotocol/sdk@1.8.0(zod@4.6.5)':
+    dependencies:
+      zod: 4.6.5
 
   '@alcalzone/ansi-tokenize@0.3.1':
     dependencies:
