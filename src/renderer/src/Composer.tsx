@@ -1,4 +1,5 @@
 import { ComposerInput, type ComposerInputHandle } from './ComposerInput'
+import { errorText } from './errors'
 import { t, useLanguage } from './i18n'
 import { Button } from '@/components/ui/button'
 import { ArrowUp, FileText, Paperclip, Play, Square, X } from 'lucide-react'
@@ -12,6 +13,7 @@ import { Attachments } from './Attachments'
 const CHIPS_SHOWN = 4
 // Keep long documents out of the prompt box while leaving ordinary pastes inline.
 const PASTE_ATTACHMENT_CHARACTERS = 4000
+const MAX_MESSAGE_CHARACTERS = 1_000_000 // what the background service accepts for one message
 const PASTE_ATTACHMENT_LINES = 40
 
 /** Auto-growing prompt box. Enter sends, Shift+Enter adds a line. */
@@ -100,7 +102,7 @@ export function Composer({
       onAttachmentsChange(currentFiles.current)
       return true
     } catch (error) {
-      setAttachmentError(error instanceof Error ? error.message : String(error))
+      setAttachmentError(error instanceof Error ? error.message : errorText(error))
       return false
     } finally { if (--pendingUploads.current === 0) setUploading(false) }
     })
@@ -197,6 +199,8 @@ export function Composer({
           const name = number === 1 ? 'Pasted text.txt' : `Pasted text ${number}.txt`
           void importFiles([new File([text], name, { type: 'text/plain;charset=utf-8' })]).then((attached) => {
             if (attached || !ref.current) return
+            // Too big for a message anyway (the attachment error says why): inserting it would only freeze the editor.
+            if (text.length > MAX_MESSAGE_CHARACTERS) return
             // Preserve the paste if storage fails or the attachment limit is reached.
             const input = ref.current
             const position = input.selectionStart + text.length

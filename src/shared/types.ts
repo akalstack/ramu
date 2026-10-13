@@ -124,6 +124,16 @@ export interface FileContent {
   hash: string
 }
 
+/** Editor settings resolved from .editorconfig; anything the files do not set is left out. */
+export interface EditorConfigProps {
+  indentStyle?: 'space' | 'tab'
+  indentSize?: number | 'tab'
+  tabWidth?: number
+  endOfLine?: 'lf' | 'crlf'
+  insertFinalNewline?: boolean
+  trimTrailingWhitespace?: boolean
+}
+
 export interface LintDiagnostic { tool: string; severity: 'error' | 'warning' | 'info'; message: string; code: string | null; url: string | null; line: number; column: number; endLine: number; endColumn: number }
 /** `live` tools lint the unsaved buffer; the rest only describe the saved file. */
 export interface LintResult { tools: { id: string; label: string; live: boolean }[]; diagnostics: LintDiagnostic[]; errors: string[] }

@@ -1,4 +1,5 @@
 import { systemTimezone } from '../shared/timezone'
+import { cleanLabel, clipText } from '../shared/text'
 import { randomUUID } from 'node:crypto'
 import { DateTime } from 'luxon'
 import { z } from 'zod'
@@ -63,7 +64,9 @@ export class ScheduleService {
   get(id: string): Schedule { const s = this.list().find((s) => s.id === id); if (!s) throw new Error('Unknown schedule'); return s }
   runs(id?: string): ScheduleRun[] { return this.db.prepare(`SELECT ${RUN_COLUMNS} FROM schedule_runs ${id ? 'WHERE schedule_id = ?' : ''} ORDER BY created_at DESC LIMIT 200`).all(...(id ? [id] : [])) as unknown as ScheduleRun[] }
   private validate(input: ScheduleInput): ScheduleInput {
-    const value = scheduleSchema.parse(input)
+    const parsed = scheduleSchema.parse(input)
+    const value = { ...parsed, name: cleanLabel(parsed.name) }
+    if (!value.name) throw new Error("A schedule's name can't be empty.")
     if (value.projectId !== NO_PROJECT && !this.workspace.listProjects().some((p) => p.id === value.projectId)) throw new Error('Unknown project')
     if (value.workspaceId && this.workspace.getWorktreeWorkspace(value.workspaceId).projectId !== value.projectId) throw new Error('Workspace belongs to another project')
     if (value.sourceTaskId) this.workspace.getTask(value.sourceTaskId)
@@ -129,7 +132,7 @@ export class ScheduleService {
         if (this.db.prepare("SELECT 1 FROM schedule_runs WHERE schedule_id=? AND id!=? AND status IN ('running','needs-input') LIMIT 1").get(run.scheduleId, run.id)) continue
         const s = this.get(run.scheduleId)
         try {
-          const task = run.taskId ? this.workspace.getTask(run.taskId) : await this.workspace.createTask({ projectId: s.projectId, title: `${s.name} · ${DateTime.fromMillis(run.dueAt, { zone: s.timezone }).toFormat('LLL d HH:mm')}`.slice(0, 200), mode: s.workspaceId ? 'worktree' : 'current', workspaceId: s.workspaceId ?? undefined })
+          const task = run.taskId ? this.workspace.getTask(run.taskId) : await this.workspace.createTask({ projectId: s.projectId, title: clipText(`${s.name} · ${DateTime.fromMillis(run.dueAt, { zone: s.timezone }).toFormat('LLL d HH:mm')}`, 200), mode: s.workspaceId ? 'worktree' : 'current', workspaceId: s.workspaceId ?? undefined })
           this.db.prepare('UPDATE schedule_runs SET task_id=? WHERE id=?').run(task.id, run.id)
           const scope = this.workspace.agentScope(task.id)
           if (this.agents.activeWriter(scope.covers)) { this.db.prepare('UPDATE schedule_runs SET retry_at=?, error=? WHERE id=?').run(now + 30000, 'Waiting for the workspace agent', run.id); continue }

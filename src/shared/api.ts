@@ -26,6 +26,7 @@ import type {
   DiffContents,
   DirEntry,
   FileContent,
+  EditorConfigProps,
   GitStatus,
   GitCommit,
   GitCommitFile,
@@ -150,6 +151,7 @@ export interface RamuMethods {
   'files.reveal'(taskId: string, repoId: string, path: string): void
   'files.list'(taskId: string, repoId: string, path: string): DirEntry[]
   'files.read'(taskId: string, repoId: string, path: string): FileContent
+  'files.editorconfig'(taskId: string, repoId: string, path: string): EditorConfigProps
   'files.image'(taskId: string, repoId: string, path: string): string
   'files.media'(taskId: string, repoId: string, path: string): { mimeType: string; size: number; url: string }
   'files.write'(taskId: string, repoId: string, path: string, content: string, baseHash: string | null): SaveResult

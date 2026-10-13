@@ -1,4 +1,5 @@
 import { configureLanguage } from './i18n'
+import { errorText } from './errors'
 import { BootScreen } from './Brand'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '../../shared/types'
@@ -10,7 +11,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [preferences, setPreferences] = useState(DEFAULT_APP_PREFERENCES)
   const [loaded, setLoaded] = useState(false)
   useEffect(() => {
-    void Promise.all([invoke('settings.app.get'), invoke('app.systemLanguages').catch(() => navigator.languages)]).then(([saved, languages]) => { const next = { ...DEFAULT_APP_PREFERENCES, ...saved }; configureLanguage(next.language, languages); setPreferences(next) }, (reason) => notifyError(String(reason), 'Settings')).finally(() => setLoaded(true))
+    void Promise.all([invoke('settings.app.get'), invoke('app.systemLanguages').catch(() => navigator.languages)]).then(([saved, languages]) => { const next = { ...DEFAULT_APP_PREFERENCES, ...saved }; configureLanguage(next.language, languages); setPreferences(next) }, (reason) => notifyError(errorText(reason), 'Settings')).finally(() => setLoaded(true))
   }, [])
   useEffect(() => {
     if (preferences.language !== 'system') return

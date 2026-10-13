@@ -1,4 +1,5 @@
 import { ContentSkeleton } from '@/components/content-skeleton'
+import { errorText } from './errors'
 import { SettingsRow } from '@/components/settings-row'
 import { Card } from '@/components/ui/card'
 import { t, useLanguage } from './i18n'
@@ -25,20 +26,20 @@ export function ProviderSettings({ value, onChange }: { value: AppPreferences; o
     const request = ++sequence.current
     setBusy(true); setError(null)
     try { const next = await ramu.invoke('providers.status', config, latest); if (request === sequence.current) setStatuses(next) }
-    catch (reason) { if (request === sequence.current) setError(String(reason)) }
+    catch (reason) { if (request === sequence.current) setError(errorText(reason)) }
     finally { if (request === sequence.current) setBusy(false) }
   }
   useEffect(() => { const timer = setTimeout(() => void refresh(), 350); return () => { clearTimeout(timer); sequence.current++ } }, [config])
   const change = (provider: AgentProvider, patch: Partial<NonNullable<typeof config[AgentProvider]>>) => onChange({ ...value, providerBinaries: { ...config, [provider]: { binary: '', ...config[provider], ...patch } } })
-  const browse = async (provider: AgentProvider, key: 'binary' | 'harness') => { try { const path = await ramu.invoke('providers.pickBinary'); if (path) change(provider, { [key]: path }) } catch (reason) { setError(String(reason)) } }
+  const browse = async (provider: AgentProvider, key: 'binary' | 'harness') => { try { const path = await ramu.invoke('providers.pickBinary'); if (path) change(provider, { [key]: path }) } catch (reason) { setError(errorText(reason)) } }
   const login = async (provider: AgentProvider) => {
     try { const command = await ramu.invoke('providers.loginCommand', provider, config); if (command) runProviderCommand(`${providerName(provider)} · ${t('Login')}`, command) }
-    catch (reason) { setError(String(reason)) }
+    catch (reason) { setError(errorText(reason)) }
   }
   const update = async (provider: AgentProvider) => {
     setUpdating(provider); setError(null)
     try { await ramu.invoke('providers.update', provider); await refresh() }
-    catch (reason) { setError(String(reason)) }
+    catch (reason) { setError(errorText(reason)) }
     finally { setUpdating(null) }
   }
   const add = (provider: AgentProvider) => {
@@ -65,7 +66,7 @@ export function ProviderSettings({ value, onChange }: { value: AppPreferences; o
         {status?.latestVersion && status.updateAvailable && <p className="muted text-muted-foreground small text-caption">{t('Available version: {0}', { '0': status.latestVersion })}</p>}
         {[status?.versionError, status?.error, status?.updateError].filter(Boolean).map((message) => <p key={message} className="error text-bad small text-caption" role="alert">{message}</p>)}
         <Collapsible><CollapsibleTrigger render={<Button size="sm" variant="ghost" className="small text-caption" />}>{t('Advanced')}</CollapsibleTrigger><CollapsibleContent>
-          <label className="provider-binary-label block text-caption m-[12px_0_6px]" htmlFor={`provider-${provider}`}>{t('Binary path')}</label><div className="provider-binary-input"><Input id={`provider-${provider}`} placeholder={t('Automatic detection')} value={preferences?.binary ?? ''} onChange={(event) => change(provider, { binary: event.target.value })} /><Button variant="secondary" size="icon-sm" className="bg-fill hover:bg-fill-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t('Browse {0} binary', { '0': providerName(provider) })} onClick={() => void browse(provider, 'binary')}><FolderOpen size={16} /></Button></div>
+          <label className="provider-binary-label block text-caption m-[12px_0_6px]" htmlFor={`provider-${provider}`}>{t('Binary path')}</label><div className="provider-binary-input"><Input id={`provider-${provider}`} maxLength={4096} placeholder={t('Automatic detection')} value={preferences?.binary ?? ''} onChange={(event) => change(provider, { binary: event.target.value })} /><Button variant="secondary" size="icon-sm" className="bg-fill hover:bg-fill-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t('Browse {0} binary', { '0': providerName(provider) })} onClick={() => void browse(provider, 'binary')}><FolderOpen size={16} /></Button></div>
           {status && <p className="muted text-muted-foreground small text-caption"><code>{status.binary}</code></p>}
           {provider === 'antigravity' && <><label htmlFor="provider-harness">{t('Harness helper path')}</label><div className="provider-binary-input"><Input id="provider-harness" value={preferences?.harness ?? ''} onChange={(event) => change(provider, { harness: event.target.value })} /><Button variant="secondary" size="icon-sm" className="bg-fill hover:bg-fill-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t('Browse Antigravity harness helper')} onClick={() => void browse(provider, 'harness')}><FolderOpen size={16} /></Button></div></>}
         </CollapsibleContent></Collapsible>

@@ -1,4 +1,5 @@
 import { t, useLanguage } from './i18n'
+import { clipText } from '../../shared/text'
 import { useModelSets } from './ModelSets'
 import { FolderClosed, GitBranch, Laptop, Settings } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
@@ -17,8 +18,8 @@ import { HomeFeed } from './Home'
 export function titleFrom(prompt: string): string {
   const line = prompt.trim().split('\n')[0]!.trim()
   if (line.length <= 60) return line
-  const cut = line.slice(0, 60)
-  return `${cut.slice(0, cut.lastIndexOf(' ') > 30 ? cut.lastIndexOf(' ') : 60)}…`
+  const cut = clipText(line, 60)
+  return `${clipText(cut, cut.lastIndexOf(' ') > 30 ? cut.lastIndexOf(' ') : 60)}…`
 }
 
 const MODES: { id: CheckoutMode; label: string; hint: string; Icon: typeof Laptop }[] = [

@@ -1,4 +1,5 @@
 import { ContentSkeleton } from '@/components/content-skeleton'
+import { errorText } from './errors'
 import { SettingsRow } from '@/components/settings-row'
 import { t, useLanguage, formatLocale } from './i18n'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -28,7 +29,7 @@ export function useSchedules() {
   const [loading, setLoading] = useState(true)
   const reload = useCallback(async () => { try { const [s, r] = await Promise.all([invoke('schedules.list'), invoke('schedules.runs')]); setSchedules(s); setRuns(r) } finally { setLoading(false) } }, [])
   useEffect(() => {
-    void reload().catch((e) => notifyError(String(e), 'Schedules'))
+    void reload().catch((e) => notifyError(errorText(e), 'Schedules'))
     const off = ramu.on('automation:changed', () => { void reload().catch(() => {}) })
     return off
   }, [reload])
@@ -49,7 +50,7 @@ export function SchedulesPage() {
     const select = (e: Event) => { const id = (e as CustomEvent).detail?.id; setSelected(id ?? null); setEditing(id ? schedules.find((s) => s.id === id) ?? null : 'new') }
     window.addEventListener('ramu:schedule', select); return () => window.removeEventListener('ramu:schedule', select)
   }, [schedules])
-  const act = async (fn: () => Promise<unknown>) => { setBusy(true); setError(null); try { await fn(); await reload() } catch (e) { setError(String(e)) } finally { setBusy(false) } }
+  const act = async (fn: () => Promise<unknown>) => { setBusy(true); setError(null); try { await fn(); await reload() } catch (e) { setError(errorText(e)) } finally { setBusy(false) } }
   const openRun = async (run: ScheduleRun) => {
     if (!run.taskId) return
     await ws.refresh(); ws.openTask(run.taskId)
@@ -75,14 +76,14 @@ function ScheduleEditor({ schedule, onClose, onSaved }: { schedule?: Schedule; o
   const [previewLoading, setPreviewLoading] = useState(true)
   const [preview, setPreview] = useState<number[]>([]), [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false)
   const [onceLocal, setOnceLocal] = useState(() => DateTime.fromISO(schedule?.rule.kind === 'once' ? schedule.rule.at : DateTime.now().plus({ hours: 1 }).toISO()!, { zone: input.timezone }).toFormat("yyyy-MM-dd'T'HH:mm"))
-  useEffect(() => { let disposed = false; setPreviewLoading(true); const timer = setTimeout(() => { void invoke('schedules.preview', input.rule, input.timezone).then((dates) => { if (!disposed) { setPreview(dates); setPreviewLoading(false); setError(null) } }, (e) => { if (!disposed) { setPreview([]); setPreviewLoading(false); setError(String(e)) } }) }, 200); return () => { disposed = true; clearTimeout(timer) } }, [input.rule, input.timezone])
+  useEffect(() => { let disposed = false; setPreviewLoading(true); const timer = setTimeout(() => { void invoke('schedules.preview', input.rule, input.timezone).then((dates) => { if (!disposed) { setPreview(dates); setPreviewLoading(false); setError(null) } }, (e) => { if (!disposed) { setPreview([]); setPreviewLoading(false); setError(errorText(e)) } }) }, 200); return () => { disposed = true; clearTimeout(timer) } }, [input.rule, input.timezone])
   const rule = input.rule
   const setRule = (rule: ScheduleRule) => setInput((i) => ({ ...i, rule }))
   const once = (value: string, zone = input.timezone) => DateTime.fromISO(value, { zone }).toISO() ?? value
-  const save = async () => { setBusy(true); setError(null); try { await invoke('schedules.save', input, schedule?.id); onSaved() } catch (e) { setError(String(e)) } finally { setBusy(false) } }
+  const save = async () => { setBusy(true); setError(null); try { await invoke('schedules.save', input, schedule?.id); onSaved() } catch (e) { setError(errorText(e)) } finally { setBusy(false) } }
   return <section className="schedule-editor p-5 [border:1px_solid_var(--line)] rounded-(--radius-m) mb-4 bg-fill"><div className="schedule-card-title [&_h2]:text-heading [&_h2]:font-semibold [&_h2]:m-0 flex items-center gap-2"><h2>{schedule ? t("Edit schedule") : t("New schedule")}</h2><span className="grow flex-1 min-w-0 text-left" /><Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Close schedule editor")} onClick={onClose} disabled={busy}><X size={15} /></Button></div><fieldset disabled={busy} className="schedule-form [&_label]:flex [&_label]:flex-col [&_label]:gap-[7px] [&_label]:text-caption [&_input]:w-full [&_input]:p-[9px_10px] [&_input]:rounded-(--radius-s) [&_input]:[border:1px_solid_transparent] [&_input]:[background:var(--field)] [&_input]:text-inherit [&_input]:[font:inherit] [&_select]:w-full [&_select]:p-[9px_10px] [&_select]:rounded-(--radius-s) [&_select]:[border:1px_solid_transparent] [&_select]:[background:var(--field)] [&_select]:text-inherit [&_select]:[font:inherit] [&_textarea]:w-full [&_textarea]:p-[9px_10px] [&_textarea]:rounded-(--radius-s) [&_textarea]:[border:1px_solid_transparent] [&_textarea]:[background:var(--field)] [&_textarea]:text-inherit [&_textarea]:[font:inherit] [&_textarea]:resize-y [&_textarea]:leading-[1.5] [&_[data-slot='select-trigger']]:p-[9px_10px] [&_[data-slot='select-trigger']]:[background:var(--field)] [&_[data-slot='select-trigger']]:h-auto [border:0] p-0 mt-4 grid gap-4 min-w-0 grid-cols-1 min-[640px]:grid-cols-2 [&_>_*]:min-w-0 [&_>_:is(.schedule-wide,_.schedule-form-row,_.schedule-weekdays,_.schedule-preview,_p,_.error,_.schedule-form-actions)]:col-span-full">
     <label className="schedule-wide col-span-full">{t("Name")}<Input value={input.name} maxLength={200} placeholder={t("Morning project check")} onChange={(e) => setInput({ ...input, name: e.target.value })} /></label>
-    <label className="schedule-wide col-span-full">{t("What should the agent do?")}<Textarea rows={3} value={input.prompt} placeholder={t("Review unfinished work and identify the next useful action.")} onChange={(e) => setInput({ ...input, prompt: e.target.value })} /></label>
+    <label className="schedule-wide col-span-full">{t("What should the agent do?")}<Textarea rows={3} maxLength={100000} value={input.prompt} placeholder={t("Review unfinished work and identify the next useful action.")} onChange={(e) => setInput({ ...input, prompt: e.target.value })} /></label>
     <div className="schedule-form-row grid [grid-template-columns:1fr_1fr] gap-4"><label>{t("Scope")}<Dropdown label={t("Scope")} value={input.projectId} onChange={(projectId) => setInput({ ...input, projectId, workspaceId: null })} options={[{ value: NO_PROJECT, label: t("No project") }, ...ws.projects.map((p) => ({ value: p.id, label: p.name }))]} /></label>{input.projectId !== NO_PROJECT && <label>Checkout<Dropdown label="Checkout" value={input.workspaceId ?? ''} onChange={(workspaceId) => setInput({ ...input, workspaceId: workspaceId || null })} options={[{ value: '', label: t("Current checkout") }, ...ws.workspaces.filter((w) => w.projectId === input.projectId).map((w) => ({ value: w.id, label: w.name }))]} /></label>}</div>
     <div className="contents"><label>{t("Frequency")}<Dropdown label={t("Frequency")} value={rule.kind} onChange={(kind) => setRule(kind === 'once' ? { kind, at: once(onceLocal) } : kind === 'weekly' ? { kind, time: '09:00', weekdays: [1, 2, 3, 4, 5] } : kind === 'monthly' ? { kind, time: '09:00', day: 1 } : kind === 'interval' ? { kind, minutes: 60, anchor: DateTime.now().plus({ hours: 1 }).toISO()! } : { kind: 'daily', time: '09:00' })} options={['once', 'daily', 'weekly', 'monthly', 'interval'].map((value) => ({ value, label: value === 'interval' ? t("Every interval") : t(value[0]!.toUpperCase() + value.slice(1)) }))} /></label></div>
     {rule.kind === 'once' && <label>{t("Run at")}<Input type="datetime-local" value={onceLocal} onChange={(e) => { setOnceLocal(e.target.value); setRule({ kind: 'once', at: once(e.target.value) }) }} /></label>}
@@ -102,7 +103,7 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
   const [status, setStatus] = useState<BackgroundStatus | null>(null), [connected, setConnected] = useState(true), [busy, setBusy] = useState(false)
   const reload = () => invoke('background.status').then((s) => { setStatus(s); setConnected(true) }, () => setConnected(false))
   useEffect(() => { void reload(); return ramu.on('background:connection', ({ connected }) => { setConnected(connected); if (connected) void reload() }) }, [])
-  const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); await reload() } catch (e) { notifyError(String(e), 'Background service') } finally { setBusy(false) } }
+  const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); await reload() } catch (e) { notifyError(errorText(e), 'Background service') } finally { setBusy(false) } }
   if (compact) return <span className="inline-flex items-center gap-[7px] text-[11px] text-muted-foreground"><span className={`size-1.5 rounded-full ${connected ? 'bg-(--ok)' : 'bg-[#8b8b91]'}`} />{connected ? t("Background service running") : t("Background service stopped")}</span>
   return <>
     <SettingsRow className=""><span><strong>{t("Background service")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Chats and schedules keep running when Ramu closes. The computer must stay awake.")}</span><span className="muted text-muted-foreground block block small text-caption">{connected ? t("Running · PID {0}", { "0": status?.pid ?? '…' }) : t("Stopped")}</span></span><Button variant="secondary" className="bg-fill hover:bg-fill-hover" disabled={busy} onClick={() => void act(() => invoke(connected ? 'background.stop' : 'background.start'))}>{connected ? t("Stop") : t("Start")}</Button></SettingsRow>

@@ -1,4 +1,5 @@
 import { focusComposer } from '../ComposerInput'
+import { clipText } from '../../../shared/text'
 import { highlightSource } from '../../../shared/sourceNavigation'
 import { ChatLink, ReferenceText } from '../ChatReferences'
 import { remarkChatReferences, SKILL_REFERENCE_PREFIX } from '../../../shared/chatReferences'
@@ -414,7 +415,7 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
     let created: string | null = null
     try {
       const prompt = await invoke('agent.continuationPrompt', session.id)
-      const task = await invoke('tasks.create', { projectId: previous.projectId, title: `Continue: ${previous.title}`.slice(0, 60), mode: previous.mode, workspaceId: previous.workspaceId ?? undefined })
+      const task = await invoke('tasks.create', { projectId: previous.projectId, title: clipText(`Continue: ${previous.title}`, 60), mode: previous.mode, workspaceId: previous.workspaceId ?? undefined })
       created = task.id
       const next = await invoke('agent.start', task.id, prompt, pendingSettings ?? session.settings, [], [])
       created = null
@@ -1164,7 +1165,7 @@ function AsidePanel({ sessionId, asides, open, taskId, onOpen, onClose, onQuote 
       </div>
       {error && <p className="error text-bad small text-caption aside-error m-[0_14px_6px]">{error}</p>}
       <form className="agent-panel-compose [&_textarea]:min-h-[56px] [&_textarea]:max-h-[160px] [&_textarea]:p-[10px_48px_10px_14px] [&_textarea]:border [&_textarea]:border-line [&_textarea]:rounded-(--radius-l) [&_textarea]:bg-fill [&_textarea]:resize-none [&_textarea]:text-control [&_textarea]:leading-[1.5] [&_textarea]:shadow-none [&_textarea]:ring-0 [&_textarea]:[transition:border-color_140ms_ease] [&_textarea:focus-visible]:border-line-strong [&_textarea:focus-visible]:ring-0 relative flex-none m-[0_10px_10px] min-w-0" onSubmit={(event) => { event.preventDefault(); void send() }}>
-        <Textarea ref={input} aria-label={translate("Ask aside")} placeholder={aside ? translate("Follow up…") : translate("Ask about this…")} value={draft} rows={2} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() } }} />
+        <Textarea ref={input} aria-label={translate("Ask aside")} placeholder={aside ? translate("Follow up…") : translate("Ask about this…")} value={draft} rows={2} maxLength={20000} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() } }} />
         <Button variant="secondary" size="icon-sm" type="submit" className="icon p-0 size-(--action-size) flex-none justify-center agent-panel-send [&:hover:not(:disabled)]:[border:0] absolute right-2 bottom-2 w-7 h-7 rounded-full bg-primary text-primary-foreground [border:0] [transition:background-color_140ms_ease,opacity_140ms_ease] hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100" aria-label={translate("Ask")} title={translate("Ask aside")} disabled={!draft.trim() || sending || waiting}><Send size={14} /></Button>
       </form>
     </>}

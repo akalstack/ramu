@@ -1,4 +1,5 @@
 import { t, useLanguage } from './i18n'
+import { errorText } from './errors'
 import { Kbd } from '@/components/ui/kbd'
 import { Button } from '@/components/desktop-button'
 import { moveFavorite } from '../../shared/favorites'
@@ -100,7 +101,7 @@ export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: A
     if (savingFavorites) return
     setSavingFavorites(true)
     try { await app.save({ ...app.preferences, favoriteModels: next }); setReorderNotice(notice) }
-    catch (reason) { notifyError(String(reason), 'Models') }
+    catch (reason) { notifyError(errorText(reason), 'Models') }
     finally { setSavingFavorites(false) }
   }
   const reorder = (key: string, target: string, after: boolean) => {
@@ -161,7 +162,7 @@ export function ModelPicker({ settings, onChange, onDone, onSet }: { settings: A
         </div> })}
         {virtual && <div aria-hidden="true" style={{ height: (rows.length - end) * rowHeight }} />}
         {(q || tab !== 'sets') && !rows.length && <p className="mp-empty m-0 p-3 text-muted-foreground text-control leading-[1.5]">{providerError || error || t("No matching models")}</p>}
-        {(providerError || error) && <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover mp-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&.selected]:bg-accent [&.drop-before]:[box-shadow:inset_0_2px_var(--accent)] [&.drop-after]:[box-shadow:inset_0_-2px_var(--accent)] flex items-center gap-2 w-full min-h-[44px] p-[6px_8px] [border:0] rounded-(--radius-s) bg-transparent text-left justify-start cursor-default text-foreground" onClick={() => { void reload().catch((reason) => setError(String(reason))) }}><span className="mp-text flex flex-col min-w-0 flex-1"><span className="mp-name text-control font-medium leading-[1.4] overflow-hidden text-ellipsis whitespace-nowrap">{t("Reload available models")}</span></span></Button>}
+        {(providerError || error) && <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover mp-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&.selected]:bg-accent [&.drop-before]:[box-shadow:inset_0_2px_var(--accent)] [&.drop-after]:[box-shadow:inset_0_-2px_var(--accent)] flex items-center gap-2 w-full min-h-[44px] p-[6px_8px] [border:0] rounded-(--radius-s) bg-transparent text-left justify-start cursor-default text-foreground" onClick={() => { void reload().catch((reason) => setError(errorText(reason))) }}><span className="mp-text flex flex-col min-w-0 flex-1"><span className="mp-name text-control font-medium leading-[1.4] overflow-hidden text-ellipsis whitespace-nowrap">{t("Reload available models")}</span></span></Button>}
       </div>
     </div>
   </div>

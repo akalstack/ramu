@@ -1,4 +1,5 @@
 import { recommendedSets, migrateModelDefaults } from '../../shared/modelDefaults'
+import { errorText } from './errors'
 import { t } from './i18n'
 import { providerName } from '../../shared/providers'
 import { BootScreen } from './Brand'
@@ -45,7 +46,7 @@ export function ModelSetsProvider({ children }: { children: ReactNode }) {
       const value = saved.status === 'fulfilled' && saved.value ? saved.value : defaults
       const updated = migrateModelDefaults(value, defaults)
       setPreferences(updated)
-      if (updated !== value) void invoke('settings.models.set', updated).catch((reason) => { if (!disposed) setError(`Could not save updated defaults: ${String(reason)}`) })
+      if (updated !== value) void invoke('settings.models.set', updated).catch((reason) => { if (!disposed) setError(`Could not save updated defaults: ${errorText(reason)}`) })
       if (saved.status === 'rejected') setError(`Could not load saved model sets: ${String(saved.reason)}`)
     })
     return () => { disposed = true }

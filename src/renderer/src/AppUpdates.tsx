@@ -1,4 +1,5 @@
 import { SettingsRow } from '@/components/settings-row'
+import { errorText } from './errors'
 import { useEffect, useState } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
@@ -13,14 +14,14 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
   const [state, setState] = useState<AppUpdateStatus | null>(null), [service, setService] = useState<BackgroundStatus | null>(null)
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false)
   useEffect(() => {
-    void ramu.invoke('updates.status').then(setState, (reason) => setError(String(reason)))
+    void ramu.invoke('updates.status').then(setState, (reason) => setError(errorText(reason)))
     void ramu.invoke('background.status').then(setService, () => {})
     return ramu.on('updates:changed', setState)
   }, [])
   const act = async (method: 'updates.check' | 'updates.download' | 'updates.restart' | 'background.restart') => {
     setBusy(true); setError(null)
     try { const result = await ramu.invoke(method); if (result && 'phase' in result) setState(result) }
-    catch (reason) { setError(String(reason)) }
+    catch (reason) { setError(errorText(reason)) }
     finally { setBusy(false) }
   }
   const working = busy || state?.phase === 'checking' || state?.phase === 'downloading'
@@ -42,5 +43,5 @@ export function AppUpdateNotice() {
   const [state, setState] = useState<AppUpdateStatus | null>(null), [deferred, setDeferred] = useState(''), [error, setError] = useState<string | null>(null)
   useEffect(() => { void ramu.invoke('updates.status').then(setState, () => {}); return ramu.on('updates:changed', setState) }, [])
   if (!state?.nativeReady || !state.release || deferred === state.release.version) return null
-  return <div className="app-update-notice [&_>_span]:flex-1 [&_>_span]:text-control fixed right-5 bottom-[36px] max-w-[min(560px,_calc(100vw_-_40px))] z-40 flex items-center gap-2.5 p-[12px_16px] bg-fill [border:1px_solid_var(--edge)] rounded-(--radius-l) [box-shadow:0_8px_30px_#0003]" role="status"><span>{t('Ramu {0} is ready. Restart when you’re ready; chats stay running.', { '0': state.release.version })}</span><Button variant="secondary" size="sm" className="bg-fill hover:bg-fill-hover small text-caption" onClick={() => void ramu.invoke('updates.restart').catch((reason) => setError(String(reason)))}>{t('Restart app')}</Button><Button size="sm" variant="ghost" className="small text-caption" onClick={() => setDeferred(state.release!.version)}>{t('Later')}</Button>{error && <span className="error text-bad small text-caption">{error}</span>}</div>
+  return <div className="app-update-notice [&_>_span]:flex-1 [&_>_span]:text-control fixed right-5 bottom-[36px] max-w-[min(560px,_calc(100vw_-_40px))] z-40 flex items-center gap-2.5 p-[12px_16px] bg-fill [border:1px_solid_var(--edge)] rounded-(--radius-l) [box-shadow:0_8px_30px_#0003]" role="status"><span>{t('Ramu {0} is ready. Restart when you’re ready; chats stay running.', { '0': state.release.version })}</span><Button variant="secondary" size="sm" className="bg-fill hover:bg-fill-hover small text-caption" onClick={() => void ramu.invoke('updates.restart').catch((reason) => setError(errorText(reason)))}>{t('Restart app')}</Button><Button size="sm" variant="ghost" className="small text-caption" onClick={() => setDeferred(state.release!.version)}>{t('Later')}</Button>{error && <span className="error text-bad small text-caption">{error}</span>}</div>
 }

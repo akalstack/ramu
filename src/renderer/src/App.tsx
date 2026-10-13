@@ -1,9 +1,11 @@
 import { AppUpdateNotice } from './AppUpdates'
+import { errorText } from './errors'
 import { t, useLanguage } from './i18n'
 import { Kbd } from '@/components/ui/kbd'
 import { ProviderSetupTerminal } from './ProviderSetupTerminal'
 import { beginPaneResize } from './paneResize'
 import { Button } from '@/components/desktop-button'
+import { PaneHeader, paneActionClass } from '@/components/pane-header'
 import { Input } from '@/components/ui/input'
 import { CalendarClock, Settings, SquarePen, Archive, Files, History, Folders, FolderPlus, GitBranch, MessageCircle, Pencil, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, SquareTerminal, X, RefreshCcw, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -35,7 +37,7 @@ import { ExplorerPanel } from './sidebar/ExplorerPanel'
 import { ProjectsPanel } from './sidebar/ProjectsPanel'
 import { SearchPanel } from './sidebar/SearchPanel'
 import { ScmPanel } from './sidebar/ScmPanel'
-import { errorText, TaskPane } from './TaskPane'
+import { TaskPane } from './TaskPane'
 import { isWorktreeCtx, isWorkspaceCtx, worktreeCtx, projectCtx, useWorkspace, WorkspaceProvider } from './workspace'
 
 export function App({ onReady }: { onReady?: () => void }) {
@@ -66,7 +68,7 @@ function Shell() {
   const sidebarWidth = dragWidth ?? preferences.sidebarWidth
   const latest = useRef({ preferences, save })
   latest.current = { preferences, save }
-  const saveLayout = (patch: Partial<typeof preferences>) => void latest.current.save({ ...latest.current.preferences, ...patch }).catch((reason) => notifyError(String(reason), 'Settings'))
+  const saveLayout = (patch: Partial<typeof preferences>) => void latest.current.save({ ...latest.current.preferences, ...patch }).catch((reason) => notifyError(errorText(reason), 'Settings'))
   const resizeCleanup = useRef<(() => void) | null>(null)
   useEffect(() => () => resizeCleanup.current?.(), [])
   const startResize = (event: React.PointerEvent) => {
@@ -90,7 +92,7 @@ function Shell() {
     const open = (event: Event) => { setSettingsSection((event as CustomEvent<{ section?: SettingsSection }>).detail?.section ?? 'appearance'); setSettingsOpen(true) }
     const off = ramu.on('menu:action', ({ action }) => {
       window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: action === 'check-updates' ? 'updates' : 'appearance' } }))
-      if (action === 'check-updates') void invoke('updates.check').catch((reason) => notifyError(String(reason), 'Updates'))
+      if (action === 'check-updates') void invoke('updates.check').catch((reason) => notifyError(errorText(reason), 'Updates'))
     })
     window.addEventListener('ramu:settings', open)
     return () => { off(); window.removeEventListener('ramu:settings', open) }
@@ -232,10 +234,7 @@ function Shell() {
           event.preventDefault()
           setToolsWidth((width) => Math.max(220, Math.min(480, window.innerWidth * .35, event.key === 'Home' ? 220 : event.key === 'End' ? 480 : width + (event.key === 'ArrowLeft' ? 20 : -20))))
         }} />
-        <header className="workspace-tools-header [&_.icon]:w-[var(--action-size)] [&_.icon]:h-[var(--action-size)] [&_.icon_>_svg]:w-[var(--icon-size)] [&_.icon_>_svg]:h-[var(--icon-size)] flex items-center gap-2 flex-none min-h-[46px] p-[4px_10px] text-control font-semibold text-soft">
-          <span className="grow flex-1 min-w-0 text-left">{t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')}</span>
-          <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Close")} title={t("Close")} onClick={() => ws.setSidebar('projects')}><X size={15} /></Button>
-        </header>
+        <PaneHeader className="workspace-tools-header" title={t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')} actions={<Button variant="ghost" size="icon-xs" className={paneActionClass} aria-label={t("Close")} title={t("Close")} onClick={() => ws.setSidebar('projects')}><X size={15} /></Button>} />
         <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden [&_.project-group]:mb-3 [&_.project-row]:min-h-8 [&_.project-row]:p-[0_8px] [&_.task-list]:pl-[22px] [&_.task-list]:gap-0.5 [&_.task-row]:min-h-8 [&_.task-row]:p-[0_8px] flex-1 overflow-auto min-h-0">
           {workspaceTool === 'explorer' && <ExplorerPanel />}
           {workspaceTool === 'scm' && <ScmPanel />}
@@ -319,6 +318,7 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
             ref={input}
             className="inline-edit flex-1 min-w-0 p-[2px_6px] text-body font-medium text-soft bg-canvas [border-color:var(--line-strong)] header-edit max-w-[420px] no-drag [-webkit-app-region:no-drag]"
             aria-label={t("Chat title")}
+            maxLength={200}
             defaultValue={task.title}
             onBlur={(e) => void rename(e.target.value)}
             onKeyDown={(e) => {

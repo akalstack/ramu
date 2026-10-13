@@ -21,8 +21,10 @@ import { codexHookTrust } from './codex'
 import { join } from 'node:path'
 import { AttachmentStore, MAX_ATTACHMENT_BYTES } from './attachments'
 import { z } from 'zod'
+import { describeValidationError } from './validation'
 import type { AgentService } from './agent'
 import * as files from './files'
+import { editorConfigFor } from './editorconfig'
 import * as tooling from './tooling'
 import * as git from './git'
 import type { TerminalService } from './pty'
@@ -259,7 +261,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'schedules.delete': { args: z.tuple([id]), run: (scheduleId: string) => schedules.delete(scheduleId) },
     'schedules.runNow': { args: z.tuple([id]), run: (scheduleId: string) => schedules.runNow(scheduleId) },
     'schedules.runs': { args: z.tuple([id.optional()]), run: (scheduleId?: string) => schedules.runs(scheduleId) },
-    'schedules.preview': { args: z.tuple([ruleSchema, z.string()]), run: (rule: Parameters<typeof previewOccurrences>[0], zone: string) => { scheduleSchema.shape.timezone.parse(zone); return previewOccurrences(rule, zone, Date.now()) } },
+    'schedules.preview': { args: z.tuple([ruleSchema, z.string()]), run: (rule: Parameters<typeof previewOccurrences>[0], zone: string) => { if (!scheduleSchema.shape.timezone.safeParse(zone).success) throw new Error('Unknown timezone'); return previewOccurrences(rule, zone, Date.now()) } },
     'recaps.get': { args: z.tuple([]), run: () => recaps.snapshot() },
     'recaps.refresh': { args: z.tuple([]), run: () => recaps.refresh() },
     'memory.get': { args: z.tuple([]), run: () => need(memory).snapshot() },
@@ -487,6 +489,10 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
       args: z.tuple([id, id, relPath]),
       run: (taskId: string, repoId: string, path: string) => files.readText(cwdOf(taskId, repoId), path),
     },
+    'files.editorconfig': {
+      args: z.tuple([id, id, relPath]),
+      run: (taskId: string, repoId: string, path: string) => editorConfigFor(cwdOf(taskId, repoId), path),
+    },
     'files.image': {
       args: z.tuple([id, id, relPath]),
       run: (taskId: string, repoId: string, path: string) => files.readImage(cwdOf(taskId, repoId), path),
@@ -500,7 +506,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
       run: async (taskId: string, repoId: string, path: string, content: string, scope: 'buffer' | 'saved') => { const cwd = cwdOf(taskId, repoId); return tooling.lintBuffer(cwd, await files.resolveInRoot(cwd, path), content, scope) },
     },
     'files.write': {
-      args: z.tuple([id, id, relPath, text, z.string().max(128).nullable()]),
+      args: z.tuple([id, id, relPath, z.string().max(files.MAX_EDITABLE_BYTES), z.string().max(128).nullable()]),
       run: (taskId: string, repoId: string, path: string, content: string, baseHash: string | null) => {
         const cwd = cwdOf(taskId, repoId)
         return lock.run(`file:${cwd}/${path}`, () => files.writeText(cwd, path, content, baseHash))
@@ -758,7 +764,10 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     invoke(method: unknown, args: unknown): unknown {
       if (typeof method !== 'string' || !Object.hasOwn(methods, method)) throw new Error(`Unknown method ${String(method)}`)
       const m = methods[method as keyof typeof methods]
-      return (m.run as (...a: unknown[]) => unknown)(...(m.args.parse(args) as unknown[]))
+      const parsed = m.args.safeParse(args)
+      // People see this message, so it must read as a sentence rather than as a list of schema issues.
+      if (!parsed.success) throw new Error(describeValidationError(parsed.error))
+      return (m.run as (...a: unknown[]) => unknown)(...(parsed.data as unknown[]))
     },
     close() { providers.close(); updates.close(); awake.close(); for (const watcher of watchers.values()) watcher.close() },
   }

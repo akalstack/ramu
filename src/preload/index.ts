@@ -5,7 +5,10 @@ import type { PushEvents, RamuBridge } from '../shared/api'
 const PUSH_EVENTS = new Set<string>(['menu:action', 'updates:changed', 'providers:updates', 'automation:changed', 'memory:changed', 'notify:inapp', 'notify:open', 'background:connection', 'agent:event', 'term:data', 'term:exit', 'fs:changed', 'usage:changed', 'aside:changed', 'context:changed'])
 
 const bridge: RamuBridge = {
-  invoke: (method, ...args) => ipcRenderer.invoke('ramu:invoke', method, args),
+  // Electron wraps handler failures as "Error invoking remote method '...': Error: <message>"; people should only see the message.
+  invoke: (method, ...args) => ipcRenderer.invoke('ramu:invoke', method, args).catch((error: unknown) => {
+    throw new Error((error instanceof Error ? error.message : String(error)).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+  }),
   on(event, listener) {
     if (!PUSH_EVENTS.has(event)) throw new Error(`Unknown event ${event}`)
     const wrapped = (_e: IpcRendererEvent, payload: PushEvents[typeof event]) => listener(payload)

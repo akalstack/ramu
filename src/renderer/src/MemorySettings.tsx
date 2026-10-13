@@ -1,4 +1,5 @@
 import { SettingsRow } from '@/components/settings-row'
+import { errorText } from './errors'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/desktop-button'
@@ -38,8 +39,8 @@ function MemoryBrowser() {
   const [status, setStatus] = useState<Memory['status']>('active')
   const [editing, setEditing] = useState<{ id?: string; input: MemoryInput } | null>(null)
   const reload = useCallback(() => invoke('memory.get').then(setSnapshot), [])
-  useEffect(() => { void reload().catch((e) => notifyError(String(e), 'Memory')); return ramu.on('memory:changed', () => { void reload().catch(() => {}) }) }, [reload])
-  const act = async (fn: () => Promise<unknown>) => { try { await fn(); await reload() } catch (e) { notifyError(String(e), 'Memory') } }
+  useEffect(() => { void reload().catch((e) => notifyError(errorText(e), 'Memory')); return ramu.on('memory:changed', () => { void reload().catch(() => {}) }) }, [reload])
+  const act = async (fn: () => Promise<unknown>) => { try { await fn(); await reload() } catch (e) { notifyError(errorText(e), 'Memory') } }
   const projects = ws.projects.filter((p) => p.id !== NO_PROJECT)
   const projectName = (id: string | null) => id ? projects.find((p) => p.id === id)?.name ?? t('Removed project') : t('All projects')
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)

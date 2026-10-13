@@ -1,4 +1,5 @@
 import { SettingsRow } from '@/components/settings-row'
+import { errorText } from './errors'
 import { t, useLanguage } from './i18n'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
@@ -110,7 +111,7 @@ function CodexHookRow({ checked, busy, onChange }: { checked: boolean; busy: boo
     if (!next) return onChange(false)
     setWorking(true)
     try { const result = await invoke('codex.hook.trust'); setStatus(result); if (result.trusted) onChange(true) }
-    catch (error) { setStatus({ trusted: false, error: String(error) }) }
+    catch (error) { setStatus({ trusted: false, error: errorText(error) }) }
     finally { setWorking(false) }
   }
   return <SettingsRow className="settings-toggle"><span><strong>{t("Decide before Codex starts its own sub-agents")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Route Codex helpers before they start. Enabling adds a trusted hook to ")}<code>~/.codex/config.toml</code>{t(". Disabling leaves the inactive entry in place.")}</span>{status && <span className={`block block small text-caption ${status.error ? 'error text-bad' : 'muted text-muted-foreground'}`}>{status.error ? `Codex: ${status.error}` : status.trusted ? t("Codex trusts the hook.") : t("Codex does not trust the hook yet.")}</span>}</span><Switch aria-label={t("Decide before Codex starts its own sub-agents")} checked={checked} disabled={busy || working} onCheckedChange={(next) => void toggle(next)} /></SettingsRow>

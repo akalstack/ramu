@@ -470,6 +470,7 @@ function InlineEdit({ value, onDone }: { value: string; onDone: (v: string | nul
       ref={ref}
       className="inline-edit flex-1 min-w-0 p-[2px_6px] [font:inherit] bg-canvas [border-color:var(--line-strong)]"
       aria-label={t("Name")}
+      maxLength={200}
       value={v}
       autoFocus
       onClick={(e) => e.stopPropagation()}

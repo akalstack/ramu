@@ -1,4 +1,5 @@
 import { t, useLanguage } from './i18n'
+import { errorText } from './errors'
 import { Button } from '@/components/desktop-button'
 import { Check, Clock, FolderClosed, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -22,7 +23,7 @@ export function HomeFeed() {
   const [lastVisit] = useState(() => Number(localStorage.getItem('ramu.last-visit') ?? 0))
   const reload = useCallback(() => invoke('recaps.get').then(setRecap), [])
   useEffect(() => { void reload().catch(() => {}); localStorage.setItem('ramu.last-visit', String(Date.now())); return ramu.on('automation:changed', () => { void reload().catch(() => {}) }) }, [reload])
-  const act = async (id: string, action: 'done' | 'dismissed' | 'snoozed') => { try { await invoke('recaps.act', id, action); await reload() } catch (e) { notifyError(String(e), 'Recaps') } }
+  const act = async (id: string, action: 'done' | 'dismissed' | 'snoozed') => { try { await invoke('recaps.act', id, action); await reload() } catch (e) { notifyError(errorText(e), 'Recaps') } }
   const visible = recap?.items.filter((i) => (i.status === 'open' || i.status === 'snoozed' && (i.snoozedUntil ?? 0) <= Date.now()) && ws.tasks.some((t) => t.id === i.taskId)) ?? []
   const groups = (['attention', 'recent'] as const).map((group) => ({ group, items: visible.filter((i) => i.group === group && (group !== 'recent' || i.updatedAt >= lastVisit)) })).filter((entry) => entry.items.length)
   const upcoming = schedules.filter((s) => s.state === 'active').sort((a, b) => (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity)).slice(0, 3)
@@ -39,7 +40,7 @@ export function HomeFeed() {
     {upcoming.length > 0 && <section className="recap-group [&_h2]:text-[length:15px] [&_h2]:font-semibold [&_h2]:m-[0_0_12px] m-[20px_0]"><h2>{t("Coming up")}</h2>{upcoming.map((s) => <Button variant="secondary" key={s.id} className="bg-fill hover:bg-fill-hover home-upcoming [&_>_span:last-child]:ml-auto flex items-center gap-3 w-full p-[10px_12px] mb-1.5 text-left" onClick={() => ws.setSidebar('schedules')}><Clock size={14} /><span>{s.name}</span><span className="muted text-muted-foreground small text-caption">{formatScheduleTime(s.nextRunAt, s.timezone)}</span></Button>)}</section>}
     <footer className="mt-3 flex items-center gap-2 pt-2">
       <BackgroundControls compact />
-      {preferences.recapsEnabled && <><span className="grow flex-1 min-w-0 text-left" /><span className="muted text-muted-foreground small text-caption">{recap?.generating ? t("Updating recap…") : recap?.generatedAt ? t("Daily recap updated {0}", { "0": DateTime.fromMillis(recap.generatedAt).toRelative() }) : t("Preparing your first recap")}</span><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Refresh recap")} disabled={recap?.generating} onClick={() => void invoke('recaps.refresh').then(setRecap, (e) => notifyError(String(e), 'Recaps'))}><RefreshCw size={13} /></Button></>}
+      {preferences.recapsEnabled && <><span className="grow flex-1 min-w-0 text-left" /><span className="muted text-muted-foreground small text-caption">{recap?.generating ? t("Updating recap…") : recap?.generatedAt ? t("Daily recap updated {0}", { "0": DateTime.fromMillis(recap.generatedAt).toRelative() }) : t("Preparing your first recap")}</span><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Refresh recap")} disabled={recap?.generating} onClick={() => void invoke('recaps.refresh').then(setRecap, (e) => notifyError(errorText(e), 'Recaps'))}><RefreshCw size={13} /></Button></>}
     </footer>
   </div>
 }

@@ -3,6 +3,7 @@
 // low-importance notes, purging long-archived ones) and a periodic "dream" in which a model merges duplicates,
 // resolves contradictions and retires stale notes. Every change is recorded in memory_events and stays restorable.
 import { randomUUID } from 'node:crypto'
+import { cleanLabel } from '../shared/text'
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentService } from './agent'
@@ -139,7 +140,9 @@ export class MemoryService {
 
   /** Mem0-style write: a near-duplicate in the same scope is updated instead of added; related notes are returned so the agent can consolidate. */
   save(raw: MemoryInput, actor: Actor, id?: string, reason?: string): { action: 'added' | 'updated' | 'exists'; memory: Memory; related: Memory[] } {
-    const parsed = memoryInputSchema.parse(raw)
+    const checked = memoryInputSchema.parse(raw)
+    const parsed = { ...checked, title: cleanLabel(checked.title) }
+    if (!parsed.title) throw new Error("A memory's title can't be empty.")
     const input = { ...parsed, importance: actor.actor === 'user' ? parsed.importance : Math.min(parsed.importance, AGENT_MAX_IMPORTANCE) }
     if (SECRET.test(`${input.title}\n${input.content}`)) throw new Error('This looks like a credential. Memory is shared with every provider and chat; never store secrets in it.')
     const projectId = input.projectId === NO_PROJECT ? null : input.projectId

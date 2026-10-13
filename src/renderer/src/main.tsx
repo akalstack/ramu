@@ -12,6 +12,7 @@ import { createRoot } from 'react-dom/client'
 import { useCallback, useEffect, useState } from 'react'
 import { App } from './App'
 import { StartupScreen } from './Brand'
+import { ErrorBoundary } from './ErrorBoundary'
 
 function Startup() {
   const [fontsReady, setFontsReady] = useState(false)
@@ -30,7 +31,7 @@ function Startup() {
     })
     return () => { disposed = true }
   }, [])
-  return <StartupScreen ready={fontsReady && appReady}><TooltipProvider delay={350}><App onReady={onReady} /></TooltipProvider></StartupScreen>
+  return <StartupScreen ready={fontsReady && appReady}><ErrorBoundary scope="app"><TooltipProvider delay={350}><App onReady={onReady} /></TooltipProvider></ErrorBoundary></StartupScreen>
 }
 
 // Fonts and application data load behind one continuous logo-to-wordmark reveal.

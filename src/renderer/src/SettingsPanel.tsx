@@ -79,7 +79,6 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
         ...(modelsChanged ? [store.save({ ...draft, sets: draft.sets.map((entry) => ({ ...entry, steps: entry.steps.map((step) => ({ ...step, name: modelStepName(step, store.catalogs) })) })) })] : []),
       ])
       if (JSON.stringify(appDraft.providerBinaries) !== JSON.stringify(app.preferences.providerBinaries)) void store.reload().catch(() => {})
-      onClose()
     } catch (reason) { setError(errorText(reason)) }
     finally { setBusy(false) }
   }

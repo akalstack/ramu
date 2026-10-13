@@ -1,4 +1,5 @@
 import * as monaco from 'monaco-editor/editor/editor.api.js'
+import { errorText } from './errors'
 import { invoke } from './ipc'
 import { notifyError } from './Notifications'
 
@@ -33,13 +34,13 @@ export function nativeMonacoMenu(editor: monaco.editor.ICodeEditor): void {
     event.event.preventDefault(); event.event.stopPropagation()
     const position = event.target.position, selection = editor.getSelection()
     if (position && !selection?.containsPosition(position)) editor.setPosition(position)
-    void show({ x: event.event.posx, y: event.event.posy }).catch((error) => notifyError(String(error), 'Editor'))
+    void show({ x: event.event.posx, y: event.event.posy }).catch((error) => notifyError(errorText(error), 'Editor'))
   })
   const key = editor.onKeyDown((event) => {
     if (event.browserEvent.key !== 'ContextMenu' && !(event.shiftKey && event.browserEvent.key === 'F10')) return
     event.preventDefault(); event.stopPropagation()
     const rect = editor.getDomNode()?.getBoundingClientRect(), cursor = editor.getPosition(), visible = cursor ? editor.getScrolledVisiblePosition(cursor) : null
-    if (rect) void show({ x: rect.left + (visible?.left ?? 10), y: rect.top + (visible?.top ?? 10) + (visible?.height ?? 20) }).catch((error) => notifyError(String(error), 'Editor'))
+    if (rect) void show({ x: rect.left + (visible?.left ?? 10), y: rect.top + (visible?.top ?? 10) + (visible?.height ?? 20) }).catch((error) => notifyError(errorText(error), 'Editor'))
   })
   editor.onDidDispose(() => { mouse.dispose(); key.dispose(); comments.delete(editor) })
 }

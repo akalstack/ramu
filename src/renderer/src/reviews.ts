@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { errorText } from './errors'
 import type { ChangeReview } from '../../shared/types'
 import { invoke, ramu } from './ipc'
 import { useWorkspace } from './workspace'
@@ -12,7 +13,7 @@ export function openReview(ws: ReturnType<typeof useWorkspace>, target: ReviewTa
     ws.openView(taskId, { kind: 'review', taskId, reviewId: target.id, fileId: target.fileId, threadId: target.threadId, requestId: crypto.randomUUID() })
   }
   if (target.taskId) open(target.taskId)
-  else void invoke('reviews.get', target.id).then((review) => open(review.taskId), (error) => notifyError(String(error), 'Changes'))
+  else void invoke('reviews.get', target.id).then((review) => open(review.taskId), (error) => notifyError(errorText(error), 'Changes'))
 }
 const summaries = createSharedResource<ChangeReview[]>(() => invoke('reviews.list'), [])
 let subscriptions = 0

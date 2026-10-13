@@ -1,6 +1,7 @@
 // Project / task / binding model. Every surface (editor, diff, terminal, agent)
 // takes its working directory from a RepositoryBinding, never from the repo root.
 import { randomUUID } from 'node:crypto'
+import { cleanLabel } from '../shared/text'
 import { existsSync, mkdirSync, realpathSync } from 'node:fs'
 import { mkdir, readdir, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative } from 'node:path'
@@ -92,7 +93,7 @@ export class Workspace {
   }
 
   createProject(name: string, root: string | null = null): Project {
-    const project: Project = { id: randomUUID(), name: name.trim(), root, createdAt: Date.now() }
+    const project: Project = { id: randomUUID(), name: cleanLabel(name), root, createdAt: Date.now() }
     if (!project.name) throw new Error('Project name is required')
     this.db
       .prepare('INSERT INTO projects (id, name, root, created_at) VALUES (?, ?, ?, ?)')
@@ -232,7 +233,7 @@ export class Workspace {
   }
 
   renameTask(id: string, title: string): Task {
-    const t = title.trim()
+    const t = cleanLabel(title)
     if (!t) throw new Error('Chat title is required')
     this.getTask(id)
     this.db.prepare("UPDATE tasks SET title = ?, title_source = 'manual' WHERE id = ?").run(t, id)
@@ -242,7 +243,7 @@ export class Workspace {
   /** An AI-written title. Unless forced (an explicit "Rename with AI"), a title the user typed is left alone. */
   setGeneratedTitle(id: string, title: string, force = false): Task {
     this.getTask(id)
-    this.db.prepare("UPDATE tasks SET title = ?, title_source = 'ai' WHERE id = ? AND (title_source != 'manual' OR ?)").run(title, id, force ? 1 : 0)
+    this.db.prepare("UPDATE tasks SET title = ?, title_source = 'ai' WHERE id = ? AND (title_source != 'manual' OR ?)").run(cleanLabel(title) || 'New chat', id, force ? 1 : 0)
     return this.getTask(id)
   }
 
@@ -299,7 +300,7 @@ export class Workspace {
   }
 
   renameProject(id: string, name: string): Project {
-    const n = name.trim()
+    const n = cleanLabel(name)
     if (!n) throw new Error('Project name is required')
     this.getProject(id)
     this.db.prepare('UPDATE projects SET name = ? WHERE id = ?').run(n, id)
@@ -363,7 +364,7 @@ export class Workspace {
    * touch nothing in Git. Worktree bindings are recorded as pending; call setupTask to create them.
    */
   async createTask(input: CreateTaskInput, plan?: WorktreePlanEntry[]): Promise<Task> {
-    const title = input.title.trim()
+    const title = cleanLabel(input.title)
     if (!title) throw new Error('Chat title is required')
     // Repositories belong to the project: a task always covers all of them.
     const repos = this.listRepositories(input.projectId)

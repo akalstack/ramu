@@ -1,4 +1,5 @@
 import { ContentSkeleton } from '@/components/content-skeleton'
+import { visibleName } from '../../../shared/text'
 import { FileIcon } from '../FileIcon'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { t, useLanguage } from './../i18n'
@@ -354,7 +355,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
               <FileIcon path={e.path} className="tree-icon [.commit-file-A_&]:text-ok [.commit-file-D_&]:text-bad flex-none file" />
             </>
           )}
-          <span className="tree-name relative top-[-1px] min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{e.name}</span>
+          <span className="tree-name relative top-[-1px] min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{visibleName(e.name)}</span>
         </Button>
         {e.kind === 'dir' && open.has(e.path) && <div className="tree-children [&::before]:[content:''] [&::before]:absolute [&::before]:top-0 [&::before]:bottom-0 [&::before]:left-[var(--tree-guide-left)] [&::before]:w-px [&::before]:[background:var(--line)] [&::before]:pointer-events-none [&::before]:z-1 relative" style={{ '--tree-guide-left': `${14 + depth * 12}px` } as CSSProperties}>{render(e.path, depth + 1)}</div>}
       </div>

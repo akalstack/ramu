@@ -54,7 +54,7 @@ export function searchText(root: string, repoId: string, options: SearchOptions,
     child.on('close', (code) => {
       clearTimeout(timer)
       if (timedOut) return reject(new Error('Search timed out. Narrow the repository or include filter.'))
-      if (!limited && code !== 0 && code !== 1) return reject(new Error(stderr.trim() || 'Project search failed.'))
+      if (!limited && code !== 0 && code !== 1) return reject(new Error(stderr.trim().replace(/^rg: /, '') || 'Project search failed.'))
       resolve({ matches, limited })
     })
   })
@@ -97,6 +97,23 @@ export async function replacementPlan(root: string, repoId: string, options: Sea
   return plans
 }
 
+const MAX_NAME_BYTES = 255
+const MAX_PATH_BYTES = 1000
+/** Beyond what the filesystem accepts: say so, rather than surfacing ENAMETOOLONG or a null-byte TypeError. */
+function assertUsablePath(relPath: string): void {
+  if (relPath.includes('\0')) throw new Error('A path cannot contain null characters.')
+  for (const segment of relPath.split(/[\\/]/)) {
+    if (Buffer.byteLength(segment) > MAX_NAME_BYTES) throw new Error(`A file or folder name can be at most ${MAX_NAME_BYTES} bytes long.`)
+  }
+}
+
+// Control characters and bidirectional overrides make a name read differently from what it is (e.g. "txt.png" for "png.txt").
+const MISLEADING_NAME = /[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]/
+/** New names only: existing files with odd names must stay openable, but Ramu does not create new ones. */
+export function assertNewName(relPath: string): void {
+  if (MISLEADING_NAME.test(relPath)) throw new Error('Names cannot contain control or text-direction characters.')
+}
+
 function isInside(root: string, target: string): boolean {
   const rel = relative(root, target)
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
@@ -109,7 +126,10 @@ function isInside(root: string, target: string): boolean {
  */
 export async function resolveInRoot(root: string, relPath: string): Promise<string> {
   if (isAbsolute(relPath)) throw new PathEscapeError(`Expected a relative path, got ${relPath}`)
+  assertUsablePath(relPath)
   const target = normalize(join(root, relPath))
+  // The OS limits whole paths too (1024 bytes on macOS), and reports it as an opaque ENAMETOOLONG.
+  if (Buffer.byteLength(target) > MAX_PATH_BYTES) throw new Error('That path is too long.')
   if (!isInside(root, target)) throw new PathEscapeError(`${relPath} is outside ${root}`)
   const segments = relative(root, target).split(sep)
   if (segments.includes('.git')) throw new PathEscapeError('Access to .git is not allowed')
@@ -162,6 +182,7 @@ export async function listFolderFiles(root: string, limit = 50_000): Promise<str
 
 export async function createEntry(root: string, path: string, kind: 'file' | 'dir'): Promise<void> {
   if (!path.trim()) throw new Error('Enter a file or folder name.')
+  assertNewName(path)
   const absolute = await resolveInRoot(root, path)
   if (absolute === root) throw new Error('Choose a name inside this repository.')
   if (kind === 'dir') await mkdir(absolute)
@@ -169,6 +190,7 @@ export async function createEntry(root: string, path: string, kind: 'file' | 'di
 }
 
 export async function renameEntry(root: string, path: string, destination: string): Promise<void> {
+  assertNewName(destination)
   const source = await resolveEntryInRoot(root, path), target = await resolveEntryInRoot(root, destination)
   if (source === root || target === root) throw new Error('The repository root cannot be renamed.')
   if (existsSync(target)) throw new Error('A file or folder already exists with that name.')
@@ -177,6 +199,7 @@ export async function renameEntry(root: string, path: string, destination: strin
 
 /** Copies a file or folder to `destination` (never over something that exists, never a folder into itself). */
 export async function copyEntry(root: string, path: string, destination: string): Promise<void> {
+  assertNewName(destination)
   const source = await resolveEntryInRoot(root, path), target = await resolveEntryInRoot(root, destination)
   if (source === root || target === root) throw new Error('The repository root cannot be copied.')
   if (existsSync(target)) throw new Error('A file or folder already exists with that name.')
@@ -184,8 +207,13 @@ export async function copyEntry(root: string, path: string, destination: string)
   await cp(source, target, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true })
 }
 
+/** What the editor will open and save. Reads are checked on disk first so a huge file is never loaded into memory. */
+export const MAX_EDITABLE_BYTES = 20 * 1024 * 1024
+
 export async function readText(root: string, relPath: string): Promise<FileContent> {
-  const buf = await readFile(await resolveInRoot(root, relPath))
+  const abs = await resolveInRoot(root, relPath)
+  if ((await stat(abs)).size > MAX_EDITABLE_BYTES) throw new Error(`This file is larger than ${MAX_EDITABLE_BYTES / 1024 / 1024} MB and is too large to open in the editor.`)
+  const buf = await readFile(abs)
   // A NUL byte means binary data: decoding it as UTF-8 would show garbage and corrupt the file on save.
   if (buf.subarray(0, 8192).includes(0)) throw new Error('This is a binary file and cannot be shown as text.')
   return { content: buf.toString('utf8'), hash: hashOf(buf) }

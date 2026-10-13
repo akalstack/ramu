@@ -9,7 +9,7 @@ function AnchoredTooltip({ anchor, side = 'bottom', sideOffset = 6, className, c
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Positioner anchor={anchor} side={side} sideOffset={sideOffset} className="pointer-events-none isolate z-[1200]">
-        <TooltipPrimitive.Popup data-slot="tooltip-content" className={cn('z-50 inline-flex w-fit max-w-xs origin-(--transform-origin) items-center gap-1.5 rounded-md px-3 py-1.5 text-xs', className)} {...props}>
+        <TooltipPrimitive.Popup data-slot="tooltip-content" className={cn('z-50 inline-flex w-fit max-w-xs origin-(--transform-origin) items-center gap-1.5 rounded-md px-3 py-1.5 text-xs [overflow-wrap:anywhere]', className)} {...props}>
           {children}
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>

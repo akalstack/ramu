@@ -1,4 +1,5 @@
 import { providerBinary, providerAccountId } from './providerBinaries'
+import { clipText } from '../shared/text'
 import { createAcpRunner, acpModels } from './acp'
 import { toolDescription, toolInput } from './acpEvents'
 import { agentContent } from '../shared/agentContent'
@@ -1387,7 +1388,7 @@ export class AgentService {
     const target = forced ? { settings: { ...this.withStep(parent.settings, forced.step), autoFallback: parent.settings.autoFallback }, reason: forced.reason, from: parent.provider } : await this.subagentSettings(parentId, input.type)
     await this.validateSettings(target.settings)
     const catalogs = await this.catalog()
-    const name = (input.name?.trim() || input.description.trim() || 'Sub-agent').slice(0, 80)
+    const name = clipText(input.name?.trim() || input.description.trim() || 'Sub-agent', 80)
     // Its own copy of the checkout, when asked for: parallel helpers never overwrite each other or the chat.
     const isolation = this.preferences?.().subagents.isolate && this.isolationRoot ? await createIsolation({ cwd: parent.cwd, covers: parent.covers, root: join(this.isolationRoot, randomUUID()) }) : null
     const child = this.createSession(parent.taskId, isolation ? { cwd: isolation.cwd, additionalDirs: isolation.additionalDirs, covers: isolation.covers } : { cwd: parent.cwd, additionalDirs: parent.additionalDirs, covers: parent.covers }, target.settings, 'starting', parentId)
@@ -2255,11 +2256,11 @@ function titleOf(firstEvent: string | null): string {
 export function cleanTitle(raw: string): string | null {
   const line = raw.split('\n').map((l) => l.trim()).find(Boolean) ?? ''
   const title = line.replace(/^(title\s*:\s*)/i, '').replace(/^[#>*\-\s"'`“”‘’]+|["'`“”‘’*\s]+$/g, '').replace(/[.。]+$/, '').replace(/\s+/g, ' ')
-  return title ? (title.length > 60 ? `${title.slice(0, 59).trimEnd()}…` : title) : null
+  return title ? (title.length > 60 ? `${clipText(title, 59).trimEnd()}…` : title) : null
 }
 
 function truncate(s: string, n = 400): string {
-  return s.length > n ? `${s.slice(0, n)}…` : s
+  return s.length > n ? `${clipText(s, n)}…` : s
 }
 
 function summarizeInput(input: Record<string, unknown>): string {

@@ -1,4 +1,5 @@
 import { t, useLanguage } from './i18n'
+import { errorText } from './errors'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -38,7 +39,7 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
     if (!visible || !scope) return
     let disposed = false
     setLoading(true); setLoadError(null)
-    void Promise.all([invoke('files.all', scope), invoke('skills.list', scope)]).then(([f, s]) => { if (!disposed) { setFiles(f); setSkills(s) } }, (e) => { if (!disposed) setLoadError(String(e)) }).finally(() => { if (!disposed) setLoading(false) })
+    void Promise.all([invoke('files.all', scope), invoke('skills.list', scope)]).then(([f, s]) => { if (!disposed) { setFiles(f); setSkills(s) } }, (e) => { if (!disposed) setLoadError(errorText(e)) }).finally(() => { if (!disposed) setLoading(false) })
     return () => { disposed = true }
   }, [scope, mode])
   const repoName = (repoId: string) => Object.values(ws.repos).flat().find((r) => r.id === repoId)?.name ?? repoId

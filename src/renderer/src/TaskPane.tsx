@@ -1,4 +1,6 @@
 import { ContentSkeleton } from '@/components/content-skeleton'
+import { errorText } from './errors'
+import { visibleName } from '../../shared/text'
 import { t, useLanguage, formatLocale } from './i18n'
 import { FileIcon, fileStyle } from './FileIcon'
 import { beginPaneResize } from './paneResize'
@@ -16,6 +18,7 @@ import { Composer } from './Composer'
 import { Menu, useContextMenu } from './Menu'
 import { invoke, ramu, copyText } from './ipc'
 import { AgentView } from './views/AgentView'
+import { ErrorBoundary } from './ErrorBoundary'
 import { GitDetailsView } from './views/GitDetailsView'
 import { DiffView } from './views/DiffView'
 import { FileView } from './views/FileView'
@@ -177,12 +180,12 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
                   {!ready ? (
                     <div className="empty flex flex-1 items-center justify-center text-muted-foreground p-6 text-center">{t("This repository isn't ready yet.")}</div>
                   ) : (
-                    <VisitedView visible={shown}>
+                    <VisitedView visible={shown}><ErrorBoundary resetKey={v.id}>
                       {v.kind === 'file' && binding && <FileView taskId={workspaceId} view={v} binding={binding} />}
                       {v.kind === 'diff' && binding && <DiffView taskId={workspaceId} view={v} binding={binding} />}
                       {v.kind === 'review' && <ChangeReviewTab view={v} visible={shown} />}
                       {v.kind === 'git' && binding && <GitDetailsView taskId={workspaceId} view={v} binding={binding} />}
-                    </VisitedView>
+                    </ErrorBoundary></VisitedView>
                   )}
                 </div>
               )
@@ -216,7 +219,9 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
           {agentViews.map((v) =>
             v.kind === 'agent' ? (
               <div key={v.id} className="view flex-1 min-w-0 min-h-0 flex-col" style={{ display: chatView?.id === v.id ? 'flex' : 'none' }}>
+                <ErrorBoundary resetKey={v.id}>
                 <AgentView view={v} visible={visible && chatView?.id === v.id} history={sessions.length > 1 ? <Menu label={t("Earlier conversations")} icon={<History size={14} />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" align="end" items={[...sessions].sort((a, b) => b.createdAt - a.createdAt).map(session => ({ key: session.id, selected: session.id === v.sessionId, label: <><span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis grow flex-1 min-w-0 text-left">{session.title}</span><span className="muted text-muted-foreground small text-caption">{new Date(session.createdAt).toLocaleDateString(formatLocale())}</span></>, onSelect: () => openSession(session) }))} /> : undefined} />
+                </ErrorBoundary>
               </div>
             ) : null,
           )}
@@ -317,7 +322,7 @@ function FileTab({ taskId, view, tabs, active, repoName }: { taskId: string; vie
     } },
   ])
   return <div className="tab-slot flex items-center flex-none">
-    <div role="tab" tabIndex={active ? 0 : -1} aria-selected={active} className={`view-tab bg-fill [&:hover_.tab-close]:opacity-100 [&_.tab-title]:max-w-[180px] [&:hover]:bg-fill-hover [&:hover]:text-soft [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&_.kind:not(.file-kind)]:text-muted-foreground [&_.kind]:flex-none [&.partner]:text-soft [&.partner]:[box-shadow:inset_0_-2px_0_var(--line-strong)] [&.pinned]:font-medium [&.active_.kind:not(.file-kind)]:text-foreground [&.preview_.tab-label]:[font-style:italic] [&.preview_.view-label]:[font-style:italic] [&.preview]:[font-style:italic] [border-color:transparent] [&:hover:not(:disabled)]:[border-color:transparent] [&:focus-visible]:[outline-color:var(--line-strong)] [&_.tab-close]:w-[18px] [&_.tab-close]:h-[18px] [&_.tab-close]:min-w-[18px] [&_.tab-close]:min-h-[18px] [&_.tab-close]:p-0 [&_.tab-close]:inline-grid [&_.tab-close]:place-items-center [&_.tab-close]:rounded-(--radius-xs) [&_.tab-close]:bg-transparent [&_.tab-close]:[border:0] [&_.tab-close]:[box-shadow:none] [&_.tab-close]:flex-none [&_.tab-close:hover:not(:disabled)]:bg-accent [&_.tab-close:hover:not(:disabled)]:text-foreground [&_.tab-close_svg]:w-3 [&_.tab-close_svg]:h-3 flex items-center gap-1.5 cursor-default whitespace-nowrap text-muted-foreground text-control [transition:background_0.12s_var(--ease),_color_0.12s_var(--ease)] h-[27px] rounded-(--radius-s) p-[0_5px_0_9px] ${active ? ' active' : ''}${isPreviewable(view) && view.preview ? ' preview' : ''}`} title={isPreviewable(view) && view.preview ? t("Preview tab. Double-click or edit to keep it open.") : undefined} onDoubleClick={() => ws.keepView(taskId, view.id)} onContextMenu={context.onContextMenu} onKeyDown={(event) => { context.onKeyDown(event); if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); ws.activateView(taskId, view.id) } }} onClick={() => ws.activateView(taskId, view.id)} onAuxClick={(event) => event.button === 1 && ws.closeView(taskId, view.id)}>
+    <div role="tab" tabIndex={active ? 0 : -1} aria-selected={active} className={`view-tab bg-fill [&:hover_.tab-close]:opacity-100 [&_.tab-title]:max-w-[180px] [&:not(.active):hover]:bg-fill-hover [&:not(.active):hover]:text-soft [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&_.kind:not(.file-kind)]:text-muted-foreground [&_.kind]:flex-none [&.partner]:text-soft [&.partner]:[box-shadow:inset_0_-2px_0_var(--line-strong)] [&.pinned]:font-medium [&.active_.kind:not(.file-kind)]:text-foreground [&.preview_.tab-label]:[font-style:italic] [&.preview_.view-label]:[font-style:italic] [&.preview]:[font-style:italic] [border-color:transparent] [&:hover:not(:disabled)]:[border-color:transparent] [&:focus-visible]:[outline-color:var(--line-strong)] [&_.tab-close]:w-[18px] [&_.tab-close]:h-[18px] [&_.tab-close]:min-w-[18px] [&_.tab-close]:min-h-[18px] [&_.tab-close]:p-0 [&_.tab-close]:inline-grid [&_.tab-close]:place-items-center [&_.tab-close]:rounded-(--radius-xs) [&_.tab-close]:bg-transparent [&_.tab-close]:[border:0] [&_.tab-close]:[box-shadow:none] [&_.tab-close]:flex-none [&_.tab-close:hover:not(:disabled)]:bg-accent [&_.tab-close:hover:not(:disabled)]:text-foreground [&_.tab-close_svg]:w-3 [&_.tab-close_svg]:h-3 flex items-center gap-1.5 cursor-default whitespace-nowrap text-muted-foreground text-control [transition:background_0.12s_var(--ease),_color_0.12s_var(--ease)] h-[27px] rounded-(--radius-s) p-[0_5px_0_9px] ${active ? ' active' : ''}${isPreviewable(view) && view.preview ? ' preview' : ''}`} title={isPreviewable(view) && view.preview ? t("Preview: opening another file replaces this tab. Double-click or edit to keep it open.") : undefined} onDoubleClick={() => ws.keepView(taskId, view.id)} onContextMenu={context.onContextMenu} onKeyDown={(event) => { context.onKeyDown(event); if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); ws.activateView(taskId, view.id) } }} onClick={() => ws.activateView(taskId, view.id)} onAuxClick={(event) => event.button === 1 && ws.closeView(taskId, view.id)}>
       <ViewIcon kind={view.kind} path={view.kind === 'file' || view.kind === 'diff' ? view.path : undefined} />
       <ViewLabel view={view} all={tabs} repoName={repoName} />
       {ws.dirty[view.id] && <span className="dirty w-[7px] h-[7px] rounded-full [background:var(--soft)] flex-none" aria-label={t("Unsaved changes")} />}
@@ -354,15 +359,11 @@ function ViewLabel({ view: v, all, repoName }: { view: ViewDescriptor; all: View
   )
   return (
     <>
-      {name}
+      {visibleName(name)}
       {clash && <span className="tab-repo text-muted-foreground text-caption">{repoName(v.repoId)}</span>}
       {v.kind === 'diff' && <span className="tab-repo text-muted-foreground text-caption">{v.oid ? v.oid.slice(0, 7) : v.staged ? 'staged' : t("changes")}</span>}
     </>
   )
 }
 
-export function errorText(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e)
-  // Electron prefixes errors thrown in handlers.
-  return msg.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
-}
+export { errorText } from './errors'

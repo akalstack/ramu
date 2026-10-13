@@ -4,11 +4,12 @@ import { Button } from '@/components/desktop-button'
 import { Columns2, Eye, Pencil, WrapText } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { MarkdownPreview } from '../MarkdownPreview'
-import type { LintResult, RepositoryBinding, ViewDescriptor } from '../../../shared/types'
+import type { EditorConfigProps, LintResult, RepositoryBinding, ViewDescriptor } from '../../../shared/types'
 import { useAppSettings } from '../AppSettings'
 import { invoke, ramu } from '../ipc'
 import { registerBuffer, registerSelection } from '../editorBuffers'
 import { monaco } from '../monaco'
+import { applyEditorConfig, normalizeForSave } from '../editorConfig'
 import { errorText } from '../TaskPane'
 import { useWorkspace } from '../workspace'
 import { MediaFileView, isMedia } from './MediaFileView'
@@ -84,6 +85,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
         setLoading(true)
         setError(null)
         let disposed = false, saving = false, diskRequest = 0
+        let editorConfig: EditorConfigProps = {}
         const uri = monaco.Uri.from({ scheme: 'file', path: `/${taskId}/${binding.repoId}/${view.path}` })
         const model = monaco.editor.getModel(uri) ?? monaco.editor.createModel('', undefined, uri)
         const editor = monaco.editor.create(host.current!, {
@@ -162,6 +164,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
         const save = async () => {
             if (saving || !loaded.current || disposed) return
             saving = true
+            normalizeForSave(model, editorConfig)
             const version = model.getAlternativeVersionId()
             const content = model.getValue()
             try {
@@ -187,10 +190,15 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
         window.addEventListener('ramu:save-all', saveAll)
         const sub = model.onDidChangeContent(() => { if (loaded.current && !changingBuffer.current) { setDirty(view.id, isDirty()); dropFileBasedMarkers(); scheduleLint() } })
 
-        invoke('files.read', taskId, binding.repoId, view.path).then(
-            (f) => {
+        Promise.all([
+            invoke('files.read', taskId, binding.repoId, view.path),
+            invoke('files.editorconfig', taskId, binding.repoId, view.path).catch((): EditorConfigProps => ({})),
+        ]).then(
+            ([f, config]) => {
                 if (disposed) return
+                editorConfig = config
                 model.setValue(f.content)
+                applyEditorConfig(model, config)
                 baseHash.current = f.hash
                 savedVersion.current = model.getAlternativeVersionId()
                 setDirty(view.id, false)
