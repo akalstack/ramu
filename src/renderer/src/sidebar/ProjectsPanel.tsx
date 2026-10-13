@@ -20,6 +20,8 @@ export function ProjectsPanel() {
   useLanguage()
   const ws = useWorkspace()
   const addProject = useAddProject()
+  const [showArchived, setShowArchived] = useState(false)
+  const archivedChats = ws.tasks.filter((task) => task.status === 'archived').sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   const looseChats = ws.tasks.filter((t) => t.projectId === NO_PROJECT && t.status !== 'archived').sort(pinnedFirst)
   const { preferences } = useAppSettings()
   // Relative labels keep aging even when no provider event re-renders the list.
@@ -67,6 +69,14 @@ export function ProjectsPanel() {
       ))}
       {!recentMode && <><div className="section-head [.review-inbox_>_&]:gap-2 [&_button.small-icon]:mr-0 flex items-center justify-between text-control text-muted-foreground p-[5px_8px]"><span>{t("Chats")}</span><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("New chat without a project")} onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></div>
       {looseChats.map((t) => <TaskRow key={t.id} task={t} />)}</>}
+      <Button variant="ghost" className="archived-toggle" aria-expanded={showArchived} aria-controls="archived-chats" onClick={() => setShowArchived((shown) => !shown)}>
+        <ChevronRight data-icon="inline-start" className={showArchived ? 'caret open' : 'caret'} />
+        {t('Archived chats')} ({archivedChats.length})
+      </Button>
+      {showArchived && <div id="archived-chats" className="task-list">
+        {archivedChats.length === 0 && <p className="muted small empty-tasks">{t('No archived chats')}</p>}
+        {archivedChats.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
+      </div>}
     </div>
   )
 }

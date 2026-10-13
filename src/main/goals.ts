@@ -3,7 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentService } from './agent'
 import type { GoalPreferences, ChatGoal } from '../shared/types'
 
-export const goalPreferencesSchema = z.object({ mode: z.enum(['auto', 'manual', 'off']).default('auto'), maxTurns: z.number().int().min(1).max(1000).nullable().default(10) })
+export const goalPreferencesSchema = z.object({ mode: z.enum(['auto', 'manual', 'off']).default('auto').transform((mode) => mode === 'off' ? 'manual' : mode), maxTurns: z.number().int().min(1).max(1000).nullable().default(10) })
 
 const AUTO_GOAL_POLICY = `A goal schedules automatic follow-up agent turns after your response ends; it is not a task plan or progress tracker. Decide in this order:
 1. Respect an explicit request not to create a goal or automatically continue. Questions, explanations, brainstorming and plan-only discussion do not authorize implementation or an implicit goal.
@@ -13,7 +13,6 @@ const AUTO_GOAL_POLICY = `A goal schedules automatic follow-up agent turns after
 Reassess at the start or later when the scope grows or substantial work remains. A goal does not replace doing the work now or justify ending a turn early. Do all useful authorized work available in this turn; do not finish with only a progress report when that work is still possible. Keep a goal active for work requiring a later turn, completed only with verification evidence, or blocked when required input or an external obstacle leaves no useful independent work.`
 
 export function goalInstructions(preferences: GoalPreferences, goal: ChatGoal | null): string {
-  if (preferences.mode === 'off') return 'Ramu goals are disabled. Do not start a native provider goal or an automatic continuation loop.'
   return `Ramu owns goals and continuation for this chat. Do not start the provider's native /goal or another continuation loop.
 Use Ramu's MCP tools set_goal, get_goal and update_goal. When a goal is warranted, use set_goal rather than merely describing a goal in your response. If your runtime defers tool discovery, discover the Ramu goal tools before concluding they are unavailable.
 ${preferences.mode === 'auto' ? AUTO_GOAL_POLICY : 'Only create a goal when the user explicitly requests one.'}

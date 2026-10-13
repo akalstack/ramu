@@ -18,7 +18,7 @@ import { BackgroundControls } from './Automation'
 import { Dropdown } from './Menu'
 import { effortDisplayName, modelDisplayName, modelStepName, recommendedSets, useModelSets } from './ModelSets'
 import { useAppSettings } from './AppSettings'
-import { SettingsPage, type SettingsSection } from './SettingsPage'
+import { SETTINGS_SECTIONS, SettingsPage, type SettingsSection } from './SettingsPage'
 import { accessName } from './AgentControls'
 import { formatKeys } from './commands'
 import { errorText } from './TaskPane'
@@ -36,7 +36,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
   const [selected, setSelected] = useState(draft.defaultSetId)
   const [busy, setBusy] = useState(false)
   const ws = useWorkspace()
-  const [reset, setReset] = useState<'page' | 'models' | 'sizes' | null>(null)
+  const [reset, setReset] = useState<SettingsSection | 'sizes' | null>(null)
   const [sizesReset, setSizesReset] = useState(false)
   const [error, setError] = useState<string | null>(store.error)
   const set = draft.sets.find((entry) => entry.id === selected) ?? draft.sets[0]!
@@ -90,11 +90,12 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
     git: ['busyMessageAction', 'includeTabContext', 'pullMode', 'autoPull', 'commitStyle', 'commitInstructions', 'hideEmptyStaged', 'recentChats'],
   }
   const pageKeys = resetKeys[page]
-  const resetPage = () => {
-    if (!pageKeys) return
-    setAppDraft((current) => ({ ...current, ...Object.fromEntries(pageKeys.map((key) => [key, DEFAULT_APP_PREFERENCES[key]])),
+  const resetPage = (section: SettingsSection) => {
+    const keys = resetKeys[section]
+    if (!keys) return
+    setAppDraft((current) => ({ ...current, ...Object.fromEntries(keys.map((key) => [key, DEFAULT_APP_PREFERENCES[key]])),
       // Account identities are recovery metadata, not disposable appearance settings.
-      ...(page === 'providers' ? { providerBinaries: Object.fromEntries(Object.entries(current.providerBinaries).map(([provider, config]) => [provider, { binary: '', accounts: config?.accounts, accountId: 'default', autoUpdate: false }])) } : {}),
+      ...(section === 'providers' ? { providerBinaries: Object.fromEntries(Object.entries(current.providerBinaries).map(([provider, config]) => [provider, { binary: '', accounts: config?.accounts, accountId: 'default', autoUpdate: false }])) } : {}),
     }))
   }
   return <SettingsPage section={page} onSection={setPage} busy={busy} error={error} onSave={() => void save()} onClose={() => { if (!busy) onClose() }}>
@@ -170,17 +171,17 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
       <div className="settings-set-footer [&_>_span]:ml-auto flex items-center gap-2"><Button variant="ghost" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover" disabled={busy || set.steps.length >= 20} onClick={() => updateSteps([...set.steps, { ...set.steps.at(-1)!, id: crypto.randomUUID() }])}><Plus size={13} />{t("Add step")}</Button><span className="muted text-muted-foreground small text-caption">{set.steps.length} {t(" steps · up to 20")}</span></div>
       <div className="settings-maintenance flex items-center gap-2 pt-3 justify-between"><Button variant="ghost" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover" disabled={busy} onClick={() => setReset('models')}><RotateCcw size={13} />{t("Restore defaults")}</Button><Button variant="ghost" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover" disabled={busy} onClick={() => { setBusy(true); void store.reload().catch((reason) => setError(errorText(reason))).finally(() => setBusy(false)) }}>{t("Refresh available models")}</Button></div>
     </div>}
-    {pageKeys && <div className="settings-maintenance flex items-center gap-2 pt-3 justify-between"><Button variant="ghost" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover" disabled={busy} onClick={() => setReset('page')}><RotateCcw size={13} />{t("Reset to defaults")}</Button></div>}
+    {pageKeys && <div className="settings-maintenance flex items-center gap-2 pt-3 justify-between"><Button variant="ghost" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover" disabled={busy} onClick={() => setReset(page)}><RotateCcw size={13} />{t("Reset to defaults")}</Button></div>}
     <AlertDialog open={reset !== null} onOpenChange={(open) => { if (!open) setReset(null) }}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{reset === 'sizes' ? t('Reset layout sizes?') : reset === 'models' ? t('Restore default model sets?') : t('Reset this section to defaults?')}</AlertDialogTitle>
-          <AlertDialogDescription>{reset === 'sizes' ? t('The sidebar width, editor/chat split and terminal height will return to their default sizes in every workspace. This applies immediately.') : reset === 'models' ? t('Your model sets will be replaced with the recommended defaults. Save changes to apply the reset.') : t('Settings in this section will return to their defaults. Save changes to apply the reset.')}</AlertDialogDescription>
+          <AlertDialogTitle>{reset === 'sizes' ? t('Reset layout sizes?') : reset ? t('Reset {0} to defaults?', { '0': t(SETTINGS_SECTIONS.find((entry) => entry.id === reset)!.label) }) : ''}</AlertDialogTitle>
+          <AlertDialogDescription>{reset === 'sizes' ? t('The sidebar width, editor/chat split and terminal height will return to their default sizes in every workspace. This applies immediately.') : t('This replaces your changes in this section with the default settings. Choose Save changes to apply them.')}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
           <AlertDialogAction onClick={() => {
-            if (reset === 'page') resetPage()
+            if (reset && reset !== 'models' && reset !== 'sizes') resetPage(reset)
             if (reset === 'models') { const next = recommendedSets(store.catalogs); setDraft(next); setSelected(next.defaultSetId) }
             if (reset === 'sizes') {
               ws.resetLayoutSizes()

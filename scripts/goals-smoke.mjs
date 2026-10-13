@@ -49,7 +49,7 @@ try {
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
   await page.locator('.settings-page').waitFor({ state: 'detached' })
   assert.deepEqual((await invoke('settings.app.get')).goals, { mode: 'auto', maxTurns: null })
-  await openSettings(); await select('Goal detection', 'Manual')
+  await openSettings(); await page.getByRole('switch', { name: 'Automatic goals', exact: true }).click()
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   assert.equal((await invoke('settings.app.get')).goals.mode, 'auto')
   console.log('ok - Goals settings default, Unlimited, Save and Cancel')
@@ -61,6 +61,13 @@ try {
   assert.equal(goal.turns, 1)
   assert.equal(goal.objective, 'Verify the goal smoke fixture [goal tool]')
   console.log('ok - Agent detects a goal through MCP, continues once, and reports completion')
+
+  await openSettings()
+  await page.getByRole('switch', { name: 'Automatic goals', exact: true }).click()
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await page.locator('.settings-page').waitFor({ state: 'detached' })
+  assert.equal((await invoke('settings.app.get')).goals.mode, 'manual')
+  console.log('ok - Automatic goals toggle saves manual mode')
 
   const pausedTask = await invoke('tasks.create', { projectId: 'no-project', title: 'Paused goal', mode: 'current' })
   const pausedSession = await invoke('agent.start', pausedTask.id, '/goal Keep working on the fixture', settings)

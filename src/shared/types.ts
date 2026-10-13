@@ -471,7 +471,7 @@ export interface AppPreferences {
 }
 
 export interface GoalPreferences {
-  mode: 'auto' | 'manual' | 'off'
+  mode: 'auto' | 'manual'
   /** Automatic follow-up turns per goal; null means unlimited. Initial and user turns do not count. */
   maxTurns: number | null
 }

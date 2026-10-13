@@ -33,7 +33,7 @@ export function createAgentNotifier(options: {
       const session = await options.invoke('agent.get', [sessionId]) as AgentSessionInfo
       if (kind === 'done') {
         const goal = await options.invoke('agent.goal', [sessionId]) as ChatGoal | null
-        if (prefs.goals?.mode !== 'off' && goal && ['active', 'waiting-provider', 'blocked'].includes(goal.status)) return
+        if (goal && ['active', 'waiting-provider', 'blocked'].includes(goal.status)) return
       }
       const task = ((await options.invoke('tasks.list')) as Task[]).find((entry) => entry.id === session.taskId)
       // A sub-agent only ever needs you when it asks for approval; finishing or failing is reported in its chat.

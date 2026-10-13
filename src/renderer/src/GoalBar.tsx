@@ -6,7 +6,7 @@ import { t, useLanguage } from './i18n'
 import { useAppSettings } from './AppSettings'
 
 const LABELS: Record<ChatGoal['status'], string> = { active: 'Working toward goal', completed: 'Goal completed', blocked: 'Goal needs input', paused: 'Goal paused', 'turn-limit': 'Goal turn limit reached', 'waiting-provider': 'Waiting for provider' }
-const goalIcon = (goal: ChatGoal, disabled: boolean) => disabled ? CirclePause : goal.status === 'completed' ? CircleCheck : goal.status === 'blocked' || goal.status === 'turn-limit' ? CircleAlert : goal.status === 'paused' ? CirclePause : goal.status === 'waiting-provider' ? Clock3 : Target
+const goalIcon = (goal: ChatGoal) => goal.status === 'completed' ? CircleCheck : goal.status === 'blocked' || goal.status === 'turn-limit' ? CircleAlert : goal.status === 'paused' ? CirclePause : goal.status === 'waiting-provider' ? Clock3 : Target
 
 function GoalDetails({ goal }: { goal: ChatGoal }) {
   const { preferences } = useAppSettings()
@@ -22,19 +22,18 @@ function GoalDetails({ goal }: { goal: ChatGoal }) {
 export function GoalBar({ goal, onControl }: { goal: ChatGoal; onControl: (action: 'pause' | 'resume' | 'clear') => void }) {
   useLanguage()
   const { preferences } = useAppSettings()
-  const disabled = preferences.goals.mode === 'off'
   const active = goal.status === 'active' || goal.status === 'waiting-provider'
-  const Icon = goalIcon(goal, disabled), limit = preferences.goals.maxTurns
-  return <Collapsible className="goal-bar [&[data-status='paused']_.goal-icon]:text-muted-foreground [&:is([data-status='blocked'],_[data-status='turn-limit'],_[data-status='waiting-provider'])_.goal-icon]:text-warn [&[data-open]_.goal-summary_.caret]:opacity-100 [&[data-open]_.goal-summary_.caret]:[transform:rotate(90deg)] text-control" data-status={disabled ? 'paused' : goal.status} aria-label={t('Chat goal')}>
+  const Icon = goalIcon(goal), limit = preferences.goals.maxTurns
+  return <Collapsible className="goal-bar [&[data-status='paused']_.goal-icon]:text-muted-foreground [&:is([data-status='blocked'],_[data-status='turn-limit'],_[data-status='waiting-provider'])_.goal-icon]:text-warn [&[data-open]_.goal-summary_.caret]:opacity-100 [&[data-open]_.goal-summary_.caret]:[transform:rotate(90deg)] text-control" data-status={goal.status} aria-label={t('Chat goal')}>
     <div className="goal-bar-header flex items-center gap-0.5 min-h-8">
       <CollapsibleTrigger render={<Button variant="ghost" className="goal-summary [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:0] [&_svg]:flex-none [&_svg]:w-[var(--icon-compact)] [&_svg]:h-[var(--icon-compact)] [&_.caret]:text-muted-foreground [&_.caret]:opacity-0 [&_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] [&:is(:hover,_:focus-visible)_.caret]:opacity-100 flex flex-1 items-center justify-start gap-2 min-w-0 h-7 p-[0_4px] [border:0] rounded-(--radius-s) bg-transparent text-control font-normal text-left" />}>
         <Icon size={14} className="goal-icon text-brand" />
-        <strong className="goal-status flex-none text-foreground font-medium">{disabled ? t('Goals disabled') : t(LABELS[goal.status])}</strong>
+        <strong className="goal-status flex-none text-foreground font-medium">{t(LABELS[goal.status])}</strong>
         <span className="goal-objective flex-initial min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-soft font-normal" title={goal.objective}>{goal.objective}</span>
         {limit !== null && goal.turns > 0 && <span className="goal-turns flex-none text-muted-foreground text-caption tabular-nums" title={t('{0} continuation turns · limit {1}', { '0': goal.turns, '1': limit })}>{goal.turns}/{limit}</span>}
         <ChevronRight size={14} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />
       </CollapsibleTrigger>
-      {(active || !disabled) && <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)" aria-label={active ? t('Pause goal') : t('Resume goal')} title={active ? t('Pause goal') : t('Resume goal')} onClick={() => onControl(active ? 'pause' : 'resume')}>{active ? <Pause size={14} /> : <Play size={14} />}</Button>}
+      {(goal.status !== 'completed') && <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)" aria-label={active ? t('Pause goal') : t('Resume goal')} title={active ? t('Pause goal') : t('Resume goal')} onClick={() => onControl(active ? 'pause' : 'resume')}>{active ? <Pause size={14} /> : <Play size={14} />}</Button>}
       <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)" aria-label={t('Clear goal')} title={t('Clear goal')} onClick={() => onControl('clear')}><X size={14} /></Button>
     </div>
     <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:height_160ms_var(--ease)]"><GoalDetails goal={goal} /></CollapsibleContent>

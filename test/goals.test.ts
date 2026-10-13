@@ -37,6 +37,7 @@ describe('Ramu goals', () => {
   it('defaults to automatic detection and 10 extra turns, validates unlimited and custom limits', () => {
     expect(goalPreferencesSchema.parse({})).toEqual({ mode: 'auto', maxTurns: 10 })
     expect(goalPreferencesSchema.parse({ maxTurns: null }).maxTurns).toBeNull()
+    expect(goalPreferencesSchema.parse({ mode: 'off', maxTurns: 25 })).toEqual({ mode: 'manual', maxTurns: 25 })
     for (const maxTurns of [0, -1, 1.5, 1001, Infinity]) expect(() => goalPreferencesSchema.parse({ maxTurns })).toThrow()
   })
 
@@ -51,7 +52,6 @@ describe('Ramu goals', () => {
     expect(prompt).toContain('when the scope grows')
     expect(prompt).toContain('audit ALL requirements')
     expect(goalInstructions({ mode: 'manual', maxTurns: 10 }, null)).toContain('explicitly requests')
-    expect(goalInstructions({ mode: 'off', maxTurns: null }, null)).toContain('disabled')
   })
 
   it('continues idle unfinished work, keeps user history intact, and stops at the cap', async () => {
@@ -122,17 +122,23 @@ describe('Ramu goals', () => {
     expect(prompts[1]).not.toMatch(/^\/goal/)
   })
 
-  it('manual and off modes reject implicit activation; off suppresses pending continuation', async () => {
-    prefs.goals.mode = 'manual'
+  it('turning off automatic goals rejects implicit activation but keeps explicit goals and continuation', async () => {
+    service.setGoal(id, 'Login')
+    prefs.goals.mode = 'manual'; service.goalsSettingsChanged()
+    done(); await tick()
+    expect(prompts).toHaveLength(2)
+    expect(service.getGoal(id)).toMatchObject({ status: 'active', turns: 1 })
+    service.controlGoal(id, 'pause')
+    service.controlGoal(id, 'resume')
+    expect(service.getGoal(id)?.status).toBe('active')
+    service.controlGoal(id, 'clear')
     expect(() => service.setGoal(id, 'Login')).toThrow('Manual mode')
     await service.submit(id, '/goal Login\n\n<ramu-context>\nfile context\n</ramu-context>', 'queue')
     expect(service.getGoal(id)?.objective).toBe('Login')
-    prefs.goals.mode = 'off'; service.goalsSettingsChanged()
-    done(); await tick(10_000)
-    expect(prompts).toHaveLength(2) // The queued user instruction still runs.
-    done(); await tick(10_000)
-    expect(prompts).toHaveLength(2)
-    expect(() => service.setGoal(id, 'Login', true)).toThrow('disabled')
+    done(); await tick()
+    done(); await tick()
+    expect(service.getGoal(id)?.turns).toBe(1)
+    expect(prompts).toHaveLength(4)
   })
 
   it('unlimited exceeds the default cap and usage exhaustion waits, retries, and preserves the turn count', async () => {

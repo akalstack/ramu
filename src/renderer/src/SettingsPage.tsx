@@ -20,7 +20,7 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
   { section: 'git', title: 'Automatic pull', words: 'git auto fetch remote fast-forward background sync' },
   { section: 'updates', title: 'Auto-update Ramu', words: 'app update github release download restart background service version' },
-  { section: 'goals', title: 'Goal detection', words: 'goal auto manual off automatic completion continue unfinished' },
+  { section: 'goals', title: 'Automatic goals', words: 'goal auto manual off automatic completion continue unfinished' },
   { section: 'goals', title: 'Maximum continuation turns', words: 'goal max limit budget unlimited retry available quota reset' },
   { section: 'goals', title: 'Custom turn limit', words: 'goal max number turns' },
   { section: 'automation', title: 'Agent notifications', words: 'notify notification alert done finished system toast' },

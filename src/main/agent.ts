@@ -178,7 +178,6 @@ export class AgentService {
   setGoal(id: string, objective: string, fromUser = false): ChatGoal {
     const session = this.get(id), current = this.getGoal(id), prefs = this.goalPreferences()
     if (session.parentId) throw new Error('Goals belong to main chats.')
-    if (prefs.mode === 'off') throw new Error('Goals are disabled in Settings.')
     if (!fromUser && prefs.mode === 'manual' && !current) throw new Error('Manual mode requires the user to start a goal with /goal.')
     if (!fromUser && current && ['paused', 'turn-limit', 'waiting-provider'].includes(current.status)) throw new Error('Only the user can resume this goal.')
     if (!objective.trim() || objective.length > 8000) throw new Error('Enter a goal of at most 8000 characters.')
@@ -199,7 +198,6 @@ export class AgentService {
     const goal = this.getGoal(id)
     if (action === 'clear') return this.saveGoal(id, null)
     if (!goal) throw new Error('This chat has no goal.')
-    if (action === 'resume' && this.goalPreferences().mode === 'off') throw new Error('Enable Goals in Settings first.')
     if (action === 'resume' && goal.status === 'completed') throw new Error('This goal is already complete. Start a new goal.')
     if (action === 'resume') this.updateQueue(id, this.queued(id), false)
     return this.saveGoal(id, { ...goal, status: action === 'pause' ? 'paused' : 'active', turns: action === 'resume' && goal.status === 'turn-limit' ? 0 : goal.turns, retryAt: undefined, retryDelay: undefined, updatedAt: Date.now() })
@@ -209,7 +207,7 @@ export class AgentService {
   goalsSettingsChanged(): void {
     for (const timer of this.goalTimers.values()) clearTimeout(timer)
     this.goalTimers.clear()
-    if (this.shutdown || this.goalPreferences().mode === 'off') return
+    if (this.shutdown) return
     for (const { id } of this.db.prepare('SELECT id FROM agent_sessions WHERE parent_session_id IS NULL').all() as { id: string }[]) {
       const goal = this.getGoal(id)
       if (goal?.status === 'turn-limit' && (this.goalPreferences().maxTurns === null || goal.turns < this.goalPreferences().maxTurns!)) { this.saveGoal(id, { ...goal, status: 'active', reason: 'Continuation limit increased.', updatedAt: Date.now() }); continue }
@@ -218,7 +216,7 @@ export class AgentService {
   }
 
   private scheduleGoal(id: string, delay = 1000): void {
-    if (this.shutdown || this.goalPreferences().mode === 'off' || this.goalTimers.has(id)) return
+    if (this.shutdown || this.goalTimers.has(id)) return
     const timer = setTimeout(() => {
       this.goalTimers.delete(id)
       void this.continueGoal(id).catch((error) => {
@@ -232,7 +230,7 @@ export class AgentService {
 
   private async continueGoal(id: string): Promise<void> {
     let goal = this.getGoal(id)
-    if (this.shutdown || this.goalPreferences().mode === 'off' || !goal || !['active', 'waiting-provider'].includes(goal.status)) return
+    if (this.shutdown || !goal || !['active', 'waiting-provider'].includes(goal.status)) return
     if (this.goalDispatching.has(id)) return
     const session = this.get(id)
     if (WRITING_STATES.includes(session.state)) return // The next terminal state re-arms the goal.
@@ -264,7 +262,7 @@ export class AgentService {
   /** A quota failure keeps the goal durable. Known resets schedule a retry; unknown resets back off. */
   private waitForGoalProvider(id: string): boolean {
     const goal = this.getGoal(id)
-    if (!goal || !['active', 'waiting-provider'].includes(goal.status) || this.goalPreferences().mode === 'off') return false
+    if (!goal || !['active', 'waiting-provider'].includes(goal.status)) return false
     const session = this.get(id), now = Date.now()
     const applicable = (this.usage?.list({ [session.provider]: session.settings.accountId ?? 'default' }) ?? []).filter((r) => peakFor([r], session.provider, session.settings.model, now) && isOver(r, null))
     const reset = Math.max(0, ...applicable.map((r) => r.resetsAt ?? 0))
@@ -739,7 +737,7 @@ export class AgentService {
     s = this.get(id)
     this.transitioning.add(id)
     try { if (reviewId) await this.reviewHooks?.validateFeedback?.(reviewId); if (!s.parentId) await this.reviewHooks?.followup(id) } finally { this.transitioning.delete(id) }
-    if (internalGoal && (this.shutdown || this.goalPreferences().mode === 'off' || internalGoal.revision !== (this.revisions.get(id) ?? 0) || this.getGoal(id)?.id !== internalGoal.goalId || this.getGoal(id)?.status !== 'active' || this.queued(id).length || this.queuePaused(id) || WRITING_STATES.includes(this.get(id).state) || this.hasBlockingQuestions(id) || this.hasRunningTasks(id))) return
+    if (internalGoal && (this.shutdown || internalGoal.revision !== (this.revisions.get(id) ?? 0) || this.getGoal(id)?.id !== internalGoal.goalId || this.getGoal(id)?.status !== 'active' || this.queued(id).length || this.queuePaused(id) || WRITING_STATES.includes(this.get(id).state) || this.hasBlockingQuestions(id) || this.hasRunningTasks(id))) return
     if (!recordUser && !this.isRecoveryPending(id) && !internalGoal) return
     if (recordUser) this.db.prepare('DELETE FROM agent_recovery WHERE session_id = ?').run(id)
     if (recordUser && this.getGoal(id)?.status === 'blocked') this.controlGoal(id, 'resume')

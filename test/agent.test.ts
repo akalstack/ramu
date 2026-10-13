@@ -369,7 +369,7 @@ describe('AgentService', () => {
     const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
     vi.spyOn(svc, 'catalog').mockResolvedValue([])
     svc.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 't' })
-    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions: false, autoBackgroundSeconds: 0, goals: { mode: 'off', maxTurns: 10 } })
+    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions: false, autoBackgroundSeconds: 0, goals: { mode: 'manual', maxTurns: 10 } })
     const session = svc.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' })
     await until(() => svc.get(session.id).state === 'idle')
     await svc.stopAndWait(session.id)
