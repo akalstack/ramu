@@ -1,5 +1,5 @@
 const { execFileSync } = require('node:child_process')
-const { chmodSync, existsSync, readdirSync, rmSync } = require('node:fs')
+const { chmodSync, copyFileSync, existsSync, readdirSync, rmSync } = require('node:fs')
 const { join } = require('node:path')
 
 module.exports = {
@@ -9,7 +9,8 @@ module.exports = {
     executableName: 'Ramu',
     appBundleId: 'app.ramu.desktop',
     appCategoryType: 'public.app-category.developer-tools',
-    extendInfo: { CFBundleName: 'Ramu', CFBundleDisplayName: 'Ramu' },
+    // CFBundleIconName selects the Liquid Glass icon in Assets.car (macOS 26+); older systems use icon.icns.
+    extendInfo: { CFBundleName: 'Ramu', CFBundleDisplayName: 'Ramu', CFBundleIconName: 'Ramu' },
     icon: 'assets/icon',
     // The detached Node daemon and Claude SDK executables must run outside ASAR.
     asar: false,
@@ -32,6 +33,10 @@ module.exports = {
     prePackage: async (_config, platform, arch) => {
       if (!existsSync(join(__dirname, 'node_modules', '@anthropic-ai', `claude-agent-sdk-${platform}-${arch}`))) throw new Error(`Claude SDK executable for ${platform}/${arch} is missing. Install dependencies and build on the target platform.`)
       execFileSync('pnpm', ['build'], { stdio: 'inherit' })
+    },
+    packageAfterCopy: async (_config, buildPath, _version, platform) => {
+      // buildPath is Contents/Resources/app; Assets.car (compiled from assets/Ramu.icon) must sit beside it, before signing.
+      if (platform === 'darwin') copyFileSync(join(__dirname, 'assets', 'Assets.car'), join(buildPath, '..', 'Assets.car'))
     },
     packageAfterPrune: async (_config, buildPath, _version, platform, arch) => {
       const root = join(buildPath, 'node_modules', 'node-pty')
