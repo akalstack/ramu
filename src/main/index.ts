@@ -212,7 +212,7 @@ async function main() {
     if (method === 'background.login') { if (typeof args[0] !== 'boolean') throw new Error('Invalid startup setting'); return setLoginService(args[0]) }
     if (method === 'background.status') { const status = await runtimeInvoke(socketPath, method); return { ...status, loginEnabled: loginEnabled(userData), bundledVersion: app.getVersion(), bundledBuild: runtimeBuild(daemonPath), updateAvailable: status.build !== runtimeBuild(daemonPath) } }
     if (method === 'background.restart') {
-      const choice = await dialog.showMessageBox(win, { type: 'question', message: t('Restart Ramu and the background service?'), detail: t('Running agents will stop and unfinished chats will recover using your restart settings. App-only restarts keep the service and chats running.'), buttons: [t('Restart now'), t('Later')], defaultId: 1, cancelId: 1 })
+      const choice = await dialog.showMessageBox(win, { type: 'question', message: t('Restart Ramu and the background service?'), detail: t("Stops running agents. Unfinished chats resume if restart recovery is enabled."), buttons: [t('Restart now'), t('Later')], defaultId: 1, cancelId: 1 })
       if (choice.response !== 0) return
       const startup = loginEnabled(userData)
       // Unload the old supervisor so it cannot race the replacement back into existence.
@@ -224,7 +224,7 @@ async function main() {
       app.relaunch(); app.quit(); return
     }
     if (method === 'updates.restart') {
-      const choice = await dialog.showMessageBox(win, { type: 'question', message: t('Restart Ramu to finish updating?'), detail: t('The background service and its running chats will stay connected. You can update the service separately afterwards.'), buttons: [t('Restart now'), t('Later')], defaultId: 1, cancelId: 1 })
+      const choice = await dialog.showMessageBox(win, { type: 'question', message: t('Restart Ramu to finish updating?'), detail: t("Running chats continue. The background service can be updated separately."), buttons: [t('Restart now'), t('Later')], defaultId: 1, cancelId: 1 })
       if (choice.response === 0) desktopUpdater.install()
       return
     }

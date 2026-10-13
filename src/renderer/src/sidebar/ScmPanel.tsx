@@ -217,7 +217,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   // With no message typed, Commit drafts one from the staged changes first and commits it as written.
   const commit = async (action: 'commit' | 'amend' | 'push' | 'sync' | 'new-branch' = 'commit', stagePaths?: string[]) => {
     if (loading || busy || generating || conflicts.length) return
-    const branchOptions = action === 'push' || action === 'sync' || action === 'new-branch' ? await chooseCommitBranch(taskId, binding.repoId, action === 'new-branch') : undefined
+    const branchOptions = action === 'push' || action === 'sync' || action === 'new-branch' ? await chooseCommitBranch(taskId, binding.repoId, action === 'new-branch', action === 'sync' ? 'sync' : 'push') : undefined
     if (branchOptions === null) return
     if (branchOptions?.newBranch) requireSaved()
     if (stagePaths?.length) await invoke('git.stage', taskId, binding.repoId, stagePaths)
@@ -259,7 +259,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   const requestUndo = (commit: GitCommit) => setConfirmation({ kind: 'undo', oid: commit.oid, title: commit.subject })
   // Like VS Code: with a clean tree and something to sync, the primary button becomes Sync Changes (or Publish Branch) instead of Commit.
   const syncOnly = !!status && !status.entries.length && !status.operation && !!status.branch && !!status.remote && (!status.upstream || status.ahead > 0 || status.behind > 0)
-  const canPublish = canCommit && !!staged.length && !!status?.branch && !!status.remote && !status.operation
+  const canPickRemoteAction = !!status?.branch && !!status.remote && !status.operation
   // The Commit & Push shortcut (commitShortcut.ts) runs this section's own commit, typed message included.
   const publishable = !!status?.branch && !!status.remote && !status.operation && !conflicts.length
   const shortcut = useRef({ staged: 0, unstaged: [] as string[], publishable: false, commit })
@@ -298,7 +298,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
           {onToggle ? <Button variant="tree" type="button" className="scm-repo-toggle [&_.strong]:overflow-hidden [&_.strong]:text-ellipsis [&_.strong]:whitespace-nowrap [&_.scm-count]:ml-1.5 flex items-center justify-start gap-1 min-w-0 p-0 [border:0] bg-transparent text-inherit [font:inherit] text-left cursor-pointer grow flex-1 min-w-0 text-left" aria-expanded={!collapsed} onClick={onToggle}>{collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}<span className="strong font-semibold">{binding.repoName}</span>{collapsed && !!status?.entries.length && <span className="scm-count ml-auto text-muted-foreground inline-flex items-center justify-center min-w-[18px] h-[18px] p-[0_4px] rounded-(--radius-row) bg-accent text-caption leading-[18px]">{status.entries.length}</span>}</Button> : <><ChevronDown size={14} /><span className="grow flex-1 min-w-0 text-left strong font-semibold">{binding.repoName}</span></>}
           <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" title={t("Stash all changes…")} aria-label={t("Stash all changes")} disabled={busy || !canStash} onClick={() => { setOperationName(''); setConfirmation({ kind: 'stash' }) }}><Archive size={13} /></Button>
           <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" title={t("Refresh source control")} aria-label={t("Refresh source control")} onClick={() => void load()}><RefreshCw size={13} /></Button>
-          <Menu disabled={busy} label={t("Source control actions")} icon={<MoreHorizontal size={14} />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" align="end" items={[
+          <Menu disabled={loading || busy || generating} label={t("Source control actions")} icon={<MoreHorizontal size={14} />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" align="end" items={[
             { key: 'stage-all', label: <><Plus size={14} />{t("Stage all changes")}</>, disabled: !unstaged.length, onSelect: () => void run(() => invoke('git.stage', taskId, binding.repoId, unstaged.map((entry) => entry.path))) },
             { key: 'unstage-all', label: <><Minus size={14} />{t("Unstage all changes")}</>, disabled: !staged.length, onSelect: () => void run(() => invoke('git.unstage', taskId, binding.repoId, staged.map((entry) => entry.path))) },
             { key: 'discard-all', label: <><Undo2 size={14} />{t("Discard all unstaged changes…")}</>, danger: true, disabled: !unstaged.length, onSelect: () => setConfirmation({ kind: 'discard', paths: unstaged.map((entry) => entry.path) }) },
@@ -336,13 +336,13 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
         </div>
         {!syncOnly && <ButtonGroup className="scm-commit-split [&_>_button.scm-commit]:flex-1 [&_>_button.scm-commit]:w-auto [&_>_button.scm-commit]:min-w-0 [&_>_button.scm-commit]:m-0 [&_>_button.scm-commit]:[border-radius:var(--radius-s)_0_0_var(--radius-s)] flex gap-0 mb-1.5" aria-label={t("Commit")}>
           <Button variant="default" className="scm-commit primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100" aria-label={commitLabel} disabled={!canRunCommit(commitAction)} title={!staged.length ? t("Stage all changes and commit?") : message.trim() ? undefined : t("Drafts a message with AI, then commits")} onClick={() => requestCommit()}><Check size={14} />{generating ? t("Drafting message…") : busy ? t("Working…") : commitLabel}</Button>
-          <Menu label={t("Commit options")} icon={<ChevronDown size={14} />} className="scm-commit-menu primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100 icon p-0 size-(--action-size) flex-none justify-center" align="end" disabled={loading || busy || generating || !!conflicts.length || (!canCommit && !canAmend)} items={[
-            { key: 'commit', label: t("Commit"), selected: commitAction === 'commit', disabled: !canCommit, onSelect: () => selectCommitAction('commit') },
+          <Menu disabled={loading || busy || generating || !!conflicts.length} label={t("Commit options")} icon={<ChevronDown size={14} />} className="scm-commit-menu primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100 icon p-0 size-(--action-size) flex-none justify-center" align="end"  items={[
+            { key: 'commit', label: t("Commit"), selected: commitAction === 'commit', onSelect: () => selectCommitAction('commit') },
             { key: 'new-branch', label: t("Commit on new branch"), disabled: !canCommit || !staged.length || !!status?.operation, onSelect: () => void commit('new-branch').catch((reason) => reportError(errorText(reason))) },
             { key: 'amend', label: t("Commit (Amend)"), title: t("Replace the latest commit; leave the message empty to keep its message"), disabled: !canAmend, onSelect: () => void commit('amend') },
             { key: 'separator', separator: true },
-            { key: 'push', label: t("Commit & Push"), selected: commitAction === 'push', title: t("Shortcut: {0}", { "0": formatKeys('mod+alt+p') }), disabled: !canPublish, onSelect: () => selectCommitAction('push') },
-            { key: 'sync', label: t("Commit & Sync"), selected: commitAction === 'sync', disabled: !canPublish, onSelect: () => selectCommitAction('sync') },
+            { key: 'push', label: t("Commit & Push"), selected: commitAction === 'push', title: t("Shortcut: {0}", { "0": formatKeys('mod+alt+p') }), disabled: !canPickRemoteAction, onSelect: () => selectCommitAction('push') },
+            { key: 'sync', label: t("Commit & Sync"), selected: commitAction === 'sync', disabled: !canPickRemoteAction, onSelect: () => selectCommitAction('sync') },
           ]} />
         </ButtonGroup>}
         {syncOnly && <SyncButton status={status} busy={busy} pullMode={preferences.pullMode} className="scm-commit primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover mb-1.5" showLabel onSync={sync} />}
@@ -402,7 +402,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
             </span>
           </div>)}
           {loading && <ContentSkeleton />}
-          {!loading && !stashes.length && <p className="muted text-muted-foreground small text-caption git-empty m-[2px_0] p-1.5 text-caption leading-[1.5]">{t("No stashes. Stash your changes to set them aside and bring them back later.")}</p>}
+          {!loading && !stashes.length && <p className="muted text-muted-foreground small text-caption git-empty m-[2px_0] p-1.5 text-caption leading-[1.5]">{t("No saved stashes.")}</p>}
           <Button variant="secondary" className="bg-fill hover:bg-fill-hover git-stash-new" disabled={busy || !canStash} title={canStash ? undefined : t("Nothing to stash")} onClick={() => { setOperationName(''); setConfirmation({ kind: 'stash' }) }}><Plus size={13} />{t("Stash changes…")}</Button>
         </OverlayScrollArea></TabsContent>
       </>}

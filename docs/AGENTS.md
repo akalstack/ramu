@@ -2,30 +2,26 @@
 
 ## Helpers
 
-Claude and Codex helpers appear as cards with their task, progress, transcript, and controls. Open a card to inspect its work, send a follow-up, or stop it. Messages are relayed through the main agent. Stopping the main chat also stops its helpers.
+Helper cards show task progress and transcripts. Open a card to inspect its work, send a message, or stop it. Stopping the main chat stops its helpers.
 
-Saved helper transcripts can be recovered when reopening a chat. Service restart recovery lets the main agent reconcile unfinished helper work; it does not reattach every helper process or isolated worktree. See [background workflows](AUTOMATION.md).
+Ramu can route helpers to another provider or model. **Native** uses the provider's own helpers. Type rules override general routing. Codex's optional hook routes helpers before they start; enabling it adds a trust entry to `~/.codex/config.toml`.
 
-## Quote and Aside
+An isolated helper uses a separate checkout and applies its changes back when finished. Conflicting patches remain in the checkout for review. The tracked-change snapshot excludes untracked files; isolated helpers do not support follow-up messages.
 
-Select chat text to quote it in a follow-up or ask a read-only Aside without interrupting the main conversation. Aside uses a separate analysis session; provider support and available context vary.
+Already-running native helpers keep their provider. After a service restart, Ramu reads saved helper transcripts so the main agent can reconcile unfinished work; it does not reattach every helper process.
 
 ## Usage limits and fallback
 
-Claude and Codex report account usage windows when their runtimes expose them. Configure fallback providers, models, and reasoning effort in Settings. Ramu can switch before a usage limit or continue after a limit, preserving the visible conversation in the same chat. Provider-private reasoning is not transferred.
+**Settings → Access & Fallback** defines an ordered provider/model list. The default is **Only at the limit**; 80%, 90%, and 95% thresholds allow earlier switching. Unavailable or limited entries are skipped. **Return after the limit resets** restores the original provider and model on a later message.
 
-Fallback requires installed and authenticated runtimes. Authentication errors and ordinary tool failures do not imply a usage limit. Usage information can be unavailable or delayed. Already-running native helpers cannot be moved to another provider.
+Fallback requires installed, authenticated providers. It carries visible conversation context into the same chat; private provider reasoning is not transferred. Usage readings can be delayed or unavailable. Authentication errors and tool failures do not trigger usage fallback.
 
-## Cross-provider helpers
+Helpers can use the main fallback policy or their own list and threshold.
 
-Routing settings can send helper tasks to another provider or model, with optional worktree isolation. Codex's opt-in spawn hook enables routing at native spawn time; without it, routing changes apply at message boundaries. Existing native helpers keep their original provider.
+## Asides and advice
 
-An isolated helper works in a separate checkout. Conflicting patches are preserved for review. Isolation does not include untracked files in the tracked-change snapshot, and isolated helpers do not support follow-up messages.
+Select chat text to quote it or ask a read-only Aside. Aside replies stay separate from the main agent's conversation.
 
-## Advisor
+The optional advisor sends chat context to a second model for advice. See [providers and advisor](PROVIDERS.md#advisor).
 
-An optional advisor provides a second perspective using another installed provider or model. Advice can arrive while the main agent continues independent work. Pending advisor requests do not survive a service restart. See [provider setup and advisor](PROVIDERS.md#advisor).
-
-## Compatibility
-
-Capabilities depend on the installed runtime. Automated fixtures cover routing and transcript behavior; they do not certify every live provider version. See [provider setup](PROVIDERS.md) and [ACP chat presentation](ACP-CHAT-UI.md) for integration details.
+Provider features depend on the installed runtime. See [provider setup](PROVIDERS.md) and [background recovery](AUTOMATION.md).

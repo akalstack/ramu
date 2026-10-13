@@ -21,10 +21,10 @@ const GLOBAL = 'global'
 
 export function MemorySettings({ value, onChange }: { value: MemoryPreferences; onChange: (value: MemoryPreferences) => void }) {
   return <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0">
-    <SettingsRow className="settings-toggle"><span><strong>{t('Shared memory')}</strong><span className="muted text-muted-foreground block small text-caption">{t('Agents of every provider read and save the same memory, so what Claude learns, Codex and OpenCode know too. Applies to chats started after saving.')}</span></span><Switch aria-label={t('Shared memory')} checked={value.enabled} onCheckedChange={(enabled) => onChange({ ...value, enabled })} /></SettingsRow>
+    <SettingsRow className="settings-toggle"><span><strong>{t('Shared memory')}</strong><span className="muted text-muted-foreground block small text-caption">{t("Share saved notes across providers. Applies to chats started after saving.")}</span></span><Switch aria-label={t('Shared memory')} checked={value.enabled} onCheckedChange={(enabled) => onChange({ ...value, enabled })} /></SettingsRow>
     {value.enabled && <>
-      <SettingsRow className="settings-toggle"><span><strong>{t('Dream')}</strong><span className="muted text-muted-foreground block small text-caption">{t('Once a day, after enough has changed, a model consolidates memory: merges duplicates, resolves contradictions, makes dates absolute and retires outdated notes. Uses model tokens. Every change can be restored.')}</span></span><Switch aria-label={t('Dream')} checked={value.dream} onCheckedChange={(dream) => onChange({ ...value, dream })} /></SettingsRow>
-      <SettingsRow className=""><span><strong>{t('Forget unused memories after')}</strong><span className="muted text-muted-foreground block small text-caption">{t('Project notes nobody has used are archived after this. Preferences and references last twice as long and important notes three times. Memories you write or edit, and essential ones, are never forgotten automatically.')}</span></span><Dropdown label={t('Forget unused memories after')} value={String(value.staleAfterDays)} options={[...new Set([30, 60, 90, 180, 365, value.staleAfterDays])].sort((a, b) => a - b).map((days) => ({ value: String(days), label: t('{0} days', { 0: days }) }))} onChange={(days) => onChange({ ...value, staleAfterDays: Number(days) })} /></SettingsRow>
+      <SettingsRow className="settings-toggle"><span><strong>{t("Memory cleanup")}</strong><span className="muted text-muted-foreground block small text-caption">{t("Merge duplicate notes and archive outdated memory daily. Uses model tokens. Changes can be restored.")}</span></span><Switch aria-label={t("Memory cleanup")} checked={value.dream} onCheckedChange={(dream) => onChange({ ...value, dream })} /></SettingsRow>
+      <SettingsRow className=""><span><strong>{t('Archive unused memories after')}</strong><span className="muted text-muted-foreground block small text-caption">{t("Archive unused project notes after this period. Your notes and essential memories are kept.")}</span></span><Dropdown label={t('Archive unused memories after')} value={String(value.staleAfterDays)} options={[...new Set([30, 60, 90, 180, 365, value.staleAfterDays])].sort((a, b) => a - b).map((days) => ({ value: String(days), label: t('{0} days', { 0: days }) }))} onChange={(days) => onChange({ ...value, staleAfterDays: Number(days) })} /></SettingsRow>
       <MemoryBrowser />
     </>}
   </div>
@@ -44,7 +44,7 @@ function MemoryBrowser() {
   const projectName = (id: string | null) => id ? projects.find((p) => p.id === id)?.name ?? t('Removed project') : t('All projects')
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const shown = (snapshot?.memories ?? []).filter((m) => m.status === status && (scope === 'all' || (scope === GLOBAL ? m.projectId === null : m.projectId === scope)) && words.every((w) => `${m.title} ${m.content} ${m.tags.join(' ')}`.toLowerCase().includes(w)))
-  const author = (m: Memory) => m.source.actor === 'agent' && m.source.provider ? providerName(m.source.provider) : m.source.actor === 'dream' ? t('Dream') : t('You')
+  const author = (m: Memory) => m.source.actor === 'agent' && m.source.provider ? providerName(m.source.provider) : m.source.actor === 'dream' ? t("Memory cleanup") : t('You')
   const save = () => editing && act(async () => { await invoke('memory.save', editing.input, editing.id); setEditing(null) })
   return <div className="memory-browser flex flex-col gap-2 mt-5">
     <div className="flex items-center gap-2">
@@ -54,13 +54,13 @@ function MemoryBrowser() {
       <Button variant="secondary" className="bg-fill hover:bg-fill-hover flex-none h-8! min-h-8!" onClick={() => setEditing({ input: { projectId: scope !== 'all' && scope !== GLOBAL ? scope : null, kind: 'feedback', title: '', content: '', tags: [], importance: 3 } })}><Plus size={13} />{t('Add')}</Button>
     </div>
     <div className="flex items-center gap-2 small text-caption text-muted-foreground">
-      <span>{snapshot?.dreaming ? t('Dreaming…') : snapshot?.dreamedAt ? t('Last dream {0}', { 0: DateTime.fromMillis(snapshot.dreamedAt).toRelative() ?? '' }) : t('Not dreamed yet')}</span>
+      <span>{snapshot?.dreaming ? t("Cleaning up memory…") : snapshot?.dreamedAt ? t("Last cleanup {0}", { 0: DateTime.fromMillis(snapshot.dreamedAt).toRelative() ?? '' }) : t("Not cleaned up yet")}</span>
       {snapshot?.error && <span className="text-bad" role="alert">{snapshot.error}</span>}
       <span className="grow" />
-      <Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground small text-caption" disabled={!snapshot || snapshot.dreaming} onClick={() => void act(() => invoke('memory.dream'))}><Moon size={12} />{t('Dream now')}</Button>
+      <Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground small text-caption" disabled={!snapshot || snapshot.dreaming} onClick={() => void act(() => invoke('memory.dream'))}><Moon size={12} />{t("Clean up memory")}</Button>
     </div>
     {editing && !editing.id && <MemoryEditor value={editing.input} projects={projects} onChange={(input) => setEditing({ ...editing, input })} onSave={() => void save()} onCancel={() => setEditing(null)} />}
-    {snapshot && !shown.length && <p className="muted text-muted-foreground small text-caption py-6 text-center">{status === 'archived' ? t('Nothing archived. Stale, merged and forgotten memories appear here and can be restored.') : t('No memories yet. Agents save what they learn about you and your projects as they work.')}</p>}
+    {snapshot && !shown.length && <p className="muted text-muted-foreground small text-caption py-6 text-center">{status === 'archived' ? t("No archived memories.") : t("No saved memories.")}</p>}
     {shown.map((m) => editing?.id === m.id
       ? <MemoryEditor key={m.id} value={editing.input} projects={projects} onChange={(input) => setEditing({ ...editing, input })} onSave={() => void save()} onCancel={() => setEditing(null)} />
       : <article key={m.id} className="memory-card group bg-card rounded-(--radius-m) p-3 [border:1px_solid_transparent]">

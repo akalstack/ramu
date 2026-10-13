@@ -142,7 +142,7 @@ function UsagePopover({ trigger, side = 'top', align = 'start' }: { trigger: Rea
     <div className="flex items-center gap-1.5 text-caption text-muted-foreground"><Gauge size={14} /><span>{t("Plan usage")}</span></div>
     {groups.map((group, index) => <Fragment key={group.provider}>{index > 0 && <Separator className="h-px bg-line" />}<UsageDetail {...group} /></Fragment>)}
     <Separator className="h-px bg-line" />
-    <p className="m-0 text-caption leading-normal whitespace-normal text-muted-foreground">{t("Ramu switches before a limit when fallback is on.")}</p>
+    <p className="m-0 text-caption leading-normal whitespace-normal text-muted-foreground">{t("Fallback continues the chat when a usage limit is reached.")}</p>
   </PopoverContent></Popover>
 }
 

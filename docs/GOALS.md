@@ -1,47 +1,37 @@
 # Goals
 
-Ramu keeps a chat working toward the user's requested outcome across agent turns. Goals belong to Ramu, work across providers and fallback, and are saved in the chat's event history.
+Goals keep a chat working toward an objective across turns. They persist with the chat and follow provider changes.
 
 ## Settings
 
-Open **Settings → Goals**:
+In **Settings → Goals**:
 
-- **Goal detection:** Auto (default) lets the working agent identify a goal at the start or later in the conversation, but only for substantial work that likely needs several turns, not small tasks. Manual requires `/goal <objective>`. Off disables automatic continuation and new goals.
-- **Maximum continuation turns:** 10 by default. Choose a preset, enter a custom limit from 1 to 1000, or select Unlimited. Only automatic follow-up turns count; initial work and user messages do not. A quota retry resumes the interrupted turn without consuming another turn.
-- Changes apply to existing goals. Raising the cap or choosing Unlimited reactivates a goal that reached its limit. Resuming a goal at its turn limit allows another batch.
+- **Automatic goals** is on by default. Agents can create goals for work that needs further turns. Turn it off to start goals manually with `/goal`.
+- **Maximum continuation turns** defaults to 10. Choose a preset, a custom limit from 1–1000, or Unlimited. Initial turns, user messages, and quota retries do not count.
 
-Unlimited removes the continuation cap. It still respects completion, blockers, required input and user pause/Stop. Exhausted provider usage waits for availability and retries automatically, including after background-service restart.
+Changes apply to existing goals. Raising the limit reactivates goals stopped at their cap. Resume allows another batch after reaching the limit.
 
-## Chat controls
+## Controls
 
-The goal bar shows the objective, latest progress or blocker, continuation count, and next availability check when waiting. Use Pause goal, Resume goal or Clear goal. Stop also pauses the goal. Pausing the goal prevents future automatic turns; use Stop to interrupt work already running.
-
-Commands are handled by Ramu rather than forwarded to a provider:
+Use Pause, Resume, or Clear in the goal bar. Pause prevents further turns; Stop interrupts current work and pauses the goal.
 
 ```text
-/goal Implement login and verify the authentication tests
-/goal
+/goal Implement login and test authentication
 /goal pause
 /goal resume
 /goal clear
 ```
 
-An existing chat can set a goal while working. Ramu queues the updated objective so the working agent receives it. `/goal` without arguments leaves the current goal visible in the bar.
+`/goal` without arguments shows the current goal. An updated objective is queued for an agent already working.
 
-## Completion and continuation
+## Continuation
 
-The working agent defaults to doing tasks directly. An explicit request not to create a goal or automatically continue takes precedence. Auto mode creates a goal when the user explicitly requests one, even for a small task, or after inspecting the task and finding concrete evidence that it needs multiple agent turns and automatic continuation. Multiple steps, files, tool calls or tests do not by themselves justify a goal. The `set_goal` tool requires a `continuationReason` naming the inspected facts and the authorized work likely to need a later turn, or quoting the explicit goal request; an objective alone is rejected. Questions, brainstorming and plan-only discussion should not become goals. A goal does not justify ending a turn while useful authorized work remains possible. With an active goal, the agent audits all user requirements before ending a turn and reports through the provider-neutral `set_goal`, `get_goal` and `update_goal` tools. It reports concrete evidence when complete, remaining work while active, or the missing input/obstacle when blocked.
+The working agent reports progress and completion. Active goals continue after a turn ends. User messages, required answers, approvals, and workspace writers take priority. Completed goals stop; blocked goals need user input or an explicit resume.
 
-There is no separate periodic AI judge. After a turn ends, an active goal starts another turn containing its objective and progress plus an explicit completion audit. This also covers an agent that forgot to report completion. Automatic detection and evidence assessment depend on the working model following those instructions.
+Usage failures try the chat's fallback list first. If no provider is available, the goal waits for a reset and retries. Unknown reset times retry with increasing delays, up to 15 minutes. Authentication errors require intervention.
 
-Detection instructions run in the background service. After rebuilding or updating them, use **Settings → Updates → Restart app & service** to load the new service. App-only restarts retain the running service. Existing goals remain saved; clear an unwanted goal in the chat before checking detection on a new task.
+Goal detection depends on the model following its instructions. Creating a goal does not grant permission for additional work.
 
-Queued user input takes priority. Ramu waits for required approvals/answers, running helpers, change snapshots, and other writers in the same workspace. User controls and Stop win over pending automatic dispatch. Completed goals stop; blocked goals can be resumed explicitly or by a user reply.
+## Checks
 
-Usage failures first use the chat's existing fallback policy. If fallback is disabled or exhausted, the goal enters Waiting for provider. Stored usage readings and reset times determine availability without inference. Unknown reset times retry with exponential backoff from one minute up to fifteen minutes. Waiting timers inspect availability at most once a minute; fresh availability or a fallback provider's reset can release the wait early. Authentication errors and other failures require intervention rather than quota retries.
-
-## Verification
-
-`test/goals.test.ts` covers limits, unlimited continuation, lifecycle controls, user-message priority, quota waiting, reset detection and durable state. After building, run `node scripts/goals-smoke.mjs` to check the real Electron settings and MCP tools with a temporary profile and fake providers, without model calls. UI evidence is written to `output/playwright/goals/`.
-
-For model behavior, run `RAMU_REAL_GOALS=1 pnpm vitest run test/goals.live.test.ts`. This opt-in test uses the signed-in Codex CLI with `gpt-6-luna` at high reasoning effort, real Ramu goal instructions and MCP tool definitions, and temporary workspaces. It checks eight cases: questions, routine fixes, multiple-file edits, planning only, explicit goals, implicit continuation, explicit opt-out, and Manual mode. Tool inventory is verified before scoring model behavior. The continuation fixture models a service accepting one migration batch per agent turn; the test sends the production continuation prompt for the second turn and checks completion. Goal state is kept in memory in this harness; daemon scheduling and persistence are covered by the lifecycle tests and Electron smoke test. Set `RAMU_GOALS_REPORT` to a JSONL path to retain tool calls and model events. These tests make real model calls and are skipped by default.
+`test/goals.test.ts` covers lifecycle, limits, waiting, and persistence. After building, run `node scripts/goals-smoke.mjs` for isolated Electron checks. Live model checks are opt-in: `RAMU_REAL_GOALS=1 pnpm exec vitest run test/goals.live.test.ts`.

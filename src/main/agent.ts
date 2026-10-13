@@ -38,6 +38,14 @@ import { USER_MESSAGE_PREAMBLE } from './agentInstructions'
 
 export type QueryFn = (params: { prompt: AsyncIterable<SDKUserMessage>; options: Options }) => Query
 
+/** Merges several pending messages into one request so the provider answers them together. */
+function combineQueued(messages: QueuedMessage[]): { text: string; attachments: Attachment[]; reviewId?: string } {
+  const attachments: Attachment[] = []
+  for (const file of messages.flatMap((message) => message.attachments ?? [])) if (!attachments.some((entry) => entry.id === file.id)) attachments.push(file)
+  const reviewId = messages.find((message) => message.reviewId)?.reviewId
+  return { text: messages.map((message) => message.text).filter((text) => text.trim()).join('\n\n'), attachments, ...(reviewId ? { reviewId } : {}) }
+}
+
 /** Push-based async iterable used as the SDK's streaming input. */
 class InputQueue implements AsyncIterable<SDKUserMessage> {
   private items: SDKUserMessage[] = []
@@ -289,6 +297,8 @@ export class AgentService {
     return true
   }
   private readonly sendingMessages = new Set<string>()
+  /** Sessions with a send in flight that has not reached 'running' yet; later submits must queue behind it. */
+  private readonly startingSends = new Set<string>()
   private readonly steering = new Set<string>()
   private readonly activeTools = new Map<string, Set<string>>()
   /** Timers that move a long foreground command to the background, by session and tool use id. */
@@ -817,13 +827,19 @@ export class AgentService {
     const session = this.get(id)
     if (session.provider === 'opencode' || isAcpProvider(session.provider)) mode = 'queue'
     if (!WRITING_STATES.includes(session.state)) {
-      if (this.workspaceBusy(session.covers, id) || this.queued(id).length) {
+      if (this.workspaceBusy(session.covers, id) || this.queued(id).length || this.startingSends.has(id)) {
         this.updateQueue(id, [...this.queued(id), { id: randomUUID(), text, mode: 'queue', ...(attachments.length ? { attachments } : {}), ...(reviewId ? { reviewId } : {}) }], false)
         this.workspaceQueue.add(id); this.wakeWorkspaceQueue()
         return
       }
       this.updateQueue(id, this.queued(id), false)
-      return this.send(id, text, attachments, reviewId)
+      this.startingSends.add(id)
+      try { return await this.send(id, text, attachments, reviewId) }
+      finally {
+        this.startingSends.delete(id)
+        // Messages that arrived while this one was starting go out together once the turn is idle.
+        if (this.queued(id).length) { this.workspaceQueue.add(id); this.wakeWorkspaceQueue() }
+      }
     }
     this.updateQueue(id, [...this.queued(id), { id: randomUUID(), text, mode, ...(attachments.length ? { attachments } : {}), ...(reviewId ? { reviewId } : {}) }], false)
     // Keep steering visible in the queue until all active tools have finished.
@@ -835,23 +851,27 @@ export class AgentService {
     if (this.activeTools.get(id)?.size || this.steering.has(id) || this.queuePaused(id) || this.shutdown || this.transitioning.has(id)) return
     this.steering.add(id)
     try {
+      // Brief window so messages sent within milliseconds of each other are steered as one request.
+      await new Promise((resolve) => setTimeout(resolve, 75))
       while (this.get(id).state === 'running' && !this.queuePaused(id) && !this.activeTools.get(id)?.size) {
-        const message = this.queued(id).find((message) => message.mode === 'steer')
-        if (!message) break
+        const batch = this.queued(id).filter((message) => message.mode === 'steer')
+        if (!batch.length) break
         const codex = this.runners.get(id)
         const live = this.live.get(id)
         if (!codex && !live) break
-        this.sendingMessages.add(message.id)
+        const combined = combineQueued(batch)
+        batch.forEach((message) => this.sendingMessages.add(message.id))
         try {
-          if (codex) await codex.steer(message.text, message.attachments)
-          else live!.input.push(message.text, message.attachments)
+          if (codex) await codex.steer(combined.text, combined.attachments)
+          else live!.input.push(combined.text, combined.attachments)
         } catch (error) {
           // Keep unsent input visible and recoverable; a finishing turn may win the race.
           this.record(id, { kind: 'error', message: `Steering message is still pending: ${String(error)}` })
           break
-        } finally { this.sendingMessages.delete(message.id) }
-        this.updateQueue(id, this.queued(id).filter((entry) => entry.id !== message.id))
-        this.record(id, { kind: 'user', text: message.text, ...(message.attachments?.length ? { attachments: message.attachments } : {}) })
+        } finally { batch.forEach((message) => this.sendingMessages.delete(message.id)) }
+        const sent = new Set(batch.map((message) => message.id))
+        this.updateQueue(id, this.queued(id).filter((entry) => !sent.has(entry.id)))
+        this.record(id, { kind: 'user', text: combined.text, ...(combined.attachments.length ? { attachments: combined.attachments } : {}) })
       }
     } finally {
       this.steering.delete(id)
@@ -863,14 +883,17 @@ export class AgentService {
     const state = this.get(id).state
     if (this.shutdown || this.queuePaused(id) || this.steering.has(id) || this.transitioning.has(id) || (state !== 'idle' && (!resumeStopped || WRITING_STATES.includes(state)))) return
     const messages = this.queued(id)
-    const message = messages.find((entry) => entry.mode === 'steer') ?? messages[0]
-    if (!message) return
+    if (!messages.length) return
+    // A review follow-up carries its own validation, so it is never merged with other messages.
+    const batch = messages[0].reviewId ? [messages[0]] : messages.filter((entry) => !entry.reviewId)
     if (this.workspaceBusy(this.get(id).covers, id)) { this.workspaceQueue.add(id); return }
     this.workspaceQueue.delete(id)
-    this.updateQueue(id, messages.filter((entry) => entry.id !== message.id))
-    try { await this.send(id, message.text, message.attachments, message.reviewId) }
+    const sent = new Set(batch.map((entry) => entry.id))
+    this.updateQueue(id, messages.filter((entry) => !sent.has(entry.id)))
+    const combined = combineQueued(batch)
+    try { await this.send(id, combined.text, combined.attachments, combined.reviewId) }
     catch (error) {
-      this.updateQueue(id, [message, ...this.queued(id)], message.reviewId ? true : this.queuePaused(id))
+      this.updateQueue(id, [...batch, ...this.queued(id)], batch[0].reviewId ? true : this.queuePaused(id))
       this.record(id, { kind: 'error', message: `Queued message was not sent: ${String(error)}` })
     }
   }

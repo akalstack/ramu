@@ -2,7 +2,7 @@
   "name": "ramu",
   "version": "0.1.0-alpha.1",
   "private": true,
-  "description": "Ramu \u2014 your project, every repo, one workspace.",
+  "description": "Desktop workspace for coding with agents.",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
@@ -17,7 +17,6 @@
     "ui:add": "shadcn add",
     "test:e2e": "node scripts/automation-smoke.mjs",
     "test:terminal": "node scripts/terminal-smoke.mjs",
-    "icons": "electron scripts/render-icon.cjs",
     "check": "pnpm typecheck && pnpm test && pnpm test:scripts && pnpm build",
     "test:scripts": "node --test scripts/release.test.mjs",
     "release:prepare": "node scripts/release.mjs prepare",

@@ -71,7 +71,7 @@ export function ProjectsPanel() {
       {recentMode && latest.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
       {!recentMode && ws.projects.length === 0 && (
         <div className="add-project [&_.hint]:m-[6px_0_14px] [&_.hint]:leading-[1.55] p-[2px_8px_8px]">
-          <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">{t("Pick a repository, or a folder that holds several repositories. Ramu groups them into one workspace.")}</p>
+          <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">{t("Choose a repository or a folder containing repositories.")}</p>
           <Button variant="secondary" className="bg-fill hover:bg-fill-hover add-project-btn [&:hover:not(:disabled)]:[background:var(--fill-hover)] w-full min-h-[30px] rounded-(--radius-s) bg-fill [border-color:transparent] text-foreground justify-start" disabled={addProject.busy} onClick={() => void addProject.add()}><FolderPlus size={14} /> {t(" Add project…")}</Button>
         </div>
       )}

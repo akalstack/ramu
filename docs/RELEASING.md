@@ -1,30 +1,31 @@
-# Releasing Ramu
+# Releases
 
-Releases use Electron Forge and GitHub Actions. CI checks pushes and pull requests on macOS and Linux, with the simulated Electron integration journey on macOS. The release workflow builds macOS arm64, macOS x64 and Linux x64 installers, smoke-tests the packaged macOS apps, adds SHA-256 checksums and creates a **draft** GitHub release. Publishing is manual. Windows packaging exists in Forge but is not in the release matrix: the background runtime needs Windows named-pipe support and validation first.
+Electron Forge builds installers. GitHub Actions targets macOS arm64, macOS x64, and Linux x64, adds SHA-256 checksums, and creates a draft release. Publishing is manual. Windows packaging is not in the release matrix.
 
-## One-time repository setup
+## Repository setup
 
-Push this repository to GitHub and configure its `origin` remote. Enable GitHub Actions and private vulnerability reporting. The release workflow needs permission to write repository contents; only its final draft job receives that permission. Protect your default branch and require the CI checks before merging. Install [GitHub CLI](https://cli.github.com/) and authenticate using `gh auth login` to run the local draft helper.
+Enable GitHub Actions and private vulnerability reporting. Require CI on the default branch. The release workflow's final job needs repository contents write permission. Local helpers use an authenticated GitHub CLI (`gh auth login`).
 
-No npm publishing is involved; `private: true` prevents accidental publication of the desktop package to npm. In-app update checks use published stable GitHub releases; alpha and other prerelease tags are excluded.
+`private: true` in `package.json` prevents npm publication; it does not affect desktop releases.
 
-## Prepare and draft
+## Prepare
 
-The first public release is `0.1.0-alpha.1`, reflecting the current desktop alpha and installation limitations. Use `0.1.0` for a later release once the alpha validation gaps are resolved.
-
-Choose a new version explicitly; version tags have the form `v0.1.0` or `v0.1.0-beta.1`.
+Choose a version, then review the generated notes:
 
 ```sh
 pnpm release:prepare 0.1.0 --dry-run
 pnpm release:prepare 0.1.0
+pnpm check
+pnpm test:e2e # macOS, simulated providers
 ```
 
-Preparation updates `package.json` and writes `releases/v0.1.0.md`. It does not commit, tag, push or create a GitHub release. Review the notes: replace the commit scaffold with user-facing changes, installation details and known limitations. The lockfile does not contain the root package version, so a version-only change does not require regenerating it.
+Preparation updates `package.json` and writes `releases/v0.1.0.md`. It does not commit, tag, push, or publish. Replace the generated scaffold with user-facing changes and installation limitations. A version-only change does not require a lockfile update.
+
+## Draft
+
+Commit the intended release files, create a matching tag, and push it:
 
 ```sh
-pnpm check
-pnpm test:e2e # macOS; simulated providers
-# Stage the intended release changes, including package.json and releases/v0.1.0.md.
 git commit -m "chore: prepare v0.1.0"
 git tag -a v0.1.0 -m "Ramu v0.1.0"
 git push origin HEAD
@@ -34,28 +35,22 @@ pnpm release:draft v0.1.0
 gh run list --workflow release.yml
 ```
 
-The helper requires a clean working tree, a local version tag at HEAD, notes matching `package.json`, and the same tag pushed to `origin`. It dispatches the `Draft release` workflow from that tag. The workflow file must already exist on GitHub's default branch for manual dispatch. You can also run it from the Actions page with the pushed tag as its input.
+The helper requires a clean tree, matching version and notes, a local tag at HEAD, and that tag on `origin`. The workflow must exist on GitHub's default branch. Review every target's notes, installers, and checksums before publishing the draft. Prerelease tags create prerelease drafts. Never move a published tag; use a new version for corrections.
 
-Wait for all jobs to succeed. Review the draft notes and every target's assets in GitHub Releases. The workflow checks downloaded installer checksums before uploading. Prerelease version tags create prerelease drafts. Rerunning the workflow can replace assets on an existing draft; it refuses to modify a published release. Publish from GitHub when ready. Never move a published version tag; fix a release with a new version.
+## Signing and packaged checks
 
-## Signing and validation
+CI macOS builds are unsigned and not notarized. Signed builds use `RAMU_SIGN_IDENTITY`; notarization also needs `APPLE_API_KEY` (a `.p8` file path), `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`. Keep credentials in CI secrets and remove temporary signing material after the build.
 
-The checked-in workflow builds unsigned installers and does not configure signing secrets. macOS builds are not notarized. Keep that status in the release notes. For a trusted macOS distribution, extend the workflow to import a Developer ID certificate into a temporary keychain, set `RAMU_SIGN_IDENTITY`, and provide `APPLE_API_KEY` (a temporary `.p8` file path), `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`. Forge already reads these variables. Store credentials in GitHub secrets and remove temporary files/keychains after building.
+Test signed installers on another machine. Simulated checks do not verify live provider authentication, login startup, or real model calls. Linux packaged GUI validation remains separate.
 
-Test signed installers on a separate machine before claiming signing or notarization is working. The simulated smoke test verifies desktop behavior without provider accounts; it does not verify real model calls, provider authentication or macOS login startup in a user installation. Linux installers are built and unit-tested in CI, but do not yet receive a packaged GUI smoke test.
+`pnpm make` writes installers to `dist/make`. On the matching build machine, `pnpm release:assets darwin arm64` (or `darwin x64` / `linux x64`) collects installers and checksums in `dist/release`. Clear old collected artifacts before rebuilding.
 
-## Local artifacts and agent assistance
+For packaged macOS checks, run `RAMU_PACKAGED_EXECUTABLE=/path/to/Ramu node scripts/automation-smoke.mjs`. The [release skill](../.agents/skills/ramu-release/SKILL.md) documents the repository's optional agent-assisted workflow.
 
-`pnpm make` writes installers to `dist/make`. Run `pnpm release:assets darwin arm64` (or `darwin x64` / `linux x64` on the matching build machine) to collect platform-named installers and checksum files in `dist/release`. It refuses duplicate output; remove the previous `dist/release` contents before collecting a rebuilt target.
+## Updates and the background service
 
-The repository skill [ramu-release](../.agents/skills/ramu-release/SKILL.md) can prepare notes and a draft. Example: “Use $ramu-release to prepare version 0.1.0 and create a GitHub draft release with notes.” Asking only for notes or preparation keeps the work local.
+The app checks stable releases from `ahxar/ramu`; drafts and prereleases are excluded. Downloads require a matching ZIP and checksum file. Automatic installation requires a signed macOS app and compatible signed ZIP. Unsigned macOS and other platforms use manual installation.
 
-## App and background-service updates
+**Auto-update Ramu** downloads updates but does not restart automatically. **Restart app** leaves the service and chats running. **Restart app & service** switches to the bundled service, stops agents, and recovers unfinished chats according to the saved recovery setting. A healthy older service is not restarted on app launch.
 
-Settings → Updates checks published stable releases from `ahxar/ramu` on GitHub. Drafts and prereleases are excluded. The detached service can check and download while the app is closed; downloads require the matching platform/architecture ZIP and `SHA256SUMS-<platform>-<arch>.txt`, and verify the exact size and SHA-256 before becoming ready. App auto-update is opt-in and stages downloads; it never automatically calls Restart.
-
-Automatic installation uses Electron's native macOS updater and requires a Developer ID-signed installed app and a compatible signed release ZIP. The current unsigned CI builds can check/download, but require manual installation. Linux/Windows automatic installation is not certified or enabled. Code-signing configuration and a real packaged update between two published versions remain release validation requirements; unit tests are not evidence that unsigned builds can auto-install.
-
-The service uses the app version plus a content-based build ID, without a separate version sequence. Settings displays the running and bundled service identities. A packaged macOS daemon and login supervisor run from an immutable app copy under `userData/background-runtimes/<build>/Ramu.app`. An app-only update/restart leaves that service and its chats running. A healthy older daemon is never restarted automatically on app launch. **Restart app & service** is a separate, confirmed action that switches the runtime and recovers unfinished chats according to their restart preference.
-
-Keep computer awake defaults off before installation. The first installation of login startup turns it on once; later user changes are preserved. The recommended/default power policy is **Plugged in only**; **Plugged in and on battery** is available. The daemon owns macOS `caffeinate` assertions (`-s` for AC only; `-i` for both), so the feature works even without login startup installed, while the local service runs. Display sleep remains available; manual/lid sleep and OS power/thermal protections are not overridden. Disabling the option or stopping/crashing the daemon releases the assertion. Other platforms are not yet supported for this option.
+The service owns macOS keep-awake behavior. First-time login startup enables it once; later choices are preserved. **Plugged in only** is the default power policy. Display and manual sleep remain available.

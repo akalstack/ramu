@@ -1,10 +1,10 @@
-# Contributing to Ramu
+# Contributing
 
-Bug reports, documentation, tests and focused improvements are welcome. For a substantial feature or architecture change, open an issue first so we can agree on the scope.
+Open an issue before a substantial feature or architecture change. For fixes, include the problem, expected behavior, and steps to reproduce it.
 
 ## Development
 
-Use Node.js 24 and pnpm 11.21.0 (the version pinned in `package.json`). On macOS or Linux:
+Use Git, Node.js 24, and pnpm 11.21.0:
 
 ```sh
 npm install --global pnpm@11.21.0
@@ -12,21 +12,28 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Git must be on PATH. Native dependencies may need Python 3 and a C/C++ toolchain: Xcode Command Line Tools on macOS, or `build-essential` on Debian/Ubuntu. The dependency layout is intentionally hoisted for Electron Forge; keep `pnpm-workspace.yaml` settings when changing installation tooling.
+Native dependencies may need Python 3 and a C/C++ toolchain. Keep the hoisted dependency layout in `pnpm-workspace.yaml`; Electron Forge depends on it.
 
-Run `pnpm check` before submitting. On macOS, also run `pnpm test:e2e` after building for changes to desktop behavior. It uses an isolated profile and simulated providers without paid model calls. Live provider tests are opt-in and are not part of CI. Build and test installers with `pnpm make` when changing packaging.
+## Checks
 
-For changes to large lists, review rendering, or editor lifecycle, also run `node scripts/rendering-performance-smoke.mjs` after building. It seeds a disposable 5,000-file review and checks bounded rendering, scrolling, keyboard navigation, draft preservation, and editor cleanup without model calls.
+- Run `pnpm check` before submitting.
+- For desktop behavior, build and run `pnpm test:e2e` on macOS. It uses disposable repositories, an isolated profile, and simulated providers.
+- For large lists, reviews, or editor lifecycle changes, run `node scripts/rendering-performance-smoke.mjs` after building.
+- For packaging changes, build and test the installer with `pnpm make`.
 
-## Project layout
+Live-provider tests are opt-in and may use paid model calls. Report which checks ran and include screenshots for UI changes. Keep generated output, private logs, credentials, and personal repositories out of commits.
 
-- `src/main`: Electron host, background runtime, providers and repository operations.
-- `src/preload`: the isolated IPC bridge.
-- `src/renderer`: React workspace and editor UI.
-- `src/shared`: shared types and pure helpers.
-- `test`: Vitest coverage.
-- `scripts`: development, integration and release helpers.
+## Code layout
 
-Match the existing TypeScript style and keep changes focused. Add tests for behavior changes where they provide useful coverage. Include screenshots for visible UI changes and say which checks ran. Avoid including credentials, private repositories, generated output or personal logs. Generated screenshots belong in the ignored `output/` directory and should remain local.
+| Directory | Contents |
+| --- | --- |
+| `src/main` | Electron host, background service, providers, and repository operations |
+| `src/preload` | IPC bridge |
+| `src/renderer` | React UI and editor |
+| `src/shared` | Types and pure helpers |
+| `test` | Vitest tests |
+| `scripts` | Integration, development, and release helpers |
 
-Contributions are licensed under the project's [MIT license](LICENSE). Be respectful and constructive in issues, pull requests and reviews. For release maintenance, see [the release guide](docs/RELEASING.md).
+Match the existing TypeScript style. Keep changes focused and test behavior where useful. See [UI development](docs/UI.md), [localization](docs/LOCALIZATION.md), and [release maintenance](docs/RELEASING.md).
+
+Contributions use the [MIT license](LICENSE). Be respectful in issues and reviews. For vulnerabilities, follow [SECURITY.md](SECURITY.md).
