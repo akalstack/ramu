@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import assert from 'node:assert/strict'
-const cwd = resolve(import.meta.dirname, '..')
+const cwd = resolve(import.meta.dirname, '..', 'apps', 'desktop')
 const fixture = mkdtempSync(join(tmpdir(), 'ramu-acp-ui-')), repo = join(fixture, 'repo'), binary = join(fixture, 'agent')
 const shots = process.env.RAMU_E2E_SCREENSHOTS ?? join(fixture, 'screenshots')
 mkdirSync(repo); mkdirSync(shots, { recursive: true })

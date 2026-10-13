@@ -34,4 +34,4 @@ Goal detection depends on the model following its instructions. Creating a goal 
 
 ## Checks
 
-`test/goals.test.ts` covers lifecycle, limits, waiting, and persistence. After building, run `node scripts/goals-smoke.mjs` for isolated Electron checks. Live model checks are opt-in: `RAMU_REAL_GOALS=1 pnpm exec vitest run test/goals.live.test.ts`.
+`apps/server/test/goals.test.ts` covers lifecycle, limits, waiting, and persistence. After building, run `node scripts/goals-smoke.mjs` for isolated Electron checks. Live model checks are opt-in: `RAMU_REAL_GOALS=1 pnpm exec vitest run test/goals.live.test.ts`.

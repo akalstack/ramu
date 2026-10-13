@@ -29,6 +29,19 @@ export function collectAssets(source, destination, platform, arch) {
   }
   writeFileSync(join(destination, `SHA256SUMS-${platform}-${arch}.txt`), sums.join('\n') + '\n')
 }
+// Every workspace package ships together; the desktop app reads its own package.json for app.getVersion().
+function setWorkspaceVersions(version) {
+  for (const group of ['apps', 'packages']) {
+    if (!existsSync(resolve(group))) continue
+    for (const name of readdirSync(resolve(group))) {
+      const path = resolve(group, name, 'package.json')
+      if (!existsSync(path)) continue
+      const manifest = JSON.parse(readFileSync(path, 'utf8'))
+      manifest.version = version
+      writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n')
+    }
+  }
+}
 export function run(args) {
   const [command, input] = args
   if (!command || args.includes('--help')) {
@@ -47,8 +60,9 @@ export function run(args) {
     const previous = git('tag', '--merged', 'HEAD', '--sort=-version:refname').split('\n').find((name) => /^v\d+\.\d+\.\d+(?:-|$)/.test(name))
     const log = git('log', '--format=- %s (%h)', ...(previous ? [`${previous}..HEAD`] : ['HEAD']))
     const notes = `# Ramu ${tag}\n\n## Changes\n\n${log || '- Initial release.'}\n\n## Downloads\n\nChoose the installer matching your OS and CPU: macOS arm64 (Apple Silicon), macOS x64 (Intel), or Linux x64. SHA256SUMS files accompany the downloads.\n\n## Known limitations\n\nDesktop alpha. Automated builds are unsigned and macOS builds are not notarized. Windows releases are not available yet. Agent providers require their own installation and authentication.\n`
-    if (dryRun) { console.log(`Would set package.json version to ${version} and write ${notesPath}\n\n${notes}`); return }
+    if (dryRun) { console.log(`Would set package.json versions (root and workspace packages) to ${version} and write ${notesPath}\n\n${notes}`); return }
     pkg.version = version
+    setWorkspaceVersions(version)
     mkdirSync(resolve('releases'), { recursive: true })
     writeFileSync(notesPath, notes)
     writeFileSync(packagePath, JSON.stringify(pkg, null, 2) + '\n')

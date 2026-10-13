@@ -19,7 +19,7 @@ pnpm check
 pnpm test:e2e # macOS, simulated providers
 ```
 
-Preparation updates `package.json` and writes `releases/v0.1.0.md`. It does not commit, tag, push, or publish. Replace the generated scaffold with user-facing changes and installation limitations. A version-only change does not require a lockfile update.
+Preparation updates the version in the root and every workspace `package.json` (the desktop app reads its own) and writes `releases/v0.1.0.md`. It does not commit, tag, push, or publish. Replace the generated scaffold with user-facing changes and installation limitations. A version-only change does not require a lockfile update.
 
 ## Draft
 

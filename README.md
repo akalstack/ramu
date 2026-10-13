@@ -21,7 +21,7 @@ Inspired by **T3 Code**, **Codex**, and **VS Code**.
 ## Why Ramu
 
 - **Cross-provider advisor:** let your working agent consult a second model, even from another provider, for guidance on its approach and a final review. The advisor reads the conversation and tool summaries; the agent can continue independent work while advice arrives.
-- **Automatic provider fallback:** keep working when a provider reaches its usage limit. Configure an ordered list of providers and models, switch at the limit or an earlier usage threshold, and optionally return to the original model after its limit resets. Visible conversation context carries into the same chat.
+- **Automatic provider fallback:** keep working when a provider reaches its usage limit. Configure an ordered list of providers and models, switch at the limit or an earlier usage threshold, and optionally return to the original model after its limit resets. Visible conversation context carries into the same chat. When every provider in the list is limited, the chat is not failed: it waits in the background, keeps accepting messages, and continues on its own once a limit resets, even after a restart.
 - **Automatic goals:** agents can create a persistent goal when authorized work is likely to need multiple turns. Ramu starts follow-up turns toward that objective, keeps the goal across provider changes, and gives you pause, resume, and continuation limits. You can also start a goal explicitly with `/goal`.
 - **Cross-provider helpers:** route delegated tasks to another provider or model, with rules by task type and separate fallback policies. Inspect helper progress and transcripts, or use isolated checkouts for their changes.
 - **Shared memory across providers:** carry project knowledge and personal preferences between agents through shared notes. Browse and edit memories, restore earlier versions, and use model-assisted cleanup to merge duplicates and archive outdated notes.
@@ -32,7 +32,8 @@ Inspired by **T3 Code**, **Codex**, and **VS Code**.
 - **Agents:** Claude Code, Codex, OpenCode, Cursor, and Antigravity, with model selection, file context, and follow-ups.
 - **Workspace:** Monaco editor, split terminals, and Git branches, staging, stashes, and sync.
 - **Reviews:** recorded diffs, file and line comments, and selective undo with conflict checks.
-- **Background work:** persistent chats, goals, schedules, shared memory, helper agents, and provider fallback.
+- **Background work:** persistent chats, goals, schedules, shared memory, helper agents, and provider fallback that waits out usage limits.
+- **Drafts:** unsent text in a chat or new-chat composer is kept per chat and per project, across tab switches and restarts, until you send it or it goes unused for 30 days. Drafts are stored on the device you typed them on.
 - **Appearance:** configurable fonts and colors, with English and Bahasa Indonesia.
 
 Provider capabilities vary. Background work requires an awake computer.
@@ -59,7 +60,7 @@ pnpm dev
 
 ## Development
 
-Built with Electron, React, TypeScript, Monaco, and xterm.js. A local service manages agents, terminals, and schedules.
+Built with Electron, React, TypeScript, Monaco, and xterm.js. A pnpm workspace: `apps/desktop` (Electron), `apps/web` (React UI), `apps/server` (the background service, also runnable [headless](docs/HEADLESS-SERVER.md)), and shared `packages/`.
 
 | Command | Purpose |
 | --- | --- |
@@ -67,13 +68,14 @@ Built with Electron, React, TypeScript, Monaco, and xterm.js. A local service ma
 | `pnpm check` | Type-check, test, and build |
 | `pnpm test:e2e` | macOS Electron checks with simulated providers |
 | `pnpm make` | Build installers for the current platform |
+| `pnpm server serve` | Run the workspace server without the desktop app (after `pnpm build`) |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and validation requirements. [Report bugs or request features](https://github.com/ahxar/ramu/issues/new/choose); report vulnerabilities through [SECURITY.md](SECURITY.md).
 
 ## Guides
 
-[Providers](docs/PROVIDERS.md) · [Agents and routing](docs/AGENTS.md) · [Background work and reviews](docs/AUTOMATION.md) · [Goals](docs/GOALS.md) · [Shared memory](docs/MEMORY.md) · [Editor](docs/EDITOR.md)
+[Providers](docs/PROVIDERS.md) · [Agents and routing](docs/AGENTS.md) · [Background work and reviews](docs/AUTOMATION.md) · [Goals](docs/GOALS.md) · [Shared memory](docs/MEMORY.md) · [Editor](docs/EDITOR.md) · [Headless server](docs/HEADLESS-SERVER.md)
 
 ## License
 
-[MIT](LICENSE). Third-party assets and provider trademarks retain their respective licenses; see [provider assets](src/renderer/src/assets/providers/README.md) and [branding](assets/branding/README.md).
+[MIT](LICENSE). Third-party assets and provider trademarks retain their respective licenses; see [provider assets](apps/web/src/assets/providers/README.md) and [branding](assets/branding/README.md).

@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { _electron as electron } from 'playwright-core'
 
-const appDir = resolve(import.meta.dirname, '..')
+const appDir = resolve(import.meta.dirname, '..', 'apps', 'desktop')
 const dir = mkdtempSync(join(tmpdir(), 'ramu-language-'))
 const profile = join(dir, 'profile'), repo = join(dir, 'Language Smoke')
 const shots = join(appDir, 'output', 'playwright', 'languages')
@@ -37,6 +37,8 @@ const selectLanguage = async (value) => {
 }
 const save = async () => {
   await page.getByRole('button', { name: /^(Save changes|Simpan perubahan)$/ }).click()
+  // Saving keeps the settings dialog open; Escape closes it.
+  await page.keyboard.press('Escape')
   await page.locator('.settings-page').waitFor({ state: 'detached' })
 }
 const language = () => page.locator('html').getAttribute('lang')

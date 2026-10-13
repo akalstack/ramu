@@ -1,0 +1,16 @@
+{
+  "name": "@ramu/shared",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "exports": { "./*": "./src/*.ts" },
+  "scripts": { "typecheck": "tsc -p tsconfig.json", "test": "vitest run" },
+  "dependencies": {
+    "react-markdown": "catalog:",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "catalog:"
+  },
+  "devDependencies": { "@types/node": "catalog:", "typescript": "catalog:", "vitest": "catalog:" }
+}

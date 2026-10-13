@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
 import { CORE, PAYLOADS, pick } from './chaos-payloads.mjs'
 
-const APP_DIR = resolve(import.meta.dirname, '..')
+const APP_DIR = resolve(import.meta.dirname, '..', 'apps', 'desktop')
 const SHOTS = process.env.SHOTS ?? '/tmp/ramu-chaos'
 mkdirSync(SHOTS, { recursive: true })
 

@@ -18,6 +18,15 @@ Fallback requires installed, authenticated providers. It carries visible convers
 
 Helpers can use the main fallback policy or their own list and threshold.
 
+### When every provider is limited
+
+If the chat's provider and every fallback are at their limit, the chat goes idle with a notice showing the next check time instead of failing. A clock replaces the chat's status in the sidebar, and Home lists it under **Running in the background** with the expected resume time. It keeps working in the background, so closing the window does not cancel it:
+
+- **Messages still go through.** Anything you send or queue while limited is kept in the chat's queue, and nothing reaches a provider yet.
+- **It resumes by itself.** Ramu rechecks when a reset is known, or backs off from one minute up to 15 minutes when it is not. Queued messages are then sent together as one request; with nothing queued, the unfinished request continues.
+- **It survives a service restart**, and a goal waiting on the same limit continues with it.
+- **You can cancel it.** Stopping or interrupting the chat ends the wait. With **Auto fallback** off and no goal, a limit still stops the chat for manual action.
+
 ## Asides and advice
 
 Select chat text to quote it or ask a read-only Aside. Aside replies stay separate from the main agent's conversation.

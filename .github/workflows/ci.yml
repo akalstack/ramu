@@ -33,6 +33,6 @@ jobs:
         if: failure()
         with:
           name: failure-${{ matrix.os }}
-          path: output/playwright/automation/
+          path: apps/desktop/output/playwright/automation/
           if-no-files-found: ignore
           retention-days: 7

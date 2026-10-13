@@ -1,0 +1,54 @@
+{
+  "name": "@ramu/desktop",
+  "productName": "Ramu",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "description": "Ramu — your project, every repo, one workspace.",
+  "author": "Ramu contributors",
+  "license": "MIT",
+  "type": "module",
+  "main": "out/main/index.js",
+  "config": {
+    "forge": "./forge.config.cjs"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "package": "node ../../scripts/desktop-package.mjs package",
+    "make": "node ../../scripts/desktop-package.mjs make"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "1.8.0",
+    "@anthropic-ai/claude-agent-sdk": "catalog:",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@opencode-ai/sdk": "^1.18.35",
+    "editorconfig": "^3.0.2",
+    "luxon": "catalog:",
+    "node-pty": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^8.0.1",
+    "@electron-forge/maker-deb": "^8.0.1",
+    "@electron-forge/maker-dmg": "^8.0.1",
+    "@electron-forge/maker-squirrel": "^8.0.1",
+    "@electron-forge/maker-zip": "^8.0.1",
+    "@ramu/client-runtime": "workspace:*",
+    "@ramu/contracts": "workspace:*",
+    "@ramu/server": "workspace:*",
+    "@ramu/shared": "workspace:*",
+    "@ramu/web": "workspace:*",
+    "@types/node": "catalog:",
+    "electron": "catalog:",
+    "electron-vite": "5.0.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  }
+}

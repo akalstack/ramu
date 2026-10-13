@@ -13,5 +13,5 @@ coverage/
 *.p12
 *.p8
 .ramu-*
-src/renderer/_debug-*
+apps/web/_debug-*
 .playwright-cli/

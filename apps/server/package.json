@@ -1,0 +1,37 @@
+{
+  "name": "@ramu/server",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "description": "Ramu workspace server: agents, files, Git, terminals, schedules and the local database.",
+  "type": "module",
+  "bin": { "ramu": "dist/cli.js", "ramu-server": "dist/cli.js" },
+  "exports": { "./build": "./src/build.ts", "./attachments": "./src/attachments.ts" },
+  "engines": { "node": ">=24 <25" },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "start": "node dist/cli.js serve",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "1.8.0",
+    "@anthropic-ai/claude-agent-sdk": "catalog:",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@opencode-ai/sdk": "^1.18.35",
+    "editorconfig": "^3.0.2",
+    "luxon": "catalog:",
+    "node-pty": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@ramu/client-runtime": "workspace:*",
+    "@ramu/contracts": "workspace:*",
+    "@ramu/shared": "workspace:*",
+    "@types/luxon": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

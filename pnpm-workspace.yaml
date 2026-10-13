@@ -1,6 +1,27 @@
 nodeLinker: hoisted
+packages:
+  - apps/*
+  - packages/*
 # The Claude SDK platform tarball is ~100 MB; allow slow connections to finish.
 fetchTimeout: 600000
+# Versions used by more than one workspace package.
+catalog:
+  '@anthropic-ai/claude-agent-sdk': 0.3.295
+  '@types/luxon': ^3.7.6
+  '@types/node': ^24.19.1
+  '@types/react': ^19.3.0
+  '@types/react-dom': ^19.3.0
+  electron: 44.7.0
+  luxon: ^3.7.2
+  node-pty: 1.1.0
+  react: 19.3.0
+  react-dom: 19.3.0
+  react-markdown: 10.1.0
+  remark-gfm: 4.0.1
+  typescript: 5.9.3
+  vite: 7.3.7
+  vitest: 5.0.3
+  zod: 4.6.5
 allowBuilds:
   electron: true
   electron-winstaller: true

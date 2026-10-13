@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
 
-const root = resolve(import.meta.dirname, '..')
+const root = resolve(import.meta.dirname, '..', 'apps', 'desktop')
 const dir = mkdtempSync(join(tmpdir(), 'ramu-goals-'))
 const shots = join(root, 'output', 'playwright', 'goals')
 mkdirSync(shots, { recursive: true })
@@ -47,6 +47,8 @@ try {
   await select('Maximum continuation turns', 'Unlimited')
   await page.screenshot({ path: join(shots, 'settings-unlimited.png'), animations: 'disabled' })
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  // Saving keeps the settings dialog open; Escape closes it.
+  await page.keyboard.press('Escape')
   await page.locator('.settings-page').waitFor({ state: 'detached' })
   assert.deepEqual((await invoke('settings.app.get')).goals, { mode: 'auto', maxTurns: null })
   await openSettings(); await page.getByRole('switch', { name: 'Automatic goals', exact: true }).click()
@@ -65,6 +67,8 @@ try {
   await openSettings()
   await page.getByRole('switch', { name: 'Automatic goals', exact: true }).click()
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  // Saving keeps the settings dialog open; Escape closes it.
+  await page.keyboard.press('Escape')
   await page.locator('.settings-page').waitFor({ state: 'detached' })
   assert.equal((await invoke('settings.app.get')).goals.mode, 'manual')
   console.log('ok - Automatic goals toggle saves manual mode')

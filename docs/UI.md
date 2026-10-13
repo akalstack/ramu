@@ -16,6 +16,6 @@ Editors, terminals, and attachments use native context menus. Keep clipboard and
 
 ## Branding
 
-See [branding assets](../assets/branding/README.md) and [provider logos](../src/renderer/src/assets/providers/README.md) for source assets and attribution.
+See [branding assets](../assets/branding/README.md) and [provider logos](../apps/web/src/assets/providers/README.md) for source assets and attribution.
 
 For packaging and updates, use the [release guide](RELEASING.md).

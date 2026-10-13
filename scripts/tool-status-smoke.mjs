@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import assert from 'node:assert/strict'
-const cwd = resolve(import.meta.dirname, '..')
+const cwd = resolve(import.meta.dirname, '..', 'apps', 'desktop')
 const fixture = mkdtempSync(join(tmpdir(), 'ramu-tool-status-')), repo = join(fixture, 'repo')
 mkdirSync(repo); writeFileSync(join(repo, 'file.txt'), 'fixture\n')
 for (const args of [['init', '-q'], ['add', '.'], ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'initial']]) execFileSync('git', args, { cwd: repo })

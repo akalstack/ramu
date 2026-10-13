@@ -12,4 +12,4 @@ Unused project notes can be archived after the configured period. Preferences an
 
 ## Checks
 
-`test/memory.test.ts` covers storage, search, scope, cleanup, and history. Model-generated cleanup depends on the selected provider and available tokens.
+`apps/server/test/memory.test.ts` covers storage, search, scope, cleanup, and history. Model-generated cleanup depends on the selected provider and available tokens.

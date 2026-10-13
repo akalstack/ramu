@@ -16,7 +16,7 @@ Native dependencies may need Python 3 and a C/C++ toolchain. Keep the hoisted de
 
 ## Checks
 
-- Run `pnpm check` before submitting.
+- Run `pnpm check` before submitting. To work on one package, use `pnpm --filter @ramu/server test` (or `typecheck`).
 - For desktop behavior, build and run `pnpm test:e2e` on macOS. It uses disposable repositories, an isolated profile, and simulated providers.
 - For large lists, reviews, or editor lifecycle changes, run `node scripts/rendering-performance-smoke.mjs` after building.
 - For packaging changes, build and test the installer with `pnpm make`.
@@ -25,14 +25,19 @@ Live-provider tests are opt-in and may use paid model calls. Report which checks
 
 ## Code layout
 
+pnpm workspace; each package has its own `src`, `test`, and `typecheck`/`test` scripts.
+
 | Directory | Contents |
 | --- | --- |
-| `src/main` | Electron host, background service, providers, and repository operations |
-| `src/preload` | IPC bridge |
-| `src/renderer` | React UI and editor |
-| `src/shared` | Types and pure helpers |
-| `test` | Vitest tests |
+| `apps/desktop` | Electron shell: windows, menus, native dialogs, preload bridge, updates, packaging |
+| `apps/web` | React workspace UI and editor, rendered inside the desktop app |
+| `apps/server` | Workspace server and `ramu` CLI: agents, providers, files, Git, terminals, schedules, database |
+| `packages/contracts` | Wire protocol: versions, capabilities, request encoding |
+| `packages/client-runtime` | Node client for a workspace server (local socket or authenticated HTTP) |
+| `packages/shared` | Domain types, the API method table, and pure helpers |
 | `scripts` | Integration, development, and release helpers |
+
+Import shared code as `@ramu/shared/<module>`. Server code must not import Electron or `apps/desktop`; desktop reaches the server through `@ramu/client-runtime`. See [headless server](docs/HEADLESS-SERVER.md).
 
 Match the existing TypeScript style. Keep changes focused and test behavior where useful. See [UI development](docs/UI.md), [localization](docs/LOCALIZATION.md), and [release maintenance](docs/RELEASING.md).
 

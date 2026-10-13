@@ -7,7 +7,7 @@ import { request } from 'node:http'
 import { createHash } from 'node:crypto'
 import { _electron as electron } from 'playwright-core'
 
-const appDir = resolve(import.meta.dirname, '..'), dir = mkdtempSync(join(tmpdir(), 'ramu-advisor-'))
+const appDir = resolve(import.meta.dirname, '..', 'apps', 'desktop'), dir = mkdtempSync(join(tmpdir(), 'ramu-advisor-'))
 const profile = join(dir, 'profile')
 const shots = join(appDir, 'output', 'playwright', 'advisor'); mkdirSync(shots, { recursive: true })
 const env = { ...process.env, RAMU_USER_DATA: profile, RAMU_WORKTREES: join(dir, 'worktrees'), RAMU_FAKE_AGENT: '1' }; delete env.ELECTRON_RENDERER_URL

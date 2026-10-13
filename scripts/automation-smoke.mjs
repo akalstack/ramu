@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { request } from 'node:http'
 import { createHash } from 'node:crypto'
 import { _electron as electron } from 'playwright-core'
-const appDir = process.env.RAMU_E2E_APP_DIR ? resolve(process.env.RAMU_E2E_APP_DIR) : resolve(import.meta.dirname, '..'), dir = mkdtempSync(join(tmpdir(), 'ramu-automation-'))
+const appDir = process.env.RAMU_E2E_APP_DIR ? resolve(process.env.RAMU_E2E_APP_DIR) : resolve(import.meta.dirname, '..', 'apps', 'desktop'), dir = mkdtempSync(join(tmpdir(), 'ramu-automation-'))
 const profile = join(dir, 'profile'), repo = join(dir, 'demo')
 const shots = process.env.RAMU_E2E_SCREENSHOTS ? resolve(process.env.RAMU_E2E_SCREENSHOTS) : join(appDir, 'output', 'playwright', 'automation'); mkdirSync(shots, { recursive: true })
 mkdirSync(repo); execFileSync('git', ['init', '-q'], { cwd: repo })
@@ -173,6 +173,8 @@ async function runJourney() {
   await page.getByRole('button', { name: 'Background & Recaps', exact: true }).click()
   await page.getByRole('switch', { name: /Daily recaps/ }).uncheck()
   await page.getByRole('button', { name: 'Save changes' }).click()
+  // Saving keeps the settings dialog open; Escape closes it.
+  await page.keyboard.press('Escape')
   await page.getByRole('button', { name: 'Home', exact: true }).click()
   check(await page.getByRole('button', { name: 'Refresh recap', exact: true }).count() === 0, 'Recap toggle hides Home recaps')
   { const chats = page.getByRole('button', { name: 'Home', exact: true }); if (await chats.getAttribute('aria-pressed') !== 'true') await chats.click() }
@@ -224,11 +226,15 @@ async function runJourney() {
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'appearance' } })))
   await page.getByRole('switch', { name: 'Crisper text' }).click()
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  // Saving keeps the settings dialog open; Escape closes it.
+  await page.keyboard.press('Escape')
   await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
   check(Object.values(await smoothing()).every((value) => value === 'auto'), 'Turning smoothing off restores platform rendering in the interface and editor')
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'appearance' } })))
   await page.getByRole('switch', { name: 'Crisper text' }).click()
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  // Saving keeps the settings dialog open; Escape closes it.
+  await page.keyboard.press('Escape')
   await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
   check(Object.values(await smoothing()).every((value) => value === 'antialiased'), 'Font smoothing can be re-enabled')
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'editor' } })))

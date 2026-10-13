@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
 
-const appDir = resolve(import.meta.dirname, '..')
+const appDir = resolve(import.meta.dirname, '..', 'apps', 'desktop')
 const fixture = mkdtempSync(join(tmpdir(), 'ramu-palette-'))
 const env = { ...process.env, RAMU_USER_DATA: join(fixture, 'profile'), RAMU_WORKTREES: join(fixture, 'worktrees'), RAMU_FAKE_AGENT: '1' }
 delete env.ELECTRON_RENDERER_URL

@@ -6,7 +6,7 @@ Follow system uses the first supported OS language, falling back to English. `id
 
 ## Adding copy
 
-English strings are translation keys and fallbacks. Indonesian translations live in `src/shared/locales/id.ts`. Use `t()` and `useLanguage()` in renderer components; native menus and notifications use `src/main/localization.ts`.
+English strings are translation keys and fallbacks. Indonesian translations live in `packages/shared/src/locales/id.ts`. Use `t()` and `useLanguage()` in renderer components; native menus and notifications use `src/main/localization.ts`.
 
 - Use short, direct labels and actionable errors. Explain consequences in confirmations.
 - Translate complete sentences. Preserve placeholders for names and counts.
@@ -16,4 +16,4 @@ English strings are translation keys and fallbacks. Indonesian translations live
 
 ## Checks
 
-Run `pnpm typecheck` and `pnpm exec vitest run test/i18n.test.ts test/chatDates.test.ts test/editMenu.test.ts`. After building, `node scripts/i18n-smoke.mjs` checks switching, persistence, native menus, and editor buffers with an isolated profile.
+Run `pnpm typecheck` and `pnpm test`. After building, `node scripts/i18n-smoke.mjs` checks switching, persistence, native menus, and editor buffers with an isolated profile.

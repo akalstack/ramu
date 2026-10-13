@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { DatabaseSync } from 'node:sqlite'
 import { _electron as electron } from 'playwright-core'
 
-const root = resolve(import.meta.dirname, '..'), dir = mkdtempSync(join(tmpdir(), 'ramu-rendering-'))
+const root = resolve(import.meta.dirname, '..', 'apps', 'desktop'), dir = mkdtempSync(join(tmpdir(), 'ramu-rendering-'))
 const profile = join(dir, 'profile'), env = { ...process.env, RAMU_USER_DATA: profile, RAMU_WORKTREES: join(dir, 'worktrees'), RAMU_FAKE_AGENT: '1' }
 delete env.ELECTRON_RUN_AS_NODE; delete env.ELECTRON_RENDERER_URL
 let app, page

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
 
-const APP_DIR = resolve(import.meta.dirname, '..')
+const APP_DIR = resolve(import.meta.dirname, '..', 'apps', 'desktop')
 const SHOTS = process.env.SHOTS ?? '/tmp/ramu-shots'
 mkdirSync(SHOTS, { recursive: true })
 
