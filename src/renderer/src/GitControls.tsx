@@ -10,7 +10,7 @@ export function BranchPicker({ binding, status, branches, busy, onChange, classN
   onChange: (branch: string) => void; className?: string
 }) {
   useLanguage()
-  return <Dropdown label={t("Switch branch")} value={status?.branch ?? ''} icon={<GitBranch size={13} />} placeholder={status?.detached ? t("Detached at {0}", { "0": status.oid?.slice(0, 7) }) : t("No commits")} className={className} disabled={busy} options={branches.map((branch) => ({ value: branch.name, label: branch.name, disabled: branch.current || !!branch.worktree && branch.worktree !== binding.cwd }))} onChange={onChange} />
+  return <Dropdown label={t("Switch branch")} value={status?.branch ?? ''} icon={<GitBranch size={13} />} placeholder={status?.detached ? t("Detached at {0}", { "0": status.oid?.slice(0, 7) }) : t("No commits")} className={className} disabled={busy} options={branches.map((branch) => ({ value: branch.name, label: branch.name, disabled: !!branch.worktree && branch.worktree !== binding.cwd }))} onChange={(branch) => { if (branch !== status?.branch) onChange(branch) }} />
 }
 
 const PULL_LABEL: Record<PullMode, string> = { rebase: 'rebase', merge: 'merge', 'ff-only': 'fast-forward only' }

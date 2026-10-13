@@ -26,6 +26,12 @@ function subscribe(listener: () => void) {
     // Claude's usage can be read without a turn, so the gauges are right on open.
     void invoke('usage.refresh').then(publish, () => {})
     ramu.on('usage:changed', publish)
+    // Keep the gauges current between turns: poll while the window is visible and catch up when it regains focus.
+    // The main process throttles the actual read, so extra calls are cheap.
+    const refresh = () => { if (document.visibilityState === 'visible' && listeners.size) void invoke('usage.refresh').then(publish, () => {}) }
+    window.setInterval(refresh, 5 * 60_000 + 5_000)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
     ramu.on('background:connection', ({ connected }) => { if (connected) void invoke('usage.get').then(publish, () => {}) })
   }
   return () => { listeners.delete(listener) }

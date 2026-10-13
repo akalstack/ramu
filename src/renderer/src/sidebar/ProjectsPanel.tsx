@@ -2,7 +2,7 @@ import { t, useLanguage } from './../i18n'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
-import { Archive, ArchiveRestore, ChevronRight, MessageCircle, FolderClosed, FolderOpen, FolderPlus, FolderSearch, GitBranch, Link2, Pencil, Pin, PinOff, Plus, Sparkles, SquarePen, Trash2, Unlink, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronDown, ChevronRight, MessageCircle, FolderClosed, FolderOpen, FolderPlus, FolderSearch, GitBranch, Link2, Pencil, Pin, PinOff, Plus, Sparkles, SquarePen, Trash2, Unlink, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { NO_PROJECT, type Project, type Task } from '../../../shared/types'
@@ -23,7 +23,12 @@ export function ProjectsPanel() {
   const addProject = useAddProject()
   const [showArchived, setShowArchived] = useState(false)
   const archivedChats = ws.tasks.filter((task) => task.status === 'archived').sort((a, b) => b.lastActiveAt - a.lastActiveAt)
-  const looseChats = ws.tasks.filter((t) => t.projectId === NO_PROJECT && t.status !== 'archived').sort(pinnedFirst)
+  // Pinned chats from every project gather in one section above the projects.
+  const [showPinned, setShowPinned] = useState(true)
+  const [showProjects, setShowProjects] = useState(true)
+  const [showChats, setShowChats] = useState(true)
+  const pinned = ws.tasks.filter((t) => t.pinnedAt && t.status !== 'archived').sort(pinnedFirst)
+  const looseChats = ws.tasks.filter((t) => t.projectId === NO_PROJECT && t.status !== 'archived' && !t.pinnedAt).sort(pinnedFirst)
   const { preferences } = useAppSettings()
   // Relative labels keep aging even when no provider event re-renders the list.
   const [, setTimeTick] = useState(0)
@@ -33,7 +38,7 @@ export function ProjectsPanel() {
   }, [])
   // Recent mode: every chat in one list by activity, each led by its project's name.
   const recentMode = preferences.recentChatMode
-  const latest = recentMode ? ws.tasks.filter((t) => t.status !== 'archived').sort((a, b) => b.lastActiveAt - a.lastActiveAt) : []
+  const latest = recentMode ? ws.tasks.filter((t) => t.status !== 'archived' && !t.pinnedAt).sort((a, b) => b.lastActiveAt - a.lastActiveAt) : []
   // Drag a project by its row to put it somewhere else in the list.
   const [dragging, setDragging] = useState<string | null>(null)
   const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null)
@@ -52,12 +57,18 @@ export function ProjectsPanel() {
       onDragOver={(event) => { if (!hasFiles(event) || addProject.busy) return; event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setFolderOver(true) }}
       onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFolderOver(false) }}
       onDrop={(event) => { if (!hasFiles(event)) return; event.preventDefault(); setFolderOver(false); void addProject.addDropped([...event.dataTransfer.files]) }}>
-      <div className="section-head [.review-inbox_>_&]:gap-2 [&_button.small-icon]:mr-0 flex items-center justify-between text-control text-muted-foreground p-[5px_8px]">
-        <span>{recentMode ? t("Recent chats") : t("Projects")}</span>
+      {pinned.length > 0 && <>
+        <SectionHead title={t("Pinned")} open={showPinned} onToggle={() => setShowPinned((shown) => !shown)} controls="pinned-chats" />
+        <Collapse open={showPinned} id="pinned-chats" className="task-list">
+          {pinned.map((task) => <TaskRow key={task.id} task={task} hidePin projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
+        </Collapse>
+      </>}
+      <SectionHead title={recentMode ? t("Recent chats") : t("Projects")} open={showProjects} onToggle={() => setShowProjects((shown) => !shown)} controls="projects-list">
         <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Add project")} title={t("Add project…")} disabled={addProject.busy} onClick={() => void addProject.add()}>
           <FolderPlus size={14} />
         </Button>
-      </div>
+      </SectionHead>
+      <Collapse open={showProjects} id="projects-list">
       {recentMode && latest.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
       {!recentMode && ws.projects.length === 0 && (
         <div className="add-project [&_.hint]:m-[6px_0_14px] [&_.hint]:leading-[1.55] p-[2px_8px_8px]">
@@ -68,9 +79,12 @@ export function ProjectsPanel() {
       {!recentMode && ws.projects.map((p) => (
         <ProjectGroup key={p.id} project={p} dnd={dnd} />
       ))}
-      {!recentMode && <><div className="section-head [.review-inbox_>_&]:gap-2 [&_button.small-icon]:mr-0 flex items-center justify-between text-control text-muted-foreground p-[5px_8px]"><span>{t("Chats")}</span><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("New chat without a project")} onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></div>
-      {looseChats.map((t) => <TaskRow key={t.id} task={t} />)}</>}
-      <Button variant="ghost" className="archived-toggle" aria-expanded={showArchived} aria-controls="archived-chats" onClick={() => setShowArchived((shown) => !shown)}>
+      </Collapse>
+      {!recentMode && <>
+      <SectionHead title={t("Chats")} open={showChats} onToggle={() => setShowChats((shown) => !shown)} controls="loose-chats"><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("New chat without a project")} onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></SectionHead>
+      <Collapse open={showChats} id="loose-chats">{looseChats.map((t) => <TaskRow key={t.id} task={t} />)}</Collapse></>}
+      {archivedChats.length > 0 && <>
+      <Button variant="ghost" className="archived-toggle h-auto min-h-7 justify-start gap-1 rounded-(--radius-row) bg-transparent px-2 text-caption font-normal text-muted-foreground [border:none] [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:hover:bg-hover" aria-expanded={showArchived} aria-controls="archived-chats" onClick={() => setShowArchived((shown) => !shown)}>
         <ChevronRight data-icon="inline-start" className={showArchived ? 'caret open' : 'caret'} />
         {t('Archived chats')} ({archivedChats.length})
       </Button>
@@ -78,8 +92,41 @@ export function ProjectsPanel() {
         {archivedChats.length === 0 && <p className="muted small empty-tasks">{t('No archived chats')}</p>}
         {archivedChats.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
       </div>}
+      </>}
     </div>
   )
+}
+
+/** Mounts its children while open and while the slide-closed animation runs. */
+function Collapse({ open, id, className, children }: { open: boolean; id?: string; className?: string; children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(open)
+  const el = useRef<HTMLDivElement>(null)
+  const wasOpen = useRef(open)
+  const opening = useRef(false)
+  useLayoutEffect(() => {
+    if (wasOpen.current === open) return
+    wasOpen.current = open
+    if (open) {
+      if (el.current) slide(el.current, true)
+      else { opening.current = true; setMounted(true) }
+    } else if (el.current) slide(el.current, false, () => setMounted(false))
+    else setMounted(false)
+  }, [open])
+  useLayoutEffect(() => {
+    if (mounted && opening.current && el.current) { opening.current = false; slide(el.current, true) }
+  }, [mounted])
+  return open || mounted ? <div ref={el} id={id} className={className}>{children}</div> : null
+}
+
+/** A sidebar section title that folds its list; the chevron shows on hover only, with no hover background. */
+function SectionHead({ title, open, onToggle, controls, children }: { title: string; open: boolean; onToggle: () => void; controls: string; children?: React.ReactNode }) {
+  return <div className="section-head group/head flex items-center justify-between text-control text-muted-foreground p-[5px_8px]">
+    <button type="button" className="inline-flex items-center gap-1 bg-transparent p-0 [border:0] text-inherit cursor-default hover:text-foreground focus-visible:text-foreground" aria-expanded={open} aria-controls={controls} onClick={onToggle}>
+      <span>{title}</span>
+      <ChevronDown size={13} className={`flex-none opacity-0 [transition:opacity_0.12s,transform_0.15s_var(--ease)] group-hover/head:opacity-100 group-focus-within/head:opacity-100 ${open ? '' : '[transform:rotate(-90deg)]'}`} />
+    </button>
+    {children}
+  </div>
 }
 
 /** Pinned chats lead their list (most recently pinned first); the rest follow by recent activity. */
@@ -107,7 +154,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
   const { preferences } = useAppSettings()
   const recent = preferences.recentChats
   const all = ws.tasks.filter((t) => t.projectId === project.id)
-  const sorted = all.filter((t) => t.status !== 'archived').sort(pinnedFirst)
+  const sorted = all.filter((t) => t.status !== 'archived' && !t.pinnedAt).sort(pinnedFirst)
   const others = sorted.filter((t) => !t.pinnedAt)
   const [showAll, setShowAll] = useState(false)
   // Like Codex: the latest few chats, with the rest behind "Show more"; the open chat always shows.
@@ -233,7 +280,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
             }}
           />
         ) : (
-          <FadeText className="project-name font-semibold text-foreground overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0" text={project.name} />
+          <FadeText className="project-name font-semibold text-foreground overflow-hidden whitespace-nowrap flex-1 min-w-0" text={project.name} />
         )}
         <span className="row-actions [&:has([aria-expanded='true'])]:opacity-100 flex items-center gap-0.5 opacity-0 [transition:opacity_0.1s] flex-none">
           <Button variant="ghost" size="icon-xs"
@@ -286,7 +333,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
   )
 }
 
-function TaskRow({ task, projectName }: { task: Task; projectName?: string }) {
+function TaskRow({ task, projectName, hidePin }: { task: Task; projectName?: string; hidePin?: boolean }) {
   useLanguage()
   const ws = useWorkspace()
   const [renaming, setRenaming] = useState(false)
@@ -336,7 +383,7 @@ function TaskRow({ task, projectName }: { task: Task; projectName?: string }) {
     <>
       <div
         onContextMenu={contextMenu.onContextMenu}
-        className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-hover [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-brand-wash [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] min-h-8 rounded-(--radius-s) p-[0_8px_2px_10px] ${active ? ' active' : ''}${archived ? ' archived' : ''}`}
+        className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-hover [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-brand-wash [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] min-h-8 rounded-(--radius-s) p-[0_8px_2px_10px] ${active ? ' active' : ''}${archived ? ' archived' : ''}`}
         role="button"
         tabIndex={0}
         onClick={() => !renaming && ws.openTask(task.id)}
@@ -352,9 +399,9 @@ function TaskRow({ task, projectName }: { task: Task; projectName?: string }) {
             }}
           />
         ) : (
-          <>{projectName && <span className="task-project [&::after]:[content:'·'] [&::after]:ml-1 flex-none max-w-[40%] overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground font-medium">{projectName}</span>}<FadeText className="grow flex-1 min-w-0 text-left task-title overflow-hidden text-ellipsis whitespace-nowrap" text={task.title} /></>
+          <>{projectName && <span className="task-project [&::after]:[content:'·'] [&::after]:ml-1 flex-none max-w-[40%] overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground font-medium">{projectName}</span>}<FadeText className="grow flex-1 min-w-0 text-left task-title overflow-hidden whitespace-nowrap" text={task.title} /></>
         )}
-        {task.pinnedAt && !archived && <Pin size={11} className="muted text-muted-foreground mode-icon flex-none" aria-label={t("Pinned")} />}
+        {task.pinnedAt && !archived && !hidePin && <Pin size={12} className="task-pin muted text-muted-foreground mode-icon flex-none" aria-label={t("Pinned")} />}
         {naming && <Sparkles size={12} className="muted text-muted-foreground mode-icon flex-none" aria-label={t("Naming chat")} />}
         {task.mode === 'worktree' && <span title={ws.workspaces.find((w) => w.id === task.workspaceId)?.name ?? t("Isolated worktrees")}><GitBranch size={12} className="muted text-muted-foreground mode-icon flex-none" aria-label={t("Isolated worktrees")} /></span>}
         <span className="row-actions [&:has([aria-expanded='true'])]:opacity-100 flex items-center gap-0.5 opacity-0 [transition:opacity_0.1s] flex-none task-actions">
