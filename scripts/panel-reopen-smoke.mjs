@@ -1,4 +1,5 @@
-// Run after pnpm build. Uses a fake agent and a throwaway repository/profile.
+// Run after pnpm build, or set RAMU_RENDERER_URL for a running dev renderer.
+// Uses a fake agent and a throwaway repository/profile.
 import { _electron as electron } from 'playwright-core'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,7 +16,8 @@ for (let i = 0; i < 60; i++) writeFileSync(join(repo, 'docs', `document-${String
 const git = (...args) => execFileSync('git', args, { cwd: repo })
 git('init', '-q'); git('add', '.'); git('-c', 'user.name=Layout', '-c', 'user.email=layout@example.com', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'initial')
 const env = { ...process.env, RAMU_USER_DATA: join(fixture, 'profile'), RAMU_FAKE_AGENT: '1' }
-delete env.ELECTRON_RENDERER_URL
+if (process.env.RAMU_RENDERER_URL) env.ELECTRON_RENDERER_URL = process.env.RAMU_RENDERER_URL
+else delete env.ELECTRON_RENDERER_URL
 delete env.ELECTRON_RUN_AS_NODE
 const app = await electron.launch({ args: [cwd], cwd, env })
 const page = await app.firstWindow()
@@ -75,15 +77,15 @@ try {
   await page.mouse.up()
   const saved = await check(true, false)
   const motion = await pane.locator('[data-workspace-split]').first().evaluate(el => getComputedStyle(el).transitionDuration)
-  assert(motion.includes('0.26s'), 'Split geometry has the layout animation')
+  assert.equal(motion, '0s', 'Split geometry changes without a layout animation')
   assert(Math.abs(saved.chat.width - beforeDrag.chat.width - 40) < 1, 'Dragging the independent divider resizes the chat by the pointer movement')
   for (let i = 0; i < 3; i++) {
     await pane.getByRole('button', { name: 'Hide workspace', exact: true }).click()
     if (i === 0) {
-      await page.waitForTimeout(60)
-      const midway = await pane.locator('.main-chat').boundingBox()
+      const closed = await pane.locator('.main-chat').boundingBox()
       const full = await pane.locator('.task-body').boundingBox()
-      assert(midway.width > saved.chat.width && midway.width < full.width - 1, 'Closing animates through intermediate geometry')
+      assert(Math.abs(closed.width - full.width) < 1, 'Closing immediately restores the full chat width')
+      assert.equal(await pane.locator('.editor-area').evaluate(el => getComputedStyle(el).visibility), 'hidden')
     }
     await check(false, false)
     await page.getByRole('button', { name: 'Show right panel', exact: true }).click()
@@ -172,19 +174,24 @@ try {
   await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click()
   await page.waitForTimeout(350)
   assert(await page.getByRole('button', { name: 'Show sidebar', exact: true }).isVisible())
-  assert((await page.locator('#sidebar').boundingBox()).width < 1)
+  assert((await page.locator('#workspace-sidebar').boundingBox()).width < 1)
   await page.getByRole('button', { name: 'Show sidebar', exact: true }).click()
   await page.waitForTimeout(350)
-  assert((await page.locator('#sidebar').boundingBox()).width > 200)
+  assert((await page.locator('#workspace-sidebar').boundingBox()).width > 200)
   await page.getByRole('button', { name: 'Explorer', exact: true }).click()
   await page.waitForTimeout(350)
   assert((await page.locator('.workspace-tools').boundingBox()).width > 220)
+  const toolsWidth = (await page.locator('.workspace-tools').boundingBox()).width
+  for (const name of ['Search', 'Source Control', 'Explorer']) {
+    await page.getByRole('button', { name, exact: true }).click()
+    assert(Math.abs((await page.locator('.workspace-tools').boundingBox()).width - toolsWidth) < 1, 'Switching tools preserves the column width')
+    assert.equal(await page.locator('#shell > [data-panel]').first().evaluate(el => getComputedStyle(el).transitionDuration), '0s')
+  }
   await page.locator('.workspace-tools-header').getByRole('button', { name: 'Close', exact: true }).click()
-  await page.locator('.workspace-tools').waitFor({ state: 'detached', timeout: 2000 })
   assert.equal(await page.locator('.workspace-tools').count(), 0)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   assert.equal(await pane.locator('[data-workspace-split]').first().evaluate(el => getComputedStyle(el).transitionDuration), '0s')
-  console.log('ok - animated sidebar/tools toggles settle correctly and reduced motion disables transitions')
+  console.log('ok - sidebar/tools toggles are immediate, tool switches preserve width, and reduced motion remains supported')
 
 } finally {
   await api('background.stop').catch(() => {})

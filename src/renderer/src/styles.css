@@ -575,7 +575,7 @@ button.scm-sync:hover:not(:disabled) { @apply [background:var(--pressed)]; }
 
 /* Interpolate real pane geometry so text stays crisp during layout changes. */
 @property --chat-share { syntax: '<length-percentage>'; inherits: false; initial-value: 100%; }
-:root { --motion-layout: 260ms; --motion-curve: cubic-bezier(.22, .8, .25, 1); }
+:root { --motion-curve: cubic-bezier(.22, .8, .25, 1); }
 @media (prefers-reduced-motion: reduce) {
   .task-body, .shell, .project-row, .task-row, .workspace-tool-buttons .icon, .overlay-scroll-area > [data-slot=scroll-area-scrollbar] { @apply [transition:none]; }
 }
@@ -719,15 +719,8 @@ button.git-stash-new:hover:not(:disabled) { @apply [background:var(--hover)]; @a
 .scm-repo .sub-title { position: sticky; top: 0; z-index: 3; background: var(--scm-surface); padding-top: 2px; padding-bottom: 2px; }
 /* Compact repositories share the outer list viewport so section headings stick within it. */
 
-/* Split tracks animate when panes open, close, dock or restore their saved layout. */
-[data-workspace-split] {
-  transition: grid-template-columns var(--motion-layout) var(--motion-curve), grid-template-rows var(--motion-layout) var(--motion-curve);
-}
-[data-workspace-split][data-dragging] { transition: none; }
-[data-group] > [data-panel] {
-  transition: flex-grow var(--motion-layout) var(--motion-curve), flex-basis var(--motion-layout) var(--motion-curve);
-}
-[data-group]:has(> [data-separator="active"]) > [data-panel] { transition: none; }
-@media (prefers-reduced-motion: reduce) {
-  [data-workspace-split], [data-group] > [data-panel] { transition: none; }
+/* Panel geometry changes immediately: animated tracks repeatedly reflow the transcript,
+   Monaco and xterm, and send a terminal resize for each intermediate frame. */
+[data-workspace-split], [data-group] > [data-panel] {
+  transition: none;
 }

@@ -9,7 +9,7 @@ import { readSize, useLayoutEpoch, writeSize } from './panelLayout'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { CalendarClock, Settings, SquarePen, Archive, Files, History, Folders, FolderPlus, GitBranch, MessageCircle, Pencil, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, SquareTerminal, X, RefreshCcw, Search } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildCommands, formatKeys, Palette, useKeybindings, type PaletteMode } from './commands'
 import { copyText, invoke, ramu } from './ipc'
 import { Dropdown, Menu, useContextMenu } from './Menu'
@@ -88,7 +88,7 @@ function Shell() {
     const tools = toolsPanel.current?.getSize().inPixels
     if (tools) writeSize('tools-width', tools)
   }
-  useEffect(() => {
+  useLayoutEffect(() => {
     const panel = sidebarPanel.current
     if (!panel) return
     if (sidebarHidden && !panel.isCollapsed()) panel.collapse()
@@ -147,28 +147,23 @@ function Shell() {
   // The start screen shows for New chat, and when nothing is open yet.
   const globalPage = ui.sidebar === 'schedules'
   const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
-  const [retainedTool, setRetainedTool] = useState(workspaceTool)
-  const renderedTool = workspaceTool ?? retainedTool
-  useEffect(() => {
-    if (workspaceTool) setRetainedTool(workspaceTool)
-    let frame = 0, timer = 0, tries = 0
+  useLayoutEffect(() => {
+    let frame = 0, tries = 0
     const apply = () => {
       const panel = toolsPanel.current
       if (!panel) return
       try {
         // The fixed shell panels register before their first layout is published.
         panel.getSize()
-        if (workspaceTool) panel.resize(readSize('tools-width', 340))
-        else {
-          panel.collapse()
-          timer = window.setTimeout(() => setRetainedTool(null), 260)
-        }
+        if (workspaceTool) {
+          if (panel.isCollapsed()) panel.resize(readSize('tools-width', 340))
+        } else panel.collapse()
       } catch {
         if (++tries < 30) frame = requestAnimationFrame(apply)
       }
     }
-    frame = requestAnimationFrame(apply)
-    return () => { cancelAnimationFrame(frame); window.clearTimeout(timer) }
+    apply()
+    return () => cancelAnimationFrame(frame)
   }, [workspaceTool])
   // Chats with nothing open is the home page: the start box, background chats and recaps. New chat without a project lands here too.
   const landing = ui.sidebar === 'projects' && !ui.activeTaskId
@@ -214,9 +209,9 @@ function Shell() {
       </Button>
 
   return (
-    <div className={`shell [&.no-sidebar_.sidebar]:opacity-0 [&.no-sidebar_.sidebar]:invisible [&.no-sidebar_.sidebar]:[transition:opacity_160ms_ease,_visibility_0s_var(--motion-layout)] [&_.sidebar_>_*]:min-w-[calc(var(--sidebar-w,_268px)_-_14px)] [&.no-sidebar_.main]:ml-[var(--island-gap)] relative h-full bg-window [--titlebar-h:44px] [--nav-width:var(--sidebar-w,_268px)] ${sidebarHidden ? ' no-sidebar' : ''}${workspaceTool ? ' with-workspace-tools' : ''}`} style={{ '--sidebar-w': `${expandedWidth}px`, '--nav-width': `${navWidth}px` } as React.CSSProperties}>
+    <div className={`shell [&.no-sidebar_.sidebar]:opacity-0 [&.no-sidebar_.sidebar]:invisible [&_.sidebar_>_*]:min-w-[calc(var(--sidebar-w,_268px)_-_14px)] [&.no-sidebar_.main]:ml-[var(--island-gap)] relative h-full bg-window [--titlebar-h:44px] [--nav-width:var(--sidebar-w,_268px)] ${sidebarHidden ? ' no-sidebar' : ''}${workspaceTool ? ' with-workspace-tools' : ''}`} style={{ '--sidebar-w': `${expandedWidth}px`, '--nav-width': `${navWidth}px` } as React.CSSProperties}>
       <div className="app-titlebar [&_>_.task-header]:flex-1 [&_>_.task-header]:min-w-0 [&_>_.task-header]:h-[44px] [&_>_.task-header]:p-[0_10px_0_12px] [&_>_.task-header]:bg-transparent [&_>_.task-header]:[border:0] absolute inset-[0_0_auto] z-20 h-[var(--titlebar-h)] flex items-center [-webkit-app-region:drag] pr-[var(--island-gap)]">
-        <div className="sidebar-titlebar @container flex flex-none items-center gap-2 min-w-0 h-full pr-2 pl-[max(16px,_calc(var(--window-controls-inset,_0px)_+_8px))] [transition:width_var(--motion-layout)_var(--motion-curve)]" style={{ width: sidebarHidden ? 'calc(var(--window-controls-inset, 0px) + 44px)' : 'var(--nav-width)' }}>
+        <div className="sidebar-titlebar @container flex flex-none items-center gap-2 min-w-0 h-full pr-2 pl-[max(16px,_calc(var(--window-controls-inset,_0px)_+_8px))]" style={{ width: sidebarHidden ? 'calc(var(--window-controls-inset, 0px) + 44px)' : 'var(--nav-width)' }}>
           {!sidebarHidden && <>
             <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover wordmark-link min-w-0 shrink [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:0] [&:hover_.app-wordmark]:opacity-100 bg-transparent [border:0] p-0 min-h-0 rounded-(--radius-s) cursor-pointer [-webkit-app-region:no-drag]" aria-label={t("Home")} title={t("Home")} onClick={() => ws.showHome()}><Wordmark className="app-wordmark block max-w-full [opacity:0.94]" height={15} /></Button>
             <span className="release-badge hidden @min-[163px]:inline-flex p-[0_6px] h-[18px] items-center [border:0] rounded-full bg-fill text-muted-foreground text-[length:9.5px] font-semibold leading-[1] tracking-[0.08em] [text-transform:uppercase] whitespace-nowrap select-none pointer-events-none">Alpha</span>
@@ -227,7 +222,7 @@ function Shell() {
       </div>
       <ResizablePanelGroup orientation="horizontal" id="shell" onLayoutChanged={onShellLayout}>
       <ResizablePanel id="sidebar" panelRef={sidebarPanel} collapsible collapsedSize={0} minSize={SIDEBAR_WIDTH_RANGE[0]} maxSize={SIDEBAR_WIDTH_RANGE[1]} defaultSize={preferences.sidebarWidth} onResize={onSidebarResize}>
-      <aside id="workspace-sidebar" className="sidebar flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] h-[calc(100%_-_var(--titlebar-h))] bg-transparent opacity-100 visible [transition:opacity_160ms_ease,_visibility_0s]" aria-hidden={sidebarHidden} inert={sidebarHidden}>
+      <aside id="workspace-sidebar" className="sidebar flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] h-[calc(100%_-_var(--titlebar-h))] bg-transparent opacity-100 visible" aria-hidden={sidebarHidden} inert={sidebarHidden}>
         <nav className="sidebar-nav flex flex-col gap-px p-[2px_8px_6px] flex-none" aria-label={t("Activity")}>
           <div className="sidebar-actions @container flex items-center gap-1">
             <Button variant="secondary" className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] flex-1 min-w-0 bg-transparent [border:none] rounded-(--radius-row) text-[length:var(--font-control)] leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start" onClick={() => ws.newTask()}>
@@ -265,17 +260,17 @@ function Shell() {
         <StatusBar usage={sidebarHidden ? <UsageRings /> : null} />
       </main>
       </ResizablePanel>
-      <ResizableHandle aria-label={t("Resize tools panel")} disabled={!workspaceTool} aria-hidden={!workspaceTool} tabIndex={workspaceTool ? 0 : -1} className="bg-transparent" style={{ width: renderedTool ? 1 : 0 }} />
+      <ResizableHandle aria-label={t("Resize tools panel")} disabled={!workspaceTool} aria-hidden={!workspaceTool} tabIndex={workspaceTool ? 0 : -1} className="bg-transparent" style={{ width: workspaceTool ? 1 : 0 }} />
       <ResizablePanel id="tools" panelRef={toolsPanel} collapsible collapsedSize={0} minSize={220} maxSize={480} defaultSize={0}>
-      {renderedTool && <aside className="workspace-tools [&_.sidebar-body]:flex-1 [&_.sidebar-body]:min-h-0 [&_.explorer-title]:m-[0_0_4px] [&_.explorer-title]:min-h-7 [&_.search-title]:m-[0_0_4px] [&_.search-title]:min-h-7 [&_.explorer-scroll-area]:mr-[-8px] [&_.git-history.overlay-scroll-area]:mr-[-8px] [&_.explorer-scroll-area_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 [&_.git-history.overlay-scroll-area_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 relative flex flex-col min-h-0 min-w-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] [border-left:var(--pane-border-width)_solid_var(--pane-border-color)] rounded-(--radius-m) bg-canvas" inert={!workspaceTool} aria-hidden={!workspaceTool} aria-label={t(renderedTool === 'explorer' ? 'Explorer' : renderedTool === 'scm' ? 'Source Control' : 'Search')}>
+      {workspaceTool && <aside className="workspace-tools [&_.sidebar-body]:flex-1 [&_.sidebar-body]:min-h-0 [&_.explorer-title]:m-[0_0_4px] [&_.explorer-title]:min-h-7 [&_.search-title]:m-[0_0_4px] [&_.search-title]:min-h-7 [&_.explorer-scroll-area]:mr-[-8px] [&_.git-history.overlay-scroll-area]:mr-[-8px] [&_.explorer-scroll-area_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 [&_.git-history.overlay-scroll-area_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 relative flex flex-col min-h-0 min-w-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] [border-left:var(--pane-border-width)_solid_var(--pane-border-color)] rounded-(--radius-m) bg-canvas" inert={!workspaceTool} aria-hidden={!workspaceTool} aria-label={t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')}>
         <header className="workspace-tools-header [&_.icon]:w-[var(--action-size)] [&_.icon]:h-[var(--action-size)] [&_.icon_>_svg]:w-[var(--icon-size)] [&_.icon_>_svg]:h-[var(--icon-size)] flex items-center gap-2 flex-none min-h-[46px] p-[4px_10px] text-control font-semibold text-soft">
-          <span className="grow flex-1 min-w-0 text-left">{t(renderedTool === 'explorer' ? 'Explorer' : renderedTool === 'scm' ? 'Source Control' : 'Search')}</span>
+          <span className="grow flex-1 min-w-0 text-left">{t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')}</span>
           <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Close")} title={t("Close")} onClick={() => ws.setSidebar('projects')}><X size={15} /></Button>
         </header>
         <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden [&_.project-group]:mb-2 [&_.project-row]:min-h-7 [&_.project-row]:p-[0_8px] [&_.project-row]:text-[length:var(--font-control)] [&_.project-row]:leading-5 [&_.task-list]:pl-[22px] [&_.task-list]:gap-0.5 [&_.task-list]:pt-0.5 [&_.task-row]:min-h-7 [&_.task-row]:p-[0_8px] [&_.task-row]:text-[length:var(--font-control)] [&_.task-row]:leading-5 flex-1 overflow-auto min-h-0">
-          {renderedTool === 'explorer' && <ExplorerPanel />}
-          {renderedTool === 'scm' && <ScmPanel />}
-          {renderedTool === 'search' && <SearchPanel key={ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : 'empty'} />}
+          {workspaceTool === 'explorer' && <ExplorerPanel />}
+          {workspaceTool === 'scm' && <ScmPanel />}
+          {workspaceTool === 'search' && <SearchPanel key={ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : 'empty'} />}
         </div>
       </aside>}
       </ResizablePanel>

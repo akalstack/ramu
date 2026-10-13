@@ -22,12 +22,6 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
   const [share, setShare] = useState(readShare)
   const [length, setLength] = useState(0)
   const [dragging, setDragging] = useState(false)
-  const [present, setPresent] = useState(open)
-  useEffect(() => {
-    if (open) { setPresent(true); return }
-    const timer = window.setTimeout(() => setPresent(false), 260)
-    return () => window.clearTimeout(timer)
-  }, [open])
   const root = useRef<HTMLDivElement>(null)
   const currentShare = useRef(share)
   const epoch = useLayoutEpoch()
@@ -110,6 +104,6 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
         save()
       }}
     />
-    <div className="min-w-0 min-h-0 overflow-hidden" inert={!open} aria-hidden={!open} style={{ visibility: open || present ? 'visible' : 'hidden' }}>{secondary}</div>
+    <div className="min-w-0 min-h-0 overflow-hidden" inert={!open} aria-hidden={!open} style={{ visibility: open ? 'visible' : 'hidden' }}>{secondary}</div>
   </div>
 }
