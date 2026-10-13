@@ -64,7 +64,7 @@ Background work requires an awake computer. Provider capabilities vary; see [pro
 
 ### Installation
 
-Ramu is in **desktop alpha**. Check [GitHub Releases](https://github.com/ahxar/ramu/releases) for available downloads and their SHA-256 checksums, or run from source below.
+The first public version is **0.1.0-alpha.1**, a desktop alpha. Check [GitHub Releases](https://github.com/ahxar/ramu/releases) for available downloads and their SHA-256 checksums, or run from source below.
 
 | Platform | Current support |
 | --- | --- |
@@ -88,7 +88,7 @@ pnpm dev
 
 ### Start your first chat
 
-1. Open **Settings → Providers** to detect installed runtimes, choose executable paths, and find installation and sign-in commands. Each provider needs its own installation and account or model configuration.
+1. Open **Settings → Providers** to detect installed runtimes, choose executable paths under Advanced, and sign in. Each provider needs its own installation and account or model configuration.
 2. Add a repository or a folder containing multiple repositories as a project, or start without a project.
 3. Choose a model, describe the task, and open files beside the chat. Review the recorded changes and send comments when you want a follow-up.
 
@@ -117,7 +117,7 @@ For project layout, development conventions, and validation requirements, read [
 | [Providers and advisor](docs/PROVIDERS.md) | Runtime setup, authentication, compatibility, and advisor behavior |
 | [Background workflows](docs/AUTOMATION.md) | Schedules, recaps, questions, reviews, undo, and restart recovery |
 | [Goals](docs/GOALS.md) | Automatic continuation, limits, quota waiting, and chat controls |
-| [Agents and routing](docs/AGENTS-NEXT.md) | Helpers, asides, usage limits, fallback, and remaining work |
+| [Agents and routing](docs/AGENTS.md) | Helpers, asides, usage limits, and fallback |
 | [ACP chat UI](docs/ACP-CHAT-UI.md) | Shared tool descriptions, thinking, rich content, and protocol UI checks |
 | [Editor tooling](docs/EDITOR-TOOLING.md) | Simple editor, project linters, and font smoothing |
 | [Languages](docs/LOCALIZATION.md) | English, Bahasa Indonesia, and translation conventions |

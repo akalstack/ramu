@@ -197,7 +197,7 @@ export function timeAgo(ts: number): string {
 }
 
 /** Every value picker uses the same compact menu, selection mark and trigger. */
-export function Dropdown({ label, value, options, onChange, icon, placeholder = t('Select…'), className = '', disabled = false }: {
+export function Dropdown({ label, value, options, onChange, icon, placeholder = t('Select…'), className = '', disabled = false, title }: {
   label: string
   value: string
   options: { value: string; label: string; disabled?: boolean }[]
@@ -206,12 +206,13 @@ export function Dropdown({ label, value, options, onChange, icon, placeholder = 
   placeholder?: string
   className?: string
   disabled?: boolean
+  title?: string
 }) {
   useLanguage()
   // Base UI Select treats null as unselected, so an empty option needs a sentinel value.
   const emptyValue = '__ramu_empty_option__'
   return <Select value={value || (options.some((o) => o.value === '') ? emptyValue : '')} items={options.map((o) => ({ value: o.value || emptyValue, label: o.label }))} onValueChange={(next) => { if (next !== null) onChange(next === emptyValue ? '' : next) }} disabled={disabled || !options.length}>
-    <SelectTrigger className={`dropdown-trigger [&_>_svg]:flex-none [&_>_svg]:w-3.5 [&_>_svg]:h-3.5 [&_>_svg]:text-soft [&_>_svg:last-child]:w-3 [&_>_svg:last-child]:h-3 [&_>_svg:last-child]:ml-auto [&_>_svg:last-child]:text-muted-foreground [&:hover]:bg-hover [&.on]:bg-hover [&.control-btn]:min-h-6 [&.control-btn]:p-[3px_4px] [&.control-btn]:[border:0] [&.control-btn]:bg-transparent [&.control-btn]:text-caption [&.control-btn]:leading-[18px] [&.control-btn]:gap-[5px] [&.control-btn:hover]:bg-hover [&.control-btn.on]:bg-hover [.sidebar-scope_&_>_svg:last-child]:ml-auto [.sidebar-scope_&_>_svg:last-child]:text-muted-foreground [:is(.settings-page-content,_.schedule-editor,_.schedule-card,_.changes-page,_.home-page,_.dialog,_.model-settings)_&_>_svg:last-child]:text-muted-foreground flex items-center gap-2 min-h-[30px] p-[5px_10px] [border:1px_solid_transparent] rounded-(--radius-s) text-[length:var(--ui-font-size)] leading-[18px] text-left bg-fill ${className}`} aria-label={label}>{icon}<SelectValue placeholder={placeholder} /></SelectTrigger>
+    <SelectTrigger className={`dropdown-trigger [&_>_svg]:flex-none [&_>_svg]:w-3.5 [&_>_svg]:h-3.5 [&_>_svg]:text-soft [&_>_svg:last-child]:w-3 [&_>_svg:last-child]:h-3 [&_>_svg:last-child]:ml-auto [&_>_svg:last-child]:text-muted-foreground [&:hover]:bg-hover [&.on]:bg-hover [&.control-btn]:min-h-6 [&.control-btn]:p-[3px_4px] [&.control-btn]:[border:0] [&.control-btn]:bg-transparent [&.control-btn]:text-caption [&.control-btn]:leading-[18px] [&.control-btn]:gap-[5px] [&.control-btn:hover]:bg-hover [&.control-btn.on]:bg-hover [.sidebar-scope_&_>_svg:last-child]:ml-auto [.sidebar-scope_&_>_svg:last-child]:text-muted-foreground [:is(.settings-page-content,_.schedule-editor,_.schedule-card,_.changes-page,_.home-page,_.dialog,_.model-settings)_&_>_svg:last-child]:text-muted-foreground flex items-center gap-2 min-h-[30px] p-[5px_10px] [border:1px_solid_transparent] rounded-(--radius-s) text-[length:var(--ui-font-size)] leading-[18px] text-left bg-fill ${className}`} aria-label={label} title={title}>{icon}<SelectValue placeholder={placeholder} /></SelectTrigger>
     <SelectContent alignItemWithTrigger={false} align="start"><SelectGroup className="p-0">{options.map((option) => <SelectItem key={option.value || emptyValue} value={option.value || emptyValue} disabled={option.disabled}>{option.label}</SelectItem>)}</SelectGroup></SelectContent>
   </Select>
 }

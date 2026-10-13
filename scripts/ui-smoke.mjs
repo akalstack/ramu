@@ -99,7 +99,7 @@ async function runInTerminal(page, command) {
 }
 
 const REAL = process.env.RAMU_REAL_AGENT === '1'
-const startComposer = (page) => page.locator('textarea:visible[placeholder*="whole workspace"]')
+const startComposer = (page) => page.locator('[data-composer-input]:visible[data-placeholder*="whole workspace"]')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /** Approves any permission request and waits for the visible conversation to finish its turn. */

@@ -1,24 +1,20 @@
+import { ChatLink } from './ChatReferences'
+import { remarkChatReferences, SKILL_REFERENCE_PREFIX } from '../../shared/chatReferences'
+import { localFileLink } from '../../shared/fileLinks'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Markdown from 'react-markdown'
+import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { FileText, Image as ImageIcon, SquareTerminal } from 'lucide-react'
-import { Button } from '@/components/desktop-button'
 import type { AgentContent } from '../../shared/types'
 import { agentContent, inlineMedia, resourceDownload } from '../../shared/agentContent'
 import { invoke } from './ipc'
 import { monaco } from './monaco'
-import { useWorkspace } from './workspace'
-import { notifyError } from './Notifications'
 import { t, useLanguage } from './i18n'
 
 function ContentLink({ uri, label, taskId }: { uri: string; label: string; taskId?: string }) {
-  const ws = useWorkspace()
   if (/^https?:\/\//i.test(uri)) return <a className="text-brand break-all" href={uri} target="_blank" rel="noreferrer">{label}</a>
-  if (!taskId || !uri || /^[a-z][a-z\d+.-]*:/i.test(uri) && !uri.startsWith('file:')) return <span className="break-all">{label}</span>
-  return <Button variant="ghost" className="h-auto p-0 text-brand text-left whitespace-normal" onClick={() => { void invoke('files.resolveLink', taskId, uri).then(file => {
-    if (!file) throw new Error('This resource is outside the chat’s folders or is unavailable.')
-    ws.openView(taskId, { kind: 'file', repoId: file.repoId, path: file.path, preview: false })
-  }).catch(error => notifyError(String(error), 'Open resource')) }}>{label}</Button>
+  if (!taskId || !localFileLink(uri)) return <span className="break-all">{label}</span>
+  return <ChatLink href={uri} taskId={taskId}>{label}</ChatLink>
 }
 
 function AgentImage({ content, taskId }: { content: Extract<AgentContent, { type: 'image' }>; taskId?: string }) {
@@ -55,7 +51,7 @@ function AgentDiff({ content, taskId }: { content: Extract<AgentContent, { type:
 export function AgentContentView({ content, taskId, plainText = false }: { content: AgentContent[]; taskId?: string; plainText?: boolean }) {
   useLanguage()
   return <div className="agent-content flex flex-col gap-3 min-w-0 text-control text-soft">{content.map((item, index) => <div key={index} data-content-type={item.type}>
-    {item.type === 'text' ? <div className="agent-content-text whitespace-pre-wrap break-words [&_p]:m-0 [&_pre]:overflow-auto [&_pre]:p-2 [&_pre]:bg-fill [&_pre]:rounded-(--radius-s) [&_a]:text-brand">{plainText ? <pre className="m-0 font-mono whitespace-pre-wrap break-words max-h-64 overflow-auto text-caption">{item.text}</pre> : <Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown>}</div>
+    {item.type === 'text' ? <div className="agent-content-text whitespace-pre-wrap break-words [&_p]:m-0 [&_pre]:overflow-auto [&_pre]:p-2 [&_pre]:bg-fill [&_pre]:rounded-(--radius-s) [&_a]:text-brand">{plainText ? <pre className="m-0 font-mono whitespace-pre-wrap break-words max-h-64 overflow-auto text-caption">{item.text}</pre> : <Markdown remarkPlugins={[remarkGfm, remarkChatReferences]} urlTransform={(url) => url.startsWith(SKILL_REFERENCE_PREFIX) || localFileLink(url) ? url : defaultUrlTransform(url)} components={{ a: ({ href, children }) => <ChatLink href={href} taskId={taskId}>{children}</ChatLink> }}>{item.text}</Markdown>}</div>
       : item.type === 'image' ? <AgentImage content={item} taskId={taskId} />
       : item.type === 'audio' ? inlineMedia(item.mimeType, item.data, 'audio') ? <audio controls preload="none" src={inlineMedia(item.mimeType, item.data, 'audio')} className="max-w-full h-10" aria-label={t('Agent audio')} /> : <span>{t('Audio preview unavailable')}</span>
       : item.type === 'diff' ? <AgentDiff content={item} taskId={taskId} />

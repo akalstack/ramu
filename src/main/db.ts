@@ -135,6 +135,13 @@ const MIGRATIONS: string[] = [
   UPDATE agent_events SET event = replace(event, '"access":"ask"', '"access":"edits"') WHERE event LIKE '%"access":"ask"%';
   UPDATE schedules SET data = replace(data, '"access":"ask"', '"access":"edits"') WHERE data LIKE '%"access":"ask"%';
   UPDATE app_state SET value = replace(replace(value, '"access":"ask"', '"access":"edits"'), '"defaultAccess":"ask"', '"defaultAccess":"edits"') WHERE key = 'app-preferences' OR key = 'model-preferences' OR key LIKE 'asides:%';`,
+  // Memory shared by every provider. Archived rows stay restorable; memory_events is the audit trail of who changed what and why.
+  `CREATE TABLE memories (id TEXT PRIMARY KEY, project_id TEXT, kind TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '[]',
+    importance INTEGER NOT NULL DEFAULT 3, status TEXT NOT NULL DEFAULT 'active', archived_reason TEXT, source TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, last_used_at INTEGER, use_count INTEGER NOT NULL DEFAULT 0, expires_at INTEGER);
+  CREATE INDEX memories_by_scope ON memories(status, project_id);
+  CREATE TABLE memory_events (id INTEGER PRIMARY KEY AUTOINCREMENT, memory_id TEXT NOT NULL, action TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT, before TEXT, at INTEGER NOT NULL);
+  CREATE INDEX memory_events_by_memory ON memory_events(memory_id, at);`,
 ]
 
 export type Db = DatabaseSync

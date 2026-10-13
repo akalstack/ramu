@@ -94,7 +94,7 @@ await step('new chat', async () => {
   const chats = page.getByRole('button', { name: 'Home', exact: true })
   if (await chats.getAttribute('aria-pressed') !== 'true') await chats.click()
   await page.getByRole('button', { name: 'New chat in shop', exact: true }).click()
-  await page.locator('textarea:visible[placeholder*="whole workspace"]').waitFor()
+  await page.locator('[data-composer-input]:visible[data-placeholder*="whole workspace"]').waitFor()
   await shot('04-new-chat')
 })
 await step('chat', async () => {
@@ -106,7 +106,7 @@ await step('chat', async () => {
   await page.getByRole('button', { name: 'Claude', exact: true }).click()
   await page.getByText('Claude (test)', { exact: true }).click()
   await page.keyboard.press('Escape')
-  const prompt = page.locator('textarea:visible[placeholder*="whole workspace"]')
+  const prompt = page.locator('[data-composer-input]:visible[data-placeholder*="whole workspace"]')
   await prompt.fill('Add a password reset flow to the api')
   await prompt.press('Enter')
   await page.waitForTimeout(2500)
@@ -148,7 +148,7 @@ await step('details', async () => {
   if (process.env.PROBE) console.log(JSON.stringify(await page.evaluate(() => {
     const box = (sel) => [...document.querySelectorAll(sel)].filter((e) => e.checkVisibility()).map((e) => { const r = e.getBoundingClientRect(); return `${Math.round(r.left)}-${Math.round(r.right)} y${Math.round(r.top)} h${Math.round(r.height)}` })
     return { sidebar: box('.sidebar'), kbd: box('.sidebar kbd'), sectionBtn: box('.section-head button svg'), taskTime: box('.task-time'), taskRow: box('.task-row'), navIcon: box('.nav-btn svg'), projIcon: box('.project-row > svg'),
-      status: box('.status-bar > *'), git: box('.status-git-actions > *'), branchParts: box('.status-branch > *'), bar: box('.composer-bar:not(:empty) > *'), text: box('.composer textarea') }
+      status: box('.status-bar > *'), git: box('.status-git-actions > *'), branchParts: box('.status-branch > *'), bar: box('.composer-bar:not(:empty) > *'), text: box('[data-composer-input]') }
   }), null, 1))
   if (process.env.CENTER_PROBE) console.log(await page.evaluate(`(${readFileSync(process.env.CENTER_PROBE, 'utf8')})(${JSON.stringify(CENTER_TARGETS)})`))
   await inkProbe('chat')
@@ -261,7 +261,7 @@ await step('commit and push shortcut', async () => {
   git(web, 'push', '-q', '-u', 'origin', 'main')
   writeFileSync(join(web, 'CHANGELOG.md'), '# Changelog\n\n- Password reset flow.\n')
   if (git(api, 'status', '--porcelain').trim()) return console.log('skip commit shortcut: api has changes too')
-  await page.locator('.agent-view:visible textarea').first().click()
+  await page.locator('.agent-view:visible [data-composer-input]').first().click()
   await page.keyboard.press('Meta+Alt+p')
   await page.getByText(/^Pushed “/).waitFor({ timeout: 20_000 })
   await shot('24-commit-push-toast')

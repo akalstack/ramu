@@ -1,11 +1,23 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
+import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages'
 import type { Attachment } from '../shared/types'
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 export const MAX_ATTACHMENTS = 10
 const imageTypes: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }
+
+export const isPdf = (file: Pick<Attachment, 'mimeType'>) => file.mimeType === 'application/pdf'
+
+/** Base64 content blocks for attachments Claude reads natively: images and PDFs (as documents). */
+export function nativeBlocks(attachments: Attachment[]): ContentBlockParam[] {
+  return attachments.flatMap((file): ContentBlockParam[] => {
+    if (file.mimeType.startsWith('image/')) return [{ type: 'image' as const, source: { type: 'base64' as const, media_type: file.mimeType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp', data: readFileSync(file.path).toString('base64') } }]
+    if (isPdf(file)) return [{ type: 'document' as const, title: file.name, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: readFileSync(file.path).toString('base64') } }]
+    return []
+  })
+}
 
 /** Files are copied into the app profile so queues and history never depend on originals. */
 export class AttachmentStore {

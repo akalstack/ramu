@@ -78,6 +78,8 @@ label input { @apply m-[3px_0_0]; @apply [accent-color:var(--accent)]; }
 @layer base {
 
 * { @apply [box-sizing:border-box]; }
+/* Tailwind's preflight is not loaded, so a bare border utility would draw in currentColor (the text colour). */
+*, ::before, ::after { @apply [border-color:var(--color-border)]; }
 html, body, #root { @apply h-full; @apply m-0; }
 body {
   @apply [background:var(--canvas)];
@@ -192,7 +194,6 @@ body.resizing-terminal * { @apply pointer-events-none; }
 
 /* Review inbox remains readable at the minimum window size. */
 @media (max-width: 700px) { .undo-layout { @apply [grid-template-columns:170px_minmax(0,_1fr)]; } .undo-detail-heading { @apply items-start; @apply flex-col; } }
-@media (max-width: 1100px) { .changes-page { @apply p-[18px]; } }
 
 /* shadcn primitives use the workspace tokens and compact desktop rhythm. */
 /* Tree focus stays inside the row, without stacking the primitive's purple ring. */
@@ -201,30 +202,43 @@ body.resizing-terminal * { @apply pointer-events-none; }
   @apply [outline-offset:-1px];
   @apply [box-shadow:none];
 }
-/* Sticky folders use the same opaque surface and rounded states as every tree row. */
+/* Only sticky headers need an opaque backing to cover scrolling content. */
 .explorer-panel { --tree-surface: var(--sidebar); --tree-row-height: 28px; }
 .workspace-tools .explorer-panel { --tree-surface: var(--canvas); }
 .explorer-panel :is(.tree-row, .tree-root) {
   @apply flex;
   @apply h-[var(--tree-row-height)];
   @apply min-h-[var(--tree-row-height)];
-  @apply [background:var(--tree-surface)];
+  @apply bg-transparent;
   @apply rounded-(--radius-s);
 }
-/* Draw ancestor guides on the row so an opaque sticky folder does not erase them. */
+.explorer-panel :is(.tree-root, .tree-folder-sticky) { @apply [background:var(--tree-surface)]; }
+/* Draw ancestor guides above row highlights, including opaque sticky folders. */
 .explorer-panel .tree-children::before { @apply hidden; }
 .explorer-panel .tree-row:not(.tree-folder-sticky) { @apply relative; }
 .tree-row-guides { @apply absolute; @apply inset-0; @apply pointer-events-none; }
 .tree-row-guide { @apply absolute; @apply top-0; @apply bottom-0; @apply w-px; @apply [background:var(--line)]; }
 .repo-tree:hover .tree-row-guide { @apply [background:var(--line-strong)]; }
-.tree-row:is(:hover, .selected, .picked, .drop-target) > .tree-row-guides { @apply invisible; }
+.tree-row:is(:hover, .selected, .picked, .drop-target) .tree-row-guide { @apply [background:var(--line-strong)]; }
 .explorer-panel :is(.tree-row, .tree-root):hover:not(:disabled) {
-  @apply [background:linear-gradient(var(--hover),_var(--hover)),_var(--tree-surface)];
+  @apply bg-hover;
 }
-.explorer-panel .tree-row:is(.picked, .selected) {
-  @apply [background:linear-gradient(var(--pressed),_var(--pressed)),_var(--tree-surface)];
+.explorer-panel .tree-row:is(.picked, .selected),
+.explorer-panel .tree-row:is(.picked, .selected):hover:not(:disabled) {
+  @apply bg-accent;
 }
 .explorer-panel :is(.tree-row, .tree-root).drop-target {
+  @apply bg-brand-wash;
+}
+/* Composite translucent feedback only for headers that sit above other rows. */
+.explorer-panel :is(.tree-root, .tree-folder-sticky):hover:not(:disabled) {
+  @apply [background:linear-gradient(var(--hover),_var(--hover)),_var(--tree-surface)];
+}
+.explorer-panel .tree-folder-sticky:is(.picked, .selected),
+.explorer-panel .tree-folder-sticky:is(.picked, .selected):hover:not(:disabled) {
+  @apply [background:linear-gradient(var(--pressed),_var(--pressed)),_var(--tree-surface)];
+}
+.explorer-panel :is(.tree-root, .tree-folder-sticky).drop-target {
   @apply [background:linear-gradient(var(--accent-wash),_var(--accent-wash)),_var(--tree-surface)];
 }
 [data-slot="input"] { @apply h-auto; @apply min-h-7; }
@@ -305,16 +319,18 @@ button.scm-sync:hover:not(:disabled) { @apply [background:var(--pressed)]; }
 
 /* ── Design system pass: one scale for fields, buttons, switches and pills ──────────────────────
    Fields 32px, buttons 28px, radius 8px (12px panels), filled without outlines, a neutral edge only on focus. */
-:is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings) :is(input:not([type="checkbox"], [type="radio"], [data-slot="input-group-control"]), select, .dropdown-trigger, [data-slot="select-trigger"]) {
+:is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings) :is(input:not([type="checkbox"], [type="radio"], [data-slot="input-group-control"], [data-slot="command-input"]), select, .dropdown-trigger, [data-slot="select-trigger"]) {
   @apply h-8; @apply min-h-8; @apply p-[0_10px]; @apply [background:var(--field)]; @apply [border:1px_solid_transparent]; @apply rounded-(--radius-s);
   @apply [font:inherit]; @apply text-control; @apply leading-[20px]; @apply text-foreground; @apply [box-shadow:none];
 }
-:is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings) :is(input:not([type="checkbox"], [type="radio"], [data-slot="input-group-control"]), select, .dropdown-trigger, [data-slot="select-trigger"]):hover:not(:disabled) { @apply [background:var(--fill-hover)]; }
+:is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings) :is(input:not([type="checkbox"], [type="radio"], [data-slot="input-group-control"], [data-slot="command-input"]), select, .dropdown-trigger, [data-slot="select-trigger"]):hover:not(:disabled) { @apply [background:var(--fill-hover)]; }
 :is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings) textarea {
   @apply min-h-[64px]; @apply p-[8px_10px]; @apply [background:var(--field)]; @apply [border:1px_solid_transparent]; @apply rounded-(--radius-s); @apply [font:inherit]; @apply text-control; @apply leading-[20px]; @apply text-foreground; @apply [box-shadow:none];
 }
 :is(.settings-page-content, .schedule-editor, .changes-page, .home-page, .dialog, .model-settings) :is(input, textarea)::placeholder { @apply [color:var(--placeholder)]; }
-:is(.settings-page-content, .schedule-editor, .changes-page, .home-page, .dialog, .model-settings) :is(input:not([data-slot="input-group-control"]), textarea, select, .dropdown-trigger, [data-slot="select-trigger"]):is(:focus, :focus-visible) { @apply [border-color:var(--line-strong)]; @apply [outline:none]; @apply [box-shadow:none]; }
+:is(.settings-page-content, .schedule-editor, .changes-page, .home-page, .dialog, .model-settings) :is(input:not([data-slot="input-group-control"], [data-slot="command-input"]), textarea):is(:focus, :focus-visible),
+/* Pickers get the edge only from the keyboard: after a mouse pick, focus returns to the trigger and would keep it outlined. */
+:is(.settings-page-content, .schedule-editor, .changes-page, .home-page, .dialog, .model-settings) :is(select, .dropdown-trigger, [data-slot="select-trigger"]):focus-visible { @apply [border-color:var(--line-strong)]; @apply [outline:none]; @apply [box-shadow:none]; }
 /* Field labels share one look wherever they stack above a control. */
 :is(.settings-form, .schedule-form, .model-settings, .review-comment-composer) label:not(.settings-row) { @apply flex; @apply flex-col; @apply gap-1.5; @apply text-caption; @apply text-soft; }
 
@@ -678,3 +694,22 @@ button.git-stash-new:hover:not(:disabled) { @apply [background:var(--hover)]; @a
 
 /* Monaco and diff surfaces follow the same smoothing preference as the interface. */
 .monaco-editor, .monaco-diff-editor, .monaco-component { -webkit-font-smoothing: inherit; -moz-osx-font-smoothing: inherit; }
+
+/* Keep Monaco scrollbars/widgets beneath the sticky review headers. */
+.review-diff-wrap { @apply relative z-0 isolate; }
+
+/* Branch names size the trigger naturally; long names stop at the status-bar limit. */
+[data-slot="select-trigger"].branch-picker {
+  width: fit-content;
+  min-width: 0;
+  max-width: 220px;
+  flex: 0 1 auto;
+}
+.branch-picker > [data-slot="select-value"] {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

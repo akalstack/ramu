@@ -347,7 +347,7 @@ export type QuestionReply = { requestId: string; answers: Record<string, string>
 // ---- UI persistence ----
 
 export type ViewDescriptor =
-  | { kind: 'agent'; id: string; sessionId: string; repoId?: string; sourceSeq?: number }
+  | { kind: 'agent'; id: string; sessionId: string; repoId?: string; sourceSeq?: number; sourceRequestId?: string }
   | { kind: 'file'; id: string; repoId: string; path: string; preview?: boolean; selection?: { line: number; column: number; endColumn: number; requestId: string } }
   | { kind: 'diff'; id: string; repoId: string; path: string; staged: boolean; oid?: string; preview?: boolean }
   | { kind: 'git'; id: string; repoId: string; title: string; oid?: string; preview?: boolean }
@@ -363,6 +363,10 @@ export interface TaskUiState {
   activeViewId: string | null
   /** Last focused conversation, kept visible beside the workspace. */
   activeAgentViewId?: string | null
+  /** Last editor tab shown before the workspace was hidden, so reopening returns to it. */
+  lastWorkspaceViewId?: string | null
+  /** The terminal panel was open when the workspace was hidden; reopen it with the workspace. */
+  restoreTerminal?: boolean
   /** Dock width in px when files are open beside the conversation. */
   dockWidth?: number
   /** Legacy sidebar visibility, retained for saved profiles; main chat is always visible. */
@@ -388,6 +392,8 @@ export interface WorkspaceUiState {
   sidebar: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules'
   /** Sidebar sections and projects the user folded (`section:pinned`, `project:<id>`); everything else is open. */
   collapsed?: string[]
+  /** What the right-side toggle hid (tool panel and/or workspace), restored when it is toggled back. */
+  hiddenRight?: { tool: 'explorer' | 'search' | 'scm' | null; workspace: boolean }
 }
 
 export interface GitCommit {
@@ -470,7 +476,43 @@ export interface AppPreferences {
   subagents: SubagentPreferences
   advisor: AdvisorPreferences
   goals: GoalPreferences
+  memory: MemoryPreferences
 }
+
+export interface MemoryPreferences {
+  /** Agents of every provider read and write Ramu's shared memory. */
+  enabled: boolean
+  /** Periodically consolidate memories with a model: merge duplicates, resolve contradictions and retire stale notes. */
+  dream: boolean
+  /** Unused, low-importance memories are archived after this many days. */
+  staleAfterDays: number
+}
+export const DEFAULT_MEMORY_PREFERENCES: MemoryPreferences = { enabled: true, dream: true, staleAfterDays: 90 }
+export const MEMORY_KINDS = ['user', 'feedback', 'project', 'reference'] as const
+export type MemoryKind = (typeof MEMORY_KINDS)[number]
+/** A durable note shared by every provider. projectId null means it applies everywhere. */
+export interface Memory {
+  id: string
+  projectId: string | null
+  kind: MemoryKind
+  title: string
+  content: string
+  tags: string[]
+  /** 1 (minor) to 4 (important) drive ranking and decay. 5 (essential) is set only by the user: never forgotten, always given to agents in full. */
+  importance: number
+  status: 'active' | 'archived'
+  /** Why it was archived: stale, merged, contradicted, forgotten by an agent or by the user. */
+  archivedReason: string | null
+  /** Who created it. confirmed: the user wrote the current text, so it is never forgotten automatically and is quoted in agent instructions. */
+  source: { actor: 'user' | 'agent' | 'dream'; provider?: AgentProvider; sessionId?: string; taskId?: string; confirmed?: boolean }
+  createdAt: number
+  updatedAt: number
+  lastUsedAt: number | null
+  useCount: number
+  expiresAt: number | null
+}
+export interface MemoryInput { projectId: string | null; kind: MemoryKind; title: string; content: string; tags?: string[]; importance?: number; expiresAt?: number | null }
+export interface MemorySnapshot { memories: Memory[]; dreamedAt: number | null; dreaming: boolean; error: string | null }
 
 export interface GoalPreferences {
   mode: 'auto' | 'manual'
@@ -550,7 +592,7 @@ export interface AdvisorPreferences {
 export const DEFAULT_ADVISOR_PREFERENCES: AdvisorPreferences = { enabled: false, step: null, wait: false }
 /** Result of an advisor request, as the agent's tool sees it. */
 export interface AdviceStatus { requestId: string; status: 'pending' | 'ready' | 'failed'; advice?: string; advisor?: string; error?: string; note?: string }
-export const DEFAULT_FALLBACK_PREFERENCES: FallbackPreferences = { switchAt: 90, returnAfterReset: false, chains: {} }
+export const DEFAULT_FALLBACK_PREFERENCES: FallbackPreferences = { switchAt: null, returnAfterReset: false, chains: {} }
 export const DEFAULT_SUBAGENT_PREFERENCES: SubagentPreferences = { mode: 'native', single: null, perProvider: {}, byType: [], fallback: 'same', chains: {}, switchAt: 'same', continueNative: true, isolate: false, codexHook: false, maxConcurrent: 3, shareContext: false }
 
 /** How much of the model's context window a chat uses right now. */
@@ -561,7 +603,7 @@ export interface AsideMessage { id: string; role: 'user' | 'assistant'; text: st
 export interface Aside { id: string; sessionId: string; quote: string; quoteFrom: 'assistant' | 'user'; messages: AsideMessage[]; createdAt: number }
 export const DEFAULT_SIDEBAR_WIDTH = 268
 export const SIDEBAR_WIDTH_RANGE = [200, 520] as const
-export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, recentChatMode: false, editorFontSize: 14, lintWhileEditing: true, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', recentChats: 10, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
+export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, recentChatMode: false, editorFontSize: 14, lintWhileEditing: true, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', recentChats: 10, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, memory: DEFAULT_MEMORY_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
 
 
 /** Internal scope ID; omitted from the user project list. */

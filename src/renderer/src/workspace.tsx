@@ -1,3 +1,4 @@
+import { persistentTaskUi } from '../../shared/sourceNavigation'
 import { t, useLanguage } from './i18n'
 // Renderer-side workspace state: projects, tasks, open task tabs and their view tabs.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -53,6 +54,7 @@ export interface WorkspaceApi {
   activateTask(taskId: string): void
   workspaceOf(taskId: string): string
   openView(taskId: string, view: ViewInput): void
+  consumeSourceNavigation(taskId: string, viewId: string, requestId?: string): void
   /** Turns a preview tab into a regular one, so the next preview no longer replaces it. */
   keepView(taskId: string, viewId: string): void
   reopenClosedView(taskId: string): void
@@ -61,7 +63,15 @@ export interface WorkspaceApi {
   closeViews(taskId: string, viewIds: string[]): void
   activateView(taskId: string, viewId: string): void
   showChat(taskId: string): void
-  setTerminalPanel(taskId: string, settings: Partial<Pick<TaskUiState, 'terminalOpen' | 'terminalLayout' | 'terminalGroups' | 'terminalTabPosition' | 'terminalHeight' | 'terminalDock'>>): void
+  /** Reopens the workspace on the tab that was open when it was hidden (or the newest editor tab). */
+  showWorkspace(taskId: string): void
+  /** Hides the workspace pane and terminal without closing tabs; `showWorkspace` brings both back. */
+  hideWorkspace(taskId: string): void
+  /** Hides everything on the right (tool panel and workspace), or brings back what was hidden. */
+  toggleRightPanel(taskId: string): void
+  /** An editor tab or a right-docked terminal is showing beside the chat. */
+  workspaceVisible(taskId: string): boolean
+  setTerminalPanel(taskId: string, settings: Partial<Pick<TaskUiState, 'terminalOpen' | 'restoreTerminal' | 'terminalLayout' | 'terminalGroups' | 'terminalTabPosition' | 'terminalHeight' | 'terminalDock'>>): void
   splitTerminal(taskId: string, direction: 'horizontal' | 'vertical'): void
   unsplitTerminal(taskId: string, terminalId: string): void
   setDockWidth(taskId: string, width: number): void
@@ -174,6 +184,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     void (async () => {
       await refresh()
       const saved = await invoke('ui.get')
+      saved.tasks = Object.fromEntries(Object.entries(saved.tasks).map(([id, state]) => [id, persistentTaskUi(state)]))
       const known = new Set([...(await invoke('tasks.list')).map((t) => t.id), ...(await invoke('projects.list')).map((p) => projectCtx(p.id)), ...(await invoke('workspaces.list')).map((w) => worktreeCtx(w.id))])
       const openTaskIds = saved.workspace.openTaskIds.filter((t) => known.has(t))
       setUi({
@@ -214,7 +225,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
   useEffect(() => {
     if (!loaded || !dirtyTasks.current.size) return
     const t = setTimeout(() => {
-      for (const id of dirtyTasks.current) void invoke('ui.setTask', id, taskUi[id] ?? EMPTY_TASK_UI)
+      for (const id of dirtyTasks.current) void invoke('ui.setTask', id, persistentTaskUi(taskUi[id] ?? EMPTY_TASK_UI))
       dirtyTasks.current.clear()
     }, 250)
     return () => clearTimeout(t)
@@ -284,6 +295,14 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     setTaskUi((m) => ({ ...m, [taskId]: fn(m[taskId] ?? EMPTY_TASK_UI) }))
   }, [])
 
+  const consumeSourceNavigation = useCallback((taskId: string, viewId: string, requestId?: string) => {
+    updateTaskUi(taskId, (state) => ({ ...state, views: state.views.map((view) => {
+      if (view.id !== viewId || view.kind !== 'agent' || view.sourceRequestId !== requestId) return view
+      const { sourceSeq: _seq, sourceRequestId: _request, ...rest } = view
+      return rest
+    }) }))
+  }, [updateTaskUi])
+
   const api = useMemo<WorkspaceApi>(() => {
     const workspaceOf = (ctx: string) => {
       const task = tasks.find((t) => t.id === ctx)
@@ -332,7 +351,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         if (owner !== taskId) updateTaskUi(taskId, (state) => ({ ...state, activeViewId: ids.has(state.activeViewId ?? '') ? state.activeAgentViewId ?? null : state.activeViewId }))
       }
     }
-    return {
+    const api: WorkspaceApi = {
       projects,
       repos,
       tasks,
@@ -425,7 +444,9 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         setComposing(null)
         setUi((u) => ({ ...u, activeTaskId: taskId }))
       },
+      consumeSourceNavigation,
       openView(taskId, view) {
+        if (view.kind === 'agent') view = { ...view, sourceRequestId: view.sourceSeq ? crypto.randomUUID() : undefined }
         const owner = view.kind === 'agent' ? taskId : workspaceOf(taskId)
         if (view.kind === 'agent') updateTaskUi(workspaceOf(taskId), (state) => ({ ...state, activeViewId: null }))
         const key = viewKey(view)
@@ -433,7 +454,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         // File opens are kept unless explicitly requested as previews (Explorer/search browsing).
         // Reopening never turns a kept tab back into a preview.
         const preview = preferences.previewTabs && isPreviewable(view) && (view.kind === 'file' ? view.preview === true : view.preview !== false)
-        const desc: ViewDescriptor = previous?.kind === 'review' && view.kind === 'review' ? { ...previous, ...view } : previous?.kind === 'agent' && view.kind === 'agent' ? { ...previous, sourceSeq: view.sourceSeq } : previous && previous.kind === 'file' && view.kind === 'file' ? { ...previous, ...(view.selection ? { selection: view.selection } : {}), preview: !!previous.preview && preview } : previous && isPreviewable(previous) ? { ...previous, preview: !!previous.preview && preview } : previous ?? ({ ...view, ...(isPreviewable(view) ? { preview } : {}), id: crypto.randomUUID() } as ViewDescriptor)
+        const desc: ViewDescriptor = previous?.kind === 'review' && view.kind === 'review' ? { ...previous, ...view } : previous?.kind === 'agent' && view.kind === 'agent' ? { ...previous, sourceSeq: view.sourceSeq, sourceRequestId: view.sourceRequestId } : previous && previous.kind === 'file' && view.kind === 'file' ? { ...previous, ...(view.selection ? { selection: view.selection } : {}), preview: !!previous.preview && preview } : previous && isPreviewable(previous) ? { ...previous, preview: !!previous.preview && preview } : previous ?? ({ ...view, ...(isPreviewable(view) ? { preview } : {}), id: crypto.randomUUID() } as ViewDescriptor)
         if (owner !== taskId && desc.kind !== 'terminal') updateTaskUi(taskId, (own) => ({ ...own, activeViewId: desc.id }))
         updateTaskUi(owner, (s) => {
           const existing = s.views.find((v) => v.id === desc.id)
@@ -463,8 +484,45 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       closeViews,
       showChat(taskId) {
         const owner = workspaceOf(taskId)
-        updateTaskUi(owner, (state) => ({ ...state, activeViewId: null }))
+        updateTaskUi(owner, (state) => {
+          const current = state.views.find((view) => view.id === state.activeViewId)
+          return { ...state, activeViewId: null, lastWorkspaceViewId: current && current.kind !== 'agent' && current.kind !== 'terminal' ? current.id : state.lastWorkspaceViewId }
+        })
         if (owner !== taskId) updateTaskUi(taskId, (state) => ({ ...state, activeViewId: null }))
+      },
+      workspaceVisible(taskId) {
+        const state = effectiveUi[taskId]
+        if (!state) return false
+        const editor = state.views.find((view) => view.id === state.activeViewId && view.kind !== 'agent')
+        const terminalOpen = state.views.some((view) => view.kind === 'terminal') && (state.terminalOpen ?? true)
+        return !!editor || terminalOpen && (state.terminalDock ?? 'right') === 'right'
+      },
+      hideWorkspace(taskId) {
+        const state = effectiveUi[taskId]
+        const terminalOpen = !!state?.views.some((view) => view.kind === 'terminal') && (state.terminalOpen ?? true)
+        api.showChat(taskId)
+        updateTaskUi(workspaceOf(taskId), (s) => ({ ...s, terminalOpen: false, restoreTerminal: terminalOpen }))
+      },
+      toggleRightPanel(taskId) {
+        const tool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null, workspace = api.workspaceVisible(taskId)
+        if (tool || workspace) {
+          if (workspace) api.hideWorkspace(taskId)
+          setUi((u) => ({ ...u, sidebar: 'projects', hiddenRight: { tool, workspace } }))
+          return
+        }
+        // Nothing was recorded (each part was closed on its own): open the workspace.
+        const hidden = ui.hiddenRight ?? { tool: null, workspace: true }
+        setUi((u) => ({ ...u, sidebar: hidden.tool ?? u.sidebar, hiddenRight: undefined }))
+        if (hidden.workspace) api.showWorkspace(taskId)
+      },
+      showWorkspace(taskId) {
+        if (effectiveUi[taskId]?.restoreTerminal) updateTaskUi(workspaceOf(taskId), (state) => ({ ...state, terminalOpen: true, restoreTerminal: false }))
+        const editors = viewsOf(taskId).filter((view) => view.kind !== 'agent' && view.kind !== 'terminal')
+        const target = editors.find((view) => view.id === effectiveUi[taskId]?.lastWorkspaceViewId) ?? editors.at(-1)
+        if (!target) return
+        const owner = workspaceOf(taskId)
+        updateTaskUi(owner, (state) => focus(state, target))
+        if (owner !== taskId) updateTaskUi(taskId, (state) => ({ ...state, activeViewId: target.id }))
       },
       activateView(taskId, viewId) {
         const view = viewsOf(taskId).find((v) => v.id === viewId)
@@ -489,6 +547,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         return t && projects.find((p) => p.id === t.projectId)
       },
     }
+    return api
   }, [projects, repos, tasks, workspaces, composingWorkspace, ui, taskUi, bindings, dirty, composing, refresh, refreshBindings, updateTaskUi, setDirty, unread, preferences.previewTabs, language])
 
   return <Ctx.Provider value={api}>{children(loaded)}</Ctx.Provider>

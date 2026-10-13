@@ -1,6 +1,6 @@
 {
   "name": "ramu",
-  "version": "0.0.1",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "description": "Ramu \u2014 your project, every repo, one workspace.",
   "type": "module",

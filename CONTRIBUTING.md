@@ -27,6 +27,6 @@ For changes to large lists, review rendering, or editor lifecycle, also run `nod
 - `test`: Vitest coverage.
 - `scripts`: development, integration and release helpers.
 
-Match the existing TypeScript style and keep changes focused. Add tests for behavior changes where they provide useful coverage. Include screenshots for visible UI changes and say which checks ran. Avoid including credentials, private repositories, generated output or personal logs. Generated screenshots already tracked in older commits are not removed by `.gitignore`.
+Match the existing TypeScript style and keep changes focused. Add tests for behavior changes where they provide useful coverage. Include screenshots for visible UI changes and say which checks ran. Avoid including credentials, private repositories, generated output or personal logs. Generated screenshots belong in the ignored `output/` directory and should remain local.
 
 Contributions are licensed under the project's [MIT license](LICENSE). Be respectful and constructive in issues, pull requests and reviews. For release maintenance, see [the release guide](docs/RELEASING.md).

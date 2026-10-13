@@ -5,7 +5,7 @@ import { ProviderSetupTerminal } from './ProviderSetupTerminal'
 import { beginPaneResize } from './paneResize'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
-import { CalendarClock, Settings, SquarePen, Archive, Files, History, Folders, FolderPlus, GitBranch, MessageCircle, Pencil, PanelLeftClose, PanelLeftOpen, PanelRightClose, SquareTerminal, RefreshCcw, Search } from 'lucide-react'
+import { CalendarClock, Settings, SquarePen, Archive, Files, History, Folders, FolderPlus, GitBranch, MessageCircle, Pencil, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, SquareTerminal, X, RefreshCcw, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildCommands, formatKeys, Palette, useKeybindings, type PaletteMode } from './commands'
 import { copyText, invoke, ramu } from './ipc'
@@ -147,6 +147,7 @@ function Shell() {
   const attentionChats = ws.tasks.filter(task => task.status !== 'archived' && (ws.unread.has(task.id) || task.status === 'needs-input')).length
   const badge = (count: number, compact = false) => count > 0 && <span className={`activity-badge absolute grid place-items-center rounded-(--radius-row) [background:var(--primary)] [color:var(--primary-ink)] font-semibold leading-[1] tabular-nums pointer-events-none ${compact ? 'right-[-4px] bottom-[-3px] min-w-3 h-3 px-0.5 [box-shadow:0_0_0_1px_var(--window)] text-[length:8px]' : 'right-[-3px] bottom-[-2px] min-w-4 h-4 p-[0_4px] [box-shadow:0_0_0_2px_var(--window)] text-[length:10px]'}`} aria-hidden="true">{count > 99 ? '99+' : count}</span>
 
+  const rightShown = !!workspaceTool || !!ui.activeTaskId && ws.workspaceVisible(ui.activeTaskId)
   const toolButtons = <nav className="workspace-tool-buttons [&_.active]:text-brand [&_.active]:bg-brand-wash [&_.icon]:[transition:background-color_140ms_ease,_color_140ms_ease] [&_>_button]:relative [&_>_button]:overflow-visible flex flex-none items-center ml-auto [-webkit-app-region:no-drag] gap-1" aria-label={t("Workspace tabs")}>
     <ProjectSwitcher />
     {([
@@ -165,6 +166,7 @@ function Shell() {
         else ws.openView(id, { kind: 'terminal' })
       }
     }}><SquareTerminal size={16} /></Button>
+    <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-expanded={rightShown} aria-label={rightShown ? t("Hide right panel") : t("Show right panel")} title={`${rightShown ? t("Hide right panel") : t("Show right panel")} (${formatKeys('mod+alt+b')})`} disabled={!ui.activeTaskId} onClick={() => { if (ui.activeTaskId) ws.toggleRightPanel(ui.activeTaskId) }}>{rightShown ? <PanelRightClose size={16} strokeWidth={1.6} /> : <PanelRightOpen size={16} strokeWidth={1.6} />}</Button>
   </nav>
   // With the sidebar hidden, chats that want attention show on its toggle instead.
   const sidebarToggle = <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-toggle [&:hover:not(:disabled)]:text-foreground [-webkit-app-region:no-drag] relative overflow-visible [&_*]:[-webkit-app-region:no-drag] flex-none z-30 [-webkit-app-region:no-drag] text-muted-foreground" aria-expanded={!sidebarHidden} aria-controls="workspace-sidebar" aria-label={sidebarHidden ? t("Show sidebar") : t("Hide sidebar")} aria-description={sidebarHidden && attentionChats ? `${attentionChats} ${t('Chats')}` : undefined} title={t("{0} sidebar ({1})", { "0": sidebarHidden ? t('Show') : t('Hide'), "1": formatKeys('mod+b') })} onClick={() => setSidebarHidden((hidden) => !hidden)}>
@@ -192,10 +194,10 @@ function Shell() {
           <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-search" aria-label={t("Search chats")} title={`${t("Search chats")} (${formatKeys('mod+k')})`} onClick={() => setSearchingChats(true)}><Search size={16} /></Button>
         </div>
         <nav className="sidebar-nav flex flex-col gap-px p-[2px_8px_6px] flex-none" aria-label={t("Activity")}>
-          <Button variant="secondary" className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start" onClick={() => ws.newTask()}>
+          <Button variant="secondary" className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-[length:var(--font-control)] leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start" onClick={() => ws.newTask()}>
             <SquarePen size={15} /> <span className="grow flex-1 min-w-0 text-left">{t("New chat")}</span> <Kbd>{formatKeys('mod+n')}</Kbd>
           </Button>
-          <Button variant="secondary" className={`nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${globalPage ? ' active' : ''}`} aria-pressed={globalPage} onClick={() => ws.setSidebar(globalPage ? 'projects' : 'schedules')}>
+          <Button variant="secondary" className={`nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-[length:var(--font-control)] leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${globalPage ? ' active' : ''}`} aria-pressed={globalPage} onClick={() => ws.setSidebar(globalPage ? 'projects' : 'schedules')}>
             <CalendarClock size={15} /> <span className="grow flex-1 min-w-0 text-left">{t("Schedules")}</span>
           </Button>
         </nav>
@@ -205,7 +207,7 @@ function Shell() {
         </div>
         <div className="sidebar-footer flex flex-col gap-1.5 p-[6px_8px_8px] flex-none">
           {!sidebarHidden && <UsageFooter />}
-          <Button variant="secondary" className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start" aria-label={t("Settings")} title={`${t("Settings")} (${formatKeys('mod+,')})`} onClick={() => { setSettingsSection('appearance'); setSettingsOpen(true) }}><Settings size={15} /> <span className="grow flex-1 min-w-0 text-left">{t("Settings")}</span> <Kbd>{formatKeys('mod+,')}</Kbd></Button>
+          <Button variant="secondary" className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-[length:var(--font-control)] leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start" aria-label={t("Settings")} title={`${t("Settings")} (${formatKeys('mod+,')})`} onClick={() => { setSettingsSection('appearance'); setSettingsOpen(true) }}><Settings className="size-[calc(var(--font-control)+2px)]" /> <span className="grow flex-1 min-w-0 text-left">{t("Settings")}</span> <Kbd>{formatKeys('mod+,')}</Kbd></Button>
         </div>
       </aside>
       <main className="main flex flex-col min-w-0 min-h-0 overflow-hidden m-[var(--titlebar-h)_var(--island-gap)_var(--island-gap)_0] bg-canvas rounded-(--radius-m) [box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.025),_0_8px_28px_rgba(0,_0,_0,_0.28)]">
@@ -232,7 +234,7 @@ function Shell() {
         }} />
         <header className="workspace-tools-header [&_.icon]:w-[var(--action-size)] [&_.icon]:h-[var(--action-size)] [&_.icon_>_svg]:w-[var(--icon-size)] [&_.icon_>_svg]:h-[var(--icon-size)] flex items-center gap-2 flex-none min-h-[46px] p-[4px_10px] text-control font-semibold text-soft">
           <span className="grow flex-1 min-w-0 text-left">{t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')}</span>
-          <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Close")} title={t("Close")} onClick={() => ws.setSidebar('projects')}><PanelRightClose size={15} /></Button>
+          <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Close")} title={t("Close")} onClick={() => ws.setSidebar('projects')}><X size={15} /></Button>
         </header>
         <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden [&_.project-group]:mb-3 [&_.project-row]:min-h-8 [&_.project-row]:p-[0_8px] [&_.task-list]:pl-[22px] [&_.task-list]:gap-0.5 [&_.task-row]:min-h-8 [&_.task-row]:p-[0_8px] flex-1 overflow-auto min-h-0">
           {workspaceTool === 'explorer' && <ExplorerPanel />}

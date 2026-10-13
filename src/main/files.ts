@@ -186,6 +186,8 @@ export async function copyEntry(root: string, path: string, destination: string)
 
 export async function readText(root: string, relPath: string): Promise<FileContent> {
   const buf = await readFile(await resolveInRoot(root, relPath))
+  // A NUL byte means binary data: decoding it as UTF-8 would show garbage and corrupt the file on save.
+  if (buf.subarray(0, 8192).includes(0)) throw new Error('This is a binary file and cannot be shown as text.')
   return { content: buf.toString('utf8'), hash: hashOf(buf) }
 }
 
@@ -199,6 +201,25 @@ export async function readImage(root: string, relPath: string): Promise<string> 
   const bytes = await readFile(path)
   if (bytes.length > 10 * 1024 * 1024) throw new Error('Preview images must be smaller than 10 MB.')
   return `data:${mime};base64,${bytes.toString('base64')}`
+}
+
+const MEDIA_TYPES: Record<string, string> = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif', '.bmp': 'image/bmp', '.ico': 'image/x-icon',
+  '.pdf': 'application/pdf',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4', '.flac': 'audio/flac',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+}
+const MAX_MEDIA_BYTES = 25 * 1024 * 1024
+
+/** Images, PDFs, audio and video opened from the explorer, as a data URL under the same repository boundary. */
+export async function readMedia(root: string, relPath: string): Promise<{ mimeType: string; size: number; url: string }> {
+  const mimeType = MEDIA_TYPES[extname(relPath).toLowerCase()]
+  if (!mimeType) throw new Error('Unsupported file format.')
+  const path = await resolveInRoot(root, relPath)
+  const { size } = await stat(path)
+  if (size > MAX_MEDIA_BYTES) throw new Error('Files larger than 25 MB cannot be previewed.')
+  const bytes = await readFile(path)
+  return { mimeType, size: bytes.length, url: `data:${mimeType};base64,${bytes.toString('base64')}` }
 }
 
 /**

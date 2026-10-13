@@ -1,3 +1,4 @@
+import { ContentSkeleton } from '@/components/content-skeleton'
 import { SettingsRow } from '@/components/settings-row'
 import { Card } from '@/components/ui/card'
 import { t, useLanguage } from './i18n'
@@ -17,7 +18,7 @@ import { ramu } from './ipc'
 export function ProviderSettings({ value, onChange }: { value: AppPreferences; onChange: (value: AppPreferences) => void }) {
   useLanguage()
   const [statuses, setStatuses] = useState<ProviderStatus[]>([])
-  const [busy, setBusy] = useState(false), [updating, setUpdating] = useState<AgentProvider | null>(null)
+  const [busy, setBusy] = useState(true), [updating, setUpdating] = useState<AgentProvider | null>(null)
   const [error, setError] = useState<string | null>(null), [adding, setAdding] = useState<AgentProvider | null>(null), [name, setName] = useState('')
   const sequence = useRef(0), config = value.providerBinaries
   const refresh = async (latest = false) => {
@@ -48,9 +49,10 @@ export function ProviderSettings({ value, onChange }: { value: AppPreferences; o
   }
   return <div className="settings-form [&_p]:m-0 [&_p]:leading-[1.55] flex flex-col gap-3 provider-settings">
     <SettingsRow className="settings-toggle [&:not(:has(+_.settings-row))]:mb-0"><span><strong>{t('Check provider updates')}</strong><span className="muted text-muted-foreground block block small text-caption">{t('Checks run in the background service, including while Ramu is closed.')}</span></span><Switch aria-label={t('Check provider updates')} checked={value.providerUpdateChecks} onCheckedChange={(checked) => onChange({ ...value, providerUpdateChecks: checked })} /></SettingsRow>
+    {busy && !statuses.length && <ContentSkeleton variant="cards" rows={2} label={t("Checking providers…")} />}
     <div className="provider-settings-actions flex items-center gap-2.5 flex-wrap"><Button variant="secondary" className="bg-fill hover:bg-fill-hover" disabled={busy} onClick={() => void refresh(true)}><RefreshCw size={14} className={busy ? 'spin [animation:spin_0.9s_linear_infinite]' : ''} />{busy ? t('Checking providers…') : t('Check for updates')}</Button></div>
     {error && <p className="error text-bad small text-caption" role="alert">{error}</p>}
-    {AGENT_PROVIDERS.map((provider) => {
+    {(busy && !statuses.length ? [] : AGENT_PROVIDERS).map((provider) => {
       const status = statuses.find((item) => item.provider === provider), preferences = config[provider]
       const accounts = supportsProviderAccounts(provider), canUpdate = provider !== 'antigravity' && !(provider === 'codex' && preferences?.binary?.trim())
       return <Card role="region" className="gap-3 overflow-visible ring-0 text-body provider-settings-card [&_header]:flex [&_header]:items-center [&_header]:gap-2.5 [border:1px_solid_transparent] rounded-(--radius-row) p-4 min-w-0 bg-fill" key={provider} aria-label={t('{0} settings', { '0': providerName(provider) })}>

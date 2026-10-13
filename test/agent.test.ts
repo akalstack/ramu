@@ -958,7 +958,7 @@ describe('switching before a limit', () => {
     const svc = service()
     const store = { readings, list: () => store.readings, update: (next: UsageReading[]) => { store.readings = [...store.readings.filter((r) => !next.some((n) => n.provider === r.provider && n.window === r.window && n.scope === r.scope)), ...next] } }
     svc.usage = store
-    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, fallback: { ...DEFAULT_APP_PREFERENCES.fallback, ...prefs } })
+    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, fallback: { ...DEFAULT_APP_PREFERENCES.fallback, switchAt: 90, ...prefs } })
     return { svc, store }
   }
 
@@ -973,6 +973,28 @@ describe('switching before a limit', () => {
     expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'settings', handoff: true, reason: expect.stringContaining('5-hour limit was at 93%') }))
     expect(svc.events(s.id).filter((e) => e.kind === 'error')).toHaveLength(0)
     expect(svc.events(s.id).filter((e) => e.kind === 'user')).toHaveLength(2)
+    svc.stopAll()
+  })
+
+  it('waits for an actual limit when only-at-the-limit is selected', async () => {
+    const { svc } = withRouting([reading({ usedPercent: 99 })], { switchAt: null })
+    const s = await svc.startReviewed('t', scopeOf(cwd), 'hello', full)
+    await until(() => svc.get(s.id).state === 'idle')
+    await svc.send(s.id, 'continue')
+    await until(() => svc.get(s.id).state === 'idle')
+    expect(svc.get(s.id).provider).toBe('claude-code')
+    expect(svc.events(s.id).some((e) => e.kind === 'settings')).toBe(false)
+    svc.usage!.update([reading({ usedPercent: 99, status: 'limited' })])
+    await svc.send(s.id, 'try the fallback')
+    await until(() => svc.get(s.id).provider === 'codex' && svc.get(s.id).state === 'idle')
+    svc.stopAll()
+  })
+
+  it('can fall back to a nearly-full provider in only-at-the-limit mode', async () => {
+    const { svc } = withRouting([reading({ provider: 'codex', usedPercent: 99 })], { switchAt: null })
+    const s = svc.start('t', scopeOf(cwd), 'Finish the change [limit claude]', full)
+    await until(() => ['idle', 'failed'].includes(svc.get(s.id).state))
+    expect(svc.get(s.id)).toMatchObject({ provider: 'codex', state: 'idle' })
     svc.stopAll()
   })
 
@@ -1144,6 +1166,17 @@ describe('sub-agents Ramu runs', () => {
     const calm = routed({ mode: 'native', single: null, switchAt: 90 }, [reading(85)])
     expect(await calm.subagentSettings((await parentOf(calm)).id)).toMatchObject({ redirect: false })
     for (const svc of [native, typed, pressed, calm]) svc.stopAll()
+  })
+
+  it.each(['same', null] as const)('preserves the only-at-the-limit sub-agent policy (%s)', async (switchAt) => {
+    const reading: UsageReading = { provider: 'claude-code', window: 'five_hour', usedPercent: 99, status: 'warning', updatedAt: Date.now(), resetsAt: Date.now() + 1e6 }
+    const svc = routed({ mode: 'native', single: null, switchAt }, [reading])
+    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, fallback: { ...DEFAULT_APP_PREFERENCES.fallback, switchAt: switchAt === 'same' ? null : 80 }, subagents: { ...DEFAULT_APP_PREFERENCES.subagents, switchAt } })
+    const parent = await parentOf(svc)
+    expect(await svc.subagentSettings(parent.id)).toMatchObject({ redirect: false, settings: { provider: 'claude-code' } })
+    reading.status = 'limited'
+    expect(await svc.subagentSettings(parent.id)).toMatchObject({ redirect: true, settings: { provider: 'codex' } })
+    svc.stopAll()
   })
 
   it('refuses Claude\'s own Agent tool when Ramu should run the sub-agent', async () => {

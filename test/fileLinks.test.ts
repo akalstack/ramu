@@ -26,10 +26,12 @@ describe('local file links', () => {
     expect(await resolveFileLink(ws, taskId, `file://${cwd}/src/example%20file.ts:5:2`)).toEqual({ repoId: 'general', path: 'src/example file.ts', line: 5, column: 2 })
     expect(localFileLink('notes.md#L8-L12')).toEqual({ path: 'notes.md', line: 8, column: 1 })
     expect(localFileLink('file:///C:/workspace/notes.md#L2')).toEqual({ path: 'C:/workspace/notes.md', line: 2, column: 1 })
+    expect(localFileLink('README.md:12')).toEqual({ path: 'README.md', line: 12, column: 1 })
+    expect(localFileLink('README:12:3')).toEqual({ path: 'README', line: 12, column: 3 })
     expect(localFileLink('notes.md#details')).toEqual({ path: 'notes.md' })
   })
   it('leaves external URLs and anchors out of file resolution', () => {
-    for (const href of ['https://example.com/file.ts', 'mailto:hello@example.com', 'javascript:alert(1)', '//example.com/file', '#heading', 'file://remote/path', 'invalid%zz.md']) expect(localFileLink(href)).toBeNull()
+    for (const href of ['https://example.com/file.ts', 'mailto:hello@example.com', 'javascript:alert(1)', 'javascript:123', '//example.com/file', '#heading', 'file://remote/path', 'invalid%zz.md']) expect(localFileLink(href)).toBeNull()
   })
   it('rejects missing files, folders, traversal, and links into another chat', async () => {
     const cwd = ws.agentScope(taskId).cwd

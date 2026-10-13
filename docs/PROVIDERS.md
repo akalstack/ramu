@@ -24,7 +24,7 @@ All active providers now cross an ACP boundary. OpenCode, Cursor, and Antigravit
 
 OpenCode, Cursor and Antigravity queue follow-ups until the current turn completes. Claude and Codex keep their existing steering behavior. Background analysis requires an advertised read-only mode or the retained native tool/sandbox policy. Ramu's scoped MCP connection is injected into the host/native ACP session. Model discovery, history and account-usage reads may still use native control paths. The legacy OpenCode SDK driver is retained for compatibility tests, but is no longer the active OpenCode connection.
 
-Claude and Codex sub-agents (including background agents that keep running after a turn) appear as cards in the chat, with their own transcript, Stop, and a message box. See [AGENTS-NEXT.md](AGENTS-NEXT.md) for how that works and which provider features are still open.
+Claude and Codex sub-agents (including background agents that keep running after a turn) appear as cards in the chat, with their own transcript, Stop, and a message box. See [Agents and routing](AGENTS.md) for how that works and which provider features are still open.
 
 Claude and Codex also receive scoped Ramu question tools. By default an agent can ask and continue independent work, then wait when an answer is needed. Related questions send together; independent replies send separately. Codex native async questions are supported, while native blocking questions and permission approvals keep their blocking behavior. See [questions while work continues](AUTOMATION.md#questions-while-work-continues).
 

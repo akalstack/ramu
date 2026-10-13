@@ -1,3 +1,4 @@
+import { ContentSkeleton } from '@/components/content-skeleton'
 import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useRef, useState } from 'react'
@@ -17,10 +18,13 @@ export function DiffView({ taskId, view, binding }: { taskId: string; view: Diff
   const { preferences } = useAppSettings()
   const editorRef = useRef<monaco.editor.IStandaloneDiffEditor | null>(null)
   const host = useRef<HTMLDivElement>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let disposed = false, request = 0, loaded = false
+    setLoading(true)
+    setError(null)
     const lang = monaco.editor.createModel('', undefined, monaco.Uri.from({ scheme: 'inmemory', path: `/${crypto.randomUUID()}/${view.path}` }))
     const languageId = lang.getLanguageId()
     lang.dispose()
@@ -60,6 +64,7 @@ export function DiffView({ taskId, view, binding }: { taskId: string; view: Diff
         loaded = true
         setError(null)
       } catch (reason) { if (!disposed && current === request) setError(errorText(reason)) }
+      finally { if (!disposed && current === request) setLoading(false) }
     }
     void load()
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -94,7 +99,10 @@ export function DiffView({ taskId, view, binding }: { taskId: string; view: Diff
         <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: view.path })}>{t("Open file")}</Button>
       </div>
       {error && <div className="error text-bad banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control">{error}</div>}
-      <div ref={host} className="editor-host flex-1 min-h-0" />
+      <div className="relative flex-1 min-h-0">
+        <div ref={host} className="editor-host h-full" />
+        {loading && <div className="absolute inset-0 flex bg-canvas"><ContentSkeleton variant="editor" rows={12} className="flex-1" /><ContentSkeleton variant="editor" rows={12} className="flex-1 border-l border-border" /></div>}
+      </div>
     </div>
   )
 }

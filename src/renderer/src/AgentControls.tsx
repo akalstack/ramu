@@ -17,7 +17,7 @@ export function AgentControls({ settings, current, onChange, disabled = false, s
   return <div className="agent-controls flex items-center flex-wrap gap-[4px_8px] w-full min-w-0">
     <ModelBar settings={settings} current={current} onChange={onChange} disabled={disabled} />
     <div className="agent-control-options [&_.control-btn]:min-h-7 [&_.control-btn]:text-control flex items-center flex-wrap gap-[4px_8px]">
-    {showAccess && <Menu standard label={t("Access mode")} className="control-btn h-8 gap-2 px-2 text-sm" menuClassName="access-menu [&_[data-slot='dropdown-menu-radio-item-indicator']]:top-[50%] [&_[data-slot='dropdown-menu-radio-item-indicator']]:bottom-auto [&_[data-slot='dropdown-menu-radio-item-indicator']]:[transform:translateY(-50%)] w-[380px] max-w-[calc(100vw_-_16px)]" disabled={disabled}
+    {showAccess && <Menu standard label={t("Access mode")} className="control-btn h-8 gap-2 px-2 text-sm" menuClassName="access-menu w-[380px] max-w-[calc(100vw_-_16px)]" disabled={disabled}
       icon={<>{settings.access === 'full' ? <LockOpen size={13} /> : settings.access === 'edits' ? <Pencil size={13} /> : <Sparkles size={13} />}{accessName(settings.access)}<ChevronDown size={12} /></>}
       items={accessModes.map(({ key, label, description, Icon }) => ({
         key, selected: settings.access === key,

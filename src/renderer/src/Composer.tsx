@@ -1,6 +1,6 @@
+import { ComposerInput, type ComposerInputHandle } from './ComposerInput'
 import { t, useLanguage } from './i18n'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { ArrowUp, FileText, Paperclip, Play, Square, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 
@@ -107,16 +107,9 @@ export function Composer({
     uploadQueue.current = operation.then(() => {})
     return operation
   }
-  const ref = useRef<HTMLTextAreaElement>(null)
+  const ref = useRef<ComposerInputHandle>(null)
 
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    el.style.height = '0px'
-    el.style.height = `${Math.min(el.scrollHeight, 240)}px`
-    // Only scroll once the box has hit its cap; otherwise a sliver of scrollbar shows on an empty prompt.
-    el.style.overflowY = el.scrollHeight > 240 ? 'auto' : 'hidden'
-  }, [value])
+
 
   const choose = (index: number) => {
     const choice = suggestions.choices[index]; if (!choice) return
@@ -188,9 +181,8 @@ export function Composer({
       </div>}
       {attachments.length > 0 && <Attachments files={attachments} onRemove={(id) => onAttachmentsChange?.(attachments.filter((file) => file.id !== id))} />}
       {attachmentError && <div className="error text-bad small text-caption" role="alert">{attachmentError}</div>}
-      <Textarea
+      <ComposerInput
         ref={ref}
-        rows={1}
         autoFocus={autoFocus}
         value={value}
         placeholder={t(placeholder)}
@@ -207,9 +199,8 @@ export function Composer({
             if (attached || !ref.current) return
             // Preserve the paste if storage fails or the attachment limit is reached.
             const input = ref.current
+            const position = input.selectionStart + text.length
             input.setRangeText(text, input.selectionStart, input.selectionEnd, 'end')
-            onChange(input.value)
-            const position = input.selectionStart
             setCaret(position)
             requestAnimationFrame(() => { input.focus(); input.setSelectionRange(position, position) })
           })
@@ -218,9 +209,9 @@ export function Composer({
         aria-controls={suggestions.visible ? suggestions.listId : undefined}
         aria-expanded={suggestions.visible}
         aria-activedescendant={suggestions.visible && suggestions.choices.length ? `${suggestions.listId}-${suggestions.selected}` : undefined}
-        onClick={(e) => setCaret(e.currentTarget.selectionStart)}
-        onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
-        onChange={(e) => { onChange(e.target.value); setCaret(e.target.selectionStart) }}
+        onClick={(e) => setCaret(ref.current?.selectionStart ?? value.length)}
+        onKeyUp={(e) => setCaret(ref.current?.selectionStart ?? value.length)}
+        onChange={(next, position) => { onChange(next); setCaret(position) }}
         onKeyDown={(e) => {
           if (suggestions.visible && !e.nativeEvent.isComposing) {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); suggestions.move(e.key === 'ArrowDown' ? 1 : -1); return }

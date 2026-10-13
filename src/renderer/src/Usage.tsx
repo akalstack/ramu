@@ -155,10 +155,10 @@ export function UsageFooter() {
   if (!preferences.showUsageLimits || !groups.length) return null
   const label = groups.map(({ provider, five, weekly }) => `${providerName(provider)}: ${[five && `5-hour ${five.usedPercent}%`, weekly && `weekly ${weekly.usedPercent}%`].filter(Boolean).join(', ')}`).join('; ')
   return <div className="usage-footer flex flex-none items-center">
-    <UsagePopover trigger={<Button type="button" variant="ghost" className="h-auto min-h-8 min-w-0 w-full flex-1 flex-wrap justify-start gap-x-3 gap-y-1 rounded-(--radius-row) bg-fill px-2.5 py-[5px] text-control font-normal text-soft [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:bg-fill dark:hover:bg-hover aria-expanded:bg-hover aria-expanded:text-foreground active:not-aria-[haspopup]:translate-y-0" aria-label={t("Plan usage. {0}", { "0": label })}>
-      <Gauge size={15} className="size-[15px] text-muted-foreground" />
+    <UsagePopover trigger={<Button type="button" variant="ghost" className="h-auto min-h-8 min-w-0 w-full flex-1 flex-wrap justify-start gap-x-3 gap-y-1 rounded-(--radius-row) bg-fill px-2.5 py-[5px] text-[length:var(--font-caption)] leading-4 font-normal text-soft [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:bg-fill dark:hover:bg-hover aria-expanded:bg-hover aria-expanded:text-foreground active:not-aria-[haspopup]:translate-y-0" aria-label={t("Plan usage. {0}", { "0": label })}>
+      <Gauge className="size-[calc(var(--font-caption)+3px)] text-muted-foreground" />
       {groups.map(({ provider }) => { const peak = peakUsage(all, provider)!, tone = usageTone(peak)
-        return <span key={provider} className="usage-compact-item inline-flex items-center gap-1"><ProviderIcon provider={provider} size={13} /><span className={cn('text-caption tabular-nums', toneText[tone])}>{peak.usedPercent}%</span>{tone !== 'ok' && <span className="usage-window-label -ml-px text-[10px] leading-3.5 text-muted-foreground">{windowLabel(peak, true)}</span>}</span> })}
+        return <span key={provider} className="usage-compact-item inline-flex items-center gap-1"><ProviderIcon provider={provider} size="calc(var(--font-caption) + 2px)" /><span className={cn('text-[length:var(--font-caption)] leading-4 tabular-nums', toneText[tone])}>{peak.usedPercent}%</span>{tone !== 'ok' && <span className="usage-window-label -ml-px text-[length:calc(var(--font-caption)-2px)] leading-3.5 text-muted-foreground">{windowLabel(peak, true)}</span>}</span> })}
     </Button>} />
   </div>
 }

@@ -47,7 +47,7 @@ try {
   await page.screenshot({ path: join(fixture, 'conversation-find.png') })
   await find.press('Escape')
   assert(await page.locator('.chat-find-bar').count() === 0)
-  assert(await page.locator('.composer textarea').evaluate(el => el === document.activeElement))
+  assert(await page.locator('[data-composer-input]').evaluate(el => el === document.activeElement))
   console.log('ok - chat header search opens a compact find panel, steps through matches and restores composer focus')
   console.log('ok - group and rows reflect mixed running/completed commands and settle to Ran')
   console.log(`Screenshots: ${fixture}`)

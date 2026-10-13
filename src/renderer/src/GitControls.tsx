@@ -1,3 +1,4 @@
+import { cn } from 'cn'
 import { t, useLanguage } from './i18n'
 import { Button } from '@/components/desktop-button'
 import { AlertTriangle, CloudUpload, GitBranch, RefreshCcw } from 'lucide-react'
@@ -10,7 +11,7 @@ export function BranchPicker({ binding, status, branches, busy, onChange, classN
   onChange: (branch: string) => void; className?: string
 }) {
   useLanguage()
-  return <Dropdown label={t("Switch branch")} value={status?.branch ?? ''} icon={<GitBranch size={13} />} placeholder={status?.detached ? t("Detached at {0}", { "0": status.oid?.slice(0, 7) }) : t("No commits")} className={className} disabled={busy} options={branches.map((branch) => ({ value: branch.name, label: branch.name, disabled: !!branch.worktree && branch.worktree !== binding.cwd }))} onChange={(branch) => { if (branch !== status?.branch) onChange(branch) }} />
+  return <Dropdown label={t("Switch branch")} value={status?.branch ?? ''} icon={<GitBranch size={13} />} placeholder={status?.detached ? t("Detached at {0}", { "0": status.oid?.slice(0, 7) }) : t("No commits")} className={cn("branch-picker", className)} title={status?.branch ?? undefined} disabled={busy} options={branches.map((branch) => ({ value: branch.name, label: branch.name, disabled: !!branch.worktree && branch.worktree !== binding.cwd }))} onChange={(branch) => { if (branch !== status?.branch) onChange(branch) }} />
 }
 
 const PULL_LABEL: Record<PullMode, string> = { rebase: 'rebase', merge: 'merge', 'ff-only': 'fast-forward only' }

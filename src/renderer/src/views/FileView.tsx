@@ -1,3 +1,4 @@
+import { ContentSkeleton } from '@/components/content-skeleton'
 import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/desktop-button'
 import { Columns2, Eye, Pencil, WrapText } from 'lucide-react'
@@ -10,6 +11,7 @@ import { registerBuffer, registerSelection } from '../editorBuffers'
 import { monaco } from '../monaco'
 import { errorText } from '../TaskPane'
 import { useWorkspace } from '../workspace'
+import { MediaFileView, isMedia } from './MediaFileView'
 
 /** Word wrap is one choice for every editor, kept across sessions. */
 const WRAP_KEY = 'ramu.word-wrap'
@@ -27,7 +29,7 @@ interface Conflict {
     diskHash: string
 }
 
-export function FileView({ taskId, view, binding }: { taskId: string; view: FileViewDesc; binding: RepositoryBinding }) {
+function TextFileView({ taskId, view, binding }: { taskId: string; view: FileViewDesc; binding: RepositoryBinding }) {
   useLanguage()
     const ws = useWorkspace()
     const { preferences } = useAppSettings()
@@ -39,6 +41,7 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
     selection.current = view.selection
     const loaded = useRef(false)
     const [loadedTick, setLoadedTick] = useState(0)
+    const [loading, setLoading] = useState(true)
     const revealMatch = () => {
         const target = selection.current, editor = editorRef.current
         if (!loaded.current || !target || !editor) return
@@ -78,6 +81,8 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
 
     useEffect(() => {
         loaded.current = false
+        setLoading(true)
+        setError(null)
         let disposed = false, saving = false, diskRequest = 0
         const uri = monaco.Uri.from({ scheme: 'file', path: `/${taskId}/${binding.repoId}/${view.path}` })
         const model = monaco.editor.getModel(uri) ?? monaco.editor.createModel('', undefined, uri)
@@ -191,11 +196,12 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
                 setDirty(view.id, false)
                 editor.updateOptions({ readOnly: false })
                 loaded.current = true
+                setLoading(false)
                 setLoadedTick((tick) => tick + 1)
                 revealMatch()
                 void lint('saved')
             },
-            (e) => { if (!disposed) setError(errorText(e)) },
+            (e) => { if (!disposed) { setError(errorText(e)); setLoading(false) } },
         )
 
         // Agents, terminals and other tools write to the same files.
@@ -317,10 +323,16 @@ export function FileView({ taskId, view, binding }: { taskId: string; view: File
                 </div>
             )}
             <div ref={diffHost} className="editor-host flex-1 min-h-0" style={{ display: comparing ? 'block' : 'none' }} />
-            <div className="file-body [&_>_.editor-host]:[flex:1_1_0] [&_>_.editor-host]:min-w-0 flex-1 min-h-0 min-w-0 flex" style={{ display: comparing ? 'none' : 'flex' }}>
+            <div className="file-body relative [&_>_.editor-host]:[flex:1_1_0] [&_>_.editor-host]:min-w-0 flex-1 min-h-0 min-w-0 flex" style={{ display: comparing ? 'none' : 'flex' }}>
+                {loading && <ContentSkeleton variant="editor" rows={12} className="absolute inset-0 z-10 bg-canvas" />}
                 <div ref={host} className="editor-host flex-1 min-h-0" style={{ display: markdown && mode === 'preview' ? 'none' : 'block' }} />
         {markdown && mode !== 'edit' && <div className="md-preview-pane [flex:1_1_0] min-w-0 overflow-auto [border-left:1px_solid_var(--line)] p-[16px_24px_32px]"><div className="md-preview [&_h1]:text-[length:1.6em] [&_h1]:m-[0_0_12px] [&_h1]:pb-1.5 [&_h1]:[border-bottom:1px_solid_var(--line)] [&_h2]:text-[length:1.3em] [&_h2]:m-[20px_0_8px] [&_h2]:pb-1 [&_h2]:[border-bottom:1px_solid_var(--line)] [&_h3]:text-[length:1.1em] [&_img]:max-w-full [&_.md-frontmatter]:mb-4 [&_.md-frontmatter]:p-[8px_12px] [&_.md-frontmatter]:[border:1px_solid_transparent] [&_.md-frontmatter]:rounded-(--radius-s) [&_.md-frontmatter]:text-soft [&_.md-frontmatter]:bg-fill [&_.md-frontmatter_summary]:cursor-pointer [&_.md-frontmatter_summary]:text-control [&_.md-frontmatter_pre]:mb-0 [&_blockquote]:m-[8px_0] [&_blockquote]:p-[2px_12px] [&_blockquote]:[border-left:3px_solid_var(--line-strong)] [&_blockquote]:text-soft [&_hr]:[border:0] [&_hr]:[border-top:1px_solid_var(--line)] [&_hr]:m-[16px_0] max-w-[820px] m-[0_auto] text-chat leading-[1.65] select-text msg [&.user]:self-end [&.user]:whitespace-pre-wrap [&.user]:max-w-[78%] [&.user]:mt-[18px] [&.user]:w-[fit-content] [&.user]:[background:var(--bubble)] [&.user]:[border:0] [&.user]:[box-shadow:none] [&.user]:text-chat [&.user]:leading-[1.55] [&.user]:p-[10px_16px_11px] [&.user]:rounded-(--radius-l) [&.user]:tracking-[-0.006em] [&.user]:[color:var(--text-body)] [&.assistant]:relative [&.assistant]:tracking-[-0.008em] [&.assistant]:text-chat [&.assistant]:leading-[1.65] [&.assistant]:[color:var(--text-body)] [&.assistant_>_:first-child]:mt-0 [&.assistant_>_:last-child]:mb-0 [&.assistant_p]:m-[0_0_10px] [&.assistant_ul]:pl-5 [&.assistant_ul]:m-[0_0_10px] [&.assistant_ol]:pl-5 [&.assistant_ol]:m-[0_0_10px] [&.assistant_code]:[background:rgba(255,_255,_255,_0.075)] [&.assistant_code]:[border:0] [&.assistant_code]:rounded-(--radius-xs) [&.assistant_code]:p-[0_5px] [&.assistant_code]:[color:var(--text-body)] [&.assistant_code]:text-[length:0.88em] [&.assistant_pre]:overflow-x-auto [&.assistant_pre]:[white-space:pre] [&.assistant_pre]:[background:var(--code-bg)] [&.assistant_pre]:[border:1px_solid_transparent] [&.assistant_pre]:rounded-(--radius-m) [&.assistant_pre]:p-[12px_14px] [&.assistant_pre]:m-[4px_0_12px] [&.assistant_pre]:leading-[1.6] [&.assistant_pre]:[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.02)] [&.assistant_pre]:text-[length:0.88em] [&.assistant_pre_code]:bg-transparent [&.assistant_pre_code]:p-0 [&.assistant_pre_code]:[border:none] [&.assistant_pre_code]:text-[length:inherit] [&.assistant_pre_code]:[color:#dcdce2] [&.assistant_a]:text-brand [&.assistant_a]:[text-decoration:none] [&.assistant_table]:[border-collapse:collapse] [&.assistant_table]:m-[6px_0] [&.assistant_th]:[border:1px_solid_var(--line-strong)] [&.assistant_th]:p-[3px_8px] [&.assistant_td]:[border:1px_solid_var(--line-strong)] [&.assistant_td]:p-[3px_8px] [&.meta]:text-caption [&.meta]:text-muted-foreground [&.error]:text-bad [&.assistant:hover_.msg-actions]:opacity-100 [&.assistant.generating]:[animation:arrive_100ms_var(--ease)] [&.user_.muted.small.block]:mt-0.5 [&.user_.muted.small.block]:[color:rgba(255,_255,_255,_0.7)] [&.assistant_li]:m-[3px_0] [&.assistant_li::marker]:text-muted-foreground [&.assistant_strong]:font-semibold [&.assistant_strong]:[color:#fff] [&.assistant_h1]:text-[length:1em] [&.assistant_h1]:font-semibold [&.assistant_h1]:m-[16px_0_6px] [&.assistant_h1]:tracking-[-0.012em] [&.assistant_h2]:text-[length:1em] [&.assistant_h2]:font-semibold [&.assistant_h2]:m-[16px_0_6px] [&.assistant_h2]:tracking-[-0.012em] [&.assistant_h3]:text-[length:1em] [&.assistant_h3]:font-semibold [&.assistant_h3]:m-[16px_0_6px] [&.assistant_h3]:tracking-[-0.012em] [&.assistant_a:hover]:[text-decoration:underline] [.msg-wrap.user_&.user]:max-w-full [.msg-wrap.user_&.user]:mt-3.5 [&.assistant_.msg-actions]:mt-2 [&.assistant_:is(h1,_h2,_h3,_h4,_strong)]:text-foreground break-words assistant"><MarkdownPreview text={previewText} taskId={taskId} repoId={binding.repoId} path={view.path} onOpenFile={(path) => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path })} /></div></div>}
             </div>
         </div>
     )
+}
+
+/** Images, PDFs, audio and video open in a preview; everything else opens in the editor. */
+export function FileView(props: { taskId: string; view: FileViewDesc; binding: RepositoryBinding }) {
+  return isMedia(props.view.path) ? <MediaFileView {...props} /> : <TextFileView {...props} />
 }

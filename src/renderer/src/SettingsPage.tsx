@@ -1,7 +1,7 @@
 import { t, useLanguage } from './i18n'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
-import { Bell, Bot, CalendarClock, Code, Cpu, GitBranch, Keyboard, Lightbulb, Palette, Plug, RefreshCw, ShieldCheck, Target, X, type LucideIcon } from 'lucide-react'
+import { Bell, Bot, Brain, CalendarClock, Code, Cpu, GitBranch, Keyboard, Lightbulb, Palette, Plug, RefreshCw, ShieldCheck, Target, X, type LucideIcon } from 'lucide-react'
 import { SearchInput } from './SearchInput'
 import { fuzzy } from './fuzzy'
 import { useRef, useState, type ReactNode } from 'react'
@@ -9,6 +9,7 @@ import { useRef, useState, type ReactNode } from 'react'
 export const SETTINGS_SECTIONS = [
   { id: 'updates', label: 'Updates', Icon: RefreshCw },
   { id: 'goals', label: 'Goals', Icon: Target },
+  { id: 'memory', label: 'Memory', Icon: Brain },
   { id: 'automation', label: 'Background & Recaps', Icon: CalendarClock },
   { id: 'appearance', label: 'Appearance', Icon: Palette }, { id: 'editor', label: 'Editor & Terminal', Icon: Code },
   { id: 'models', label: 'Models', Icon: Cpu }, { id: 'providers', label: 'Providers', Icon: Plug }, { id: 'access', label: 'Access & Fallback', Icon: ShieldCheck }, { id: 'subagents', label: 'Sub-agents', Icon: Bot }, { id: 'advisor', label: 'Advisor', Icon: Lightbulb },
@@ -23,6 +24,9 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'goals', title: 'Automatic goals', words: 'goal auto manual off automatic completion continue unfinished' },
   { section: 'goals', title: 'Maximum continuation turns', words: 'goal max limit budget unlimited retry available quota reset' },
   { section: 'goals', title: 'Custom turn limit', words: 'goal max number turns' },
+  { section: 'memory', title: 'Shared memory', words: 'memory remember recall learn preferences claude codex opencode providers' },
+  { section: 'memory', title: 'Dream', words: 'memory consolidate merge duplicates stale contradictions cleanup self improve tokens' },
+  { section: 'memory', title: 'Forget unused memories after', words: 'memory stale decay archive expire days' },
   { section: 'automation', title: 'Agent notifications', words: 'notify notification alert done finished system toast' },
   { section: 'automation', title: 'Continue chats after restart', words: 'resume recover recovery interrupted progress startup crash' },
   { section: 'automation', title: 'Keep working while commands run', words: 'background long running slow dev server watcher build test shell command async auto automatic timeout seconds' },
@@ -68,7 +72,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'shortcuts', title: 'Keyboard shortcuts', words: 'keys commands bindings' },
 ]
 
-export function SettingsPage({ section, onSection, children, busy, error, onSave, onClose }: { section: SettingsSection; onSection: (section: SettingsSection) => void; children: ReactNode; busy: boolean; error: string | null; onSave: () => void; onClose: () => void }) {
+export function SettingsPage({ section, onSection, children, busy, hasChanges, error, onSave, onClose }: { section: SettingsSection; onSection: (section: SettingsSection) => void; children: ReactNode; busy: boolean; hasChanges: boolean; error: string | null; onSave: () => void; onClose: () => void }) {
   useLanguage()
   const [query, setQuery] = useState('')
   const host = useRef<HTMLDivElement>(null)
@@ -92,6 +96,6 @@ export function SettingsPage({ section, onSection, children, busy, error, onSave
       {q ? (results.length ? results.map(({ entry, hits }) => { const Icon = SETTINGS_SECTIONS.find((item) => item.id === entry.section)!.Icon; return <Button variant="secondary" key={`${entry.section}:${entry.title}`} className="bg-fill hover:bg-fill-hover settings-result [&_svg]:mt-[3px] items-start! h-auto! min-h-10! p-[7px_12px]!" disabled={busy} onClick={() => open(entry)}><Icon size={14} /><span className="settings-result-text flex flex-col min-w-0 gap-px"><span className="settings-result-title">{title(entry.title, hits)}</span><span className="muted text-muted-foreground small text-caption">{t(SETTINGS_SECTIONS.find((item) => item.id === entry.section)!.label)}</span></span></Button> }) : <p className="muted text-muted-foreground small text-caption settings-search-empty p-[0_12px]">{t("No settings match “")}{q}”.</p>)
         : SETTINGS_SECTIONS.map((entry) => <Button variant="secondary" key={entry.id} aria-current={entry.id === section ? 'page' : undefined} className={entry.id === section ? 'on' : ''} disabled={busy} onClick={() => onSection(entry.id)}><entry.Icon size={15} />{t(entry.label)}</Button>)}
     </nav><div className="settings-page-content [&_>_h3]:text-heading [&_>_h3]:font-semibold [&_>_h3]:m-[0_0_20px] [&_.flash:not(.settings-row)]:[animation:settings-flash_1.4s_ease-out] [&_.flash:not(.settings-row)]:rounded-(--radius-s) [&_.settings-form_>_div_>_h4]:m-[18px_0_10px] [&_.settings-form_>_div_>_p]:m-[8px_0_12px] [&_.settings-form_>_div_>_p]:leading-[1.55] flex-1 min-w-0 overflow-y-auto p-[24px_28px]"><h3>{t(SETTINGS_SECTIONS.find((entry) => entry.id === section)!.label)}</h3><fieldset className="settings-fields p-0 m-0 [border:0] min-w-0" disabled={busy}>{children}</fieldset></div></div>
-    <footer className="settings-page-footer [&_.error]:flex-1 [&_.error]:[overflow-wrap:anywhere] flex-none flex items-center gap-2 p-[12px_20px] min-h-[58px]">{error && <span className="error text-bad small text-caption" role="alert">{error}</span>}<span className="grow flex-1 min-w-0 text-left" /><Button variant="secondary" className="bg-fill hover:bg-fill-hover" disabled={busy} onClick={onClose}>{t("Cancel")}</Button><Button variant="default" className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100" disabled={busy} onClick={onSave}>{busy ? t("Saving…") : t("Save changes")}</Button></footer>
+    <footer className="settings-page-footer [&_.error]:flex-1 [&_.error]:[overflow-wrap:anywhere] flex-none flex items-center gap-2 p-[12px_20px] min-h-[58px]">{error && <span className="error text-bad small text-caption" role="alert">{error}</span>}<span className="grow flex-1 min-w-0 text-left" /><Button variant="secondary" className="bg-fill hover:bg-fill-hover" disabled={busy} onClick={onClose}>{t("Cancel")}</Button><Button variant="default" className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100" disabled={busy || !hasChanges} onClick={onSave}>{busy ? t("Saving…") : t("Save changes")}</Button></footer>
   </DialogContent></Dialog>
 }

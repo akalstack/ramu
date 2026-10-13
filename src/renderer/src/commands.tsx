@@ -1,4 +1,5 @@
 import { t, useLanguage } from './i18n'
+import { FileIcon } from './FileIcon'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup, CommandShortcut } from '@/components/ui/command'
 // Commands, keyboard shortcuts and the command palette.
@@ -139,6 +140,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       when: () => tabs.filter((v) => v.kind === 'file' || v.kind === 'diff' || v.kind === 'git' || v.kind === 'review').length > i,
     })),
     { id: 'view.sidebar', title: t("Toggle primary side bar"), category: t("View"), keys: 'mod+b', run: shell.toggleSidebar },
+    { id: 'view.right-panel', title: t("Toggle right panel"), category: t("View"), keys: 'mod+alt+b', run: () => taskId && ws.toggleRightPanel(taskId), when: hasTask },
     { id: 'view.chats', title: t("Show chats"), category: t("View"), run: () => shell.showSidebar ? shell.showSidebar('projects') : ws.setSidebar('projects') },
     { id: 'view.explorer', title: t("Show explorer"), category: t("View"), keys: 'mod+shift+e', run: () => shell.showSidebar ? shell.showSidebar('explorer') : ws.setSidebar('explorer') },
     { id: 'view.search', title: t("Search in project"), category: t("View"), keys: 'mod+shift+f', run: shell.showSearch },
@@ -262,7 +264,7 @@ export function Palette({ ws, commands, mode, onClose }: { ws: WorkspaceApi; com
       if (m) {
         ranked.push({
           key: `f:${f.repoId}:${f.path}`,
-          icon: <File size={14} />,
+          icon: <FileIcon path={f.path} />,
           label: f.path,
           hits: m.hits,
           detail: multiRepo ? repoName(f.repoId) : undefined,

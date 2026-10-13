@@ -3,7 +3,7 @@ import type { ProviderConfiguration, ProviderStatus } from './providers'
 // The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
 import type {
   PullMode, CommitBranchOptions,
-  ChangeReview, ChangeFile, ReviewFileState, ReviewComment, UndoPreview, FileContext, SkillInfo, ScheduleInput, ScheduleRule, Schedule, ScheduleRun, RecapSnapshot, BackgroundStatus,
+  ChangeReview, ChangeFile, ReviewFileState, ReviewComment, UndoPreview, FileContext, SkillInfo, ScheduleInput, ScheduleRule, Schedule, ScheduleRun, RecapSnapshot, BackgroundStatus, Memory, MemoryInput, MemorySnapshot,
   SearchOptions,
   SearchResults,
   ReplaceFilePreview,
@@ -94,6 +94,13 @@ export interface RamuMethods {
   'recaps.get'(): RecapSnapshot
   'recaps.refresh'(): RecapSnapshot
   'recaps.act'(id: string, action: 'open' | 'done' | 'dismissed' | 'snoozed'): void
+  'memory.get'(): MemorySnapshot
+  'memory.save'(input: MemoryInput, id?: string): Memory
+  'memory.archive'(id: string): Memory
+  'memory.restore'(id: string): Memory
+  'memory.delete'(id: string): void
+  'memory.history'(id: string): { action: string; actor: string; reason: string | null; before: Partial<Memory> | null; at: number }[]
+  'memory.dream'(): MemorySnapshot
   'projects.list'(): Project[]
   'projects.create'(name: string): Project
   'projects.inspect'(dir: string): FolderInspection
@@ -144,6 +151,7 @@ export interface RamuMethods {
   'files.list'(taskId: string, repoId: string, path: string): DirEntry[]
   'files.read'(taskId: string, repoId: string, path: string): FileContent
   'files.image'(taskId: string, repoId: string, path: string): string
+  'files.media'(taskId: string, repoId: string, path: string): { mimeType: string; size: number; url: string }
   'files.write'(taskId: string, repoId: string, path: string, content: string, baseHash: string | null): SaveResult
   'files.lint'(taskId: string, repoId: string, path: string, content: string, scope: 'buffer' | 'saved'): LintResult
   'git.status'(taskId: string, repoId: string): GitStatus
@@ -251,6 +259,7 @@ export interface RamuMethods {
 export type PushEvents = {
   'menu:action': { action: 'settings' | 'check-updates' }
   'automation:changed': Record<string, never>
+  'memory:changed': Record<string, never>
   'background:connection': { connected: boolean }
   'updates:changed': AppUpdateStatus
   'providers:updates': ProviderStatus[]

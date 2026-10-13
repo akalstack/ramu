@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { AttachmentStore, attachmentPrompt, MAX_ATTACHMENT_BYTES } from '../src/main/attachments'
+import { AttachmentStore, attachmentPrompt, nativeBlocks, MAX_ATTACHMENT_BYTES } from '../src/main/attachments'
 
 const roots: string[] = []
 const setup = () => { const root = mkdtempSync(join(tmpdir(), 'ramu-attachments-')); roots.push(root); return { root, store: new AttachmentStore(root) } }
@@ -32,6 +32,13 @@ describe('chat attachments', () => {
     const image = store.add('pasted-image.png', Buffer.from('image bytes'))
     expect(store.preview(image.id)).toBe(`data:image/png;base64,${Buffer.from('image bytes').toString('base64')}`)
     expect(attachmentPrompt('', [image])).toContain('inspect the attached files')
+  })
+  it('sends images and PDFs as native content blocks and leaves other files out', () => {
+    const { store } = setup()
+    const image = store.add('shot.png', Buffer.from('img')), pdf = store.add('spec.pdf', Buffer.from('%PDF-1.4')), text = store.add('a.txt', Buffer.from('hi'))
+    const blocks = nativeBlocks([image, pdf, text])
+    expect(blocks.map((b) => b.type)).toEqual(['image', 'document'])
+    expect(blocks[1]).toMatchObject({ title: 'spec.pdf', source: { media_type: 'application/pdf', data: Buffer.from('%PDF-1.4').toString('base64') } })
   })
   it('rejects empty, oversized, and excessive attachments', () => {
     const { store } = setup()

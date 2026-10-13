@@ -9,7 +9,7 @@
 }
 .composer:focus-within { background: color-mix(in srgb, var(--raised) 97%, var(--text)); }
 .composer.dragging { background: color-mix(in srgb, var(--raised) 88%, var(--accent)); }
-.composer textarea {
+.composer [data-composer-input] {
   display: block;
   min-height: 26px;
   max-height: 240px;
@@ -22,7 +22,7 @@
   line-height: 1.55;
   letter-spacing: -0.006em;
 }
-.composer textarea::placeholder { color: var(--placeholder); }
+.composer [data-composer-input][data-empty]::before { content: attr(data-placeholder); color: var(--placeholder); pointer-events: none; }
 .composer-bar { display: flex; align-items: center; gap: 4px; margin: 4px 0 0 -8px; min-height: 32px; }
 .composer-bar .composer-controls { flex: 1; min-width: 0; margin: 0; padding: 0; border: 0; gap: 0; }
 .composer-bar .agent-controls, .composer-bar .agent-control-options { gap: 2px; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
@@ -64,3 +64,44 @@
 .tool-group-body { margin: 2px 0 0; padding: 0; border: 0; background: transparent; gap: 0; border-radius: 0; }
 .tool-group-body .tool > [data-slot='collapsible-trigger'], .tool-group-body .tool > [data-slot='collapsible-trigger']:hover { margin: 0; padding: 3px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; justify-content: flex-start; gap: 8px; font-size: var(--font-chat); }
 .tool-group.text-destructive > [data-slot='collapsible-trigger'] { color: var(--bad); }
+
+/* Inline references share the same quiet material in user and assistant messages. */
+[data-slot="badge"].chat-reference {
+  display: inline-flex;
+  vertical-align: baseline;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  align-items: baseline;
+  padding: 2px 8px;
+  gap: 5px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line-strong);
+  background: var(--fill);
+  color: var(--soft);
+  font-size: inherit;
+  font-weight: 500;
+  line-height: 1.25;
+  text-decoration: none;
+  white-space: nowrap;
+}
+a[data-slot="badge"].chat-reference:hover {
+  background: var(--fill-hover);
+  color: var(--text);
+  text-decoration: none;
+}
+.chat-reference > svg { flex: none; align-self: center; }
+.chat-reference > span { min-width: 0; }
+
+.composer-reference { max-width: min(100%, 360px); }
+
+.composer [data-composer-input] {
+  width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-y: auto;
+  max-height: 240px;
+  outline: none;
+}
+.composer-inline-atom { display: inline; white-space: nowrap; }
+.composer-inline-atom .chat-reference { vertical-align: baseline; max-width: min(100%, 360px); }

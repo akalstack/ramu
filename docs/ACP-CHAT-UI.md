@@ -23,4 +23,4 @@ See the [ACP tool call specification](https://agentclientprotocol.com/protocol/v
 
 `pnpm check` covers normalization, native host round trips, provider adapters, streaming thinking, durable row replacement, and production builds. `pnpm test:acp-ui` uses a local executable ACP stub over the actual external ACP wire and an isolated Electron profile. It checks thoughts, plans, description updates, command input, live output, image decoding, diffs, resources, terminal references, unknown content, and reload persistence. It makes no model calls and uses no provider credentials.
 
-The fixture checks do not certify every live provider version. Providers may omit reasoning, images, descriptions, or tool content; the UI cannot display information that never arrives. Existing protocol/migration limitations are tracked in `ACP-MIGRATION-AUDIT.md`.
+The fixture checks do not certify every live provider version. Providers may omit reasoning, images, descriptions, or tool content; the UI cannot display information that never arrives. Provider integration details and compatibility constraints are documented in [provider setup](PROVIDERS.md).

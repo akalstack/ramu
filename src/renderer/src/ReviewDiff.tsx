@@ -53,7 +53,7 @@ export function ReviewDiff({ file, comments, onSelect, onComment, flow = false, 
     if (!mounted) return
     setComputed(false)
     const original = monaco.editor.createModel(file.oldContent, undefined, monaco.Uri.from({ scheme: 'inmemory', path: `/${crypto.randomUUID()}/${file.path}` })), modified = monaco.editor.createModel(file.newContent, original.getLanguageId())
-    const diff = monaco.editor.createDiffEditor(host.current!, { theme: 'ramu', readOnly: true, originalEditable: false, automaticLayout: true, renderSideBySide: sideBySide, useInlineViewWhenSpaceIsLimited: false, glyphMargin: true, minimap: { enabled: false }, fontSize: preferences.editorFontSize, accessibilityVerbose: true, scrollBeyondLastLine: false, ...(flow ? { hideUnchangedRegions: { enabled: true, contextLineCount: 4, minimumLineCount: 10, revealLineCount: 20 }, scrollbar: { vertical: 'hidden', alwaysConsumeMouseWheel: false } } : {}) })
+    const diff = monaco.editor.createDiffEditor(host.current!, { theme: 'ramu', readOnly: true, originalEditable: false, automaticLayout: true, renderSideBySide: sideBySide, useInlineViewWhenSpaceIsLimited: false, glyphMargin: true, lineNumbersMinChars: 3, lineDecorationsWidth: 4, folding: false, overviewRulerLanes: 0, minimap: { enabled: false }, fontSize: preferences.editorFontSize, accessibilityVerbose: true, scrollBeyondLastLine: false, ...(flow ? { hideUnchangedRegions: { enabled: true, contextLineCount: 4, minimumLineCount: 10, revealLineCount: 20 }, scrollbar: { vertical: 'hidden', alwaysConsumeMouseWheel: false } } : {}) })
     const viewModel = diff.createViewModel({ original, modified })
     diff.setModel(viewModel); editor.current = diff
     if (viewState.current) diff.restoreViewState(viewState.current)

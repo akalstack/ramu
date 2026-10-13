@@ -21,6 +21,7 @@ import { ScheduleService, scheduleSchema } from './schedules'
 import { runtimeBuild, runtimeVersion, runtimeInvoke } from './runtimeClient'
 import { ReviewService } from './reviews'
 import { RecapService } from './recaps'
+import { MemoryService, registerMemoryTools } from './memory'
 import type { AgentSessionInfo, ScheduleInput } from '../shared/types'
 
 const userData = process.env.RAMU_USER_DATA
@@ -80,6 +81,9 @@ reviews = new ReviewService(db, workspace, agents, join(userData, 'reviews'), ch
 reviews.recover()
 agents.reviewHooks = { begin: (taskId, scope) => reviews!.begin(taskId, scope), bind: (id, sessionId) => reviews!.bind(id, sessionId), abandon: (id, error) => reviews!.abandon(id, error), followup: (sessionId) => reviews!.beforeFollowup(sessionId), complete: (sessionId) => reviews!.complete(sessionId), validateFeedback: (reviewId) => reviews!.requireOriginalCheckout(reviewId) }
 const recaps = new RecapService(db, workspace, agents, changed)
+const memory = new MemoryService(db, workspace, agents, () => send('memory:changed', {}))
+const projectOf = (session: AgentSessionInfo) => { try { return workspace.getTask(session.taskId).projectId } catch { return null } }
+agents.memoryInstructions = (session) => memory.instructions(session, projectOf(session))
 const dispatcher = createDispatcher({ userData, send, native: (method, path) => {
   if (!clients.size) return Promise.reject(new Error('Open Ramu to use this desktop action'))
   const requestId = randomUUID()
@@ -89,7 +93,7 @@ const dispatcher = createDispatcher({ userData, send, native: (method, path) => 
     // Exactly one UI owns a desktop dialog/action.
     clients.values().next().value?.write(`data: ${JSON.stringify({ channel: 'host:request', payload: { requestId, method, path } })}\n\n`)
   })
-} }, { workspace, terminals, agents, schedules, recaps, reviews })
+} }, { workspace, terminals, agents, schedules, recaps, reviews, memory })
 const startedAt = Date.now()
 let stopping = false
 async function stop(intentional = false) {
@@ -102,7 +106,7 @@ async function stop(intentional = false) {
   reviews.stop(); agents.stopAll(!intentional)
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))
-  await Promise.all([recaps.settle(), reviews.settle()])
+  await Promise.all([recaps.settle(), reviews.settle(), memory.settle()])
   terminals.closeAll(); dispatcher.close()
   for (const c of clients) c.end()
   for (const r of nativeRequests.values()) { clearTimeout(r.timer); r.reject(new Error('Service stopping')) }
@@ -144,6 +148,7 @@ const mcpHttp = createServer(async (req, res) => {
   registerQuestionTools(server, agents, source.id)
   if (!source.parentId) registerGoalTools(server, agents, source.id)
   if (agents.advisorStep(source.id)) registerAdvisorTools(server, agents, source.id)
+  if (memory.enabled()) registerMemoryTools(server, memory, source, projectOf(source))
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
   const scope = workspace.getTask(source.taskId)
   const input = scheduleSchema.omit({ sourceTaskId: true }).extend({ projectId: scheduleSchema.shape.projectId.optional(), workspaceId: scheduleSchema.shape.workspaceId })
@@ -179,7 +184,7 @@ agents.toolConnection = (session) => { const token = randomBytes(32).toString('h
 // Never unlink a socket owned by another live service. The launcher removes stale sockets first.
 await new Promise<void>((resolve, reject) => { runtime.once('error', reject); runtime.listen(socketPath, resolve) })
 chmodSync(socketPath, 0o600)
-const tick = setInterval(() => { void agents.resumeInterruptedChats().catch(console.error); void schedules.tick().catch(console.error); void recaps.tick().catch(console.error) }, 5000)
+const tick = setInterval(() => { void agents.resumeInterruptedChats().catch(console.error); void schedules.tick().catch(console.error); void recaps.tick().catch(console.error); void memory.tick().catch(console.error) }, 5000)
 await agents.restoreHelperTranscripts()
 await agents.resumeInterruptedChats()
 agents.goalsSettingsChanged()

@@ -13,6 +13,7 @@ import { ArrowDown, ArrowUp, GripVertical, Plus, RotateCcw, Trash2 } from 'lucid
 import { useEffect, useState } from 'react'
 import { DEFAULT_APP_PREFERENCES, DEFAULT_SIDEBAR_WIDTH, type AppPreferences, type ModelPreferences, type ModelStep } from '../../shared/types'
 import { GoalSettings } from './GoalSettings'
+import { MemorySettings } from './MemorySettings'
 import { AdvisorSettings, FallbackSettings, SubagentSettings } from './FallbackSettings'
 import { BackgroundControls } from './Automation'
 import { Dropdown } from './Menu'
@@ -39,6 +40,9 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
   const [reset, setReset] = useState<SettingsSection | 'sizes' | null>(null)
   const [sizesReset, setSizesReset] = useState(false)
   const [error, setError] = useState<string | null>(store.error)
+  const appChanged = JSON.stringify(appDraft) !== JSON.stringify(app.preferences)
+  const modelsChanged = JSON.stringify(draft) !== JSON.stringify(store.preferences)
+  const hasChanges = appChanged || modelsChanged
   const set = draft.sets.find((entry) => entry.id === selected) ?? draft.sets[0]!
   const models = store.catalogs.flatMap((catalog) => catalog.models)
   const updateSteps = (steps: ModelStep[]) => setDraft((current) => {
@@ -66,10 +70,14 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
     updateSteps(steps)
   }
   const save = async () => {
+    if (busy || !hasChanges) return
     setBusy(true); setError(null)
     try {
-      if (draft.sets.some((entry) => !entry.name.trim())) throw new Error(t('Name each set before saving.'))
-      await Promise.all([app.save(appDraft), store.save({ ...draft, sets: draft.sets.map((entry) => ({ ...entry, steps: entry.steps.map((step) => ({ ...step, name: modelStepName(step, store.catalogs) })) })) })]);
+      if (modelsChanged && draft.sets.some((entry) => !entry.name.trim())) throw new Error(t('Name each set before saving.'))
+      await Promise.all([
+        ...(appChanged ? [app.save(appDraft)] : []),
+        ...(modelsChanged ? [store.save({ ...draft, sets: draft.sets.map((entry) => ({ ...entry, steps: entry.steps.map((step) => ({ ...step, name: modelStepName(step, store.catalogs) })) })) })] : []),
+      ])
       if (JSON.stringify(appDraft.providerBinaries) !== JSON.stringify(app.preferences.providerBinaries)) void store.reload().catch(() => {})
       onClose()
     } catch (reason) { setError(errorText(reason)) }
@@ -87,6 +95,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
     subagents: ['subagents'],
     advisor: ['advisor'],
     goals: ['goals'],
+    memory: ['memory'],
     git: ['busyMessageAction', 'includeTabContext', 'pullMode', 'autoPull', 'commitStyle', 'commitInstructions', 'hideEmptyStaged', 'recentChats'],
   }
   const pageKeys = resetKeys[page]
@@ -98,7 +107,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
       ...(section === 'providers' ? { providerBinaries: Object.fromEntries(Object.entries(current.providerBinaries).map(([provider, config]) => [provider, { binary: '', accounts: config?.accounts, accountId: 'default', autoUpdate: false }])) } : {}),
     }))
   }
-  return <SettingsPage section={page} onSection={setPage} busy={busy} error={error} onSave={() => void save()} onClose={() => { if (!busy) onClose() }}>
+  return <SettingsPage section={page} onSection={setPage} busy={busy} hasChanges={hasChanges} error={error} onSave={() => void save()} onClose={() => { if (!busy) onClose() }}>
     {page === 'updates' && <AppUpdates value={appDraft} onChange={setAppDraft} />}
     {page === 'providers' && <><ProviderSettings value={appDraft} onChange={setAppDraft} /><div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0">{toggle('showUsageLimits', 'Show usage limits', 'Show the 5-hour and weekly plan usage at the bottom of the sidebar, or in the status bar when the sidebar is hidden.')}</div></>}
     {page === 'automation' && <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0">
@@ -132,6 +141,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
     </div>}
     {page === 'access' && <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0"><SettingsRow className=""><span><strong>{t("Default access")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Applied to new chats. Existing chats keep their access mode.")}</span></span><Dropdown label={t("Default access")} value={appDraft.defaultAccess} options={(['edits', 'auto', 'full'] as const).map((value) => ({ value, label: accessName(value) }))} onChange={(value) => setAppDraft({ ...appDraft, defaultAccess: value as AppPreferences['defaultAccess'] })} /></SettingsRow>{toggle('defaultAutoFallback', 'Automatic provider fallback', 'Continue with another provider when a usage limit is reached. Applies to new chats.')}<FallbackSettings value={appDraft} onChange={setAppDraft} busy={busy} /></div>}
     {page === 'subagents' && <SubagentSettings value={appDraft} onChange={setAppDraft} busy={busy} />}
+    {page === 'memory' && <MemorySettings value={appDraft.memory} onChange={(memory) => setAppDraft({ ...appDraft, memory })} />}
     {page === 'goals' && <GoalSettings value={appDraft.goals} onChange={(goals) => setAppDraft({ ...appDraft, goals })} />}
     {page === 'advisor' && <AdvisorSettings value={appDraft} onChange={setAppDraft} busy={busy} />}
     {page === 'git' && <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0"><SettingsRow className=""><span><strong>{t("Messages while working")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Steer shows your message above the box and sends it after the active tools finish. Queue keeps it there until the whole turn finishes. ⌘Enter / Ctrl+Enter uses the opposite action.")}</span></span><Dropdown label={t("Messages while working")} value={appDraft.busyMessageAction} options={[{ value: 'queue', label: t("Queue") }, { value: 'steer', label: t("Steer") }]} onChange={(value) => setAppDraft({ ...appDraft, busyMessageAction: value === 'steer' ? 'steer' : 'queue' })} /></SettingsRow>{toggle('includeTabContext', 'Include open tabs as context', 'Each message includes the active file or selected text. Other open tabs are listed by path so the agent can read them when relevant. Files you @mention or drop into the chat include their content.')}{toggle('autoPull', 'Automatic pull', 'After automatic fetch, fast-forward the repository selected in the status bar when it is clean. Skip while an agent is working, files are unsaved, branches have diverged, or a Git operation is in progress. Runs every 3 minutes and on window focus.')}<SettingsRow className=""><span><strong>{t("Pull behavior")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("How Pull and Sync bring in remote commits. All manual pull modes automatically stash and restore tracked working changes. Rebase replays your local commits on top for a linear history. If a rebase or merge stops on a conflict, Source Control offers Continue and Abort.")}</span></span><Dropdown label={t("Pull behavior")} value={appDraft.pullMode} options={[{ value: 'rebase', label: 'Rebase' }, { value: 'merge', label: 'Merge' }, { value: 'ff-only', label: t("Fast-forward only") }]} onChange={(value) => setAppDraft({ ...appDraft, pullMode: value === 'merge' || value === 'ff-only' ? value : 'rebase' })} /></SettingsRow><SettingsRow className=""><span><strong>{t("Commit messages")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("How AI drafts commit messages. Conventional follows Conventional Commits (feat(scope): subject). Repository convention copies the style of the repository's recent commits. Custom uses your instructions.")}</span></span><Dropdown label={t("Commit message style")} value={appDraft.commitStyle} options={[{ value: 'conventional', label: t("Conventional commits") }, { value: 'repository', label: t("Repository convention") }, { value: 'custom', label: t("Custom instructions") }]} onChange={(value) => setAppDraft({ ...appDraft, commitStyle: value === 'repository' || value === 'custom' ? value : 'conventional' })} /></SettingsRow>{appDraft.commitStyle === 'custom' && <SettingsRow className="settings-stack"><span><strong>{t("Commit instructions")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("For example: start with a ticket key like ABC-123, write in English, keep the subject under 50 characters.")}</span></span><Textarea rows={4} maxLength={2000} value={appDraft.commitInstructions} aria-label={t("Commit message instructions")} placeholder={t("Describe how commit messages should be written")} onChange={(event) => setAppDraft({ ...appDraft, commitInstructions: event.target.value })} /></SettingsRow>}{toggle('hideEmptyStaged', 'Hide empty Staged section', 'Show Staged only when the index contains changes.')}<SettingsRow className=""><span><strong>{t("Recent chats per project")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Older chats stay available under Show more.")}</span></span><Dropdown label={t("Recent chats per project")} value={String(appDraft.recentChats)} options={Array.from({ length: 18 }, (_, index) => ({ value: String(index + 3), label: String(index + 3) }))} onChange={(value) => setAppDraft({ ...appDraft, recentChats: Number(value) })} /></SettingsRow><p className="muted text-muted-foreground small text-caption">{t("Discard and delete actions show their affected files before running. Explorer deletion uses Trash.")}</p></div>}

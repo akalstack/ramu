@@ -6,9 +6,11 @@ Releases use Electron Forge and GitHub Actions. CI checks pushes and pull reques
 
 Push this repository to GitHub and configure its `origin` remote. Enable GitHub Actions and private vulnerability reporting. The release workflow needs permission to write repository contents; only its final draft job receives that permission. Protect your default branch and require the CI checks before merging. Install [GitHub CLI](https://cli.github.com/) and authenticate using `gh auth login` to run the local draft helper.
 
-No npm publishing is involved; `private: true` prevents accidental publication of the desktop package to npm. No auto-update channel is configured.
+No npm publishing is involved; `private: true` prevents accidental publication of the desktop package to npm. In-app update checks use published stable GitHub releases; alpha and other prerelease tags are excluded.
 
 ## Prepare and draft
+
+The first public release is `0.1.0-alpha.1`, reflecting the current desktop alpha and installation limitations. Use `0.1.0` for a later release once the alpha validation gaps are resolved.
 
 Choose a new version explicitly; version tags have the form `v0.1.0` or `v0.1.0-beta.1`.
 

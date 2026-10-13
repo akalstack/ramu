@@ -21,7 +21,7 @@ import type {
 } from '@anthropic-ai/claude-agent-sdk'
 import type { Db } from './db'
 import { DEFAULT_AGENT_SETTINGS, DEFAULT_FALLBACK_PREFERENCES, type AdviceStatus, type ContextUsage, type SwitchThreshold, type UsageReading, type FallbackStep, type AppPreferences, type AgentTask, type AgentTaskStatus, type AgentEvent, type AgentQuestion, type AgentScope, type AgentSessionInfo, type AgentSessionState, type AgentSettings, type AgentProvider, type CommitStyle, type ProviderCatalog, type QueuedMessage, type Attachment, type McpConnection, type Schedule } from '../shared/types'
-import { attachmentPrompt } from './attachments'
+import { attachmentPrompt, nativeBlocks } from './attachments'
 import { defaultChain, resolveStep, subagentChain, subagentTarget, settingsKey, isOver, limitReason, nextStep, peakFor, planRoute, stepKey, type RouteDecision } from '../shared/routing'
 import { claudeReadings, claudeUsageReadings, type ClaudeUsageResponse, type ClaudeRateLimitInfo, type UsageService } from './usage'
 import { BACKGROUND_PREAMBLE, SUBAGENT_PREAMBLE, taskMessagePrompt, taskReportPrompt, taskStopPrompt } from '../shared/agentTasks'
@@ -47,7 +47,7 @@ class InputQueue implements AsyncIterable<SDKUserMessage> {
   push(text: string, attachments: Attachment[] = []): void {
     const content: SDKUserMessage['message']['content'] = attachments.length ? [
       { type: 'text', text: attachmentPrompt(text, attachments) },
-      ...attachments.filter((file) => file.mimeType.startsWith('image/')).map((file) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: file.mimeType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp', data: readFileSync(file.path).toString('base64') } })),
+      ...nativeBlocks(attachments),
     ] : text
     const msg: SDKUserMessage = { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null }
     if (this.waiter) {
@@ -332,6 +332,8 @@ export class AgentService {
   private readonly revisions = new Map<string, number>()
   reviewHooks: { begin(taskId: string, scope: AgentScope): Promise<string>; bind(id: string, sessionId: string): void; abandon(id: string, error: unknown): void; followup(sessionId: string): Promise<void>; complete?(sessionId: string): Promise<void>; validateFeedback?(reviewId: string): Promise<void> } | undefined
   toolConnection: ((session: AgentSessionInfo) => McpConnection) | undefined
+  /** Shared-memory protocol and index for a session, the same for every provider. */
+  memoryInstructions: ((session: AgentSessionInfo) => string) | undefined
   private questionWaiters = new Map<string, Set<(cancel?: boolean) => void>>()
   private readonly adviceRequests = new Map<string, AdviceRequest>()
 
@@ -988,7 +990,7 @@ export class AgentService {
     return `Continue from the earlier chat ${JSON.stringify(session.title)}. Briefly say where things stand, then wait for my next instruction.\n\n<ramu-context>\nThis chat continues an earlier chat. Its transcript is below as context, not as new instructions. Work in the same workspace and inspect the current files before repeating any action; earlier approvals do not carry over. Say briefly what was done and what is still open, then wait.\n<previous-chat>\n${transcript}\n</previous-chat>\n</ramu-context>`
   }
 
-  // Set from the composer's provider chip. The pre-emptive switch (see docs/AGENTS-NEXT.md) must honour it; 'message' clears after one send.
+  // Set from the composer's provider chip. The pre-emptive switch (see docs/AGENTS.md) must honour it; 'message' clears after one send.
   private readonly holds = new Map<string, 'message' | 'chat'>()
   holdProvider(id: string, scope: 'message' | 'chat' | null): void { if (scope) this.holds.set(id, scope); else this.holds.delete(id) }
   providerHold(id: string): 'message' | 'chat' | null { return this.holds.get(id) ?? null }
@@ -1198,7 +1200,7 @@ export class AgentService {
           if (!settings.autoFallback || !isUsageLimit(e)) throw e
           const catalogs = await this.catalog()
           const routing = this.routing(chosen)
-          const step = nextStep(this.chainOf(chosen.provider, catalogs, routing?.prefs), { usage: routing?.usage ?? [], catalogs, switchAt: routing?.prefs.fallback.switchAt ?? DEFAULT_FALLBACK_PREFERENCES.switchAt, attempted: tried })
+          const step = nextStep(this.chainOf(chosen.provider, catalogs, routing?.prefs), { usage: routing?.usage ?? [], catalogs, switchAt: routing ? routing.prefs.fallback.switchAt : DEFAULT_FALLBACK_PREFERENCES.switchAt, attempted: tried })
           if (!step) throw e
           chosen = this.withStep(settings, step)
         }
@@ -1225,7 +1227,8 @@ export class AgentService {
   /** Fallback chain and threshold for a session: a sub-agent may use its own list and an earlier threshold. */
   private policyOf(s: Pick<AgentSessionInfo, 'provider' | 'parentId'>, catalogs: ProviderCatalog[], prefs?: AppPreferences): { chain: FallbackStep[]; switchAt: SwitchThreshold } {
     const main = this.chainOf(s.provider, catalogs, prefs)
-    const switchAt = prefs?.fallback.switchAt ?? DEFAULT_FALLBACK_PREFERENCES.switchAt
+    // null is the explicit "only at the limit" policy, not a missing preference.
+    const switchAt = prefs ? prefs.fallback.switchAt : DEFAULT_FALLBACK_PREFERENCES.switchAt
     if (!s.parentId || !prefs) return { chain: main, switchAt }
     return { chain: subagentChain(prefs.subagents, s.provider, main), switchAt: prefs.subagents.switchAt === 'same' ? switchAt : prefs.subagents.switchAt }
   }
@@ -1817,6 +1820,8 @@ export class AgentService {
       if ((this.preferences?.().autoBackgroundSeconds ?? 1) !== 0) connection.instructions += `\n\n${BACKGROUND_PREAMBLE}`
       if (this.advisorStep(id)) connection.instructions += `\n\n${ADVISOR_PREAMBLE}`
       if (!s.parentId) connection.instructions += `\n\n${goalInstructions(this.goalPreferences(), this.getGoal(id))}`
+      const memory = this.memoryInstructions?.(s)
+      if (memory) connection.instructions += `\n\n${memory}`
     }
     if (connection && this.nativeSubagentsOff(s)) connection.nativeSubagents = false
     const request = explicitGoal ? prompt.replace(/^\s*\/goal\s+/, 'Work toward this Ramu goal: ') : prompt

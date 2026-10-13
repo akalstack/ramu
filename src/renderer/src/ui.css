@@ -29,6 +29,7 @@
   --text-heading: var(--font-heading);
   --text-hero: var(--font-hero);
   --color-background: var(--canvas);
+  --color-search-match: color-mix(in srgb, var(--accent) 28%, var(--canvas));
   --color-foreground: var(--text);
   --color-card: var(--raised-2);
   --color-card-foreground: var(--text);
