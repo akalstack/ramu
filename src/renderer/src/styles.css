@@ -152,10 +152,7 @@ kbd { @apply [font:500_var(--font-caption)/16px_var(--sans)]; @apply text-muted-
 
 /* Source control */
 
-::-webkit-scrollbar { @apply w-2.5; @apply h-2.5; }
-::-webkit-scrollbar-thumb { @apply [background:rgba(255,_255,_255,_0.08)]; @apply rounded-(--radius-m); @apply [border:3px_solid_transparent]; @apply [background-clip:content-box]; }
-::-webkit-scrollbar-thumb:hover { @apply [background-color:rgba(255,_255,_255,_0.16)]; }
-::-webkit-scrollbar-corner { @apply [background:transparent]; }
+/* No ::-webkit-scrollbar rules: styling them forces classic scrollbars that take layout width. Left alone, macOS draws overlay scrollbars on top of the content. */
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { @apply [animation:none]!; @apply [transition:none]!; }
@@ -170,7 +167,7 @@ button.danger-btn { @apply [background:var(--bad)]; @apply [border-color:transpa
 button.danger-btn:hover:not(:disabled) { @apply [background:color-mix(in_srgb,_var(--bad),_white_12%)]; }
 
 /* Chat details */
-button.scm-commit.primary { @apply w-full; @apply justify-center; @apply [background:var(--primary)]; @apply [color:var(--primary-ink)]; @apply [border:none]; @apply rounded-(--radius-s); @apply h-8; @apply p-[6px_12px]; @apply gap-2; @apply text-control; }
+button.scm-commit.primary { @apply w-full; @apply justify-center; @apply [background:var(--primary)]; @apply [color:var(--primary-ink)]; @apply [border:none]; @apply rounded-(--radius-s); @apply h-7; @apply p-[6px_12px]; @apply gap-2; @apply text-control; }
 button.scm-commit.primary:hover:not(:disabled) { @apply [background:var(--primary-hover)]; @apply [border:none]; }
 button.scm-commit.primary:disabled { @apply [background:var(--primary)]; @apply [opacity:0.5]; }
 
@@ -601,7 +598,7 @@ body.resizing .app-titlebar > .task-header { @apply [transition:none]; }
 @media (prefers-reduced-motion: reduce) { .app-titlebar > .task-header { @apply [transition:none]; } }
 
 /* One commit action with a separate, keyboard-accessible options trigger. */
-button.scm-commit-menu { @apply relative; @apply w-8; @apply h-8; @apply [border:0]; @apply [border-radius:0_var(--radius-s)_var(--radius-s)_0]; }
+button.scm-commit-menu { @apply relative; @apply w-7; @apply h-7; @apply [border:0]; @apply [border-radius:0_var(--radius-s)_var(--radius-s)_0]; }
 .scm-commit-menu::before { @apply [content:'']; @apply absolute; @apply left-0; @apply top-2; @apply bottom-2; @apply w-px; @apply [background:#ffffff40]; }
 button.scm-commit-menu:disabled { @apply [background:var(--primary)]; @apply [color:var(--primary-ink)]; @apply [opacity:.5]; }
 
@@ -713,3 +710,7 @@ button.git-stash-new:hover:not(:disabled) { @apply [background:var(--hover)]; @a
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Staged / Changes headers stay pinned while their rows scroll, so each group keeps its title and actions in reach. */
+.scm-repo { --scm-surface: var(--sidebar); }
+.workspace-tools .scm-repo { --scm-surface: var(--canvas); }
+.scm-repo .sub-title { position: sticky; top: 0; z-index: 3; background: var(--scm-surface); padding-top: 2px; padding-bottom: 2px; }
