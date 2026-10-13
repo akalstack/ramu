@@ -3,7 +3,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Archive, ArchiveRestore, ChevronRight, MessageCircle, FolderClosed, FolderOpen, FolderPlus, FolderSearch, GitBranch, Link2, Pencil, Pin, PinOff, Plus, Sparkles, SquarePen, Trash2, Unlink, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { NO_PROJECT, type Project, type Task } from '../../../shared/types'
 import { copyText, invoke } from '../ipc'
@@ -14,6 +14,7 @@ import { projectCtx, useWorkspace } from '../workspace'
 import { useAppSettings } from '../AppSettings'
 import { useAddProject } from '../addProject'
 import { FadeText } from '../FadeText'
+import { slide } from '../slide'
 import { useModelSets } from '../ModelSets'
 
 export function ProjectsPanel() {
@@ -113,6 +114,23 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
   const tasks = showAll ? sorted : sorted.filter((t) => t.pinnedAt || others.indexOf(t) < recent || t.id === ws.ui.activeTaskId)
   const archived = all.filter((t) => t.status === 'archived')
   const [open, setOpen] = useState(true)
+  // The chat list stays mounted while it slides closed, and slides open once it is mounted.
+  const [mounted, setMounted] = useState(true)
+  const list = useRef<HTMLDivElement>(null)
+  const wasOpen = useRef(open)
+  const opening = useRef(false)
+  useLayoutEffect(() => {
+    if (wasOpen.current === open) return
+    wasOpen.current = open
+    if (open) {
+      if (list.current) slide(list.current, true)
+      else { opening.current = true; setMounted(true) }
+    } else if (list.current) slide(list.current, false, () => setMounted(false))
+    else setMounted(false)
+  }, [open])
+  useLayoutEffect(() => {
+    if (mounted && opening.current && list.current) { opening.current = false; slide(list.current, true) }
+  }, [mounted])
   const [showArchived, setShowArchived] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -193,7 +211,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
         draggable={dnd.enabled && !renaming}
         onDragStart={(event) => { event.dataTransfer.setData(PROJECT_DRAG_TYPE, project.id); event.dataTransfer.effectAllowed = 'move'; dnd.setDragging(project.id) }}
         onDragEnd={() => { dnd.setDragging(null); dnd.setDrop(null) }}
-        className={active ? 'project-row [&:hover]:bg-hover [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [&_>_:not(.project-name)]:mt-0.5 [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft min-h-[34px] p-[4px_8px_6px] active' : 'project-row [&:hover]:bg-hover [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [&_>_:not(.project-name)]:mt-0.5 [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft min-h-[34px] p-[4px_8px_6px]'}
+        className={active ? 'project-row [&:hover]:bg-hover [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft min-h-8 p-[0_8px_2px] active' : 'project-row [&:hover]:bg-hover [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft min-h-8 p-[0_8px_2px]'}
         role="button"
         tabIndex={0}
         aria-label={t("Open {0}", { "0": project.name })}
@@ -227,7 +245,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
               setOpen((o) => !o)
             }}
           >
-            <ChevronRight size={14} className={open ? 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)] open' : 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]'} />
+            <ChevronRight size={14} className={open ? 'caret [&.open]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)] open' : 'caret [&.open]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]'} />
           </Button>
           <Button variant="ghost" size="icon-xs"
             className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
@@ -245,8 +263,8 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
       <ProjectHoverCard project={project} folders={repos.map((r) => ({ id: r.id, name: r.name, root: r.root }))} chats={all.filter((t) => t.status !== 'archived').length} />
       </HoverCard>
       {error && <div className="error text-bad small text-caption row-error p-[2px_10px_4px_26px]">{error}</div>}
-      {open && (
-        <div className="task-list flex flex-col gap-px pl-3.5">
+      {(open || mounted) && (
+        <div ref={list} className="task-list flex flex-col gap-px pl-3.5">
           {tasks.length === 0 && <div className="muted text-muted-foreground small text-caption empty-tasks p-[4px_10px]">{t("No chats yet")}</div>}
           {tasks.map((t) => <TaskRow key={t.id} task={t} />)}
           {others.length > recent && (

@@ -199,7 +199,7 @@ function Shell() {
             <CalendarClock size={15} /> <span className="grow flex-1 min-w-0 text-left">{t("Schedules")}</span>
           </Button>
         </nav>
-        <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden [&_.project-group]:mb-3 [&_.project-row]:min-h-8 [&_.project-row]:p-[5px_8px] [&_.task-list]:pl-[22px] [&_.task-list]:gap-0.5 [&_.task-row]:min-h-8 [&_.task-row]:p-[0_8px] flex-1 overflow-auto min-h-0">
+        <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden [&_.project-group]:mb-3 [&_.project-row]:min-h-8 [&_.project-row]:p-[0_8px] [&_.task-list]:pl-[22px] [&_.task-list]:gap-0.5 [&_.task-row]:min-h-8 [&_.task-row]:p-[0_8px] flex-1 overflow-auto min-h-0">
           {ui.sidebar !== 'schedules' && <ProjectsPanel />}
           {ui.sidebar === 'schedules' && <ScheduleNavigation />}
         </div>
@@ -234,7 +234,7 @@ function Shell() {
           <span className="grow flex-1 min-w-0 text-left">{t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')}</span>
           <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Close")} title={t("Close")} onClick={() => ws.setSidebar('projects')}><PanelRightClose size={15} /></Button>
         </header>
-        <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden [&_.project-group]:mb-3 [&_.project-row]:min-h-8 [&_.project-row]:p-[5px_8px] [&_.task-list]:pl-[22px] [&_.task-list]:gap-0.5 [&_.task-row]:min-h-8 [&_.task-row]:p-[0_8px] flex-1 overflow-auto min-h-0">
+        <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden [&_.project-group]:mb-3 [&_.project-row]:min-h-8 [&_.project-row]:p-[0_8px] [&_.task-list]:pl-[22px] [&_.task-list]:gap-0.5 [&_.task-row]:min-h-8 [&_.task-row]:p-[0_8px] flex-1 overflow-auto min-h-0">
           {workspaceTool === 'explorer' && <ExplorerPanel />}
           {workspaceTool === 'scm' && <ScmPanel />}
           {workspaceTool === 'search' && <SearchPanel key={ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : 'empty'} />}

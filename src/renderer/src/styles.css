@@ -106,11 +106,11 @@ button {
 }
 button:hover:not(:disabled) { @apply [background:var(--fill-hover)]; }
 button:disabled { @apply [opacity:0.4]; @apply cursor-default; }
-button:focus-visible, input:focus-visible, textarea:focus-visible, [role='tab']:focus-visible, summary:focus-visible {
+button:focus-visible, input:not([data-slot="input-group-control"]):focus-visible, textarea:not([data-slot="input-group-control"]):focus-visible, [role='tab']:focus-visible, summary:focus-visible {
   @apply [outline:2px_solid_var(--line-strong)];
   @apply [outline-offset:1px];
 }
-input, textarea, select {
+input:not([data-slot="input-group-control"]), textarea:not([data-slot="input-group-control"]), select {
   @apply [background:var(--fill)];
   @apply [border:1px_solid_transparent];
   @apply rounded-(--radius-s);
@@ -118,8 +118,10 @@ input, textarea, select {
   @apply [outline:none];
   @apply [transition:border-color_0.12s_var(--ease)];
 }
-input:focus, textarea:focus { @apply [border-color:var(--line-strong)]; }
+input:not([data-slot="input-group-control"]):focus, textarea:not([data-slot="input-group-control"]):focus { @apply [border-color:var(--line-strong)]; }
 input::placeholder, textarea::placeholder { @apply [color:var(--placeholder)]; }
+/* Controls inside a shadcn InputGroup are bare: the group draws the frame, fill and focus state. */
+[data-slot="input-group-control"] { @apply [border:0]; @apply rounded-none; @apply bg-transparent; @apply [box-shadow:none]; @apply [outline:none]; }
 textarea { @apply resize-none; @apply w-full; }
 code, .path, pre { @apply font-mono; @apply text-caption; @apply tracking-[0]; }
 pre { @apply whitespace-pre-wrap; @apply break-words; @apply m-[6px_0_0]; }
@@ -229,7 +231,7 @@ body.resizing-terminal * { @apply pointer-events-none; }
 }
 [data-slot="input"] { @apply h-auto; @apply min-h-7; }
 /* shadcn fields carry no outline (--color-input is transparent); the fill marks them instead. */
-:is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="input-group"]):not(.composer *, .search-input *, .status-bar *, .control-btn) { @apply bg-fill; }
+:is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="input-group"]):not(.composer *, .search-input *, .status-bar *, .chat-find-bar *, .control-btn) { @apply bg-fill; }
 :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]):hover:not(:disabled, :focus-visible, .composer *, .status-bar *, .control-btn) { @apply [background-color:var(--fill-hover)]; }
 [data-slot="textarea"] { @apply min-h-0; }
 [data-slot="checkbox"] { @apply w-4; @apply h-4; @apply p-0; @apply rounded-(--radius-xs); @apply [background:transparent]; @apply [border-color:var(--line-strong)]; @apply flex-none; }
