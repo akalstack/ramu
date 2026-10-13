@@ -24,9 +24,7 @@ export function ProjectsPanel() {
   const [showArchived, setShowArchived] = useState(false)
   const archivedChats = ws.tasks.filter((task) => task.status === 'archived').sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   // Pinned chats from every project gather in one section above the projects.
-  const [showPinned, setShowPinned] = useState(true)
-  const [showProjects, setShowProjects] = useState(true)
-  const [showChats, setShowChats] = useState(true)
+  const showPinned = ws.isExpanded('section:pinned'), showProjects = ws.isExpanded('section:projects'), showChats = ws.isExpanded('section:chats')
   const pinned = ws.tasks.filter((t) => t.pinnedAt && t.status !== 'archived').sort(pinnedFirst)
   const looseChats = ws.tasks.filter((t) => t.projectId === NO_PROJECT && t.status !== 'archived' && !t.pinnedAt).sort(pinnedFirst)
   const { preferences } = useAppSettings()
@@ -58,12 +56,12 @@ export function ProjectsPanel() {
       onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFolderOver(false) }}
       onDrop={(event) => { if (!hasFiles(event)) return; event.preventDefault(); setFolderOver(false); void addProject.addDropped([...event.dataTransfer.files]) }}>
       {pinned.length > 0 && <>
-        <SectionHead title={t("Pinned")} open={showPinned} onToggle={() => setShowPinned((shown) => !shown)} controls="pinned-chats" />
+        <SectionHead title={t("Pinned")} open={showPinned} onToggle={() => ws.setExpanded('section:pinned', !showPinned)} controls="pinned-chats" />
         <Collapse open={showPinned} id="pinned-chats" className="task-list">
           {pinned.map((task) => <TaskRow key={task.id} task={task} hidePin projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
         </Collapse>
       </>}
-      <SectionHead title={recentMode ? t("Recent chats") : t("Projects")} open={showProjects} onToggle={() => setShowProjects((shown) => !shown)} controls="projects-list">
+      <SectionHead title={recentMode ? t("Recent chats") : t("Projects")} open={showProjects} onToggle={() => ws.setExpanded('section:projects', !showProjects)} controls="projects-list">
         <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Add project")} title={t("Add project…")} disabled={addProject.busy} onClick={() => void addProject.add()}>
           <FolderPlus size={14} />
         </Button>
@@ -81,7 +79,7 @@ export function ProjectsPanel() {
       ))}
       </Collapse>
       {!recentMode && <>
-      <SectionHead title={t("Chats")} open={showChats} onToggle={() => setShowChats((shown) => !shown)} controls="loose-chats"><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("New chat without a project")} onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></SectionHead>
+      <SectionHead title={t("Chats")} open={showChats} onToggle={() => ws.setExpanded('section:chats', !showChats)} controls="loose-chats"><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("New chat without a project")} onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></SectionHead>
       <Collapse open={showChats} id="loose-chats">{looseChats.map((t) => <TaskRow key={t.id} task={t} />)}</Collapse></>}
       {archivedChats.length > 0 && <>
       <Button variant="ghost" className="archived-toggle h-auto min-h-7 justify-start gap-1 rounded-(--radius-row) bg-transparent px-2 text-caption font-normal text-muted-foreground [border:none] [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:hover:bg-hover" aria-expanded={showArchived} aria-controls="archived-chats" onClick={() => setShowArchived((shown) => !shown)}>
@@ -160,9 +158,10 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
   // Like Codex: the latest few chats, with the rest behind "Show more"; the open chat always shows.
   const tasks = showAll ? sorted : sorted.filter((t) => t.pinnedAt || others.indexOf(t) < recent || t.id === ws.ui.activeTaskId)
   const archived = all.filter((t) => t.status === 'archived')
-  const [open, setOpen] = useState(true)
+  const open = ws.isExpanded(`project:${project.id}`)
+  const setOpen = (next: boolean | ((current: boolean) => boolean)) => ws.setExpanded(`project:${project.id}`, typeof next === 'function' ? next(open) : next)
   // The chat list stays mounted while it slides closed, and slides open once it is mounted.
-  const [mounted, setMounted] = useState(true)
+  const [mounted, setMounted] = useState(open)
   const list = useRef<HTMLDivElement>(null)
   const wasOpen = useRef(open)
   const opening = useRef(false)

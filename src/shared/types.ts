@@ -386,6 +386,8 @@ export interface WorkspaceUiState {
   openTaskIds: string[]
   activeTaskId: string | null
   sidebar: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules'
+  /** Sidebar sections and projects the user folded (`section:pinned`, `project:<id>`); everything else is open. */
+  collapsed?: string[]
 }
 
 export interface GitCommit {

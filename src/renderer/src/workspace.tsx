@@ -43,6 +43,9 @@ export interface WorkspaceApi {
   refresh(): Promise<void>
   refreshBindings(taskId: string): Promise<RepositoryBinding[]>
   setSidebar(s: WorkspaceUiState['sidebar']): void
+  /** Whether a sidebar section or project is expanded, and the setter that remembers it across restarts. */
+  isExpanded(key: string): boolean
+  setExpanded(key: string, expanded: boolean): void
   openTask(taskId: string): void
   closeTask(taskId: string): void
   /** Drops a deleted or archived task from the open set without prompting. */
@@ -388,6 +391,11 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       refresh,
       refreshBindings,
       setSidebar: (sidebar) => setUi((u) => ({ ...u, sidebar })),
+      isExpanded: (key) => !ui.collapsed?.includes(key),
+      setExpanded: (key, expanded) => setUi((u) => {
+        const rest = (u.collapsed ?? []).filter((entry) => entry !== key)
+        return { ...u, collapsed: expanded ? rest : [...rest, key] }
+      }),
       openTask(taskId) {
         setComposing(null)
         void refreshBindings(taskId)
