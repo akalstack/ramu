@@ -3,13 +3,14 @@ import { errorText } from './errors'
 import { visibleName } from '../../shared/text'
 import { t, useLanguage, formatLocale } from './i18n'
 import { FileIcon, fileStyle } from './FileIcon'
-import { beginPaneResize } from './paneResize'
+import { createPortal } from 'react-dom'
+import { WorkspaceSplit } from './WorkspaceSplit'
 import { Button } from '@/components/desktop-button'
 import { NO_PROJECT, type Attachment, type FileContext } from '../../shared/types'
 import { notifyError } from './Notifications'
 import { useModelSets } from './ModelSets'
 import { CircleAlert, FileDiff, FileText, GitBranch, History, FileSearch, ChevronsRight, SquareTerminal, X } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { ChangeReviewTab } from './Changes'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type AgentSessionInfo, type ViewDescriptor } from '../../shared/types'
 import { formatKeys, type TaskAction } from './commands'
@@ -48,13 +49,12 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
   const [sessionsLoadedFor, setSessionsLoadedFor] = useState<string | null>(null)
   const [retrying, setRetrying] = useState(false)
   const body = useRef<HTMLDivElement>(null)
-  const [bodyWidth, setBodyWidth] = useState(0)
-  useLayoutEffect(() => {
-    if (!body.current) return
-    const observer = new ResizeObserver(([entry]) => setBodyWidth(entry?.contentRect.width ?? 0))
-    observer.observe(body.current)
-    return () => observer.disconnect()
-  }, [])
+  // One terminal instance serves both docks: its host element moves between slots so shells never remount.
+  const [chatHost] = useState(() => createPaneHost('chat-slot'))
+  const [editorHost] = useState(() => createPaneHost('editor-slot'))
+  const [terminalHost] = useState(() => { const el = document.createElement('div'); el.className = 'terminal-slot flex h-full w-full min-w-0 min-h-0'; return el })
+  const [rightSlot, setRightSlot] = useState<HTMLDivElement | null>(null)
+  const [bottomSlot, setBottomSlot] = useState<HTMLDivElement | null>(null)
 
   // Palette and shortcut actions that act on this task's own view state.
   useEffect(() => {
@@ -92,12 +92,11 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
   const terminalDock = state.terminalDock ?? (editorView ? 'bottom' : 'right')
   const rightTerminal = terminalOpen && terminalDock === 'right' && !composing
   const bottomTerminal = terminalOpen && terminalDock === 'bottom' && !composing
-  const workspaceOpen = (!!editorView || rightTerminal) && !composing
-  const maxChatShare = rightTerminal && editorView ? .5 : .7
-  const defaultChatShare = rightTerminal && editorView ? .4 : .55
-  const maxChatWidth = bodyWidth * maxChatShare
-  const minChatWidth = Math.min(320, maxChatWidth)
-  const chatWidth = Math.min(state.dockWidth ?? bodyWidth * defaultChatShare, maxChatWidth)
+  const editorOpen = !!editorView && !composing
+  useLayoutEffect(() => {
+    const slot = rightTerminal ? rightSlot : bottomTerminal ? bottomSlot : null
+    if (slot && terminalHost.parentElement !== slot) slot.appendChild(terminalHost)
+  }, [rightTerminal, bottomTerminal, rightSlot, bottomSlot, terminalHost])
 
   // A saved chat may not have a saved view yet. Restore its conversation before
   // showing a composer for a session that does not exist.
@@ -134,15 +133,6 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
     }
   }
 
-  const resizeCleanup = useRef<(() => void) | null>(null)
-  useEffect(() => () => resizeCleanup.current?.(), [])
-  // Resize the main conversation without replacing its transcript or composer.
-  const startResize = (event: ReactPointerEvent) => {
-    resizeCleanup.current?.()
-    const rect = body.current!.getBoundingClientRect()
-    resizeCleanup.current = beginPaneResize(event, 'column', (next) => ws.setDockWidth(taskId, Math.min(Math.max(next.clientX - rect.left, Math.min(320, rect.width * maxChatShare)), rect.width * maxChatShare)))
-  }
-
   const unfinished = bindings.filter((b) => b.setupState !== 'ready')
 
   return (
@@ -159,8 +149,50 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
           </Button>
         </div>
       )}
-      <div className={`task-body [&_>_.view-tabs]:[grid-column:1] [&_>_.view-tabs]:[grid-row:1] [&_>_.editor-area]:[grid-column:1] [&_>_.editor-area]:[grid-row:2] [&_>_.editor-area]:min-h-0 [&_>_.terminal-panel]:min-w-0 [&_>_.terminal-panel]:min-h-0 [&_>_.terminal-panel]:w-full [&_>_.terminal-panel]:self-stretch [&_>_.terminal-panel]:h-full! [&_>_.terminal-panel]:max-h-[none] [&_>_.terminal-panel]:overflow-hidden [&_>_.main-chat]:[grid-column:1] [&_>_.main-chat]:[grid-row:1] [&_>_.main-chat]:min-h-0 [&_>_.main-chat]:overflow-hidden [&.with-editor]:[grid-template-columns:minmax(0,_min(var(--chat-width,_55%),_70%))_0_minmax(0,_1fr)] [&.with-editor_>_.view-tabs]:[grid-column:3] [&.with-editor_>_.editor-area]:[grid-column:3] [&.with-editor_>_.splitter]:[justify-self:center] [&.with-editor_>_.splitter]:[grid-column:2] [&.with-editor_>_.splitter]:[grid-row:1] [&.with-editor_>_.main-chat]:[grid-column:1] [&.with-editor_>_.main-chat]:[grid-row:1] [&.with-editor_>_.main-chat]:min-h-0 [&.with-editor_>_.main-chat]:overflow-hidden [&_>_.workspace-panel]:[grid-column:3] [&_>_.workspace-panel]:[grid-row:1] [&_>_.workspace-panel]:flex [&_>_.workspace-panel]:flex-col [&_>_.workspace-panel]:min-w-0 [&_>_.workspace-panel]:min-h-0 [&_>_.workspace-panel]:overflow-hidden [&_>_.terminal-panel.dock-bottom]:[grid-column:1_/_-1] [&_>_.terminal-panel.dock-bottom]:[grid-row:2] [&_>_.terminal-panel.dock-right]:[grid-column:3] [&_>_.terminal-panel.dock-right]:[grid-row:1] [&_>_.terminal-panel.dock-right]:[border-top:0] [&_>_.terminal-panel.dock-right]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] [&.terminal-with-editor_>_.terminal-panel.dock-right]:[grid-column:4] flex-1 grid min-h-0 min-w-0 relative [container-type:inline-size] [--chat-share:100%] [grid-template-columns:minmax(0,_var(--chat-share))_0_minmax(0,_1fr)] [grid-template-rows:minmax(0,_1fr)] [transition:--chat-share_var(--motion-layout)_var(--motion-curve)] ${workspaceOpen ? ' with-editor' : ''}${rightTerminal ? ' terminal-right' : ''}${rightTerminal && editorView ? ' terminal-with-editor' : ''}${bottomTerminal ? ' terminal-bottom' : ''}`} style={{ '--chat-width': state.dockWidth ? `${state.dockWidth}px` : `${defaultChatShare * 100}%`, '--terminal-height': `${state.terminalHeight ?? 260}px` } as CSSProperties} ref={body}>
-      <div className="workspace-panel" inert={!editorView || composing} aria-hidden={!editorView || composing}>
+      <div className="task-body flex-1 min-h-0 min-w-0 relative" ref={body}>
+        <WorkspaceSplit id={`${workspaceId}.terminal-bottom`} orientation="vertical" open={bottomTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={240} secondaryMin={120}
+          primary={
+            <WorkspaceSplit id={`${workspaceId}.terminal-right`} open={rightTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={480}
+              primary={
+                <WorkspaceSplit id={`${workspaceId}.editor`} open={editorOpen} label={t("Resize chat pane")} defaultShare={45}
+                  primary={<PaneSlot host={chatHost} />}
+                  secondary={<PaneSlot host={editorHost} />}
+                />
+              }
+              secondary={<div className="h-full w-full min-w-0 min-h-0" ref={setRightSlot} />}
+            />
+          }
+          secondary={<div className="h-full w-full min-w-0 min-h-0" ref={setBottomSlot} />}
+        />
+        {createPortal(
+        <div className="main-chat h-full w-full [&_>_.home-page]:flex-1 [&_>_.home-page]:min-h-0 flex-1 min-w-0 flex-col bg-canvas" style={{ display: 'flex' }}>
+          {(showLauncherMain || (editorView && !chatView)) && isWorkspaceCtx(taskId) && (
+            <NewTask projectId={project?.id ?? ''} onProjectChange={(id) => ws.newTask(id)} feed={!editorView} />
+          )}
+          {sessionsError && !chatView && <p role="alert" className="p-4 text-bad">{sessionsError}</p>}
+          {!isWorkspaceCtx(taskId) && !chatView && !sessionsError && sessionsLoadedFor !== taskId && <ContentSkeleton variant="chat" rows={2} className="p-[12px_24px]" />}
+          {(showLauncherMain || (editorView && !chatView)) && !isWorkspaceCtx(taskId) && sessionsLoadedFor === taskId && !sessions.length && (
+            <NewChat
+              taskId={taskId}
+              onStarted={(s) => {
+                setSessions((list) => [...list.filter((x) => x.id !== s.id), s])
+                ws.openView(taskId, { kind: 'agent', sessionId: s.id })
+                void ws.refresh()
+              }}
+            />
+          )}
+          {agentViews.map((v) =>
+            v.kind === 'agent' ? (
+              <div key={v.id} className="view flex-1 min-w-0 min-h-0 flex-col" style={{ display: chatView?.id === v.id ? 'flex' : 'none' }}>
+                <ErrorBoundary resetKey={v.id}>
+                <AgentView view={v} visible={visible && chatView?.id === v.id} history={sessions.length > 1 ? <Menu label={t("Earlier conversations")} icon={<History size={14} />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" align="end" items={[...sessions].sort((a, b) => b.createdAt - a.createdAt).map(session => ({ key: session.id, selected: session.id === v.sessionId, label: <><span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis grow flex-1 min-w-0 text-left">{session.title}</span><span className="muted text-muted-foreground small text-caption">{new Date(session.createdAt).toLocaleDateString(formatLocale())}</span></>, onSelect: () => openSession(session) }))} /> : undefined} />
+                </ErrorBoundary>
+              </div>
+            ) : null,
+          )}
+        </div>, chatHost)}
+        {createPortal(
+      <div className="workspace-panel flex flex-col h-full min-w-0 min-h-0 overflow-hidden" inert={!editorView || composing} aria-hidden={!editorView || composing}>
       <div className="view-tabs [.workspace-panel_>_&]:flex-none flex items-center flex-none overflow-x-auto [scrollbar-width:none] p-[5px_8px] [border-bottom-color:var(--line)] [border-bottom:0] gap-1" role="tablist" aria-label={t("Workspace tabs")} style={{ display: editorView ? 'flex' : 'none' }}>
         {tabs.filter((v) => v.kind !== 'agent').map((view) => <FileTab key={view.id} taskId={taskId} view={view} tabs={tabs} active={state.activeViewId === view.id} repoName={repoName} />)}
         <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Open file")} title={`${t("Open file")} (${formatKeys('mod+p')})`} onClick={() => window.dispatchEvent(new Event('ramu:open-file'))}><FileSearch size={16} /></Button>
@@ -191,45 +223,28 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
               )
             })}
         </div>
-      </div>
-        {workspaceOpen && <div className="splitter [&::after]:[content:''] [&::after]:absolute [&::after]:[transition:background_0.15s] [&::after]:inset-[0_4px] [&::after]:w-[var(--pane-border-width)] [&::after]:[background:var(--pane-border-color)] [&:hover::after]:w-px [&:hover::after]:[background:var(--pane-border-active)] [&.is-resizing::after]:w-px [&.is-resizing::after]:[background:var(--pane-border-active)] [&:focus-visible::after]:[background:var(--pane-border-active)] flex-none cursor-col-resize relative z-2 w-[9px] m-[0_-4px]" role="separator" tabIndex={0} aria-label={t("Resize chat pane")} aria-orientation="vertical" aria-valuemin={Math.round(minChatWidth)} aria-valuemax={Math.round(maxChatWidth)} aria-valuenow={Math.round(chatWidth)} onPointerDown={startResize} onDoubleClick={() => ws.setDockWidth(taskId, bodyWidth * defaultChatShare)} onKeyDown={(event) => {
-          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-          event.preventDefault()
-          const max = maxChatWidth
-          const min = Math.min(320, max)
-          const value = event.key === 'Home' ? min : event.key === 'End' ? max : chatWidth + (event.key === 'ArrowRight' ? 20 : -20)
-          ws.setDockWidth(taskId, Math.max(min, Math.min(max, value)))
-        }} />}
-        <div className="main-chat [&_>_.home-page]:flex-1 [&_>_.home-page]:min-h-0 flex-1 min-w-0 flex-col bg-canvas" style={{ display: 'flex' }}>
-          {(showLauncherMain || (editorView && !chatView)) && isWorkspaceCtx(taskId) && (
-            <NewTask projectId={project?.id ?? ''} onProjectChange={(id) => ws.newTask(id)} feed={!editorView} />
-          )}
-          {sessionsError && !chatView && <p role="alert" className="p-4 text-bad">{sessionsError}</p>}
-          {!isWorkspaceCtx(taskId) && !chatView && !sessionsError && sessionsLoadedFor !== taskId && <ContentSkeleton variant="cards" rows={2} />}
-          {(showLauncherMain || (editorView && !chatView)) && !isWorkspaceCtx(taskId) && sessionsLoadedFor === taskId && !sessions.length && (
-            <NewChat
-              taskId={taskId}
-              onStarted={(s) => {
-                setSessions((list) => [...list.filter((x) => x.id !== s.id), s])
-                ws.openView(taskId, { kind: 'agent', sessionId: s.id })
-                void ws.refresh()
-              }}
-            />
-          )}
-          {agentViews.map((v) =>
-            v.kind === 'agent' ? (
-              <div key={v.id} className="view flex-1 min-w-0 min-h-0 flex-col" style={{ display: chatView?.id === v.id ? 'flex' : 'none' }}>
-                <ErrorBoundary resetKey={v.id}>
-                <AgentView view={v} visible={visible && chatView?.id === v.id} history={sessions.length > 1 ? <Menu label={t("Earlier conversations")} icon={<History size={14} />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" align="end" items={[...sessions].sort((a, b) => b.createdAt - a.createdAt).map(session => ({ key: session.id, selected: session.id === v.sessionId, label: <><span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis grow flex-1 min-w-0 text-left">{session.title}</span><span className="muted text-muted-foreground small text-caption">{new Date(session.createdAt).toLocaleDateString(formatLocale())}</span></>, onSelect: () => openSession(session) }))} /> : undefined} />
-                </ErrorBoundary>
-              </div>
-            ) : null,
-          )}
-        </div>
-        <TerminalPanel taskId={workspaceId} visible={visible} hidden={composing} dock={terminalDock} />
+      </div>, editorHost)}
+        {createPortal(<TerminalPanel taskId={workspaceId} visible={visible} hidden={composing} dock={terminalDock} />, terminalHost)}
       </div>
     </section>
   )
+}
+
+// Views keep a stable DOM host while the independent grid tracks open and close.
+function createPaneHost(className: string) {
+  const element = document.createElement('div')
+  element.className = `${className} h-full w-full min-w-0 min-h-0 overflow-hidden`
+  return element
+}
+
+function PaneSlot({ host }: { host: HTMLDivElement }) {
+  const slot = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const element = slot.current
+    element?.appendChild(host)
+    return () => { if (host.parentElement === element) host.remove() }
+  }, [host])
+  return <div ref={slot} className="h-full w-full min-w-0 min-h-0" />
 }
 
 /** Restore tab state without constructing editors for tabs the user has not opened. */

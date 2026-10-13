@@ -1,10 +1,13 @@
+import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 /** Fixed-height rows with bounded DOM and keyboard navigation through the entire list. */
-export function VirtualList<T>({ items, rowHeight, itemKey, renderItem, className, resetKey, revealKey, isFocusable }: {
+export function VirtualList<T>({ items, rowHeight, itemKey, renderItem, className, resetKey, revealKey, isFocusable, overlay }: {
   items: T[]; rowHeight: number | ((item: T) => number); itemKey: (item: T) => string
   renderItem: (item: T, index: number) => ReactNode; className?: string
   resetKey?: string; revealKey?: string; isFocusable?: (item: T) => boolean
+  /** Scroll inside an overlay scrollbar that takes no layout width. */
+  overlay?: boolean
 }) {
   const root = useRef<HTMLDivElement>(null)
   const [top, setTop] = useState(0), [height, setHeight] = useState(400)
@@ -43,7 +46,7 @@ export function VirtualList<T>({ items, rowHeight, itemKey, renderItem, classNam
     const button = root.current?.querySelector<HTMLElement>(`[data-virtual-index="${pendingFocus.current}"] button`)
     if (button) { button.focus({ preventScroll: true }); pendingFocus.current = null }
   })
-  return <div ref={root} className={className} onScroll={(event) => { if (virtual) setTop(event.currentTarget.scrollTop) }} onKeyDown={(event) => {
+  const handlers = { onScroll: (event: React.UIEvent<HTMLDivElement>) => { if (virtual) setTop(event.currentTarget.scrollTop) }, onKeyDown: (event) => {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || event.altKey || event.metaKey || event.ctrlKey) return
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-virtual-index]')
     if (!row) return
@@ -55,9 +58,13 @@ export function VirtualList<T>({ items, rowHeight, itemKey, renderItem, classNam
     event.preventDefault(); pendingFocus.current = next; scrollTo(next)
     const button = root.current?.querySelector<HTMLElement>(`[data-virtual-index="${next}"] button`)
     if (button) { button.focus({ preventScroll: true }); pendingFocus.current = null }
-  }}>
+  } }
+  const rows = <>
     {virtual && <div aria-hidden="true" style={{ height: offsets[start], flex: 'none' }} />}
     {items.slice(start, end).map((item, offset) => <div key={itemKey(item)} data-virtual-index={start + offset} style={{ height: offsets[start + offset + 1]! - offsets[start + offset]!, flex: 'none' }}>{renderItem(item, start + offset)}</div>)}
     {virtual && <div aria-hidden="true" style={{ height: offsets.at(-1)! - offsets[end]!, flex: 'none' }} />}
-  </div>
+  </>
+  return overlay
+    ? <OverlayScrollArea className={className} viewportClassName="max-h-[inherit]" viewportRef={root} viewportProps={handlers}>{rows}</OverlayScrollArea>
+    : <div ref={root} className={className} {...handlers}>{rows}</div>
 }

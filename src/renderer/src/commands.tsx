@@ -1,3 +1,4 @@
+import { searchableChats } from './chatSearch'
 import { t, useLanguage } from './i18n'
 import { FileIcon } from './FileIcon'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -280,9 +281,9 @@ export function Palette({ ws, commands, mode, onClose }: { ws: WorkspaceApi; com
       const match = fuzzy(q, `${project.name} ${project.root ?? ''}`)
       if (q && match) out.push({ key: `project:${project.id}`, icon: <FolderTree size={14} />, label: project.name, detail: project.root ?? undefined, group: 'Projects', run: () => ws.openProject(project.id) })
     }
-    for (const t of ws.tasks.filter((task) => task.status !== 'archived')) {
-      const m = fuzzy(q, t.title)
-      if (m && q) out.push({ key: `t:${t.id}`, icon: <FolderTree size={14} />, label: t.title, hits: m.hits, detail: ws.projects.find((p) => p.id === t.projectId)?.name, group: 'Chats', run: () => ws.openTask(t.id) })
+    for (const chat of searchableChats(ws.tasks)) {
+      const m = fuzzy(q, chat.title)
+      if (m && q) out.push({ key: `t:${chat.id}`, icon: <FolderTree size={14} />, label: chat.title, hits: m.hits, detail: [ws.projects.find((p) => p.id === chat.projectId)?.name, chat.status === 'archived' ? t('Archived') : undefined].filter(Boolean).join(' · ') || undefined, group: 'Chats', run: () => ws.openTask(chat.id) })
     }
     if (q && taskId) {
       // Send what you typed to the agent: the open conversation if there is one, else a new chat.

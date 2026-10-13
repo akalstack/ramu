@@ -147,6 +147,13 @@ async function main() {
   const send = (channel: string, payload: unknown) => {
     if (!win.isDestroyed()) win.webContents.send(channel, payload)
   }
+  // Native fullscreen hides the macOS traffic lights; reclaim their space in the header.
+  const sendWindowChrome = () => send('ramu:window-chrome', {
+    controlsInset: process.platform === 'darwin' && !win.isFullScreen() ? 84 : 0,
+  })
+  win.webContents.on('dom-ready', sendWindowChrome)
+  win.on('enter-full-screen', sendWindowChrome)
+  win.on('leave-full-screen', sendWindowChrome)
   const notifier = createAgentNotifier({ window: win, send, invoke: (method, args) => runtimeInvoke(socketPath, method, args) })
   const unsubscribe = subscribeRuntime(socketPath, (channel, payload) => {
     if (channel === 'updates:changed') { updateStatus = payload; void desktopUpdater.prepare(payload); send(channel, updateView(payload)); return }

@@ -8,7 +8,10 @@ import { Button } from '@/components/desktop-button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { GitCommitHorizontal, Archive, ArchiveRestore, ArrowDown, ArrowUp, Check, CloudDownload, CloudUpload, GitBranch, RefreshCcw, Trash2, ChevronDown, ChevronRight, GitCompareArrows, Minus, MoreHorizontal, Plus, RefreshCw, Sparkles, Undo2, FileText, Copy } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { usePanelRef, type Layout } from 'react-resizable-panels'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { useLayoutEpoch, usePanelLayout } from '../panelLayout'
 import { createPortal } from 'react-dom'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type CommitAction, type CommitDraft, type GitStash, type GitBranchInfo, type GitCommit, type GitStatus, type GitStatusEntry, type PullMode, type RepositoryBinding } from '../../../shared/types'
 import { useAppSettings } from '../AppSettings'
@@ -28,10 +31,8 @@ import { FILE_ROW, FileRowLabel } from './FileRow'
 import { CommitHistoryRow } from './CommitHistoryRow'
 import { NoTask } from './ExplorerPanel'
 
-const GIT_HEIGHT_KEY = 'ramu.scmGitHeight'
-const GIT_HEIGHT_DEFAULT = 280
-const GIT_HEIGHT_MIN = 120
-// Room always left for the repository list above the Git section.
+// The Git section can shrink to its heading; the repository list always keeps room above it.
+const GIT_COLLAPSED_HEIGHT = 36
 const SCM_MIN_HEIGHT = 160
 
 /** A project folder without Git: offers `git init`, like VS Code's Initialize Repository. */
@@ -60,38 +61,38 @@ export function ScmPanel() {
   // The Git section (branches, commits, stashes) exists once, pinned below the list, for the repository last opened.
   const [gitHost, setGitHost] = useState<HTMLElement | null>(null)
   const [gitRepoId, setGitRepoId] = useState<string | null>(null)
-  const [gitHeight, setGitHeight] = useState(() => Number(localStorage.getItem(GIT_HEIGHT_KEY)) || GIT_HEIGHT_DEFAULT)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    const handle = event.currentTarget
-    const startY = event.clientY, startHeight = gitHeight
-    const max = () => Math.max(GIT_HEIGHT_MIN, (panelRef.current?.clientHeight ?? 600) - SCM_MIN_HEIGHT)
-    let latest = startHeight
-    handle.setPointerCapture(event.pointerId)
-    handle.classList.add('is-resizing')
-    const move = (e: PointerEvent) => { latest = Math.min(max(), Math.max(GIT_HEIGHT_MIN, startHeight + startY - e.clientY)); setGitHeight(latest) }
-    const end = () => {
-      handle.classList.remove('is-resizing')
-      handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end)
-      localStorage.setItem(GIT_HEIGHT_KEY, String(latest))
-    }
-    handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end)
-  }
+  const layoutEpoch = useLayoutEpoch()
+  const layout = usePanelLayout('scm', ['repos', 'git'], (): Layout => ({ repos: 60, git: 40 }))
+  const gitPanel = usePanelRef()
+  const [gitCollapsed, setGitCollapsed] = useState(false)
+  const gitExpandedHeight = useRef(0)
+  // Folding the Git heading shrinks its panel to the heading; unfolding restores the size it had.
+  useEffect(() => {
+    const panel = gitPanel.current
+    if (!panel) return
+    if (gitCollapsed) panel.resize(GIT_COLLAPSED_HEIGHT)
+    else if (gitExpandedHeight.current > GIT_COLLAPSED_HEIGHT) panel.resize(gitExpandedHeight.current)
+  }, [gitCollapsed, gitPanel])
   if (!taskId) return <NoTask />
   const many = bindings.length > 1
   const isOpen = (repoId: string, index: number) => open[repoId] ?? index === 0
   const gitRepo = bindings.find((b) => b.repoId === gitRepoId) ?? bindings.find((b, index) => isOpen(b.repoId, index)) ?? bindings[0]
-  return <div className="panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] p-[2px_8px_16px] scm-panel [&:has(.git-inspector.collapsed)_.scm-git-resizer]:hidden flex flex-col w-full h-full min-h-0 p-[2px_8px_0]" ref={panelRef}>
+  return <div className="panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] scm-panel flex flex-col w-full h-full min-w-0 min-h-0 overflow-hidden pt-0.5">
     {bindings.length === 0 && plainFolders.length > 0 && taskId ? plainFolders.map((b) => <InitializeRepository key={b.repoId} taskId={taskId} binding={b} />)
       : bindings.length === 0 ? <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">{t("No repository available.")}</p>
       : <>
-        <OverlayScrollArea className="scm-repos flex-1 min-h-0 overflow-y-auto">{bindings.map((b, index) => {
+        <ResizablePanelGroup key={layoutEpoch} orientation="vertical" id="scm" groupRef={layout.groupRef} defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="flex-1 min-h-0">
+          <ResizablePanel id="repos" minSize={SCM_MIN_HEIGHT}>
+        <OverlayScrollArea className="scm-repos h-full min-h-0" contentClassName="px-2">{bindings.map((b, index) => {
           const expanded = isOpen(b.repoId, index)
-          return <RepositoryControl key={`${taskId}:${b.repoId}`} taskId={taskId} binding={b} compact collapsed={many && !expanded} gitHost={gitHost} showGit={gitRepo?.repoId === b.repoId} gitRepos={bindings} onGitRepo={setGitRepoId} onToggle={many ? () => { setOpen((current) => ({ ...current, [b.repoId]: !expanded })); if (!expanded) setGitRepoId(b.repoId) } : undefined} />
+          return <RepositoryControl key={`${taskId}:${b.repoId}`} taskId={taskId} binding={b} compact collapsed={many && !expanded} gitHost={gitHost} showGit={gitRepo?.repoId === b.repoId} gitRepos={bindings} onGitRepo={setGitRepoId} onGitCollapsed={setGitCollapsed} onToggle={many ? () => { setOpen((current) => ({ ...current, [b.repoId]: !expanded })); if (!expanded) setGitRepoId(b.repoId) } : undefined} />
         })}</OverlayScrollArea>
-        <div className="scm-git-resizer [&::after]:[content:''] [&::after]:absolute [&::after]:inset-[4px_0] [&::after]:h-[var(--pane-border-width)] [&::after]:[background:var(--pane-border-color)] [&::after]:[transition:background_0.15s] [&:hover::after]:[background:var(--accent)] [&.is-resizing::after]:[background:var(--accent)] flex-none h-[9px] m-[-4px_-8px] relative z-2 cursor-row-resize" role="separator" aria-orientation="horizontal" aria-label={t("Resize Git section")} title={t("Drag to resize · double-click to reset")} onPointerDown={startResize} onDoubleClick={() => { setGitHeight(GIT_HEIGHT_DEFAULT); localStorage.removeItem(GIT_HEIGHT_KEY) }} />
-        <div className="scm-git-host [&:has(.git-inspector.collapsed)]:h-auto! [&_.git-inspector]:flex-1 [&_.git-inspector]:h-auto [&_.git-inspector]:min-h-0 [&_.git-inspector]:max-h-[none] [&_.git-inspector]:[border-top:0] [&_.git-inspector:not(.collapsed)]:flex-1 [&_.git-inspector:not(.collapsed)]:h-auto [&_.git-inspector:not(.collapsed)]:min-h-0 [&_.git-inspector:not(.collapsed)]:max-h-[none] [&_.git-inspector:not(.collapsed)]:[border-top:0] flex-none flex flex-col min-h-0" ref={setGitHost} style={{ height: gitHeight }} />
+          </ResizablePanel>
+          <ResizableHandle disabled={gitCollapsed} aria-label={t("Resize Git section")} className="scm-git-resizer" />
+          <ResizablePanel id="git" panelRef={gitPanel} minSize={GIT_COLLAPSED_HEIGHT} maxSize="75%" onResize={(size) => { if (size.inPixels > GIT_COLLAPSED_HEIGHT + 4) gitExpandedHeight.current = size.inPixels }}>
+        <div className="scm-git-host [&_.git-inspector]:flex-1 [&_.git-inspector]:h-auto [&_.git-inspector]:min-h-0 [&_.git-inspector]:max-h-[none] [&_.git-inspector]:[border-top:0] [&_.git-inspector:not(.collapsed)]:flex-1 [&_.git-inspector:not(.collapsed)]:h-auto [&_.git-inspector:not(.collapsed)]:min-h-0 [&_.git-inspector:not(.collapsed)]:max-h-[none] [&_.git-inspector:not(.collapsed)]:[border-top:0] flex flex-col h-full min-w-0 min-h-0 px-2" ref={setGitHost} />
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </>}
   </div>
 }
@@ -100,7 +101,7 @@ const PULL_NAME: Record<PullMode, string> = { rebase: 'rebase', merge: 'merge', 
 
 const LETTER: Record<string, string> = { modified: 'M', added: 'A', deleted: 'D', renamed: 'R', copied: 'C', 'type-changed': 'T', untracked: 'U', unmerged: '!' }
 
-function RepositoryControl({ taskId, binding, compact = false, collapsed = false, gitHost = null, showGit = true, gitRepos = [], onGitRepo, onToggle }: { taskId: string; binding: RepositoryBinding; compact?: boolean; collapsed?: boolean; gitHost?: HTMLElement | null; showGit?: boolean; gitRepos?: RepositoryBinding[]; onGitRepo?: (repoId: string) => void; onToggle?: () => void }) {
+function RepositoryControl({ taskId, binding, compact = false, collapsed = false, gitHost = null, showGit = true, gitRepos = [], onGitRepo, onToggle, onGitCollapsed }: { taskId: string; binding: RepositoryBinding; compact?: boolean; collapsed?: boolean; gitHost?: HTMLElement | null; showGit?: boolean; gitRepos?: RepositoryBinding[]; onGitRepo?: (repoId: string) => void; onToggle?: () => void; onGitCollapsed?: (collapsed: boolean) => void }) {
   useLanguage()
   const ws = useWorkspace()
   const { preferences, save: savePreferences } = useAppSettings()
@@ -122,6 +123,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   const [historyOpen, setHistoryOpen] = useState(true)
   const [stagedOpen, setStagedOpen] = useState(true)
   const [changesOpen, setChangesOpen] = useState(true)
+  useEffect(() => { if (showGit) onGitCollapsed?.(!historyOpen) }, [showGit, historyOpen, onGitCollapsed])
 
   const load = useCallback(async () => {
     const results = await Promise.allSettled([invoke('git.status', taskId, binding.repoId), invoke('git.history', taskId, binding.repoId), invoke('git.branches', taskId, binding.repoId), invoke('git.stashes', taskId, binding.repoId)])
@@ -297,6 +299,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
     },
   }), [taskId, binding.repoId, reportError])
 
+  const Content = compact ? 'div' : OverlayScrollArea
   return <div ref={root} className={`scm-repo-body${compact ? ' compact' : ''}${collapsed ? ' collapsed' : ''}`}>
     {fileContext.menu}
     {confirmation && <Dialog title={confirmation.kind === 'smart-commit' ? t("Stage all changes and commit?") : confirmation.kind === 'discard' ? t("Discard changes?") : confirmation.kind === 'undo' ? t("Undo last commit?") : confirmation.kind === 'branch' ? t("Create branch") : confirmation.kind === 'stash' ? (confirmation.staged ? t("Stash staged changes") : t("Stash changes")) : confirmation.kind === 'delete-branch' ? t("Delete branch?") : t("Delete stash?")} confirmLabel={confirmation.kind === 'smart-commit' ? (confirmation.action === 'commit' ? t("Stage all and commit") : actionLabel(confirmation.action)) : confirmation.kind === 'discard' ? t("Discard changes") : confirmation.kind === 'undo' ? t("Undo commit") : confirmation.kind === 'branch' ? t("Create branch") : confirmation.kind === 'stash' ? t("Stash") : t("Delete")} danger={confirmation.kind === 'discard' || confirmation.kind === 'drop-stash' || confirmation.kind === 'delete-branch'} busy={busy} onCancel={() => { if (!busy) setConfirmation(null) }} onConfirm={() => { if (confirmation.kind === 'smart-commit') { setConfirmation(null); void commit(confirmation.action, unstaged.map((entry) => entry.path)).catch((reason) => reportError(errorText(reason))); return } void run(async () => {
@@ -311,7 +314,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
     }) }}>
       {confirmation.kind === 'smart-commit' ? <p>{t("No changes are staged. All unstaged changes in this repository will be staged and committed.")}</p> : confirmation.kind === 'discard' ? <><p>{t("Tracked edits return to their staged version. Untracked files move to Trash. Staged changes are kept.")}</p><pre className="confirm-paths max-h-[240px] overflow-auto p-2.5 [border:1px_solid_transparent] rounded-(--radius-s) text-caption bg-fill">{confirmation.paths.join('\n')}</pre></> : confirmation.kind === 'undo' ? <><p>{t("The last local commit will be undone. Its files stay in your checkout and index.")}</p><p className="strong font-semibold">{confirmation.title}</p></> : confirmation.kind === 'branch' || confirmation.kind === 'stash' ? <><label className="explorer-name-field [&_input]:w-full flex flex-col items-stretch">{confirmation.kind === 'branch' ? t("Branch name") : t("Stash message")}<Input autoFocus value={operationName} onChange={(event) => setOperationName(event.target.value)} /></label><p className="muted text-muted-foreground small text-caption">{confirmation.kind === 'branch' ? t("Creates and switches to a new local branch. The checkout must be clean.") : (confirmation.kind === 'stash' && confirmation.staged ? t("Saves only staged changes and removes them from the checkout. Unstaged edits stay.") : t("Preserves tracked and untracked changes. Ignored files stay in place."))}</p></> : <><p>{confirmation.kind === 'delete-branch' ? t("Deletes the local branch only. Git will refuse an unmerged branch or one in use by a worktree.") : t("This saved stash will be permanently removed.")}</p><p className="strong font-semibold">{confirmation.kind === 'delete-branch' ? confirmation.name : confirmation.title}</p></>}
     </Dialog>}
-    <OverlayScrollArea className="scm-content [.scm-repo-body.compact_&]:flex-none [.scm-repo-body.compact_&]:overflow-visible flex-1 min-h-0 overflow-y-auto">
+    <Content className="scm-content [.scm-repo-body.compact_&]:flex-none flex-1 min-w-0 min-h-0">
       <section className="scm-repo [&_.scm-commit]:mb-1.5 [&_.commit-msg]:block [&_.commit-msg]:w-full [&_.commit-msg]:min-h-12 [&_.commit-msg]:p-[8px_36px_8px_10px] [&_.commit-msg]:leading-[18px] [&_.commit-msg]:bg-fill [&_.commit-msg]:[border-color:transparent] [&_.commit-msg]:rounded-(--radius-s) [&_.commit-msg]:text-control [&_.commit-msg]:resize-y [&_.sub-title]:m-[4px_0_0] [&_.sub-title]:mt-1 [&_.sub-title]:p-[0_4px] [&_.sub-title]:min-h-7 [&_.sub-title]:rounded-(--radius-s) [&_.sub-title]:gap-1 [&_.sub-title_.with-icon]:gap-1.5 [&_.sub-title:has(.scm-group-toggle):hover]:bg-hover [&_.sub-title:has(.scm-group-toggle):focus-within]:bg-hover [.scm-repo-body.collapsed_&_>_:not(.scm-section-head)]:hidden [.scm-repo-body.collapsed_&]:pb-0.5 [&_.scm-repo-toggle]:justify-start [&_.scm-repo-toggle]:bg-transparent! [&_.scm-repo-toggle]:p-0 [&_.scm-repo-toggle]:h-auto [&_.scm-repo-toggle:hover]:justify-start [&_.scm-repo-toggle:hover]:bg-transparent! [&_.scm-repo-toggle:hover]:p-0 [&_.scm-repo-toggle:hover]:h-auto [&_.sub-title_.scm-count]:bg-accent [&_.sub-title_.scm-count]:text-soft [&_.sub-title_.scm-count]:font-semibold [&_.change-name]:min-w-0 [&_.change-name]:overflow-hidden [&_.change-name]:flex-auto [&_.change-name]:whitespace-nowrap [&_.change-base]:text-foreground [&_.change-base]:flex-initial [&_.change-base]:max-w-[none] [&_.change-base]:min-w-0 [&_.change-base]:overflow-hidden [&_.change-base]:text-ellipsis [&_.change-base]:whitespace-nowrap [&_.change-dir]:overflow-hidden [&_.change-dir]:text-ellipsis [&_.change-dir]:text-muted-foreground [&_.change-dir]:[flex:1_1_0] [&_.change-dir]:min-w-0 [&_.change-dir]:whitespace-nowrap [&_.change-dir]:text-caption [&_.change-row_>_.letter]:flex-none [&_.change-row_>_.letter]:w-[18px] [&_.change-row_>_.letter]:mr-1 [&_.change-row_>_.letter]:font-semibold flex flex-col [border-bottom:none] gap-0 pb-2 mb-0">
         <div className="scm-section-head [&_>_svg]:flex-none [&_.strong]:overflow-hidden [&_.strong]:text-ellipsis [&_.strong]:whitespace-nowrap flex items-center gap-1.5 min-h-8 p-[0_4px] m-0 text-control">
           {onToggle ? <Button variant="tree" type="button" className="scm-repo-toggle [&_.strong]:overflow-hidden [&_.strong]:text-ellipsis [&_.strong]:whitespace-nowrap [&_.scm-count]:ml-1.5 flex items-center justify-start gap-1 min-w-0 p-0 [border:0] bg-transparent text-inherit [font:inherit] text-left cursor-pointer grow flex-1 min-w-0 text-left" aria-expanded={!collapsed} onClick={onToggle}>{collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}<span className="strong font-semibold">{binding.repoName}</span>{collapsed && !!status?.entries.length && <span className="scm-count ml-auto text-muted-foreground inline-flex items-center justify-center min-w-[18px] h-[18px] p-[0_4px] rounded-(--radius-row) bg-accent text-caption leading-[18px]">{status.entries.length}</span>}</Button> : <><ChevronDown size={14} /><span className="grow flex-1 min-w-0 text-left strong font-semibold">{binding.repoName}</span></>}
@@ -375,7 +378,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
         {changesOpen && unstaged.map((e) => row(e, false))}
         {!status?.entries.length && status && <p className="muted text-muted-foreground small text-caption scm-empty p-[8px_0]">{t("No changes in this checkout.")}</p>}
       </section>
-    </OverlayScrollArea>
+    </Content>
     {showGit && inGitSlot(<Tabs value={gitTab} onValueChange={(value) => setGitTab(value as 'commits' | 'stashes')} render={<section />} className={`git-inspector [&:not(.collapsed)]:h-[40%] [&:not(.collapsed)]:min-h-[220px] [&:not(.collapsed)]:max-h-[50%] [&_.git-tabs]:flex [&_.git-tabs]:flex-none [&_.git-tabs]:w-full [&_.git-tabs]:h-7 [&_.git-tabs]:gap-0.5 [&_.git-tabs]:p-0.5 [&_.git-tabs]:m-[0_0_4px] [&_.git-tabs]:rounded-(--radius-s) [&_.git-tabs]:bg-hover [&_.git-tabs_.git-tab]:flex-1 [&_.git-tabs_.git-tab]:h-6 [&_.git-tabs_.git-tab]:min-h-6 [&_.git-tabs_.git-tab]:p-[0_8px] [&_.git-tabs_.git-tab]:gap-1.5 [&_.git-tabs_.git-tab]:[border:0] [&_.git-tabs_.git-tab]:rounded-(--radius-s) [&_.git-tabs_.git-tab]:bg-transparent [&_.git-tabs_.git-tab]:[box-shadow:none] [&_.git-tabs_.git-tab]:text-muted-foreground [&_.git-tabs_.git-tab]:text-caption [&_.git-tabs_.git-tab]:font-medium [&_.git-tabs_.git-tab:hover]:text-foreground [&_.git-tabs_.git-tab:hover]:bg-transparent [&_.git-tabs_.git-tab:is([aria-selected='true'],_[data-active])]:bg-raised [&_.git-tabs_.git-tab:is([aria-selected='true'],_[data-active])]:text-foreground [&_.git-tabs_.git-tab:is([aria-selected='true'],_[data-active])]:[box-shadow:0_1px_2px_rgba(0,_0,_0,_0.25)] [&_.git-pane]:flex-auto [&_.git-pane]:min-h-0 [&_.git-pane:not([hidden])]:flex [&_.git-pane:not([hidden])]:flex-col [&_.git-history]:flex-auto [&_.git-history]:min-h-0 flex-none flex flex-col gap-0 min-w-0 p-[0_0_6px] ${historyOpen ? '' : ' collapsed'}`}>
       <div className="git-inspector-head [&_.dropdown-trigger.git-repo-picker]:flex-initial [&_.dropdown-trigger.git-repo-picker]:w-auto [&_.dropdown-trigger.git-repo-picker]:min-w-0 [&_.dropdown-trigger.git-repo-picker]:h-6 [&_.dropdown-trigger.git-repo-picker]:min-h-6 [&_.dropdown-trigger.git-repo-picker]:p-[0_4px_0_6px] [&_.dropdown-trigger.git-repo-picker]:gap-1 [&_.dropdown-trigger.git-repo-picker]:[border:0] [&_.dropdown-trigger.git-repo-picker]:rounded-(--radius-s) [&_.dropdown-trigger.git-repo-picker]:bg-transparent [&_.dropdown-trigger.git-repo-picker]:[box-shadow:none] [&_.dropdown-trigger.git-repo-picker]:text-muted-foreground [&_.dropdown-trigger.git-repo-picker]:text-control [&_.dropdown-trigger.git-repo-picker:is(:hover,_[data-popup-open])]:bg-hover [&_.dropdown-trigger.git-repo-picker:is(:hover,_[data-popup-open])]:text-foreground [&_.dropdown-trigger.git-repo-picker_>_[data-slot='select-value']]:flex-initial [&_.dropdown-trigger.git-repo-picker_>_[data-slot='select-value']]:min-w-0 [&_.dropdown-trigger.git-repo-picker_>_[data-slot='select-value']]:overflow-hidden [&_.dropdown-trigger.git-repo-picker_>_[data-slot='select-value']]:text-ellipsis [&_.dropdown-trigger.git-repo-picker_>_[data-slot='select-value']]:whitespace-nowrap [&_.dropdown-trigger.git-repo-picker_>_svg:last-child]:ml-0 flex items-center gap-0.5 min-w-0 min-h-[34px]">
         <Button variant="tree" className="git-inspector-heading" aria-expanded={historyOpen} onClick={() => setHistoryOpen((v) => !v)}><ChevronRight size={13} className={historyOpen ? 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)] open' : 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]'} />Git</Button>

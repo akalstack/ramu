@@ -23,6 +23,9 @@ export function ProjectsPanel() {
   const ws = useWorkspace()
   const addProject = useAddProject()
   const [showArchived, setShowArchived] = useState(false)
+  const [clearingArchived, setClearingArchived] = useState(false)
+  const [clearBusy, setClearBusy] = useState(false)
+  const [clearError, setClearError] = useState<string | null>(null)
   const archivedChats = ws.tasks.filter((task) => task.status === 'archived').sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   // Pinned chats from every project gather in one section above the projects.
   const showPinned = ws.isExpanded('section:pinned'), showProjects = ws.isExpanded('section:projects'), showChats = ws.isExpanded('section:chats')
@@ -89,7 +92,7 @@ export function ProjectsPanel() {
         </Button>
       </SectionHead>
       <Collapse open={showProjects} id="projects-list">
-      {recentMode && latest.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
+      {recentMode && <div className="flex flex-col gap-0.5">{latest.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}</div>}
       {!recentMode && ws.projects.length === 0 && (
         <div className="add-project [&_.hint]:m-[6px_0_14px] [&_.hint]:leading-[1.55] p-[2px_8px_4px]">
           <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">{t("Choose a repository or a folder containing repositories.")}</p>
@@ -102,17 +105,27 @@ export function ProjectsPanel() {
       </Collapse>
       {!recentMode && <>
       <SectionHead title={t("Chats")} open={showChats} onToggle={() => ws.setExpanded('section:chats', !showChats)} controls="loose-chats"><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("New chat without a project")} onClick={() => ws.newTask(NO_PROJECT)}><Plus size={14} /></Button></SectionHead>
-      <Collapse open={showChats} id="loose-chats">{looseChats.map((t) => <TaskRow key={t.id} task={t} />)}</Collapse></>}
+      <Collapse open={showChats} id="loose-chats" className="flex flex-col gap-0.5">{looseChats.map((t) => <TaskRow key={t.id} task={t} />)}</Collapse></>}
       {archivedChats.length > 0 && <>
-      <Button variant="ghost" className="archived-toggle h-auto min-h-7 justify-start gap-1 rounded-(--radius-row) bg-transparent px-2 text-caption font-normal text-muted-foreground [border:none] [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:hover:bg-hover" aria-expanded={showArchived} aria-controls="archived-chats" onClick={() => setShowArchived((shown) => !shown)}>
-        <ChevronRight data-icon="inline-start" className={showArchived ? 'caret open' : 'caret'} />
-        {t('Archived chats')} ({archivedChats.length})
-      </Button>
+      <SectionHead title={`${t('Archived')} · ${archivedChats.length}`} open={showArchived} onToggle={() => setShowArchived((shown) => !shown)} controls="archived-chats">
+        <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) opacity-0 [transition:opacity_0.12s] group-hover/head:opacity-100 group-focus-within/head:opacity-100" aria-label={t("Delete all archived chats")} title={t("Delete all archived chats")} onClick={() => { setClearError(null); setClearingArchived(true) }}><Trash2 size={14} /></Button>
+      </SectionHead>
       {showArchived && <div id="archived-chats" className="task-list">
         {archivedChats.length === 0 && <p className="muted small empty-tasks">{t('No archived chats')}</p>}
         {archivedChats.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
       </div>}
       </>}
+      {clearingArchived && <Dialog title={t("Delete {0} archived chats?", { "0": archivedChats.length })} confirmLabel={t("Delete all")} danger busy={clearBusy} error={clearError} onCancel={() => { setClearingArchived(false); setClearError(null) }} onConfirm={async () => {
+        setClearBusy(true); setClearError(null)
+        try {
+          for (const task of archivedChats) { await invoke('tasks.delete', task.id, false); ws.forgetTask(task.id) }
+          await ws.refresh()
+          setClearingArchived(false)
+        } catch (e) { setClearError(errorText(e)); await ws.refresh() } finally { setClearBusy(false) }
+      }}>
+        <p>{t("This removes every archived chat and its agent transcripts. This can't be undone.")}</p>
+        <p className="muted text-muted-foreground">{t("Worktrees and branches are kept.")}</p>
+      </Dialog>}
     </div>
   )
 }

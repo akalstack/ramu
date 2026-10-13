@@ -1,8 +1,17 @@
+/// <reference lib="dom" />
 // Exposes a narrow bridge; the renderer never sees ipcRenderer or Node APIs.
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import type { PushEvents, RamuBridge } from '../shared/api'
 
 const PUSH_EVENTS = new Set<string>(['menu:action', 'updates:changed', 'providers:updates', 'automation:changed', 'memory:changed', 'notify:inapp', 'notify:open', 'background:connection', 'agent:event', 'term:data', 'term:exit', 'fs:changed', 'usage:changed', 'aside:changed', 'context:changed'])
+
+let controlsInset = process.platform === 'darwin' ? 84 : 0
+const applyWindowChrome = () => document.documentElement?.style.setProperty('--window-controls-inset', `${controlsInset}px`)
+window.addEventListener('DOMContentLoaded', applyWindowChrome, { once: true })
+ipcRenderer.on('ramu:window-chrome', (_event, chrome: { controlsInset: number }) => {
+  controlsInset = chrome.controlsInset
+  applyWindowChrome()
+})
 
 const bridge: RamuBridge = {
   // Electron wraps handler failures as "Error invoking remote method '...': Error: <message>"; people should only see the message.

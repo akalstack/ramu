@@ -12,6 +12,7 @@ import { toolKind, KIND_LABEL, KIND_VERB } from '../../../shared/agentTools'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { compactionLabel, isCompacting, isTurnFooter } from '../../../shared/compaction'
 import { Button } from '@/components/desktop-button'
+import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { Input } from '@/components/ui/input'
 import type { FileContext } from '../../../shared/types'
 import { Wrench, Globe, FilePenLine, FileMinus2, ArrowRightLeft, Settings2, Image as ImageIcon, ArrowDown, ArrowLeft, Plus, Bot, Brain, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb } from 'lucide-react'
@@ -536,17 +537,18 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
         }}>{question.kind === 'elicitation' || questionStates.get(question.requestId)?.waiting || question.responseMode !== 'message' ? 'Waiting: ' : 'Pending: '}{question.kind === 'elicitation' ? `${question.serverName}: ${question.message}` : question.dependsOn || question.questions[0]?.question}</Button>)}
       </div>}
       <div className={`transcript-frame [&_>_.transcript]:min-h-0 [&_>_.transcript]:[flex:1_1_0] [&_>_.transcript]:min-w-0 [&::before]:[content:''] [&::before]:absolute [&::before]:left-0 [&::before]:right-0 [&::before]:h-[36px] [&::before]:pointer-events-none [&::before]:z-1 [&::before]:opacity-0 [&::before]:[transition:opacity_150ms_var(--motion-curve)] [&::before]:top-0 [&::before]:[background:linear-gradient(to_bottom,_var(--canvas)_15%,_transparent)] [&::after]:[content:''] [&::after]:absolute [&::after]:left-0 [&::after]:right-0 [&::after]:h-[36px] [&::after]:pointer-events-none [&::after]:z-1 [&::after]:opacity-0 [&::after]:[transition:opacity_150ms_var(--motion-curve)] [&::after]:bottom-0 [&::after]:[background:linear-gradient(to_top,_var(--canvas)_15%,_transparent)] [&.shadow-top::before]:opacity-100 [&.shadow-bottom::after]:opacity-100 [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col${edges.top ? ' shadow-top' : ''}${edges.bottom ? ' shadow-bottom' : ''}`}>
-      <div
-        className="transcript flex-1 overflow-auto [scrollbar-gutter:stable] p-[12px_24px_28px] pt-3"
-        ref={scroller}
-        onScroll={(e) => {
+      <OverlayScrollArea
+        className="transcript flex-1"
+        viewportClassName="p-[12px_24px_28px] pt-3"
+        viewportRef={scroller}
+        viewportProps={{ onScroll: (e) => {
           const el = e.currentTarget
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
           measureEdges()
-        }}
+        } }}
       >
         <div className="transcript-col [&_>_[data-block-index]:has(>_.msg.user)]:flex [&_>_[data-block-index]:has(>_.msg.user)]:justify-end max-w-[var(--chat-column-width)] m-[0_auto] flex flex-col gap-3.5">
-          {hydrating && !turns.length && <ContentSkeleton variant="cards" rows={2} />}
+          {hydrating && !turns.length && <ContentSkeleton variant="chat" rows={2} />}
           {turns.map((turn, ti) => {
             const isLast = ti === turns.length - 1
             // A turn is done when the agent reported a result, a later message exists, or nothing is running any more.
@@ -583,7 +585,7 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
             </div>
           )}
         </div>
-      </div>
+      </OverlayScrollArea>
       {edges.bottom && <Button variant="outline" size="icon-sm" type="button" className={`jump-bottom absolute left-1/2 z-4 [transform:translateX(-50%)] grid place-items-center p-0 rounded-full backdrop-blur-sm bottom-2.5 shadow-sm motion-safe:[animation:fade-only_0.14s_ease-out] ${working ? 'working' : ''}`} aria-label={working ? translate("Agent is working. Scroll to latest") : translate("Scroll to latest")} title={translate("Scroll to latest")} onClick={scrollToLatest}>
         {working ? <LoadingDots /> : <ArrowDown size={14} />}
       </Button>}

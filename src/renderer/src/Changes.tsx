@@ -1,5 +1,6 @@
 import { ExpandRow } from '@/components/expand-row'
 import { errorText } from './errors'
+import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { t, useLanguage, formatLocale, currentLanguage } from './i18n'
 import { formatChatDate } from '../../shared/chatDates'
@@ -125,14 +126,14 @@ export function ChangeReviewTab({ view, visible = true }: { view: Extract<ViewDe
   }, [])
   const pickFile = (fileId: string) => { window.dispatchEvent(new CustomEvent('ramu:review-file', { detail: { fileId } })); if (oneAtATime) { setActiveFileId(fileId); root.current?.scrollTo?.({ top: 0 }) } else root.current?.querySelector<HTMLElement>(`[data-file-id="${fileId}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }
   const openChat = () => { if (review?.sessionId) { ws.openTask(review.taskId); ws.openView(review.taskId, { kind: 'agent', sessionId: review.sessionId }) } }
-  return <div ref={root} className="changes-page h-full overflow-auto pair-review changes-tab flex-1 min-w-0 w-full p-[0_8px_12px] flex flex-col gap-2 isolate [container-type:inline-size] [--review-page-padding-top:0px]">
+  return <OverlayScrollArea className="h-full flex-1 min-w-0 w-full isolate [container-type:inline-size]" viewportClassName="changes-page pair-review changes-tab h-full" viewportRef={root} contentClassName="flex flex-col gap-2 p-[0_8px_12px] min-h-full [--review-page-padding-top:0px]">
     {!review && id && !error && <ContentSkeleton variant="cards" rows={3} label={t("Loading changes…")} />}
     {!review && (!id || error) && <Empty className="automation-empty"><EmptyHeader><EmptyMedia variant="icon"><FileDiff /></EmptyMedia><EmptyTitle>{id && !error ? t("Loading changes…") : t("No changes to review")}</EmptyTitle><EmptyDescription>{t("Changed files will appear here after the agent finishes.")}</EmptyDescription></EmptyHeader>{error && <EmptyContent><p className="error text-bad" role="alert">{error}</p></EmptyContent>}</Empty>}
     {review && <>
-      <div className="pair-review-bar [&_>_*]:flex-none [&_>_.grow]:flex-1 [&_>_.grow]:min-w-1 [&_button.small-icon]:text-muted-foreground [&_button.small-icon]:rounded-(--radius-s) [&_button.small-icon:hover:not(:disabled)]:text-foreground [&_button.small-icon[aria-pressed='true']]:text-foreground [&_.review-layout-toggle_button.small-icon]:w-6 [&_.review-layout-toggle_button.small-icon]:h-6 [&_.review-layout-toggle_button.small-icon]:rounded-(--radius-xs) [&_.review-layout-toggle_button.small-icon[aria-pressed='true']]:bg-raised [&_.review-layout-toggle_button.small-icon[aria-pressed='true']]:text-foreground [&_.review-layout-toggle_button.small-icon[aria-pressed='true']]:[box-shadow:0_1px_2px_rgba(0,_0,_0,_0.2)] sticky top-0 z-20 flex items-center gap-1 min-h-[40px] m-[0_-8px] p-[0_8px] bg-canvas [border-bottom:var(--pane-border-width)_solid_var(--pane-border-color)] whitespace-nowrap">
+      <div className="pair-review-bar [&_>_*]:flex-none [&_>_.grow]:flex-1 [&_>_.grow]:min-w-1 [&_button.small-icon]:text-muted-foreground [&_button.small-icon]:rounded-(--radius-s) [&_button.small-icon:hover:not(:disabled)]:text-foreground [&_button.small-icon[aria-pressed='true']]:text-foreground [&_.review-layout-toggle_button.small-icon]:w-6 [&_.review-layout-toggle_button.small-icon]:h-6 [&_.review-layout-toggle_button.small-icon]:rounded-(--radius-xs) [&_.review-layout-toggle_button.small-icon[aria-pressed='true']]:bg-raised [&_.review-layout-toggle_button.small-icon[aria-pressed='true']]:text-foreground [&_.review-layout-toggle_button.small-icon[aria-pressed='true']]:[box-shadow:0_1px_2px_rgba(0,_0,_0,_0.2)] sticky top-0 z-20 flex items-center gap-1 min-h-[40px] m-[0_-8px] p-[0_8px] bg-canvas [border-bottom:var(--pane-border-width)_solid_var(--pane-border-color)] whitespace-nowrap overflow-hidden">
         <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-pressed={showTree} aria-label={showTree ? t("Hide file tree") : t("Show file tree")} title={showTree ? t("Hide file tree") : t("Show file tree")} onClick={toggleTree}><PanelLeft size={14} /></Button>
         <span className="review-bar-summary [&_strong]:font-medium inline-flex items-center gap-2 ml-1 text-control"><strong>{review.files.length === 1 ? t("1 file") : t("{0} files", { "0": review.files.length })}</strong><LineStats files={review.files} /></span>
-        {revisions.length > 1 ? <Dropdown label={t("Review revision")} disabled={busy} value={review.id} onChange={(value) => openReview(ws, { id: value })} options={revisions.map((r, i) => ({ value: r.id, label: t("{0}Revision {1} · {2}", { "0": i === 0 ? 'Latest · ' : '', "1": revisions.length - i, "2": formatChatDate(r.createdAt, Date.now(), currentLanguage()) }) }))} /> : <time className="review-bar-date text-muted-foreground text-caption tabular-nums ml-1.5" dateTime={new Date(review.createdAt).toISOString()} title={new Date(review.createdAt).toLocaleString(formatLocale())}>{formatChatDate(review.createdAt, Date.now(), currentLanguage())}</time>}
+        {revisions.length > 1 ? <Dropdown label={t("Review revision")} className="shrink! min-w-0! max-w-[min(100%,260px)] overflow-hidden" disabled={busy} value={review.id} onChange={(value) => openReview(ws, { id: value })} options={revisions.map((r, i) => ({ value: r.id, label: t("{0}Revision {1} · {2}", { "0": i === 0 ? 'Latest · ' : '', "1": revisions.length - i, "2": formatChatDate(r.createdAt, Date.now(), currentLanguage()) }) }))} /> : <time className="review-bar-date text-muted-foreground text-caption tabular-nums ml-1.5" dateTime={new Date(review.createdAt).toISOString()} title={new Date(review.createdAt).toLocaleString(formatLocale())}>{formatChatDate(review.createdAt, Date.now(), currentLanguage())}</time>}
         <span className="grow flex-1 min-w-0 text-left" />
         <span className="review-viewed-progress whitespace-nowrap text-muted-foreground text-caption tabular-nums mr-1.5" role="status">{t("{0} / {1} viewed", { "0": files.filter((file) => viewedFiles.has(file.id)).length, "1": files.length })}</span>
         <div className="review-layout-toggle inline-flex gap-0.5 p-0.5 rounded-(--radius-s) bg-fill" role="group" aria-label={t("Layout for all file diffs")}>
@@ -157,7 +158,7 @@ export function ChangeReviewTab({ view, visible = true }: { view: Extract<ViewDe
         </div>
       </div>
     </>}
-  </div>
+  </OverlayScrollArea>
 }
 /** Keep visited cards (and their drafts) alive, but do not construct off-screen card bodies. */
 function DeferredReviewFile({ file, visible, children }: { file: ChangeFile; visible: boolean; children: React.ReactNode }) {
@@ -285,7 +286,7 @@ function ReviewFileTree({ review, activeId, onPick, viewedFiles }: { viewedFiles
     </Button>
   return <aside className="review-tree [&_.review-tree-filter]:m-0 [&_.search-input]:w-full sticky top-[calc(var(--review-toolbar-height,_44px)_+_12px)] flex flex-col gap-1.5 max-h-[calc(100vh_-_200px)] min-w-0" aria-label={t("Changed files")}>
     <SearchInput className="review-tree-filter" aria-label={t("Filter files")} placeholder={t("Filter files…")} value={filter} onChange={(event) => setFilter(event.target.value)} onClear={() => setFilter('')} />
-    <VirtualList items={rows} rowHeight={Math.max(27, preferences.fontSize + 12)} itemKey={(row) => row.key} renderItem={render} className="review-tree-list overflow-y-auto min-h-0 flex flex-col [overflow-anchor:none]" resetKey={needle} revealKey={activeId ? `file:${activeId}` : undefined} />
+    <VirtualList items={rows} rowHeight={Math.max(27, preferences.fontSize + 12)} itemKey={(row) => row.key} renderItem={render} overlay className="review-tree-list min-h-0 flex-1 [overflow-anchor:none]" resetKey={needle} revealKey={activeId ? `file:${activeId}` : undefined} />
   </aside>
 }
 
@@ -327,7 +328,7 @@ export const TurnChanges = memo(function TurnChanges({ review }: { review: Chang
       <div className="chat-changes-actions [&_>_.error]:max-w-[180px] flex items-center gap-1 flex-none"><UndoReview reviewId={review.id} disabled={undone || review.state !== 'ready'} /><Button size="sm" variant="secondary" className="small text-caption" onClick={() => openReview(ws, { id: review.id, taskId: review.taskId })}>{t("View changes")}</Button></div>
     </div>
     {!single && (expanded && review.files.length > 100
-      ? <VirtualList items={review.files} rowHeight={32} itemKey={(file) => file.id} renderItem={renderFile} className="chat-change-list max-h-[320px] overflow-y-auto [border-top:1px_solid_var(--line)]" />
+      ? <VirtualList items={review.files} rowHeight={32} itemKey={(file) => file.id} renderItem={renderFile} overlay className="chat-change-list max-h-[320px] [border-top:1px_solid_var(--line)]" />
       : <ul>{visible.map((file) => <li key={file.id}>{renderFile(file)}</li>)}</ul>)}
     {!single && review.files.length > 3 && <ExpandRow expanded={expanded} onToggle={() => setExpanded((value) => !value)}>{expanded ? t('Show fewer files') : t('Show {0} more files', { '0': review.files.length - 3 })}</ExpandRow>}
   </section>

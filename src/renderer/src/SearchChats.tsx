@@ -1,3 +1,4 @@
+import { searchableChats } from './chatSearch'
 import { t, useLanguage } from './i18n'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { MessageSquare, Sparkles, User } from 'lucide-react'
@@ -53,7 +54,7 @@ export function SearchChats({ onClose }: { onClose: () => void }) {
   const tasks = useMemo(() => new Map(ws.tasks.map((task) => [task.id, task])), [ws.tasks])
   const chats: Result[] = useMemo(() => {
     const live = ws.tasks.filter((task) => task.status !== 'archived')
-    const found = needle ? live.filter((task) => task.title.toLowerCase().includes(needle)) : [...live].sort((a, b) => b.lastActiveAt - a.lastActiveAt).slice(0, 8)
+    const found = needle ? searchableChats(ws.tasks).filter((task) => task.title.toLowerCase().includes(needle)) : [...live].sort((a, b) => b.lastActiveAt - a.lastActiveAt).slice(0, 8)
     return found.slice(0, 20).map((task) => ({ key: `chat:${task.id}`, task }))
   }, [ws.tasks, needle])
   // At most three matches per chat, so one long conversation doesn't bury the rest.

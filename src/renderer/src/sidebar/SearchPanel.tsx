@@ -169,6 +169,6 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
       <div className="muted text-muted-foreground small text-caption search-scope-note text-caption p-[3px_0] leading-[1.5]">{t("Files on disk · Files up to 2 MB")}</div>
     </div>
     {busy && <ContentSkeleton label={t("Searching…")} />}
-    <VirtualList items={rows} rowHeight={rowHeight} itemKey={(row) => row.key} renderItem={renderRow} isFocusable={(row) => row.kind !== 'repo'} resetKey={`${options.query}:${viewMode}`} className={`search-results flex-1 min-h-0 overflow-auto search-results-${viewMode}`} />
+    <VirtualList items={rows} rowHeight={rowHeight} itemKey={(row) => row.key} renderItem={renderRow} overlay isFocusable={(row) => row.kind !== 'repo'} resetKey={`${options.query}:${viewMode}`} className={`search-results flex-1 min-h-0 search-results-${viewMode}`} />
   </div>
 }

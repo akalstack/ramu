@@ -3,7 +3,9 @@ import { errorText } from './errors'
 import { t, useLanguage } from './i18n'
 import { Kbd } from '@/components/ui/kbd'
 import { ProviderSetupTerminal } from './ProviderSetupTerminal'
-import { beginPaneResize } from './paneResize'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { usePanelRef, type Layout, type PanelSize } from 'react-resizable-panels'
+import { readSize, useLayoutEpoch, writeSize } from './panelLayout'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { CalendarClock, Settings, SquarePen, Archive, Files, History, Folders, FolderPlus, GitBranch, MessageCircle, Pencil, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, SquareTerminal, X, RefreshCcw, Search } from 'lucide-react'
@@ -22,7 +24,7 @@ import { AppSettingsProvider, useAppSettings } from './AppSettings'
 import { ModelSetsProvider } from './ModelSets'
 import type { SettingsSection } from './SettingsPage'
 import { ScheduleNavigation, SchedulesPage } from './Automation'
-import { DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '../../shared/types'
+import { NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '../../shared/types'
 import { SettingsPanel } from './SettingsPanel'
 import { UsageFooter, UsageRings } from './Usage'
 import { ProjectSwitcher } from './ProjectSwitcher'
@@ -60,31 +62,44 @@ function Shell() {
   const { ui } = ws
   const [palette, setPalette] = useState<PaletteMode | null>(null)
   const [sidebarHidden, setSidebarHidden] = useState(false)
-  const [toolsWidth, setToolsWidth] = useState(340)
-  const toolsResizeCleanup = useRef<(() => void) | null>(null)
-  useEffect(() => () => toolsResizeCleanup.current?.(), [])
   const { preferences, save } = useAppSettings()
-  const [dragWidth, setDragWidth] = useState<number | null>(null)
-  const sidebarWidth = dragWidth ?? preferences.sidebarWidth
   const latest = useRef({ preferences, save })
   latest.current = { preferences, save }
   const saveLayout = (patch: Partial<typeof preferences>) => void latest.current.save({ ...latest.current.preferences, ...patch }).catch((reason) => notifyError(errorText(reason), 'Settings'))
-  const resizeCleanup = useRef<(() => void) | null>(null)
-  useEffect(() => () => resizeCleanup.current?.(), [])
-  const startResize = (event: React.PointerEvent) => {
-    resizeCleanup.current?.()
-    const startX = event.clientX, startWidth = sidebarWidth
-    let width = startWidth
-    const move = (e: { clientX: number }) => {
-      const delta = e.clientX - startX
-      width = Math.round(Math.min(Math.max(startWidth + delta, SIDEBAR_WIDTH_RANGE[0]), Math.min(SIDEBAR_WIDTH_RANGE[1], window.innerWidth * 0.5)))
-      setDragWidth(width)
-    }
-    resizeCleanup.current = beginPaneResize(event, 'column', move, () => {
-      if (width !== latest.current.preferences.sidebarWidth) saveLayout({ sidebarWidth: width })
-      setDragWidth(null)
-    })
+  // The sidebar, main area and tools column are panels of one group. Their default sizes always mirror the
+  // current ones, so the group keeps them when another panel joins or leaves.
+  const sidebarPanel = usePanelRef()
+  const toolsPanel = usePanelRef()
+  const [navWidth, setNavWidth] = useState(preferences.sidebarWidth)
+  const [expandedWidth, setExpandedWidth] = useState(preferences.sidebarWidth)
+  const layoutEpoch = useLayoutEpoch()
+  const onSidebarResize = (size: PanelSize) => {
+    const width = Math.round(size.inPixels)
+    setNavWidth(width)
+    const collapsed = sidebarPanel.current?.isCollapsed() ?? width === 0
+    if (width > 0 && !collapsed) setExpandedWidth(width)
+    setSidebarHidden((hidden) => hidden === collapsed ? hidden : collapsed)
   }
+  // Dragging remembers sizes; the sidebar width is a preference, the tools column a layout size.
+  const onShellLayout = (_layout: Layout, meta: { isUserInteraction: boolean }) => {
+    if (!meta.isUserInteraction) return
+    const sidebar = Math.round(sidebarPanel.current?.getSize().inPixels ?? 0)
+    if (sidebar > 0 && sidebar !== latest.current.preferences.sidebarWidth) saveLayout({ sidebarWidth: sidebar })
+    const tools = toolsPanel.current?.getSize().inPixels
+    if (tools) writeSize('tools-width', tools)
+  }
+  useEffect(() => {
+    const panel = sidebarPanel.current
+    if (!panel) return
+    if (sidebarHidden && !panel.isCollapsed()) panel.collapse()
+    if (!sidebarHidden && panel.isCollapsed()) panel.expand()
+  }, [sidebarHidden])
+  // Settings → reset layout sizes (and any other change of the saved width) applies to the live panel.
+  useEffect(() => {
+    const panel = sidebarPanel.current
+    if (panel && !panel.isCollapsed() && Math.abs(panel.getSize().inPixels - preferences.sidebarWidth) > 1) panel.resize(preferences.sidebarWidth)
+  }, [preferences.sidebarWidth])
+  useEffect(() => { if (layoutEpoch) toolsPanel.current?.resize(340) }, [layoutEpoch])
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchingChats, setSearchingChats] = useState(false)
@@ -132,6 +147,29 @@ function Shell() {
   // The start screen shows for New chat, and when nothing is open yet.
   const globalPage = ui.sidebar === 'schedules'
   const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
+  const [retainedTool, setRetainedTool] = useState(workspaceTool)
+  const renderedTool = workspaceTool ?? retainedTool
+  useEffect(() => {
+    if (workspaceTool) setRetainedTool(workspaceTool)
+    let frame = 0, timer = 0, tries = 0
+    const apply = () => {
+      const panel = toolsPanel.current
+      if (!panel) return
+      try {
+        // The fixed shell panels register before their first layout is published.
+        panel.getSize()
+        if (workspaceTool) panel.resize(readSize('tools-width', 340))
+        else {
+          panel.collapse()
+          timer = window.setTimeout(() => setRetainedTool(null), 260)
+        }
+      } catch {
+        if (++tries < 30) frame = requestAnimationFrame(apply)
+      }
+    }
+    frame = requestAnimationFrame(apply)
+    return () => { cancelAnimationFrame(frame); window.clearTimeout(timer) }
+  }, [workspaceTool])
   // Chats with nothing open is the home page: the start box, background chats and recaps. New chat without a project lands here too.
   const landing = ui.sidebar === 'projects' && !ui.activeTaskId
   const startProject = globalPage || landing ? null : ws.composing ?? (!ui.activeTaskId ? NO_PROJECT : null)
@@ -171,39 +209,38 @@ function Shell() {
     <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-expanded={rightShown} aria-label={rightShown ? t("Hide right panel") : t("Show right panel")} title={`${rightShown ? t("Hide right panel") : t("Show right panel")} (${formatKeys('mod+alt+b')})`} disabled={!ui.activeTaskId} onClick={() => { if (ui.activeTaskId) ws.toggleRightPanel(ui.activeTaskId) }}>{rightShown ? <PanelRightClose size={16} strokeWidth={1.6} /> : <PanelRightOpen size={16} strokeWidth={1.6} />}</Button>
   </nav>
   // With the sidebar hidden, chats that want attention show on its toggle instead.
-  const sidebarToggle = <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-toggle [&:hover:not(:disabled)]:text-foreground [-webkit-app-region:no-drag] relative overflow-visible [&_*]:[-webkit-app-region:no-drag] flex-none z-30 [-webkit-app-region:no-drag] text-muted-foreground" aria-expanded={!sidebarHidden} aria-controls="workspace-sidebar" aria-label={sidebarHidden ? t("Show sidebar") : t("Hide sidebar")} aria-description={sidebarHidden && attentionChats ? `${attentionChats} ${t('Chats')}` : undefined} title={t("{0} sidebar ({1})", { "0": sidebarHidden ? t('Show') : t('Hide'), "1": formatKeys('mod+b') })} onClick={() => setSidebarHidden((hidden) => !hidden)}>
+  const sidebarToggle = <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center sidebar-toggle aria-expanded:bg-transparent aria-expanded:hover:bg-hover aria-expanded:text-muted-foreground aria-expanded:hover:text-foreground [&:hover:not(:disabled)]:text-foreground [-webkit-app-region:no-drag] relative overflow-visible [&_*]:[-webkit-app-region:no-drag] flex-none z-30 [-webkit-app-region:no-drag] text-muted-foreground" aria-expanded={!sidebarHidden} aria-controls="workspace-sidebar" aria-label={sidebarHidden ? t("Show sidebar") : t("Hide sidebar")} aria-description={sidebarHidden && attentionChats ? `${attentionChats} ${t('Chats')}` : undefined} title={t("{0} sidebar ({1})", { "0": sidebarHidden ? t('Show') : t('Hide'), "1": formatKeys('mod+b') })} onClick={() => setSidebarHidden((hidden) => !hidden)}>
         {sidebarHidden ? <PanelLeftOpen size={16} strokeWidth={1.6} /> : <PanelLeftClose size={16} strokeWidth={1.6} />}{sidebarHidden && badge(attentionChats)}
       </Button>
 
   return (
-    <div className={`shell [&.no-sidebar_.sidebar]:opacity-0 [&.no-sidebar_.sidebar]:invisible [&.no-sidebar_.sidebar]:[transition:opacity_160ms_ease,_visibility_0s_var(--motion-layout)] [&_.sidebar_>_*]:min-w-[calc(var(--sidebar-w,_268px)_-_14px)] [&.no-sidebar_.main]:ml-[var(--island-gap)] relative grid h-full bg-window [--titlebar-h:44px] [--nav-width:var(--sidebar-w,_268px)] [--tools-share:0px] [grid-template-columns:var(--nav-width)_minmax(0,_1fr)_minmax(0,_var(--tools-share))] ${sidebarHidden ? ' no-sidebar' : ''}${workspaceTool ? ' with-workspace-tools' : ''}`} style={{ '--sidebar-w': `${sidebarWidth}px`, '--workspace-tools-w': `${toolsWidth}px` } as React.CSSProperties}>
-      <div className="app-titlebar [&_>_.task-header]:flex-1 [&_>_.task-header]:min-w-0 [&_>_.task-header]:h-[44px] [&_>_.task-header]:p-[0_10px_0_4px] [&_>_.task-header]:bg-transparent [&_>_.task-header]:[border:0] [&_>_.task-header]:relative [&_>_.task-header]:ml-[max(0px,_calc(var(--nav-width,_268px)_-_120px))] [&_>_.task-header]:pl-3 [&_>_.task-header]:[transition:margin-left_var(--motion-layout)_var(--motion-curve)] absolute inset-[0_0_auto] z-20 h-[var(--titlebar-h)] flex items-center pl-[84px] [-webkit-app-region:drag] gap-2 pr-[var(--island-gap)]">
-        {sidebarToggle}
+    <div className={`shell [&.no-sidebar_.sidebar]:opacity-0 [&.no-sidebar_.sidebar]:invisible [&.no-sidebar_.sidebar]:[transition:opacity_160ms_ease,_visibility_0s_var(--motion-layout)] [&_.sidebar_>_*]:min-w-[calc(var(--sidebar-w,_268px)_-_14px)] [&.no-sidebar_.main]:ml-[var(--island-gap)] relative h-full bg-window [--titlebar-h:44px] [--nav-width:var(--sidebar-w,_268px)] ${sidebarHidden ? ' no-sidebar' : ''}${workspaceTool ? ' with-workspace-tools' : ''}`} style={{ '--sidebar-w': `${expandedWidth}px`, '--nav-width': `${navWidth}px` } as React.CSSProperties}>
+      <div className="app-titlebar [&_>_.task-header]:flex-1 [&_>_.task-header]:min-w-0 [&_>_.task-header]:h-[44px] [&_>_.task-header]:p-[0_10px_0_12px] [&_>_.task-header]:bg-transparent [&_>_.task-header]:[border:0] absolute inset-[0_0_auto] z-20 h-[var(--titlebar-h)] flex items-center [-webkit-app-region:drag] pr-[var(--island-gap)]">
+        <div className="sidebar-titlebar @container flex flex-none items-center gap-2 min-w-0 h-full pr-2 pl-[max(16px,_calc(var(--window-controls-inset,_0px)_+_8px))] [transition:width_var(--motion-layout)_var(--motion-curve)]" style={{ width: sidebarHidden ? 'calc(var(--window-controls-inset, 0px) + 44px)' : 'var(--nav-width)' }}>
+          {!sidebarHidden && <>
+            <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover wordmark-link min-w-0 shrink [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:0] [&:hover_.app-wordmark]:opacity-100 bg-transparent [border:0] p-0 min-h-0 rounded-(--radius-s) cursor-pointer [-webkit-app-region:no-drag]" aria-label={t("Home")} title={t("Home")} onClick={() => ws.showHome()}><Wordmark className="app-wordmark block max-w-full [opacity:0.94]" height={15} /></Button>
+            <span className="release-badge hidden @min-[163px]:inline-flex p-[0_6px] h-[18px] items-center [border:0] rounded-full bg-fill text-muted-foreground text-[length:9.5px] font-semibold leading-[1] tracking-[0.08em] [text-transform:uppercase] whitespace-nowrap select-none pointer-events-none">Alpha</span>
+          </>}
+          <div className="ml-auto flex items-center">{sidebarToggle}</div>
+        </div>
         {globalPage ? <header className="task-header [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_.chat-switch-btn:hover_.header-secondary]:text-soft [&_.header-center]:flex [&_.header-center]:items-center [&_.header-center]:gap-2 [&_.header-center]:flex-1 [&_.header-center]:min-w-0 [&_.header-center]:overflow-hidden [&::after]:[content:''] [&::after]:flex-1 [&_.header-title]:relative [&_.header-title]:top-[-1px] [&_.header-title]:leading-[20px] [&_.header-secondary]:relative [&_.header-secondary]:top-[-1px] [&_.header-secondary]:leading-[20px] [&_.header-meta]:relative [&_.header-meta]:top-[-1px] [&_.header-meta]:leading-[20px] [&_.header-meta]:shrink-0 [&_.header-meta]:max-w-[25%] [&_.header-meta]:overflow-hidden [&_.header-meta]:text-ellipsis [&_.chat-switch-btn]:justify-start [&_.chat-switch-btn]:w-[fit-content] [&_.chat-switch-btn]:max-w-[none] [&_.chat-switch-btn]:flex-initial [&_.chat-switch-btn_.header-title]:flex-initial [&_.chat-switch-btn_.header-title]:min-w-0 [&_.chat-switch-btn_.header-title]:max-w-[none] [&_.chat-switch-btn_.header-title]:text-left [&_.chat-switch-btn_.header-secondary]:flex-initial [&_.chat-switch-btn_.header-secondary]:min-w-0 [&_.chat-switch-btn_.header-secondary]:max-w-[none] [&_.chat-switch-btn_.header-secondary]:text-left [&:has(.workspace-tool-buttons)::after]:hidden [&_.workspace-tool-buttons]:ml-auto [&_.header-center_>_svg]:flex-none [&_.header-center_.chat-switch-btn]:max-w-full [&_.header-center_.chat-switch-btn]:min-w-0 flex-none flex items-center gap-2.5 p-[0_12px_0_16px] [-webkit-app-region:drag] min-w-0 h-[46px] [border-bottom-color:var(--line)] [border-bottom:0]"><span className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default">{t("Schedules")}</span></header> : <TaskHeader starting={!!startProject || landing} tools={toolButtons} />}
       </div>
-      {!sidebarHidden && <div className="sidebar-resizer [&::after]:[content:''] [&::after]:absolute [&::after]:top-3 [&::after]:bottom-3 [&::after]:left-0.5 [&::after]:w-[var(--pane-border-width)] [&::after]:[border-radius:1px] [&::after]:bg-transparent [&::after]:[transition:background_0.15s] [&:hover::after]:[background:var(--pane-border-active)] [&.is-resizing::after]:[background:var(--pane-border-active)] [&:focus-visible::after]:[background:var(--pane-border-active)] absolute top-[var(--titlebar-h)] bottom-0 left-[calc(var(--nav-width)_-_3px)] w-1.5 z-25 cursor-col-resize [-webkit-app-region:no-drag]" role="separator" tabIndex={0} aria-orientation="vertical" aria-label={t("Resize sidebar")} aria-valuemin={SIDEBAR_WIDTH_RANGE[0]} aria-valuemax={SIDEBAR_WIDTH_RANGE[1]} aria-valuenow={sidebarWidth} title={t("Drag or use arrow keys to resize · double-click to reset")} onPointerDown={startResize} onDoubleClick={() => saveLayout({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH })} onKeyDown={(event) => {
-        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-        event.preventDefault()
-        const max = Math.min(SIDEBAR_WIDTH_RANGE[1], window.innerWidth * .5)
-        const delta = event.key === 'ArrowRight' ? 20 : -20
-        saveLayout({ sidebarWidth: Math.round(Math.max(SIDEBAR_WIDTH_RANGE[0], Math.min(max, event.key === 'Home' ? SIDEBAR_WIDTH_RANGE[0] : event.key === 'End' ? max : sidebarWidth + delta))) })
-      }} />}
-      <aside id="workspace-sidebar" className="sidebar flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] bg-transparent opacity-100 visible [transition:opacity_160ms_ease,_visibility_0s]" aria-hidden={sidebarHidden} inert={sidebarHidden}>
-        <div className="sidebar-top [&_button]:[-webkit-app-region:no-drag] [&_.sidebar-search]:[-webkit-app-region:no-drag] [&_.sidebar-search]:text-muted-foreground [&_.sidebar-search:hover:not(:disabled)]:text-foreground [&_.wordmark-link]:flex-none [&_.sidebar-mode]:[-webkit-app-region:no-drag] [&_.sidebar-mode]:text-muted-foreground [&_.sidebar-mode:hover:not(:disabled)]:text-foreground [&_.sidebar-mode.active]:text-foreground [&_.sidebar-mode_+_.sidebar-search]:ml-[-6px] h-10 flex items-center gap-2 p-[0_8px_0_16px] flex-none [-webkit-app-region:drag]">
-          <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover wordmark-link [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:0] [&:hover_.app-wordmark]:opacity-100 bg-transparent [border:0] p-0 min-h-0 rounded-(--radius-s) cursor-pointer [-webkit-app-region:no-drag]" aria-label={t("Home")} title={t("Home")} onClick={() => ws.showHome()}><Wordmark className="app-wordmark block [opacity:0.94]" height={15} /></Button>
-          <span className="release-badge mr-auto p-[0_6px] h-[18px] inline-flex items-center [border:0] rounded-full bg-fill text-muted-foreground text-[length:9.5px] font-semibold leading-[1] tracking-[0.08em] [text-transform:uppercase] whitespace-nowrap select-none pointer-events-none">Alpha</span>
-          <Button variant="secondary" className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-mode${preferences.recentChatMode ? ' active' : ''}`} aria-pressed={preferences.recentChatMode} aria-label={preferences.recentChatMode ? t("Group chats by project") : t("Show chats by recent activity")} title={preferences.recentChatMode ? t("Group chats by project") : t("Show chats by recent activity")} onClick={() => void save({ ...preferences, recentChatMode: !preferences.recentChatMode })}>{preferences.recentChatMode ? <Folders size={16} /> : <History size={16} />}</Button>
-          <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-search" aria-label={t("Search chats")} title={`${t("Search chats")} (${formatKeys('mod+k')})`} onClick={() => setSearchingChats(true)}><Search size={16} /></Button>
-        </div>
+      <ResizablePanelGroup orientation="horizontal" id="shell" onLayoutChanged={onShellLayout}>
+      <ResizablePanel id="sidebar" panelRef={sidebarPanel} collapsible collapsedSize={0} minSize={SIDEBAR_WIDTH_RANGE[0]} maxSize={SIDEBAR_WIDTH_RANGE[1]} defaultSize={preferences.sidebarWidth} onResize={onSidebarResize}>
+      <aside id="workspace-sidebar" className="sidebar flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] h-[calc(100%_-_var(--titlebar-h))] bg-transparent opacity-100 visible [transition:opacity_160ms_ease,_visibility_0s]" aria-hidden={sidebarHidden} inert={sidebarHidden}>
         <nav className="sidebar-nav flex flex-col gap-px p-[2px_8px_6px] flex-none" aria-label={t("Activity")}>
-          <Button variant="secondary" className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-[length:var(--font-control)] leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start" onClick={() => ws.newTask()}>
-            <SquarePen size={15} /> <span className="grow flex-1 min-w-0 text-left">{t("New chat")}</span> <Kbd>{formatKeys('mod+n')}</Kbd>
-          </Button>
+          <div className="sidebar-actions @container flex items-center gap-1">
+            <Button variant="secondary" className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] flex-1 min-w-0 bg-transparent [border:none] rounded-(--radius-row) text-[length:var(--font-control)] leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start" onClick={() => ws.newTask()}>
+              <SquarePen data-icon="inline-start" /> <span className="grow flex-1 min-w-0 truncate text-left">{t("New chat")}</span> <Kbd className="hidden @min-[230px]:inline-flex">{formatKeys('mod+n')}</Kbd>
+            </Button>
+            <Button variant="secondary" className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-mode${preferences.recentChatMode ? ' active' : ''}`} aria-pressed={preferences.recentChatMode} aria-label={preferences.recentChatMode ? t("Group chats by project") : t("Show chats by recent activity")} title={preferences.recentChatMode ? t("Group chats by project") : t("Show chats by recent activity")} onClick={() => void save({ ...preferences, recentChatMode: !preferences.recentChatMode })}>{preferences.recentChatMode ? <Folders size={16} /> : <History size={16} />}</Button>
+            <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-search" aria-label={t("Search chats")} title={`${t("Search chats")} (${formatKeys('mod+k')})`} onClick={() => setSearchingChats(true)}><Search size={16} /></Button>
+          </div>
           <Button variant="secondary" className={`nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-[length:var(--font-control)] leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${globalPage ? ' active' : ''}`} aria-pressed={globalPage} onClick={() => ws.setSidebar(globalPage ? 'projects' : 'schedules')}>
             <CalendarClock size={15} /> <span className="grow flex-1 min-w-0 text-left">{t("Schedules")}</span>
           </Button>
         </nav>
-        <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden [&_.project-group]:mb-2 [&_.project-row]:min-h-7 [&_.project-row]:p-[0_8px] [&_.project-row]:text-[length:var(--font-control)] [&_.project-row]:leading-5 [&_.task-list]:pl-[22px] [&_.task-list]:gap-1 [&_.task-row]:min-h-7 [&_.task-row]:p-[0_8px] [&_.task-row]:text-[length:var(--font-control)] [&_.task-row]:leading-5 flex-1 overflow-auto min-h-0">
+        <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden [&_.project-group]:mb-2 [&_.project-row]:min-h-7 [&_.project-row]:p-[0_8px] [&_.project-row]:text-[length:var(--font-control)] [&_.project-row]:leading-5 [&_.task-list]:pl-[22px] [&_.task-list]:gap-0.5 [&_.task-list]:pt-0.5 [&_.task-row]:min-h-7 [&_.task-row]:p-[0_8px] [&_.task-row]:text-[length:var(--font-control)] [&_.task-row]:leading-5 flex-1 overflow-auto min-h-0">
           {ui.sidebar !== 'schedules' && <ProjectsPanel />}
           {ui.sidebar === 'schedules' && <ScheduleNavigation />}
         </div>
@@ -212,7 +249,10 @@ function Shell() {
           <Button variant="secondary" className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-[length:var(--font-control)] leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start" aria-label={t("Settings")} title={`${t("Settings")} (${formatKeys('mod+,')})`} onClick={() => { setSettingsSection('appearance'); setSettingsOpen(true) }}><Settings className="size-[calc(var(--font-control)+2px)]" /> <span className="grow flex-1 min-w-0 text-left">{t("Settings")}</span> <Kbd>{formatKeys('mod+,')}</Kbd></Button>
         </div>
       </aside>
-      <main className="main flex flex-col min-w-0 min-h-0 overflow-hidden m-[var(--titlebar-h)_var(--island-gap)_var(--island-gap)_0] bg-canvas rounded-(--radius-m) [box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.025),_0_8px_28px_rgba(0,_0,_0,_0.28)]">
+      </ResizablePanel>
+      {!sidebarHidden && <ResizableHandle aria-label={t("Resize sidebar")} className="bg-transparent" />}
+      <ResizablePanel id="main" minSize={360}>
+      <main className="main flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] bg-canvas rounded-(--radius-m) [box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.025),_0_8px_28px_rgba(0,_0,_0,_0.28)]">
         <div className="task-area flex-1 min-h-0 flex">
           {landing && <HomePage />}
           {ui.sidebar === 'schedules' && <SchedulesPage />}
@@ -224,26 +264,22 @@ function Shell() {
         </div>
         <StatusBar usage={sidebarHidden ? <UsageRings /> : null} />
       </main>
-      {workspaceTool && <aside className="workspace-tools [&_.sidebar-body]:flex-1 [&_.sidebar-body]:min-h-0 [&_.explorer-title]:m-[0_0_4px] [&_.explorer-title]:min-h-7 [&_.search-title]:m-[0_0_4px] [&_.search-title]:min-h-7 [&_.explorer-scroll-area]:mr-[-8px] [&_.scm-repos]:mr-[-8px] [&_.scm-repo-body:not(.compact)_>_.scm-content]:mr-[-8px] [&_.git-history.overlay-scroll-area]:mr-[-8px] [&_.explorer-scroll-area_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 [&_.scm-repos_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 [&_.scm-repo-body:not(.compact)_>_.scm-content_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 [&_.git-history.overlay-scroll-area_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 relative flex flex-col min-h-0 min-w-0 overflow-hidden m-[var(--titlebar-h)_var(--island-gap)_var(--island-gap)_0] [border-left:var(--pane-border-width)_solid_var(--pane-border-color)] rounded-(--radius-m) bg-canvas" aria-label={t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')}>
-        <div className="workspace-tools-resizer [&:hover]:bg-brand-wash [&:focus-visible]:bg-brand-wash [&.is-resizing]:bg-brand-wash absolute top-0 bottom-0 left-[-1px] w-[7px] cursor-col-resize z-5" role="separator" tabIndex={0} aria-label={t("Resize sidebar")} aria-orientation="vertical" aria-valuemin={220} aria-valuemax={480} aria-valuenow={toolsWidth} onDoubleClick={() => setToolsWidth(340)} onPointerDown={(event) => {
-          toolsResizeCleanup.current?.()
-          const startX = event.clientX, startWidth = toolsWidth
-          toolsResizeCleanup.current = beginPaneResize(event, 'column', (next) => setToolsWidth(Math.round(Math.max(220, Math.min(480, window.innerWidth * .35, startWidth + startX - next.clientX)))))
-        }} onKeyDown={(event) => {
-          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-          event.preventDefault()
-          setToolsWidth((width) => Math.max(220, Math.min(480, window.innerWidth * .35, event.key === 'Home' ? 220 : event.key === 'End' ? 480 : width + (event.key === 'ArrowLeft' ? 20 : -20))))
-        }} />
+      </ResizablePanel>
+      <ResizableHandle aria-label={t("Resize tools panel")} disabled={!workspaceTool} aria-hidden={!workspaceTool} tabIndex={workspaceTool ? 0 : -1} className="bg-transparent" style={{ width: renderedTool ? 1 : 0 }} />
+      <ResizablePanel id="tools" panelRef={toolsPanel} collapsible collapsedSize={0} minSize={220} maxSize={480} defaultSize={0}>
+      {renderedTool && <aside className="workspace-tools [&_.sidebar-body]:flex-1 [&_.sidebar-body]:min-h-0 [&_.explorer-title]:m-[0_0_4px] [&_.explorer-title]:min-h-7 [&_.search-title]:m-[0_0_4px] [&_.search-title]:min-h-7 [&_.explorer-scroll-area]:mr-[-8px] [&_.git-history.overlay-scroll-area]:mr-[-8px] [&_.explorer-scroll-area_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 [&_.git-history.overlay-scroll-area_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 relative flex flex-col min-h-0 min-w-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] [border-left:var(--pane-border-width)_solid_var(--pane-border-color)] rounded-(--radius-m) bg-canvas" inert={!workspaceTool} aria-hidden={!workspaceTool} aria-label={t(renderedTool === 'explorer' ? 'Explorer' : renderedTool === 'scm' ? 'Source Control' : 'Search')}>
         <header className="workspace-tools-header [&_.icon]:w-[var(--action-size)] [&_.icon]:h-[var(--action-size)] [&_.icon_>_svg]:w-[var(--icon-size)] [&_.icon_>_svg]:h-[var(--icon-size)] flex items-center gap-2 flex-none min-h-[46px] p-[4px_10px] text-control font-semibold text-soft">
-          <span className="grow flex-1 min-w-0 text-left">{t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')}</span>
+          <span className="grow flex-1 min-w-0 text-left">{t(renderedTool === 'explorer' ? 'Explorer' : renderedTool === 'scm' ? 'Source Control' : 'Search')}</span>
           <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Close")} title={t("Close")} onClick={() => ws.setSidebar('projects')}><X size={15} /></Button>
         </header>
-        <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden [&_.project-group]:mb-2 [&_.project-row]:min-h-7 [&_.project-row]:p-[0_8px] [&_.project-row]:text-[length:var(--font-control)] [&_.project-row]:leading-5 [&_.task-list]:pl-[22px] [&_.task-list]:gap-1 [&_.task-row]:min-h-7 [&_.task-row]:p-[0_8px] [&_.task-row]:text-[length:var(--font-control)] [&_.task-row]:leading-5 flex-1 overflow-auto min-h-0">
-          {workspaceTool === 'explorer' && <ExplorerPanel />}
-          {workspaceTool === 'scm' && <ScmPanel />}
-          {workspaceTool === 'search' && <SearchPanel key={ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : 'empty'} />}
+        <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden [&_.project-group]:mb-2 [&_.project-row]:min-h-7 [&_.project-row]:p-[0_8px] [&_.project-row]:text-[length:var(--font-control)] [&_.project-row]:leading-5 [&_.task-list]:pl-[22px] [&_.task-list]:gap-0.5 [&_.task-list]:pt-0.5 [&_.task-row]:min-h-7 [&_.task-row]:p-[0_8px] [&_.task-row]:text-[length:var(--font-control)] [&_.task-row]:leading-5 flex-1 overflow-auto min-h-0">
+          {renderedTool === 'explorer' && <ExplorerPanel />}
+          {renderedTool === 'scm' && <ScmPanel />}
+          {renderedTool === 'search' && <SearchPanel key={ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : 'empty'} />}
         </div>
       </aside>}
+      </ResizablePanel>
+      </ResizablePanelGroup>
       {settingsOpen && <SettingsPanel initialSection={settingsSection} shortcuts={commands.filter((command) => command.keys).map((command) => ({ title: command.title, category: command.category, keys: command.keys! }))} onClose={() => setSettingsOpen(false)} />}
       {palette && <Palette ws={ws} commands={commands} mode={palette} onClose={() => setPalette(null)} />}
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}

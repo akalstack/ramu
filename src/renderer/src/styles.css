@@ -69,8 +69,6 @@
 }
 /* Grayscale antialiasing is the default; the Appearance setting switches back to the heavier macOS rendering. */
 :root:not([data-font-smoothing='system']) { @apply [-webkit-font-smoothing:antialiased]; @apply [-moz-osx-font-smoothing:grayscale]; }
-body.resizing { @apply cursor-col-resize; }
-body.resizing * { @apply pointer-events-none; }
 
 /* Controls */
 label input { @apply m-[3px_0_0]; @apply [accent-color:var(--accent)]; }
@@ -135,7 +133,6 @@ label { @apply flex; @apply gap-2; @apply items-start; @apply p-[3px_0]; @apply 
 .shell.no-sidebar { --nav-width: 0px; }
 .shell.with-workspace-tools { --tools-share: min(var(--workspace-tools-w, 340px), 35vw); }
 @media (max-width: 1100px) { .shell.with-workspace-tools:not(.no-sidebar) { --nav-width: min(var(--sidebar-w, 268px), 180px); } }
-body.resizing .shell { @apply [transition:none]; }
 /* The sidebar sits on the window material with no edge of its own; only the work area is raised. */
 kbd { @apply [font:500_var(--font-caption)/16px_var(--sans)]; @apply text-muted-foreground; @apply [background:var(--hover)]; @apply rounded-(--radius-s); @apply p-[1px_5px]; @apply tracking-[0.02em]; }
 /* Large surfaces use a slightly squarer, continuous corner where Chromium supports it (Codex does the same). */
@@ -152,7 +149,23 @@ kbd { @apply [font:500_var(--font-caption)/16px_var(--sans)]; @apply text-muted-
 
 /* Source control */
 
-/* No ::-webkit-scrollbar rules: styling them forces classic scrollbars that take layout width. Left alone, macOS draws overlay scrollbars on top of the content. */
+/* Native scroll areas (text fields, menus, code blocks) match the custom list thumbs.
+   OverlayScrollArea hides these on its viewport and supplies its own floating scrollbar. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text) 28%, transparent) transparent;
+  }
+}
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 28%, transparent);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text) 42%, transparent); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { @apply [animation:none]!; @apply [transition:none]!; }
@@ -172,8 +185,6 @@ button.scm-commit.primary:hover:not(:disabled) { @apply [background:var(--primar
 button.scm-commit.primary:disabled { @apply [background:var(--primary)]; @apply [opacity:0.5]; }
 
 /* Bottom terminal panel, independent of editor and conversation selection. */
-body.resizing-terminal { @apply cursor-row-resize; }
-body.resizing-terminal * { @apply pointer-events-none; }
 
 /* Model and effort share one title, followed directly by the stepped track. */
 .settings-intro h4 { @apply m-[0_0_4px]; @apply text-[length:var(--ui-font-size)]; }
@@ -565,9 +576,6 @@ button.scm-sync:hover:not(:disabled) { @apply [background:var(--pressed)]; }
 /* Interpolate real pane geometry so text stays crisp during layout changes. */
 @property --chat-share { syntax: '<length-percentage>'; inherits: false; initial-value: 100%; }
 :root { --motion-layout: 260ms; --motion-curve: cubic-bezier(.22, .8, .25, 1); }
-.task-body.with-editor { --chat-share: min(var(--chat-width, 55%), 70%); @apply [grid-template-columns:minmax(0,_var(--chat-share))_0_minmax(0,_1fr)]; }
-body.resizing .task-body { @apply [transition:none]; }
-body.resizing .shell { @apply [transition:none]; }
 @media (prefers-reduced-motion: reduce) {
   .task-body, .shell, .project-row, .task-row, .workspace-tool-buttons .icon, .overlay-scroll-area > [data-slot=scroll-area-scrollbar] { @apply [transition:none]; }
 }
@@ -585,16 +593,11 @@ body.resizing .shell { @apply [transition:none]; }
 
 /* One persistent terminal panel moves between grid cells without restarting shells. */
 @property --terminal-size { syntax: '<length-percentage>'; inherits: false; initial-value: 0px; }
-.task-body, .task-body.with-editor { --terminal-size: 0px; @apply [grid-template-rows:minmax(0,_1fr)_minmax(0,_var(--terminal-size))]; @apply [transition:--chat-share_var(--motion-layout)_var(--motion-curve),_--terminal-size_var(--motion-layout)_var(--motion-curve)]; }
-.task-body.terminal-bottom { --terminal-size: min(var(--terminal-height, 260px), 65%); }
-.task-body.terminal-with-editor { --chat-share: min(var(--chat-width, 40%), 50%); @apply [grid-template-columns:minmax(0,_var(--chat-share))_0_minmax(0,_1fr)_minmax(0,_1fr)]; }
-body.resizing .task-body, body.resizing-terminal .task-body { @apply [transition:none]; }
 @media (prefers-reduced-motion: reduce) { .task-body, .task-body.with-editor { @apply [transition:none]; } }
 
 /* Scroll fades remain inside the full-width conversation viewport. */
 @media (prefers-reduced-motion: reduce) { .transcript-frame::before, .transcript-frame::after { @apply [transition:none]; } }
 /* The window title follows the conversation edge while navigation controls stay fixed. */
-body.resizing .app-titlebar > .task-header { @apply [transition:none]; }
 @media (prefers-reduced-motion: reduce) { .app-titlebar > .task-header { @apply [transition:none]; } }
 
 /* One commit action with a separate, keyboard-accessible options trigger. */
@@ -714,3 +717,17 @@ button.git-stash-new:hover:not(:disabled) { @apply [background:var(--hover)]; @a
 .scm-repo { --scm-surface: var(--sidebar); }
 .workspace-tools .scm-repo { --scm-surface: var(--canvas); }
 .scm-repo .sub-title { position: sticky; top: 0; z-index: 3; background: var(--scm-surface); padding-top: 2px; padding-bottom: 2px; }
+/* Compact repositories share the outer list viewport so section headings stick within it. */
+
+/* Split tracks animate when panes open, close, dock or restore their saved layout. */
+[data-workspace-split] {
+  transition: grid-template-columns var(--motion-layout) var(--motion-curve), grid-template-rows var(--motion-layout) var(--motion-curve);
+}
+[data-workspace-split][data-dragging] { transition: none; }
+[data-group] > [data-panel] {
+  transition: flex-grow var(--motion-layout) var(--motion-curve), flex-basis var(--motion-layout) var(--motion-curve);
+}
+[data-group]:has(> [data-separator="active"]) > [data-panel] { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  [data-workspace-split], [data-group] > [data-panel] { transition: none; }
+}
