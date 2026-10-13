@@ -1,4 +1,5 @@
 import { chooseCommitBranch } from './CommitBranchDialog'
+import { withGitBusy } from './gitBusy'
 import { t } from './i18n'
 import { notify } from '@/components/app-toaster'
 import { DEFAULT_AGENT_SETTINGS } from '../../shared/types'
@@ -68,7 +69,7 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
     await invoke('git.push', ctx, binding.repoId, branchOptions.newBranch ?? branchOptions.expectedBranch ?? undefined)
     return draft.message.split('\n')[0]!
   }
-  const work = run().finally(() => window.dispatchEvent(new Event('ramu:git-updated')))
+  const work = withGitBusy(ctx, binding.repoId, run).finally(() => window.dispatchEvent(new Event('ramu:git-updated')))
   void notify.promise(work, {
     loading: { title: t("Committing and pushing {0}…", { "0": binding.repoName }), type: 'loading' },
     success: (subject) => ({ title: t("Pushed “{0}” to {1}", { "0": subject, "1": branchOptions.newBranch ?? status.branch! }), type: 'success' }),

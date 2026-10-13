@@ -80,8 +80,10 @@ export type BindingSetupState = 'ready' | 'pending' | 'failed'
 
 /** Task + repository + mode + the working directory every surface must use. */
 export interface RepositoryBinding {
-  /** A plain chat folder supports files and terminals, without Git controls. */
+  /** A plain folder supports files and terminals, without Git controls. */
   folderOnly?: boolean
+  /** A project folder that is not a Git repository yet; Source Control offers to initialize it. */
+  notGit?: boolean
   taskId: string
   repoId: string
   repoName: string

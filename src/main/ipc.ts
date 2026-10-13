@@ -622,6 +622,14 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
         return { ...draft, fingerprint }
       },
     },
+    'git.init': {
+      args: z.tuple([id, id]),
+      run: (t: string, r: string) => {
+        const binding = workspace.getBinding(t, r)
+        if (!binding.notGit) throw new Error('This folder is already a Git repository')
+        return lock.run(`repo:${binding.cwd}`, () => git.initRepository(binding.cwd))
+      },
+    },
     'git.fetch': { args: z.tuple([id, id]), run: (t: string, r: string) => lock.run(`repo:${workspace.getRepository(r).root}`, () => git.fetch(gitCwdOf(t, r))) },
     'git.autoPull': {
       args: z.tuple([id, id]), run: (t: string, r: string) => {

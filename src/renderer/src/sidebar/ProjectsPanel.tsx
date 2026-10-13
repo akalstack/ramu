@@ -53,9 +53,30 @@ export function ProjectsPanel() {
 
   return (
     <div className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] p-[2px_8px_16px] tasks-panel${folderOver ? ' folder-drop' : ''}`}
-      onDragOver={(event) => { if (!hasFiles(event) || addProject.busy) return; event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setFolderOver(true) }}
+      onDragOver={(event) => {
+        if (dragging && event.dataTransfer.types.includes(PROJECT_DRAG_TYPE) && !(event.target as HTMLElement).closest('.project-group')) {
+          // Over the gaps, headings or empty space: snap to the nearest end of the list.
+          const groups = [...event.currentTarget.querySelectorAll<HTMLElement>('.project-group')]
+          const first = groups[0], last = groups.at(-1)
+          if (first && last) {
+            event.preventDefault()
+            const before = event.clientY < first.getBoundingClientRect().top
+            const target = { id: ws.projects[before ? 0 : ws.projects.length - 1]!.id, after: !before }
+            if (drop?.id !== target.id || drop.after !== target.after) setDrop(target)
+          }
+          return
+        }
+        if (!hasFiles(event) || addProject.busy) return; event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setFolderOver(true) }}
       onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFolderOver(false) }}
-      onDrop={(event) => { if (!hasFiles(event)) return; event.preventDefault(); setFolderOver(false); void addProject.addDropped([...event.dataTransfer.files]) }}>
+      onDrop={(event) => {
+        if (dragging && drop && !event.defaultPrevented && event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) {
+          event.preventDefault()
+          const dragged = event.dataTransfer.getData(PROJECT_DRAG_TYPE), target = drop
+          setDragging(null); setDrop(null)
+          if (dragged && dragged !== target.id) void reorder(dragged, target)
+          return
+        }
+        if (!hasFiles(event)) return; event.preventDefault(); setFolderOver(false); void addProject.addDropped([...event.dataTransfer.files]) }}>
       {pinned.length > 0 && <>
         <SectionHead title={t("Pinned")} open={showPinned} onToggle={() => ws.setExpanded('section:pinned', !showPinned)} controls="pinned-chats" />
         <Collapse open={showPinned} id="pinned-chats" className="task-list">
@@ -239,8 +260,9 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
       onDragOver={(event) => {
         if (!dnd.enabled || !dnd.dragging || dnd.dragging === project.id || !event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return
         event.preventDefault()
-        const box = event.currentTarget.getBoundingClientRect()
-        const after = event.clientY > box.top + Math.min(box.height / 2, 22)
+        // Half of the project's own row decides, so the whole row works and not just the chats below it.
+        const box = (event.currentTarget.querySelector('[draggable="true"]') ?? event.currentTarget).getBoundingClientRect()
+        const after = event.clientY > box.top + box.height / 2
         if (dnd.drop?.id !== project.id || dnd.drop.after !== after) dnd.setDrop({ id: project.id, after })
       }}
       onDrop={(event) => {

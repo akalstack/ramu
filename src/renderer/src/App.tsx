@@ -15,6 +15,7 @@ import { Dropdown, Menu, useContextMenu } from './Menu'
 import { WorkspaceSyncDialog } from './WorkspaceSync'
 import type { GitBranchInfo, GitStatus } from '../../shared/types'
 import { BranchPicker, SyncButton, useAutoFetch } from './GitControls'
+import { isGitBusy, useGitBusy, withGitBackground, withGitBusy } from './gitBusy'
 import { CommitBranchDialog } from './CommitBranchDialog'
 import { Notifications, notifyError } from './Notifications'
 import { TitleTooltips } from './TitleTooltips'
@@ -355,7 +356,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
   const binding = candidate?.folderOnly ? undefined : candidate
   const [status, setStatus] = useState<GitStatus | null>(null)
   const [branches, setBranches] = useState<GitBranchInfo[]>([])
-  const [busy, setBusy] = useState(false)
+  const busy = useGitBusy(taskId, binding?.repoId)
   const [revision, setRevision] = useState(0)
   const { preferences } = useAppSettings()
   const [syncAll, setSyncAll] = useState(false)
@@ -363,13 +364,16 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
   autoPullContext.current = { taskId, repoId, allowed: preferences.autoPull && !busy && !Object.values(ws.dirty).some(Boolean) }
   const autoFetch = useCallback(async () => {
     if (!taskId || !binding || binding.setupState !== 'ready') return
-    await invoke('git.fetch', taskId, binding.repoId)
-    try {
-      const current = autoPullContext.current
-      if (current.allowed && current.taskId === taskId && current.repoId === binding.repoId) await invoke('git.autoPull', taskId, binding.repoId)
-    } finally {
-      window.dispatchEvent(new Event('ramu:git-updated'))
-    }
+    // Queued with user actions on this repo: skipped while one runs, and a user action that arrives waits for it.
+    await withGitBackground(taskId, binding.repoId, async () => {
+      await invoke('git.fetch', taskId, binding.repoId)
+      try {
+        const current = autoPullContext.current
+        if (current.allowed && !isGitBusy(taskId, binding.repoId) && current.taskId === taskId && current.repoId === binding.repoId) await invoke('git.autoPull', taskId, binding.repoId)
+      } finally {
+        window.dispatchEvent(new Event('ramu:git-updated'))
+      }
+    })
   }, [taskId, binding?.repoId, binding?.setupState])
   useAutoFetch(binding?.setupState === 'ready' ? autoFetch : null)
 
@@ -388,19 +392,19 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
     }
     const refresh = () => { clearTimeout(timer); timer = setTimeout(() => void load(), 150) }
     void load()
-    const off = ramu.on('fs:changed', ({ cwd }) => { if (cwd === binding.cwd) refresh() })
+    // Like VS Code, skip file-change refreshes while a git operation runs; 'ramu:git-updated' refreshes once it finishes.
+    const off = ramu.on('fs:changed', ({ cwd }) => { if (cwd === binding.cwd && !isGitBusy(taskId, binding.repoId)) refresh() })
     window.addEventListener('ramu:git-updated', refresh)
     return () => { disposed = true; off(); clearTimeout(timer); window.removeEventListener('ramu:git-updated', refresh) }
   }, [taskId, binding?.repoId, binding?.cwd, binding?.setupState, revision])
 
   if (!binding || !taskId) return <footer className="status-bar [&_.strong]:text-soft [&_>_.strong]:flex-none [&_.status-branch]:max-w-[220px] [&_.status-branch]:[border:0] [&_.status-branch]:rounded-(--radius-s) [&_.status-branch]:bg-transparent [&_.status-branch]:text-caption [&_.status-branch]:leading-[18px] [&_.status-branch]:text-soft [&_.status-branch]:w-auto [&_.status-branch]:flex-initial [&_.status-branch]:gap-[5px] [&_.status-branch]:h-[22px] [&_.status-branch]:min-h-[22px] [&_.status-branch]:p-[0_6px] [&_.path]:min-w-0 [&_.path]:overflow-hidden [&_.path]:text-ellipsis [&_.path]:whitespace-nowrap [&_>_.status-project]:max-w-[220px] [&_>_.status-project]:min-w-0 [&_>_.status-project]:overflow-hidden [&_>_.status-project]:text-ellipsis [&_>_.status-project]:whitespace-nowrap [&_>_.status-project]:flex-none [&_>_.status-project]:inline-flex [&_>_.status-project]:items-center [&_>_.status-project]:h-[22px] [&_>_.status-project]:p-[0_6px] [&_>_.status-project]:leading-[18px] [&_[data-slot='select-trigger'].status-branch]:w-auto [&_[data-slot='select-trigger'].status-branch]:flex-initial [&_[data-slot='select-trigger'].status-branch]:gap-[5px] [&_[data-slot='select-trigger'].status-branch]:h-[22px] [&_[data-slot='select-trigger'].status-branch]:min-h-[22px] [&_[data-slot='select-trigger'].status-branch]:p-[0_6px] [&_.status-branch_[data-slot=select-value]]:flex-initial [&_.status-branch_>_svg:last-child]:ml-0 [&_.sync-button]:h-[22px] [&_.sync-button]:min-h-[22px] [&_.sync-button]:p-[0_6px] [&_.sync-button]:gap-[5px] [&_.sync-button]:rounded-(--radius-s) [&_.sync-button]:text-caption [&_.sync-button]:text-soft [&_.sync-button]:tabular-nums [&_.sync-button]:flex-none [&_.sync-button:hover:not(:disabled)]:text-foreground [&_.status-repo]:w-auto [&_.status-repo]:flex-initial [&_.status-repo]:h-[22px] [&_.status-repo]:min-h-[22px] [&_.status-repo]:p-[0_6px] [&_.status-repo]:gap-[5px] [&_.status-repo]:max-w-[240px] [&_.status-repo]:[border:0] [&_.status-repo]:rounded-(--radius-s) [&_.status-repo]:bg-transparent [&_.status-repo]:text-caption [&_.status-repo]:font-semibold [&_[data-slot='select-trigger'].status-repo]:w-auto [&_[data-slot='select-trigger'].status-repo]:flex-initial [&_[data-slot='select-trigger'].status-repo]:h-[22px] [&_[data-slot='select-trigger'].status-repo]:min-h-[22px] [&_[data-slot='select-trigger'].status-repo]:p-[0_6px] [&_[data-slot='select-trigger'].status-repo]:gap-[5px] [&_[data-slot='select-trigger'].status-repo]:max-w-[240px] [&_[data-slot='select-trigger'].status-repo]:[border:0] [&_[data-slot='select-trigger'].status-repo]:rounded-(--radius-s) [&_[data-slot='select-trigger'].status-repo]:bg-transparent [&_[data-slot='select-trigger'].status-repo]:text-caption [&_[data-slot='select-trigger'].status-repo]:font-semibold [&_.status-repo:hover]:bg-hover [&_.status-checkout]:inline-flex [&_.status-checkout]:items-center [&_.status-checkout]:h-[22px] [&_.status-checkout]:p-[0_6px] [&_.status-checkout]:leading-[18px] tabular-nums flex items-center text-caption flex-none text-muted-foreground min-w-0 h-7 bg-transparent gap-0.5 p-[0_6px] [border-top:1px_solid_var(--line)]"><span className="grow flex-1 min-w-0 text-left" />{usage}</footer>
   const run = async (action: () => Promise<unknown>, needsSaved = false) => {
-    setBusy(true)
     try {
       if (needsSaved && Object.values(ws.dirty).some(Boolean)) throw new Error('Save or close unsaved editor buffers before switching branches or pulling.')
-      await action()
+      await withGitBusy(taskId, binding.repoId, action)
     } catch (e) { notifyError(errorText(e), `Git · ${binding.repoName}`) }
-    finally { setBusy(false); setRevision((value) => value + 1); window.dispatchEvent(new Event('ramu:git-updated')) }
+    finally { setRevision((value) => value + 1); window.dispatchEvent(new Event('ramu:git-updated')) }
   }
   const ready = binding.setupState === 'ready'
   const project = ws.projectOf(taskId)

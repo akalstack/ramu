@@ -10,6 +10,7 @@ import { notifyError } from './Notifications'
 import { errorText } from './TaskPane'
 import { useModelSets } from './ModelSets'
 import { invoke } from './ipc'
+import { withGitBusy } from './gitBusy'
 import { titleFrom } from './NewTask'
 import { commitAndPush } from './commitShortcut'
 import { isPreviewable, isWorkspaceCtx, isWorktreeCtx, tabOrder, type WorkspaceApi } from './workspace'
@@ -120,7 +121,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
         } else await invoke(kind === 'sync' ? 'git.sync' : kind === 'fetch' ? 'git.fetch' : kind === 'pull' ? 'git.pull' : 'git.push', taskId, binding.repoId)
         window.dispatchEvent(new Event('ramu:git-updated'))
       }
-      return (['sync', 'fetch', 'pull', 'push', 'stage', 'unstage'] as const).map((kind) => ({ id: `git.${kind}.${binding.repoId}`, title: `${kind === 'stage' ? 'Stage all changes' : kind === 'unstage' ? 'Unstage all changes' : kind[0]!.toUpperCase() + kind.slice(1)} · ${binding.repoName}`, category: 'Git', run: () => { void action(kind).catch((reason) => notifyError(errorText(reason), `Git · ${binding.repoName}`)) } }))
+      return (['sync', 'fetch', 'pull', 'push', 'stage', 'unstage'] as const).map((kind) => ({ id: `git.${kind}.${binding.repoId}`, title: `${kind === 'stage' ? 'Stage all changes' : kind === 'unstage' ? 'Unstage all changes' : kind[0]!.toUpperCase() + kind.slice(1)} · ${binding.repoName}`, category: 'Git', run: () => { void withGitBusy(taskId!, binding.repoId, () => action(kind)).catch((reason) => notifyError(errorText(reason), `Git · ${binding.repoName}`)) } }))
     }),
     { id: 'tab.close', title: t("Close editor"), category: t("View"), keys: 'mod+w', run: () => taskId && active && ws.closeView(taskId, active.id), when: () => !!active },
     { id: 'tab.next', title: t("Open next editor"), category: t("View"), keys: 'ctrl+tab', run: () => cycleTab(1), when: hasTask },

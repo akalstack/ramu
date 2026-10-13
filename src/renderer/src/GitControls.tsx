@@ -32,16 +32,30 @@ export function SyncButton({ status, busy, pullMode, onSync, className = '', sho
 }
 
 /** Keeps ahead/behind counts current, like VS Code's autofetch: on window focus and every few minutes. Failures stay quiet. */
+const AUTH_FAILURE = /Authentication failed|could not read (Username|Password)|terminal prompts disabled|Permission denied \(publickey/i
+
 export function useAutoFetch(fetch: (() => Promise<unknown>) | null) {
   useLanguage()
   useEffect(() => {
     if (!fetch) return
     let last = 0
     let running = false
+    let failures = 0
+    let stopped = false
+    // Like VS Code, only fetch while the window is focused; regaining focus fetches right away.
     const run = () => {
-      if (running || Date.now() - last < 60_000) return
+      // Offline or failing remotes back off (1, 2, 4… minutes, at most 30) instead of retrying every tick.
+      const gap = failures ? Math.min(60_000 * 2 ** failures, 30 * 60_000) : 60_000
+      if (stopped || running || !document.hasFocus() || Date.now() - last < gap) return
       last = Date.now(); running = true
-      void fetch().catch(() => {}).finally(() => { running = false })
+      void fetch()
+        .then(() => { failures = 0 })
+        .catch((error: unknown) => {
+          // Credentials won't fix themselves, so stop until the repository is reopened (as VS Code does).
+          if (AUTH_FAILURE.test(String(error instanceof Error ? error.message : error))) stopped = true
+          else failures++
+        })
+        .finally(() => { running = false })
     }
     run()
     const timer = setInterval(run, 3 * 60_000)

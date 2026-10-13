@@ -6,6 +6,7 @@ import type { GitBranchInfo, GitStatus, RepositoryBinding } from '../../shared/t
 import { Checkbox } from '@/components/ui/checkbox'
 import { BranchPicker } from './GitControls'
 import { invoke } from './ipc'
+import { withGitBusy } from './gitBusy'
 import { Dialog } from './Menu'
 import { errorText } from './TaskPane'
 import { useWorkspace } from './workspace'
@@ -33,7 +34,7 @@ export function WorkspaceSyncDialog({ taskId, bindings, onClose }: { taskId: str
   const switchBranch = async (binding: RepositoryBinding, branch: string) => {
     if (unsaved) { setError('Save or close unsaved editor buffers before switching branches or pulling.'); return }
     setError(null); patch(binding.repoId, { result: undefined })
-    try { await invoke('git.checkout', taskId, binding.repoId, branch) } catch (e) { patch(binding.repoId, { result: errorText(e) }) }
+    try { await withGitBusy(taskId, binding.repoId, () => invoke('git.checkout', taskId, binding.repoId, branch)) } catch (e) { patch(binding.repoId, { result: errorText(e) }) }
     await load(binding); window.dispatchEvent(new Event('ramu:git-updated'))
   }
   const chosen = bindings.filter((b) => selection.has(b.repoId) && canSync(rows[b.repoId]?.status ?? null))
@@ -45,7 +46,7 @@ export function WorkspaceSyncDialog({ taskId, bindings, onClose }: { taskId: str
     const worker = async () => {
       for (let binding = queue.shift(); binding; binding = queue.shift()) {
         patch(binding.repoId, { result: 'running' })
-        try { await invoke('git.sync', taskId, binding.repoId); patch(binding.repoId, { result: 'done' }) } catch (e) { patch(binding.repoId, { result: errorText(e) }) }
+        try { await withGitBusy(taskId, binding.repoId, () => invoke('git.sync', taskId, binding.repoId)); patch(binding.repoId, { result: 'done' }) } catch (e) { patch(binding.repoId, { result: errorText(e) }) }
         await load(binding)
       }
     }

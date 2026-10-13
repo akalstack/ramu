@@ -20,7 +20,21 @@ export class GitError extends Error {
 
 const MAX_BUFFER = 64 * 1024 * 1024
 
-export function git(cwd: string, args: string[], opts: { input?: string } = {}): Promise<string> {
+/** Another git process (a terminal, an editor, an agent) briefly holds the repository lock. */
+const LOCKED = /Unable to create '[^']*\.lock': File exists|Another git process seems to be running/
+
+/** Retries a briefly locked repository with quadratic backoff, like VS Code, instead of failing the action. */
+export async function git(cwd: string, args: string[], opts: { input?: string } = {}): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    try { return await gitOnce(cwd, args, opts) }
+    catch (error) {
+      if (attempt > 5 || !(error instanceof GitError) || !LOCKED.test(error.stderr ?? error.message)) throw error
+      await new Promise((resolve) => setTimeout(resolve, attempt * attempt * 100))
+    }
+  }
+}
+
+function gitOnce(cwd: string, args: string[], opts: { input?: string }): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = execFile(
       'git',
@@ -43,6 +57,11 @@ export function git(cwd: string, args: string[], opts: { input?: string } = {}):
     )
     if (opts.input !== undefined) child.stdin?.end(opts.input)
   })
+}
+
+/** Turns a plain folder into a repository, like VS Code's Initialize Repository. */
+export async function initRepository(cwd: string): Promise<void> {
+  await git(cwd, ['init'])
 }
 
 export async function topLevel(dir: string): Promise<string> {

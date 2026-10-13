@@ -174,6 +174,7 @@ export interface RamuMethods {
   'git.history'(taskId: string, repoId: string): GitCommit[]
   'git.branches'(taskId: string, repoId: string): GitBranchInfo[]
   'git.checkout'(taskId: string, repoId: string, branch: string): void
+  'git.init'(taskId: string, repoId: string): void
   'git.fetch'(taskId: string, repoId: string): void
   'git.pull'(taskId: string, repoId: string, mode?: PullMode): void
   'git.autoPull'(taskId: string, repoId: string): boolean

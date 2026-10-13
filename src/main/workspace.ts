@@ -123,10 +123,11 @@ export class Workspace {
   /** Creates a project from a folder: a workspace with its child repositories, or a single repository. */
   async addProjectFromFolder(dir: string): Promise<{ project: Project; repositories: Repository[] }> {
     const found = await this.inspectFolder(dir)
-    if (found.kind === 'none') throw new Error(`No Git repositories in ${found.root} or its immediate subfolders`)
     const existing = this.listProjects().find((p) => p.root === found.root)
     if (existing) return { project: existing, repositories: this.listRepositories(existing.id) }
-    const project = this.createProject(found.name, found.root)
+    // Not a Git repository: the folder itself becomes the project, and Source Control offers to initialize it.
+    const project = this.createProject(found.kind === 'none' ? basename(found.root) : found.name, found.root)
+    if (found.kind === 'none') return { project, repositories: [this.addFolderRepository(project.id, found.root)] }
     const paths = found.kind === 'repo' ? [found.root] : found.repos
     const repositories: Repository[] = []
     for (const p of paths) repositories.push(await this.addRepository(project.id, p))
@@ -187,6 +188,13 @@ export class Workspace {
     for (let n = 2; names.has(name); n++) name = `${basename(root)}-${n}`
     const repo: Repository = { id: randomUUID(), projectId, name, root }
     this.db.prepare('INSERT INTO repositories (id, project_id, name, root) VALUES (?, ?, ?, ?)').run(repo.id, projectId, name, root)
+    return repo
+  }
+
+  /** Registers a plain folder as the project's only repository entry; it works as files and terminals until initialized. */
+  private addFolderRepository(projectId: string, root: string): Repository {
+    const repo: Repository = { id: randomUUID(), projectId, name: basename(root), root }
+    this.db.prepare('INSERT INTO repositories (id, project_id, name, root) VALUES (?, ?, ?, ?)').run(repo.id, projectId, repo.name, root)
     return repo
   }
 
@@ -344,6 +352,7 @@ export class Workspace {
     for (const repoId of repoIds) {
       const repo = this.getRepository(repoId)
       if (repo.projectId !== projectId) throw new Error(`Repository ${repo.name} is not in this project`)
+      if (!existsSync(join(repo.root, '.git'))) throw new Error(`${repo.name} is not a Git repository. Initialize it in Source Control to use isolated worktrees.`)
       const baseRef = (await gitCli.currentBranch(repo.root)) ?? (await gitCli.headOid(repo.root))
       if (!baseRef) throw new Error(`${repo.name} has no commits to branch from`)
       let taskBranch = `ramu/${slug}${suffix}`
@@ -472,6 +481,8 @@ export class Workspace {
     const workspaceId = this.workspaceIdOf(ctx)
     if (!workspaceId) {
       return this.listRepositories(this.projectIdOf(ctx)).map((r) => ({
+        // A folder without Git has files and terminals only, until it is initialized.
+        ...(existsSync(join(r.root, '.git')) ? {} : { folderOnly: true, notGit: true }),
         taskId: ctx,
         repoId: r.id,
         repoName: r.name,

@@ -18,6 +18,7 @@ import { invoke, ramu, copyText } from '../ipc'
 import { Dialog, Dropdown, Menu, useContextMenu } from '../Menu'
 import { errorText } from '../TaskPane'
 import { chooseCommitBranch } from '../CommitBranchDialog'
+import { useGitBusy, withGitBusy } from '../gitBusy'
 import { registerCommitTarget } from '../commitShortcut'
 import { formatKeys } from '../commands'
 import { notifyError } from '../Notifications'
@@ -32,11 +33,27 @@ const GIT_HEIGHT_MIN = 120
 // Room always left for the repository list above the Git section.
 const SCM_MIN_HEIGHT = 160
 
+/** A project folder without Git: offers `git init`, like VS Code's Initialize Repository. */
+function InitializeRepository({ taskId, binding }: { taskId: string; binding: RepositoryBinding }) {
+  useLanguage()
+  const ws = useWorkspace()
+  const busy = useGitBusy(taskId, binding.repoId)
+  const init = () => void withGitBusy(taskId, binding.repoId, () => invoke('git.init', taskId, binding.repoId))
+    .then(() => ws.refreshBindings(taskId))
+    .then(() => window.dispatchEvent(new Event('ramu:git-updated')))
+    .catch((reason) => notifyError(errorText(reason), `Git · ${binding.repoName}`))
+  return <div className="scm-init flex flex-col gap-2 p-[4px_8px_12px]">
+    <p className="muted text-muted-foreground text-control leading-[1.5]">{t("The folder “{0}” isn't a Git repository. You can initialize one to track changes with Source Control.", { "0": binding.repoName })}</p>
+    <Button variant="default" className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100" disabled={busy} onClick={init}>{t("Initialize Repository")}</Button>
+  </div>
+}
+
 export function ScmPanel() {
   useLanguage()
   const ws = useWorkspace()
   const taskId = ws.ui.activeTaskId
   const bindings = taskId ? (ws.bindings[taskId] ?? []).filter((b) => b.setupState === 'ready' && !b.folderOnly) : []
+  const plainFolders = taskId ? (ws.bindings[taskId] ?? []).filter((b) => b.setupState === 'ready' && b.notGit) : []
   // With several repositories every one is listed and can be folded; the first starts open.
   const [open, setOpen] = useState<Record<string, boolean>>({})
   // The Git section (branches, commits, stashes) exists once, pinned below the list, for the repository last opened.
@@ -65,7 +82,8 @@ export function ScmPanel() {
   const isOpen = (repoId: string, index: number) => open[repoId] ?? index === 0
   const gitRepo = bindings.find((b) => b.repoId === gitRepoId) ?? bindings.find((b, index) => isOpen(b.repoId, index)) ?? bindings[0]
   return <div className="panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] p-[2px_8px_16px] scm-panel [&:has(.git-inspector.collapsed)_.scm-git-resizer]:hidden flex flex-col w-full h-full min-h-0 p-[2px_8px_0]" ref={panelRef}>
-    {bindings.length === 0 ? <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">{t("No repository available.")}</p>
+    {bindings.length === 0 && plainFolders.length > 0 && taskId ? plainFolders.map((b) => <InitializeRepository key={b.repoId} taskId={taskId} binding={b} />)
+      : bindings.length === 0 ? <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">{t("No repository available.")}</p>
       : <>
         <OverlayScrollArea className="scm-repos flex-1 min-h-0 overflow-y-auto">{bindings.map((b, index) => {
           const expanded = isOpen(b.repoId, index)
@@ -95,7 +113,8 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   const [draft, setDraft] = useState<CommitDraft | null>(null)
   const [settings, setSettings] = useState<AgentSettings>(DEFAULT_AGENT_SETTINGS)
   const reportError = useCallback((message: string) => notifyError(message, `Git · ${binding.repoName}`), [binding.repoName])
-  const [busy, setBusy] = useState(false)
+  // Shared per repository, so work started from the status bar, commands or the shortcut also disables this panel.
+  const busy = useGitBusy(taskId, binding.repoId)
   const [generating, setGenerating] = useState(false)
   const [confirmation, setConfirmation] = useState<{ kind: 'smart-commit'; action: CommitAction } | { kind: 'discard'; paths: string[] } | { kind: 'undo'; oid: string; title: string } | { kind: 'branch' } | { kind: 'stash'; staged?: boolean } | { kind: 'delete-branch'; name: string } | { kind: 'drop-stash'; oid: string; title: string } | null>(null)
   const [contextEntry, setContextEntry] = useState<{ entry: GitStatusEntry; staged: boolean } | null>(null)
@@ -134,9 +153,8 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   }, [taskId, ws.taskUi[taskId]?.activeAgentViewId])
 
   const run = async (fn: () => Promise<unknown>) => {
-    setBusy(true)
-    try { await fn() } catch (e) { reportError(errorText(e)) }
-    finally { setBusy(false); void load(); window.dispatchEvent(new Event('ramu:git-updated')) }
+    try { await withGitBusy(taskId, binding.repoId, fn) } catch (e) { reportError(errorText(e)) }
+    finally { void load(); window.dispatchEvent(new Event('ramu:git-updated')) }
   }
   const requireSaved = () => {
     if (Object.values(ws.dirty).some(Boolean)) throw new Error('Save or close unsaved editor buffers before changing files or branches.')
@@ -207,7 +225,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   const draftMessage = async () => {
     setGenerating(true)
     try {
-      const value = await invoke('git.generateCommit', taskId, binding.repoId, settings)
+      const value = await withGitBusy(taskId, binding.repoId, () => invoke('git.generateCommit', taskId, binding.repoId, settings))
       setDraft(value); setMessage(value.message)
       return value
     } catch (e) { reportError(errorText(e)); return null }
