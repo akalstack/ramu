@@ -1,6 +1,6 @@
+import { FILE_ROW, FileRowLabel } from './FileRow'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { visibleName } from '../../../shared/text'
-import { FileIcon } from '../FileIcon'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/desktop-button'
@@ -319,7 +319,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
         <Button variant="tree"
           ref={e.kind !== 'dir' && e.path === selectedPath ? selectedRow : undefined}
           data-path={`${binding.repoId}:${e.path}`}
-          className={`tree-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.selected]:bg-accent [&.selected]:text-foreground [&.selected]:[box-shadow:none] [&.selected:hover]:bg-accent [&.selected:hover]:text-foreground [&.selected:hover]:[box-shadow:none] [&:focus-visible]:[outline-color:var(--line-strong)] [&[draggable='true']]:[-webkit-user-drag:element] [&.picked]:bg-accent [&.picked]:text-foreground [&.drop-target]:bg-brand-wash [&.drop-target]:[box-shadow:none] flex items-center w-full bg-transparent [border:none] rounded-(--radius-s) p-[3px_4px] gap-1.5 text-left whitespace-nowrap text-soft justify-start${e.kind === 'dir' && open.has(e.path) ? ' tree-folder-sticky' : ''}${e.kind !== 'dir' && e.path === selectedPath ? ' selected' : ''}${picked.includes(e.path) && (e.kind !== 'dir' || showFolderSelection) ? ' picked' : ''}${dropDir === e.path ? ' drop-target' : ''}`}
+          className={`tree-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.selected]:bg-accent [&.selected]:text-foreground [&.selected]:[box-shadow:none] [&.selected:hover]:bg-accent [&.selected:hover]:text-foreground [&.selected:hover]:[box-shadow:none] [&:focus-visible]:[outline-color:var(--line-strong)] [&[draggable='true']]:[-webkit-user-drag:element] [&.picked]:bg-accent [&.picked]:text-foreground [&.drop-target]:bg-brand-wash [&.drop-target]:[box-shadow:none] ${FILE_ROW} w-full bg-transparent [border:none] p-[3px_4px] text-left justify-start${e.kind === 'dir' && open.has(e.path) ? ' tree-folder-sticky' : ''}${e.kind !== 'dir' && e.path === selectedPath ? ' selected' : ''}${picked.includes(e.path) && (e.kind !== 'dir' || showFolderSelection) ? ' picked' : ''}${dropDir === e.path ? ' drop-target' : ''}`}
           aria-expanded={e.kind === 'dir' ? open.has(e.path) : undefined}
           aria-current={e.kind !== 'dir' && e.path === selectedPath ? 'page' : undefined}
           onContextMenu={(event) => { setShowFolderSelection(true); lastRepo = binding.repoId; if (!picked.includes(e.path)) { setPicked([e.path]); anchor.current = e.path } setTarget(e); context.onContextMenu(event) }}
@@ -348,14 +348,11 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
             <>
               <ChevronRight size={12} className={open.has(e.path) ? 'tree-caret [&.open]:[transform:rotate(90deg)] w-3 flex-none text-muted-foreground [transition:transform_0.12s_var(--ease)] open' : 'tree-caret [&.open]:[transform:rotate(90deg)] w-3 flex-none text-muted-foreground [transition:transform_0.12s_var(--ease)]'} />
               {open.has(e.path) ? <FolderOpen size={14} className="tree-icon [.commit-file-A_&]:text-ok [.commit-file-D_&]:text-bad flex-none text-muted-foreground" /> : <Folder size={14} className="tree-icon [.commit-file-A_&]:text-ok [.commit-file-D_&]:text-bad flex-none text-muted-foreground" />}
+              <span className="tree-name relative top-[-1px] min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{visibleName(e.name)}</span>
             </>
           ) : (
-            <>
-              <span className="tree-caret [&.open]:[transform:rotate(90deg)] w-3 flex-none text-muted-foreground [transition:transform_0.12s_var(--ease)]" />
-              <FileIcon path={e.path} className="tree-icon [.commit-file-A_&]:text-ok [.commit-file-D_&]:text-bad flex-none file" />
-            </>
+            <FileRowLabel path={e.path} name={visibleName(e.name)} />
           )}
-          <span className="tree-name relative top-[-1px] min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{visibleName(e.name)}</span>
         </Button>
         {e.kind === 'dir' && open.has(e.path) && <div className="tree-children [&::before]:[content:''] [&::before]:absolute [&::before]:top-0 [&::before]:bottom-0 [&::before]:left-[var(--tree-guide-left)] [&::before]:w-px [&::before]:[background:var(--line)] [&::before]:pointer-events-none [&::before]:z-1 relative" style={{ '--tree-guide-left': `${14 + depth * 12}px` } as CSSProperties}>{render(e.path, depth + 1)}</div>}
       </div>
