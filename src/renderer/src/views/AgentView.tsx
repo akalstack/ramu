@@ -16,7 +16,7 @@ import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { Input } from '@/components/ui/input'
 import type { FileContext } from '../../../shared/types'
 import { Wrench, Globe, FilePenLine, FileMinus2, ArrowRightLeft, Settings2, Image as ImageIcon, ArrowDown, ArrowLeft, Plus, Bot, Brain, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb } from 'lucide-react'
-import { Children, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Children, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Attachment, ChatGoal, QueuedMessage, AgentEvent, AgentSettings, AgentSessionInfo, AgentSessionState, ViewDescriptor } from '../../../shared/types'
@@ -835,7 +835,8 @@ function useTypewriter(text: string, active: boolean): string {
 }
 
 
-function AssistantText({ event: e, generating, actions, latest = false, taskId, sessionId }: { event: Extract<AgentEvent, { kind: 'text' }>; generating: boolean; actions: boolean; latest?: boolean; taskId?: string; sessionId?: string }) {
+/** Memoized: the markdown parse is the costliest part of a transcript, and layout changes re-render the chat without changing a message. */
+const AssistantText = memo(function AssistantText({ event: e, generating, actions, latest = false, taskId, sessionId }: { event: Extract<AgentEvent, { kind: 'text' }>; generating: boolean; actions: boolean; latest?: boolean; taskId?: string; sessionId?: string }) {
   useLanguage()
   const text = useTypewriter(e.text, generating)
   return (
@@ -844,14 +845,22 @@ function AssistantText({ event: e, generating, actions, latest = false, taskId, 
       {actions && !generating && <div className={`msg-actions [&:focus-within]:opacity-100 [.msg-wrap:hover_&]:opacity-100 [.msg-wrap.user_&]:mr-1 [.msg-wrap.user_&]:mt-2 [&_.copy-btn]:w-6 [&_.copy-btn]:h-6 [&_.copy-btn]:p-0 [&_.copy-btn_svg]:w-3.5 [&_.copy-btn_svg]:h-3.5 [&.always]:opacity-100 flex items-center mt-0.5 opacity-0 [transition:opacity_0.12s_var(--ease)] gap-0.5 h-6${latest || actions ? ' always' : ''}`}><MessageTime at={e.at} /><CopyButton text={e.text} />{latest && sessionId && <ContextMeter sessionId={sessionId} />}</div>}
     </div>
   )
+})
+
+// Building an Intl formatter costs far more than using one, so each locale keeps its own.
+const timeFormats = new Map<string, { time: Intl.DateTimeFormat; full: Intl.DateTimeFormat }>()
+function timeFormat(locale: string) {
+  let formats = timeFormats.get(locale)
+  if (!formats) timeFormats.set(locale, formats = { time: new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }), full: new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' }) })
+  return formats
 }
 
-function MessageTime({ at }: { at?: number }) {
+const MessageTime = memo(function MessageTime({ at }: { at?: number }) {
   useLanguage()
   if (!at) return null
-  const date = new Date(at)
-  return <time className="msg-time text-muted-foreground tabular-nums text-caption leading-[24px] p-[0_4px]" dateTime={date.toISOString()} title={date.toLocaleString(formatLocale())}>{date.toLocaleTimeString(formatLocale(), { hour: 'numeric', minute: '2-digit' })}</time>
-}
+  const date = new Date(at), formats = timeFormat(formatLocale())
+  return <time className="msg-time text-muted-foreground tabular-nums text-caption leading-[24px] p-[0_4px]" dateTime={date.toISOString()} title={formats.full.format(date)}>{formats.time.format(date)}</time>
+})
 
 function CopyButton({ text }: { text: string }) {
   useLanguage()
