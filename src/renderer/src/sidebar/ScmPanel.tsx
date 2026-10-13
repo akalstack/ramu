@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Archive, ArchiveRestore, ArrowDown, ArrowUp, Check, CloudDownload, CloudUpload, GitBranch, RefreshCcw, Trash2, ChevronDown, ChevronRight, GitCompareArrows, Minus, MoreHorizontal, Plus, RefreshCw, Sparkles, Undo2, FileText, Copy } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type CommitDraft, type GitStash, type GitBranchInfo, type GitCommit, type GitStatus, type GitStatusEntry, type PullMode, type RepositoryBinding } from '../../../shared/types'
+import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type CommitAction, type CommitDraft, type GitStash, type GitBranchInfo, type GitCommit, type GitStatus, type GitStatusEntry, type PullMode, type RepositoryBinding } from '../../../shared/types'
 import { useAppSettings } from '../AppSettings'
 import { BranchPicker, SyncButton } from '../GitControls'
 import { AgentControls, providerName } from '../AgentControls'
@@ -84,7 +84,7 @@ const LETTER: Record<string, string> = { modified: 'M', added: 'A', deleted: 'D'
 function RepositoryControl({ taskId, binding, compact = false, collapsed = false, gitHost = null, showGit = true, gitRepos = [], onGitRepo, onToggle }: { taskId: string; binding: RepositoryBinding; compact?: boolean; collapsed?: boolean; gitHost?: HTMLElement | null; showGit?: boolean; gitRepos?: RepositoryBinding[]; onGitRepo?: (repoId: string) => void; onToggle?: () => void }) {
   useLanguage()
   const ws = useWorkspace()
-  const { preferences } = useAppSettings()
+  const { preferences, save: savePreferences } = useAppSettings()
   const [status, setStatus] = useState<GitStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [commits, setCommits] = useState<GitCommit[]>([])
@@ -97,7 +97,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   const reportError = useCallback((message: string) => notifyError(message, `Git · ${binding.repoName}`), [binding.repoName])
   const [busy, setBusy] = useState(false)
   const [generating, setGenerating] = useState(false)
-  const [confirmation, setConfirmation] = useState<{ kind: 'smart-commit' } | { kind: 'discard'; paths: string[] } | { kind: 'undo'; oid: string; title: string } | { kind: 'branch' } | { kind: 'stash'; staged?: boolean } | { kind: 'delete-branch'; name: string } | { kind: 'drop-stash'; oid: string; title: string } | null>(null)
+  const [confirmation, setConfirmation] = useState<{ kind: 'smart-commit'; action: CommitAction } | { kind: 'discard'; paths: string[] } | { kind: 'undo'; oid: string; title: string } | { kind: 'branch' } | { kind: 'stash'; staged?: boolean } | { kind: 'delete-branch'; name: string } | { kind: 'drop-stash'; oid: string; title: string } | null>(null)
   const [contextEntry, setContextEntry] = useState<{ entry: GitStatusEntry; staged: boolean } | null>(null)
   const [historyOpen, setHistoryOpen] = useState(true)
   const [stagedOpen, setStagedOpen] = useState(true)
@@ -239,7 +239,21 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   }
 
   const canCommit = !loading && !busy && !generating && !!(staged.length || unstaged.length) && !conflicts.length
-  const requestCommit = () => { if (!canCommit) return; if (!staged.length) setConfirmation({ kind: 'smart-commit' }); else void commit() }
+  const commitAction = preferences.defaultCommitAction
+  const actionLabel = (action: CommitAction) => t(action === 'push' ? 'Commit & Push' : action === 'sync' ? 'Commit & Sync' : 'Commit')
+  const commitLabel = actionLabel(commitAction)
+  const canRunCommit = (action: CommitAction) => canCommit && (action === 'commit' || (!!status?.branch && !!status.remote && !status.operation))
+  const requestCommit = (action: CommitAction = commitAction) => {
+    if (!canRunCommit(action)) return
+    if (!staged.length) setConfirmation({ kind: 'smart-commit', action })
+    else void commit(action).catch((reason) => reportError(errorText(reason)))
+  }
+  const selectCommitAction = (action: CommitAction) => {
+    void (async () => {
+      if (action !== preferences.defaultCommitAction) await savePreferences({ ...preferences, defaultCommitAction: action })
+      requestCommit(action)
+    })().catch((reason) => reportError(errorText(reason)))
+  }
   const canAmend = !loading && !busy && !generating && !!status?.oid && !status.operation && !conflicts.length
   const canUndo = !busy && !generating && !!status?.oid && commits.length > 1 && !status.detached && !status.operation && !conflicts.length && !(status.upstream && status.ahead === 0)
   const requestUndo = (commit: GitCommit) => setConfirmation({ kind: 'undo', oid: commit.oid, title: commit.subject })
@@ -266,7 +280,7 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
 
   return <div ref={root} className={`scm-repo-body${compact ? ' compact' : ''}${collapsed ? ' collapsed' : ''}`}>
     {fileContext.menu}
-    {confirmation && <Dialog title={confirmation.kind === 'smart-commit' ? t("Stage all changes and commit?") : confirmation.kind === 'discard' ? t("Discard changes?") : confirmation.kind === 'undo' ? t("Undo last commit?") : confirmation.kind === 'branch' ? t("Create branch") : confirmation.kind === 'stash' ? (confirmation.staged ? t("Stash staged changes") : t("Stash changes")) : confirmation.kind === 'delete-branch' ? t("Delete branch?") : t("Delete stash?")} confirmLabel={confirmation.kind === 'smart-commit' ? t("Stage all and commit") : confirmation.kind === 'discard' ? t("Discard changes") : confirmation.kind === 'undo' ? t("Undo commit") : confirmation.kind === 'branch' ? t("Create branch") : confirmation.kind === 'stash' ? t("Stash") : t("Delete")} danger={confirmation.kind === 'discard' || confirmation.kind === 'drop-stash' || confirmation.kind === 'delete-branch'} busy={busy} onCancel={() => { if (!busy) setConfirmation(null) }} onConfirm={() => { if (confirmation.kind === 'smart-commit') { setConfirmation(null); void commit('commit', unstaged.map((entry) => entry.path)).catch((reason) => reportError(errorText(reason))); return } void run(async () => {
+    {confirmation && <Dialog title={confirmation.kind === 'smart-commit' ? t("Stage all changes and commit?") : confirmation.kind === 'discard' ? t("Discard changes?") : confirmation.kind === 'undo' ? t("Undo last commit?") : confirmation.kind === 'branch' ? t("Create branch") : confirmation.kind === 'stash' ? (confirmation.staged ? t("Stash staged changes") : t("Stash changes")) : confirmation.kind === 'delete-branch' ? t("Delete branch?") : t("Delete stash?")} confirmLabel={confirmation.kind === 'smart-commit' ? (confirmation.action === 'commit' ? t("Stage all and commit") : actionLabel(confirmation.action)) : confirmation.kind === 'discard' ? t("Discard changes") : confirmation.kind === 'undo' ? t("Undo commit") : confirmation.kind === 'branch' ? t("Create branch") : confirmation.kind === 'stash' ? t("Stash") : t("Delete")} danger={confirmation.kind === 'discard' || confirmation.kind === 'drop-stash' || confirmation.kind === 'delete-branch'} busy={busy} onCancel={() => { if (!busy) setConfirmation(null) }} onConfirm={() => { if (confirmation.kind === 'smart-commit') { setConfirmation(null); void commit(confirmation.action, unstaged.map((entry) => entry.path)).catch((reason) => reportError(errorText(reason))); return } void run(async () => {
       requireSaved()
       if (confirmation.kind === 'discard') await invoke('git.discard', taskId, binding.repoId, confirmation.paths)
       else if (confirmation.kind === 'undo') { const message = await invoke('git.undoCommit', taskId, binding.repoId, confirmation.oid); setMessage(message); setDraft(null) }
@@ -321,14 +335,14 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
           <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) commit-ai absolute right-1.5 top-1.5" title={t("Draft a commit message from staged changes")} aria-label={t("AI commit message for {0}", { "0": binding.repoName })} disabled={busy || generating || !staged.length || !!conflicts.length} onClick={generate}><Sparkles size={14} className={generating ? 'shimmer text-control [background:linear-gradient(90deg,_var(--muted)_30%,_var(--text)_50%,_var(--muted)_70%)] [background-size:200%_100%] [-webkit-background-clip:text] [background-clip:text] [color:transparent] [animation:shimmer_1.8s_linear_infinite]' : ''} /></Button>
         </div>
         {!syncOnly && <ButtonGroup className="scm-commit-split [&_>_button.scm-commit]:flex-1 [&_>_button.scm-commit]:w-auto [&_>_button.scm-commit]:min-w-0 [&_>_button.scm-commit]:m-0 [&_>_button.scm-commit]:[border-radius:var(--radius-s)_0_0_var(--radius-s)] flex gap-0 mb-1.5" aria-label={t("Commit")}>
-          <Button variant="default" className="scm-commit primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100" aria-label={t("Commit")} disabled={!canCommit} title={!staged.length ? t("Stage all changes and commit?") : message.trim() ? undefined : t("Drafts a message with AI, then commits")} onClick={requestCommit}><Check size={14} />{generating ? t("Drafting message…") : busy ? t("Working…") : t("Commit")}</Button>
+          <Button variant="default" className="scm-commit primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100" aria-label={commitLabel} disabled={!canRunCommit(commitAction)} title={!staged.length ? t("Stage all changes and commit?") : message.trim() ? undefined : t("Drafts a message with AI, then commits")} onClick={() => requestCommit()}><Check size={14} />{generating ? t("Drafting message…") : busy ? t("Working…") : commitLabel}</Button>
           <Menu label={t("Commit options")} icon={<ChevronDown size={14} />} className="scm-commit-menu primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100 icon p-0 size-(--action-size) flex-none justify-center" align="end" disabled={loading || busy || generating || !!conflicts.length || (!canCommit && !canAmend)} items={[
-            { key: 'commit', label: t("Commit"), disabled: !canCommit, onSelect: requestCommit },
+            { key: 'commit', label: t("Commit"), selected: commitAction === 'commit', disabled: !canCommit, onSelect: () => selectCommitAction('commit') },
             { key: 'new-branch', label: t("Commit on new branch"), disabled: !canCommit || !staged.length || !!status?.operation, onSelect: () => void commit('new-branch').catch((reason) => reportError(errorText(reason))) },
             { key: 'amend', label: t("Commit (Amend)"), title: t("Replace the latest commit; leave the message empty to keep its message"), disabled: !canAmend, onSelect: () => void commit('amend') },
             { key: 'separator', separator: true },
-            { key: 'push', label: t("Commit & Push"), title: t("Shortcut: {0}", { "0": formatKeys('mod+alt+p') }), disabled: !canPublish, onSelect: () => void commit('push').catch((reason) => reportError(errorText(reason))) },
-            { key: 'sync', label: t("Commit & Sync"), disabled: !canPublish, onSelect: () => void commit('sync').catch((reason) => reportError(errorText(reason))) },
+            { key: 'push', label: t("Commit & Push"), selected: commitAction === 'push', title: t("Shortcut: {0}", { "0": formatKeys('mod+alt+p') }), disabled: !canPublish, onSelect: () => selectCommitAction('push') },
+            { key: 'sync', label: t("Commit & Sync"), selected: commitAction === 'sync', disabled: !canPublish, onSelect: () => selectCommitAction('sync') },
           ]} />
         </ButtonGroup>}
         {syncOnly && <SyncButton status={status} busy={busy} pullMode={preferences.pullMode} className="scm-commit primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover mb-1.5" showLabel onSync={sync} />}

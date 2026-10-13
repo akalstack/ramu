@@ -158,6 +158,7 @@ export type GitOperation = 'rebase' | 'merge'
 export type PullMode = 'rebase' | 'merge' | 'ff-only'
 /** How drafted commit messages are worded: Conventional Commits, the repository's own recent style, or the user's instructions. */
 export type CommitStyle = 'conventional' | 'repository' | 'custom'
+export type CommitAction = 'commit' | 'push' | 'sync'
 
 export type DiffSide = 'HEAD' | 'INDEX' | 'WORKTREE'
 
@@ -440,6 +441,10 @@ export interface AppPreferences {
   commitStyle: CommitStyle
   /** Used when commitStyle is custom. */
   commitInstructions: string
+  /** Last reusable action selected in Source Control's commit menu. */
+  defaultCommitAction: CommitAction
+  /** Primary choice when committing from the default branch. */
+  defaultCommitBranch: 'new-branch' | 'current'
   recentChats: number
   terminalTabPosition: 'top' | 'right'
   defaultAccess: AgentSettings['access']
@@ -603,7 +608,7 @@ export interface AsideMessage { id: string; role: 'user' | 'assistant'; text: st
 export interface Aside { id: string; sessionId: string; quote: string; quoteFrom: 'assistant' | 'user'; messages: AsideMessage[]; createdAt: number }
 export const DEFAULT_SIDEBAR_WIDTH = 268
 export const SIDEBAR_WIDTH_RANGE = [200, 520] as const
-export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, recentChatMode: false, editorFontSize: 14, lintWhileEditing: true, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', recentChats: 10, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, memory: DEFAULT_MEMORY_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
+export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, recentChatMode: false, editorFontSize: 14, lintWhileEditing: true, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', defaultCommitAction: 'commit', defaultCommitBranch: 'new-branch', recentChats: 10, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, memory: DEFAULT_MEMORY_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
 
 
 /** Internal scope ID; omitted from the user project list. */

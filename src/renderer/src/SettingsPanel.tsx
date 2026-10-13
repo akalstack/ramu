@@ -96,7 +96,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
     advisor: ['advisor'],
     goals: ['goals'],
     memory: ['memory'],
-    git: ['busyMessageAction', 'includeTabContext', 'pullMode', 'autoPull', 'commitStyle', 'commitInstructions', 'hideEmptyStaged', 'recentChats'],
+    git: ['busyMessageAction', 'includeTabContext', 'pullMode', 'autoPull', 'commitStyle', 'commitInstructions', 'defaultCommitAction', 'defaultCommitBranch', 'hideEmptyStaged', 'recentChats'],
   }
   const pageKeys = resetKeys[page]
   const resetPage = (section: SettingsSection) => {

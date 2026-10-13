@@ -160,6 +160,8 @@ export function Dialog({
   title,
   children,
   confirmLabel,
+  extraActions,
+  footerLeading,
   confirmDisabled = false,
   danger,
   busy,
@@ -170,6 +172,8 @@ export function Dialog({
   title: string
   children?: ReactNode
   confirmLabel: string
+  extraActions?: ReactNode
+  footerLeading?: ReactNode
   confirmDisabled?: boolean
   danger?: boolean
   busy?: boolean
@@ -182,7 +186,7 @@ export function Dialog({
     <DialogContent className="dialog [&_h3]:m-[0_0_8px] [&_h3]:text-heading [&_h3]:font-semibold [&_h3]:tracking-[-0.01em] [&:has(.model-settings)]:w-[min(640px,_calc(100vw_-_40px))] [&:has(.model-settings)]:max-h-[calc(100vh_-_40px)] [&:has(.model-settings)]:flex [&:has(.model-settings)]:flex-col [&:has(.model-settings)_>_.dialog-body]:overflow-auto [&:has(.model-settings)_>_.dialog-body]:min-h-0 [&:has(.model-settings)_>_h3]:flex-none [&:has(.model-settings)_>_.dialog-actions]:flex-none [&:has(.undo-preview)]:w-[min(1000px,_calc(100vw_-_48px))] [&:has(.undo-preview)]:max-w-[none] [&:has(.undo-preview)]:max-h-[calc(100vh_-_48px)] [&:has(.undo-preview)]:flex [&:has(.undo-preview)]:flex-col [&:has(.undo-preview)_.dialog-body]:min-h-0 [&:has(.undo-preview)_.dialog-body]:overflow-auto [[data-slot='dialog-content']&]:block [[data-slot='dialog-content']&]:max-w-[none] [[data-slot='dialog-content']&]:max-h-[calc(100vh_-_48px)] [[data-slot='dialog-content']&]:overflow-y-auto [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgba(255,_255,_255,_0.07)] [&:has(.workspace-sync)]:w-[min(680px,_calc(100vw_-_48px))] w-[min(440px,_calc(100vw_-_48px))] bg-card [border:1px_solid_var(--edge)] rounded-(--radius-l) p-[18px_20px_16px] [box-shadow:0_24px_64px_rgba(0,_0,_0,_0.55)] [animation:pop_0.14s_var(--ease)]" role="alertdialog" showCloseButton={false} aria-describedby={undefined}>
       <DialogTitle>{title}</DialogTitle><div className="dialog-body [&_p]:m-[0_0_8px] text-soft text-[length:var(--ui-font-size)]">{children}</div>
       {error && <div className="error text-bad small text-caption" role="alert">{error}</div>}
-      <div className="dialog-actions [&_button]:p-[5px_14px] flex justify-end gap-2 mt-3.5"><Button variant="outline" onClick={onCancel} disabled={busy}>{t("Cancel")}</Button><Button variant={danger ? 'destructive' : 'default'} className={danger ? 'danger-btn' : 'primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100'} onClick={onConfirm} disabled={busy || confirmDisabled}>{confirmLabel}</Button></div>
+      <div className="dialog-actions [&_button]:p-[5px_14px] flex flex-wrap items-center justify-end gap-2 mt-3.5">{footerLeading}<Button variant="outline" className="whitespace-nowrap" onClick={onCancel} disabled={busy}>{t("Cancel")}</Button>{extraActions}<Button variant={danger ? 'destructive' : 'default'} className={danger ? 'danger-btn whitespace-nowrap' : 'whitespace-nowrap primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100'} onClick={onConfirm} disabled={busy || confirmDisabled}>{confirmLabel}</Button></div>
     </DialogContent>
   </ShadcnDialog>
 }

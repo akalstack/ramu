@@ -916,6 +916,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Branch name": "Nama branch",
   "Switch branch": "Ganti branch",
   "Create branch": "Buat branch",
+  "Use current branch by default": "Gunakan branch saat ini secara default",
+  "Use new branch by default": "Gunakan branch baru secara default",
   "Create branch…": "Buat branch…",
   "Creates and switches to a new local branch. The checkout must be clean.": "Buat dan beralih ke branch lokal baru. Checkout harus bersih.",
   "Delete local branch": "Hapus branch lokal",

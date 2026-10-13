@@ -1,3 +1,4 @@
+import { ExpandRow } from '@/components/expand-row'
 import { t, useLanguage } from './../i18n'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/desktop-button'
@@ -314,9 +315,9 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
           {tasks.length === 0 && <div className="muted text-muted-foreground small text-caption empty-tasks p-[4px_10px]">{t("No chats yet")}</div>}
           {tasks.map((t) => <TaskRow key={t.id} task={t} />)}
           {others.length > recent && (
-            <Button variant="secondary" className="bg-fill hover:bg-fill-hover archived-toggle [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-soft bg-transparent [border:none] text-muted-foreground text-caption p-[4px_10px] gap-1 justify-start" onClick={() => setShowAll((s) => !s)}>
+            <ExpandRow expanded={showAll} onToggle={() => setShowAll((s) => !s)} className="px-2.5">
               {showAll ? t("Show less") : t("Show more")}
-            </Button>
+            </ExpandRow>
           )}
           {archived.length > 0 && (
             <>
