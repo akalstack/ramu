@@ -26,7 +26,7 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
       fontSize: preferences.terminalFontSize,
       fontFamily: '"SF Mono", Menlo, "Geist Mono Variable", monospace',
       lineHeight: 1.25,
-      theme: { background: '#1c1c1e', cursor: '#72b4ff', selectionBackground: '#72b4ff35' },
+      theme: { background: '#141416', cursor: '#72b4ff', selectionBackground: '#72b4ff35' },
       cursorBlink: true,
       screenReaderMode: true,
       scrollback: 5000,

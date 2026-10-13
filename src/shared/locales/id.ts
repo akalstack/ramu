@@ -717,6 +717,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Return after the limit resets": "Kembali setelah batas direset",
   "Until its limit resets": "Sampai batasnya direset",
   "Switch back to": "Kembali ke",
+  "Restore the previous settings for the next message": "Pulihkan pengaturan sebelumnya untuk pesan berikutnya",
   "Send with the next fallback once either the 5-hour or weekly window reaches this level, so the chat never stops on a limit error.": "Pakai fallback berikutnya saat pemakaian 5 jam atau mingguan mencapai level ini, supaya obrolan tetap lanjut.",
   "Each provider has its own list. Ramu skips entries that are unavailable or also over the limit. Percentages show current usage.": "Tiap provider punya daftar sendiri. Ramu melewati pilihan yang belum tersedia atau sudah mencapai batas. Persentase menunjukkan pemakaian saat ini.",
   "The first message after a reset goes back to the provider, model and effort the chat started with.": "Pesan pertama setelah reset kembali memakai provider, model, dan reasoning awal obrolan.",

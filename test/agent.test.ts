@@ -1653,6 +1653,35 @@ describe('questions while work continues', () => {
     svc.stopAll()
   })
 
+  it('delivers late answers after the chat failed or was stopped', async () => {
+    const failed = fixture(), failedChat = failed.start()
+    const failedAsk = await failed.svc.askQuestion(failedChat.id, { questions })
+    failed.outputs.get('1')!({ kind: 'result', isError: true, text: 'Boom', costUsd: null })
+    expect(failed.svc.get(failedChat.id).state).toBe('failed')
+    failed.svc.replyQuestion(failedChat.id, failedAsk.request.requestId, { db: 'SQLite', region: 'Jakarta' })
+    await until(() => failed.starts.length === 2)
+    failed.svc.stopAll()
+    const stopped = fixture(), stoppedChat = stopped.start()
+    const stoppedAsk = await stopped.svc.askQuestion(stoppedChat.id, { questions })
+    stopped.svc.stop(stoppedChat.id)
+    expect(stopped.svc.get(stoppedChat.id).state).toBe('stopped')
+    stopped.svc.replyQuestion(stoppedChat.id, stoppedAsk.request.requestId, { db: 'SQLite', region: 'Jakarta' })
+    await until(() => stopped.starts.length === 2)
+    stopped.svc.stopAll()
+  })
+
+  it('claude: a late answer after the turn finished starts a new turn', async () => {
+    const svc = new AgentService(db, () => {}, fakeQuery([]))
+    const chat = svc.start('t', scopeOf(cwd), 'Work', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
+    const asked = await svc.askQuestion(chat.id, { questions })
+    await until(() => svc.get(chat.id).state === 'idle')
+    const users = () => svc.events(chat.id).filter((e) => e.kind === 'user').length
+    expect(users()).toBe(1)
+    svc.replyQuestion(chat.id, asked.request.requestId, { db: 'SQLite', region: 'Jakarta' })
+    await until(() => users() === 2)
+    svc.stopAll()
+  })
+
   it('preserves pending async questions and drafts through restart and resumes without duplicates', async () => {
     const first = fixture(), chat = first.start()
     const asked = await first.svc.askQuestion(chat.id, { questions })
