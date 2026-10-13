@@ -26,7 +26,7 @@ Version checks run in the background service. CLI auto-update is opt-in and affe
 
 All active providers use ACP. Claude and Codex retain native session, history, usage, and helper controls through Ramu's local hosts. OpenCode, Cursor, and Antigravity connect to native ACP executables.
 
-Claude and Codex support steering and async Ramu questions. Other providers queue follow-ups until the turn finishes. Read-only analysis requires the provider's read-only mode or native sandbox policy. See [agents and routing](AGENTS.md), [background workflows](AUTOMATION.md), and [ACP integration](ACP-CHAT-UI.md).
+Claude and Codex support steering and async Ramu questions. Other providers queue follow-ups until the turn finishes. Read-only analysis requires the provider's read-only mode or native sandbox policy. See [agents and routing](AGENTS.md) and [background workflows](AUTOMATION.md).
 
 ## Advisor
 

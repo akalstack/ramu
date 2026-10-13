@@ -49,6 +49,7 @@
 .composer-bar .send { width: 30px; height: 30px; min-height: 30px; flex: none; align-self: flex-end; padding: 0; border: 0; border-radius: 50%; background: var(--primary); color: #fff; box-shadow: 0 1px 2px #0005, inset 0 1px 0 #ffffff2e; }
 .composer-bar .send:hover:not(:disabled) { background: var(--primary-hover); }
 .composer-bar .send:disabled { background: #ffffff14; color: var(--placeholder); opacity: 1; box-shadow: none; }
+.composer-bar .send[aria-busy="true"]:disabled { background: var(--primary); color: #fff; }
 .composer-bar .send.stop, .composer-bar .send.resume { background: var(--text); color: var(--canvas); }
 .composer-bar .send.stop:hover, .composer-bar .send.resume:hover { background: var(--text); color: var(--canvas); }
 .tool-group > [data-slot='collapsible-trigger'] { display: flex; justify-content: flex-start; gap: 8px; height: auto; min-height: 0; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: var(--font-chat); font-weight: 400; }
@@ -105,3 +106,41 @@ a[data-slot="badge"].chat-reference:hover {
 }
 .composer-inline-atom { display: inline; white-space: nowrap; }
 .composer-inline-atom .chat-reference { vertical-align: baseline; max-width: min(100%, 360px); }
+
+.chat-code-block { margin: 4px 0 12px; overflow: hidden; border-radius: var(--radius-m); background: var(--code-bg); }
+.chat-code-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 14px; border-bottom: 1px solid var(--line); color: var(--muted); font: var(--font-caption)/1.5 var(--sans); }
+.chat-code-language { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-code-header .chat-code-copy { flex: none; width: 26px; height: 26px; min-height: 26px; justify-content: center; padding: 0; background: transparent; border: 0; color: var(--muted); font-size: var(--font-caption); }
+.chat-code-header .chat-code-copy:hover { background: transparent; color: var(--text); }
+/* Override transcript and tool-content pre styling inside the shared code frame. */
+.chat-code-block > pre { margin: 0 !important; padding: 12px 14px !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; overflow-x: auto; white-space: pre; }
+.chat-code-block > pre > code { padding: 0 !important; background: transparent !important; font-family: var(--mono); white-space: pre; }
+
+/* Compact transcript notices share the tool-row treatment, not filled pills. */
+.chat-activity-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 28px;
+  height: auto;
+  gap: 8px;
+  margin: 4px 0;
+  padding: 3px 0;
+  border: 0;
+  border-radius: var(--radius-row);
+  background: transparent;
+  color: var(--soft);
+  font-size: var(--font-control);
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+  text-align: left;
+}
+button.chat-activity-row:hover { background: transparent; color: var(--text); }
+.chat-activity-row > svg, .chat-activity-row > [data-slot='spinner'] { width: 14px; height: 14px; flex: none; }
+.chat-activity-meta { color: var(--muted); font-size: var(--font-caption); min-width: 0; }
+.chat-activity-row .caret { color: var(--muted); }
+.chat-activity-disclosure[data-open] .caret { transform: rotate(90deg); }

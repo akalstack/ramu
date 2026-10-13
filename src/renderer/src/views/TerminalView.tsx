@@ -1,5 +1,7 @@
 import { FitAddon } from '@xterm/addon-fit'
+import { createTerminalResizeScheduler } from '../terminalResize'
 import { Terminal } from '@xterm/xterm'
+import { WebglAddon } from '@xterm/addon-webgl'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAppSettings } from '../AppSettings'
 import { invoke, ramu } from '../ipc'
@@ -8,6 +10,8 @@ import { errorText } from '../TaskPane'
 export function TerminalView({ taskId, repoId, label, active, onExit, actions, initialCommand, run }: { taskId: string; repoId: string | null; label: string; active: boolean; onExit?: () => void; actions?: ReactNode; initialCommand?: string; /** Typed into the task's shell once it opens (project actions). */ run?: string }) {
   const { preferences } = useAppSettings()
   const terminal = useRef<Terminal | null>(null)
+  const renderer = useRef<WebglAddon | null>(null)
+  const rendererLoss = useRef<{ dispose(): void } | null>(null)
   const host = useRef<HTMLDivElement>(null)
   const scheduleFitRef = useRef<(() => void) | null>(null)
   const [cwd, setCwd] = useState<string | null>(null)
@@ -38,15 +42,33 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
     let termId: string | null = null
     let disposed = false
     const offs: (() => void)[] = []
+    const dragging = () => !!document.querySelector('[data-separator="active"], [data-workspace-split][data-dragging]')
+    const ptyResize = createTerminalResizeScheduler((cols, rows) => {
+      if (termId) void invoke('term.resize', termId, cols, rows).catch((e) => setError(errorText(e)))
+    })
     let fitFrame = 0
+    let fitPending = false
+    let flushOnFit = false
     const scheduleFit = () => {
-      if (disposed || fitFrame) return
+      if (disposed) return
+      fitPending = true
+      if (fitFrame) return
       fitFrame = requestAnimationFrame(() => {
         fitFrame = 0
-        if (!disposed && host.current?.offsetParent) fit.fit()
+        if (disposed) return
+        fitPending = false
+        if (host.current?.offsetParent) fit.fit()
+        if (flushOnFit) { flushOnFit = false; ptyResize.flush() }
       })
     }
     scheduleFitRef.current = scheduleFit
+    const endResize = () => {
+      if (fitPending || ptyResize.pending) { flushOnFit = true; scheduleFit() }
+    }
+    const release = new MutationObserver(() => { if (!dragging()) endResize() })
+    release.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['data-separator', 'data-dragging'] })
+    window.addEventListener('pointerup', endResize)
+    window.addEventListener('pointercancel', endResize)
     // Install input before opening the shell so early typing is not dropped.
     let pendingInput = ''
     const input = term.onData((data) => {
@@ -54,7 +76,7 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
       void invoke('term.write', termId, data).catch((e) => setError(errorText(e)))
     })
     const resize = term.onResize(({ cols, rows }) => {
-      if (termId) void invoke('term.resize', termId, Math.max(2, cols), Math.max(2, rows)).catch((e) => setError(errorText(e)))
+      if (termId) ptyResize.request(cols, rows)
     })
     offs.push(() => input.dispose(), () => resize.dispose())
     if (host.current?.offsetParent) fit.fit()
@@ -66,6 +88,9 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
       (info) => {
         if (disposed) return void invoke('term.close', info.id)
         termId = info.id
+        // Geometry may have changed while the shell was opening, before its
+        // ID existed and resize notifications could be delivered.
+        ptyResize.request(term.cols, term.rows)
         const openedAt = Date.now()
         setCwd(info.cwd)
         offs.push(ramu.on('term:data', ({ id, data }) => id === termId && term.write(data)))
@@ -97,14 +122,47 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
     return () => {
       disposed = true
       ro.disconnect()
+      release.disconnect()
       cancelAnimationFrame(fitFrame)
+      ptyResize.dispose()
+      window.removeEventListener('pointerup', endResize)
+      window.removeEventListener('pointercancel', endResize)
       scheduleFitRef.current = null
       for (const off of offs) off()
       if (termId) void invoke('term.close', termId)
+      rendererLoss.current?.dispose()
+      rendererLoss.current = null
+      renderer.current?.dispose()
+      renderer.current = null
       terminal.current = null
       term.dispose()
     }
   }, [taskId, repoId, initialCommand])
+
+  useEffect(() => {
+    const term = terminal.current
+    if (!active || !term || renderer.current) return
+    // Attach before the shell's first output. Delaying this lets the DOM
+    // renderer measure every prompt glyph before it is replaced by WebGL.
+    // Keep the GPU context when hiding/docking; dispose only on teardown/loss.
+    const addon = new WebglAddon()
+    const loss = addon.onContextLoss(() => {
+      addon.dispose()
+      loss.dispose()
+      if (renderer.current === addon) {
+        renderer.current = null
+        rendererLoss.current = null
+      }
+    })
+    try {
+      term.loadAddon(addon)
+      renderer.current = addon
+      rendererLoss.current = loss
+    } catch {
+      loss.dispose()
+      addon.dispose() // GPU unavailable: retain the working DOM renderer.
+    }
+  }, [active, taskId, repoId, initialCommand])
 
   useEffect(() => {
     if (active) scheduleFitRef.current?.()
@@ -117,7 +175,7 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
         <span className="grow flex-1 min-w-0 text-left" />{actions}
       </div>
       {error && <div className="error text-bad banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control">{error}</div>}
-      <div className="terminal-host flex flex-1 min-h-0 min-w-0 overflow-hidden p-[4px_0_0_12px]" onPointerDown={(event) => {
+      <div className="terminal-host [contain:layout_paint] flex flex-1 min-h-0 min-w-0 overflow-hidden p-[4px_0_0_12px]" onPointerDown={(event) => {
         // Padding has no native input target; keep the browser from blurring xterm after focus.
         if (!(event.target as HTMLElement).closest('.xterm')) event.preventDefault()
         terminal.current?.focus()

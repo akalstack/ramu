@@ -16,10 +16,6 @@ writeFileSync(join(repo, 'tsconfig.json'), JSON.stringify({ compilerOptions: { s
 mkdirSync(join(repo, 'src', 'orders'), { recursive: true })
 writeFileSync(join(repo, 'src', 'orders', 'queue.ts'), 'export class OrderQueue {\n  enqueueUrgent(order: Order): void {\n    this.items.unshift(order)\n  }\n}\n')
 writeFileSync(join(repo, 'format-me.ts'), 'const   x=1\ndebugger\n')
-// A stand-in for the project's linter; no network access is needed.
-const fakeTool = (pkg, bin, body) => { const dir = join(repo, 'node_modules', pkg); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: pkg, bin: { [bin]: 'cli.js' } })); writeFileSync(join(dir, 'cli.js'), `let i='';process.stdin.on('data',c=>i+=c);process.stdin.on('end',()=>{${body}})`) }
-writeFileSync(join(repo, 'eslint.config.js'), 'export default []')
-fakeTool('eslint', 'eslint', `const m=[];i.split('\\n').forEach((l,n)=>{const c=l.indexOf('debugger');if(c>=0)m.push({ruleId:'no-debugger',severity:2,message:'Unexpected debugger statement.',line:n+1,column:c+1,endLine:n+1,endColumn:c+9})});process.stdout.write(JSON.stringify([{messages:m}]));process.exit(m.length?1:0)`)
 mkdirSync(join(repo, '.agents', 'skills', 'smoke-skill'), { recursive: true })
 writeFileSync(join(repo, '.agents', 'skills', 'smoke-skill', 'SKILL.md'), '---\nname: smoke-skill\ndescription: Review the smoke fixture notes\n---\nRead notes.md and summarize it.\n')
 const env = { ...process.env, RAMU_USER_DATA: profile, RAMU_WORKTREES: join(dir, 'worktrees'), RAMU_FAKE_AGENT: '1' }; delete env.ELECTRON_RENDERER_URL
@@ -38,6 +34,65 @@ async function launch() {
   app = await electron.launch({ ...(process.env.RAMU_PACKAGED_EXECUTABLE ? { executablePath: process.env.RAMU_PACKAGED_EXECUTABLE, args: [] } : { args: [appDir] }), cwd: appDir, env, timeout: 30000 })
   page = await app.firstWindow(); page.on('pageerror', (e) => !MONACO_NOISE.test(e.message) && errors.push(process.env.RAMU_E2E_STACKS ? `[after: ${lastStep}] ${e.message}\n${e.stack}` : e.message))
   await page.waitForSelector('.shell', { timeout: 20000 })
+}
+async function runDropJourney() {
+  await launch()
+  const { project } = await api('projects.addFolder', [repo])
+  const task = await api('tasks.create', [{ projectId: project.id, title: 'Drop checks', mode: 'current' }])
+  const session = await api('agent.start', [task.id, 'Ready for drop checks', { provider: 'claude-code', model: 'fake-claude', effort: 'medium', access: 'full', autoFallback: true }])
+  await until(async () => (await api('agent.get', [session.id])).state === 'idle', 'Drop fixture did not become idle')
+  const ui = await api('ui.get'), viewId = `drop-${session.id}`
+  await api('ui.setTask', [task.id, { views: [{ id: viewId, kind: 'agent', sessionId: session.id }], activeViewId: viewId, activeAgentViewId: viewId }])
+  await api('ui.setWorkspace', [{ ...ui.workspace, openTaskIds: [task.id], activeTaskId: task.id, sidebar: 'explorer' }])
+  await page.reload(); await page.waitForSelector('.shell')
+  await page.locator('.task-row').filter({ has: page.getByText(task.title, { exact: true }) }).click()
+  await page.getByRole('button', { name: 'Explorer', exact: true }).click()
+  await page.waitForSelector('.explorer-panel .tree-root')
+  const desktop = join(dir, 'Desktop fixtures'), folder = join(desktop, 'Dropped folder')
+  mkdirSync(folder, { recursive: true }); mkdirSync(join(folder, 'Nested'))
+  writeFileSync(join(folder, 'Nested', 'context.txt'), 'Folder context from desktop\n')
+  writeFileSync(join(desktop, 'note.txt'), 'Desktop note\n')
+  const cdp = await page.context().newCDPSession(page)
+  const dropFiles = async (locator, paths, bottom = false) => {
+    const box = await locator.boundingBox(); if (!box) throw new Error('Drop target is not visible')
+    const x = box.x + box.width / 2, y = box.y + (bottom ? box.height - 4 : box.height / 2)
+    const data = { items: [], files: paths, dragOperationsMask: 1 }
+    for (const type of ['dragEnter', 'dragOver', 'drop']) await cdp.send('Input.dispatchDragEvent', { type, x, y, data })
+  }
+  const treeRoot = page.locator('.explorer-panel .tree-root').first()
+  await dropFiles(treeRoot, [folder, join(desktop, 'note.txt')])
+  await until(() => existsSync(join(repo, 'Dropped folder', 'Nested', 'context.txt')) && existsSync(join(repo, 'note.txt')), 'Desktop drop was not imported')
+  check(readFileSync(join(folder, 'Nested', 'context.txt'), 'utf8') === 'Folder context from desktop\n', 'Explorer imports desktop folders recursively and preserves originals')
+  await dropFiles(treeRoot, [join(desktop, 'note.txt')])
+  await until(() => existsSync(join(repo, 'note copy.txt')), 'Duplicate import did not get a free name')
+  check(readFileSync(join(repo, 'note.txt'), 'utf8') === 'Desktop note\n', 'Duplicate drops preserve existing files')
+  const folderRow = page.locator('.explorer-panel .tree-row').filter({ hasText: 'Dropped folder' }).first()
+  await folderRow.waitFor()
+  await dropFiles(folderRow, [join(desktop, 'note.txt')])
+  await until(() => existsSync(join(repo, 'Dropped folder', 'note.txt')), 'Folder row did not receive the drop')
+  check(true, 'Explorer folder rows receive desktop drops')
+  writeFileSync(join(desktop, 'blank-space.txt'), 'Dropped below the tree\n')
+  await dropFiles(page.locator('.explorer-panel .repo-tree').last(), [join(desktop, 'blank-space.txt')], true)
+  await until(() => existsSync(join(repo, 'blank-space.txt')), 'Empty Explorer space did not receive the drop')
+  check(true, 'Empty Explorer space imports into the repository root')
+  const chat = page.locator('.agent-view:visible'), composer = chat.locator('.composer'), input = composer.locator('[data-composer-input]')
+  await input.fill('Inspect these folders')
+  await dropFiles(composer, [folder, join(desktop, 'note.txt')])
+  await until(async () => (await input.getAttribute('data-draft')).includes(JSON.stringify(folder)), 'Desktop folder path did not reach the draft')
+  await composer.locator('.attachment-name').filter({ hasText: 'note.txt' }).waitFor()
+  check(true, 'Mixed desktop drops add folder paths and file attachments to the chat input')
+  const emptyFolder = join(desktop, 'Empty folder'); mkdirSync(emptyFolder)
+  await dropFiles(chat.locator('.agent-header'), [emptyFolder])
+  await until(async () => (await input.getAttribute('data-draft')).includes(JSON.stringify(emptyFolder)), 'Empty folder did not reach the draft from the conversation')
+  check(await composer.getByRole('alert').count() === 0, 'Conversation drops accept empty desktop folders as path references')
+  await folderRow.dragTo(composer)
+  await composer.getByRole('button', { name: 'Remove Dropped folder/Nested/context.txt', exact: true }).waitFor()
+  check(true, 'Explorer folder drops add nested file context')
+  check(await chat.getAttribute('class').then((value) => !value.includes(' dropping')), 'Chat drop highlight clears after input drops')
+  check(errors.length === 0, `No renderer errors: ${errors.join(', ')}`)
+  await page.screenshot({ path: join(shots, 'file-drops.png') })
+  await cdp.detach()
+  return
 }
 async function runJourney() {
   await launch()
@@ -112,8 +167,10 @@ async function runJourney() {
   await awakeSource.click(); await page.getByRole('option', { name: 'Plugged in only (recommended)', exact: true }).click()
   await awake.uncheck()
   check(await page.locator('[data-slot=dialog-content].settings-page').isVisible(), 'Settings uses a shadcn modal')
+  await page.getByRole('button', { name: 'Chats', exact: true }).click()
   check(await page.getByRole('switch', { name: 'Continue chats after restart', exact: true }).isChecked(), 'Chat continuation after restart is on by default')
   check(await page.getByRole('switch', { name: 'Keep working while asking questions', exact: true }).isChecked(), 'Async questions are on by default')
+  await page.getByRole('button', { name: 'Background & Recaps', exact: true }).click()
   await page.getByRole('switch', { name: /Daily recaps/ }).uncheck()
   await page.getByRole('button', { name: 'Save changes' }).click()
   await page.getByRole('button', { name: 'Home', exact: true }).click()
@@ -155,11 +212,9 @@ async function runJourney() {
   const projectSessions = await api('agent.list', [projectChat.id]); const evs = await api('agent.events', [projectSessions[0].id])
   check(evs.some((e) => e.kind === 'user' && e.text.includes('Unsaved buffer context')), 'Open tabs send unsaved buffer content')
   check(readFileSync(join(repo, 'notes.md'), 'utf8') === 'Saved project notes\n', 'Sending context does not save or overwrite files')
-  // Lint follows the project's own tools and never touches the file.
+  // Open a source file to check rendering and save behavior.
   await page.locator('.explorer-panel').getByRole('button', { name: /format-me.ts/ }).click()
-  await page.locator('.lint-summary').getByText('1 error').waitFor()
-  await page.locator('.monaco-editor:visible .squiggly-error').first().waitFor()
-  check(true, 'Lint markers come from the project linter')
+  await page.locator('.monaco-editor:visible textarea').waitFor()
   const smoothing = () => page.evaluate(() => ({
     root: getComputedStyle(document.documentElement).webkitFontSmoothing,
     editor: getComputedStyle(document.querySelector('.monaco-editor')).webkitFontSmoothing,
@@ -177,7 +232,7 @@ async function runJourney() {
   await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
   check(Object.values(await smoothing()).every((value) => value === 'antialiased'), 'Font smoothing can be re-enabled')
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'editor' } })))
-  check(await page.getByRole('switch', { name: /Format on save|Language servers|AI inline completion/ }).count() === 0, 'Editor settings contain no formatter, language server or AI completion controls')
+  check(await page.getByRole('switch', { name: /Lint while editing|Format on save|Language servers|AI inline completion/ }).count() === 0, 'Editor settings contain no linter, formatter, language server or AI completion controls')
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
   await page.locator('.monaco-editor:visible .view-lines').first().click()
@@ -493,7 +548,7 @@ async function runJourney() {
   check(errors.length === 0, `No renderer errors: ${errors.join(', ')}`)
   console.log(`Screenshots: ${shots}`)
 }
-try { await runJourney() } catch (error) {
+try { await (process.env.RAMU_E2E_DROP_ONLY ? runDropJourney() : runJourney()) } catch (error) {
   console.error('Renderer errors:', errors)
   try { const ts = await api('tasks.list'); for (const t of ts) { const ss = await api('agent.list', [t.id]); console.error('sessions', ss); for (const s of ss) console.error('events', await api('agent.events', [s.id])) } console.error('ui', await api('ui.get')) } catch {}
   await page?.screenshot({ path: join(shots, 'failure.png') }).catch(() => {})

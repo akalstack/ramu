@@ -1,9 +1,10 @@
+import { REPLACE_CONTENT_LIMIT } from '../shared/searchLimits'
 // File access scoped to a binding's working directory.
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { cp, mkdir, readdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises'
-import { dirname, extname, isAbsolute, join, normalize, relative, sep } from 'node:path'
+import { cp, lstat, mkdir, readdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from 'node:path'
 import type { DirEntry, FileContent, SaveResult, SearchMatch, SearchOptions, SearchResults, ReplaceFilePreview } from '../shared/types'
 
 export class PathEscapeError extends Error {}
@@ -39,11 +40,11 @@ export function searchText(root: string, repoId: string, options: SearchOptions,
         if (event.type !== 'match' || !event.data.path.text || !event.data.lines.text) continue
         const data = event.data, text = data.lines.text!.replace(/[\r\n]+$/, ''), bytes = Buffer.from(text)
         for (const hit of data.submatches) {
+          if (matches.length >= limit) { limited = true; child.kill(); return }
           const start = bytes.subarray(0, hit.start).toString('utf8').length
           const end = bytes.subarray(0, hit.end).toString('utf8').length
           const previewStart = Math.max(0, start - 60), previewEnd = Math.min(text.length, start + 180)
           matches.push({ repoId, path: data.path.text!.replace(/^\.\//, ''), line: data.line_number, column: start + 1, endColumn: end + 1, text: text.slice(previewStart, previewEnd), start: start - previewStart, end: Math.min(end, previewEnd) - previewStart })
-          if (matches.length >= limit) { limited = true; child.kill(); return }
         }
       }
     })
@@ -66,17 +67,18 @@ export function hashOf(data: string | Buffer): string {
 
 export async function replacementPlan(root: string, repoId: string, options: SearchOptions, replacement: string, matches: SearchMatch[]): Promise<{ preview: ReplaceFilePreview; content: string }[]> {
   const grouped = new Map<string, SearchMatch[]>()
-  for (const match of matches) if (match.repoId === repoId) grouped.set(match.path, [...(grouped.get(match.path) ?? []), match])
-  const regex = options.regex ? new RegExp(options.query.replace(/\(\?P</g, '(?<'), `u${options.caseSensitive ? '' : 'i'}`) : null
+  for (const match of matches) if (match.repoId === repoId) { const hits = grouped.get(match.path) ?? []; hits.push(match); grouped.set(match.path, hits) }
+  const regex = options.regex ? new RegExp(options.query.replace(/\(\?P</g, '(?<'), `uy${options.caseSensitive ? '' : 'i'}`) : null
   const plans: { preview: ReplaceFilePreview; content: string }[] = []
   let bytes = 0
   for (const [path, hits] of grouped) {
     const file = await readText(root, path)
     bytes += Buffer.byteLength(file.content)
-    if (bytes > 20_000_000) throw new Error('Replacement spans too much content. Narrow the include filter or repository.')
+    if (bytes > REPLACE_CONTENT_LIMIT) throw new Error('Replacement spans too much content. Narrow the include filter or repository.')
     const starts = [0]
     for (let index = 0; index < file.content.length; index++) if (file.content[index] === '\n') starts.push(index + 1)
-    let content = file.content, before = '', after = ''
+    let before = '', after = '', cursor = file.content.length
+    const chunks: string[] = []
     for (const hit of [...hits].sort((a, b) => b.line - a.line || b.column - a.column)) {
       const lineStart = starts[hit.line - 1]
       if (lineStart === undefined) throw new Error('Files changed during search. Refresh before replacing.')
@@ -85,13 +87,25 @@ export async function replacementPlan(root: string, repoId: string, options: Sea
       let insert = replacement
       if (!regex && (options.caseSensitive ? text !== options.query : text.toLocaleLowerCase() !== options.query.toLocaleLowerCase())) throw new Error('Files changed during search. Refresh before replacing.')
       if (regex) {
-        const match = regex.exec(text)
-        if (!match || match.index !== 0 || match[0].length !== text.length) throw new Error('This expression cannot be expanded for replacement. Simplify the regular expression.')
-        insert = text.replace(regex, replacement)
+        // Match against the original line so anchors, boundaries and lookarounds
+        // retain the context ripgrep used. Sticky matching pins the exact hit.
+        const line = file.content.slice(lineStart, starts[hit.line] ?? file.content.length).replace(/[\r\n]+$/, '')
+        const offset = hit.column - 1
+        regex.lastIndex = offset
+        const match = regex.exec(line)
+        if (!match || match.index !== offset || match[0] !== text) throw new Error('Files changed or the expression cannot be expanded. Review replacement again.')
+        regex.lastIndex = offset
+        const replaced = line.replace(regex, replacement)
+        insert = replaced.slice(offset, replaced.length - (line.length - offset - text.length))
       }
       before = text.slice(0, 160); after = insert.slice(0, 160)
-      content = content.slice(0, start) + insert + content.slice(end)
+      bytes += Buffer.byteLength(insert) - Buffer.byteLength(text)
+      if (bytes > REPLACE_CONTENT_LIMIT) throw new Error('Replacement produces too much content. Narrow the search or shorten the replacement.')
+      if (end > cursor) throw new Error('Search matches overlap. Review replacement again.')
+      chunks.push(file.content.slice(end, cursor), insert); cursor = start
     }
+    chunks.push(file.content.slice(0, cursor))
+    const content = chunks.reverse().join('')
     plans.push({ preview: { repoId, path, hash: file.hash, count: hits.length, before, after }, content })
   }
   return plans
@@ -205,6 +219,39 @@ export async function copyEntry(root: string, path: string, destination: string)
   if (existsSync(target)) throw new Error('A file or folder already exists with that name.')
   if (target === source || target.startsWith(source + sep)) throw new Error('A folder cannot be copied into itself.')
   await cp(source, target, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true })
+}
+
+/** Native drops can include directories, which Chromium represents as zero-byte Files. */
+export async function describeDroppedPaths(paths: string[]): Promise<{ path: string; kind: 'file' | 'dir' }[]> {
+  return Promise.all(paths.map(async (path) => {
+    if (!isAbsolute(path)) throw new Error('Expected an absolute dropped path.')
+    const info = await stat(path)
+    if (!info.isDirectory() && !info.isFile()) throw new Error('Drop regular files or folders.')
+    return { path, kind: info.isDirectory() ? 'dir' as const : 'file' as const }
+  }))
+}
+
+/** Copy native drops into the chosen folder without overwriting existing entries. */
+export async function importEntries(root: string, dir: string, paths: string[]): Promise<string[]> {
+  const folder = await resolveInRoot(root, dir)
+  if (!(await stat(folder)).isDirectory()) throw new Error('Drop into a folder.')
+  const taken = new Set(await readdir(folder)), imported: string[] = []
+  for (const path of new Set(paths)) {
+    if (!isAbsolute(path)) throw new Error('Expected an absolute dropped path.')
+    const info = await lstat(path)
+    if (!info.isDirectory() && !info.isFile() && !info.isSymbolicLink()) throw new Error('Drop regular files or folders.')
+    const original = basename(path)
+    assertNewName(original)
+    let name = original
+    const dot = original.lastIndexOf('.'), stem = dot > 0 ? original.slice(0, dot) : original, ext = dot > 0 ? original.slice(dot) : ''
+    for (let n = 1; taken.has(name); n++) name = `${stem} copy${n > 1 ? ` ${n}` : ''}${ext}`
+    const destination = dir ? `${dir}/${name}` : name
+    const target = await resolveEntryInRoot(root, destination), source = await realpath(path)
+    if (target === source || target.startsWith(source + sep)) throw new Error('A folder cannot be copied into itself.')
+    await cp(path, target, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true })
+    taken.add(name); imported.push(destination)
+  }
+  return imported
 }
 
 /** What the editor will open and save. Reads are checked on disk first so a huge file is never loaded into memory. */

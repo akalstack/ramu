@@ -136,9 +136,6 @@ export interface EditorConfigProps {
   trimTrailingWhitespace?: boolean
 }
 
-export interface LintDiagnostic { tool: string; severity: 'error' | 'warning' | 'info'; message: string; code: string | null; url: string | null; line: number; column: number; endLine: number; endColumn: number }
-/** `live` tools lint the unsaved buffer; the rest only describe the saved file. */
-export interface LintResult { tools: { id: string; label: string; live: boolean }[]; diagnostics: LintDiagnostic[]; errors: string[] }
 export type SaveResult = { ok: true; hash: string } | { ok: false; reason: 'changed-on-disk'; diskHash: string }
 
 export type GitFileState = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'type-changed' | 'untracked' | 'unmerged'
@@ -325,6 +322,7 @@ export interface AgentToolDetails {
 type AgentEventBody =
   | { kind: 'goal'; goal: ChatGoal | null }
   | { kind: 'schedule'; schedule: Schedule }
+  | { kind: 'provider-wait'; retryAt: number | null; retryDelay?: number; updatedAt: number }
   | { kind: 'queue'; messages: QueuedMessage[]; paused?: boolean }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
@@ -362,7 +360,7 @@ export type QuestionReply = { requestId: string; answers: Record<string, string>
 export type ViewDescriptor =
   | { kind: 'agent'; id: string; sessionId: string; repoId?: string; sourceSeq?: number; sourceRequestId?: string }
   | { kind: 'file'; id: string; repoId: string; path: string; preview?: boolean; selection?: { line: number; column: number; endColumn: number; requestId: string } }
-  | { kind: 'diff'; id: string; repoId: string; path: string; staged: boolean; oid?: string; preview?: boolean }
+  | { kind: 'diff'; id: string; repoId: string; path: string; staged: boolean; stash?: boolean; oid?: string; preview?: boolean }
   | { kind: 'git'; id: string; repoId: string; title: string; oid?: string; preview?: boolean }
   | { kind: 'review'; id: string; repoId?: string; reviewId: string; taskId: string; fileId?: string; threadId?: string; requestId?: string }
   /** Without a repoId the terminal starts where the task's agent runs (the workspace). */
@@ -442,7 +440,6 @@ export interface AppPreferences {
   fontFamily: 'system' | 'geist'
   fontSize: number
   editorFontSize: number
-  lintWhileEditing: boolean
   terminalFontSize: number
   previewTabs: boolean
   hideEmptyStaged: boolean
@@ -487,6 +484,8 @@ export interface AppPreferences {
   recentChatMode: boolean
   /** Render text with thin grayscale antialiasing instead of the macOS default. */
   fontSmoothing: boolean
+  /** Disable interface animations in addition to the system motion preference. */
+  reduceMotion: boolean
   keepAwake: boolean
   keepAwakeWhen: 'plugged-in' | 'always'
   /** Show the 5-hour and weekly plan usage gauges. */
@@ -622,7 +621,7 @@ export interface AsideMessage { id: string; role: 'user' | 'assistant'; text: st
 export interface Aside { id: string; sessionId: string; quote: string; quoteFrom: 'assistant' | 'user'; messages: AsideMessage[]; createdAt: number }
 export const DEFAULT_SIDEBAR_WIDTH = 268
 export const SIDEBAR_WIDTH_RANGE = [200, 520] as const
-export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, recentChatMode: false, editorFontSize: 14, lintWhileEditing: true, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', defaultCommitAction: 'commit', defaultCommitBranch: 'new-branch', recentChats: 10, cleanupArchivedDays: 30, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, memory: DEFAULT_MEMORY_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
+export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, reduceMotion: false, recentChatMode: false, editorFontSize: 14, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', defaultCommitAction: 'commit', defaultCommitBranch: 'new-branch', recentChats: 10, cleanupArchivedDays: 30, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, memory: DEFAULT_MEMORY_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
 
 
 /** Internal scope ID; omitted from the user project list. */
@@ -635,7 +634,7 @@ export interface FileContext {
   /** Other open tabs are references; their content is fetched only when the agent needs it. */
   referenceOnly?: boolean
   selection?: { startLine: number; startColumn: number; endLine: number; endColumn: number; side?: 'original' | 'modified' }
-  diff?: { staged: boolean; oid?: string }
+  diff?: { staged: boolean; oid?: string; stash?: boolean }
   source: 'tab' | 'mention'
 }
 /** The per-chat tool server a provider connects to. `nativeSubagents: false` turns the provider's own sub-agent tools off so Ramu's `ramu_agent` is used instead. */
@@ -674,6 +673,11 @@ export interface ChangeFile {
   oldHash?: string; newHash?: string
   oldMode?: number
   addedLines?: number; removedLines?: number
+}
+/** Branch context for a saved run; the diff itself remains a before/after snapshot. */
+export interface ReviewBranchState {
+  repoId: string; repoName: string
+  currentBranch: string | null; targetBranch: string | null; recordedBranch: string | null
 }
 /** Live state is separate from the immutable run snapshot. */
 export interface ReviewFileState {

@@ -38,10 +38,10 @@ it('ignores removed editor settings and preserves an explicit font smoothing cho
   } as unknown as Services)
   try {
     const preferences = dispatcher.invoke('settings.app.get', [])
-    expect(preferences).toMatchObject({ fontSmoothing: true })
+    expect(preferences).toMatchObject({ fontSmoothing: true, reduceMotion: false })
     for (const key of ['formatOnSave', 'languageServers', 'aiCompletion']) expect(preferences).not.toHaveProperty(key)
-    saved = { ...saved, fontSmoothing: false }
-    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fontSmoothing: false })
+    saved = { ...saved, fontSmoothing: false, reduceMotion: true }
+    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fontSmoothing: false, reduceMotion: true })
     for (const method of ['files.format', 'lsp.open', 'completion.complete']) expect(() => dispatcher.invoke(method, [])).toThrow()
   } finally { dispatcher.close(); configureProviderBinaries({}) }
 })

@@ -97,6 +97,45 @@ describe('saved reviews and live workspaces', () => {
     git('mv', file.path, 'renamed.txt')
     expect((await service.inspect(id))[0]).toMatchObject({ state: 'moved', currentPath: 'renamed.txt' })
   })
+  it('reports branch context without inspecting files or replacing the saved diff', async () => {
+    const git = (...args: string[]) => execFileSync('git', args, { cwd, stdio: 'pipe' })
+    git('init', '-b', 'main'); git('config', 'user.name', 'Test'); git('config', 'user.email', 'test@example.com'); git('add', '.'); git('commit', '-m', 'Initial')
+    git('checkout', '-b', 'feature')
+    const id = await service.begin(review.taskId, { cwd, covers: [cwd], additionalDirs: [] }); service.bind(id, 'session')
+    writeFileSync(join(cwd, 'changed.txt'), 'Snapshot result\n'); await service.complete('session')
+    const saved = service.get(id)
+    git('checkout', '-b', 'other')
+    rmSync(join(cwd, 'changed.txt'))
+    const inspect = vi.spyOn(service, 'inspect')
+    expect(await service.branches(id)).toEqual([{ repoId: 'general', repoName: 'Chat files', currentBranch: 'other', targetBranch: 'main', recordedBranch: 'feature' }])
+    expect(inspect).not.toHaveBeenCalled()
+    expect(service.get(id)).toEqual(saved)
+    git('checkout', '--detach')
+    expect((await service.branches(id))[0]?.currentBranch).toMatch(/^HEAD \([a-f0-9]{8}\)$/)
+    // Old reviews still resolve a target without rewriting their saved data.
+    const legacy = JSON.parse(JSON.stringify(saved))
+    delete legacy.roots[0].targetBranch
+    db.prepare('UPDATE change_reviews SET data=? WHERE id=?').run(JSON.stringify(legacy), id)
+    expect((await service.branches(id))[0]?.targetBranch).toBe('main')
+  })
+  it('preserves the worktree target from capture even if its binding changes', async () => {
+    const binding = { ...ws.fileBindings(review.taskId)[0]!, baseRef: 'release' }
+    const list = vi.spyOn(ws, 'listBindings').mockReturnValue([binding])
+    const id = await service.begin(review.taskId, { cwd, covers: [cwd], additionalDirs: [] }); service.bind(id, 'session')
+    writeFileSync(join(cwd, 'changed.txt'), 'Another run\n'); await service.complete('session')
+    list.mockReturnValue([{ ...binding, baseRef: 'main' }])
+    expect((await service.branches(id))[0]?.targetBranch).toBe('release')
+    list.mockRestore()
+  })
+  it('shows the branch before a repository has its first commit', async () => {
+    execFileSync('git', ['init', '-b', 'main'], { cwd, stdio: 'pipe' })
+    const id = await service.begin(review.taskId, { cwd, covers: [cwd], additionalDirs: [] }); service.bind(id, 'session')
+    writeFileSync(join(cwd, 'changed.txt'), 'First run\n'); await service.complete('session')
+    expect((await service.branches(id))[0]).toMatchObject({ currentBranch: 'main', targetBranch: 'main', recordedBranch: 'main' })
+  })
+  it('supports snapshots without a Git branch or target', async () => {
+    expect(await service.branches(review.id)).toEqual([{ repoId: 'general', repoName: 'Chat files', currentBranch: null, targetBranch: null, recordedBranch: null }])
+  })
   it('sends current-file context and outdated state without resolving the comment', async () => {
     const comment = human().comments[0]!
     writeFileSync(join(cwd, 'changed.txt'), 'External replacement\n')

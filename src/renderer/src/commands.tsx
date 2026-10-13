@@ -1,3 +1,4 @@
+import { SETTINGS_SECTIONS } from './SettingsPage'
 import { searchableChats } from './chatSearch'
 import { t, useLanguage } from './i18n'
 import { FileIcon } from './FileIcon'
@@ -38,7 +39,9 @@ export interface ShellControls {
   openPalette(mode: PaletteMode): void
   toggleSidebar(): void
   showSearch(): void
-  showSidebar?(tab: 'projects' | 'explorer' | 'search' | 'scm'): void
+  showSidebar?(tab: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules'): void
+  createSchedule(): void
+  addProject?(): void
 }
 
 export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[] {
@@ -48,6 +51,8 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
   const active = tabs.find((v) => v.id === state?.activeViewId)
   const bindings = taskId ? (ws.bindings[taskId] ?? []).filter((b) => b.setupState === 'ready') : []
   const hasTask = () => !!taskId
+  const chat = active?.kind === 'agent' ? active : tabs.find(view => view.kind === 'agent' && view.id === state?.activeAgentViewId) ?? tabs.findLast(view => view.kind === 'agent')
+  const hasVisibleChat = () => [...document.querySelectorAll('.agent-view[data-chat-visible]')].some(el => el.checkVisibility())
 
   const cycleTab = (delta: number) => {
     const editorTabs = tabs.filter((v) => v.kind === 'file' || v.kind === 'diff' || v.kind === 'git' || v.kind === 'review')
@@ -78,6 +83,8 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
   const cmds: Command[] = [
     { id: 'palette.commands', title: t("Show all commands"), category: t("View"), keys: 'mod+shift+p', run: () => shell.openPalette('commands') },
     { id: 'palette.files', title: t("Go to file…"), category: t("Go"), keys: 'mod+p', run: () => shell.openPalette('files') },
+    { id: 'schedule.new', title: t("New schedule"), category: t("Schedules"), run: shell.createSchedule },
+    ...(shell.addProject ? [{ id: 'project.add', title: t("Add project…"), category: t("Project"), run: shell.addProject }] : []),
     { id: 'task.new', title: t("New chat"), category: t("Chat"), keys: 'mod+n', run: () => ws.newTask(), when: () => true },
     { id: 'chat.new', title: t("New chat in this project"), category: t("Chat"), keys: 'ctrl+mod+i', run: () => taskId && ws.newTask(ws.projectOf(taskId)?.id), when: () => !!taskId },
     // ⌘F finds in the visible chat, unless the editor or a terminal has focus and wants its own find.
@@ -88,9 +95,11 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       id: 'agent.interrupt',
       title: t("Interrupt agent"),
       category: t("Chat"),
-      run: () => active?.kind === 'agent' && void invoke('agent.interrupt', active.sessionId),
-      when: () => active?.kind === 'agent',
+      run: async () => { if (chat?.kind === 'agent') await invoke('agent.interrupt', chat.sessionId) },
+      when: () => chat?.kind === 'agent' && hasVisibleChat(),
     },
+    { id: 'chat.aside', title: t("Toggle aside"), category: t("Chat"), keys: 'mod+shift+a', run: () => window.dispatchEvent(new CustomEvent('ramu:chat-panel', { detail: { panel: 'aside' } })), when: () => hasVisibleChat() && !window.getSelection()?.toString().trim() },
+    { id: 'chat.agents', title: t("Show agents"), category: t("Chat"), run: () => window.dispatchEvent(new CustomEvent('ramu:chat-panel', { detail: { panel: 'agents' } })), when: () => [...document.querySelectorAll('.agent-view[data-chat-visible] .agents-chip[aria-pressed]')].some(el => el.checkVisibility()) },
     { id: 'term.toggle', title: t("Toggle terminal"), category: 'Terminal', keys: 'ctrl+`', run: toggleTerminal, when: hasTask },
     { id: 'term.toggle2', title: t("Toggle panel"), category: t("View"), keys: 'mod+j', run: toggleTerminal, when: hasTask },
     { id: 'term.new', title: t("Create new terminal"), category: 'Terminal', keys: 'ctrl+shift+`', run: () => newTerminal(), when: hasTask },
@@ -101,7 +110,9 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       run: () => newTerminal(b.repoId),
     })),
     { id: 'settings.open', title: t("Open settings"), category: t("Preferences"), keys: 'mod+,', run: () => window.dispatchEvent(new Event('ramu:settings')) },
+    { id: 'updates.check', title: t("Check for updates"), category: t("Preferences"), run: async () => { window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'updates' } })); await invoke('updates.check') } },
     { id: 'settings.models', title: t("Model sets and reasoning defaults"), category: t("Preferences"), run: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } })) },
+    ...SETTINGS_SECTIONS.filter(section => section.id !== 'models').map(section => ({ id: `settings.${section.id}`, title: t("Open {0} settings", { "0": t(section.label) }), category: t("Preferences"), run: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: section.id } })) })),
     { id: 'file.new', title: t("New file…"), category: 'File', run: () => window.dispatchEvent(new CustomEvent('ramu:create-entry', { detail: { kind: 'file' } })), when: hasTask },
     { id: 'folder.new', title: t("New folder…"), category: 'File', run: () => window.dispatchEvent(new CustomEvent('ramu:create-entry', { detail: { kind: 'dir' } })), when: hasTask },
     { id: 'file.save-all', title: t("Save all files"), category: 'File', keys: 'mod+alt+s', run: () => window.dispatchEvent(new Event('ramu:save-all')), when: hasTask },
@@ -143,6 +154,8 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     })),
     { id: 'view.sidebar', title: t("Toggle primary side bar"), category: t("View"), keys: 'mod+b', run: shell.toggleSidebar },
     { id: 'view.right-panel', title: t("Toggle right panel"), category: t("View"), keys: 'mod+alt+b', run: () => taskId && ws.toggleRightPanel(taskId), when: hasTask },
+    { id: 'view.home', title: t("Show home"), category: t("View"), run: () => { shell.showSidebar?.('projects'); ws.showHome() } },
+    { id: 'view.schedules', title: t("Show schedules"), category: t("View"), run: () => shell.showSidebar ? shell.showSidebar('schedules') : ws.setSidebar('schedules') },
     { id: 'view.chats', title: t("Show chats"), category: t("View"), run: () => shell.showSidebar ? shell.showSidebar('projects') : ws.setSidebar('projects') },
     { id: 'view.explorer', title: t("Show explorer"), category: t("View"), keys: 'mod+shift+e', run: () => shell.showSidebar ? shell.showSidebar('explorer') : ws.setSidebar('explorer') },
     { id: 'view.search', title: t("Search in project"), category: t("View"), keys: 'mod+shift+f', run: shell.showSearch },

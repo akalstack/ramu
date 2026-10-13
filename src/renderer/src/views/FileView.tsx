@@ -4,7 +4,7 @@ import { Button } from '@/components/desktop-button'
 import { Columns2, Eye, Pencil, WrapText } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { MarkdownPreview } from '../MarkdownPreview'
-import type { EditorConfigProps, LintResult, RepositoryBinding, ViewDescriptor } from '../../../shared/types'
+import type { EditorConfigProps, RepositoryBinding, ViewDescriptor } from '../../../shared/types'
 import { useAppSettings } from '../AppSettings'
 import { invoke, ramu } from '../ipc'
 import { registerBuffer, registerSelection } from '../editorBuffers'
@@ -20,10 +20,6 @@ const readWrap = () => { try { return localStorage.getItem(WRAP_KEY) === 'on' } 
 const isMarkdown = (path: string) => /\.(md|markdown|mdx)$/i.test(path)
 
 type FileViewDesc = Extract<ViewDescriptor, { kind: 'file' }>
-
-const SEVERITY = { error: monaco.MarkerSeverity.Error, warning: monaco.MarkerSeverity.Warning, info: monaco.MarkerSeverity.Info }
-interface Problems { errors: number; warnings: number; tools: string[]; failures: string[] }
-const NO_PROBLEMS: Problems = { errors: 0, warnings: 0, tools: [], failures: [] }
 
 interface Conflict {
     disk: string | null
@@ -56,9 +52,6 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
     const [error, setError] = useState<string | null>(null)
     const [conflict, setConflict] = useState<Conflict | null>(null)
     const [comparing, setComparing] = useState(false)
-    const [problems, setProblems] = useState<Problems>(NO_PROBLEMS)
-    const prefsRef = useRef(preferences)
-    prefsRef.current = preferences
     const conflictRef = useRef(conflict)
     conflictRef.current = conflict
     const { setDirty } = ws
@@ -114,53 +107,6 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
         })
         editorRef.current = editor
 
-        // Markers are grouped per tool, so each linter's results replace only their own.
-        const owners = new Map<string, { live: boolean; label: string; errors: number; warnings: number }>()
-        let lintSeq = 0, lintTimer: ReturnType<typeof setTimeout> | undefined
-        const publish = (failures: string[]) => {
-            const entries = [...owners.values()]
-            setProblems({ errors: entries.reduce((sum, e) => sum + e.errors, 0), warnings: entries.reduce((sum, e) => sum + e.warnings, 0), tools: entries.map((e) => e.label), failures })
-        }
-        const lint = async (scope: 'buffer' | 'saved') => {
-            if (!loaded.current || disposed) return
-            const seq = ++lintSeq, version = model.getVersionId()
-            let result: LintResult
-            try { result = await invoke('files.lint', taskId, binding.repoId, view.path, model.getValue(), scope) } catch { return }
-            // Drop answers about text that has since changed.
-            if (disposed || seq !== lintSeq || model.getVersionId() !== version) return
-            for (const tool of result.tools) {
-                const found = result.diagnostics.filter((d) => d.tool === tool.id)
-                monaco.editor.setModelMarkers(model, `ramu-lint:${tool.id}`, found.map((d) => ({
-                    severity: SEVERITY[d.severity], message: d.message, source: tool.label,
-                    code: d.code ? (d.url ? { value: d.code, target: monaco.Uri.parse(d.url) } : d.code) : undefined,
-                    startLineNumber: d.line, startColumn: d.column, endLineNumber: d.endLine, endColumn: d.endColumn,
-                })))
-                owners.set(tool.id, { live: tool.live, label: tool.label, errors: found.filter((d) => d.severity === 'error').length, warnings: found.filter((d) => d.severity === 'warning').length })
-            }
-            publish(result.errors)
-        }
-        // One live lint per file at a time: edits made while it runs queue a single trailing run, so slow
-        // linters cannot pile up processes while the user types.
-        let bufferLinting = false, lintAgain = false
-        const lintBuffer = async () => {
-            if (bufferLinting) { lintAgain = true; return }
-            bufferLinting = true
-            try { await lint('buffer') } finally {
-                bufferLinting = false
-                if (lintAgain && !disposed) { lintAgain = false; void lintBuffer() }
-            }
-        }
-        const scheduleLint = () => {
-            clearTimeout(lintTimer)
-            if (prefsRef.current.lintWhileEditing) lintTimer = setTimeout(() => void lintBuffer(), 800)
-        }
-        // Tools that only read the saved file describe text that has now changed, so their markers would drift.
-        const dropFileBasedMarkers = () => {
-            let changed = false
-            for (const [id, entry] of owners) if (!entry.live) { monaco.editor.setModelMarkers(model, `ramu-lint:${id}`, []); owners.delete(id); changed = true }
-            if (changed) publish([])
-        }
-
         const save = async () => {
             if (saving || !loaded.current || disposed) return
             saving = true
@@ -175,7 +121,6 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
                     savedVersion.current = version
                     setConflict(null)
                     setDirty(view.id, isDirty())
-                    void lint('saved')
                 } else {
                     const disk = await invoke('files.read', taskId, binding.repoId, view.path).then((f) => f.content, () => null)
                     if (!disposed) setConflict({ disk, diskHash: res.diskHash })
@@ -188,7 +133,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
         editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyZ, () => { const on = !readWrap(); try { localStorage.setItem(WRAP_KEY, on ? 'on' : 'off') } catch { /* private mode */ } window.dispatchEvent(new CustomEvent('ramu:word-wrap', { detail: on })) })
         const saveAll = () => { if (isDirty()) void save() }
         window.addEventListener('ramu:save-all', saveAll)
-        const sub = model.onDidChangeContent(() => { if (loaded.current && !changingBuffer.current) { setDirty(view.id, isDirty()); dropFileBasedMarkers(); scheduleLint() } })
+        const sub = model.onDidChangeContent(() => { if (loaded.current && !changingBuffer.current) setDirty(view.id, isDirty()) })
 
         Promise.all([
             invoke('files.read', taskId, binding.repoId, view.path),
@@ -207,7 +152,6 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
                 setLoading(false)
                 setLoadedTick((tick) => tick + 1)
                 revealMatch()
-                void lint('saved')
             },
             (e) => { if (!disposed) { setError(errorText(e)); setLoading(false) } },
         )
@@ -225,7 +169,6 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
                 baseHash.current = disk.hash
                 savedVersion.current = model.getAlternativeVersionId()
                 setDirty(view.id, false)
-                void lint('saved')
             } else {
                 setConflict({ disk: disk?.content ?? null, diskHash })
             }
@@ -235,8 +178,6 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
             disposed = true
             off()
             window.removeEventListener('ramu:save-all', saveAll)
-            clearTimeout(lintTimer)
-            for (const id of owners.keys()) monaco.editor.setModelMarkers(model, `ramu-lint:${id}`, [])
             sub.dispose()
             editor.dispose()
             unregisterBuffer()
@@ -288,9 +229,6 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
             <div className="view-header [&_.path]:flex-1 [&_button]:text-control [&_button]:p-[2px_8px] [&_[aria-pressed='true']]:bg-hover [&_[aria-pressed='true']]:text-foreground flex gap-2.5 items-center h-8 p-[0_12px] flex-none min-w-0 text-control text-soft">
                 <span className="strong font-semibold">{binding.repoName}</span>
                 <span className="path text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap min-w-0">{view.path}</span>
-                {(problems.tools.length > 0 || problems.failures.length > 0) && <span className={`lint-summary [&.has-errors]:text-bad [&.has-warnings]:text-warn text-caption text-muted-foreground whitespace-nowrap${problems.errors ? ' has-errors' : problems.warnings ? ' has-warnings' : ''}`} title={[...problems.failures, `Checked by ${problems.tools.join(', ')}`].filter(Boolean).join('\n')}>
-                    {problems.failures.length > 0 ? t("Lint unavailable") : !problems.errors && !problems.warnings ? t("{0} · no problems", { "0": problems.tools.join(' · ') }) : `${problems.errors ? `${problems.errors} error${problems.errors > 1 ? 's' : ''}` : ''}${problems.errors && problems.warnings ? ', ' : ''}${problems.warnings ? `${problems.warnings} warning${problems.warnings > 1 ? 's' : ''}` : ''}`}
-                </span>}
                 {markdown && <span className="view-header-group inline-flex gap-px p-0.5 [border:1px_solid_transparent] rounded-(--radius-s) bg-fill" role="group" aria-label={t("Markdown view")}>
                     <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-pressed={mode === 'edit'} aria-label={t("Editor only")} title={t("Editor only")} onClick={() => setMode('edit')}><Pencil size={14} /></Button>
                     <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-pressed={mode === 'split'} aria-label={t("Editor and preview side by side")} title={t("Preview beside the editor")} onClick={() => setMode('split')}><Columns2 size={14} /></Button>

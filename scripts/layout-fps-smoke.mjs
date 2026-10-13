@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
+import assert from 'node:assert/strict'
 const cwd = resolve(import.meta.dirname, '..')
 const fixture = mkdtempSync(join(tmpdir(), 'ramu-fps-'))
 const repo = join(fixture, 'project')
@@ -20,27 +21,53 @@ else delete env.ELECTRON_RENDERER_URL
 delete env.ELECTRON_RUN_AS_NODE
 const app = await electron.launch({ args: [cwd], cwd, env })
 const page = await app.firstWindow()
+await page.addInitScript(() => {
+  window.__panelProfile = []
+  const start = document.startViewTransition.bind(document)
+  document.startViewTransition = update => {
+    const sample = { scope: document.documentElement.dataset.panelMotion, start: performance.now(), updateMs: 0, readyMs: 0 }
+    window.__panelProfile.push(sample)
+    const transition = start(() => {
+      sample.beforeUpdate = performance.now() - sample.start
+      const before = performance.now()
+      const result = update()
+      sample.updateMs = performance.now() - before
+      return result
+    })
+    transition.ready.then(() => { sample.readyMs = performance.now() - sample.start }, () => {})
+    return transition
+  }
+})
 const budget = Number(process.env.RAMU_FPS_BUDGET_MS ?? 0)
 const results = []
 const api = (method, ...args) => page.evaluate(([m, a]) => window.ramu.invoke(m, ...a), [method, args])
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms))
 const sample = async (name, run) => {
+  const profile = process.env.RAMU_CPU_PROFILE && name.startsWith('terminal') ? await page.context().newCDPSession(page) : null
+  if (profile) { await profile.send('Profiler.enable'); await profile.send('Profiler.start') }
   await page.evaluate(() => {
+    window.__panelProfile = []
     const frames = []; let last = performance.now(), live = true, layouts = 0
     const observer = new ResizeObserver(() => layouts++)
     document.querySelectorAll('.main, .main-chat, .editor-area, .terminal-panel').forEach(el => observer.observe(el))
     const tick = (now) => { frames.push(now - last); last = now; if (live) requestAnimationFrame(tick) }
     requestAnimationFrame(tick)
-    window.__fps = () => { live = false; observer.disconnect(); return { frames, layouts } }
+    window.__fps = () => { live = false; observer.disconnect(); return { frames, layouts, transitions: window.__panelProfile } }
   })
   await run()
   const measured = await page.evaluate(() => window.__fps())
+  if (profile) {
+    const { profile: data } = await profile.send('Profiler.stop')
+    writeFileSync(join(fixture, `${name.replaceAll(' ', '-')}.cpuprofile`), JSON.stringify(data))
+    await profile.detach()
+  }
   const frames = measured.frames.slice(1)
   const sorted = [...frames].sort((a, b) => a - b)
   const at = (q) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))] ?? 0
   const row = { name, layouts: measured.layouts, frames: frames.length, avg: +(frames.reduce((a, b) => a + b, 0) / Math.max(1, frames.length)).toFixed(1), p95: +at(.95).toFixed(1), max: +at(1).toFixed(1), slow: frames.filter((ms) => ms > 25).length }
   results.push(row)
   console.log(`${name.padEnd(34)} frames ${String(row.frames).padStart(4)}  avg ${row.avg}ms  p95 ${row.p95}ms  max ${row.max}ms  >25ms: ${row.slow}  layouts: ${row.layouts}`)
+  if (measured.transitions.length) console.log('  snapshot timings:', measured.transitions.map(t => `${t.scope}: prepare ${t.beforeUpdate?.toFixed(1)}ms, update ${t.updateMs.toFixed(1)}ms, ready ${t.readyMs.toFixed(1)}ms`).join('; '))
 }
 const drag = async (from, to, steps = 60) => {
   await page.mouse.move(from.x, from.y); await page.mouse.down()
@@ -60,6 +87,7 @@ try {
   await page.reload(); await page.locator('.task-row').first().waitFor()
   await page.locator('.task-row').first().click()
   await page.locator('.agent-view:visible').waitFor()
+  await page.locator('.agent-view:visible .msg').nth(49).waitFor()
   console.log(`Fixture: ${fixture}\nMessages rendered: ${await page.locator('.agent-view:visible .msg').count()}`)
 
   await sample('sidebar drag', async () => { const c = await center(page.getByRole('separator', { name: 'Resize sidebar', exact: true })); await drag(c, { x: c.x + 120, y: c.y }); await drag({ x: c.x + 120, y: c.y }, c) })
@@ -89,9 +117,29 @@ try {
     for (let w = 1440; w >= 1000; w -= 20) { await app.evaluate(({ BrowserWindow }, width) => BrowserWindow.getAllWindows()[0].setSize(width, 900), w); await sleep(16) }
     for (let w = 1000; w <= 1440; w += 20) { await app.evaluate(({ BrowserWindow }, width) => BrowserWindow.getAllWindows()[0].setSize(width, 900), w); await sleep(16) }
   })
+  const toolsWidth = (await page.locator('.workspace-tools').boundingBox()).width
   await sample('terminal open', async () => { await page.getByRole('button', { name: 'Terminal', exact: true }).click(); await sleep(700) })
+  assert(Math.abs((await page.locator('.workspace-tools').boundingBox()).width - toolsWidth) < 1, 'Opening the terminal preserves the tools width')
   await sample('terminal resize drag', async () => { const c = await center(page.locator('.task-pane:visible').getByRole('separator', { name: 'Resize terminal panel', exact: true })); await drag(c, { x: c.x, y: c.y - 120 }); await drag({ x: c.x, y: c.y - 120 }, c) })
   await sample('terminal close', async () => { await page.getByRole('button', { name: 'Terminal', exact: true }).click(); await sleep(700) })
+  assert(Math.abs((await page.locator('.workspace-tools').boundingBox()).width - toolsWidth) < 1, 'Closing the terminal preserves the tools width')
+  // The outer tools divider changes the terminal's width too. Earlier probes
+  // only dragged this divider before a terminal existed.
+  await page.getByRole('button', { name: 'Terminal', exact: true }).click()
+  await page.getByRole('button', { name: 'Dock terminal on right', exact: true }).click()
+  await page.locator('.task-pane:visible .view-tabs').getByRole('button', { name: 'Close view', exact: true }).first().click()
+  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click()
+  for (let i = 0; i < 11; i++) writeFileSync(join(repo, `file-${String(i).padStart(2, '0')}.md`), '# Changed fixture\n')
+  await sleep(500)
+  for (const name of ['Source Control', 'Explorer']) {
+    await page.getByRole('button', { name, exact: true }).click()
+    await sleep(500)
+    await sample(`${name} resize, terminal right`, async () => {
+      const c = await center(page.getByRole('separator', { name: 'Resize tools panel', exact: true }))
+      await drag(c, { x: c.x - 120, y: c.y })
+      await drag({ x: c.x - 120, y: c.y }, c)
+    })
+  }
   if (budget) {
     const over = results.filter((row) => row.p95 > budget)
     if (over.length) throw new Error(`p95 over ${budget}ms: ${over.map((row) => row.name).join(', ')}`)

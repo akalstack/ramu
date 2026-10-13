@@ -6,20 +6,11 @@ Explorer single-clicks and search results open preview tabs. Open another previe
 
 Saving writes the buffer exactly. Ramu checks for disk conflicts and can send unsaved buffers as agent context.
 
-## Linting
+## Drag and drop
 
-Linters must be installed and configured in the repository. Ramu does not download them.
+Drop desktop files or folders onto an Explorer folder, repository header, or the empty space below its tree to copy them there. Existing entries keep their contents; imported duplicates get a new name. Within a repository, dragging moves entries; hold Option/Alt to copy. Drops between repository trees copy entries.
 
-| Tool | Languages | Checks unsaved text |
-| --- | --- | --- |
-| ESLint | JavaScript / TypeScript | Yes |
-| Ruff | Python | Yes |
-| Biome | JavaScript / TypeScript, JSON, CSS | No |
-| Oxlint | JavaScript / TypeScript | No |
-
-Tools run from the nearest configured folder. Ruff uses the project's virtual environment or PATH.
-
-Files are checked on open and save. **Lint while editing** checks supported unsaved buffers after a pause. Linting does not write files.
+Drop Explorer files or folders onto the chat input or conversation to add file context (up to 20 files). Desktop files become attachments; desktop folders insert their quoted absolute paths so the agent can inspect them. Mixed file/folder drops work in the same gesture.
 
 ## Text rendering
 
@@ -27,4 +18,4 @@ Files are checked on open and save. **Lint while editing** checks supported unsa
 
 ## Checks
 
-Run `pnpm check`. On macOS, build and run `RAMU_E2E_EDITOR_ONLY=1 pnpm test:e2e` for editor, lint, save-conflict, and font-smoothing checks.
+Run `pnpm check`. On macOS, build and run `RAMU_E2E_EDITOR_ONLY=1 pnpm test:e2e` for editor, save-conflict, and font-smoothing checks. Run `RAMU_E2E_DROP_ONLY=1 pnpm test:e2e` for native Explorer imports and chat drops.

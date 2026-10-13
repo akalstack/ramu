@@ -1,4 +1,6 @@
+import { closingPanel } from '../../shared/panelClose'
 import { persistentTaskUi } from '../../shared/sourceNavigation'
+import { animatePanelChange, type PanelMotionScope } from './panelMotion'
 import { t, useLanguage } from './i18n'
 // Renderer-side workspace state: projects, tasks, open task tabs and their view tabs.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -84,6 +86,15 @@ export interface WorkspaceApi {
 }
 
 const Ctx = createContext<WorkspaceApi | null>(null)
+type WorkspaceActions = Pick<WorkspaceApi, 'task' | 'refresh' | 'openTask' | 'openView' | 'consumeSourceNavigation'>
+const ActionsCtx = createContext<WorkspaceActions | null>(null)
+
+/** Commands read fresh state when called, without subscribing to panel/UI changes. */
+export function useWorkspaceActions(): WorkspaceActions {
+  const actions = useContext(ActionsCtx)
+  if (!actions) throw new Error('WorkspaceProvider missing')
+  return actions
+}
 
 export function useWorkspace(): WorkspaceApi {
   const ws = useContext(Ctx)
@@ -101,7 +112,7 @@ function viewKey(v: ViewInput | ViewDescriptor): string {
     case 'file':
       return `file:${v.repoId}:${v.path}`
     case 'diff':
-      return `diff:${v.repoId}:${v.path}:${v.oid ?? v.staged}`
+      return `diff:${v.repoId}:${v.path}:${v.oid ?? v.staged}${v.stash ? ":stash" : ""}`
     case 'git':
       return `git:${v.repoId}:${v.oid ?? 'upstream'}`
     case 'review':
@@ -550,5 +561,66 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     return api
   }, [projects, repos, tasks, workspaces, composingWorkspace, ui, taskUi, bindings, dirty, composing, refresh, refreshBindings, updateTaskUi, setDirty, unread, preferences.previewTabs, language])
 
-  return <Ctx.Provider value={api}>{children(loaded)}</Ctx.Provider>
+  // Resolve delayed snapshot callbacks against the latest state, including when
+  // a rapid second action completes the previous pending update first.
+  const latestPanelApi = useRef(api)
+  latestPanelApi.current = api
+  const animatedApi = useMemo<WorkspaceApi>(() => {
+    const change = (update: (current: WorkspaceApi) => void, scope: PanelMotionScope, entering: boolean | (() => boolean) = false, captureIncoming = false) => animatePanelChange(() => update(latestPanelApi.current), scope, entering, captureIncoming)
+    const active = (taskId: string) => taskId === api.ui.activeTaskId
+    const terminalShown = (taskId: string) => !!api.taskUi[taskId]?.views.some(v => v.kind === 'terminal') && (api.taskUi[taskId]?.terminalOpen ?? true)
+    const editorShown = (taskId: string) => !!api.taskUi[taskId]?.views.some(v => v.id === api.taskUi[taskId]?.activeViewId && v.kind !== 'agent' && v.kind !== 'terminal')
+    return {
+      ...api,
+      setSidebar: sidebar => {
+        const tool = (tab: WorkspaceUiState['sidebar']) => tab === 'explorer' || tab === 'search' || tab === 'scm'
+        if (sidebar !== api.ui.sidebar && (tool(sidebar) || tool(api.ui.sidebar))) change(current => current.setSidebar(sidebar), 'tools', tool(sidebar))
+        else api.setSidebar(sidebar)
+      },
+      openView: (taskId, view) => {
+        const opening = view.kind === 'terminal' ? !terminalShown(taskId) : view.kind !== 'agent' && !editorShown(taskId)
+        if (active(taskId) && opening) change(current => current.openView(taskId, view), view.kind === 'terminal' ? 'terminal' : 'editor', true)
+        else api.openView(taskId, view)
+      },
+      activateView: (taskId, viewId) => {
+        const view = api.taskUi[taskId]?.views.find(v => v.id === viewId)
+        const opening = view?.kind === 'terminal' ? !terminalShown(taskId) : !!view && view.kind !== 'agent' && !editorShown(taskId)
+        if (active(taskId) && opening) change(current => current.activateView(taskId, viewId), view?.kind === 'terminal' ? 'terminal' : 'editor', true)
+        else api.activateView(taskId, viewId)
+      },
+      hideWorkspace: taskId => active(taskId) ? change(current => current.hideWorkspace(taskId), 'workspace') : api.hideWorkspace(taskId),
+      showWorkspace: taskId => active(taskId) ? change(current => current.showWorkspace(taskId), 'workspace', true) : api.showWorkspace(taskId),
+      toggleRightPanel: taskId => active(taskId) ? change(current => current.toggleRightPanel(taskId), 'right', () => {
+        const current = latestPanelApi.current
+        return !current.workspaceVisible(taskId) && !['explorer', 'scm', 'search'].includes(current.ui.sidebar)
+      }) : api.toggleRightPanel(taskId),
+      setTerminalPanel: (taskId, settings) => {
+        if (active(taskId) && ('terminalOpen' in settings || 'terminalDock' in settings)) change(current => current.setTerminalPanel(taskId, settings), 'terminal', settings.terminalOpen === true, 'terminalDock' in settings)
+        else api.setTerminalPanel(taskId, settings)
+      },
+      closeView: (taskId, viewId) => {
+        const scope = closingPanel(api.taskUi[taskId], [viewId])
+        if (active(taskId) && scope && !api.dirty[viewId]) change(current => current.closeView(taskId, viewId), scope)
+        else api.closeView(taskId, viewId)
+      },
+      closeViews: (taskId, viewIds) => {
+        const scope = closingPanel(api.taskUi[taskId], viewIds)
+        if (active(taskId) && scope && !viewIds.some(id => api.dirty[id])) change(current => current.closeViews(taskId, viewIds), scope)
+        else api.closeViews(taskId, viewIds)
+      },
+      showChat: taskId => active(taskId) && editorShown(taskId) ? change(current => current.showChat(taskId), 'editor') : api.showChat(taskId),
+    }
+  }, [api])
+
+  const latestActionsApi = useRef(animatedApi)
+  latestActionsApi.current = animatedApi
+  const actions = useMemo<WorkspaceActions>(() => ({
+    task: taskId => latestActionsApi.current.task(taskId),
+    refresh: () => latestActionsApi.current.refresh(),
+    openTask: taskId => latestActionsApi.current.openTask(taskId),
+    openView: (taskId, view) => latestActionsApi.current.openView(taskId, view),
+    consumeSourceNavigation: (taskId, viewId, requestId) => latestActionsApi.current.consumeSourceNavigation(taskId, viewId, requestId),
+  }), [])
+
+  return <ActionsCtx.Provider value={actions}><Ctx.Provider value={animatedApi}>{children(loaded)}</Ctx.Provider></ActionsCtx.Provider>
 }

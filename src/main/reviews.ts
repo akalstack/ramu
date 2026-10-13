@@ -10,15 +10,16 @@ import type { Db } from './db'
 import type { AgentService } from './agent'
 import type { Workspace } from './workspace'
 import { resolveInRoot } from './files'
+import { commitBranchInfo } from './git'
 import { RunUndo } from './undo'
 import { combineChatUndo } from './chatUndo'
 import { readReviewCurrent, reviewCheckout, reviewRenames, type ReviewCheckout } from './reviewLive'
 import { reviewCommentOutdated } from '../shared/reviewOutdated'
 import { reviewLineStats } from './reviewStats'
-import { type AgentScope, type Attachment, type ChangeFile, type ChangeReview, type ReviewComment, type ReviewFileState } from '../shared/types'
+import { type AgentScope, type Attachment, type ChangeFile, type ChangeReview, type ReviewComment, type ReviewFileState, type ReviewBranchState } from '../shared/types'
 const exec = promisify(execFile)
 interface SnapshotFile { repoId: string; repoName: string; path: string; hash: string; content: string; binary: boolean; mode?: number }
-interface ReviewData extends ChangeReview { roots: { repoId: string; repoName: string; cwd: string; checkout?: ReviewCheckout }[]; fileLocations?: Record<string, string> }
+interface ReviewData extends ChangeReview { roots: { repoId: string; repoName: string; cwd: string; checkout?: ReviewCheckout; targetBranch?: string | null }[]; fileLocations?: Record<string, string> }
 const findingSchema = z.object({ summary: z.string().max(4000).optional().default(''), findings: z.array(z.object({ fileId: z.string(), line: z.number().int().positive(), endLine: z.number().int().positive().optional(), severity: z.enum(['high', 'medium', 'low']), text: z.string().min(1).max(4000) })).max(40).default([]), notes: z.array(z.object({ fileId: z.string(), scope: z.enum(['file', 'line']), line: z.number().int().positive().optional(), kind: z.enum(['note', 'question']), text: z.string().min(1).max(4000) })).max(20).default([]) })
 export class ReviewService {
   private undo: RunUndo
@@ -67,7 +68,11 @@ export class ReviewService {
     const bindings = this.workspace.listBindings(taskId)
     const roots = bindings.length ? bindings.map((b) => ({ repoId: b.repoId, repoName: b.repoName, cwd: b.cwd })) : [{ repoId: 'general', repoName: 'Chat files', cwd: scope.cwd }]
     const id = randomUUID()
-    const recordedRoots = await Promise.all(roots.map(async (r) => ({ ...r, checkout: await reviewCheckout(r.cwd) })))
+    const recordedRoots = await Promise.all(roots.map(async (r) => {
+      const [checkout, branchInfo] = await Promise.all([reviewCheckout(r.cwd), commitBranchInfo(r.cwd).catch(() => null)])
+      return { ...r, checkout: { ...checkout, branch: checkout.branch ?? branchInfo?.branch ?? undefined },
+        targetBranch: bindings.find((b) => b.repoId === r.repoId)?.baseRef ?? branchInfo?.defaultBranch ?? null }
+    }))
     const review: ReviewData = { id, taskId, sessionId: null, createdAt: Date.now(), state: 'recording', files: [], comments: [], error: null, roots: recordedRoots, aiState: 'idle', aiSummary: null }
     try { const snapshot = await this.snapshot(roots); writeFileSync(join(this.root, `${id}.gz`), gzipSync(JSON.stringify(snapshot)), { mode: 0o600 }) } catch (error) { review.state = 'failed'; review.error = `Change capture unavailable: ${String(error)}` }
     this.db.prepare('INSERT INTO change_reviews VALUES (?, ?, ?, ?, ?, ?)').run(id, taskId, null, review.state, JSON.stringify(review), review.createdAt)
@@ -152,6 +157,18 @@ export class ReviewService {
     this.update({ ...review, reviewedAt: reviewed ? Date.now() : null }); return this.get(id)
   }
   covers(id: string): string[] { return (this.get(id) as ReviewData).roots.map((r) => r.cwd) }
+  async branches(id: string): Promise<ReviewBranchState[]> {
+    const review = this.get(id) as ReviewData
+    const bindings = this.workspace.fileBindings(review.taskId)
+    const label = (checkout?: ReviewCheckout) => checkout?.branch === 'HEAD' ? `HEAD (${checkout.head?.slice(0, 8) ?? 'detached'})` : checkout?.branch ?? null
+    return Promise.all(review.roots.filter((root) => review.files.some((file) => file.repoId === root.repoId)).map(async (root) => {
+      const binding = bindings.find((b) => b.repoId === root.repoId)
+      const current = binding ? await reviewCheckout(binding.cwd) : undefined
+      // Legacy reviews did not save a target; derive a best-effort local default.
+      const targetBranch = root.targetBranch !== undefined ? root.targetBranch : binding?.baseRef ?? (await commitBranchInfo(root.cwd).catch(() => null))?.defaultBranch ?? null
+      return { repoId: root.repoId, repoName: root.repoName, currentBranch: label(current), targetBranch, recordedBranch: label(root.checkout) }
+    }))
+  }
   async inspect(id: string): Promise<ReviewFileState[]> {
     const review = this.get(id) as ReviewData
     const stored = this.stored(), later = stored.slice(0, stored.findIndex((r) => r.id === id)) as ReviewData[]

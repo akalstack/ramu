@@ -1,3 +1,4 @@
+import { chatCodeComponents } from './ChatCodeBlock'
 import { ChatLink } from './ChatReferences'
 import { remarkChatReferences, SKILL_REFERENCE_PREFIX } from '../../shared/chatReferences'
 import { localFileLink } from '../../shared/fileLinks'
@@ -51,7 +52,7 @@ function AgentDiff({ content, taskId }: { content: Extract<AgentContent, { type:
 export function AgentContentView({ content, taskId, plainText = false }: { content: AgentContent[]; taskId?: string; plainText?: boolean }) {
   useLanguage()
   return <div className="agent-content flex flex-col gap-3 min-w-0 text-control text-soft">{content.map((item, index) => <div key={index} data-content-type={item.type}>
-    {item.type === 'text' ? <div className="agent-content-text whitespace-pre-wrap break-words [&_p]:m-0 [&_pre]:overflow-auto [&_pre]:p-2 [&_pre]:bg-fill [&_pre]:rounded-(--radius-s) [&_a]:text-brand">{plainText ? <pre className="m-0 font-mono whitespace-pre-wrap break-words max-h-64 overflow-auto text-caption">{item.text}</pre> : <Markdown remarkPlugins={[remarkGfm, remarkChatReferences]} urlTransform={(url) => url.startsWith(SKILL_REFERENCE_PREFIX) || localFileLink(url) ? url : defaultUrlTransform(url)} components={{ a: ({ href, children }) => <ChatLink href={href} taskId={taskId}>{children}</ChatLink> }}>{item.text}</Markdown>}</div>
+    {item.type === 'text' ? <div className="agent-content-text whitespace-pre-wrap break-words [&_p]:m-0 [&_pre]:overflow-auto [&_pre]:p-2 [&_pre]:bg-fill [&_pre]:rounded-(--radius-s) [&_a]:text-brand">{plainText ? <pre className="m-0 font-mono whitespace-pre-wrap break-words max-h-64 overflow-auto text-caption">{item.text}</pre> : <Markdown remarkPlugins={[remarkGfm, remarkChatReferences]} urlTransform={(url) => url.startsWith(SKILL_REFERENCE_PREFIX) || localFileLink(url) ? url : defaultUrlTransform(url)} components={{ ...chatCodeComponents, a: ({ href, children }) => <ChatLink href={href} taskId={taskId}>{children}</ChatLink> }}>{item.text}</Markdown>}</div>
       : item.type === 'image' ? <AgentImage content={item} taskId={taskId} />
       : item.type === 'audio' ? inlineMedia(item.mimeType, item.data, 'audio') ? <audio controls preload="none" src={inlineMedia(item.mimeType, item.data, 'audio')} className="max-w-full h-10" aria-label={t('Agent audio')} /> : <span>{t('Audio preview unavailable')}</span>
       : item.type === 'diff' ? <AgentDiff content={item} taskId={taskId} />

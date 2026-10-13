@@ -1,3 +1,4 @@
+import { Spinner } from '@/components/ui/spinner'
 import { ComposerInput, type ComposerInputHandle } from './ComposerInput'
 import { errorText } from './errors'
 import { t, useLanguage } from './i18n'
@@ -6,7 +7,7 @@ import { ArrowUp, FileText, Paperclip, Play, Square, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Attachment, FileContext } from '../../shared/types'
-import { invoke } from './ipc'
+import { invoke, ramu } from './ipc'
 import { ComposerSuggestions, FILE_DRAG_TYPE, MAX_PINNED_FILES, useComposerSuggestions } from './ComposerSuggestions'
 import { Attachments } from './Attachments'
 
@@ -43,8 +44,8 @@ export function Composer({
   value: string
   scopeId?: string
   onChange: (v: string) => void
-  onSubmit: (context: FileContext[]) => void
-  onAlternateSubmit?: (context: FileContext[]) => void
+  onSubmit: (context: FileContext[]) => void | Promise<void>
+  onAlternateSubmit?: (context: FileContext[]) => void | Promise<void>
   alternateLabel?: string
   alternateDisabled?: boolean
   placeholder: string
@@ -70,6 +71,8 @@ export function Composer({
   useLanguage()
   const [caret, setCaret] = useState(value.length)
   const suggestions = useComposerSuggestions(value, caret, scopeId, chat)
+  const [submitting, setSubmitting] = useState(false)
+  const submissionPending = useRef(false)
   const [uploading, setUploading] = useState(false)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   // Notices about files that did not fit go away on their own.
@@ -84,13 +87,28 @@ export function Composer({
   const uploadQueue = useRef(Promise.resolve())
   const pendingUploads = useRef(0)
   const pastedCount = useRef(0)
-  const importFiles = (files?: File[]): Promise<boolean> => {
+  const importFiles = (files?: File[], dropped = false): Promise<boolean> => {
     if (!onAttachmentsChange) return Promise.resolve(false)
     pendingUploads.current++
     setUploading(true)
     const operation = uploadQueue.current.then(async () => {
     setAttachmentError(null)
     try {
+      if (files && dropped) {
+        const paths = files.map((file) => ramu.pathForFile(file))
+        const info = await ramu.invoke('files.dropInfo', paths.filter(Boolean))
+        const folders = new Set(info.filter((entry) => entry.kind === 'dir').map((entry) => entry.path))
+        const input = ref.current
+        if (folders.size && input) {
+          const text = [...folders].map((path) => JSON.stringify(path)).join('\n')
+          const start = input.selectionStart, end = input.selectionEnd
+          const insertion = `${start && !/\s$/.test(input.value.slice(0, start)) ? '\n' : ''}${text}\n`
+          input.setRangeText(insertion, start, end, 'end')
+          setCaret(start + insertion.length)
+          input.focus()
+        }
+        files = files.filter((_, index) => !folders.has(paths[index]!))
+      }
       if (files && files.length + currentFiles.current.length > 10) throw new Error('Attach up to 10 files per message.')
       const selected = files ? await Promise.all(files.map(async (file) => {
         if (!file.size || file.size > 10 * 1024 * 1024) throw new Error(`${file.name}: files must be nonempty and no larger than 10 MB.`)
@@ -118,18 +136,36 @@ export function Composer({
     const next = suggestions.choose(choice); onChange(next.value); setCaret(next.caret)
     requestAnimationFrame(() => { ref.current?.focus(); ref.current?.setSelectionRange(next.caret, next.caret) })
   }
-  const submit = () => { onSubmit(suggestions.hydrate()); suggestions.clearPinned(); setAttachmentError(null) }
-  const alternate = () => { onAlternateSubmit?.(suggestions.hydrate()); suggestions.clearPinned() }
+  const send = async (handler: (context: FileContext[]) => void | Promise<void>) => {
+    // Lock immediately: repeated Enter presses can arrive before React renders the disabled button.
+    if (submissionPending.current) return
+    submissionPending.current = true
+    setSubmitting(true)
+    setAttachmentError(null)
+    try {
+      await handler(suggestions.hydrate())
+      suggestions.clearPinned()
+    } catch (error) {
+      setAttachmentError(errorText(error))
+    } finally {
+      submissionPending.current = false
+      setSubmitting(false)
+    }
+  }
+  const submit = () => { void send(onSubmit) }
+  const alternate = () => { if (onAlternateSubmit) void send(onAlternateSubmit) }
   const hasPinned = suggestions.pinned.length > 0
   const hasContent = allowEmpty || hasPinned || value.trim().length > 0 || attachments.length > 0
-  const canAlternate = !alternateDisabled && !uploading && hasContent
-  const showStop = !allowEmpty && !hasPinned && !!stop?.active && !value.trim() && attachments.length === 0
-  const showResume = !allowEmpty && !hasPinned && !showStop && !!resume?.active && !value.trim() && attachments.length === 0
+  const canAlternate = !submitting && !alternateDisabled && !uploading && hasContent
+  const showStop = !submitting && !allowEmpty && !hasPinned && !!stop?.active && !value.trim() && attachments.length === 0
+  const showResume = !submitting && !allowEmpty && !hasPinned && !showStop && !!resume?.active && !value.trim() && attachments.length === 0
   const rootRef = useRef<HTMLDivElement>(null)
   const [showAllChips, setShowAllChips] = useState(false)
-  // A file dragged from the Explorer becomes an @mention, so it rides along as context; files from the desktop become attachments.
+  // Explorer entries become context; desktop files become attachments and folders become path references.
   const handleDrop = (dragged: string, files: File[]) => {
     if (dragged) {
+      pendingUploads.current++
+      setUploading(true)
       void (async () => {
         try {
           const item = JSON.parse(dragged) as { repoId: string; path: string; kind?: 'file' | 'dir'; items?: { path: string; kind?: 'file' | 'dir' }[] }
@@ -147,12 +183,13 @@ export function Composer({
           if (!picked.length) { setAttachmentError('Nothing to add: those folders have no files.'); return }
           const dropped = suggestions.pinMany(picked)
           setAttachmentError(dropped ? `Only ${MAX_PINNED_FILES} files can be added as context per message. ${dropped} ${dropped === 1 ? 'was' : 'were'} left out.` : null)
-        } catch { /* Not one of ours. */ }
+        } catch (error) { setAttachmentError(errorText(error)) }
+        finally { if (--pendingUploads.current === 0) setUploading(false) }
         requestAnimationFrame(() => ref.current?.focus())
       })()
       return
     }
-    if (onAttachmentsChange && files.length) void importFiles(files)
+    if (onAttachmentsChange && files.length) void importFiles(files, true)
   }
   // The whole chat accepts drops (see AgentView); it hands them to the composer in the same pane.
   const latestDrop = useRef(handleDrop); latestDrop.current = handleDrop
@@ -164,7 +201,7 @@ export function Composer({
     window.addEventListener('ramu:chat-drop', onChatDrop)
     return () => window.removeEventListener('ramu:chat-drop', onChatDrop)
   }, [])
-  const canSend = !disabled && !uploading && hasContent
+  const canSend = !submitting && !disabled && !uploading && hasContent
   return (<>
     <div ref={rootRef} className={`composer${dragging ? " dragging" : ""}`}
       onDragOver={(event) => { if (event.dataTransfer.types.includes(FILE_DRAG_TYPE) || onAttachmentsChange && event.dataTransfer.types.includes('Files')) { event.preventDefault(); setDragging(true) } }}
@@ -233,8 +270,8 @@ export function Composer({
         {onAttachmentsChange && <Button variant="ghost" size="icon-xs" className="icon small-icon" aria-label={t("Attach files")} title={t("Attach files")} disabled={uploading || attachments.length >= 10} onClick={() => void importFiles()}><Paperclip size={15} /></Button>}
         {controls ? <div className="composer-controls flex min-w-0 flex-1 flex-wrap items-center gap-1">{controls}</div> : <span className="grow flex-1 min-w-0 text-left" />}
         {actions}
-        <Button variant={showStop || showResume ? "secondary" : "default"} size="icon-sm" className={`send${showStop ? " stop" : showResume ? " resume" : ""}`} aria-label={showStop ? t("Stop") : showResume ? t("Resume") : t(submitLabel)} title={showStop ? t("Stop this turn") : showResume ? t("Resume where it stopped") : `${t(submitLabel)} (Enter)${onAlternateSubmit && alternateLabel ? ` · ${t(alternateLabel)} (⌘Enter / Ctrl+Enter)` : ''}`} disabled={showStop || showResume ? false : !canSend} onClick={showStop ? stop!.onStop : showResume ? resume!.onResume : submit}>
-          {showStop ? <Square size={12} fill="currentColor" strokeWidth={0} /> : showResume ? <Play size={13} fill="currentColor" strokeWidth={0} /> : <ArrowUp size={16} strokeWidth={2.25} />}
+        <Button variant={showStop || showResume ? "secondary" : "default"} size="icon-sm" className={`send${showStop ? " stop" : showResume ? " resume" : ""}`} aria-busy={submitting} aria-label={submitting ? t("Sending") : showStop ? t("Stop") : showResume ? t("Resume") : t(submitLabel)} title={submitting ? t("Sending") : showStop ? t("Stop this turn") : showResume ? t("Resume where it stopped") : `${t(submitLabel)} (Enter)${onAlternateSubmit && alternateLabel ? ` · ${t(alternateLabel)} (⌘Enter / Ctrl+Enter)` : ''}`} disabled={showStop || showResume ? false : !canSend} onClick={showStop ? stop!.onStop : showResume ? resume!.onResume : submit}>
+          {submitting ? <Spinner aria-label={t("Sending")} /> : showStop ? <Square size={12} fill="currentColor" strokeWidth={0} /> : showResume ? <Play size={13} fill="currentColor" strokeWidth={0} /> : <ArrowUp size={16} strokeWidth={2.25} />}
         </Button>
       </div>
     </div>

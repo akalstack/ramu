@@ -17,6 +17,8 @@ import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type CommitAction, type Com
 import { useAppSettings } from '../AppSettings'
 import { BranchPicker, SyncButton } from '../GitControls'
 import { AgentControls, providerName } from '../AgentControls'
+import { ipcQueryKey } from '../dataQueries'
+import { useQuery } from '@tanstack/react-query'
 import { invoke, ramu, copyText } from '../ipc'
 import { Dialog, Dropdown, Menu, useContextMenu } from '../Menu'
 import { errorText } from '../TaskPane'
@@ -28,6 +30,7 @@ import { notifyError } from '../Notifications'
 import { isWorktreeCtx, useWorkspace } from '../workspace'
 import { useModelSets } from '../ModelSets'
 import { FILE_ROW, FileRowLabel } from './FileRow'
+import { StashRow } from './StashRow'
 import { CommitHistoryRow } from './CommitHistoryRow'
 import { NoTask } from './ExplorerPanel'
 
@@ -105,12 +108,16 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   useLanguage()
   const ws = useWorkspace()
   const { preferences, save: savePreferences } = useAppSettings()
-  const [status, setStatus] = useState<GitStatus | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [commits, setCommits] = useState<GitCommit[]>([])
-  const [stashes, setStashes] = useState<GitStash[]>([])
+  const statusQuery = useQuery({ queryKey: ipcQueryKey('git.status', taskId, binding.repoId), queryFn: () => ramu.invoke('git.status', taskId, binding.repoId) })
+  const historyQuery = useQuery({ queryKey: ipcQueryKey('git.history', taskId, binding.repoId), queryFn: () => ramu.invoke('git.history', taskId, binding.repoId) })
+  const branchesQuery = useQuery({ queryKey: ipcQueryKey('git.branches', taskId, binding.repoId), queryFn: () => ramu.invoke('git.branches', taskId, binding.repoId) })
+  const stashesQuery = useQuery({ queryKey: ipcQueryKey('git.stashes', taskId, binding.repoId), queryFn: () => ramu.invoke('git.stashes', taskId, binding.repoId) })
+  const status = statusQuery.data ?? null
+  const loading = statusQuery.isLoading
+  const commits = historyQuery.data ?? []
+  const stashes = stashesQuery.data ?? []
+  const branches = branchesQuery.data ?? []
   const [operationName, setOperationName] = useState('')
-  const [branches, setBranches] = useState<GitBranchInfo[]>([])
   const [message, setMessage] = useState('')
   const [draft, setDraft] = useState<CommitDraft | null>(null)
   const [settings, setSettings] = useState<AgentSettings>(DEFAULT_AGENT_SETTINGS)
@@ -125,18 +132,14 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
   const [changesOpen, setChangesOpen] = useState(true)
   useEffect(() => { if (showGit) onGitCollapsed?.(!historyOpen) }, [showGit, historyOpen, onGitCollapsed])
 
-  const load = useCallback(async () => {
-    const results = await Promise.allSettled([invoke('git.status', taskId, binding.repoId), invoke('git.history', taskId, binding.repoId), invoke('git.branches', taskId, binding.repoId), invoke('git.stashes', taskId, binding.repoId)])
-    if (results[0].status === 'fulfilled') setStatus(results[0].value)
-    if (results[1].status === 'fulfilled') setCommits(results[1].value)
-    if (results[2].status === 'fulfilled') setBranches(results[2].value)
-    if (results[3].status === 'fulfilled') setStashes(results[3].value)
-    for (const result of results) if (result.status === 'rejected') reportError(errorText(result.reason))
-    setLoading(false)
-  }, [taskId, binding.repoId, reportError])
   useEffect(() => {
-    setLoading(true)
-    void load()
+    for (const error of [statusQuery.error, historyQuery.error, branchesQuery.error, stashesQuery.error]) if (error) reportError(errorText(error))
+  }, [statusQuery.error, historyQuery.error, branchesQuery.error, stashesQuery.error, reportError])
+
+  const load = useCallback(async () => {
+    await Promise.all([statusQuery.refetch(), historyQuery.refetch(), branchesQuery.refetch(), stashesQuery.refetch()])
+  }, [statusQuery.refetch, historyQuery.refetch, branchesQuery.refetch, stashesQuery.refetch, reportError])
+  useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const off = ramu.on('fs:changed', ({ cwd }) => {
       if (cwd === binding.cwd) { clearTimeout(timer); timer = setTimeout(() => void load(), 150) }
@@ -415,14 +418,13 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
           <OverlayScrollArea className="git-history">{loading ? <ContentSkeleton /> : commits.length ? <div className="git-graph [&_.commit-file-tree]:m-[2px_0_4px] [&_.commit-file-tree]:pl-5 [&_.commit-file-tree::before]:[content:none] flex flex-col">{commits.map((commit) => <CommitHistoryRow key={commit.oid} taskId={taskId} binding={binding} commit={commit} branch={status?.branch ?? null} onUndo={commit.oid === status?.oid ? () => requestUndo(commit) : undefined} undoDisabled={!canUndo} />)}</div> : <p className="muted text-muted-foreground small text-caption git-empty m-[2px_0] p-1.5 text-caption leading-[1.5]">{t("No commits yet.")}</p>}</OverlayScrollArea>
         </TabsContent>
         <TabsContent value="stashes" className="git-pane git-stashes"><OverlayScrollArea className="git-history">
-          {stashes.map((stash) => <div key={stash.oid} className="stash-row">
-            <span className="stash-name" title={`${stash.ref} · ${stash.subject}`}><Archive size={13} /><span>{stash.subject.replace(/^On [^:]+: /, '')}</span></span>
+          {stashes.map((stash) => <StashRow key={`${binding.repoId}:${stash.oid}`} taskId={taskId} binding={binding} stash={stash}>
             <span className="stash-actions">
               <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" disabled={busy} aria-label={t("Apply {0}", { "0": stash.subject })} title={t("Apply (keep the stash)")} onClick={() => void applyStash(stash)}><Copy size={13} /></Button>
               <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" disabled={busy} aria-label={t("Pop {0}", { "0": stash.subject })} title={t("Pop (apply and remove)")} onClick={() => void popStash(stash)}><ArchiveRestore size={13} /></Button>
               <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" disabled={busy} aria-label={t("Delete {0}", { "0": stash.subject })} title={t("Delete stash")} onClick={() => setConfirmation({ kind: 'drop-stash', oid: stash.oid, title: stash.subject })}><Trash2 size={13} /></Button>
             </span>
-          </div>)}
+          </StashRow>)}
           {loading && <ContentSkeleton />}
           {!loading && !stashes.length && <p className="muted text-muted-foreground small text-caption git-empty m-[2px_0] p-1.5 text-caption leading-[1.5]">{t("No saved stashes.")}</p>}
           <Button variant="secondary" className="bg-fill hover:bg-fill-hover git-stash-new" disabled={busy || !canStash} title={canStash ? undefined : t("Nothing to stash")} onClick={() => { setOperationName(''); setConfirmation({ kind: 'stash' }) }}><Plus size={13} />{t("Stash changes…")}</Button>

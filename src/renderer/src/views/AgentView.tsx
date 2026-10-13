@@ -1,11 +1,13 @@
+import { chatCodeComponents } from '../ChatCodeBlock'
 import { focusComposer } from '../ComposerInput'
 import { clipText } from '../../../shared/text'
 import { highlightSource } from '../../../shared/sourceNavigation'
 import { ChatLink, ReferenceText } from '../ChatReferences'
 import { remarkChatReferences, SKILL_REFERENCE_PREFIX } from '../../../shared/chatReferences'
-import { ContentSkeleton } from '@/components/content-skeleton'
-import { t as translate, useLanguage, currentLanguage, formatLocale } from './../i18n'
 import { Spinner } from '@/components/ui/spinner'
+import { cachedData, ipcQueryKey, queryClient } from '../dataQueries'
+import { useQuery } from '@tanstack/react-query'
+import { t as translate, useLanguage, currentLanguage, formatLocale } from './../i18n'
 import { LoadingDots } from '@/components/loading-dots'
 import { AgentContentView } from '../AgentContentView'
 import { toolKind, KIND_LABEL, KIND_VERB } from '../../../shared/agentTools'
@@ -20,8 +22,10 @@ import { Children, memo, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Attachment, ChatGoal, QueuedMessage, AgentEvent, AgentSettings, AgentSessionInfo, AgentSessionState, ViewDescriptor } from '../../../shared/types'
+import { foldChatTurn as foldTurn, toolNeedsAttention, type ChatBlock as Block } from '../../../shared/chatFolding'
 import { toolIsRunning, toolVerb } from '../../../shared/toolStatus'
 import { agentActivityLabel } from '../../../shared/agentActivity'
+import { ChatActivityButton } from '../ChatActivity'
 import { GoalBar, GoalDone } from '../GoalBar'
 import { accessName, AgentControls, providerName } from '../AgentControls'
 import { useAppSettings } from '../AppSettings'
@@ -39,6 +43,7 @@ import { ProviderIcon } from '../ProviderIcon'
 import { modelDisplayName, settingsNames, useModelSets } from '../ModelSets'
 import { Textarea } from '@/components/ui/textarea'
 import { slide } from '../slide'
+import { animatePanelChange, reducedMotion } from '../panelMotion'
 import { CommentsChip, pendingComments, sentComments } from '../ReviewChip'
 import { SessionChangesButton, TurnChanges } from '../Changes'
 import { ScheduleChatCard } from '../Automation'
@@ -48,7 +53,7 @@ import { Composer } from '../Composer'
 import { invoke, ramu, copyText } from '../ipc'
 import { errorText } from '../TaskPane'
 import { Dialog, Menu } from '../Menu'
-import { useWorkspace } from '../workspace'
+import { useWorkspaceActions } from '../workspace'
 import { formatChatDate, needsChatDate } from '../../../shared/chatDates'
 import { ElicitationCard } from '../ElicitationCard'
 import { QuestionDock, QuestionRow } from '../QuestionCard'
@@ -68,16 +73,26 @@ const STATE_LABEL: Partial<Record<AgentSessionState, string>> = {
 const LIVE: AgentSessionState[] = ['starting', 'running', 'needs-input', 'idle']
 const NEAR_BOTTOM_PX = 80
 
-type Block = { kind: 'event'; event: AgentEvent } | { kind: 'tools'; tools: ToolUse[] }
 
 /** Consecutive tool calls collapse into one line, like "Ran 2 commands". */
 function toBlocks(events: AgentEvent[]): Block[] {
   const blocks: Block[] = []
+  const agentUpdates = new Map(events.flatMap(event => event.kind === 'agent' && event.taskType !== 'local_bash' ? [[event.agentId, event] as const] : []))
+  const seenAgents = new Set<string>()
   for (const event of events) {
     // A sub-agent's own output lives in its panel; its card stands for it here.
     if (event.agentId && event.kind !== 'agent') continue
     if (event.kind === 'compaction' && event.state === 'started') continue
-    // A background command is the Bash row that started it, not a sub-agent card.
+    // Keep one activity row at each agent's starting position,
+    // updated with its latest state instead of repeating every progress event.
+    if (event.kind === 'agent' && event.taskType !== 'local_bash') {
+      if (!seenAgents.has(event.agentId)) {
+        seenAgents.add(event.agentId)
+        blocks.push({ kind: 'event', event: agentUpdates.get(event.agentId)! })
+      }
+      continue
+    }
+    // Background commands use their Bash row.
     if (event.kind === 'agent' && event.taskType === 'local_bash') continue
     // The advisor's card stands for its tool calls.
     if (event.kind === 'tool-use' && isAdvisorTool(event)) continue
@@ -92,6 +107,8 @@ function toBlocks(events: AgentEvent[]): Block[] {
 }
 
 type Turn = { key: number; user: Block | null; items: Block[]; ended: boolean; interrupted?: boolean; startedAt?: number; endedAt?: number }
+
+const blockIndex = (block: Block, blocks: Block[]) => block.kind === 'tools' ? blocks.findIndex(original => original.kind === 'tools' && original.tools.includes(block.tools[0]!)) : blocks.indexOf(block)
 
 const blockAt = (block: Block): number | undefined => block.kind === 'event' ? block.event.at : block.tools[0]?.at
 
@@ -115,20 +132,6 @@ function toTurns(blocks: Block[], events: AgentEvent[]): Turn[] {
   }
   for (const turn of turns) turn.endedAt ??= ends.get(turn.user?.kind === 'event' ? turn.user.event : null)
   return turns
-}
-
-/** Splits a finished turn into the work that folds away and the answer that stays. */
-function foldTurn(items: Block[], outcomes: Map<string, string>): { folded: Block[]; kept: Block[]; answer: Block[] } {
-  let end = items.length
-  while (end > 0 && items[end - 1]!.kind === 'event' && isTurnFooter((items[end - 1] as { event: AgentEvent }).event)) end--
-  let start = end
-  while (start > 0 && items[start - 1]!.kind === 'event' && ['text', 'content'].includes((items[start - 1] as { event: AgentEvent }).event.kind)) start--
-  const folded: Block[] = [], kept: Block[] = []
-  for (const block of items.slice(0, start)) {
-    const foldable = block.kind === 'tools' || block.event.kind === 'text' || block.event.kind === 'thinking' || block.event.kind === 'plan' || (block.event.kind === 'permission-request' || block.event.kind === 'elicitation' || block.event.kind === 'question' && !['dismissed', 'obsolete'].includes(outcomes.get(block.event.requestId) ?? '')) && outcomes.has(block.event.requestId)
-    ;(foldable ? folded : kept).push(block)
-  }
-  return { folded, kept, answer: items.slice(start) }
 }
 
 function formatDuration(ms: number): string {
@@ -184,26 +187,47 @@ function describeTools(tools: ToolUse[], results: Map<string, ToolResult>, activ
   return parts.join(', ')
 }
 
-export function AgentView({ view, history, visible = true }: { view: AgentViewDesc; history?: React.ReactNode; visible?: boolean }) {
+// Per-chat presentation state belongs to the UI, separate from the data query cache.
+const chatPresentation = new Map<string, { draft: string; attachments: Attachment[]; top: number; stick: boolean }>()
+
+export const AgentView = memo(function AgentView({ view, history, visible = true }: { view: AgentViewDesc; history?: React.ReactNode; visible?: boolean }) {
   useLanguage()
+  // Keep these queries observed while the chat is mounted. Hydration and live
+  // events below reconcile revisions; observers only manage cache lifetime.
+  useQuery({ queryKey: ipcQueryKey('agent.get', view.sessionId), queryFn: () => ramu.invoke('agent.get', view.sessionId), enabled: false, notifyOnChangeProps: [] })
+  useQuery({ queryKey: ipcQueryKey('agent.events', view.sessionId), queryFn: () => ramu.invoke('agent.events', view.sessionId), enabled: false, notifyOnChangeProps: [] })
   const { preferences } = useAppSettings()
   const { reviews } = useReviews()
-  const [eventSequences, setEventSequences] = useState<Map<AgentEvent, number>>(new Map())
-  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [eventSequences, setEventSequences] = useState<Map<AgentEvent, number>>(() => new Map((cachedData('agent.events', view.sessionId) ?? []).map((event, i) => [event, i + 1])))
+  const [attachments, setAttachments] = useState<Attachment[]>(() => chatPresentation.get(view.sessionId)?.attachments ?? [])
   const [queuePaused, setQueuePaused] = useState(false)
   const [queued, setQueued] = useState<QueuedMessage[]>([])
-  const [hydrating, setHydrating] = useState(true)
-  const [session, setSession] = useState<AgentSessionInfo | null>(null)
-  const [events, setEvents] = useState<AgentEvent[]>([])
+  const [hydrating, setHydrating] = useState(() => !cachedData('agent.events', view.sessionId))
+  const [session, setSession] = useState<AgentSessionInfo | null>(() => cachedData('agent.get', view.sessionId) ?? null)
+  const [events, setEvents] = useState<AgentEvent[]>(() => cachedData('agent.events', view.sessionId) ?? [])
   const [liveText, setLiveText] = useState<AgentEvent | null>(null)
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useState(() => chatPresentation.get(view.sessionId)?.draft ?? '')
   const [editTarget, setEditTarget] = useState<number | null>(null)
   const [editRestored, setEditRestored] = useState(false)
   const [pendingSettings, setPendingSettings] = useState<AgentSettings | null>(null)
   const [configuring, setConfiguring] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
-  const stick = useRef(true)
+  const stick = useRef(chatPresentation.get(view.sessionId)?.stick ?? true)
+  const latestChat = useRef({ session, events, draft, attachments })
+  latestChat.current = { session, events, draft, attachments }
+  useLayoutEffect(() => {
+    const saved = chatPresentation.get(view.sessionId)
+    if (saved && scroller.current) scroller.current.scrollTop = saved.top
+    return () => {
+      const current = latestChat.current
+      chatPresentation.set(view.sessionId, { draft: current.draft, attachments: current.attachments, top: scroller.current?.scrollTop ?? 0, stick: stick.current })
+      // Refresh cache lifetime on leaving an open chat, even if it was idle for
+      // longer than the query's normal garbage-collection interval.
+      if (current.session) queryClient.setQueryData(ipcQueryKey('agent.get', view.sessionId), current.session)
+      queryClient.setQueryData(ipcQueryKey('agent.events', view.sessionId), current.events)
+    }
+  }, [view.sessionId])
   const scrollFrame = useRef(0)
   const [dropping, setDropping] = useState(false)
   const [finding, setFinding] = useState(false)
@@ -213,12 +237,9 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
   // The aside panel: one aside (a new one carries its quote), or '*' for the list.
   const [openAside, setOpenAsideState] = useState<AsideTarget | '*' | null>(null)
   // One side panel at a time.
-  const setOpenAgent = (value: string | null | ((current: string | null) => string | null)) => { setOpenAsideState(null); setOpenAgentState(value) }
-  const setOpenAside = (value: typeof openAside) => { setOpenAgentState(null); setOpenAsideState(value) }
+  const setOpenAgent = (value: string | null | ((current: string | null) => string | null)) => animatePanelChange(() => { setOpenAsideState(null); setOpenAgentState(value) }, 'chat', typeof value === 'function' ? () => value(openAgent) !== null : value !== null)
+  const setOpenAside = (value: typeof openAside) => animatePanelChange(() => { setOpenAgentState(null); setOpenAsideState(value) }, 'chat', value !== null)
   const [asides, setAsides] = useState<Aside[]>([])
-  // Panels stay mounted while their slide-out plays; the one just opened wins over one still leaving.
-  const keptAside = useExitPresence(openAside), keptAgent = useExitPresence(openAgent)
-  const shownAside = openAside ?? (openAgent ? null : keptAside), shownAgent = openAgent ?? (openAside ? null : keptAgent)
   const panelOpen = openAside !== null || openAgent !== null
   useEffect(() => {
     let cancelled = false
@@ -245,6 +266,7 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
     const el = scroller.current
     if (!el) return
     cancelAnimationFrame(scrollFrame.current)
+    if (reducedMotion()) { el.scrollTop = el.scrollHeight; stick.current = true; return }
     const from = el.scrollTop, start = performance.now()
     const duration = Math.min(420, 160 + Math.abs(el.scrollHeight - el.clientHeight - from) / 12)
     const stop = () => { cancelAnimationFrame(scrollFrame.current); el.removeEventListener('wheel', stop); el.removeEventListener('touchstart', stop) }
@@ -269,18 +291,30 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
   useLayoutEffect(() => {
     const el = scroller.current
     if (!el) return
-    const measure = () => root.current?.style.setProperty('--chat-scrollbar-width', `${el.offsetWidth - el.clientWidth}px`)
+    let previousWidth = -1
+    const measure = () => {
+      // Measuring the transcript forces layout. Defer this stable scrollbar
+      // gutter until release instead of doing it for every live drag frame.
+      if (document.querySelector('[data-separator="active"], [data-workspace-split][data-dragging]')) return
+      const width = el.offsetWidth - el.clientWidth
+      if (width === previousWidth) return
+      previousWidth = width
+      root.current?.style.setProperty('--chat-scrollbar-width', `${width}px`)
+    }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(el)
-    return () => observer.disconnect()
+    const release = new MutationObserver(measure)
+    release.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['data-separator', 'data-dragging'] })
+    return () => { observer.disconnect(); release.disconnect() }
   }, [])
 
   useEffect(() => {
-    setHydrating(true); setError(null)
+    const cached = cachedData('agent.events', view.sessionId)
+    setHydrating(!cached); setError(null)
     let cancelled = false, revision = 0, latestState: AgentSessionState | undefined
-    const stored = new Map<number, { event: AgentEvent; revision: number }>()
-    const refreshEvents = () => { setEventSequences(new Map([...stored].map(([seq, item]) => [item.event, seq]))); const list = [...stored].sort(([a], [b]) => a - b).map(([, item]) => item.event); setEvents(list); const queue = list.findLast((e) => e.kind === 'queue'); if (queue?.kind === 'queue') { setQueued(queue.messages); setQueuePaused(!!queue.paused) } }
+    const stored = new Map<number, { event: AgentEvent; revision: number }>((cached ?? []).map((event, index) => [index + 1, { event, revision: 0 }]))
+    const refreshEvents = () => { setEventSequences(new Map([...stored].map(([seq, item]) => [item.event, seq]))); const list = [...stored].sort(([a], [b]) => a - b).map(([, item]) => item.event); setEvents(list); queryClient.setQueryData(ipcQueryKey('agent.events', view.sessionId), list); const queue = list.findLast((e) => e.kind === 'queue'); if (queue?.kind === 'queue') { setQueued(queue.messages); setQueuePaused(!!queue.paused) } }
     const hydrate = async () => {
       const requestedAt = revision
       const [s, evs] = await Promise.all([invoke('agent.get', view.sessionId), invoke('agent.events', view.sessionId)])
@@ -288,7 +322,7 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
       evs.forEach((event, index) => { if ((stored.get(index + 1)?.revision ?? -1) <= requestedAt) stored.set(index + 1, { event, revision: requestedAt }) })
       setSession({ ...s, state: latestState ?? s.state }); refreshEvents(); setHydrating(false)
     }
-    setEvents([]); setLiveText(null)
+    setEvents(cached ?? []); setLiveText(null)
     void hydrate().catch((e) => { if (!cancelled) { setError(errorText(e)); setHydrating(false) } })
     const reconnect = ramu.on('background:connection', ({ connected }) => { if (connected) void hydrate().catch(() => {}) })
     const off = ramu.on('agent:event', ({ sessionId, event, seq }) => {
@@ -310,6 +344,8 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
     }
   }, [view.sessionId])
 
+  useEffect(() => { if (session) queryClient.setQueryData(ipcQueryKey('agent.get', view.sessionId), session) }, [session, view.sessionId])
+
   // Follow new output only while the reader is already at the bottom.
   useEffect(() => {
     const el = scroller.current
@@ -326,6 +362,7 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
   const openQuestion = (requestId: string) => setQuestionFocus({ requestId, at: Date.now() })
   const results = useMemo(() => new Map(events.flatMap((e) => (e.kind === 'tool-result' ? [[e.toolUseId, e] as const] : []))), [events])
   const blocks = useMemo(() => toBlocks(events), [events])
+  const latestAssistant = blocks.findLast((block) => block.kind === 'event' && block.event.kind === 'text')
   const handledSource = useRef<string | null>(null)
   useEffect(() => {
     if (!visible || !view.sourceSeq || !events.length) return
@@ -406,7 +443,7 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
   const lastUserIndex = events.findLastIndex((e) => e.kind === 'user')
   const stopped = interrupted || (!!lastResult && events.lastIndexOf(lastResult) > lastUserIndex && /interrupt|abort/i.test(lastResult.kind === 'result' ? lastResult.text : ''))
   useEffect(() => { if (working) setInterrupted(false) }, [working])
-  const ws = useWorkspace()
+  const ws = useWorkspaceActions()
   const [continuing, setContinuing] = useState(false), [confirmContinue, setConfirmContinue] = useState(false)
   // A fresh chat in the same checkout that opens with this one's transcript as hidden context.
   const continueInNewChat = async () => {
@@ -462,6 +499,16 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
   const newAside: AsideTarget = { id: null, quote: '', from: 'assistant' }
   const toggleAside = () => setOpenAside(openAside ? null : asides.length === 0 ? newAside : asides.length === 1 ? { id: asides[0]!.id, quote: '', from: 'assistant' } : '*')
   const toggleAsideRef = useRef(toggleAside); toggleAsideRef.current = toggleAside
+  useEffect(() => {
+    const openPanel = (event: Event) => {
+      if (!root.current?.checkVisibility()) return
+      const panel = (event as CustomEvent<{ panel: string }>).detail.panel
+      if (panel === 'aside') toggleAside()
+      else if (panel === 'agents' && tasks.length) setOpenAgent('*')
+    }
+    window.addEventListener('ramu:chat-panel', openPanel)
+    return () => window.removeEventListener('ramu:chat-panel', openPanel)
+  }, [openAside, openAgent, asides, tasks])
   // ⌘⇧A with no text selected opens an aside on the whole chat (a selection is handled by SelectionActions).
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -498,7 +545,7 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
   })
 
   return (
-    <div ref={root} className={`agent-view [&.dropping::after]:[content:'Drop_to_add_to_the_message'] [&.dropping::after]:absolute [&.dropping::after]:inset-1.5 [&.dropping::after]:z-20 [&.dropping::after]:grid [&.dropping::after]:place-items-center [&.dropping::after]:[border:1px_dashed_var(--line-strong)] [&.dropping::after]:rounded-(--radius-m) [&.dropping::after]:[background:color-mix(in_srgb,_var(--canvas)_78%,_transparent)] [&.dropping::after]:text-foreground [&.dropping::after]:text-control [&.dropping::after]:pointer-events-none flex flex-col flex-1 min-h-0 min-w-0 relative${dropping ? ' dropping' : ''}`} data-state={session?.state}
+    <div ref={root} className={`agent-view [&.dropping::after]:[content:'Drop_to_add_to_the_message'] [&.dropping::after]:absolute [&.dropping::after]:inset-1.5 [&.dropping::after]:z-20 [&.dropping::after]:grid [&.dropping::after]:place-items-center [&.dropping::after]:[border:1px_dashed_var(--line-strong)] [&.dropping::after]:rounded-(--radius-m) [&.dropping::after]:[background:color-mix(in_srgb,_var(--canvas)_78%,_transparent)] [&.dropping::after]:text-foreground [&.dropping::after]:text-control [&.dropping::after]:pointer-events-none flex flex-col flex-1 min-h-0 min-w-0 relative${dropping ? ' dropping' : ''}`} data-state={session?.state} data-chat-visible={visible || undefined}
       onDragOver={(event) => { if (event.dataTransfer.types.includes(FILE_DRAG_TYPE) || event.dataTransfer.types.includes('Files')) { event.preventDefault(); setDropping(true) } }}
       onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false) }}
       onDrop={(event) => {
@@ -538,7 +585,7 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
       </div>}
       <div className={`transcript-frame [&_>_.transcript]:min-h-0 [&_>_.transcript]:[flex:1_1_0] [&_>_.transcript]:min-w-0 [&::before]:[content:''] [&::before]:absolute [&::before]:left-0 [&::before]:right-0 [&::before]:h-[36px] [&::before]:pointer-events-none [&::before]:z-1 [&::before]:opacity-0 [&::before]:[transition:opacity_150ms_var(--motion-curve)] [&::before]:top-0 [&::before]:[background:linear-gradient(to_bottom,_var(--canvas)_15%,_transparent)] [&::after]:[content:''] [&::after]:absolute [&::after]:left-0 [&::after]:right-0 [&::after]:h-[36px] [&::after]:pointer-events-none [&::after]:z-1 [&::after]:opacity-0 [&::after]:[transition:opacity_150ms_var(--motion-curve)] [&::after]:bottom-0 [&::after]:[background:linear-gradient(to_top,_var(--canvas)_15%,_transparent)] [&.shadow-top::before]:opacity-100 [&.shadow-bottom::after]:opacity-100 [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col${edges.top ? ' shadow-top' : ''}${edges.bottom ? ' shadow-bottom' : ''}`}>
       <OverlayScrollArea
-        className="transcript flex-1"
+        className={`transcript flex-1 ${hydrating && !turns.length ? 'chat-loading' : ''}`} contentClassName={hydrating && !turns.length ? 'h-full' : undefined}
         viewportClassName="p-[12px_24px_28px] pt-3"
         viewportRef={scroller}
         viewportProps={{ onScroll: (e) => {
@@ -547,20 +594,20 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
           measureEdges()
         } }}
       >
-        <div className="transcript-col [&_>_[data-block-index]:has(>_.msg.user)]:flex [&_>_[data-block-index]:has(>_.msg.user)]:justify-end max-w-[var(--chat-column-width)] m-[0_auto] flex flex-col gap-3.5">
-          {hydrating && !turns.length && <ContentSkeleton variant="chat" rows={2} />}
+        <div className={`${hydrating && !turns.length ? 'h-full justify-center' : ''} transcript-col [&_>_[data-block-index]:has(>_.msg.user)]:flex [&_>_[data-block-index]:has(>_.msg.user)]:justify-end max-w-[var(--chat-column-width)] m-[0_auto] flex flex-col gap-3.5`}>
+          {hydrating && !turns.length && <div className="flex items-center justify-center"><Spinner className="size-5 text-muted-foreground" aria-label={translate("Loading conversation")} /></div>}
           {turns.map((turn, ti) => {
             const isLast = ti === turns.length - 1
             // A turn is done when the agent reported a result, a later message exists, or nothing is running any more.
             const finished = turn.ended || !isLast || (!working && session?.state !== 'needs-input')
-            const { folded, kept, answer } = finished ? foldTurn(turn.items, outcomes) : { folded: [] as Block[], kept: turn.items, answer: [] as Block[] }
+            const { folded, kept, answer } = finished ? foldTurn(turn.items, outcomes, results) : { folded: [] as Block[], kept: turn.items, answer: [] as Block[] }
             const render = (b: Block, actions = false, latest = false) => {
-              const index = blocks.indexOf(b)
+              const index = blockIndex(b, blocks)
               return <div key={index} data-block-index={index}>
                 {b.kind === 'tools' ? (
                   <ToolGroup tools={b.tools} results={results} cwd={session?.cwd ?? ''} active={busyAgent && !finished} activity={b === statusGroup ? translate(activityLabel ?? "Working") : undefined} taskId={session?.taskId} onBackground={session?.provider === 'claude-code' && live ? backgroundTool : undefined} />
                 ) : b.event.kind === 'agent' ? (
-                  <AgentTaskCard task={b.event} live={live} onOpen={() => setOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)} onStop={stopTask} />
+                  b.event.taskType === 'advisor' ? <AdvisorActivity task={b.event} live={live} onOpen={() => setOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)} /> : <AgentTaskCard task={b.event} live={live} onOpen={() => setOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)} onStop={stopTask} />
                 ) : (
                   <EventRow event={relativize(b.event, session?.cwd ?? '')} taskId={session?.taskId} sessionId={view.sessionId} live={live} generating={working && (b.event === liveText || b.event.kind === 'thinking' && b === turn.items.at(-1))} outcomes={outcomes} questionStates={questionStates} actions={actions} latest={latest} onEdit={(text, files) => editMessage(text, files, eventSequences.get(b.event))} onOpenAgent={setOpenAgent} onOpenQuestion={openQuestion} />
                 )}</div>
@@ -572,9 +619,9 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
               {turnDates[ti] !== undefined && <time className="chat-date [.turn:first-child_&]:mt-1 block self-center w-full m-[18px_0_24px] text-center text-muted-foreground text-control font-normal leading-[1.5]" dateTime={new Date(turnDates[ti]!).toISOString()} title={new Date(turnDates[ti]!).toLocaleString(formatLocale())}>{formatChatDate(turnDates[ti]!, dateNow, currentLanguage())}</time>}
               {turn.user && render(turn.user, false, isLast && !answer.length && !kept.length && !folded.length)}
               {((!finished && isLast && (working || session?.state === 'needs-input')) || (finished && (!turn.ended || turn.interrupted) && !folded.length)) && <div className="turn-working text-muted-foreground tabular-nums" role="status"><span>{(elapsed ?? duration) !== null && (elapsed ?? duration) !== undefined ? translate("Working for {0}", { "0": formatDuration((elapsed ?? duration)!) }) : translate("Working")}</span></div>}
-              {folded.length > 0 && <TurnSummary label={duration !== undefined ? translate(turn.ended && !turn.interrupted && !(isLast && stopped) ? "Worked for {0}" : "Working for {0}", { "0": formatDuration(duration) }) : translate(turn.ended && !turn.interrupted && !(isLast && stopped) ? "Worked" : "Working")} sourceIndex={view.sourceSeq ? blocks.indexOf(folded[0]!) : undefined}>{folded.map((b) => render(b))}</TurnSummary>}
+              {folded.length > 0 && <TurnSummary label={duration !== undefined ? translate(turn.ended && !turn.interrupted && !(isLast && stopped) ? "Worked for {0}" : "Working for {0}", { "0": formatDuration(duration) }) : translate(turn.ended && !turn.interrupted && !(isLast && stopped) ? "Worked" : "Working")} sourceIndex={view.sourceSeq ? blockIndex(folded[0]!, blocks) : undefined}>{folded.map((b) => render(b))}</TurnSummary>}
               {kept.map((b) => render(b))}
-              {answer.map((b) => render(b, finished, isLast && b === answer.at(-1)))}
+              {answer.map((b) => render(b, finished && b === latestAssistant, b === latestAssistant))}
               {turnReviews.get(turn.key)?.map((review) => <TurnChanges key={review.id} review={review} />)}
               {completedGoals.get(turn.user?.kind === 'event' ? turn.user.event : null)?.map((done) => <GoalDone key={done.id} goal={done} />)}
             </div>
@@ -635,8 +682,8 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
           controls={session && <><AgentControls settings={pendingSettings ?? session.settings} current={session.settings} onChange={changeSettings} disabled={false} trailing={<ContextMeter sessionId={view.sessionId} />} /></>}
           onChange={setDraft}
           chat
-          onSubmit={(context) => void send(action, context)}
-          onAlternateSubmit={busyAgent && supportsSteering ? (context) => void send(opposite, context) : undefined}
+          onSubmit={(context) => send(action, context)}
+          onAlternateSubmit={busyAgent && supportsSteering ? (context) => send(opposite, context) : undefined}
           alternateDisabled={configuring || !session}
           alternateLabel={opposite === 'queue' ? 'Queue' : 'Steer'}
           placeholder={live || busyAgent ? translate("Reply to the agent") : translate("Message the agent")}
@@ -644,27 +691,15 @@ export function AgentView({ view, history, visible = true }: { view: AgentViewDe
         />
       </div>
       </div>
-      <div className={`agent-dock [&.open]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:h-full [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] flex-none w-0 min-h-0 overflow-hidden [transition:width_200ms_var(--motion-curve,_ease)] ${panelOpen ? ' open' : ''}`} inert={!panelOpen} aria-hidden={!panelOpen}>
-        {shownAside && <AsidePanel sessionId={view.sessionId} asides={asides} open={shownAside} taskId={session?.taskId} onOpen={setOpenAside} onClose={() => setOpenAside(null)} onQuote={quoteIntoDraft} />}
-        {shownAgent && <AgentTaskPanel tasks={tasks} openId={shownAgent} events={events} results={results} cwd={session?.cwd ?? ''} live={live} taskId={session?.taskId} onSelect={setOpenAgent} onClose={() => setOpenAgent(null)} onStop={stopTask}
+      <div className={`agent-dock [&.open]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:h-full [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] flex-none w-0 min-h-0 overflow-hidden ${panelOpen ? ' open' : ''}`} inert={!panelOpen} aria-hidden={!panelOpen}>
+        {openAside && <AsidePanel sessionId={view.sessionId} asides={asides} open={openAside} taskId={session?.taskId} onOpen={setOpenAside} onClose={() => setOpenAside(null)} onQuote={quoteIntoDraft} />}
+        {openAgent && <AgentTaskPanel tasks={tasks} openId={openAgent} events={events} results={results} cwd={session?.cwd ?? ''} live={live} taskId={session?.taskId} onSelect={setOpenAgent} onClose={() => setOpenAgent(null)} onStop={stopTask}
           onMessage={(task, text) => act(() => invoke('agent.messageTask', view.sessionId, task.agentId, text))} />}
       </div>
       </div>
     </div>
   )
-}
-
-/** Keeps the last non-null value around for `ms` after it goes null, so a closing panel can animate out before it unmounts. */
-function useExitPresence<T>(value: T | null, ms = 220): T | null {
-  const [kept, setKept] = useState<T | null>(value)
-  if (value !== null && value !== kept) setKept(value)
-  useEffect(() => {
-    if (value !== null) return
-    const timer = setTimeout(() => setKept(null), ms)
-    return () => clearTimeout(timer)
-  }, [value, ms])
-  return kept
-}
+})
 
 /** Shows paths inside the agent's directory relative to it; the header carries the full path. */
 function relativize(e: AgentEvent, cwd: string): AgentEvent {
@@ -686,7 +721,7 @@ function TurnSummary({ label, children }: { label: string; children: React.React
       <CollapsibleTrigger render={<Button variant="ghost" className="turn-summary-toggle w-full justify-start text-muted-foreground" />}>
         <span>{label}</span>{open ? <ChevronDown size={14} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" /> : <ChevronRight size={14} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />}
       </CollapsibleTrigger>
-      <CollapsibleContent className="turn-summary-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:height_160ms_var(--ease)]"><div className="turn-summary-body flex flex-col gap-3 pt-3">{children}</div></CollapsibleContent>
+      <CollapsibleContent className="turn-summary-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:none]"><div className="turn-summary-body flex flex-col gap-3 pt-3">{children}</div></CollapsibleContent>
     </Collapsible>
   )
 }
@@ -755,13 +790,13 @@ function ToolGroup({ tools, results, cwd, active, activity, onBackground, taskId
   const running = tools.some((t) => toolIsRunning(results.get(t.toolUseId), active))
   const primaryTool = tools.find(t => toolIsRunning(results.get(t.toolUseId), active)) ?? tools[0]!
   return (
-    <Collapsible defaultOpen={running || tools.length === 1} className="tool-group text-sm text-muted-foreground">
+    <Collapsible defaultOpen={running || tools.length === 1 || tools.some(tool => toolNeedsAttention(results.get(tool.toolUseId)))} className="tool-group text-sm text-muted-foreground">
       {tools.length > 1 && <CollapsibleTrigger render={<Button variant="ghost" className="h-auto w-full justify-start gap-2 px-2 py-1 text-sm font-normal" />}>
         <ToolIcon tool={primaryTool} content={results.get(primaryTool.toolUseId)?.content} className={running ? 'tool-icon [&.running]:text-brand [&.running]:[animation:pulse_1.6s_ease-in-out_infinite] flex-none text-muted-foreground running' : 'tool-icon [&.running]:text-brand [&.running]:[animation:pulse_1.6s_ease-in-out_infinite] flex-none text-muted-foreground'} />
         <span className="tool-group-label">{activity ? <WorkingText>{running ? describeTools(tools, results, active) : activity}</WorkingText> : describeTools(tools, results, active)}</span>
         <ChevronRight size={13} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />
       </CollapsibleTrigger>}
-      <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:height_160ms_var(--ease)]"><div ref={bodyRef} className="tool-group-body [&.fade-scroll]:max-h-[320px] [&.fade-scroll]:overflow-x-hidden [&.fade-scroll_>_*]:flex-none [&_.tool]:min-w-0 [&_.tool_>_[data-slot='collapsible-trigger']]:flex [&_.tool_>_[data-slot='collapsible-trigger']]:w-full [&_.tool_>_[data-slot='collapsible-trigger']]:max-w-full [&_.tool_>_[data-slot='collapsible-trigger']]:min-w-0 [&_.tool_>_[data-slot='collapsible-trigger']]:h-auto [&_.tool_>_[data-slot='collapsible-trigger']]:justify-start [&_.tool_>_[data-slot='collapsible-trigger']]:[border:0] [&_.tool_>_[data-slot='collapsible-trigger']]:bg-transparent [&_.tool_>_[data-slot='collapsible-trigger']]:[box-shadow:none] [&_.tool_>_[data-slot='collapsible-trigger']]:whitespace-nowrap [&_.tool_>_[data-slot='collapsible-trigger']:hover]:flex [&_.tool_>_[data-slot='collapsible-trigger']:hover]:w-full [&_.tool_>_[data-slot='collapsible-trigger']:hover]:max-w-full [&_.tool_>_[data-slot='collapsible-trigger']:hover]:min-w-0 [&_.tool_>_[data-slot='collapsible-trigger']:hover]:h-auto [&_.tool_>_[data-slot='collapsible-trigger']:hover]:justify-start [&_.tool_>_[data-slot='collapsible-trigger']:hover]:[border:0] [&_.tool_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_.tool_>_[data-slot='collapsible-trigger']:hover]:[box-shadow:none] [&_.tool_>_[data-slot='collapsible-trigger']:hover]:whitespace-nowrap [&_.tool-summary]:flex-initial [&_.tool-summary]:min-w-0 [&_.tool-summary]:overflow-hidden [&_.tool-summary]:text-ellipsis [&_.tool-summary]:whitespace-nowrap [&_.tool_>_[data-slot='collapsible-trigger']_>_.tool-icon]:flex-none [&_.tool_>_[data-slot='collapsible-trigger']_>_.caret]:flex-none pl-3 [border-left:1px_solid_var(--line-strong)] flex flex-col m-[2px_0_0] p-0 [border:0] bg-transparent gap-0 [border-radius:0] fade-scroll [--fade-top:0px] [--fade-bottom:0px] [mask-image:linear-gradient(to_bottom,_transparent_0,_#000_var(--fade-top),_#000_calc(100%_-_var(--fade-bottom)),_transparent_100%)] [transition:--fade-top_0.14s_ease-out,_--fade-bottom_0.14s_ease-out] overflow-y-auto">
+      <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:none]"><div ref={bodyRef} className="tool-group-body [&.fade-scroll]:max-h-[320px] [&.fade-scroll]:overflow-x-hidden [&.fade-scroll_>_*]:flex-none [&_.tool]:min-w-0 [&_.tool_>_[data-slot='collapsible-trigger']]:flex [&_.tool_>_[data-slot='collapsible-trigger']]:w-full [&_.tool_>_[data-slot='collapsible-trigger']]:max-w-full [&_.tool_>_[data-slot='collapsible-trigger']]:min-w-0 [&_.tool_>_[data-slot='collapsible-trigger']]:h-auto [&_.tool_>_[data-slot='collapsible-trigger']]:justify-start [&_.tool_>_[data-slot='collapsible-trigger']]:[border:0] [&_.tool_>_[data-slot='collapsible-trigger']]:bg-transparent [&_.tool_>_[data-slot='collapsible-trigger']]:[box-shadow:none] [&_.tool_>_[data-slot='collapsible-trigger']]:whitespace-nowrap [&_.tool_>_[data-slot='collapsible-trigger']:hover]:flex [&_.tool_>_[data-slot='collapsible-trigger']:hover]:w-full [&_.tool_>_[data-slot='collapsible-trigger']:hover]:max-w-full [&_.tool_>_[data-slot='collapsible-trigger']:hover]:min-w-0 [&_.tool_>_[data-slot='collapsible-trigger']:hover]:h-auto [&_.tool_>_[data-slot='collapsible-trigger']:hover]:justify-start [&_.tool_>_[data-slot='collapsible-trigger']:hover]:[border:0] [&_.tool_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_.tool_>_[data-slot='collapsible-trigger']:hover]:[box-shadow:none] [&_.tool_>_[data-slot='collapsible-trigger']:hover]:whitespace-nowrap [&_.tool-summary]:flex-initial [&_.tool-summary]:min-w-0 [&_.tool-summary]:overflow-hidden [&_.tool-summary]:text-ellipsis [&_.tool-summary]:whitespace-nowrap [&_.tool_>_[data-slot='collapsible-trigger']_>_.tool-icon]:flex-none [&_.tool_>_[data-slot='collapsible-trigger']_>_.caret]:flex-none pl-3 [border-left:1px_solid_var(--line-strong)] flex flex-col m-[2px_0_0] p-0 [border:0] bg-transparent gap-0 [border-radius:0] fade-scroll [--fade-top:0px] [--fade-bottom:0px] [mask-image:linear-gradient(to_bottom,_transparent_0,_#000_var(--fade-top),_#000_calc(100%_-_var(--fade-bottom)),_transparent_100%)] [transition:--fade-top_0.14s_ease-out,_--fade-bottom_0.14s_ease-out] overflow-y-auto">
         {tools.map((t) => {
           const r = results.get(t.toolUseId)
           const toolRunning = toolIsRunning(r, active)
@@ -770,17 +805,18 @@ function ToolGroup({ tools, results, cwd, active, activity, onBackground, taskId
           const bash = category === 'execute'
           const humanTitle = t.title?.trim()
           const inputText = t.input ?? (humanTitle === summary ? undefined : summary)
-          const state = r?.isError ? 'Failed' : t.status === 'pending' && active ? 'Pending' : toolRunning ? 'Running' : !r || r.running ? 'Stopped' : 'Completed'
+          const failed = r ? r.isError || r.status === 'failed' : t.status === 'failed'
+          const state = failed ? 'Failed' : t.status === 'pending' && active ? 'Pending' : toolRunning ? 'Running' : !r || r.running ? 'Stopped' : 'Completed'
           const movable = !!onBackground && t.name === 'Bash' && toolRunning
           return (
-            <Collapsible key={t.toolUseId} className="tool [&_[data-slot='collapsible-trigger']]:flex [&_[data-slot='collapsible-trigger']]:items-center [&_[data-slot='collapsible-trigger']]:cursor-pointer [&_[data-slot='collapsible-trigger']]:[list-style:none] [&_[data-slot='collapsible-trigger']]:min-w-0 [&_[data-slot='collapsible-trigger']]:m-0 [&_[data-slot='collapsible-trigger']]:p-[4px_6px] [&_[data-slot='collapsible-trigger']]:rounded-(--radius-s) [&_[data-slot='collapsible-trigger']]:gap-2 [&_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_[data-slot='collapsible-trigger']:hover]:bg-hover [&_.caret]:text-muted-foreground [&_.caret]:flex-none [&_.caret]:[transition:transform_0.15s_var(--ease)] [&[data-open]_.caret]:[transform:rotate(90deg)] [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:m-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:text-soft text-control text-soft rounded-(--radius-s)" defaultOpen={movable}>
+            <Collapsible key={t.toolUseId} data-tool-use-id={t.toolUseId} className="tool [&_[data-slot='collapsible-trigger']]:flex [&_[data-slot='collapsible-trigger']]:items-center [&_[data-slot='collapsible-trigger']]:cursor-pointer [&_[data-slot='collapsible-trigger']]:[list-style:none] [&_[data-slot='collapsible-trigger']]:min-w-0 [&_[data-slot='collapsible-trigger']]:m-0 [&_[data-slot='collapsible-trigger']]:p-[4px_6px] [&_[data-slot='collapsible-trigger']]:rounded-(--radius-s) [&_[data-slot='collapsible-trigger']]:gap-2 [&_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_[data-slot='collapsible-trigger']:hover]:bg-hover [&_.caret]:text-muted-foreground [&_.caret]:flex-none [&_.caret]:[transition:transform_0.15s_var(--ease)] [&[data-open]_.caret]:[transform:rotate(90deg)] [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:m-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:text-soft text-control text-soft rounded-(--radius-s)" defaultOpen={movable}>
               <CollapsibleTrigger render={<Button variant="ghost" />}>
-                <ToolIcon tool={t} content={r?.content ?? t.content} className={`tool-icon flex-none ${r?.isError ? 'text-bad' : 'text-muted-foreground'}${toolRunning ? ' running text-brand motion-safe:[animation:pulse_1.6s_ease-in-out_infinite]' : ''}`} />
+                <ToolIcon tool={t} content={r?.content ?? t.content} className={`tool-icon flex-none ${failed ? 'text-bad' : 'text-muted-foreground'}${toolRunning ? ' running text-brand motion-safe:[animation:pulse_1.6s_ease-in-out_infinite]' : ''}`} />
                 <span className="tool-summary overflow-hidden text-ellipsis whitespace-nowrap min-w-0 font-sans text-chat text-inherit flex-initial">{humanTitle ?? `${translate(toolVerb(TOOL_VERB[t.name] ?? KIND_VERB[category], toolRunning))} ${summary}`}</span>
-                {(state === 'Pending' || state === 'Stopped') && <span className="tool-state text-caption flex-none text-muted-foreground">{translate(state)}</span>}
+                {(state === 'Failed' || state === 'Pending' || state === 'Stopped') && <span className={`tool-state text-caption flex-none ${state === 'Failed' ? 'text-bad' : 'text-muted-foreground'}`} >{translate(state)}</span>}
                 <ChevronRight size={12} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />
               </CollapsibleTrigger>
-              <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:height_160ms_var(--ease)]"><div className="tool-card [&_.tool-output]:m-0 [&_.tool-output]:[border:0] [&_.tool-output]:[border-radius:0] [&_.tool-output]:bg-transparent [&_.tool-output]:p-[8px_12px_10px] [&_.tool-output]:max-h-[260px] [&_.tool-output]:text-caption [&_.tool-output]:whitespace-pre-wrap [&_.tool-output]:[overflow-wrap:anywhere] [&_.tool-output]:text-muted-foreground m-[6px_0_8px] [border:1px_solid_transparent] rounded-(--radius-m) [background:rgba(255,_255,_255,_0.035)] overflow-hidden">
+              <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:none]"><div className="tool-card [&_.tool-output]:m-0 [&_.tool-output]:[border:0] [&_.tool-output]:[border-radius:0] [&_.tool-output]:bg-transparent [&_.tool-output]:p-[8px_12px_10px] [&_.tool-output]:max-h-[260px] [&_.tool-output]:text-caption [&_.tool-output]:whitespace-pre-wrap [&_.tool-output]:[overflow-wrap:anywhere] [&_.tool-output]:text-muted-foreground m-[6px_0_8px] [border:1px_solid_transparent] rounded-(--radius-m) [background:rgba(255,_255,_255,_0.035)] overflow-hidden">
                 <div className={movable ? 'tool-card-title [&.with-action]:flex [&.with-action]:items-center [&.with-action]:justify-between [&.with-action]:gap-2 [&.with-action]:pr-2 p-[8px_12px_0] text-control text-soft with-action' : 'tool-card-title [&.with-action]:flex [&.with-action]:items-center [&.with-action]:justify-between [&.with-action]:gap-2 [&.with-action]:pr-2 p-[8px_12px_0] text-control text-soft'}>
                   <span>{humanTitle ?? (category === 'other' ? toolLabel(t.name) : translate(KIND_LABEL[category]))}</span>
                   {movable && <Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption" title={translate("Let the agent carry on while this keeps running")} onClick={() => onBackground(t.toolUseId)}>{translate("Run in background")}</Button>}
@@ -816,6 +852,8 @@ const STREAMING: Components = {
 /** Reveals streamed text at a steady pace instead of in the bursts the provider sends it, catching up faster the further behind it is. */
 function useTypewriter(text: string, active: boolean): string {
   useLanguage()
+  const { preferences } = useAppSettings()
+  active = active && !preferences.reduceMotion && !reducedMotion()
   const [shown, setShown] = useState(active ? 0 : text.length)
   const target = useRef(text.length)
   target.current = text.length
@@ -841,8 +879,8 @@ const AssistantText = memo(function AssistantText({ event: e, generating, action
   const text = useTypewriter(e.text, generating)
   return (
     <div className={`msg [&.user]:self-end [&.user]:whitespace-pre-wrap [&.user]:max-w-[78%] [&.user]:mt-[18px] [&.user]:w-[fit-content] [&.user]:[background:var(--bubble)] [&.user]:[border:0] [&.user]:[box-shadow:none] [&.user]:text-chat [&.user]:leading-[1.55] [&.user]:p-[10px_16px_11px] [&.user]:rounded-(--radius-l) [&.user]:tracking-[-0.006em] [&.user]:[color:var(--text-body)] [&.assistant]:relative [&.assistant]:tracking-[-0.008em] [&.assistant]:text-chat [&.assistant]:leading-[1.65] [&.assistant]:[color:var(--text-body)] [&.assistant_>_:first-child]:mt-0 [&.assistant_>_:last-child]:mb-0 [&.assistant_p]:m-[0_0_10px] [&.assistant_ul]:pl-5 [&.assistant_ul]:m-[0_0_10px] [&.assistant_ol]:pl-5 [&.assistant_ol]:m-[0_0_10px] [&.assistant_code]:[background:rgba(255,_255,_255,_0.075)] [&.assistant_code]:[border:0] [&.assistant_code]:rounded-(--radius-xs) [&.assistant_code]:p-[0_5px] [&.assistant_code]:[color:var(--text-body)] [&.assistant_code]:text-[length:0.88em] [&.assistant_pre]:overflow-x-auto [&.assistant_pre]:[white-space:pre] [&.assistant_pre]:[background:var(--code-bg)] [&.assistant_pre]:[border:1px_solid_transparent] [&.assistant_pre]:rounded-(--radius-m) [&.assistant_pre]:p-[12px_14px] [&.assistant_pre]:m-[4px_0_12px] [&.assistant_pre]:leading-[1.6] [&.assistant_pre]:[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.02)] [&.assistant_pre]:text-[length:0.88em] [&.assistant_pre_code]:bg-transparent [&.assistant_pre_code]:p-0 [&.assistant_pre_code]:[border:none] [&.assistant_pre_code]:text-[length:inherit] [&.assistant_pre_code]:[color:#dcdce2] [&.assistant_a]:text-brand [&.assistant_a]:[text-decoration:none] [&.assistant_table]:[border-collapse:collapse] [&.assistant_table]:m-[6px_0] [&.assistant_th]:[border:1px_solid_var(--line-strong)] [&.assistant_th]:p-[3px_8px] [&.assistant_td]:[border:1px_solid_var(--line-strong)] [&.assistant_td]:p-[3px_8px] [&.meta]:text-caption [&.meta]:text-muted-foreground [&.error]:text-bad [&.assistant:hover_.msg-actions]:opacity-100 [&.assistant.generating]:[animation:arrive_100ms_var(--ease)] [&.user_.muted.small.block]:mt-0.5 [&.user_.muted.small.block]:[color:rgba(255,_255,_255,_0.7)] [&.assistant_li]:m-[3px_0] [&.assistant_li::marker]:text-muted-foreground [&.assistant_strong]:font-semibold [&.assistant_strong]:[color:#fff] [&.assistant_h1]:text-[length:1em] [&.assistant_h1]:font-semibold [&.assistant_h1]:m-[16px_0_6px] [&.assistant_h1]:tracking-[-0.012em] [&.assistant_h2]:text-[length:1em] [&.assistant_h2]:font-semibold [&.assistant_h2]:m-[16px_0_6px] [&.assistant_h2]:tracking-[-0.012em] [&.assistant_h3]:text-[length:1em] [&.assistant_h3]:font-semibold [&.assistant_h3]:m-[16px_0_6px] [&.assistant_h3]:tracking-[-0.012em] [&.assistant_a:hover]:[text-decoration:underline] [.msg-wrap.user_&.user]:max-w-full [.msg-wrap.user_&.user]:mt-3.5 [&.assistant_.msg-actions]:mt-2 [&.assistant_:is(h1,_h2,_h3,_h4,_strong)]:text-foreground break-words assistant${generating ? ' generating' : ''}`}>
-      <Markdown remarkPlugins={[remarkGfm, remarkChatReferences]} urlTransform={(url) => url.startsWith(SKILL_REFERENCE_PREFIX) || localFileLink(url) ? url : defaultUrlTransform(url)} components={{ ...(generating ? STREAMING : {}), a: ({ href, children }) => <ChatLink href={href} taskId={taskId}>{children}</ChatLink> }}>{text}</Markdown>
-      {actions && !generating && <div className={`msg-actions [&:focus-within]:opacity-100 [.msg-wrap:hover_&]:opacity-100 [.msg-wrap.user_&]:mr-1 [.msg-wrap.user_&]:mt-2 [&_.copy-btn]:w-6 [&_.copy-btn]:h-6 [&_.copy-btn]:p-0 [&_.copy-btn_svg]:w-3.5 [&_.copy-btn_svg]:h-3.5 [&.always]:opacity-100 flex items-center mt-0.5 opacity-0 [transition:opacity_0.12s_var(--ease)] gap-0.5 h-6${latest || actions ? ' always' : ''}`}><MessageTime at={e.at} /><CopyButton text={e.text} />{latest && sessionId && <ContextMeter sessionId={sessionId} />}</div>}
+      <Markdown remarkPlugins={[remarkGfm, remarkChatReferences]} urlTransform={(url) => url.startsWith(SKILL_REFERENCE_PREFIX) || localFileLink(url) ? url : defaultUrlTransform(url)} components={{ ...chatCodeComponents, ...(generating ? STREAMING : {}), a: ({ href, children }) => <ChatLink href={href} taskId={taskId}>{children}</ChatLink> }}>{text}</Markdown>
+      {actions && !generating && <div className={`msg-actions [&:focus-within]:opacity-100 [.msg-wrap:hover_&]:opacity-100 [.msg-wrap.user_&]:mr-1 [.msg-wrap.user_&]:mt-2 [&_.copy-btn]:w-6 [&_.copy-btn]:h-6 [&_.copy-btn]:p-0 [&_.copy-btn_svg]:w-3.5 [&_.copy-btn_svg]:h-3.5 [&.always]:opacity-100 flex items-center mt-0.5 opacity-0 [transition:opacity_0.12s_var(--ease)] gap-0.5 h-6${latest ? ' always' : ''}`}><MessageTime at={e.at} /><CopyButton text={e.text} />{latest && sessionId && <ContextMeter sessionId={sessionId} />}</div>}
     </div>
   )
 })
@@ -888,7 +926,7 @@ function Outcome({ outcome }: { outcome: string | undefined }) {
 
 function TurnDiff({ diff }: { diff: string }) {
   useLanguage()
-  return <Collapsible className="tool-group [&_>_[data-slot='collapsible-trigger']]:cursor-pointer [&_>_[data-slot='collapsible-trigger']]:[list-style:none] [&_>_[data-slot='collapsible-trigger']]:font-normal [&_>_[data-slot='collapsible-trigger']]:[transition:background_0.12s_var(--ease),_border-color_0.12s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:flex [&_>_[data-slot='collapsible-trigger']]:items-center [&_>_[data-slot='collapsible-trigger']]:justify-start [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:h-auto [&_>_[data-slot='collapsible-trigger']]:min-h-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border:0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:bg-transparent [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:[border:0] [&_>_[data-slot='collapsible-trigger']:hover]:text-soft [&[data-open]_>_summary_.caret]:[transform:rotate(90deg)] [&[data-open]_>_summary]:bg-transparent [&[data-open]_>_summary]:[border:0] [&[data-open]_>_summary]:text-soft [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] text-control text-muted-foreground"><CollapsibleTrigger render={<Button variant="ghost" />}><BookOpen size={14} /><span className="tool-group-label text-[length:inherit]">{translate('Changes in this turn')}</span><ChevronRight size={13} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" /></CollapsibleTrigger><CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:height_160ms_var(--ease)]"><div className="tool-card [&_.tool-output]:m-0 [&_.tool-output]:[border:0] [&_.tool-output]:[border-radius:0] [&_.tool-output]:bg-transparent [&_.tool-output]:p-[8px_12px_10px] [&_.tool-output]:max-h-[260px] [&_.tool-output]:text-caption [&_.tool-output]:whitespace-pre-wrap [&_.tool-output]:[overflow-wrap:anywhere] [&_.tool-output]:text-muted-foreground m-[6px_0_8px] [border:1px_solid_transparent] rounded-(--radius-m) [background:rgba(255,_255,_255,_0.035)] overflow-hidden"><ShadowPre>{diff}</ShadowPre></div></CollapsibleContent></Collapsible>
+  return <Collapsible className="tool-group [&_>_[data-slot='collapsible-trigger']]:cursor-pointer [&_>_[data-slot='collapsible-trigger']]:[list-style:none] [&_>_[data-slot='collapsible-trigger']]:font-normal [&_>_[data-slot='collapsible-trigger']]:[transition:background_0.12s_var(--ease),_border-color_0.12s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:flex [&_>_[data-slot='collapsible-trigger']]:items-center [&_>_[data-slot='collapsible-trigger']]:justify-start [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:h-auto [&_>_[data-slot='collapsible-trigger']]:min-h-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border:0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:bg-transparent [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:[border:0] [&_>_[data-slot='collapsible-trigger']:hover]:text-soft [&[data-open]_>_summary_.caret]:[transform:rotate(90deg)] [&[data-open]_>_summary]:bg-transparent [&[data-open]_>_summary]:[border:0] [&[data-open]_>_summary]:text-soft [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] text-control text-muted-foreground"><CollapsibleTrigger render={<Button variant="ghost" />}><BookOpen size={14} /><span className="tool-group-label text-[length:inherit]">{translate('Changes in this turn')}</span><ChevronRight size={13} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" /></CollapsibleTrigger><CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:none]"><div className="tool-card [&_.tool-output]:m-0 [&_.tool-output]:[border:0] [&_.tool-output]:[border-radius:0] [&_.tool-output]:bg-transparent [&_.tool-output]:p-[8px_12px_10px] [&_.tool-output]:max-h-[260px] [&_.tool-output]:text-caption [&_.tool-output]:whitespace-pre-wrap [&_.tool-output]:[overflow-wrap:anywhere] [&_.tool-output]:text-muted-foreground m-[6px_0_8px] [border:1px_solid_transparent] rounded-(--radius-m) [background:rgba(255,_255,_255,_0.035)] overflow-hidden"><ShadowPre>{diff}</ShadowPre></div></CollapsibleContent></Collapsible>
 }
 
 function EventRow({ event: e, sessionId, taskId, live, generating = false, outcomes, questionStates, actions = false, latest = false, onEdit, onOpenAgent, onOpenQuestion }: { event: AgentEvent; sessionId: string; taskId?: string; live: boolean; generating?: boolean; outcomes: Map<string, string>; questionStates: Map<string, QuestionState>; actions?: boolean; latest?: boolean; onEdit?: (text: string, attachments: Attachment[]) => void; onOpenAgent?: (agentId: string) => void; onOpenQuestion?: (requestId: string) => void }) {
@@ -908,13 +946,13 @@ function EventRow({ event: e, sessionId, taskId, live, generating = false, outco
       const report = parseTaskReport(e.text)
       // Advice delivered after the advisor answered: the card holds the advice, this marks where the agent received it.
       const advice = parseAdvice(e.text)
-      if (advice) return <Button variant="secondary" type="button" className={`advice-delivered [&:hover]:[border-color:var(--line-strong)] [&.failed]:text-muted-foreground [&_.caret]:flex-none [&_.caret]:text-muted-foreground flex items-center gap-2 w-auto max-w-full h-auto m-[8px_auto_8px_0] p-[6px_10px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised text-foreground text-control font-normal text-left whitespace-normal${advice.failed ? ' failed' : ''}`} onClick={() => onOpenAgent?.(advisorAgentId(advice.requestId))} title={translate("Open the advisor's answer")}>
-        <Lightbulb size={13} /><span>{advice.failed ? translate("The advisor could not answer: {0}", { "0": advice.body }) : translate("Advice delivered to the agent")}</span>{advice.advisor && <span className="muted text-muted-foreground">{advice.advisor}</span>}<ChevronRight size={13} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />
-      </Button>
+      if (advice) return <ChatActivityButton type="button" className={`advice-delivered${advice.failed ? ' failed' : ''}`} onClick={() => onOpenAgent?.(advisorAgentId(advice.requestId))} title={translate("Open the advisor's answer")}>
+        <Lightbulb size={13} /><span>{advice.failed ? translate("The advisor could not answer: {0}", { "0": advice.body }) : translate("Advice delivered to the agent")}</span>{advice.advisor && <span className="chat-activity-meta">{advice.advisor}</span>}<ChevronRight size={13} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />
+      </ChatActivityButton>
       if (report) return <div className="task-report [&_.msg.assistant]:p-0 m-[8px_0] p-[10px_14px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised"><div className="task-report-title flex items-center gap-1.5 mb-1 font-semibold text-control"><Bot size={13} />{report.name} <span className="muted text-muted-foreground">{report.verb}</span></div><div className="msg [&.user]:self-end [&.user]:whitespace-pre-wrap [&.user]:max-w-[78%] [&.user]:mt-[18px] [&.user]:w-[fit-content] [&.user]:[background:var(--bubble)] [&.user]:[border:0] [&.user]:[box-shadow:none] [&.user]:text-chat [&.user]:leading-[1.55] [&.user]:p-[10px_16px_11px] [&.user]:rounded-(--radius-l) [&.user]:tracking-[-0.006em] [&.user]:[color:var(--text-body)] [&.assistant]:relative [&.assistant]:tracking-[-0.008em] [&.assistant]:text-chat [&.assistant]:leading-[1.65] [&.assistant]:[color:var(--text-body)] [&.assistant_>_:first-child]:mt-0 [&.assistant_>_:last-child]:mb-0 [&.assistant_p]:m-[0_0_10px] [&.assistant_ul]:pl-5 [&.assistant_ul]:m-[0_0_10px] [&.assistant_ol]:pl-5 [&.assistant_ol]:m-[0_0_10px] [&.assistant_code]:[background:rgba(255,_255,_255,_0.075)] [&.assistant_code]:[border:0] [&.assistant_code]:rounded-(--radius-xs) [&.assistant_code]:p-[0_5px] [&.assistant_code]:[color:var(--text-body)] [&.assistant_code]:text-[length:0.88em] [&.assistant_pre]:overflow-x-auto [&.assistant_pre]:[white-space:pre] [&.assistant_pre]:[background:var(--code-bg)] [&.assistant_pre]:[border:1px_solid_transparent] [&.assistant_pre]:rounded-(--radius-m) [&.assistant_pre]:p-[12px_14px] [&.assistant_pre]:m-[4px_0_12px] [&.assistant_pre]:leading-[1.6] [&.assistant_pre]:[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.02)] [&.assistant_pre]:text-[length:0.88em] [&.assistant_pre_code]:bg-transparent [&.assistant_pre_code]:p-0 [&.assistant_pre_code]:[border:none] [&.assistant_pre_code]:text-[length:inherit] [&.assistant_pre_code]:[color:#dcdce2] [&.assistant_a]:text-brand [&.assistant_a]:[text-decoration:none] [&.assistant_table]:[border-collapse:collapse] [&.assistant_table]:m-[6px_0] [&.assistant_th]:[border:1px_solid_var(--line-strong)] [&.assistant_th]:p-[3px_8px] [&.assistant_td]:[border:1px_solid_var(--line-strong)] [&.assistant_td]:p-[3px_8px] [&.meta]:text-caption [&.meta]:text-muted-foreground [&.error]:text-bad [&.assistant:hover_.msg-actions]:opacity-100 [&.assistant.generating]:[animation:arrive_100ms_var(--ease)] [&.user_.muted.small.block]:mt-0.5 [&.user_.muted.small.block]:[color:rgba(255,_255,_255,_0.7)] [&.assistant_li]:m-[3px_0] [&.assistant_li::marker]:text-muted-foreground [&.assistant_strong]:font-semibold [&.assistant_strong]:[color:#fff] [&.assistant_h1]:text-[length:1em] [&.assistant_h1]:font-semibold [&.assistant_h1]:m-[16px_0_6px] [&.assistant_h1]:tracking-[-0.012em] [&.assistant_h2]:text-[length:1em] [&.assistant_h2]:font-semibold [&.assistant_h2]:m-[16px_0_6px] [&.assistant_h2]:tracking-[-0.012em] [&.assistant_h3]:text-[length:1em] [&.assistant_h3]:font-semibold [&.assistant_h3]:m-[16px_0_6px] [&.assistant_h3]:tracking-[-0.012em] [&.assistant_a:hover]:[text-decoration:underline] [.msg-wrap.user_&.user]:max-w-full [.msg-wrap.user_&.user]:mt-3.5 [&.assistant_.msg-actions]:mt-2 [&.assistant_:is(h1,_h2,_h3,_h4,_strong)]:text-foreground break-words assistant"><Markdown remarkPlugins={[remarkGfm]}>{report.body}</Markdown></div></div>
       // Stopping a Codex sub-agent goes through the main agent; the chat shows it as a note.
       const stop = parseTaskStop(e.text)
-      if (stop) return <div className="turn-end [&_svg]:text-ok [&_svg]:flex-none [&_svg]:w-3.5 [&_svg]:h-3.5 [&_svg]:p-0.5 [&_svg]:rounded-full [&_svg]:[background:var(--ok-wash)] [&.error_svg]:text-bad [&.error_svg]:[background:var(--bad-wash)] [&.chat-note]:m-[8px_0] [&.chat-note_svg]:text-muted-foreground [&_.muted]:ml-auto [&_.muted]:tabular-nums [&.error]:[border-top:none] [&.error]:text-bad flex items-center text-caption text-muted-foreground gap-2 p-[6px_0_2px] [border-top:1px_solid_var(--line)] mt-1 chat-note" role="status"><Square size={11} />{translate("Asked the agent to stop {0}", { "0": stop.name })}</div>
+      if (stop) return <div className="chat-activity-row chat-note" role="status"><Square size={11} />{translate("Asked the agent to stop {0}", { "0": stop.name })}</div>
       // Late answers are yours, so they stay on the right, without the delivery note the agent reads.
       const answers = parseAnswerMessage(e.text)
       if (answers) return <div className="msg-wrap user"><span className="msg-to [&_+_.msg.user]:mt-1 [.msg-wrap.user_&_+_.msg.user]:mt-1 inline-flex items-center gap-1 mt-3.5 text-muted-foreground text-caption"><ShieldQuestion size={12} />{translate("Answers to the agent's questions")}</span><div className="msg [&.user]:self-end [&.user]:whitespace-pre-wrap [&.user]:max-w-[78%] [&.user]:mt-[18px] [&.user]:w-[fit-content] [&.user]:[background:var(--bubble)] [&.user]:[border:0] [&.user]:[box-shadow:none] [&.user]:text-chat [&.user]:leading-[1.55] [&.user]:p-[10px_16px_11px] [&.user]:rounded-(--radius-l) [&.user]:tracking-[-0.006em] [&.user]:[color:var(--text-body)] [&.assistant]:relative [&.assistant]:tracking-[-0.008em] [&.assistant]:text-chat [&.assistant]:leading-[1.65] [&.assistant]:[color:var(--text-body)] [&.assistant_>_:first-child]:mt-0 [&.assistant_>_:last-child]:mb-0 [&.assistant_p]:m-[0_0_10px] [&.assistant_ul]:pl-5 [&.assistant_ul]:m-[0_0_10px] [&.assistant_ol]:pl-5 [&.assistant_ol]:m-[0_0_10px] [&.assistant_code]:[background:rgba(255,_255,_255,_0.075)] [&.assistant_code]:[border:0] [&.assistant_code]:rounded-(--radius-xs) [&.assistant_code]:p-[0_5px] [&.assistant_code]:[color:var(--text-body)] [&.assistant_code]:text-[length:0.88em] [&.assistant_pre]:overflow-x-auto [&.assistant_pre]:[white-space:pre] [&.assistant_pre]:[background:var(--code-bg)] [&.assistant_pre]:[border:1px_solid_transparent] [&.assistant_pre]:rounded-(--radius-m) [&.assistant_pre]:p-[12px_14px] [&.assistant_pre]:m-[4px_0_12px] [&.assistant_pre]:leading-[1.6] [&.assistant_pre]:[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.02)] [&.assistant_pre]:text-[length:0.88em] [&.assistant_pre_code]:bg-transparent [&.assistant_pre_code]:p-0 [&.assistant_pre_code]:[border:none] [&.assistant_pre_code]:text-[length:inherit] [&.assistant_pre_code]:[color:#dcdce2] [&.assistant_a]:text-brand [&.assistant_a]:[text-decoration:none] [&.assistant_table]:[border-collapse:collapse] [&.assistant_table]:m-[6px_0] [&.assistant_th]:[border:1px_solid_var(--line-strong)] [&.assistant_th]:p-[3px_8px] [&.assistant_td]:[border:1px_solid_var(--line-strong)] [&.assistant_td]:p-[3px_8px] [&.meta]:text-caption [&.meta]:text-muted-foreground [&.error]:text-bad [&.assistant:hover_.msg-actions]:opacity-100 [&.assistant.generating]:[animation:arrive_100ms_var(--ease)] [&.user_.muted.small.block]:mt-0.5 [&.user_.muted.small.block]:[color:rgba(255,_255,_255,_0.7)] [&.assistant_li]:m-[3px_0] [&.assistant_li::marker]:text-muted-foreground [&.assistant_strong]:font-semibold [&.assistant_strong]:[color:#fff] [&.assistant_h1]:text-[length:1em] [&.assistant_h1]:font-semibold [&.assistant_h1]:m-[16px_0_6px] [&.assistant_h1]:tracking-[-0.012em] [&.assistant_h2]:text-[length:1em] [&.assistant_h2]:font-semibold [&.assistant_h2]:m-[16px_0_6px] [&.assistant_h2]:tracking-[-0.012em] [&.assistant_h3]:text-[length:1em] [&.assistant_h3]:font-semibold [&.assistant_h3]:m-[16px_0_6px] [&.assistant_h3]:tracking-[-0.012em] [&.assistant_a:hover]:[text-decoration:underline] [.msg-wrap.user_&.user]:max-w-full [.msg-wrap.user_&.user]:mt-3.5 [&.assistant_.msg-actions]:mt-2 [&.assistant_:is(h1,_h2,_h3,_h4,_strong)]:text-foreground break-words user">{answers.body}</div><div className={`msg-actions [&:focus-within]:opacity-100 [.msg-wrap:hover_&]:opacity-100 [.msg-wrap.user_&]:mr-1 [.msg-wrap.user_&]:mt-2 [&_.copy-btn]:w-6 [&_.copy-btn]:h-6 [&_.copy-btn]:p-0 [&_.copy-btn_svg]:w-3.5 [&_.copy-btn_svg]:h-3.5 [&.always]:opacity-100 flex items-center mt-0.5 opacity-0 [transition:opacity_0.12s_var(--ease)] gap-0.5 h-6${latest ? ' always' : ''}`}><MessageTime at={e.at} /><CopyButton text={answers.body} /></div></div>
@@ -990,6 +1028,22 @@ function taskMeta(task: AgentTask, status: AgentTask['status']): string {
 }
 
 /** A sub-agent in the main transcript, where the main agent started it. */
+/** A consultation remains visible in the main chat even with Agents closed. */
+function AdvisorActivity({ task, live, onOpen }: { task: AgentTask; live: boolean; onOpen: () => void }) {
+  useLanguage()
+  const status = effectiveStatus(task, live)
+  const elapsed = useElapsed(task.startedAt, status === 'running')
+  const label = status === 'running' ? 'Consulting advisor…' : status === 'completed' ? 'Advisor finished' : status === 'failed' ? 'Advisor failed' : 'Advisor stopped'
+  const duration = elapsed ?? (task.endedAt && task.startedAt ? task.endedAt - task.startedAt : null)
+  return <ChatActivityButton type="button" className={`advisor-activity ${status}`} onClick={onOpen} title={task.error ?? translate("Open the advisor's answer")}>
+    {status === 'running' ? <Spinner className="size-3.5 flex-none" /> : <TaskStatusIcon status={status} />}
+    <span role="status">{translate(label)}</span>
+    {(task.model || task.provider) && <span className="chat-activity-meta truncate">{task.model ? modelDisplayName(task.model) : providerName(task.provider!)}</span>}
+    {duration !== null && <span className="chat-activity-meta flex-none tabular-nums">{formatDuration(duration)}</span>}
+    <ChevronRight className="size-3.5 flex-none" />
+  </ChatActivityButton>
+}
+
 function AgentTaskCard({ task, live, onOpen, onStop }: { task: AgentTask; live: boolean; onOpen: () => void; onStop: (task: AgentTask) => void }) {
   useLanguage()
   const status = effectiveStatus(task, live)
@@ -1188,6 +1242,6 @@ function ThinkingRow({ text, active = false }: { text: string; active?: boolean 
   useLanguage()
   return <Collapsible defaultOpen={active} className="thinking tool-group [&_>_[data-slot='collapsible-trigger']]:cursor-pointer [&_>_[data-slot='collapsible-trigger']]:[list-style:none] [&_>_[data-slot='collapsible-trigger']]:font-normal [&_>_[data-slot='collapsible-trigger']]:[transition:background_0.12s_var(--ease),_border-color_0.12s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:flex [&_>_[data-slot='collapsible-trigger']]:items-center [&_>_[data-slot='collapsible-trigger']]:justify-start [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:h-auto [&_>_[data-slot='collapsible-trigger']]:min-h-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border:0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:bg-transparent [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:[border:0] [&_>_[data-slot='collapsible-trigger']:hover]:text-soft [&[data-open]_>_summary_.caret]:[transform:rotate(90deg)] [&[data-open]_>_summary]:bg-transparent [&[data-open]_>_summary]:[border:0] [&[data-open]_>_summary]:text-soft [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] text-control text-muted-foreground">
     <CollapsibleTrigger render={<Button variant="ghost" />}><Brain size={14} className="tool-icon [&.running]:text-brand [&.running]:[animation:pulse_1.6s_ease-in-out_infinite] flex-none text-muted-foreground" /><span className="tool-summary overflow-hidden text-ellipsis whitespace-nowrap min-w-0 font-sans text-chat text-inherit flex-initial">{translate(active ? "Thinking" : "Thought")}</span><ChevronRight size={12} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" /></CollapsibleTrigger>
-    <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:height_160ms_var(--ease)]"><div className="thinking-body m-[2px_0_4px_20px] pl-2.5 [border-left:2px_solid_var(--line-strong)] text-muted-foreground text-control leading-[1.55] whitespace-pre-wrap [overflow-wrap:anywhere] max-h-[260px] overflow-auto">{text}</div></CollapsibleContent>
+    <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:none]"><div className="thinking-body m-[2px_0_4px_20px] pl-2.5 [border-left:2px_solid_var(--line-strong)] text-muted-foreground text-control leading-[1.55] whitespace-pre-wrap [overflow-wrap:anywhere] max-h-[260px] overflow-auto">{text}</div></CollapsibleContent>
   </Collapsible>
 }

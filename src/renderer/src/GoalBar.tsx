@@ -1,4 +1,5 @@
 import { ChevronRight, CircleAlert, CircleCheck, CirclePause, Clock3, Pause, Play, Target, X } from 'lucide-react'
+import { ChatActivityButton } from './ChatActivity'
 import { Button } from '@/components/desktop-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import type { ChatGoal } from '../../shared/types'
@@ -43,11 +44,11 @@ export function GoalBar({ goal, onControl }: { goal: ChatGoal; onControl: (actio
 /** A finished goal sits in the transcript where the work ended, as quiet as the turn's tool rows. */
 export function GoalDone({ goal }: { goal: ChatGoal }) {
   useLanguage()
-  return <Collapsible className="tool-group [&_>_[data-slot='collapsible-trigger']]:cursor-pointer [&_>_[data-slot='collapsible-trigger']]:[list-style:none] [&_>_[data-slot='collapsible-trigger']]:font-normal [&_>_[data-slot='collapsible-trigger']]:[transition:background_0.12s_var(--ease),_border-color_0.12s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:flex [&_>_[data-slot='collapsible-trigger']]:items-center [&_>_[data-slot='collapsible-trigger']]:justify-start [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:h-auto [&_>_[data-slot='collapsible-trigger']]:min-h-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border:0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:bg-transparent [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:[border:0] [&_>_[data-slot='collapsible-trigger']:hover]:text-soft [&[data-open]_>_summary_.caret]:[transform:rotate(90deg)] [&[data-open]_>_summary]:bg-transparent [&[data-open]_>_summary]:[border:0] [&[data-open]_>_summary]:text-soft [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] text-control text-muted-foreground goal-done [&_>_[data-slot='collapsible-trigger']]:max-w-full [&_.goal-icon]:flex-none [&_.goal-icon]:text-ok [&_.tool-group-label]:flex-none [&_.tool-group-label]:text-soft [&_.goal-objective]:text-muted-foreground [&_.goal-details]:pl-[22px] [&_.goal-details]:text-chat m-[8px_0_4px]" aria-label={t('Chat goal')}>
-    <CollapsibleTrigger render={<Button variant="ghost" />}>
-      <CircleCheck size={14} className="goal-icon text-brand" />
+  return <Collapsible className="goal-done chat-activity-disclosure [&_.goal-details]:pl-[22px] [&_.goal-details]:text-chat" aria-label={t('Chat goal')}>
+    <CollapsibleTrigger render={<ChatActivityButton />}>
+      <CircleCheck size={14} className="goal-icon text-ok" />
       <span className="tool-group-label text-[length:inherit]">{t('Goal completed')}</span>
-      <span className="goal-objective flex-initial min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-soft font-normal" title={goal.objective}>{goal.objective}</span>
+      <span className="goal-objective chat-activity-meta flex-initial min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={goal.objective}>{goal.objective}</span>
       <ChevronRight size={14} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />
     </CollapsibleTrigger>
     <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:height_160ms_var(--ease)]"><GoalDetails goal={goal} /></CollapsibleContent>

@@ -61,7 +61,7 @@ export async function withContext(workspace: Workspace, taskId: string, prompt: 
     }
     let content: string
     if (file.selection && file.source === 'tab' && file.content !== undefined) content = file.content
-    else if (file.diff) { const diff = file.diff.oid ? await git.commitFileDiff(binding.cwd, file.diff.oid, file.path) : { original: await git.showBlob(binding.cwd, file.diff.staged ? 'HEAD' : 'INDEX', file.path), modified: file.diff.staged ? await git.showBlob(binding.cwd, 'INDEX', file.path) : file.content ?? await readText(binding.cwd, file.path).then((f) => f.content, () => '') }; content = `Before:\n${diff.original}\nAfter:\n${diff.modified}` }
+    else if (file.diff) { const diff = file.diff.oid ? await (file.diff.stash ? git.stashFileDiff : git.commitFileDiff)(binding.cwd, file.diff.oid, file.path) : { original: await git.showBlob(binding.cwd, file.diff.staged ? 'HEAD' : 'INDEX', file.path), modified: file.diff.staged ? await git.showBlob(binding.cwd, 'INDEX', file.path) : file.content ?? await readText(binding.cwd, file.path).then((f) => f.content, () => '') }; content = `Before:\n${diff.original}\nAfter:\n${diff.modified}` }
     else content = file.content ?? (await readText(binding.cwd, file.path)).content
     const budget = Math.min(60000, 200000 - total)
     if (budget <= 0) throw new Error('File context exceeds 200,000 characters. Exclude some files before sending.')

@@ -35,7 +35,7 @@ import { ADVISOR_PREAMBLE, ADVISOR_TIMEOUT_MS, advisorPrompt } from './advisor'
 import { latestTasks, adviceMessage, advisorAgentId } from '../shared/agentTasks'
 import { DEFAULT_GOAL_PREFERENCES, type ChatGoal, type ChatSearchHit } from '../shared/types'
 import { goalInstructions, goalContinuation } from './goals'
-import { USER_MESSAGE_PREAMBLE } from './agentInstructions'
+import { USER_MESSAGE_PREAMBLE, TOOL_PRESENTATION_PREAMBLE } from './agentInstructions'
 
 export type QueryFn = (params: { prompt: AsyncIterable<SDKUserMessage>; options: Options }) => Query
 
@@ -164,6 +164,54 @@ const WRITING_STATES: AgentSessionState[] = ['starting', 'running', 'needs-input
 const limitSection = (value: string, max: number) => value.length <= max ? value : `${value.slice(0, max)}\n\n[truncated]`
 
 export class AgentService {
+  private readonly providerTimers = new Map<string, NodeJS.Timeout>()
+  private readonly providerDispatching = new Set<string>()
+
+  private providerWait(id: string) {
+    const event = this.events(id).findLast((event) => event.kind === 'provider-wait')
+    return event?.kind === 'provider-wait' && event.retryAt !== null ? event : null
+  }
+
+  private scheduleProvider(id: string, delay = 1000): void {
+    if (this.shutdown || this.providerTimers.has(id)) return
+    this.providerTimers.set(id, setTimeout(() => {
+      this.providerTimers.delete(id)
+      void this.retryProvider(id).catch((error) => {
+        if (!this.shutdown) { this.clearProviderWait(id); this.fail(id, error) }
+      })
+    }, delay).unref())
+  }
+
+  private clearProviderWait(id: string): void {
+    const timer = this.providerTimers.get(id)
+    if (timer) clearTimeout(timer)
+    this.providerTimers.delete(id)
+    if (this.providerWait(id)) this.record(id, { kind: 'provider-wait', retryAt: null, updatedAt: Date.now() })
+  }
+
+  private async retryProvider(id: string): Promise<void> {
+    const wait = this.providerWait(id)
+    if (this.shutdown || !wait || this.providerDispatching.has(id)) return
+    const session = this.get(id)
+    if (this.queuePaused(id) || WRITING_STATES.includes(session.state) || this.transitioning.has(id) || this.startingSends.has(id) || this.workspaceBusy(session.covers, id) || this.hasBlockingQuestions(id) || this.hasRunningTasks(id)) { this.scheduleProvider(id); return }
+    const readings = this.routing(session.settings)?.usage ?? []
+    const catalogs = await this.catalog()
+    if (this.shutdown || this.providerWait(id) !== wait && this.providerWait(id)?.updatedAt !== wait.updatedAt) return
+    const candidates = [session.settings, ...(session.settings.autoFallback ? this.policyOf(session, catalogs, this.preferences?.()).chain : [])]
+    const available = candidates.some((step) => resolveStep({ ...step, id: 'retry' }, catalogs) && readings.some((r) => r.provider === step.provider && (r.updatedAt > wait.updatedAt || !!r.resetsAt && r.resetsAt > wait.updatedAt && r.resetsAt <= Date.now())) && !isOver(peakFor(readings, step.provider, step.model), null))
+    if (!available && wait.retryAt! > Date.now()) { this.scheduleProvider(id, Math.min(60_000, wait.retryAt! - Date.now())); return }
+    this.providerDispatching.add(id)
+    try {
+      await this.finalizing.get(id)
+      if (this.shutdown || this.providerWait(id)?.updatedAt !== wait.updatedAt || this.queuePaused(id)) return
+      this.clearProviderWait(id)
+      const goal = this.getGoal(id)
+      if (goal?.status === 'waiting-provider') this.saveGoal(id, { ...goal, status: 'active', retryAt: undefined, updatedAt: Date.now() })
+      if (this.queued(id).length) await this.dispatchQueued(id, true)
+      else await this.send(id, goal ? goalContinuation(goal) : 'Continue the unfinished request. Inspect current files and tool results first to avoid repeating completed work.', [], undefined, false, undefined, true)
+    } finally { this.providerDispatching.delete(id) }
+  }
+
   private readonly goalTimers = new Map<string, NodeJS.Timeout>()
   private readonly goalDispatching = new Set<string>()
 
@@ -218,6 +266,7 @@ export class AgentService {
     this.goalTimers.clear()
     if (this.shutdown) return
     for (const { id } of this.db.prepare('SELECT id FROM agent_sessions WHERE parent_session_id IS NULL').all() as { id: string }[]) {
+      if (this.providerWait(id)) this.scheduleProvider(id)
       const goal = this.getGoal(id)
       if (goal?.status === 'turn-limit' && (this.goalPreferences().maxTurns === null || goal.turns < this.goalPreferences().maxTurns!)) { this.saveGoal(id, { ...goal, status: 'active', reason: 'Continuation limit increased.', updatedAt: Date.now() }); continue }
       if (goal && ['active', 'waiting-provider'].includes(goal.status)) this.scheduleGoal(id)
@@ -239,7 +288,7 @@ export class AgentService {
 
   private async continueGoal(id: string): Promise<void> {
     let goal = this.getGoal(id)
-    if (this.shutdown || !goal || !['active', 'waiting-provider'].includes(goal.status)) return
+    if (this.shutdown || this.providerWait(id) || !goal || !['active', 'waiting-provider'].includes(goal.status)) return
     if (this.goalDispatching.has(id)) return
     const session = this.get(id)
     if (WRITING_STATES.includes(session.state)) return // The next terminal state re-arms the goal.
@@ -271,12 +320,20 @@ export class AgentService {
   /** A quota failure keeps the goal durable. Known resets schedule a retry; unknown resets back off. */
   private waitForGoalProvider(id: string): boolean {
     const goal = this.getGoal(id)
-    if (!goal || !['active', 'waiting-provider'].includes(goal.status)) return false
-    const session = this.get(id), now = Date.now()
-    const applicable = (this.usage?.list({ [session.provider]: session.settings.accountId ?? 'default' }) ?? []).filter((r) => peakFor([r], session.provider, session.settings.model, now) && isOver(r, null))
-    const reset = Math.max(0, ...applicable.map((r) => r.resetsAt ?? 0))
-    const retryDelay = Math.min(15 * 60_000, Math.max(60_000, (goal.retryDelay ?? 30_000) * 2))
-    this.saveGoal(id, { ...goal, status: 'waiting-provider', retryAt: reset > now ? reset + 1000 : now + retryDelay, retryDelay, reason: 'Waiting for provider availability after a usage limit. Ramu will resume automatically.', updatedAt: now })
+    const session = this.get(id)
+    if (session.parentId || (!session.settings.autoFallback && !goal)) return false
+    const now = Date.now(), previous = this.providerWait(id)
+    const readings = this.routing(session.settings)?.usage ?? []
+    const chain = session.settings.autoFallback ? this.chainOf(session.provider, [], this.preferences?.()) : []
+    const resets = [session.settings, ...chain].map((step) => {
+      const applicable = readings.filter((r) => r.provider === step.provider && peakFor([r], step.provider, step.model, now) && isOver(r, null))
+      return applicable.length && applicable.every((r) => r.resetsAt) ? Math.max(...applicable.map((r) => r.resetsAt!)) : 0
+    }).filter((reset) => reset > now)
+    const retryDelay = Math.min(15 * 60_000, Math.max(60_000, (previous?.retryDelay ?? goal?.retryDelay ?? 30_000) * 2))
+    const retryAt = resets.length ? Math.min(...resets) + 1000 : now + retryDelay
+    this.record(id, { kind: 'provider-wait', retryAt, retryDelay, updatedAt: now })
+    if (goal && ['active', 'waiting-provider'].includes(goal.status)) this.saveGoal(id, { ...goal, status: 'waiting-provider', retryAt, retryDelay, reason: 'Waiting for provider availability after a usage limit. Ramu will resume automatically.', updatedAt: now })
+    this.scheduleProvider(id)
     this.halt(id)
     this.setState(id, 'idle')
     return true
@@ -735,8 +792,13 @@ export class AgentService {
   }
 
   /** Sends a follow-up. A session without a live process is natively resumed by provider session id. */
-  async send(id: string, text: string, attachments: Attachment[] = [], reviewId?: string, recordUser = true, internalGoal?: { revision: number; goalId: string }): Promise<void> {
+  async send(id: string, text: string, attachments: Attachment[] = [], reviewId?: string, recordUser = true, internalGoal?: { revision: number; goalId: string }, providerRetry = false): Promise<void> {
     if (recordUser && this.goalCommand(id, text, attachments, reviewId)) return
+    if (this.providerWait(id) && recordUser) {
+      this.updateQueue(id, [...this.queued(id), { id: randomUUID(), text, mode: 'queue', ...(attachments.length ? { attachments } : {}), ...(reviewId ? { reviewId } : {}) }], false)
+      this.scheduleProvider(id)
+      return
+    }
     await this.finalizing.get(id)
     if (this.transitioning.has(id)) throw new Error('Provider switch in progress. Try again in a moment.')
     let s = this.get(id)
@@ -751,7 +813,7 @@ export class AgentService {
     this.transitioning.add(id)
     try { if (reviewId) await this.reviewHooks?.validateFeedback?.(reviewId); if (!s.parentId) await this.reviewHooks?.followup(id) } finally { this.transitioning.delete(id) }
     if (internalGoal && (this.shutdown || internalGoal.revision !== (this.revisions.get(id) ?? 0) || this.getGoal(id)?.id !== internalGoal.goalId || this.getGoal(id)?.status !== 'active' || this.queued(id).length || this.queuePaused(id) || WRITING_STATES.includes(this.get(id).state) || this.hasBlockingQuestions(id) || this.hasRunningTasks(id))) return
-    if (!recordUser && !this.isRecoveryPending(id) && !internalGoal) return
+    if (!recordUser && !this.isRecoveryPending(id) && !internalGoal && !providerRetry) return
     if (recordUser) this.db.prepare('DELETE FROM agent_recovery WHERE session_id = ?').run(id)
     if (recordUser && this.getGoal(id)?.status === 'blocked') this.controlGoal(id, 'resume')
     const instructions = !s.parentId && (this.toolConnection || this.getGoal(id)) ? goalInstructions(this.goalPreferences(), this.getGoal(id)) : ''
@@ -882,6 +944,7 @@ export class AgentService {
 
   private async dispatchQueued(id: string, resumeStopped = false): Promise<void> {
     const state = this.get(id).state
+    if (this.providerWait(id)) { this.scheduleProvider(id); return }
     if (this.shutdown || this.queuePaused(id) || this.steering.has(id) || this.transitioning.has(id) || (state !== 'idle' && (!resumeStopped || WRITING_STATES.includes(state)))) return
     const messages = this.queued(id)
     if (!messages.length) return
@@ -1663,6 +1726,7 @@ export class AgentService {
   }
 
   async interrupt(id: string): Promise<void> {
+    this.clearProviderWait(id)
     if (this.getGoal(id) && this.getGoal(id)?.status !== 'completed') this.controlGoal(id, 'pause')
     this.updateQueue(id, this.queued(id), true)
     if (this.runners.has(id)) await this.runners.get(id)!.interrupt()
@@ -1670,6 +1734,7 @@ export class AgentService {
   }
 
   stop(id: string): void {
+    if (!this.shutdown) this.clearProviderWait(id)
     if (!this.shutdown && this.getGoal(id) && this.getGoal(id)?.status !== 'completed') this.controlGoal(id, 'pause')
     if (!this.shutdown && this.isRecoveryPending(id)) {
       this.db.prepare('DELETE FROM agent_recovery WHERE session_id = ?').run(id)
@@ -1724,6 +1789,8 @@ export class AgentService {
   stopAll(preserveRecovery = false): void {
     if (!preserveRecovery) this.db.prepare('DELETE FROM agent_recovery').run()
     this.shutdown = true
+    for (const timer of this.providerTimers.values()) clearTimeout(timer)
+    this.providerTimers.clear()
     for (const timer of this.goalTimers.values()) clearTimeout(timer)
     this.goalTimers.clear()
     for (const cancel of this.analysisStops) cancel()
@@ -1840,7 +1907,7 @@ export class AgentService {
       const questions = this.preferences?.().asyncQuestions === false
         ? `${QUESTION_PREAMBLE}\nAsync questions are disabled. Use ask_user (Ramu will wait for an answer) or a native blocking question. Do not use request_user_input_async.`
         : QUESTION_PREAMBLE
-      connection.instructions = `${USER_MESSAGE_PREAMBLE}\n\n${questions}`
+      connection.instructions = `${USER_MESSAGE_PREAMBLE}\n\n${TOOL_PRESENTATION_PREAMBLE}\n\n${questions}`
       if ((this.preferences?.().autoBackgroundSeconds ?? 1) !== 0) connection.instructions += `\n\n${BACKGROUND_PREAMBLE}`
       if (this.advisorStep(id)) connection.instructions += `\n\n${ADVISOR_PREAMBLE}`
       if (!s.parentId) connection.instructions += `\n\n${goalInstructions(this.goalPreferences(), this.getGoal(id))}`

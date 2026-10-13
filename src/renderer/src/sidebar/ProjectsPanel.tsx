@@ -82,7 +82,7 @@ export function ProjectsPanel() {
         if (!hasFiles(event)) return; event.preventDefault(); setFolderOver(false); void addProject.addDropped([...event.dataTransfer.files]) }}>
       {pinned.length > 0 && <>
         <SectionHead title={t("Pinned")} open={showPinned} onToggle={() => ws.setExpanded('section:pinned', !showPinned)} controls="pinned-chats" />
-        <Collapse open={showPinned} id="pinned-chats" className="task-list">
+        <Collapse open={showPinned} id="pinned-chats" className="task-list flex flex-col gap-0.5">
           {pinned.map((task) => <TaskRow key={task.id} task={task} hidePin projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
         </Collapse>
       </>}
@@ -110,7 +110,7 @@ export function ProjectsPanel() {
       <SectionHead title={`${t('Archived')} · ${archivedChats.length}`} open={showArchived} onToggle={() => setShowArchived((shown) => !shown)} controls="archived-chats">
         <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) opacity-0 [transition:opacity_0.12s] group-hover/head:opacity-100 group-focus-within/head:opacity-100" aria-label={t("Delete all archived chats")} title={t("Delete all archived chats")} onClick={() => { setClearError(null); setClearingArchived(true) }}><Trash2 size={14} /></Button>
       </SectionHead>
-      {showArchived && <div id="archived-chats" className="task-list">
+      {showArchived && <div id="archived-chats" className="task-list flex flex-col gap-0.5">
         {archivedChats.length === 0 && <p className="muted small empty-tasks">{t('No archived chats')}</p>}
         {archivedChats.map((task) => <TaskRow key={task.id} task={task} projectName={ws.projects.find((project) => project.id === task.projectId)?.name} />)}
       </div>}
@@ -153,7 +153,7 @@ function Collapse({ open, id, className, children }: { open: boolean; id?: strin
 
 /** A sidebar section title that folds its list; the chevron shows on hover only, with no hover background. */
 function SectionHead({ title, open, onToggle, controls, children }: { title: string; open: boolean; onToggle: () => void; controls: string; children?: React.ReactNode }) {
-  return <div className="section-head group/head flex items-center justify-between text-control text-muted-foreground p-[3px_8px]">
+  return <div className="section-head group/head flex items-center justify-between text-body text-muted-foreground p-[3px_8px]">
     <button type="button" className="inline-flex items-center gap-1 bg-transparent p-0 [border:0] text-inherit cursor-default hover:text-foreground focus-visible:text-foreground" aria-expanded={open} aria-controls={controls} onClick={onToggle}>
       <span>{title}</span>
       <ChevronDown size={13} className={`flex-none opacity-0 [transition:opacity_0.12s,transform_0.15s_var(--ease)] group-hover/head:opacity-100 group-focus-within/head:opacity-100 ${open ? '' : '[transform:rotate(-90deg)]'}`} />
@@ -269,7 +269,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
 
   return (
     <section
-      className={`project-group [&.dragging]:[opacity:0.45] [&.drop-before::before]:[content:''] [&.drop-before::before]:absolute [&.drop-before::before]:left-1.5 [&.drop-before::before]:right-1.5 [&.drop-before::before]:h-0.5 [&.drop-before::before]:[border-radius:1px] [&.drop-before::before]:[background:var(--accent)] [&.drop-before::before]:pointer-events-none [&.drop-before::before]:z-2 [&.drop-before::before]:top-[-2px] [&.drop-after::after]:[content:''] [&.drop-after::after]:absolute [&.drop-after::after]:left-1.5 [&.drop-after::after]:right-1.5 [&.drop-after::after]:h-0.5 [&.drop-after::after]:[border-radius:1px] [&.drop-after::after]:[background:var(--accent)] [&.drop-after::after]:pointer-events-none [&.drop-after::after]:z-2 [&.drop-after::after]:bottom-[-2px] mb-0.5 relative${dnd.dragging === project.id ? ' dragging' : ''}${dnd.drop?.id === project.id && dnd.dragging !== project.id ? dnd.drop.after ? ' drop-after' : ' drop-before' : ''}`}
+      className={`project-group [&.dragging]:[opacity:0.45] [&.drop-before::before]:[content:''] [&.drop-before::before]:absolute [&.drop-before::before]:left-1.5 [&.drop-before::before]:right-1.5 [&.drop-before::before]:h-0.5 [&.drop-before::before]:[border-radius:1px] [&.drop-before::before]:[background:var(--accent)] [&.drop-before::before]:pointer-events-none [&.drop-before::before]:z-2 [&.drop-before::before]:top-[-2px] [&.drop-after::after]:[content:''] [&.drop-after::after]:absolute [&.drop-after::after]:left-1.5 [&.drop-after::after]:right-1.5 [&.drop-after::after]:h-0.5 [&.drop-after::after]:[border-radius:1px] [&.drop-after::after]:[background:var(--accent)] [&.drop-after::after]:pointer-events-none [&.drop-after::after]:z-2 [&.drop-after::after]:bottom-[-2px] mb-0 [&:has(.task-list)]:mb-2.5 relative${dnd.dragging === project.id ? ' dragging' : ''}${dnd.drop?.id === project.id && dnd.dragging !== project.id ? dnd.drop.after ? ' drop-after' : ' drop-before' : ''}`}
       onDragOver={(event) => {
         if (!dnd.enabled || !dnd.dragging || dnd.dragging === project.id || !event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return
         event.preventDefault()
@@ -293,7 +293,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
         draggable={dnd.enabled && !renaming}
         onDragStart={(event) => { event.dataTransfer.setData(PROJECT_DRAG_TYPE, project.id); event.dataTransfer.effectAllowed = 'move'; dnd.setDragging(project.id) }}
         onDragEnd={() => { dnd.setDragging(null); dnd.setDrop(null) }}
-        className={active ? 'project-row [&:hover]:bg-hover [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft min-h-[26px] p-[0_8px] active' : 'project-row [&:hover]:bg-hover [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft min-h-[26px] p-[0_8px]'}
+        className={active ? 'project-row [&:hover]:bg-accent [&:hover]:text-foreground [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft text-body leading-5 min-h-[30px] p-[0_8px] active' : 'project-row [&:hover]:bg-accent [&:hover]:text-foreground [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft text-body leading-5 min-h-[30px] p-[0_8px]'}
         role="button"
         tabIndex={0}
         aria-label={t("Open {0}", { "0": project.name })}
@@ -315,7 +315,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
             }}
           />
         ) : (
-          <FadeText className="project-name font-semibold text-foreground overflow-hidden whitespace-nowrap flex-1 min-w-0" text={project.name} />
+          <FadeText className="project-name font-normal overflow-hidden whitespace-nowrap flex-1 min-w-0" text={project.name} />
         )}
         <span className="row-actions [&:has([aria-expanded='true'])]:opacity-100 flex items-center gap-0.5 opacity-0 [transition:opacity_0.1s] flex-none">
           <Button variant="ghost" size="icon-xs"
@@ -346,11 +346,11 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
       </HoverCard>
       {error && <div className="error text-bad small text-caption row-error p-[1px_10px_2px_26px]">{error}</div>}
       {(open || mounted) && (
-        <div ref={list} className="task-list flex flex-col gap-px pl-2.5">
+        <div ref={list} className="task-list flex flex-col gap-0.5 pl-[22px] pt-0.5">
           {tasks.length === 0 && <div className="muted text-muted-foreground small text-caption empty-tasks p-[2px_10px]">{t("No chats yet")}</div>}
           {tasks.map((t) => <TaskRow key={t.id} task={t} />)}
           {others.length > recent && (
-            <ExpandRow expanded={showAll} onToggle={() => setShowAll((s) => !s)} className="px-2.5">
+            <ExpandRow expanded={showAll} onToggle={() => setShowAll((s) => !s)} className="h-[30px] min-h-[30px] px-2 text-body leading-5">
               {showAll ? t("Show less") : t("Show more")}
             </ExpandRow>
           )}
@@ -418,7 +418,7 @@ function TaskRow({ task, projectName, hidePin }: { task: Task; projectName?: str
     <>
       <div
         onContextMenu={contextMenu.onContextMenu}
-        className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-hover [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-brand-wash [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] min-h-[26px] rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${archived ? ' archived' : ''}`}
+        className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 min-h-[30px] rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${archived ? ' archived' : ''}`}
         role="button"
         tabIndex={0}
         onClick={() => !renaming && ws.openTask(task.id)}

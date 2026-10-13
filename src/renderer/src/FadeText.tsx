@@ -1,3 +1,4 @@
+import { reducedMotion } from './panelMotion'
 import { useLayoutEffect, useRef } from 'react'
 
 const ROW = '.project-row, .task-row'
@@ -20,6 +21,7 @@ export function FadeText({ text, className = '' }: { text: string; className?: s
     const stop = () => { cancelAnimationFrame(frame); window.clearTimeout(timer) }
     const slideTo = (target: number, delay: number) => {
       stop()
+      if (reducedMotion()) { el.scrollLeft = target; fades(); return }
       timer = window.setTimeout(() => {
         const from = el.scrollLeft, start = performance.now(), duration = Math.min(4000, Math.max(300, Math.abs(target - from) * 20))
         const step = (now: number) => {

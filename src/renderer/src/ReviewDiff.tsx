@@ -28,7 +28,11 @@ export function ReviewDiff({ file, comments, onSelect, onComment, flow = false, 
   const host = useRef<HTMLDivElement>(null), editor = useRef<monaco.editor.IStandaloneDiffEditor | null>(null)
   const near = useNearViewport(host, visible)
   const [requested, setRequested] = useState(false)
-  const mounted = visible && (near || requested)
+  const visited = useRef(false)
+  if (near || requested) visited.current = true
+  // Lazily create a diff once, then retain it while this tab is visible.
+  // Rebuilding it at viewport edges clears its canvas and recomputes heights.
+  const mounted = visible && visited.current
   const pendingLine = useRef<{ side: 'old' | 'new'; line: number; endLine: number } | null>(null)
   const pendingNavigation = useRef<'next' | 'previous' | null>(null)
   useEffect(() => { if (near) setRequested(false) }, [near])
@@ -92,6 +96,15 @@ export function ReviewDiff({ file, comments, onSelect, onComment, flow = false, 
       finally { editor.current = null; original.dispose(); modified.dispose() }
     }
   }, [file.id, flow, mounted])
+  useLayoutEffect(() => {
+    // Cached off-screen editors retain their models and rendered surface,
+    // but need not observe every intermediate pane width while resizing.
+    const diff = editor.current
+    if (!diff) return
+    const active = near || requested
+    diff.updateOptions({ automaticLayout: active })
+    if (active) diff.layout()
+  }, [near, requested, mounted])
   useLayoutEffect(() => { editor.current?.updateOptions({ renderSideBySide: sideBySide, fontSize: preferences.editorFontSize }); size() }, [sideBySide, preferences.editorFontSize, mounted])
   useLayoutEffect(() => { if (flow) editor.current?.updateOptions({ scrollbar: { vertical: capped ? 'auto' : 'hidden', alwaysConsumeMouseWheel: false } }) }, [capped, flow, mounted])
   const zoneSpec = inlineBlocks.map((block) => `${block.key}:${block.side}:${block.line}`).join('|')

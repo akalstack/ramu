@@ -1,3 +1,4 @@
+import { reducedMotion } from './panelMotion'
 import { t, useLanguage } from './i18n'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
@@ -44,9 +45,10 @@ export function BootScreen() {
 /** Keep one animation mounted while the nested application providers load. */
 export function StartupScreen({ ready, children }: { ready: boolean; children: ReactNode }) {
   useLanguage()
-  const [motionDone, setMotionDone] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const [motionDone, setMotionDone] = useState(() => reducedMotion())
   const [closed, setClosed] = useState(false)
   const released = ready && motionDone
+  useEffect(() => { if (reducedMotion()) setMotionDone(true) }, [ready])
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)')
     const reduced = () => { if (media.matches) setMotionDone(true) }

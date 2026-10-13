@@ -7,6 +7,8 @@ import { useAppSettings } from './AppSettings'
 import { Menu, useContextMenu } from './Menu'
 import { terminalGroups } from '../../shared/terminalGroups'
 import type { TerminalGroup, ViewDescriptor } from '../../shared/types'
+import { OverlayScrollArea } from '@/components/overlay-scroll-area'
+import { useTabScroll } from './useTabScroll'
 import { TerminalView } from './views/TerminalView'
 import { useWorkspace } from './workspace'
 
@@ -24,6 +26,7 @@ export function TerminalPanel({ taskId, visible, hidden = false, dock = 'right' 
   const focusedId = activeGroup?.terminalIds.includes(activeId ?? '') ? activeId : activeGroup?.terminalIds[0]
   const position = state?.terminalTabPosition ?? preferences.terminalTabPosition
   const open = !!terminals.length && (state?.terminalOpen ?? true)
+  const tabScroll = useTabScroll(activeGroup?.id, position === 'top', open && visible && !hidden)
   const focusTerminal = () => requestAnimationFrame(() => panel.current?.querySelector<HTMLTextAreaElement>('.terminal-pane.focused textarea')?.focus())
   useEffect(() => { if (open && visible && !hidden && !panel.current?.querySelector('.terminal-tabs')?.contains(document.activeElement)) focusTerminal() }, [open, visible, hidden, focusedId])
   const ready = (ws.bindings[taskId] ?? []).filter((b) => b.setupState === 'ready')
@@ -32,14 +35,14 @@ export function TerminalPanel({ taskId, visible, hidden = false, dock = 'right' 
   const arrange = (layout: TerminalGroup['layout']) => {
     if (activeGroup && state) ws.setTerminalPanel(taskId, { terminalGroups: groups.map((group) => group.id === activeGroup.id ? { ...group, layout } : group) })
   }
-  const tabList = <TabsList className="terminal-tabs [&[data-slot='tabs-list']]:w-auto [&[data-slot='tabs-list']]:h-auto [&[data-slot='tabs-list']]:[border-radius:0] [&[data-slot='tabs-list']]:p-0 [&[data-slot='tabs-list']]:bg-transparent [&[data-slot='tabs-list']]:justify-start [.tabs-right_&[data-slot='tabs-list']]:flex-col flex flex-none gap-0.5 p-[2px_8px] overflow-auto [border-bottom-color:var(--line)]" aria-label={t("Terminal groups")}>
+  const tabList = <OverlayScrollArea horizontal={position === 'top'} viewportRef={tabScroll} className={position === 'top' ? 'terminal-tab-scroll min-w-0 flex-initial h-[26px]' : 'terminal-tab-scroll flex-none w-[164px] h-full min-h-0'} contentClassName={position === 'top' ? 'w-max! min-w-full!' : undefined}><TabsList className="terminal-tabs [&[data-slot='tabs-list']]:w-auto [&[data-slot='tabs-list']]:h-auto [&[data-slot='tabs-list']]:[border-radius:0] [&[data-slot='tabs-list']]:p-0 [&[data-slot='tabs-list']]:bg-transparent [&[data-slot='tabs-list']]:justify-start [.tabs-right_&[data-slot='tabs-list']]:flex-col flex flex-none gap-0.5 p-[2px_8px] [border-bottom-color:var(--line)]" aria-label={t("Terminal groups")}>
     {groups.map((group, index) => <TerminalTab key={group.id} taskId={taskId} group={group} groups={groups} index={index} label={label(terminals.find((view) => view.id === group.terminalIds[0]))} active={group.id === activeGroup?.id} activeId={focusedId} onActivate={focusTerminal} />)}
-  </TabsList>
+  </TabsList></OverlayScrollArea>
   return <Tabs value={activeGroup?.id ?? null} orientation={position === 'top' ? 'horizontal' : 'vertical'} onValueChange={(value) => {
     const group = groups.find((entry) => entry.id === value)
     if (group) ws.activateView(taskId, group.id === activeGroup?.id && focusedId ? focusedId : group.terminalIds[0]!)
-  }} render={<section />} ref={(element) => { panel.current = element }} className={`terminal-panel [&[data-slot='tabs']]:gap-0 relative flex-1 h-full min-h-0 min-w-0 flex-col bg-[var(--code-bg)] [border-top:0] [border-bottom:0] [border-left:var(--pane-border-width)_solid_var(--pane-border-color)] [border-right:var(--pane-border-width)_solid_var(--pane-border-color)] rounded-none overflow-hidden dock-${dock}`} aria-label={t("Terminal panel")} style={{ display: open && !hidden ? 'flex' : 'none' }}>
-    <header className="terminal-toolbar [&_.terminal-tabs]:flex [&_.terminal-tabs]:gap-0.5 [&_.terminal-tabs]:p-0 [&_.terminal-tabs]:[border:0] [&_.terminal-tabs]:overflow-x-auto [&_.terminal-tabs]:[scrollbar-width:none] [&_.terminal-tabs]:min-w-0 [&_.terminal-tabs]:flex-initial flex items-center flex-none [border-bottom-color:var(--line)] h-[36px] p-[4px_6px] [border-bottom:0] gap-1">
+  }} render={<section />} ref={(element) => { panel.current = element }} className={`terminal-panel [&[data-slot='tabs']]:gap-0 relative flex-1 h-full min-h-0 min-w-0 flex-col bg-[var(--code-bg)] [border-top:0] [border-bottom:0] [border-left:0] [border-right:0] rounded-none overflow-hidden dock-${dock}`} aria-label={t("Terminal panel")} style={{ display: open && !hidden ? 'flex' : 'none' }}>
+    <header className="terminal-toolbar [&_.terminal-tabs]:flex [&_.terminal-tabs]:gap-0.5 [&_.terminal-tabs]:p-0 [&_.terminal-tabs]:[border:0] [&_.terminal-tabs]:overflow-x-auto [&_.terminal-tabs]:min-w-0 [&_.terminal-tabs]:flex-initial flex items-center flex-none [border-bottom-color:var(--line)] h-[36px] p-[4px_6px] [border-bottom:0] gap-1">
       {position === 'top' ? tabList : <span className="terminal-panel-title pl-2 text-control font-medium text-soft">Terminal</span>}
       <Menu label={t("New terminal")} icon={<Plus size={15} />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) terminal-add [&:hover:not(:disabled)]:text-foreground text-muted-foreground" align="start" items={[
         { key: 'workspace', label: <><SquareTerminal size={14} /> {t(" Workspace terminal")}</>, onSelect: () => ws.openView(taskId, { kind: 'terminal' }) },

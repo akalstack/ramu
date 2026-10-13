@@ -304,6 +304,24 @@ export async function stashes(cwd: string): Promise<GitStash[]> {
   const output = await git(cwd, ['stash', 'list', '--format=%H%x00%gd%x00%s'])
   return output.trimEnd().split('\n').filter(Boolean).map((line) => { const [oid, ref, subject] = line.split('\0'); return { oid: oid!, ref: ref!, subject: subject! } })
 }
+/** A stash's third parent stores files captured with --include-untracked or --all. */
+async function stashUntrackedParent(cwd: string, oid: string): Promise<string | undefined> {
+  if (!/^[a-f0-9]{40,64}$/.test(oid)) throw new Error('Invalid stash identifier')
+  const parents = (await git(cwd, ['rev-list', '--parents', '-n', '1', oid])).trim().split(' ').slice(1)
+  if (parents.length < 2) throw new Error('This commit is not a stash')
+  return parents[2]
+}
+export async function stashFiles(cwd: string, oid: string): Promise<GitCommitFile[]> {
+  const untracked = await stashUntrackedParent(cwd, oid)
+  const [trackedFiles, untrackedFiles] = await Promise.all([commitFiles(cwd, oid), untracked ? commitFiles(cwd, untracked) : []])
+  return [...trackedFiles, ...untrackedFiles]
+}
+export async function stashFileDiff(cwd: string, oid: string, path: string): Promise<DiffContents> {
+  const untracked = await stashUntrackedParent(cwd, oid)
+  if ((await commitFiles(cwd, oid)).some((file) => file.path === path)) return commitFileDiff(cwd, oid, path)
+  if (untracked) return commitFileDiff(cwd, untracked, path)
+  throw new Error('This file is not part of the selected stash')
+}
 export async function stash(cwd: string, name: string, stagedOnly = false): Promise<void> {
   const current = await status(cwd)
   if (!current.oid || !current.entries.length || current.entries.some((entry) => entry.staged === 'unmerged')) throw new Error('Stash requires an existing commit and changes without merge conflicts.')

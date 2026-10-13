@@ -191,7 +191,7 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
             setPrompt(v)
             setPlan(null)
           }}
-          onSubmit={(context) => void send(context)}
+          onSubmit={send}
           disabled={busy || !general && !repos.length}
           placeholder={general || repos.length ? t("Message the agent") : t("Add a repository to this project first")}
           submitLabel={plan ? t('Create worktrees and start') : t('Start chat')}

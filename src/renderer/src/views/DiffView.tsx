@@ -57,7 +57,7 @@ export function DiffView({ taskId, view, binding }: { taskId: string; view: Diff
     const load = async () => {
       const current = ++request
       try {
-        const diff = view.oid ? await invoke('git.commitFileDiff', taskId, binding.repoId, view.oid, view.path) : await invoke('git.diff', taskId, binding.repoId, view.path, view.staged)
+        const diff = view.oid ? await invoke(view.stash ? 'git.stashFileDiff' : 'git.commitFileDiff', taskId, binding.repoId, view.oid, view.path) : await invoke('git.diff', taskId, binding.repoId, view.path, view.staged)
         if (disposed || current !== request) return
         if (original.getValue() !== diff.original) original.setValue(diff.original)
         if (modified.getValue() !== diff.modified) modified.setValue(diff.modified)
@@ -86,7 +86,7 @@ export function DiffView({ taskId, view, binding }: { taskId: string; view: Diff
       original.dispose()
       modified.dispose()
     }
-  }, [taskId, binding.repoId, binding.cwd, view.path, view.staged, view.oid])
+  }, [taskId, binding.repoId, binding.cwd, view.path, view.staged, view.oid, view.stash])
 
   useEffect(() => { editorRef.current?.updateOptions({ fontSize: preferences.editorFontSize, lineHeight: Math.round(preferences.editorFontSize * 1.6) }) }, [preferences.editorFontSize])
 
@@ -95,7 +95,7 @@ export function DiffView({ taskId, view, binding }: { taskId: string; view: Diff
       <div className="view-header [&_.path]:flex-1 [&_button]:text-control [&_button]:p-[2px_8px] [&_[aria-pressed='true']]:bg-hover [&_[aria-pressed='true']]:text-foreground flex gap-2.5 items-center h-8 p-[0_12px] flex-none min-w-0 text-control text-soft">
         <span className="strong font-semibold">{binding.repoName}</span>
         <span className="path text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap min-w-0">{view.path}</span>
-        <span className="muted text-muted-foreground small text-caption">{view.oid ? t("{0} · Parent → commit", { "0": view.oid.slice(0, 7) }) : view.staged ? t("Staged changes") : t("Unstaged changes")}</span>
+        <span className="muted text-muted-foreground small text-caption">{view.oid ? t(view.stash ? "{0} · Base → stash" : "{0} · Parent → commit", { "0": view.oid.slice(0, 7) }) : view.staged ? t("Staged changes") : t("Unstaged changes")}</span>
         <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path: view.path })}>{t("Open file")}</Button>
       </div>
       {error && <div className="error text-bad banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control">{error}</div>}

@@ -10,7 +10,11 @@ export async function reviewCheckout(cwd: string): Promise<ReviewCheckout> {
     const { stdout } = await exec('git', ['rev-parse', 'HEAD', '--abbrev-ref', 'HEAD'], { cwd, timeout: 5000 })
     const [head, branch] = stdout.trim().split('\n')
     return { head, branch }
-  } catch { return {} }
+  } catch {
+    // An unborn branch has a symbolic HEAD even though no commit exists yet.
+    try { const { stdout } = await exec('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd, timeout: 5000 }); return { branch: stdout.trim() || undefined } }
+    catch { return {} }
+  }
 }
 
 /** Only Git's explicit rename records are used for automatic relocation. */

@@ -24,7 +24,7 @@ export function buildComposerContext({ views, activeViewId, explicitFiles, inclu
   const active = tabs.find((view) => view.id === activeViewId)
   for (const view of [...(active ? [active] : []), ...tabs.filter((view) => view !== active)]) {
     const file: FileContext = { repoId: view.repoId, path: view.path, source: 'tab', referenceOnly: view !== active }
-    if (view.kind === 'diff') file.diff = { staged: view.staged, oid: view.oid }
+    if (view.kind === 'diff') file.diff = { staged: view.staged, oid: view.oid, ...(view.stash ? { stash: true } : {}) }
     add(file, () => view !== active ? {} : readSelection(view.id) ?? { content: readBuffer(file) })
   }
   return context

@@ -6,11 +6,13 @@ import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { ChevronRight, FileText, Folder, FolderOpen, FilePlus, FolderPlus, Copy, Pencil, Trash2, SquareTerminal, RefreshCw, ListCollapse, ClipboardPaste, CopyPlus, Scissors } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState, useLayoutEffect, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, useLayoutEffect, type CSSProperties, type DragEvent } from 'react'
 import type { DirEntry, RepositoryBinding } from '../../../shared/types'
 import { Dialog, useContextMenu } from '../Menu'
 import { notifyError } from '../Notifications'
 import { errorText } from '../TaskPane'
+import { ipcQueryKey } from '../dataQueries'
+import { useQueries } from '@tanstack/react-query'
 import { invoke, ramu, copyText } from '../ipc'
 import { FILE_DRAG_TYPE } from '../ComposerSuggestions'
 import { useWorkspace } from '../workspace'
@@ -19,7 +21,7 @@ type Clip = { taskId: string; repoId: string; paths: string[]; cut: boolean }
 /** Shared by every repository tree: what was cut or copied, which tree was used last, and what is being dragged. */
 let clip: Clip | null = null
 let lastRepo: string | null = null
-let dragging: { repoId: string; paths: string[] } | null = null
+let dragging: { repoId: string; cwd: string; paths: string[] } | null = null
 const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 const parentOf = (path: string) => path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
 const joinPath = (dir: string, name: string) => dir ? `${dir}/${name}` : name
@@ -39,7 +41,7 @@ export function ExplorerPanel() {
   return (
     <div className="panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] p-[2px_8px_16px] explorer-panel [&_>_.explorer-title]:flex-none [&_>_.explorer-context]:flex-none [&_.tree-root-children::before]:hidden [&_.tree-row]:h-7 [&_.tree-row]:min-h-7 [&_.tree-row]:whitespace-nowrap [&_.tree-row]:overflow-hidden [&_.tree-root]:h-7 [&_.tree-root]:min-h-7 [&_.tree-root]:sticky [&_.tree-root]:top-0 [&_.tree-root]:z-40 [&_.tree-root]:mb-0 [&_.tree-root]:whitespace-nowrap [&_.tree-root]:overflow-hidden [&_.tree-folder-sticky]:sticky [&_.tree-folder-sticky]:top-[var(--tree-sticky-top)] [&_.tree-folder-sticky]:z-[var(--tree-sticky-layer)] [&_.tree-name]:flex-initial [&_.tree-name]:min-w-0 [&_.tree-name]:overflow-hidden [&_.tree-name]:text-ellipsis [&_.tree-name]:whitespace-nowrap flex flex-col w-full h-full min-h-0 pb-0">
       <header className="panel-title text-chat font-semibold tracking-[-0.01em] text-foreground m-[4px_0_8px] overflow-hidden text-ellipsis whitespace-nowrap explorer-title [&_.icon]:w-[var(--action-size)] [&_.icon]:h-[var(--action-size)] [&_.icon_>_svg]:w-[var(--icon-size)] [&_.icon_>_svg]:h-[var(--icon-size)] flex items-center gap-1"><span className="grow flex-1 min-w-0 text-left" /><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" title={t("New file")} aria-label={t("New file")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:explorer-new', { detail: 'file' }))}><FilePlus size={14} /></Button><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" title={t("New folder")} aria-label={t("New folder")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:explorer-new', { detail: 'dir' }))}><FolderPlus size={14} /></Button><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" title={t("Refresh explorer")} aria-label={t("Refresh explorer")} onClick={() => window.dispatchEvent(new Event('ramu:refresh-explorer'))}><RefreshCw size={14} /></Button><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" title={t("Collapse folders")} aria-label={t("Collapse explorer folders")} onClick={() => window.dispatchEvent(new Event('ramu:collapse-explorer'))}><ListCollapse size={14} /></Button></header>
-      <OverlayScrollArea className="explorer-scroll-area flex-1 min-h-0" viewportClassName="explorer-tree-scroll flex-1 min-h-0 overflow-auto pb-3">
+      <OverlayScrollArea className="explorer-scroll-area flex-1 min-h-0" viewportClassName="explorer-tree-scroll flex-1 min-h-0 overflow-auto pb-3" contentClassName="min-h-full flex flex-col [&>.repo-tree:last-child]:flex-1">
       {bindings.map((b, index) =>
         b.setupState === 'ready' ? (
           <RepoTree key={`${ws.workspaceOf(taskId)}:${b.repoId}`} taskId={taskId} binding={b} primary={index === 0} />
@@ -66,8 +68,11 @@ export function NoTask() {
 function RepoTree({ taskId, binding, primary }: { taskId: string; binding: RepositoryBinding; primary: boolean }) {
   useLanguage()
   const ws = useWorkspace()
-  const [children, setChildren] = useState<Record<string, DirEntry[]>>({})
   const [open, setOpen] = useState<Set<string>>(new Set(['']))
+  const directories = [...open]
+  const listings = useQueries({ queries: directories.map(dir => ({ queryKey: ipcQueryKey('files.list', taskId, binding.repoId, dir), queryFn: () => ramu.invoke('files.list', taskId, binding.repoId, dir) })) })
+  const children: Record<string, DirEntry[]> = {}
+  directories.forEach((dir, index) => { const data = listings[index]?.data; if (data) children[dir] = data })
   const [target, setTarget] = useState<DirEntry>({ name: binding.repoName, path: '', kind: 'dir' })
   const [action, setAction] = useState<{ type: 'create'; parent: string; kind: 'file' | 'dir' } | { type: 'rename'; entry: DirEntry } | { type: 'trash'; entries: DirEntry[] } | null>(null)
   const [name, setName] = useState('')
@@ -90,8 +95,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
 
   const load = useCallback(
     async (dir: string) => {
-      const list = await invoke('files.list', taskId, binding.repoId, dir).catch(() => [])
-      setChildren((c) => ({ ...c, [dir]: list }))
+      await invoke('files.list', taskId, binding.repoId, dir).catch(() => [])
     },
     [taskId, binding.repoId],
   )
@@ -154,7 +158,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
     const entries = clicked && !picked.includes(clicked.path) ? [clicked] : pickedEntries.length ? pickedEntries : clicked ? [clicked] : []
     if (entries.length) begin({ type: 'trash', entries })
   }
-  const reloadAll = async () => { setChildren({}); await Promise.all([...open].map(load)) }
+  const reloadAll = async () => { await Promise.all([...open].map(load)) }
   const fail = (reason: unknown) => notifyError(errorText(reason), 'Explorer')
   const hasDirty = (paths: string[]) => (ws.taskUi[ws.workspaceOf(taskId)]?.views ?? []).some((view) => (view.kind === 'file' || view.kind === 'diff' && !view.oid) && view.repoId === binding.repoId && ws.dirty[view.id] && paths.some((path) => view.path === path || view.path.startsWith(`${path}/`)))
   const setClip = (paths: string[], cut: boolean) => { if (paths.length) clip = { taskId, repoId: binding.repoId, paths, cut } }
@@ -167,7 +171,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
     try {
       const listing = await invoke('files.list', taskId, binding.repoId, dir).catch(() => [])
       const taken = new Set(listing.map((entry) => entry.name)), done: string[] = []
-      for (const path of source.paths) {
+      for (const path of source.paths.filter((path) => !source.paths.some((parent) => path !== parent && path.startsWith(`${parent}/`)))) {
         if (cut && (path === dir || dir.startsWith(`${path}/`))) throw new Error('A folder cannot be moved into itself.')
         if (cut && parentOf(path) === dir) continue
         const name = cut ? baseName(path) : freeName(baseName(path), taken)
@@ -184,6 +188,35 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
       window.dispatchEvent(new Event('ramu:git-updated'))
     } catch (reason) { fail(reason); await reloadAll() }
     finally { setBusy(false) }
+  }
+  const acceptsDrop = (event: DragEvent) => !busy && (!!dragging || event.dataTransfer.types.includes('Files'))
+  const dragOver = (event: DragEvent, dir: string) => {
+    if (!acceptsDrop(event)) return
+    event.preventDefault(); event.stopPropagation()
+    event.dataTransfer.dropEffect = dragging?.repoId === binding.repoId && dragging.cwd === binding.cwd && !event.altKey ? 'move' : 'copy'
+    setDropDir(dir)
+  }
+  const dropInto = (event: DragEvent, dir: string) => {
+    if (!acceptsDrop(event)) return
+    event.preventDefault(); event.stopPropagation(); setDropDir(null)
+    const source = dragging; dragging = null
+    if (source?.repoId === binding.repoId && source.cwd === binding.cwd) {
+      void pasteInto(dir, { taskId, repoId: binding.repoId, paths: source.paths, cut: !event.altKey })
+      return
+    }
+    // Desktop and other repositories are copied, leaving their originals in place.
+    const paths = source ? source.paths.map((path) => `${source.cwd}/${path}`) : [...event.dataTransfer.files].map((file) => ramu.pathForFile(file)).filter(Boolean)
+    if (!paths.length) { fail(new Error('Could not read the dropped file paths.')); return }
+    setBusy(true)
+    void (async () => {
+      try {
+        const done = await invoke('files.import', taskId, binding.repoId, dir, paths)
+        setOpen((current) => new Set([...current, dir]))
+        setPicked(done); anchor.current = done[0] ?? null
+        window.dispatchEvent(new Event('ramu:git-updated'))
+      } catch (reason) { fail(reason) }
+      finally { await reloadAll(); setBusy(false) }
+    })()
   }
   const dirOfTarget = (entry: DirEntry) => entry.kind === 'dir' ? entry.path : parentOf(entry.path)
   const selectRow = (entry: DirEntry, event: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }): boolean => {
@@ -303,7 +336,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
           await invoke('files.rename', taskId, binding.repoId, action.entry.path, destination)
           ws.renameFileViews(taskId, binding.repoId, action.entry.path, destination)
           const expanded = new Set([...open].map((path) => path === action.entry.path || path.startsWith(`${action.entry.path}/`) ? destination + path.slice(action.entry.path.length) : path))
-          setChildren({}); setOpen(expanded); setPicked([destination])
+          setOpen(expanded); setPicked([destination])
           await Promise.all([...expanded].map(load))
         }
       }
@@ -324,9 +357,9 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
           aria-current={e.kind !== 'dir' && e.path === selectedPath ? 'page' : undefined}
           onContextMenu={(event) => { setShowFolderSelection(true); lastRepo = binding.repoId; if (!picked.includes(e.path)) { setPicked([e.path]); anchor.current = e.path } setTarget(e); context.onContextMenu(event) }}
           onKeyDown={(event) => { if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') { setTarget(e); context.onKeyDown(event) } }}
-          onDragOver={(event) => { if (dragging && dragging.repoId === binding.repoId) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = event.altKey ? 'copy' : 'move'; if (dropDir !== dirOfTarget(e)) setDropDir(dirOfTarget(e)) } }}
+          onDragOver={(event) => dragOver(event, dirOfTarget(e))}
           onDragLeave={() => setDropDir(null)}
-          onDrop={(event) => { if (!dragging || dragging.repoId !== binding.repoId) return; event.preventDefault(); event.stopPropagation(); const source = dragging; dragging = null; setDropDir(null); void pasteInto(dirOfTarget(e), { taskId, repoId: binding.repoId, paths: source.paths, cut: !event.altKey }) }}
+          onDrop={(event) => dropInto(event, dirOfTarget(e))}
           onDragEnd={() => { dragging = null; setDropDir(null) }}
           title={e.path}
           draggable
@@ -335,7 +368,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
             // Dragging a selected row takes the whole selection; any other row is dragged alone.
             const group = picked.includes(e.path) && pickedEntries.length > 1 ? pickedEntries : [e]
             if (group.length === 1) { setPicked([e.path]); anchor.current = e.path }
-            dragging = { repoId: binding.repoId, paths: group.map((entry) => entry.path) }
+            dragging = { repoId: binding.repoId, cwd: binding.cwd, paths: group.map((entry) => entry.path) }
             event.dataTransfer.setData(FILE_DRAG_TYPE, JSON.stringify({ repoId: binding.repoId, path: e.path, kind: e.kind, items: group.map((entry) => ({ path: entry.path, kind: entry.kind })) }))
             event.dataTransfer.effectAllowed = 'copyMove'
           }}
@@ -359,12 +392,12 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
     ))
 
   return (
-    <div className="repo-tree [&:hover_.tree-children::before]:[background:var(--line-strong)] mb-1.5" onKeyDown={onTreeKey} onFocusCapture={() => { lastRepo = binding.repoId }}>
+    <div className="repo-tree [&:hover_.tree-children::before]:[background:var(--line-strong)] mb-1.5" onDragOver={(event) => dragOver(event, '')} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropDir(null) }} onDrop={(event) => dropInto(event, '')} onKeyDown={onTreeKey} onFocusCapture={() => { lastRepo = binding.repoId }}>
       {context.menu}
       {action && <Dialog title={action.type === 'create' ? action.kind === 'file' ? t("New file") : t("New folder") : action.type === 'rename' ? t("Rename") : t("Move to Trash?")} confirmLabel={action.type === 'create' ? t("Create") : action.type === 'rename' ? t("Rename") : t("Move to Trash")} danger={action.type === 'trash'} busy={busy} error={error} onCancel={() => { if (!busy) setAction(null) }} onConfirm={() => void confirmAction()}>
         {action.type === 'trash' ? <><p>{action.entries.length === 1 ? t("This item and its contents will move") : t("These {0} items and their contents will move", { "0": action.entries.length })} {t(" to the macOS Trash.")}</p><pre className="confirm-paths max-h-[240px] overflow-auto p-2.5 [border:1px_solid_transparent] rounded-(--radius-s) text-caption bg-fill">{action.entries.map((entry) => entry.path).join('\n')}</pre></> : <><label className="explorer-name-field [&_input]:w-full flex flex-col items-stretch">{t("Name")}<Input ref={nameInput} value={name} maxLength={255} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void confirmAction() }} /></label><p className="muted text-muted-foreground small text-caption">{binding.repoName}{action.type === 'create' && action.parent ? ` / ${action.parent}` : ''}</p></>}
       </Dialog>}
-      <Button variant="tree" className={`tree-root [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&:focus-visible]:[outline-color:var(--line-strong)] [&_>_span]:relative [&_>_span]:top-[-1px] [&.drop-target]:bg-brand-wash [&.drop-target]:[box-shadow:none] flex items-center w-full bg-transparent [border:none] rounded-(--radius-s) p-[3px_4px] gap-1.5 text-left whitespace-nowrap text-soft mb-0.5 justify-start${dropDir === '' ? ' drop-target' : ''}`} onDragOver={(event) => { if (dragging && dragging.repoId === binding.repoId) { event.preventDefault(); event.dataTransfer.dropEffect = event.altKey ? 'copy' : 'move'; setDropDir('') } }} onDragLeave={() => setDropDir(null)} onDrop={(event) => { if (!dragging || dragging.repoId !== binding.repoId) return; event.preventDefault(); const source = dragging; dragging = null; setDropDir(null); void pasteInto('', { taskId, repoId: binding.repoId, paths: source.paths, cut: !event.altKey }) }} onContextMenu={(event) => { setTarget({ name: binding.repoName, path: '', kind: 'dir' }); context.onContextMenu(event) }} onKeyDown={(event) => { if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') { setTarget({ name: binding.repoName, path: '', kind: 'dir' }); context.onKeyDown(event) } }} onClick={() => toggle('')} title={binding.cwd}>
+      <Button variant="tree" className={`tree-root [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&:focus-visible]:[outline-color:var(--line-strong)] [&_>_span]:relative [&_>_span]:top-[-1px] [&.drop-target]:bg-brand-wash [&.drop-target]:[box-shadow:none] flex items-center w-full bg-transparent [border:none] rounded-(--radius-s) p-[3px_4px] gap-1.5 text-left whitespace-nowrap text-soft mb-0.5 justify-start${dropDir === '' ? ' drop-target' : ''}`} onDragOver={(event) => dragOver(event, '')} onDragLeave={() => setDropDir(null)} onDrop={(event) => dropInto(event, '')} onContextMenu={(event) => { setTarget({ name: binding.repoName, path: '', kind: 'dir' }); context.onContextMenu(event) }} onKeyDown={(event) => { if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') { setTarget({ name: binding.repoName, path: '', kind: 'dir' }); context.onKeyDown(event) } }} onClick={() => toggle('')} title={binding.cwd}>
         <ChevronRight size={12} className={open.has('') ? 'tree-caret [&.open]:[transform:rotate(90deg)] w-3 flex-none text-muted-foreground [transition:transform_0.12s_var(--ease)] open' : 'tree-caret [&.open]:[transform:rotate(90deg)] w-3 flex-none text-muted-foreground [transition:transform_0.12s_var(--ease)]'} />
         <span className="strong font-semibold">{binding.repoName}</span>
         <span className="muted text-muted-foreground small text-caption">{binding.folderOnly ? 'folder' : binding.mode === 'worktree' ? binding.taskBranch : 'checkout'}</span>

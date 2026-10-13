@@ -3,7 +3,7 @@ import type { ProviderConfiguration, ProviderStatus } from './providers'
 // The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
 import type {
   PullMode, CommitBranchOptions,
-  ChangeReview, ChangeFile, ReviewFileState, ReviewComment, UndoPreview, FileContext, SkillInfo, ScheduleInput, ScheduleRule, Schedule, ScheduleRun, RecapSnapshot, BackgroundStatus, Memory, MemoryInput, MemorySnapshot,
+  ChangeReview, ChangeFile, ReviewBranchState, ReviewFileState, ReviewComment, UndoPreview, FileContext, SkillInfo, ScheduleInput, ScheduleRule, Schedule, ScheduleRun, RecapSnapshot, BackgroundStatus, Memory, MemoryInput, MemorySnapshot,
   SearchOptions,
   SearchResults,
   ReplaceFilePreview,
@@ -37,7 +37,6 @@ import type {
   Repository,
   RepositoryBinding,
   SaveResult,
-  LintResult,
   Task,
   TaskUiState,
   WorkspaceUiState,
@@ -57,6 +56,7 @@ export interface RamuMethods {
   'app.systemLanguages': () => string[]
   'reviews.list'(sessionId?: string): ChangeReview[]
   'reviews.get'(id: string): ChangeReview
+  'reviews.branches'(id: string): ReviewBranchState[]
   'reviews.inspect'(id: string): ReviewFileState[]
   'reviews.compareCurrent'(id: string, fileId: string): ChangeFile
   'reviews.locate'(id: string, fileId: string, path: string): void
@@ -147,6 +147,8 @@ export interface RamuMethods {
   'files.create'(taskId: string, repoId: string, path: string, kind: 'file' | 'dir'): void
   'files.rename'(taskId: string, repoId: string, path: string, destination: string): void
   'files.copy'(taskId: string, repoId: string, path: string, destination: string): void
+  'files.import'(taskId: string, repoId: string, dir: string, paths: string[]): string[]
+  'files.dropInfo'(paths: string[]): { path: string; kind: 'file' | 'dir' }[]
   'files.trash'(taskId: string, repoId: string, path: string): void
   'files.reveal'(taskId: string, repoId: string, path: string): void
   'files.list'(taskId: string, repoId: string, path: string): DirEntry[]
@@ -155,7 +157,6 @@ export interface RamuMethods {
   'files.image'(taskId: string, repoId: string, path: string): string
   'files.media'(taskId: string, repoId: string, path: string): { mimeType: string; size: number; url: string }
   'files.write'(taskId: string, repoId: string, path: string, content: string, baseHash: string | null): SaveResult
-  'files.lint'(taskId: string, repoId: string, path: string, content: string, scope: 'buffer' | 'saved'): LintResult
   'git.status'(taskId: string, repoId: string): GitStatus
   'git.diff'(taskId: string, repoId: string, path: string, staged: boolean): DiffContents
   'git.stage'(taskId: string, repoId: string, paths: string[]): void
@@ -166,6 +167,8 @@ export interface RamuMethods {
   'git.createBranch'(taskId: string, repoId: string, name: string): void
   'git.deleteBranch'(taskId: string, repoId: string, name: string): void
   'git.stashes'(taskId: string, repoId: string): GitStash[]
+  'git.stashFiles'(taskId: string, repoId: string, oid: string): GitCommitFile[]
+  'git.stashFileDiff'(taskId: string, repoId: string, oid: string, path: string): DiffContents
   'git.stash'(taskId: string, repoId: string, name: string, stagedOnly?: boolean): void
   'git.popStash'(taskId: string, repoId: string, oid: string): void
   'git.applyStash'(taskId: string, repoId: string, oid: string): void

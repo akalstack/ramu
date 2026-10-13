@@ -1,3 +1,4 @@
+import { SEARCH_RESULT_LIMIT, REPLACE_MATCH_LIMIT, REPLACE_FILE_LIMIT, REPLACE_CONTENT_LIMIT } from '../shared/searchLimits'
 import { homedir } from 'node:os'
 import { ProviderService } from './providers'
 import { KeepAwakeService } from './keepAwake'
@@ -25,7 +26,6 @@ import { describeValidationError } from './validation'
 import type { AgentService } from './agent'
 import * as files from './files'
 import { editorConfigFor } from './editorconfig'
-import * as tooling from './tooling'
 import * as git from './git'
 import type { TerminalService } from './pty'
 import type { Workspace } from './workspace'
@@ -53,10 +53,10 @@ const fallbackPreferences = z.object({ switchAt: threshold.default(DEFAULT_FALLB
 const subagentPreferences = z.object({ mode: z.enum(['native', 'single', 'per-provider']).default('native'), single: fallbackStep.nullable().default(null), perProvider: z.partialRecord(providerId, fallbackStep.nullable()).default({}), byType: z.array(z.object({ id: z.string().min(1).max(100), type: z.string().max(80), step: fallbackStep.nullable() })).max(20).default([]), fallback: z.enum(['same', 'separate']).default('same'), chains: chains.default({}), switchAt: z.union([threshold, z.literal('same')]).default('same'), continueNative: z.boolean().default(true), isolate: z.boolean().default(false), codexHook: z.boolean().default(false), maxConcurrent: z.number().int().min(1).max(8).default(3), shareContext: z.boolean().default(false) })
 const advisorPreferences = z.object({ enabled: z.boolean().default(false), step: fallbackStep.nullable().default(null), wait: z.boolean().default(false) })
 const projectAction = z.object({ id: z.string().min(1).max(64), name: z.string().trim().min(1).max(60), command: z.string().trim().min(1).max(4000), keys: z.string().max(40).optional() })
-const appPreferences = z.object({ language: z.enum(['system', 'en', 'id']).default('system'), recapsEnabled: z.boolean().default(true), recapTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'), accent: z.enum(['blue', 'violet', 'teal']), fontFamily: z.enum(['system', 'geist']), fontSize: z.number().int().min(12).max(18), fontSmoothing: z.boolean().default(true), recentChatMode: z.boolean().default(false), editorFontSize: z.number().int().min(12).max(22), lintWhileEditing: z.boolean().default(true), terminalFontSize: z.number().int().min(12).max(22), previewTabs: z.boolean(), hideEmptyStaged: z.boolean(), pullMode: pullMode.default('rebase'), autoPull: z.boolean().default(true), commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'), commitInstructions: z.string().max(2000).default(''), defaultCommitAction: z.enum(['commit', 'push', 'sync']).default('commit'), defaultCommitBranch: z.enum(['new-branch', 'current']).default('new-branch'), recentChats: z.number().int().min(3).max(20), cleanupArchivedDays: z.number().int().min(0).max(3650).default(30), terminalTabPosition: z.enum(['top', 'right']), defaultAccess: agentSettings.shape.access, defaultAutoFallback: z.boolean(), busyMessageAction: z.enum(['queue', 'steer']).default('steer'), includeTabContext: z.boolean().default(true), sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH), messageBehaviorVersion: z.literal(4).default(4), defaultChatDockOpen: z.boolean(), favoriteModels: z.array(z.string().max(200)).max(100).default([]), notifyAgentDone: z.boolean().default(true), resumeChatsOnRestart: z.boolean().default(true), asyncQuestions: z.boolean().default(true), autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60), providerBinaries: providerBinaries.default({}), providerUpdateChecks: z.boolean().default(true), appUpdateChecks: z.boolean().default(true), appAutoUpdate: z.boolean().default(false), keepAwake: z.boolean().default(false), keepAwakeWhen: z.enum(['plugged-in', 'always']).default('plugged-in'), showUsageLimits: z.boolean().default(true), fallback: fallbackPreferences.default(DEFAULT_FALLBACK_PREFERENCES), subagents: subagentPreferences.default(DEFAULT_SUBAGENT_PREFERENCES), advisor: advisorPreferences.default(DEFAULT_ADVISOR_PREFERENCES), goals: goalPreferencesSchema.default({ mode: 'auto', maxTurns: 10 }), memory: z.object({ enabled: z.boolean().default(true), dream: z.boolean().default(true), staleAfterDays: z.number().int().min(7).max(3650).default(90) }).default(DEFAULT_MEMORY_PREFERENCES) })
+const appPreferences = z.object({ language: z.enum(['system', 'en', 'id']).default('system'), recapsEnabled: z.boolean().default(true), recapTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'), accent: z.enum(['blue', 'violet', 'teal']), fontFamily: z.enum(['system', 'geist']), fontSize: z.number().int().min(12).max(18), fontSmoothing: z.boolean().default(true), reduceMotion: z.boolean().default(false), recentChatMode: z.boolean().default(false), editorFontSize: z.number().int().min(12).max(22), terminalFontSize: z.number().int().min(12).max(22), previewTabs: z.boolean(), hideEmptyStaged: z.boolean(), pullMode: pullMode.default('rebase'), autoPull: z.boolean().default(true), commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'), commitInstructions: z.string().max(2000).default(''), defaultCommitAction: z.enum(['commit', 'push', 'sync']).default('commit'), defaultCommitBranch: z.enum(['new-branch', 'current']).default('new-branch'), recentChats: z.number().int().min(3).max(20), cleanupArchivedDays: z.number().int().min(0).max(3650).default(30), terminalTabPosition: z.enum(['top', 'right']), defaultAccess: agentSettings.shape.access, defaultAutoFallback: z.boolean(), busyMessageAction: z.enum(['queue', 'steer']).default('steer'), includeTabContext: z.boolean().default(true), sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH), messageBehaviorVersion: z.literal(4).default(4), defaultChatDockOpen: z.boolean(), favoriteModels: z.array(z.string().max(200)).max(100).default([]), notifyAgentDone: z.boolean().default(true), resumeChatsOnRestart: z.boolean().default(true), asyncQuestions: z.boolean().default(true), autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60), providerBinaries: providerBinaries.default({}), providerUpdateChecks: z.boolean().default(true), appUpdateChecks: z.boolean().default(true), appAutoUpdate: z.boolean().default(false), keepAwake: z.boolean().default(false), keepAwakeWhen: z.enum(['plugged-in', 'always']).default('plugged-in'), showUsageLimits: z.boolean().default(true), fallback: fallbackPreferences.default(DEFAULT_FALLBACK_PREFERENCES), subagents: subagentPreferences.default(DEFAULT_SUBAGENT_PREFERENCES), advisor: advisorPreferences.default(DEFAULT_ADVISOR_PREFERENCES), goals: goalPreferencesSchema.default({ mode: 'auto', maxTurns: 10 }), memory: z.object({ enabled: z.boolean().default(true), dream: z.boolean().default(true), staleAfterDays: z.number().int().min(7).max(3650).default(90) }).default(DEFAULT_MEMORY_PREFERENCES) })
 
 const searchOptions = z.object({ query: z.string().min(1).max(1000), caseSensitive: z.boolean(), wholeWord: z.boolean(), regex: z.boolean(), include: z.string().max(2000), exclude: z.string().max(2000), repoId: id.optional() })
-const replacePreview = z.array(z.object({ repoId: id, path: relPath, hash: z.string().regex(/^[a-f0-9]{64}$/), count: z.number().int().positive(), before: z.string().max(160), after: z.string().max(160) })).max(500)
+const replacePreview = z.array(z.object({ repoId: id, path: relPath, hash: z.string().regex(/^[a-f0-9]{64}$/), count: z.number().int().positive(), before: z.string().max(160), after: z.string().max(160) })).max(REPLACE_FILE_LIMIT)
 
 const modelPreferences = z.object({
   defaultBarMode: z.enum(['effort', 'model']).optional(),
@@ -73,7 +73,7 @@ const modelPreferences = z.object({
 const viewSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('agent'), id, sessionId: id, repoId: id.optional(), sourceSeq: z.number().int().positive().optional() }),
   z.object({ kind: z.literal('file'), id, repoId: id, path: relPath, preview: z.boolean().optional(), selection: z.object({ line: z.number().int().positive(), column: z.number().int().positive(), endColumn: z.number().int().positive(), requestId: id }).optional() }),
-  z.object({ kind: z.literal('diff'), id, repoId: id, path: relPath, staged: z.boolean(), oid: z.string().regex(/^[a-f0-9]{40,64}$/).optional() }),
+  z.object({ kind: z.literal('diff'), id, repoId: id, path: relPath, staged: z.boolean(), stash: z.boolean().optional(), oid: z.string().regex(/^[a-f0-9]{40,64}$/).optional() }),
   z.object({ kind: z.literal('git'), id, repoId: id, title: z.string().max(1000), oid: z.string().regex(/^[a-f0-9]{40,64}$/).optional() }),
   z.object({ kind: z.literal('review'), id, reviewId: id, taskId: id, fileId: id.optional(), threadId: id.optional(), requestId: id.optional() }),
   z.object({ kind: z.literal('terminal'), id, repoId: id.optional() }),
@@ -149,7 +149,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
   const awake = new KeepAwakeService(() => workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).keepAwake ?? false, () => workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).keepAwakeWhen ?? 'plugged-in')
   const attachmentStore = new AttachmentStore(join(host.userData, 'attachments'))
   const updates = new AppUpdateService(host.userData, runtimeVersion(process.argv[1] ?? ''), () => ({ ...DEFAULT_APP_PREFERENCES, ...workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}) }), (state) => host.send('updates:changed', state))
-  const fileContext = z.array(z.object({ repoId: id, path: relPath, content: z.string().max(1000000).optional(), referenceOnly: z.boolean().optional(), selection: z.object({ startLine: z.number().int().positive(), startColumn: z.number().int().positive(), endLine: z.number().int().positive(), endColumn: z.number().int().positive(), side: z.enum(['original', 'modified']).optional() }).optional(), diff: z.object({ staged: z.boolean(), oid: z.string().regex(/^[a-f0-9]{40,64}$/).optional() }).optional(), source: z.enum(['tab', 'mention']) })).max(30).optional()
+  const fileContext = z.array(z.object({ repoId: id, path: relPath, content: z.string().max(1000000).optional(), referenceOnly: z.boolean().optional(), selection: z.object({ startLine: z.number().int().positive(), startColumn: z.number().int().positive(), endLine: z.number().int().positive(), endColumn: z.number().int().positive(), side: z.enum(['original', 'modified']).optional() }).optional(), diff: z.object({ staged: z.boolean(), stash: z.boolean().optional(), oid: z.string().regex(/^[a-f0-9]{40,64}$/).optional() }).optional(), source: z.enum(['tab', 'mention']) })).max(30).optional()
   const attachmentIds = z.array(id).max(10).optional()
   const lock = new KeyedLock()
   const usage = new UsageService(() => workspace.getAppState<UsageReading[]>('usage-limits', []), (readings) => workspace.setAppState('usage-limits', readings), (readings) => host.send('usage:changed', readings))
@@ -208,10 +208,12 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     let count = 0
     for (const binding of workspace.fileBindings(taskId)) {
       if (binding.setupState !== 'ready' || options.repoId && options.repoId !== binding.repoId) continue
-      const found = await files.searchText(cwdOf(taskId, binding.repoId), binding.repoId, options, 500 - count)
+      const found = await files.searchText(cwdOf(taskId, binding.repoId), binding.repoId, options, REPLACE_MATCH_LIMIT - count)
       count += found.matches.length
-      if (found.limited || count >= 500) throw new Error('Replacement is limited to fewer than 500 matches. Narrow the search before replacing.')
+      if (found.limited) throw new Error(`Replacement exceeds ${REPLACE_MATCH_LIMIT.toLocaleString('en-US')} matches. Narrow the search using the include/exclude filters.`)
+      if (plans.length + new Set(found.matches.map(match => match.path)).size > REPLACE_FILE_LIMIT) throw new Error(`Replacement exceeds ${REPLACE_FILE_LIMIT.toLocaleString('en-US')} files. Narrow the include filter or repository.`)
       plans.push(...await files.replacementPlan(cwdOf(taskId, binding.repoId), binding.repoId, options, replacement, found.matches))
+      if (plans.length > REPLACE_FILE_LIMIT || plans.reduce((bytes, plan) => bytes + Buffer.byteLength(plan.content), 0) > REPLACE_CONTENT_LIMIT) throw new Error('Replacement spans too many files or too much content. Narrow the include filter or repository.')
     }
     return plans
   }
@@ -245,6 +247,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
   const methods = {
     'reviews.list': { args: z.tuple([id.optional()]), run: (sessionId?: string) => reviews.list(sessionId).map((r) => ({ ...r, files: r.files.map((f) => ({ ...f, oldContent: '', newContent: '' })) })) },
     'reviews.get': { args: z.tuple([id]), run: (reviewId: string) => reviews.details(reviewId) },
+    'reviews.branches': { args: z.tuple([id]), run: (reviewId: string) => reviews.branches(reviewId) },
     'reviews.inspect': { args: z.tuple([id]), run: (reviewId: string) => reviews.inspect(reviewId) },
     'reviews.compareCurrent': { args: z.tuple([id, id]), run: (reviewId: string, fileId: string) => reviews.compareCurrent(reviewId, fileId) },
     'reviews.locate': { args: z.tuple([id, id, relPath]), run: (reviewId: string, fileId: string, path: string) => reviews.locate(reviewId, fileId, path) },
@@ -453,9 +456,9 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
         let limited = false
         for (const binding of workspace.fileBindings(taskId)) {
           if (binding.setupState !== 'ready' || options.repoId && binding.repoId !== options.repoId) continue
-          const result = await files.searchText(cwdOf(taskId, binding.repoId), binding.repoId, options, 500 - matches.length)
+          const result = await files.searchText(cwdOf(taskId, binding.repoId), binding.repoId, options, SEARCH_RESULT_LIMIT - matches.length)
           matches.push(...result.matches)
-          if (result.limited || matches.length >= 500) { limited = true; break }
+          if (result.limited) { limited = true; break }
         }
         return { matches, limited }
       },
@@ -480,6 +483,17 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
         const cwd = cwdOf(t, r)
         return lock.run(`checkout:${cwd}`, () => files.copyEntry(cwd, path, destination))
       },
+    },
+    'files.import': {
+      args: z.tuple([id, id, relPath, z.array(z.string().min(1).max(4096)).min(1).max(100)]),
+      run: (t: string, r: string, dir: string, paths: string[]) => {
+        const cwd = cwdOf(t, r)
+        return lock.run(`checkout:${cwd}`, () => files.importEntries(cwd, dir, paths))
+      },
+    },
+    'files.dropInfo': {
+      args: z.tuple([z.array(z.string().min(1).max(4096)).max(100)]),
+      run: (paths: string[]) => files.describeDroppedPaths(paths),
     },
     'files.trash': {
       args: z.tuple([id, id, relPath]),
@@ -512,10 +526,6 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'files.media': {
       args: z.tuple([id, id, relPath]),
       run: (taskId: string, repoId: string, path: string) => files.readMedia(cwdOf(taskId, repoId), path),
-    },
-    'files.lint': {
-      args: z.tuple([id, id, relPath, text, z.enum(['buffer', 'saved'])]),
-      run: async (taskId: string, repoId: string, path: string, content: string, scope: 'buffer' | 'saved') => { const cwd = cwdOf(taskId, repoId); return tooling.lintBuffer(cwd, await files.resolveInRoot(cwd, path), content, scope) },
     },
     'files.write': {
       args: z.tuple([id, id, relPath, z.string().max(files.MAX_EDITABLE_BYTES), z.string().max(128).nullable()]),
@@ -611,6 +621,8 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'git.createBranch': { args: z.tuple([id, id, z.string().min(1).max(200)]), run: (t: string, r: string, name: string) => { const cwd = gitCwdOf(t, r); return lock.runMany([`checkout:${cwd}`, `repo:${workspace.getRepository(r).root}`], () => git.createBranch(cwd, name)) } },
     'git.deleteBranch': { args: z.tuple([id, id, z.string().min(1).max(200)]), run: (t: string, r: string, name: string) => lock.run(`repo:${workspace.getRepository(r).root}`, () => git.deleteBranch(gitCwdOf(t, r), name)) },
     'git.stashes': { args: z.tuple([id, id]), run: (t: string, r: string) => git.stashes(gitCwdOf(t, r)) },
+    'git.stashFiles': { args: z.tuple([id, id, z.string().regex(/^[a-f0-9]{40,64}$/)]), run: (t: string, r: string, oid: string) => git.stashFiles(gitCwdOf(t, r), oid) },
+    'git.stashFileDiff': { args: z.tuple([id, id, z.string().regex(/^[a-f0-9]{40,64}$/), relPath]), run: (t: string, r: string, oid: string, path: string) => git.stashFileDiff(gitCwdOf(t, r), oid, path) },
     'git.stash': { args: z.tuple([id, id, z.string().max(500), z.boolean().optional()]), run: (t: string, r: string, name: string, stagedOnly?: boolean) => { const cwd = gitCwdOf(t, r); return lock.runMany([`checkout:${cwd}`, `repo:${workspace.getRepository(r).root}`], () => git.stash(cwd, name, stagedOnly)) } },
     'git.popStash': { args: z.tuple([id, id, z.string().regex(/^[a-f0-9]{40,64}$/)]), run: (t: string, r: string, oid: string) => { const cwd = gitCwdOf(t, r); return lock.runMany([`checkout:${cwd}`, `repo:${workspace.getRepository(r).root}`], () => git.popStash(cwd, oid)) } },
     'git.applyStash': { args: z.tuple([id, id, z.string().regex(/^[a-f0-9]{40,64}$/)]), run: (t: string, r: string, oid: string) => { const cwd = gitCwdOf(t, r); return lock.runMany([`checkout:${cwd}`, `repo:${workspace.getRepository(r).root}`], () => git.applyStash(cwd, oid)) } },

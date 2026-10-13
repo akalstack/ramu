@@ -10,6 +10,9 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { monaco } from './monaco'
 import { createRoot } from 'react-dom/client'
 import { useCallback, useEffect, useState } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient, invalidateData } from './dataQueries'
+import { ramu } from './ipc'
 import { App } from './App'
 import { StartupScreen } from './Brand'
 import { ErrorBoundary } from './ErrorBoundary'
@@ -31,8 +34,17 @@ function Startup() {
     })
     return () => { disposed = true }
   }, [])
+  useEffect(() => {
+    const offs = [
+      ramu.on('fs:changed', () => { void invalidateData('files', 'git') }),
+      ramu.on('automation:changed', () => { void invalidateData('reviews', 'tasks') }),
+      ramu.on('agent:event', () => { void invalidateData('agent') }),
+      ramu.on('background:connection', ({ connected }) => { if (connected) void invalidateData() }),
+    ]
+    return () => offs.forEach(off => off())
+  }, [])
   return <StartupScreen ready={fontsReady && appReady}><ErrorBoundary scope="app"><TooltipProvider delay={350}><App onReady={onReady} /></TooltipProvider></ErrorBoundary></StartupScreen>
 }
 
 // Fonts and application data load behind one continuous logo-to-wordmark reveal.
-createRoot(document.getElementById('root')!).render(<Startup />)
+createRoot(document.getElementById('root')!).render(<QueryClientProvider client={queryClient}><Startup /></QueryClientProvider>)

@@ -182,6 +182,40 @@ describe('Automatic pull', () => {
 })
 
 describe('Stashes', () => {
+  it('lists tracked and untracked stash files and reads their saved diffs', async () => {
+    commit(mine, 'deleted.txt', 'delete me\n', 'Deletion fixture')
+    commit(mine, 'rename.txt', 'rename me\n', 'Rename fixture')
+    writeFileSync(join(mine, 'shared.txt'), 'saved change\n')
+    rmSync(join(mine, 'deleted.txt'))
+    sh(mine, 'mv', 'rename.txt', 'renamed.txt')
+    writeFileSync(join(mine, 'staged.txt'), 'staged addition\n'); sh(mine, 'add', 'staged.txt')
+    writeFileSync(join(mine, 'new file\twith tab.txt'), 'untracked addition\n')
+    await git.stash(mine, 'Contents')
+    const [entry] = await git.stashes(mine)
+    expect(await git.stashFiles(mine, entry!.oid)).toEqual(expect.arrayContaining([
+      { path: 'shared.txt', status: 'M' }, { path: 'deleted.txt', status: 'D' },
+      { path: 'renamed.txt', origPath: 'rename.txt', status: 'R' }, { path: 'staged.txt', status: 'A' },
+      { path: 'new file\twith tab.txt', status: 'A' },
+    ]))
+    writeFileSync(join(mine, 'shared.txt'), 'later change\n')
+    expect(await git.stashFileDiff(mine, entry!.oid, 'shared.txt')).toEqual({ original: 'base\n', modified: 'saved change\n' })
+    expect(await git.stashFileDiff(mine, entry!.oid, 'deleted.txt')).toEqual({ original: 'delete me\n', modified: '' })
+    expect(await git.stashFileDiff(mine, entry!.oid, 'renamed.txt')).toEqual({ original: 'rename me\n', modified: 'rename me\n' })
+    expect(await git.stashFileDiff(mine, entry!.oid, 'staged.txt')).toEqual({ original: '', modified: 'staged addition\n' })
+    expect(await git.stashFileDiff(mine, entry!.oid, 'new file\twith tab.txt')).toEqual({ original: '', modified: 'untracked addition\n' })
+    await expect(git.stashFileDiff(mine, entry!.oid, 'not-in-stash.txt')).rejects.toThrow()
+    expect(readFileSync(join(mine, 'shared.txt'), 'utf8')).toBe('later change\n')
+  })
+  it('reads a tracked-only stash and rejects invalid stash identifiers', async () => {
+    writeFileSync(join(mine, 'shared.txt'), 'staged change\n'); sh(mine, 'add', 'shared.txt')
+    await git.stash(mine, 'Staged only', true)
+    const [entry] = await git.stashes(mine)
+    expect(await git.stashFiles(mine, entry!.oid)).toEqual([{ path: 'shared.txt', status: 'M' }])
+    expect(await git.stashFileDiff(mine, entry!.oid, 'shared.txt')).toEqual({ original: 'base\n', modified: 'staged change\n' })
+    await expect(git.stashFiles(mine, 'HEAD')).rejects.toThrow('Invalid stash identifier')
+    await expect(git.stashFiles(mine, sh(mine, 'rev-parse', 'HEAD'))).rejects.toThrow('not a stash')
+  })
+
   it('pops a stash by oid and stashes staged changes only', async () => {
     writeFileSync(join(mine, 'shared.txt'), 'changed\n'); writeFileSync(join(mine, 'new.txt'), 'new\n')
     await git.stash(mine, 'Work in progress')

@@ -1,3 +1,4 @@
+import { reducedMotion } from './panelMotion'
 const EASING = 'cubic-bezier(0.2, 0, 0, 1)'
 /** Beyond this height, animating height re-lays-out the whole section every frame and stutters. */
 const CHEAP_HEIGHT = 320
@@ -9,7 +10,7 @@ const CHEAP_HEIGHT = 320
  */
 export function slide(el: HTMLElement, open: boolean, done?: () => void): void {
   el.getAnimations().forEach((animation) => animation.cancel())
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { done?.(); return }
+  if (reducedMotion()) { done?.(); return }
   const height = open ? el.scrollHeight : el.offsetHeight
   const cheap = height <= CHEAP_HEIGHT
   const hidden = { opacity: 0, transform: 'translateY(-6px)' }, shown = { opacity: 1, transform: 'translateY(0)' }

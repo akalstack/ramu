@@ -41,11 +41,15 @@ export function ScheduleNavigation() {
   const select = (id?: string) => window.dispatchEvent(new CustomEvent('ramu:schedule', { detail: { id } }))
   return <div className="panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] p-[2px_8px_16px]"><Button variant="secondary" className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start" onClick={() => select()}><Plus size={15} />{t("New schedule")}</Button><div className="section-head [.review-inbox_>_&]:gap-2 [&_button.small-icon]:mr-0 flex items-center justify-between text-control text-muted-foreground p-[5px_8px]">{t("Schedules")}</div>{schedules.map((s) => <Button variant="secondary" className="schedule-nav flex h-auto min-h-8 w-full items-start justify-start gap-[9px] rounded-(--radius-row) bg-transparent px-2 py-1.5 text-left font-normal text-soft [border:0] [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:hover:bg-hover [&_>_svg]:mt-[2px] [&_>_svg]:shrink-0 [&_>_svg]:text-muted-foreground [&_>_span]:min-w-0 [&_>_span]:flex-1 [&_>_span]:overflow-hidden [&_>_span]:text-ellipsis [&_>_span]:whitespace-nowrap" key={s.id} onClick={() => select(s.id)}><CalendarClock size={15} /><span><span className="block truncate text-control text-foreground">{s.name}</span><span className="muted text-muted-foreground small text-caption block truncate">{s.state === 'active' ? formatScheduleTime(s.nextRunAt, s.timezone) : t(s.state)}</span></span></Button>)}{loading && <ContentSkeleton />}{!loading && !schedules.length && <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">{t("Choose when to run this task.")}</p>}</div>
 }
-export function SchedulesPage() {
+export function SchedulesPage({ createRequested = false, onCreateHandled }: { createRequested?: boolean; onCreateHandled?: () => void }) {
   useLanguage()
   const ws = useWorkspace(), { schedules, runs, reload, loading } = useSchedules()
   const [editing, setEditing] = useState<Schedule | 'new' | null>(null), [selected, setSelected] = useState<string | null>(null)
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!createRequested) return
+    setSelected(null); setEditing('new'); onCreateHandled?.()
+  }, [createRequested, onCreateHandled])
   useEffect(() => {
     const select = (e: Event) => { const id = (e as CustomEvent).detail?.id; setSelected(id ?? null); setEditing(id ? schedules.find((s) => s.id === id) ?? null : 'new') }
     window.addEventListener('ramu:schedule', select); return () => window.removeEventListener('ramu:schedule', select)

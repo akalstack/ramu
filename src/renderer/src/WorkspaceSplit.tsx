@@ -3,13 +3,14 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { readSize, useLayoutEpoch } from './panelLayout'
 
 /** A stable two-track split. Content never participates in track sizing or panel registration. */
-export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, defaultShare, primaryMin = 320, secondaryMin = 240, primary, secondary }: {
+export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, defaultShare, primaryMin = 320, secondaryMin = 240, resizePreview = false, primary, secondary }: {
   id: string
   orientation?: 'horizontal' | 'vertical'
   open: boolean
   label: string
   defaultShare: number
   primaryMin?: number
+  resizePreview?: boolean
   secondaryMin?: number
   primary: ReactNode
   secondary: ReactNode
@@ -23,8 +24,16 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
   const [length, setLength] = useState(0)
   const [dragging, setDragging] = useState(false)
   const root = useRef<HTMLDivElement>(null)
+  const preview = useRef<HTMLDivElement>(null)
+  const drag = useRef<{ rect: DOMRect; length: number; share: number } | null>(null)
   const currentShare = useRef(share)
   const epoch = useLayoutEpoch()
+  useLayoutEffect(() => {
+    if (open) return
+    drag.current = null
+    if (preview.current) preview.current.style.visibility = 'hidden'
+    setDragging(false)
+  }, [open])
   useEffect(() => {
     const next = readShare()
     currentShare.current = next
@@ -56,10 +65,21 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
   const save = () => localStorage.setItem(`ramu.layout.${storageKey}`, String(currentShare.current))
   const tracks = open ? `minmax(0, ${100 - actual}fr) 1px minmax(0, ${actual}fr)` : 'minmax(0, 100fr) 0px minmax(0, 0fr)'
   const horizontal = orientation === 'horizontal'
+  const movePreview = (value: number, size: number) => {
+    if (!preview.current) return
+    preview.current.style.visibility = 'visible'
+    preview.current.style.transform = horizontal ? `translateX(${Math.round(size * (1 - value / 100))}px)` : `translateY(${Math.round(size * (1 - value / 100))}px)`
+  }
+  const endDrag = () => {
+    drag.current = null
+    if (preview.current) preview.current.style.visibility = 'hidden'
+    setDragging(false)
+  }
 
-  return <div ref={root} data-workspace-split={id} data-dragging={dragging || undefined} className={cn('grid h-full w-full min-w-0 min-h-0 overflow-hidden', dragging && 'select-none')} style={horizontal ? { gridTemplateColumns: tracks, gridTemplateRows: 'minmax(0, 1fr)' } : { gridTemplateRows: tracks, gridTemplateColumns: 'minmax(0, 1fr)' }}>
+  return <div ref={root} data-workspace-split={id} data-open={open || undefined} data-dragging={dragging || undefined} className={cn('relative grid h-full w-full min-w-0 min-h-0 overflow-hidden', dragging && 'select-none')} style={horizontal ? { gridTemplateColumns: tracks, gridTemplateRows: 'minmax(0, 1fr)' } : { gridTemplateRows: tracks, gridTemplateColumns: 'minmax(0, 1fr)' }}>
     <div className="min-w-0 min-h-0 overflow-hidden">{primary}</div>
     <div
+      data-sash-active={dragging || undefined}
       role="separator"
       aria-label={label}
       aria-orientation={horizontal ? 'vertical' : 'horizontal'}
@@ -68,27 +88,34 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
       aria-valuenow={Math.round(actual)}
       aria-hidden={!open}
       tabIndex={open ? 0 : -1}
-      className={cn('relative z-10 bg-[var(--pane-border-color)] outline-none touch-none hover:bg-[var(--pane-border-active)] focus-visible:bg-[var(--pane-border-active)]', horizontal ? 'cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-3 after:-translate-x-1/2' : 'cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-3 after:-translate-y-1/2', dragging && 'bg-[var(--pane-border-active)]')}
+      className={cn('pane-sash relative z-60 bg-[var(--pane-border-color)] outline-none touch-none', horizontal ? 'cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-3 after:-translate-x-1/2' : 'cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-3 after:-translate-y-1/2')}
       style={{ visibility: open ? 'visible' : 'hidden' }}
       onPointerDown={event => {
-        if (event.button !== 0 || !open) return
+        if (event.button !== 0 || !open || drag.current || !root.current) return
         event.preventDefault()
         event.currentTarget.setPointerCapture(event.pointerId)
+        const rect = root.current.getBoundingClientRect()
+        const size = Math.max(0, (horizontal ? rect.width : rect.height) - 1)
+        drag.current = { rect, length: size, share: actual }
+        if (resizePreview) movePreview(actual, size)
         setDragging(true)
       }}
       onPointerMove={event => {
         if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
-        const rect = root.current?.getBoundingClientRect()
-        if (!rect || length <= 0) return
-        update(((horizontal ? rect.right - event.clientX : rect.bottom - event.clientY) - 0.5) / length * 100)
+        const state = drag.current
+        if (!state || state.length <= 0 || !open) return
+        state.share = clamp(((horizontal ? state.rect.right - event.clientX : state.rect.bottom - event.clientY) - 0.5) / state.length * 100)
+        if (resizePreview) movePreview(state.share, state.length)
+        else update(state.share)
       }}
       onPointerUp={event => {
         if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
-        save()
+        if (drag.current && open) { update(drag.current.share); save() }
         event.currentTarget.releasePointerCapture(event.pointerId)
-        setDragging(false)
+        endDrag()
       }}
-      onLostPointerCapture={() => setDragging(false)}
+      onPointerCancel={event => { if (drag.current && !resizePreview) { update(drag.current.share); save() }; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); endDrag() }}
+      onLostPointerCapture={() => { if (drag.current && !resizePreview) save(); endDrag() }}
       onDoubleClick={() => { update(defaultShare); save() }}
       onKeyDown={event => {
         const earlier = horizontal ? 'ArrowLeft' : 'ArrowUp'
@@ -104,6 +131,7 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
         save()
       }}
     />
-    <div className="min-w-0 min-h-0 overflow-hidden" inert={!open} aria-hidden={!open} style={{ visibility: open ? 'visible' : 'hidden' }}>{secondary}</div>
+    <div data-panel-surface className="min-w-0 min-h-0 overflow-hidden" inert={!open} aria-hidden={!open} style={{ visibility: open ? 'visible' : 'hidden' }}>{secondary}</div>
+    <div ref={preview} data-workspace-divider-preview aria-hidden="true" className={cn('pointer-events-none absolute z-70 bg-[var(--pane-border-active)]', horizontal ? 'inset-y-0 left-0 w-0.5' : 'inset-x-0 top-0 h-0.5')} style={{ visibility: 'hidden' }} />
   </div>
 }

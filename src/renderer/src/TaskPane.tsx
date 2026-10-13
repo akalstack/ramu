@@ -1,16 +1,19 @@
-import { ContentSkeleton } from '@/components/content-skeleton'
+import { Spinner } from '@/components/ui/spinner'
+import { cachedData } from './dataQueries'
 import { errorText } from './errors'
 import { visibleName } from '../../shared/text'
 import { t, useLanguage, formatLocale } from './i18n'
 import { FileIcon, fileStyle } from './FileIcon'
 import { createPortal } from 'react-dom'
+import { OverlayScrollArea } from '@/components/overlay-scroll-area'
+import { useTabScroll } from './useTabScroll'
 import { WorkspaceSplit } from './WorkspaceSplit'
 import { Button } from '@/components/desktop-button'
 import { NO_PROJECT, type Attachment, type FileContext } from '../../shared/types'
 import { notifyError } from './Notifications'
 import { useModelSets } from './ModelSets'
 import { CircleAlert, FileDiff, FileText, GitBranch, History, FileSearch, ChevronsRight, SquareTerminal, X } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { ChangeReviewTab } from './Changes'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type AgentSessionInfo, type ViewDescriptor } from '../../shared/types'
 import { formatKeys, type TaskAction } from './commands'
@@ -33,7 +36,7 @@ import { isPreviewable, isWorkspaceCtx, tabOrder, useWorkspace } from './workspa
  * The left conversation stays mounted throughout review and agent revisions.
  * Files, diffs and terminals remain shared within their checkout.
  */
-export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean }) {
+export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: string; visible: boolean }) {
   useLanguage()
   const ws = useWorkspace()
   const project = ws.projectOf(taskId)
@@ -44,9 +47,9 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
   const bindings = ws.bindings[taskId] ?? []
   const tabs = tabOrder(state.views).filter((v) => v.kind !== 'terminal')
   const agentViews = tabs.filter((v) => v.kind === 'agent')
-  const [sessions, setSessions] = useState<AgentSessionInfo[]>([])
+  const [sessions, setSessions] = useState<AgentSessionInfo[]>(() => cachedData('agent.list', taskId) ?? [])
   const [sessionsError, setSessionsError] = useState<string | null>(null)
-  const [sessionsLoadedFor, setSessionsLoadedFor] = useState<string | null>(null)
+  const [sessionsLoadedFor, setSessionsLoadedFor] = useState<string | null>(() => cachedData('agent.list', taskId) ? taskId : null)
   const [retrying, setRetrying] = useState(false)
   const body = useRef<HTMLDivElement>(null)
   // One terminal instance serves both docks: its host element moves between slots so shells never remount.
@@ -69,8 +72,9 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
 
   useEffect(() => {
     let cancelled = false
-    setSessions([])
-    setSessionsLoadedFor(null)
+    const cached = cachedData('agent.list', taskId)
+    setSessions(cached ?? [])
+    setSessionsLoadedFor(cached ? taskId : null)
     setSessionsError(null)
     const load = () => invoke('agent.list', taskId).then((list) => {
       if (!cancelled) { setSessions(list); setSessionsLoadedFor(taskId); setSessionsError(null) }
@@ -86,6 +90,7 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
   const focusedChat = agentViews.find((v) => v.id === state.activeAgentViewId) ?? agentViews.at(-1) ?? null
   // The conversation always stays in the main chat pane beside the active workspace view.
   const editorView = active && active.kind !== 'agent' ? active : null
+  const tabScroll = useTabScroll(editorView?.id, true, visible && !!editorView && !composing)
   const chatView = composing ? null : active?.kind === 'agent' ? active : editorView ? focusedChat : null
   const showLauncherMain = !editorView && !chatView
   const terminalOpen = (ws.taskUi[workspaceId]?.views.some((view) => view.kind === 'terminal') ?? false) && (ws.taskUi[workspaceId]?.terminalOpen ?? true)
@@ -136,7 +141,7 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
   const unfinished = bindings.filter((b) => b.setupState !== 'ready')
 
   return (
-    <section className="task-pane flex-1 flex-col min-w-0 min-h-0" style={{ display: visible ? 'flex' : 'none' }}>
+    <section className="task-pane flex-1 flex-col min-w-0 min-h-0" data-panel-visible={visible || undefined} style={{ display: visible ? 'flex' : 'none' }}>
       {unfinished.length > 0 && (
         <div className="banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control warn text-warn">
           <CircleAlert size={14} />
@@ -150,9 +155,9 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
         </div>
       )}
       <div className="task-body flex-1 min-h-0 min-w-0 relative" ref={body}>
-        <WorkspaceSplit id={`${workspaceId}.terminal-bottom`} orientation="vertical" open={bottomTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={240} secondaryMin={120}
+        <WorkspaceSplit id={`${workspaceId}.terminal-bottom`} orientation="vertical" resizePreview open={bottomTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={240} secondaryMin={120}
           primary={
-            <WorkspaceSplit id={`${workspaceId}.terminal-right`} open={rightTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={480}
+            <WorkspaceSplit id={`${workspaceId}.terminal-right`} resizePreview open={rightTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={480}
               primary={
                 <WorkspaceSplit id={`${workspaceId}.editor`} open={editorOpen} label={t("Resize chat pane")} defaultShare={45}
                   primary={<PaneSlot host={chatHost} />}
@@ -170,7 +175,7 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
             <NewTask projectId={project?.id ?? ''} onProjectChange={(id) => ws.newTask(id)} feed={!editorView} />
           )}
           {sessionsError && !chatView && <p role="alert" className="p-4 text-bad">{sessionsError}</p>}
-          {!isWorkspaceCtx(taskId) && !chatView && !sessionsError && sessionsLoadedFor !== taskId && <ContentSkeleton variant="chat" rows={2} className="p-[12px_24px]" />}
+          {!isWorkspaceCtx(taskId) && !chatView && !sessionsError && sessionsLoadedFor !== taskId && <div className="flex flex-1 items-center justify-center"><Spinner className="size-5 text-muted-foreground" aria-label={t("Loading conversation")} /></div>}
           {(showLauncherMain || (editorView && !chatView)) && !isWorkspaceCtx(taskId) && sessionsLoadedFor === taskId && !sessions.length && (
             <NewChat
               taskId={taskId}
@@ -193,10 +198,21 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
         </div>, chatHost)}
         {createPortal(
       <div className="workspace-panel flex flex-col h-full min-w-0 min-h-0 overflow-hidden" inert={!editorView || composing} aria-hidden={!editorView || composing}>
-      <div className="view-tabs [.workspace-panel_>_&]:flex-none flex items-center flex-none overflow-x-auto [scrollbar-width:none] p-[5px_8px] [border-bottom-color:var(--line)] [border-bottom:0] gap-1" role="tablist" aria-label={t("Workspace tabs")} style={{ display: editorView ? 'flex' : 'none' }}>
+      <div className="workspace-tab-toolbar flex items-center flex-none min-w-0 min-h-[40px] gap-1 px-2 py-1.5" style={{ display: editorView ? 'flex' : 'none' }}>
+      <OverlayScrollArea horizontal className="flex-initial min-w-0 w-max max-w-full h-[27px]" viewportRef={tabScroll} viewportClassName="view-tabs" contentClassName="flex items-center gap-1 w-max! min-w-full!" viewportProps={{ role: 'tablist', 'aria-label': t("Workspace tabs"), onKeyDown: event => {
+        if (!(event.target instanceof HTMLElement) || event.target.getAttribute('role') !== 'tab' || event.altKey || event.ctrlKey || event.metaKey) return
+        const entries = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]'))
+        const index = entries.indexOf(event.target)
+        const next = event.key === 'ArrowRight' ? (index + 1) % entries.length : event.key === 'ArrowLeft' ? (index - 1 + entries.length) % entries.length : event.key === 'Home' ? 0 : event.key === 'End' ? entries.length - 1 : -1
+        if (next < 0) return
+        event.preventDefault()
+        entries[next]?.focus({ preventScroll: true })
+        entries[next]?.click()
+      } }}>
         {tabs.filter((v) => v.kind !== 'agent').map((view) => <FileTab key={view.id} taskId={taskId} view={view} tabs={tabs} active={state.activeViewId === view.id} repoName={repoName} />)}
+      </OverlayScrollArea>
         <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Open file")} title={`${t("Open file")} (${formatKeys('mod+p')})`} onClick={() => window.dispatchEvent(new Event('ramu:open-file'))}><FileSearch size={16} /></Button>
-        <div className="grow flex-1 min-w-0 text-left" />
+        <div className="flex-1 min-w-0" />
         {editorView && !composing && <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Hide workspace")} title={t("Hide workspace")} onClick={() => ws.hideWorkspace(taskId)}><ChevronsRight size={15} /></Button>}
 
       </div>
@@ -228,7 +244,7 @@ export function TaskPane({ taskId, visible }: { taskId: string; visible: boolean
       </div>
     </section>
   )
-}
+})
 
 // Views keep a stable DOM host while the independent grid tracks open and close.
 function createPaneHost(className: string) {
@@ -376,7 +392,7 @@ function ViewLabel({ view: v, all, repoName }: { view: ViewDescriptor; all: View
     <>
       {visibleName(name)}
       {clash && <span className="tab-repo text-muted-foreground text-caption">{repoName(v.repoId)}</span>}
-      {v.kind === 'diff' && <span className="tab-repo text-muted-foreground text-caption">{v.oid ? v.oid.slice(0, 7) : v.staged ? 'staged' : t("changes")}</span>}
+      {v.kind === 'diff' && <span className="tab-repo text-muted-foreground text-caption">{v.oid ? `${v.stash ? 'stash · ' : ''}${v.oid.slice(0, 7)}` : v.staged ? 'staged' : t("changes")}</span>}
     </>
   )
 }
