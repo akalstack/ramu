@@ -18,7 +18,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'models', label: 'Models', Icon: Cpu, group: 'Agents' },
   { id: 'access', label: 'Access & Fallback', Icon: ShieldCheck, group: 'Agents' },
   { id: 'goals', label: 'Goals', Icon: Target, group: 'Agents' },
-  { id: 'memory', label: 'Memory', Icon: Brain, group: 'Agents' },
+  { id: 'memory', label: 'Memory & skills', Icon: Brain, group: 'Agents' },
   { id: 'subagents', label: 'Sub-agents', Icon: Bot, group: 'Agents' },
   { id: 'advisor', label: 'Advisor', Icon: Lightbulb, group: 'Agents' },
   { id: 'automation', label: 'Background & Recaps', Icon: CalendarClock, group: 'System' },

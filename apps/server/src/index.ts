@@ -81,6 +81,12 @@ const db = openDb(join(userData, 'ramu.db'))
 const root = process.env.RAMU_WORKTREES ?? join(homedir(), '.ramu', 'worktrees')
 mkdirSync(root, { recursive: true })
 const workspace = new Workspace(db, root)
+// Review first was the stored default for one release; move those saved values to the new Automatic default once.
+if (!workspace.getAppState('migration:learning-auto-default', false)) {
+  const saved = workspace.getAppState<{ intelligence?: { learning?: string } } | null>('app-preferences', null)
+  if (saved?.intelligence?.learning === 'review') workspace.setAppState('app-preferences', { ...saved, intelligence: { ...saved.intelligence, learning: 'auto' } })
+  workspace.setAppState('migration:learning-auto-default', true)
+}
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./fakeAgent') : null
 let reviews!: ReviewService
 const agents = new AgentService(db, (sessionId, event, seq) => { send('agent:event', { sessionId, event, seq }) }, fake?.fakeQuery ?? claudeAcpQuery(query), fake?.fakeCodex, fake?.fakeCodex, fake?.fakeCodex)

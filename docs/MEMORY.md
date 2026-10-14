@@ -1,8 +1,8 @@
 # Shared memory
 
-Agents use the same saved notes across providers. Notes can apply to a project or all projects. **Settings → Memory → Shared memory** is on by default and applies to chats started after saving.
+Agents use the same saved notes across providers. Notes can apply to a project or all projects. **Settings → Memory & skills → Shared memory** is on by default and applies to chats started after saving.
 
-Browse, search, add, edit, archive, or restore notes in the Memory page. Changes are recorded so earlier versions can be restored. Do not store credentials; memory can be sent to any provider used by your chats.
+Browse, search, add, edit, archive, or restore notes in Settings → Memory & skills. Changes are recorded so earlier versions can be restored. Do not store credentials; memory can be sent to any provider used by your chats.
 
 Use **History** to compare earlier text and restore a revision. User-confirmed and essential notes cannot be rewritten or archived by an agent or automatic cleanup. Conflicting evidence stays separate until you edit the original.
 

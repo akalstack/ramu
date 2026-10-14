@@ -194,7 +194,9 @@ export class AgentService {
     const wait = this.providerWait(id)
     if (this.shutdown || !wait || this.providerDispatching.has(id)) return
     const session = this.get(id)
-    if (this.queuePaused(id) || WRITING_STATES.includes(session.state) || this.transitioning.has(id) || this.startingSends.has(id) || this.workspaceBusy(session.covers, id) || this.hasBlockingQuestions(id) || this.hasRunningTasks(id)) { this.scheduleProvider(id); return }
+    // A paused queue only protects messages waiting in it; an empty one must not strand the unfinished request.
+    const held = () => this.queuePaused(id) && this.queued(id).length > 0
+    if (held() || WRITING_STATES.includes(session.state) || this.transitioning.has(id) || this.startingSends.has(id) || this.workspaceBusy(session.covers, id) || this.hasBlockingQuestions(id) || this.hasRunningTasks(id)) { this.scheduleProvider(id); return }
     const readings = this.routing(session.settings)?.usage ?? []
     const catalogs = await this.catalog()
     if (this.shutdown || this.providerWait(id) !== wait && this.providerWait(id)?.updatedAt !== wait.updatedAt) return
@@ -204,7 +206,7 @@ export class AgentService {
     this.providerDispatching.add(id)
     try {
       await this.finalizing.get(id)
-      if (this.shutdown || this.providerWait(id)?.updatedAt !== wait.updatedAt || this.queuePaused(id)) return
+      if (this.shutdown || this.providerWait(id)?.updatedAt !== wait.updatedAt || held()) return
       this.clearProviderWait(id)
       const goal = this.getGoal(id)
       if (goal?.status === 'waiting-provider') this.saveGoal(id, { ...goal, status: 'active', retryAt: undefined, updatedAt: Date.now() })

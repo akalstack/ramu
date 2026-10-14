@@ -48,7 +48,8 @@ function MemoryBrowser() {
   const shown = (snapshot?.memories ?? []).filter((m) => m.status === status && (scope === 'all' || (scope === GLOBAL ? m.projectId === null : m.projectId === scope)) && words.every((w) => `${m.title} ${m.content} ${m.tags.join(' ')}`.toLowerCase().includes(w)))
   const author = (m: Memory) => m.source.actor === 'agent' && m.source.provider ? providerName(m.source.provider) : m.source.actor === 'dream' ? t("Memory cleanup") : t('You')
   const save = () => editing && act(async () => { await invoke('memory.save', editing.input, editing.id); setEditing(null) })
-  return <div className="memory-browser flex flex-col gap-2 mt-5">
+  return <div className="memory-browser flex flex-col gap-2 mt-2">
+    <h4 className="settings-group-title mt-4 mb-1 text-caption font-medium text-muted-foreground">{t('Saved memories')}</h4>
     <div className="flex items-center gap-2">
       <SearchInput className="flex-1 min-w-0" aria-label={t('Search memories')} placeholder={t('Search memories')} value={query} onChange={(e) => setQuery(e.target.value)} onClear={() => setQuery('')} />
       <Dropdown className="w-[150px]! flex-none" label={t('Scope')} value={scope} options={[{ value: 'all', label: t('Everything') }, { value: GLOBAL, label: t('All projects') }, ...projects.map((p) => ({ value: p.id, label: p.name }))]} onChange={setScope} />
@@ -65,7 +66,7 @@ function MemoryBrowser() {
     {snapshot && !shown.length && <p className="muted text-muted-foreground small text-caption py-6 text-center">{status === 'archived' ? t("No archived memories.") : t("No saved memories.")}</p>}
     {shown.map((m) => editing?.id === m.id
       ? <MemoryEditor key={m.id} value={editing.input} projects={projects} onChange={(input) => setEditing({ ...editing, input })} onSave={() => void save()} onCancel={() => setEditing(null)} />
-      : <article key={m.id} className="memory-card group bg-card rounded-(--radius-m) p-3 [border:1px_solid_transparent]">
+      : <article key={m.id} className="memory-card group bg-fill rounded-(--radius-m) p-3 [border:1px_solid_transparent]">
         <div className="flex items-center gap-2 mb-1">
           <Badge variant="secondary">{t(KIND_LABELS[m.kind])}</Badge>
           <span className="muted text-muted-foreground small text-caption">{projectName(m.projectId)}</span>
@@ -77,11 +78,10 @@ function MemoryBrowser() {
             : <><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center" aria-label={t('Restore memory')} onClick={() => void act(() => invoke('memory.restore', m.id))}><RotateCcw size={12} /></Button>
               <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center" aria-label={t('Delete memory')} onClick={() => void act(() => invoke('memory.delete', m.id))}><Trash2 size={12} /></Button></>}
         </div>
-        <Button variant="ghost" size="sm" aria-label={t('Memory history')} onClick={() => void act(async () => setHistory({ id: m.id, entries: await invoke('memory.history', m.id) }))}><History size={12} />{t('History')}</Button>
-        {history?.id === m.id && <div className="flex flex-col gap-2">{history.entries.map((entry, index) => <details key={index}><summary>{new Date(entry.at).toLocaleString()} · {entry.actor} · {entry.reason ?? entry.action}</summary><div className="grid grid-cols-2 gap-2 text-caption"><div><strong>{t('Earlier revision')}</strong><pre className="whitespace-pre-wrap">{entry.before?.content ?? t('No earlier text')}</pre></div><div><strong>{t('Current memory')}</strong><pre className="whitespace-pre-wrap">{m.content}</pre></div></div>{entry.before?.content && <Button variant="secondary" onClick={() => void act(async () => { await invoke('memory.revert', m.id, index, m.updatedAt); setHistory(null) })}>{t('Restore revision')}</Button>}</details>)}</div>}
         <h4 className="text-body font-medium m-0">{m.title}</h4>
         <p className="muted text-muted-foreground whitespace-pre-wrap leading-[1.5] m-[4px_0_6px] line-clamp-4">{m.content}</p>
-        <span className="muted text-muted-foreground small text-caption">{[t('Saved by {0}', { 0: author(m) }), t('Used {0}×', { 0: m.useCount }), t('Updated {0}', { 0: DateTime.fromMillis(m.updatedAt).toRelative() ?? '' }), ...(m.archivedReason ? [m.archivedReason] : [])].join(' · ')}</span>
+        <div className="flex items-center gap-2"><span className="muted text-muted-foreground small text-caption">{[t('Saved by {0}', { 0: author(m) }), t('Used {0}×', { 0: m.useCount }), t('Updated {0}', { 0: DateTime.fromMillis(m.updatedAt).toRelative() ?? '' }), ...(m.archivedReason ? [m.archivedReason] : [])].join(' · ')}</span><span className="grow" /><Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground small text-caption" aria-label={t('Memory history')} onClick={() => void act(async () => setHistory({ id: m.id, entries: await invoke('memory.history', m.id) }))}><History size={12} />{t('History')}</Button></div>
+        {history?.id === m.id && <div className="flex flex-col gap-2">{history.entries.map((entry, index) => <details key={index}><summary>{new Date(entry.at).toLocaleString()} · {entry.actor} · {entry.reason ?? entry.action}</summary><div className="grid grid-cols-2 gap-2 text-caption"><div><strong>{t('Earlier revision')}</strong><pre className="whitespace-pre-wrap">{entry.before?.content ?? t('No earlier text')}</pre></div><div><strong>{t('Current memory')}</strong><pre className="whitespace-pre-wrap">{m.content}</pre></div></div>{entry.before?.content && <Button variant="secondary" onClick={() => void act(async () => { await invoke('memory.revert', m.id, index, m.updatedAt); setHistory(null) })}>{t('Restore revision')}</Button>}</details>)}</div>}
       </article>)}
   </div>
 }

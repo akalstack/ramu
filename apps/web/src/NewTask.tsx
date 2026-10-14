@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_AGENT_SETTINGS, NO_PROJECT, type FileContext, type Attachment, type AgentSettings, type CheckoutMode, type WorktreePlanEntry } from '@ramu/shared/types'
 import { AgentControls } from './AgentControls'
 import { Composer } from './Composer'
+import { ComposerTray } from './ComposerTray'
 import { invoke } from './ipc'
 import { Menu } from './Menu'
 import { AnimatedMark } from './Brand'
@@ -133,7 +134,7 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
         </h1>
         {repos.length > 0 && <p className="muted text-muted-foreground start-repos m-0 text-control">{repos.map((r) => r.name).join(' · ')}</p>}
       </div>
-      <div className="start-dock [&_.plan]:m-[0_6px_8px] [&_.composer-tray]:flex [&_.composer-tray]:items-center [&_.composer-tray]:gap-0.5 [&_.composer-tray]:p-[4px_6px_14px] [&_.composer-tray]:m-[0_auto_-10px] [&_.composer-tray]:w-[calc(100%_-_24px)] [&_.composer-tray]:[border:0] [&_.composer-tray]:[border-radius:var(--radius-l)_var(--radius-l)_0_0] [&_.composer-tray]:[background:var(--composer-tray)] [&_.composer-tray]:relative [&_.composer-tray]:z-0 [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
+      <div className="start-dock [&_.plan]:m-[0_6px_8px] [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
         {plan && (
           <div className="plan bg-brand-wash rounded-(--radius-s) p-[8px_10px] m-[8px_0] text-control">
             <div className="muted text-muted-foreground">{t("Ramu will create a branch and worktree for each repository:")}</div>
@@ -146,7 +147,7 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
             <div className="muted text-muted-foreground small text-caption">{t("Worktrees separate files and the Git index. They do not sandbox processes, ports or credentials.")}</div>
           </div>
         )}
-        <div className="start-chips flex gap-1.5 p-[0_8px_10px] composer-tray">
+        <ComposerTray className="start-chips items-center gap-0.5">
           <Menu label={t("Project")} className="chip-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:1px_solid_transparent] [&:hover:not(:disabled)]:text-foreground [&.on]:bg-hover [&.on]:[border:1px_solid_transparent] [&.on]:text-foreground h-7 min-h-7 p-[0_10px] rounded-(--radius-s) bg-transparent [border:1px_solid_transparent] [box-shadow:none] text-soft text-control [.composer-tray_&]:h-7 [.composer-tray_&]:min-h-7 [.composer-tray_&]:p-[0_8px] [.composer-tray_&]:gap-1.5 [.composer-tray_&]:[border:0] [.composer-tray_&]:rounded-full [.composer-tray_&]:bg-transparent [.composer-tray_&]:[box-shadow:none] [.composer-tray_&]:text-soft [.composer-tray_&]:text-caption [.composer-tray_&:hover:not(:disabled)]:[border:0] [.composer-tray_&:hover:not(:disabled)]:bg-hover [.composer-tray_&:hover:not(:disabled)]:text-foreground [.composer-tray_&.on]:[border:0] [.composer-tray_&.on]:bg-hover [.composer-tray_&.on]:text-foreground [.composer-tray_&_svg]:text-muted-foreground [border:none] p-[5px_10px] text-soft text-control gap-1.5 rounded-full bg-hover [box-shadow:inset_0_0_0_1px_var(--line)]" icon={<><FolderClosed size={13} /> <span className="chip-label">{project?.name ?? t("No project")}</span></>} items={projectItems} />
           {!general && <Menu
             label={t("Where the work happens")}
@@ -182,7 +183,7 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
           />}
           <span className="grow flex-1 min-w-0 text-left" />
           <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) tray-settings" aria-label={t("Chat settings")} title={t("Chat settings")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git' } }))}><Settings size={14} /></Button>
-        </div>
+        </ComposerTray>
         <Composer
           scopeId={workspaceId ? `worktree:${workspaceId}` : `project:${projectId}`}
           attachments={attachments}

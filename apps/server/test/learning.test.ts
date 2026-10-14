@@ -19,6 +19,7 @@ beforeEach(() => {
   db.exec("INSERT INTO projects(id,name,created_at) VALUES ('p','Project',1); INSERT INTO tasks(id,project_id,title,mode,status,created_at) VALUES ('t','p','Task','current','idle',1); INSERT INTO agent_sessions(id,task_id,provider,cwd,state,created_at) VALUES ('s','t','codex','/tmp','idle',1), ('other','t','codex','/tmp','stopped',1)")
   trace = [{ kind: 'user', text: 'Fix retries' }, { kind: 'tool-use', toolUseId: 'test', name: 'shell', summary: 'run retry tests' }, { kind: 'tool-result', toolUseId: 'test', isError: false, summary: '429 simulation passed' }, { kind: 'text', text: 'Fixed retries; integration tests remain.' }, { kind: 'result', isError: false, text: 'done', costUsd: null }]
   analyze = vi.fn<AgentService['analyze']>(async () => ({ message: JSON.stringify(proposal), provider: 'codex', model: 'test' }))
+  workspace.setAppState('app-preferences', { intelligence: { ...DEFAULT_INTELLIGENCE_PREFERENCES, learning: 'review' } })
   const agents = { get: () => session, events: () => trace, analyze }
   memory = new MemoryService(db, workspace, { analyze, list: () => [] }, () => {})
   service = new LearningService(db, workspace, agents, memory, join(root, 'skills'), () => {})
@@ -48,7 +49,7 @@ it('refuses cancelled turns and honors the daily review budget even after a prop
   trace[trace.length - 1] = { kind: 'result', isError: false, text: 'cancelled', costUsd: null }
   expect(service.enqueue('s')).toBeNull()
   trace[trace.length - 1] = { kind: 'result', isError: false, text: 'done', costUsd: null }
-  workspace.setAppState('app-preferences', { intelligence: { ...DEFAULT_INTELLIGENCE_PREFERENCES, dailyReviews: 1 } })
+  workspace.setAppState('app-preferences', { intelligence: { ...DEFAULT_INTELLIGENCE_PREFERENCES, learning: 'review', dailyReviews: 1 } })
   await service.tick(true)
   const pending = service.jobs().find((job) => job.status === 'pending')!
   service.dismiss(pending.id)

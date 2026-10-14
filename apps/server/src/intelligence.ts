@@ -10,7 +10,7 @@ export const intelligenceSchema = z.object({
   toolSearch: z.boolean().default(true),
   rtk: z.boolean().default(false),
   compression: z.enum(['off', 'balanced', 'aggressive']).default('balanced'),
-  learning: z.enum(['off', 'review', 'auto']).default('review'),
+  learning: z.enum(['off', 'review', 'auto']).default('auto'),
   maintenanceModel: z.object({ provider: z.enum(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity']), model: z.string().max(200), effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable() }).nullable().default(null),
   dailyReviews: z.number().int().min(1).max(50).default(5),
   archiveSkillDays: z.number().int().min(7).max(3650).default(90),

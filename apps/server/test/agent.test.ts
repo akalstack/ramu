@@ -641,6 +641,44 @@ describe('Conversation provider settings and handoffs', () => {
     svc.stopAll()
   })
 
+  const pauseQueue = (svc: AgentService, id: string) => (svc as unknown as { updateQueue: (id: string, messages: unknown[], paused: boolean) => void }).updateQueue(id, svc.queued(id), true)
+
+  it('continues after the reset even if an empty queue was left paused', async () => {
+    const svc = service()
+    const s = svc.start('t', scopeOf(cwd), 'big task [limit claude] [limit codex]', full)
+    await until(() => waiting(svc, s.id))
+    pauseQueue(svc, s.id)
+    expireWait(svc, s.id)
+    await until(() => resumedAfterReset(svc, s.id))
+    svc.stopAll()
+  })
+
+  it('unpauses the queue when a message is sent during the wait, then sends it after the reset', async () => {
+    const svc = service()
+    const s = svc.start('t', scopeOf(cwd), 'big task [limit claude] [limit codex]', full)
+    await until(() => waiting(svc, s.id))
+    pauseQueue(svc, s.id)
+    await svc.send(s.id, 'typed during the limit')
+    expect(svc.events(s.id).findLast((e) => e.kind === 'queue')).toMatchObject({ paused: false })
+    expireWait(svc, s.id)
+    await until(() => !waiting(svc, s.id) && svc.queued(s.id).length === 0 && svc.get(s.id).state === 'idle')
+    expect(svc.events(s.id).filter((e) => e.kind === 'user').at(-1)).toMatchObject({ text: 'typed during the limit' })
+    svc.stopAll()
+  })
+
+  it('keeps a paused queue with messages held after the reset until the user resumes it', async () => {
+    const svc = service()
+    const s = svc.start('t', scopeOf(cwd), 'big task [limit claude] [limit codex]', full)
+    await until(() => waiting(svc, s.id))
+    await svc.send(s.id, 'typed during the limit')
+    pauseQueue(svc, s.id)
+    expireWait(svc, s.id)
+    await new Promise((resolve) => setTimeout(resolve, 2500))
+    expect(svc.queued(s.id)).toHaveLength(1)
+    expect(svc.events(s.id).filter((e) => e.kind === 'user')).toHaveLength(1)
+    svc.stopAll()
+  })
+
   it('resumes after the service restarts while waiting for a reset', async () => {
     const first = service()
     const s = first.start('t', scopeOf(cwd), 'task [limit claude] [limit codex]', full)

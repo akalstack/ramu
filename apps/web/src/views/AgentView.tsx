@@ -63,6 +63,7 @@ import { localFileLink } from '@ramu/shared/fileLinks'
 import { notifyError } from '../Notifications'
 import { draftKey, loadDraft, useDraftPersistence } from '../drafts'
 import { ProviderWaitNote } from '../ProviderWait'
+import { ComposerTray } from '../ComposerTray'
 import { providerWaitOf } from '@ramu/shared/providerWait'
 
 type AgentViewDesc = Extract<ViewDescriptor, { kind: 'agent' }>
@@ -651,8 +652,8 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
         </div>}
         {dockQuestions.length > 0 && <QuestionDock sessionId={view.sessionId} requests={dockQuestions} states={questionStates} open={questionDockOpen} onOpenChange={setQuestionDockOpen} focus={questionFocus} />}
         {error && <div className="error text-bad">{error}</div>}
+        {(providerWait || liveGoal || queued.length > 0) && <ComposerTray className="chat-tray [&_.provider-wait_+_*]:mt-0.5 [&_.provider-wait_+_*]:pt-0.5 [&_.provider-wait_+_*]:[border-top:1px_solid_var(--line)] [&_.message-queue]:gap-0 [&_.message-queue]:p-0 [&_.message-queue]:m-0 [&_.message-queue]:[border:0] [&_.message-queue]:[border-radius:0] [&_.message-queue]:bg-transparent [&_.message-queue]:max-h-[136px] [&_.goal-bar_+_.message-queue]:mt-0.5 [&_.goal-bar_+_.message-queue]:pt-0.5 [&_.goal-bar_+_.message-queue]:[border-top:1px_solid_var(--line)] flex-col max-w-[calc(var(--chat-column-width)_-_24px)]!">
         {providerWait && <ProviderWaitNote retryAt={providerWait.retryAt} />}
-        {(liveGoal || queued.length > 0) && <div className="chat-tray [&_.message-queue]:gap-0 [&_.message-queue]:p-0 [&_.message-queue]:m-0 [&_.message-queue]:[border:0] [&_.message-queue]:[border-radius:0] [&_.message-queue]:bg-transparent [&_.message-queue]:max-h-[136px] [&_.goal-bar_+_.message-queue]:mt-0.5 [&_.goal-bar_+_.message-queue]:pt-0.5 [&_.goal-bar_+_.message-queue]:[border-top:1px_solid_var(--line)] flex flex-col p-[4px_8px_12px] m-[0_auto_-10px] w-[calc(100%_-_24px)] max-w-[696px] [border-radius:var(--radius-l)_var(--radius-l)_0_0] [background:var(--composer-tray)] relative z-0">
         {liveGoal && <GoalBar goal={liveGoal} onControl={(action) => { void act(() => invoke('agent.goal.control', view.sessionId, action)) }} />}
         {queued.length > 0 && <div className="message-queue flex flex-col gap-1.5 p-[8px_12px] mb-2 max-h-[180px] overflow-auto [border:1px_solid_transparent] rounded-(--radius-s) bg-raised" aria-label={translate("Queued messages")}>
           {queuePaused && <div className="message-queue-heading flex items-center justify-between gap-2"><span className="muted text-muted-foreground small text-caption">{translate("Paused")}</span><Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption" onClick={() => void act(() => invoke('agent.resumeQueue', view.sessionId))}>{translate("Resume messages")}</Button></div>}
@@ -676,7 +677,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
             </div>
           })}
         </div>}
-        </div>}
+        </ComposerTray>}
         <Composer
           attachments={attachments}
           onAttachmentsChange={setAttachments}

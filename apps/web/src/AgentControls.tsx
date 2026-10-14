@@ -1,6 +1,6 @@
 import { t, useLanguage } from './i18n'
 import { ChevronDown, LockOpen, Pencil, Sparkles } from 'lucide-react'
-import { RESPONSE_STYLES, RESPONSE_STYLE_LABELS, type AgentSettings } from '@ramu/shared/types'
+import type { AgentSettings } from '@ramu/shared/types'
 import { ModelBar } from './ModelBar'
 import { Menu } from './Menu'
 
@@ -24,7 +24,6 @@ export function AgentControls({ settings, current, onChange, disabled = false, r
         label: <span className="access-option [.access-menu_&]:block [.access-menu_&]:flex-1 [.access-menu_&]:min-w-0 [.access-menu_&]:max-w-[none] [.access-menu_&]:pr-7 [.access-menu_&_.block]:max-w-[none] [.access-menu_&_.block]:w-auto [.access-menu_&_.block]:m-[2px_0_0] [.access-menu_&_.block]:pl-0 [.access-menu_&_.block]:whitespace-normal [.access-menu_&_.muted]:max-w-[none] [.access-menu_&_.muted]:w-auto [.access-menu_&_.muted]:m-[2px_0_0] [.access-menu_&_.muted]:pl-0 [.access-menu_&_.muted]:whitespace-normal flex flex-col gap-[3px] w-full"><span className="access-option-title flex items-center gap-2 text-[length:var(--ui-font-size)]"><Icon size={16} />{t(label)}</span><span className="muted text-muted-foreground block block">{t(description)}</span></span>,
         onSelect: () => onChange({ ...settings, access: key }),
       }))} />}
-    {showAccess && <Menu standard label={t('Response style')} disabled={disabled} className="control-btn h-8 gap-2 px-2 text-sm" icon={<>{t(settings.responseStyle && settings.responseStyle !== 'inherit' ? RESPONSE_STYLE_LABELS[settings.responseStyle] : 'Response style')}<ChevronDown size={12} /></>} items={[{ key: 'inherit', label: t('Use global style'), selected: !settings.responseStyle || settings.responseStyle === 'inherit', onSelect: () => onChange({ ...settings, responseStyle: 'inherit' }) }, ...RESPONSE_STYLES.map((style) => ({ key: style, label: t(RESPONSE_STYLE_LABELS[style]), selected: settings.responseStyle === style, onSelect: () => onChange({ ...settings, responseStyle: style }) }))]} />}
     </div>
     {trailing}
   </div>
