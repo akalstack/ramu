@@ -26,8 +26,9 @@ export function SyncButton({ status, busy, pullMode, onSync, className = '', sho
   if (!status.branch || !status.remote) return null
   if (!status.upstream) return <Button variant="secondary" className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover sync-button ${className}`} disabled={busy} aria-label={t("Publish branch")} title={t("Publish {0} to the remote", { "0": status.branch })} onClick={onSync}><CloudUpload size={13} /><span>{showLabel ? t("Publish branch") : t("Publish")}</span></Button>
   const counts = `${status.behind}↓ ${status.ahead}↑`
+  const hasChanges = status.behind !== 0 || status.ahead !== 0
   return <Button variant="secondary" className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover sync-button ${className}`} disabled={busy} aria-label={t("Sync changes")} title={t("Sync changes: pull {0} ({1}), then push {2}", { "0": status.behind, "1": PULL_LABEL[pullMode], "2": status.ahead })} onClick={onSync}>
-    <RefreshCcw size={13} className={busy ? 'spin [animation:spin_0.9s_linear_infinite]' : ''} /><span>{showLabel ? t("Sync changes {0}", { "0": counts }) : counts}</span>
+    <RefreshCcw size={13} className={busy ? 'spin [animation:spin_0.9s_linear_infinite]' : ''} />{hasChanges && <span>{showLabel ? t("Sync changes {0}", { "0": counts }) : counts}</span>}
   </Button>
 }
 

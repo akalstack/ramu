@@ -90,7 +90,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', initialT
     system: ['appUpdateChecks', 'appAutoUpdate', 'keepAwake', 'keepAwakeWhen', 'recapsEnabled', 'recapTime'],
     providers: ['providerBinaries', 'providerUpdateChecks', 'showUsageLimits'],
     appearance: ['language', 'accent', 'fontFamily', 'fontSize', 'fontSmoothing', 'reduceMotion', 'sidebarWidth'],
-    editor: ['previewTabs', 'editorFontSize', 'terminalFontSize', 'terminalTabPosition'],
+    editor: ['previewTabs', 'editorFontSize', 'terminalFontSize', 'defaultTerminalDock'],
     access: ['defaultAccess', 'defaultAutoFallback', 'fallback'],
     workflows: ['goals', 'subagents', 'advisor'],
     memory: ['memory'],
@@ -139,7 +139,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', initialT
       <SettingsRow><strong>{t("Editor font size")}</strong><Dropdown label={t("Editor font size")} value={String(appDraft.editorFontSize)} options={sizes(12, 22)} onChange={(value) => setAppDraft({ ...appDraft, editorFontSize: Number(value) })} /></SettingsRow>
       <SettingsGroupTitle>{t("Terminal")}</SettingsGroupTitle>
       <SettingsRow><strong>{t("Terminal font size")}</strong><Dropdown label={t("Terminal font size")} value={String(appDraft.terminalFontSize)} options={sizes(12, 22)} onChange={(value) => setAppDraft({ ...appDraft, terminalFontSize: Number(value) })} /></SettingsRow>
-      <SettingsRow><SettingsLabel title={t("Default terminal tabs")} help={t("Choose where terminal tabs appear in new checkouts. Existing checkouts keep their layout.")} /><Dropdown label={t("Default terminal tabs")} value={appDraft.terminalTabPosition} options={[{ value: 'top', label: t("Across the top") }, { value: 'right', label: t("On the right") }]} onChange={(value) => setAppDraft({ ...appDraft, terminalTabPosition: value === 'right' ? 'right' : 'top' })} /></SettingsRow>
+      <SettingsRow><SettingsLabel title={t("Default terminal position")} help={t("Choose where the terminal panel opens. Checkouts with a saved terminal position keep that choice.")} /><Dropdown label={t("Default terminal position")} value={appDraft.defaultTerminalDock} options={[{ value: 'bottom', label: t("Bottom") }, { value: 'right', label: t("Right") }]} onChange={(value) => setAppDraft({ ...appDraft, defaultTerminalDock: value === 'right' ? 'right' : 'bottom' })} /></SettingsRow>
       <p className="muted text-muted-foreground small text-caption">{t("Files and terminals are shared by chats in the same checkout. Isolated worktrees keep separate state.")}</p>
     </div>}
     {page === 'access' && <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0"><SettingsGroupTitle>{t("Permissions")}</SettingsGroupTitle><SettingsRow><SettingsLabel title={t("Default access")} help={t("Starting access for new chats. Existing chats keep theirs.")} /><Dropdown label={t("Default access")} value={appDraft.defaultAccess} options={(['edits', 'auto', 'full'] as const).map((value) => ({ value, label: accessName(value) }))} onChange={(value) => setAppDraft({ ...appDraft, defaultAccess: value as AppPreferences['defaultAccess'] })} /></SettingsRow><SettingsGroupTitle>{t("Provider fallback")}</SettingsGroupTitle>{toggle('defaultAutoFallback', 'Automatic provider fallback', 'Switch to another provider when a usage limit is reached. Applies to new chats.')}<FallbackSettings value={appDraft} onChange={setAppDraft} busy={busy} /></div>}

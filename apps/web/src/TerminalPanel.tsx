@@ -62,8 +62,8 @@ export function TerminalPanel({ taskId, visible, hidden = false, dock = 'right' 
         { key: 'horizontal', label: t("Arrange group side by side"), onSelect: () => arrange('horizontal') },
         { key: 'vertical', label: t("Arrange group stacked"), onSelect: () => arrange('vertical') },
         { key: 'sep2', separator: true },
-        { key: 'top', label: t("Tabs across the top"), selected: position === 'top', onSelect: () => ws.setTerminalPanel(taskId, { terminalTabPosition: 'top' }) },
-        { key: 'right', label: t("Tabs down the right"), selected: position === 'right', onSelect: () => ws.setTerminalPanel(taskId, { terminalTabPosition: 'right' }) },
+        { key: 'top', label: t("Horizontal tabs"), selected: position === 'top', onSelect: () => ws.setTerminalPanel(taskId, { terminalTabPosition: 'top' }) },
+        { key: 'right', label: t("Vertical tabs on the right"), selected: position === 'right', onSelect: () => ws.setTerminalPanel(taskId, { terminalTabPosition: 'right' }) },
       ]} />
       <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Hide terminal panel")} title={t("Hide terminal panel")} onClick={() => ws.setTerminalPanel(taskId, { terminalOpen: false })}><X data-icon="inline-start" /></Button>
     </header>

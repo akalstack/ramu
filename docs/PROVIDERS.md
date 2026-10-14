@@ -26,7 +26,7 @@ Version checks run in the background service. CLI auto-update is opt-in and affe
 
 All active providers use ACP. Claude and Codex retain native session, history, usage, and helper controls through Ramu's local hosts. OpenCode, Cursor, and Antigravity connect to native ACP executables.
 
-Claude and Codex support steering and async Ramu questions. Other providers queue follow-ups until the turn finishes. Read-only analysis requires the provider's read-only mode or native sandbox policy. See [agents and routing](AGENTS.md) and [background workflows](AUTOMATION.md).
+Claude and Codex support steering and async Ramu questions. OpenCode, Cursor and Antigravity queue follow-ups until the turn finishes. All three connect over ACP, which works with OpenCode 1.x and 2.x alike. Reasoning effort is offered for ACP runtimes that advertise a `thought_level` option, such as OpenCode. Cursor encodes effort in its model names, so each level is a separate model. OpenCode and Cursor sub-agents appear as task cards; OpenCode also streams each sub-agent's own tool calls and replies into its card. Side questions run on a throwaway fork of the OpenCode session, with every tool refused; Cursor and Antigravity answer them from the visible conversation. OpenCode, Cursor and Antigravity have no usage or rate-limit source, so those readings stay empty. Read-only analysis requires the provider's read-only mode or native sandbox policy. See [agents and routing](AGENTS.md) and [background workflows](AUTOMATION.md).
 
 ## Advisor
 

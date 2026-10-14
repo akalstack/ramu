@@ -71,3 +71,32 @@ it('supports Claude image sources and OpenCode data URIs while refusing unsafe i
   expect(inlineMedia('image/png', 'aGVsbG8=', 'image')).toBe('data:image/png;base64,aGVsbG8=')
   expect(toolKind({ name: 'Read', toolKind: 'think' })).toBe('think')
 })
+
+it('shows OpenCode sub-agent calls as task cards and ignores them for other providers', () => {
+  const decoder = new AcpEvents(false, ['task', 'subagent'])
+  const started = decoder.consume({ sessionUpdate: 'tool_call_update', toolCallId: 'call', name: 'subagent', kind: 'think', status: 'in_progress', rawInput: { description: 'Say hi', agent: 'general', prompt: 'reply hi' } })
+  expect(started.find((e) => e.kind === 'agent')).toMatchObject({ agentId: 'call', toolUseId: 'call', name: 'Say hi', agentType: 'general', prompt: 'reply hi', status: 'running', taskType: 'local_agent' })
+  const done = decoder.consume({ sessionUpdate: 'tool_call_update', toolCallId: 'call', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: '<subagent sessionID="ses_1" state="completed">\nhi\n</subagent>' } }] })
+  expect(done.find((e) => e.kind === 'agent')).toMatchObject({ name: 'Say hi', status: 'completed', summary: 'hi' })
+  expect(new AcpEvents().consume({ sessionUpdate: 'tool_call', toolCallId: 'x', name: 'subagent', status: 'pending' }).some((e) => e.kind === 'agent')).toBe(false)
+})
+
+it('recognises Cursor sub-agents by the tool named in their input', () => {
+  const decoder = new AcpEvents(false, ['task', 'subagent'])
+  const call = decoder.consume({ sessionUpdate: 'tool_call', toolCallId: 'c\nfc_1', title: 'Task: Reply with hi', kind: 'other', status: 'pending', rawInput: { _toolName: 'task', prompt: 'reply hi', description: 'Reply with hi', subagentType: { unspecified: {} } } })
+  expect(call.find((e) => e.kind === 'agent')).toMatchObject({ name: 'Reply with hi', status: 'running', prompt: 'reply hi' })
+  expect((call.find((e) => e.kind === 'agent') as any).agentType).toBeUndefined()
+  expect(decoder.consume({ sessionUpdate: 'tool_call_update', toolCallId: 'c\nfc_1', status: 'completed', rawOutput: { durationMs: 10 } }).find((e) => e.kind === 'agent')).toMatchObject({ status: 'completed' })
+  expect(decoder.consume({ sessionUpdate: 'tool_call', toolCallId: 'other', title: 'Run', kind: 'execute', rawInput: { _toolName: 'shell' } }).some((e) => e.kind === 'agent')).toBe(false)
+})
+
+it('attaches child-session updates to the sub-agent card with the same description', () => {
+  const decoder = new AcpEvents(false, ['subagent'])
+  decoder.consume({ sessionUpdate: 'tool_call_update', toolCallId: 'call', name: 'subagent', status: 'in_progress', rawInput: { description: 'Run ls', agent: 'general', prompt: 'x' } })
+  const meta = { 'opencode/child-session': { id: 'child' } }
+  const shell = decoder.consumeChild('child', 'Run ls', { sessionUpdate: 'tool_call', toolCallId: 'child:1', name: 'shell', title: 'ls', kind: 'execute', status: 'pending', _meta: meta })
+  expect(shell[0]).toMatchObject({ kind: 'tool-use', toolUseId: 'child:1', agentId: 'call' })
+  const first = decoder.consumeChild('child', 'Run ls', { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'h' } })
+  expect(decoder.consumeChild('child', 'Run ls', { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'i' } })[0]).toMatchObject({ kind: 'text', text: 'hi', agentId: 'call', messageId: (first[0] as any).messageId })
+  expect(decoder.consumeChild('stranger', 'Other', { sessionUpdate: 'usage_update', used: 1, size: 2 })).toEqual([])
+})

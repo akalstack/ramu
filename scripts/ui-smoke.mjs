@@ -246,7 +246,7 @@ try {
   await pane(page).locator('.terminal-panes.layout-vertical .terminal-pane:visible').nth(2).waitFor()
   check(await pane(page).locator('.terminal-pane:visible').count() === 3, 'vertical split creates a third live terminal')
   await pane(page).getByRole('button', { name: 'Terminal layout', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Tabs down the right', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Vertical tabs on the right', exact: true }).click()
   await shot(page, '05g-terminal-vertical')
   await pane(page).getByRole('button', { name: 'Hide terminal panel', exact: true }).click()
   await page.keyboard.press('Meta+j')
@@ -256,7 +256,7 @@ try {
   await pane(page).getByRole('button', { name: 'Terminal layout', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Show one terminal', exact: true }).click()
   await pane(page).getByRole('button', { name: 'Terminal layout', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Tabs across the top', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Horizontal tabs', exact: true }).click()
   check((await termText(page)).includes(api), 'original terminal output survives layout changes')
 
   await page.keyboard.press('Meta+Shift+P')
@@ -460,7 +460,7 @@ try {
 
 // Persist terminal presentation independently of the chat and verify the compact layout.
 await pane(page).getByRole('button', { name: 'Terminal layout', exact: true }).click()
-await page.getByRole('menuitem', { name: 'Tabs down the right', exact: true }).click()
+await page.getByRole('menuitem', { name: 'Vertical tabs on the right', exact: true }).click()
 await pane(page).getByRole('button', { name: 'Terminal layout', exact: true }).click()
 await page.getByRole('menuitem', { name: 'Arrange side by side', exact: true }).click()
 const resizeHandle = await pane(page).getByRole('separator', { name: 'Resize terminal panel' }).boundingBox()

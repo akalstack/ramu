@@ -520,7 +520,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         if (!state) return false
         const editor = state.views.find((view) => view.id === state.activeViewId && view.kind !== 'agent')
         const terminalOpen = state.views.some((view) => view.kind === 'terminal') && (state.terminalOpen ?? true)
-        return !!editor || terminalOpen && (state.terminalDock ?? 'right') === 'right'
+        return !!editor || terminalOpen && (state.terminalDock ?? preferences.defaultTerminalDock) === 'right'
       },
       hideWorkspace(taskId) {
         const state = effectiveUi[taskId]
@@ -573,7 +573,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       },
     }
     return api
-  }, [projects, repos, tasks, workspaces, composingWorkspace, ui, taskUi, bindings, dirty, composing, refresh, refreshBindings, updateTaskUi, setDirty, unread, preferences.previewTabs, language])
+  }, [projects, repos, tasks, workspaces, composingWorkspace, ui, taskUi, bindings, dirty, composing, refresh, refreshBindings, updateTaskUi, setDirty, unread, preferences.previewTabs, preferences.defaultTerminalDock, language])
 
   // Resolve delayed snapshot callbacks against the latest state, including when
   // a rapid second action completes the previous pending update first.

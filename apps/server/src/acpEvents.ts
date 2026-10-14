@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { SessionNotification } from '@agentclientprotocol/sdk'
-import type { AgentEvent, AgentToolDetails, AgentToolStatus } from '@ramu/shared/types'
+import type { AgentEvent, AgentTask, AgentToolDetails, AgentToolStatus } from '@ramu/shared/types'
 import { agentContent, contentSummary } from '@ramu/shared/agentContent'
 import { TOOL_KINDS, toolKind } from '@ramu/shared/agentTools'
 
@@ -20,8 +20,49 @@ export class AcpEvents {
   private stream?: { kind: 'text' | 'thinking'; messageId: string; text: string }
   private tools = new Map<string, Extract<AgentEvent, { kind: 'tool-use' }>>()
   private planId = randomUUID()
-  constructor(private nativeExtensions = false) {}
+  private agents = new Map<string, AgentTask>()
+  private children = new Map<string, { agentId?: string; events: AcpEvents }>()
+  /** `subagentTools` names tool calls that start a sub-agent, so they also appear as task cards. */
+  constructor(private nativeExtensions = false, private subagentTools: string[] = []) {}
   beginTurn(): void { this.stream = undefined; this.tools.clear(); this.planId = randomUUID() }
+  /** Turns one runtime-reported child-session update into events on the matching task card. */
+  consumeChild(childId: string, title: string, update: Update): AgentEvent[] {
+    let child = this.children.get(childId)
+    if (!child) this.children.set(childId, child = { events: new AcpEvents() })
+    if (!child.agentId) {
+      // The child carries the task's description as its title; a lone running task is the fallback.
+      const claimed = new Set([...this.children.values()].map((entry) => entry.agentId))
+      const open = [...this.agents.values()].filter((task) => task.status === 'running' && !claimed.has(task.agentId))
+      child.agentId = (open.find((task) => task.name === title) ?? (open.length === 1 ? open[0] : undefined))?.agentId
+    }
+    const agentId = child.agentId
+    if (!agentId) return []
+    return child.events.consume(update).flatMap((event): AgentEvent[] =>
+      event.kind === 'text' || event.kind === 'thinking' || event.kind === 'tool-use' || event.kind === 'tool-result' ? [{ ...event, agentId }] : [])
+  }
+  private subagent(call: Extract<AgentEvent, { kind: 'tool-use' }>, u: Update): AgentEvent | undefined {
+    const before = this.agents.get(call.toolUseId)
+    let input: Update = {}
+    try { input = u.rawInput && typeof u.rawInput === 'object' ? u.rawInput : JSON.parse(call.input ?? '{}') } catch {}
+    // Some runtimes (Cursor) title the call generically and name the tool only inside its input.
+    if (!before && ![call.name, text(input._toolName)].some((name) => name && this.subagentTools.includes(name.toLowerCase()))) return undefined
+    // Cursor describes the type as a tagged object such as {unspecified:{}} or {explore:{}}.
+    const type = typeof (input.agent ?? input.subagent_type ?? input.subagentType) === 'object' ? Object.keys(input.subagentType ?? {}).find((key) => !['unspecified', 'custom'].includes(key)) : input.agent ?? input.subagent_type ?? input.subagentType
+    const now = Date.now()
+    const status = call.status === 'completed' ? 'completed' : call.status === 'failed' ? 'failed' : 'running'
+    // The report arrives wrapped as <subagent sessionID=… state=…>…</subagent>.
+    const report = contentSummary(call.content ?? []).replace(/^\s*<subagent\b[^>]*>\s*|\s*<\/subagent>\s*$/g, '').trim()
+    const task: AgentTask = {
+      ...before, agentId: call.toolUseId, toolUseId: call.toolUseId, taskType: 'local_agent', status,
+      name: text(input.description)?.trim() || before?.name || call.title || 'Sub-agent',
+      ...(text(type) ? { agentType: type } : {}),
+      ...(text(input.prompt) ? { prompt: input.prompt } : {}),
+      ...(report ? { summary: report } : {}), ...(status === 'failed' ? { error: report || 'The sub-agent failed' } : {}),
+      startedAt: before?.startedAt ?? now, ...(status === 'running' ? {} : { endedAt: now, durationMs: now - (before?.startedAt ?? now) }),
+    }
+    this.agents.set(call.toolUseId, task)
+    return { ...task, kind: 'agent' }
+  }
   consume(u: Update): AgentEvent[] {
     if (this.nativeExtensions && u._meta?.ramu?.version === 1 && u._meta.ramu.event) return [u._meta.ramu.event as AgentEvent]
     if (u.sessionUpdate === 'agent_message_chunk' || u.sessionUpdate === 'agent_thought_chunk') {
@@ -56,7 +97,9 @@ export class AcpEvents {
       const call: Extract<AgentEvent, { kind: 'tool-use' }> = { ...details, kind: 'tool-use', toolUseId: u.toolCallId, name, summary: details.input ?? details.title ?? previous?.summary ?? '' }
       this.tools.set(u.toolCallId, call)
       const events: AgentEvent[] = [call]
+      const agent = this.subagent(call, u)
       if (Array.isArray(u.content) || u.rawOutput != null || details.content?.length || terminal(details.status)) events.push({ ...details, kind: 'tool-result', toolUseId: u.toolCallId, isError: details.status === 'failed', summary: contentSummary(details.content ?? []), running: !terminal(details.status) })
+      if (agent) events.push(agent)
       return events
     }
     if (u.sessionUpdate === 'plan' && Array.isArray(u.entries)) return [{ kind: 'plan', messageId: this.planId, entries: u.entries.filter((e: Update) => typeof e?.content === 'string').map((e: Update) => ({ content: e.content, status: ['pending', 'in_progress', 'completed'].includes(e.status) ? e.status : 'pending', priority: ['low', 'medium', 'high'].includes(e.priority) ? e.priority : 'medium' })) }]

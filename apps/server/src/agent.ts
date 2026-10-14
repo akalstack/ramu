@@ -1,7 +1,7 @@
 import { responseInstructions, TOOL_DISCOVERY_INSTRUCTIONS } from './intelligence'
 import { providerBinary, providerAccountId } from './providerBinaries'
 import { clipText } from '@ramu/shared/text'
-import { createAcpRunner, acpModels } from './acp'
+import { createAcpRunner, acpModels, acpAside } from './acp'
 import { toolDescription, toolInput } from './acpEvents'
 import { agentContent } from '@ramu/shared/agentContent'
 import { acpHostedRunner } from './acpNativeHost'
@@ -1116,6 +1116,16 @@ export class AgentService {
       this.analysisStops.add(stop)
       try { return { text: await codexAside({ accountId: s.settings.accountId ?? 'default', threadId: s.providerSessionId, cwd: s.cwd, model: s.settings.model, effort: s.settings.effort, prompt, signal: controller.signal }), provider: 'codex', model: s.settings.model } }
       catch { return null }
+      finally { this.analysisStops.delete(stop) }
+    }
+    if (s.provider === 'opencode' && process.env.RAMU_FAKE_AGENT !== '1') {
+      const controller = new AbortController()
+      const stop = () => controller.abort()
+      this.analysisStops.add(stop)
+      try {
+        const text = await acpAside({ provider: 'opencode', accountId: s.settings.accountId ?? 'default', cwd: s.cwd, sessionId: s.providerSessionId, prompt, signal: controller.signal })
+        return text ? { text, provider: 'opencode', model: s.settings.model } : null
+      } catch { return null }
       finally { this.analysisStops.delete(stop) }
     }
     if (s.provider !== 'claude-code') return null

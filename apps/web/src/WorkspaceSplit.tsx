@@ -97,7 +97,7 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
       aria-valuenow={Math.round(actual)}
       aria-hidden={!open || collapsed}
       tabIndex={open && !collapsed ? 0 : -1}
-      className={cn('pane-sash relative z-60 bg-[var(--pane-border-color)] outline-none touch-none', horizontal ? 'cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-3 after:-translate-x-1/2' : 'cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-3 after:-translate-y-1/2')}
+      className={cn('pane-sash relative z-90 bg-[var(--pane-border-color)] outline-none touch-none', horizontal ? 'cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-3 after:-translate-x-1/2' : 'cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-3 after:-translate-y-1/2')}
       style={{ ...place(2), visibility: open && !collapsed ? 'visible' : 'hidden' }}
       onPointerDown={event => {
         if (event.button !== 0 || !open || drag.current || !root.current) return
@@ -142,6 +142,6 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
       }}
     />
     <div data-panel-surface className="min-w-0 min-h-0 overflow-hidden" inert={!open} aria-hidden={!open} style={{ ...place(1), visibility: open ? 'visible' : 'hidden' }}>{secondary}</div>
-    <div ref={preview} data-workspace-divider-preview aria-hidden="true" className={cn('pointer-events-none absolute z-70 bg-[var(--pane-border-active)]', horizontal ? 'inset-y-0 left-0 w-0.5' : 'inset-x-0 top-0 h-0.5')} style={{ visibility: 'hidden' }} />
+    <div ref={preview} data-workspace-divider-preview aria-hidden="true" className={cn('pointer-events-none absolute z-100 bg-[var(--pane-border-active)]', horizontal ? 'inset-y-0 -left-[1.5px] w-1' : 'inset-x-0 -top-[1.5px] h-1')} style={{ visibility: 'hidden' }} />
   </div>
 }

@@ -12,7 +12,7 @@ import { Button } from '@/components/desktop-button'
 import { NO_PROJECT, type Attachment, type FileContext } from '@ramu/shared/types'
 import { notifyError } from './Notifications'
 import { useModelSets } from './ModelSets'
-import { CircleAlert, FileDiff, FileText, GitBranch, History, FileSearch, ChevronLeft, ChevronRight, ChevronsRight, PanelLeftClose, PanelLeftOpen, SquareTerminal, X } from 'lucide-react'
+import { CircleAlert, FileDiff, FileText, GitBranch, History, FileSearch, ChevronsRight, PanelLeftClose, PanelLeftOpen, PanelRightOpen, SquareTerminal, X } from 'lucide-react'
 import { memo, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { ChangeReviewTab } from './Changes'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type AgentSessionInfo, type ViewDescriptor } from '@ramu/shared/types'
@@ -30,6 +30,7 @@ import { TerminalPanel } from './TerminalPanel'
 import { NewTask } from './NewTask'
 import { FILE_DRAG_TYPE } from './ComposerSuggestions'
 import { beginDrag, setActiveDrag, TAB_DRAG_TYPE, TERMINAL_DRAG_TYPE, useActiveDrag } from './dragState'
+import { useAppSettings } from './AppSettings'
 import { useChatHidden, useEditorSide } from './layoutPrefs'
 import { isPreviewable, isWorkspaceCtx, tabOrder, useWorkspace } from './workspace'
 
@@ -42,6 +43,7 @@ import { isPreviewable, isWorkspaceCtx, tabOrder, useWorkspace } from './workspa
 export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: string; visible: boolean }) {
   useLanguage()
   const ws = useWorkspace()
+  const { preferences } = useAppSettings()
   const project = ws.projectOf(taskId)
   const composing = isWorkspaceCtx(taskId) && ws.composing === project?.id
   const workspaceId = ws.workspaceOf(taskId)
@@ -102,7 +104,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   const chatView = composing ? null : active?.kind === 'agent' ? active : editorView ? focusedChat : null
   const showLauncherMain = !editorView && !chatView
   const terminalOpen = (ws.taskUi[workspaceId]?.views.some((view) => view.kind === 'terminal') ?? false) && (ws.taskUi[workspaceId]?.terminalOpen ?? true)
-  const terminalDock = state.terminalDock ?? (editorView ? 'bottom' : 'right')
+  const terminalDock = state.terminalDock ?? preferences.defaultTerminalDock
   const rightTerminal = terminalOpen && terminalDock === 'right' && !composing
   const bottomTerminal = terminalOpen && terminalDock === 'bottom' && !composing
   const editorOpen = !!editorView && !composing
@@ -164,9 +166,10 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
       )}
       <div className="task-body flex-1 min-h-0 min-w-0 relative" ref={body}>
         <DockZones taskId={taskId} editorOpen={editorOpen} onEditorSide={setEditorSide} />
-        {chatHidden && editorOpen && <button type="button" aria-label={t("Show chat")} title={`${t("Show chat")} (${formatKeys('mod+alt+c')})`} className={`group absolute inset-y-0 z-50 flex w-3 cursor-pointer items-center justify-center border-0 bg-transparent p-0 text-muted-foreground hover:bg-brand-wash hover:text-foreground focus-visible:bg-brand-wash ${editorSide === 'left' ? 'right-0' : 'left-0'}`} onClick={() => setChatHidden(false)}>
-          {editorSide === 'left' ? <ChevronLeft size={12} className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" /> : <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />}
-        </button>}
+        {chatHidden && editorOpen && <Button variant="secondary" size="sm" className={`absolute top-1/2 z-50 -translate-y-1/2 gap-1.5 rounded-(--radius-l) bg-fill p-[6px_12px] text-control text-foreground hover:bg-fill-hover [border:1px_solid_var(--edge)] [box-shadow:0_8px_30px_#0003] ${editorSide === 'left' ? 'right-2' : 'left-2'}`} aria-label={t("Show chat")} title={`${t("Show chat")} (${formatKeys('mod+alt+c')})`} onClick={() => setChatHidden(false)}>
+          {editorSide === 'left' ? <PanelRightOpen size={14} /> : <PanelLeftOpen size={14} />}{t("Show chat")}
+          {(ws.task(taskId)?.status === 'needs-input' || ws.unread.has(taskId)) && <span role="status" aria-label={ws.task(taskId)?.status === 'needs-input' ? t("Waiting for your input") : t("New activity in chat")} className={`size-1.5 rounded-full ${ws.task(taskId)?.status === 'needs-input' ? 'bg-warn' : 'bg-brand'}`} />}
+        </Button>}
         <WorkspaceSplit id={`${workspaceId}.terminal-bottom`} orientation="vertical" resizePreview open={bottomTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={240} secondaryMin={120}
           primary={
             <WorkspaceSplit id={`${workspaceId}.terminal-right`} resizePreview open={rightTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={480}
@@ -211,7 +214,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
         {createPortal(
       <div className="workspace-panel flex flex-col h-full min-w-0 min-h-0 overflow-hidden" inert={!editorView || composing} aria-hidden={!editorView || composing}>
       <div className="workspace-tab-toolbar flex items-center flex-none min-w-0 min-h-[40px] gap-1 px-2 py-1.5" style={{ display: editorView ? 'flex' : 'none' }}>
-      <OverlayScrollArea horizontal className="flex-initial min-w-0 w-max max-w-full h-[27px]" viewportRef={tabScroll} viewportClassName="view-tabs" contentClassName="flex items-center gap-1 w-max! min-w-full!" viewportProps={{ role: 'tablist', 'aria-label': t("Workspace tabs"), onKeyDown: event => {
+      <OverlayScrollArea horizontal className="flex-initial min-w-0 w-max max-w-full h-[27px] [&:focus-within_>_[data-slot='scroll-area-scrollbar']]:opacity-0 [&_>_[data-slot='scroll-area-scrollbar'][data-scrolling]]:opacity-0 [&:hover_>_[data-slot='scroll-area-scrollbar']]:opacity-100 [&_>_[data-slot='scroll-area-scrollbar'][data-dragging]]:opacity-100 [&_>_[data-slot='scroll-area-scrollbar']]:h-[3px] [&_>_[data-slot='scroll-area-scrollbar']]:p-0 [&_>_[data-slot='scroll-area-scrollbar']]:bottom-px [&_[data-slot='scroll-area-thumb']]:[background:color-mix(in_srgb,_var(--text)_22%,_transparent)] [&_[data-slot='scroll-area-thumb']:hover]:[background:color-mix(in_srgb,_var(--text)_38%,_transparent)]" viewportRef={tabScroll} viewportClassName="view-tabs" contentClassName="flex items-center gap-1 w-max! min-w-full!" viewportProps={{ role: 'tablist', 'aria-label': t("Workspace tabs"), onKeyDown: event => {
         if (!(event.target instanceof HTMLElement) || event.target.getAttribute('role') !== 'tab' || event.ctrlKey || event.metaKey) return
         const entries = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]'))
         const index = entries.indexOf(event.target)
@@ -410,7 +413,7 @@ function FileTab({ taskId, view, tabs, active, repoName }: { taskId: string; vie
   }
   return <div className="tab-slot relative flex items-center flex-none" {...dragProps}>
     {drop && <span aria-hidden="true" className={`pointer-events-none absolute inset-y-0 z-2 w-0.5 rounded-[1px] bg-(--accent) ${drop === 'before' ? '-left-0.5' : '-right-0.5'}`} />}
-    <div role="tab" data-view-id={view.id} tabIndex={active ? 0 : -1} aria-selected={active} className={`view-tab bg-fill [&:hover_.tab-close]:opacity-100 [&_.tab-title]:max-w-[180px] [&:not(.active):hover]:bg-fill-hover [&:not(.active):hover]:text-soft [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&_.kind:not(.file-kind)]:text-muted-foreground [&_.kind]:flex-none [&.partner]:text-soft [&.partner]:[box-shadow:inset_0_-2px_0_var(--line-strong)] [&.pinned]:font-medium [&.active_.kind:not(.file-kind)]:text-foreground [&.preview_.tab-label]:[font-style:italic] [&.preview_.view-label]:[font-style:italic] [&.preview]:[font-style:italic] [border-color:transparent] [&:hover:not(:disabled)]:[border-color:transparent] [&:focus-visible]:[outline-color:var(--line-strong)] [&_.tab-close]:w-[18px] [&_.tab-close]:h-[18px] [&_.tab-close]:min-w-[18px] [&_.tab-close]:min-h-[18px] [&_.tab-close]:p-0 [&_.tab-close]:inline-grid [&_.tab-close]:place-items-center [&_.tab-close]:rounded-(--radius-xs) [&_.tab-close]:bg-transparent [&_.tab-close]:[border:0] [&_.tab-close]:[box-shadow:none] [&_.tab-close]:flex-none [&_.tab-close:hover:not(:disabled)]:bg-accent [&_.tab-close:hover:not(:disabled)]:text-foreground [&_.tab-close_svg]:w-3 [&_.tab-close_svg]:h-3 flex items-center gap-1.5 cursor-default whitespace-nowrap text-muted-foreground text-control [transition:background_0.12s_var(--ease),_color_0.12s_var(--ease)] h-[27px] rounded-(--radius-s) p-[0_5px_0_9px] ${active ? ' active' : ''}${isPreviewable(view) && view.preview ? ' preview' : ''}`} title={isPreviewable(view) && view.preview ? t("Preview: opening another file replaces this tab. Double-click or edit to keep it open.") : undefined} onDoubleClick={() => ws.keepView(taskId, view.id)} onContextMenu={context.onContextMenu} onKeyDown={(event) => { context.onKeyDown(event); if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); ws.activateView(taskId, view.id) } }} onClick={() => ws.activateView(taskId, view.id)} onAuxClick={(event) => event.button === 1 && ws.closeView(taskId, view.id)}>
+    <div role="tab" data-view-id={view.id} tabIndex={active ? 0 : -1} aria-selected={active} className={`view-tab bg-transparent [&:not(.active):active]:bg-accent [&:hover_.tab-close]:opacity-100 [&_.tab-title]:max-w-[180px] [&:not(.active):hover]:bg-fill-hover [&:not(.active):hover]:text-soft [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&_.kind:not(.file-kind)]:text-muted-foreground [&_.kind]:flex-none [&.partner]:text-soft [&.partner]:[box-shadow:inset_0_-2px_0_var(--line-strong)] [&.pinned]:font-medium [&.active_.kind:not(.file-kind)]:text-foreground [&.preview_.tab-label]:[font-style:italic] [&.preview_.view-label]:[font-style:italic] [&.preview]:[font-style:italic] [border-color:transparent] [&:hover:not(:disabled)]:[border-color:transparent] [&:focus-visible]:[outline-color:var(--line-strong)] [&_.tab-close]:w-[18px] [&_.tab-close]:h-[18px] [&_.tab-close]:min-w-[18px] [&_.tab-close]:min-h-[18px] [&_.tab-close]:p-0 [&_.tab-close]:inline-grid [&_.tab-close]:place-items-center [&_.tab-close]:rounded-(--radius-xs) [&_.tab-close]:bg-transparent [&_.tab-close]:[border:0] [&_.tab-close]:[box-shadow:none] [&_.tab-close]:flex-none [&_.tab-close:hover:not(:disabled)]:bg-accent [&_.tab-close:hover:not(:disabled)]:text-foreground [&_.tab-close_svg]:w-3 [&_.tab-close_svg]:h-3 flex items-center gap-1.5 cursor-default whitespace-nowrap text-muted-foreground text-control [transition:background_0.12s_var(--ease),_color_0.12s_var(--ease)] h-[27px] rounded-(--radius-s) p-[0_5px_0_9px] ${active ? ' active' : ''}${isPreviewable(view) && view.preview ? ' preview' : ''}`} title={isPreviewable(view) && view.preview ? t("Preview: opening another file replaces this tab. Double-click or edit to keep it open.") : undefined} onDoubleClick={() => ws.keepView(taskId, view.id)} onContextMenu={context.onContextMenu} onKeyDown={(event) => { context.onKeyDown(event); if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); ws.activateView(taskId, view.id) } }} onClick={() => ws.activateView(taskId, view.id)} onAuxClick={(event) => event.button === 1 && ws.closeView(taskId, view.id)}>
       <ViewIcon kind={view.kind} path={view.kind === 'file' || view.kind === 'diff' ? view.path : undefined} />
       <ViewLabel view={view} all={tabs} repoName={repoName} />
       {ws.dirty[view.id] && <span className="dirty w-[7px] h-[7px] rounded-full [background:var(--soft)] flex-none" aria-label={t("Unsaved changes")} />}
@@ -466,13 +469,13 @@ function DockZones({ taskId, editorOpen, onEditorSide }: { taskId: string; edito
   if (!drag || drag === 'tab' && !editorOpen) return null
   const type = drag === 'tab' ? TAB_DRAG_TYPE : TERMINAL_DRAG_TYPE
   const zone = (id: string, label: string, className: string, dock: () => void) => <div key={id} role="presentation"
-    className={`pointer-events-auto absolute grid place-items-center rounded-(--radius-m) border border-dashed text-control transition-colors ${className} ${over === id ? 'border-(--accent) bg-brand-wash text-foreground' : 'border-transparent bg-transparent text-transparent'}`}
+    className={`pointer-events-auto absolute grid place-items-center rounded-(--radius-l) border text-control transition-colors ${className} ${over === id ? 'border-(--accent) bg-brand-wash text-foreground' : 'border-transparent bg-transparent text-transparent'}`}
     onDragOver={(event) => { if (!event.dataTransfer.types.includes(type)) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setOver(id) }}
     onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOver((current) => current === id ? null : current) }}
-    onDrop={(event) => { event.preventDefault(); setOver(null); setActiveDrag(null); dock() }}>{label}</div>
+    onDrop={(event) => { event.preventDefault(); setOver(null); setActiveDrag(null); dock() }}><span className={`rounded-(--radius-l) bg-fill p-[6px_12px] [border:1px_solid_var(--edge)] [box-shadow:0_8px_30px_#0003] ${over === id ? '' : 'invisible'}`}>{label}</span></div>
   return <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-80 p-1.5">
     {drag === 'tab'
-      ? [zone('left', t("Dock editor on left"), 'inset-y-1.5 left-1.5 w-[18%]', () => onEditorSide('left')), zone('right', t("Dock editor on right"), 'inset-y-1.5 right-1.5 w-[18%]', () => onEditorSide('right'))]
+      ? [zone('left', t("Dock editor on left"), 'top-12 bottom-1.5 left-1.5 w-[18%]', () => onEditorSide('left')), zone('right', t("Dock editor on right"), 'top-12 bottom-1.5 right-1.5 w-[18%]', () => onEditorSide('right'))]
       : [zone('right', t("Dock terminal on right"), 'top-1.5 bottom-[34%] right-1.5 w-[30%]', () => ws.setTerminalPanel(taskId, { terminalDock: 'right' })), zone('bottom', t("Dock terminal at bottom"), 'inset-x-1.5 bottom-1.5 h-[30%]', () => ws.setTerminalPanel(taskId, { terminalDock: 'bottom' }))]}
   </div>
 }

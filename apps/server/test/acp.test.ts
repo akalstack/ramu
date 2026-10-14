@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { acpModels, acpSessionModels, createAcpRunner } from '../src/acp'
+import { acpAside, acpModels, acpSessionModels, createAcpRunner } from '../src/acp'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent } from '@ramu/shared/types'
 
 let dir: string
@@ -58,6 +58,11 @@ it('supports grouped config options and legacy model lists', () => {
   expect(acpSessionModels('antigravity', { configOptions: [{ category: 'model', currentValue: 'm', options: [{ group: 'Google', options: [{ value: 'm', name: 'Model' }] }] }] })[0]?.id).toBe('m')
   expect(acpSessionModels('cursor', { models: { currentModelId: 'm', availableModels: [{ modelId: 'm', name: 'Model' }] } })[0]?.isDefault).toBe(true)
 })
+it('offers only recognised thought levels as reasoning effort', () => {
+  const session = { models: { currentModelId: 'm', availableModels: [{ modelId: 'm', name: 'Model' }] }, configOptions: [{ id: 'thinking', category: 'thought_level', currentValue: 'medium', options: [{ value: 'low' }, { value: 'medium' }, { value: 'turbo' }, { value: 'high' }] }] }
+  expect(acpSessionModels('cursor', session)[0]).toMatchObject({ efforts: ['low', 'medium', 'high'], defaultEffort: 'medium' })
+  expect(acpSessionModels('cursor', { models: session.models })[0]).toMatchObject({ efforts: [], defaultEffort: null })
+})
 it('streams accumulated text, exposes permission requests and returns provider option IDs', async () => {
   await start('hello'); await until(() => events.some((e) => e.kind === 'permission-request'))
   expect(events.filter((e) => e.kind === 'text').map((e) => e.text)).toEqual(['Hello ', 'Hello world'])
@@ -110,4 +115,29 @@ it('passes scoped Ramu MCP connection and image content', async () => {
   await until(() => events.some((e) => e.kind === 'result'))
   expect(log().find((m) => m.method === 'session/new').params.mcpServers[0].headers).toEqual([{ name: 'Authorization', value: 'Bearer test-token' }])
   expect(log().find((m) => m.method === 'session/prompt').params.prompt[1]).toEqual({ type: 'image', mimeType: 'image/png', data: Buffer.from('image').toString('base64') })
+})
+
+const forkRuntime = (fork: boolean) => {
+  const bin = join(dir, 'fork-agent')
+  writeFileSync(bin, `#!/usr/bin/env node
+const rl=require('node:readline').createInterface({input:process.stdin});
+const send=m=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',...m})+'\\n');
+rl.on('line',line=>{const m=JSON.parse(line);
+ if(m.method==='initialize')send({id:m.id,result:{protocolVersion:1,agentCapabilities:{sessionCapabilities:${fork ? '{fork:{}}' : '{}'}}}});
+ if(m.method==='session/fork')send({id:m.id,result:{sessionId:'fork-1'}});
+ if(m.method==='session/prompt'){send({method:'session/update',params:{sessionId:'other',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'ignored'}}}});
+  for(const text of ['ku','mquat'])send({method:'session/update',params:{sessionId:m.params.sessionId,update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text}}}});
+  send({id:900,method:'session/request_permission',params:{toolCall:{toolCallId:'t'},options:[{optionId:'yes',kind:'allow_once'},{optionId:'no',kind:'reject_once'}]}});
+  process.stdin.once('data',()=>send({id:m.id,result:{stopReason:'end_turn'}}))}
+});
+`)
+  chmodSync(bin, 0o755); vi.stubEnv('RAMU_OPENCODE_BIN', bin)
+}
+it('answers a side question on a forked session and refuses its tool requests', async () => {
+  forkRuntime(true)
+  expect(await acpAside({ provider: 'opencode', cwd: dir, sessionId: 'main', prompt: 'word?' })).toBe('kumquat')
+})
+it('reports runtimes that cannot fork', async () => {
+  forkRuntime(false)
+  await expect(acpAside({ provider: 'opencode', cwd: dir, sessionId: 'main', prompt: 'word?' })).rejects.toThrow(/cannot fork/)
 })

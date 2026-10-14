@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { createInterface } from 'node:readline'
 import { AcpEvents } from './acpEvents'
-import type { AgentEvent, AgentModel, AgentScope, AgentSettings, Attachment, McpConnection } from '@ramu/shared/types'
+import type { AgentEvent, AgentModel, ReasoningEffort, AgentScope, AgentSettings, Attachment, McpConnection } from '@ramu/shared/types'
 import { providerName } from '@ramu/shared/providers'
 import { attachmentPrompt } from './attachments'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
@@ -64,7 +64,7 @@ export class AcpRpc {
     })
   }
   async initialize(): Promise<Wire> {
-    const result = await this.request('initialize', { protocolVersion: 1, clientInfo: { name: 'ramu', version: '0.0.1' }, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } })
+    const result = await this.request('initialize', { protocolVersion: 1, clientInfo: { name: 'ramu', version: '0.0.1' }, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false, ...(this.provider === 'opencode' ? { _meta: { 'opencode/child-session-updates': true } } : {}) } })
     if (result.protocolVersion !== 1) throw new Error('Unsupported ACP protocol version')
     if (this.provider === 'cursor') await this.request('authenticate', { methodId: 'cursor_login' })
     return result
@@ -77,18 +77,46 @@ export class AcpRpc {
     }
   }
 }
+const EFFORTS: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+const effortConfig = (session: Wire): Wire | undefined => (session.configOptions ?? []).find((c: Wire) => c.category === 'thought_level')
 const optionsOf = (config: Wire): Wire[] => (config.options ?? []).flatMap((option: Wire) => option.options ?? [option])
 export function acpSessionModels(provider: AcpProvider, session: Wire): AgentModel[] {
   const config = (session.configOptions ?? []).find((c: Wire) => c.category === 'model' || c.id === 'model')
   const models: Wire[] = config ? optionsOf(config).map((m) => ({ id: m.value, name: m.name })) : (session.models?.availableModels ?? []).map((m: Wire) => ({ id: m.modelId, name: m.name }))
   const current = config?.currentValue ?? session.models?.currentModelId
-  return models.map((m) => ({ provider, id: m.id, name: m.name || m.id, efforts: [], defaultEffort: null, isDefault: m.id === current }))
+  // ACP exposes reasoning as one session-wide option; only levels Ramu understands can be offered.
+  const level = effortConfig(session)
+  const efforts = level ? optionsOf(level).map((o) => o.value as ReasoningEffort).filter((value) => EFFORTS.includes(value)) : []
+  const defaultEffort = efforts.includes(level?.currentValue) ? level!.currentValue as ReasoningEffort : null
+  return models.map((m) => ({ provider, id: m.id, name: m.name || m.id, efforts, defaultEffort, isDefault: m.id === current }))
 }
 export async function acpModels(provider: AcpProvider, accountId?: string): Promise<AgentModel[]> {
   const rpc = new AcpRpc(provider, homedir(), accountId)
   rpc.onMessage = (m) => { if (m.id !== undefined && m.method) rpc.write({ id: m.id, error: { code: -32601, message: 'Model discovery cannot run tools or answer questions' } }) }
   try { await rpc.initialize(); return acpSessionModels(provider, await rpc.request('session/new', { cwd: homedir(), mcpServers: [] })) }
   finally { await rpc.close() }
+}
+/** Answers one question on a throwaway fork of an existing session, with every tool refused. Needs the runtime's `fork` capability. */
+export async function acpAside({ provider, accountId, cwd, sessionId, prompt, timeoutMs = 120_000, signal }: { provider: AcpProvider; accountId?: string; cwd: string; sessionId: string; prompt: string; timeoutMs?: number; signal?: AbortSignal }): Promise<string> {
+  const rpc = new AcpRpc(provider, cwd, accountId)
+  let forked = '', text = ''
+  rpc.onMessage = (m) => {
+    if (m.method === 'session/update' && m.params?.sessionId === forked && m.params.update?.sessionUpdate === 'agent_message_chunk' && m.params.update.content?.type === 'text') text += String(m.params.update.content.text ?? '')
+    else if (m.id !== undefined && m.method === 'session/request_permission') {
+      const option = (m.params.options ?? []).find((o: Wire) => o.kind === 'reject_once') ?? (m.params.options ?? []).find((o: Wire) => o.kind === 'reject_always')
+      rpc.write({ id: m.id, result: { outcome: option ? { outcome: 'selected', optionId: option.optionId } : { outcome: 'cancelled' } } })
+    } else if (m.id !== undefined && m.method) rpc.write({ id: m.id, error: { code: -32601, message: 'A side question cannot use tools or ask questions' } })
+  }
+  const stop = () => void rpc.close()
+  signal?.addEventListener('abort', stop, { once: true })
+  try {
+    const init = await rpc.initialize()
+    if (!init.agentCapabilities?.sessionCapabilities?.fork) throw new Error(`${providerName(provider)} cannot fork sessions`)
+    forked = (await rpc.request('session/fork', { sessionId, cwd, mcpServers: [] })).sessionId
+    if (!forked) throw new Error('ACP runtime did not return a forked session')
+    await rpc.request('session/prompt', { sessionId: forked, prompt: [{ type: 'text', text: prompt }] }, timeoutMs)
+    return text.trim()
+  } finally { signal?.removeEventListener('abort', stop); await rpc.close() }
 }
 export const createAcpRunner: AgentRunnerFactory = (scope, settings, emit, readOnly) => new AcpSession(scope, settings, emit, readOnly)
 class AcpSession implements AgentRunner {
@@ -98,10 +126,12 @@ class AcpSession implements AgentRunner {
   private active?: Promise<void>
   private stopped = false
   private loading = false
-  private events = new AcpEvents()
+  private events: AcpEvents
   private pending = new Map<string, Wire>()
   private session: Wire = {}
-  constructor(private scope: AgentScope, private settings: AgentSettings, private emit: (event: AgentEvent, limit?: boolean) => void, private readOnly = false) {}
+  constructor(private scope: AgentScope, private settings: AgentSettings, private emit: (event: AgentEvent, limit?: boolean) => void, private readOnly = false) {
+    this.events = new AcpEvents(false, settings.provider === 'opencode' || settings.provider === 'cursor' ? ['task', 'subagent'] : [])
+  }
   setTools(connection: McpConnection): void { this.connection = connection }
   async start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void> {
     const provider = this.settings.provider as AcpProvider
@@ -119,7 +149,13 @@ class AcpSession implements AgentRunner {
     if (this.settings.model) {
       const config = (this.session.configOptions ?? []).find((c: Wire) => c.category === 'model' || c.id === 'model')
       if (!acpSessionModels(provider, this.session).some((m) => m.id === this.settings.model)) throw new Error('The selected model is unavailable in this ACP session')
-      await this.rpc.request(config ? 'session/set_config_option' : 'session/set_model', config ? { sessionId: this.sessionId, configId: config.id, value: this.settings.model } : { sessionId: this.sessionId, modelId: this.settings.model })
+      const changed = await this.rpc.request(config ? 'session/set_config_option' : 'session/set_model', config ? { sessionId: this.sessionId, configId: config.id, value: this.settings.model } : { sessionId: this.sessionId, modelId: this.settings.model })
+      if (Array.isArray(changed.configOptions)) this.session = { ...this.session, configOptions: changed.configOptions }
+    }
+    if (this.settings.effort) {
+      // Re-read after the model switch: the runtime may expose different levels per model.
+      const level = effortConfig(this.session)
+      if (level && optionsOf(level).some((o) => o.value === this.settings.effort)) await this.rpc.request('session/set_config_option', { sessionId: this.sessionId, configId: level.id, value: this.settings.effort })
     }
     if (this.readOnly) {
       const config = (this.session.configOptions ?? []).find((c: Wire) => c.category === 'mode' || c.id === 'mode')
@@ -187,6 +223,11 @@ class AcpSession implements AgentRunner {
       if (this.loading || p.sessionId !== this.sessionId) return
       const u = p.update ?? {}
       for (const event of this.events.consume(u)) this.emit(event)
+      return
+    }
+    if (m.method === 'opencode/session/child_update') {
+      // Sub-agent progress; rootSessionId ties it to this chat.
+      if (!this.loading && p.rootSessionId === this.sessionId && p.type === 'update' && p.update && typeof p.childSessionId === 'string') for (const event of this.events.consumeChild(p.childSessionId, String(p.title ?? ''), p.update)) this.emit(event)
       return
     }
     if (m.id === undefined) return

@@ -572,6 +572,97 @@ describe('Conversation provider settings and handoffs', () => {
     svc.stopAll()
   })
 
+  describe('switching access from the composer', () => {
+    const requests = (svc: AgentService, id: string) => svc.events(id).filter((e) => e.kind === 'permission-request')
+
+    it('asks in Auto without bypassing permissions', async () => {
+      const calls: Options[] = []
+      const svc = service(calls)
+      const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'auto' })
+      await until(() => svc.get(s.id).state === 'needs-input')
+      expect(calls[0]).toMatchObject({ permissionMode: 'auto' })
+      expect(calls[0]).not.toHaveProperty('allowDangerouslySkipPermissions')
+      expect(requests(svc, s.id)).toHaveLength(1)
+      svc.stopAll()
+    })
+
+    it('moves from Auto with a pending request to Full access and keeps working without asking again', async () => {
+      const calls: Options[] = []
+      const svc = service(calls)
+      const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'auto' })
+      await until(() => svc.get(s.id).state === 'needs-input')
+      await svc.configure(s.id, { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
+      expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'request-resolved', outcome: 'cancelled' }))
+      await until(() => svc.get(s.id).state === 'idle')
+      expect(svc.get(s.id).settings.access).toBe('full')
+      await svc.send(s.id, 'continue')
+      await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:continue') && svc.get(s.id).state === 'idle')
+      expect(calls.at(-1)).toMatchObject({ resume: 'provider-1', permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true })
+      // The tool call after the switch is approved silently, and the chat is not left waiting.
+      expect(requests(svc, s.id)).toHaveLength(1)
+      expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'text', text: 'perm:allow' }))
+      svc.stopAll()
+    })
+
+    it('does not leave the chat stuck on needs-input after the pending request is cancelled', async () => {
+      const svc = service()
+      const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'auto' })
+      await until(() => svc.get(s.id).state === 'needs-input')
+      await svc.configure(s.id, { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
+      await until(() => svc.get(s.id).state === 'idle')
+      await svc.send(s.id, 'one')
+      await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:one') && svc.get(s.id).state === 'idle')
+      await svc.send(s.id, 'two')
+      await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:two') && svc.get(s.id).state === 'idle')
+      expect(requests(svc, s.id)).toHaveLength(1)
+      svc.stopAll()
+    })
+
+    it('goes back from Full access to Auto and asks again', async () => {
+      const calls: Options[] = []
+      const svc = service(calls)
+      const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
+      await until(() => svc.get(s.id).state === 'idle')
+      expect(requests(svc, s.id)).toHaveLength(0)
+      await svc.configure(s.id, { ...DEFAULT_AGENT_SETTINGS, access: 'auto' })
+      await svc.send(s.id, 'again')
+      await until(() => svc.get(s.id).state === 'needs-input')
+      expect(calls.at(-1)).toMatchObject({ permissionMode: 'auto' })
+      expect(calls.at(-1)).not.toHaveProperty('allowDangerouslySkipPermissions')
+      expect(requests(svc, s.id)).toHaveLength(1)
+      svc.stopAll()
+    })
+
+    it('asks again after moving from Auto to Allow edits and finishes once approved', async () => {
+      const calls: Options[] = []
+      const svc = service(calls)
+      const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'auto' })
+      await until(() => svc.get(s.id).state === 'needs-input')
+      await svc.configure(s.id, { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
+      // Allow edits still asks about commands, so the resumed turn raises a fresh request instead of reusing the cancelled one.
+      await until(() => requests(svc, s.id).length === 2 && svc.get(s.id).state === 'needs-input')
+      expect(calls.at(-1)).toMatchObject({ permissionMode: 'acceptEdits' })
+      const latest = requests(svc, s.id).at(-1) as Extract<AgentEvent, { kind: 'permission-request' }>
+      svc.replyPermission(s.id, latest.requestId, true)
+      await until(() => svc.get(s.id).state === 'idle')
+      expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'text', text: 'perm:allow' }))
+      svc.stopAll()
+    })
+
+    it('moves a Codex chat from Auto with a pending request to Full access', async () => {
+      const svc = service()
+      const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'auto' })
+      await until(() => svc.get(s.id).state === 'needs-input')
+      await svc.configure(s.id, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'full' })
+      await until(() => svc.get(s.id).state === 'idle')
+      expect(svc.get(s.id).settings.access).toBe('full')
+      await svc.send(s.id, 'run it')
+      await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text.includes('received: run it')) && svc.get(s.id).state === 'idle')
+      expect(requests(svc, s.id)).toHaveLength(1)
+      svc.stopAll()
+    })
+  })
+
   it('falls back automatically on a Claude usage limit without recording an extra user message', async () => {
     const svc = service()
     const s = svc.start('t', scopeOf(cwd), 'Finish the change [limit claude]', full)
