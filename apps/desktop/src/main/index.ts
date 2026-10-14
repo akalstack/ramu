@@ -261,8 +261,9 @@ async function main() {
   app.on('before-quit', () => {
     desktopUpdater.close()
     unsubscribe()
-    ipcMain.removeHandler('ramu:invoke')
   })
+  // Keep the bridge available until windows have closed; renderers can still invoke it during before-quit.
+  app.on('will-quit', () => ipcMain.removeHandler('ramu:invoke'))
   app.on('window-all-closed', () => app.quit())
 }
 
