@@ -1753,7 +1753,14 @@ export class AgentService {
     if (this.transitioning.has(id)) this.setState(id, 'stopped')
   }
 
-  async stopAndWait(id: string): Promise<void> { this.stop(id); await this.draining.get(id); await this.finalizing.get(id) }
+  async stopAndWait(id: string): Promise<void> {
+    this.stop(id)
+    await this.draining.get(id)
+    await this.finalizing.get(id)
+    // Steering has a batching delay and may still inspect the session after its runner stops.
+    // Keep the database available until that pending dispatch has finished too.
+    while (this.steering.has(id)) await new Promise((resolve) => setTimeout(resolve, 5))
+  }
 
   private trackDrain(id: string, promise: Promise<void>): void {
     this.closing.add(id)
