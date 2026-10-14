@@ -12,8 +12,8 @@ import { Button } from '@/components/desktop-button'
 import { NO_PROJECT, type Attachment, type FileContext } from '@ramu/shared/types'
 import { notifyError } from './Notifications'
 import { useModelSets } from './ModelSets'
-import { CircleAlert, FileDiff, FileText, GitBranch, History, FileSearch, ChevronsRight, SquareTerminal, X } from 'lucide-react'
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { CircleAlert, FileDiff, FileText, GitBranch, History, FileSearch, ChevronLeft, ChevronRight, ChevronsRight, PanelLeftClose, PanelLeftOpen, SquareTerminal, X } from 'lucide-react'
+import { memo, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { ChangeReviewTab } from './Changes'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type AgentSessionInfo, type ViewDescriptor } from '@ramu/shared/types'
 import { formatKeys, type TaskAction } from './commands'
@@ -28,6 +28,9 @@ import { DiffView } from './views/DiffView'
 import { FileView } from './views/FileView'
 import { TerminalPanel } from './TerminalPanel'
 import { NewTask } from './NewTask'
+import { FILE_DRAG_TYPE } from './ComposerSuggestions'
+import { beginDrag, setActiveDrag, TAB_DRAG_TYPE, TERMINAL_DRAG_TYPE, useActiveDrag } from './dragState'
+import { useChatHidden, useEditorSide } from './layoutPrefs'
 import { isPreviewable, isWorkspaceCtx, tabOrder, useWorkspace } from './workspace'
 
 
@@ -58,6 +61,10 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   const [terminalHost] = useState(() => { const el = document.createElement('div'); el.className = 'terminal-slot flex h-full w-full min-w-0 min-h-0'; return el })
   const [rightSlot, setRightSlot] = useState<HTMLDivElement | null>(null)
   const [bottomSlot, setBottomSlot] = useState<HTMLDivElement | null>(null)
+  const [chatHidden, setChatHidden] = useChatHidden(workspaceId)
+  const [editorSide, setEditorSide] = useEditorSide(workspaceId)
+  const chatHiddenRef = useRef(chatHidden)
+  chatHiddenRef.current = chatHidden
 
   // Palette and shortcut actions that act on this task's own view state.
   useEffect(() => {
@@ -65,10 +72,11 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
       const { taskId: target, action } = (e as CustomEvent<{ taskId: string; action: TaskAction }>).detail
       if (target !== taskId) return
       if (action === 'new-chat') ws.newTask(ws.projectOf(taskId)?.id)
+      if (action === 'toggle-chat') setChatHidden(!chatHiddenRef.current)
     }
     window.addEventListener('ramu:task-action', onAction)
     return () => window.removeEventListener('ramu:task-action', onAction)
-  }, [taskId, ws])
+  }, [taskId, ws, setChatHidden])
 
   useEffect(() => {
     let cancelled = false
@@ -155,11 +163,15 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
         </div>
       )}
       <div className="task-body flex-1 min-h-0 min-w-0 relative" ref={body}>
+        <DockZones taskId={taskId} editorOpen={editorOpen} onEditorSide={setEditorSide} />
+        {chatHidden && editorOpen && <button type="button" aria-label={t("Show chat")} title={`${t("Show chat")} (${formatKeys('mod+alt+c')})`} className={`group absolute inset-y-0 z-50 flex w-3 cursor-pointer items-center justify-center border-0 bg-transparent p-0 text-muted-foreground hover:bg-brand-wash hover:text-foreground focus-visible:bg-brand-wash ${editorSide === 'left' ? 'right-0' : 'left-0'}`} onClick={() => setChatHidden(false)}>
+          {editorSide === 'left' ? <ChevronLeft size={12} className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" /> : <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />}
+        </button>}
         <WorkspaceSplit id={`${workspaceId}.terminal-bottom`} orientation="vertical" resizePreview open={bottomTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={240} secondaryMin={120}
           primary={
             <WorkspaceSplit id={`${workspaceId}.terminal-right`} resizePreview open={rightTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={480}
               primary={
-                <WorkspaceSplit id={`${workspaceId}.editor`} open={editorOpen} label={t("Resize chat pane")} defaultShare={45}
+                <WorkspaceSplit id={`${workspaceId}.editor`} open={editorOpen} flip={editorSide === 'left'} primaryCollapsed={chatHidden} label={t("Resize chat pane")} defaultShare={45}
                   primary={<PaneSlot host={chatHost} />}
                   secondary={<PaneSlot host={editorHost} />}
                 />
@@ -200,9 +212,20 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
       <div className="workspace-panel flex flex-col h-full min-w-0 min-h-0 overflow-hidden" inert={!editorView || composing} aria-hidden={!editorView || composing}>
       <div className="workspace-tab-toolbar flex items-center flex-none min-w-0 min-h-[40px] gap-1 px-2 py-1.5" style={{ display: editorView ? 'flex' : 'none' }}>
       <OverlayScrollArea horizontal className="flex-initial min-w-0 w-max max-w-full h-[27px]" viewportRef={tabScroll} viewportClassName="view-tabs" contentClassName="flex items-center gap-1 w-max! min-w-full!" viewportProps={{ role: 'tablist', 'aria-label': t("Workspace tabs"), onKeyDown: event => {
-        if (!(event.target instanceof HTMLElement) || event.target.getAttribute('role') !== 'tab' || event.altKey || event.ctrlKey || event.metaKey) return
+        if (!(event.target instanceof HTMLElement) || event.target.getAttribute('role') !== 'tab' || event.ctrlKey || event.metaKey) return
         const entries = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]'))
         const index = entries.indexOf(event.target)
+        if (event.altKey) {
+          // Alt+Arrow moves the focused tab one place, matching drag reorder.
+          const forward = event.key === 'ArrowRight'
+          if (!forward && event.key !== 'ArrowLeft') return
+          event.preventDefault()
+          const id = event.target.dataset.viewId, other = entries[index + (forward ? 1 : -1)]?.dataset.viewId
+          if (!id || !other) return
+          ws.moveView(taskId, id, other, forward)
+          requestAnimationFrame(() => document.querySelector<HTMLElement>(`[role="tab"][data-view-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: false }))
+          return
+        }
         const next = event.key === 'ArrowRight' ? (index + 1) % entries.length : event.key === 'ArrowLeft' ? (index - 1 + entries.length) % entries.length : event.key === 'Home' ? 0 : event.key === 'End' ? entries.length - 1 : -1
         if (next < 0) return
         event.preventDefault()
@@ -213,6 +236,10 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
       </OverlayScrollArea>
         <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Open file")} title={`${t("Open file")} (${formatKeys('mod+p')})`} onClick={() => window.dispatchEvent(new Event('ramu:open-file'))}><FileSearch size={16} /></Button>
         <div className="flex-1 min-w-0" />
+        {editorView && !composing && <Button variant="ghost" size="icon-sm" className="ghost relative bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={chatHidden ? t("Show chat") : t("Hide chat")} aria-pressed={chatHidden} title={`${chatHidden ? t("Show chat") : t("Hide chat")} (${formatKeys('mod+alt+c')})`} onClick={() => setChatHidden(!chatHidden)}>
+          {chatHidden ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+          {chatHidden && (ws.task(taskId)?.status === 'needs-input' || ws.unread.has(taskId)) && <span role="status" aria-label={ws.task(taskId)?.status === 'needs-input' ? t("Waiting for your input") : t("New activity in chat")} className={`absolute top-1 right-1 size-1.5 rounded-full ${ws.task(taskId)?.status === 'needs-input' ? 'bg-warn' : 'bg-brand'}`} />}
+        </Button>}
         {editorView && !composing && <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Hide workspace")} title={t("Hide workspace")} onClick={() => ws.hideWorkspace(taskId)}><ChevronsRight size={15} /></Button>}
 
       </div>
@@ -352,8 +379,38 @@ function FileTab({ taskId, view, tabs, active, repoName }: { taskId: string; vie
       window.dispatchEvent(new Event('ramu:show-explorer'))
     } },
   ])
-  return <div className="tab-slot flex items-center flex-none">
-    <div role="tab" tabIndex={active ? 0 : -1} aria-selected={active} className={`view-tab bg-fill [&:hover_.tab-close]:opacity-100 [&_.tab-title]:max-w-[180px] [&:not(.active):hover]:bg-fill-hover [&:not(.active):hover]:text-soft [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&_.kind:not(.file-kind)]:text-muted-foreground [&_.kind]:flex-none [&.partner]:text-soft [&.partner]:[box-shadow:inset_0_-2px_0_var(--line-strong)] [&.pinned]:font-medium [&.active_.kind:not(.file-kind)]:text-foreground [&.preview_.tab-label]:[font-style:italic] [&.preview_.view-label]:[font-style:italic] [&.preview]:[font-style:italic] [border-color:transparent] [&:hover:not(:disabled)]:[border-color:transparent] [&:focus-visible]:[outline-color:var(--line-strong)] [&_.tab-close]:w-[18px] [&_.tab-close]:h-[18px] [&_.tab-close]:min-w-[18px] [&_.tab-close]:min-h-[18px] [&_.tab-close]:p-0 [&_.tab-close]:inline-grid [&_.tab-close]:place-items-center [&_.tab-close]:rounded-(--radius-xs) [&_.tab-close]:bg-transparent [&_.tab-close]:[border:0] [&_.tab-close]:[box-shadow:none] [&_.tab-close]:flex-none [&_.tab-close:hover:not(:disabled)]:bg-accent [&_.tab-close:hover:not(:disabled)]:text-foreground [&_.tab-close_svg]:w-3 [&_.tab-close_svg]:h-3 flex items-center gap-1.5 cursor-default whitespace-nowrap text-muted-foreground text-control [transition:background_0.12s_var(--ease),_color_0.12s_var(--ease)] h-[27px] rounded-(--radius-s) p-[0_5px_0_9px] ${active ? ' active' : ''}${isPreviewable(view) && view.preview ? ' preview' : ''}`} title={isPreviewable(view) && view.preview ? t("Preview: opening another file replaces this tab. Double-click or edit to keep it open.") : undefined} onDoubleClick={() => ws.keepView(taskId, view.id)} onContextMenu={context.onContextMenu} onKeyDown={(event) => { context.onKeyDown(event); if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); ws.activateView(taskId, view.id) } }} onClick={() => ws.activateView(taskId, view.id)} onAuxClick={(event) => event.button === 1 && ws.closeView(taskId, view.id)}>
+  const [drop, setDrop] = useState<'before' | 'after' | null>(null)
+  const dragProps = {
+    draggable: true,
+    onDragStart: (event: DragEvent) => {
+      event.dataTransfer.setData(TAB_DRAG_TYPE, view.id)
+      // A file tab doubles as an Explorer file, so it can be dropped into a chat or a terminal.
+      if (view.kind === 'file') event.dataTransfer.setData(FILE_DRAG_TYPE, JSON.stringify({ repoId: view.repoId, path: view.path, kind: 'file' }))
+      event.dataTransfer.effectAllowed = 'copyMove'
+      beginDrag('tab')
+    },
+    onDragEnd: () => { setActiveDrag(null); setDrop(null) },
+    onDragOver: (event: DragEvent<HTMLDivElement>) => {
+      if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE)) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      const box = event.currentTarget.getBoundingClientRect()
+      const next = event.clientX > box.left + box.width / 2 ? 'after' : 'before'
+      setDrop((current) => current === next ? current : next)
+    },
+    onDragLeave: (event: DragEvent<HTMLDivElement>) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null) },
+    onDrop: (event: DragEvent) => {
+      const dragged = event.dataTransfer.getData(TAB_DRAG_TYPE)
+      setDrop(null)
+      if (!dragged) return
+      event.preventDefault()
+      setActiveDrag(null)
+      ws.moveView(taskId, dragged, view.id, drop === 'after')
+    },
+  }
+  return <div className="tab-slot relative flex items-center flex-none" {...dragProps}>
+    {drop && <span aria-hidden="true" className={`pointer-events-none absolute inset-y-0 z-2 w-0.5 rounded-[1px] bg-(--accent) ${drop === 'before' ? '-left-0.5' : '-right-0.5'}`} />}
+    <div role="tab" data-view-id={view.id} tabIndex={active ? 0 : -1} aria-selected={active} className={`view-tab bg-fill [&:hover_.tab-close]:opacity-100 [&_.tab-title]:max-w-[180px] [&:not(.active):hover]:bg-fill-hover [&:not(.active):hover]:text-soft [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&_.kind:not(.file-kind)]:text-muted-foreground [&_.kind]:flex-none [&.partner]:text-soft [&.partner]:[box-shadow:inset_0_-2px_0_var(--line-strong)] [&.pinned]:font-medium [&.active_.kind:not(.file-kind)]:text-foreground [&.preview_.tab-label]:[font-style:italic] [&.preview_.view-label]:[font-style:italic] [&.preview]:[font-style:italic] [border-color:transparent] [&:hover:not(:disabled)]:[border-color:transparent] [&:focus-visible]:[outline-color:var(--line-strong)] [&_.tab-close]:w-[18px] [&_.tab-close]:h-[18px] [&_.tab-close]:min-w-[18px] [&_.tab-close]:min-h-[18px] [&_.tab-close]:p-0 [&_.tab-close]:inline-grid [&_.tab-close]:place-items-center [&_.tab-close]:rounded-(--radius-xs) [&_.tab-close]:bg-transparent [&_.tab-close]:[border:0] [&_.tab-close]:[box-shadow:none] [&_.tab-close]:flex-none [&_.tab-close:hover:not(:disabled)]:bg-accent [&_.tab-close:hover:not(:disabled)]:text-foreground [&_.tab-close_svg]:w-3 [&_.tab-close_svg]:h-3 flex items-center gap-1.5 cursor-default whitespace-nowrap text-muted-foreground text-control [transition:background_0.12s_var(--ease),_color_0.12s_var(--ease)] h-[27px] rounded-(--radius-s) p-[0_5px_0_9px] ${active ? ' active' : ''}${isPreviewable(view) && view.preview ? ' preview' : ''}`} title={isPreviewable(view) && view.preview ? t("Preview: opening another file replaces this tab. Double-click or edit to keep it open.") : undefined} onDoubleClick={() => ws.keepView(taskId, view.id)} onContextMenu={context.onContextMenu} onKeyDown={(event) => { context.onKeyDown(event); if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); ws.activateView(taskId, view.id) } }} onClick={() => ws.activateView(taskId, view.id)} onAuxClick={(event) => event.button === 1 && ws.closeView(taskId, view.id)}>
       <ViewIcon kind={view.kind} path={view.kind === 'file' || view.kind === 'diff' ? view.path : undefined} />
       <ViewLabel view={view} all={tabs} repoName={repoName} />
       {ws.dirty[view.id] && <span className="dirty w-[7px] h-[7px] rounded-full [background:var(--soft)] flex-none" aria-label={t("Unsaved changes")} />}
@@ -398,3 +455,24 @@ function ViewLabel({ view: v, all, repoName }: { view: ViewDescriptor; all: View
 }
 
 export { errorText } from './errors'
+
+
+/** Edge drop targets that appear while a tab is dragged: docks the editor left or right, or the terminal right or bottom. */
+function DockZones({ taskId, editorOpen, onEditorSide }: { taskId: string; editorOpen: boolean; onEditorSide: (side: 'left' | 'right') => void }) {
+  const ws = useWorkspace()
+  const drag = useActiveDrag()
+  const [over, setOver] = useState<string | null>(null)
+  useEffect(() => { if (!drag) setOver(null) }, [drag])
+  if (!drag || drag === 'tab' && !editorOpen) return null
+  const type = drag === 'tab' ? TAB_DRAG_TYPE : TERMINAL_DRAG_TYPE
+  const zone = (id: string, label: string, className: string, dock: () => void) => <div key={id} role="presentation"
+    className={`pointer-events-auto absolute grid place-items-center rounded-(--radius-m) border border-dashed text-control transition-colors ${className} ${over === id ? 'border-(--accent) bg-brand-wash text-foreground' : 'border-transparent bg-transparent text-transparent'}`}
+    onDragOver={(event) => { if (!event.dataTransfer.types.includes(type)) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setOver(id) }}
+    onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOver((current) => current === id ? null : current) }}
+    onDrop={(event) => { event.preventDefault(); setOver(null); setActiveDrag(null); dock() }}>{label}</div>
+  return <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-80 p-1.5">
+    {drag === 'tab'
+      ? [zone('left', t("Dock editor on left"), 'inset-y-1.5 left-1.5 w-[18%]', () => onEditorSide('left')), zone('right', t("Dock editor on right"), 'inset-y-1.5 right-1.5 w-[18%]', () => onEditorSide('right'))]
+      : [zone('right', t("Dock terminal on right"), 'top-1.5 bottom-[34%] right-1.5 w-[30%]', () => ws.setTerminalPanel(taskId, { terminalDock: 'right' })), zone('bottom', t("Dock terminal at bottom"), 'inset-x-1.5 bottom-1.5 h-[30%]', () => ws.setTerminalPanel(taskId, { terminalDock: 'bottom' }))]}
+  </div>
+}

@@ -104,7 +104,7 @@ it('uses read-only mode and rejects background tool permissions', async () => {
 })
 it('passes scoped Ramu MCP connection and image content', async () => {
   const image = join(dir, 'image.png'); writeFileSync(image, 'image')
-  runner = createAcpRunner({ cwd: dir, additionalDirs: [], covers: [dir] }, { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', model: 'wire-model' }, (e) => events.push(e))
+  runner = createAcpRunner({ cwd: dir, additionalDirs: [], covers: [dir] }, { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'cursor', model: 'wire-model' }, (e) => events.push(e))
   runner.setTools!({ url: 'http://localhost:1234/mcp', token: 'test-token' })
   await runner.start('hello', null, [{ id: 'image', path: image, name: 'image.png', size: 5, mimeType: 'image/png' }])
   await until(() => events.some((e) => e.kind === 'result'))

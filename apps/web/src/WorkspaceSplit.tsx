@@ -1,9 +1,9 @@
 import { cn } from 'cn'
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { readSize, useLayoutEpoch } from './panelLayout'
 
 /** A stable two-track split. Content never participates in track sizing or panel registration. */
-export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, defaultShare, primaryMin = 320, secondaryMin = 240, resizePreview = false, primary, secondary }: {
+export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, defaultShare, primaryMin = 320, secondaryMin = 240, resizePreview = false, flip = false, primaryCollapsed = false, primary, secondary }: {
   id: string
   orientation?: 'horizontal' | 'vertical'
   open: boolean
@@ -12,6 +12,10 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
   primaryMin?: number
   resizePreview?: boolean
   secondaryMin?: number
+  /** Puts the secondary pane first (left); only meaningful for horizontal splits. */
+  flip?: boolean
+  /** Hides the primary pane and gives the secondary pane the full track while open. */
+  primaryCollapsed?: boolean
   primary: ReactNode
   secondary: ReactNode
 }) {
@@ -63,12 +67,17 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
     setShare(next)
   }
   const save = () => localStorage.setItem(`ramu.layout.${storageKey}`, String(currentShare.current))
-  const tracks = open ? `minmax(0, ${100 - actual}fr) 1px minmax(0, ${actual}fr)` : 'minmax(0, 100fr) 0px minmax(0, 0fr)'
   const horizontal = orientation === 'horizontal'
+  const flipped = flip && horizontal
+  const collapsed = open && primaryCollapsed
+  const first = collapsed ? 0 : open ? 100 - actual : 100
+  const gap = open && !collapsed ? '1px' : '0px'
+  const tracks = flipped ? `minmax(0, ${100 - first}fr) ${gap} minmax(0, ${first}fr)` : `minmax(0, ${first}fr) ${gap} minmax(0, ${100 - first}fr)`
+  const place = (column: number): CSSProperties | undefined => flipped ? { gridColumn: column, gridRow: 1 } : undefined
   const movePreview = (value: number, size: number) => {
     if (!preview.current) return
     preview.current.style.visibility = 'visible'
-    preview.current.style.transform = horizontal ? `translateX(${Math.round(size * (1 - value / 100))}px)` : `translateY(${Math.round(size * (1 - value / 100))}px)`
+    preview.current.style.transform = horizontal ? `translateX(${Math.round(size * (flipped ? value / 100 : 1 - value / 100))}px)` : `translateY(${Math.round(size * (1 - value / 100))}px)`
   }
   const endDrag = () => {
     drag.current = null
@@ -77,7 +86,7 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
   }
 
   return <div ref={root} data-workspace-split={id} data-open={open || undefined} data-dragging={dragging || undefined} className={cn('relative grid h-full w-full min-w-0 min-h-0 overflow-hidden', dragging && 'select-none')} style={horizontal ? { gridTemplateColumns: tracks, gridTemplateRows: 'minmax(0, 1fr)' } : { gridTemplateRows: tracks, gridTemplateColumns: 'minmax(0, 1fr)' }}>
-    <div className="min-w-0 min-h-0 overflow-hidden">{primary}</div>
+    <div className="min-w-0 min-h-0 overflow-hidden" inert={collapsed} aria-hidden={collapsed || undefined} style={{ ...place(3), visibility: collapsed ? 'hidden' : 'visible' }}>{primary}</div>
     <div
       data-sash-active={dragging || undefined}
       role="separator"
@@ -86,10 +95,10 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
       aria-valuemin={Math.round(minimum)}
       aria-valuemax={Math.round(maximum)}
       aria-valuenow={Math.round(actual)}
-      aria-hidden={!open}
-      tabIndex={open ? 0 : -1}
+      aria-hidden={!open || collapsed}
+      tabIndex={open && !collapsed ? 0 : -1}
       className={cn('pane-sash relative z-60 bg-[var(--pane-border-color)] outline-none touch-none', horizontal ? 'cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-3 after:-translate-x-1/2' : 'cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-3 after:-translate-y-1/2')}
-      style={{ visibility: open ? 'visible' : 'hidden' }}
+      style={{ ...place(2), visibility: open && !collapsed ? 'visible' : 'hidden' }}
       onPointerDown={event => {
         if (event.button !== 0 || !open || drag.current || !root.current) return
         event.preventDefault()
@@ -104,7 +113,7 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
         if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
         const state = drag.current
         if (!state || state.length <= 0 || !open) return
-        state.share = clamp(((horizontal ? state.rect.right - event.clientX : state.rect.bottom - event.clientY) - 0.5) / state.length * 100)
+        state.share = clamp(((horizontal ? flipped ? event.clientX - state.rect.left : state.rect.right - event.clientX : state.rect.bottom - event.clientY) - 0.5) / state.length * 100)
         if (resizePreview) movePreview(state.share, state.length)
         else update(state.share)
       }}
@@ -121,8 +130,9 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
         const earlier = horizontal ? 'ArrowLeft' : 'ArrowUp'
         const later = horizontal ? 'ArrowRight' : 'ArrowDown'
         let next: number
-        if (event.key === earlier) next = actual + 20 / Math.max(1, length) * 100
-        else if (event.key === later) next = actual - 20 / Math.max(1, length) * 100
+        const step = 20 / Math.max(1, length) * 100 * (flipped ? -1 : 1)
+        if (event.key === earlier) next = actual + step
+        else if (event.key === later) next = actual - step
         else if (event.key === 'Home') next = maximum
         else if (event.key === 'End') next = minimum
         else return
@@ -131,7 +141,7 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
         save()
       }}
     />
-    <div data-panel-surface className="min-w-0 min-h-0 overflow-hidden" inert={!open} aria-hidden={!open} style={{ visibility: open ? 'visible' : 'hidden' }}>{secondary}</div>
+    <div data-panel-surface className="min-w-0 min-h-0 overflow-hidden" inert={!open} aria-hidden={!open} style={{ ...place(1), visibility: open ? 'visible' : 'hidden' }}>{secondary}</div>
     <div ref={preview} data-workspace-divider-preview aria-hidden="true" className={cn('pointer-events-none absolute z-70 bg-[var(--pane-border-active)]', horizontal ? 'inset-y-0 left-0 w-0.5' : 'inset-x-0 top-0 h-0.5')} style={{ visibility: 'hidden' }} />
   </div>
 }

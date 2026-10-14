@@ -105,12 +105,13 @@ function Shell() {
   }, [preferences.sidebarWidth])
   useEffect(() => { if (layoutEpoch) toolsPanel.current?.resize(340) }, [layoutEpoch])
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance')
+  const [settingsTarget, setSettingsTarget] = useState<string | undefined>()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchingChats, setSearchingChats] = useState(false)
   useEffect(() => {
-    const open = (event: Event) => { setSettingsSection((event as CustomEvent<{ section?: SettingsSection }>).detail?.section ?? 'appearance'); setSettingsOpen(true) }
+    const open = (event: Event) => { const detail = (event as CustomEvent<{ section?: SettingsSection; target?: string }>).detail; setSettingsSection(detail?.section ?? 'appearance'); setSettingsTarget(detail?.target); setSettingsOpen(true) }
     const off = ramu.on('menu:action', ({ action }) => {
-      window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: action === 'check-updates' ? 'updates' : 'appearance' } }))
+      window.dispatchEvent(new CustomEvent('ramu:settings', { detail: action === 'check-updates' ? { section: 'system', target: 'Check app updates' } : { section: 'appearance' } }))
       if (action === 'check-updates') void invoke('updates.check').catch((reason) => notifyError(errorText(reason), 'Updates'))
     })
     window.addEventListener('ramu:settings', open)
@@ -280,7 +281,7 @@ function Shell() {
       </aside>
       </ResizablePanel>
       </ResizablePanelGroup>
-      {settingsOpen && <SettingsPanel initialSection={settingsSection} shortcuts={commands.filter((command) => command.keys).map((command) => ({ title: command.title, category: command.category, keys: command.keys! }))} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsPanel initialSection={settingsSection} initialTarget={settingsTarget} shortcuts={commands.filter((command) => command.keys).map((command) => ({ title: command.title, category: command.category, keys: command.keys! }))} onClose={() => setSettingsOpen(false)} />}
       {palette && <Palette ws={ws} commands={commands} mode={palette} onClose={() => setPalette(null)} />}
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
       <AppUpdateNotice />

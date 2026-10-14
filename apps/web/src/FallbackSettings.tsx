@@ -1,4 +1,4 @@
-import { SettingsRow } from '@/components/settings-row'
+import { SettingsGroupTitle, SettingsRow } from '@/components/settings-row'
 import { errorText } from './errors'
 import { t, useLanguage } from './i18n'
 import { Button } from '@/components/desktop-button'
@@ -127,8 +127,9 @@ export function SubagentSettings({ value, onChange, busy }: { value: AppPreferen
   const firstStep = (): FallbackStep | null => { const model = catalogs.flatMap((catalog) => catalog.models).find((entry) => entry.isDefault); return model ? stepFor(model) : null }
   const mainChain = (provider: AgentProvider) => value.fallback.chains[provider] ?? defaultChain(provider, catalogs)
   const toggle = (key: 'continueNative' | 'isolate' | 'shareContext', title: string, description: string) => <SettingsRow className="settings-toggle"><span><strong>{title}</strong><span className="muted text-muted-foreground block block small text-caption">{description}</span></span><Switch aria-label={title} checked={sub[key]} disabled={busy} onCheckedChange={(checked) => set({ [key]: checked })} /></SettingsRow>
-  return <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 subagent-settings">
-    <p className="muted text-muted-foreground">{t("Choose where helper agents run and how they handle usage limits.")}</p>
+  return <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 subagent-settings mt-8">
+    <SettingsGroupTitle>{t("Sub-agents")}</SettingsGroupTitle>
+    <p className="muted text-muted-foreground small text-caption">{t("Choose where helper agents run and how they handle usage limits.")}</p>
     <SettingsRow className=""><span><strong>{t("Where sub-agents run")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Use native helpers or route tasks to a selected model.")}</span></span><Dropdown label={t("Where sub-agents run")} value={sub.mode} disabled={busy} options={[{ value: 'native', label: t("Native") }, { value: 'single', label: t("One provider for all") }, { value: 'per-provider', label: t("Per provider") }]} onChange={(mode) => set({ mode: mode === 'single' ? 'single' : mode === 'per-provider' ? 'per-provider' : 'native', ...(mode === 'single' && !sub.single ? { single: firstStep() } : {}) })} /></SettingsRow>
     {sub.mode === 'single' && <SettingsRow className="subagent-route [&_.fallback-step-picker]:flex-1 [&_.fallback-step-picker]:max-w-[460px] items-center"><span><strong>{t("All sub-agents use")}</strong></span><StepPicker label={t("All sub-agents")} step={sub.single} disabled={busy} onChange={(step) => set({ single: step })} /></SettingsRow>}
     {sub.mode === 'per-provider' && <div className="subagent-routes flex flex-col">{providers.map((provider) => <SettingsRow className="subagent-route [&_.fallback-step-picker]:flex-1 [&_.fallback-step-picker]:max-w-[460px] items-center" key={provider}>
@@ -173,8 +174,9 @@ export function AdvisorSettings({ value, onChange, busy }: { value: AppPreferenc
     return model ? stepFor(model) : null
   }
   const toggle = (enabled: boolean) => set({ enabled, ...(enabled && !advisor.step ? { step: firstStep() } : {}) })
-  return <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 advisor-settings">
-    <p className="muted text-muted-foreground">{t("Consult a second model before key decisions or when the agent is stuck.")}</p>
+  return <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 advisor-settings mt-8">
+    <SettingsGroupTitle>{t("Advisor")}</SettingsGroupTitle>
+    <p className="muted text-muted-foreground small text-caption">{t("Consult a second model before key decisions or when the agent is stuck.")}</p>
     <SettingsRow className="settings-toggle"><span><strong>{t("Advisor")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Send the chat transcript to the advisor model. Uses model tokens. Applies when a chat starts or restarts.")}</span></span><Switch aria-label={t("Advisor")} checked={advisor.enabled} disabled={busy} onCheckedChange={toggle} /></SettingsRow>
     <SettingsRow className="subagent-route [&_.fallback-step-picker]:flex-1 [&_.fallback-step-picker]:max-w-[460px] items-center"><span><strong>{t("Advisor model")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Choose the model used for advice.")}</span></span><StepPicker label={t("Advisor")} step={advisor.step} disabled={busy || !advisor.enabled} onChange={(step) => set({ step })} /></SettingsRow>
     <SettingsRow className="settings-toggle"><span><strong>{t("Always wait for advice")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Pause until advice arrives. When off, the agent can continue independent work.")}</span></span><Switch aria-label={t("Always wait for advice")} checked={advisor.wait} disabled={busy || !advisor.enabled} onCheckedChange={(wait) => set({ wait })} /></SettingsRow>

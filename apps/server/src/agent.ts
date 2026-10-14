@@ -26,7 +26,7 @@ import { DEFAULT_AGENT_SETTINGS, DEFAULT_FALLBACK_PREFERENCES, type AdviceStatus
 import { attachmentPrompt, nativeBlocks } from './attachments'
 import { defaultChain, resolveStep, subagentChain, subagentTarget, settingsKey, isOver, limitReason, nextStep, peakFor, planRoute, stepKey, type RouteDecision } from '@ramu/shared/routing'
 import { claudeReadings, claudeUsageReadings, type ClaudeUsageResponse, type ClaudeRateLimitInfo, type UsageService } from './usage'
-import { BACKGROUND_PREAMBLE, SUBAGENT_PREAMBLE, taskMessagePrompt, taskReportPrompt, taskStopPrompt } from '@ramu/shared/agentTasks'
+import { BACKGROUND_PREAMBLE, SUBAGENT_PREAMBLE, subagentNotePrompt, taskMessagePrompt, taskReportPrompt, taskStopPrompt } from '@ramu/shared/agentTasks'
 import { applyIsolation, collectPatch, createIsolation, removeIsolation, type Isolation } from './isolation'
 import { codexAside, codexModels, createCodexRunner, type CodexFactory } from './codex'
 import { QUESTION_PREAMBLE, answerMessage, questionKey, questionAnswer, questionState, type QuestionInput, type QuestionRequest, type QuestionState } from '@ramu/shared/questions'
@@ -87,6 +87,8 @@ class InputQueue implements AsyncIterable<SDKUserMessage> {
 
 /** How long a foreground sub-agent holds its parent's tool call open before turning into a background one. */
 const FOREGROUND_WAIT_MS = 45 * 60_000
+/** How long a sub-agent's question waits for an answer before it carries on by itself. */
+const ASK_WAIT_MS = 10 * 60_000
 
 interface ChildRun {
   parentId: string
@@ -96,6 +98,8 @@ interface ChildRun {
   /** Waiting for the result as a tool result; otherwise it is reported with a message. */
   waiter?: (result: SubagentResult) => void
   report: boolean
+  /** A question to the parent that is waiting for its answer. */
+  asking?: (answer: string) => void
   settled: boolean
   promptSeen: boolean
   isolation?: Isolation
@@ -883,6 +887,11 @@ export class AgentService {
     this.record(id, { kind: 'queue', messages, paused })
   }
 
+  /** Stop holds queued messages so they do not fire at a stopped chat. An empty queue has nothing to hold, and a hidden pause would block later resumes. */
+  private pauseQueue(id: string): void {
+    if (this.queued(id).length) this.updateQueue(id, this.queued(id), true)
+  }
+
   resumeQueue(id: string): void {
     this.get(id)
     this.updateQueue(id, this.queued(id), false)
@@ -1495,6 +1504,7 @@ export class AgentService {
     const state = this.get(id).state
     if (state !== 'idle' && state !== 'failed' && state !== 'stopped') return
     run.settled = true
+    run.asking?.('The sub-agent ended before an answer arrived.')
     const status: AgentTaskStatus = state === 'idle' ? 'completed' : state === 'failed' ? 'failed' : 'stopped'
     const error = this.events(id).findLast((e) => e.kind === 'error')
     const failure = error?.kind === 'error' ? error.message : ''
@@ -1509,6 +1519,44 @@ export class AgentService {
     // The task stays "running" in its chat until the work is back in the checkout, so the checkout stays reserved and the change capture waits.
     if (run.isolation) void this.finishIsolation(run, status).then(finish, (error) => finish(`\n\n(Bringing its changes back failed: ${errorMessage(error)})`))
     else finish('')
+  }
+
+  /** A note from a running sub-agent to its chat. It does not wait for a reply. */
+  async messageParent(childId: string, text: string): Promise<void> {
+    const run = this.children.get(childId)
+    if (!run || run.settled) throw new Error('Only a running sub-agent that Ramu started can message its parent.')
+    await this.reportToParent(run.parentId, subagentNotePrompt(run.name, 'says', childId, text))
+  }
+
+  /** A question from a running sub-agent to its chat; resolves with the answer, or a note to carry on if none comes. */
+  async askParent(childId: string, question: string, signal?: AbortSignal): Promise<string> {
+    const run = this.children.get(childId)
+    if (!run || run.settled) throw new Error('Only a running sub-agent that Ramu started can ask its parent.')
+    if (run.asking) throw new Error('A question is already waiting for an answer.')
+    const answered = new Promise<string>((resolve) => {
+      const timer = setTimeout(() => resolve('No answer arrived. Carry on with your best judgment and say in your report what you assumed.'), ASK_WAIT_MS)
+      const stop = () => resolve('The question was cancelled.')
+      signal?.addEventListener('abort', stop, { once: true })
+      run.asking = (answer) => { clearTimeout(timer); signal?.removeEventListener('abort', stop); resolve(answer) }
+    })
+    const text = subagentNotePrompt(run.name, 'asks', childId, question)
+    if (run.waiter) {
+      // The chat is blocked on this sub-agent's call, so it could not answer: hand the question back as that call's result and let the report follow as a message.
+      const waiter = run.waiter
+      run.waiter = undefined
+      run.report = true
+      const child = this.get(childId)
+      waiter({ agentId: childId, name: run.name, status: 'running', report: `${text}\n\nIt keeps waiting for your answer; its final report arrives as a message.`, provider: child.provider, model: child.settings.model })
+    } else void this.reportToParent(run.parentId, text)
+    try { return await answered } finally { run.asking = undefined }
+  }
+
+  /** The chat's answer to a sub-agent that asked a question. */
+  answerSubagent(parentId: string, agentId: string, text: string): void {
+    const run = this.children.get(agentId)
+    if (!run || run.parentId !== parentId) throw new Error('Unknown sub-agent.')
+    if (!run.asking) throw new Error('That sub-agent is not waiting for an answer. Use SendMessage-style messaging from its card instead.')
+    run.asking(text.trim())
   }
 
   /** A sub-agent that worked in its own copy: apply what it did to the checkout, or keep the copy and say where it is. */
@@ -1703,6 +1751,7 @@ export class AgentService {
     if (run?.parentId === id) {
       // Straight to the sub-agent; its next report comes back as a message.
       run.report = true
+      if (run.asking) { run.asking(text.trim()); return }
       const child = this.get(agentId)
       await this.submit(agentId, text.trim(), WRITING_STATES.includes(child.state) ? 'steer' : 'queue')
       return
@@ -1740,7 +1789,7 @@ export class AgentService {
   async interrupt(id: string): Promise<void> {
     this.clearProviderWait(id)
     if (this.getGoal(id) && this.getGoal(id)?.status !== 'completed') this.controlGoal(id, 'pause')
-    this.updateQueue(id, this.queued(id), true)
+    this.pauseQueue(id)
     if (this.runners.has(id)) await this.runners.get(id)!.interrupt()
     else await this.live.get(id)?.query.interrupt()
   }
@@ -1753,7 +1802,7 @@ export class AgentService {
       this.setState(id, 'stopped')
     }
     for (const [childId, run] of this.children) if (run.parentId === id) this.stop(childId)
-    this.updateQueue(id, this.queued(id), true)
+    this.pauseQueue(id)
     this.revisions.set(id, (this.revisions.get(id) ?? 0) + 1)
     this.halt(id)
     if (!this.live.has(id) && !this.runners.has(id)) this.setState(id, 'stopped')

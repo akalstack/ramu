@@ -61,6 +61,8 @@ export interface WorkspaceApi {
   keepView(taskId: string, viewId: string): void
   reopenClosedView(taskId: string): void
   renameFileViews(taskId: string, repoId: string, path: string, destination: string): void
+  /** Reorders an editor tab: places it before (or after) `targetId`. */
+  moveView(taskId: string, viewId: string, targetId: string, after: boolean): void
   closeView(taskId: string, viewId: string): void
   closeViews(taskId: string, viewIds: string[]): void
   activateView(taskId: string, viewId: string): void
@@ -490,6 +492,18 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
           if ((view.kind !== 'file' && view.kind !== 'diff') || view.repoId !== repoId || view.kind === 'diff' && view.oid || view.path !== path && !view.path.startsWith(`${path}/`)) return view
           return { ...view, path: destination + view.path.slice(path.length) }
         }) }))
+      },
+      moveView(taskId, viewId, targetId, after) {
+        if (viewId === targetId) return
+        updateTaskUi(workspaceOf(taskId), (state) => {
+          const moving = state.views.find((view) => view.id === viewId)
+          if (!moving || moving.kind === 'agent' || moving.kind === 'terminal') return state
+          const rest = state.views.filter((view) => view.id !== viewId)
+          const at = rest.findIndex((view) => view.id === targetId)
+          if (at < 0) return state
+          rest.splice(at + (after ? 1 : 0), 0, moving)
+          return { ...state, views: rest }
+        })
       },
       closeView: (taskId, viewId) => closeViews(taskId, [viewId]),
       closeViews,

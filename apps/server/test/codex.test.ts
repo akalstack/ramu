@@ -115,7 +115,7 @@ const scope = { cwd: '/workspace', additionalDirs: ['/other'], covers: ['/worksp
 
 describe('Codex app-server wire adapter', () => {
   it('recovers saved helper threads without resuming or starting work and isolates missing histories', async () => {
-    const settings = { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' as const }
+    const settings = { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' as const }
     const history = await codexHelperHistory({ ...scope, id: 'ramu-root', taskId: 't', repoId: null, provider: 'codex', settings, state: 'restored', providerSessionId: 'saved-root', parentId: null, createdAt: 0, title: 'Root' }, [
       { agentId: 'interrupted-helper', name: 'Interrupted', status: 'running' },
       { agentId: 'missing', name: 'Missing', status: 'running' },
@@ -136,7 +136,7 @@ describe('Codex app-server wire adapter', () => {
     ])
   })
   it('validates MCP forms before replying, retains invalid requests, and uses typed values and raw server IDs', async () => {
-    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, (event) => events.push(event))
+    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' }, (event) => events.push(event))
     await runner.start('mcp form', null)
     await until(() => events.some((event) => event.kind === 'elicitation'))
     const request = events.find((event) => event.kind === 'elicitation')!
@@ -150,7 +150,7 @@ describe('Codex app-server wire adapter', () => {
     expect(() => runner!.replyElicitation!(request.requestId, 'accept', {})).toThrow(/no longer pending/)
   })
   it.each(['decline', 'cancel'] as const)('returns explicit %s and waits for other outstanding forms', async (action) => {
-    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, (event) => events.push(event))
+    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' }, (event) => events.push(event))
     await runner.start('mcp many', null)
     await until(() => events.filter((event) => event.kind === 'elicitation').length === 2)
     const requests = events.filter((event) => event.kind === 'elicitation')
@@ -163,7 +163,7 @@ describe('Codex app-server wire adapter', () => {
     expect(events.at(-1)).toMatchObject({ kind: 'state', state: 'running' })
   })
   it('shows URL requests without opening them and responds only after explicit continuation', async () => {
-    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, (event) => events.push(event))
+    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' }, (event) => events.push(event))
     await runner.start('mcp url', null)
     await until(() => events.some((event) => event.kind === 'elicitation'))
     const request = events.find((event) => event.kind === 'elicitation')!
@@ -174,26 +174,26 @@ describe('Codex app-server wire adapter', () => {
     expect(messages()).toContainEqual({ id: 700, result: { action: 'accept', content: null, _meta: null } })
   })
   it('cancels unsupported schemas, keeps dynamic tool calls separate, and observes server-side resolution', async () => {
-    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, (event) => events.push(event))
+    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' }, (event) => events.push(event))
     await runner.start('mcp unsupported', null)
     await until(() => messages().some((message) => message.id === 700 && message.result))
     expect(messages()).toContainEqual({ id: 700, result: { action: 'cancel', content: null, _meta: null } })
     expect(events.some((event) => event.kind === 'error')).toBe(true)
     expect(events.some((event) => event.kind === 'elicitation')).toBe(false)
-    await runner.stop(); runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, (event) => events.push(event))
+    await runner.stop(); runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' }, (event) => events.push(event))
     await runner.start('mcp dynamic', null)
     await until(() => messages().some((message) => message.id === 702 && message.error))
     expect(messages().find((message) => message.id === 702 && message.error)?.error.code).toBe(-32601)
     await runner.stop(); runner = undefined
     events.length = 0
-    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, (event) => events.push(event))
+    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' }, (event) => events.push(event))
     await runner.start('mcp resolved', null)
     await until(() => events.some((event) => event.kind === 'request-resolved'))
     const request = events.find((event) => event.kind === 'elicitation')!
     expect(() => runner!.replyElicitation!(request.requestId, 'accept', {})).toThrow(/no longer pending/)
   })
   it('cancels outstanding elicitations on interrupt and scopes request identities to a connection', async () => {
-    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, (event) => events.push(event))
+    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' }, (event) => events.push(event))
     await runner.start('mcp form', null)
     await until(() => events.some((event) => event.kind === 'elicitation'))
     const first = events.find((event) => event.kind === 'elicitation')!
@@ -201,7 +201,7 @@ describe('Codex app-server wire adapter', () => {
     await until(() => messages().some((message) => message.id === 700 && message.result))
     expect(messages()).toContainEqual({ id: 700, result: { action: 'cancel', content: null, _meta: null } })
     await runner.stop(); events.length = 0
-    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, (event) => events.push(event))
+    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' }, (event) => events.push(event))
     await runner.start('mcp form', null)
     await until(() => events.some((event) => event.kind === 'elicitation'))
     expect(events.find((event) => event.kind === 'elicitation')?.requestId).not.toBe(first.requestId)
@@ -253,7 +253,7 @@ describe('Codex app-server wire adapter', () => {
   })
   it('maps structured usage limits to a terminal turn failure', async () => {
     let limited = false
-    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, (e, limit) => { events.push(e); limited ||= !!limit })
+    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' }, (e, limit) => { events.push(e); limited ||= !!limit })
     await runner.start('limit', null)
     await until(() => events.some((e) => e.kind === 'result'))
     expect(limited).toBe(true)
@@ -272,7 +272,7 @@ describe('Codex app-server wire adapter', () => {
     expect(messages()).toContainEqual({ id: 901, result: { decision: 'accept' } })
   })
   it('answers user input using the provider question IDs', async () => {
-    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, (e) => events.push(e))
+    runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' }, (e) => events.push(e))
     await runner.start('question', null)
     await until(() => events.some((e) => e.kind === 'question'))
     runner.replyQuestion('900', { 'Which?': 'A' })
@@ -346,7 +346,7 @@ describe('Codex context window', () => {
 describe('Codex sub-agent controls at launch', () => {
   const argvOf = () => wireLines().find((m) => m.argv).argv as string[]
   const scope = { cwd: '/workspace', additionalDirs: [], covers: ['/workspace'] }
-  const settings = { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' as const, model: 'codex-wire' }
+  const settings = { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' as const, model: 'codex-wire' }
   it('turns Codex\'s own sub-agent tools off and lifts the tool timeout when Ramu runs sub-agents', async () => {
     runner = createCodexRunner(scope, settings, (e) => events.push(e))
     runner.setTools?.({ url: 'http://127.0.0.1:9/mcp', token: 't', nativeSubagents: false })

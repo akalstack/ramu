@@ -51,6 +51,8 @@ For packaged macOS checks, run `RAMU_PACKAGED_EXECUTABLE=/path/to/Ramu node scri
 
 The app checks stable releases from `ahxar/ramu`; drafts and prereleases are excluded. Downloads require a matching ZIP and checksum file. Automatic installation requires a signed macOS app and compatible signed ZIP. Unsigned macOS and other platforms use manual installation.
 
-**Auto-update Ramu** downloads updates but does not restart automatically. **Restart app** leaves the service and chats running. **Restart app & service** switches to the bundled service, stops agents, and recovers unfinished chats according to the saved recovery setting. A healthy older service is not restarted on app launch.
+Auto-update is currently disabled (`APP_AUTO_UPDATE` in `packages/shared/src/updates.ts`) because builds are not signed with an Apple Developer ID. The service still checks for releases, and Settings links to the GitHub release for a manual install. Once signed builds ship, set the flag to `true` to restore the **Auto-update Ramu** setting and in-app downloads.
+
+When enabled, **Auto-update Ramu** downloads updates but does not restart automatically. **Restart app** leaves the service and chats running. **Restart app & service** switches to the bundled service, stops agents, and recovers unfinished chats according to the saved recovery setting. A healthy older service is not restarted on app launch.
 
 The service owns macOS keep-awake behavior. First-time login startup enables it once; later choices are preserved. **Plugged in only** is the default power policy. Display and manual sleep remain available.

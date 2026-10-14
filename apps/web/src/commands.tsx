@@ -30,7 +30,7 @@ export interface Command {
 }
 
 /** Task-scoped UI actions that live in TaskPane's own state. */
-export type TaskAction = 'new-chat'
+export type TaskAction = 'new-chat' | 'toggle-chat'
 export function taskAction(taskId: string, action: TaskAction) {
   window.dispatchEvent(new CustomEvent('ramu:task-action', { detail: { taskId, action } }))
 }
@@ -110,9 +110,9 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       run: () => newTerminal(b.repoId),
     })),
     { id: 'settings.open', title: t("Open settings"), category: t("Preferences"), keys: 'mod+,', run: () => window.dispatchEvent(new Event('ramu:settings')) },
-    { id: 'updates.check', title: t("Check for updates"), category: t("Preferences"), run: async () => { window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'updates' } })); await invoke('updates.check') } },
-    { id: 'settings.models', title: t("Model sets and reasoning defaults"), category: t("Preferences"), run: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } })) },
-    ...SETTINGS_SECTIONS.filter(section => section.id !== 'models').map(section => ({ id: `settings.${section.id}`, title: t("Open {0} settings", { "0": t(section.label) }), category: t("Preferences"), run: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: section.id } })) })),
+    { id: 'updates.check', title: t("Check for updates"), category: t("Preferences"), run: async () => { window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'system', target: 'Check app updates' } })); await invoke('updates.check') } },
+    { id: 'settings.models', title: t("Model sets and reasoning defaults"), category: t("Preferences"), run: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'providers', target: 'Model sets' } })) },
+    ...SETTINGS_SECTIONS.map(section => ({ id: `settings.${section.id}`, title: t("Open {0} settings", { "0": t(section.label) }), category: t("Preferences"), run: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: section.id } })) })),
     { id: 'file.new', title: t("New file…"), category: 'File', run: () => window.dispatchEvent(new CustomEvent('ramu:create-entry', { detail: { kind: 'file' } })), when: hasTask },
     { id: 'folder.new', title: t("New folder…"), category: 'File', run: () => window.dispatchEvent(new CustomEvent('ramu:create-entry', { detail: { kind: 'dir' } })), when: hasTask },
     { id: 'file.save-all', title: t("Save all files"), category: 'File', keys: 'mod+alt+s', run: () => window.dispatchEvent(new Event('ramu:save-all')), when: hasTask },
@@ -153,6 +153,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       when: () => tabs.filter((v) => v.kind === 'file' || v.kind === 'diff' || v.kind === 'git' || v.kind === 'review').length > i,
     })),
     { id: 'view.sidebar', title: t("Toggle primary side bar"), category: t("View"), keys: 'mod+b', run: shell.toggleSidebar },
+    { id: 'view.chat', title: t("Toggle chat pane"), category: t("View"), keys: 'mod+alt+c', run: () => taskId && taskAction(taskId, 'toggle-chat'), when: hasTask },
     { id: 'view.right-panel', title: t("Toggle right panel"), category: t("View"), keys: 'mod+alt+b', run: () => taskId && ws.toggleRightPanel(taskId), when: hasTask },
     { id: 'view.home', title: t("Show home"), category: t("View"), run: () => { shell.showSidebar?.('projects'); ws.showHome() } },
     { id: 'view.schedules', title: t("Show schedules"), category: t("View"), run: () => shell.showSidebar ? shell.showSidebar('schedules') : ws.setSidebar('schedules') },

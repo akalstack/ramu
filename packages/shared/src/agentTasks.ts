@@ -66,7 +66,8 @@ export function effectiveStatus(task: AgentTask, sessionLive: boolean): AgentTas
 }
 
 // A sub-agent Ramu runs reports back to its chat through a message the chat shows as a report, not as something you typed.
-const REPORT = /^\[Sub-agent "(.+?)" (finished|failed|stopped|is still working)\]\n([\s\S]*)$/
+const REPORT = /^\[Sub-agent "(.+?)" (finished|failed|stopped|is still working|says|asks)\]\n([\s\S]*)$/
+const ANSWER_HINT = /\n\n\(Reply with answer_subagent, agent "[^"\n]*"\.\)$/
 
 export function taskReportPrompt(name: string, status: AgentTaskStatus | 'running', text: string): string {
   const verb = status === 'completed' ? 'finished' : status === 'running' ? 'is still working' : status
@@ -75,7 +76,12 @@ export function taskReportPrompt(name: string, status: AgentTaskStatus | 'runnin
 
 export function parseTaskReport(text: string): { name: string; verb: string; body: string } | null {
   const match = REPORT.exec(text)
-  return match ? { name: match[1]!, verb: match[2]!, body: match[3]! } : null
+  return match ? { name: match[1]!, verb: match[2]!, body: match[3]!.replace(ANSWER_HINT, '') } : null
+}
+
+/** A note or question a running sub-agent sends its chat before it has finished. A question tells the chat how to answer. */
+export function subagentNotePrompt(name: string, kind: 'says' | 'asks', agentId: string, text: string): string {
+  return `[Sub-agent "${name.replace(/"/g, "'")}" ${kind}]\n${text.trim()}${kind === 'asks' ? `\n\n(Reply with answer_subagent, agent "${agentId}".)` : ''}`
 }
 
 // Ramu's advisor shows as a card like a sub-agent; advice it delivers later arrives as a message the chat shows as a link to that card.
@@ -99,4 +105,4 @@ export function parseAdvice(text: string): { requestId: string; advisor?: string
 /** What a sub-agent is told, so it works as a helper and ends with something its parent can use. */
 /** Appended to the agent's instructions when long commands may run in the background. */
 export const BACKGROUND_PREAMBLE = 'Long-running commands: when a command may take more than about 30 seconds (dev servers, watchers, full builds, large test suites, installs) and you have other work to do, start it in the background with your shell tool\'s background option instead of waiting for it. Carry on with the other work, then read its output or wait for it to finish before you rely on its result. Run short commands in the foreground.'
-export const SUBAGENT_PREAMBLE = 'You are a sub-agent started by another agent that works in the same workspace. Do the task below, then finish with a concise report of what you did and found: files you changed, results, and anything left open. Ask nothing unless you are blocked; your report goes straight back to the agent that started you.'
+export const SUBAGENT_PREAMBLE = 'You are a sub-agent started by another agent that works in the same workspace. Do the task below, then finish with a concise report of what you did and found: files you changed, results, and anything left open. Ask nothing unless you are blocked; your report goes straight back to the agent that started you. While you work, message_parent sends the agent that started you a short note without stopping, and ask_parent asks it a question and waits for the answer; use ask_parent only when you cannot go on without it, and still end with your report.'

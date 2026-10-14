@@ -153,7 +153,7 @@ async function runJourney() {
   await page.getByRole('option', { name: 'Default CLI account', exact: true }).click()
   await page.screenshot({ path: join(shots, 'provider-settings.png') })
   await page.getByRole('button', { name: 'Updates', exact: true }).click()
-  check(!(await page.getByRole('switch', { name: 'Auto-update Ramu', exact: true }).isChecked()), 'App auto-download is opt-in')
+  check(await page.getByRole('switch', { name: 'Auto-update Ramu', exact: true }).count() === 0, 'App auto-update is unavailable for unsigned builds')
   check(await page.getByRole('switch', { name: 'Check app updates', exact: true }).isChecked(), 'GitHub app-update checks are on by default')
   await page.screenshot({ path: join(shots, 'app-updates.png') })
   await page.getByRole('button', { name: 'Background & Recaps', exact: true }).click()

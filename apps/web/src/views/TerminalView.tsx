@@ -6,9 +6,14 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAppSettings } from '../AppSettings'
 import { invoke, ramu } from '../ipc'
 import { errorText } from '../TaskPane'
+import { useWorkspace } from '../workspace'
+import { FILE_DRAG_TYPE } from '../ComposerSuggestions'
+
+const shellQuote = (path: string) => /^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`
 
 export function TerminalView({ taskId, repoId, label, active, onExit, actions, initialCommand, run }: { taskId: string; repoId: string | null; label: string; active: boolean; onExit?: () => void; actions?: ReactNode; initialCommand?: string; /** Typed into the task's shell once it opens (project actions). */ run?: string }) {
   const { preferences } = useAppSettings()
+  const ws = useWorkspace()
   const terminal = useRef<Terminal | null>(null)
   const renderer = useRef<WebglAddon | null>(null)
   const rendererLoss = useRef<{ dispose(): void } | null>(null)
@@ -175,7 +180,24 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
         <span className="grow flex-1 min-w-0 text-left" />{actions}
       </div>
       {error && <div className="error text-bad banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control">{error}</div>}
-      <div className="terminal-host [contain:layout_paint] flex flex-1 min-h-0 min-w-0 overflow-hidden p-[4px_0_0_12px]" onPointerDown={(event) => {
+      <div className="terminal-host [contain:layout_paint] flex flex-1 min-h-0 min-w-0 overflow-hidden p-[4px_0_0_12px]" onDragOver={(event) => {
+        if (event.dataTransfer.types.includes(FILE_DRAG_TYPE) || event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy' }
+      }} onDrop={(event) => {
+        // Dropped files and Explorer entries are typed into the shell as quoted absolute paths.
+        const dragged = event.dataTransfer.getData(FILE_DRAG_TYPE), files = [...event.dataTransfer.files]
+        const paths: string[] = []
+        if (dragged) {
+          try {
+            const item = JSON.parse(dragged) as { repoId?: string; path?: string; items?: { path: string }[] }
+            const cwd = item.repoId ? ws.binding(taskId, item.repoId)?.cwd : undefined
+            if (cwd) for (const entry of item.items?.length ? item.items : item.path ? [{ path: item.path }] : []) paths.push(`${cwd}/${entry.path}`)
+          } catch { /* not ours */ }
+        } else for (const file of files) { const path = ramu.pathForFile(file); if (path) paths.push(path) }
+        if (!paths.length) return
+        event.preventDefault()
+        terminal.current?.paste(`${paths.map(shellQuote).join(' ')} `)
+        terminal.current?.focus()
+      }} onPointerDown={(event) => {
         // Padding has no native input target; keep the browser from blurring xterm after focus.
         if (!(event.target as HTMLElement).closest('.xterm')) event.preventDefault()
         terminal.current?.focus()

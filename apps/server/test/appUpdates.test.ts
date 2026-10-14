@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { AppUpdateService, assetChecksum, parseAppRelease } from '../src/appUpdates'
 import { runtimeBuild } from '../src/build'
+import { APP_AUTO_UPDATE } from '@ramu/shared/updates'
 import { writeFileSync } from 'node:fs'
 
 const dirs: string[] = [], services: AppUpdateService[] = []
@@ -38,7 +39,7 @@ it('rejects corrupt downloads without staging an installable update', async () =
   expect((await service.download()).phase).toBe('error')
   expect(service.status().error).toContain('checksum')
 })
-it('auto-downloads in the service without asking Electron to restart anything', async () => {
+it.runIf(APP_AUTO_UPDATE)('auto-downloads in the service without asking Electron to restart anything', async () => {
   vi.useFakeTimers()
   const { service } = make({ appUpdateChecks: false, appAutoUpdate: true })
   vi.spyOn(service, 'check').mockResolvedValue({ ...service.status(), phase: 'available' })
@@ -47,6 +48,16 @@ it('auto-downloads in the service without asking Electron to restart anything', 
   expect(download).toHaveBeenCalledOnce()
   service.close(); await vi.advanceTimersByTimeAsync(6 * 60 * 60_000)
   expect(download).toHaveBeenCalledOnce()
+})
+it.skipIf(APP_AUTO_UPDATE)('checks but never downloads while unsigned builds cannot self-install, even with a saved auto-update preference', async () => {
+  vi.useFakeTimers()
+  const { service } = make({ appUpdateChecks: false, appAutoUpdate: true })
+  const check = vi.spyOn(service, 'check').mockResolvedValue({ ...service.status(), phase: 'available' })
+  const download = vi.spyOn(service, 'download').mockResolvedValue({ ...service.status(), phase: 'ready' })
+  await vi.advanceTimersByTimeAsync(45_000)
+  expect(check).toHaveBeenCalledOnce()
+  expect(download).not.toHaveBeenCalled()
+  service.close()
 })
 it('service identity changes with shared code, independent of filesystem timestamps', () => {
   const { dir } = make()

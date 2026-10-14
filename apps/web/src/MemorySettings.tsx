@@ -1,4 +1,4 @@
-import { SettingsRow } from '@/components/settings-row'
+import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { errorText } from './errors'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -22,16 +22,16 @@ const GLOBAL = 'global'
 
 export function MemorySettings({ value, onChange }: { value: MemoryPreferences; onChange: (value: MemoryPreferences) => void }) {
   return <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0">
-    <SettingsRow className="settings-toggle"><span><strong>{t('Shared memory')}</strong><span className="muted text-muted-foreground block small text-caption">{t("Share saved notes across providers. Applies to chats started after saving.")}</span></span><Switch aria-label={t('Shared memory')} checked={value.enabled} onCheckedChange={(enabled) => onChange({ ...value, enabled })} /></SettingsRow>
+    <SettingsGroupTitle>{t('Memory')}</SettingsGroupTitle>
+    <SettingsRow><SettingsLabel title={t('Shared memory')} help={t("Agents on every provider read and save the same notes, including during chats. Learning also saves lasting lessons after chats. Applies to new chats.")} /><Switch aria-label={t('Shared memory')} checked={value.enabled} onCheckedChange={(enabled) => onChange({ ...value, enabled })} /></SettingsRow>
     {value.enabled && <>
-      <SettingsRow className="settings-toggle"><span><strong>{t("Memory cleanup")}</strong><span className="muted text-muted-foreground block small text-caption">{t("Merge duplicate notes and archive outdated memory daily. Uses model tokens. Changes can be restored.")}</span></span><Switch aria-label={t("Memory cleanup")} checked={value.dream} onCheckedChange={(dream) => onChange({ ...value, dream })} /></SettingsRow>
-      <SettingsRow className=""><span><strong>{t('Archive unused memories after')}</strong><span className="muted text-muted-foreground block small text-caption">{t("Archive unused project notes after this period. Your notes and essential memories are kept.")}</span></span><Dropdown label={t('Archive unused memories after')} value={String(value.staleAfterDays)} options={[...new Set([30, 60, 90, 180, 365, value.staleAfterDays])].sort((a, b) => a - b).map((days) => ({ value: String(days), label: t('{0} days', { 0: days }) }))} onChange={(days) => onChange({ ...value, staleAfterDays: Number(days) })} /></SettingsRow>
-      <MemoryBrowser />
+      <SettingsRow><SettingsLabel title={t("Memory cleanup")} help={t("Once a day, merge duplicates and archive unused notes. Notes you wrote are never changed. Uses model tokens. Anything archived can be restored.")} /><Switch aria-label={t("Memory cleanup")} checked={value.dream} onCheckedChange={(dream) => onChange({ ...value, dream })} /></SettingsRow>
+      <SettingsRow><SettingsLabel title={t('Archive unused memories after')} help={t("Applies to project notes nobody has used. Notes you wrote and essential memories are kept.")} /><Dropdown label={t('Archive unused memories after')} value={String(value.staleAfterDays)} options={[...new Set([30, 60, 90, 180, 365, value.staleAfterDays])].sort((a, b) => a - b).map((days) => ({ value: String(days), label: t('{0} days', { 0: days }) }))} onChange={(days) => onChange({ ...value, staleAfterDays: Number(days) })} /></SettingsRow>
     </>}
   </div>
 }
 
-function MemoryBrowser() {
+export function MemoryBrowser() {
   const ws = useWorkspace()
   const [snapshot, setSnapshot] = useState<MemorySnapshot | null>(null)
   const [history, setHistory] = useState<{ id: string; entries: Awaited<ReturnType<typeof ramu.invoke<'memory.history'>>> } | null>(null)
@@ -49,7 +49,7 @@ function MemoryBrowser() {
   const author = (m: Memory) => m.source.actor === 'agent' && m.source.provider ? providerName(m.source.provider) : m.source.actor === 'dream' ? t("Memory cleanup") : t('You')
   const save = () => editing && act(async () => { await invoke('memory.save', editing.input, editing.id); setEditing(null) })
   return <div className="memory-browser flex flex-col gap-2 mt-2">
-    <h4 className="settings-group-title mt-4 mb-1 text-caption font-medium text-muted-foreground">{t('Saved memories')}</h4>
+    <SettingsGroupTitle className="mt-4 mb-1">{t('Saved memories')}</SettingsGroupTitle>
     <div className="flex items-center gap-2">
       <SearchInput className="flex-1 min-w-0" aria-label={t('Search memories')} placeholder={t('Search memories')} value={query} onChange={(e) => setQuery(e.target.value)} onClear={() => setQuery('')} />
       <Dropdown className="w-[150px]! flex-none" label={t('Scope')} value={scope} options={[{ value: 'all', label: t('Everything') }, { value: GLOBAL, label: t('All projects') }, ...projects.map((p) => ({ value: p.id, label: p.name }))]} onChange={setScope} />

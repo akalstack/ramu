@@ -47,6 +47,7 @@ import { slide } from '../slide'
 import { animatePanelChange, reducedMotion } from '../panelMotion'
 import { CommentsChip, pendingComments, sentComments } from '../ReviewChip'
 import { SessionChangesButton, TurnChanges } from '../Changes'
+import { SessionCheckpointButton } from '../SessionCheckpoint'
 import { ScheduleChatCard } from '../Automation'
 import { Attachments } from '../Attachments'
 import { UndoRun } from '../UndoRun'
@@ -567,6 +568,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
       <div className="agent-header [&_.path]:flex-1 [&:not(:has(>_:not(.grow)))]:hidden [&_.grow]:hidden [&_.state]:mr-auto [&_.small]:gap-1.5 [&_.small]:text-soft [&_>_*]:flex-none [&_>_*]:whitespace-nowrap flex items-center flex-none text-control min-w-0 justify-end h-auto min-h-[36px] p-[4px_10px_0] gap-1.5 flex-wrap gap-y-1 pb-1">
         {history}
         <SessionChangesButton sessionId={view.sessionId} />
+        <SessionCheckpointButton sessionId={view.sessionId} />
         {session && STATE_LABEL[session.state] && <span className={`state [&.running]:text-brand [&.starting]:text-brand [&.needs-input]:text-warn [&.failed]:text-bad [&::before]:[content:''] [&::before]:w-1.5 [&::before]:h-1.5 [&::before]:rounded-full [&::before]:[background:var(--muted)] [&.idle::before]:[background:var(--ok)] [&.running::before]:[background:var(--accent)] [&.running::before]:[animation:pulse_1.6s_ease-in-out_infinite] [&.starting::before]:[background:var(--accent)] [&.starting::before]:[animation:pulse_1.6s_ease-in-out_infinite] [&.needs-input::before]:[background:var(--warn)] [&.failed::before]:[background:var(--bad)] [&:empty]:hidden tabular-nums text-muted-foreground whitespace-nowrap inline-flex items-center gap-1.5 p-[2px_9px_2px_8px] rounded-full bg-hover text-caption ${session.state}`}>{STATE_LABEL[session.state]}</span>}
         <span className="grow flex-1 min-w-0 text-left" />
         {pendingQuestions.length > 0 && <Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption" aria-pressed={showQuestions} onClick={() => setShowQuestions((open) => !open)}><ShieldQuestion size={14} />{translate("Questions · ")}{pendingQuestions.length}</Button>}

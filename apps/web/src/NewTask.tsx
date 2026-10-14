@@ -15,6 +15,7 @@ import { errorText } from './TaskPane'
 import { useWorkspace } from './workspace'
 import { HomeFeed } from './Home'
 import { clearDraft, draftKey, loadDraft, useDraftPersistence } from './drafts'
+import { useAddProject } from './addProject'
 
 /** A task's title is the first line of what you asked for. */
 export function titleFrom(prompt: string): string {
@@ -43,6 +44,8 @@ export function HomePage() {
 export function NewTask({ projectId, onProjectChange, feed = true }: { projectId: string; onProjectChange: (id: string) => void; feed?: boolean }) {
   useLanguage()
   const ws = useWorkspace()
+  const addProject = useAddProject()
+  const [folderOver, setFolderOver] = useState(false)
   const general = projectId === NO_PROJECT
   const repos = ws.repos[projectId] ?? []
   const project = ws.projects.find((p) => p.id === projectId)
@@ -206,7 +209,16 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
   )
   if (!feed) return start
   return (
-    <div className="home-page [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer-bar_.dropdown-trigger.control-btn]:h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:min-h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:p-[4px_8px] [&_.composer-bar_.dropdown-trigger.control-btn]:bg-transparent [&_.composer-bar_.dropdown-trigger.control-btn]:text-control [&_.composer-bar_.dropdown-trigger.control-btn]:leading-[normal] w-full h-full overflow-auto flex flex-col items-stretch p-[0_24px_24px]">
+    <div onDragOver={(event) => { if (!addProject.busy && event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setFolderOver(true) } }}
+      onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFolderOver(false) }}
+      onDrop={(event) => {
+        setFolderOver(false)
+        // A drop on the message box is an attachment; anywhere else on Home it adds a project.
+        if (event.defaultPrevented || addProject.busy || !event.dataTransfer.files.length) return
+        event.preventDefault()
+        void addProject.addDropped([...event.dataTransfer.files])
+      }}
+      className={`home-page${folderOver ? ' outline-dashed outline-1 -outline-offset-4 outline-(--line-strong)' : ''} [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer-bar_.dropdown-trigger.control-btn]:h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:min-h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:p-[4px_8px] [&_.composer-bar_.dropdown-trigger.control-btn]:bg-transparent [&_.composer-bar_.dropdown-trigger.control-btn]:text-control [&_.composer-bar_.dropdown-trigger.control-btn]:leading-[normal] w-full h-full overflow-auto flex flex-col items-stretch p-[0_24px_24px]`}>
       <div className="home-start [&_.start-view]:min-h-[min(560px,_72vh)] [&_.start-view]:pt-2 [&_.start-hero]:mb-[22px] [&_.start-hero_h1]:text-hero [&_.start-mark]:block [&_.start-dock]:pl-0 [&_.start-dock]:pr-0 [&_.start-dock]:max-w-[none] w-full max-w-[760px] m-[0_auto] [border:0]">{start}</div>
       <HomeFeed />
     </div>

@@ -1,52 +1,53 @@
 import { t, useLanguage } from './i18n'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
-import { MessageSquare, Bot, Brain, CalendarClock, Code, Cpu, GitBranch, Keyboard, Lightbulb, Palette, Plug, RefreshCw, ShieldCheck, Target, X, type LucideIcon } from 'lucide-react'
+import { MessageSquare, Brain, CalendarClock, Code, Cpu, GitBranch, Keyboard, Palette, ShieldCheck, Target, X, type LucideIcon } from 'lucide-react'
 import { SearchInput } from './SearchInput'
 import { fuzzy } from './fuzzy'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { APP_AUTO_UPDATE } from '@ramu/shared/updates'
 
 export const SETTINGS_GROUPS = ['Workspace', 'Agents', 'System'] as const
 
 export const SETTINGS_SECTIONS = [
   { id: 'appearance', label: 'Appearance', Icon: Palette, group: 'Workspace' },
   { id: 'editor', label: 'Editor & Terminal', Icon: Code, group: 'Workspace' },
-  { id: 'chats', label: 'Chats', Icon: MessageSquare, group: 'Workspace' },
   { id: 'git', label: 'Git', Icon: GitBranch, group: 'Workspace' },
   { id: 'shortcuts', label: 'Keyboard shortcuts', Icon: Keyboard, group: 'Workspace' },
-  { id: 'providers', label: 'Providers', Icon: Plug, group: 'Agents' },
-  { id: 'models', label: 'Models', Icon: Cpu, group: 'Agents' },
+  { id: 'chats', label: 'Chats', Icon: MessageSquare, group: 'Agents' },
+  { id: 'providers', label: 'Providers & models', Icon: Cpu, group: 'Agents' },
   { id: 'access', label: 'Access & Fallback', Icon: ShieldCheck, group: 'Agents' },
-  { id: 'goals', label: 'Goals', Icon: Target, group: 'Agents' },
+  { id: 'workflows', label: 'Goals & delegation', Icon: Target, group: 'Agents' },
   { id: 'memory', label: 'Memory & skills', Icon: Brain, group: 'Agents' },
-  { id: 'subagents', label: 'Sub-agents', Icon: Bot, group: 'Agents' },
-  { id: 'advisor', label: 'Advisor', Icon: Lightbulb, group: 'Agents' },
-  { id: 'automation', label: 'Background & Recaps', Icon: CalendarClock, group: 'System' },
-  { id: 'updates', label: 'Updates', Icon: RefreshCw, group: 'System' },
+  { id: 'system', label: 'Background & updates', Icon: CalendarClock, group: 'System' },
 ] as const satisfies readonly { id: string; label: string; Icon: LucideIcon; group: typeof SETTINGS_GROUPS[number] }[]
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
   { section: 'git', title: 'Automatic pull', words: 'git auto fetch remote fast-forward background sync' },
-  { section: 'updates', title: 'Auto-update Ramu', words: 'app update github release download restart background service version' },
-  { section: 'goals', title: 'Automatic goals', words: 'goal auto manual off automatic completion continue unfinished' },
-  { section: 'goals', title: 'Maximum continuation turns', words: 'goal max limit budget unlimited retry available quota reset' },
-  { section: 'goals', title: 'Custom turn limit', words: 'goal max number turns' },
+  ...(APP_AUTO_UPDATE ? [{ section: 'system' as const, title: 'Auto-update Ramu', words: 'app update github release download restart background service version' }] : []),  { section: 'workflows', title: 'Automatic goals', words: 'goal auto manual off automatic completion continue unfinished' },
+  { section: 'workflows', title: 'Maximum continuation turns', words: 'goal max limit budget unlimited retry available quota reset' },
+  { section: 'workflows', title: 'Custom turn limit', words: 'goal max number turns' },
   { section: 'chats', title: 'Response style', words: 'adhd concise detailed caveman custom skill' },
-  { section: 'chats', title: 'Input compression', words: 'tokens efficiency output tool search' },
-  { section: 'memory', title: 'Automatic learning', words: 'self improve skills consolidate review maintenance' },
+  { section: 'chats', title: 'Tool output compression', words: 'input tokens efficiency shorten results' },
+  { section: 'chats', title: 'Load tools on demand', words: 'tool search tokens deferred optional ramu' },
+  { section: 'chats', title: 'RTK command tool', words: 'rtk binary shell commands full access' },
+  { section: 'memory', title: 'Automatic learning', words: 'self improve skills consolidate review maintenance ask first' },
+  { section: 'memory', title: 'Model for background maintenance', words: 'maintenance model cheaper background' },
+  { section: 'memory', title: 'Reviews per day', words: 'maximum daily limit tokens learning' },
+  { section: 'memory', title: 'Archive unused skills after', words: 'skill stale expire days' },
   { section: 'memory', title: 'Shared memory', words: 'memory remember recall learn preferences claude codex opencode providers' },
   { section: 'memory', title: "Memory cleanup", words: 'memory consolidate merge duplicates stale contradictions cleanup self improve tokens' },
   { section: 'memory', title: 'Archive unused memories after', words: 'memory stale decay archive expire days' },
   { section: 'chats', title: 'Agent notifications', words: 'notify notification alert done finished system toast' },
   { section: 'chats', title: 'Continue chats after restart', words: 'resume recover recovery interrupted progress startup crash' },
-  { section: 'chats', title: 'Keep working while commands run', words: 'background long running slow dev server watcher build test shell command async auto automatic timeout seconds' },
+  { section: 'chats', title: 'Move slow commands to background', words: 'background long running slow dev server watcher build test shell command async auto automatic timeout seconds' },
   { section: 'chats', title: 'Keep working while asking questions', words: 'async asynchronous optional blocking related grouped answers pending input' },
-  { section: 'automation', title: 'Daily recaps', words: 'recap summary home tokens' },
-  { section: 'automation', title: 'Generate daily at', words: 'recap time schedule timezone' },
-  { section: 'automation', title: 'Keep computer awake', words: 'sleep awake caffeinate power battery background installed login' },
-  { section: 'automation', title: 'Background service', words: 'daemon login startup' },
+  { section: 'system', title: 'Daily recaps', words: 'recap summary home tokens' },
+  { section: 'system', title: 'Generate daily at', words: 'recap time schedule timezone' },
+  { section: 'system', title: 'Keep computer awake', words: 'sleep awake caffeinate power battery background installed login' },
+  { section: 'system', title: 'Background service', words: 'daemon login startup' },
   { section: 'appearance', title: 'Language', words: 'bahasa indonesia english system perangkat' },
   { section: 'appearance', title: 'Primary color', words: 'accent blue violet teal theme' },
   { section: 'appearance', title: 'Interface font', words: 'system geist typeface' },
@@ -60,20 +61,21 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'editor', title: 'Default terminal tabs', words: 'top right position' },
   { section: 'providers', title: 'Provider binaries', words: 'claude codex opencode cursor antigravity install setup path executable login' },
   { section: 'providers', title: 'Provider update notifications', words: 'latest version check updates automatic' },
-  { section: 'models', title: 'Model sets', words: 'steps effort reasoning provider codex claude' },
-  { section: 'models', title: 'Default set', words: 'model' },
-  { section: 'models', title: 'Default step', words: 'model effort' },
+  { section: 'providers', title: 'Model sets', words: 'steps effort reasoning provider codex claude' },
+  { section: 'providers', title: 'Default set', words: 'model' },
+  { section: 'providers', title: 'Default step', words: 'model effort' },
+  { section: 'access', title: 'Provider fallback', words: 'limit switch provider' },
   { section: 'access', title: 'Default access', words: 'permissions edits auto full' },
   { section: 'access', title: 'Automatic provider fallback', words: 'provider fallback limit' },
   { section: 'access', title: "When to switch", words: 'usage threshold percent 5-hour weekly fallback' },
   { section: 'access', title: 'Fallback order', words: 'provider model effort chain list order' },
-  { section: 'subagents', title: 'Where sub-agents run', words: 'subagent native provider cross delegate' },
-  { section: 'subagents', title: 'By type', words: 'explore plan subagent type route' },
-  { section: 'subagents', title: 'Fallback order', words: 'subagent limit separate same' },
-  { section: 'subagents', title: 'Decide before Codex starts its own sub-agents', words: 'codex hook trust intercept spawn_agent config' },
-  { section: 'advisor', title: 'Advisor', words: 'advisor reviewer review second opinion stronger model consult claude opus gpt cross provider' },
-  { section: 'advisor', title: 'Advisor model', words: 'advisor reviewer model effort provider' },
-  { section: 'advisor', title: 'Always wait for advice', words: 'advisor block blocking async wait continue' },
+  { section: 'workflows', title: 'Where sub-agents run', words: 'subagent native provider cross delegate' },
+  { section: 'workflows', title: 'By type', words: 'explore plan subagent type route' },
+  { section: 'workflows', title: 'When a sub-agent is limited', words: 'subagent fallback order limit separate same' },
+  { section: 'workflows', title: 'Decide before Codex starts its own sub-agents', words: 'codex hook trust intercept spawn_agent config' },
+  { section: 'workflows', title: 'Advisor', words: 'advisor reviewer review second opinion stronger model consult claude opus gpt cross provider' },
+  { section: 'workflows', title: 'Advisor model', words: 'advisor reviewer model effort provider' },
+  { section: 'workflows', title: 'Always wait for advice', words: 'advisor block blocking async wait continue' },
   { section: 'providers', title: 'Show usage limits', words: 'usage gauge 5-hour weekly plan quota' },
   { section: 'chats', title: 'Messages while working', words: 'queue steer steering enter busy' },
   { section: 'chats', title: 'Include open tabs as context', words: 'files mention' },
@@ -81,34 +83,33 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'git', title: 'Commit messages', words: 'style conventional repository custom instructions generated' },
   { section: 'git', title: 'Commit instructions', words: 'custom message ticket language subject' },
   { section: 'git', title: 'Commit from default branch', words: 'feature branch current main push' },
-  { section: 'automation', title: 'Start at login', words: 'startup launch macos service' },
-  { section: 'automation', title: 'When to keep awake', words: 'battery power plugged in' },
-  { section: 'updates', title: 'Check app updates', words: 'release version check' },
-  { section: 'models', title: 'Default bar mode', words: 'model effort selection' },
+  { section: 'system', title: 'Start at login', words: 'startup launch macos service' },
+  { section: 'system', title: 'When to keep awake', words: 'battery power plugged in' },
+  { section: 'system', title: 'Check app updates', words: 'release version check' },
+  { section: 'providers', title: 'Default bar mode', words: 'model effort selection' },
   { section: 'git', title: 'Pull behavior', words: 'rebase merge fast-forward sync' },
   { section: 'git', title: 'Hide empty Staged section', words: 'source control' },
   { section: 'chats', title: 'Recent chats per project', words: 'sidebar count project' },
   { section: 'shortcuts', title: 'Keyboard shortcuts', words: 'keys commands bindings' },
 ]
 
-export function SettingsPage({ section, onSection, children, busy, hasChanges, error, onSave, onClose }: { section: SettingsSection; onSection: (section: SettingsSection) => void; children: ReactNode; busy: boolean; hasChanges: boolean; error: string | null; onSave: () => void; onClose: () => void }) {
+export function SettingsPage({ section, target, onSection, children, busy, hasChanges, error, onSave, onClose }: { section: SettingsSection; target?: string; onSection: (section: SettingsSection) => void; children: ReactNode; busy: boolean; hasChanges: boolean; error: string | null; onSave: () => void; onClose: () => void }) {
   useLanguage()
   const [query, setQuery] = useState('')
   const host = useRef<HTMLDivElement>(null)
   useEffect(() => { host.current?.querySelector('.settings-page-content')?.scrollTo({ top: 0 }) }, [section])
   const q = query.trim()
   const results = q ? SETTINGS_INDEX.map((source) => { const entry = { ...source, title: t(source.title) }; const title = fuzzy(q, entry.title), words = fuzzy(q, `${entry.title} ${source.title} ${entry.words ?? ''} ${t(SETTINGS_SECTIONS.find((item) => item.id === entry.section)!.label)}`); return title || words ? { entry, hits: title?.hits ?? [], score: (title?.score ?? 0) * 2 + (words?.score ?? 0) } : null }).filter((item): item is NonNullable<typeof item> => !!item).sort((a, b) => b.score - a.score).slice(0, 12) : []
-  /** Opens the page and flashes the row, once the page has rendered. */
-  const open = (entry: { section: SettingsSection; title: string }) => {
-    setQuery(''); onSection(entry.section)
-    window.setTimeout(() => {
-      const rows = [...(host.current?.querySelectorAll<HTMLElement>('.settings-page-content .settings-row, .settings-page-content label, .settings-page-content h4, .settings-page-content strong') ?? [])]
-      const row = rows.find((element) => element.textContent?.trim().toLowerCase().startsWith(entry.title.toLowerCase().slice(0, 12)))
-      const target = row?.closest<HTMLElement>('.settings-row') ?? row
-      target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-      target?.classList.add('flash'); window.setTimeout(() => target?.classList.remove('flash'), 1400)
-    }, 60)
-  }
+  /** Scrolls to the row with this title and flashes it, once the page has rendered. */
+  const reveal = (title: string) => window.setTimeout(() => {
+    const rows = [...(host.current?.querySelectorAll<HTMLElement>('.settings-page-content .settings-row, .settings-page-content label, .settings-page-content h4, .settings-page-content strong') ?? [])]
+    const row = rows.find((element) => element.textContent?.trim().toLowerCase().startsWith(title.toLowerCase().slice(0, 12)))
+    const target = row?.closest<HTMLElement>('.settings-row') ?? row
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    target?.classList.add('flash'); window.setTimeout(() => target?.classList.remove('flash'), 1400)
+  }, 60)
+  useEffect(() => { if (target) reveal(t(target)) }, [target])
+  const open = (entry: { section: SettingsSection; title: string }) => { setQuery(''); onSection(entry.section); reveal(entry.title) }
   const title = (text: string, hits: number[]) => hits.length ? [...text].map((char, i) => hits.includes(i) ? <mark key={i}>{char}</mark> : char) : text
   return <Dialog open disablePointerDismissal onOpenChange={(open, details) => { if (open) return; if (busy) details.cancel(); else onClose() }}><DialogContent ref={host} className="settings-page [[data-slot='dialog-content']&]:max-w-[none] [[data-slot='dialog-content']&]:p-0 [[data-slot='dialog-content']&]:gap-0 [&[data-slot='dialog-content']]:w-[min(1000px,_calc(100vw_-_48px))] flex flex-col w-[min(1000px,_100%)] h-[min(780px,_calc(100vh_-_48px))] min-h-0 bg-canvas [border:1px_solid_var(--edge)] rounded-(--radius-xl) [box-shadow:0_24px_80px_rgba(0,0,0,.45)] overflow-hidden" showCloseButton={false} aria-describedby={undefined} initialFocus={() => host.current?.querySelector<HTMLElement>('[aria-current="page"]') ?? true}>
     <header className="settings-page-header [&_h2]:m-0 [&_h2]:text-heading [&_h2]:font-semibold [&_[data-slot='dialog-title']]:m-0 flex items-center gap-3 min-h-[58px] p-[12px_20px]"><DialogTitle>{t("Settings")}</DialogTitle><span className="muted text-muted-foreground small text-caption">{t("Ramu · This device")}</span><span className="grow flex-1 min-w-0 text-left" /><Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Close settings")} disabled={busy} onClick={onClose}><X size={16} /></Button></header>

@@ -18,3 +18,12 @@ export function SettingsRow({ className, ...props }: ComponentProps<typeof Field
     className,
   )} {...props} />
 }
+
+/** Title plus optional one-line help; the first cell of a SettingsRow. */
+export function SettingsLabel({ title, help }: { title: string; help?: string }) {
+  return <span><strong>{title}</strong>{help && <span className="muted text-muted-foreground block small text-caption">{help}</span>}</span>
+}
+
+export function SettingsGroupTitle({ className, ...props }: ComponentProps<'h4'>) {
+  return <h4 className={cn('settings-group-title m-[4px_0_10px] text-caption font-medium text-muted-foreground', className)} {...props} />
+}

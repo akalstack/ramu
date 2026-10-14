@@ -13,7 +13,7 @@ const extraDataQueries = new Set<string>([
   'tasks.plan', 'tasks.bindings', 'projects.actions', 'providers.loginCommand', 'providers.updates',
   'files.resolveLink', 'git.diff', 'git.commitBranchInfo', 'git.commitFiles',
   'git.stashFiles', 'git.stashFileDiff', 'git.commitFileDiff', 'git.commitDetails', 'git.compareUpstream', 'agent.goal', 'agent.scope',
-  'agent.searchMessages', 'agent.continuationPrompt', 'agent.context', 'agent.providerHold',
+  'agent.checkpoint', 'agent.searchMessages', 'agent.continuationPrompt', 'agent.context', 'agent.providerHold',
   'attachments.text', 'advisor.claude', 'reviews.compareCurrent',
 ])
 export const isDataQuery = (method: string) => extraDataQueries.has(method) || /\.(get|list|read|events|search|status|history|branches|stashes|remotes|inspect|all|catalog|editorconfig|image|media)$/.test(method)

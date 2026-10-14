@@ -26,6 +26,39 @@ beforeEach(() => {
 })
 afterEach(async () => { await service.settle(); db.close(); rmSync(root, { recursive: true, force: true }) })
 
+it('skips a connectivity test with an incidental status check without spending a review', async () => {
+  trace = [{ kind: 'user', text: 'test' }, { kind: 'tool-use', toolUseId: 'status', name: 'shell', summary: 'git status' }, { kind: 'tool-result', toolUseId: 'status', isError: false, summary: 'Modified files exist' }, { kind: 'result', isError: false, text: 'Ready', costUsd: null }]
+  await service.tick(true)
+  expect(service.jobs()).toEqual([])
+  expect(analyze).not.toHaveBeenCalled()
+  expect(service.checkpoint('s')).toBeNull()
+})
+
+it('does not reuse earlier tool calls to review a later acknowledgement', async () => {
+  trace.push({ kind: 'user', text: 'Thanks' }, { kind: 'result', isError: false, text: 'You are welcome', costUsd: null })
+  await service.tick(true)
+  expect(service.jobs()).toEqual([])
+  expect(analyze).not.toHaveBeenCalled()
+})
+
+it('allows a real testing workflow with a short request and leaves checkpoints chat-local', async () => {
+  trace[0] = { kind: 'user', text: 'test' }
+  trace.splice(1, 0, { kind: 'tool-use', toolUseId: 'inspect', name: 'shell', summary: 'Inspect retry implementation' })
+  await service.tick(true)
+  service.apply(service.jobs()[0]!.id)
+  expect(service.checkpoint('s')?.summary).toContain('integration suite')
+  expect(service.checkpoint('other')).toBeNull()
+})
+
+it('can save durable learning without creating a checkpoint when there is no progress to preserve', async () => {
+  analyze.mockResolvedValue({ provider: 'codex', model: 'test', message: JSON.stringify({ ...proposal, checkpoint: '' }) })
+  await service.tick(true)
+  expect(analyze.mock.calls[0]![0]).toContain('Return an empty checkpoint')
+  service.apply(service.jobs()[0]!.id)
+  expect(service.checkpoint('s')).toBeNull()
+  expect(memory.active('p')).toHaveLength(1)
+})
+
 it('stages durable learning, deduplicates a completed turn across restart and applies source-linked changes', async () => {
   const job = service.enqueue('s')!
   expect(service.enqueue('s')).toBeNull()

@@ -6,7 +6,7 @@ import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
-import { ArrowDown, ArrowUp, ChevronDown, GripVertical, Pencil, Play, Plus, SquareTerminal } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, GripVertical, Pencil, Play, Plus, Settings2, SquareTerminal, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { ProjectAction } from '@ramu/shared/types'
 import { formatKeys } from './commands'
@@ -60,7 +60,7 @@ function ActionsControl({ ctx, projectId }: { ctx: string; projectId: string }) 
   const ws = useWorkspace()
   const actions = useProjectActions(projectId)
   const [editing, setEditing] = useState<ProjectAction | 'new' | null>(null)
-  const [arranging, setArranging] = useState(false)
+  const [managing, setManaging] = useState(false)
   const [lastId, setLastId] = useState<string | null>(() => localStorage.getItem(`ramu.last-action:${projectId}`))
   const run = (action: ProjectAction) => {
     setLastId(action.id)
@@ -69,7 +69,7 @@ function ActionsControl({ ctx, projectId }: { ctx: string; projectId: string }) 
   }
   const dialog = <>
     {editing && <ActionDialog projectId={projectId} actions={actions} action={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
-    {arranging && <ArrangeDialog projectId={projectId} actions={actions} onClose={() => setArranging(false)} />}
+    {managing && !editing && <ManageDialog projectId={projectId} actions={actions} onEdit={setEditing} onClose={() => setManaging(false)} />}
   </>
   if (!actions.length) return <>
     <Button variant="secondary" className="bg-fill hover:bg-fill-hover window-action" title={t("Save a command you run often, like a dev server or tests")} onClick={() => setEditing('new')}><Plus size={14} /><span>{t("Add action")}</span></Button>
@@ -83,8 +83,7 @@ function ActionsControl({ ctx, projectId }: { ctx: string; projectId: string }) 
         ...actions.map((action): MenuEntry => ({ key: action.id, label: <><SquareTerminal size={14} /><span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis grow flex-1 min-w-0 text-left">{action.name}</span>{action.keys && <Kbd>{formatKeys(action.keys)}</Kbd>}</>, title: action.command, onSelect: () => run(action) })),
         { key: 'separator', separator: true },
         { key: 'add', label: <><Plus size={14} />{t("Add action…")}</>, onSelect: () => setEditing('new') },
-        ...(actions.length > 1 ? [{ key: 'arrange', label: <><GripVertical size={14} />{t("Rearrange actions…")}</>, onSelect: () => setArranging(true) } as MenuEntry] : []),
-        { key: 'edit', label: <><Pencil size={14} />{t("Edit action")}</>, submenu: actions.map((action) => ({ key: `edit:${action.id}`, label: action.name, onSelect: () => setEditing(action) })) },
+        { key: 'manage', label: <><Settings2 size={14} />{t("Manage actions…")}</>, onSelect: () => setManaging(true) },
       ]}
     />
     {dialog}
@@ -126,9 +125,9 @@ function ActionDialog({ projectId, actions, action, onClose }: { projectId: stri
   return <ShadcnDialog open disablePointerDismissal={busy} onOpenChange={(open) => { if (!open && !busy) onClose() }}>
     <DialogContent className={ACTION_DIALOG_CLASS} showCloseButton={false} aria-describedby={undefined}>
       <DialogTitle>{action ? t("Edit action") : t("Add action")}</DialogTitle>
-      <form className="dialog-body [&_p]:m-[0_0_8px] text-soft text-[length:var(--ui-font-size)] action-form [&_label]:flex [&_label]:flex-col [&_label]:gap-1.5 [&_label]:text-caption [&_label]:text-soft [&_textarea.mono]:font-mono [&_textarea.mono]:text-caption [&_.action-keys]:flex [&_.action-keys]:items-center [&_.action-keys]:gap-1.5 [&_.action-keys_input]:flex-1 [&_.action-keys_input]:[caret-color:transparent] [&_>_p]:m-0 [&_.dialog-actions]:items-center flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); submit() }}>
+      <form className="dialog-body text-soft text-[length:var(--ui-font-size)] action-form [&_label]:w-full [&_label]:text-caption [&_label]:font-medium [&_label]:text-soft [&_textarea.mono]:font-mono [&_textarea.mono]:text-caption [&_.action-keys]:flex [&_.action-keys]:items-center [&_.action-keys]:gap-1.5 [&_.action-keys_input]:flex-1 [&_.action-keys_input]:[caret-color:transparent] [&_.dialog-actions]:items-center flex flex-col gap-3.5 mt-3" onSubmit={(event) => { event.preventDefault(); submit() }}>
         <Field><FieldLabel htmlFor="action-name">{t("Name")}</FieldLabel><Input id="action-name" autoFocus maxLength={60} value={name} placeholder={t("Dev server")} onChange={(event) => setName(event.target.value)} /></Field>
-        <Field><FieldLabel htmlFor="action-command">{t("Command")}</FieldLabel><Textarea id="action-command" className="mono" rows={3} maxLength={4000} value={command} placeholder="pnpm dev" onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit() } }} /><FieldDescription>{t("Runs in a new terminal at the chat's workspace.")}</FieldDescription></Field>
+        <Field><FieldLabel htmlFor="action-command">{t("Command")}</FieldLabel><Textarea id="action-command" className="mono" rows={3} maxLength={4000} value={command} placeholder="pnpm dev" onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit() } }} /><FieldDescription className="text-caption">{t("Runs in a new terminal at the chat's workspace.")}</FieldDescription></Field>
         <Field><FieldLabel htmlFor="action-keys">{t("Shortcut")}</FieldLabel><span className="action-keys">
           <Input id="action-keys" readOnly value={keys ? formatKeys(keys) : ''} placeholder={t("Press a shortcut, e.g. {0}", { "0": formatKeys('mod+shift+r') })} onKeyDown={(event) => {
             if (event.key === 'Tab' || event.key === 'Escape') return
@@ -138,7 +137,7 @@ function ActionDialog({ projectId, actions, action, onClose }: { projectId: stri
             if (next) setKeys(next)
           }} />
           {keys && <Button variant="ghost" size="sm" type="button" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption" onClick={() => setKeys('')}>{t("Clear")}</Button>}
-        </span></Field>
+        </span><FieldDescription className="text-caption">{t("Focus the field and press the keys. Backspace removes it.")}</FieldDescription></Field>
         {error && <div className="error text-bad small text-caption" role="alert">{error}</div>}
         <div className="dialog-actions [&_button]:p-[5px_14px] flex justify-end gap-2 mt-3.5">
           {action && <Button variant="ghost" type="button" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover danger-text" disabled={busy} onClick={() => void save(actions.filter((current) => current.id !== action.id))}>{t("Delete")}</Button>}
@@ -151,50 +150,54 @@ function ActionDialog({ projectId, actions, action, onClose }: { projectId: stri
   </ShadcnDialog>
 }
 
-/** Drag rows, or use the arrows, to set the order actions appear in the menu; the first is the default button until one is run. */
-function ArrangeDialog({ projectId, actions, onClose }: { projectId: string; actions: ProjectAction[]; onClose: () => void }) {
+/** Every action in one place: drag rows or use the arrows to set their order (the first is the default button until one is run), edit, delete or add. Order changes are saved as they are made. */
+function ManageDialog({ projectId, actions, onEdit, onClose }: { projectId: string; actions: ProjectAction[]; onEdit: (action: ProjectAction | 'new') => void; onClose: () => void }) {
   useLanguage()
-  const [order, setOrder] = useState(actions)
   const [dragging, setDragging] = useState<number | null>(null)
   const [over, setOver] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const move = (from: number, to: number) => {
-    if (from === to || to < 0 || to >= order.length) return
-    const next = [...order]
-    next.splice(to, 0, next.splice(from, 1)[0]!)
-    setOrder(next)
-  }
-  const changed = order.some((action, index) => action.id !== actions[index]?.id)
-  const save = async () => {
+  const save = async (next: ProjectAction[]) => {
     setBusy(true); setError(null)
     try {
-      await invoke('projects.setActions', projectId, order)
+      await invoke('projects.setActions', projectId, next)
       window.dispatchEvent(new Event(PROJECT_ACTIONS_EVENT))
-      onClose()
     } catch (reason) { setError(errorText(reason)) } finally { setBusy(false) }
   }
-  return <ShadcnDialog open disablePointerDismissal={busy} onOpenChange={(open) => { if (!open && !busy) onClose() }}>
+  const move = (from: number, to: number) => {
+    if (busy || from === to || to < 0 || to >= actions.length) return
+    const next = [...actions]
+    next.splice(to, 0, next.splice(from, 1)[0]!)
+    void save(next)
+  }
+  return <ShadcnDialog open onOpenChange={(open) => { if (!open) onClose() }}>
     <DialogContent className={ACTION_DIALOG_CLASS} showCloseButton={false} aria-describedby={undefined}>
-      <DialogTitle>{t("Rearrange actions")}</DialogTitle>
-      <div className="flex flex-col gap-1 mt-2" role="list">
-        {order.map((action, index) => <div key={action.id} role="listitem" draggable={!busy}
-          className={`flex items-center gap-2 min-h-9 p-[0_6px_0_4px] rounded-(--radius-s) bg-fill text-control${dragging === index ? ' opacity-45' : ''}${over === index && dragging !== index ? ' [box-shadow:0_0_0_1px_var(--accent)]' : ''}`}
+      <DialogTitle>{t("Manage actions")}</DialogTitle>
+      <div className="flex flex-col gap-1 mt-3" role="list">
+        {actions.length === 0 && <div className="p-[10px_4px] text-caption text-muted-foreground">{t("No actions yet.")}</div>}
+        {actions.map((action, index) => <div key={action.id} role="listitem" draggable={!busy}
+          className={`flex items-center gap-1.5 min-h-10 p-[0_4px_0_4px] rounded-(--radius-s) bg-fill text-control${dragging === index ? ' opacity-45' : ''}${over === index && dragging !== index ? ' [box-shadow:0_0_0_1px_var(--accent)]' : ''}`}
           onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', action.id); setDragging(index) }}
           onDragOver={(event) => { if (dragging === null) return; event.preventDefault(); if (over !== index) setOver(index) }}
           onDrop={(event) => { event.preventDefault(); if (dragging !== null) move(dragging, index); setDragging(null); setOver(null) }}
           onDragEnd={() => { setDragging(null); setOver(null) }}>
           <GripVertical size={14} className="flex-none text-muted-foreground cursor-grab" aria-hidden="true" />
-          <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-left" title={action.command}>{action.name}</span>
+          <span className="flex-1 min-w-0 flex flex-col text-left">
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap">{action.name}</span>
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap font-mono text-caption text-muted-foreground" title={action.command}>{action.command}</span>
+          </span>
           {action.keys && <Kbd>{formatKeys(action.keys)}</Kbd>}
           <Button variant="ghost" size="icon-xs" type="button" className="flex-none" aria-label={t("Move {0} up", { "0": action.name })} disabled={busy || index === 0} onClick={() => move(index, index - 1)}><ArrowUp size={14} /></Button>
-          <Button variant="ghost" size="icon-xs" type="button" className="flex-none" aria-label={t("Move {0} down", { "0": action.name })} disabled={busy || index === order.length - 1} onClick={() => move(index, index + 1)}><ArrowDown size={14} /></Button>
+          <Button variant="ghost" size="icon-xs" type="button" className="flex-none" aria-label={t("Move {0} down", { "0": action.name })} disabled={busy || index === actions.length - 1} onClick={() => move(index, index + 1)}><ArrowDown size={14} /></Button>
+          <Button variant="ghost" size="icon-xs" type="button" className="flex-none" aria-label={t("Edit {0}", { "0": action.name })} disabled={busy} onClick={() => onEdit(action)}><Pencil size={14} /></Button>
+          <Button variant="ghost" size="icon-xs" type="button" className="flex-none" aria-label={t("Delete {0}", { "0": action.name })} disabled={busy} onClick={() => void save(actions.filter((current) => current.id !== action.id))}><Trash2 size={14} /></Button>
         </div>)}
       </div>
       {error && <div className="error text-bad small text-caption mt-2" role="alert">{error}</div>}
-      <div className="dialog-actions flex justify-end gap-2 mt-3.5">
-        <Button type="button" variant="outline" disabled={busy} onClick={onClose}>{t("Cancel")}</Button>
-        <Button variant="default" type="button" className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100" disabled={busy || !changed} onClick={() => void save()}>{t("Save")}</Button>
+      <div className="dialog-actions flex items-center justify-end gap-2 mt-3.5">
+        <Button type="button" variant="ghost" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground" disabled={busy} onClick={() => onEdit('new')}><Plus size={14} />{t("Add action")}</Button>
+        <span className="grow flex-1 min-w-0" />
+        <Button variant="default" type="button" className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover" onClick={onClose}>{t("Done")}</Button>
       </div>
     </DialogContent>
   </ShadcnDialog>

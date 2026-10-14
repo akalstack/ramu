@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { SettingsRow } from '@/components/settings-row'
+import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -13,18 +13,38 @@ import { useModelSets, modelStepName } from './ModelSets'
 import { RESPONSE_STYLES, RESPONSE_STYLE_LABELS, type IntelligencePreferences, type LearningSnapshot, type ManagedSkill } from '@ramu/shared/types'
 
 type Props = { value: IntelligencePreferences; onChange: (value: IntelligencePreferences) => void }
-export function IntelligenceSettings({ value, onChange }: Props) {
+const withCurrent = (values: number[], current: number) => [...new Set([...values, current])].sort((a, b) => a - b)
+
+export function ResponseSettings({ value, onChange }: Props) {
   return <>
-    <SettingsRow><strong>{t('Response style')}</strong><Dropdown label={t('Response style')} value={value.responseStyle} options={RESPONSE_STYLES.map((style) => ({ value: style, label: t(RESPONSE_STYLE_LABELS[style]) }))} onChange={(style) => onChange({ ...value, responseStyle: style as IntelligencePreferences['responseStyle'] })} /></SettingsRow>
+    <SettingsGroupTitle>{t('Responses')}</SettingsGroupTitle>
+    <SettingsRow><SettingsLabel title={t('Response style')} help={t('How the agent words its replies. Applies from the next message.')} /><Dropdown label={t('Response style')} value={value.responseStyle} options={RESPONSE_STYLES.map((style) => ({ value: style, label: t(RESPONSE_STYLE_LABELS[style]) }))} onChange={(style) => onChange({ ...value, responseStyle: style as IntelligencePreferences['responseStyle'] })} /></SettingsRow>
     {value.responseStyle === 'custom' && <>
-      <SettingsRow><strong>{t('Custom style instructions')}</strong><Textarea aria-label={t('Custom style instructions')} value={value.responseInstructions} maxLength={4000} rows={4} onChange={(e) => onChange({ ...value, responseInstructions: e.target.value })} /></SettingsRow>
-      <SettingsRow><span><strong>{t('Style skill name')}</strong><span className="muted text-muted-foreground block small text-caption">{t('Optional installed skill, matched by name in the chat scope.')}</span></span><Input aria-label={t('Style skill name')} value={value.responseSkill} maxLength={200} onChange={(e) => onChange({ ...value, responseSkill: e.target.value })} /></SettingsRow>
+      <SettingsRow className="settings-stack"><SettingsLabel title={t('Custom style instructions')} help={t('Describe the tone and format you want.')} /><Textarea aria-label={t('Custom style instructions')} value={value.responseInstructions} maxLength={4000} rows={4} onChange={(e) => onChange({ ...value, responseInstructions: e.target.value })} /></SettingsRow>
+      <SettingsRow><SettingsLabel title={t('Style skill name')} help={t('Optional. Name of an installed skill to follow as well.')} /><Input aria-label={t('Style skill name')} value={value.responseSkill} maxLength={200} onChange={(e) => onChange({ ...value, responseSkill: e.target.value })} /></SettingsRow>
     </>}
-    <SettingsRow><span><strong>{t('Input compression')}</strong><span className="muted text-muted-foreground block small text-caption">{t('Compact large Ramu tool results before the model reads them. Full output stays available on demand.')}</span></span><Dropdown label={t('Input compression')} value={value.compression} options={['off', 'balanced', 'aggressive'].map((mode) => ({ value: mode, label: t(mode === 'off' ? 'Off' : mode === 'balanced' ? 'Balanced' : 'Aggressive') }))} onChange={(mode) => onChange({ ...value, compression: mode as IntelligencePreferences['compression'] })} /></SettingsRow>
-    <SettingsRow><span><strong>{t('Ramu tool search')}</strong><span className="muted text-muted-foreground block small text-caption">{t('Discover optional Ramu tools on demand. Changes apply to newly connected provider sessions.')}</span></span><Switch aria-label={t('Ramu tool search')} checked={value.toolSearch} onCheckedChange={(toolSearch) => onChange({ ...value, toolSearch })} /></SettingsRow>
-    <SettingsRow><span><strong>{t('RTK command tool')}</strong><span className="muted text-muted-foreground block small text-caption">{t('Use an installed RTK binary through an explicit tool in full-access chats. Native shell commands are unchanged.')}</span></span><Switch aria-label={t('RTK command tool')} checked={value.rtk} onCheckedChange={(rtk) => onChange({ ...value, rtk })} /></SettingsRow>
-    <p className="muted text-muted-foreground small text-caption">{t('Styles apply on the next turn. Native provider tools and compaction remain controlled by the provider.')}</p>
   </>
+}
+
+export function EfficiencySettings({ value, onChange }: Props) {
+  return <>
+    <SettingsGroupTitle>{t('Token efficiency')}</SettingsGroupTitle>
+    <SettingsRow><SettingsLabel title={t('Tool output compression')} help={t('Shorten large tool results before the model reads them. The full output stays available on request.')} /><Dropdown label={t('Tool output compression')} value={value.compression} options={[{ value: 'off', label: t('Off') }, { value: 'balanced', label: t('Balanced (recommended)') }, { value: 'aggressive', label: t('Aggressive') }]} onChange={(mode) => onChange({ ...value, compression: mode as IntelligencePreferences['compression'] })} /></SettingsRow>
+    <SettingsRow><SettingsLabel title={t('Load tools on demand')} help={t('Keep optional Ramu tools out of the prompt until the agent needs them. Applies to new provider sessions.')} /><Switch aria-label={t('Load tools on demand')} checked={value.toolSearch} onCheckedChange={(toolSearch) => onChange({ ...value, toolSearch })} /></SettingsRow>
+    <SettingsRow><SettingsLabel title={t('RTK command tool')} help={t('Advanced. Lets full-access chats run commands through an installed RTK binary. Normal shell commands are unchanged.')} /><Switch aria-label={t('RTK command tool')} checked={value.rtk} onCheckedChange={(rtk) => onChange({ ...value, rtk })} /></SettingsRow>
+  </>
+}
+
+/** One model for the background work of both memory cleanup and learning reviews. */
+export function MaintenanceModelSettings({ value, onChange, cleanup }: Props & { cleanup: boolean }) {
+  const models = useModelSets()
+  const steps = models.preferences.sets.flatMap((set) => set.steps)
+  const modelId = steps.find((step) => step.provider === value.maintenanceModel?.provider && step.model === value.maintenanceModel.model && step.effort === value.maintenanceModel.effort)?.id ?? ''
+  if (value.learning === 'off' && !cleanup) return null
+  return <div className="settings-form flex flex-col gap-0 mt-6">
+    <SettingsGroupTitle>{t('Background model')}</SettingsGroupTitle>
+      <SettingsRow><SettingsLabel title={t('Model for background maintenance')} help={t('Used for learning reviews and memory cleanup. A cheaper model keeps token use low.')} /><Dropdown label={t('Model for background maintenance')} value={modelId} options={[{ value: '', label: t('Same as chat') }, ...steps.map((step) => ({ value: step.id, label: modelStepName(step, models.catalogs) }))]} onChange={(id) => { const step = steps.find((step) => step.id === id); onChange({ ...value, maintenanceModel: step ? { provider: step.provider, model: step.model, effort: step.effort } : null }) }} /></SettingsRow>
+  </div>
 }
 
 export function LearningSettings({ value, onChange }: Props) {
@@ -32,30 +52,32 @@ export function LearningSettings({ value, onChange }: Props) {
   const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState<ManagedSkill[]>([])
   const [selected, setSelected] = useState<string | null>(null)
-  const models = useModelSets()
-  const steps = models.preferences.sets.flatMap((set) => set.steps)
   const reload = useCallback(() => invoke('learning.get').then(setSnapshot), [])
   useEffect(() => { void reload().catch((e) => notifyError(errorText(e), 'Learning')); return ramu.on('memory:changed', () => { void reload().catch(() => {}) }) }, [reload])
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); await reload() } catch (e) { notifyError(errorText(e), 'Learning') } finally { setBusy(false) } }
-  const modelId = steps.find((step) => step.provider === value.maintenanceModel?.provider && step.model === value.maintenanceModel.model && step.effort === value.maintenanceModel.effort)?.id ?? ''
+  const reviews = snapshot?.jobs.filter((job) => {
+    if (job.status !== 'applied' || !job.proposal || job.error) return true
+    const change = JSON.parse(job.proposal) as { memories: unknown[]; skills: unknown[]; archive: unknown[] }
+    return change.memories.length + change.skills.length + change.archive.length > 0
+  })
   return <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 mt-6">
-    <h4 className="settings-group-title m-[4px_0_10px] text-caption font-medium text-muted-foreground">{t('Learning & skills')}</h4>
-    <SettingsRow><span><strong>{t('Automatic learning')}</strong><span className="muted text-muted-foreground block small text-caption">{t('Review completed work for durable memories and reusable skills. Uses model tokens while idle.')}</span></span><Dropdown label={t('Automatic learning')} value={value.learning} options={[{ value: 'off', label: t('Off') }, { value: 'review', label: t('Review first') }, { value: 'auto', label: t('Automatic') }]} onChange={(learning) => onChange({ ...value, learning: learning as IntelligencePreferences['learning'] })} /></SettingsRow>
-    <SettingsRow><strong>{t('Maintenance model')}</strong><Dropdown label={t('Maintenance model')} value={modelId} options={[{ value: '', label: t('Use chat model') }, ...steps.map((step) => ({ value: step.id, label: modelStepName(step, models.catalogs) }))]} onChange={(id) => { const step = steps.find((step) => step.id === id); onChange({ ...value, maintenanceModel: step ? { provider: step.provider, model: step.model, effort: step.effort } : null }) }} /></SettingsRow>
-    <SettingsRow><strong>{t('Maximum reviews per day')}</strong><Input type="number" min={1} max={50} aria-label={t('Maximum reviews per day')} value={value.dailyReviews} onChange={(e) => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 1 && n <= 50) onChange({ ...value, dailyReviews: n }) }} /></SettingsRow>
-    <SettingsRow><strong>{t('Archive unused skills after')}</strong><Input type="number" min={7} max={3650} aria-label={t('Archive unused skills after')} value={value.archiveSkillDays} onChange={(e) => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 7 && n <= 3650) onChange({ ...value, archiveSkillDays: n }) }} /></SettingsRow>
-    <p className="muted text-muted-foreground small text-caption mt-3 mb-3">{t('Only Ramu-generated skills are maintained. Pinned skills are protected. Installed skills remain managed by their original source.')}</p>
-    <Button disabled={busy || snapshot?.running || value.learning === 'off'} variant="secondary" className="bg-fill hover:bg-fill-hover self-start mb-4" onClick={() => void act(() => invoke('learning.run'))}>{snapshot?.running ? t('Reviewing…') : t('Run learning maintenance')}</Button>
-    {snapshot?.jobs.slice(0, 30).map((job) => <article key={job.id} className="bg-card rounded-(--radius-m) p-3 mb-2 flex flex-col gap-2">
+    <SettingsGroupTitle>{t('Learning & skills')}</SettingsGroupTitle>
+    <SettingsRow><SettingsLabel title={t('Automatic learning')} help={t('After a chat, look for lasting notes and reusable skills. Uses model tokens when idle.')} /><Dropdown label={t('Automatic learning')} value={value.learning} options={[{ value: 'off', label: t('Off') }, { value: 'review', label: t('Ask me first') }, { value: 'auto', label: t('Save automatically (recommended)') }]} onChange={(learning) => onChange({ ...value, learning: learning as IntelligencePreferences['learning'] })} /></SettingsRow>
+    {value.learning !== 'off' && <>
+      <SettingsRow><SettingsLabel title={t('Reviews per day')} help={t('Upper limit on background reviews, to cap token use.')} /><Dropdown label={t('Reviews per day')} value={String(value.dailyReviews)} options={withCurrent([1, 3, 5, 10, 20], value.dailyReviews).map((n) => ({ value: String(n), label: String(n) }))} onChange={(n) => onChange({ ...value, dailyReviews: Number(n) })} /></SettingsRow>
+      <SettingsRow><SettingsLabel title={t('Archive unused skills after')} help={t('Only skills Ramu created are archived. Pinned skills are kept.')} /><Dropdown label={t('Archive unused skills after')} value={String(value.archiveSkillDays)} options={withCurrent([30, 60, 90, 180, 365], value.archiveSkillDays).map((days) => ({ value: String(days), label: t('{0} days', { 0: days }) }))} onChange={(days) => onChange({ ...value, archiveSkillDays: Number(days) })} /></SettingsRow>
+    </>}
+    <Button disabled={busy || snapshot?.running || value.learning === 'off'} variant="secondary" className="bg-fill hover:bg-fill-hover self-start mb-4 mt-1" onClick={() => void act(() => invoke('learning.run'))}>{snapshot?.running ? t('Reviewing…') : t('Run learning maintenance')}</Button>
+    {reviews?.slice(0, 30).map((job) => <article key={job.id} className="bg-card rounded-(--radius-m) p-3 mb-2 flex flex-col gap-2">
       <strong className="font-medium">{t('Learning review')} · {t(job.status)}</strong><p className="muted text-muted-foreground small text-caption m-0!">{new Date(job.createdAt).toLocaleString()} · {job.sessionTitle ?? t('Chat')}</p>
       {job.error && <p role="alert" className="text-bad small text-caption m-0!">{job.error}</p>}
-      {job.proposal && <LearningProposal proposal={job.proposal} skills={snapshot.skills} />}
+      {job.proposal && <LearningProposal proposal={job.proposal} skills={snapshot?.skills ?? []} showCheckpoint={job.status !== 'applied'} />}
       <div className="flex gap-2 flex-wrap">{job.status === 'pending' && <Button disabled={busy} variant="default" className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover" onClick={() => void act(() => invoke('learning.apply', job.id))}>{t('Apply')}</Button>}
       {['pending', 'failed'].includes(job.status) && <Button disabled={busy} variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => void act(() => invoke('learning.retry', job.id))}>{t('Retry review')}</Button>}
       {['queued', 'pending', 'failed'].includes(job.status) && <Button disabled={busy} variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => void act(() => invoke('learning.dismiss', job.id))}>{t('Dismiss')}</Button>}</div>
     </article>)}
-    <h4 className="settings-group-title m-[4px_0_10px] text-caption font-medium text-muted-foreground mt-5!">{t('Managed skills')}</h4>
-    {!snapshot?.skills.length && <p className="muted text-muted-foreground small text-caption py-6 text-center">{t('No managed skills yet.')}</p>}
+    <SettingsGroupTitle className="mt-5!">{t('Managed skills')}</SettingsGroupTitle>
+    {!snapshot?.skills.length && <p className="muted text-muted-foreground small text-caption py-6 text-center">{t('No skills yet. Ramu adds them here when it learns a repeatable procedure.')}</p>}
     {snapshot?.skills.map((skill) => <article key={skill.id} className="bg-card rounded-(--radius-m) p-3 mb-2 flex flex-col gap-2">
       <strong className="font-medium">{skill.name} · {t(skill.status)}{skill.pinned ? ` · ${t('Pinned')}` : ''}</strong><p className="muted text-muted-foreground small text-caption m-0!">{skill.description} · {t('Read {0} times', { 0: skill.useCount })}</p>
       <details className="text-caption"><summary className="cursor-pointer text-muted-foreground hover:text-foreground">{t('Procedure')}</summary><pre className="whitespace-pre-wrap text-caption text-muted-foreground m-0 mt-2">{skill.content}</pre></details>
@@ -66,10 +88,11 @@ export function LearningSettings({ value, onChange }: Props) {
   </div>
 }
 
-function LearningProposal({ proposal, skills }: { proposal: string; skills: ManagedSkill[] }) {
+function LearningProposal({ proposal, skills, showCheckpoint }: { proposal: string; skills: ManagedSkill[]; showCheckpoint: boolean }) {
   const change = JSON.parse(proposal) as { checkpoint: string; memories: { title: string; content: string; reason: string }[]; skills: { id?: string; name: string; content: string; reason: string }[]; archive: { id: string; absorbedInto: string; reason: string }[] }
   return <details className="text-caption"><summary className="cursor-pointer text-muted-foreground hover:text-foreground">{t('Review proposed changes')}</summary><div className="flex flex-col gap-3 max-h-96 overflow-auto py-2">
-    {change.checkpoint && <section><strong>{t('Session checkpoint')}</strong><p className="whitespace-pre-wrap text-caption">{change.checkpoint}</p></section>}
+    {showCheckpoint && change.checkpoint && <section><strong>{t('Session checkpoint')}</strong><p className="whitespace-pre-wrap text-caption">{change.checkpoint}</p></section>}
+    {!showCheckpoint && change.checkpoint && <p className="text-muted-foreground">{t('Saved checkpoints are available in their chat.')}</p>}
     {change.memories.map((note, index) => <section key={`memory-${index}`}><strong>{t('Memory')}: {note.title}</strong><p className="whitespace-pre-wrap text-caption">{note.content}</p><p className="muted text-caption">{note.reason}</p></section>)}
     {change.skills.map((skill, index) => <section key={`skill-${index}`}><strong>{t('Procedure')}: {skill.name}</strong><div className="grid grid-cols-2 gap-2 text-caption"><div><strong>{t('Earlier revision')}</strong><pre className="whitespace-pre-wrap">{skills.find((entry) => entry.id === skill.id)?.content ?? t('No earlier text')}</pre></div><div><strong>{t('Proposed revision')}</strong><pre className="whitespace-pre-wrap">{skill.content}</pre></div></div><p className="muted text-caption">{skill.reason}</p></section>)}
     {change.archive.map((item) => <section key={item.id}><strong>{t('Archive')}: {skills.find((entry) => entry.id === item.id)?.name ?? item.id} → {skills.find((entry) => entry.id === item.absorbedInto)?.name ?? item.absorbedInto}</strong><p className="text-caption">{item.reason}</p></section>)}

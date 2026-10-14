@@ -371,7 +371,7 @@ describe('AgentService', () => {
     vi.spyOn(svc, 'catalog').mockResolvedValue([])
     svc.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 't' })
     svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions: false, autoBackgroundSeconds: 0, goals: { mode: 'manual', maxTurns: 10 } })
-    const session = svc.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' })
+    const session = svc.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
     await until(() => svc.get(session.id).state === 'idle')
     await svc.stopAndWait(session.id)
     await svc.send(session.id, 'follow-up')
@@ -395,7 +395,7 @@ describe('AgentService', () => {
     service.memoryInstructions = () => 'Shared memory instructions fixture'
     let style: 'adhd' | 'detailed' | 'default' = 'adhd'
     service.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, intelligence: { ...DEFAULT_APP_PREFERENCES.intelligence, responseStyle: style } })
-    const chat = service.start('t', scopeOf(cwd), 'Do the work', { ...DEFAULT_AGENT_SETTINGS, provider })
+    const chat = service.start('t', scopeOf(cwd), 'Do the work', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider })
     await until(() => service.get(chat.id).state === 'idle')
     expect(prompts[0]).toContain('numbered steps')
     expect(connections[0]?.instructions).toContain('tool_search')
@@ -821,7 +821,7 @@ describe('busy agent messages', () => {
         interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
     }
     const service = new AgentService(db, () => {}, fakeQuery([]), factory)
-    const session = service.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' })
+    const session = service.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
     return { service, session, send, steer, complete: () => emit({ kind: 'result', text: 'done', isError: false, costUsd: null }) }
   }
 
@@ -831,7 +831,7 @@ describe('busy agent messages', () => {
     const capture = new Promise<void>((resolve) => { release = resolve })
     const begin = vi.fn(async () => 'review'), followup = vi.fn(async () => {})
     service.reviewHooks = { begin, bind: () => {}, abandon: () => {}, followup, complete: async (id) => { if (id === session.id) await capture } }
-    const second = await service.startReviewed('t2', scopeOf(cwd), 'second chat', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' })
+    const second = await service.startReviewed('t2', scopeOf(cwd), 'second chat', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
     expect(second.state).toBe('idle'); expect(service.queued(second.id)[0]?.text).toBe('second chat')
     expect(begin).not.toHaveBeenCalled(); expect(followup).not.toHaveBeenCalled()
     complete()
@@ -1073,7 +1073,7 @@ it.each(['cursor', 'antigravity', 'opencode'] as const)('routes %s through its n
   const native = vi.fn(fakeCodex)
   const unused = vi.fn(() => { throw new Error('Wrong provider adapter') })
   const svc = new AgentService(db, (id, event) => events.push({ id, event }), fakeQuery([]), unused, native, native)
-  const session = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, provider, model: 'native-model' })
+  const session = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider, model: 'native-model' })
   await until(() => svc.get(session.id).state === 'idle')
   expect(native).toHaveBeenCalledOnce()
   expect(unused).not.toHaveBeenCalled()
@@ -1094,7 +1094,7 @@ it('keeps steering queued until every active tool has completed, without interru
     emit = callback
     return { start: async () => { emit({ kind: 'state', state: 'running' }) }, send: async () => {}, steer, interrupt, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
   })
-  const session = svc.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' })
+  const session = svc.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
   emit({ kind: 'tool-use', toolUseId: 'one', name: 'Bash', summary: 'first command' })
   emit({ kind: 'tool-use', toolUseId: 'two', name: 'Bash', summary: 'second command' })
   await svc.submit(session.id, 'change direction', 'steer')
@@ -1274,6 +1274,48 @@ describe('sub-agents Ramu runs', () => {
     expect(started.status).toBe('running')
     await until(() => svc.events(parent.id).some((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Survey" finished]')))
     expect(svc.task(parent.id, started.agentId)?.status).toBe('completed')
+    svc.stopAll()
+  })
+
+  it('lets a running sub-agent note or ask its chat, and the chat or you answer it', async () => {
+    const svc = routed()
+    const parent = await parentOf(svc, 'edits')
+    const started = await svc.spawnSubagent(parent.id, { description: 'Edit', prompt: 'Change it', background: true }, undefined, { step: { ...codexStep }, reason: 'test' })
+    // The sub-agent is held on an approval, so it is still running.
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
+    await svc.messageParent(started.agentId, 'Found two call sites')
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'user' && e.text === '[Sub-agent "Edit" says]\nFound two call sites'))
+    const answer = svc.askParent(started.agentId, 'Rename or wrap?')
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Edit" asks]\nRename or wrap?')))
+    await expect(svc.askParent(started.agentId, 'again')).rejects.toThrow(/already waiting/)
+    expect(() => svc.answerSubagent('other', started.agentId, 'x')).toThrow(/Unknown/)
+    svc.answerSubagent(parent.id, started.agentId, ' Wrap it ')
+    expect(await answer).toBe('Wrap it')
+    expect(() => svc.answerSubagent(parent.id, started.agentId, 'late')).toThrow(/not waiting/)
+    // You can answer from the sub-agent's card too.
+    const second = svc.askParent(started.agentId, 'Which file?')
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Edit" asks]\nWhich file?')))
+    await svc.messageTask(parent.id, started.agentId, 'a.ts')
+    expect(await second).toBe('a.ts')
+    // A finished sub-agent can no longer reach its chat.
+    svc.replyPermission(parent.id, (svc.events(parent.id).find((e) => e.kind === 'permission-request') as { requestId: string }).requestId, true)
+    await until(() => svc.task(parent.id, started.agentId)?.status === 'completed')
+    await expect(svc.messageParent(started.agentId, 'too late')).rejects.toThrow(/running sub-agent/)
+    svc.stopAll()
+  })
+
+  it('hands a foreground sub-agent\'s question back as its call result so the blocked chat can answer', async () => {
+    const svc = routed()
+    const parent = await parentOf(svc, 'edits')
+    const call = svc.spawnSubagent(parent.id, { description: 'Edit', prompt: 'Change it' }, undefined, { step: { ...codexStep }, reason: 'test' })
+    await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
+    const agentId = [...svc.events(parent.id)].find((e) => e.kind === 'agent')!.agentId
+    const answer = svc.askParent(agentId, 'Which branch?')
+    const result = await call
+    expect(result).toMatchObject({ status: 'running', report: expect.stringContaining('Which branch?') })
+    expect(result.report).toContain(`answer_subagent, agent "${agentId}"`)
+    svc.answerSubagent(parent.id, agentId, 'main')
+    expect(await answer).toBe('main')
     svc.stopAll()
   })
 
@@ -1486,7 +1528,7 @@ describe('chat continuation after restart', () => {
     await until(() => original.get(chat.id).state === 'idle'); original.stopAll()
     const oldId = original.get(chat.id).providerSessionId!
     persist(chat.id, { kind: 'agent', agentId: 'old-helper', name: 'Old helper', status: 'running' })
-    const codex = { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' as const }
+    const codex = { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' as const }
     persist(chat.id, { kind: 'settings', previous: DEFAULT_AGENT_SETTINGS, settings: codex, reason: 'Fallback', handoff: true })
     persist(chat.id, { kind: 'init', providerSessionId: 'codex-current', model: 'codex', cwd })
     persist(chat.id, { kind: 'agent', agentId: 'current-helper', name: 'Current helper', status: 'running' })
@@ -1974,12 +2016,12 @@ it('pins provider accounts for existing chats when the default account changes',
   const svc = new AgentService(db, () => {}, fakeQuery([]), fakeCodex)
   try {
     configureProviderBinaries({ codex: { binary: '', accounts, accountId: 'work' } })
-    const first = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' })
+    const first = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
     await until(() => svc.get(first.id).state === 'idle')
     expect(svc.get(first.id).settings.accountId).toBe('work')
     configureProviderBinaries({ codex: { binary: '', accounts, accountId: 'personal' } })
     expect(svc.get(first.id).settings.accountId).toBe('work')
-    const second = svc.start('t2', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' })
+    const second = svc.start('t2', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
     await until(() => svc.get(second.id).state === 'idle')
     expect(svc.get(second.id).settings.accountId).toBe('personal')
   } finally { svc.stopAll(); configureProviderBinaries({}) }

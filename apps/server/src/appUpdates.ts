@@ -4,7 +4,7 @@ import { open } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { newerVersion } from '@ramu/shared/version'
-import type { AppRelease, AppUpdateStatus } from '@ramu/shared/updates'
+import { APP_AUTO_UPDATE, type AppRelease, type AppUpdateStatus } from '@ramu/shared/updates'
 import type { AppPreferences } from '@ramu/shared/types'
 
 export const RAMU_RELEASES = 'https://github.com/ahxar/ramu/releases'
@@ -59,7 +59,7 @@ export class AppUpdateService {
   }
   private async automatic() {
     const generation = this.generation
-    try { const status = await this.check(); if (!this.closed && generation === this.generation && this.preferences().appAutoUpdate && status.phase === 'available') await this.download() } catch {}
+    try { const status = await this.check(); if (!this.closed && generation === this.generation && APP_AUTO_UPDATE && this.preferences().appAutoUpdate && status.phase === 'available') await this.download() } catch {}
     if (!this.closed && (this.preferences().appUpdateChecks || this.preferences().appAutoUpdate)) { this.timer = setTimeout(() => void this.automatic(), 6 * 60 * 60_000); this.timer.unref() }
   }
   check(): Promise<AppUpdateStatus> {

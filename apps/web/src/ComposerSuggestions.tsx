@@ -53,13 +53,19 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
       { id: 'changes', label: '/changes', description: t("Open the chat's changed files"), kind: 'Command', action: () => { void invoke('reviews.list').then((reviews) => { const review = reviews.find((r) => r.taskId === scope); if (review) openReview(ws, { id: review.id, taskId: review.taskId }); else notifyError('This chat has no recorded file changes yet.', 'Changes') }) } },
       { id: 'recap', label: '/recap', description: t("Open your daily recap"), kind: 'Command', action: () => ws.showHome() },
       { id: 'settings', label: '/settings', description: t("Open app settings"), kind: 'Command', action: () => window.dispatchEvent(new Event('ramu:settings')) },
+      ...(preferences.memory.enabled ? [
+        { id: 'remember', label: '/remember', description: t("Save something to shared memory"), kind: 'Command' as const, insertion: 'Remember this for future chats: ' },
+        { id: 'forget', label: '/forget', description: t("Ask the agent to forget a memory"), kind: 'Command' as const, insertion: 'Forget this memory: ' },
+        { id: 'memory', label: '/memory', description: t("Open saved memories"), kind: 'Command' as const, action: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'memory', target: 'Saved memories' } })) },
+      ] : []),
+      ...(preferences.intelligence.learning !== 'off' ? [{ id: 'learn', label: '/learn', description: t("Review recent chats for lessons and skills now"), kind: 'Command' as const, action: () => { void invoke('learning.run').catch((e) => notifyError(errorText(e), 'Learning')) } }] : []),
       { id: 'clear', label: '/clear', description: t("Clear this draft"), kind: 'Command', insertion: '' },
       // A chat's composer only: the question goes to an aside, never to the agent.
       ...(chat ? [{ id: 'aside', label: '/aside', description: t("Ask a side question without interrupting the chat"), kind: 'Command' as const, insertion: '/aside ' }] : []),
     ]
     const options: Choice[] = mode === '@' ? files.map((file) => ({ id: `${file.repoId}:${file.path}`, label: `${repoName(file.repoId)}/${file.path}`, description: t("Add file context"), kind: 'File', insertion: `@"${repoName(file.repoId)}/${file.path}" `, file })) : [...commands, ...skills.map((s): Choice => ({ id: `skill:${s.path}`, label: `/${s.name}`, description: s.description, kind: 'Skill', insertion: `$${s.name} ` }))]
     return options.filter((c) => `${c.label} ${c.description}`.toLowerCase().includes(query)).slice(0, 30)
-  }, [mode, query, files, skills, ws, language, chat])
+  }, [mode, query, files, skills, ws, language, chat, preferences.memory.enabled, preferences.intelligence.learning])
   const hydrate = (): FileContext[] => {
     const state = scope ? ws.taskUi[scope] : undefined
     return buildComposerContext({

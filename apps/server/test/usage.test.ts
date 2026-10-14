@@ -1,7 +1,7 @@
 import type { UsageReading } from '@ramu/shared/types'
 import { describe, expect, it } from 'vitest'
 import { UsageService, claudeReadings, claudeUsageReadings } from '../src/usage'
-import { parseTaskMessage, taskMessagePrompt } from '@ramu/shared/agentTasks'
+import { parseTaskMessage, parseTaskReport, subagentNotePrompt, taskMessagePrompt } from '@ramu/shared/agentTasks'
 
 describe('Claude plan usage', () => {
   it('reads every window of a real rate_limit_event, with reset times in milliseconds', () => {
@@ -58,4 +58,13 @@ it('keeps account windows separate and only exposes the selected account', async
     expect(service.list({ codex: 'default' }).map((reading) => reading.usedPercent)).toEqual([99])
     expect(stored.at(-1)).toHaveLength(2)
   } finally { configureProviderBinaries({}) }
+})
+
+describe('sub-agent notes to their chat', () => {
+  it('round-trips a note and a question, hiding the reply hint from the chat', () => {
+    expect(parseTaskReport(subagentNotePrompt('Map "auth"', 'says', 'c1', 'Found two call sites'))).toEqual({ name: "Map 'auth'", verb: 'says', body: 'Found two call sites' })
+    const ask = subagentNotePrompt('Map', 'asks', 'c1', 'Rename or wrap?')
+    expect(ask).toContain('answer_subagent, agent "c1"')
+    expect(parseTaskReport(ask)).toEqual({ name: 'Map', verb: 'asks', body: 'Rename or wrap?' })
+  })
 })
