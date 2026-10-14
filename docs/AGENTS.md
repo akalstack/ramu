@@ -1,5 +1,9 @@
 # Agents and routing
 
+## Changing models while working
+
+Selecting a model from the dropdown during a running turn starts a five-second countdown. **Apply now** switches immediately; **Cancel** restores the currently applied model and reasoning effort. Adjusting reasoning while a model change is pending keeps the original deadline and applies the latest effort with that model. Selecting a model through the slider still commits on release. Idle chats keep their existing selection behavior, and a pending countdown is cancelled if the turn stops running.
+
 ## Helpers
 
 Helper cards show task progress and transcripts. Open a card to inspect its work, send a message, or stop it. Stopping the main chat stops its helpers.

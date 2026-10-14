@@ -1,3 +1,6 @@
+import type { LearningService } from './learning'
+import type { CompressionService } from './compression'
+import { intelligenceSchema } from './intelligence'
 import { SEARCH_RESULT_LIMIT, REPLACE_MATCH_LIMIT, REPLACE_FILE_LIMIT, REPLACE_CONTENT_LIMIT } from '@ramu/shared/searchLimits'
 import { homedir } from 'node:os'
 import { ProviderService } from './providers'
@@ -8,7 +11,7 @@ import { configureProviderAccounts } from './providerBinaries'
 import type { ProviderConfiguration, ProviderStatus } from '@ramu/shared/providers'
 // The renderer's only door into privileged code: one validated method table.
 import { readFileSync, statSync, watch, type FSWatcher } from 'node:fs'
-import { withContext, discoverSkills } from './context'
+import { withContext as withFileContext, discoverSkills } from './context'
 import { resolveFileLink } from './fileLinks'
 import { scheduleSchema, ruleSchema, previewOccurrences, type ScheduleService } from './schedules'
 import type { ReviewService } from './reviews'
@@ -40,7 +43,7 @@ const agentSettings = z.object({
   provider: z.enum(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity']), accountId: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(), model: z.string().max(200),
   effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable(),
   serviceTier: z.enum(['standard', 'fast']).default('standard'),
-  access: z.enum(['edits', 'auto', 'full']), autoFallback: z.boolean(),
+  access: z.enum(['edits', 'auto', 'full']), autoFallback: z.boolean(), responseStyle: z.enum(['inherit', 'default', 'concise', 'detailed', 'adhd', 'caveman', 'custom']).optional(),
 })
 
 const pullMode = z.enum(['rebase', 'merge', 'ff-only'])
@@ -53,7 +56,7 @@ const fallbackPreferences = z.object({ switchAt: threshold.default(DEFAULT_FALLB
 const subagentPreferences = z.object({ mode: z.enum(['native', 'single', 'per-provider']).default('native'), single: fallbackStep.nullable().default(null), perProvider: z.partialRecord(providerId, fallbackStep.nullable()).default({}), byType: z.array(z.object({ id: z.string().min(1).max(100), type: z.string().max(80), step: fallbackStep.nullable() })).max(20).default([]), fallback: z.enum(['same', 'separate']).default('same'), chains: chains.default({}), switchAt: z.union([threshold, z.literal('same')]).default('same'), continueNative: z.boolean().default(true), isolate: z.boolean().default(false), codexHook: z.boolean().default(false), maxConcurrent: z.number().int().min(1).max(8).default(3), shareContext: z.boolean().default(false) })
 const advisorPreferences = z.object({ enabled: z.boolean().default(false), step: fallbackStep.nullable().default(null), wait: z.boolean().default(false) })
 const projectAction = z.object({ id: z.string().min(1).max(64), name: z.string().trim().min(1).max(60), command: z.string().trim().min(1).max(4000), keys: z.string().max(40).optional() })
-const appPreferences = z.object({ language: z.enum(['system', 'en', 'id']).default('system'), recapsEnabled: z.boolean().default(true), recapTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'), accent: z.enum(['blue', 'violet', 'teal']), fontFamily: z.enum(['system', 'geist']), fontSize: z.number().int().min(12).max(18), fontSmoothing: z.boolean().default(true), reduceMotion: z.boolean().default(false), recentChatMode: z.boolean().default(false), editorFontSize: z.number().int().min(12).max(22), terminalFontSize: z.number().int().min(12).max(22), previewTabs: z.boolean(), hideEmptyStaged: z.boolean(), pullMode: pullMode.default('rebase'), autoPull: z.boolean().default(true), commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'), commitInstructions: z.string().max(2000).default(''), defaultCommitAction: z.enum(['commit', 'push', 'sync']).default('commit'), defaultCommitBranch: z.enum(['new-branch', 'current']).default('new-branch'), recentChats: z.number().int().min(3).max(20), cleanupArchivedDays: z.number().int().min(0).max(3650).default(30), terminalTabPosition: z.enum(['top', 'right']), defaultAccess: agentSettings.shape.access, defaultAutoFallback: z.boolean(), busyMessageAction: z.enum(['queue', 'steer']).default('steer'), includeTabContext: z.boolean().default(true), sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH), messageBehaviorVersion: z.literal(4).default(4), defaultChatDockOpen: z.boolean(), favoriteModels: z.array(z.string().max(200)).max(100).default([]), notifyAgentDone: z.boolean().default(true), resumeChatsOnRestart: z.boolean().default(true), asyncQuestions: z.boolean().default(true), autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60), providerBinaries: providerBinaries.default({}), providerUpdateChecks: z.boolean().default(true), appUpdateChecks: z.boolean().default(true), appAutoUpdate: z.boolean().default(false), keepAwake: z.boolean().default(false), keepAwakeWhen: z.enum(['plugged-in', 'always']).default('plugged-in'), showUsageLimits: z.boolean().default(true), fallback: fallbackPreferences.default(DEFAULT_FALLBACK_PREFERENCES), subagents: subagentPreferences.default(DEFAULT_SUBAGENT_PREFERENCES), advisor: advisorPreferences.default(DEFAULT_ADVISOR_PREFERENCES), goals: goalPreferencesSchema.default({ mode: 'auto', maxTurns: 10 }), memory: z.object({ enabled: z.boolean().default(true), dream: z.boolean().default(true), staleAfterDays: z.number().int().min(7).max(3650).default(90) }).default(DEFAULT_MEMORY_PREFERENCES) })
+const appPreferences = z.object({ intelligence: intelligenceSchema.default(() => intelligenceSchema.parse({})), language: z.enum(['system', 'en', 'id']).default('system'), recapsEnabled: z.boolean().default(true), recapTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'), accent: z.enum(['blue', 'violet', 'teal']), fontFamily: z.enum(['system', 'geist']), fontSize: z.number().int().min(12).max(18), fontSmoothing: z.boolean().default(true), reduceMotion: z.boolean().default(false), recentChatMode: z.boolean().default(false), editorFontSize: z.number().int().min(12).max(22), terminalFontSize: z.number().int().min(12).max(22), previewTabs: z.boolean(), hideEmptyStaged: z.boolean(), pullMode: pullMode.default('rebase'), autoPull: z.boolean().default(true), commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'), commitInstructions: z.string().max(2000).default(''), defaultCommitAction: z.enum(['commit', 'push', 'sync']).default('commit'), defaultCommitBranch: z.enum(['new-branch', 'current']).default('new-branch'), recentChats: z.number().int().min(3).max(20), cleanupArchivedDays: z.number().int().min(0).max(3650).default(30), terminalTabPosition: z.enum(['top', 'right']), defaultAccess: agentSettings.shape.access, defaultAutoFallback: z.boolean(), busyMessageAction: z.enum(['queue', 'steer']).default('steer'), includeTabContext: z.boolean().default(true), sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH), messageBehaviorVersion: z.literal(4).default(4), defaultChatDockOpen: z.boolean(), favoriteModels: z.array(z.string().max(200)).max(100).default([]), notifyAgentDone: z.boolean().default(true), resumeChatsOnRestart: z.boolean().default(true), asyncQuestions: z.boolean().default(true), autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60), providerBinaries: providerBinaries.default({}), providerUpdateChecks: z.boolean().default(true), appUpdateChecks: z.boolean().default(true), appAutoUpdate: z.boolean().default(false), keepAwake: z.boolean().default(false), keepAwakeWhen: z.enum(['plugged-in', 'always']).default('plugged-in'), showUsageLimits: z.boolean().default(true), fallback: fallbackPreferences.default(DEFAULT_FALLBACK_PREFERENCES), subagents: subagentPreferences.default(DEFAULT_SUBAGENT_PREFERENCES), advisor: advisorPreferences.default(DEFAULT_ADVISOR_PREFERENCES), goals: goalPreferencesSchema.default({ mode: 'auto', maxTurns: 10 }), memory: z.object({ enabled: z.boolean().default(true), dream: z.boolean().default(true), staleAfterDays: z.number().int().min(7).max(3650).default(90) }).default(DEFAULT_MEMORY_PREFERENCES) })
 
 const searchOptions = z.object({ query: z.string().min(1).max(1000), caseSensitive: z.boolean(), wholeWord: z.boolean(), regex: z.boolean(), include: z.string().max(2000), exclude: z.string().max(2000), repoId: id.optional() })
 const replacePreview = z.array(z.object({ repoId: id, path: relPath, hash: z.string().regex(/^[a-f0-9]{64}$/), count: z.number().int().positive(), before: z.string().max(160), after: z.string().max(160) })).max(REPLACE_FILE_LIMIT)
@@ -127,6 +130,8 @@ export interface Services {
   agents: AgentService
   schedules: ScheduleService
   recaps: RecapService
+  learning?: LearningService
+  compression?: CompressionService
   memory?: MemoryService
   reviews: ReviewService
 }
@@ -137,8 +142,10 @@ export interface RuntimeHost {
 }
 
 
-export function createDispatcher(host: RuntimeHost, { workspace, terminals, agents, schedules, recaps, reviews, memory }: Services) {
+export function createDispatcher(host: RuntimeHost, { workspace, terminals, agents, schedules, recaps, reviews, memory, learning, compression }: Services) {
   configureProviderAccounts(join(host.userData, 'provider-accounts'))
+  const managedSkills = (taskId: string) => learning?.catalog(workspace.projectIdOf(taskId)) ?? []
+  const withContext = (ws: Workspace, taskId: string, prompt: string, context?: FileContext[]) => withFileContext(ws, taskId, prompt, context, managedSkills(taskId))
   const need = <T,>(service: T | undefined): T => { if (!service) throw new Error('Memory is unavailable'); return service }
   const providers = new ProviderService(
     () => ({ ...DEFAULT_APP_PREFERENCES, ...workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}) }),
@@ -269,7 +276,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'reviews.undoApply': { args: z.tuple([id, z.array(id).min(1).max(100)]), run: (token: string, fileIds: string[]) => lock.runMany(reviews.covers(reviews.undoReviewId(token)).map((cwd) => `checkout:${cwd}`), () => reviews.undoApply(token, fileIds)) },
     'reviews.chatUndoPreview': { args: z.tuple([id, z.number().int().min(1)]), run: (s: string, seq: number) => lock.runMany(agents.get(s).covers.map((cwd) => `checkout:${cwd}`), () => reviews.chatUndoPreview(s, seq)) },
     'reviews.chatUndoApply': { args: z.tuple([id, z.array(id).min(1).max(100)]), run: (token: string, files: string[]) => lock.runMany(reviews.chatUndoCovers(token).map((cwd) => `checkout:${cwd}`), () => reviews.chatUndoApply(token, files)) },
-    'skills.list': { args: z.tuple([id]), run: (ctx: string) => discoverSkills(workspace.agentScope(ctx)) },
+    'skills.list': { args: z.tuple([id]), run: (ctx: string) => [...new Map([...managedSkills(ctx), ...discoverSkills(workspace.agentScope(ctx))].map((skill) => [skill.name, skill])).values()] },
     'schedules.list': { args: z.tuple([]), run: () => schedules.list() },
     'schedules.save': { args: z.tuple([scheduleSchema, id.optional()]), run: (input: ScheduleInput, scheduleId?: string) => schedules.save(input, scheduleId) },
     'schedules.pause': { args: z.tuple([id, z.boolean()]), run: (scheduleId: string, paused: boolean) => schedules.pause(scheduleId, paused) },
@@ -279,6 +286,17 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'schedules.preview': { args: z.tuple([ruleSchema, z.string()]), run: (rule: Parameters<typeof previewOccurrences>[0], zone: string) => { if (!scheduleSchema.shape.timezone.safeParse(zone).success) throw new Error('Unknown timezone'); return previewOccurrences(rule, zone, Date.now()) } },
     'recaps.get': { args: z.tuple([]), run: () => recaps.snapshot() },
     'recaps.refresh': { args: z.tuple([]), run: () => recaps.refresh() },
+    'learning.get': { args: z.tuple([]), run: () => need(learning).snapshot() },
+    'learning.apply': { args: z.tuple([id]), run: (jobId: string) => need(learning).apply(jobId) },
+    'learning.retry': { args: z.tuple([id]), run: (jobId: string) => need(learning).retry(jobId) },
+    'learning.dismiss': { args: z.tuple([id]), run: (jobId: string) => need(learning).dismiss(jobId) },
+    'learning.control': { args: z.tuple([id, z.enum(['pin', 'unpin', 'disable', 'archive', 'restore'])]), run: (skillId: string, action: 'pin' | 'unpin' | 'disable' | 'archive' | 'restore') => need(learning).control(skillId, action) },
+    'learning.history': { args: z.tuple([id]), run: (skillId: string) => need(learning).history(skillId) },
+    'learning.revert': { args: z.tuple([id, z.number().int().positive()]), run: (skillId: string, revision: number) => need(learning).revert(skillId, revision) },
+    'learning.run': { args: z.tuple([]), run: () => need(learning).tick(true) },
+    'agent.compression': { args: z.tuple([id]), run: (sessionId: string) => need(compression).stats(sessionId) },
+    'agent.checkpoint': { args: z.tuple([id]), run: (sessionId: string) => need(learning).checkpoint(sessionId) },
+    'memory.revert': { args: z.tuple([id, z.number().int().min(0), z.number().int()]), run: (memoryId: string, index: number, updatedAt: number) => need(memory).revert(memoryId, index, updatedAt) },
     'memory.get': { args: z.tuple([]), run: () => need(memory).snapshot() },
     'memory.save': { args: z.tuple([memoryInputSchema, id.optional()]), run: (input: MemoryInput, memoryId?: string) => need(memory).save(input, { actor: 'user' }, memoryId).memory },
     'memory.archive': { args: z.tuple([id]), run: (memoryId: string) => need(memory).archive(memoryId, { actor: 'user' }, 'archived by you') },
@@ -377,7 +395,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
       },
     },
     'settings.app.get': { args: z.tuple([]), run: loadPreferences },
-    'settings.app.set': { args: z.tuple([appPreferences]), run: (preferences: AppPreferences) => { workspace.setAppState('app-preferences', preferences); recaps.settingsChanged(); providers.settingsChanged(); awake.settingsChanged(); host.send('usage:changed', usage.list()); updates.settingsChanged(); agents.invalidateCatalog(); agents.goalsSettingsChanged(); memory?.settingsChanged() } },
+    'settings.app.set': { args: z.tuple([appPreferences]), run: (preferences: AppPreferences) => { workspace.setAppState('app-preferences', preferences); recaps.settingsChanged(); providers.settingsChanged(); awake.settingsChanged(); host.send('usage:changed', usage.list()); updates.settingsChanged(); agents.invalidateCatalog(); agents.goalsSettingsChanged(); memory?.settingsChanged(); learning?.settingsChanged() } },
     'background.keepAwake': { args: z.tuple([]), run: () => awake.status() },
     'updates.status': { args: z.tuple([]), run: () => updates.status() },
     'updates.check': { args: z.tuple([]), run: () => updates.check() },

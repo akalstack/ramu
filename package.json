@@ -16,6 +16,7 @@
     "make": "node scripts/desktop-package.mjs make",
     "ui:add": "pnpm --filter @ramu/web ui:add",
     "server": "node apps/server/dist/cli.js",
+    "test:learning": "node scripts/learning-smoke.mjs",
     "test:e2e": "node scripts/automation-smoke.mjs",
     "test:terminal": "node scripts/terminal-smoke.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm test:scripts && pnpm build",

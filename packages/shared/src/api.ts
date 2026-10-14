@@ -53,6 +53,18 @@ export interface TerminalInfo {
 }
 
 export interface RamuMethods {
+  'learning.get'(): import('./types').LearningSnapshot
+  'learning.apply'(id: string): void
+  'learning.retry'(id: string): void
+  'learning.dismiss'(id: string): void
+  'learning.control'(id: string, action: 'pin' | 'unpin' | 'disable' | 'archive' | 'restore'): void
+  'learning.history'(id: string): import('./types').ManagedSkill[]
+  'learning.revert'(id: string, revision: number): void
+  'learning.run'(): void
+  'agent.checkpoint'(id: string): import('./types').SessionCheckpoint | null
+  'agent.compression'(id: string): { outputs: number; originalCharacters: number; compactCharacters: number; estimatedTokensAvoided: number; note: string }
+  'memory.revert'(id: string, index: number, updatedAt: number): Memory
+
   'app.systemLanguages': () => string[]
   'reviews.list'(sessionId?: string): ChangeReview[]
   'reviews.get'(id: string): ChangeReview

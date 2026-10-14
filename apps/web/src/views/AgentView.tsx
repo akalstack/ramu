@@ -1,3 +1,4 @@
+import { RESPONSE_STYLE_LABELS } from '@ramu/shared/types'
 import { chatCodeComponents } from '../ChatCodeBlock'
 import { focusComposer } from '../ComposerInput'
 import { clipText } from '@ramu/shared/text'
@@ -38,7 +39,7 @@ import { advisorTranscript, advisorAgentId, effectiveStatus, latestTasks, parseA
 import type { AgentTask, Aside } from '@ramu/shared/types'
 import { createPortal } from 'react-dom'
 import { ProviderRouteChip } from '../ProviderRoute'
-import { ContextMeter } from '../Usage'
+import { CompressionMeter, ContextMeter } from '../Usage'
 import { ProviderIcon } from '../ProviderIcon'
 import { modelDisplayName, settingsNames, useModelSets } from '../ModelSets'
 import { Textarea } from '@/components/ui/textarea'
@@ -685,7 +686,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
           allowEmpty={attached.length > 0}
           chips={<>{session && <ProviderRouteChip sessionId={view.sessionId} settings={pendingSettings ?? session.settings} />}{attached.length > 0 && <CommentsChip groups={attached} onRemove={() => void act(async () => { for (const group of attached) await invoke('reviews.select', group.review.id, group.ids, false) })} />}</>}
           disabled={configuring || !session}
-          controls={session && <><AgentControls settings={pendingSettings ?? session.settings} current={session.settings} onChange={changeSettings} disabled={false} trailing={<ContextMeter sessionId={view.sessionId} />} /></>}
+          controls={session && <><AgentControls settings={pendingSettings ?? session.settings} current={session.settings} onChange={changeSettings} disabled={false} running={working} trailing={<><ContextMeter sessionId={view.sessionId} /><CompressionMeter sessionId={view.sessionId} /></>} /></>}
           onChange={setDraft}
           chat
           onSubmit={(context) => send(action, context)}
@@ -737,8 +738,9 @@ function SettingsChange({ next, previous }: { next: AgentSettings; previous?: Ag
   const { catalogs } = useModelSets()
   const label = (s: AgentSettings) => { const { model, effort } = settingsNames(s, catalogs); return effort ? `${model} ${effort}` : model }
   const tier = (s: AgentSettings) => s.provider === 'codex' ? s.serviceTier === 'fast' ? 'Fast' : 'Standard' : null
-  if (!previous) return <>{[label(next), accessName(next.access), tier(next)].filter(Boolean).join(' · ')}</>
-  const changed = [[label(previous), label(next)], [accessName(previous.access), accessName(next.access)], [tier(previous), tier(next)]].filter(([before, now]) => before && now && before !== now).map(([before, now]) => `${before} → ${now}`)
+  const style = (s: AgentSettings) => translate(s.responseStyle && s.responseStyle !== 'inherit' ? RESPONSE_STYLE_LABELS[s.responseStyle] : 'Use global style')
+  if (!previous) return <>{[label(next), accessName(next.access), tier(next), style(next)].filter(Boolean).join(' · ')}</>
+  const changed = [[label(previous), label(next)], [accessName(previous.access), accessName(next.access)], [tier(previous), tier(next)], [style(previous), style(next)]].filter(([before, now]) => before && now && before !== now).map(([before, now]) => `${before} → ${now}`)
   return <>{changed.length ? changed.join(' · ') : label(next)}</>
 }
 

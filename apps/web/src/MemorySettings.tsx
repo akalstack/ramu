@@ -5,7 +5,7 @@ import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Archive, Moon, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { Archive, History, Moon, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { DateTime } from 'luxon'
 import { t } from './i18n'
@@ -34,6 +34,7 @@ export function MemorySettings({ value, onChange }: { value: MemoryPreferences; 
 function MemoryBrowser() {
   const ws = useWorkspace()
   const [snapshot, setSnapshot] = useState<MemorySnapshot | null>(null)
+  const [history, setHistory] = useState<{ id: string; entries: Awaited<ReturnType<typeof ramu.invoke<'memory.history'>>> } | null>(null)
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState('all')
   const [status, setStatus] = useState<Memory['status']>('active')
@@ -76,6 +77,8 @@ function MemoryBrowser() {
             : <><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center" aria-label={t('Restore memory')} onClick={() => void act(() => invoke('memory.restore', m.id))}><RotateCcw size={12} /></Button>
               <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center" aria-label={t('Delete memory')} onClick={() => void act(() => invoke('memory.delete', m.id))}><Trash2 size={12} /></Button></>}
         </div>
+        <Button variant="ghost" size="sm" aria-label={t('Memory history')} onClick={() => void act(async () => setHistory({ id: m.id, entries: await invoke('memory.history', m.id) }))}><History size={12} />{t('History')}</Button>
+        {history?.id === m.id && <div className="flex flex-col gap-2">{history.entries.map((entry, index) => <details key={index}><summary>{new Date(entry.at).toLocaleString()} · {entry.actor} · {entry.reason ?? entry.action}</summary><div className="grid grid-cols-2 gap-2 text-caption"><div><strong>{t('Earlier revision')}</strong><pre className="whitespace-pre-wrap">{entry.before?.content ?? t('No earlier text')}</pre></div><div><strong>{t('Current memory')}</strong><pre className="whitespace-pre-wrap">{m.content}</pre></div></div>{entry.before?.content && <Button variant="secondary" onClick={() => void act(async () => { await invoke('memory.revert', m.id, index, m.updatedAt); setHistory(null) })}>{t('Restore revision')}</Button>}</details>)}</div>}
         <h4 className="text-body font-medium m-0">{m.title}</h4>
         <p className="muted text-muted-foreground whitespace-pre-wrap leading-[1.5] m-[4px_0_6px] line-clamp-4">{m.content}</p>
         <span className="muted text-muted-foreground small text-caption">{[t('Saved by {0}', { 0: author(m) }), t('Used {0}×', { 0: m.useCount }), t('Updated {0}', { 0: DateTime.fromMillis(m.updatedAt).toRelative() ?? '' }), ...(m.archivedReason ? [m.archivedReason] : [])].join(' · ')}</span>

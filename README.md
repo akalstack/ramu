@@ -25,6 +25,7 @@ Inspired by **T3 Code**, **Codex**, and **VS Code**.
 - **Automatic goals:** agents can create a persistent goal when authorized work is likely to need multiple turns. Ramu starts follow-up turns toward that objective, keeps the goal across provider changes, and gives you pause, resume, and continuation limits. You can also start a goal explicitly with `/goal`.
 - **Cross-provider helpers:** route delegated tasks to another provider or model, with rules by task type and separate fallback policies. Inspect helper progress and transcripts, or use isolated checkouts for their changes.
 - **Shared memory across providers:** carry project knowledge and personal preferences between agents through shared notes. Browse and edit memories, restore earlier versions, and use model-assisted cleanup to merge duplicates and archive outdated notes.
+- **Learning and context efficiency:** review completed work for reusable skills and lasting lessons, with automatic or review-first updates and revision history. Choose response styles including ADHD-friendly and Caveman, discover Ramu tools on demand, and compact large tool results with full output available when needed. See [learning and context efficiency](docs/LEARNING.md).
 - **Persistent background work:** chats and terminals keep running when you close the window. Resume unfinished chats after a service restart, schedule recurring tasks, and catch up through recaps linked to the original conversations.
 
 ## Features

@@ -13,43 +13,53 @@ async function fakeTools(text: string, connection?: McpConnection): Promise<void
   const client = new Client({ name: 'ramu-smoke', version: '1' })
   try {
     await client.connect(new StreamableHTTPClientTransport(new URL(connection.url), { requestInit: { headers: { Authorization: `Bearer ${connection.token}` } } }))
+    const exposed = new Set((await client.listTools()).tools.map((tool) => tool.name))
+    const call = async (request: Parameters<Client['callTool']>[0]) => {
+      if (exposed.has(request.name)) return client.callTool(request)
+      const found = await client.callTool({ name: 'tool_search', arguments: { query: request.name, limit: 5 } })
+      const block = found.content as { type: string; text?: string }[]
+      if (!block.some((item) => item.text?.includes(request.name))) throw new Error(`Ramu tool not discovered: ${request.name}`)
+      return client.callTool({ name: 'tool_invoke', arguments: { name: request.name, arguments: request.arguments ?? {} } })
+    }
     if (text.includes('[goal tool]')) {
       const continuation = text.startsWith('Ramu goal continuation:')
-      const reply = await client.callTool(continuation
+      const reply = await call(continuation
         ? { name: 'update_goal', arguments: { status: 'completed', reason: 'The smoke fixture verified goal tools, persistence and automatic continuation.' } }
         : { name: 'set_goal', arguments: { objective: 'Verify the goal smoke fixture [goal tool]', continuationReason: 'The smoke fixture checks automatic continuation, so it needs a second turn.' } })
       if (reply.isError) throw new Error(JSON.stringify(reply.content))
     }
     if (text.includes('[questions')) {
-      const reply = await client.callTool({ name: 'ask_user', arguments: { grouping: text.includes('[questions independent]') ? 'independent' : 'together', dependsOn: 'Choose the database and deployment region', questions: [{ id: 'database', question: 'Which database?', options: [{ label: 'SQLite' }, { label: 'Postgres' }] }, { id: 'region', question: 'Which region?', options: [{ label: 'Jakarta' }, { label: 'Singapore' }] }] } })
+      const reply = await call({ name: 'ask_user', arguments: { grouping: text.includes('[questions independent]') ? 'independent' : 'together', dependsOn: 'Choose the database and deployment region', questions: [{ id: 'database', question: 'Which database?', options: [{ label: 'SQLite' }, { label: 'Postgres' }] }, { id: 'region', question: 'Which region?', options: [{ label: 'Jakarta' }, { label: 'Singapore' }] }] } })
       if (reply.isError) throw new Error(JSON.stringify(reply.content))
       const data = JSON.parse((reply.content as { text: string }[])[0]!.text)
-      if (text.includes('[questions obsolete]')) await client.callTool({ name: 'close_question', arguments: { requestId: data.request.requestId, reason: 'The requested work no longer needs a database.' } })
-      if (text.includes('[questions wait]')) await client.callTool({ name: 'wait_for_answer', arguments: { requestId: data.request.requestId } })
+      if (text.includes('[questions obsolete]')) await call({ name: 'close_question', arguments: { requestId: data.request.requestId, reason: 'The requested work no longer needs a database.' } })
+      if (text.includes('[questions wait]')) await call({ name: 'wait_for_answer', arguments: { requestId: data.request.requestId } })
     }
     if (text.includes('[advisor')) {
-      const reply = await client.callTool({ name: 'advisor', arguments: { focus: 'Is the plan sound?', wait: !text.includes('[advisor async]') } })
+      const reply = await call({ name: 'advisor', arguments: { focus: 'Is the plan sound?', wait: !text.includes('[advisor async]') } })
       if (reply.isError) throw new Error(JSON.stringify(reply.content))
     }
     if (text.includes('[schedule tool]')) {
-      const context = await client.callTool({ name: 'schedule_context', arguments: {} })
+      const context = await call({ name: 'schedule_context', arguments: {} })
       const data = JSON.parse((context.content as { text: string }[])[0]!.text)
-      const result = await client.callTool({ name: 'schedule_create', arguments: { name: 'Created through chat tools', prompt: 'Summarize this chat', timezone: data.timezone ?? 'UTC', rule: { kind: 'once', at: new Date(Date.now() + 86400000).toISOString() }, missedPolicy: 'latest', settings: data.currentSettings } })
+      const result = await call({ name: 'schedule_create', arguments: { name: 'Created through chat tools', prompt: 'Summarize this chat', timezone: data.timezone ?? 'UTC', rule: { kind: 'once', at: new Date(Date.now() + 86400000).toISOString() }, missedPolicy: 'latest', settings: data.currentSettings } })
       if (result.isError) throw new Error(JSON.stringify(result.content))
     }
     if (text.includes('[ramu-agent')) {
-      const result = await client.callTool({ name: 'ramu_agent', arguments: { description: 'Survey the tests', prompt: 'List the test files', type: 'Explore', background: text.includes('[ramu-agent background]') } })
+      const result = await call({ name: 'ramu_agent', arguments: { description: 'Survey the tests', prompt: 'List the test files', type: 'Explore', background: text.includes('[ramu-agent background]') } })
       if (result.isError) throw new Error(JSON.stringify(result.content))
     }
     const body = text.match(/<review-comments>\s*([\s\S]*?)\s*<\/review-comments>/)?.[1]
     if (body) for (const thread of JSON.parse(body)) {
-      const result = await client.callTool({ name: 'review_reply', arguments: { reviewId: thread.reviewId, threadId: thread.threadId, text: 'Test agent examined the supplied feedback and code context.', suggestResolved: true } })
+      const result = await call({ name: 'review_reply', arguments: { reviewId: thread.reviewId, threadId: thread.threadId, text: 'Test agent examined the supplied feedback and code context.', suggestResolved: true } })
       if (result.isError) throw new Error(JSON.stringify(result.content))
     }
   } finally { await client.close() }
 }
 
 export function fakeAnalysis(prompt: string): string {
+  if (prompt.startsWith('ramu-learning:') && prompt.includes('[learn-fixture]')) return JSON.stringify({ checkpoint: 'Fixture checks completed; no deployment performed.', memories: [{ kind: 'feedback', title: 'Retry fixture guidance', content: 'Use bounded retries for this fixture; verify with its retry test.', tags: ['retry'], importance: 3, reason: 'Observed simulated test result' }], skills: [{ name: 'fixture-retry-check', description: 'Verify bounded retries in the fixture', content: 'Inspect the retry limit. Run its tests. Report failures accurately.', reason: 'Verified reusable fixture procedure' }], archive: [] })
+  if (prompt.startsWith('ramu-learning:')) return '{"checkpoint":"Completed simulated work; verify real changes separately.","memories":[],"skills":[],"archive":[]}'
   if (prompt.includes('recap-items')) return '{"items":[]}'
   if (prompt.startsWith('aside:')) return `Side answer: ${prompt.match(/<question>\n([\s\S]*?)\n<\/question>/)?.[1] ?? ''}`.trim()
   if (prompt.startsWith('advisor:')) return `Advisor review: ${prompt.match(/<agent-focus>\n([\s\S]*?)\n<\/agent-focus>/)?.[1] ?? 'general check'}. Verify the tests before declaring done.`

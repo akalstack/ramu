@@ -150,15 +150,16 @@ it('exposes MCP tools scoped to the session project', async () => {
   expect(memory.history(saved.value.memory.id)[0]).toMatchObject({ action: 'update', reason: 'version' })
 })
 
-it('a user edit confirms an agent memory, and an agent rewrite takes the confirmation away', () => {
+it('a user edit confirms an agent memory and agents cannot overwrite or archive it', () => {
   const m = memory.save(note('Review style', 'Prefers small PRs'), agent).memory
   age(m.id, 400)
   expect(staleAt(memory.get(m.id), 90)).not.toBeNull()
   memory.save({ ...note('Review style', 'Prefers small, focused PRs') }, { actor: 'user' }, m.id)
   expect(memory.get(m.id).source).toMatchObject({ actor: 'agent', provider: 'codex', confirmed: true })
   expect(staleAt(memory.get(m.id), 90)).toBeNull()
-  memory.save({ ...note('Review style', 'Prefers large PRs') }, agent, m.id)
-  expect(memory.get(m.id).source.confirmed).toBe(false)
+  expect(() => memory.save({ ...note('Review style', 'Prefers large PRs') }, agent, m.id)).toThrow(/protected/)
+  expect(() => memory.archive(m.id, agent, 'different preference')).toThrow(/protected/)
+  expect(memory.get(m.id)).toMatchObject({ content: 'Prefers small, focused PRs', source: { confirmed: true } })
 })
 
 it('essential is set only by the user: never forgotten, quoted for every agent, and agents cannot overwrite it', () => {
@@ -170,6 +171,6 @@ it('essential is set only by the user: never forgotten, quoted for every agent, 
   age(rule.id, 1000)
   expect(memory.hygiene().stale).toBe(0)
   expect(memory.instructions(session(), null)).toContain(`[${rule.id}] project, global: Golden rule: Never force-push shared branches`)
-  // An explicit agent rewrite drops it to important and unconfirmed.
-  expect(memory.save(note('Golden rule', 'Force-push is fine', { kind: 'project', importance: 5 }), agent, rule.id).memory).toMatchObject({ importance: 4, source: { confirmed: false } })
+  expect(() => memory.save(note('Golden rule', 'Force-push is fine', { kind: 'project', importance: 5 }), agent, rule.id)).toThrow(/protected/)
+  expect(memory.get(rule.id)).toMatchObject({ importance: 5, content: 'Never force-push shared branches' })
 })

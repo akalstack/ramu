@@ -1,3 +1,4 @@
+import { IntelligenceSettings, LearningSettings } from './IntelligenceSettings'
 import { SettingsRow } from '@/components/settings-row'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
 import { AppUpdates } from './AppUpdates'
@@ -95,8 +96,8 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
     subagents: ['subagents'],
     advisor: ['advisor'],
     goals: ['goals'],
-    memory: ['memory'],
-    chats: ['busyMessageAction', 'includeTabContext', 'notifyAgentDone', 'resumeChatsOnRestart', 'asyncQuestions', 'autoBackgroundSeconds', 'recentChats', 'cleanupArchivedDays'],
+    memory: ['memory', 'intelligence'],
+    chats: ['intelligence', 'busyMessageAction', 'includeTabContext', 'notifyAgentDone', 'resumeChatsOnRestart', 'asyncQuestions', 'autoBackgroundSeconds', 'recentChats', 'cleanupArchivedDays'],
     git: [ 'pullMode', 'autoPull', 'commitStyle', 'commitInstructions', 'defaultCommitAction', 'defaultCommitBranch', 'hideEmptyStaged'],
   }
   const pageKeys = resetKeys[page]
@@ -141,11 +142,12 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', shortcut
     </div>}
     {page === 'access' && <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0"><SettingsRow className=""><span><strong>{t("Default access")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Applied to new chats. Existing chats keep their access mode.")}</span></span><Dropdown label={t("Default access")} value={appDraft.defaultAccess} options={(['edits', 'auto', 'full'] as const).map((value) => ({ value, label: accessName(value) }))} onChange={(value) => setAppDraft({ ...appDraft, defaultAccess: value as AppPreferences['defaultAccess'] })} /></SettingsRow>{toggle('defaultAutoFallback', 'Automatic provider fallback', 'Continue with another provider when a usage limit is reached. Applies to new chats.')}<FallbackSettings value={appDraft} onChange={setAppDraft} busy={busy} /></div>}
     {page === 'subagents' && <SubagentSettings value={appDraft} onChange={setAppDraft} busy={busy} />}
-    {page === 'memory' && <MemorySettings value={appDraft.memory} onChange={(memory) => setAppDraft({ ...appDraft, memory })} />}
+    {page === 'memory' && <><MemorySettings value={appDraft.memory} onChange={(memory) => setAppDraft({ ...appDraft, memory })} /><LearningSettings value={appDraft.intelligence} onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })} /></>}
     {page === 'goals' && <GoalSettings value={appDraft.goals} onChange={(goals) => setAppDraft({ ...appDraft, goals })} />}
     {page === 'advisor' && <AdvisorSettings value={appDraft} onChange={setAppDraft} busy={busy} />}
     {page === 'chats' && <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0">
       <h4 className="settings-group-title m-[4px_0_10px] text-caption font-medium text-muted-foreground">{t('Messages & context')}</h4>
+      <IntelligenceSettings value={appDraft.intelligence} onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })} />
       <SettingsRow className=""><span><strong>{t("Messages while working")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Steer sends your message after the current tools finish. Queue waits until the agent finishes its turn. Cmd/Ctrl+Enter switches between these actions.")}</span></span><Dropdown label={t("Messages while working")} value={appDraft.busyMessageAction} options={[{ value: 'queue', label: t("Queue") }, { value: 'steer', label: t("Steer") }]} onChange={(value) => setAppDraft({ ...appDraft, busyMessageAction: value === 'steer' ? 'steer' : 'queue' })} /></SettingsRow>{toggle('includeTabContext', 'Include open tabs as context', "Include the active file or selection with each message. Other open tabs are listed by path. Unsaved edits are included.")}
       <h4 className="settings-group-title m-[4px_0_10px] text-caption font-medium text-muted-foreground">{t('While agents work')}</h4>
       {toggle('notifyAgentDone', 'Agent notifications', "Notify when an agent finishes, needs input, or fails. Click a notification to open the chat.")}

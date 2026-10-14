@@ -182,6 +182,27 @@ export interface DiffContents {
 
 export type AgentProvider = 'claude-code' | 'codex' | 'opencode' | 'cursor' | 'antigravity'
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
+export const RESPONSE_STYLES = ['default', 'concise', 'detailed', 'adhd', 'caveman', 'custom'] as const
+export type ResponseStyle = (typeof RESPONSE_STYLES)[number]
+export const RESPONSE_STYLE_LABELS: Record<ResponseStyle, string> = { default: 'Default', concise: 'Concise', detailed: 'Detailed', adhd: 'ADHD-friendly', caveman: 'Caveman', custom: 'Custom' }
+export interface IntelligencePreferences {
+  responseStyle: ResponseStyle
+  responseInstructions: string
+  responseSkill: string
+  toolSearch: boolean
+  rtk: boolean
+  compression: 'off' | 'balanced' | 'aggressive'
+  learning: 'off' | 'review' | 'auto'
+  maintenanceModel: { provider: AgentProvider; model: string; effort: ReasoningEffort | null } | null
+  dailyReviews: number
+  archiveSkillDays: number
+}
+export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = { responseStyle: 'default', responseInstructions: '', responseSkill: '', toolSearch: true, rtk: false, compression: 'balanced', learning: 'review', maintenanceModel: null, dailyReviews: 5, archiveSkillDays: 90 }
+export interface ManagedSkill { id: string; projectId: string | null; name: string; description: string; content: string; status: 'active' | 'disabled' | 'archived'; pinned: boolean; revision: number; createdAt: number; updatedAt: number; lastUsedAt: number | null; useCount: number; sourceSessionId: string; sourceSeq: number }
+export interface LearningJob { sessionTitle?: string; memoryVersions?: Record<string, number>; skillVersions?: Record<string, number>; id: string; sessionId: string; projectId: string | null; seq: number; status: 'queued' | 'running' | 'pending' | 'applied' | 'dismissed' | 'failed'; createdAt: number; error: string | null; proposal: string | null }
+export interface LearningSnapshot { skills: ManagedSkill[]; jobs: LearningJob[]; running: boolean }
+export interface SessionCheckpoint { sessionId: string; seq: number; summary: string; updatedAt: number }
+
 export interface AgentSettings {
   provider: AgentProvider
   /** Pinned credential profile. Existing chats without this field use the original CLI account. */
@@ -192,6 +213,7 @@ export interface AgentSettings {
   serviceTier?: 'standard' | 'fast'
   access: 'edits' | 'auto' | 'full'
   autoFallback: boolean
+  responseStyle?: ResponseStyle | 'inherit'
 }
 export interface AgentModel {
   provider: AgentProvider
@@ -496,6 +518,7 @@ export interface AppPreferences {
   subagents: SubagentPreferences
   advisor: AdvisorPreferences
   goals: GoalPreferences
+  intelligence: IntelligencePreferences
   memory: MemoryPreferences
 }
 
@@ -524,7 +547,7 @@ export interface Memory {
   /** Why it was archived: stale, merged, contradicted, forgotten by an agent or by the user. */
   archivedReason: string | null
   /** Who created it. confirmed: the user wrote the current text, so it is never forgotten automatically and is quoted in agent instructions. */
-  source: { actor: 'user' | 'agent' | 'dream'; provider?: AgentProvider; sessionId?: string; taskId?: string; confirmed?: boolean }
+  source: { actor: 'user' | 'agent' | 'dream'; provider?: AgentProvider; sessionId?: string; taskId?: string; confirmed?: boolean; eventSeq?: number }
   createdAt: number
   updatedAt: number
   lastUsedAt: number | null
@@ -623,7 +646,7 @@ export interface AsideMessage { id: string; role: 'user' | 'assistant'; text: st
 export interface Aside { id: string; sessionId: string; quote: string; quoteFrom: 'assistant' | 'user'; messages: AsideMessage[]; createdAt: number }
 export const DEFAULT_SIDEBAR_WIDTH = 268
 export const SIDEBAR_WIDTH_RANGE = [200, 520] as const
-export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, reduceMotion: false, recentChatMode: false, editorFontSize: 14, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', defaultCommitAction: 'commit', defaultCommitBranch: 'new-branch', recentChats: 10, cleanupArchivedDays: 30, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, memory: DEFAULT_MEMORY_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
+export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, reduceMotion: false, recentChatMode: false, editorFontSize: 14, terminalFontSize: 14, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', defaultCommitAction: 'commit', defaultCommitBranch: 'new-branch', recentChats: 10, cleanupArchivedDays: 30, terminalTabPosition: 'top', defaultAccess: 'full', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, memory: DEFAULT_MEMORY_PREFERENCES, intelligence: DEFAULT_INTELLIGENCE_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
 
 
 /** Internal scope ID; omitted from the user project list. */

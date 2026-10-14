@@ -4,6 +4,10 @@ Agents use the same saved notes across providers. Notes can apply to a project o
 
 Browse, search, add, edit, archive, or restore notes in the Memory page. Changes are recorded so earlier versions can be restored. Do not store credentials; memory can be sent to any provider used by your chats.
 
+Use **History** to compare earlier text and restore a revision. User-confirmed and essential notes cannot be rewritten or archived by an agent or automatic cleanup. Conflicting evidence stays separate until you edit the original.
+
+**Learning & skills** can review completed work for durable memories, reusable procedures, and session checkpoints. See [learning and context efficiency](LEARNING.md) for modes, budgets, response styles, tool discovery, and compression.
+
 ## Cleanup
 
 **Memory cleanup** uses a model to merge duplicates and archive outdated notes. It runs daily when enough has changed and uses model tokens. **Clean up memory** runs it manually.

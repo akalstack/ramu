@@ -48,9 +48,12 @@ it('still includes full explicit file content and validates reference-only paths
   expect(result).toContain('Saved content')
   await expect(withContext(ws, 'task', 'Read tabs', [{ repoId: 'repo', path: '../private.md', source: 'tab', referenceOnly: true }])).rejects.toThrow()
 })
-it('discovers nearest project skills first and shows folded descriptions', () => {
+it('discovers nearest project skills first and shows folded descriptions', async () => {
   const skill = (base: string, description: string) => { const folder = join(base, '.agents', 'skills', 'ramu-test-context-skill'); mkdirSync(folder, { recursive: true }); writeFileSync(join(folder, 'SKILL.md'), `---\nname: ramu-test-context-skill\ndescription: >\n  ${description}\n  Continue the description.\n---\nInstructions\n`) }
   skill(root, 'Parent skill.'); skill(cwd, 'Project skill.')
   const entry = discoverSkills(ws.agentScope('task')).find((s) => s.name === 'ramu-test-context-skill')!
   expect(entry.path).toContain(join(cwd, '.agents')); expect(entry.description).toBe('Project skill. Continue the description.')
+  const prompt = await withContext(ws, 'task', '$ramu-test-context-skill', [], [{ name: entry.name, description: 'Managed copy', path: '/managed/copy/SKILL.md' }])
+  expect(prompt).toContain(entry.path)
+  expect(prompt).not.toContain('/managed/copy/SKILL.md')
 })

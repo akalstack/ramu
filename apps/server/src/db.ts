@@ -142,6 +142,13 @@ const MIGRATIONS: string[] = [
   CREATE INDEX memories_by_scope ON memories(status, project_id);
   CREATE TABLE memory_events (id INTEGER PRIMARY KEY AUTOINCREMENT, memory_id TEXT NOT NULL, action TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT, before TEXT, at INTEGER NOT NULL);
   CREATE INDEX memory_events_by_memory ON memory_events(memory_id, at);`,
+  `ALTER TABLE agent_sessions ADD COLUMN response_style_applied INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE managed_skills (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+  CREATE TABLE skill_revisions (skill_id TEXT NOT NULL REFERENCES managed_skills(id) ON DELETE CASCADE, revision INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(skill_id, revision));
+  CREATE TABLE learning_jobs (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE, seq INTEGER NOT NULL, data TEXT NOT NULL, UNIQUE(session_id, seq));
+  CREATE TABLE session_checkpoints (session_id TEXT PRIMARY KEY REFERENCES agent_sessions(id) ON DELETE CASCADE, data TEXT NOT NULL);
+  CREATE TABLE tool_payloads (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE, content TEXT NOT NULL, compact_chars INTEGER NOT NULL, created_at INTEGER NOT NULL);
+  CREATE INDEX payloads_by_session ON tool_payloads(session_id, created_at);`,
 ]
 
 export type Db = DatabaseSync

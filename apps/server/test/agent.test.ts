@@ -382,6 +382,33 @@ describe('AgentService', () => {
     svc.stopAll()
   })
 
+  it.each(['codex', 'opencode', 'cursor', 'antigravity'] as const)('delivers shared guidance and updated response styles to %s', async (provider) => {
+    const prompts: string[] = []
+    const connections: import('@ramu/shared/types').McpConnection[] = []
+    const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
+      const complete = (prompt: string) => { prompts.push(prompt); emit({ kind: 'result', text: 'done', isError: false, costUsd: null }) }
+      return { setTools: (connection) => connections.push(connection), start: async (prompt) => complete(prompt), send: async (prompt) => complete(prompt), steer: async () => {}, interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
+    }
+    const service = new AgentService(db, () => {}, fakeQuery([]), factory, factory, factory)
+    vi.spyOn(service, 'catalog').mockResolvedValue([])
+    service.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 'test' })
+    service.memoryInstructions = () => 'Shared memory instructions fixture'
+    let style: 'adhd' | 'detailed' | 'default' = 'adhd'
+    service.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, intelligence: { ...DEFAULT_APP_PREFERENCES.intelligence, responseStyle: style } })
+    const chat = service.start('t', scopeOf(cwd), 'Do the work', { ...DEFAULT_AGENT_SETTINGS, provider })
+    await until(() => service.get(chat.id).state === 'idle')
+    expect(prompts[0]).toContain('numbered steps')
+    expect(connections[0]?.instructions).toContain('tool_search')
+    if (provider !== 'codex') expect(prompts[0]).toContain('Shared memory instructions fixture')
+    style = 'detailed'
+    await service.send(chat.id, 'Explain the result')
+    expect(prompts[1]).toContain('Explain the reasoning')
+    style = 'default'
+    await service.send(chat.id, 'Use the normal style again')
+    expect(prompts[2]).toContain('replacing earlier Ramu style preferences')
+    service.stopAll()
+  })
+
   it('keeps the checkout while a background agent works, without holding back the chat itself', async () => {
     vi.stubEnv('RAMU_FAKE_AGENT_DELAY', '500')
     try {
@@ -1918,4 +1945,15 @@ it('pins provider accounts for existing chats when the default account changes',
     await until(() => svc.get(second.id).state === 'idle')
     expect(svc.get(second.id).settings.accountId).toBe('personal')
   } finally { svc.stopAll(); configureProviderBinaries({}) }
+})
+
+
+it('preserves original user constraints and recent results when using a checkpoint handoff', () => {
+  const trace: AgentEvent[] = [{ kind: 'user', text: 'Keep the public API unchanged and use pnpm.' }, { kind: 'tool-result', toolUseId: 'old', isError: false, summary: 'old output'.repeat(10000) }, { kind: 'text', text: 'Migrated the implementation.' }, { kind: 'user', text: 'Also preserve the error code.' }, { kind: 'tool-result', toolUseId: 'recent', isError: true, summary: 'integration test failed' }]
+  const handoff = conversationHandoff(trace, { seq: 3, summary: 'Implementation migrated; verification remains.' })
+  expect(handoff).toContain('Keep the public API unchanged and use pnpm.')
+  expect(handoff).toContain('Also preserve the error code.')
+  expect(handoff).toContain('integration test failed')
+  expect(handoff).toContain('session_recall')
+  expect(handoff).not.toContain('old output')
 })

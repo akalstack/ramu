@@ -1,6 +1,6 @@
 import { t, useLanguage } from './i18n'
 import { ChevronDown, LockOpen, Pencil, Sparkles } from 'lucide-react'
-import type { AgentSettings } from '@ramu/shared/types'
+import { RESPONSE_STYLES, RESPONSE_STYLE_LABELS, type AgentSettings } from '@ramu/shared/types'
 import { ModelBar } from './ModelBar'
 import { Menu } from './Menu'
 
@@ -12,10 +12,10 @@ const accessModes = [
 ] as const
 
 export { providerName } from '@ramu/shared/providers'
-export function AgentControls({ settings, current, onChange, disabled = false, showAccess = true, trailing }: { settings: AgentSettings; current?: AgentSettings; onChange: (s: AgentSettings) => void; disabled?: boolean; showAccess?: boolean; trailing?: React.ReactNode }) {
+export function AgentControls({ settings, current, onChange, disabled = false, running = false, showAccess = true, trailing }: { settings: AgentSettings; current?: AgentSettings; onChange: (s: AgentSettings) => void; disabled?: boolean; running?: boolean; showAccess?: boolean; trailing?: React.ReactNode }) {
   useLanguage()
   return <div className="agent-controls flex items-center flex-wrap gap-[4px_8px] w-full min-w-0">
-    <ModelBar settings={settings} current={current} onChange={onChange} disabled={disabled} />
+    <ModelBar settings={settings} current={current} onChange={onChange} disabled={disabled} running={running} />
     <div className="agent-control-options [&_.control-btn]:min-h-7 [&_.control-btn]:text-control flex items-center flex-wrap gap-[4px_8px]">
     {showAccess && <Menu standard label={t("Access mode")} className="control-btn h-8 gap-2 px-2 text-sm" menuClassName="access-menu w-[380px] max-w-[calc(100vw_-_16px)]" disabled={disabled}
       icon={<>{settings.access === 'full' ? <LockOpen size={13} /> : settings.access === 'edits' ? <Pencil size={13} /> : <Sparkles size={13} />}{accessName(settings.access)}<ChevronDown size={12} /></>}
@@ -24,6 +24,7 @@ export function AgentControls({ settings, current, onChange, disabled = false, s
         label: <span className="access-option [.access-menu_&]:block [.access-menu_&]:flex-1 [.access-menu_&]:min-w-0 [.access-menu_&]:max-w-[none] [.access-menu_&]:pr-7 [.access-menu_&_.block]:max-w-[none] [.access-menu_&_.block]:w-auto [.access-menu_&_.block]:m-[2px_0_0] [.access-menu_&_.block]:pl-0 [.access-menu_&_.block]:whitespace-normal [.access-menu_&_.muted]:max-w-[none] [.access-menu_&_.muted]:w-auto [.access-menu_&_.muted]:m-[2px_0_0] [.access-menu_&_.muted]:pl-0 [.access-menu_&_.muted]:whitespace-normal flex flex-col gap-[3px] w-full"><span className="access-option-title flex items-center gap-2 text-[length:var(--ui-font-size)]"><Icon size={16} />{t(label)}</span><span className="muted text-muted-foreground block block">{t(description)}</span></span>,
         onSelect: () => onChange({ ...settings, access: key }),
       }))} />}
+    {showAccess && <Menu standard label={t('Response style')} disabled={disabled} className="control-btn h-8 gap-2 px-2 text-sm" icon={<>{t(settings.responseStyle && settings.responseStyle !== 'inherit' ? RESPONSE_STYLE_LABELS[settings.responseStyle] : 'Response style')}<ChevronDown size={12} /></>} items={[{ key: 'inherit', label: t('Use global style'), selected: !settings.responseStyle || settings.responseStyle === 'inherit', onSelect: () => onChange({ ...settings, responseStyle: 'inherit' }) }, ...RESPONSE_STYLES.map((style) => ({ key: style, label: t(RESPONSE_STYLE_LABELS[style]), selected: settings.responseStyle === style, onSelect: () => onChange({ ...settings, responseStyle: style }) }))]} />}
     </div>
     {trailing}
   </div>

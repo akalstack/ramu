@@ -1,3 +1,9 @@
+import { registerRtkTool } from './rtk'
+import type { AppPreferences } from '@ramu/shared/types'
+import { ToolRegistry } from './toolRegistry'
+import { CompressionService } from './compression'
+import { LearningService } from './learning'
+import { DEFAULT_INTELLIGENCE_PREFERENCES } from '@ramu/shared/types'
 // Independent Node process. Electron windows are clients, never owners of agent lifetimes.
 import { createServer, type ServerResponse } from 'node:http'
 import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, rmSync, statSync } from 'node:fs'
@@ -88,6 +94,10 @@ reviews.recover()
 agents.reviewHooks = { begin: (taskId, scope) => reviews!.begin(taskId, scope), bind: (id, sessionId) => reviews!.bind(id, sessionId), abandon: (id, error) => reviews!.abandon(id, error), followup: (sessionId) => reviews!.beforeFollowup(sessionId), complete: (sessionId) => reviews!.complete(sessionId), validateFeedback: (reviewId) => reviews!.requireOriginalCheckout(reviewId) }
 const recaps = new RecapService(db, workspace, agents, changed)
 const memory = new MemoryService(db, workspace, agents, () => send('memory:changed', {}))
+const compression = new CompressionService(db)
+const learning = new LearningService(db, workspace, agents, memory, join(userData, 'skills'), () => send('memory:changed', {}))
+agents.sessionCheckpoint = (id) => learning.checkpoint(id)
+agents.learningInstructions = (session) => learning.instructions(session.id)
 const projectOf = (session: AgentSessionInfo) => { try { return workspace.getTask(session.taskId).projectId } catch { return null } }
 agents.memoryInstructions = (session) => memory.instructions(session, projectOf(session))
 const dispatcher = createDispatcher({ userData, send, native: (method, path) => {
@@ -99,7 +109,7 @@ const dispatcher = createDispatcher({ userData, send, native: (method, path) => 
     // Exactly one UI owns a desktop dialog/action.
     hostClients.values().next().value?.write(`data: ${JSON.stringify({ channel: 'host:request', payload: { requestId, method, path } })}\n\n`)
   })
-} }, { workspace, terminals, agents, schedules, recaps, reviews, memory })
+} }, { workspace, terminals, agents, schedules, recaps, reviews, memory, learning, compression })
 const startedAt = Date.now()
 let stopping = false
 async function stop(intentional = false) {
@@ -112,7 +122,7 @@ async function stop(intentional = false) {
   reviews.stop(); agents.stopAll(!intentional)
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))
-  await Promise.all([recaps.settle(), reviews.settle(), memory.settle()])
+  await Promise.all([recaps.settle(), reviews.settle(), memory.settle(), learning.settle()])
   terminals.closeAll(); dispatcher.close()
   for (const c of clients) c.end()
   for (const r of nativeRequests.values()) { clearTimeout(r.timer); r.reject(new Error('Service stopping')) }
@@ -166,13 +176,20 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
 const runtime = createServer(handle(false))
 const remote = config.listen ? createServer(handle(true)) : null
 // Per-agent bearer credentials bind tool calls to their originating chat, including no-project chats.
-const sessions = new Map<string, AgentSessionInfo>()
+const sessions = new Map<string, { session: AgentSessionInfo; toolSearch: boolean }>()
 const mcpHttp = createServer(async (req, res) => {
   const token = req.headers.authorization?.replace(/^Bearer /, '')
-  const source = token && sessions.get(token)
+  const connection = token ? sessions.get(token) : undefined
+  const source = connection?.session
   if (!source || req.url !== '/mcp' || stopping) { res.writeHead(401).end(); return }
   if (req.method !== 'POST') { res.writeHead(405).end(); return }
-  const server = new McpServer({ name: 'ramu', version: '0.1.0' })
+  const target = new McpServer({ name: 'ramu', version: '0.1.0' })
+  const preferences = { ...DEFAULT_INTELLIGENCE_PREFERENCES, ...workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence }
+  const registry = new ToolRegistry(target, connection!.toolSearch, (result) => compression.compact(source.id, preferences.compression, result))
+  const server = registry.server
+  learning.register(server, source.id)
+  if (preferences.rtk) registerRtkTool(server, agents.get(source.id))
+  compression.register(server, source.id)
   registerQuestionTools(server, agents, source.id)
   if (!source.parentId) registerGoalTools(server, agents, source.id)
   if (agents.advisorStep(source.id)) registerAdvisorTools(server, agents, source.id)
@@ -201,6 +218,7 @@ const mcpHttp = createServer(async (req, res) => {
   server.registerTool('schedule_run_now', { description: 'Run a schedule now without changing its recurrence.', inputSchema: { id: z.string() } }, async ({ id }) => result(schedules.runNow(id)))
   server.registerTool('schedule_delete', { description: 'Delete a schedule when requested. Existing run chats remain available.', inputSchema: { id: z.string() } }, async ({ id }) => { schedules.delete(id); return result({ deleted: id }) })
   server.registerTool('schedule_context', { description: 'Get current time, timezone, project and isolated workspace choices before creating a schedule.', inputSchema: {} }, async () => result({ now: new Date().toISOString(), preferences: workspace.getAppState('app-preferences', {}), currentProjectId: scope.projectId, currentWorkspaceId: scope.workspaceId, currentSettings: source.settings, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, projects: workspace.listProjects(), workspaces: workspace.listWorkspaces() }))
+  registry.expose()
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
   res.on('close', () => { void transport.close(); void server.close() })
   try { await server.connect(transport); await transport.handleRequest(req, res, await body(req)) }
@@ -208,7 +226,7 @@ const mcpHttp = createServer(async (req, res) => {
 })
 await new Promise<void>((resolve, reject) => { mcpHttp.once('error', reject); mcpHttp.listen(0, '127.0.0.1', resolve) })
 const address = mcpHttp.address() as import('node:net').AddressInfo
-agents.toolConnection = (session) => { const token = randomBytes(32).toString('hex'); sessions.set(token, session); return { url: `http://127.0.0.1:${address.port}/mcp`, token } }
+agents.toolConnection = (session) => { const token = randomBytes(32).toString('hex'); sessions.set(token, { session, toolSearch: workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence?.toolSearch ?? true }); return { url: `http://127.0.0.1:${address.port}/mcp`, token } }
 // Never unlink a socket owned by another live service. The launcher removes stale sockets first.
 await new Promise<void>((resolve, reject) => { runtime.once('error', reject); runtime.listen(socketPath, resolve) })
 chmodSync(socketPath, 0o600)
@@ -219,7 +237,7 @@ if (remote && config.listen) {
 }
 // Proxies and mobile networks drop idle event streams; a comment line every 20 s keeps them open.
 const heartbeat = setInterval(() => { for (const client of clients) client.write(': ping\n\n') }, 20000)
-const tick = setInterval(() => { void agents.resumeInterruptedChats().catch(console.error); void schedules.tick().catch(console.error); void recaps.tick().catch(console.error); void memory.tick().catch(console.error) }, 5000)
+const tick = setInterval(() => { void agents.resumeInterruptedChats().catch(console.error); void schedules.tick().catch(console.error); void recaps.tick().catch(console.error); void memory.tick().catch(console.error); void learning.tick().catch(console.error) }, 5000)
 await agents.restoreHelperTranscripts()
 await agents.resumeInterruptedChats()
 agents.goalsSettingsChanged()
