@@ -8,10 +8,11 @@ import { invoke, ramu } from '../ipc'
 import { errorText } from '../TaskPane'
 import { useWorkspace } from '../workspace'
 import { FILE_DRAG_TYPE } from '../ComposerSuggestions'
+import { trackTerminal } from '../terminalRegistry'
 
 const shellQuote = (path: string) => /^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`
 
-export function TerminalView({ taskId, repoId, label, active, onExit, actions, initialCommand, run }: { taskId: string; repoId: string | null; label: string; active: boolean; onExit?: () => void; actions?: ReactNode; initialCommand?: string; /** Typed into the task's shell once it opens (project actions). */ run?: string }) {
+export function TerminalView({ viewId, taskId, repoId, label, active, onExit, actions, initialCommand, run }: { viewId?: string; taskId: string; repoId: string | null; label: string; active: boolean; onExit?: () => void; actions?: ReactNode; initialCommand?: string; /** Typed into the task's shell once it opens (project actions). */ run?: string }) {
   const { preferences } = useAppSettings()
   const ws = useWorkspace()
   const terminal = useRef<Terminal | null>(null)
@@ -93,6 +94,7 @@ export function TerminalView({ taskId, repoId, label, active, onExit, actions, i
       (info) => {
         if (disposed) return void invoke('term.close', info.id)
         termId = info.id
+        if (viewId) offs.push(trackTerminal(viewId, info.id))
         // Geometry may have changed while the shell was opening, before its
         // ID existed and resize notifications could be delivered.
         ptyResize.request(term.cols, term.rows)

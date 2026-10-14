@@ -207,6 +207,8 @@ export interface RamuMethods {
   'term.write'(termId: string, data: string): void
   'term.resize'(termId: string, cols: number, rows: number): void
   'term.close'(termId: string): void
+  /** How many of these terminals have a command running in the foreground. */
+  'term.busy'(termIds: string[]): number
   'editor.menu'(options: { selection: string; editable: boolean; comment: boolean }, point: { x: number; y: number }): 'cut' | 'undo' | 'redo' | 'selectAll' | 'find' | 'comment' | { paste: string } | null
   'clipboard.write'(text: string): void
   'term.menu'(selection: string, point: { x: number; y: number }): 'selectAll' | 'clear' | { paste: string } | null

@@ -17,6 +17,7 @@ import type {
 } from '@ramu/shared/types'
 import { useAppSettings } from './AppSettings'
 import { invoke, ramu } from './ipc'
+import { closeAfterTerminalCheck } from './terminalRegistry'
 import { splitTerminal, terminalFocusAfterClose, terminalGroups, unsplitTerminal } from '@ramu/shared/terminalGroups'
 
 type ViewInput = ViewDescriptor extends infer V ? (V extends ViewDescriptor ? Omit<V, 'id'> : never) : never
@@ -612,16 +613,16 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         if (active(taskId) && ('terminalOpen' in settings || 'terminalDock' in settings)) change(current => current.setTerminalPanel(taskId, settings), 'terminal', settings.terminalOpen === true, 'terminalDock' in settings)
         else api.setTerminalPanel(taskId, settings)
       },
-      closeView: (taskId, viewId) => {
+      closeView: (taskId, viewId) => closeAfterTerminalCheck([viewId], () => {
         const scope = closingPanel(api.taskUi[taskId], [viewId])
         if (active(taskId) && scope && !api.dirty[viewId]) change(current => current.closeView(taskId, viewId), scope)
         else api.closeView(taskId, viewId)
-      },
-      closeViews: (taskId, viewIds) => {
+      }),
+      closeViews: (taskId, viewIds) => closeAfterTerminalCheck(viewIds, () => {
         const scope = closingPanel(api.taskUi[taskId], viewIds)
         if (active(taskId) && scope && !viewIds.some(id => api.dirty[id])) change(current => current.closeViews(taskId, viewIds), scope)
         else api.closeViews(taskId, viewIds)
-      },
+      }),
       showChat: taskId => active(taskId) && editorShown(taskId) ? change(current => current.showChat(taskId), 'editor') : api.showChat(taskId),
     }
   }, [api])

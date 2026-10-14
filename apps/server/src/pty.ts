@@ -12,6 +12,7 @@ export interface TerminalInfo {
 
 interface Entry extends TerminalInfo {
   pty: nodePty.IPty
+  shell: string
 }
 
 export class TerminalService {
@@ -31,7 +32,7 @@ export class TerminalService {
       rows,
       env: { ...process.env, TERM_PROGRAM: 'Ramu' } as Record<string, string>,
     })
-    const entry: Entry = { id: randomUUID(), taskId, repoId, cwd, exited: false, pty }
+    const entry: Entry = { id: randomUUID(), taskId, repoId, cwd, exited: false, pty, shell }
     this.terms.set(entry.id, entry)
     pty.onData((d) => this.onData(entry.id, d))
     pty.onExit(({ exitCode }) => {
@@ -60,6 +61,14 @@ export class TerminalService {
     if (!e) return
     if (!e.exited) e.pty.kill()
     this.terms.delete(id)
+  }
+
+  /** True while something other than the login shell itself holds the terminal's foreground. */
+  busy(id: string): boolean {
+    const e = this.terms.get(id)
+    if (!e || e.exited) return false
+    const name = (value: string) => value.split(/[\\/]/).pop()!.replace(/^-/, '').replace(/\.exe$/i, '')
+    try { return name(e.pty.process) !== name(e.shell) } catch { return false }
   }
 
   closeTask(taskId: string): void {

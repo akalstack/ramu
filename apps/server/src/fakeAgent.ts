@@ -126,6 +126,28 @@ async function* agentsTurn(stopped: Set<string>, delayMs: number): AsyncGenerato
   yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0.01 })
 }
 
+/** Ramu's own tools as a chat shows them: some have a card elsewhere and stay out of the transcript, the rest read as plain rows. Several sub-agents start side by side. */
+async function* ramuToolsTurn(): AsyncGenerator<SDKMessage, void> {
+  const stamp = Date.now()
+  const use = (id: string, name: string, input: unknown) => msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: `${id}-${stamp}`, name, input }] } })
+  const done = (id: string, content: string, isError = false) => msg({ type: 'user', parent_tool_use_id: null, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `${id}-${stamp}`, content, is_error: isError }] } })
+  yield use('goal', 'mcp__ramu__set_goal', { objective: 'Ship the tool rows' }); yield done('goal', '{"ok":true}')
+  yield use('search', 'mcp__ramu__tool_invoke', { name: 'memory_search', arguments: { query: 'editor preferences' } }); yield done('search', '[]')
+  yield use('save', 'mcp__ramu__tool_invoke', { name: 'memory_save', arguments: { kind: 'user', title: 'Prefers tabs over spaces', content: 'Use tabs in every project.', scope: 'global' } }); yield done('save', '{"action":"created","memory":{"id":"m1","title":"Prefers tabs over spaces"}}')
+  yield use('skill', 'mcp__ramu__skill_read', { id: 'skill-1' }); yield done('skill', '{"id":"skill-1","name":"Release checklist"}')
+  yield use('ask', 'mcp__ramu__ask_user', { questions: [] }); yield done('ask', '{"requestId":"q1"}')
+  yield use('ask-failed', 'mcp__ramu__ask_user', { questions: [] }); yield done('ask-failed', 'Question could not be saved', true)
+  yield use('lookup', 'mcp__ramu__tool_search', { query: 'schedule' }); yield done('lookup', '[]')
+  for (const n of [1, 2, 3, 4]) {
+    const call = `team-call-${stamp}-${n}`, task = `team-task-${stamp}-${n}`
+    yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: call, name: 'Agent', input: { description: `Review package ${n}`, prompt: `Look through package ${n}`, subagent_type: 'Explore', name: `reviewer-${n}`, run_in_background: true } }] } })
+    yield msg({ type: 'system', subtype: 'task_started', task_id: task, tool_use_id: call, description: `Review package ${n}`, subagent_type: 'Explore', task_type: 'local_agent', is_backgrounded: true, prompt: `Look through package ${n}` })
+    if (n < 3) yield msg({ type: 'system', subtype: 'task_notification', task_id: task, tool_use_id: call, status: 'completed', output_file: '', summary: `Package ${n} looks fine.`, usage: { total_tokens: 2100, tool_uses: 3, duration_ms: 4200 } })
+  }
+  yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'Tool rows are in place.' }] } })
+  yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
+}
+
 export const fakeQuery: QueryFn = ({ prompt, options }) => {
   const stopped = new Set<string>()
   async function* run(): AsyncGenerator<SDKMessage, void> {
@@ -158,6 +180,10 @@ export const fakeQuery: QueryFn = ({ prompt, options }) => {
         await sleep(Number(process.env.RAMU_FAKE_AGENT_DELAY ?? 2500))
         yield msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'Done reading.' }] } })
         yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
+        continue
+      }
+      if (text.includes('[ramu tools]')) {
+        yield* ramuToolsTurn()
         continue
       }
       if (text.includes('[agents]')) {

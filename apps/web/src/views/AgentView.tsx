@@ -18,7 +18,8 @@ import { Button } from '@/components/desktop-button'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { Input } from '@/components/ui/input'
 import type { FileContext } from '@ramu/shared/types'
-import { Wrench, Globe, FilePenLine, FileMinus2, ArrowRightLeft, Settings2, Image as ImageIcon, ArrowDown, ArrowLeft, Plus, Bot, Brain, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb } from 'lucide-react'
+import { Wrench, Globe, FilePenLine, FileMinus2, ArrowRightLeft, Settings2, Image as ImageIcon, ArrowDown, ArrowLeft, Plus, Bot, Brain, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb, CalendarClock, MessageSquareText, ListChecks, Sparkles } from 'lucide-react'
+import { describeRamuTool, ramuTool, ramuToolHasOwnUi, summarizeAgentStatuses, type RamuToolIcon } from '@ramu/shared/ramuTools'
 import { Children, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -85,6 +86,9 @@ function toBlocks(events: AgentEvent[]): Block[] {
   const blocks: Block[] = []
   const agentUpdates = new Map(events.flatMap(event => event.kind === 'agent' && event.taskType !== 'local_bash' ? [[event.agentId, event] as const] : []))
   const seenAgents = new Set<string>()
+  const failed = new Set(events.flatMap(event => event.kind === 'tool-result' && event.isError ? [event.toolUseId] : []))
+  // The call that started a sub-agent is the card it produced.
+  const agentCalls = new Set(events.flatMap(event => event.kind === 'agent' && event.taskType !== 'local_bash' && event.toolUseId ? [event.toolUseId] : []))
   for (const event of events) {
     // A sub-agent's own output lives in its panel; its card stands for it here.
     if (event.agentId && event.kind !== 'agent') continue
@@ -102,6 +106,8 @@ function toBlocks(events: AgentEvent[]): Block[] {
     if (event.kind === 'agent' && event.taskType === 'local_bash') continue
     // The advisor's card stands for its tool calls.
     if (event.kind === 'tool-use' && isAdvisorTool(event)) continue
+    // Questions, goals, schedules and sub-agents have their own place in the chat; a failed call stays, since nothing else shows it.
+    if (event.kind === 'tool-use' && (ramuToolHasOwnUi(event) || agentCalls.has(event.toolUseId)) && !failed.has(event.toolUseId)) continue
     if (event.kind === 'goal' || event.kind === 'queue' || event.kind === 'tool-result' || event.kind === 'state' || event.kind === 'request-resolved' || event.kind === 'question-state') continue
     const last = blocks.at(-1)
     if (event.kind === 'tool-use') {
@@ -162,7 +168,7 @@ function useElapsed(since: number | undefined, active: boolean): number | null {
 }
 
 /** Ramu's advisor tools: mcp__ramu__advisor from Claude, `advisor` on the ramu server from Codex. */
-const isAdvisorTool = (e: { name: string; summary: string }) => /^mcp__ramu__(advisor|wait_for_advice)$/.test(e.name) || (e.name === 'advisor' || e.name === 'wait_for_advice') && e.summary === 'ramu'
+const isAdvisorTool = (e: { name: string; summary: string; input?: string }) => { const call = ramuTool(e); return call?.name === 'advisor' || call?.name === 'wait_for_advice' }
 
 /** MCP tools arrive as mcp__server__tool; show the tool name. */
 const toolLabel = (name: string) => name.startsWith('mcp__') ? name.split('__').slice(2).join('__') || name : name
@@ -181,12 +187,20 @@ const VERBS: Record<string, [string, string, string]> = {
 }
 
 function describeTools(tools: ToolUse[], results: Map<string, ToolResult>, active: boolean): string {
+  const keyOf = (t: ToolUse) => { const call = ramuTool(t); return call ? `ramu:${call.name}` : t.name }
   const counts = new Map<string, number>()
-  for (const t of tools) counts.set(t.name, (counts.get(t.name) ?? 0) + 1)
-  const parts = [...counts].map(([name, n]) => {
+  for (const t of tools) counts.set(keyOf(t), (counts.get(keyOf(t)) ?? 0) + 1)
+  const parts = [...counts].map(([key, n]) => {
+    const first = tools.find(t => keyOf(t) === key)!
+    const running = tools.some(t => keyOf(t) === key && toolIsRunning(results.get(t.toolUseId), active))
+    const call = ramuTool(first)
+    if (call) {
+      const row = describeRamuTool(call, results.get(first.toolUseId)?.summary)
+      return `${translate(running ? row.running : row.done)}${n > 1 ? ` ×${n}` : row.subject ? ` ${row.subject}` : ''}`
+    }
+    const name = key
     const v = VERBS[name]
-    if (!v) { const first = tools.find(t => t.name === name)!; const category = toolKind(first); const running = tools.some(t => t.name === name && toolIsRunning(results.get(t.toolUseId), active)); return category === 'other' ? translate('Used {name}{count}', { name: toolLabel(name), count: n > 1 ? ` ×${n}` : '' }) : `${translate(toolVerb(KIND_VERB[category], running))} ${n > 1 ? `${n} · ` : ''}${first.title ?? translate(KIND_LABEL[category])}` }
-    const running = tools.some(tool => tool.name === name && toolIsRunning(results.get(tool.toolUseId), active))
+    if (!v) { const category = toolKind(first); return category === 'other' ? translate('Used {name}{count}', { name: toolLabel(name), count: n > 1 ? ` ×${n}` : '' }) : `${translate(toolVerb(KIND_VERB[category], running))} ${n > 1 ? `${n} · ` : ''}${first.title ?? translate(KIND_LABEL[category])}` }
     const verb = translate(toolVerb(v[0], running))
     return v[1] ? translate('{verb} {count} {unit}', { verb, count: n, unit: translate(n === 1 ? v[1] : v[2]) }) : verb
   })
@@ -621,6 +635,10 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
                   <EventRow event={relativize(b.event, session?.cwd ?? '')} taskId={session?.taskId} sessionId={view.sessionId} live={live} generating={working && (b.event === liveText || b.event.kind === 'thinking' && b === turn.items.at(-1))} outcomes={outcomes} questionStates={questionStates} actions={actions} latest={latest} onEdit={(text, files) => editMessage(text, files, eventSequences.get(b.event))} onOpenAgent={setOpenAgent} onOpenQuestion={openQuestion} />
                 )}</div>
             }
+            // Several sub-agents in a row read as one line with a summary, expanding to their cards.
+            const renderList = (list: Block[]) => groupAgentRuns(list).map((item) => Array.isArray(item)
+              ? <div key={blockIndex(item[0]!, blocks)} data-block-index={blockIndex(item[0]!, blocks)}><AgentGroup tasks={item.map(agentOf)} live={live} onOpen={setOpenAgent} onStop={stopTask} /></div>
+              : render(item))
             const startedAt = turn.startedAt ?? (folded[0] ? blockAt(folded[0]) : undefined)
             const endedAt = turn.endedAt ?? (finished || session?.state === 'needs-input' ? turn.items.map(blockAt).findLast((at) => at !== undefined) : undefined)
             const duration = startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : undefined
@@ -628,8 +646,8 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
               {turnDates[ti] !== undefined && <time className="chat-date [.turn:first-child_&]:mt-1 block self-center w-full m-[18px_0_24px] text-center text-muted-foreground text-control font-normal leading-[1.5]" dateTime={new Date(turnDates[ti]!).toISOString()} title={new Date(turnDates[ti]!).toLocaleString(formatLocale())}>{formatChatDate(turnDates[ti]!, dateNow, currentLanguage())}</time>}
               {turn.user && render(turn.user, false, isLast && !answer.length && !kept.length && !folded.length)}
               {((!finished && isLast && (working || session?.state === 'needs-input')) || (finished && (!turn.ended || turn.interrupted) && !folded.length)) && <div className="turn-working text-muted-foreground tabular-nums" role="status"><span>{(elapsed ?? duration) !== null && (elapsed ?? duration) !== undefined ? translate("Working for {0}", { "0": formatDuration((elapsed ?? duration)!) }) : translate("Working")}</span></div>}
-              {folded.length > 0 && <TurnSummary label={duration !== undefined ? translate(turn.ended && !turn.interrupted && !(isLast && stopped) ? "Worked for {0}" : "Working for {0}", { "0": formatDuration(duration) }) : translate(turn.ended && !turn.interrupted && !(isLast && stopped) ? "Worked" : "Working")} sourceIndex={view.sourceSeq ? blockIndex(folded[0]!, blocks) : undefined}>{folded.map((b) => render(b))}</TurnSummary>}
-              {kept.map((b) => render(b))}
+              {folded.length > 0 && <TurnSummary label={duration !== undefined ? translate(turn.ended && !turn.interrupted && !(isLast && stopped) ? "Worked for {0}" : "Working for {0}", { "0": formatDuration(duration) }) : translate(turn.ended && !turn.interrupted && !(isLast && stopped) ? "Worked" : "Working")} sourceIndex={view.sourceSeq ? blockIndex(folded[0]!, blocks) : undefined}>{renderList(folded)}</TurnSummary>}
+              {renderList(kept)}
               {answer.map((b) => render(b, finished && b === latestAssistant, b === latestAssistant))}
               {turnReviews.get(turn.key)?.map((review) => <TurnChanges key={review.id} review={review} />)}
               {completedGoals.get(turn.user?.kind === 'event' ? turn.user.event : null)?.map((done) => <GoalDone key={done.id} goal={done} />)}
@@ -789,10 +807,27 @@ function WorkingText({ children }: { children: React.ReactNode }) {
   return <span className="shimmer bg-clip-text text-transparent motion-reduce:animate-none!" style={{ backgroundImage: 'linear-gradient(90deg, var(--muted) 30%, var(--text) 50%, var(--muted) 70%)', backgroundSize: '200% 100%', animation: 'shimmer 1.8s linear infinite' }}>{children}</span>
 }
 
+const RAMU_ICONS: Record<RamuToolIcon, typeof Wrench> = { brain: Brain, book: BookOpen, search: Search, sparkles: Sparkles, calendar: CalendarClock, message: MessageSquareText, review: ListChecks, terminal: SquareTerminal, wrench: Wrench }
+
 function ToolIcon({ tool, content, className }: { tool: ToolUse; content?: ToolResult['content']; className?: string }) {
   const kind = toolKind(tool)
-  const Icon = content?.some(c => c.type === 'image') || /image/i.test(tool.name) ? ImageIcon : ({ read: BookOpen, edit: FilePenLine, delete: FileMinus2, move: ArrowRightLeft, search: Search, execute: SquareTerminal, think: Brain, fetch: Globe, switch_mode: Settings2, other: Wrench })[kind]
+  const ramu = ramuTool(tool)
+  const Icon = ramu ? RAMU_ICONS[describeRamuTool(ramu).icon] : content?.some(c => c.type === 'image') || /image/i.test(tool.name) ? ImageIcon : ({ read: BookOpen, edit: FilePenLine, delete: FileMinus2, move: ArrowRightLeft, search: Search, execute: SquareTerminal, think: Brain, fetch: Globe, switch_mode: Settings2, other: Wrench })[kind]
   return <Icon size={14} className={className} aria-hidden="true" />
+}
+
+/** A Ramu tool opens to the few facts that matter. The raw request and response stay a click away. */
+function RamuToolBody({ row, tool, result }: { row: ReturnType<typeof describeRamuTool>; tool: ToolUse; result: ToolResult | undefined }) {
+  useLanguage()
+  const output = result?.summary?.trim()
+  const failed = !!result && (result.isError || result.status === 'failed')
+  const shell = row.icon === 'terminal'
+  return <div className="tool-ramu p-[8px_12px] space-y-2">
+    {row.facts.length > 0 && <dl className="m-0 space-y-1 text-caption">{row.facts.map(fact => <div key={fact.label} className="flex gap-3"><dt className="flex-none w-16 text-muted-foreground">{translate(fact.label)}</dt><dd className="m-0 min-w-0 max-h-24 overflow-auto whitespace-pre-wrap break-words text-soft">{fact.value}</dd></div>)}</dl>}
+    {failed && output && <p className="m-0 text-caption text-bad whitespace-pre-wrap break-words">{output}</p>}
+    {shell && !failed && output && <pre className="m-0 max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-caption text-muted-foreground">{output}</pre>}
+    {!shell && (tool.input || output) && <details className="tool-raw text-caption text-muted-foreground"><summary className="w-fit cursor-pointer select-none hover:text-soft">{translate('Details')}</summary><pre className="m-0 mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-muted-foreground">{[tool.input, output].filter(Boolean).join('\n\n')}</pre></details>}
+  </div>
 }
 
 function ToolGroup({ tools, results, cwd, active, activity, onBackground, taskId }: { tools: ToolUse[]; results: Map<string, ToolResult>; cwd: string; active: boolean; activity?: string; taskId?: string; onBackground?: (toolUseId: string) => void }) {
@@ -814,7 +849,9 @@ function ToolGroup({ tools, results, cwd, active, activity, onBackground, taskId
           const summary = t.summary.split(`${cwd}/`).join('')
           const category = toolKind(t)
           const bash = category === 'execute'
-          const humanTitle = t.title?.trim()
+          const call = ramuTool(t)
+          const row = call ? describeRamuTool(call, r?.summary) : undefined
+          const humanTitle = row ? `${translate(toolRunning ? row.running : row.done)}${row.subject ? ` ${row.subject}` : ''}` : t.title?.trim()
           const inputText = t.input ?? (humanTitle === summary ? undefined : summary)
           const failed = r ? r.isError || r.status === 'failed' : t.status === 'failed'
           const state = failed ? 'Failed' : t.status === 'pending' && active ? 'Pending' : toolRunning ? 'Running' : !r || r.running ? 'Stopped' : 'Completed'
@@ -828,13 +865,15 @@ function ToolGroup({ tools, results, cwd, active, activity, onBackground, taskId
                 <ChevronRight size={12} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />
               </CollapsibleTrigger>
               <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:none]"><div className="tool-card [&_.tool-output]:m-0 [&_.tool-output]:[border:0] [&_.tool-output]:[border-radius:0] [&_.tool-output]:bg-transparent [&_.tool-output]:p-[8px_12px_10px] [&_.tool-output]:max-h-[260px] [&_.tool-output]:text-caption [&_.tool-output]:whitespace-pre-wrap [&_.tool-output]:[overflow-wrap:anywhere] [&_.tool-output]:text-muted-foreground m-[6px_0_8px] [border:1px_solid_transparent] rounded-(--radius-m) [background:rgba(255,_255,_255,_0.035)] overflow-hidden">
-                <div className={movable ? 'tool-card-title [&.with-action]:flex [&.with-action]:items-center [&.with-action]:justify-between [&.with-action]:gap-2 [&.with-action]:pr-2 p-[8px_12px_0] text-control text-soft with-action' : 'tool-card-title [&.with-action]:flex [&.with-action]:items-center [&.with-action]:justify-between [&.with-action]:gap-2 [&.with-action]:pr-2 p-[8px_12px_0] text-control text-soft'}>
+                {!row && <div className={movable ? 'tool-card-title [&.with-action]:flex [&.with-action]:items-center [&.with-action]:justify-between [&.with-action]:gap-2 [&.with-action]:pr-2 p-[8px_12px_0] text-control text-soft with-action' : 'tool-card-title [&.with-action]:flex [&.with-action]:items-center [&.with-action]:justify-between [&.with-action]:gap-2 [&.with-action]:pr-2 p-[8px_12px_0] text-control text-soft'}>
                   <span>{humanTitle ?? (category === 'other' ? toolLabel(t.name) : translate(KIND_LABEL[category]))}</span>
                   {movable && <Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption" title={translate("Let the agent carry on while this keeps running")} onClick={() => onBackground(t.toolUseId)}>{translate("Run in background")}</Button>}
-                </div>
+                </div>}
+                {row ? <RamuToolBody row={row} tool={t} result={r} /> : <>
                 {inputText && <div className="tool-input p-[8px_12px] space-y-1"><span className="text-caption font-medium text-muted-foreground">{translate('Input')}</span><pre className="m-0 whitespace-pre-wrap break-words max-h-48 overflow-auto font-mono text-caption text-soft">{t.input ?? (bash ? `$ ${inputText}` : inputText)}</pre></div>}
                 {(r?.content ?? t.content)?.length ? <div className="tool-rich-content p-[8px_12px]"><AgentContentView content={(r?.content ?? t.content)!} taskId={taskId} plainText={bash} /></div> : <ShadowPre>{r ? r.summary || translate("No output") : toolRunning ? translate("Running…") : translate("No output")}</ShadowPre>}
                 {t.locations?.length ? <div className="tool-locations px-3 pb-2 text-caption text-muted-foreground">{t.locations.map((location, i) => <div key={i}>{location.path}{location.line !== undefined ? `:${location.line}` : ''}</div>)}</div> : null}
+                </>}
               </div></CollapsibleContent>
             </Collapsible>
           )
@@ -1024,6 +1063,19 @@ function EventRow({ event: e, sessionId, taskId, live, generating = false, outco
   }
 }
 
+const agentOf = (block: Block): AgentTask => (block as { event: AgentTask }).event
+const isAgentCard = (block: Block) => block.kind === 'event' && block.event.kind === 'agent' && block.event.taskType !== 'advisor'
+
+/** Runs of two or more sub-agent cards, as arrays; everything else passes through. */
+function groupAgentRuns(blocks: Block[]): (Block | Block[])[] {
+  const out: (Block | Block[])[] = []
+  let run: Block[] = []
+  const flush = () => { if (run.length > 1) out.push(run); else out.push(...run); run = [] }
+  for (const block of blocks) { if (isAgentCard(block)) run.push(block); else { flush(); out.push(block) } }
+  flush()
+  return out
+}
+
 const TASK_STATUS: Record<AgentTask['status'], string> = { running: 'Running', completed: 'Done', failed: 'Failed', stopped: 'Stopped' }
 
 function TaskStatusIcon({ status }: { status: AgentTask['status'] }) {
@@ -1055,6 +1107,31 @@ function AdvisorActivity({ task, live, onOpen }: { task: AgentTask; live: boolea
     {duration !== null && <span className="chat-activity-meta flex-none tabular-nums">{formatDuration(duration)}</span>}
     <ChevronRight className="size-3.5 flex-none" />
   </ChatActivityButton>
+}
+
+/** Many sub-agents at once: stacked avatars and one status line that opens into each agent's card. */
+function AgentGroup({ tasks, live, onOpen, onStop }: { tasks: AgentTask[]; live: boolean; onOpen: (agentId: string) => void; onStop: (task: AgentTask) => void }) {
+  useLanguage()
+  const statuses = tasks.map((task) => effectiveStatus(task, live))
+  const running = statuses.includes('running')
+  const failed = statuses.includes('failed')
+  return <Collapsible className="agent-group text-sm">
+    <CollapsibleTrigger render={<Button variant="ghost" className="h-auto w-full justify-start gap-3 rounded-(--radius-m) bg-raised px-3 py-2 text-sm font-normal hover:bg-fill" />}>
+      <span className="flex flex-none items-center" aria-hidden="true">
+        {tasks.slice(0, 3).map((task, index) => <span key={task.agentId} className="grid size-6 place-items-center rounded-full bg-accent text-soft [box-shadow:0_0_0_2px_var(--raised)]" style={{ marginLeft: index === 0 ? 0 : -8 }}>{task.provider ? <ProviderIcon provider={task.provider} size={13} /> : <Bot size={13} />}</span>)}
+        {tasks.length > 3 && <span className="grid size-6 place-items-center rounded-full bg-accent text-caption text-muted-foreground [box-shadow:0_0_0_2px_var(--raised)]" style={{ marginLeft: -8 }}>+{tasks.length - 3}</span>}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left">
+        <span className="font-semibold text-foreground">{translate('{0} agents', { 0: tasks.length })}</span>
+        <span className={`text-caption ${failed ? 'text-bad' : running ? 'text-brand' : 'text-muted-foreground'}`}>{summarizeAgentStatuses(statuses, (status) => translate(TASK_STATUS[status]).toLowerCase())}</span>
+      </span>
+      {running && <Spinner className="size-3.5 flex-none" aria-hidden="true" />}
+      <ChevronRight size={14} className="caret flex-none text-muted-foreground [transition:transform_0.15s_var(--ease)] [[data-open]>_[data-slot='collapsible-trigger']_&]:[transform:rotate(90deg)]" />
+    </CollapsibleTrigger>
+    <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:none]">
+      <div className="flex flex-col gap-1.5 pt-1.5">{tasks.map((task) => <AgentTaskCard key={task.agentId} task={task} live={live} onOpen={() => onOpen(task.agentId)} onStop={onStop} />)}</div>
+    </CollapsibleContent>
+  </Collapsible>
 }
 
 function AgentTaskCard({ task, live, onOpen, onStop }: { task: AgentTask; live: boolean; onOpen: () => void; onStop: (task: AgentTask) => void }) {

@@ -592,7 +592,7 @@ button.scm-commit-menu:disabled { @apply [background:var(--primary)]; @apply [co
 
 
 /* Git section (branch, commits, stashes). One block: same 8px gutter and 28px rows as the lists above it. */
-button.git-inspector-heading { @apply flex-none; @apply justify-start; @apply gap-1.5; @apply h-7; @apply p-[0_6px_0_4px]; @apply [border:0]; @apply [background:none]; @apply text-foreground; @apply text-control; @apply font-semibold; }
+button.git-inspector-heading { @apply flex-none; @apply w-auto; @apply justify-start; @apply gap-1.5; @apply h-7; @apply p-[0_6px_0_4px]; @apply [border:0]; @apply [background:none]; @apply text-foreground; @apply text-control; @apply font-semibold; }
 button.git-inspector-heading:hover:not(:disabled) { @apply [background:none]; @apply [border:0]; }
 button.git-inspector-heading > svg { @apply w-[13px]; @apply flex-none; }
 

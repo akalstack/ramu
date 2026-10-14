@@ -28,9 +28,17 @@ it('retains pending or declined permissions, and folds approved ones', () => {
 it('keeps each advisor consultation and failed helper visible', () => {
   const agent = (id: string, status: 'completed' | 'failed', taskType?: string) => event({ kind: 'agent', agentId: id, name: id, status, taskType })
   const first = agent('advisor-1', 'completed', 'advisor'), second = agent('advisor-2', 'completed', 'advisor'), failed = agent('failed', 'failed'), done = agent('done', 'completed')
-  const folded = foldChatTurn([first, second, failed, done, answer], new Map(), new Map())
+  const folded = foldChatTurn([first, second, failed, answer], new Map(), new Map())
   expect(folded.kept).toEqual([first, second, failed])
-  expect(folded.folded).toEqual([done])
+  expect(foldChatTurn([first, done, answer], new Map(), new Map()).folded).toEqual([done])
+})
+it('keeps a group of sub-agents together until all of them are done', () => {
+  const agent = (id: string, status: 'completed' | 'running') => event({ kind: 'agent', agentId: id, name: id, status })
+  const done = agent('done', 'completed'), running = agent('running', 'running'), other = agent('other', 'completed')
+  const open = foldChatTurn([done, running, other, answer], new Map(), new Map())
+  expect(open.kept).toEqual([done, running, other])
+  expect(open.folded).toEqual([])
+  expect(foldChatTurn([done, other, answer], new Map(), new Map()).folded).toEqual([done, other])
 })
 it('keeps errors and pending plans visible while folding completed plans', () => {
   const error = event({ kind: 'error', message: 'Failed' })

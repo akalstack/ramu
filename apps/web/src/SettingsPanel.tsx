@@ -136,9 +136,9 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', initialT
     {page === 'editor' && <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0">
       <SettingsGroupTitle>{t('Editor')}</SettingsGroupTitle>
       {toggle('previewTabs', 'Preview tabs', 'Single-click previews a file. Double-click or edit to keep it open.')}
-      <SettingsRow><strong>{t("Editor font size")}</strong><Dropdown label={t("Editor font size")} value={String(appDraft.editorFontSize)} options={sizes(12, 22)} onChange={(value) => setAppDraft({ ...appDraft, editorFontSize: Number(value) })} /></SettingsRow>
+      <SettingsRow><strong>{t("Editor font size")}</strong><Dropdown label={t("Editor font size")} value={String(appDraft.editorFontSize)} options={sizes(10, 22)} onChange={(value) => setAppDraft({ ...appDraft, editorFontSize: Number(value) })} /></SettingsRow>
       <SettingsGroupTitle>{t("Terminal")}</SettingsGroupTitle>
-      <SettingsRow><strong>{t("Terminal font size")}</strong><Dropdown label={t("Terminal font size")} value={String(appDraft.terminalFontSize)} options={sizes(12, 22)} onChange={(value) => setAppDraft({ ...appDraft, terminalFontSize: Number(value) })} /></SettingsRow>
+      <SettingsRow><strong>{t("Terminal font size")}</strong><Dropdown label={t("Terminal font size")} value={String(appDraft.terminalFontSize)} options={sizes(8, 22)} onChange={(value) => setAppDraft({ ...appDraft, terminalFontSize: Number(value) })} /></SettingsRow>
       <SettingsRow><SettingsLabel title={t("Default terminal position")} help={t("Choose where the terminal panel opens. Checkouts with a saved terminal position keep that choice.")} /><Dropdown label={t("Default terminal position")} value={appDraft.defaultTerminalDock} options={[{ value: 'bottom', label: t("Bottom") }, { value: 'right', label: t("Right") }]} onChange={(value) => setAppDraft({ ...appDraft, defaultTerminalDock: value === 'right' ? 'right' : 'bottom' })} /></SettingsRow>
       <p className="muted text-muted-foreground small text-caption">{t("Files and terminals are shared by chats in the same checkout. Isolated worktrees keep separate state.")}</p>
     </div>}
