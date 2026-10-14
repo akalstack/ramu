@@ -154,7 +154,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     })),
     { id: 'view.sidebar', title: t("Toggle primary side bar"), category: t("View"), keys: 'mod+b', run: shell.toggleSidebar },
     { id: 'view.chat', title: t("Toggle chat pane"), category: t("View"), keys: 'mod+alt+c', run: () => taskId && taskAction(taskId, 'toggle-chat'), when: hasTask },
-    { id: 'view.right-panel', title: t("Toggle right panel"), category: t("View"), keys: 'mod+alt+b', run: () => taskId && ws.toggleRightPanel(taskId), when: hasTask },
+    { id: 'view.right-panel', title: t("Toggle workspace"), category: t("View"), keys: 'mod+alt+b', run: () => taskId && ws.toggleRightPanel(taskId), when: hasTask },
     { id: 'view.home', title: t("Show home"), category: t("View"), run: () => { shell.showSidebar?.('projects'); ws.showHome() } },
     { id: 'view.schedules', title: t("Show schedules"), category: t("View"), run: () => shell.showSidebar ? shell.showSidebar('schedules') : ws.setSidebar('schedules') },
     { id: 'view.chats', title: t("Show chats"), category: t("View"), run: () => shell.showSidebar ? shell.showSidebar('projects') : ws.setSidebar('projects') },

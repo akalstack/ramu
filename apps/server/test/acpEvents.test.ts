@@ -100,3 +100,30 @@ it('attaches child-session updates to the sub-agent card with the same descripti
   expect(decoder.consumeChild('child', 'Run ls', { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'i' } })[0]).toMatchObject({ kind: 'text', text: 'hi', agentId: 'call', messageId: (first[0] as any).messageId })
   expect(decoder.consumeChild('stranger', 'Other', { sessionUpdate: 'usage_update', used: 1, size: 2 })).toEqual([])
 })
+
+it('maps Antigravity invoke_subagent permission calls to one card and ignores its odd launcher failure', () => {
+  const decoder = new AcpEvents(false, ['invoke_subagent'])
+  const started = decoder.consume({ sessionUpdate: 'tool_call', toolCallId: 'agy', title: 'Run invoke_subagent?', kind: 'other', status: 'pending', rawInput: { Subagents: [{ Prompt: 'reply hi', Role: 'Assistant', TypeName: 'self' }] } })
+  expect(started.find((e) => e.kind === 'agent')).toMatchObject({ name: 'reply hi', prompt: 'reply hi', agentType: 'Assistant', status: 'running', canStop: true })
+  const done = decoder.consume({ sessionUpdate: 'tool_call_update', toolCallId: 'agy', status: 'failed', rawOutput: 'Tool call was approved but never executed.' })
+  expect(done.find((e) => e.kind === 'agent')).toMatchObject({ status: 'completed', canStop: false })
+  expect((done.find((e) => e.kind === 'agent') as any).error).toBeUndefined()
+  expect(decoder.consume({ sessionUpdate: 'tool_call', toolCallId: 'x', title: 'Running start_subagent', kind: 'other' }).some((e) => e.kind === 'agent')).toBe(false)
+})
+it('merges out-of-band sub-agent details and keeps a stopped card stopped', () => {
+  const decoder = new AcpEvents(false, ['task'])
+  decoder.consume({ sessionUpdate: 'tool_call', toolCallId: 'c', name: 'task', status: 'in_progress', rawInput: { description: 'Survey' } })
+  expect(decoder.updateAgent('c', { durationMs: 2637, address: 'agent-1' })).toMatchObject({ kind: 'agent', name: 'Survey', durationMs: 2637, address: 'agent-1' })
+  expect(decoder.updateAgent('missing', { durationMs: 1 })).toBeUndefined()
+  decoder.updateAgent('c', { status: 'stopped' })
+  expect(decoder.consume({ sessionUpdate: 'tool_call_update', toolCallId: 'c', status: 'failed' }).find((e) => e.kind === 'agent')).toMatchObject({ status: 'stopped' })
+})
+
+it('reports an Antigravity helper as failed when its start_subagent step fails', () => {
+  const decoder = new AcpEvents(false, ['invoke_subagent'])
+  decoder.consume({ sessionUpdate: 'tool_call', toolCallId: 'agy', title: 'Run invoke_subagent?', status: 'pending', rawInput: { Subagents: [{ Prompt: 'reply hi' }] } })
+  decoder.consume({ sessionUpdate: 'tool_call', toolCallId: 's:1', title: 'Running start_subagent', status: 'in_progress', rawInput: {} })
+  decoder.consume({ sessionUpdate: 'tool_call_update', toolCallId: 's:1', status: 'failed', content: [{ type: 'content', content: { type: 'text', text: 'Tool execution failed' } }] })
+  const done = decoder.consume({ sessionUpdate: 'tool_call_update', toolCallId: 'agy', status: 'failed', rawOutput: 'Tool call was approved but never executed.' })
+  expect(done.find((e) => e.kind === 'agent')).toMatchObject({ status: 'failed', error: 'Tool execution failed' })
+})

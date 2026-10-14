@@ -13,6 +13,12 @@ export function useLayoutPref<T extends string>(name: string, id: string, fallba
   return [value, set]
 }
 
+/** Reveal a workspace's chat pane from outside its view, e.g. when a chat is opened from the sidebar. */
+export function showChat(id: string): void {
+  if (localStorage.getItem(key('chat', id)) !== 'hidden') return
+  localStorage.setItem(key('chat', id), 'shown'); listeners.forEach((listener) => listener())
+}
+
 export const useEditorSide = (id: string) => useLayoutPref<'left' | 'right'>('editor-side', id, 'right', ['left', 'right'])
 export const useChatHidden = (id: string) => {
   const [value, set] = useLayoutPref<'shown' | 'hidden'>('chat', id, 'shown', ['shown', 'hidden'])

@@ -2,7 +2,8 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { acpAside, acpModels, acpSessionModels, createAcpRunner } from '../src/acp'
+import { isLimitMessage, isLimitReply, limitResetsAt } from '../src/usageLimit'
+import { acpAside, openCodeConfigEnv, acpModels, acpSessionModels, createAcpRunner } from '../src/acp'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent } from '@ramu/shared/types'
 
 let dir: string
@@ -33,6 +34,7 @@ rl.on('line',line=>{
  if(m.method==='session/prompt'){
   promptID=m.id;current=m.params.prompt[0].text;
   if(current==='limit'){send({id:m.id,error:{code:-32000,message:'quota exceeded 429'}});return;}
+  if(current==='limitreply'){send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:"You've hit your usage limit. Resets at 5pm."}}}});send({id:m.id,result:{stopReason:'end_turn'}});return;}
   if(current==='long')return;
   for(const text of ['Hello ','world'])send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text}}}});
   if(current==='question')send({id:900,method:'cursor/ask_question',params:{title:'Choice',questions:[{id:'q1',prompt:'Which?',options:[{id:'one',label:'First'}]}]}});
@@ -140,4 +142,51 @@ it('answers a side question on a forked session and refuses its tool requests', 
 it('reports runtimes that cannot fork', async () => {
   forkRuntime(false)
   await expect(acpAside({ provider: 'opencode', cwd: dir, sessionId: 'main', prompt: 'word?' })).rejects.toThrow(/cannot fork/)
+})
+
+it('denies OpenCode\'s native sub-agent tool only when Ramu routes sub-agents, keeping existing config', () => {
+  const connection = { url: 'http://127.0.0.1:1/mcp', token: 't' }
+  expect(openCodeConfigEnv(connection, undefined)).toEqual({})
+  expect(openCodeConfigEnv({ ...connection, nativeSubagents: false }, undefined)).toEqual({ OPENCODE_CONFIG_CONTENT: '{"permission":{"task":"deny"}}' })
+  expect(JSON.parse(openCodeConfigEnv({ ...connection, nativeSubagents: false }, '{"model":"a/b","permission":{"bash":"ask"}}').OPENCODE_CONFIG_CONTENT!)).toEqual({ model: 'a/b', permission: { bash: 'ask', task: 'deny' } })
+  expect(openCodeConfigEnv({ ...connection, nativeSubagents: false }, 'not json')).toEqual({})
+})
+
+it('steers by cancelling the running turn and continuing with the new message, reporting only one result', async () => {
+  await start('long')
+  expect(runner!.canSteer).toBe(true)
+  await runner!.steer('limit')
+  await until(() => events.some((e) => e.kind === 'result'))
+  const methods = log().map((m) => m.method).filter((m) => m === 'session/cancel' || m === 'session/prompt')
+  expect(methods).toEqual(['session/prompt', 'session/cancel', 'session/prompt'])
+  expect(events.filter((e) => e.kind === 'result')).toEqual([expect.objectContaining({ isError: true, text: expect.stringContaining('quota') })])
+})
+it('refuses to steer when no turn is running', async () => {
+  await start('limit'); await until(() => events.some((e) => e.kind === 'result'))
+  await expect(runner!.steer('x')).rejects.toThrow(/no running turn/)
+})
+
+it('treats a limit notice sent as an ordinary reply as a usage limit so fallback can run', async () => {
+  const limits: (boolean | undefined)[] = []
+  runner = createAcpRunner({ cwd: dir, additionalDirs: [], covers: [dir] }, { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', model: 'wire-model' }, (e, limit) => { events.push(e); if (e.kind === 'result') limits.push(limit) })
+  await runner.start('limitreply', null)
+  await until(() => events.some((e) => e.kind === 'result'))
+  expect(events.find((e) => e.kind === 'result')).toMatchObject({ isError: true, text: expect.stringContaining('usage limit') })
+  expect(limits).toEqual([true])
+  // Recorded as a reading so routing avoids this provider before the next request fails.
+  expect(events.find((e) => e.kind === 'usage')).toMatchObject({ readings: [{ provider: 'cursor', status: 'limited', usedPercent: 100 }] })
+})
+it('reads how long a limit lasts from the notice', () => {
+  expect(limitResetsAt('Rate limited. Try again in 2 hours.', 0)).toBe(7_200_000)
+  expect(limitResetsAt('429: retry after 30s', 0)).toBe(30_000)
+  expect(limitResetsAt('quota exceeded', 0)).toBeUndefined()
+})
+it('recognises provider limit wording without flagging ordinary answers', () => {
+  for (const text of ['RESOURCE_EXHAUSTED: quota', 'Error 429 Too Many Requests', 'insufficient_quota', 'You are out of credits']) expect(isLimitMessage(text)).toBe(true)
+  expect(isLimitMessage('File not found')).toBe(false)
+  expect(isLimitReply("You've hit your usage limit. Resets at 5pm.")).toBe(true)
+  expect(isLimitReply('Usage limit reached for this model')).toBe(true)
+  expect(isLimitReply("You've hit your usage limit.", 1)).toBe(false)
+  expect(isLimitReply('Rate limiting works by counting requests per window; here is how to add it to your API. '.repeat(10))).toBe(false)
+  expect(isLimitReply('Added a rate limiter to the API.')).toBe(false)
 })

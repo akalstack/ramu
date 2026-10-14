@@ -347,9 +347,9 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
       </HoverCard>
       {error && <div className="error text-bad small text-caption row-error p-[1px_10px_2px_26px]">{error}</div>}
       {(open || mounted) && (
-        <div ref={list} className="task-list flex flex-col gap-0.5 pl-[22px] pt-0.5">
+        <div ref={list} className="task-list flex flex-col gap-0.5 pt-0.5">
           {tasks.length === 0 && <div className="muted text-muted-foreground small text-caption empty-tasks p-[2px_10px]">{t("No chats yet")}</div>}
-          {tasks.map((t) => <TaskRow key={t.id} task={t} />)}
+          {tasks.map((t) => <TaskRow key={t.id} task={t} nested />)}
           {others.length > recent && (
             <ExpandRow expanded={showAll} onToggle={() => setShowAll((s) => !s)} className="h-[30px] min-h-[30px] px-2 text-body leading-5">
               {showAll ? t("Show less") : t("Show more")}
@@ -360,7 +360,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
               <Button variant="secondary" className="bg-fill hover:bg-fill-hover archived-toggle [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-soft bg-transparent [border:none] text-muted-foreground text-caption p-[2px_10px] gap-1 justify-start" onClick={() => setShowArchived((s) => !s)}>
                 <ChevronRight size={12} className={showArchived ? 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)] open' : 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]'} /> {t(" Archived (")}{archived.length})
               </Button>
-              {showArchived && archived.map((t) => <TaskRow key={t.id} task={t} />)}
+              {showArchived && archived.map((t) => <TaskRow key={t.id} task={t} nested />)}
             </>
           )}
         </div>
@@ -369,7 +369,7 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
   )
 }
 
-function TaskRow({ task, projectName, hidePin }: { task: Task; projectName?: string; hidePin?: boolean }) {
+function TaskRow({ task, projectName, hidePin, nested }: { task: Task; projectName?: string; hidePin?: boolean; nested?: boolean }) {
   useLanguage()
   const ws = useWorkspace()
   const [renaming, setRenaming] = useState(false)
@@ -409,6 +409,7 @@ function TaskRow({ task, projectName, hidePin }: { task: Task; projectName?: str
               ws.forgetTask(task.id)
             }),
         },
+    ...(ws.ui.openTaskIds.includes(task.id) ? [{ key: 'close', label: <><X size={14} /> {t(" Close workspace")}</>, title: t("Closes the tab. Chats keep running and nothing is deleted."), onSelect: () => ws.closeTask(task.id) }] : []),
     { key: 'sep', separator: true },
     { key: 'delete', label: <><Trash2 size={14} /> {t(" Delete…")}</>, danger: true, onSelect: () => setDeleting(true) },
   ]
@@ -419,7 +420,7 @@ function TaskRow({ task, projectName, hidePin }: { task: Task; projectName?: str
     <>
       <div
         onContextMenu={contextMenu.onContextMenu}
-        className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 min-h-[30px] rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${archived ? ' archived' : ''}`}
+        className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 min-h-[30px] rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${archived ? ' archived' : ''}${nested ? ' pl-[31px]' : ''}`}
         role="button"
         tabIndex={0}
         onClick={() => !renaming && ws.openTask(task.id)}

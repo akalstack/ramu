@@ -1,3 +1,5 @@
+import { ActivityService, operationLabels } from './activity'
+import type { BackgroundActivity } from '@ramu/shared/activity'
 import type { LearningService } from './learning'
 import type { CompressionService } from './compression'
 import { intelligenceSchema } from './intelligence'
@@ -8,7 +10,7 @@ import { KeepAwakeService } from './keepAwake'
 import { AppUpdateService } from './appUpdates'
 import { runtimeVersion } from './build'
 import { configureProviderAccounts } from './providerBinaries'
-import type { ProviderConfiguration, ProviderStatus } from '@ramu/shared/providers'
+import { providerEnabled, type ProviderConfiguration, type ProviderStatus } from '@ramu/shared/providers'
 // The renderer's only door into privileged code: one validated method table.
 import { readFileSync, statSync, watch, type FSWatcher } from 'node:fs'
 import { withContext as withFileContext, discoverSkills } from './context'
@@ -20,6 +22,7 @@ import { memoryInputSchema, type MemoryService } from './memory'
 import type { Aside, AsideMessage, FileContext, MemoryInput, ProjectAction, ScheduleInput, UsageReading, CommitBranchOptions } from '@ramu/shared/types'
 import { randomUUID } from 'node:crypto'
 import { UsageService } from './usage'
+import { ExtraUsageReader } from './providerUsage'
 import { goalPreferencesSchema } from './goals'
 import { codexHookTrust } from './codex'
 import { join } from 'node:path'
@@ -47,7 +50,7 @@ const agentSettings = z.object({
 })
 
 const pullMode = z.enum(['rebase', 'merge', 'ff-only'])
-const providerBinaries = z.object(Object.fromEntries(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'].map((provider) => [provider, z.object({ binary: z.string().trim().max(4096).refine((path) => !path.includes('\0'), 'Invalid binary path'), accounts: z.array(z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).refine((id) => id !== 'default'), name: z.string().trim().min(1).max(80) })).max(20).optional(), accountId: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(), autoUpdate: z.boolean().optional(), harness: z.string().trim().max(4096).refine((path) => !path.includes('\0'), 'Invalid helper path').optional() }).optional()])))
+const providerBinaries = z.object(Object.fromEntries(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'].map((provider) => [provider, z.object({ binary: z.string().trim().max(4096).refine((path) => !path.includes('\0'), 'Invalid binary path'), accounts: z.array(z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).refine((id) => id !== 'default'), name: z.string().trim().min(1).max(80), enabled: z.boolean().optional() })).max(20).optional(), accountId: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(), autoUpdate: z.boolean().optional(), enabled: z.boolean().optional(), usageKeychain: z.boolean().optional(), harness: z.string().trim().max(4096).refine((path) => !path.includes('\0'), 'Invalid helper path').optional() }).optional()]))).refine((config) => ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'].some((provider) => (config as Record<string, { enabled?: boolean } | undefined>)[provider]?.enabled !== false), 'Keep at least one provider turned on')
 const providerId = z.enum(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'])
 const fallbackStep = z.object({ id: z.string().min(1).max(100), provider: providerId, model: z.string().max(200), effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable(), serviceTier: z.enum(['standard', 'fast']).optional() })
 const threshold = z.union([z.literal(80), z.literal(90), z.literal(95), z.null()])
@@ -143,6 +146,7 @@ export interface RuntimeHost {
 
 
 export function createDispatcher(host: RuntimeHost, { workspace, terminals, agents, schedules, recaps, reviews, memory, learning, compression }: Services) {
+  const activity = new ActivityService((items) => host.send('activity:changed', items))
   configureProviderAccounts(join(host.userData, 'provider-accounts'))
   const managedSkills = (taskId: string) => learning?.catalog(workspace.projectIdOf(taskId)) ?? []
   const withContext = (ws: Workspace, taskId: string, prompt: string, context?: FileContext[]) => withFileContext(ws, taskId, prompt, context, managedSkills(taskId))
@@ -152,6 +156,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     (key, fallback) => workspace.getAppState(key, fallback),
     (key, value) => workspace.setAppState(key, value),
     (statuses) => host.send('providers:updates', statuses),
+    activity,
   )
   const awake = new KeepAwakeService(() => workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).keepAwake ?? false, () => workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).keepAwakeWhen ?? 'plugged-in')
   const attachmentStore = new AttachmentStore(join(host.userData, 'attachments'))
@@ -160,16 +165,20 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
   const attachmentIds = z.array(id).max(10).optional()
   const lock = new KeyedLock()
   const usage = new UsageService(() => workspace.getAppState<UsageReading[]>('usage-limits', []), (readings) => workspace.setAppState('usage-limits', readings), (readings) => host.send('usage:changed', readings))
+  const extraUsage = new ExtraUsageReader((readings) => usage.update(readings), () => { const config = loadPreferences().providerBinaries; return { cursor: providerEnabled(config, 'cursor'), antigravity: providerEnabled(config, 'antigravity'), keychain: !!config.cursor?.usageKeychain } })
   const loadPreferences = (): AppPreferences => { const saved = workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}); return appPreferences.parse({ ...DEFAULT_APP_PREFERENCES, ...saved, ...(saved.messageBehaviorVersion === 4 ? {} : { busyMessageAction: 'steer', messageBehaviorVersion: 4 }) }) }
   // Archived chats unused for `cleanupArchivedDays` are deleted (worktrees and branches are kept); 0 turns it off.
   const cleanupArchived = async () => {
     const days = loadPreferences().cleanupArchivedDays
     if (!days) return
     const cutoff = Date.now() - days * 86_400_000
-    for (const task of workspace.listTasks()) {
-      if (task.status !== 'archived' || task.lastActiveAt >= cutoff) continue
-      try { await workspace.deleteTask(task.id, false) } catch { /* Retried on the next pass. */ }
-    }
+    const tasks = workspace.listTasks().filter((task) => task.status === 'archived' && task.lastActiveAt < cutoff)
+    if (!tasks.length) return
+    await activity.run('Cleaning up archived chats', undefined, async () => {
+      for (const task of tasks) {
+        try { await workspace.deleteTask(task.id, false) } catch { /* Retried on the next pass. */ }
+      }
+    })
   }
   setTimeout(() => void cleanupArchived(), 30_000).unref()
   setInterval(() => void cleanupArchived(), 6 * 3_600_000).unref()
@@ -397,10 +406,20 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'settings.app.get': { args: z.tuple([]), run: loadPreferences },
     'settings.app.set': { args: z.tuple([appPreferences]), run: (preferences: AppPreferences) => { workspace.setAppState('app-preferences', preferences); recaps.settingsChanged(); providers.settingsChanged(); awake.settingsChanged(); host.send('usage:changed', usage.list()); updates.settingsChanged(); agents.invalidateCatalog(); agents.goalsSettingsChanged(); memory?.settingsChanged(); learning?.settingsChanged() } },
     'background.keepAwake': { args: z.tuple([]), run: () => awake.status() },
+    'activity.status': { args: z.tuple([]), run: () => {
+      const items: BackgroundActivity[] = activity.status()
+      const phase = updates.status().phase
+      if (phase === 'checking' || phase === 'downloading') items.push({ id: 'app-update', label: phase === 'checking' ? 'Checking app updates' : 'Downloading app update' })
+      if (memory?.snapshot().dreaming) items.push({ id: 'memory', label: 'Maintaining memories' })
+      if (learning?.snapshot().running) items.push({ id: 'learning', label: 'Learning skills' })
+      if (recaps.snapshot().generating) items.push({ id: 'recaps', label: 'Generating recaps' })
+      return items
+    } },
     'updates.status': { args: z.tuple([]), run: () => updates.status() },
     'updates.check': { args: z.tuple([]), run: () => updates.check() },
     'updates.download': { args: z.tuple([]), run: () => updates.download() },
     'providers.status': { args: z.tuple([providerBinaries.optional(), z.boolean().optional()]), run: (config?: ProviderConfiguration, latest?: boolean) => providers.status(config, latest) },
+    'providers.signIn': { args: z.tuple([agentSettings.shape.provider]), run: (provider: ProviderStatus['provider']) => providers.signIn(provider) },
     'providers.loginCommand': { args: z.tuple([agentSettings.shape.provider, providerBinaries.optional()]), run: (provider: ProviderStatus['provider'], config?: ProviderConfiguration) => providers.loginCommand(provider, config) },
     'providers.update': { args: z.tuple([agentSettings.shape.provider]), run: (provider: ProviderStatus['provider']) => providers.update(provider) },
     'providers.updates': { args: z.tuple([]), run: () => providers.updates() },
@@ -766,7 +785,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
         })
       },
     },
-    'agent.submit': { args: z.tuple([id, z.string().max(1_000_000), z.enum(['queue', 'steer']), attachmentIds, fileContext]), run: async (s: string, t: string, mode: 'queue' | 'steer', attachmentIds?: string[], context?: FileContext[]) => { t = await withContext(workspace, agents.get(s).taskId, t, context); return lock.runMany(agents.get(s).covers.map((cwd) => `checkout:${cwd}`), () => agents.submit(s, t, mode, attachmentStore.resolve(attachmentIds))) } },
+    'agent.submit': { args: z.tuple([id, z.string().max(1_000_000), z.enum(['queue', 'steer']), attachmentIds, fileContext]), run: async (s: string, t: string, mode: 'queue' | 'steer', attachmentIds?: string[], context?: FileContext[]) => { t = await withContext(workspace, agents.get(s).taskId, t, context); return lock.runMany(agents.get(s).covers.map((cwd) => `checkout:${cwd}`), () => agents.submit(s, t, mode, attachmentStore.resolve(attachmentIds), undefined, true)) } },
     'agent.removeQueued': { args: z.tuple([id, id]), run: (s: string, messageId: string) => agents.removeQueued(s, messageId) },
     'agent.send': { args: z.tuple([id, text]), run: (s: string, t: string) => lock.runMany(agents.get(s).covers.map((cwd) => `checkout:${cwd}`), () => agents.send(s, t)) },
     'agent.resumeQueue': { args: z.tuple([id]), run: (s: string) => agents.resumeQueue(s) },
@@ -775,7 +794,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'agent.interrupt': { args: z.tuple([id]), run: (s: string) => agents.interrupt(s) },
     'agent.stop': { args: z.tuple([id]), run: (s: string) => agents.stopAndWait(s) },
     'usage.get': { args: z.tuple([]), run: () => usage.list() },
-    'usage.refresh': { args: z.tuple([]), run: async () => { await agents.readClaudeUsage(); return usage.list() } },
+    'usage.refresh': { args: z.tuple([]), run: async () => { await Promise.all([agents.readClaudeUsage(), extraUsage.refresh()]); return usage.list() } },
     'codex.hook.status': { args: z.tuple([]), run: () => codexHookTrust(false) },
     'advisor.claude': { args: z.tuple([]), run: () => ({ model: claudeAdvisorModel() }) },
     'codex.hook.trust': { args: z.tuple([]), run: () => codexHookTrust(true) },
@@ -818,7 +837,13 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
       const parsed = m.args.safeParse(args)
       // People see this message, so it must read as a sentence rather than as a list of schema issues.
       if (!parsed.success) throw new Error(describeValidationError(parsed.error))
-      return (m.run as (...a: unknown[]) => unknown)(...(parsed.data as unknown[]))
+      const run = () => (m.run as (...a: unknown[]) => unknown)(...(parsed.data as unknown[]))
+      const label = operationLabels[method]
+      let detail: string | undefined
+      if (label && method.startsWith('git.') && typeof parsed.data[1] === 'string') {
+        try { detail = workspace.getRepository(parsed.data[1]).name } catch {}
+      }
+      return label ? activity.run(label, detail, run) : run()
     },
     close() { providers.close(); updates.close(); awake.close(); for (const watcher of watchers.values()) watcher.close() },
   }

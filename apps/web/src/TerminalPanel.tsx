@@ -1,7 +1,7 @@
 import { t, useLanguage } from './i18n'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/desktop-button'
-import { Columns2, LayoutGrid, PanelBottom, PanelRight, Plus, Rows2, SquareTerminal, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRightToLine, Columns2, Ellipsis, Plus, Rows2, SquareTerminal, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useAppSettings } from './AppSettings'
 import { Menu, useContextMenu } from './Menu'
@@ -50,13 +50,13 @@ export function TerminalPanel({ taskId, visible, hidden = false, dock = 'right' 
         ...ready.map((b) => ({ key: b.repoId, label: <><SquareTerminal size={14} /> {t(" Terminal in ")}{b.repoName}</>, onSelect: () => ws.openView(taskId, { kind: 'terminal', repoId: b.repoId }) })),
       ]} />
       <div className="grow flex-1 min-w-0 text-left" />
-      <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={dock === 'right' ? t("Dock terminal at bottom") : t("Dock terminal on right")} title={dock === 'right' ? t("Dock terminal at bottom") : t("Dock terminal on right")} onClick={() => ws.setTerminalPanel(taskId, { terminalDock: dock === 'right' ? 'bottom' : 'right' })}>{dock === 'right' ? <PanelBottom data-icon="inline-start" /> : <PanelRight data-icon="inline-start" />}</Button>
-      <Menu label={t("Terminal layout")} icon={<LayoutGrid />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" align="end" items={[
+      <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Split side by side")} title={t("Split side by side")} onClick={() => ws.splitTerminal(taskId, 'horizontal')}><Columns2 data-icon="inline-start" /></Button>
+      <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Split stacked")} title={t("Split stacked")} onClick={() => ws.splitTerminal(taskId, 'vertical')}><Rows2 data-icon="inline-start" /></Button>
+      <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={dock === 'right' ? t("Dock terminal at bottom") : t("Dock terminal on right")} title={dock === 'right' ? t("Dock terminal at bottom") : t("Dock terminal on right")} onClick={() => ws.setTerminalPanel(taskId, { terminalDock: dock === 'right' ? 'bottom' : 'right' })}>{dock === 'right' ? <ArrowDownToLine data-icon="inline-start" /> : <ArrowRightToLine data-icon="inline-start" />}</Button>
+      <Menu label={t("Terminal layout")} icon={<Ellipsis />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" align="end" items={[
         { key: 'dock-right', label: t("Dock terminal on right"), selected: dock === 'right', onSelect: () => ws.setTerminalPanel(taskId, { terminalDock: 'right' }) },
         { key: 'dock-bottom', label: t("Dock terminal at bottom"), selected: dock === 'bottom', onSelect: () => ws.setTerminalPanel(taskId, { terminalDock: 'bottom' }) },
         { key: 'dock-separator', separator: true },
-        { key: 'split-h', label: <><Columns2 size={14} /> {t(" Split side by side")}</>, onSelect: () => ws.splitTerminal(taskId, 'horizontal') },
-        { key: 'split-v', label: <><Rows2 size={14} /> {t(" Split stacked")}</>, onSelect: () => ws.splitTerminal(taskId, 'vertical') },
         { key: 'unsplit', label: t("Move active pane to a new tab"), disabled: (activeGroup?.terminalIds.length ?? 0) < 2, onSelect: () => focusedId && ws.unsplitTerminal(taskId, focusedId) },
         { key: 'sep1', separator: true },
         { key: 'horizontal', label: t("Arrange group side by side"), onSelect: () => arrange('horizontal') },

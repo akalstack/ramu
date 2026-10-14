@@ -22,11 +22,16 @@
 .scm-repo .commit-input-wrap { position: relative; margin: 4px 0 8px; }
 .scm-repo .commit-msg { display: block; width: 100%; min-height: 48px; padding: 8px 36px 8px 10px; line-height: 18px; background: var(--fill); border-color: transparent; border-radius: var(--radius-s); font-size: var(--font-control); resize: vertical; }
 .scm-repo .commit-ai { position: absolute; right: 6px; top: 6px; }
+/* The commit split button follows the sidebar density with a restrained accent tint. */
+.scm-repo .scm-commit-split { --commit-fill: color-mix(in srgb, var(--accent) 12%, var(--raised)); --commit-fill-hover: color-mix(in srgb, var(--accent) 18%, var(--raised)); }
+.scm-repo .scm-commit-split > button.scm-commit,
+.scm-repo .scm-commit-split > button.scm-commit-menu { height: var(--action-size); min-height: var(--action-size); padding: 0 10px; gap: 6px; border: 0; border-radius: var(--radius-s); background: var(--commit-fill); color: var(--text); font-size: var(--font-control); font-weight: 500; justify-content: center; }
+.scm-repo .scm-commit-split > button.scm-commit { width: 100%; }
+.scm-repo .scm-commit-split > button:is(.scm-commit, .scm-commit-menu):is(:hover, [aria-expanded='true']):not(:disabled) { background: var(--commit-fill-hover); }
+.scm-repo .scm-commit-split > button:is(.scm-commit, .scm-commit-menu):disabled { background: var(--fill); color: var(--muted); opacity: .65; }
 .scm-repo .scm-commit-split { display: flex; width: 100%; gap: 0; margin-bottom: 6px; }
-.scm-repo .scm-commit-split > button.scm-commit { flex: 1; width: auto; min-width: 0; height: 32px; margin: 0; padding: 6px 12px; gap: 8px; border: 0; border-radius: var(--radius-s) 0 0 var(--radius-s); background: var(--primary); color: var(--primary-ink); font-size: var(--font-control); }
-.scm-repo .scm-commit-split > button.scm-commit:hover:not(:disabled) { background: var(--primary-hover); }
-.scm-repo .scm-commit-split > button.scm-commit-menu { position: relative; flex: none; width: 32px; height: 32px; min-height: 32px; border: 0; border-radius: 0 var(--radius-s) var(--radius-s) 0; background: var(--primary); color: var(--primary-ink); }
-.scm-repo .scm-commit-split > button:disabled { background: var(--primary); opacity: .5; }
-.scm-repo .scm-commit-menu::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 1px; background: #ffffff40; }
+.scm-repo .scm-commit-split > button.scm-commit { flex: 1; width: auto; min-width: 0; margin: 0; border-radius: var(--radius-s) 0 0 var(--radius-s); }
+.scm-repo .scm-commit-split > button.scm-commit-menu { position: relative; flex: none; width: var(--action-size); padding: 0; border-radius: 0 var(--radius-s) var(--radius-s) 0; }
+.scm-repo .scm-commit-menu::before { content: ''; position: absolute; left: 0; top: 7px; bottom: 7px; width: 1px; background: var(--line-strong); }
 .scm-ai-settings [data-slot='collapsible-trigger'] { height: auto; min-height: 28px; padding: 0 4px; gap: 6px; border: 0; border-radius: var(--radius-s); background: transparent; box-shadow: none; color: var(--muted); font-size: var(--font-caption); font-weight: 400; }
 .scm-ai-settings [data-slot='collapsible-trigger']:hover { background: var(--hover); }

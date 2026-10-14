@@ -99,7 +99,8 @@ reviews = new ReviewService(db, workspace, agents, join(userData, 'reviews'), ch
 reviews.recover()
 agents.reviewHooks = { begin: (taskId, scope) => reviews!.begin(taskId, scope), bind: (id, sessionId) => reviews!.bind(id, sessionId), abandon: (id, error) => reviews!.abandon(id, error), followup: (sessionId) => reviews!.beforeFollowup(sessionId), complete: (sessionId) => reviews!.complete(sessionId), validateFeedback: (reviewId) => reviews!.requireOriginalCheckout(reviewId) }
 const recaps = new RecapService(db, workspace, agents, changed)
-const memory = new MemoryService(db, workspace, agents, () => send('memory:changed', {}))
+const memory = new MemoryService(db, workspace, agents, () => send('memory:changed', {}), join(userData, 'memory'))
+memory.start()
 const compression = new CompressionService(db)
 const learning = new LearningService(db, workspace, agents, memory, join(userData, 'skills'), () => send('memory:changed', {}))
 agents.sessionCheckpoint = (id) => learning.checkpoint(id)

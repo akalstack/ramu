@@ -487,7 +487,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
       setError(errorText(e))
     } finally { setContinuing(false); setConfirmContinue(false) }
   }
-  const supportsSteering = session?.provider === 'claude-code' || session?.provider === 'codex'
+  const supportsSteering = !!session
   const action = supportsSteering ? preferences.busyMessageAction : 'queue'
   const opposite = action === 'queue' ? 'steer' : 'queue'
   // While the agent is working, a model change takes effect right away and the run continues with the new settings.

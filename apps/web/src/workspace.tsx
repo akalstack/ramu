@@ -1,4 +1,5 @@
 import { closingPanel } from '@ramu/shared/panelClose'
+import { showChat } from './layoutPrefs'
 import { persistentTaskUi } from '@ramu/shared/sourceNavigation'
 import { animatePanelChange, type PanelMotionScope } from './panelMotion'
 import { t, useLanguage } from './i18n'
@@ -434,6 +435,8 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         void refreshBindings(taskId)
         const shared = workspaceOf(taskId)
         if (shared !== taskId) void refreshBindings(shared)
+        // Opening a chat while the workspace shows only the editor would otherwise change nothing on screen.
+        showChat(shared)
         setUi((u) => ({
           ...u,
           openTaskIds: [...new Set([...u.openTaskIds, shared, taskId])],
@@ -530,7 +533,9 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         updateTaskUi(workspaceOf(taskId), (s) => ({ ...s, terminalOpen: false, restoreTerminal: terminalOpen }))
       },
       toggleRightPanel(taskId) {
-        const tool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null, workspace = api.workspaceVisible(taskId)
+        const state = effectiveUi[taskId]
+        const terminalOpen = !!state?.views.some(view => view.kind === 'terminal') && (state.terminalOpen ?? true)
+        const tool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null, workspace = api.workspaceVisible(taskId) || terminalOpen
         if (tool || workspace) {
           if (workspace) api.hideWorkspace(taskId)
           setUi((u) => ({ ...u, sidebar: 'projects', hiddenRight: { tool, workspace } }))
@@ -538,7 +543,9 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         }
         // Nothing was recorded (each part was closed on its own): open the workspace.
         const hidden = ui.hiddenRight ?? { tool: null, workspace: true }
-        setUi((u) => ({ ...u, sidebar: hidden.tool ?? u.sidebar, hiddenRight: undefined }))
+        const canRestore = viewsOf(taskId).some(view => view.kind !== 'agent' && view.kind !== 'terminal') || state?.restoreTerminal
+        // A layout toggle must visibly open something even before a file has been opened.
+        setUi((u) => ({ ...u, sidebar: hidden.tool ?? (hidden.workspace && canRestore ? u.sidebar : 'explorer'), hiddenRight: undefined }))
         if (hidden.workspace) api.showWorkspace(taskId)
       },
       showWorkspace(taskId) {
@@ -584,7 +591,9 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     const change = (update: (current: WorkspaceApi) => void, scope: PanelMotionScope, entering: boolean | (() => boolean) = false, captureIncoming = false) => animatePanelChange(() => update(latestPanelApi.current), scope, entering, captureIncoming)
     const active = (taskId: string) => taskId === api.ui.activeTaskId
     const terminalShown = (taskId: string) => !!api.taskUi[taskId]?.views.some(v => v.kind === 'terminal') && (api.taskUi[taskId]?.terminalOpen ?? true)
-    const editorShown = (taskId: string) => !!api.taskUi[taskId]?.views.some(v => v.id === api.taskUi[taskId]?.activeViewId && v.kind !== 'agent' && v.kind !== 'terminal')
+    // The right pane is already on screen while a tool rail is open, so a file opening or closing in it is not a pane change.
+    const toolOpen = () => ['explorer', 'search', 'scm'].includes(api.ui.sidebar)
+    const editorShown = (taskId: string) => toolOpen() || !!api.taskUi[taskId]?.views.some(v => v.id === api.taskUi[taskId]?.activeViewId && v.kind !== 'agent' && v.kind !== 'terminal')
     return {
       ...api,
       setSidebar: sidebar => {
@@ -607,7 +616,9 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       showWorkspace: taskId => active(taskId) ? change(current => current.showWorkspace(taskId), 'workspace', true) : api.showWorkspace(taskId),
       toggleRightPanel: taskId => active(taskId) ? change(current => current.toggleRightPanel(taskId), 'right', () => {
         const current = latestPanelApi.current
-        return !current.workspaceVisible(taskId) && !['explorer', 'scm', 'search'].includes(current.ui.sidebar)
+        const state = current.taskUi[taskId]
+        const terminalOpen = !!state?.views.some(view => view.kind === 'terminal') && (state.terminalOpen ?? true)
+        return !current.workspaceVisible(taskId) && !terminalOpen && !['explorer', 'scm', 'search'].includes(current.ui.sidebar)
       }) : api.toggleRightPanel(taskId),
       setTerminalPanel: (taskId, settings) => {
         if (active(taskId) && ('terminalOpen' in settings || 'terminalDock' in settings)) change(current => current.setTerminalPanel(taskId, settings), 'terminal', settings.terminalOpen === true, 'terminalDock' in settings)
@@ -615,12 +626,12 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       },
       closeView: (taskId, viewId) => closeAfterTerminalCheck([viewId], () => {
         const scope = closingPanel(api.taskUi[taskId], [viewId])
-        if (active(taskId) && scope && !api.dirty[viewId]) change(current => current.closeView(taskId, viewId), scope)
+        if (active(taskId) && scope && !(scope === 'editor' && toolOpen()) && !api.dirty[viewId]) change(current => current.closeView(taskId, viewId), scope)
         else api.closeView(taskId, viewId)
       }),
       closeViews: (taskId, viewIds) => closeAfterTerminalCheck(viewIds, () => {
         const scope = closingPanel(api.taskUi[taskId], viewIds)
-        if (active(taskId) && scope && !viewIds.some(id => api.dirty[id])) change(current => current.closeViews(taskId, viewIds), scope)
+        if (active(taskId) && scope && !(scope === 'editor' && toolOpen()) && !viewIds.some(id => api.dirty[id])) change(current => current.closeViews(taskId, viewIds), scope)
         else api.closeViews(taskId, viewIds)
       }),
       showChat: taskId => active(taskId) && editorShown(taskId) ? change(current => current.showChat(taskId), 'editor') : api.showChat(taskId),

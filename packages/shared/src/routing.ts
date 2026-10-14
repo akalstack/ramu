@@ -80,7 +80,7 @@ export function nextStep(chain: FallbackStep[], context: RouteContext): Fallback
 export interface RouteDecision { step: FallbackStep; reason: string; peak: UsageReading }
 
 export function windowName(reading: UsageReading): string {
-  const base = reading.window === 'five_hour' ? '5-hour' : 'weekly'
+  const base = reading.window === 'five_hour' ? '5-hour' : reading.window === 'monthly' ? 'monthly' : 'weekly'
   return reading.scope ? `${reading.scope} ${base}` : base
 }
 

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -173,4 +173,58 @@ it('essential is set only by the user: never forgotten, quoted for every agent, 
   expect(memory.instructions(session(), null)).toContain(`[${rule.id}] project, global: Golden rule: Never force-push shared branches`)
   expect(() => memory.save(note('Golden rule', 'Force-push is fine', { kind: 'project', importance: 5 }), agent, rule.id)).toThrow(/protected/)
   expect(memory.get(rule.id)).toMatchObject({ importance: 5, content: 'Never force-push shared branches' })
+})
+
+// Markdown files: USER.md / MEMORY.md are what people read and edit; the index follows them.
+const files = () => new MemoryService(db, ws, { analyze, list: () => [] } as unknown as AgentService, () => {}, join(dir, 'memory'))
+const read = (name: string) => readFileSync(join(dir, 'memory', name), 'utf8')
+
+it('writes user notes to USER.md and the rest to MEMORY.md, archived ones to ARCHIVE.md', () => {
+  const m = files(); m.start()
+  const pref = m.save({ ...note('Prefers Indonesian', 'Reply in Indonesian'), kind: 'user' }, { actor: 'user' })
+  const rule = m.save(note('Use pnpm', 'Always use pnpm'), agent)
+  expect(read('USER.md')).toContain('### Prefers Indonesian')
+  expect(read('USER.md')).not.toContain('Use pnpm')
+  expect(read('MEMORY.md')).toContain('### Use pnpm')
+  m.archive(rule.memory.id, { actor: 'user' }, 'done')
+  expect(read('MEMORY.md')).not.toContain('Use pnpm')
+  expect(read('ARCHIVE.md')).toContain('### Use pnpm')
+  expect(m.get(pref.memory.id).kind).toBe('user')
+})
+
+it('adopts edits, new blocks and removed blocks from the files', () => {
+  const m = files(); m.start()
+  const a = m.save(note('Use pnpm', 'Always use pnpm'), agent).memory
+  const b = m.save(note('Squash merges', 'Merge PRs with squash'), agent).memory
+  const path = join(dir, 'memory', 'MEMORY.md')
+  const edited = read('MEMORY.md').replace('Always use pnpm', 'Always use pnpm 9').replace(new RegExp(`<!-- ramu:note \\{"id":"${b.id}".*\\n### Squash merges\\nMerge PRs with squash\\n`), '')
+  writeFileSync(path, `${edited}\n<!-- ramu:note {} -->\n### Run lint first\nRun lint before commits\n`)
+  m.sync()
+  expect(m.get(a.id)).toMatchObject({ content: 'Always use pnpm 9', source: { confirmed: true } })
+  expect(m.get(b.id)).toMatchObject({ status: 'archived', archivedReason: 'removed from memory file' })
+  const added = m.snapshot().memories.find((x) => x.title === 'Run lint first')
+  expect(added).toMatchObject({ status: 'active', kind: 'reference', source: { actor: 'user', confirmed: true } })
+  expect(read('MEMORY.md')).toContain(`"id":"${added!.id}"`)
+  expect(m.history(a.id)[0]).toMatchObject({ action: 'update', actor: 'user', reason: 'edited in memory file' })
+})
+
+it('leaves a file with an unreadable block untouched', () => {
+  const m = files(); m.start()
+  const a = m.save(note('Use pnpm', 'Always use pnpm'), agent).memory
+  const broken = `${read('MEMORY.md')}\n<!-- ramu:note {oops -->\n### Typo\ntext\n`
+  writeFileSync(join(dir, 'memory', 'MEMORY.md'), broken)
+  m.sync()
+  expect(m.snapshot().error ?? '').toMatch(/MEMORY\.md/)
+  m.save(note('Another', 'Something else entirely different here'), agent)
+  expect(read('MEMORY.md')).toBe(broken)
+  expect(m.get(a.id).status).toBe('active')
+})
+
+it('seeds the files from existing database notes and reads them back after a restart', () => {
+  const old = memory.save(note('Legacy', 'Saved before files existed'), agent).memory
+  const m = files(); m.start()
+  expect(read('MEMORY.md')).toContain('### Legacy')
+  writeFileSync(join(dir, 'memory', 'MEMORY.md'), read('MEMORY.md').replace('Saved before files existed', 'Edited while closed'))
+  const restarted = files(); restarted.start()
+  expect(restarted.get(old.id).content).toBe('Edited while closed')
 })

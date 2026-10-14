@@ -1,10 +1,12 @@
+import type { ActivityService } from './activity'
 import { execFile, spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { homedir } from 'node:os'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { AGENT_PROVIDERS, supportsProviderAccounts, type ProviderConfiguration, type ProviderStatus } from '@ramu/shared/providers'
+import { AGENT_PROVIDERS, providerEnabled, supportsProviderAccounts, type ProviderConfiguration, type ProviderSignIn, type ProviderStatus } from '@ramu/shared/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
+import { acpSignIn } from './acp'
 import { configureProviderBinaries, findExecutable, providerAccountClearedEnv, providerAccountHome, providerRuntimeHome, providerBinary, providerEnvironment } from './providerBinaries'
 
 type Release = { version: string; checkedAt: string; downloadUrl?: string }
@@ -69,6 +71,32 @@ async function installedVersion(provider: AgentProvider, binary: string, config:
   })
 }
 
+const run = (binary: string, args: string[], env: NodeJS.ProcessEnv): Promise<{ ok: boolean; out: string }> => new Promise((resolve) => {
+  execFile(binary, args, { timeout: 8000, maxBuffer: 64 * 1024, windowsHide: true, env }, (error, stdout, stderr) => resolve({ ok: !error, out: `${stdout}${stderr}` }))
+})
+/** Asks the CLI itself whether it holds a login, without starting a chat. Details are shown only to the user who owns the login. */
+export async function signInState(provider: AgentProvider, binary: string, env: NodeJS.ProcessEnv): Promise<ProviderSignIn> {
+  if (provider === 'antigravity') {
+    try { const type = JSON.parse(readFileSync(join(env.GEMINI_HOME || join(homedir(), '.gemini'), 'antigravity-acp', 'settings.json'), 'utf8'))?.auth?.type; return typeof type === 'string' && type ? { signedIn: true, detail: type } : { signedIn: false } } catch { return { signedIn: false } }
+  }
+  if (provider === 'claude-code') {
+    const { out } = await run(binary, ['auth', 'status'], env)
+    try { const status = JSON.parse(out); return status.loggedIn ? { signedIn: true, ...(typeof status.authMethod === 'string' ? { detail: status.authMethod } : {}) } : { signedIn: false } } catch { return { signedIn: false } }
+  }
+  if (provider === 'codex') {
+    const { ok, out } = await run(binary, ['login', 'status'], env)
+    return ok && /logged in/i.test(out) ? { signedIn: true, detail: out.trim().split('\n')[0]!.replace(/^logged in( using)?\s*/i, '') || undefined } : { signedIn: false }
+  }
+  if (provider === 'cursor') {
+    const { out } = await run(binary, ['status'], env)
+    const match = /logged in(?: as (\S+))?/i.exec(out)
+    return match && !/not logged in/i.test(out) ? { signedIn: true, ...(match[1] ? { detail: match[1] } : {}) } : { signedIn: false }
+  }
+  const { out } = await run(binary, ['auth', 'list'], env)
+  const stored = out.split('\n').filter((line) => /\b(stored|env)\b/i.test(line)).length
+  return stored ? { signedIn: true, detail: String(stored) } : { signedIn: false }
+}
+
 export class ProviderService {
   private timer: NodeJS.Timeout | undefined
   private closed = false
@@ -78,7 +106,7 @@ export class ProviderService {
   private dismissed: Record<string, boolean>
   private updating = new Map<AgentProvider, Promise<ProviderStatus>>()
   private updateErrors = new Map<AgentProvider, string>()
-  constructor(private preferences: () => Pick<AppPreferences, 'providerBinaries' | 'providerUpdateChecks'>, private read: <T>(key: string, fallback: T) => T, private write: (key: string, value: unknown) => void, private emit: (statuses: ProviderStatus[]) => void) {
+  constructor(private preferences: () => Pick<AppPreferences, 'providerBinaries' | 'providerUpdateChecks'>, private read: <T>(key: string, fallback: T) => T, private write: (key: string, value: unknown) => void, private emit: (statuses: ProviderStatus[]) => void, private activity?: ActivityService) {
     this.releases = read<Cache>('provider-releases', {})
     this.dismissed = read<Record<string, boolean>>('provider-updates-dismissed', {})
     this.settingsChanged()
@@ -123,11 +151,17 @@ export class ProviderService {
     const clean = id === 'default' || !cleared.length ? '' : process.platform === 'win32' ? `Remove-Item ${cleared.map((key) => `Env:${key}`).join(',')} -ErrorAction SilentlyContinue; ` : `env ${cleared.map((key) => `-u ${key}`).join(' ')} `
     return `${clean}${assignments}${process.platform === 'win32' ? '& ' : ''}${quote(providerBinary(provider, config))} ${args.join(' ')}`
   }
+  /** Providers whose sign-in runs inside Ramu instead of a terminal command. */
+  async signIn(provider: AgentProvider): Promise<void> {
+    if (provider !== 'antigravity') throw new Error('Use the Login command for this provider.')
+    if (!findExecutable(providerBinary(provider, this.preferences().providerBinaries))) throw new Error('Select the Antigravity ACP runtime first.')
+    await acpSignIn('antigravity', 'oauth-personal')
+  }
   /** Shell-free updater, shared by manual actions and the detached service timer. */
   update(provider: AgentProvider): Promise<ProviderStatus> {
     const pending = this.updating.get(provider)
     if (pending) return pending
-    const work = (async () => {
+    const update = async () => {
       const config = this.preferences().providerBinaries
       const binary = providerBinary(provider, config)
       if (!findExecutable(binary)) throw new Error('Select an installed CLI before updating it.')
@@ -140,7 +174,8 @@ export class ProviderService {
       this.updateErrors.delete(provider)
       await new Promise<void>((resolve, reject) => execFile(command, args, { timeout: 5 * 60_000, maxBuffer: 1024 * 1024, windowsHide: true, env: providerEnvironment(provider, config) }, (error) => error ? reject(new Error('CLI update failed. Check permissions, network access, and how this CLI was installed.')) : resolve()))
       return (await this.status()).find((status) => status.provider === provider)!
-    })().catch((error) => { this.updateErrors.set(provider, (error as Error).message); throw error }).finally(() => this.updating.delete(provider))
+    }
+    const work = (this.activity ? this.activity.run('Updating CLI', provider, update) : update()).catch((error) => { this.updateErrors.set(provider, (error as Error).message); throw error }).finally(() => this.updating.delete(provider))
     this.updating.set(provider, work)
     return work
   }
@@ -148,7 +183,11 @@ export class ProviderService {
   notices(statuses: ProviderStatus[]) { return statuses.filter((s) => s.updateAvailable && !this.dismissed[this.key(s)]) }
   dismiss(status: ProviderStatus) { this.dismissed[this.key(status)] = true; this.write('provider-updates-dismissed', this.dismissed) }
   async updates() { return this.preferences().providerUpdateChecks ? this.notices(await this.status()) : [] }
-  async status(overrides?: ProviderConfiguration, checkLatest = false, force = true): Promise<ProviderStatus[]> {
+  status(overrides?: ProviderConfiguration, checkLatest = false, force = true): Promise<ProviderStatus[]> {
+    const work = () => this.readStatus(overrides, checkLatest, force)
+    return checkLatest && this.activity ? this.activity.run('Checking CLI updates', undefined, work) : work()
+  }
+  private async readStatus(overrides?: ProviderConfiguration, checkLatest = false, force = true): Promise<ProviderStatus[]> {
     const config = overrides ?? this.preferences().providerBinaries ?? {}
     const statuses = await Promise.all(AGENT_PROVIDERS.map(async (provider): Promise<ProviderStatus> => {
       const binary = providerBinary(provider, config), installed = !!findExecutable(binary)
@@ -160,12 +199,18 @@ export class ProviderService {
       if (checkLatest && (force || !release || Date.now() - Date.parse(release.checkedAt) > 24 * 60 * 60 * 1000) && (installed || force)) {
         try { release = await latestProviderRelease(provider, version); this.releases[provider] = release } catch (reason) { error = `Latest version check failed: ${(reason as Error).message}` }
       }
+      let signIn: Record<string, ProviderSignIn> | undefined
+      if (force && installed) {
+        signIn = {}
+        const ids = ['default', ...(supportsProviderAccounts(provider) ? (config[provider]?.accounts ?? []).map((account) => account.id) : [])]
+        await Promise.all(ids.map(async (accountId) => { try { signIn![accountId] = await signInState(provider, binary, providerEnvironment(provider, config, accountId)) } catch { signIn![accountId] = { signedIn: false } } }))
+      }
       const setup = providerSetup(provider, version)
       const quoted = process.platform === 'win32' ? `& '${binary.replaceAll("'", "''")}'` : `'${binary.replaceAll("'", "'\"'\"'")}'`
       const useBinary = (command: string | null) => command?.replace(/^(claude|codex|agent|opencode)(?= |$)/, () => quoted) ?? null
       setup.setupCommand = useBinary(setup.setupCommand)
       setup.updateCommand = useBinary(setup.updateCommand)
-      return { provider, binary, installed, version, accountsSupported: supportsProviderAccounts(provider), updating: this.updating.has(provider), ...(this.updateErrors.has(provider) ? { updateError: this.updateErrors.get(provider) } : {}), latestVersion: release?.version ?? null, checkedAt: release?.checkedAt ?? null, updateAvailable: !!(installed && version && release && newerVersion(release.version, version)), ...(error ? { error } : {}), ...(versionError ? { versionError } : {}), ...(release?.downloadUrl ? { downloadUrl: release.downloadUrl } : {}), ...setup }
+      return { provider, binary, installed, version, enabled: providerEnabled(config, provider), ...(signIn ? { signIn } : {}), accountsSupported: supportsProviderAccounts(provider), updating: this.updating.has(provider), ...(this.updateErrors.has(provider) ? { updateError: this.updateErrors.get(provider) } : {}), latestVersion: release?.version ?? null, checkedAt: release?.checkedAt ?? null, updateAvailable: !!(installed && version && release && newerVersion(release.version, version)), ...(error ? { error } : {}), ...(versionError ? { versionError } : {}), ...(release?.downloadUrl ? { downloadUrl: release.downloadUrl } : {}), ...setup }
     }))
     if (checkLatest && !this.closed) this.write('provider-releases', this.releases)
     return statuses

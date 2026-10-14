@@ -557,7 +557,7 @@ export interface Memory {
   expiresAt: number | null
 }
 export interface MemoryInput { projectId: string | null; kind: MemoryKind; title: string; content: string; tags?: string[]; importance?: number; expiresAt?: number | null }
-export interface MemorySnapshot { memories: Memory[]; dreamedAt: number | null; dreaming: boolean; error: string | null }
+export interface MemorySnapshot { memories: Memory[]; dreamedAt: number | null; dreaming: boolean; error: string | null; /** Folder holding the markdown files. */ dir?: string | null }
 
 export interface GoalPreferences {
   mode: 'auto' | 'manual'
@@ -582,7 +582,7 @@ export interface ChatGoal {
 export interface UsageReading {
   provider: AgentProvider
   accountId?: string
-  window: 'five_hour' | 'weekly'
+  window: 'five_hour' | 'weekly' | 'monthly'
   /** Set for a model-specific window, e.g. Claude's Opus weekly limit. */
   scope?: string
   /** 0–100. */

@@ -9,10 +9,11 @@ import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { useTabScroll } from './useTabScroll'
 import { WorkspaceSplit } from './WorkspaceSplit'
 import { Button } from '@/components/desktop-button'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { NO_PROJECT, type Attachment, type FileContext } from '@ramu/shared/types'
 import { notifyError } from './Notifications'
 import { useModelSets } from './ModelSets'
-import { CircleAlert, FileDiff, FileText, GitBranch, History, FileSearch, ChevronsRight, PanelLeftClose, PanelLeftOpen, PanelRightOpen, SquareTerminal, X } from 'lucide-react'
+import { CircleAlert, FileDiff, FileText, GitBranch, History, FileSearch, Maximize2, Minimize2, SquareTerminal, X } from 'lucide-react'
 import { memo, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { ChangeReviewTab } from './Changes'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type AgentSessionInfo, type ViewDescriptor } from '@ramu/shared/types'
@@ -33,6 +34,7 @@ import { beginDrag, setActiveDrag, TAB_DRAG_TYPE, TERMINAL_DRAG_TYPE, useActiveD
 import { useAppSettings } from './AppSettings'
 import { useChatHidden, useEditorSide } from './layoutPrefs'
 import { isPreviewable, isWorkspaceCtx, tabOrder, useWorkspace } from './workspace'
+import { WorkspaceTools, workspaceToolOf } from './WorkspaceTools'
 
 
 /**
@@ -99,7 +101,10 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   const active = tabs.find((v) => v.id === state.activeViewId) ?? tabs.find((v) => v.id === state.activeAgentViewId) ?? null
   const focusedChat = agentViews.find((v) => v.id === state.activeAgentViewId) ?? agentViews.at(-1) ?? null
   // The conversation always stays in the main chat pane beside the active workspace view.
-  const editorView = active && active.kind !== 'agent' ? active : null
+  // Explorer, Search and Source Control live in a rail of this pane, so opening one opens the pane too.
+  const workspaceTool = visible && !composing ? workspaceToolOf(ws.ui.sidebar) : null
+  // With a tool open the pane shows a file tab if there is one; otherwise an empty-state hint beside the rail.
+  const editorView = active && active.kind !== 'agent' ? active : workspaceTool ? tabs.findLast((v) => v.kind !== 'agent') ?? null : null
   const tabScroll = useTabScroll(editorView?.id, true, visible && !!editorView && !composing)
   const chatView = composing ? null : active?.kind === 'agent' ? active : editorView ? focusedChat : null
   const showLauncherMain = !editorView && !chatView
@@ -107,7 +112,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   const terminalDock = state.terminalDock ?? preferences.defaultTerminalDock
   const rightTerminal = terminalOpen && terminalDock === 'right' && !composing
   const bottomTerminal = terminalOpen && terminalDock === 'bottom' && !composing
-  const editorOpen = !!editorView && !composing
+  const editorOpen = (!!editorView || !!workspaceTool) && !composing
   useLayoutEffect(() => {
     const slot = rightTerminal ? rightSlot : bottomTerminal ? bottomSlot : null
     if (slot && terminalHost.parentElement !== slot) slot.appendChild(terminalHost)
@@ -166,15 +171,11 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
       )}
       <div className="task-body flex-1 min-h-0 min-w-0 relative" ref={body}>
         <DockZones taskId={taskId} editorOpen={editorOpen} onEditorSide={setEditorSide} />
-        {chatHidden && editorOpen && <Button variant="secondary" size="sm" className={`absolute top-1/2 z-50 -translate-y-1/2 gap-1.5 rounded-(--radius-l) bg-fill p-[6px_12px] text-control text-foreground hover:bg-fill-hover [border:1px_solid_var(--edge)] [box-shadow:0_8px_30px_#0003] ${editorSide === 'left' ? 'right-2' : 'left-2'}`} aria-label={t("Show chat")} title={`${t("Show chat")} (${formatKeys('mod+alt+c')})`} onClick={() => setChatHidden(false)}>
-          {editorSide === 'left' ? <PanelRightOpen size={14} /> : <PanelLeftOpen size={14} />}{t("Show chat")}
-          {(ws.task(taskId)?.status === 'needs-input' || ws.unread.has(taskId)) && <span role="status" aria-label={ws.task(taskId)?.status === 'needs-input' ? t("Waiting for your input") : t("New activity in chat")} className={`size-1.5 rounded-full ${ws.task(taskId)?.status === 'needs-input' ? 'bg-warn' : 'bg-brand'}`} />}
-        </Button>}
         <WorkspaceSplit id={`${workspaceId}.terminal-bottom`} orientation="vertical" resizePreview open={bottomTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={240} secondaryMin={120}
           primary={
             <WorkspaceSplit id={`${workspaceId}.terminal-right`} resizePreview open={rightTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={480}
               primary={
-                <WorkspaceSplit id={`${workspaceId}.editor`} open={editorOpen} flip={editorSide === 'left'} primaryCollapsed={chatHidden} label={t("Resize chat pane")} defaultShare={45}
+                <WorkspaceSplit id={`${workspaceId}.editor`} open={editorOpen} flip={editorSide === 'left'} primaryCollapsed={chatHidden} label={t("Resize chat pane")} defaultShare={55}
                   primary={<PaneSlot host={chatHost} />}
                   secondary={<PaneSlot host={editorHost} />}
                 />
@@ -212,8 +213,9 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
           )}
         </div>, chatHost)}
         {createPortal(
-      <div className="workspace-panel flex flex-col h-full min-w-0 min-h-0 overflow-hidden" inert={!editorView || composing} aria-hidden={!editorView || composing}>
-      <div className="workspace-tab-toolbar flex items-center flex-none min-w-0 min-h-[40px] gap-1 px-2 py-1.5" style={{ display: editorView ? 'flex' : 'none' }}>
+      <div className="workspace-panel flex h-full min-w-0 min-h-0 overflow-hidden" inert={!editorOpen} aria-hidden={!editorOpen}>
+      <div className="workspace-main flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
+      <div className="workspace-tab-toolbar flex items-center flex-none min-w-0 min-h-[40px] gap-1 px-2 py-1.5" style={{ display: editorOpen ? 'flex' : 'none' }}>
       <OverlayScrollArea horizontal className="flex-initial min-w-0 w-max max-w-full h-[27px] [&:focus-within_>_[data-slot='scroll-area-scrollbar']]:opacity-0 [&_>_[data-slot='scroll-area-scrollbar'][data-scrolling]]:opacity-0 [&:hover_>_[data-slot='scroll-area-scrollbar']]:opacity-100 [&_>_[data-slot='scroll-area-scrollbar'][data-dragging]]:opacity-100 [&_>_[data-slot='scroll-area-scrollbar']]:h-[3px] [&_>_[data-slot='scroll-area-scrollbar']]:p-0 [&_>_[data-slot='scroll-area-scrollbar']]:bottom-px [&_[data-slot='scroll-area-thumb']]:[background:color-mix(in_srgb,_var(--text)_22%,_transparent)] [&_[data-slot='scroll-area-thumb']:hover]:[background:color-mix(in_srgb,_var(--text)_38%,_transparent)]" viewportRef={tabScroll} viewportClassName="view-tabs" contentClassName="flex items-center gap-1 w-max! min-w-full!" viewportProps={{ role: 'tablist', 'aria-label': t("Workspace tabs"), onKeyDown: event => {
         if (!(event.target instanceof HTMLElement) || event.target.getAttribute('role') !== 'tab' || event.ctrlKey || event.metaKey) return
         const entries = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]'))
@@ -237,16 +239,17 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
       } }}>
         {tabs.filter((v) => v.kind !== 'agent').map((view) => <FileTab key={view.id} taskId={taskId} view={view} tabs={tabs} active={state.activeViewId === view.id} repoName={repoName} />)}
       </OverlayScrollArea>
-        <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Open file")} title={`${t("Open file")} (${formatKeys('mod+p')})`} onClick={() => window.dispatchEvent(new Event('ramu:open-file'))}><FileSearch size={16} /></Button>
+        <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Open file")} title={`${t("Open file")} (${formatKeys('mod+p')})`} onClick={() => window.dispatchEvent(new Event('ramu:open-file'))}><FileSearch data-icon="inline-start" /></Button>
         <div className="flex-1 min-w-0" />
-        {editorView && !composing && <Button variant="ghost" size="icon-sm" className="ghost relative bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={chatHidden ? t("Show chat") : t("Hide chat")} aria-pressed={chatHidden} title={`${chatHidden ? t("Show chat") : t("Hide chat")} (${formatKeys('mod+alt+c')})`} onClick={() => setChatHidden(!chatHidden)}>
-          {chatHidden ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+        {editorOpen && <Button variant="ghost" size={chatHidden ? "sm" : "icon-sm"} className="ghost relative bg-transparent border-transparent text-muted-foreground hover:bg-transparent hover:text-foreground aria-pressed:bg-transparent aria-expanded:bg-transparent gap-1.5 px-2 min-h-(--action-size) flex-none justify-center" aria-label={chatHidden ? t("Show chat") : t("Maximize workspace")} aria-pressed={chatHidden} title={`${chatHidden ? t("Show chat") : t("Maximize workspace")} (${formatKeys('mod+alt+c')})`} onClick={() => setChatHidden(!chatHidden)}>
+          {chatHidden ? <Minimize2 data-icon="inline-start" /> : <Maximize2 data-icon="inline-start" />}
+          {chatHidden && <span>{t("Show chat")}</span>}
           {chatHidden && (ws.task(taskId)?.status === 'needs-input' || ws.unread.has(taskId)) && <span role="status" aria-label={ws.task(taskId)?.status === 'needs-input' ? t("Waiting for your input") : t("New activity in chat")} className={`absolute top-1 right-1 size-1.5 rounded-full ${ws.task(taskId)?.status === 'needs-input' ? 'bg-warn' : 'bg-brand'}`} />}
         </Button>}
-        {editorView && !composing && <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Hide workspace")} title={t("Hide workspace")} onClick={() => ws.hideWorkspace(taskId)}><ChevronsRight size={15} /></Button>}
+
 
       </div>
-        <div className="editor-area [.workspace-panel_>_&]:flex-1 [.workspace-panel_>_&]:min-h-0 flex-1 min-w-0 flex flex-col" style={{ display: editorView ? 'flex' : 'none' }}>
+        <div className="editor-area flex-1 min-h-0 min-w-0 flex flex-col" style={{ display: editorView ? 'flex' : 'none' }}>
           {tabs
             .filter((v) => v.kind !== 'agent')
             .map((v) => {
@@ -269,6 +272,9 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
               )
             })}
         </div>
+        {!editorView && <Empty className="flex-1"><EmptyHeader><EmptyMedia variant="icon"><FileText /></EmptyMedia><EmptyTitle>{t("Select a file to open it here.")}</EmptyTitle></EmptyHeader></Empty>}
+      </div>
+      {workspaceTool && <div className="workspace-rail flex-none h-full w-[260px] min-w-0 [border-left:1px_solid_var(--pane-border-color)]"><WorkspaceTools tool={workspaceTool} /></div>}
       </div>, editorHost)}
         {createPortal(<TerminalPanel taskId={workspaceId} visible={visible} hidden={composing} dock={terminalDock} />, terminalHost)}
       </div>
@@ -366,14 +372,14 @@ function FileTab({ taskId, view, tabs, active, repoName }: { taskId: string; vie
   const close = (views: ViewDescriptor[]) => ws.closeViews(taskId, views.map((tab) => tab.id))
   const context = useContextMenu('Tab actions', [
     ...(isPreviewable(view) && view.preview ? [{ key: 'keep', label: t("Keep Open"), onSelect: () => ws.keepView(taskId, view.id) }] : []),
-    { key: 'close', label: t("Close"), onSelect: () => ws.closeView(taskId, view.id) },
+    { key: 'close', label: <span className="flex w-full items-center gap-2">{t("Close")}<span className="ml-auto text-muted-foreground">{formatKeys('mod+w')}</span></span>, onSelect: () => ws.closeView(taskId, view.id) },
     { key: 'others', label: t("Close Others"), disabled: !others.length, onSelect: () => close(others) },
     { key: 'left', label: t("Close to the Left"), disabled: !toLeft.length, onSelect: () => close(toLeft) },
     { key: 'right', label: t("Close to the Right"), disabled: !toRight.length, onSelect: () => close(toRight) },
     { key: 'separator', separator: true },
     { key: 'saved', label: t("Close Saved Tabs"), disabled: !saved.length, onSelect: () => close(saved) },
     { key: 'all', label: t("Close All"), onSelect: () => close(files) },
-    { key: 'reopen', label: t("Reopen Closed Editor"), onSelect: () => ws.reopenClosedView(taskId) },
+    { key: 'reopen', label: <span className="flex w-full items-center gap-2">{t("Reopen Closed Editor")}<span className="ml-auto text-muted-foreground">{formatKeys('mod+shift+t')}</span></span>, onSelect: () => ws.reopenClosedView(taskId) },
     { key: 'reveal-separator', separator: true },
     ...(view.kind === 'file' || view.kind === 'diff' ? [{ key: 'copy-path', label: t("Copy Relative Path"), onSelect: () => { void copyText(view.path).catch((reason) => notifyError(errorText(reason), 'Copy path')) } }] : []),
     { key: 'reveal', label: t("Reveal in Explorer"), disabled: view.kind !== 'file' && view.kind !== 'diff', onSelect: () => {

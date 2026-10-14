@@ -1,6 +1,10 @@
 import type { AgentEvent, ElicitationAction, AgentScope, AgentSettings, Attachment, McpConnection } from '@ramu/shared/types'
 
 export interface AgentRunner {
+  /** Whether `steer` accepts input during a turn. Runners without it are always queued. */
+  readonly canSteer?: boolean
+  /** Steering cancels the running turn instead of adding to it, so only the user's own messages may use it. */
+  readonly steerInterrupts?: boolean
   setTools?(connection: McpConnection): void
   start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void>
   send(prompt: string, attachments?: Attachment[]): Promise<void>

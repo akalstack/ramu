@@ -1,3 +1,4 @@
+import { BackgroundActivity } from './BackgroundActivity'
 import { AppUpdateNotice } from './AppUpdates'
 import { animatePanelChange, cancelPanelMotion } from './panelMotion'
 import { errorText } from './errors'
@@ -6,10 +7,10 @@ import { Kbd } from '@/components/ui/kbd'
 import { ProviderSetupTerminal } from './ProviderSetupTerminal'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { SeparatorOverlay, usePanelRef, type Layout, type PanelSize } from 'react-resizable-panels'
-import { readSize, useLayoutEpoch, writeSize } from './panelLayout'
 import { Button } from '@/components/desktop-button'
+import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
-import { CalendarClock, Settings, SquarePen, Archive, Files, History, Folders, FolderPlus, GitBranch, MessageCircle, Pencil, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, SquareTerminal, X, RefreshCcw, Search } from 'lucide-react'
+import { CalendarClock, Settings, SquarePen, Archive, Files, History, Folders, FolderPlus, GitBranch, MessageCircle, Pencil, PanelLeftClose, PanelLeftOpen, PanelRight, SquareTerminal, X, RefreshCcw, Search } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildCommands, formatKeys, Palette, useKeybindings, type PaletteMode } from './commands'
 import { copyText, invoke, ramu } from './ipc'
@@ -25,7 +26,7 @@ import { AppSettingsProvider, useAppSettings } from './AppSettings'
 import { ModelSetsProvider } from './ModelSets'
 import type { SettingsSection } from './SettingsPage'
 import { ScheduleNavigation, SchedulesPage } from './Automation'
-import { NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
+import { DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
 import { SettingsPanel } from './SettingsPanel'
 import { UsageFooter, UsageRings } from './Usage'
 import { ProjectSwitcher } from './ProjectSwitcher'
@@ -36,10 +37,7 @@ import { CreateEntryDialog } from './CreateEntryDialog'
 import { HomePage, NewTask } from './NewTask'
 import { AnimatedMark, BootScreen, Wordmark } from './Brand'
 import { useAddProject } from './addProject'
-import { ExplorerPanel } from './sidebar/ExplorerPanel'
 import { ProjectsPanel } from './sidebar/ProjectsPanel'
-import { SearchPanel } from './sidebar/SearchPanel'
-import { ScmPanel } from './sidebar/ScmPanel'
 import { TaskPane } from './TaskPane'
 import { isWorktreeCtx, isWorkspaceCtx, worktreeCtx, projectCtx, useWorkspace, WorkspaceProvider } from './workspace'
 
@@ -73,10 +71,8 @@ function Shell() {
   // The sidebar, main area and tools column are panels of one group. Their default sizes always mirror the
   // current ones, so the group keeps them when another panel joins or leaves.
   const sidebarPanel = usePanelRef()
-  const toolsPanel = usePanelRef()
   const [navWidth, setNavWidth] = useState(preferences.sidebarWidth)
   const [expandedWidth, setExpandedWidth] = useState(preferences.sidebarWidth)
-  const layoutEpoch = useLayoutEpoch()
   const onSidebarResize = (size: PanelSize) => {
     const width = Math.round(size.inPixels)
     setNavWidth(width)
@@ -89,8 +85,6 @@ function Shell() {
     if (!meta.isUserInteraction) return
     const sidebar = Math.round(sidebarPanel.current?.getSize().inPixels ?? 0)
     if (sidebar > 0 && sidebar !== latest.current.preferences.sidebarWidth) saveLayout({ sidebarWidth: sidebar })
-    const tools = toolsPanel.current?.getSize().inPixels
-    if (tools) writeSize('tools-width', tools)
   }
   useLayoutEffect(() => {
     const panel = sidebarPanel.current
@@ -103,7 +97,6 @@ function Shell() {
     const panel = sidebarPanel.current
     if (panel && !panel.isCollapsed() && Math.abs(panel.getSize().inPixels - preferences.sidebarWidth) > 1) panel.resize(preferences.sidebarWidth)
   }, [preferences.sidebarWidth])
-  useEffect(() => { if (layoutEpoch) toolsPanel.current?.resize(340) }, [layoutEpoch])
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance')
   const [settingsTarget, setSettingsTarget] = useState<string | undefined>()
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -152,24 +145,6 @@ function Shell() {
   // The start screen shows for New chat, and when nothing is open yet.
   const globalPage = ui.sidebar === 'schedules'
   const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
-  useLayoutEffect(() => {
-    let frame = 0, tries = 0
-    const apply = () => {
-      const panel = toolsPanel.current
-      if (!panel) return
-      try {
-        // The fixed shell panels register before their first layout is published.
-        panel.getSize()
-        if (workspaceTool) {
-          if (panel.isCollapsed()) panel.resize(readSize('tools-width', 340))
-        } else panel.collapse()
-      } catch {
-        if (++tries < 30) frame = requestAnimationFrame(apply)
-      }
-    }
-    apply()
-    return () => cancelAnimationFrame(frame)
-  }, [workspaceTool])
   // Chats with nothing open is the home page: the start box, background chats and recaps. New chat without a project lands here too.
   const landing = ui.sidebar === 'projects' && !ui.activeTaskId
   const startProject = globalPage || landing ? null : ws.composing ?? (!ui.activeTaskId ? NO_PROJECT : null)
@@ -186,29 +161,36 @@ function Shell() {
   const activePanelState = ws.taskUi[activeWorkspace ?? '']
   const terminalShown = !globalPage && !landing && !startProject && !!activePanelState?.views.some(view => view.kind === 'terminal') && (activePanelState.terminalOpen ?? true)
   const unsavedFiles = new Set([...(ws.taskUi[ui.activeTaskId ?? '']?.views ?? []), ...(ws.taskUi[activeWorkspace ?? '']?.views ?? [])].filter(view => view.kind === 'file' && ws.dirty[view.id]).map(view => view.id)).size
+  // Output from a terminal nobody is looking at: a dot on the Terminal button until the panel is opened.
+  const [terminalQuiet, setTerminalQuiet] = useState(true)
+  const terminalOpenRef = useRef(false)
+  terminalOpenRef.current = terminalShown
+  useEffect(() => ramu.on('term:data', () => { if (!terminalOpenRef.current) setTerminalQuiet(false) }), [])
+  useEffect(() => { if (terminalShown) setTerminalQuiet(true) }, [terminalShown])
   const attentionChats = ws.tasks.filter(task => task.status !== 'archived' && (ws.unread.has(task.id) || task.status === 'needs-input')).length
   const badge = (count: number, compact = false) => count > 0 && <span className={`activity-badge absolute grid place-items-center rounded-(--radius-row) [background:var(--primary)] [color:var(--primary-ink)] font-semibold leading-[1] tabular-nums pointer-events-none ${compact ? 'right-[-4px] bottom-[-3px] min-w-3 h-3 px-0.5 [box-shadow:0_0_0_1px_var(--window)] text-[length:8px]' : 'right-[-3px] bottom-[-2px] min-w-4 h-4 p-[0_4px] [box-shadow:0_0_0_2px_var(--window)] text-[length:10px]'}`} aria-hidden="true">{count > 99 ? '99+' : count}</span>
 
-  const rightShown = !!workspaceTool || !!ui.activeTaskId && ws.workspaceVisible(ui.activeTaskId)
-  const toolButtons = <nav className="workspace-tool-buttons [&_.active]:text-brand [&_.active]:bg-brand-wash [&_.icon]:[transition:background-color_140ms_ease,_color_140ms_ease] [&_>_button]:relative [&_>_button]:overflow-visible flex flex-none items-center ml-auto [-webkit-app-region:no-drag] gap-1" aria-label={t("Workspace tabs")}>
+  const rightShown = terminalShown || !!workspaceTool || !!ui.activeTaskId && ws.workspaceVisible(ui.activeTaskId)
+  const toolButtons = <nav className="workspace-tool-buttons [&_button[aria-pressed=true]]:text-brand [&_button[aria-pressed=true]]:bg-brand-wash [&_.icon]:[transition:background-color_140ms_ease,_color_140ms_ease] [&_>_button]:relative [&_>_button]:overflow-visible flex flex-none items-center ml-auto [-webkit-app-region:no-drag] gap-1" aria-label={t("Workspace controls")}>
     <ProjectSwitcher />
     {([
       { id: 'explorer', label: 'Explorer', keys: 'mod+shift+e', Icon: Files },
       { id: 'search', label: 'Search', keys: 'mod+shift+f', Icon: Search },
       { id: 'scm', label: 'Source Control', keys: 'ctrl+shift+g', Icon: GitBranch },
     ] as const).map(({ id, label, keys, Icon }) => <Button variant="secondary" key={id} className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center${workspaceTool === id ? ' active' : ''}`} aria-label={t(label)} aria-description={id === 'scm' && gitChanges ? `${gitChanges} ${t('Changes')}` : id === 'explorer' && unsavedFiles ? `${unsavedFiles} ${t('Unsaved changes')}` : undefined} aria-pressed={workspaceTool === id} title={`${t(label)} (${formatKeys(keys)})${id === 'scm' && gitChanges ? ` · ${gitChanges} ${t('Changes')}` : id === 'explorer' && unsavedFiles ? ` · ${unsavedFiles} ${t('Unsaved changes')}` : ''}`} onClick={() => ws.setSidebar(workspaceTool === id ? 'projects' : id)}><Icon size={16} />{badge(id === 'scm' ? gitChanges : id === 'explorer' ? unsavedFiles : 0, true)}</Button>)}
-    <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Terminal")} title={t("Terminal")} disabled={!ui.activeTaskId} onClick={() => {
+    <Separator orientation="vertical" className="mx-1 self-center! h-4" />
+    <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Terminal")} aria-pressed={terminalShown} title={terminalShown ? t("Hide terminal") : t("Show terminal")} disabled={!ui.activeTaskId} onClick={() => {
       const id = ui.activeTaskId
       if (!id) return
-      const state = ws.taskUi[id]
-      if (state?.terminalOpen) ws.setTerminalPanel(id, { terminalOpen: false })
+      const state = activePanelState
+      if (terminalShown) ws.setTerminalPanel(id, { terminalOpen: false })
       else {
         const terminal = state?.views.findLast((view) => view.kind === 'terminal')
         if (terminal) ws.activateView(id, terminal.id)
         else ws.openView(id, { kind: 'terminal' })
       }
-    }}><SquareTerminal size={16} /></Button>
-    <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-expanded={rightShown} aria-label={rightShown ? t("Hide right panel") : t("Show right panel")} title={`${rightShown ? t("Hide right panel") : t("Show right panel")} (${formatKeys('mod+alt+b')})`} disabled={!ui.activeTaskId} onClick={() => { if (ui.activeTaskId) ws.toggleRightPanel(ui.activeTaskId) }}>{rightShown ? <PanelRightClose size={16} strokeWidth={1.6} /> : <PanelRightOpen size={16} strokeWidth={1.6} />}</Button>
+    }}><SquareTerminal data-icon="inline-start" />{!terminalQuiet && !terminalShown && <span role="status" aria-label={t("New terminal output")} className="absolute right-[3px] bottom-[3px] size-1.5 rounded-full bg-primary pointer-events-none" />}</Button>
+    <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-expanded={rightShown} aria-pressed={rightShown} aria-label={rightShown ? t("Hide workspace") : t("Show workspace")} title={`${rightShown ? t("Hide workspace") : t("Show workspace")} (${formatKeys('mod+alt+b')})`} disabled={!ui.activeTaskId} onClick={() => { if (ui.activeTaskId) ws.toggleRightPanel(ui.activeTaskId) }}><PanelRight data-icon="inline-start" /></Button>
   </nav>
   // With the sidebar hidden, chats that want attention show on its toggle instead.
   const sidebarToggle = <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center sidebar-toggle aria-expanded:bg-transparent aria-expanded:hover:bg-hover aria-expanded:text-muted-foreground aria-expanded:hover:text-foreground [&:hover:not(:disabled)]:text-foreground [-webkit-app-region:no-drag] relative overflow-visible [&_*]:[-webkit-app-region:no-drag] flex-none z-30 [-webkit-app-region:no-drag] text-muted-foreground" aria-expanded={!sidebarHidden} aria-controls="workspace-sidebar" aria-label={sidebarHidden ? t("Show sidebar") : t("Hide sidebar")} aria-description={sidebarHidden && attentionChats ? `${attentionChats} ${t('Chats')}` : undefined} title={t("{0} sidebar ({1})", { "0": sidebarHidden ? t('Show') : t('Hide'), "1": formatKeys('mod+b') })} onClick={toggleSidebar}>
@@ -216,7 +198,7 @@ function Shell() {
       </Button>
 
   return (
-    <div onPointerDownCapture={event => { if ((event.target as HTMLElement).closest('[role="separator"]')) cancelPanelMotion() }} className={`shell [&.no-sidebar_.sidebar]:opacity-0 [&.no-sidebar_.sidebar]:invisible [&_.sidebar_>_*]:min-w-[calc(var(--sidebar-w,_268px)_-_14px)] [&.no-sidebar_.main]:ml-[var(--island-gap)] relative h-full bg-window [--titlebar-h:44px] [--nav-width:var(--sidebar-w,_268px)] ${sidebarHidden ? ' no-sidebar' : ''}${workspaceTool ? ' with-workspace-tools' : ''}`} style={{ '--sidebar-w': `${expandedWidth}px`, '--nav-width': `${navWidth}px` } as React.CSSProperties}>
+    <div onPointerDownCapture={event => { if ((event.target as HTMLElement).closest('[role="separator"]')) cancelPanelMotion() }} className={`shell [&.no-sidebar_.sidebar]:opacity-0 [&.no-sidebar_.sidebar]:invisible [&_.sidebar_>_*]:min-w-[calc(var(--sidebar-w,_268px)_-_14px)] [&.no-sidebar_.main]:ml-[var(--island-gap)] relative h-full bg-window [--titlebar-h:44px] [--nav-width:var(--sidebar-w,_268px)] ${sidebarHidden ? ' no-sidebar' : ''}`} style={{ '--sidebar-w': `${expandedWidth}px`, '--nav-width': `${navWidth}px` } as React.CSSProperties}>
       <div className="app-titlebar [&_>_.task-header]:flex-1 [&_>_.task-header]:min-w-0 [&_>_.task-header]:h-[44px] [&_>_.task-header]:p-[0_10px_0_12px] [&_>_.task-header]:bg-transparent [&_>_.task-header]:[border:0] absolute inset-[0_0_auto] z-20 h-[var(--titlebar-h)] flex items-center [-webkit-app-region:drag] pr-[var(--island-gap)]">
         <div className="sidebar-titlebar @container flex flex-none items-center gap-2 min-w-0 h-full pr-2 pl-[max(16px,_calc(var(--window-controls-inset,_0px)_+_8px))]" style={{ width: sidebarHidden ? 'calc(var(--window-controls-inset, 0px) + 44px)' : 'var(--nav-width)' }}>
           {!sidebarHidden && <>
@@ -253,7 +235,7 @@ function Shell() {
         </div>
       </aside>
       </ResizablePanel>
-      {!sidebarHidden && <ResizableHandle aria-label={t("Resize sidebar")} className="bg-transparent" />}
+      {!sidebarHidden && <ResizableHandle aria-label={t("Resize sidebar")} className="bg-transparent" onDoubleClick={() => { sidebarPanel.current?.resize(DEFAULT_SIDEBAR_WIDTH); saveLayout({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH }) }} />}
       <ResizablePanel id="main" minSize={360}>
       <main className="main flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] bg-canvas rounded-(--radius-m) [box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.025),_0_8px_28px_rgba(0,_0,_0,_0.28)]">
         <div className="task-area flex-1 min-h-0 flex">
@@ -267,18 +249,6 @@ function Shell() {
         </div>
         <StatusBar usage={sidebarHidden ? <UsageRings /> : null} />
       </main>
-      </ResizablePanel>
-      <ResizableHandle aria-label={t("Resize tools panel")} disabled={!workspaceTool} aria-hidden={!workspaceTool} className="bg-transparent" style={{ width: workspaceTool ? 1 : 0 }} />
-      <ResizablePanel id="tools" panelRef={toolsPanel} collapsible collapsedSize={0} minSize={220} maxSize={480} defaultSize={0}>
-      <aside hidden={!workspaceTool} style={{ display: workspaceTool ? undefined : 'none' }} className="workspace-tools [&_.sidebar-body]:flex-1 [&_.sidebar-body]:min-h-0 [&_.explorer-title]:m-[0_0_4px] [&_.explorer-title]:min-h-7 [&_.search-title]:m-[0_0_4px] [&_.search-title]:min-h-7 [&_.explorer-scroll-area]:mr-[-8px] [&_.git-history.overlay-scroll-area]:mr-[-8px] [&_.explorer-scroll-area_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 [&_.git-history.overlay-scroll-area_>_[data-slot='scroll-area-viewport']_>_[data-slot='scroll-area-content']]:pr-2 relative flex flex-col min-h-0 min-w-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] [border-left:var(--pane-border-width)_solid_var(--pane-border-color)] rounded-(--radius-m) bg-canvas" inert={!workspaceTool} aria-hidden={!workspaceTool} aria-label={t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')}>
-        <header className="workspace-tools-header [&_.icon]:w-[var(--action-size)] [&_.icon]:h-[var(--action-size)] [&_.icon_>_svg]:w-[var(--icon-size)] [&_.icon_>_svg]:h-[var(--icon-size)] flex items-center gap-2 flex-none min-h-[46px] p-[4px_10px] text-control font-semibold text-soft">
-          <span className="grow flex-1 min-w-0 text-left">{t(workspaceTool === 'explorer' ? 'Explorer' : workspaceTool === 'scm' ? 'Source Control' : 'Search')}</span>
-          <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Close")} title={t("Close")} onClick={() => ws.setSidebar('projects')}><X size={15} /></Button>
-        </header>
-        <CachedTool active={workspaceTool === 'explorer'}><ExplorerPanel /></CachedTool>
-        <CachedTool active={workspaceTool === 'scm'}><ScmPanel /></CachedTool>
-        <CachedTool active={workspaceTool === 'search'}><SearchPanel key={ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : 'empty'} /></CachedTool>
-      </aside>
       </ResizablePanel>
       </ResizablePanelGroup>
       {settingsOpen && <SettingsPanel initialSection={settingsSection} initialTarget={settingsTarget} shortcuts={commands.filter((command) => command.keys).map((command) => ({ title: command.title, category: command.category, keys: command.keys! }))} onClose={() => setSettingsOpen(false)} />}
@@ -437,7 +407,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
     return () => { disposed = true; off(); clearTimeout(timer); window.removeEventListener('ramu:git-updated', refresh) }
   }, [taskId, binding?.repoId, binding?.cwd, binding?.setupState, revision])
 
-  if (!binding || !taskId) return <footer className="status-bar [&_.strong]:text-soft [&_>_.strong]:flex-none [&_.status-branch]:max-w-[220px] [&_.status-branch]:[border:0] [&_.status-branch]:rounded-(--radius-s) [&_.status-branch]:bg-transparent [&_.status-branch]:text-caption [&_.status-branch]:leading-[18px] [&_.status-branch]:text-soft [&_.status-branch]:w-auto [&_.status-branch]:flex-initial [&_.status-branch]:gap-[5px] [&_.status-branch]:h-[22px] [&_.status-branch]:min-h-[22px] [&_.status-branch]:p-[0_6px] [&_.path]:min-w-0 [&_.path]:overflow-hidden [&_.path]:text-ellipsis [&_.path]:whitespace-nowrap [&_>_.status-project]:max-w-[220px] [&_>_.status-project]:min-w-0 [&_>_.status-project]:overflow-hidden [&_>_.status-project]:text-ellipsis [&_>_.status-project]:whitespace-nowrap [&_>_.status-project]:flex-none [&_>_.status-project]:inline-flex [&_>_.status-project]:items-center [&_>_.status-project]:h-[22px] [&_>_.status-project]:p-[0_6px] [&_>_.status-project]:leading-[18px] [&_[data-slot='select-trigger'].status-branch]:w-auto [&_[data-slot='select-trigger'].status-branch]:flex-initial [&_[data-slot='select-trigger'].status-branch]:gap-[5px] [&_[data-slot='select-trigger'].status-branch]:h-[22px] [&_[data-slot='select-trigger'].status-branch]:min-h-[22px] [&_[data-slot='select-trigger'].status-branch]:p-[0_6px] [&_.status-branch_[data-slot=select-value]]:flex-initial [&_.status-branch_>_svg:last-child]:ml-0 [&_.sync-button]:h-[22px] [&_.sync-button]:min-h-[22px] [&_.sync-button]:p-[0_6px] [&_.sync-button]:gap-[5px] [&_.sync-button]:rounded-(--radius-s) [&_.sync-button]:text-caption [&_.sync-button]:text-soft [&_.sync-button]:tabular-nums [&_.sync-button]:flex-none [&_.sync-button:hover:not(:disabled)]:text-foreground [&_.status-repo]:w-auto [&_.status-repo]:flex-initial [&_.status-repo]:h-[22px] [&_.status-repo]:min-h-[22px] [&_.status-repo]:p-[0_6px] [&_.status-repo]:gap-[5px] [&_.status-repo]:max-w-[240px] [&_.status-repo]:[border:0] [&_.status-repo]:rounded-(--radius-s) [&_.status-repo]:bg-transparent [&_.status-repo]:text-caption [&_.status-repo]:font-semibold [&_[data-slot='select-trigger'].status-repo]:w-auto [&_[data-slot='select-trigger'].status-repo]:flex-initial [&_[data-slot='select-trigger'].status-repo]:h-[22px] [&_[data-slot='select-trigger'].status-repo]:min-h-[22px] [&_[data-slot='select-trigger'].status-repo]:p-[0_6px] [&_[data-slot='select-trigger'].status-repo]:gap-[5px] [&_[data-slot='select-trigger'].status-repo]:max-w-[240px] [&_[data-slot='select-trigger'].status-repo]:[border:0] [&_[data-slot='select-trigger'].status-repo]:rounded-(--radius-s) [&_[data-slot='select-trigger'].status-repo]:bg-transparent [&_[data-slot='select-trigger'].status-repo]:text-caption [&_[data-slot='select-trigger'].status-repo]:font-semibold [&_.status-repo:hover]:bg-hover [&_.status-checkout]:inline-flex [&_.status-checkout]:items-center [&_.status-checkout]:h-[22px] [&_.status-checkout]:p-[0_6px] [&_.status-checkout]:leading-[18px] tabular-nums flex items-center text-caption flex-none text-muted-foreground min-w-0 h-7 bg-transparent gap-0.5 p-[0_6px] [border-top:1px_solid_var(--line)]"><span className="grow flex-1 min-w-0 text-left" />{usage}</footer>
+  if (!binding || !taskId) return <footer className="status-bar [&_.strong]:text-soft [&_>_.strong]:flex-none [&_.status-branch]:max-w-[220px] [&_.status-branch]:[border:0] [&_.status-branch]:rounded-(--radius-s) [&_.status-branch]:bg-transparent [&_.status-branch]:text-caption [&_.status-branch]:leading-[18px] [&_.status-branch]:text-soft [&_.status-branch]:w-auto [&_.status-branch]:flex-initial [&_.status-branch]:gap-[5px] [&_.status-branch]:h-[22px] [&_.status-branch]:min-h-[22px] [&_.status-branch]:p-[0_6px] [&_.path]:min-w-0 [&_.path]:overflow-hidden [&_.path]:text-ellipsis [&_.path]:whitespace-nowrap [&_>_.status-project]:max-w-[220px] [&_>_.status-project]:min-w-0 [&_>_.status-project]:overflow-hidden [&_>_.status-project]:text-ellipsis [&_>_.status-project]:whitespace-nowrap [&_>_.status-project]:flex-none [&_>_.status-project]:inline-flex [&_>_.status-project]:items-center [&_>_.status-project]:h-[22px] [&_>_.status-project]:p-[0_6px] [&_>_.status-project]:leading-[18px] [&_[data-slot='select-trigger'].status-branch]:w-auto [&_[data-slot='select-trigger'].status-branch]:flex-initial [&_[data-slot='select-trigger'].status-branch]:gap-[5px] [&_[data-slot='select-trigger'].status-branch]:h-[22px] [&_[data-slot='select-trigger'].status-branch]:min-h-[22px] [&_[data-slot='select-trigger'].status-branch]:p-[0_6px] [&_.status-branch_[data-slot=select-value]]:flex-initial [&_.status-branch_>_svg:last-child]:ml-0 [&_.sync-button]:h-[22px] [&_.sync-button]:min-h-[22px] [&_.sync-button]:p-[0_6px] [&_.sync-button]:gap-[5px] [&_.sync-button]:rounded-(--radius-s) [&_.sync-button]:text-caption [&_.sync-button]:text-soft [&_.sync-button]:tabular-nums [&_.sync-button]:flex-none [&_.sync-button:hover:not(:disabled)]:text-foreground [&_.status-repo]:w-auto [&_.status-repo]:flex-initial [&_.status-repo]:h-[22px] [&_.status-repo]:min-h-[22px] [&_.status-repo]:p-[0_6px] [&_.status-repo]:gap-[5px] [&_.status-repo]:max-w-[240px] [&_.status-repo]:[border:0] [&_.status-repo]:rounded-(--radius-s) [&_.status-repo]:bg-transparent [&_.status-repo]:text-caption [&_.status-repo]:font-semibold [&_[data-slot='select-trigger'].status-repo]:w-auto [&_[data-slot='select-trigger'].status-repo]:flex-initial [&_[data-slot='select-trigger'].status-repo]:h-[22px] [&_[data-slot='select-trigger'].status-repo]:min-h-[22px] [&_[data-slot='select-trigger'].status-repo]:p-[0_6px] [&_[data-slot='select-trigger'].status-repo]:gap-[5px] [&_[data-slot='select-trigger'].status-repo]:max-w-[240px] [&_[data-slot='select-trigger'].status-repo]:[border:0] [&_[data-slot='select-trigger'].status-repo]:rounded-(--radius-s) [&_[data-slot='select-trigger'].status-repo]:bg-transparent [&_[data-slot='select-trigger'].status-repo]:text-caption [&_[data-slot='select-trigger'].status-repo]:font-semibold [&_.status-repo:hover]:bg-hover [&_.status-checkout]:inline-flex [&_.status-checkout]:items-center [&_.status-checkout]:h-[22px] [&_.status-checkout]:p-[0_6px] [&_.status-checkout]:leading-[18px] tabular-nums flex items-center text-caption flex-none text-muted-foreground min-w-0 h-7 bg-transparent gap-0.5 p-[0_6px] [border-top:1px_solid_var(--line)]"><span className="grow flex-1 min-w-0 text-left" />{usage}<BackgroundActivity /></footer>
   const run = async (action: () => Promise<unknown>, needsSaved = false) => {
     try {
       if (needsSaved && Object.values(ws.dirty).some(Boolean)) throw new Error('Save or close unsaved editor buffers before switching branches or pulling.')
@@ -456,14 +426,8 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
     {repos.length > 1 && <Button variant="ghost" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover sync-button status-sync-all" title={t("Sync every repository in this workspace")} onClick={() => setSyncAll(true)}><RefreshCcw size={13} /><span>{t("Sync all")}</span></Button>}
     {syncAll && taskId && <WorkspaceSyncDialog taskId={taskId} bindings={repos} onClose={() => setSyncAll(false)} />}
     <span className="status-checkout flex-none text-muted-foreground p-[0_6px_2px]" title={binding.cwd}>{binding.mode === 'current' ? t("Current checkout") : t("Isolated worktree")}</span>
-    {usage && <><span className="grow flex-1 min-w-0 text-left" />{usage}</>}
+    <span className="grow flex-1 min-w-0 text-left" />
+    {usage}
+    <BackgroundActivity />
   </footer>
-}
-
-/** Cache visited tools across switching and reopening; hidden tools keep their drafts and scroll. */
-function CachedTool({ active, children }: { active: boolean; children: React.ReactNode }) {
-  const visited = useRef(active)
-  if (active) visited.current = true
-  if (!visited.current) return null
-  return <div className="sidebar-body flex-col flex-1 min-h-0 min-w-0 overflow-auto [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:overflow-hidden" style={{ display: active ? 'flex' : 'none' }} inert={!active} aria-hidden={!active}>{children}</div>
 }

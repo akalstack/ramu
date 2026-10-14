@@ -8,7 +8,7 @@
 | Codex | Ramu ACP host over Codex app-server | Install Codex and sign in |
 | OpenCode | `opencode acp` | Install OpenCode and configure a model provider |
 | Cursor | `agent acp` | Install Cursor CLI and run `agent login` |
-| Antigravity | Official ACP runtime | Install the runtime and its matching `localharness_external` helper; sign in through a supported ACP client |
+| Antigravity | Official ACP runtime | Install the runtime and its matching `localharness_external` helper, then use **Login** (opens Google sign-in in your browser) |
 
 Use **Settings → Providers** to log in, select accounts, update CLIs, and set executable paths under Advanced. Ramu reads model IDs from the installed runtime.
 
@@ -26,7 +26,16 @@ Version checks run in the background service. CLI auto-update is opt-in and affe
 
 All active providers use ACP. Claude and Codex retain native session, history, usage, and helper controls through Ramu's local hosts. OpenCode, Cursor, and Antigravity connect to native ACP executables.
 
-Claude and Codex support steering and async Ramu questions. OpenCode, Cursor and Antigravity queue follow-ups until the turn finishes. All three connect over ACP, which works with OpenCode 1.x and 2.x alike. Reasoning effort is offered for ACP runtimes that advertise a `thought_level` option, such as OpenCode. Cursor encodes effort in its model names, so each level is a separate model. OpenCode and Cursor sub-agents appear as task cards; OpenCode also streams each sub-agent's own tool calls and replies into its card. Side questions run on a throwaway fork of the OpenCode session, with every tool refused; Cursor and Antigravity answer them from the visible conversation. OpenCode, Cursor and Antigravity have no usage or rate-limit source, so those readings stay empty. Read-only analysis requires the provider's read-only mode or native sandbox policy. See [agents and routing](AGENTS.md) and [background workflows](AUTOMATION.md).
+Claude and Codex support steering and async Ramu questions. OpenCode, Cursor and Antigravity all connect over ACP, which works with OpenCode 1.x and 2.x alike.
+
+- **Steering:** these runtimes cannot take input mid-turn, so **Steer** cancels the running turn and continues the same session with your message; the cancelled turn is not reported as finished. Only messages you send (including Send now, and stopping or messaging a helper) do this. Ramu's own messages, such as late advice, async answers and helper reports, are queued so they never discard the agent's work. **Queue** waits for the turn to end.
+- **Limits and fallback:** there is no usage API. A rejected request or a reply that is only a limit notice (quota exhausted, usage limit reached, rate limited, HTTP 429) triggers fallback and is recorded as a *limited* reading, so routing avoids that provider until the notice's stated wait passes, or for 15 minutes.
+- **Reasoning effort:** offered when the runtime advertises a `thought_level` option (OpenCode). Cursor and Antigravity encode effort in their model names, so each level is a separate model.
+- **Sub-agents:** native helpers from all three appear as task cards that can be stopped (stopping cancels the turn and continues without the helper). OpenCode also streams each helper's tool calls and replies into its card; Cursor and Antigravity report only start and finish. Native helpers cannot receive messages; helpers started through `ramu_agent` can.
+- **Routing sub-agents through Ramu:** OpenCode's own sub-agent tool is switched off (its `task` permission is denied for that chat process) and Antigravity's `invoke_subagent` requests are refused, so helpers go through `ramu_agent`. Cursor cannot switch its tool off, so the chat guidance tells it not to use it. A routing change restarts an idle chat's runtime before the next message, resuming the same session.
+- **Side questions:** run on a throwaway fork of the OpenCode session, with every tool refused. Cursor and Antigravity cannot fork, so they answer from the visible conversation.
+
+Read-only analysis requires the provider's read-only mode or native sandbox policy. See [agents and routing](AGENTS.md) and [background workflows](AUTOMATION.md).
 
 ## Advisor
 

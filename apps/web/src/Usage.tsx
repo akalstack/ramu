@@ -8,7 +8,7 @@ import { cn } from 'cn'
 import { Gauge } from 'lucide-react'
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { AgentProvider, ContextUsage, UsageReading } from '@ramu/shared/types'
-import { providerName } from '@ramu/shared/providers'
+import { providerEnabled, providerName } from '@ramu/shared/providers'
 import { invoke, ramu } from './ipc'
 import { ProviderIcon } from './ProviderIcon'
 import { useAppSettings } from './AppSettings'
@@ -48,13 +48,19 @@ export function usageTone(reading: Pick<UsageReading, 'usedPercent' | 'status'>)
   return reading.status === 'limited' || reading.usedPercent >= 90 ? 'bad' : reading.usedPercent >= 70 ? 'warn' : 'ok'
 }
 
+/** Usage for providers that are turned on; a turned-off provider shows no gauge. */
+function useVisibleUsage(): UsageReading[] {
+  const { preferences } = useAppSettings()
+  return useUsage().filter((reading) => providerEnabled(preferences.providerBinaries, reading.provider))
+}
+
 /** Provider order on screen: the two subscription providers first. */
 const ORDER: AgentProvider[] = ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity']
 function byProvider(all: UsageReading[]): { provider: AgentProvider; five?: UsageReading; weekly?: UsageReading; scoped: UsageReading[] }[] {
   return ORDER.flatMap((provider) => {
     const own = all.filter((reading) => reading.provider === provider)
     if (!own.length) return []
-    return [{ provider, five: own.find((r) => r.window === 'five_hour' && !r.scope), weekly: own.find((r) => r.window === 'weekly' && !r.scope), scoped: own.filter((r) => r.scope) }]
+    return [{ provider, five: own.find((r) => r.window === 'five_hour' && !r.scope), weekly: own.find((r) => (r.window === 'weekly' || r.window === 'monthly') && !r.scope), scoped: own.filter((r) => r.scope) }]
   })
 }
 
@@ -64,7 +70,7 @@ export function peakUsage(all: UsageReading[], provider: AgentProvider): UsageRe
 }
 
 export function windowLabel(reading: UsageReading, short = false): string {
-  const base = reading.window === 'five_hour' ? (short ? t('5h') : t('5-hour')) : (short ? t('wk') : t('Weekly'))
+  const base = reading.window === 'five_hour' ? (short ? t('5h') : t('5-hour')) : reading.window === 'monthly' ? (short ? t('mo') : t('Monthly')) : (short ? t('wk') : t('Weekly'))
   return reading.scope ? `${reading.scope} ${short ? base : base.toLowerCase()}` : base
 }
 
@@ -114,7 +120,7 @@ function UsageDetail({ provider, five, weekly, scoped }: ReturnType<typeof byPro
 
 function UsagePopover({ trigger, side = 'top', align = 'start' }: { trigger: React.ReactElement; side?: 'top' | 'bottom'; align?: 'start' | 'end' }) {
   useLanguage()
-  const groups = byProvider(useUsage())
+  const groups = byProvider(useVisibleUsage())
   const [open, setOpen] = useState(false)
   // Hover peeks; a click on the trigger while peeking pins it open instead of closing it.
   const peeking = useRef(false)
@@ -150,10 +156,10 @@ function UsagePopover({ trigger, side = 'top', align = 'start' }: { trigger: Rea
 export function UsageFooter() {
   useLanguage()
   const { preferences } = useAppSettings()
-  const all = useUsage()
+  const all = useVisibleUsage()
   const groups = byProvider(all)
   if (!preferences.showUsageLimits || !groups.length) return null
-  const label = groups.map(({ provider, five, weekly }) => `${providerName(provider)}: ${[five && `5-hour ${five.usedPercent}%`, weekly && `weekly ${weekly.usedPercent}%`].filter(Boolean).join(', ')}`).join('; ')
+  const label = groups.map(({ provider, five, weekly }) => `${providerName(provider)}: ${[five && `5-hour ${five.usedPercent}%`, weekly && `${weekly.window === 'monthly' ? 'monthly' : 'weekly'} ${weekly.usedPercent}%`].filter(Boolean).join(', ')}`).join('; ')
   return <div className="usage-footer flex flex-none items-center">
     <UsagePopover trigger={<Button type="button" variant="ghost" className="h-auto min-h-8 min-w-0 w-full flex-1 flex-wrap justify-start gap-x-3 gap-y-1 rounded-(--radius-row) bg-fill px-2.5 py-[5px] text-[length:var(--font-caption)] leading-4 font-normal text-soft [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:bg-fill dark:hover:bg-hover aria-expanded:bg-hover aria-expanded:text-foreground active:not-aria-[haspopup]:translate-y-0" aria-label={t("Plan usage. {0}", { "0": label })}>
       <Gauge className="size-[calc(var(--font-caption)+3px)] text-muted-foreground" />
@@ -167,7 +173,7 @@ export function UsageFooter() {
 export function UsageRings() {
   useLanguage()
   const { preferences } = useAppSettings()
-  const all = useUsage()
+  const all = useVisibleUsage()
   const groups = byProvider(all)
   if (!preferences.showUsageLimits || !groups.length) return null
   return <UsagePopover side="top" align="end" trigger={<Button type="button" variant="ghost" className="usage-rings h-[22px] gap-1 px-1.5 hover:bg-hover dark:hover:bg-hover aria-expanded:bg-hover active:not-aria-[haspopup]:translate-y-0" aria-label={t("Plan usage")}>

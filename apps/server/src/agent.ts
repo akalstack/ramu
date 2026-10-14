@@ -5,7 +5,7 @@ import { createAcpRunner, acpModels, acpAside } from './acp'
 import { toolDescription, toolInput } from './acpEvents'
 import { agentContent } from '@ramu/shared/agentContent'
 import { acpHostedRunner } from './acpNativeHost'
-import { providerName, isAcpProvider, supportsProviderAccounts } from '@ramu/shared/providers'
+import { providerName, providerEnabled, isAcpProvider, supportsProviderAccounts } from '@ramu/shared/providers'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 // Structured agent adapter for Claude Code via the Claude Agent SDK.
 // One live SDK query per session, always launched in the session's binding cwd.
@@ -167,6 +167,9 @@ const WRITING_STATES: AgentSessionState[] = ['starting', 'running', 'needs-input
 
 /** Cuts long prompt context, marking the cut so the model knows it saw part of it. */
 const limitSection = (value: string, max: number) => value.length <= max ? value : `${value.slice(0, max)}\n\n[truncated]`
+
+/** Cursor and Antigravity cannot have their own sub-agent tool switched off, so the model is told not to use it. */
+const NATIVE_SUBAGENT_PREAMBLE = `Sub-agents run through Ramu in this chat. Do not use your built-in sub-agent, Task or delegation tools. To delegate work, call the ramu_agent tool with a description and prompt instead; it can run the helper on a different provider or model and tracks it for the user.`
 
 export class AgentService {
   private readonly providerTimers = new Map<string, NodeJS.Timeout>()
@@ -817,7 +820,7 @@ export class AgentService {
     if (writer && writer.id !== id) throw new Error(`Another agent session is already writing in ${writer.cwd}`)
     // A provider at its limit would only fail this message; continue with the next fallback instead.
     if (await this.switchBeforeSend(id)) { await this.finalizing.get(id); s = this.get(id) }
-    await this.refreshCodexTools(id)
+    await this.refreshProviderTools(id)
     s = this.get(id)
     this.transitioning.add(id)
     try { if (reviewId) await this.reviewHooks?.validateFeedback?.(reviewId); if (!s.parentId) await this.reviewHooks?.followup(id) } finally { this.transitioning.delete(id) }
@@ -869,13 +872,23 @@ export class AgentService {
     const message = this.queued(id).find((entry) => entry.id === messageId)
     if (!message) throw new Error('That message has already been sent or removed.')
     if (WRITING_STATES.includes(session.state)) {
-      if (session.provider === 'opencode' || isAcpProvider(session.provider)) throw new Error(`${providerName(session.provider)} can't take a message mid-turn. Stop the turn to send it now.`)
+      if (!this.canSteer(session, true)) throw new Error(`${providerName(session.provider)} can't take a message mid-turn. Stop the turn to send it now.`)
       this.updateQueue(id, this.queued(id).map((entry) => entry.id === messageId ? { ...entry, mode: 'steer' } : entry), false)
       return this.dispatchSteering(id)
     }
     this.updateQueue(id, this.queued(id).filter((entry) => entry.id !== messageId))
     try { await this.send(id, message.text, message.attachments, message.reviewId) }
     catch (error) { this.updateQueue(id, [message, ...this.queued(id)]); throw error }
+  }
+
+  /**
+   * Claude and Codex always steer; other runners say so themselves once running. Where steering cancels the turn,
+   * Ramu's own messages (advice, answers, helper reports) are queued so they never throw away the agent's work.
+   */
+  private canSteer(session: AgentSessionInfo, fromUser = false): boolean {
+    if (!isAcpProvider(session.provider)) return true
+    const runner = this.runners.get(session.id)
+    return !!runner?.canSteer && (fromUser || !runner.steerInterrupts)
   }
 
   private queuePaused(id: string): boolean {
@@ -899,12 +912,12 @@ export class AgentService {
     queueMicrotask(() => { void this.dispatchQueued(id, true) })
   }
 
-  async submit(id: string, text: string, mode: 'queue' | 'steer', attachments: Attachment[] = [], reviewId?: string): Promise<void> {
+  async submit(id: string, text: string, mode: 'queue' | 'steer', attachments: Attachment[] = [], reviewId?: string, fromUser = false): Promise<void> {
     if (this.goalCommand(id, text, attachments, reviewId)) return
     if (!text.trim() && !attachments.length) throw new Error('Enter a message or attach a file first.')
     if (this.transitioning.has(id)) throw new Error('Provider switch in progress. Try again in a moment.')
     const session = this.get(id)
-    if (session.provider === 'opencode' || isAcpProvider(session.provider)) mode = 'queue'
+    if (!this.canSteer(session, fromUser)) mode = 'queue'
     if (!WRITING_STATES.includes(session.state)) {
       if (this.workspaceBusy(session.covers, id) || this.queued(id).length || this.startingSends.has(id)) {
         this.updateQueue(id, [...this.queued(id), { id: randomUUID(), text, mode: 'queue', ...(attachments.length ? { attachments } : {}), ...(reviewId ? { reviewId } : {}) }], false)
@@ -1002,6 +1015,12 @@ export class AgentService {
 
   /** Model catalogs come from the installed providers, including their supported effort levels. */
   catalog(refresh = false): Promise<ProviderCatalog[]> {
+    // Providers the user turned off disappear from pickers, routing and fallback.
+    return this.discoverCatalog(refresh).then((catalogs) => catalogs.filter((entry) => !this.providerOff(entry.provider)))
+  }
+  private providerOff(provider: AgentProvider): boolean { return !providerEnabled(this.preferences?.().providerBinaries, provider) }
+
+  private discoverCatalog(refresh: boolean): Promise<ProviderCatalog[]> {
     if (refresh) this.catalogs = null
     if (process.env.RAMU_FAKE_AGENT === '1') return Promise.resolve([
       { provider: 'claude-code', models: [{ provider: 'claude-code', id: 'fake-claude', name: 'Claude (test)', efforts: ['low', 'medium', 'high'], defaultEffort: 'medium', isDefault: true }] },
@@ -1010,6 +1029,7 @@ export class AgentService {
     ])
     this.catalogs ??= Promise.all([
       (async (): Promise<ProviderCatalog> => {
+        if (this.providerOff('claude-code')) return { provider: 'claude-code', models: [] }
         const input = new InputQueue()
         let query: Query | undefined
         try {
@@ -1020,14 +1040,17 @@ export class AgentService {
         } catch (e) { return { provider: 'claude-code', models: [], error: errorMessage(e) } }
         finally { input.close(); query?.close() }
       })(),
-      ...(['cursor', 'antigravity'] as const).map((provider) => acpModels(provider).then((models): ProviderCatalog => ({ provider, models }), (e): ProviderCatalog => ({ provider, models: [], error: errorMessage(e) }))),
-      acpModels('opencode').then((models): ProviderCatalog => ({ provider: 'opencode', models }), (e): ProviderCatalog => ({ provider: 'opencode', models: [], error: errorMessage(e) })),
-      codexModels().then((models): ProviderCatalog => ({ provider: 'codex', models }), (e): ProviderCatalog => ({ provider: 'codex', models: [], error: errorMessage(e) })),
+      ...(['cursor', 'antigravity'] as const).map((provider) => (this.providerOff(provider) ? Promise.resolve([]) : acpModels(provider)).then((models): ProviderCatalog => ({ provider, models }), (e): ProviderCatalog => ({ provider, models: [], error: errorMessage(e) }))),
+      (this.providerOff('opencode') ? Promise.resolve([]) : acpModels('opencode')).then((models): ProviderCatalog => ({ provider: 'opencode', models }), (e): ProviderCatalog => ({ provider: 'opencode', models: [], error: errorMessage(e) })),
+      (this.providerOff('codex') ? Promise.resolve([]) : codexModels()).then((models): ProviderCatalog => ({ provider: 'codex', models }), (e): ProviderCatalog => ({ provider: 'codex', models: [], error: errorMessage(e) })),
     ])
     return this.catalogs
   }
 
   async validateSettings(settings: AgentSettings): Promise<void> {
+    if (this.providerOff(settings.provider)) throw new Error(`${providerName(settings.provider)} is turned off in Settings → Providers.`)
+    const account = settings.accountId && settings.accountId !== 'default' ? this.preferences?.().providerBinaries[settings.provider]?.accounts?.find((entry) => entry.id === settings.accountId) : undefined
+    if (account?.enabled === false) throw new Error(`The ${providerName(settings.provider)} account "${account.name}" is turned off in Settings → Providers.`)
     let catalog = (await this.catalog()).find((c) => c.provider === settings.provider)
     // A retained chat may belong to a different profile than today's default.
     if (process.env.RAMU_FAKE_AGENT !== '1' && settings.accountId && settings.accountId !== providerAccountId(settings.provider) && supportsProviderAccounts(settings.provider)) {
@@ -1232,7 +1255,7 @@ export class AgentService {
     // A failed request only matters to a turn that may still be waiting on it.
     if (status.status === 'failed' ? !active : !active && session.state !== 'idle') return
     const text = adviceMessage(status)
-    const mode = session.provider === 'opencode' || isAcpProvider(session.provider) ? 'queue' : 'steer'
+    const mode = this.canSteer(session) ? 'steer' : 'queue'
     this.updateQueue(id, [...this.queued(id), { id: randomUUID(), text, mode }], false)
     this.workspaceQueue.add(id)
     queueMicrotask(() => { void this.dispatchSteering(id); this.wakeWorkspaceQueue() })
@@ -1674,19 +1697,25 @@ export class AgentService {
   }
 
   /**
-   * Codex's sub-agent tools are fixed when its process starts. When the setup changes between messages (a new routing
+   * Codex's sub-agent tools (and ACP runtimes' sub-agent settings) are fixed when the process starts. When the setup changes between messages (a new routing
    * mode, or the provider crossing the threshold), the idle process is replaced so the next message runs with the right
    * ones. Hook enable/disable also needs a restart. Running tasks defer it; an installed hook handles routing changes
    * without a restart.
    */
-  private async refreshCodexTools(id: string): Promise<void> {
+  private async refreshProviderTools(id: string): Promise<void> {
     const s = this.get(id)
     const prefs = this.preferences?.()
-    if (s.provider !== 'codex' || s.parentId || !prefs || !this.runners.has(id) || this.hasRunningTasks(id)) return
-    const hook = prefs.subagents.codexHook
-    let wanted: boolean
-    try { wanted = !hook && (await this.subagentSettings(id)).redirect } catch { return }
-    if (wanted === (this.nativeOffAtLaunch.get(id) ?? false) && hook === (this.codexHookAtLaunch.get(id) ?? false)) return
+    if (s.parentId || !prefs || !this.runners.has(id) || this.hasRunningTasks(id)) return
+    if (isAcpProvider(s.provider)) {
+      // OpenCode's tool permission and the Cursor/Antigravity guidance are fixed when the runtime starts; it resumes the same session.
+      if (!this.nativeOffAtLaunch.has(id) || this.nativeSubagentsOff(s) === this.nativeOffAtLaunch.get(id)) return
+    } else {
+      if (s.provider !== 'codex') return
+      const hook = prefs.subagents.codexHook
+      let wanted: boolean
+      try { wanted = !hook && (await this.subagentSettings(id)).redirect } catch { return }
+      if (wanted === (this.nativeOffAtLaunch.get(id) ?? false) && hook === (this.codexHookAtLaunch.get(id) ?? false)) return
+    }
     this.transitioning.add(id)
     try {
       this.halt(id)
@@ -1750,7 +1779,13 @@ export class AgentService {
     if (this.children.get(agentId)?.parentId === id) { await this.stopAndWait(agentId); return }
     const live = this.live.get(id)
     if (live) { await live.query.stopTask(agentId); return }
-    if (this.runners.has(id)) { await this.submit(id, taskStopPrompt(task), 'steer'); return }
+    // An ACP runtime's own helper runs inside the turn: steering cancels the turn, which ends the helper, then continues.
+    if (this.runners.has(id) && isAcpProvider(this.get(id).provider)) {
+      this.updateTask(id, agentId, { status: 'stopped', canStop: false, endedAt: Date.now() })
+      await this.submit(id, `The user stopped the sub-agent "${task.name.replace(/"/g, "'")}". Do not restart it; carry on without its result.`, 'steer', [], undefined, true)
+      return
+    }
+    if (this.runners.has(id)) { await this.submit(id, taskStopPrompt(task), 'steer', [], undefined, true); return }
     throw new Error('That agent is no longer running.')
   }
 
@@ -1763,11 +1798,11 @@ export class AgentService {
       run.report = true
       if (run.asking) { run.asking(text.trim()); return }
       const child = this.get(agentId)
-      await this.submit(agentId, text.trim(), WRITING_STATES.includes(child.state) ? 'steer' : 'queue')
+      await this.submit(agentId, text.trim(), WRITING_STATES.includes(child.state) ? 'steer' : 'queue', [], undefined, true)
       return
     }
     const session = this.get(id)
-    await this.submit(id, taskMessagePrompt(session.provider, task, text.trim()), WRITING_STATES.includes(session.state) ? 'steer' : 'queue')
+    await this.submit(id, taskMessagePrompt(session.provider, task, text.trim()), WRITING_STATES.includes(session.state) ? 'steer' : 'queue', [], undefined, true)
   }
 
   /** Records a sub-agent's new state, keeping when it was first seen. */
@@ -1934,7 +1969,7 @@ export class AgentService {
       try {
         if (status.request.responseMode === 'message' && !waiting) {
           const text = answerMessage(requestId, available.filter((q) => submitted[questionKey(q)]).map((q) => ({ question: q.question, answer: submitted[questionKey(q)]! })))
-          this.updateQueue(id, [...this.queued(id), { id: randomUUID(), text, mode: 'steer' }], false)
+          this.updateQueue(id, [...this.queued(id), { id: randomUUID(), text, mode: this.canSteer(this.get(id)) ? 'steer' : 'queue' }], false)
         }
         this.record(id, { kind: 'question-state', requestId, answers: submitted })
         if (done) this.record(id, { kind: 'request-resolved', requestId, outcome: 'answered' })
@@ -1997,6 +2032,7 @@ export class AgentService {
       if ((this.preferences?.().autoBackgroundSeconds ?? 1) !== 0) connection.instructions += `\n\n${BACKGROUND_PREAMBLE}`
       if (this.advisorStep(id)) connection.instructions += `\n\n${ADVISOR_PREAMBLE}`
       if (!s.parentId) connection.instructions += `\n\n${goalInstructions(this.goalPreferences(), this.getGoal(id))}`
+      if ((s.provider === 'cursor' || s.provider === 'antigravity') && this.nativeSubagentsOff(s)) connection.instructions += `\n\n${NATIVE_SUBAGENT_PREAMBLE}`
       const memory = this.memoryInstructions?.(s)
       if (memory) connection.instructions += `\n\n${memory}`
       if (this.preferences?.().intelligence?.toolSearch !== false) connection.instructions += `\n\n${TOOL_DISCOVERY_INSTRUCTIONS}`
@@ -2004,6 +2040,7 @@ export class AgentService {
       if (learning) connection.instructions += `\n\n${learning}`
     }
     if (connection && this.nativeSubagentsOff(s)) connection.nativeSubagents = false
+    if (isAcpProvider(s.provider) && connection && !s.parentId) this.nativeOffAtLaunch.set(id, connection.nativeSubagents === false)
     const request = explicitGoal ? prompt.replace(/^\s*\/goal\s+/, 'Work toward this Ramu goal: ') : prompt
     const style = this.responseStyleInstructions(s)
     const styledRequest = style ? `${request}\n\n${style}` : request
@@ -2017,7 +2054,7 @@ export class AgentService {
           if (event.kind === 'context') { this.setContext(id, event.used, event.max); return }
           if (event.kind === 'init') this.db.prepare('UPDATE agent_sessions SET provider_session_id = ? WHERE id = ?').run(event.providerSessionId, id)
           if (event.kind === 'state') this.setState(id, event.state === 'running' && this.hasBlockingQuestions(id) ? 'needs-input' : event.state)
-          else if (event.kind === 'agent') { const { kind: _, at: __, ...task } = event; this.updateTask(id, task.agentId, task) }
+          else if (event.kind === 'agent') { const { kind: _, at: __, ...task } = event; if (this.task(id, task.agentId)?.status !== 'stopped') this.updateTask(id, task.agentId, task) }
           else {
             this.record(id, event.kind === 'init' ? { ...event, provider: s.provider } : event)
             if (event.kind === 'result') {

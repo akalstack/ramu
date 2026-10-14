@@ -8,7 +8,8 @@ import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { invoke } from './ipc'
 import type { AdvisorPreferences, AgentModel, AgentProvider, AppPreferences, FallbackStep, ProviderCatalog, SubagentPreferences, SwitchThreshold, UsageReading } from '@ramu/shared/types'
-import { providerName } from '@ramu/shared/providers'
+import { providerEnabled, providerName } from '@ramu/shared/providers'
+import { useAppSettings } from './AppSettings'
 import { Dropdown } from './Menu'
 import { effortDisplayName, modelDisplayName, useModelSets } from './ModelSets'
 import { ProviderIcon } from './ProviderIcon'
@@ -78,8 +79,9 @@ const fromThreshold = (value: SwitchThreshold) => value === null ? 'limit' : Str
 function useProviders(): AgentProvider[] {
   useLanguage()
   const { catalogs } = useModelSets()
+  const { preferences } = useAppSettings()
   const installed = catalogs.filter((catalog) => catalog.models.length).map((catalog) => catalog.provider)
-  return (['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as AgentProvider[]).filter((provider) => installed.includes(provider) || provider === 'claude-code' || provider === 'codex')
+  return (['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as AgentProvider[]).filter((provider) => providerEnabled(preferences.providerBinaries, provider) && (installed.includes(provider) || provider === 'claude-code' || provider === 'codex'))
 }
 
 /** Settings › Access & Fallback: when to switch, and where each provider goes next. */

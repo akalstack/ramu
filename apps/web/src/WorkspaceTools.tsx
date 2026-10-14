@@ -1,0 +1,44 @@
+import { Button } from '@/components/desktop-button'
+import { X } from 'lucide-react'
+import { useRef, type ReactNode } from 'react'
+import { t, useLanguage } from './i18n'
+import { ExplorerPanel } from './sidebar/ExplorerPanel'
+import { ScmPanel } from './sidebar/ScmPanel'
+import { SearchPanel } from './sidebar/SearchPanel'
+import { useWorkspace } from './workspace'
+
+export type WorkspaceTool = 'explorer' | 'search' | 'scm'
+
+export const workspaceToolOf = (sidebar: string): WorkspaceTool | null => sidebar === 'explorer' || sidebar === 'search' || sidebar === 'scm' ? sidebar : null
+
+const TOOLS = [
+  { id: 'explorer', label: 'Explorer' },
+  { id: 'search', label: 'Search' },
+  { id: 'scm', label: 'Source Control' },
+] as const
+
+/** Explorer, Search and Source Control share one rail inside the right pane; the top bar picks the tool, and the rail's close button hides only the rail. */
+export function WorkspaceTools({ tool }: { tool: WorkspaceTool }) {
+  useLanguage()
+  const ws = useWorkspace()
+  const taskId = ws.ui.activeTaskId
+  return (
+    <aside className="workspace-tools [&_.sidebar-body]:flex-1 [&_.sidebar-body]:min-h-0 [&_.explorer-title]:m-[0_0_4px] [&_.explorer-title]:min-h-7 [&_.search-title]:m-[0_0_4px] [&_.search-title]:min-h-7 flex flex-col h-full min-w-0 min-h-0 overflow-hidden" aria-label={t(TOOLS.find((entry) => entry.id === tool)!.label)}>
+      <header className="flex flex-none items-center gap-2 min-h-[40px] px-3 py-1.5 text-control font-semibold text-soft">
+        <span className="grow flex-1 min-w-0 truncate text-left">{t(TOOLS.find((entry) => entry.id === tool)!.label)}</span>
+        <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center" aria-label={t("Hide {0}", { "0": t(TOOLS.find((entry) => entry.id === tool)!.label) })} title={t("Hide {0}", { "0": t(TOOLS.find((entry) => entry.id === tool)!.label) })} onClick={() => ws.setSidebar('projects')}><X data-icon="inline-start" /></Button>
+      </header>
+      <CachedTool active={tool === 'explorer'}><ExplorerPanel /></CachedTool>
+      <CachedTool active={tool === 'scm'}><ScmPanel /></CachedTool>
+      <CachedTool active={tool === 'search'}><SearchPanel key={taskId ? ws.workspaceOf(taskId) : 'empty'} /></CachedTool>
+    </aside>
+  )
+}
+
+/** Cache visited tools across switching and reopening; hidden tools keep their drafts and scroll. */
+function CachedTool({ active, children }: { active: boolean; children: ReactNode }) {
+  const visited = useRef(active)
+  if (active) visited.current = true
+  if (!visited.current) return null
+  return <div className="sidebar-body flex-col flex-1 min-h-0 min-w-0 overflow-auto [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:overflow-hidden" style={{ display: active ? 'flex' : 'none' }} inert={!active} aria-hidden={!active}>{children}</div>
+}

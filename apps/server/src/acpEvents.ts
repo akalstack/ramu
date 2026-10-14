@@ -22,6 +22,8 @@ export class AcpEvents {
   private planId = randomUUID()
   private agents = new Map<string, AgentTask>()
   private children = new Map<string, { agentId?: string; events: AcpEvents }>()
+  /** Antigravity runs a separate `start_subagent` step; its outcome is the helper's real one. */
+  private launches = new Map<string, { failed: boolean; report: string }>()
   /** `subagentTools` names tool calls that start a sub-agent, so they also appear as task cards. */
   constructor(private nativeExtensions = false, private subagentTools: string[] = []) {}
   beginTurn(): void { this.stream = undefined; this.tools.clear(); this.planId = randomUUID() }
@@ -40,25 +42,42 @@ export class AcpEvents {
     return child.events.consume(update).flatMap((event): AgentEvent[] =>
       event.kind === 'text' || event.kind === 'thinking' || event.kind === 'tool-use' || event.kind === 'tool-result' ? [{ ...event, agentId }] : [])
   }
+  /** Extra details a runtime sends about a sub-agent outside its tool call (Cursor's `cursor/task`). */
+  updateAgent(toolCallId: string, patch: Partial<AgentTask>): AgentEvent | undefined {
+    const before = this.agents.get(toolCallId)
+    if (!before) return undefined
+    const task = { ...before, ...patch }
+    this.agents.set(toolCallId, task)
+    return { ...task, kind: 'agent' }
+  }
   private subagent(call: Extract<AgentEvent, { kind: 'tool-use' }>, u: Update): AgentEvent | undefined {
     const before = this.agents.get(call.toolUseId)
     let input: Update = {}
     try { input = u.rawInput && typeof u.rawInput === 'object' ? u.rawInput : JSON.parse(call.input ?? '{}') } catch {}
-    // Some runtimes (Cursor) title the call generically and name the tool only inside its input.
-    if (!before && ![call.name, text(input._toolName)].some((name) => name && this.subagentTools.includes(name.toLowerCase()))) return undefined
+    // Cursor names the tool only inside its input; Antigravity only in the permission title ("Run invoke_subagent?").
+    const names = [call.name, text(input._toolName), /^(?:Run )?(\w+)\??$/.exec(call.title ?? '')?.[1]]
+    if (!before && !names.some((name) => name && this.subagentTools.includes(name.toLowerCase()))) return undefined
+    // Antigravity batches helpers as {Subagents:[{Prompt, Role, TypeName}]}; one card covers the batch.
+    const batch: Update[] = Array.isArray(input.Subagents) ? input.Subagents.filter((entry: Update) => entry && typeof entry === 'object') : []
+    const prompt = text(input.prompt) ?? (batch.length ? batch.map((entry) => text(entry.Prompt) ?? '').filter(Boolean).join('\n\n') : undefined)
     // Cursor describes the type as a tagged object such as {unspecified:{}} or {explore:{}}.
-    const type = typeof (input.agent ?? input.subagent_type ?? input.subagentType) === 'object' ? Object.keys(input.subagentType ?? {}).find((key) => !['unspecified', 'custom'].includes(key)) : input.agent ?? input.subagent_type ?? input.subagentType
+    const rawType = input.agent ?? input.subagent_type ?? input.subagentType ?? batch[0]?.Role
+    const type = typeof rawType === 'object' ? Object.keys(rawType ?? {}).find((key) => !['unspecified', 'custom'].includes(key)) : rawType
     const now = Date.now()
-    const status = call.status === 'completed' ? 'completed' : call.status === 'failed' ? 'failed' : 'running'
     // The report arrives wrapped as <subagent sessionID=… state=…>…</subagent>.
     const report = contentSummary(call.content ?? []).replace(/^\s*<subagent\b[^>]*>\s*|\s*<\/subagent>\s*$/g, '').trim()
+    // Antigravity marks its launcher call failed once the helpers have run; that is not a helper failure.
+    const launcherDone = call.status === 'failed' && /never executed/i.test(report)
+    const launch = this.launches.get(call.toolUseId)
+    const status = before?.status === 'stopped' ? 'stopped' : call.status === 'completed' || launcherDone && !launch?.failed ? 'completed' : call.status === 'failed' ? 'failed' : 'running'
+    const fallbackName = prompt ? prompt.split('\n')[0]!.slice(0, 80) : call.title
     const task: AgentTask = {
-      ...before, agentId: call.toolUseId, toolUseId: call.toolUseId, taskType: 'local_agent', status,
-      name: text(input.description)?.trim() || before?.name || call.title || 'Sub-agent',
+      ...before, agentId: call.toolUseId, toolUseId: call.toolUseId, taskType: 'local_agent', status, canStop: status === 'running',
+      name: text(input.description)?.trim() || before?.name || fallbackName || 'Sub-agent',
       ...(text(type) ? { agentType: type } : {}),
-      ...(text(input.prompt) ? { prompt: input.prompt } : {}),
-      ...(report ? { summary: report } : {}), ...(status === 'failed' ? { error: report || 'The sub-agent failed' } : {}),
-      startedAt: before?.startedAt ?? now, ...(status === 'running' ? {} : { endedAt: now, durationMs: now - (before?.startedAt ?? now) }),
+      ...(prompt ? { prompt } : {}),
+      ...(report && !launcherDone ? { summary: report } : {}), ...(status === 'failed' ? { error: (launcherDone ? launch?.report : report) || 'The sub-agent failed' } : {}),
+      startedAt: before?.startedAt ?? now, ...(status === 'running' ? {} : { endedAt: before?.endedAt ?? now, durationMs: before?.durationMs ?? now - (before?.startedAt ?? now) }),
     }
     this.agents.set(call.toolUseId, task)
     return { ...task, kind: 'agent' }
@@ -97,6 +116,11 @@ export class AcpEvents {
       const call: Extract<AgentEvent, { kind: 'tool-use' }> = { ...details, kind: 'tool-use', toolUseId: u.toolCallId, name, summary: details.input ?? details.title ?? previous?.summary ?? '' }
       this.tools.set(u.toolCallId, call)
       const events: AgentEvent[] = [call]
+      if (/start_subagent/.test(call.title ?? '') && terminal(details.status)) {
+        // Credit the outcome to the helper card still waiting on it.
+        const owner = [...this.agents.values()].reverse().find((task) => task.status === 'running' && !this.launches.has(task.agentId))
+        if (owner) this.launches.set(owner.agentId, { failed: details.status === 'failed', report: contentSummary(details.content ?? []) })
+      }
       const agent = this.subagent(call, u)
       if (Array.isArray(u.content) || u.rawOutput != null || details.content?.length || terminal(details.status)) events.push({ ...details, kind: 'tool-result', toolUseId: u.toolCallId, isError: details.status === 'failed', summary: contentSummary(details.content ?? []), running: !terminal(details.status) })
       if (agent) events.push(agent)

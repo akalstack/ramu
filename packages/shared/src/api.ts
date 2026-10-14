@@ -1,3 +1,4 @@
+import type { BackgroundActivity } from './activity'
 import type { AppUpdateStatus } from './updates'
 import type { ProviderConfiguration, ProviderStatus } from './providers'
 // The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
@@ -86,6 +87,7 @@ export interface RamuMethods {
   'reviews.undoApply'(token: string, fileIds: string[]): ChangeReview
   'reviews.chatUndoPreview'(sessionId: string, userSeq: number): UndoPreview
   'reviews.chatUndoApply'(token: string, fileIds: string[]): void
+  'activity.status'(): BackgroundActivity[]
   'updates.status'(): Promise<AppUpdateStatus>
   'updates.check'(): Promise<AppUpdateStatus>
   'updates.download'(): Promise<AppUpdateStatus>
@@ -143,6 +145,8 @@ export interface RamuMethods {
   'settings.models.get'(): ModelPreferences | null
   'providers.status'(configuration?: ProviderConfiguration, checkLatest?: boolean): Promise<ProviderStatus[]>
   'providers.loginCommand'(provider: ProviderStatus['provider'], configuration?: ProviderConfiguration): Promise<string | null>
+  /** In-app sign-in for runtimes without a login command (Antigravity). Resolves after the browser flow completes. */
+  'providers.signIn'(provider: ProviderStatus['provider']): Promise<void>
   'providers.update'(provider: ProviderStatus['provider']): Promise<ProviderStatus>
   'providers.updates'(): Promise<ProviderStatus[]>
   'providers.dismissUpdate'(provider: ProviderStatus['provider'], binary: string, latestVersion: string): void
@@ -277,6 +281,7 @@ export interface RamuMethods {
 }
 
 export type PushEvents = {
+  'activity:changed': BackgroundActivity[]
   'menu:action': { action: 'settings' | 'check-updates' }
   'automation:changed': Record<string, never>
   'memory:changed': Record<string, never>

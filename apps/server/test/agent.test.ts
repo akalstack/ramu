@@ -71,6 +71,25 @@ beforeEach(() => {
 afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
 describe('AgentService', () => {
+  it('lets only the user cancel a turn on providers whose steering interrupts it', async () => {
+    const steered: string[] = []
+    let ready = false
+    const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => ({
+      canSteer: true, steerInterrupts: true,
+      start: async () => { emit({ kind: 'state', state: 'running' }); ready = true }, send: async () => {}, steer: async (text) => { steered.push(text) },
+      interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {},
+    })
+    const svc = new AgentService(db, () => {}, fakeQuery([]), undefined, factory)
+    const chat = svc.start('t', scopeOf(cwd), 'Work', { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', access: 'full' })
+    await until(() => ready)
+    await svc.submit(chat.id, 'helper report', 'steer')
+    expect(steered).toEqual([])
+    expect(svc.queued(chat.id)).toEqual([expect.objectContaining({ text: 'helper report', mode: 'queue' })])
+    await svc.submit(chat.id, 'change course', 'steer', [], undefined, true)
+    await until(() => steered.length === 1)
+    expect(steered).toEqual(['change course'])
+    svc.stopAll()
+  })
   it('updates tool descriptions in one durable row and keeps rich results after restart', async () => {
     let output!: (event: AgentEvent) => void
     const delivered: { event: AgentEvent; seq?: number }[] = []
@@ -1829,6 +1848,42 @@ describe('Codex sub-agent control', () => {
     expect(await svc.codexSpawnDecision(s.id, { agent_type: 'worker' })).toBeNull()
     svc.preferences = () => prefsWith({ mode: 'single', single: claudeStep })
     expect(await svc.codexSpawnDecision(s.id, undefined)).toMatchObject({ deny: true, reason: expect.stringContaining('Claude sonnet') })
+    svc.stopAll()
+  })
+
+  it('hides turned-off providers and accounts from catalogs and refuses to start them', async () => {
+    const svc = new AgentService(db, () => {}, fakeQuery([]))
+    vi.spyOn(svc as any, 'discoverCatalog').mockResolvedValue([...catalog, { provider: 'opencode', models: [{ provider: 'opencode', id: 'a/m', name: 'M', efforts: [], defaultEffort: null, isDefault: true }] }])
+    let providerBinaries: AppPreferences['providerBinaries'] = { codex: { binary: '', enabled: false }, opencode: { binary: '', accounts: [{ id: 'work', name: 'Work', enabled: false }] } }
+    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, providerBinaries })
+    expect((await svc.catalog()).map((entry) => entry.provider)).toEqual(['claude-code', 'opencode'])
+    await expect(svc.validateSettings({ ...full, provider: 'codex', model: 'codex-test' })).rejects.toThrow(/turned off/)
+    await expect(svc.validateSettings({ ...full, provider: 'opencode', model: 'a/m', accountId: 'work' })).rejects.toThrow(/account "Work" is turned off/)
+    await expect(svc.validateSettings({ ...full, provider: 'opencode', model: 'a/m' })).resolves.toBeUndefined()
+    providerBinaries = {}
+    expect((await svc.catalog()).map((entry) => entry.provider)).toContain('codex')
+  })
+
+  it('restarts an idle ACP runtime when sub-agent routing changes, resuming the same session', async () => {
+    const launches: { native?: boolean; resume: string | null }[] = []
+    const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, output) => {
+      let connection: { nativeSubagents?: boolean } | undefined
+      return { setTools: (c) => { connection = c }, start: async (_prompt, resume) => { launches.push({ native: connection?.nativeSubagents, resume }); output({ kind: 'init', providerSessionId: 'acp-session', model: 'm', cwd }); output({ kind: 'state', state: 'running' }); output({ kind: 'result', isError: false, text: 'ok', costUsd: null }) },
+        send: async () => { output({ kind: 'state', state: 'running' }); output({ kind: 'result', isError: false, text: 'ok', costUsd: null }) }, steer: async () => {},
+        interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
+    }
+    const svc = new AgentService(db, () => {}, fakeQuery([]), undefined, undefined, factory)
+    vi.spyOn(svc, 'catalog').mockResolvedValue([...catalog, { provider: 'opencode', models: [{ provider: 'opencode', id: 'a/m', name: 'M', efforts: [], defaultEffort: null, isDefault: true }] }])
+    svc.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 't' })
+    let prefs = prefsWith({ mode: 'native' })
+    svc.preferences = () => prefs
+    const s = svc.start('t', scopeOf(cwd), 'hello', { ...full, provider: 'opencode', model: 'a/m' })
+    await until(() => svc.get(s.id).state === 'idle')
+    await svc.send(s.id, 'again'); await until(() => svc.get(s.id).state === 'idle')
+    expect(launches).toEqual([{ native: undefined, resume: null }])
+    prefs = prefsWith({ mode: 'single', single: claudeStep })
+    await svc.send(s.id, 'now with ramu agents'); await until(() => svc.get(s.id).state === 'idle' && launches.length === 2)
+    expect(launches[1]).toEqual({ native: false, resume: 'acp-session' })
     svc.stopAll()
   })
 

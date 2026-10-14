@@ -8,6 +8,7 @@ import { AcpEvents } from './acpEvents'
 import type { AgentEvent, AgentModel, ReasoningEffort, AgentScope, AgentSettings, Attachment, McpConnection } from '@ramu/shared/types'
 import { providerName } from '@ramu/shared/providers'
 import { attachmentPrompt } from './attachments'
+import { isLimitMessage, isLimitReply, limitResetsAt } from './usageLimit'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 
 type Wire = Record<string, any>
@@ -24,9 +25,9 @@ export class AcpRpc {
   readonly exited: Promise<void>
   onMessage: (message: Wire) => void = () => {}
   onExit: (error: Error) => void = () => {}
-  constructor(private provider: AcpProvider, cwd: string, accountId?: string) {
+  constructor(private provider: AcpProvider, cwd: string, accountId?: string, extraEnv: Record<string, string> = {}) {
     const { command, args } = acpCommand(provider)
-    this.child = spawn(command, args, { cwd, stdio: 'pipe', env: providerEnvironment(provider, undefined, accountId) })
+    this.child = spawn(command, args, { cwd, stdio: 'pipe', env: { ...providerEnvironment(provider, undefined, accountId), ...extraEnv } })
     this.child.stderr.resume()
     this.child.stdin.on('error', () => {})
     const lines = createInterface({ input: this.child.stdout })
@@ -37,7 +38,8 @@ export class AcpRpc {
         const pending = this.pending.get(m.id)
         if (!pending) return
         this.pending.delete(m.id); clearTimeout(pending.timer)
-        if (m.error) pending.reject(new Error(m.error.message || `${providerName(provider)} request failed`))
+        // Antigravity has no login command; point at Ramu's own sign-in instead of the runtime's settings file.
+        if (m.error) pending.reject(new Error(provider === 'antigravity' && /authentication required/i.test(m.error.message ?? '') ? 'Sign in to Antigravity first: Settings → Providers → Antigravity → Login.' : m.error.message || `${providerName(provider)} request failed`))
         else pending.resolve(m.result ?? {})
       } else this.onMessage(m)
     })
@@ -118,6 +120,28 @@ export async function acpAside({ provider, accountId, cwd, sessionId, prompt, ti
     return text.trim()
   } finally { signal?.removeEventListener('abort', stop); await rpc.close() }
 }
+/**
+ * OpenCode reads inline config from the environment. Denying its `task` permission removes the native sub-agent tool,
+ * so every sub-agent goes through `ramu_agent`. Existing inline config is kept.
+ */
+export function openCodeConfigEnv(connection: McpConnection | undefined, existing = process.env.OPENCODE_CONFIG_CONTENT): Record<string, string> {
+  if (connection?.nativeSubagents !== false) return {}
+  let config: Wire = {}
+  try { config = existing ? JSON.parse(existing) : {} } catch { return {} }
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return {}
+  const permission = config.permission && typeof config.permission === 'object' && !Array.isArray(config.permission) ? config.permission : {}
+  return { OPENCODE_CONFIG_CONTENT: JSON.stringify({ ...config, permission: { ...permission, task: 'deny' } }) }
+}
+/** Runs the runtime's own sign-in. Antigravity opens the browser itself and stores the credentials in its home. */
+export async function acpSignIn(provider: AcpProvider, methodId: string, timeoutMs = 5 * 60_000): Promise<void> {
+  const rpc = new AcpRpc(provider, homedir())
+  rpc.onMessage = (m) => { if (m.id !== undefined && m.method) rpc.write({ id: m.id, error: { code: -32601, message: 'Sign-in cannot run tools' } }) }
+  try {
+    const init = await rpc.initialize()
+    if (!(init.authMethods ?? []).some((method: Wire) => method.id === methodId)) throw new Error(`${providerName(provider)} does not offer this sign-in method`)
+    await rpc.request('authenticate', { methodId }, timeoutMs)
+  } finally { await rpc.close() }
+}
 export const createAcpRunner: AgentRunnerFactory = (scope, settings, emit, readOnly) => new AcpSession(scope, settings, emit, readOnly)
 class AcpSession implements AgentRunner {
   private rpc?: AcpRpc
@@ -125,17 +149,24 @@ class AcpSession implements AgentRunner {
   private connection?: McpConnection
   private active?: Promise<void>
   private stopped = false
+  /** True while a cancelled turn is being replaced by a steering message, so its end is not reported as a finished turn. */
+  private steering = false
+  private turnText = new Map<string, string>()
+  private turnTools = 0
+  private seenTools = new Set<string>()
+  readonly canSteer = true
+  readonly steerInterrupts = true
   private loading = false
   private events: AcpEvents
   private pending = new Map<string, Wire>()
   private session: Wire = {}
   constructor(private scope: AgentScope, private settings: AgentSettings, private emit: (event: AgentEvent, limit?: boolean) => void, private readOnly = false) {
-    this.events = new AcpEvents(false, settings.provider === 'opencode' || settings.provider === 'cursor' ? ['task', 'subagent'] : [])
+    this.events = new AcpEvents(false, settings.provider === 'antigravity' ? ['invoke_subagent'] : ['task', 'subagent'])
   }
   setTools(connection: McpConnection): void { this.connection = connection }
   async start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void> {
     const provider = this.settings.provider as AcpProvider
-    this.rpc = new AcpRpc(provider, this.scope.cwd, this.settings.accountId ?? 'default')
+    this.rpc = new AcpRpc(provider, this.scope.cwd, this.settings.accountId ?? 'default', provider === 'opencode' ? openCodeConfigEnv(this.connection) : {})
     this.rpc.onMessage = (m) => this.handle(m)
     this.rpc.onExit = (e) => { if (!this.stopped) { this.emit({ kind: 'error', message: e.message }); this.emit({ kind: 'state', state: 'failed' }) } }
     const init = await this.rpc.initialize()
@@ -170,21 +201,41 @@ class AcpSession implements AgentRunner {
   async send(prompt: string, attachments: Attachment[] = []): Promise<void> {
     if (this.active) throw new Error('Wait for the current turn to finish, or interrupt it first.')
     if (!this.rpc || this.stopped) throw new Error('ACP session is not running')
-    this.events.beginTurn()
+    this.events.beginTurn(); this.turnText.clear(); this.turnTools = 0; this.seenTools.clear()
     const content: Wire[] = [{ type: 'text', text: attachmentPrompt(prompt, attachments) }]
     for (const file of attachments.filter((f) => f.mimeType.startsWith('image/'))) content.push({ type: 'image', mimeType: file.mimeType, data: readFileSync(file.path).toString('base64') })
     this.emit({ kind: 'state', state: 'running' })
     this.active = this.rpc.request('session/prompt', { sessionId: this.sessionId, prompt: content }, 0).then((r) => {
       this.active = undefined; this.cancelPending()
-      if (!this.stopped) this.emit({ kind: 'result', isError: r.stopReason === 'refusal', text: r.stopReason || 'end_turn', costUsd: null })
+      if (this.stopped || this.steering) return
+      // A runtime may report an exhausted quota as an ordinary reply, or as a refusal.
+      const reply = [...this.turnText.values()].join('\n').trim()
+      const limited = isLimitReply(reply, this.turnTools) || r.stopReason === 'refusal' && isLimitMessage(reply)
+      if (limited) this.markLimited(reply)
+      this.emit({ kind: 'result', isError: limited || r.stopReason === 'refusal', text: limited ? reply : r.stopReason || 'end_turn', costUsd: null }, limited)
     }, (e: Error) => {
       this.active = undefined; this.cancelPending()
-      if (!this.stopped) this.emit({ kind: 'result', isError: true, text: e.message, costUsd: null }, /usage.?limit|rate.?limit|quota|429/i.test(e.message))
+      if (this.stopped || this.steering) return
+      if (isLimitMessage(e.message)) this.markLimited(e.message)
+      this.emit({ kind: 'result', isError: true, text: e.message, costUsd: null }, isLimitMessage(e.message))
     })
   }
-  async steer(): Promise<void> { throw new Error('This provider accepts follow-ups after the current turn; use Queue.') }
+  /** ACP has no way to add input to a running turn, so steering cancels it and continues the same session with the new message. */
+  async steer(prompt: string, attachments: Attachment[] = []): Promise<void> {
+    if (!this.active || !this.rpc || this.stopped) throw new Error('There is no running turn to steer')
+    this.steering = true
+    try { this.rpc.write({ method: 'session/cancel', params: { sessionId: this.sessionId } }); this.cancelPending(); await this.active }
+    finally { this.steering = false }
+    await this.send(prompt, attachments)
+  }
   async interrupt(): Promise<void> { if (this.active) { this.rpc?.write({ method: 'session/cancel', params: { sessionId: this.sessionId } }); this.cancelPending(); await this.active } }
   async stop(): Promise<void> { this.stopped = true; this.cancelPending(); await this.rpc?.close() }
+  /** No usage API exists for these runtimes, so a limit response is recorded as a reading and routing avoids the provider until it lifts. */
+  private markLimited(text: string): void {
+    const resetsAt = limitResetsAt(text)
+    const accountId = this.settings.accountId && this.settings.accountId !== 'default' ? { accountId: this.settings.accountId } : {}
+    this.emit({ kind: 'usage', readings: [{ provider: this.settings.provider, ...accountId, window: 'five_hour', usedPercent: 100, status: 'limited', ...(resetsAt ? { resetsAt } : {}), updatedAt: Date.now() }] })
+  }
   private cancelPending(): void {
     for (const [id, m] of this.pending) { this.rpc?.write({ id: m.id, result: { outcome: m.method.startsWith('cursor/') ? 'cancelled' : { outcome: 'cancelled' } } }); this.emit({ kind: 'request-resolved', requestId: id, outcome: 'cancelled' }) }
     this.pending.clear()
@@ -222,7 +273,11 @@ class AcpSession implements AgentRunner {
     if (m.method === 'session/update') {
       if (this.loading || p.sessionId !== this.sessionId) return
       const u = p.update ?? {}
-      for (const event of this.events.consume(u)) this.emit(event)
+      for (const event of this.events.consume(u)) {
+        if (event.kind === 'text' && !event.agentId) this.turnText.set(event.messageId ?? '', event.text)
+        if (event.kind === 'tool-use' && !event.agentId && !this.seenTools.has(event.toolUseId)) { this.seenTools.add(event.toolUseId); this.turnTools++ }
+        this.emit(event)
+      }
       return
     }
     if (m.method === 'opencode/session/child_update') {
@@ -231,6 +286,21 @@ class AcpSession implements AgentRunner {
       return
     }
     if (m.id === undefined) return
+    if (m.method === 'cursor/task') {
+      // Cursor's report on a finished sub-agent; it needs no answer beyond an acknowledgement.
+      this.rpc?.write({ id: m.id, result: {} })
+      const event = typeof p.toolCallId === 'string' ? this.events.updateAgent(p.toolCallId, { ...(Number.isFinite(p.durationMs) ? { durationMs: p.durationMs } : {}), ...(typeof p.agentId === 'string' ? { address: p.agentId } : {}), ...(typeof p.model === 'string' && p.model !== 'default' ? { model: p.model } : {}) }) : undefined
+      if (event) this.emit(event)
+      return
+    }
+    // Antigravity asks before its own sub-agents start, so Ramu can refuse them while it routes sub-agents itself.
+    if (m.method === 'session/request_permission' && this.settings.provider === 'antigravity' && this.connection?.nativeSubagents === false && /invoke_subagent/.test(String(p.toolCall?.title ?? ''))) {
+      const option = (p.options ?? []).find((o: Wire) => o.kind === 'reject_once') ?? (p.options ?? []).find((o: Wire) => o.kind === 'reject_always')
+      this.rpc?.write({ id: m.id, result: { outcome: option ? { outcome: 'selected', optionId: option.optionId } : { outcome: 'cancelled' } } })
+      const event = typeof p.toolCall?.toolCallId === 'string' ? this.events.updateAgent(p.toolCall.toolCallId, { status: 'stopped', canStop: false, error: 'Sub-agents run through Ramu in this chat', endedAt: Date.now() }) : undefined
+      if (event) this.emit(event)
+      return
+    }
     if (m.method === 'session/request_permission' || m.method === 'cursor/ask_question' || m.method === 'cursor/create_plan') {
       const id = String(m.id)
       if (p.toolCall?.toolCallId) for (const event of this.events.consume({ ...p.toolCall, sessionUpdate: 'tool_call_update' })) this.emit(event)
