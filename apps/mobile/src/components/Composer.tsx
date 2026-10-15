@@ -3,7 +3,7 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'r
 import { composerDraft } from '@ramu/shared/composerDraft'
 import { StepSlider } from './StepSlider'
 import { SuggestionList, useComposerSuggest } from './ComposerSuggest'
-import { ArrowUp, Pencil, ChevronLeft, ChevronRight, FileText, Paperclip, Check, ChevronDown, Clock, CornerDownRight, Flag, ListPlus, Pause, Play, Plus, Square, X } from 'lucide-react-native'
+import { ArrowUp, Pencil, ChevronLeft, ChevronRight, FileText, Paperclip, Check, ChevronDown, Clock, CornerDownRight, Flag, ListPlus, Pause, Play, Plus, Quote, Square, X } from 'lucide-react-native'
 import type { AgentProvider, AgentSettings, ChatGoal, FileContext, QueuedMessage, SkillInfo } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import { providerNames } from '../runtime/types'
@@ -171,7 +171,7 @@ function Tray({ goal, queue, paused: queuePaused, onResumeQueue, onToggleGoal, o
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}>
           <Pause size={14} color={c.warn} strokeWidth={1.8} />
           <T size={font.control} tone="warn" style={{ flex: 1 }}>Queue paused</T>
-          {onResumeQueue ? <Pressable accessibilityRole="button" onPress={() => { tap(); onResumeQueue() }} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.s, height: 28, borderRadius: radius.s, backgroundColor: c.fill }}><Play size={12} color={c.soft} /><T size={font.caption} weight="600" tone="soft">Resume</T></Pressable> : null}
+          {onResumeQueue ? <Pressable accessibilityRole="button" onPress={() => { tap(); onResumeQueue() }} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.s, height: 28, borderRadius: radius.full, backgroundColor: c.fill }}><Play size={12} color={c.soft} /><T size={font.caption} weight="600" tone="soft">Resume</T></Pressable> : null}
         </View>
       ) : null}
       {queue.map((q) => (
@@ -275,8 +275,12 @@ export function Composer({
   const [uploading, setUploading] = useState(false)
   const origin = useRef(draftKey); origin.current = draftKey
   const pc = computerId ?? store.selected
-  const suggest = useComposerSuggest({ computerId: pc, scope: scope ?? taskId, chatId, text, caret })
-  const edit = (value: string) => { setText(value); if (draftKey) store.setDraft(draftKey, value) }
+  const split = useMemo(() => splitQuotes(text), [text])
+  const suggest = useComposerSuggest({ computerId: pc, scope: scope ?? taskId, chatId, text: split.body, caret })
+  // Takes the editable body (without quotes) and keeps the quotes in front of it in the draft.
+  const save = (next: string) => { setText(next); if (draftKey) store.setDraft(draftKey, next) }
+  const edit = (value: string) => save(joinQuotes(split.quotes.map(quote => quote.source), value))
+  const removeQuote = (index: number) => save(joinQuotes(split.quotes.filter((_, i) => i !== index).map(quote => quote.source), split.body))
   const pick = (choice: Parameters<typeof suggest.choose>[0]) => {
     const next = suggest.choose(choice)
     // Inline like the desktop: the mention stays in the sentence, as a short @name (coloured like a badge). A text field can't
@@ -298,7 +302,7 @@ export function Composer({
     }
     edit(next.text); setCaret(next.caret); setForced({ start: next.caret, end: next.caret })
   }
-  const chips = useMemo(() => composerDraft(text).segments, [text])
+  const chips = useMemo(() => composerDraft(split.body).segments, [split.body])
   const append = (value: string) => { const next = text + value; setText(next); if (draftKey) store.setDraft(draftKey, next) }
   const discover = async (kind: 'context' | 'skills') => {
     if (!taskId) return
@@ -338,8 +342,9 @@ export function Composer({
     <Glass radius={radius.xl} style={{ marginHorizontal: space.s + 2 }}>
       {header ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.lineStrong }}>{header}</View> : null}
       <Tray goal={goal} queue={queue} paused={queuePaused} onResumeQueue={onResumeQueue} onToggleGoal={onToggleGoal} onClearGoal={onClearGoal} onRemove={onRemoveQueued} />
-      {attachments.length || context.length ? (
+      {attachments.length || context.length || split.quotes.length ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: space.m, paddingTop: space.s }}>
+          {split.quotes.map((quote, index) => <Chip key={`quote-${index}`} icon={Quote} label={quote.label.replace(/\s+/g, ' ')} detail={quote.label} remove={() => removeQuote(index)} />)}
           {attachments.map(a => <Chip key={a.id} icon={Paperclip} label={a.name} remove={() => setAttachments(old => old.filter(x => x.id !== a.id))} />)}
           {context.map(file => <Chip key={`${file.repoId}:${file.path}`} icon={FileText} label={file.path.split('/').at(-1) ?? file.path} detail={file.path} remove={() => setContext(old => old.filter(f => f !== file))} />)}
         </View>
@@ -378,7 +383,7 @@ export function Composer({
                 tap()
                 setMode((m) => (m === 'queue' ? 'steer' : 'queue'))
               }}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingHorizontal: space.s + 2, borderRadius: radius.s, backgroundColor: c.fill, marginRight: 4 }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, height: 34, paddingHorizontal: space.m - 2, borderRadius: radius.full, backgroundColor: c.fill, marginRight: 4 }}
             >
               {mode === 'steer' ? <CornerDownRight size={13} color={c.warn} /> : <ListPlus size={13} color={c.soft} />}
               <T size={font.control} weight="500" tone={mode === 'steer' ? 'warn' : 'soft'}>
@@ -447,10 +452,23 @@ async function pickAttachment(store: ReturnType<typeof useStore>, computerId: st
   } catch (error) { Alert.alert('Attachment failed', error instanceof Error ? error.message : String(error)) }
 }
 
+/** Quoted passages ("> line" blocks) leave the text field and show as chips above it, as on the desktop; the body is what stays editable. */
+function splitQuotes(text: string) {
+  const quotes = composerDraft(text).chips.filter(chip => chip.kind === 'quote')
+  if (!quotes.length) return { quotes, body: text }
+  let body = '', cursor = 0
+  for (const quote of quotes) {
+    body += text.slice(cursor, quote.start); cursor = quote.end
+    const gap = /^\n{1,2}/.exec(text.slice(cursor)); if (gap) cursor += gap[0].length
+  }
+  return { quotes, body: body + text.slice(cursor) }
+}
+const joinQuotes = (quotes: string[], body: string) => quotes.map(quote => `${quote}\n\n`).join('') + body
+
 function Chip({ icon: I, label, detail, remove }: { icon: typeof FileText; label: string; detail?: string; remove: () => void }) {
   const { c } = useTheme()
   return (
-    <View accessibilityLabel={detail ?? label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, height: 26, paddingLeft: 8, paddingRight: 2, borderRadius: radius.s, backgroundColor: c.fill, maxWidth: 220 }}>
+    <View accessibilityLabel={detail ?? label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, height: 26, paddingLeft: 8, paddingRight: 2, borderRadius: radius.full, backgroundColor: c.fill, maxWidth: 220 }}>
       <I size={12} color={c.accent} />
       <T size={font.caption + 1} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>{label}</T>
       <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${label}`} hitSlop={8} onPress={() => { tap(); remove() }} style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}><X size={12} color={c.muted} /></Pressable>

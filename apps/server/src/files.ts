@@ -19,7 +19,7 @@ export function searchText(root: string, repoId: string, options: SearchOptions,
   for (const pattern of options.exclude.split(',').map((entry) => entry.trim()).filter(Boolean)) args.push('--glob', `!${pattern}`)
   args.push('--glob', '!**/.git/**', '--glob', '!**/.git', '--', options.query, '.')
   return new Promise((resolve, reject) => {
-    const executable = ['/opt/homebrew/bin/rg', '/usr/local/bin/rg'].find((path) => existsSync(path)) ?? 'rg'
+    const executable = ['/opt/homebrew/bin/rg', '/usr/local/bin/rg', '/usr/bin/rg'].find((path) => existsSync(path)) ?? 'rg'
     const child = spawn(executable, args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
     const matches: SearchMatch[] = []
     let pending = '', stderr = '', limited = false, timedOut = false
@@ -50,7 +50,7 @@ export function searchText(root: string, repoId: string, options: SearchOptions,
     })
     child.on('error', (error: NodeJS.ErrnoException) => {
       clearTimeout(timer)
-      reject(new Error(error.code === 'ENOENT' ? 'Project search requires ripgrep (rg) to be installed and available on PATH.' : error.message))
+      reject(new Error(error.code === 'ENOENT' ? 'Project search requires ripgrep (rg). Install it (macOS: brew install ripgrep; Debian/Ubuntu: apt install ripgrep) and restart Ramu.' : error.message))
     })
     child.on('close', (code) => {
       clearTimeout(timer)

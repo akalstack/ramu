@@ -59,7 +59,7 @@ Up to four remote workspace views stay warm. Clean hidden views are released und
 
 Verification includes 100 simultaneous loopback event streams delivering 10,000 events, a simulated 100-computer status burst, and a real six-environment Electron flow covering eviction, draft restoration, hidden polling and unsaved-editor protection. These are local checks, not a guarantee for a particular VPN or machine's available memory.
 
-Mobile access is deferred; pairing currently has a desktop client and a programmatic API.
+The mobile companion in `apps/mobile` is not part of the alpha release; pairing is available from the desktop client and a programmatic API.
 
 ### Host availability announcements
 

@@ -213,7 +213,8 @@ export const fakeQuery: QueryFn = ({ prompt, options }) => {
       }
       const input = { command: 'pwd' }
       yield { type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 'fake-tool', name: 'Bash', input }] } } as unknown as SDKMessage
-      const res = await options.canUseTool!('Bash', input, { signal: options.abortController!.signal, toolUseID: 'fake-tool' } as never)
+      // Like the real adapter, automatic mode decides without asking; other modes defer to the user.
+      const res = options.permissionMode === 'auto' ? { behavior: 'allow' as const } : await options.canUseTool!('Bash', input, { signal: options.abortController!.signal, toolUseID: 'fake-tool' } as never)
       const server = options.mcpServers?.ramu
       if (server && 'url' in server && 'headers' in server) await fakeTools(text, { url: server.url, token: server.headers?.Authorization?.replace(/^Bearer /, '') ?? '' })
       yield {

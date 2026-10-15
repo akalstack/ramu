@@ -75,7 +75,8 @@ export function useSettingsScope() {
     const definition = common.find((entry) => entry.path === path)
     let schema = definition?.schema
     const account = /^providerBinaries\.([^.]+)\.accountId$/.exec(path)
-    if (schema && account) {
+    // With one computer the picker's own options already include unsaved accounts; a saved-state filter would hide them.
+    if (schema && account && snapshots.length > 1) {
       const options = snapshots.map((snapshot) => ['default', ...((snapshot.preferences?.providerBinaries as Record<string, { accounts?: { id: string; enabled?: boolean }[] }> | undefined)?.[account[1]!]?.accounts ?? []).filter((entry) => entry.enabled !== false).map((entry) => entry.id)])
       schema = { ...schema, enum: (options[0] ?? []).filter((id) => options.every((list) => list.includes(id))) }
     }

@@ -4,7 +4,7 @@ Open an issue before a substantial feature or architecture change. For fixes, in
 
 ## Development
 
-Use Git, Node.js 24, and pnpm 11.21.0:
+Use Git, Node.js 24, pnpm 11.21.0, and ripgrep (`rg`, needed by project search and its tests):
 
 ```sh
 npm install --global pnpm@11.21.0

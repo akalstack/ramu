@@ -49,7 +49,7 @@ Install and sign in to an agent provider, select it in **Settings → Providers*
 
 ### Run from source
 
-Requires Git, Node.js 24, and pnpm 11.21.0. Native dependencies may need Python 3 and a C/C++ toolchain (Xcode Command Line Tools on macOS; `build-essential` on Debian/Ubuntu).
+Requires Git, Node.js 24, pnpm 11.21.0, and [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`, used for project search and replace; also required by installed builds). Native dependencies may need Python 3 and a C/C++ toolchain (Xcode Command Line Tools on macOS; `build-essential` on Debian/Ubuntu).
 
 ```sh
 git clone https://github.com/ahxar/ramu.git
