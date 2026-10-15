@@ -1,0 +1,154 @@
+import { readFileSync, statSync } from 'node:fs'
+import { z } from 'zod'
+import type { AgentSettings, FileContext } from '@ramu/shared/types'
+import { MAX_ATTACHMENT_BYTES } from '../../attachments'
+import { lockCheckouts, lockSession } from '../helpers'
+import { agentSettings, attachmentIds, fileContext, id, text } from '../schemas'
+import type { RegisterHandlers } from '../types'
+
+/** Chat sessions: sending prompts, interrupting, answering questions and permissions, and attachments. */
+export const registerAgentHandlers: RegisterHandlers = (ctx) => {
+  const { host, workspace, agents, attachmentStore, withContext } = ctx
+  return {
+    'agent.list': { args: z.tuple([id]), run: (taskId: string) => agents.list(taskId) },
+    'agent.counts': { args: z.tuple([]), run: () => agents.counts() },
+    'agent.get': { args: z.tuple([id]), run: (sessionId: string) => agents.get(sessionId) },
+    'agent.goal': { args: z.tuple([id]), run: (s: string) => agents.getGoal(s) },
+    'agent.goal.control': {
+      args: z.tuple([id, z.enum(['pause', 'resume', 'clear'])]),
+      run: (s: string, action: 'pause' | 'resume' | 'clear') => agents.controlGoal(s, action),
+    },
+    'agent.snapshot': { args: z.tuple([id]), run: (sessionId: string) => agents.snapshot(sessionId) },
+    'agent.events': { args: z.tuple([id]), run: (sessionId: string) => agents.events(sessionId) },
+    'agent.searchMessages': {
+      args: z.tuple([z.string().max(200)]),
+      run: (query: string) => agents.searchMessages(query),
+    },
+    'agent.scope': { args: z.tuple([id]), run: (taskId: string) => workspace.agentScope(taskId) },
+    'agent.catalog': { args: z.tuple([z.boolean().optional()]), run: (refresh?: boolean) => agents.catalog(refresh) },
+    'agent.configure': {
+      args: z.tuple([id, agentSettings]),
+      run: (s: string, settings: AgentSettings) => lockSession(ctx, s, () => agents.configure(s, settings)),
+    },
+    'attachments.pick': {
+      args: z.tuple([]),
+      run: async () => {
+        const filePaths = (await host.native('pickAttachments')) as string[]
+        if (filePaths.length > 10) throw new Error('Attach up to 10 files per message.')
+        for (const path of filePaths)
+          if (statSync(path).size > MAX_ATTACHMENT_BYTES)
+            throw new Error('Each attachment must be no larger than 10 MB.')
+        return filePaths.map((path) => attachmentStore.add(path, readFileSync(path)))
+      },
+    },
+    'attachments.add': {
+      args: z.tuple([
+        z.string().min(1).max(255),
+        z
+          .string()
+          .min(1)
+          .max(14_000_000)
+          .regex(/^[A-Za-z0-9+/]*={0,2}$/),
+      ]),
+      run: (name: string, base64: string) => attachmentStore.add(name, Buffer.from(base64, 'base64')),
+    },
+    'attachments.text': { args: z.tuple([id]), run: (attachmentId: string) => attachmentStore.text(attachmentId) },
+    'attachments.preview': {
+      args: z.tuple([id]),
+      run: (attachmentId: string) => attachmentStore.preview(attachmentId),
+    },
+    'agent.start': {
+      args: z.tuple([id, z.string().max(1_000_000), agentSettings.optional(), attachmentIds, fileContext]),
+      run: async (
+        taskId: string,
+        prompt: string,
+        settings?: AgentSettings,
+        attachmentIds?: string[],
+        context?: FileContext[],
+      ) => {
+        if (taskId.startsWith('project:') || taskId.startsWith('worktree:'))
+          throw new Error('Start a chat to run the agent.')
+        if (settings) await agents.validateSettings(settings)
+        prompt = await withContext(workspace, taskId, prompt, context)
+        const scope = workspace.agentScope(taskId)
+        return lockCheckouts(ctx, scope.covers, () =>
+          agents.startReviewed(taskId, scope, prompt, settings, attachmentStore.resolve(attachmentIds)),
+        )
+      },
+    },
+    'agent.submit': {
+      args: z.tuple([id, z.string().max(1_000_000), z.enum(['queue', 'steer']), attachmentIds, fileContext]),
+      run: async (s: string, t: string, mode: 'queue' | 'steer', attachmentIds?: string[], context?: FileContext[]) => {
+        t = await withContext(workspace, agents.get(s).taskId, t, context)
+        return lockSession(ctx, s, () =>
+          agents.submit(s, t, mode, attachmentStore.resolve(attachmentIds), undefined, true),
+        )
+      },
+    },
+    'agent.removeQueued': {
+      args: z.tuple([id, id]),
+      run: (s: string, messageId: string) => agents.removeQueued(s, messageId),
+    },
+    'agent.send': {
+      args: z.tuple([id, text]),
+      run: (s: string, t: string) => lockSession(ctx, s, () => agents.send(s, t)),
+    },
+    'agent.resumeQueue': { args: z.tuple([id]), run: (s: string) => agents.resumeQueue(s) },
+    'agent.sendQueuedNow': {
+      args: z.tuple([id, id]),
+      run: (s: string, messageId: string) => lockSession(ctx, s, () => agents.sendQueuedNow(s, messageId)),
+    },
+    'agent.continuationPrompt': { args: z.tuple([id]), run: (s: string) => agents.continuationPrompt(s) },
+    'agent.interrupt': { args: z.tuple([id]), run: (s: string) => agents.interrupt(s) },
+    'agent.stop': { args: z.tuple([id]), run: (s: string) => agents.stopAndWait(s) },
+    'agent.context': { args: z.tuple([id]), run: (s: string) => agents.context(s) },
+    'agent.holdProvider': {
+      args: z.tuple([id, z.enum(['message', 'chat']).nullable()]),
+      run: (s: string, scope: 'message' | 'chat' | null) => agents.holdProvider(s, scope),
+    },
+    'agent.providerHold': { args: z.tuple([id]), run: (s: string) => agents.providerHold(s) },
+    'agent.backgroundTool': {
+      args: z.tuple([id, z.string().min(1).max(300)]),
+      run: (s: string, toolUseId: string) => agents.backgroundTool(s, toolUseId),
+    },
+    'agent.stopTask': {
+      args: z.tuple([id, z.string().min(1).max(200)]),
+      run: (s: string, agentId: string) => agents.stopTask(s, agentId),
+    },
+    'agent.messageTask': {
+      args: z.tuple([id, z.string().min(1).max(200), z.string().min(1).max(100_000)]),
+      run: (s: string, agentId: string, text: string) =>
+        lockSession(ctx, s, () => agents.messageTask(s, agentId, text)),
+    },
+    'agent.replyPermission': {
+      args: z.tuple([id, id, z.boolean(), z.string().max(10_000).optional()]),
+      run: (s: string, r: string, allow: boolean, message?: string) => agents.replyPermission(s, r, allow, message),
+    },
+    'agent.replyQuestion': {
+      args: z.tuple([id, z.string().min(1).max(300), z.record(z.string().max(10_000), z.string().max(10_000))]),
+      run: (s: string, r: string, answers: Record<string, string>) => agents.replyQuestion(s, r, answers),
+    },
+    'agent.replyElicitation': {
+      args: z.tuple([
+        id,
+        z.string().min(1).max(300),
+        z.enum(['accept', 'decline', 'cancel']),
+        z.record(z.string().max(10000), z.string().max(10000)),
+      ]),
+      run: (s: string, r: string, action: 'accept' | 'decline' | 'cancel', answers: Record<string, string>) =>
+        agents.replyElicitation(s, r, action, answers),
+    },
+    'agent.elicitationDraft': {
+      args: z.tuple([id, z.string().min(1).max(300), z.record(z.string().max(10000), z.string().max(10000))]),
+      run: (s: string, r: string, drafts: Record<string, string>) => agents.saveElicitationDraft(s, r, drafts),
+    },
+    'agent.questionDraft': {
+      args: z.tuple([id, z.string().min(1).max(300), z.record(z.string().max(10000), z.string().max(10000))]),
+      run: (s: string, r: string, drafts: Record<string, string>) => agents.saveQuestionDraft(s, r, drafts),
+    },
+    'agent.dismissQuestion': {
+      args: z.tuple([id, z.string().min(1).max(300)]),
+      run: (s: string, r: string) => agents.closeQuestion(s, r, 'dismissed'),
+    },
+  }
+}

@@ -1,0 +1,62 @@
+import type { GitStash, PullMode, RepositoryBinding } from '@ramu/shared/types'
+import { invoke } from '../../ipc'
+import { errorText } from '../../TaskPane'
+import { withGitBusy } from '../../gitBusy'
+import { useWorkspace } from '../../workspace'
+import type { GitRun } from './types'
+
+/** Repository-level Git actions; each runs under the busy flag, then refreshes. */
+export function useGitActions({
+  taskId,
+  binding,
+  load,
+  reportError,
+}: {
+  taskId: string
+  binding: RepositoryBinding
+  load: () => Promise<void>
+  reportError: (message: string) => void
+}) {
+  const ws = useWorkspace()
+  const run: GitRun = async (fn) => {
+    try {
+      await withGitBusy(taskId, binding.repoId, fn)
+    } catch (e) {
+      reportError(errorText(e))
+    } finally {
+      void load()
+      window.dispatchEvent(new Event('ramu:git-updated'))
+    }
+  }
+  const requireSaved = () => {
+    if (Object.values(ws.dirty).some(Boolean))
+      throw new Error('Save or close unsaved editor buffers before changing files or branches.')
+  }
+  const stagePaths = (paths: string[], stage: boolean) =>
+    void run(() => invoke(stage ? 'git.stage' : 'git.unstage', taskId, binding.repoId, paths))
+  const fetchRepo = () => void run(() => invoke('git.fetch', taskId, binding.repoId))
+  const pushRepo = () => void run(() => invoke('git.push', taskId, binding.repoId))
+  const sync = () =>
+    void run(async () => {
+      requireSaved()
+      await invoke('git.sync', taskId, binding.repoId)
+    })
+  const pull = (mode?: PullMode) =>
+    void run(async () => {
+      requireSaved()
+      await invoke('git.pull', taskId, binding.repoId, mode)
+    })
+  const popStash = (stash: GitStash) =>
+    run(async () => {
+      requireSaved()
+      await invoke('git.popStash', taskId, binding.repoId, stash.oid)
+    })
+  const applyStash = (stash: GitStash) =>
+    run(async () => {
+      requireSaved()
+      await invoke('git.applyStash', taskId, binding.repoId, stash.oid)
+    })
+  return { run, requireSaved, stagePaths, fetchRepo, pushRepo, sync, pull, popStash, applyStash }
+}
+
+export type GitActions = ReturnType<typeof useGitActions>

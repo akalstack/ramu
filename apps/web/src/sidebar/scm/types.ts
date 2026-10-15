@@ -1,0 +1,16 @@
+import type { CommitAction } from '@ramu/shared/types'
+
+/** The pending confirmation (or name prompt) shown in the repository dialog. */
+export type Confirmation =
+  | { kind: 'smart-commit'; action: CommitAction }
+  | { kind: 'discard'; paths: string[] }
+  | { kind: 'undo'; oid: string; title: string }
+  | { kind: 'branch' }
+  | { kind: 'stash'; staged?: boolean }
+  | { kind: 'delete-branch'; name: string }
+  | { kind: 'drop-stash'; oid: string; title: string }
+
+export type GitTab = 'commits' | 'stashes'
+
+/** Runs a Git operation under the repository's busy flag, reports failures and refreshes. */
+export type GitRun = (fn: () => Promise<unknown>) => Promise<void>
