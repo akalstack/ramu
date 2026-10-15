@@ -77,8 +77,8 @@ export function MarkdownPreview({
   const components = useMemo<ComponentProps<typeof Markdown>['components']>(() => {
     const context = { taskId, repoId, path }
     return {
-      img: ({ node, ...props }) => <PreviewImage {...props} context={context} />,
-      source: ({ node, ...props }) => <PreviewSource {...props} context={context} />,
+      img: ({ node: _node, ...props }) => <PreviewImage {...props} context={context} />,
+      source: ({ node: _node, ...props }) => <PreviewSource {...props} context={context} />,
       a: ({ href, children }) => (
         <a
           href={href}

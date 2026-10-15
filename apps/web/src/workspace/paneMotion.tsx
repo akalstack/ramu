@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { reducedMotion } from './panelMotion'
 
 /**
@@ -34,20 +34,6 @@ export function paneFadeIn(element: HTMLElement | null | undefined): () => void 
   if (!element || reducedMotion() || document.hidden) return () => {}
   const fade = element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' })
   return () => fade.cancel()
-}
-
-/** Keeps the last non-empty value for a moment after it goes away, so a closing pane still has its content while it shrinks. */
-export function useRetained<T>(value: T | null | undefined, ms = SETTLE_MS): T | null {
-  const [kept, setKept] = useState<T | null>(value ?? null)
-  useEffect(() => {
-    if (value != null) {
-      setKept(value)
-      return
-    }
-    const timer = window.setTimeout(() => setKept(null), ms)
-    return () => window.clearTimeout(timer)
-  }, [value, ms])
-  return value ?? kept
 }
 
 /** A pane that exists only while open (the tool rail): it appears in one step with a fade, and goes away at once. */

@@ -94,9 +94,8 @@ export async function answerOnFork(
     query.close?.()
   }
   host.analysisStops.add(cancel)
-  let text = ''
   try {
-    text = await timeout(claudeReplyText(query), 120_000, 'The side question timed out')
+    const text = await timeout(claudeReplyText(query), 120_000, 'The side question timed out')
     return text.trim() ? { text: text.trim(), provider: 'claude-code', model: s.settings.model } : null
   } catch {
     return null

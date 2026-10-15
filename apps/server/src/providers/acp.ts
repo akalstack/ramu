@@ -254,7 +254,7 @@ export function openCodeConfigEnv(
   existing = process.env.OPENCODE_CONFIG_CONTENT,
 ): Record<string, string> {
   if (connection?.nativeSubagents !== false) return {}
-  let config: Wire = {}
+  let config: Wire
   try {
     config = existing ? JSON.parse(existing) : {}
   } catch {

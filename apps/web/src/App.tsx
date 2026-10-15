@@ -19,7 +19,6 @@ import {
   Files,
   History,
   Folders,
-  FolderPlus,
   GitBranch,
   MessageCircle,
   Pencil,
@@ -27,7 +26,6 @@ import {
   PanelLeftOpen,
   PanelRight,
   SquareTerminal,
-  X,
   RefreshCcw,
   Search,
 } from 'lucide-react'
@@ -35,7 +33,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { buildCommands, formatKeys, Palette, useKeybindings, type PaletteMode } from './commands'
 import { copyText, invoke, ramu } from './ipc'
 import { setShownTerminal, useUnseenTerminalOutput } from './workspace/terminalActivity'
-import { Dropdown, Menu, useContextMenu } from './Menu'
+import { Dropdown, useContextMenu } from './Menu'
 import { WorkspaceSyncDialog } from './WorkspaceSync'
 import type { GitBranchInfo, GitStatus } from '@ramu/shared/types'
 import { BranchPicker, SyncButton, useAutoFetch } from './git/GitControls'
@@ -57,23 +55,16 @@ import { useGitChangeCount } from './git/useGitChangeCount'
 import { CreateEntryDialog } from './workspace/CreateEntryDialog'
 import { AddProjectDialog } from './workspace/AddProjectDialog'
 import { HomePage, NewTask } from './NewTask'
-import { AnimatedMark, BootScreen, Wordmark } from './Brand'
+import { BootScreen, Wordmark } from './Brand'
 import { paneFadeIn } from './workspace/paneMotion'
 import { ComputerSwitcher } from './workspace/computers'
 import { useAddProject } from './workspace/addProject'
 import { ProjectsPanel } from './sidebar/ProjectsPanel'
 import { TaskPane } from './workspace/TaskPane'
-import {
-  isWorktreeCtx,
-  isWorkspaceCtx,
-  worktreeCtx,
-  projectCtx,
-  useWorkspace,
-  WorkspaceProvider,
-} from './workspace/workspace'
+import { isWorkspaceCtx, worktreeCtx, projectCtx, useWorkspace, WorkspaceProvider } from './workspace/workspace'
 
 export function App({ onReady }: { onReady?: () => void }) {
-  const language = useLanguage()
+  useLanguage()
 
   return (
     <AppSettingsProvider>
@@ -87,7 +78,7 @@ export function App({ onReady }: { onReady?: () => void }) {
 }
 
 function ReadyShell({ onReady }: { onReady?: () => void }) {
-  const language = useLanguage()
+  useLanguage()
 
   useEffect(() => {
     onReady?.()
@@ -585,30 +576,8 @@ function Shell() {
   )
 }
 
-function Welcome() {
-  const language = useLanguage()
-
-  const addProject = useAddProject()
-  return (
-    <div className="welcome [&_p]:m-0.5 flex-1 flex flex-col items-center justify-center text-soft gap-1.5">
-      <AnimatedMark className="welcome-mark mb-2" size={72} />
-      <Wordmark className="wordmark text-[length:48px] font-bold tracking-[-0.05em] text-brand mb-2.5" height={34} />
-      <p>{t('Your project. Every repo. One workspace.')}</p>
-      <p className="muted text-muted-foreground">{t('Add a repository, or a folder that holds several of them.')}</p>
-      <Button
-        variant="default"
-        className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
-        disabled={addProject.busy}
-        onClick={() => void addProject.add()}
-      >
-        <FolderPlus size={14} /> {t(' Add project…')}
-      </Button>
-    </div>
-  )
-}
-
 function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode }) {
-  const language = useLanguage()
+  useLanguage()
 
   const ws = useWorkspace()
   const ctx = ws.ui.activeTaskId
@@ -733,7 +702,7 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
 }
 
 function StatusBar({ usage }: { usage?: ReactNode }) {
-  const language = useLanguage()
+  useLanguage()
 
   const ws = useWorkspace()
   const taskId = ws.ui.activeTaskId

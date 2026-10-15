@@ -1,12 +1,4 @@
-import type {
-  AgentProvider,
-  AgentQuestion,
-  ChatGoal,
-  Project,
-  QueuedMessage,
-  Task,
-  UsageReading,
-} from '@ramu/shared/types'
+import type { AgentProvider, AgentQuestion, ChatGoal, Project, QueuedMessage, Task } from '@ramu/shared/types'
 
 // Native view models; host IDs are kept separately from computer-scoped UI IDs.
 
@@ -124,13 +116,6 @@ export interface ChangedFile {
   additions: number
   deletions: number
   lines: DiffLine[]
-}
-
-export interface ModelOption {
-  provider: AgentProvider
-  model: string
-  label: string
-  efforts: string[]
 }
 
 export const STANDALONE = 'no-project'

@@ -2,7 +2,6 @@ import { t as translate } from '../../../i18n'
 import { toolKind, KIND_LABEL, KIND_VERB } from '@ramu/shared/chat/agentTools'
 import { describeRamuTool, ramuTool } from '@ramu/shared/chat/ramuTools'
 import { toolIsRunning, toolVerb } from '@ramu/shared/chat/toolStatus'
-import { ramu } from '../../../ipc'
 import { type ToolResult, type ToolUse } from '../types'
 
 /** MCP tools arrive as mcp__server__tool; show the tool name. */

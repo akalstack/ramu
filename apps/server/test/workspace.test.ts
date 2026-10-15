@@ -170,8 +170,8 @@ describe('current checkout (default)', () => {
   it('binds to the existing checkouts without mutating Git state', async () => {
     const before = { web: fingerprint(web), api: fingerprint(api) }
     const project = ws.createProject('Shop')
-    const rWeb = await ws.addRepository(project.id, join(web, '.')) // non-canonical input
-    const rApi = await ws.addRepository(project.id, api)
+    await ws.addRepository(project.id, join(web, '.')) // non-canonical input
+    await ws.addRepository(project.id, api)
     const task = await ws.createTask({ projectId: project.id, title: 'Add password reset', mode: 'current' })
 
     const bindings = ws.listBindings(task.id)
@@ -371,7 +371,7 @@ describe('projects from folders', () => {
     const { project, repositories } = await ws.addProjectFromFolder(api)
     expect(repositories).toHaveLength(1)
     expect(project.root).toBe(realpathSync(api))
-    const other = await ws.addRepository(project.id, web)
+    await ws.addRepository(project.id, web)
     const task = await ws.createTask({ projectId: project.id, title: 'Connected', mode: 'current' })
     const scope = ws.agentScope(task.id)
     expect(scope.cwd).toBe(realpathSync(api))
@@ -379,7 +379,7 @@ describe('projects from folders', () => {
   })
 
   it('runs worktree-task agents in the task folder that holds every worktree', async () => {
-    const { project, repositories } = await ws.addProjectFromFolder(join(tmp, 'code'))
+    const { project } = await ws.addProjectFromFolder(join(tmp, 'code'))
     const task = await ws.createTask({ projectId: project.id, title: 'Iso', mode: 'worktree' })
     await ws.setupTask(task.id)
     const scope = ws.agentScope(task.id)
@@ -403,7 +403,7 @@ describe('task lifecycle', () => {
   it('renames, archives and deletes a current-checkout task without touching the repository', async () => {
     const before = fingerprint(web)
     const project = ws.createProject('Shop')
-    const repo = await ws.addRepository(project.id, web)
+    await ws.addRepository(project.id, web)
     const task = await ws.createTask({ projectId: project.id, title: 'Old', mode: 'current' })
     expect(ws.renameTask(task.id, '  New title ').title).toBe('New title')
     expect(ws.setArchived(task.id, true).status).toBe('archived')
@@ -416,7 +416,7 @@ describe('task lifecycle', () => {
 
   it('removes clean worktrees on delete, keeps their branches, and refuses dirty ones', async () => {
     const project = ws.createProject('Shop')
-    const repo = await ws.addRepository(project.id, web)
+    await ws.addRepository(project.id, web)
     const task = await ws.createTask({ projectId: project.id, title: 'Iso', mode: 'worktree' })
     const [b] = await ws.setupTask(task.id)
     writeFileSync(join(b!.cwd, 'wip.txt'), 'unsaved work')

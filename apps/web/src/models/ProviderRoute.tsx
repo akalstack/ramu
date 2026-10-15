@@ -1,14 +1,14 @@
 import { t, useLanguage } from '../i18n'
 import { ArrowRight, Gauge } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { AgentSettings, FallbackStep, UsageReading } from '@ramu/shared/types'
+import type { AgentSettings, FallbackStep } from '@ramu/shared/types'
 import { providerName } from '@ramu/shared/providers/providers'
 import { useAppSettings } from '../settings/AppSettings'
 import { invoke } from '../ipc'
 import { Menu } from '../Menu'
 import { modelDisplayName, useModelSets } from './ModelSets'
 import { ProviderIcon } from './ProviderIcon'
-import { peakUsage, resetText, usageTone, useUsage, windowLabel } from '../settings/Usage'
+import { resetText, usageTone, useUsage, windowLabel } from '../settings/Usage'
 import { defaultOrder, peakFor, planRoute } from '@ramu/shared/providers/routing'
 
 const WARN_AT = 80

@@ -1,5 +1,4 @@
 import { t, useLanguage } from '../i18n'
-import { Input } from '@/components/ui/input'
 import { Check, ChevronDown, Folder, FolderPlus, GitBranch, Laptop } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Dropdown, Menu, type MenuEntry } from '../Menu'

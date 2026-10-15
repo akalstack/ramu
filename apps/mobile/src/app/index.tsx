@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Platform, Pressable, ScrollView as HScroll, TextInput, View } from 'react-native'
+import { Pressable, ScrollView as HScroll, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
@@ -7,7 +7,6 @@ import {
   BellDot,
   Check,
   ChevronDown,
-  ChevronRight,
   Folder,
   FolderGit2,
   MessagesSquare,

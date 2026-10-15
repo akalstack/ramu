@@ -57,6 +57,7 @@ export class AttachmentStore {
       throw new Error('Each attachment must be nonempty and no larger than 10 MB.')
     const safeName =
       basename(name.replace(/\\/g, '/'))
+        // eslint-disable-next-line no-control-regex -- strips control characters on purpose
         .replace(/[\x00-\x1f]/g, '_')
         .slice(0, 180) || 'attachment'
     const id = randomUUID()

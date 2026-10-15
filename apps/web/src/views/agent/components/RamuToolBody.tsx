@@ -1,6 +1,5 @@
 import { t as translate, useLanguage } from '../../../i18n'
 import { describeRamuTool } from '@ramu/shared/chat/ramuTools'
-import { ramu } from '../../../ipc'
 import { type ToolResult, type ToolUse } from '../types'
 
 /** A Ramu tool opens to the few facts that matter. The raw request and response stay a click away. */

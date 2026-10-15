@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TextInput, View } from 'react-native'
+import { TextInput } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Folder, ChevronLeft } from 'lucide-react-native'
 import { Header, Screen, GlassButton, PageScrollView as ScrollView } from '../components/Screen'

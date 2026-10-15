@@ -1,7 +1,5 @@
 import { Button } from '@/components/desktop-button'
-import { SettingsRow } from '@/components/settings-row'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
 import { Plus } from 'lucide-react'
 import { providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'

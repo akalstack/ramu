@@ -3,7 +3,9 @@
 // needs the exact version its renderer was built for, which lives in this app's
 // own node_modules. Every `react`/`react-dom` import in the bundle resolves here so
 // Metro ships a single React copy.
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- CommonJS Metro config
 const path = require('node:path')
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- CommonJS Metro config
 const { getDefaultConfig } = require('expo/metro-config')
 
 const config = getDefaultConfig(__dirname)

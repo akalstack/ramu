@@ -124,6 +124,7 @@ export const registerSearchHandlers: RegisterHandlers = (ctx) => {
               } catch (error) {
                 throw new Error(
                   `Replacement stopped at ${preview.path}. ${saved} files were saved; refresh and review the remaining files. ${error instanceof Error ? error.message : String(error)}`,
+                  { cause: error },
                 )
               }
             }

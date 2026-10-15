@@ -181,7 +181,6 @@ export class SessionStarter {
     // A provider at its limit would only fail this message; continue with the next fallback instead.
     if (await this.host.switchBeforeSend(id)) {
       await this.host.finalizing.get(id)
-      s = this.host.get(id)
     }
     await this.host.refreshProviderTools(id)
     s = this.host.get(id)

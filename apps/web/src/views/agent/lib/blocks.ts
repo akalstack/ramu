@@ -3,7 +3,6 @@ import type { AgentEvent } from '@ramu/shared/types'
 import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { goalChanges } from '@ramu/shared/chat/goalHistory'
 import type { AgentTask } from '@ramu/shared/types'
-import { ramu } from '../../../ipc'
 
 /** Consecutive tool calls collapse into one line, like "Ran 2 commands". */
 export function toBlocks(events: AgentEvent[]): Block[] {

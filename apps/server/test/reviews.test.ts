@@ -78,7 +78,10 @@ describe('saved reviews and live workspaces', () => {
   it('backfills older snapshots without changing their discussions or asking AI', async () => {
     human()
     const saved = service.get(review.id)
-    const legacy = { ...saved, files: saved.files.map(({ addedLines, removedLines, ...file }) => file) }
+    const legacy = {
+      ...saved,
+      files: saved.files.map(({ addedLines: _added, removedLines: _removed, ...file }) => file),
+    }
     db.prepare('UPDATE change_reviews SET data=? WHERE id=?').run(JSON.stringify(legacy), review.id)
     const hydrated = await service.details(review.id)
     expect(hydrated.files.find((f) => f.path === 'changed.txt')).toMatchObject({ addedLines: 1, removedLines: 1 })

@@ -5,7 +5,6 @@ import { FolderClosed, GitBranch, Laptop, Monitor, Network, Settings } from 'luc
 import { Button } from '@/components/desktop-button'
 import { useEffect, useRef, useState } from 'react'
 import {
-  DEFAULT_AGENT_SETTINGS,
   NO_PROJECT,
   type FileContext,
   type Attachment,

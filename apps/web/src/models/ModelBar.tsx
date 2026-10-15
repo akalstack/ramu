@@ -2,18 +2,7 @@ import { t, useLanguage } from '../i18n'
 import { providerName } from '@ramu/shared/providers/providers'
 import { StepSlider } from '@/components/step-slider'
 import { Button } from '@/components/desktop-button'
-import {
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Clock3,
-  Gauge,
-  Settings,
-  SlidersHorizontal,
-  Sparkles,
-  X,
-  Zap,
-} from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Clock3, Gauge, Settings, SlidersHorizontal, X, Zap } from 'lucide-react'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { AgentSettings, ReasoningEffort } from '@ramu/shared/types'
 import { ReasoningPicker } from './ReasoningPicker'

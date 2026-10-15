@@ -239,7 +239,7 @@ export class ClaudeStreamPump {
         }
         return
       }
-      case 'result':
+      case 'result': {
         textStream.finishMainTurn()
         this.host.record(id, {
           kind: 'result',
@@ -252,6 +252,7 @@ export class ClaudeStreamPump {
         // The agent's claim that it finished; checks and review decide readiness.
         this.host.setState(id, msg.is_error ? 'failed' : 'idle')
         return
+      }
       default:
         return
     }

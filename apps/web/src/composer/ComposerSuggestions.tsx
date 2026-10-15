@@ -312,7 +312,7 @@ export function ComposerSuggestions({
   suggestions: ReturnType<typeof useComposerSuggestions>
   onChoose: (index: number) => void
 }) {
-  const language = useLanguage()
+  useLanguage()
 
   useEffect(() => {
     document.getElementById(`${suggestions.listId}-${suggestions.selected}`)?.scrollIntoView({ block: 'nearest' })

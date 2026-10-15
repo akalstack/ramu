@@ -109,7 +109,7 @@ languages.setMonarchTokensProvider('json', {
       [/\b(?:true|false|null)\b/, 'keyword'],
       [/\/\/.*$/, 'comment'],
       [/\/\*/, 'comment', '@comment'],
-      [/[{}\[\]]/, '@brackets'],
+      [/[{}[\]]/, '@brackets'],
       [/[,:]/, 'delimiter'],
     ],
     comment: [

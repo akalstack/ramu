@@ -56,7 +56,7 @@ function subscribe(listener: () => void) {
   }
 }
 export function useUsage(): UsageReading[] {
-  const language = useLanguage()
+  useLanguage()
   return useSyncExternalStore(subscribe, () => readings)
 }
 

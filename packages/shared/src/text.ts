@@ -17,6 +17,7 @@ export function clipText(text: string, max: number): string {
 
 // Control characters, and the characters that reorder text (U+202A–202E, U+2066–2069, marks U+200E/F): they make a
 // label read differently from what it is, e.g. "report‮gnp.txt" displays as "reporttxt.png".
+// eslint-disable-next-line no-control-regex -- matches control characters on purpose
 const MISLEADING = /[\u0000-\u001f\u007f‎‏‪-‮⁦-⁩]/g
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g
 

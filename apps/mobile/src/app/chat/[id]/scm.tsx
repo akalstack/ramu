@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
@@ -16,7 +16,6 @@ import {
   Ellipsis,
   GitBranch,
   GitBranchPlus,
-  GitCommitHorizontal,
   Minus,
   Plus,
   RefreshCcw,
@@ -28,7 +27,7 @@ import {
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import type { ChangedFile } from '../../../runtime/types'
-import type { GitStatus, RepositoryBinding, GitStash, CommitDraft } from '@ramu/shared/types'
+import type { RepositoryBinding, GitStash, CommitDraft } from '@ramu/shared/types'
 interface GitCommitInfo {
   oid: string
   subject: string

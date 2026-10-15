@@ -26,7 +26,6 @@
     "@agentclientprotocol/sdk": "1.8.0",
     "@anthropic-ai/claude-agent-sdk": "catalog:",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "@opencode-ai/sdk": "^1.18.35",
     "editorconfig": "^3.0.2",
     "luxon": "catalog:",
     "node-pty": "catalog:",

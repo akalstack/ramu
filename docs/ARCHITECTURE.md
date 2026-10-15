@@ -18,7 +18,7 @@ The UI never touches the filesystem, Git, or providers directly. It calls named 
 | `apps/web` | React workspace UI and Monaco editor, rendered in the desktop app. |
 | `apps/mobile` | Expo companion app that pairs with a server over the network. Not part of the alpha release. |
 | `apps/site` | Project website. |
-| `packages/shared` | Domain types, the API method table, and pure helpers used by every app. |
+| `packages/shared` | Domain types, the API method table, and pure helpers used by every app, grouped into `chat/`, `review/`, `search/`, `workspace/` and `providers/` (import as `@ramu/shared/<folder>/<module>`). |
 | `packages/contracts` | Wire protocol: versions, capabilities, request encoding. |
 | `packages/client-runtime` | Node client for a server: local socket or authenticated HTTP, reconnects, limits. |
 | `scripts/` | `smoke/` Electron and integration checks, `release/` packaging and release tooling. |
@@ -39,8 +39,8 @@ Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockChe
 
 | Folder | Contents |
 | --- | --- |
-| `agent/` | Chat lifecycle: runner, permissions (`canUseTool`), goals, advisor, questions and elicitation, handoff, asides, usage reading. `agent.ts` is the `AgentService` that wires them together. |
-| `providers/` | Provider adapters and plumbing: Claude (SDK and ACP), Codex, OpenCode, Cursor, Antigravity; binary discovery, login and update, usage and usage-limit detection, and `fakeAgent.ts` for simulated runs. |
+| `agent/` | Chat lifecycle, one collaborator per concern: session store and registry, recorder, message dispatcher, goals, provider wait, user requests (questions, permissions, elicitation), fallback router, advisor, sub-agents, stream pump, restart recovery. Each owns its state and sees the rest through a narrow `*Host` interface. `agent.ts` is the thin `AgentService` façade that wires them together. |
+| `providers/` | Provider plumbing and the `ProviderAdapter` interface (`adapter.ts`) with one adapter per provider in `adapters/`: binary lookup, account environment, sign-in checks, login arguments and update plans. Also usage and usage-limit detection and `fakeAgent.ts` for simulated runs. |
 | `workspace/` | Repositories, files, Git, isolation checkouts, terminals (PTY), editorconfig, discard previews. |
 | `review/` | Recorded diffs, review state and stats, undo and restore with conflict checks. |
 | `memory/` | Shared memory notes, memory files, learning, recaps. |
@@ -69,7 +69,9 @@ Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockChe
 
 ## Providers
 
-Chats run through provider adapters selected per chat (`AgentSettings.provider`). `providers/fakeAgent.ts` implements the same events, permission requests and transcript paths without model usage; the Electron smoke tests depend on it. Provider behavior that differs by name (install, login, update, binary lookup) currently lives in `providers/providers.ts` and `providers/providerBinaries.ts`.
+Chats run through provider adapters selected per chat (`AgentSettings.provider`). Provider-specific setup behavior (executable and `RAMU_*_BIN` variable, account profiles, sign-in detection, login and update) is a `ProviderAdapter` in `apps/server/src/providers/adapters/`; `providers.ts` and `providerBinaries.ts` keep the shared spawning, caching and parsing. To add a provider, add an adapter, register it in `adapters/index.ts`, and add its id to `AgentProvider` in `packages/shared`. `providers/fakeAgent.ts` implements the same events, permission requests and transcript paths without model usage; the Electron smoke tests depend on it.
+
+Accounts: every enabled account of a provider is tried in order (selected account, the default login, then the others) when a chat reaches a usage limit, before Ramu falls back to another model. Turn an account off in Settings to remove it from the rotation.
 
 ## Testing
 
@@ -77,7 +79,12 @@ Chats run through provider adapters selected per chat (`AgentSettings.provider`)
 - `pnpm test:e2e`: a full Electron journey with simulated providers and an isolated profile (macOS). Other `scripts/smoke/` checks cover layout, SCM, remote access, localization and performance; see [CONTRIBUTING](../CONTRIBUTING.md).
 - Server tests are in `apps/server/test`, mirroring `src` by file name.
 
+## Code quality
+
+`pnpm check` also runs ESLint (`eslint.config.mjs`: typescript-eslint and the classic React hooks rules) and [knip](https://knip.dev) (`knip.json`) to catch unused files, exports and dependencies. Desktop lists runtime packages (for example the provider SDKs) that its bundled service loads, so `knip.json` ignores them on purpose.
+
 ## Known follow-ups
 
-- `AgentService` is still a large class. Goals, questions, fallback and the queue share about thirty mutable maps, so splitting them needs a deliberate state design rather than moving code.
-- Per-provider branching in `providers/providers.ts` and `providers/providerBinaries.ts` could become a descriptor per provider. Its install, login and update flows are only exercised by live providers, so change it with live validation.
+- Warnings remain for `react-hooks/exhaustive-deps` and `@typescript-eslint/no-explicit-any`; they are not errors yet.
+- Several older smoke scripts in `scripts/smoke/` (for example the SCM and UI ones) still expect UI text from before the settings and commit-menu redesigns and are not part of CI.
+- Provider install, login and update flows are only exercised by live providers; validate changes there against real CLIs.

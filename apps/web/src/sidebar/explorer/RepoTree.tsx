@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { Button } from '@/components/desktop-button'
 import type { DirEntry, RepositoryBinding } from '@ramu/shared/types'
-import { t, useLanguage } from '../../i18n'
+import { useLanguage } from '../../i18n'
 import { useContextMenu } from '../../Menu'
 import { notifyError } from '../../chat/Notifications'
 import { errorText } from '../../workspace/TaskPane'

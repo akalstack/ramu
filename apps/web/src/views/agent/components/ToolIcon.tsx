@@ -17,7 +17,6 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { describeRamuTool, ramuTool, type RamuToolIcon } from '@ramu/shared/chat/ramuTools'
-import { ramu } from '../../../ipc'
 import { type ToolResult, type ToolUse } from '../types'
 
 const RAMU_ICONS: Record<RamuToolIcon, typeof Wrench> = {

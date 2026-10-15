@@ -45,7 +45,6 @@ export const AssistantText = memo(function AssistantText({
   actions,
   latest = false,
   taskId,
-  sessionId,
 }: {
   event: Extract<AgentEvent, { kind: 'text' }>
   generating: boolean

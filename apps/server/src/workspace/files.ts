@@ -217,6 +217,7 @@ function assertUsablePath(relPath: string): void {
 }
 
 // Control characters and bidirectional overrides make a name read differently from what it is (e.g. "txt.png" for "png.txt").
+// eslint-disable-next-line no-control-regex -- matches control characters on purpose
 const MISLEADING_NAME = /[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]/
 /** New names only: existing files with odd names must stay openable, but Ramu does not create new ones. */
 export function assertNewName(relPath: string): void {

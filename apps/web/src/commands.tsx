@@ -13,7 +13,7 @@ import {
   CommandShortcut,
 } from '@/components/ui/command'
 // Commands, keyboard shortcuts and the command palette.
-import { CornerDownLeft, File, FolderTree, MessageSquare, Sparkles, SquareChevronRight } from 'lucide-react'
+import { FolderTree, Sparkles, SquareChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { fuzzy, highlight } from './lib/fuzzy'
 import { notifyError } from './chat/Notifications'
@@ -504,7 +504,7 @@ function matches(e: KeyboardEvent, keys: string): boolean {
 
 /** Global shortcuts. Capture phase, so they win over Monaco and the terminal. */
 export function useKeybindings(commands: Command[], enabled: boolean) {
-  const language = useLanguage()
+  useLanguage()
 
   const ref = useRef(commands)
   ref.current = commands

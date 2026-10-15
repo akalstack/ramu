@@ -511,6 +511,3 @@ export function terminalTargets(store: ReturnType<typeof useStore>, computerId: 
   }
   return targets
 }
-
-const KIND_LABEL = { project: 'Project', worktree: 'Worktree', chat: 'Chat' } as const
-export const kindLabel = (kind: TerminalTarget['kind']) => KIND_LABEL[kind]

@@ -4,7 +4,7 @@ import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
 import { Button } from '@/components/ui/button'
 import { ArrowUp, FileText, Paperclip, Play, Square, X } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Attachment, FileContext } from '@ramu/shared/types'
 import { invoke, ramu } from '../ipc'
@@ -416,8 +416,8 @@ export function Composer({
               ? `${suggestions.listId}-${suggestions.selected}`
               : undefined
           }
-          onClick={(e) => setCaret(ref.current?.selectionStart ?? value.length)}
-          onKeyUp={(e) => setCaret(ref.current?.selectionStart ?? value.length)}
+          onClick={() => setCaret(ref.current?.selectionStart ?? value.length)}
+          onKeyUp={() => setCaret(ref.current?.selectionStart ?? value.length)}
           onChange={(next, position) => {
             onChange(next)
             setCaret(position)

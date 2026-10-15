@@ -143,7 +143,7 @@ const resumeMotion = () =>
 try {
   await page.waitForSelector('.shell')
   console.log(`Fixture and screenshots: ${fixture}`)
-  const { project, repositories } = await api('projects.addFolder', repo)
+  const { project } = await api('projects.addFolder', repo)
   const task = await api('tasks.create', { projectId: project.id, title: 'Layout review', mode: 'current' })
   await api('tasks.setup', task.id)
   const session = await api('agent.start', task.id, 'Reply with a short greeting.', {

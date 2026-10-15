@@ -537,7 +537,7 @@ describe('AgentService', () => {
         svc
           .events(session.id)
           .filter((e) => e.kind === 'compaction')
-          .map(({ at, ...e }) => e),
+          .map(({ at: _at, ...e }) => e),
       ).toEqual([
         { kind: 'compaction', state: 'started' },
         prompt === 'compact'
@@ -2951,7 +2951,6 @@ describe('chat continuation after restart', () => {
 })
 
 describe('Codex sub-agent control', () => {
-  const codexStep = { id: 'c', provider: 'codex' as const, model: 'codex-test', effort: null }
   const claudeStep = { id: 'k', provider: 'claude-code' as const, model: 'sonnet', effort: null }
   // Codex leads the order so these Codex chats aren't moved up to Claude Code.
   const prefsWith = (patch: Partial<AppPreferences['subagents']>): AppPreferences => ({

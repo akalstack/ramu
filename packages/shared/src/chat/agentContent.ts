@@ -16,7 +16,7 @@ export function agentContent(value: unknown): AgentContent[] {
       const source = object(b.source)
       const mimeType = str(b.mimeType) ?? str(source.media_type) ?? 'image/png'
       const data = str(b.data) ?? str(source.data)
-      let uri = str(b.uri) ?? str(b.url) ?? str(source.url)
+      const uri = str(b.uri) ?? str(b.url) ?? str(source.url)
       const inline = uri && /^data:(image\/[a-z+.-]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(uri)
       if (inline && !data) return agentContent({ type: 'image', mimeType: inline[1], data: inline[2], alt: b.alt })
       if (data && data.length > MAX_MEDIA)

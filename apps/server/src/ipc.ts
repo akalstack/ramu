@@ -2,4 +2,4 @@
 // Handlers live in ./ipc/handlers, one module per domain; this file is the public entry point.
 export { createDispatcher } from './ipc/dispatcher'
 export { migrateChains } from './ipc/preferences'
-export type { Services, RuntimeHost } from './ipc/types'
+export type { Services } from './ipc/types'

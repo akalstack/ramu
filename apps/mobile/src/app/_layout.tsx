@@ -7,8 +7,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvide
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ThemeProvider, useTheme } from '../theme'
-import { Platform, Pressable, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { Platform, Pressable } from 'react-native'
 import { T } from '../components/ui'
 import { StoreProvider, useStore } from '../runtime/store'
 
@@ -19,7 +18,6 @@ export const unstable_settings = { initialRouteName: 'index' }
 function Navigator() {
   const { c, scheme } = useTheme()
   const store = useStore()
-  const router = useRouter()
   return (
     <StartupScreen ready={store.ready}>
       {store.error ? (

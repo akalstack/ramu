@@ -1,4 +1,5 @@
 // Runs inside the bundled terminal surface; no host credentials or network calls.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- injected into the terminal bundle as source text by gen-terminal.mjs
 function installTerminalGesture(term, post, TerminalGesture, arrowSequence) {
   const gesture = new TerminalGesture()
   const pointers = new Set()

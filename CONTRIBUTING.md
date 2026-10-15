@@ -16,7 +16,7 @@ Native dependencies may need Python 3 and a C/C++ toolchain. Keep the hoisted de
 
 ## Checks
 
-- Run `pnpm check` before submitting. To work on one package, use `pnpm --filter @ramu/server test` (or `typecheck`).
+- Run `pnpm check` before submitting; it runs formatting (`pnpm format` fixes it), ESLint (`pnpm lint`), knip (`pnpm knip`, unused code and dependencies), typechecks, tests and builds. To work on one package, use `pnpm --filter @ramu/server test` (or `typecheck`).
 - For desktop behavior, build and run `pnpm test:e2e` on macOS. It uses disposable repositories, an isolated profile, and simulated providers.
 - For large lists, reviews, or editor lifecycle changes, run `node scripts/smoke/rendering-performance-smoke.mjs` after building.
 - For packaging changes, build and test the installer with `pnpm make`.

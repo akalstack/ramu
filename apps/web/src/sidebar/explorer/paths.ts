@@ -14,7 +14,7 @@ export function freeName(name: string, taken: Set<string>): string {
   }
 }
 
-export const isValidEntryName = (name: string) => !!name.trim() && !/[\/\\]/.test(name) && name !== '.' && name !== '..'
+export const isValidEntryName = (name: string) => !!name.trim() && !/[/\\]/.test(name) && name !== '.' && name !== '..'
 
 /** Whether `path` is `parent` itself or lives inside it. */
 export const isWithin = (path: string, parent: string) => path === parent || path.startsWith(`${parent}/`)

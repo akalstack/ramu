@@ -2,7 +2,7 @@
 // second server and switch between live computer views. Isolated profiles, no model calls.
 // Run after pnpm build: node scripts/smoke/remote-access-smoke.mjs
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'

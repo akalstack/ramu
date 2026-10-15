@@ -95,7 +95,7 @@ describe('provider adapter registry', () => {
   })
 
   it('defineAdapter supplies default search directories and the version probe', () => {
-    const { searchDirs, probeVersion, ...rest } = providerAdapter('codex')
+    const { searchDirs: _searchDirs, probeVersion: _probeVersion, ...rest } = providerAdapter('codex')
     const adapter = defineAdapter(rest)
     expect(adapter.searchDirs('/h')).toEqual(['/h/.local/bin', '/opt/homebrew/bin', '/usr/local/bin'])
     expect(adapter.probeVersion).toBeTypeOf('function')

@@ -21,7 +21,6 @@ import { CircleAlert, CircleCheck, CircleDot, CircleHelp, Loader, type LucidePro
 import type { TaskStatus } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import type { ComputerStatus } from '../runtime/types'
-import { Wordmark } from './Logos'
 import { Glass, floatingChrome } from './Glass'
 
 export type Icon = ComponentType<LucideProps>
@@ -76,15 +75,6 @@ export function T({
       onLongPress={copy}
       style={[{ color: c[tone], fontSize: size, fontWeight: weight, fontFamily: mono ? font.mono : undefined }, own]}
     />
-  )
-}
-
-/** Wordmark in the desktop title bar's proportions, scaled for a phone. */
-export function Brand() {
-  return (
-    <View style={styles.row}>
-      <Wordmark height={17} />
-    </View>
   )
 }
 

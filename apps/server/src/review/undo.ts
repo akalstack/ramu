@@ -269,6 +269,7 @@ export class RunUndo {
         )
         throw new Error(
           `${String(error)}${conflicts.length ? `. Recovery backups are retained; inspect ${conflicts.join(', ')}` : '. Applied files were restored.'}`,
+          { cause: error },
         )
       }
       await writeFile(

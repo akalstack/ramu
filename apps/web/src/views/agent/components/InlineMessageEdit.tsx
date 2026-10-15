@@ -1,11 +1,9 @@
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { Send } from 'lucide-react'
 import { useState } from 'react'
 import type { Attachment } from '@ramu/shared/types'
 import { Textarea } from '@/components/ui/textarea'
 import { UndoRun } from '../../../chat/UndoRun'
-import { outbox } from '../../../composer/outbox'
 
 /** Edits a sent message inside its bubble. Enter sends, Shift+Enter adds a line, Esc cancels. */
 /** `offlineHost` names the unreachable computer: the revision goes to the outbox and file restore is unavailable until it is back. */

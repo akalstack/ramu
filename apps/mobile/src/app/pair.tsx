@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { KeyboardAvoidingView, Alert, Platform, Pressable, Switch, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Alert, Pressable, Switch, TextInput, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { needsHttpConsent } from '../runtime/transport'

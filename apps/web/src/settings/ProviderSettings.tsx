@@ -10,7 +10,6 @@ import { Switch } from '@/components/ui/switch'
 import { AGENT_PROVIDERS, providerEnabled, providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
 import { runProviderCommand } from '../models/ProviderSetupTerminal'
-import { ramu } from '../ipc'
 import { useAccountUsage } from './Usage'
 import { ProviderCard } from './ProviderCard'
 

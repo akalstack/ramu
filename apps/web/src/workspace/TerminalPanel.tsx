@@ -8,7 +8,7 @@ import { forgetTerminal, isOpening, queueAdopt, shellOf, adoptQueued } from './t
 import { useAppSettings } from '../settings/AppSettings'
 import { Menu, useContextMenu } from '../Menu'
 import { terminalGroups } from '@ramu/shared/workspace/terminalGroups'
-import type { TerminalGroup, ViewDescriptor } from '@ramu/shared/types'
+import type { TerminalGroup } from '@ramu/shared/types'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { useTabScroll } from '../lib/useTabScroll'
 import { TerminalView } from '../views/TerminalView'

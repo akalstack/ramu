@@ -27,6 +27,7 @@ it('keeps terminal buffering bounded and discards hidden transcript traffic', ()
   hidden.drain((channel, payload) => events.push([channel, payload]), 'truncated')
   expect(events.every(([channel]) => channel === 'term:data')).toBe(true)
   expect(
+    // eslint-disable-next-line no-control-regex -- matches the terminal escape sequences emitted by the truncation notice
     events.map(([, payload]) => payload.data.replace(/\x1bc\x1b\[2m\[truncated\]\x1b\[0m\r\n/g, '')).join('').length,
   ).toBeLessThanOrEqual(20)
   expect(events.some(([, payload]) => payload.data.includes('truncated'))).toBe(true)

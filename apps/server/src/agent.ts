@@ -40,7 +40,7 @@ import { RestartRecovery } from './agent/restartRecovery'
 import { ContextUsageTracker } from './agent/contextUsage'
 import type { AgentHost, Collaborators } from './agent/hosts'
 
-export type { QueryFn, SubagentInput, SubagentResult } from './agent/types'
+export type { QueryFn } from './agent/types'
 export { stripRouterLine, cleanTitle, splitBranchLine } from './agent/text'
 export { serverToolUse, serverToolResult } from './agent/toolSummaries'
 export { conversationHandoff } from './agent/handoff'

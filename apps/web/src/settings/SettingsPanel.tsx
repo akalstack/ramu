@@ -42,7 +42,7 @@ export function SettingsPanel({
   initialTarget?: string
   shortcuts?: Shortcut[]
 }) {
-  const language = useLanguage()
+  useLanguage()
 
   const app = useAppSettings()
   const scope = useSettingsScope()

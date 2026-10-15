@@ -1,5 +1,4 @@
 import type { AgentSessionState } from '@ramu/shared/types'
-import { ramu } from '../../ipc'
 
 /** Session states that get a label in the chat header. */
 export const STATE_LABEL: Partial<Record<AgentSessionState, string>> = {

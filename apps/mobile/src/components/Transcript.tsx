@@ -7,7 +7,6 @@ import {
   Bot,
   Check,
   Copy,
-  ChevronDown,
   ChevronRight,
   FileCode2,
   FilePen,
@@ -210,7 +209,6 @@ export interface ItemMeta {
 }
 
 export function TranscriptItemView({ item, chat, meta }: { item: TranscriptItem; chat: Chat; meta?: ItemMeta }) {
-  const { c } = useTheme()
   return (
     <ChatReferences chat={chat}>
       {meta?.date ? (

@@ -174,7 +174,7 @@ export function parseSshTarget(input: string): string {
     .trim()
     .replace(/^ssh:\/\//i, '')
     .replace(/\/$/, '')
-  if (!/^(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9._:\[\]-]+$/.test(text) || text.startsWith('-') || text.length > 255)
+  if (!/^(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9._:[\]-]+$/.test(text) || text.startsWith('-') || text.length > 255)
     throw new Error('Enter user@host or an alias from your SSH config')
   return text
 }

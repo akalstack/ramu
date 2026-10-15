@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -47,7 +47,7 @@ it('reports Antigravity as signed in only when the runtime saved a sign-in metho
   const home = mkdtempSync(join(tmpdir(), 'ramu-gemini-'))
   dirs.push(home)
   expect(await signInState('antigravity', '', { GEMINI_HOME: home })).toEqual({ signedIn: false })
-  require('node:fs').mkdirSync(join(home, 'antigravity-acp'))
+  mkdirSync(join(home, 'antigravity-acp'))
   writeFileSync(join(home, 'antigravity-acp', 'settings.json'), '{"auth":{"type":"oauth-personal"}}')
   expect(await signInState('antigravity', '', { GEMINI_HOME: home })).toEqual({
     signedIn: true,

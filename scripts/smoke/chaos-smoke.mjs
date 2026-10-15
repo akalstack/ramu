@@ -36,11 +36,7 @@ function repo(dir, files, branch) {
 // Folder and repo names contain a space on purpose.
 const work = join(tmp, 'chaos work')
 const web = repo(join(work, 'web app'), { 'README.md': '# web\n', 'src/App.tsx': 'export const App = 1\n' }, 'main')
-const api = repo(
-  join(work, 'api'),
-  { 'README.md': '# api\n', 'src/server.ts': 'export const port = 3000\n' },
-  'develop',
-)
+repo(join(work, 'api'), { 'README.md': '# api\n', 'src/server.ts': 'export const port = 3000\n' }, 'develop')
 env.RAMU_TEST_PICK_DIRECTORY = work
 
 const findings = []
@@ -451,6 +447,7 @@ surface('ipc', async () => {
     zeroMinutes: { kind: 'interval', minutes: 0, anchor: new Date().toISOString() },
     negativeMinutes: { kind: 'interval', minutes: -5, anchor: new Date().toISOString() },
     nanMinutes: { kind: 'interval', minutes: NaN, anchor: new Date().toISOString() },
+    // eslint-disable-next-line no-loss-of-precision -- deliberately overflows to Infinity
     hugeMinutes: { kind: 'interval', minutes: 1e309, anchor: new Date().toISOString() },
     fractional: { kind: 'interval', minutes: 7.5, anchor: new Date().toISOString() },
     badTime: { kind: 'daily', time: '25:61' },
@@ -503,13 +500,6 @@ async function showPanel(name, probe) {
       .catch(() => false))
   )
     throw new Error(`could not show the ${name} panel`)
-}
-const palette = async (query) => {
-  const input = page.locator('input[aria-label="Search files and commands"]')
-  if (!(await input.isVisible().catch(() => false))) await page.keyboard.press('Meta+P')
-  await input.waitFor({ timeout: 5000 })
-  await input.fill(query)
-  await sleep(400)
 }
 const toastText = () =>
   page
@@ -935,7 +925,6 @@ surface('scm', async () => {
   writeFileSync(join(web, 'scm-chaos.txt'), 'x\n')
   await sleep(1200)
   const msg = page.getByLabel('Commit message for web app', { exact: true })
-  const stage = page.getByRole('button', { name: 'Stage scm-chaos.txt' })
   await each(
     pick([
       'long2k',

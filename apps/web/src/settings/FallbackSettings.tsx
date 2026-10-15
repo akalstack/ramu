@@ -7,14 +7,12 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { invoke } from '../ipc'
 import type {
   AdvisorPreferences,
   AgentModel,
   AgentProvider,
   AppPreferences,
   FallbackStep,
-  ProviderCatalog,
   SubagentPreferences,
   SwitchThreshold,
   UsageReading,

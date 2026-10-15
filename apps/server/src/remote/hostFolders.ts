@@ -1,5 +1,5 @@
 import { mkdir, readdir, realpath, stat } from 'node:fs/promises'
-import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { execFile } from 'node:child_process'
 

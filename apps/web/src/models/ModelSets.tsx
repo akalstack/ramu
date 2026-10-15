@@ -6,7 +6,6 @@ import { BootScreen } from '../Brand'
 import { createContext, useContext, useEffect, useState, type ReactNode, type ContextType } from 'react'
 import {
   DEFAULT_AGENT_SETTINGS,
-  type AgentModel,
   type AgentProvider,
   type AgentSettings,
   type ModelPreferences,

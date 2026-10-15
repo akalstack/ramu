@@ -27,12 +27,7 @@ import {
 } from 'lucide-react'
 import { memo, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { ChangeReviewTab } from '../Changes'
-import {
-  DEFAULT_AGENT_SETTINGS,
-  type AgentSettings,
-  type AgentSessionInfo,
-  type ViewDescriptor,
-} from '@ramu/shared/types'
+import { type AgentSettings, type AgentSessionInfo, type ViewDescriptor } from '@ramu/shared/types'
 import { formatKeys, type TaskAction } from '../commands'
 import { AgentControls } from '../chat/AgentControls'
 import { Composer } from '../composer/Composer'

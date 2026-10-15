@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/desktop-button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
-import { CalendarClock, Check, Clock, Pause, Play, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { CalendarClock, Clock, Pause, Play, Plus, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { DateTime } from 'luxon'
 import {
@@ -21,7 +21,6 @@ import {
   type ScheduleInput,
   type ScheduleRule,
   type ScheduleRun,
-  type RecapSnapshot,
   type BackgroundStatus,
 } from '@ramu/shared/types'
 import { AgentControls } from './chat/AgentControls'

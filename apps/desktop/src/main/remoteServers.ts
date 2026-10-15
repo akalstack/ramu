@@ -1,6 +1,6 @@
 // Computers this desktop app has paired with. The app stays connected to all of them while it runs.
 // Tokens stay in the main process: the renderer only ever sees names and addresses.
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { parseRemoteUrl, type RuntimeEndpoint } from '@ramu/contracts'
@@ -47,6 +47,7 @@ export interface Sealer {
 const MAX_NAME = 60
 const clean = (text: string | undefined, fallback: string) =>
   (text ?? '')
+    // eslint-disable-next-line no-control-regex -- strips control characters on purpose
     .replace(/[\u0000-\u001f\u007f]/g, '')
     .trim()
     .slice(0, MAX_NAME) || fallback

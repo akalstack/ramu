@@ -203,6 +203,7 @@ const inbox = new NoticeInbox(
 )
 const schedules = new ScheduleService(db, workspace, agents, changed)
 schedules.recover()
+// eslint-disable-next-line prefer-const -- declared earlier because closures built before this point reference it
 reviews = new ReviewService(db, workspace, agents, join(userData, 'reviews'), changed)
 reviews.recover()
 agents.reviewHooks = {

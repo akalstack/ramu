@@ -57,7 +57,3 @@ export function readSize(key: string, fallback: number) {
   const value = Number(localStorage.getItem(PREFIX + key))
   return Number.isFinite(value) && value > 0 ? value : fallback
 }
-
-export function writeSize(key: string, value: number) {
-  localStorage.setItem(PREFIX + key, String(Math.round(value)))
-}

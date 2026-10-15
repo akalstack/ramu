@@ -541,6 +541,7 @@ export async function pull(cwd: string, mode: PullMode = 'rebase'): Promise<void
     const conflicted = (await status(cwd)).entries.filter((entry) => entry.staged === 'unmerged').length
     throw new Error(
       `Pull stopped on ${conflicted === 1 ? 'a conflict in 1 file' : `conflicts in ${conflicted} files`}. Resolve and stage ${conflicted === 1 ? 'it' : 'them'} in Source Control, then Continue, or Abort the ${op}. Nothing was pushed.`,
+      { cause: error },
     )
   }
   // Git can exit successfully when restoring the autostash leaves conflicts.

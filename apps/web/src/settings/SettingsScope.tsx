@@ -1,6 +1,6 @@
 import { SettingsFieldContext } from './settingsField'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { AppPreferences, ModelPreferences, ProviderCatalog } from '@ramu/shared/types'
+import type { AppPreferences, ModelPreferences } from '@ramu/shared/types'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import {
   commonSettings,
@@ -8,7 +8,6 @@ import {
   sameValue,
   settingValue,
   type SettingsSnapshot,
-  type SettingSchema,
 } from '@ramu/shared/settingsCompatibility'
 import { recommendedSets } from '@ramu/shared/providers/modelDefaults'
 import { invoke, ramu } from '../ipc'

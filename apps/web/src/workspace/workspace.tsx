@@ -267,7 +267,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         tasks: Record<string, TaskUiState>
         composing: string | null
         composingWorkspace: string | null
-      } | null = null
+      } | null
       try {
         resume = JSON.parse(localStorage.getItem('ramu.workspace.resume') ?? 'null')
         if (resume?.workspace && resume?.tasks) {

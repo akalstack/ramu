@@ -68,40 +68,6 @@ export function StatusDot({ status, className = '' }: { status: ComputerStatus; 
   )
 }
 
-/** Names the workspace's host even when the sidebar is hidden. Its origin stays visible while offline. */
-export function WorkspaceComputerIndicator() {
-  useLanguage()
-  const state = useComputers()
-  const current = state?.computers.find((computer) => computer.id === state.current)
-  if (!current || current.local) return null
-  const description = t('This workspace is on {0}. Files, terminals and agents run on that computer.', {
-    0: current.name,
-  })
-  return (
-    <span
-      className="workspace-computer-indicator mr-2 flex max-w-[240px] min-w-0 flex-none items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-caption text-(--accent) [-webkit-app-region:no-drag]"
-      role="status"
-      aria-label={`${description} ${statusText(current.status)}`}
-      title={`${description}\n${current.url}\n${statusText(current.status)}`}
-    >
-      <Network size={13} aria-hidden className="flex-none" />
-      <span className="flex-none font-medium">{t('Remote')}</span>
-      <span aria-hidden className="opacity-50">
-        ·
-      </span>
-      <span className="truncate">{current.name}</span>
-      {current.status !== 'connected' && (
-        <>
-          <span aria-hidden className="opacity-50">
-            ·
-          </span>
-          <span className="flex-none">{statusText(current.status)}</span>
-        </>
-      )}
-    </span>
-  )
-}
-
 /** What is going on over there, in the fewest words. */
 export function activityText(computer: Pick<Computer, 'status' | 'running' | 'needsInput' | 'waiting'>): string {
   if (computer.status !== 'connected')

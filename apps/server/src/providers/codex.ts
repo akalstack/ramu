@@ -171,7 +171,7 @@ export async function codexUsage(accountId?: string): Promise<UsageReading[]> {
 }
 
 // Compatibility aliases for existing Codex factories.
-export type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
+export type { AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
 import type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
 
 export const createCodexRunner: CodexFactory = (scope, settings, emit, readOnly) =>
