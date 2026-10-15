@@ -1,0 +1,48 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { defineAdapter, npmLatest, runCli } from '../adapter'
+
+export const codexAdapter = defineAdapter({
+  id: 'codex',
+  binaryEnvVar: 'RAMU_CODEX_BIN',
+  executableNames: () => ['codex'],
+  managedBinary(runtimeHome) {
+    const managed = join(runtimeHome, 'node_modules', '.bin', process.platform === 'win32' ? 'codex.cmd' : 'codex')
+    return existsSync(managed) ? managed : null
+  },
+  accountEnv: (root) => ({ CODEX_HOME: root }),
+  accountClearedEnv: ['OPENAI_API_KEY', 'CODEX_API_KEY'],
+  setup: () => ({
+    docsUrl: 'https://developers.openai.com/codex/cli/',
+    installCommand: 'npm install -g @openai/codex@latest',
+    updateCommand: 'npm install -g @openai/codex@latest',
+    setupCommand: 'codex login',
+    setupNote: 'Install with npm, then sign in with your ChatGPT account or configure your API key.',
+  }),
+  latestRelease: npmLatest(() => '@openai/codex'),
+  async signInState(binary, env) {
+    const { ok, out } = await runCli(binary, ['login', 'status'], env)
+    return ok && /logged in/i.test(out)
+      ? {
+          signedIn: true,
+          detail:
+            out
+              .trim()
+              .split('\n')[0]!
+              .replace(/^logged in( using)?\s*/i, '') || undefined,
+        }
+      : { signedIn: false }
+  },
+  loginArgs: ['login'],
+  updatePlan({ config, binary, findExecutable, runtimeHome }) {
+    if (!findExecutable(binary)) throw new Error('Select an installed CLI before updating it.')
+    if (config.codex?.binary?.trim() || process.env.RAMU_CODEX_BIN)
+      throw new Error('Update this custom Codex installation with its package manager.')
+    // Own the npm-managed replacement instead of modifying an unrelated global
+    // installation selected by npm's prefix. Existing native processes keep running.
+    return {
+      command: findExecutable(process.platform === 'win32' ? 'npm.cmd' : 'npm') ?? 'npm',
+      args: ['install', '--prefix', runtimeHome, '--no-audit', '--no-fund', '@openai/codex@latest'],
+    }
+  },
+})
