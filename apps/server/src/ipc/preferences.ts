@@ -139,6 +139,14 @@ export const appPreferences = z.object({
   commitInstructions: z.string().max(2000).default(''),
   defaultCommitAction: z.enum(['commit', 'push', 'sync']).default('commit'),
   defaultCommitBranch: z.enum(['new-branch', 'current']).default('new-branch'),
+  commitModel: z
+    .object({
+      provider: z.enum(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity']),
+      model: z.string().max(200),
+      effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable(),
+    })
+    .nullable()
+    .default(null),
   recentChats: z.number().int().min(3).max(20),
   cleanupArchivedDays: z.number().int().min(0).max(3650).default(DEFAULT_APP_PREFERENCES.cleanupArchivedDays),
   terminalTabPosition: z.enum(['top', 'right']),

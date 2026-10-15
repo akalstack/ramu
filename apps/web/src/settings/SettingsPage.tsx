@@ -160,6 +160,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'chats', title: 'Include open tabs as context', words: 'files mention' },
   { section: 'chats', title: 'Delete archived chats after', words: 'cleanup retention history delete days' },
   { section: 'git', title: 'Commit messages', words: 'style conventional repository custom instructions generated' },
+  { section: 'git', title: 'Commit message model', words: 'ai draft default model effort' },
   { section: 'git', title: 'Commit instructions', words: 'custom message ticket language subject' },
   { section: 'git', title: 'Commit from default branch', words: 'feature branch current main push' },
   { section: 'system', title: 'Start at login', words: 'startup launch macos service' },
@@ -167,7 +168,6 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'system', title: 'Check app updates', words: 'release version check' },
   { section: 'providers', title: 'Default bar mode', words: 'model effort selection' },
   { section: 'git', title: 'Pull behavior', words: 'rebase merge fast-forward sync' },
-  { section: 'git', title: 'Hide empty Staged section', words: 'source control' },
   { section: 'chats', title: 'Recent chats per project', words: 'sidebar count project' },
   { section: 'shortcuts', title: 'Keyboard shortcuts', words: 'keys commands bindings' },
   {
@@ -208,7 +208,7 @@ export function SettingsPage({
   onClose: () => void
 }) {
   useLanguage()
-  const computers = useComputers()
+  useComputers()
   const scope = useContext(SettingsScopeContext)
   const [query, setQuery] = useState('')
   const host = useRef<HTMLDivElement>(null)

@@ -1,13 +1,12 @@
 import { ButtonGroup } from '@/components/ui/button-group'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/desktop-button'
-import { Check, ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
-import type { AgentSettings, CommitAction, CommitDraft, GitStatus } from '@ramu/shared/types'
+import { Check, ChevronDown, Sparkles } from 'lucide-react'
+import type { CommitAction, CommitDraft, GitStatus } from '@ramu/shared/types'
 import { t } from '../../i18n'
 import { useAppSettings } from '../../settings/AppSettings'
 import { SyncButton } from '../../git/GitControls'
-import { AgentControls, providerName } from '../../chat/AgentControls'
+import { providerName } from '../../chat/AgentControls'
 import { Menu } from '../../Menu'
 import { errorText } from '../../workspace/TaskPane'
 import { formatKeys } from '../../commands'
@@ -15,7 +14,7 @@ import { ICON_BUTTON } from './classes'
 import { commitActionLabel } from './helpers'
 import type { CommitFn } from './useCommitFlow'
 
-/** Commit message field, AI drafting, the Commit / Sync button and the AI message settings. */
+/** Commit message field, AI drafting and the Commit / Sync button. */
 export function CommitBox({
   repoName,
   status,
@@ -27,10 +26,8 @@ export function CommitBox({
   generating,
   message,
   draft,
-  settings,
   onMessage,
   onDraft,
-  onSettings,
   onGenerate,
   commit,
   onSmartCommit,
@@ -47,10 +44,8 @@ export function CommitBox({
   generating: boolean
   message: string
   draft: CommitDraft | null
-  settings: AgentSettings
   onMessage: (message: string) => void
   onDraft: (draft: CommitDraft | null) => void
-  onSettings: (settings: AgentSettings) => void
   onGenerate: () => void
   commit: CommitFn
   /** Asks to stage everything first when a commit is requested with nothing staged. */
@@ -208,17 +203,6 @@ export function CommitBox({
           {providerName(draft.provider)} {t(' · Review before committing.')}
         </div>
       )}
-      <Collapsible className="scm-ai-settings [&_[data-slot='collapsible-trigger']]:cursor-pointer [&_[data-slot='collapsible-trigger']]:flex [&_[data-slot='collapsible-trigger']]:items-center [&_[data-slot='collapsible-trigger']]:gap-1.5 [&_[data-slot='collapsible-trigger']]:min-h-7 [&_[data-slot='collapsible-trigger']]:p-[0_4px] [&_[data-slot='collapsible-trigger']]:[list-style:none] [&_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&[data-open]_summary_svg]:[transform:rotate(90deg)] [&_.composer-controls]:m-[5px_0_0] [&_.composer-controls]:p-[4px_0] [&_.composer-controls]:[border:none] text-caption text-muted-foreground m-0">
-        <CollapsibleTrigger render={<Button variant="ghost" />}>
-          <ChevronRight size={13} />
-          {t('AI message settings')}
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="composer-controls flex items-center flex-wrap gap-0.5 p-[0_0_8px] mb-1.5 [border-bottom:1px_solid_var(--line)]">
-            <AgentControls settings={settings} onChange={onSettings} disabled={generating} showAccess={false} />
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
     </>
   )
 }

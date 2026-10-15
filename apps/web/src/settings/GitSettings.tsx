@@ -2,11 +2,21 @@ import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/set
 import { Textarea } from '@/components/ui/textarea'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
+import { modelStepName, useModelSets } from '../models/ModelSets'
 import { SETTINGS_FORM_CLASS } from './constants'
 import { ToggleRow, type DraftProps } from './ToggleRow'
 
 export function GitSettings({ draft, onChange, busy }: DraftProps) {
   const toggleProps = { draft, onChange, busy }
+  const models = useModelSets()
+  const steps = models.preferences.sets.flatMap((set) => set.steps)
+  const commitStepId =
+    steps.find(
+      (step) =>
+        step.provider === draft.commitModel?.provider &&
+        step.model === draft.commitModel.model &&
+        step.effort === draft.commitModel.effort,
+    )?.id ?? ''
   return (
     <div className={SETTINGS_FORM_CLASS}>
       <SettingsGroupTitle>{t('Sync')}</SettingsGroupTitle>
@@ -52,6 +62,27 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
           }
         />
       </SettingsRow>
+      <SettingsRow setting="commitModel">
+        <SettingsLabel
+          title={t('Commit message model')}
+          help={t('Model that drafts commit messages. Default follows the default model in Models & fallback.')}
+        />
+        <Dropdown
+          label={t('Commit message model')}
+          value={commitStepId}
+          options={[
+            { value: '', label: t('Default model') },
+            ...steps.map((step) => ({ value: step.id, label: modelStepName(step, models.catalogs) })),
+          ]}
+          onChange={(id) => {
+            const step = steps.find((step) => step.id === id)
+            onChange({
+              ...draft,
+              commitModel: step ? { provider: step.provider, model: step.model, effort: step.effort } : null,
+            })
+          }}
+        />
+      </SettingsRow>
       {draft.commitStyle === 'custom' && (
         <SettingsRow setting="commitInstructions" className="settings-stack">
           <SettingsLabel
@@ -88,12 +119,6 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
         />
       </SettingsRow>
       <SettingsGroupTitle>{t('Source control')}</SettingsGroupTitle>
-      <ToggleRow
-        {...toggleProps}
-        setting="hideEmptyStaged"
-        title="Hide empty Staged section"
-        description="Show Staged only when the index contains changes."
-      />
       <p className="muted text-muted-foreground small text-caption">
         {t('Discard and delete actions show their affected files before running. Explorer deletion is permanent.')}
       </p>

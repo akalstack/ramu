@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises'
 import { z } from 'zod'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
-import type { AgentSettings, CommitBranchOptions, DiffContents, PullMode } from '@ramu/shared/types'
+import type { AgentSettings, CommitBranchOptions, DiffContents, ModelPreferences, PullMode } from '@ramu/shared/types'
 import { discardPreview } from '../../workspace/discardPreview'
 import * as files from '../../workspace/files'
 import * as git from '../../workspace/git'
@@ -192,9 +192,24 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
           style === 'repository'
             ? (await git.history(cwd).catch(() => [])).slice(0, 20).map((commit) => commit.subject)
             : []
+        // The model comes from Settings: the chosen commit model, else the default step in Model sets.
+        const modelPrefs = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
+        const defaultStep = modelPrefs?.sets
+          .find((set) => set.id === modelPrefs.defaultSetId)
+          ?.steps.find((step) => step.id === modelPrefs.defaultStepId)
+        const chosen = prefs.commitModel ?? defaultStep
         const draft = await agents.draftCommit(
           patch,
-          settings,
+          chosen
+            ? {
+                ...settings,
+                provider: chosen.provider,
+                model: chosen.model,
+                effort: chosen.effort,
+                accountId: chosen.provider === settings.provider ? settings.accountId : undefined,
+                serviceTier: undefined,
+              }
+            : settings,
           { style, instructions: prefs.commitInstructions ?? '', recentSubjects },
           files,
           includeBranch,

@@ -21,7 +21,6 @@
     },
     "android": {
       "package": "dev.ramu.mobile",
-      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon-foreground.png",
         "monochromeImage": "./assets/icon-monochrome.png",

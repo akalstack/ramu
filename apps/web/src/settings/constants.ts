@@ -40,7 +40,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
     'commitInstructions',
     'defaultCommitAction',
     'defaultCommitBranch',
-    'hideEmptyStaged',
+    'commitModel',
   ],
 }
 

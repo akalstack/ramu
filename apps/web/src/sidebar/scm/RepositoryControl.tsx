@@ -8,7 +8,6 @@ import { t, useLanguage } from '../../i18n'
 import { useAppSettings } from '../../settings/AppSettings'
 import { invoke } from '../../ipc'
 import { notifyError } from '../../chat/Notifications'
-import { errorText } from '../../workspace/TaskPane'
 import { useGitBusy } from '../../git/gitBusy'
 import { ChangeRow } from './ChangeRow'
 import { REPO_SECTION } from './classes'
@@ -63,7 +62,7 @@ export function RepositoryControl({
   const { status, loading, commits, stashes, branches, load } = useRepositoryData(taskId, binding, reportError)
   // Shared per repository, so work started from the status bar, commands or the shortcut also disables this panel.
   const busy = useGitBusy(taskId, binding.repoId)
-  const [settings, setSettings] = useAgentSettings(taskId)
+  const [settings] = useAgentSettings(taskId)
   const [historyOpen, setHistoryOpen] = useState(true)
   const [stagedOpen, setStagedOpen] = useState(true)
   const [changesOpen, setChangesOpen] = useState(true)
@@ -224,10 +223,8 @@ export function RepositoryControl({
             generating={flow.generating}
             message={flow.message}
             draft={flow.draft}
-            settings={settings}
             onMessage={flow.setMessage}
             onDraft={flow.setDraft}
-            onSettings={setSettings}
             onGenerate={flow.generate}
             commit={flow.commit}
             onSmartCommit={(action) => requestConfirmation({ kind: 'smart-commit', action })}
@@ -247,7 +244,7 @@ export function RepositoryControl({
               onMarkResolved={(path) => stagePaths([path], true)}
             />
           )}
-          {(!preferences.hideEmptyStaged || !!staged.length) && (
+          {!!staged.length && (
             <>
               <ChangeGroupHeader
                 label={t('Staged')}

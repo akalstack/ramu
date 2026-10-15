@@ -5,7 +5,6 @@ import { t } from '../i18n'
 
 export type ToggleKey =
   | 'previewTabs'
-  | 'hideEmptyStaged'
   | 'autoPull'
   | 'defaultAutoFallback'
   | 'includeTabContext'
