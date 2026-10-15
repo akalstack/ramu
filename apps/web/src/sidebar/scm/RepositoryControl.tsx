@@ -54,7 +54,7 @@ export function RepositoryControl({
   onGitCollapsed?: (collapsed: boolean) => void
 }) {
   useLanguage()
-  const { preferences } = useAppSettings()
+  useAppSettings()
   const reportError = useCallback(
     (message: string) => notifyError(message, `Git · ${binding.repoName}`),
     [binding.repoName],
