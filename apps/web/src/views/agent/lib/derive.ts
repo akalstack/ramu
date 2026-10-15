@@ -48,3 +48,7 @@ export function turnDatesOf(turns: Turn[]): (number | undefined)[] {
     return separator
   })
 }
+
+/** The day separator for the turn at `pageIndex` on the drawn page; `turnDates` covers every turn, `hiddenTurns` of which are not drawn. */
+export const pageTurnDate = (turnDates: (number | undefined)[], hiddenTurns: number, pageIndex: number) =>
+  turnDates[hiddenTurns + pageIndex]

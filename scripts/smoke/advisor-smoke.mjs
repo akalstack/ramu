@@ -71,7 +71,7 @@ try {
   // Settings › Advisor: turning it on picks a model; Save stores it.
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.locator('.settings-page').waitFor()
-  await page.locator('.settings-navigation').getByRole('button', { name: 'Advisor', exact: true }).click()
+  await page.locator('.settings-navigation').getByRole('button', { name: 'Goals & delegation', exact: true }).click()
   await page.locator('.advisor-settings').waitFor()
   const advisorSwitch = page.getByRole('switch', { name: 'Advisor', exact: true })
   const checkSwitchGeometry = async () => {
@@ -103,6 +103,7 @@ try {
   )
   await page.screenshot({ path: join(shots, 'settings.png') })
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await page.getByText(/Settings saved on/).waitFor() // Escape is ignored while a save runs
   await until(async () => (await api('settings.app.get')).advisor.enabled, 'Advisor setting did not save')
   await page.keyboard.press('Escape')
   await page.locator('.settings-page').waitFor({ state: 'detached' })
@@ -361,6 +362,7 @@ try {
   await page.locator('.settings-navigation').getByRole('button', { name: 'Appearance', exact: true }).click()
   await page.getByRole('switch', { name: 'Reduce motion', exact: true }).click()
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await page.getByText(/Settings saved on/).waitFor() // Escape is ignored while a save runs
   await until(async () => (await api('settings.app.get')).reduceMotion === true, 'Reduce motion did not persist')
   await page.keyboard.press('Escape')
   await page.locator('.settings-page').waitFor({ state: 'detached' })

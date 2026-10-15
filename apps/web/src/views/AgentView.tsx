@@ -51,7 +51,14 @@ import { useModelChange } from './agent/hooks/useModelChange'
 import { useElapsed } from './agent/hooks/useElapsed'
 import { toBlocks } from './agent/lib/blocks'
 import { toTurns } from './agent/lib/turns'
-import { completedGoalsByTurn, outcomesOf, questionStatesOf, toolResultsOf, turnDatesOf } from './agent/lib/derive'
+import {
+  completedGoalsByTurn,
+  outcomesOf,
+  pageTurnDate,
+  questionStatesOf,
+  toolResultsOf,
+  turnDatesOf,
+} from './agent/lib/derive'
 import { outboxFullError, quoteLines, visibleText } from './agent/lib/messages'
 import type { AgentViewDesc, MessageEdit, TranscriptContext } from './agent/types'
 import { AgentHeader } from './agent/components/AgentHeader'
@@ -535,7 +542,7 @@ export const AgentView = memo(function AgentView({
                     key={turn.key}
                     turn={turn}
                     isLast={ti === pageTurns.length - 1}
-                    dateSeparator={turnDates[ti]}
+                    dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
                     dateNow={dateNow}
                     reviews={turnReviews.get(turn.key)}
                     completedGoals={completedGoals.get(turn.user?.kind === 'event' ? turn.user.event : null)}

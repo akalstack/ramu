@@ -33,7 +33,7 @@ const waitForGoal = async (id, predicate) => {
 const openSettings = async () => {
   await page.evaluate(() => window.dispatchEvent(new Event('ramu:settings')))
   await page.locator('.settings-page').waitFor()
-  await page.getByRole('button', { name: 'Goals', exact: true }).click()
+  await page.getByRole('button', { name: 'Goals & delegation', exact: true }).click()
 }
 const select = async (name, option) => {
   await page.getByRole('combobox', { name, exact: true }).click()
@@ -56,7 +56,8 @@ try {
   await select('Maximum continuation turns', 'Unlimited')
   await page.screenshot({ path: join(shots, 'settings-unlimited.png'), animations: 'disabled' })
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
-  // Saving keeps the settings dialog open; Escape closes it.
+  // Saving keeps the settings dialog open, and Escape is ignored while a save runs; wait for it, then close.
+  await page.getByText(/Settings saved on/).waitFor()
   await page.keyboard.press('Escape')
   await page.locator('.settings-page').waitFor({ state: 'detached' })
   assert.deepEqual((await invoke('settings.app.get')).goals, { mode: 'auto', maxTurns: null })
@@ -84,7 +85,8 @@ try {
   await openSettings()
   await page.getByRole('switch', { name: 'Automatic goals', exact: true }).click()
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
-  // Saving keeps the settings dialog open; Escape closes it.
+  // Saving keeps the settings dialog open, and Escape is ignored while a save runs; wait for it, then close.
+  await page.getByText(/Settings saved on/).waitFor()
   await page.keyboard.press('Escape')
   await page.locator('.settings-page').waitFor({ state: 'detached' })
   assert.equal((await invoke('settings.app.get')).goals.mode, 'manual')

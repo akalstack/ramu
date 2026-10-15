@@ -104,7 +104,7 @@ try {
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'chats' } })))
   await page.getByRole('combobox', { name: 'Response style', exact: true }).click()
   await page.getByRole('option', { name: 'ADHD-friendly', exact: true }).click()
-  await page.getByRole('combobox', { name: 'Input compression', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Tool output compression', exact: true }).click()
   await page.getByRole('option', { name: 'Aggressive', exact: true }).click()
   await page.getByRole('option').first().waitFor({ state: 'detached' })
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
