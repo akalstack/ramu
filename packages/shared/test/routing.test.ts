@@ -263,7 +263,6 @@ describe('account rotation', () => {
     const config = {
       codex: {
         binary: '',
-        rotateAccounts: true,
         accountId: 'b',
         accounts: [
           { id: 'a', name: 'A' },
@@ -273,7 +272,11 @@ describe('account rotation', () => {
       },
     }
     expect(providerAccountOrder(config, 'codex')).toEqual(['b', 'default', 'a'])
-    expect(providerAccountOrder({ codex: { ...config.codex, rotateAccounts: false } }, 'codex')).toEqual(['b'])
+    // An account added without an explicit flag is active; turning it off removes it from the rotation.
+    expect(
+      providerAccountOrder({ codex: { ...config.codex, accounts: [{ id: 'a', name: 'A', enabled: false }] } }, 'codex'),
+    ).toEqual(['default'])
+    expect(providerAccountOrder({ codex: { binary: '' } }, 'codex')).toEqual(['default'])
     expect(providerAccountOrder(config, 'claude-code')).toEqual(['default'])
   })
   it('skips accounts that are limited or already tried', () => {

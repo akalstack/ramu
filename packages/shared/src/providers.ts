@@ -28,7 +28,6 @@ export type ProviderConfiguration = Partial<
       autoUpdate?: boolean
       /** Off hides the provider everywhere and stops Ramu from starting it. Absent means on. */ enabled?: boolean
       /** Cursor: allow reading its login from the macOS Keychain to show plan usage. */ usageKeychain?: boolean
-      /** Use every enabled account, not just the selected one: when the active account is at its limit, chats continue on the next. */ rotateAccounts?: boolean
     }
   >
 >
@@ -63,12 +62,13 @@ export interface ProviderStatus {
 
 /**
  * Accounts a chat may run on, in the order they are tried: the selected account first, then the default login,
- * then the rest in the order they were added. Just the selected account unless rotation is on.
+ * then the rest in the order they were added. Disabled accounts are skipped, so when the active account reaches its
+ * limit a chat continues on the next enabled one.
  */
 export function providerAccountOrder(config: ProviderConfiguration | undefined, provider: AgentProvider): string[] {
   const entry = config?.[provider]
   const primary = entry?.accountId || 'default'
-  if (!entry?.rotateAccounts || !supportsProviderAccounts(provider)) return [primary]
-  const enabled = (entry.accounts ?? []).filter((account) => account.enabled !== false).map((account) => account.id)
+  if (!supportsProviderAccounts(provider)) return [primary]
+  const enabled = (entry?.accounts ?? []).filter((account) => account.enabled !== false).map((account) => account.id)
   return [...new Set([primary, 'default', ...enabled])].filter((id) => id === 'default' || enabled.includes(id))
 }

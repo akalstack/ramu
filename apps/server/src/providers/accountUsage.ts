@@ -22,9 +22,11 @@ export class AccountUsage {
     const config = this.config()
     const jobs: Promise<void>[] = []
     for (const [provider, read] of Object.entries(this.readers) as [AgentProvider, AccountUsageReader][]) {
-      if ((only && provider !== only) || !providerEnabled(config, provider) || !config[provider]?.rotateAccounts)
-        continue
-      for (const account of providerAccountOrder(config, provider)) {
+      if ((only && provider !== only) || !providerEnabled(config, provider)) continue
+      const order = providerAccountOrder(config, provider)
+      // A single account is already covered by the provider's own usage reading.
+      if (order.length < 2) continue
+      for (const account of order) {
         const key = `${provider}:${account}`
         if (now - (this.last.get(key) ?? 0) < ACCOUNT_USAGE_INTERVAL_MS) continue
         this.last.set(key, now)

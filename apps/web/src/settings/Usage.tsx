@@ -294,14 +294,15 @@ function UsagePopover({
   const groups = byProvider(useVisibleUsage())
   const { preferences } = useAppSettings()
   const [open, setOpen] = useState(false)
-  const rotating = groups.some(({ provider }) => preferences.providerBinaries[provider]?.rotateAccounts)
+  const rotating = groups.some(
+    ({ provider }) => providerAccountOrder(preferences.providerBinaries, provider).length > 1,
+  )
   const accountReadings = useAccountUsage(open && rotating)
   const othersOf = (provider: AgentProvider) => {
     const config = preferences.providerBinaries[provider]
-    if (!config?.rotateAccounts) return []
     const order = providerAccountOrder(preferences.providerBinaries, provider)
     return order
-      .filter((id) => id !== (config.accountId || 'default'))
+      .filter((id) => id !== (config?.accountId || 'default'))
       .map((id) => ({
         id,
         name: accountLabel(config, id),

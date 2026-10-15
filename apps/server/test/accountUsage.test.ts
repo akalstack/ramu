@@ -10,11 +10,11 @@ const reading = (usedPercent: number): UsageReading => ({
   updatedAt: 1,
 })
 const config = {
-  codex: { binary: '', rotateAccounts: true, accounts: [{ id: 'work', name: 'Work' }] },
-  cursor: { binary: '', accounts: [{ id: 'x', name: 'X' }] },
+  codex: { binary: '', accounts: [{ id: 'work', name: 'Work' }] },
+  cursor: { binary: '' },
 }
 
-it('reads each login once per interval, tags non-default logins, and skips providers without rotation', async () => {
+it('reads each login once per interval, tags non-default logins, and skips providers with a single account', async () => {
   const update = vi.fn(),
     read = vi.fn(async () => [reading(40)]),
     other = vi.fn(async () => [reading(1)])
@@ -35,8 +35,11 @@ it('retries a failed read on the next refresh', async () => {
     .fn()
     .mockRejectedValueOnce(new Error('offline'))
     .mockResolvedValue([reading(10)])
-  const usage = new AccountUsage(vi.fn(), () => ({ codex: { binary: '', rotateAccounts: true } }), { codex: read })
+  const usage = new AccountUsage(vi.fn(), () => ({ codex: { binary: '', accounts: [{ id: 'work', name: 'Work' }] } }), {
+    codex: read,
+  })
   await usage.refresh(undefined, 1_000_000)
   await usage.refresh(undefined, 1_000_001)
-  expect(read).toHaveBeenCalledTimes(2)
+  // The default login failed and is retried; the working login is still inside its interval.
+  expect(read).toHaveBeenCalledTimes(3)
 })

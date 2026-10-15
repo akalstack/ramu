@@ -91,32 +91,3 @@ export function ProviderAddAccountForm({
     </div>
   )
 }
-
-export function ProviderRotateAccounts({
-  provider,
-  preferences,
-  onChange,
-}: {
-  provider: AgentProvider
-  preferences: ProviderPrefs | undefined
-  onChange: (rotateAccounts: boolean) => void
-}) {
-  return (
-    <SettingsRow setting={`providerBinaries.${provider}.rotateAccounts`} className="settings-toggle">
-      <span className="small text-caption">
-        {t('Use all accounts')}
-        <span className="muted text-muted-foreground block block small text-caption">
-          {t(
-            'When the account a chat is using reaches its limit, continue on the next enabled account before switching models. Order: the selected account, the default login, then the others.',
-          )}
-        </span>
-      </span>
-      <Switch
-        aria-label={t('Use all {0} accounts', { '0': providerName(provider) })}
-        checked={preferences?.rotateAccounts ?? false}
-        disabled={(preferences?.accounts?.filter((account) => account.enabled !== false).length ?? 0) < 1}
-        onCheckedChange={onChange}
-      />
-    </SettingsRow>
-  )
-}

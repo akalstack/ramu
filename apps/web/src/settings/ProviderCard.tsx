@@ -16,7 +16,6 @@ import {
   PROVIDER_ACTIONS_CLASS,
   ProviderAccountPicker,
   ProviderAddAccountForm,
-  ProviderRotateAccounts,
   type ProviderPrefs,
 } from './ProviderAccountControls'
 import { ProviderLoginRow } from './ProviderLoginRow'
@@ -136,15 +135,10 @@ export function ProviderCard({
         <ProviderAddAccountForm name={accountName} onName={onAccountName} onAdd={onAddAccount} onCancel={onCancelAdd} />
       )}
       {accounts && (
-        <ProviderRotateAccounts
-          provider={provider}
-          preferences={preferences}
-          onChange={(rotateAccounts) => onChange({ rotateAccounts })}
-        />
-      )}
-      {accounts && (
         <p className="muted text-muted-foreground small text-caption">
-          {t('New chats use this account after saving. Existing chats keep their original account.')}
+          {t(
+            'New chats use the selected account after saving; existing chats keep theirs. When the account a chat is using reaches its limit, it continues on the next enabled account before switching models.',
+          )}
         </p>
       )}
       <div className={PROVIDER_ACTIONS_CLASS}>
