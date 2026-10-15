@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { t } from '../../i18n'
-import { errorText } from '../../TaskPane'
-import { registerCommitTarget } from '../../commitShortcut'
+import { errorText } from '../../workspace/TaskPane'
+import { registerCommitTarget } from '../../git/commitShortcut'
 import type { CommitFn } from './useCommitFlow'
 
 /** Registers this section as the target of the Commit & Push shortcut; returns the ref for the section root. */

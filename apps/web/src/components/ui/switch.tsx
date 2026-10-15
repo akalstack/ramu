@@ -1,4 +1,4 @@
-import { useSettingsField } from '../../settingsField'
+import { useSettingsField } from '../../settings/settingsField'
 import { Switch as SwitchPrimitive } from '@base-ui/react/switch'
 import { cn } from 'cn'
 

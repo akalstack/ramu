@@ -7,7 +7,7 @@ import { providerName } from '@ramu/shared/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
-import { SettingsField } from '../SettingsScope'
+import { SettingsField } from './SettingsScope'
 import { SECONDARY_BUTTON_CLASS } from './constants'
 
 export type ProviderPrefs = NonNullable<AppPreferences['providerBinaries'][AgentProvider]>

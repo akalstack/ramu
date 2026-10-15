@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { AgentEvent, AgentSessionInfo, AgentSettings } from '@ramu/shared/types'
 import { invoke } from '../../../ipc'
-import { notifyError } from '../../../Notifications'
-import { errorText } from '../../../TaskPane'
+import { notifyError } from '../../../chat/Notifications'
+import { errorText } from '../../../workspace/TaskPane'
 
 /**
  * Settings changes made in the controls under the message box. They stay pending until the next message, except

@@ -1,5 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react'
-import { focusComposer } from '../../../ComposerInput'
+import { focusComposer } from '../../../composer/ComposerInput'
 
 /** In-chat find: its open state and query, and the ⌘F command, which opens it in whichever chat is on screen. */
 export function useChatFind(root: RefObject<HTMLDivElement | null>) {

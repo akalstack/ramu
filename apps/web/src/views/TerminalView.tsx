@@ -1,15 +1,22 @@
 import { FitAddon } from '@xterm/addon-fit'
-import { createTerminalResizeScheduler } from '../terminalResize'
+import { createTerminalResizeScheduler } from '../workspace/terminalResize'
 import { Terminal } from '@xterm/xterm'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { useAppSettings } from '../AppSettings'
+import { useAppSettings } from '../settings/AppSettings'
 import { invoke, ramu } from '../ipc'
-import { errorText } from '../TaskPane'
-import { useWorkspace } from '../workspace'
-import { FILE_DRAG_TYPE } from '../ComposerSuggestions'
-import { allShells, beginOpening, forgetTerminal, shellOf, takeAdopted, trackTerminal } from '../terminalRegistry'
-import { createOutputGate, markTerminalOutput } from '../terminalActivity'
+import { errorText } from '../workspace/TaskPane'
+import { useWorkspace } from '../workspace/workspace'
+import { FILE_DRAG_TYPE } from '../composer/ComposerSuggestions'
+import {
+  allShells,
+  beginOpening,
+  forgetTerminal,
+  shellOf,
+  takeAdopted,
+  trackTerminal,
+} from '../workspace/terminalRegistry'
+import { createOutputGate, markTerminalOutput } from '../workspace/terminalActivity'
 
 const shellQuote = (path: string) => (/^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`)
 

@@ -1,4 +1,4 @@
-import { useSettingsField } from '../settingsField'
+import { useSettingsField } from '../settings/settingsField'
 import type { ComponentProps } from 'react'
 import { cn } from 'cn'
 import { Button as NativeButton } from '@/components/ui/button'

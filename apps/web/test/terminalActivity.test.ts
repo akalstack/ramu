@@ -5,7 +5,7 @@ import {
   markTerminalOutput,
   setShownTerminal,
   SETTLE_MS,
-} from '../src/terminalActivity'
+} from '../src/workspace/terminalActivity'
 
 function clock() {
   let at = 1_000

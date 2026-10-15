@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { createOutbox, OUTBOX_LIMIT, type OutboxItem } from '../src/outbox'
+import { createOutbox, OUTBOX_LIMIT, type OutboxItem } from '../src/composer/outbox'
 
 function memory() {
   const data = new Map<string, string>()

@@ -5,7 +5,7 @@ import type { AgentSessionState, AgentTask } from '@ramu/shared/types'
 import { formatKeys } from '../../../commands'
 import { Menu } from '../../../Menu'
 import { SessionChangesButton } from '../../../Changes'
-import { SessionCheckpointButton } from '../../../SessionCheckpoint'
+import { SessionCheckpointButton } from '../../../chat/SessionCheckpoint'
 import { STATE_LABEL } from '../constants'
 import { GHOST_TEXT_BUTTON_CLASS, ICON_BUTTON_CLASS } from '../styles'
 

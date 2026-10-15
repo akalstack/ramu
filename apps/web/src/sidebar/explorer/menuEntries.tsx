@@ -15,7 +15,7 @@ import type { DirEntry, RepositoryBinding } from '@ramu/shared/types'
 import { t } from '../../i18n'
 import { invoke } from '../../ipc'
 import type { MenuEntry } from '../../Menu'
-import type { useWorkspace } from '../../workspace'
+import type { useWorkspace } from '../../workspace/workspace'
 import { baseName, parentOf } from './paths'
 import { shared, type TreeAction } from './shared'
 

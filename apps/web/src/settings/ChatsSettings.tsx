@@ -1,5 +1,5 @@
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
-import { EfficiencySettings, ResponseSettings } from '../IntelligenceSettings'
+import { EfficiencySettings, ResponseSettings } from './IntelligenceSettings'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
 import { SETTINGS_FORM_CLASS } from './constants'

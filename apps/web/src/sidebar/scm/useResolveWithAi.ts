@@ -2,9 +2,9 @@ import { useState } from 'react'
 import type { AgentSettings, GitStatus, GitStatusEntry, RepositoryBinding } from '@ramu/shared/types'
 import { t } from '../../i18n'
 import { invoke } from '../../ipc'
-import { useModelSets } from '../../ModelSets'
-import { errorText } from '../../TaskPane'
-import { isWorktreeCtx, useWorkspace } from '../../workspace'
+import { useModelSets } from '../../models/ModelSets'
+import { errorText } from '../../workspace/TaskPane'
+import { isWorktreeCtx, useWorkspace } from '../../workspace/workspace'
 
 /** Starts an agent chat in this checkout that resolves the conflicted files. */
 export function useResolveWithAi({

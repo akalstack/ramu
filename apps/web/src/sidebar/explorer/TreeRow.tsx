@@ -4,7 +4,7 @@ import { Button } from '@/components/desktop-button'
 import { visibleName } from '@ramu/shared/text'
 import type { DirEntry } from '@ramu/shared/types'
 import { FILE_ROW, FileRowLabel } from '../FileRow'
-import { FILE_DRAG_TYPE } from '../../ComposerSuggestions'
+import { FILE_DRAG_TYPE } from '../../composer/ComposerSuggestions'
 import { TreeCaret } from './TreeCaret'
 
 export type TreeRowHandlers = {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { invoke } from '../../ipc'
-import { errorText } from '../../TaskPane'
+import { errorText } from '../../workspace/TaskPane'
 import type { CommitFn } from './useCommitFlow'
 import type { Confirmation, GitRun } from './types'
 

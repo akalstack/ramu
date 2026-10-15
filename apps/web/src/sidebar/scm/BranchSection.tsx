@@ -2,8 +2,8 @@ import { ArrowDown, ArrowUp, Check, GitCompareArrows } from 'lucide-react'
 import type { GitBranchInfo, GitStatus, RepositoryBinding } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { t } from '../../i18n'
-import { BranchPicker } from '../../GitControls'
-import { useWorkspace } from '../../workspace'
+import { BranchPicker } from '../../git/GitControls'
+import { useWorkspace } from '../../workspace/workspace'
 import { GIT_BRANCH_ROW, ICON_BUTTON } from './classes'
 
 /** Explains where the branch stands relative to its upstream. */

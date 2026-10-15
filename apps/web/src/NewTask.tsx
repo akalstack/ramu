@@ -1,6 +1,6 @@
 import { t, useLanguage } from './i18n'
 import { clipText } from '@ramu/shared/text'
-import { useModelSets } from './ModelSets'
+import { useModelSets } from './models/ModelSets'
 import { FolderClosed, GitBranch, Laptop, Monitor, Network, Settings } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useRef, useState } from 'react'
@@ -13,19 +13,19 @@ import {
   type CheckoutMode,
   type WorktreePlanEntry,
 } from '@ramu/shared/types'
-import { AgentControls } from './AgentControls'
-import { Composer } from './Composer'
-import { ComposerTray } from './ComposerTray'
+import { AgentControls } from './chat/AgentControls'
+import { Composer } from './composer/Composer'
+import { ComposerTray } from './composer/ComposerTray'
 import { invoke } from './ipc'
 import { Menu } from './Menu'
 import { AnimatedMark } from './Brand'
-import { errorText } from './TaskPane'
-import { useWorkspace } from './workspace'
+import { errorText } from './workspace/TaskPane'
+import { useWorkspace } from './workspace/workspace'
 import { HomeFeed } from './Home'
-import { clearDraft, draftKey, loadDraft, useDraftPersistence } from './drafts'
-import { useAddProject } from './addProject'
-import { StatusDot, useComputers } from './computers'
-import { notifyError } from './Notifications'
+import { clearDraft, draftKey, loadDraft, useDraftPersistence } from './composer/drafts'
+import { useAddProject } from './workspace/addProject'
+import { StatusDot, useComputers } from './workspace/computers'
+import { notifyError } from './chat/Notifications'
 
 /** A task's title is the first line of what you asked for. */
 export function titleFrom(prompt: string): string {

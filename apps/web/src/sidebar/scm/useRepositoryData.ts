@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { RepositoryBinding } from '@ramu/shared/types'
 import { ipcQueryKey } from '../../dataQueries'
 import { ramu } from '../../ipc'
-import { errorText } from '../../TaskPane'
+import { errorText } from '../../workspace/TaskPane'
 
 /** Status, history, branches and stashes of one repository, refreshed on file changes and `ramu:git-updated`. */
 export function useRepositoryData(taskId: string, binding: RepositoryBinding, reportError: (message: string) => void) {

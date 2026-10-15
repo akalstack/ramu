@@ -4,12 +4,13 @@ import { Check, CircleAlert } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { GitBranchInfo, GitStatus, RepositoryBinding } from '@ramu/shared/types'
 import { Checkbox } from '@/components/ui/checkbox'
-import { BranchPicker } from './GitControls'
+import { isProtectedBranch } from '@ramu/shared/protectedBranch'
+import { BranchPicker } from './git/GitControls'
 import { invoke } from './ipc'
-import { withGitBusy } from './gitBusy'
+import { withGitBusy } from './git/gitBusy'
 import { Dialog } from './Menu'
-import { errorText } from './TaskPane'
-import { useWorkspace } from './workspace'
+import { errorText } from './workspace/TaskPane'
+import { useWorkspace } from './workspace/workspace'
 
 type Row = { status: GitStatus | null; branches: GitBranchInfo[]; result?: 'running' | 'done' | string }
 
@@ -75,11 +76,26 @@ export function WorkspaceSyncDialog({
     window.dispatchEvent(new Event('ramu:git-updated'))
   }
   const chosen = bindings.filter((b) => selection.has(b.repoId) && canSync(rows[b.repoId]?.status ?? null))
-  const run = async () => {
+  // Repositories on a protected branch (the default, dev, staging, production…) with commits to push ask first, like Source Control's push.
+  const [guarded, setGuarded] = useState<{ repoName: string; branch: string }[] | null>(null)
+  const start = async () => {
     if (unsaved) {
       setError('Save or close unsaved editor buffers before switching branches or pulling.')
       return
     }
+    const ahead = chosen.filter((b) => (rows[b.repoId]?.status?.ahead ?? 0) > 0)
+    const infos = await Promise.all(
+      ahead.map((b) => invoke('git.commitBranchInfo', taskId, b.repoId).catch(() => null)),
+    )
+    const protectedRepos = ahead.flatMap((b, i) => {
+      const branch = infos[i]?.branch ?? rows[b.repoId]?.status?.branch
+      return branch && isProtectedBranch(branch, infos[i]?.defaultBranch) ? [{ repoName: b.repoName, branch }] : []
+    })
+    if (protectedRepos.length) setGuarded(protectedRepos)
+    else void run()
+  }
+  const run = async () => {
+    setGuarded(null)
     setBusy(true)
     setError(null)
     // Repositories are independent (the server locks each checkout), so they sync side by side, a few at a time.
@@ -114,7 +130,7 @@ export function WorkspaceSyncDialog({
       confirmDisabled={busy || !chosen.length}
       busy={busy}
       error={error}
-      onConfirm={() => void run()}
+      onConfirm={() => void start()}
       onCancel={onClose}
     >
       <div className="workspace-sync [&_>_p]:m-[0_0_8px] flex flex-col gap-0.5">
@@ -189,6 +205,26 @@ export function WorkspaceSyncDialog({
           )
         })}
       </div>
+      {guarded && (
+        <Dialog
+          title={t('Push to a protected branch?')}
+          confirmLabel={t('Sync anyway')}
+          onConfirm={() => void run()}
+          onCancel={() => setGuarded(null)}
+        >
+          <p>{t('These repositories are on a default or protected branch and have commits to push:')}</p>
+          <ul className="m-[0_0_8px] pl-4 list-disc">
+            {guarded.map((entry) => (
+              <li key={entry.repoName}>
+                <strong>{entry.repoName}</strong> · {entry.branch}
+              </li>
+            ))}
+          </ul>
+          <p className="muted text-muted-foreground small text-caption">
+            {t('Cancel to untick them or switch their branch first.')}
+          </p>
+        </Dialog>
+      )}
     </Dialog>
   )
 }

@@ -1,7 +1,7 @@
-import { SETTINGS_SECTIONS } from './SettingsPage'
-import { searchableChats } from './chatSearch'
+import { SETTINGS_SECTIONS } from './settings/SettingsPage'
+import { searchableChats } from './chat/chatSearch'
 import { t, useLanguage } from './i18n'
-import { FileIcon } from './FileIcon'
+import { FileIcon } from './editor/FileIcon'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import {
   Command,
@@ -15,15 +15,15 @@ import {
 // Commands, keyboard shortcuts and the command palette.
 import { CornerDownLeft, File, FolderTree, MessageSquare, Sparkles, SquareChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { fuzzy, highlight } from './fuzzy'
-import { notifyError } from './Notifications'
-import { errorText } from './TaskPane'
-import { useModelSets } from './ModelSets'
+import { fuzzy, highlight } from './lib/fuzzy'
+import { notifyError } from './chat/Notifications'
+import { errorText } from './workspace/TaskPane'
+import { useModelSets } from './models/ModelSets'
 import { invoke } from './ipc'
-import { withGitBusy } from './gitBusy'
+import { withGitBusy } from './git/gitBusy'
 import { titleFrom } from './NewTask'
-import { commitAndPush } from './commitShortcut'
-import { isPreviewable, isWorkspaceCtx, isWorktreeCtx, tabOrder, type WorkspaceApi } from './workspace'
+import { commitAndPush } from './git/commitShortcut'
+import { isPreviewable, isWorkspaceCtx, isWorktreeCtx, tabOrder, type WorkspaceApi } from './workspace/workspace'
 
 const isMac = navigator.userAgent.includes('Mac')
 

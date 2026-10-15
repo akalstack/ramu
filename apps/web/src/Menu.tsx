@@ -1,4 +1,4 @@
-import { useSettingsField } from './settingsField'
+import { useSettingsField } from './settings/settingsField'
 import { t, useLanguage, formatLocale } from './i18n'
 import { Separator } from '@/components/ui/separator'
 import { Dialog as ShadcnDialog, DialogContent, DialogTitle } from '@/components/ui/dialog'

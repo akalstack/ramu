@@ -1,4 +1,4 @@
-import { FileIcon } from '../FileIcon'
+import { FileIcon } from '../editor/FileIcon'
 
 /** Row box shared by the Explorer tree and Source Control changes so files look the same in both. */
 export const FILE_ROW = 'flex items-center h-7 min-h-7 rounded-(--radius-s) gap-1.5 whitespace-nowrap text-soft'

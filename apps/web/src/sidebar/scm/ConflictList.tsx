@@ -2,7 +2,7 @@ import { Check, Sparkles } from 'lucide-react'
 import type { GitStatusEntry } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { t } from '../../i18n'
-import { useWorkspace } from '../../workspace'
+import { useWorkspace } from '../../workspace/workspace'
 import { CHANGE_ROW, SUB_TITLE } from './classes'
 
 /** "Merge changes" group: conflicted files that open in the editor and can be marked resolved. */

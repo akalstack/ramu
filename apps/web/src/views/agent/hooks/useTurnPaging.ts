@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import { highlightSource } from '@ramu/shared/sourceNavigation'
 import type { AgentEvent } from '@ramu/shared/types'
 import type { ChatBlock as Block } from '@ramu/shared/chatFolding'
-import { useWorkspaceActions } from '../../../workspace'
+import { useWorkspaceActions } from '../../../workspace/workspace'
 import { TURN_PAGE } from '../constants'
 import type { AgentViewDesc, Turn } from '../types'
 

@@ -1,5 +1,5 @@
-import { chatCodeComponents } from '../../../ChatCodeBlock'
-import { ChatLink } from '../../../ChatReferences'
+import { chatCodeComponents } from '../../../chat/ChatCodeBlock'
+import { ChatLink } from '../../../chat/ChatReferences'
 import { remarkChatReferences, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chatReferences'
 import { useLanguage } from '../../../i18n'
 import { Children, memo, useMemo } from 'react'

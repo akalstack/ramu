@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { AgentTask, Aside } from '@ramu/shared/types'
 import { invoke, ramu } from '../../../ipc'
-import { paneFadeIn } from '../../../paneMotion'
-import { animatePanelChange } from '../../../panelMotion'
+import { paneFadeIn } from '../../../workspace/paneMotion'
+import { animatePanelChange } from '../../../workspace/panelMotion'
 import type { AsideTarget } from '../types'
 
 /**

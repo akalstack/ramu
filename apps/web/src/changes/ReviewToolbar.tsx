@@ -4,7 +4,7 @@ import { Button } from '@/components/desktop-button'
 import { formatChatDate } from '@ramu/shared/chatDates'
 import { t, formatLocale, currentLanguage } from '../i18n'
 import { Dropdown } from '../Menu'
-import { LineStats } from '../LineStats'
+import { LineStats } from '../git/LineStats'
 import { ICON_BUTTON_CLASS } from './styles'
 
 export function ReviewToolbar({

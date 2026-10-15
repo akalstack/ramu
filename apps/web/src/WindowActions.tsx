@@ -23,8 +23,8 @@ import type { ProjectAction } from '@ramu/shared/types'
 import { formatKeys } from './commands'
 import { invoke } from './ipc'
 import { Menu, type MenuEntry } from './Menu'
-import { errorText } from './TaskPane'
-import { useWorkspace } from './workspace'
+import { errorText } from './workspace/TaskPane'
+import { useWorkspace } from './workspace/workspace'
 
 /** Window-bar actions for the open chat, like T3 Code: saved project commands that run in a terminal. */
 export function WindowActions({ ctx, projectId }: { ctx: string; projectId?: string }) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ReviewBranchState } from '@ramu/shared/types'
-import { errorText } from '../errors'
+import { errorText } from '../lib/errors'
 import { invoke, ramu } from '../ipc'
 
 /** Current/target branches of the review's repos, refreshed on focus, git HEAD changes and a slow timer. */

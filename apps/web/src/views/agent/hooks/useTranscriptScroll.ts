@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject, type UIEvent } from 'react'
 import type { AgentSessionState } from '@ramu/shared/types'
-import { reducedMotion } from '../../../panelMotion'
+import { reducedMotion } from '../../../workspace/panelMotion'
 import { NEAR_BOTTOM_PX } from '../constants'
 
 /**

@@ -1,6 +1,6 @@
 import type { Task } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
-import { ProviderWaitIcon } from '../../ProviderWait'
+import { ProviderWaitIcon } from '../../models/ProviderWait'
 import { timeAgo } from '../../Menu'
 
 const STATE_CLASS =

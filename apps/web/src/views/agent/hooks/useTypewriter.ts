@@ -1,7 +1,7 @@
 import { useLanguage } from '../../../i18n'
 import { useEffect, useRef, useState } from 'react'
-import { useAppSettings } from '../../../AppSettings'
-import { reducedMotion } from '../../../panelMotion'
+import { useAppSettings } from '../../../settings/AppSettings'
+import { reducedMotion } from '../../../workspace/panelMotion'
 
 /** Reveals streamed text at a steady pace instead of in the bursts the provider sends it, catching up faster the further behind it is. */
 export function useTypewriter(text: string, active: boolean): string {

@@ -1,8 +1,8 @@
 import type { GitStash, PullMode, RepositoryBinding } from '@ramu/shared/types'
 import { invoke } from '../../ipc'
-import { errorText } from '../../TaskPane'
-import { withGitBusy } from '../../gitBusy'
-import { useWorkspace } from '../../workspace'
+import { errorText } from '../../workspace/TaskPane'
+import { withGitBusy } from '../../git/gitBusy'
+import { useWorkspace } from '../../workspace/workspace'
 import type { GitRun } from './types'
 
 /** Repository-level Git actions; each runs under the busy flag, then refreshes. */

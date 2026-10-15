@@ -6,8 +6,8 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import type { GitCommit, GitCommitFile, RepositoryBinding } from '@ramu/shared/types'
 import { invoke, copyText } from '../ipc'
 import { Menu, timeAgo, useContextMenu, type MenuEntry } from '../Menu'
-import { errorText } from '../TaskPane'
-import { useWorkspace } from '../workspace'
+import { errorText } from '../workspace/TaskPane'
+import { useWorkspace } from '../workspace/workspace'
 
 /** Refs worth a badge: other branches, remotes and tags. HEAD and the checked-out branch are implied by the list itself. */
 export function commitRefs(refs: string, branch: string | null): string[] {

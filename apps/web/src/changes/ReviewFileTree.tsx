@@ -4,8 +4,8 @@ import type { ChangeFile, ChangeReview } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../i18n'
 import { SearchInput } from '../SearchInput'
-import { VirtualList } from '../VirtualList'
-import { useAppSettings } from '../AppSettings'
+import { VirtualList } from '../lib/VirtualList'
+import { useAppSettings } from '../settings/AppSettings'
 import { DISCUSSION_COUNT_CLASS } from './styles'
 
 /** File list beside the diffs: click to jump to a file, or to open it when the diff is shown one file at a time. */

@@ -1,7 +1,7 @@
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Input } from '@/components/ui/input'
 import type { AppPreferences } from '@ramu/shared/types'
-import { AppUpdates } from '../AppUpdates'
+import { AppUpdates } from './AppUpdates'
 import { BackgroundControls } from '../Automation'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'

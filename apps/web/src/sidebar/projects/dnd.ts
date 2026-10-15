@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { invoke } from '../../ipc'
-import { notifyError } from '../../Notifications'
-import { errorText } from '../../TaskPane'
-import { useWorkspace } from '../../workspace'
-import { useAddProject } from '../../addProject'
+import { notifyError } from '../../chat/Notifications'
+import { errorText } from '../../workspace/TaskPane'
+import { useWorkspace } from '../../workspace/workspace'
+import { useAddProject } from '../../workspace/addProject'
 
 export const PROJECT_DRAG_TYPE = 'application/x-ramu-project'
 

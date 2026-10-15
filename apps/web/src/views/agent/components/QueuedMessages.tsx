@@ -13,10 +13,10 @@ import {
 } from 'lucide-react'
 import type { Attachment, QueuedMessage } from '@ramu/shared/types'
 import { parseTaskMessage } from '@ramu/shared/agentTasks'
-import { Attachments } from '../../../Attachments'
+import { Attachments } from '../../../composer/Attachments'
 import { Menu } from '../../../Menu'
 import { invoke } from '../../../ipc'
-import { outbox, type OutboxItem } from '../../../outbox'
+import { outbox, type OutboxItem } from '../../../composer/outbox'
 import { visibleText } from '../lib/messages'
 import { ICON_BUTTON_CLASS, QUEUED_MESSAGE_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../styles'
 

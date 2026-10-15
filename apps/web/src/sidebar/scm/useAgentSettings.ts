@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings } from '@ramu/shared/types'
 import { invoke, ramu } from '../../ipc'
-import { useWorkspace } from '../../workspace'
+import { useWorkspace } from '../../workspace/workspace'
 
 /** Model settings for drafting commit messages, mirroring the task's active agent chat. */
 export function useAgentSettings(taskId: string) {

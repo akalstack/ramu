@@ -1,5 +1,5 @@
 import { t as translate, useLanguage } from '../../../i18n'
-import { AgentContentView } from '../../../AgentContentView'
+import { AgentContentView } from '../../../chat/AgentContentView'
 import { toolKind, KIND_LABEL, KIND_VERB } from '@ramu/shared/agentTools'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/desktop-button'

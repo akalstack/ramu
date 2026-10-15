@@ -2,7 +2,7 @@ import { t as translate, useLanguage, currentLanguage, formatLocale } from '../.
 import { foldChatTurn as foldTurn, type ChatBlock as Block } from '@ramu/shared/chatFolding'
 import { formatChatDate } from '@ramu/shared/chatDates'
 import type { ChatGoal } from '@ramu/shared/types'
-import { GoalDone, GoalNote } from '../../../GoalBar'
+import { GoalDone, GoalNote } from '../../../chat/GoalBar'
 import { TurnChanges } from '../../../Changes'
 import { agentOf, blockAt, blockIndex, groupAgentRuns, relativize } from '../lib/blocks'
 import { formatDuration } from '../lib/format'

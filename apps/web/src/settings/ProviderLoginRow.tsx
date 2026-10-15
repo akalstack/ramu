@@ -4,8 +4,8 @@ import { LogIn } from 'lucide-react'
 import type { ProviderStatus } from '@ramu/shared/providers'
 import type { AgentProvider } from '@ramu/shared/types'
 import { t } from '../i18n'
-import { SettingsField } from '../SettingsScope'
-import { peakUsage, usageTone, type useAccountUsage } from '../Usage'
+import { SettingsField } from './SettingsScope'
+import { peakUsage, usageTone, type useAccountUsage } from './Usage'
 import { SECONDARY_BUTTON_CLASS } from './constants'
 
 export type LoginRow = { id: string; name: string; enabled?: boolean }

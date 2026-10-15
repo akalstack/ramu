@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import type { RepositoryBinding, ViewDescriptor } from '@ramu/shared/types'
 import { t, useLanguage } from '../i18n'
 import { invoke, ramu } from '../ipc'
-import { errorText } from '../TaskPane'
+import { errorText } from '../workspace/TaskPane'
 
 const MEDIA = /\.(png|jpe?g|gif|webp|avif|bmp|ico|pdf|mp3|wav|ogg|m4a|flac|mp4|webm|mov)$/i
 export const isMedia = (path: string) => MEDIA.test(path)

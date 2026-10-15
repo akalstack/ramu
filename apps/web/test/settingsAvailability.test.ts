@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { SettingsSnapshot } from '@ramu/shared/settingsCompatibility'
-import { readSettingsSnapshot, SettingsUpdateRequired } from '../src/settingsAvailability'
+import { readSettingsSnapshot, SettingsUpdateRequired } from '../src/settings/settingsAvailability'
 
 it.each([
   'Unknown method settings.app.snapshot',

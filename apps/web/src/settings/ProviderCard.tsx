@@ -8,9 +8,9 @@ import { FolderOpen, RefreshCw } from 'lucide-react'
 import { providerName, supportsProviderAccounts, type ProviderStatus } from '@ramu/shared/providers'
 import type { AgentProvider } from '@ramu/shared/types'
 import { t } from '../i18n'
-import { ProviderIcon } from '../ProviderIcon'
-import { SettingsField } from '../SettingsScope'
-import type { useAccountUsage } from '../Usage'
+import { ProviderIcon } from '../models/ProviderIcon'
+import { SettingsField } from './SettingsScope'
+import type { useAccountUsage } from './Usage'
 import { SECONDARY_BUTTON_CLASS } from './constants'
 import {
   PROVIDER_ACTIONS_CLASS,

@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { AppPreferences } from '@ramu/shared/types'
-import type { SettingsSection } from '../SettingsPage'
+import type { SettingsSection } from './SettingsPage'
 
 export type DraftSetter = Dispatch<SetStateAction<AppPreferences>>
 

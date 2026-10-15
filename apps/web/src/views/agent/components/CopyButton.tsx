@@ -3,8 +3,8 @@ import { Button } from '@/components/desktop-button'
 import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
 import { copyText } from '../../../ipc'
-import { errorText } from '../../../TaskPane'
-import { notifyError } from '../../../Notifications'
+import { errorText } from '../../../workspace/TaskPane'
+import { notifyError } from '../../../chat/Notifications'
 import { ICON_BUTTON_CLASS } from '../styles'
 
 /** Copies `text` and shows a check for a moment. */

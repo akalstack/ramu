@@ -1,8 +1,8 @@
 import { RESPONSE_STYLE_LABELS } from '@ramu/shared/types'
 import { t as translate } from '../../../i18n'
 import type { AgentSettings } from '@ramu/shared/types'
-import { accessName } from '../../../AgentControls'
-import { settingsNames, useModelSets } from '../../../ModelSets'
+import { accessName } from '../../../chat/AgentControls'
+import { settingsNames, useModelSets } from '../../../models/ModelSets'
 
 /** What the button does, not just "Undo": "Switch back to Opus Medium". */
 export function SwitchBackLabel({ previous }: { previous: AgentSettings }) {

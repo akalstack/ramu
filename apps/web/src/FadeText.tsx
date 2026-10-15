@@ -1,4 +1,4 @@
-import { reducedMotion } from './panelMotion'
+import { reducedMotion } from './workspace/panelMotion'
 import { useLayoutEffect, useRef } from 'react'
 
 const ROW = '.project-row, .task-row'

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { AgentEvent, AgentSessionInfo, AgentSessionState, QueuedMessage } from '@ramu/shared/types'
 import { cachedData, ipcQueryKey, queryClient } from '../../../dataQueries'
 import { invoke, ramu } from '../../../ipc'
-import { errorText } from '../../../TaskPane'
+import { errorText } from '../../../workspace/TaskPane'
 
 /**
  * A chat's session and events: seeded from the query cache, hydrated from the host, then kept current by live

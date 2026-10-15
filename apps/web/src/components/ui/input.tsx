@@ -1,5 +1,5 @@
 import { t } from '../../i18n'
-import { useSettingsField } from '../../settingsField'
+import { useSettingsField } from '../../settings/settingsField'
 import * as React from 'react'
 import { Input as InputPrimitive } from '@base-ui/react/input'
 import { cn } from 'cn'

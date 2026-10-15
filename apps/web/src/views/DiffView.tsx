@@ -4,11 +4,11 @@ import { Button } from '@/components/desktop-button'
 import { useEffect, useRef, useState } from 'react'
 import type { RepositoryBinding, ViewDescriptor } from '@ramu/shared/types'
 import { invoke, ramu } from '../ipc'
-import { monaco } from '../monaco'
-import { errorText } from '../TaskPane'
-import { useAppSettings } from '../AppSettings'
-import { useWorkspace } from '../workspace'
-import { registerSelection } from '../editorBuffers'
+import { monaco } from '../editor/monaco'
+import { errorText } from '../workspace/TaskPane'
+import { useAppSettings } from '../settings/AppSettings'
+import { useWorkspace } from '../workspace/workspace'
+import { registerSelection } from '../editor/editorBuffers'
 
 type DiffViewDesc = Extract<ViewDescriptor, { kind: 'diff' }>
 

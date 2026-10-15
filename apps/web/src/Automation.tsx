@@ -1,6 +1,6 @@
-import { useSettingsEvents, useSettingsInvoke } from './SettingsScope'
+import { useSettingsEvents, useSettingsInvoke } from './settings/SettingsScope'
 import { ContentSkeleton } from '@/components/content-skeleton'
-import { errorText } from './errors'
+import { errorText } from './lib/errors'
 import { SettingsRow } from '@/components/settings-row'
 import { t, useLanguage, formatLocale } from './i18n'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -24,12 +24,12 @@ import {
   type RecapSnapshot,
   type BackgroundStatus,
 } from '@ramu/shared/types'
-import { AgentControls } from './AgentControls'
-import { useModelSets } from './ModelSets'
-import { useAppSettings } from './AppSettings'
-import { useWorkspace } from './workspace'
+import { AgentControls } from './chat/AgentControls'
+import { useModelSets } from './models/ModelSets'
+import { useAppSettings } from './settings/AppSettings'
+import { useWorkspace } from './workspace/workspace'
 import { invoke, ramu } from './ipc'
-import { notifyError } from './Notifications'
+import { notifyError } from './chat/Notifications'
 
 export function formatScheduleTime(at: number | null, zone: string): string {
   return at === null

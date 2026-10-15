@@ -1,5 +1,5 @@
 import { t as translate } from '../../../i18n'
-import { OUTBOX_LIMIT } from '../../../outbox'
+import { OUTBOX_LIMIT } from '../../../composer/outbox'
 
 /** Separates what you typed from the hidden context Ramu appends to a message for the agent. */
 export const CONTEXT_MARKER = '\n\n<ramu-context>\n'

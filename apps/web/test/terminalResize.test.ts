@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createTerminalResizeScheduler } from '../src/terminalResize'
+import { createTerminalResizeScheduler } from '../src/workspace/terminalResize'
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())

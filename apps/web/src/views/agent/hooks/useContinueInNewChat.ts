@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { clipText } from '@ramu/shared/text'
 import type { AgentSessionInfo, AgentSettings } from '@ramu/shared/types'
 import { invoke } from '../../../ipc'
-import { errorText } from '../../../TaskPane'
-import { useWorkspaceActions } from '../../../workspace'
+import { errorText } from '../../../workspace/TaskPane'
+import { useWorkspaceActions } from '../../../workspace/workspace'
 
 /** "Continue in new chat": a fresh chat in the same checkout that opens with this one's transcript as hidden context. */
 export function useContinueInNewChat({

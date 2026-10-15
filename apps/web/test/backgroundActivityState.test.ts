@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { readBackgroundActivity } from '../src/backgroundActivityState'
+import { readBackgroundActivity } from '../src/chat/backgroundActivityState'
 
 it('keeps a healthy older service connected when the activity endpoint is missing', async () => {
   const state = await readBackgroundActivity(

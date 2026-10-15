@@ -1,5 +1,5 @@
 import { t as translate, useLanguage } from '../../../i18n'
-import { AgentContentView } from '../../../AgentContentView'
+import { AgentContentView } from '../../../chat/AgentContentView'
 import { Button } from '@/components/desktop-button'
 import { ArrowLeft, Bot, Send, Square, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'

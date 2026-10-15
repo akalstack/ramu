@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { slide } from '../../slide'
+import { slide } from '../../lib/slide'
 
 /** Keeps a collapsible element mounted while it slides closed, and slides it open once it is mounted. */
 export function useSlideMount(open: boolean) {

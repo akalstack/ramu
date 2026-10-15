@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import type { AgentEvent, AgentSessionInfo, Attachment } from '@ramu/shared/types'
 import { ipcQueryKey, queryClient } from '../../../dataQueries'
-import { registerWorkspaceCheckpoint } from '../../../workspaceCheckpoint'
+import { registerWorkspaceCheckpoint } from '../../../workspace/workspaceCheckpoint'
 
 // Per-chat presentation state belongs to the UI, separate from the data query cache.
 const chatPresentation = new Map<string, { draft: string; attachments: Attachment[]; top: number; stick: boolean }>()

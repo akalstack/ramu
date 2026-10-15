@@ -5,8 +5,8 @@ import { Button } from '@/components/desktop-button'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { invoke } from '../ipc'
 import { t, useLanguage } from '../i18n'
-import { errorText } from '../errors'
-import { useWorkspace } from '../workspace'
+import { errorText } from '../lib/errors'
+import { useWorkspace } from '../workspace/workspace'
 import { FILE_ROW, FileRowLabel } from './FileRow'
 
 export function StashRow({

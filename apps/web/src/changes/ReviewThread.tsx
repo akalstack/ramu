@@ -3,7 +3,7 @@ import type { ChangeReview, ReviewComment } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../i18n'
 import { invoke } from '../ipc'
-import { commentLabel } from '../ReviewChip'
+import { commentLabel } from '../git/ReviewChip'
 import { ICON_BUTTON_CLASS, NOTE_CLASS, WHERE_CLASS } from './styles'
 
 export function ReviewThread({

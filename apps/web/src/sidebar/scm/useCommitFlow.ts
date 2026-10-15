@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import type { AgentSettings, CommitDraft, GitStatus, RepositoryBinding } from '@ramu/shared/types'
 import { invoke } from '../../ipc'
-import { errorText } from '../../TaskPane'
-import { chooseCommitBranch } from '../../CommitBranchDialog'
-import { withGitBusy } from '../../gitBusy'
+import { errorText } from '../../workspace/TaskPane'
+import { chooseCommitBranch } from '../../git/CommitBranchDialog'
+import { withGitBusy } from '../../git/gitBusy'
 import type { GitRun } from './types'
 
 /** Commit message, AI draft and the commit action (with optional push, sync, amend or new branch). */

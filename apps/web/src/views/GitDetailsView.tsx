@@ -3,9 +3,9 @@ import { t, useLanguage } from './../i18n'
 import { useEffect, useRef, useState } from 'react'
 import type { RepositoryBinding, ViewDescriptor } from '@ramu/shared/types'
 import { invoke, ramu } from '../ipc'
-import { monaco } from '../monaco'
-import { errorText } from '../TaskPane'
-import { useAppSettings } from '../AppSettings'
+import { monaco } from '../editor/monaco'
+import { errorText } from '../workspace/TaskPane'
+import { useAppSettings } from '../settings/AppSettings'
 
 export function GitDetailsView({
   taskId,

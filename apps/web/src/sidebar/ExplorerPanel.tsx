@@ -1,6 +1,6 @@
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { t, useLanguage } from './../i18n'
-import { useWorkspace } from '../workspace'
+import { useWorkspace } from '../workspace/workspace'
 import { ExplorerHeader } from './explorer/ExplorerHeader'
 import { RepoTree } from './explorer/RepoTree'
 

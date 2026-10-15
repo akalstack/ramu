@@ -4,8 +4,8 @@ import type { GitStatusEntry } from '@ramu/shared/types'
 import { t } from '../../i18n'
 import { copyText } from '../../ipc'
 import { useContextMenu } from '../../Menu'
-import { errorText } from '../../TaskPane'
-import { useWorkspace } from '../../workspace'
+import { errorText } from '../../workspace/TaskPane'
+import { useWorkspace } from '../../workspace/workspace'
 
 /** Right-click menu of a Staged / Changes row; `selectEntry` records which row it was opened on. */
 export function useFileContextMenu({

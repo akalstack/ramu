@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeFile } from '@ramu/shared/types'
-import { useNearViewport } from '../useNearViewport'
+import { useNearViewport } from '../lib/useNearViewport'
 
 const revealListeners = new Map<string, Set<(event: CustomEvent) => void>>()
 const revealFile = (event: Event) => {

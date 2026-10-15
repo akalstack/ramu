@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { clearDraft, draftKey, loadDraft, pruneDrafts, saveDraft } from '../src/drafts'
+import { clearDraft, draftKey, loadDraft, pruneDrafts, saveDraft } from '../src/composer/drafts'
 
 function memory() {
   const data = new Map<string, string>()

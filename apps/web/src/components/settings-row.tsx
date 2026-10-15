@@ -1,4 +1,4 @@
-import { SettingsField, SettingsFieldNotice } from '../SettingsScope'
+import { SettingsField, SettingsFieldNotice } from '../settings/SettingsScope'
 import { Children, type ComponentProps } from 'react'
 import { cn } from 'cn'
 import { Field } from '@/components/ui/field'

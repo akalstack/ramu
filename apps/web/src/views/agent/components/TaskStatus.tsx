@@ -1,9 +1,9 @@
 import { Spinner } from '@/components/ui/spinner'
 import { useLanguage } from '../../../i18n'
 import { CircleCheck, CircleSlash, CircleX } from 'lucide-react'
-import { providerName } from '../../../AgentControls'
+import { providerName } from '../../../chat/AgentControls'
 import type { AgentTask } from '@ramu/shared/types'
-import { modelDisplayName } from '../../../ModelSets'
+import { modelDisplayName } from '../../../models/ModelSets'
 import { formatDuration } from '../lib/format'
 
 /** Display name of each sub-agent status. */

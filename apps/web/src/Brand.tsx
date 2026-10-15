@@ -1,4 +1,4 @@
-import { reducedMotion } from './panelMotion'
+import { reducedMotion } from './workspace/panelMotion'
 import { t, useLanguage } from './i18n'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'

@@ -9,7 +9,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { t } from '../i18n'
-import { SETTINGS_SECTIONS, type SettingsSection } from '../SettingsPage'
+import { SETTINGS_SECTIONS, type SettingsSection } from './SettingsPage'
 
 export type ResetTarget = SettingsSection | 'models' | 'sizes'
 
