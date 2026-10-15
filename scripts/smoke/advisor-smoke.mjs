@@ -1,5 +1,5 @@
 // Electron check for Ramu's advisor against an isolated profile and the fake agents; no model calls.
-// Run after `pnpm build`: node scripts/advisor-smoke.mjs
+// Run after `pnpm build`: node scripts/smoke/advisor-smoke.mjs
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -7,7 +7,7 @@ import { request } from 'node:http'
 import { createHash } from 'node:crypto'
 import { _electron as electron } from 'playwright-core'
 
-const appDir = resolve(import.meta.dirname, '..', 'apps', 'desktop'),
+const appDir = resolve(import.meta.dirname, '..', '..', 'apps', 'desktop'),
   dir = mkdtempSync(join(tmpdir(), 'ramu-advisor-'))
 const profile = join(dir, 'profile')
 const shots = join(appDir, 'output', 'playwright', 'advisor')

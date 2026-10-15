@@ -50,4 +50,4 @@ Ramu's advisor replaces Claude Code's configured advisor for chats it starts, wi
 
 ## Checks
 
-Simulated fixtures check adapters and transcripts; they do not verify every live runtime. For advisor UI checks, build and run `node scripts/advisor-smoke.mjs`. Provider authentication and real model calls need separate validation.
+Simulated fixtures check adapters and transcripts; they do not verify every live runtime. For advisor UI checks, build and run `node scripts/smoke/advisor-smoke.mjs`. Provider authentication and real model calls need separate validation.

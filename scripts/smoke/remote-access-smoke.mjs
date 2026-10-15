@@ -1,6 +1,6 @@
 // Remote access in the real desktop app: turn on network access, pair a device, revoke it, then pair this app with a
 // second server and switch between live computer views. Isolated profiles, no model calls.
-// Run after pnpm build: node scripts/remote-access-smoke.mjs
+// Run after pnpm build: node scripts/smoke/remote-access-smoke.mjs
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process'
 import { request as httpRequest } from 'node:http'
 import { _electron as electron } from 'playwright-core'
 
-const root = resolve(import.meta.dirname, '..'),
+const root = resolve(import.meta.dirname, '..', '..'),
   appDir = join(root, 'apps', 'desktop')
 const dir = mkdtempSync(join(tmpdir(), 'ramu-remote-'))
 const shots = join(appDir, 'output', 'playwright', 'remote-access')

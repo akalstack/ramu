@@ -16,4 +16,4 @@ English strings are translation keys and fallbacks. Indonesian translations live
 
 ## Checks
 
-Run `pnpm typecheck` and `pnpm test`. After building, `node scripts/i18n-smoke.mjs` checks switching, persistence, native menus, and editor buffers with an isolated profile.
+Run `pnpm typecheck` and `pnpm test`. After building, `node scripts/smoke/i18n-smoke.mjs` checks switching, persistence, native menus, and editor buffers with an isolated profile.

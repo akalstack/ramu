@@ -1,12 +1,12 @@
 // Palette navigation against an isolated Electron profile and simulated agents.
-// Run after pnpm build: node scripts/command-palette-smoke.mjs
+// Run after pnpm build: node scripts/smoke/command-palette-smoke.mjs
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
 
-const appDir = resolve(import.meta.dirname, '..', 'apps', 'desktop')
+const appDir = resolve(import.meta.dirname, '..', '..', 'apps', 'desktop')
 const fixture = mkdtempSync(join(tmpdir(), 'ramu-palette-'))
 const env = {
   ...process.env,

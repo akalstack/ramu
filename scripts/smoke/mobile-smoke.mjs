@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 import { spawn, execFileSync } from 'node:child_process'
 import { request, createServer } from 'node:http'
 import { HostClient } from '../apps/mobile/src/runtime/transport.ts'
-const root = resolve(import.meta.dirname, '..'),
+const root = resolve(import.meta.dirname, '..', '..'),
   directory = mkdtempSync(join(tmpdir(), 'ramu-mobile-'))
 const hosts = [],
   streams = []

@@ -2,13 +2,13 @@
 // skips the repository root for apps/desktop), so it cannot see the hoisted workspace install. This stages a
 // self-contained copy of the app and its installed production dependencies, then runs Forge there.
 //
-// Usage: node scripts/desktop-package.mjs <package|make> [forge options]
+// Usage: node scripts/release/desktop-package.mjs <package|make> [forge options]
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 
-const root = realpathSync(resolve(import.meta.dirname, '..'))
+const root = realpathSync(resolve(import.meta.dirname, '..', '..'))
 const desktop = join(root, 'apps', 'desktop')
 
 /** Node's lookup: the nearest node_modules/<name> from `from` upward. */
@@ -58,7 +58,7 @@ export function stagePath(stage, packageDir) {
 function main() {
   const [command, ...rest] = process.argv.slice(2)
   if (!['package', 'make'].includes(command)) {
-    console.error('Usage: node scripts/desktop-package.mjs <package|make> [forge options]')
+    console.error('Usage: node scripts/release/desktop-package.mjs <package|make> [forge options]')
     process.exit(1)
   }
   // A shell with ELECTRON_RUN_AS_NODE set would make Forge's Electron helpers run as plain Node.

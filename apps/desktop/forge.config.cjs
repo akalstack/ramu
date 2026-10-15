@@ -1,7 +1,7 @@
 const { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } = require('node:fs')
 const { join } = require('node:path')
 
-// Packaging runs from a staged copy of apps/desktop (see scripts/desktop-package.mjs); branding and output stay at the repository root.
+// Packaging runs from a staged copy of apps/desktop (see scripts/release/desktop-package.mjs); branding and output stay at the repository root.
 const repoRoot = process.env.RAMU_REPO_ROOT || join(__dirname, '..', '..')
 
 module.exports = {

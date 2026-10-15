@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
 
-const root = resolve(import.meta.dirname, '..', 'apps', 'desktop')
+const root = resolve(import.meta.dirname, '..', '..', 'apps', 'desktop')
 const dir = mkdtempSync(join(tmpdir(), 'ramu-goals-'))
 const shots = join(root, 'output', 'playwright', 'goals')
 mkdirSync(shots, { recursive: true })

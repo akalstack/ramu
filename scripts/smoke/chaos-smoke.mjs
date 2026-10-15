@@ -1,6 +1,6 @@
 // Chaos / QA pass: throws hostile input (see chaos-payloads.mjs) at every text surface of the built app and
 // reports crashes, renderer exceptions, dead UI, layout overflow and rejected-without-explanation submits.
-// Usage: pnpm build && node scripts/chaos-smoke.mjs [surface ...]   (SHOTS=dir keeps screenshots, default /tmp/ramu-chaos)
+// Usage: pnpm build && node scripts/smoke/chaos-smoke.mjs [surface ...]   (SHOTS=dir keeps screenshots, default /tmp/ramu-chaos)
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
 import { CORE, PAYLOADS, pick } from './chaos-payloads.mjs'
 
-const APP_DIR = resolve(import.meta.dirname, '..', 'apps', 'desktop')
+const APP_DIR = resolve(import.meta.dirname, '..', '..', 'apps', 'desktop')
 const SHOTS = process.env.SHOTS ?? '/tmp/ramu-chaos'
 mkdirSync(SHOTS, { recursive: true })
 

@@ -8,7 +8,7 @@ import { request } from 'node:http'
 import { createServer } from 'node:net'
 import { HostClient } from '../apps/mobile/src/runtime/transport.ts'
 
-const root = resolve(import.meta.dirname, '..'),
+const root = resolve(import.meta.dirname, '..', '..'),
   directory = mkdtempSync(join(tmpdir(), 'ramu-cycle-'))
 const hosts = [],
   connections = [],

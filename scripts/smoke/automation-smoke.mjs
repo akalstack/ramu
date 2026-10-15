@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto'
 import { _electron as electron } from 'playwright-core'
 const appDir = process.env.RAMU_E2E_APP_DIR
     ? resolve(process.env.RAMU_E2E_APP_DIR)
-    : resolve(import.meta.dirname, '..', 'apps', 'desktop'),
+    : resolve(import.meta.dirname, '..', '..', 'apps', 'desktop'),
   dir = mkdtempSync(join(tmpdir(), 'ramu-automation-'))
 const profile = join(dir, 'profile'),
   repo = join(dir, 'demo')

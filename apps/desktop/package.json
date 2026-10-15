@@ -18,8 +18,8 @@
     "start": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "package": "node ../../scripts/desktop-package.mjs package",
-    "make": "node ../../scripts/desktop-package.mjs make"
+    "package": "node ../../scripts/release/desktop-package.mjs package",
+    "make": "node ../../scripts/release/desktop-package.mjs make"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "1.8.0",

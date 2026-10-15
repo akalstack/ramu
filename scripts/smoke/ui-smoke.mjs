@@ -1,13 +1,13 @@
 // Drives the built app through the first-milestone journey against throwaway repos and a
 // throwaway profile, asserting the paths each surface uses. Screenshots go to $SHOTS or /tmp/ramu-shots.
-// Usage: pnpm build && node scripts/ui-smoke.mjs   (RAMU_REAL_AGENT=1 adds a real Claude Code run)
+// Usage: pnpm build && node scripts/smoke/ui-smoke.mjs   (RAMU_REAL_AGENT=1 adds a real Claude Code run)
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
 
-const APP_DIR = resolve(import.meta.dirname, '..', 'apps', 'desktop')
+const APP_DIR = resolve(import.meta.dirname, '..', '..', 'apps', 'desktop')
 const SHOTS = process.env.SHOTS ?? '/tmp/ramu-shots'
 mkdirSync(SHOTS, { recursive: true })
 

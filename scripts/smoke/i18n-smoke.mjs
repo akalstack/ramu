@@ -1,5 +1,5 @@
 // Language switching and persistence against an isolated Electron profile. No model calls.
-// Run after pnpm build: node scripts/i18n-smoke.mjs
+// Run after pnpm build: node scripts/smoke/i18n-smoke.mjs
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { _electron as electron } from 'playwright-core'
 
-const appDir = resolve(import.meta.dirname, '..', 'apps', 'desktop')
+const appDir = resolve(import.meta.dirname, '..', '..', 'apps', 'desktop')
 const dir = mkdtempSync(join(tmpdir(), 'ramu-language-'))
 const profile = join(dir, 'profile'),
   repo = join(dir, 'Language Smoke')

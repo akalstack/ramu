@@ -16,7 +16,7 @@ delete env.ELECTRON_RENDERER_URL
 let app, page
 const errors = []
 try {
-  app = await electron.launch({ args: [resolve(import.meta.dirname, '..', 'apps', 'desktop')], env })
+  app = await electron.launch({ args: [resolve(import.meta.dirname, '..', '..', 'apps', 'desktop')], env })
   page = await app.firstWindow()
   page.on('pageerror', (error) => errors.push(error.message))
   await page.waitForSelector('.shell')

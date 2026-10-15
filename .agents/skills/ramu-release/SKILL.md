@@ -3,7 +3,7 @@ name: ramu-release
 description: Prepare a Ramu desktop release, write evidence-based release notes, and optionally start the GitHub draft release workflow when requested. Use for releasing this repository or drafting its release notes.
 ---
 
-Read [the release guide](../../../docs/RELEASING.md) and `package.json`. Use `scripts/release.mjs` through the package commands; do not introduce another publisher.
+Read [the release guide](../../../docs/RELEASING.md) and `package.json`. Use `scripts/release/release.mjs` through the package commands; do not introduce another publisher.
 
 Determine the requested version and the previous released version tag. Inspect Git changes and relevant tests since that tag. For the first release, describe the current product from the code and documentation. Write user-facing highlights, fixes, compatibility changes and known limitations in `releases/v<version>.md`. Do not paste the commit list as final prose or claim validation that was not performed. Separate automation evidence from live provider verification. Keep unsigned/notarized status accurate.
 

@@ -1,5 +1,5 @@
 // Real Electron view-cache verification, using six loopback proxies to one isolated fake-agent server.
-// Run after pnpm build: node scripts/remote-scale-smoke.mjs
+// Run after pnpm build: node scripts/smoke/remote-scale-smoke.mjs
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { createServer, request } from 'node:http'
@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
 
-const root = resolve(import.meta.dirname, '..'),
+const root = resolve(import.meta.dirname, '..', '..'),
   appDir = join(root, 'apps/desktop')
 const dir = mkdtempSync(join(tmpdir(), 'ramu-scale-ui-')),
   socketPath = join(dir, 'h.sock')
