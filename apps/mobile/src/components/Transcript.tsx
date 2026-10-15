@@ -24,7 +24,7 @@ import { font, radius, space, useTheme } from '../theme'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { Markdown, ReferenceBadge, ReferenceContext } from './Markdown'
-import { composerDraft } from '@ramu/shared/composerDraft'
+import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
 import { Button, Card, Divider, Sheet, T, tap, type Icon } from './ui'
 import { formatDuration } from '../runtime/turns'
@@ -453,7 +453,7 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
   const segments = composerDraft(text + ' ').segments
   // Quotes stand above the message as their own block, like the desktop's quoted reply; the rest flows as text with badges.
   const quotes = segments.filter(
-    (part): part is import('@ramu/shared/composerDraft').DraftChip => part.kind === 'quote',
+    (part): part is import('@ramu/shared/chat/composerDraft').DraftChip => part.kind === 'quote',
   )
   const rest = segments.filter((part) => part.kind !== 'quote')
   const body = rest.map((part, index) =>

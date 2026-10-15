@@ -1,5 +1,5 @@
 import type { AppPreferences, ProviderCatalog } from '@ramu/shared/types'
-import { resolveStep, isOver, peakFor } from '@ramu/shared/routing'
+import { resolveStep, isOver, peakFor } from '@ramu/shared/providers/routing'
 import { goalContinuation } from './goals'
 import { WRITING_STATES } from './constants'
 import type { MessageDispatcher } from './messageDispatcher'

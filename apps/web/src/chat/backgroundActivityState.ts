@@ -1,4 +1,4 @@
-import type { BackgroundActivity } from '@ramu/shared/activity'
+import type { BackgroundActivity } from '@ramu/shared/chat/activity'
 
 /** An unavailable activity endpoint does not mean the service disconnected. */
 export async function readBackgroundActivity(

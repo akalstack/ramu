@@ -8,7 +8,7 @@ import {
   type QuestionInput,
   type QuestionRequest,
   type QuestionState,
-} from '@ramu/shared/questions'
+} from '@ramu/shared/chat/questions'
 import type { PendingRequest } from './types'
 import { WRITING_STATES } from './constants'
 import type { MessageDispatcher } from './messageDispatcher'

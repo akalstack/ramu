@@ -1,5 +1,5 @@
 import { providerAccountId } from '../providers/providerBinaries'
-import { supportsProviderAccounts } from '@ramu/shared/providers'
+import { supportsProviderAccounts } from '@ramu/shared/providers/providers'
 import { randomUUID } from 'node:crypto'
 import {
   DEFAULT_AGENT_SETTINGS,
@@ -8,7 +8,7 @@ import {
   type AgentSettings,
   type Attachment,
 } from '@ramu/shared/types'
-import { stepKey } from '@ramu/shared/routing'
+import { stepKey } from '@ramu/shared/providers/routing'
 import { goalInstructions } from './goals'
 import { WRITING_STATES } from './constants'
 import { LEGACY_ACCOUNT_PROVIDERS } from './settings'

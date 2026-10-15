@@ -8,7 +8,7 @@ import {
   previewRemarkPlugins,
   previewRemarkRehypeOptions,
   previewUrlTransform,
-} from '../src/markdownRendering'
+} from '../src/workspace/markdownRendering'
 
 const render = (text: string) =>
   renderToStaticMarkup(

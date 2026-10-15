@@ -17,7 +17,7 @@ import {
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { foldTurns } from '../../../runtime/turns'
-import { formatChatDate, needsChatDate } from '@ramu/shared/chatDates'
+import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
 import {

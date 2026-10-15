@@ -1,4 +1,4 @@
-import type { FileContext, ViewDescriptor } from './types'
+import type { FileContext, ViewDescriptor } from '../types'
 
 export type EditorSelection = { content: string; selection: NonNullable<FileContext['selection']> }
 

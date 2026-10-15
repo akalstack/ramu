@@ -14,7 +14,7 @@ import { commitBranchInfo } from '../workspace/git'
 import { RunUndo } from './undo'
 import { combineChatUndo } from './chatUndo'
 import { readReviewCurrent, reviewCheckout, reviewRenames, type ReviewCheckout } from './reviewLive'
-import { reviewCommentOutdated } from '@ramu/shared/reviewOutdated'
+import { reviewCommentOutdated } from '@ramu/shared/review/reviewOutdated'
 import { reviewLineStats } from './reviewStats'
 import {
   type AgentScope,

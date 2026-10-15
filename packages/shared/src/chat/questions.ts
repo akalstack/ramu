@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentQuestion } from './types'
+import type { AgentEvent, AgentQuestion } from '../types'
 
 export type QuestionRequest = Extract<AgentEvent, { kind: 'question' }>
 export interface QuestionInput {

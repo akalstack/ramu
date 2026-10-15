@@ -1,4 +1,4 @@
-import { providerName, isAcpProvider } from '@ramu/shared/providers'
+import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionInfo, QueuedMessage, Attachment } from '@ramu/shared/types'
 import { combineQueued } from './inputQueue'

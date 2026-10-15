@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveLanguage, translate } from '@ramu/shared/i18n'
 import { indonesian } from '@ramu/shared/locales/id'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
-import { formatChatDate } from '@ramu/shared/chatDates'
+import { formatChatDate } from '@ramu/shared/chat/chatDates'
 import { createDispatcher, type Services } from '../src/ipc'
 import { configureProviderBinaries } from '../src/providers/providerBinaries'
 

@@ -1,4 +1,4 @@
-import { AGENT_PROVIDERS } from '@ramu/shared/providers'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { DEFAULT_APP_PREFERENCES, DEFAULT_INTELLIGENCE_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 import type { SettingsSection } from './SettingsPage'
 import { CHATS_INTELLIGENCE_KEYS, MEMORY_INTELLIGENCE_KEYS, RESET_KEYS } from './constants'

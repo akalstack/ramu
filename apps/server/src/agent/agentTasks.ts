@@ -1,6 +1,6 @@
-import { isAcpProvider } from '@ramu/shared/providers'
+import { isAcpProvider } from '@ramu/shared/providers/providers'
 import type { AgentTask } from '@ramu/shared/types'
-import { taskMessagePrompt, taskStopPrompt } from '@ramu/shared/agentTasks'
+import { taskMessagePrompt, taskStopPrompt } from '@ramu/shared/chat/agentTasks'
 import { WRITING_STATES } from './constants'
 import { isUsageLimit } from './usageLimit'
 import type { AdvisorService } from './advisorService'

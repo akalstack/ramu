@@ -1,4 +1,4 @@
-import { systemTimezone } from '@ramu/shared/timezone'
+import { systemTimezone } from '@ramu/shared/workspace/timezone'
 import { randomUUID } from 'node:crypto'
 import { DateTime } from 'luxon'
 import { z } from 'zod'

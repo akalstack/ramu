@@ -1,4 +1,4 @@
-import type { ChangeFile, ReviewComment } from './types'
+import type { ChangeFile, ReviewComment } from '../types'
 
 function containsLines(content: string, selected: string[]): boolean {
   const lines = content.split('\n')

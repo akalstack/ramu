@@ -1,6 +1,6 @@
 import { responseInstructions } from '../intelligence'
 import { AcpResumeUnavailable } from '../providers/acp'
-import { providerName, isAcpProvider } from '@ramu/shared/providers'
+import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 import type { AppPreferences, AgentSessionInfo, AgentProvider, Attachment } from '@ramu/shared/types'
 import { goalInstructions } from './goals'

@@ -17,7 +17,7 @@ const accessModes = [
   { key: 'full', label: 'Full access', description: 'Commands and edits run without asking.', Icon: LockOpen },
 ] as const
 
-export { providerName } from '@ramu/shared/providers'
+export { providerName } from '@ramu/shared/providers/providers'
 export function AgentControls({
   settings,
   current,

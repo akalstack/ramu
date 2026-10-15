@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { moveFavorite } from '../src/favorites'
+import { moveFavorite } from '../src/workspace/favorites'
 
 it('moves favorites before and after a target while preserving hidden favorites', () => {
   const favorites = ['codex:a', 'claude-code:hidden', 'codex:b', 'claude-code:c']

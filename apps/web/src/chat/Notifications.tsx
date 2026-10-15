@@ -1,5 +1,5 @@
 import { t, useLanguage } from '../i18n'
-import { providerName, type ProviderStatus } from '@ramu/shared/providers'
+import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { AppToaster, notify, type AppToastData } from '@/components/app-toaster'
 import { MessageCircleQuestion } from 'lucide-react'
@@ -8,7 +8,7 @@ import { useAppSettings } from '../settings/AppSettings'
 import { ramu } from '../ipc'
 import { useWorkspace } from '../workspace/workspace'
 import { TOAST_MS, notices } from './notificationCenter'
-import type { InboxNotice } from '@ramu/shared/notices'
+import type { InboxNotice } from '@ramu/shared/chat/notices'
 
 type Notification = { id: string; message: string; source: string }
 

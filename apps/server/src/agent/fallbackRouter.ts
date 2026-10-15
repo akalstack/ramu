@@ -1,5 +1,5 @@
 import { providerAccountId } from '../providers/providerBinaries'
-import { providerName, supportsProviderAccounts, providerAccountOrder } from '@ramu/shared/providers'
+import { providerName, supportsProviderAccounts, providerAccountOrder } from '@ramu/shared/providers/providers'
 import {
   DEFAULT_FALLBACK_PREFERENCES,
   type SwitchThreshold,
@@ -26,7 +26,7 @@ import {
   planRoute,
   stepKey,
   type RouteDecision,
-} from '@ramu/shared/routing'
+} from '@ramu/shared/providers/routing'
 import { WRITING_STATES } from './constants'
 import { sameSettings } from './settings'
 import type { CatalogService } from './catalogService'

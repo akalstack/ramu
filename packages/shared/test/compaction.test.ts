@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS } from '../src/types'
-import { compactionLabel, isCompacting, isTurnFooter } from '../src/compaction'
+import { compactionLabel, isCompacting, isTurnFooter } from '../src/chat/compaction'
 
 it('uses provider token counts only when available and valid', () => {
   expect(compactionLabel({ kind: 'compaction', state: 'completed', beforeTokens: 212000, afterTokens: 33700 })).toBe(

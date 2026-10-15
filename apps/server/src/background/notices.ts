@@ -1,5 +1,5 @@
 import type { AgentEvent } from '@ramu/shared/types'
-import type { InboxNotice } from '@ramu/shared/notices'
+import type { InboxNotice } from '@ramu/shared/chat/notices'
 
 /**
  * What needs a person's attention, kept on the host so every device agrees: a notice raised while the phone was

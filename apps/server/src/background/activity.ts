@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { BackgroundActivity } from '@ramu/shared/activity'
+import type { BackgroundActivity } from '@ramu/shared/chat/activity'
 
 export class ActivityService {
   private active = new Map<string, BackgroundActivity>()

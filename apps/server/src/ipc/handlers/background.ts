@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { BackgroundActivity } from '@ramu/shared/activity'
+import type { BackgroundActivity } from '@ramu/shared/chat/activity'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentActivityLabel } from '../src/agentActivity'
+import { agentActivityLabel } from '../src/chat/agentActivity'
 import type { AgentEvent } from '../src/types'
 
 const thought: AgentEvent = { kind: 'thinking', text: 'Considering the request' }

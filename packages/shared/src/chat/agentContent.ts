@@ -1,4 +1,4 @@
-import type { AgentContent } from './types'
+import type { AgentContent } from '../types'
 
 const MAX_MEDIA = 28 * 1024 * 1024
 const str = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined)

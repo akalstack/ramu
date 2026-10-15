@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { AcpEventEncoder, AcpEvents, nativeShell } from '../src/providers/acpEvents'
-import { agentContent, inlineMedia } from '@ramu/shared/agentContent'
-import { toolKind } from '@ramu/shared/agentTools'
+import { agentContent, inlineMedia } from '@ramu/shared/chat/agentContent'
+import { toolKind } from '@ramu/shared/chat/agentTools'
 import type { AgentEvent } from '@ramu/shared/types'
 const chunk = (text: string, thinking = false) => ({
   sessionUpdate: thinking ? 'agent_thought_chunk' : 'agent_message_chunk',

@@ -1,4 +1,4 @@
-import type { AgentEvent } from './types'
+import type { AgentEvent } from '../types'
 
 type Compaction = Extract<AgentEvent, { kind: 'compaction' }>
 const tokens = (value?: number): string | null => {

@@ -1,5 +1,5 @@
 import type { AgentProvider, UsageReading } from '@ramu/shared/types'
-import { providerAccountOrder, providerEnabled, type ProviderConfiguration } from '@ramu/shared/providers'
+import { providerAccountOrder, providerEnabled, type ProviderConfiguration } from '@ramu/shared/providers/providers'
 
 /** Reads one login's plan usage; null when the provider has no way to read it. */
 export type AccountUsageReader = (accountId: string) => Promise<UsageReading[]>

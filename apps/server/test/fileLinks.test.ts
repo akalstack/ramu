@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { localFileLink } from '@ramu/shared/fileLinks'
+import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { resolveFileLink } from '../src/workspace/fileLinks'
 import { openDb } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'

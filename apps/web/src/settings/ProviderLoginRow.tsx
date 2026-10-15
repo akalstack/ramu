@@ -1,7 +1,7 @@
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import { LogIn } from 'lucide-react'
-import type { ProviderStatus } from '@ramu/shared/providers'
+import type { ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
 import { t } from '../i18n'
 import { SettingsField } from './SettingsScope'

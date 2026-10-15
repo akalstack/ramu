@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import type { Attachment, QueuedMessage } from '@ramu/shared/types'
-import { parseTaskMessage } from '@ramu/shared/agentTasks'
+import { parseTaskMessage } from '@ramu/shared/chat/agentTasks'
 import { Attachments } from '../../../composer/Attachments'
 import { Menu } from '../../../Menu'
 import { invoke } from '../../../ipc'

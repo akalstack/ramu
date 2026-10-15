@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { migrateModelDefaults, recommendedSets } from '../src/modelDefaults'
+import { migrateModelDefaults, recommendedSets } from '../src/providers/modelDefaults'
 
 describe('new-chat model defaults', () => {
   it('defaults to GPT-6.1 Sol with Light reasoning even before the catalog loads', () => {

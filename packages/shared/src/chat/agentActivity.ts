@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentSessionState } from './types'
+import type { AgentEvent, AgentSessionState } from '../types'
 
 /** Use the current turn's main-agent output rather than treating all work as reasoning. */
 export function agentActivityLabel(state: AgentSessionState | undefined, events: AgentEvent[]): string | null {

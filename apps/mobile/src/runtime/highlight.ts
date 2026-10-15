@@ -1,6 +1,6 @@
 // Syntax highlighting for chat code, files and diffs. Pure (no React), so it is unit-tested in Node.
 import hljs from 'highlight.js/lib/core'
-import { codeLanguage } from '@ramu/shared/codeLanguage'
+import { codeLanguage } from '@ramu/shared/workspace/codeLanguage'
 import bash from 'highlight.js/lib/languages/bash'
 import c from 'highlight.js/lib/languages/c'
 import cpp from 'highlight.js/lib/languages/cpp'

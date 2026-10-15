@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { SearchMatch, SearchOptions } from '@ramu/shared/types'
-import { searchReplacementPreview } from '@ramu/shared/searchReplacementPreview'
-import { searchSnippet } from '@ramu/shared/searchSnippet'
+import { searchReplacementPreview } from '@ramu/shared/search/searchReplacementPreview'
+import { searchSnippet } from '@ramu/shared/search/searchSnippet'
 
 /** Match-centered snippets adapt to sidebar resizing and the user's chosen font. */
 export function SearchMatchPreview({

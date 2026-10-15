@@ -3,8 +3,8 @@ import { AppState } from 'react-native'
 import { fetch as expoFetch } from 'expo/fetch'
 import * as Device from 'expo-device'
 import type { PushEvents, RamuMethods } from '@ramu/shared/api'
-import type { BackgroundActivity } from '@ramu/shared/activity'
-import type { InboxNotice } from '@ramu/shared/notices'
+import type { BackgroundActivity } from '@ramu/shared/chat/activity'
+import type { InboxNotice } from '@ramu/shared/chat/notices'
 import type {
   AgentEvent,
   AgentProvider,

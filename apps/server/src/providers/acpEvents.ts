@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import type { SessionNotification } from '@agentclientprotocol/sdk'
 import type { AgentEvent, AgentTask, AgentToolDetails, AgentToolStatus } from '@ramu/shared/types'
-import { agentContent, contentSummary } from '@ramu/shared/agentContent'
-import { TOOL_KINDS, toolKind } from '@ramu/shared/agentTools'
+import { agentContent, contentSummary } from '@ramu/shared/chat/agentContent'
+import { TOOL_KINDS, toolKind } from '@ramu/shared/chat/agentTools'
 
 type Update = Record<string, any>
 const text = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined)

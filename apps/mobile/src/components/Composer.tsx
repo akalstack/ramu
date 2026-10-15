@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { composerDraft } from '@ramu/shared/composerDraft'
+import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { StepSlider } from './StepSlider'
 import { SuggestionList, useComposerSuggest } from './ComposerSuggest'
 import {

@@ -1,4 +1,4 @@
-import type { EditorSelection } from '@ramu/shared/composerContext'
+import type { EditorSelection } from '@ramu/shared/chat/composerContext'
 
 // Lazy readers preserve unsaved buffers without copying every keystroke into workspace state.
 const buffers = new Map<string, () => string | undefined>()

@@ -1,4 +1,4 @@
-import type { AgentToolDetails, AgentToolKind } from './types'
+import type { AgentToolDetails, AgentToolKind } from '../types'
 
 export const TOOL_KINDS: AgentToolKind[] = [
   'read',

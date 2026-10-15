@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { foldChatTurn, type ChatBlock, type ToolUse, type ToolResult } from '../src/chatFolding'
+import { foldChatTurn, type ChatBlock, type ToolUse, type ToolResult } from '../src/chat/chatFolding'
 import type { AgentEvent } from '../src/types'
 const tool = (id: string): ToolUse => ({ kind: 'tool-use', toolUseId: id, name: 'Bash', summary: id })
 const result = (id: string, isError = false): ToolResult => ({

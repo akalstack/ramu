@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeRamuTool, ramuTool, ramuToolHasOwnUi, summarizeAgentStatuses } from '../src/ramuTools'
+import { describeRamuTool, ramuTool, ramuToolHasOwnUi, summarizeAgentStatuses } from '../src/chat/ramuTools'
 
 const use = (name: string, input?: unknown, summary = '') => ({
   name,

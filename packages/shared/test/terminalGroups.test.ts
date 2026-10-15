@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { splitTerminal, terminalFocusAfterClose, terminalGroups, unsplitTerminal } from '../src/terminalGroups'
+import {
+  splitTerminal,
+  terminalFocusAfterClose,
+  terminalGroups,
+  unsplitTerminal,
+} from '../src/workspace/terminalGroups'
 import type { TaskUiState } from '../src/types'
 
 const state: TaskUiState = {

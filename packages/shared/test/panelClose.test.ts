@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { closingPanel } from '../src/panelClose'
+import { closingPanel } from '../src/workspace/panelClose'
 import type { TaskUiState, ViewDescriptor } from '../src/types'
 
 const file = (id: string): ViewDescriptor => ({ id, kind: 'file', repoId: 'repo', path: id })

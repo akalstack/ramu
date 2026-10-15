@@ -1,4 +1,4 @@
-import { translate, type Language } from './i18n'
+import { translate, type Language } from '../i18n'
 const CONVERSATION_PAUSE_MS = 30 * 60 * 1000
 
 function sameDay(a: Date, b: Date): boolean {

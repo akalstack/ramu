@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { answerMessage, parseAnswerMessage } from '../src/questions'
-import { parseTaskStop, taskStopPrompt } from '../src/agentTasks'
+import { answerMessage, parseAnswerMessage } from '../src/chat/questions'
+import { parseTaskStop, taskStopPrompt } from '../src/chat/agentTasks'
 
 // Messages Ramu sends on the user's behalf: the agent reads the full text, the chat shows only what the user did.
 describe('chat messages Ramu writes for the user', () => {

@@ -1,6 +1,6 @@
-import type { ChatBlock as Block } from '@ramu/shared/chatFolding'
-import type { goalChanges } from '@ramu/shared/goalHistory'
-import type { QuestionState } from '@ramu/shared/questions'
+import type { ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
+import type { goalChanges } from '@ramu/shared/chat/goalHistory'
+import type { QuestionState } from '@ramu/shared/chat/questions'
 import type { AgentEvent, AgentTask, Attachment, ViewDescriptor } from '@ramu/shared/types'
 
 /** The chat view descriptor. */

@@ -1,5 +1,5 @@
 import { t as translate, useLanguage } from '../../../i18n'
-import { describeRamuTool } from '@ramu/shared/ramuTools'
+import { describeRamuTool } from '@ramu/shared/chat/ramuTools'
 import { ramu } from '../../../ipc'
 import { type ToolResult, type ToolUse } from '../types'
 

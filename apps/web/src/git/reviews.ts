@@ -4,7 +4,7 @@ import type { ChangeReview } from '@ramu/shared/types'
 import { invoke, ramu } from '../ipc'
 import { useWorkspace } from '../workspace/workspace'
 import { notifyError } from '../chat/Notifications'
-import { createSharedResource } from '@ramu/shared/asyncResource'
+import { createSharedResource } from '@ramu/shared/workspace/asyncResource'
 
 export interface ReviewTarget {
   id: string

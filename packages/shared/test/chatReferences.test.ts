@@ -2,8 +2,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import { describe, expect, it } from 'vitest'
-import { chatReferences, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '../src/chatReferences'
-import { localFileLink } from '../src/fileLinks'
+import { chatReferences, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '../src/chat/chatReferences'
+import { localFileLink } from '../src/workspace/fileLinks'
 
 const render = (text: string) =>
   renderToStaticMarkup(

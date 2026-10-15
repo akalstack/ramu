@@ -1,7 +1,7 @@
-import { recommendedSets, migrateModelDefaults } from '@ramu/shared/modelDefaults'
+import { recommendedSets, migrateModelDefaults } from '@ramu/shared/providers/modelDefaults'
 import { errorText } from '../lib/errors'
 import { t } from '../i18n'
-import { providerName } from '@ramu/shared/providers'
+import { providerName } from '@ramu/shared/providers/providers'
 import { BootScreen } from '../Brand'
 import { createContext, useContext, useEffect, useState, type ReactNode, type ContextType } from 'react'
 import {
@@ -54,7 +54,7 @@ export function modelStepName(step: ModelStep, catalogs: ProviderCatalog[]) {
   return `${modelDisplayName(model?.name ?? (step.model || `${providerName(step.provider)} default`))} ${effortDisplayName(step.effort ?? (step.provider === 'claude-code' || step.provider === 'codex' ? (model?.defaultEffort ?? null) : null), step.provider)}`.trim()
 }
 
-export { recommendedSets } from '@ramu/shared/modelDefaults'
+export { recommendedSets } from '@ramu/shared/providers/modelDefaults'
 
 const Context = createContext<{
   preferences: ModelPreferences

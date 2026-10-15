@@ -6,10 +6,16 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { AgentEvent, Attachment } from '@ramu/shared/types'
 import { ChatActivityButton } from '../../../chat/ChatActivity'
-import { advisorAgentId, parseAdvice, parseTaskMessage, parseTaskReport, parseTaskStop } from '@ramu/shared/agentTasks'
+import {
+  advisorAgentId,
+  parseAdvice,
+  parseTaskMessage,
+  parseTaskReport,
+  parseTaskStop,
+} from '@ramu/shared/chat/agentTasks'
 import { sentComments } from '../../../git/ReviewChip'
 import { Attachments } from '../../../composer/Attachments'
-import { parseAnswerMessage } from '@ramu/shared/questions'
+import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { visibleText } from '../lib/messages'
 import { MessageTime } from './MessageTime'
 import { CopyButton } from './CopyButton'

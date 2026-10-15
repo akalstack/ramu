@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { afterLineForBefore } from '../src/reviewLines'
+import { afterLineForBefore } from '../src/review/reviewLines'
 
 it('keeps before-side comments visible after insertions, replacements, and deletions in inline view', () => {
   const insert = [

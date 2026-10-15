@@ -1,5 +1,5 @@
 import { clipText } from '@ramu/shared/text'
-import { providerName } from '@ramu/shared/providers'
+import { providerName } from '@ramu/shared/providers/providers'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Options } from '@anthropic-ai/claude-agent-sdk'
@@ -13,8 +13,8 @@ import type {
   AgentSessionState,
   ProviderCatalog,
 } from '@ramu/shared/types'
-import { subagentTarget, settingsKey, nextStep } from '@ramu/shared/routing'
-import { SUBAGENT_PREAMBLE, subagentNotePrompt, taskReportPrompt } from '@ramu/shared/agentTasks'
+import { subagentTarget, settingsKey, nextStep } from '@ramu/shared/providers/routing'
+import { SUBAGENT_PREAMBLE, subagentNotePrompt, taskReportPrompt } from '@ramu/shared/chat/agentTasks'
 import { applyIsolation, collectPatch, createIsolation, removeIsolation } from '../workspace/isolation'
 import type { ChildRun, SubagentInput, SubagentResult } from './types'
 import { FOREGROUND_WAIT_MS, ASK_WAIT_MS } from './constants'

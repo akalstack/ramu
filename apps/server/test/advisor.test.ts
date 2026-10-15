@@ -7,7 +7,13 @@ import { AgentService, type QueryFn } from '../src/agent'
 import { ADVISOR_PREAMBLE, advisorPrompt, claudeAdvisorModel } from '../src/agent/advisor'
 import { openDb, type Db } from '../src/db'
 import { fakeCodex } from '../src/providers/fakeAgent'
-import { adviceMessage, advisorAgentId, advisorTranscript, latestTasks, parseAdvice } from '@ramu/shared/agentTasks'
+import {
+  adviceMessage,
+  advisorAgentId,
+  advisorTranscript,
+  latestTasks,
+  parseAdvice,
+} from '@ramu/shared/chat/agentTasks'
 import {
   DEFAULT_AGENT_SETTINGS,
   DEFAULT_APP_PREFERENCES,

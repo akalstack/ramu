@@ -1,7 +1,7 @@
 import { Columns2, MessageSquare, PanelLeft, Rows2 } from 'lucide-react'
 import type { ChangeReview } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
-import { formatChatDate } from '@ramu/shared/chatDates'
+import { formatChatDate } from '@ramu/shared/chat/chatDates'
 import { t, formatLocale, currentLanguage } from '../i18n'
 import { Dropdown } from '../Menu'
 import { LineStats } from '../git/LineStats'

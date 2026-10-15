@@ -1,4 +1,4 @@
-import type { AgentEvent, ChatGoal } from './types'
+import type { AgentEvent, ChatGoal } from '../types'
 
 export type GoalChangeType = 'set' | 'edited' | 'paused' | 'resumed' | 'blocked' | 'turn-limit' | 'cleared'
 export type GoalChange = { type: GoalChangeType; goal: ChatGoal }

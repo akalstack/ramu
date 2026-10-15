@@ -10,7 +10,7 @@ import {
   type SettingsSnapshot,
   type SettingSchema,
 } from '@ramu/shared/settingsCompatibility'
-import { recommendedSets } from '@ramu/shared/modelDefaults'
+import { recommendedSets } from '@ramu/shared/providers/modelDefaults'
 import { invoke, ramu } from '../ipc'
 import { useComputers, statusText } from '../workspace/computers'
 import { errorText } from '../lib/errors'

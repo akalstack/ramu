@@ -1,4 +1,4 @@
-import type { AgentEvent } from './types'
+import type { AgentEvent } from '../types'
 import { isTurnFooter } from './compaction'
 export type ToolUse = Extract<AgentEvent, { kind: 'tool-use' }>
 export type ToolResult = Extract<AgentEvent, { kind: 'tool-result' }>

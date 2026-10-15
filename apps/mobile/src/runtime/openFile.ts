@@ -1,6 +1,6 @@
 import { Alert } from 'react-native'
 import { useRouter } from 'expo-router'
-import { localFileLink } from '@ramu/shared/fileLinks'
+import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { useStore } from './store'
 import type { Chat } from './types'
 

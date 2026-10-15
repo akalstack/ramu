@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { highlightSource, persistentTaskUi } from '../src/sourceNavigation'
+import { highlightSource, persistentTaskUi } from '../src/workspace/sourceNavigation'
 
 afterEach(() => vi.useRealTimers())
 describe('temporary message navigation', () => {

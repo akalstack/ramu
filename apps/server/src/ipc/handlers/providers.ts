@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { ProviderConfiguration, ProviderStatus } from '@ramu/shared/providers'
+import type { ProviderConfiguration, ProviderStatus } from '@ramu/shared/providers/providers'
 import { codexHookTrust } from '../../providers/codex'
 import { claudeAdvisorModel } from '../../agent/advisor'
 import { providerBinaries } from '../preferences'

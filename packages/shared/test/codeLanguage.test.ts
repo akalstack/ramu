@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { codeLanguage } from '../src/codeLanguage'
+import { codeLanguage } from '../src/workspace/codeLanguage'
 
 describe('chat code language', () => {
   it('uses explicit language aliases and file extensions before inference', () => {

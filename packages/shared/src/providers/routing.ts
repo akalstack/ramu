@@ -8,7 +8,7 @@ import type {
   SubagentPreferences,
   SwitchThreshold,
   UsageReading,
-} from './types'
+} from '../types'
 import { providerName } from './providers'
 
 // One place decides where a chat or sub-agent continues when a provider's plan is nearly used up.

@@ -1,5 +1,5 @@
 import type { Query } from '@anthropic-ai/claude-agent-sdk'
-import { providerName } from '@ramu/shared/providers'
+import { providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider, ProviderCatalog } from '@ramu/shared/types'
 import { acpModels } from '../providers/acp'
 import { codexModels } from '../providers/codex'

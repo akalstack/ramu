@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import { ReviewService } from '../src/review/reviews'
-import { reviewsByTurn } from '@ramu/shared/reviewGroups'
+import { reviewsByTurn } from '@ramu/shared/review/reviewGroups'
 import { DEFAULT_AGENT_SETTINGS, NO_PROJECT, type ChangeReview } from '@ramu/shared/types'
 import type { AgentService } from '../src/agent'
 let db: Db, dir: string, ws: Workspace, service: ReviewService, review: ChangeReview, cwd: string

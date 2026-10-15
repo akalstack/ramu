@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
-import { localFileLink } from '@ramu/shared/fileLinks'
+import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { resolveInRoot } from './files'
 import type { Workspace } from './workspace'
 

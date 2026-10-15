@@ -1,4 +1,4 @@
-import { REPLACE_CONTENT_LIMIT } from '@ramu/shared/searchLimits'
+import { REPLACE_CONTENT_LIMIT } from '@ramu/shared/search/searchLimits'
 // File access scoped to a binding's working directory.
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'

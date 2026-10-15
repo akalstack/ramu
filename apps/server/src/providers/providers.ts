@@ -7,7 +7,7 @@ import {
   type ProviderConfiguration,
   type ProviderSignIn,
   type ProviderStatus,
-} from '@ramu/shared/providers'
+} from '@ramu/shared/providers/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
 import { acpSignIn } from './acp'
 import { parseProviderVersion } from './adapter'

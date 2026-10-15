@@ -1,5 +1,5 @@
 import type { AgentEvent } from '@ramu/shared/types'
-import { type ChatBlock as Block } from '@ramu/shared/chatFolding'
+import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { type Turn } from '../types'
 
 /** One user message and everything the agent did in answer to it. */

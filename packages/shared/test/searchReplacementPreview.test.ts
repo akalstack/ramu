@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { searchReplacementPreview } from '../src/searchReplacementPreview'
+import { searchReplacementPreview } from '../src/search/searchReplacementPreview'
 import type { SearchMatch, SearchOptions } from '../src/types'
 const options: SearchOptions = {
   query: 'cat-(\\d+)',

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { AGENT_PROVIDERS } from '@ramu/shared/providers'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 import { inResetSection, resetSection } from '../src/settings/resetDefaults'
 

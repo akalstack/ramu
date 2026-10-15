@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { reviewGroups, reviewsByTurn } from '../src/reviewGroups'
+import { reviewGroups, reviewsByTurn } from '../src/review/reviewGroups'
 import type { ChangeReview } from '../src/types'
 
 const revision = (id: string, taskId: string, createdAt: number, changed = true): ChangeReview => ({

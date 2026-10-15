@@ -19,13 +19,13 @@ import type {
   SwitchThreshold,
   UsageReading,
 } from '@ramu/shared/types'
-import { providerEnabled, providerName } from '@ramu/shared/providers'
+import { providerEnabled, providerName } from '@ramu/shared/providers/providers'
 import { useAppSettings } from './AppSettings'
 import { Dropdown } from '../Menu'
 import { effortDisplayName, modelDisplayName, useModelSets } from '../models/ModelSets'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { peakUsage, usageTone, useUsage } from './Usage'
-import { defaultOrder } from '@ramu/shared/routing'
+import { defaultOrder } from '@ramu/shared/providers/routing'
 
 const NATIVE = '__native'
 const newId = () => crypto.randomUUID()

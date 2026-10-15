@@ -1,7 +1,7 @@
 import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
-import type { BackgroundActivity } from './activity'
+import type { BackgroundActivity } from './chat/activity'
 import type { AppUpdateStatus } from './updates'
-import type { ProviderConfiguration, ProviderStatus } from './providers'
+import type { ProviderConfiguration, ProviderStatus } from './providers/providers'
 // The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
 import type {
   PullMode,
@@ -152,7 +152,7 @@ export interface RamuMethods {
   /** Chats working or waiting for the user. */
   'agent.counts'(): { running: number; needsInput: number }
   /** Notices waiting on a person, shared by every device paired with this computer. */
-  'notices.list'(): import('./notices').InboxNotice[]
+  'notices.list'(): import('./chat/notices').InboxNotice[]
   'notices.dismiss'(id: string): void
   'notices.clear'(): void
   'notifications.register'(token: string, computerId: string): void
@@ -465,7 +465,7 @@ export type PushEvents = {
   'term:exit': { id: string; code: number }
   /** A shell was opened, ended or closed in this workspace (`taskId` is the workspace context). */
   'term:changed': { taskId: string }
-  'notices:changed': import('./notices').InboxNotice[]
+  'notices:changed': import('./chat/notices').InboxNotice[]
   'fs:changed': { cwd: string; path: string }
 }
 

@@ -1,6 +1,6 @@
 import { t as translate, useLanguage, currentLanguage, formatLocale } from '../../../i18n'
-import { foldChatTurn as foldTurn, type ChatBlock as Block } from '@ramu/shared/chatFolding'
-import { formatChatDate } from '@ramu/shared/chatDates'
+import { foldChatTurn as foldTurn, type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
+import { formatChatDate } from '@ramu/shared/chat/chatDates'
 import type { ChatGoal } from '@ramu/shared/types'
 import { GoalDone, GoalNote } from '../../../chat/GoalBar'
 import { TurnChanges } from '../../../Changes'

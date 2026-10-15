@@ -1,7 +1,7 @@
 import type { UsageReading } from '@ramu/shared/types'
 import { describe, expect, it } from 'vitest'
 import { UsageService, claudeReadings, claudeUsageReadings } from '../src/providers/usage'
-import { parseTaskMessage, parseTaskReport, subagentNotePrompt, taskMessagePrompt } from '@ramu/shared/agentTasks'
+import { parseTaskMessage, parseTaskReport, subagentNotePrompt, taskMessagePrompt } from '@ramu/shared/chat/agentTasks'
 
 describe('Claude plan usage', () => {
   it('reads every window of a real rate_limit_event, with reset times in milliseconds', () => {

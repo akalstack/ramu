@@ -1,4 +1,4 @@
-import type { ChangeReview } from './types'
+import type { ChangeReview } from '../types'
 
 /** One navigation entry per chat, with immutable changed-run revisions inside. */
 export function reviewGroups(reviews: ChangeReview[]): { taskId: string; revisions: ChangeReview[] }[] {

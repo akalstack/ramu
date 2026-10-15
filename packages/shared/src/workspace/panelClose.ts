@@ -1,4 +1,4 @@
-import type { TaskUiState } from './types'
+import type { TaskUiState } from '../types'
 
 /** Tab changes stay instant; animate only when removing a panel's last tab. */
 export function closingPanel(

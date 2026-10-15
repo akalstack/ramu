@@ -4,7 +4,7 @@ import {
   REPLACE_MATCH_LIMIT,
   REPLACE_FILE_LIMIT,
   REPLACE_CONTENT_LIMIT,
-} from '@ramu/shared/searchLimits'
+} from '@ramu/shared/search/searchLimits'
 import type { ReplaceFilePreview, SearchOptions, SearchMatch } from '@ramu/shared/types'
 import * as files from '../../workspace/files'
 import { lockCheckouts } from '../helpers'

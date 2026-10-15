@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Quote, SquareTerminal, WandSparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { FileIcon } from '../editor/FileIcon'
-import { composerDraft, deleteDraftAtom, type DraftChip } from '@ramu/shared/composerDraft'
+import { composerDraft, deleteDraftAtom, type DraftChip } from '@ramu/shared/chat/composerDraft'
 
 export interface ComposerInputHandle {
   focus(): void

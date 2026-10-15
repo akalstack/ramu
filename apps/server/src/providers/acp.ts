@@ -14,7 +14,7 @@ import type {
   Attachment,
   McpConnection,
 } from '@ramu/shared/types'
-import { providerName } from '@ramu/shared/providers'
+import { providerName } from '@ramu/shared/providers/providers'
 import { attachmentPrompt } from '../attachments'
 import { isLimitMessage, isLimitReply, limitResetsAt } from './usageLimit'
 import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'

@@ -1,7 +1,7 @@
 import { Button } from '@/components/desktop-button'
 import { ArrowDown, ArrowUp, GripVertical, Trash2 } from 'lucide-react'
 import type { DragEvent } from 'react'
-import { providerName } from '@ramu/shared/providers'
+import { providerName } from '@ramu/shared/providers/providers'
 import type { ModelStep } from '@ramu/shared/types'
 import { setRowDragImage } from '../lib/dragState'
 import { t } from '../i18n'

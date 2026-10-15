@@ -1,6 +1,6 @@
 import { elicitationRequest, elicitationContent } from '../agent/elicitation'
 import { attachmentPrompt } from '../attachments'
-import { agentContent } from '@ramu/shared/agentContent'
+import { agentContent } from '@ramu/shared/chat/agentContent'
 import { toolDescription, toolInput } from './acpEvents'
 // Codex's local app-server protocol, using the user's existing CLI login.
 import { randomUUID } from 'node:crypto'

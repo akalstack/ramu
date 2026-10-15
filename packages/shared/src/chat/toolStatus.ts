@@ -1,4 +1,4 @@
-import type { AgentEvent } from './types'
+import type { AgentEvent } from '../types'
 
 type ToolResult = Extract<AgentEvent, { kind: 'tool-result' }>
 

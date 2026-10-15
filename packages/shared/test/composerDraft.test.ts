@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { composerDraft, deleteDraftAtom } from '../src/composerDraft'
+import { composerDraft, deleteDraftAtom } from '../src/chat/composerDraft'
 
 describe('inline composer atoms', () => {
   it('keeps skills, files and ordinary text in their original order', () => {

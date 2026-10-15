@@ -1,4 +1,4 @@
-import type { SearchMatch, SearchOptions } from './types'
+import type { SearchMatch, SearchOptions } from '../types'
 
 /** Expand a visible match without changing files; null means its context was truncated. */
 export function searchReplacementPreview(

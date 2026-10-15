@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ShieldQuestion } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
-import { questionKey, questionAnswer, type QuestionRequest, type QuestionState } from '@ramu/shared/questions'
+import { questionKey, questionAnswer, type QuestionRequest, type QuestionState } from '@ramu/shared/chat/questions'
 import { invoke } from '../ipc'
 import { errorText } from '../workspace/TaskPane'
 

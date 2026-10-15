@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { searchSnippet } from '../src/searchSnippet'
+import { searchSnippet } from '../src/search/searchSnippet'
 
 const measure = (text: string) => Array.from(text).length
 

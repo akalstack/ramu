@@ -6,7 +6,7 @@ import {
   type ProviderCatalog,
   type UsageReading,
 } from '../src/types'
-import { providerAccountOrder } from '../src/providers'
+import { providerAccountOrder } from '../src/providers/providers'
 import {
   accountKey,
   defaultOrder,
@@ -20,7 +20,7 @@ import {
   resolveStep,
   subagentOrder,
   subagentTarget,
-} from '../src/routing'
+} from '../src/providers/routing'
 
 const NOW = 1_800_000_000_000
 const model = (provider: AgentModel['provider'], id: string, extra: Partial<AgentModel> = {}): AgentModel => ({

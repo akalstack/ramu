@@ -1,4 +1,4 @@
-import type { AgentModel, ModelPreferences, ModelStep, ProviderCatalog, ReasoningEffort } from './types'
+import type { AgentModel, ModelPreferences, ModelStep, ProviderCatalog, ReasoningEffort } from '../types'
 
 export function recommendedSets(catalogs: ProviderCatalog[]): ModelPreferences {
   const models = catalogs.flatMap((catalog) => catalog.models).filter((model) => model.provider === 'codex')

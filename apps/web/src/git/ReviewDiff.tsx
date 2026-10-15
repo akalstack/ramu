@@ -1,5 +1,5 @@
 import { t, useLanguage } from '../i18n'
-import { afterLineForBefore } from '@ramu/shared/reviewLines'
+import { afterLineForBefore } from '@ramu/shared/review/reviewLines'
 import { Button } from '@/components/desktop-button'
 import { ChevronDown, ChevronUp, MessageSquarePlus } from 'lucide-react'
 import { createPortal } from 'react-dom'

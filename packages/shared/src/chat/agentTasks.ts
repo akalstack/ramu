@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentProvider, AgentTask, AgentTaskStatus } from './types'
+import type { AgentEvent, AgentProvider, AgentTask, AgentTaskStatus } from '../types'
 
 // Neither SDK lets a client write to a sub-agent directly, so a message for one goes to the main
 // agent, which relays it with its own tool: Claude's SendMessage or Codex's send_input.

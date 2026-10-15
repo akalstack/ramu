@@ -1,4 +1,4 @@
-import type { TaskUiState } from './types'
+import type { TaskUiState } from '../types'
 
 /** Message jump targets are navigation requests, never saved chat state. */
 export function persistentTaskUi(state: TaskUiState): TaskUiState {

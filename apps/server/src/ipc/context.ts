@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import type { AppPreferences, FileContext, UsageReading } from '@ramu/shared/types'
-import { providerEnabled } from '@ramu/shared/providers'
+import { providerEnabled } from '@ramu/shared/providers/providers'
 import { withContext as withFileContext } from '../context'
 import { HostFolders } from '../remote/hostFolders'
 import { ActivityService } from '../background/activity'

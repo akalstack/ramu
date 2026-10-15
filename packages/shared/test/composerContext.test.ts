@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { ViewDescriptor } from '../src/types'
-import { buildComposerContext } from '../src/composerContext'
+import { buildComposerContext } from '../src/chat/composerContext'
 
 const file = (id: string, path = `${id}.ts`): ViewDescriptor => ({ id, kind: 'file', repoId: 'repo', path })
 const selection = {

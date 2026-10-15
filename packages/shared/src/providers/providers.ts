@@ -1,4 +1,4 @@
-import type { AgentProvider } from './types'
+import type { AgentProvider } from '../types'
 
 export const AGENT_PROVIDERS = ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as const
 export const providerName = (provider: AgentProvider): string =>

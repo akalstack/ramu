@@ -7,8 +7,8 @@ import { Workspace } from '../src/workspace/workspace'
 import { RecapService } from '../src/memory/recaps'
 import { DEFAULT_APP_PREFERENCES, NO_PROJECT } from '@ramu/shared/types'
 import type { AgentService } from '../src/agent'
-import { systemTimezone } from '@ramu/shared/timezone'
-vi.mock('@ramu/shared/timezone', () => ({ systemTimezone: vi.fn(() => 'UTC') }))
+import { systemTimezone } from '@ramu/shared/workspace/timezone'
+vi.mock('@ramu/shared/workspace/timezone', () => ({ systemTimezone: vi.fn(() => 'UTC') }))
 let db: Db, dir: string, ws: Workspace, service: RecapService, taskId: string, analyze: ReturnType<typeof vi.fn>
 const item = (extra = {}) => ({
   key: 'unfinished',

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { AGENT_PROVIDERS } from '@ramu/shared/providers'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { PROVIDER_ADAPTERS, providerAdapter } from '../src/providers/adapters'
 import { defineAdapter, parseProviderVersion } from '../src/providers/adapter'
 import { ProviderService } from '../src/providers/providers'

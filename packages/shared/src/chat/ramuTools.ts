@@ -1,4 +1,4 @@
-import type { AgentEvent } from './types'
+import type { AgentEvent } from '../types'
 
 type ToolUse = Extract<AgentEvent, { kind: 'tool-use' }>
 type CallSource = Pick<ToolUse, 'name' | 'summary'> & { input?: string }

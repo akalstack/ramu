@@ -1,6 +1,6 @@
-import { closingPanel } from '@ramu/shared/panelClose'
+import { closingPanel } from '@ramu/shared/workspace/panelClose'
 import { showChat } from './layoutPrefs'
-import { persistentTaskUi } from '@ramu/shared/sourceNavigation'
+import { persistentTaskUi } from '@ramu/shared/workspace/sourceNavigation'
 import { animatePanelChange, type PanelMotionScope } from './panelMotion'
 import { t, useLanguage } from '../i18n'
 // Renderer-side workspace state: projects, tasks, open task tabs and their view tabs.
@@ -19,7 +19,12 @@ import type {
 import { useAppSettings } from '../settings/AppSettings'
 import { invoke, ramu } from '../ipc'
 import { closeAfterTerminalCheck } from './terminalRegistry'
-import { splitTerminal, terminalFocusAfterClose, terminalGroups, unsplitTerminal } from '@ramu/shared/terminalGroups'
+import {
+  splitTerminal,
+  terminalFocusAfterClose,
+  terminalGroups,
+  unsplitTerminal,
+} from '@ramu/shared/workspace/terminalGroups'
 import { onWorkspaceVisibility, workspaceVisible } from './workspaceLifetime'
 import { registerWorkspaceCheckpoint } from './workspaceCheckpoint'
 
@@ -395,7 +400,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
   // on a paired phone clears the mark here.
   useEffect(() => {
     let previous = new Set<string>()
-    const apply = (list: import('@ramu/shared/notices').InboxNotice[]) => {
+    const apply = (list: import('@ramu/shared/chat/notices').InboxNotice[]) => {
       const done = new Set(list.filter((notice) => notice.kind === 'done').map((notice) => notice.taskId))
       setUnread((current) => {
         const next = new Set(current)

@@ -1,5 +1,5 @@
 import { t, useLanguage } from '../i18n'
-import { providerName } from '@ramu/shared/providers'
+import { providerName } from '@ramu/shared/providers/providers'
 import { StepSlider } from '@/components/step-slider'
 import { Button } from '@/components/desktop-button'
 import {

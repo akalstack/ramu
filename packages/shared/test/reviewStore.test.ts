@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import { createSharedResource } from '../src/asyncResource'
+import { createSharedResource } from '../src/workspace/asyncResource'
 
 test('review consumers share one request and receive the cached summary', async () => {
   let resolve!: (reviews: { id: string }[]) => void

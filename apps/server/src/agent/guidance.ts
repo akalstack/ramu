@@ -1,5 +1,5 @@
-import { BACKGROUND_PREAMBLE } from '@ramu/shared/agentTasks'
-import { QUESTION_PREAMBLE } from '@ramu/shared/questions'
+import { BACKGROUND_PREAMBLE } from '@ramu/shared/chat/agentTasks'
+import { QUESTION_PREAMBLE } from '@ramu/shared/chat/questions'
 import { ADVISOR_PREAMBLE } from './advisor'
 import { TOOL_PRESENTATION_PREAMBLE, USER_MESSAGE_PREAMBLE } from './agentInstructions'
 import { TOOL_DISCOVERY_INSTRUCTIONS } from '../intelligence'

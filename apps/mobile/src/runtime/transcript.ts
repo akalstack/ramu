@@ -7,9 +7,9 @@ import {
   parseTaskMessage,
   parseTaskReport,
   parseTaskStop,
-} from '@ramu/shared/agentTasks'
-import { parseAnswerMessage } from '@ramu/shared/questions'
-import { goalChanges } from '@ramu/shared/goalHistory'
+} from '@ramu/shared/chat/agentTasks'
+import { parseAnswerMessage } from '@ramu/shared/chat/questions'
+import { goalChanges } from '@ramu/shared/chat/goalHistory'
 
 /** What the person typed: the file context Ramu appends for the agent (`<ramu-context>…`) is hidden, as on the desktop. */
 export const visibleText = (text: string) => text.split(/\n*<ramu-context>/)[0]!.trimEnd()

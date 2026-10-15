@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { goalChanges } from '../src/goalHistory'
+import { goalChanges } from '../src/chat/goalHistory'
 import type { AgentEvent, ChatGoal } from '../src/types'
 
 const goal = (patch: Partial<ChatGoal> = {}): ChatGoal => ({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reviewCommentOutdated } from '../src/reviewOutdated'
+import { reviewCommentOutdated } from '../src/review/reviewOutdated'
 import type { ChangeFile, ReviewComment } from '../src/types'
 const file: ChangeFile = {
   id: 'f',

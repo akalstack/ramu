@@ -6,7 +6,7 @@ import {
   DEFAULT_GOAL_PREFERENCES,
   type ChatGoal,
 } from '@ramu/shared/types'
-import { isOver, peakFor } from '@ramu/shared/routing'
+import { isOver, peakFor } from '@ramu/shared/providers/routing'
 import { goalContinuation } from './goals'
 import { WRITING_STATES } from './constants'
 import { errorMessage } from './util'

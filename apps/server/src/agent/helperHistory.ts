@@ -1,6 +1,6 @@
 import { getSubagentMessages, listSubagents, type SessionMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentEvent, AgentSessionInfo, AgentTask } from '@ramu/shared/types'
-import { latestTasks } from '@ramu/shared/agentTasks'
+import { latestTasks } from '@ramu/shared/chat/agentTasks'
 import { codexHelperHistory } from '../providers/codex'
 
 export interface HelperHistory {

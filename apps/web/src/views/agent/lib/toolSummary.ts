@@ -1,7 +1,7 @@
 import { t as translate } from '../../../i18n'
-import { toolKind, KIND_LABEL, KIND_VERB } from '@ramu/shared/agentTools'
-import { describeRamuTool, ramuTool } from '@ramu/shared/ramuTools'
-import { toolIsRunning, toolVerb } from '@ramu/shared/toolStatus'
+import { toolKind, KIND_LABEL, KIND_VERB } from '@ramu/shared/chat/agentTools'
+import { describeRamuTool, ramuTool } from '@ramu/shared/chat/ramuTools'
+import { toolIsRunning, toolVerb } from '@ramu/shared/chat/toolStatus'
 import { ramu } from '../../../ipc'
 import { type ToolResult, type ToolUse } from '../types'
 

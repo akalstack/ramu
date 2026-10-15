@@ -15,7 +15,7 @@ import { SearchInput } from '../SearchInput'
 import { invoke, ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
 import { useWorkspace } from '../workspace/workspace'
-import { providerName } from '@ramu/shared/providers'
+import { providerName } from '@ramu/shared/providers/providers'
 import {
   MEMORY_KINDS,
   NO_PROJECT,

@@ -7,7 +7,7 @@ import {
   previewRemarkPlugins,
   previewRemarkRehypeOptions,
   previewUrlTransform,
-} from '@ramu/shared/markdownRendering'
+} from '@ramu/shared/workspace/markdownRendering'
 
 type Context = { taskId: string; repoId: string; path: string }
 

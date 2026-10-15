@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatChatDate, needsChatDate } from '../src/chatDates'
+import { formatChatDate, needsChatDate } from '../src/chat/chatDates'
 
 const at = (day: number, hour: number, minute = 0) => new Date(2026, 9, day, hour, minute).getTime()
 

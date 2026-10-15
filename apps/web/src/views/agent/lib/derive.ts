@@ -1,5 +1,5 @@
-import { needsChatDate } from '@ramu/shared/chatDates'
-import { questionState, type QuestionState } from '@ramu/shared/questions'
+import { needsChatDate } from '@ramu/shared/chat/chatDates'
+import { questionState, type QuestionState } from '@ramu/shared/chat/questions'
 import type { AgentEvent, ChatGoal } from '@ramu/shared/types'
 import type { Turn } from '../types'
 import { blockAt } from './blocks'

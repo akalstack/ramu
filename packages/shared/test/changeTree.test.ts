@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changeTree } from '../src/changeTree'
+import { changeTree } from '../src/review/changeTree'
 
 const entries = (...paths: string[]) => paths.map((path) => ({ path }))
 

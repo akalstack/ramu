@@ -2,8 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { Image, Linking, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native'
 import { CodeBlock } from './Code'
 import { parseBlocks, type Block } from '../runtime/markdown'
-import { chatReferences } from '@ramu/shared/chatReferences'
-import { localFileLink } from '@ramu/shared/fileLinks'
+import { chatReferences } from '@ramu/shared/chat/chatReferences'
+import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { font, radius, space, useTheme } from '../theme'
 
 // Native markdown for agent replies: headings, lists, tasks, quotes, tables, rules, coloured code, emphasis and links.

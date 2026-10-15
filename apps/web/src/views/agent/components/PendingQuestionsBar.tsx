@@ -1,7 +1,7 @@
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import type { AgentEvent } from '@ramu/shared/types'
-import type { QuestionState } from '@ramu/shared/questions'
+import type { QuestionState } from '@ramu/shared/chat/questions'
 import { GHOST_TEXT_BUTTON_CLASS } from '../styles'
 
 type PendingQuestion = Extract<AgentEvent, { kind: 'question' | 'elicitation' }>

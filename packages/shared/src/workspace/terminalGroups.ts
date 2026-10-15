@@ -1,4 +1,4 @@
-import type { TaskUiState, TerminalGroup, ViewDescriptor } from './types'
+import type { TaskUiState, TerminalGroup, ViewDescriptor } from '../types'
 
 export function terminalGroups(state: TaskUiState): TerminalGroup[] {
   const ids = state.views.filter((view) => view.kind === 'terminal').map((view) => view.id)

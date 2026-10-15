@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { providerWaitOf } from '../src/providerWait'
+import { providerWaitOf } from '../src/chat/providerWait'
 import type { AgentEvent } from '../src/types'
 
 const wait = (retryAt: number | null): AgentEvent => ({ kind: 'provider-wait', retryAt, updatedAt: 1 })

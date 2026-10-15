@@ -3,7 +3,7 @@ import { ChatActivityButton } from './ChatActivity'
 import { Button } from '@/components/desktop-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import type { ChatGoal } from '@ramu/shared/types'
-import type { GoalChange, GoalChangeType } from '@ramu/shared/goalHistory'
+import type { GoalChange, GoalChangeType } from '@ramu/shared/chat/goalHistory'
 import { t, useLanguage } from '../i18n'
 import { useAppSettings } from '../settings/AppSettings'
 

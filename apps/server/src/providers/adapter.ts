@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { join } from 'node:path'
-import type { ProviderConfiguration, ProviderSignIn, ProviderStatus } from '@ramu/shared/providers'
+import type { ProviderConfiguration, ProviderSignIn, ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
 
 export const parseProviderVersion = (output: string): string | null =>

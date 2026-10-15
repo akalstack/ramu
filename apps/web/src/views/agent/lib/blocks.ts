@@ -1,7 +1,7 @@
-import { ramuTool, ramuToolHasOwnUi } from '@ramu/shared/ramuTools'
+import { ramuTool, ramuToolHasOwnUi } from '@ramu/shared/chat/ramuTools'
 import type { AgentEvent } from '@ramu/shared/types'
-import { type ChatBlock as Block } from '@ramu/shared/chatFolding'
-import { goalChanges } from '@ramu/shared/goalHistory'
+import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
+import { goalChanges } from '@ramu/shared/chat/goalHistory'
 import type { AgentTask } from '@ramu/shared/types'
 import { ramu } from '../../../ipc'
 

@@ -1,5 +1,5 @@
 import { providerAccountId } from '../providers/providerBinaries'
-import { supportsProviderAccounts } from '@ramu/shared/providers'
+import { supportsProviderAccounts } from '@ramu/shared/providers/providers'
 import { randomUUID } from 'node:crypto'
 import type {
   AgentTask,

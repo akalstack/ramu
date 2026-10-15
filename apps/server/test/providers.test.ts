@@ -11,7 +11,7 @@ import {
   providerEnvironment,
 } from '../src/providers/providerBinaries'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
-import type { ProviderStatus } from '@ramu/shared/providers'
+import type { ProviderStatus } from '@ramu/shared/providers/providers'
 
 let dir: string, bin: string, preferences: AppPreferences, store: Map<string, unknown>, service: ProviderService
 const emit = vi.fn()

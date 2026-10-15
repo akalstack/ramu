@@ -1,4 +1,4 @@
-import { toolKind } from '@ramu/shared/agentTools'
+import { toolKind } from '@ramu/shared/chat/agentTools'
 import {
   Wrench,
   Globe,
@@ -16,7 +16,7 @@ import {
   ListChecks,
   Sparkles,
 } from 'lucide-react'
-import { describeRamuTool, ramuTool, type RamuToolIcon } from '@ramu/shared/ramuTools'
+import { describeRamuTool, ramuTool, type RamuToolIcon } from '@ramu/shared/chat/ramuTools'
 import { ramu } from '../../../ipc'
 import { type ToolResult, type ToolUse } from '../types'
 

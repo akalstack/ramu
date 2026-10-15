@@ -1,5 +1,5 @@
 import { providerAccountId } from '../providers/providerBinaries'
-import { supportsProviderAccounts } from '@ramu/shared/providers'
+import { supportsProviderAccounts } from '@ramu/shared/providers/providers'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,7 +12,7 @@ import {
   type CommitStyle,
   type ProviderCatalog,
 } from '@ramu/shared/types'
-import { settingsKey, nextStep } from '@ramu/shared/routing'
+import { settingsKey, nextStep } from '@ramu/shared/providers/routing'
 import type { QueryFn } from './types'
 import { InputQueue } from './inputQueue'
 import { limitSection, stripRouterLine, cleanTitle, splitBranchLine } from './text'

@@ -1,6 +1,6 @@
 import { providerAccountId } from '../providers/providerBinaries'
 import { acpModels } from '../providers/acp'
-import { providerName, providerEnabled } from '@ramu/shared/providers'
+import { providerName, providerEnabled } from '@ramu/shared/providers/providers'
 import type { AppPreferences, AgentSettings, AgentProvider, ProviderCatalog } from '@ramu/shared/types'
 import { codexModels } from '../providers/codex'
 import type { QueryFn } from './types'
