@@ -75,7 +75,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and validation requirements. [R
 
 ## Guides
 
-[Providers](docs/PROVIDERS.md) · [Agents and routing](docs/AGENTS.md) · [Background work and reviews](docs/AUTOMATION.md) · [Goals](docs/GOALS.md) · [Shared memory](docs/MEMORY.md) · [Editor](docs/EDITOR.md) · [Headless server](docs/HEADLESS-SERVER.md)
+[Providers](docs/PROVIDERS.md) · [Agents and routing](docs/AGENTS.md) · [Background work and reviews](docs/AUTOMATION.md) · [Goals](docs/GOALS.md) · [Shared memory](docs/MEMORY.md) · [Editor](docs/EDITOR.md) · [Headless server](docs/HEADLESS-SERVER.md) · [Architecture](docs/ARCHITECTURE.md)
 
 ## License
 

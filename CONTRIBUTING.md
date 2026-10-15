@@ -35,9 +35,9 @@ pnpm workspace; each package has its own `src`, `test`, and `typecheck`/`test` s
 | `packages/contracts` | Wire protocol: versions, capabilities, request encoding |
 | `packages/client-runtime` | Node client for a workspace server (local socket or authenticated HTTP) |
 | `packages/shared` | Domain types, the API method table, and pure helpers |
-| `scripts` | Integration, development, and release helpers |
+| `scripts/smoke`, `scripts/release` | Electron and integration checks; packaging and release tooling |
 
-Import shared code as `@ramu/shared/<module>`. Server code must not import Electron or `apps/desktop`; desktop reaches the server through `@ramu/client-runtime`. See [headless server](docs/HEADLESS-SERVER.md).
+Read the [architecture overview](docs/ARCHITECTURE.md) before a large change; it explains how a call travels from the UI to the server and where new code belongs. Import shared code as `@ramu/shared/<module>`. Server code must not import Electron or `apps/desktop`; desktop reaches the server through `@ramu/client-runtime`. See [headless server](docs/HEADLESS-SERVER.md).
 
 Match the existing TypeScript style. Keep changes focused and test behavior where useful. See [UI development](docs/UI.md), [localization](docs/LOCALIZATION.md), and [release maintenance](docs/RELEASING.md).
 
