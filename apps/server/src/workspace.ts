@@ -123,15 +123,17 @@ export class Workspace {
     return { kind: 'workspace', root, name: basename(root), repos: repos.sort() }
   }
 
-  /** Creates a project from a folder: a workspace with its child repositories, or a single repository. */
-  async addProjectFromFolder(dir: string): Promise<{ project: Project; repositories: Repository[] }> {
+  /** Creates a project from a folder: a workspace with its child repositories (all, or only `repos`), or a single repository. */
+  async addProjectFromFolder(dir: string, repos?: string[]): Promise<{ project: Project; repositories: Repository[] }> {
     const found = await this.inspectFolder(dir)
+    const chosen = found.kind === 'workspace' && repos ? found.repos.filter((repo) => repos.includes(repo)) : null
+    if (chosen && !chosen.length) throw new Error('Choose at least one repository.')
     const existing = this.listProjects().find((p) => p.root === found.root)
     if (existing) return { project: existing, repositories: this.listRepositories(existing.id) }
     // Not a Git repository: the folder itself becomes the project, and Source Control offers to initialize it.
     const project = this.createProject(found.kind === 'none' ? basename(found.root) : found.name, found.root)
     if (found.kind === 'none') return { project, repositories: [this.addFolderRepository(project.id, found.root)] }
-    const paths = found.kind === 'repo' ? [found.root] : found.repos
+    const paths = found.kind === 'repo' ? [found.root] : chosen ?? found.repos
     const repositories: Repository[] = []
     for (const p of paths) repositories.push(await this.addRepository(project.id, p))
     return { project, repositories }

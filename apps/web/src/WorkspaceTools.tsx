@@ -54,11 +54,13 @@ export function WorkspaceRail({ tool }: { tool: WorkspaceTool }) {
     const handle = event.currentTarget, startX = event.clientX, start = rail.current!.offsetWidth
     handle.setPointerCapture(event.pointerId)
     document.documentElement.dataset.railDragging = ''
+    handle.dataset.sashActive = ''
     let next = start
     const move = (e: PointerEvent) => { next = Math.round(Math.min(RAIL_WIDTH.max, Math.max(RAIL_WIDTH.min, start + startX - e.clientX))); rail.current!.style.width = `${next}px` }
     const end = () => {
       handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end)
       delete document.documentElement.dataset.railDragging
+      delete handle.dataset.sashActive
       localStorage.setItem(RAIL_WIDTH.key, String(next)); setWidth(next)
     }
     handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end)
@@ -72,7 +74,7 @@ export function WorkspaceRail({ tool }: { tool: WorkspaceTool }) {
   }
   return (
     <div ref={rail} className="workspace-rail relative flex-none h-full min-w-0 [border-left:1px_solid_var(--pane-border-color)]" style={{ width }}>
-      <div role="separator" aria-orientation="vertical" aria-label={t("Resize tools panel")} aria-valuemin={RAIL_WIDTH.min} aria-valuemax={RAIL_WIDTH.max} aria-valuenow={width} tabIndex={0} onPointerDown={drag} onKeyDown={keyboard} className="absolute inset-y-0 -left-[3px] z-10 w-[5px] cursor-col-resize hover:bg-[var(--pane-border-active)] focus-visible:bg-[var(--pane-border-active)] outline-none" />
+      <div role="separator" aria-orientation="vertical" aria-label={t("Resize tools panel")} aria-valuemin={RAIL_WIDTH.min} aria-valuemax={RAIL_WIDTH.max} aria-valuenow={width} tabIndex={0} onPointerDown={drag} onKeyDown={keyboard} onDoubleClick={() => { localStorage.setItem(RAIL_WIDTH.key, String(RAIL_WIDTH.fallback)); setWidth(RAIL_WIDTH.fallback) }} className="pane-sash absolute inset-y-0 -left-[3px] z-10 w-[5px] cursor-col-resize outline-none touch-none" />
       <WorkspaceTools tool={tool} />
     </div>
   )

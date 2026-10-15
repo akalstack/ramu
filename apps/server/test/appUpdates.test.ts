@@ -68,3 +68,33 @@ it('service identity changes with shared code, independent of filesystem timesta
   expect(runtimeBuild(daemon)).not.toBe(original)
 })
 
+
+it('aborts an update check without an error and can check again', async () => {
+  const fetcher = vi.fn().mockImplementationOnce((_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true })
+  })).mockResolvedValue(new Response(JSON.stringify(fixture('zip'))))
+  vi.stubGlobal('fetch', fetcher)
+  const { service } = make()
+  const checking = service.check()
+  await service.cancel()
+  expect((await checking).phase).toBe('idle')
+  expect(service.status().error).toBeNull()
+  expect((await service.check()).phase).toBe('available')
+})
+
+it('cancels a download without staging partial files and permits another download', async () => {
+  const body = 'zip-content', release = fixture(body), digest = createHash('sha256').update(body).digest('hex')
+  const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(release)))
+    .mockImplementationOnce((_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true })
+    }))
+    .mockResolvedValueOnce(new Response(`${digest}  ${release.assets[0]!.name}\n`))
+    .mockResolvedValueOnce(new Response(body))
+  vi.stubGlobal('fetch', fetcher)
+  const { service } = make()
+  await service.check()
+  const downloading = service.download()
+  await service.cancel()
+  expect(await downloading).toMatchObject({ phase: 'available', error: null, downloadedBytes: 0 })
+  expect((await service.download()).phase).toBe('ready')
+})

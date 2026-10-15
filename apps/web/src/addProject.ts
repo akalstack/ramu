@@ -4,6 +4,15 @@ import { notifyError } from './Notifications'
 import { errorText } from './TaskPane'
 import { useWorkspace } from './workspace'
 
+export type RepoChoice = { name: string; repos: string[]; resolve: (repos: string[] | null) => void }
+const choiceListeners = new Set<(choice: RepoChoice) => void>()
+/** The dialog subscribes here; it answers with the repositories to keep, or null when the user cancels. */
+export function onRepoChoice(listener: (choice: RepoChoice) => void) { choiceListeners.add(listener); return () => { choiceListeners.delete(listener) } }
+const chooseRepos = (name: string, repos: string[]) => new Promise<string[] | null>((resolve) => {
+  if (!choiceListeners.size) return resolve(repos)
+  choiceListeners.forEach((listener) => listener({ name, repos, resolve }))
+})
+
 /** Every "Add project" entry point: the native folder browser, then the new project opens on its files. */
 export function useAddProject() {
   const ws = useWorkspace()
@@ -11,7 +20,16 @@ export function useAddProject() {
   const open = async (dirs: string[]) => {
     let last: string | null = null
     for (const dir of dirs) {
-      try { last = (await invoke('projects.addFolder', dir)).project.id }
+      try {
+        const found = await invoke('projects.inspect', dir)
+        let repos: string[] | undefined
+        if (found.kind === 'workspace' && found.repos.length > 1 && !ws.projects.some((project) => project.root === found.root)) {
+          const chosen = await chooseRepos(found.name, found.repos)
+          if (!chosen) continue
+          repos = chosen
+        }
+        last = (await invoke('projects.addFolder', dir, repos)).project.id
+      }
       catch (e) { notifyError(errorText(e), 'Add project') }
     }
     if (!last) return

@@ -228,3 +228,26 @@ it('seeds the files from existing database notes and reads them back after a res
   const restarted = files(); restarted.start()
   expect(restarted.get(old.id).content).toBe('Edited while closed')
 })
+
+it('cancels maintenance without applying a late result or recording a failure, and allows another run', async () => {
+  const first = memory.save(note('First', 'Keep the first memory'), agent).memory
+  memory.save(note('Second', 'Keep the second memory'), agent)
+  let release!: (value: { message: string }) => void
+  let signal!: AbortSignal
+  analyze.mockImplementationOnce((_prompt, _settings, _length, options) => {
+    signal = options.signal
+    return new Promise((resolve) => { release = resolve })
+  })
+  const running = memory.dream()
+  expect(memory.snapshot().dreaming).toBe(true)
+  memory.cancel()
+  expect(signal.aborted).toBe(true)
+  release({ message: JSON.stringify({ archive: [{ id: first.id, reason: 'Late result' }] }) })
+  await running
+  expect(memory.snapshot()).toMatchObject({ dreaming: false, error: null, dreamedAt: null })
+  expect(memory.snapshot().memories.find((entry) => entry.id === first.id)?.status).toBe('active')
+  await memory.tick()
+  expect(analyze).toHaveBeenCalledTimes(1)
+  await memory.dream()
+  expect(analyze).toHaveBeenCalledTimes(2)
+})

@@ -176,8 +176,8 @@ kbd { @apply [font:500_var(--font-caption)/16px_var(--sans)]; @apply text-muted-
 /* Palette and dialogs */
 @keyframes fade { from { opacity: 0; } }
 /* Search chats: the palette's look, with a search field like Settings' and two-line message matches. */
-button.danger-btn { @apply [background:var(--bad)]; @apply [border-color:transparent]; @apply [color:#200a07]; @apply font-semibold; }
-button.danger-btn:hover:not(:disabled) { @apply [background:color-mix(in_srgb,_var(--bad),_white_12%)]; }
+button.danger-btn { @apply [background:color-mix(in_srgb,_var(--bad),_black_30%)]; @apply [border-color:transparent]; @apply [color:#fff]; @apply font-semibold; }
+button.danger-btn:hover:not(:disabled) { @apply [background:color-mix(in_srgb,_var(--bad),_black_18%)]; }
 
 /* Chat details */
 button.scm-commit.primary { @apply w-full; @apply justify-center; @apply [background:var(--primary)]; @apply [color:var(--primary-ink)]; @apply [border:none]; @apply rounded-(--radius-s); @apply h-7; @apply p-[6px_12px]; @apply gap-2; @apply text-control; }
@@ -717,9 +717,10 @@ button.git-stash-new:hover:not(:disabled) { @apply [background:var(--hover)]; @a
   transition: opacity 100ms ease-out;
 }
 .pane-sash[aria-orientation="horizontal"]::before { inset: -1.5px 0; }
-.pane-sash:is(:hover, [data-separator="hover"])::before { opacity: 1; transition-delay: 300ms; }
-.pane-sash:is([data-separator="active"], [data-sash-active], :focus-visible)::before { opacity: 1; transition-delay: 0ms; }
+.pane-sash:hover::before { opacity: 1; transition: opacity 100ms ease-out 300ms; }
+.pane-sash:is([data-separator="active"], [data-sash-active], :focus-visible)::before { opacity: 1; transition: opacity 100ms ease-out 0ms; }
 .pane-sash[data-disabled]::before { opacity: 0; }
+.workspace-rail > .pane-sash::before { inset: 0 1px; }
 .tabs-right .terminal-tab-scroll { order: 1; }
 /* Detached workspaces keep their state without spending work on off-screen layout and animation. */
 html[data-workspace-hidden] body { content-visibility: hidden; }

@@ -24,7 +24,14 @@ function subscribeComputers(listener: () => void) {
 /** One shared computer snapshot per renderer, regardless of how many components display it. */
 export function useComputers(): Computers | null { return useSyncExternalStore(subscribeComputers, () => computerState) }
 
-export const statusText = (status: ComputerStatus) => status === 'connected' ? t('Connected') : status === 'connecting' ? t('Connecting…') : status === 'offline' ? t('Offline') : status === 'paused' ? t('Paused') : t('Pair again')
+/** Whether this window's computer is temporarily unreachable. A rejected pairing never comes back, so it doesn't count. */
+export function useHostConnection(): { offline: boolean; name: string } {
+  const state = useComputers()
+  const host = state?.computers.find((computer) => computer.id === state.current)
+  return { offline: !!host && host.status !== 'connected' && host.status !== 'rejected', name: host?.name ?? t('this computer') }
+}
+
+export const statusText =(status: ComputerStatus) => status === 'connected' ? t('Connected') : status === 'connecting' ? t('Connecting…') : status === 'offline' ? t('Offline') : status === 'paused' ? t('Paused') : t('Pair again')
 
 export function StatusDot({ status, className = '' }: { status: ComputerStatus; className?: string }) {
   return <span aria-hidden className={`size-1.5 flex-none rounded-full ${status === 'connected' ? 'bg-(--ok)' : status === 'rejected' ? 'bg-bad' : 'bg-[#8b8b91]'} ${status === 'connecting' ? 'animate-pulse' : ''} ${className}`} />
@@ -82,8 +89,9 @@ export function ComputerSwitcher() {
   return <Menu standard label={t('Switch computer')} align="start" items={items} menuClassName="min-w-[260px]"
     className="computer-switcher flex w-full min-w-0 items-center justify-start gap-[9px] rounded-(--radius-row) border-0 bg-transparent p-[5px_8px] min-h-8 text-body leading-5 text-soft hover:bg-accent hover:text-foreground aria-expanded:bg-accent [-webkit-app-region:no-drag]"
     icon={<>
-      <Monitor size={15} className="flex-none" />
+      {current.local ? <Monitor size={15} className="flex-none" /> : <Network size={15} className="flex-none text-(--accent)" />}
       <span className="min-w-0 grow truncate text-left">{current.name}</span>
+      {!current.local && <span className="flex-none rounded-full bg-primary/10 px-1.5 text-[10px] font-medium leading-[16px] text-(--accent)">{current.ssh ? t('SSH') : t('Remote')}</span>}
       <StatusDot status={current.status} />
       {(waiting > 0 || working > 0) && <span className="flex-none rounded-full bg-fill px-1.5 text-[10px] leading-[16px] tabular-nums text-muted-foreground" title={[waiting ? t('{0} waiting on other computers', { 0: waiting }) : '', working ? t('{0} working on other computers', { 0: working }) : ''].filter(Boolean).join(' · ')}>{waiting || working}</span>}
       <ChevronsUpDown size={13} className="flex-none text-muted-foreground" />

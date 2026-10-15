@@ -31,6 +31,8 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
   const preview = useRef<HTMLDivElement>(null)
   const drag = useRef<{ rect: DOMRect; length: number; share: number } | null>(null)
   const currentShare = useRef(share)
+  // Window resizes keep the secondary pane's pixel size; only user drags and resets change it.
+  const pixels = useRef<number | null>(null)
   const epoch = useLayoutEpoch()
   useLayoutEffect(() => {
     if (open) return
@@ -41,6 +43,7 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
   useEffect(() => {
     const next = readShare()
     currentShare.current = next
+    pixels.current = null
     setShare(next)
   }, [id, epoch])
   useLayoutEffect(() => {
@@ -60,10 +63,16 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
   const minimum = length ? Math.min(35, secondaryMin / length * 100) : 35
   const maximum = length ? 100 - Math.min(45, primaryMin / length * 100) : 55
   const clamp = (value: number) => Math.max(minimum, Math.min(maximum, value))
+  if (length && pixels.current === null) pixels.current = clamp(share) / 100 * length
+  if (length && pixels.current !== null && !drag.current) {
+    const kept = clamp(pixels.current / length * 100)
+    if (kept !== share) { currentShare.current = kept; setShare(kept) }
+  }
   const actual = clamp(share)
   const update = (value: number) => {
     const next = clamp(value)
     currentShare.current = next
+    pixels.current = length ? next / 100 * length : null
     setShare(next)
   }
   const save = () => localStorage.setItem(`ramu.layout.${storageKey}`, String(currentShare.current))

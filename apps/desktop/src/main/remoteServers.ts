@@ -5,9 +5,11 @@ import { dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { parseRemoteUrl, type RuntimeEndpoint } from '@ramu/contracts'
 
-interface StoredServer { id: string; name: string; url: string; pairedAt: number; token: string; sealed: boolean; enabled?: boolean; retryMode?: 'events' | 'periodic' }
+/** A computer reached through an SSH tunnel: `target` is what ssh is given, `remote` the address the tunnel forwards to on that computer. */
+export interface SshRoute { target: string; remote: string }
+interface StoredServer { id: string; name: string; url: string; pairedAt: number; token: string; sealed: boolean; enabled?: boolean; retryMode?: 'events' | 'periodic'; ssh?: SshRoute }
 interface StoredFile { servers: StoredServer[] }
-export interface SavedServer { id: string; name: string; url: string; pairedAt: number; enabled: boolean; retryMode: 'events' | 'periodic' }
+export interface SavedServer { id: string; name: string; url: string; pairedAt: number; enabled: boolean; retryMode: 'events' | 'periodic'; ssh?: SshRoute }
 export interface ComputerUpdate { name?: string; enabled?: boolean; retryMode?: 'events' | 'periodic' }
 export interface Sealer { available: boolean; seal(text: string): string; open(text: string): string }
 
@@ -45,11 +47,11 @@ export class RemoteServers {
     this.signature = ''; this.load()
   }
 
-  list(): SavedServer[] { return this.read().servers.map(({ id, name, url, pairedAt, enabled, retryMode }) => ({ id, name, url, pairedAt, enabled: enabled !== false, retryMode: retryMode === 'periodic' ? 'periodic' : 'events' })) }
+  list(): SavedServer[] { return this.read().servers.map(({ id, name, url, pairedAt, enabled, retryMode, ssh }) => ({ id, name, url, pairedAt, enabled: enabled !== false, retryMode: retryMode === 'periodic' ? 'periodic' : 'events', ...(ssh ? { ssh } : {}) })) }
   get(id: string): SavedServer | undefined {
     this.load()
     const server = this.records.get(id)
-    return server ? { id, name: server.name, url: server.url, pairedAt: server.pairedAt, enabled: server.enabled !== false, retryMode: server.retryMode === 'periodic' ? 'periodic' : 'events' } : undefined
+    return server ? { id, name: server.name, url: server.url, pairedAt: server.pairedAt, enabled: server.enabled !== false, retryMode: server.retryMode === 'periodic' ? 'periodic' : 'events', ...(server.ssh ? { ssh: server.ssh } : {}) } : undefined
   }
 
   /** What it takes to connect to a saved computer. */
@@ -67,12 +69,21 @@ export class RemoteServers {
   }
 
   /** Saves a computer after it accepted a pairing code. Pairing the same address again replaces the old entry. */
-  add(address: string, name: string | undefined, token: string, now = Date.now()): SavedServer {
+  add(address: string, name: string | undefined, token: string, now = Date.now(), ssh?: SshRoute): SavedServer {
     const url = parseRemoteUrl(address), file = this.read()
     const sealed = this.sealer.available
-    const server: StoredServer = { id: randomUUID().slice(0, 8), name: clean(name, new URL(url).hostname), url, pairedAt: now, token: sealed ? this.sealer.seal(token) : token, sealed }
-    this.write({ servers: [...file.servers.filter((s) => s.url !== url), server] })
-    return { id: server.id, name: server.name, url, pairedAt: now, enabled: true, retryMode: 'events' }
+    const server: StoredServer = { id: randomUUID().slice(0, 8), name: clean(name, ssh?.target.replace(/^.*@/, '') ?? new URL(url).hostname), url, pairedAt: now, token: sealed ? this.sealer.seal(token) : token, sealed, ...(ssh ? { ssh } : {}) }
+    // The same tunnel target replaces its entry even when the local tunnel port changed.
+    this.write({ servers: [...file.servers.filter((s) => ssh ? s.ssh?.target !== ssh.target : s.url !== url), server] })
+    return { id: server.id, name: server.name, url, pairedAt: now, enabled: true, retryMode: 'events', ...(ssh ? { ssh } : {}) }
+  }
+
+  /** A tunnel that could not reuse its last local port moves to a new one. */
+  setUrl(id: string, address: string) {
+    const file = this.read(), server = file.servers.find((entry) => entry.id === id)
+    if (!server) return
+    server.url = parseRemoteUrl(address)
+    this.write(file)
   }
 
   update(id: string, changes: ComputerUpdate): SavedServer {

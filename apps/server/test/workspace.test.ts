@@ -297,6 +297,15 @@ describe('git porcelain v2 parsing', () => {
 })
 
 describe('projects from folders', () => {
+  it('adds only the chosen child repositories of a plain folder', async () => {
+    const { repositories } = await ws.addProjectFromFolder(join(tmp, 'code'), [realpathSync(api)])
+    expect(repositories.map((r) => r.name)).toEqual(['api'])
+  })
+
+  it('refuses an empty choice of child repositories', async () => {
+    await expect(ws.addProjectFromFolder(join(tmp, 'code'), [])).rejects.toThrow('Choose at least one repository.')
+  })
+
   it('groups child repositories of a plain folder as a workspace and runs agents at its root', async () => {
     const before = { web: fingerprint(web), api: fingerprint(api) }
     mkdirSync(join(tmp, 'code', 'notes')) // not a repository

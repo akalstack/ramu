@@ -77,7 +77,7 @@ export class AppUpdateService {
         const release = parseAppRelease(JSON.parse(text))
         if (release && newerVersion(release.version, this.state.currentVersion)) this.change({ phase: ready && release.version === this.state.release?.version ? 'ready' : 'available', release, checkedAt: new Date().toISOString() })
         else this.change({ phase: ready ? 'ready' : 'idle', checkedAt: new Date().toISOString(), ...(ready ? {} : { release: null }) })
-      } catch (error) { this.change({ phase: ready ? 'ready' : 'error', error: String(error) }) }
+      } catch (error) { this.change(this.abort.signal.aborted ? { phase: ready ? 'ready' : this.state.release ? 'available' : 'idle', error: null } : { phase: ready ? 'ready' : 'error', error: String(error) }) }
       return this.status()
     })().finally(() => { this.running = undefined })
     return this.running
@@ -110,14 +110,21 @@ export class AppUpdateService {
         }
         if (size !== release.size || hash.digest('hex') !== checksum) throw new Error('Update checksum or size did not match the release')
         await file.close(); file = undefined
+        signal.throwIfAborted()
         renameSync(temporary, join(this.directory, release.assetName))
         writeFileSync(join(this.directory, 'ready.json'), JSON.stringify({ release, checksum }), { mode: 0o600 })
         this.change({ phase: 'ready', downloadedBytes: size })
-      } catch (error) { this.change({ phase: 'error', error: String(error) }) }
+      } catch (error) { this.change(this.abort.signal.aborted ? { phase: 'available', downloadedBytes: 0, error: null } : { phase: 'error', error: String(error) }) }
       finally { await file?.close(); rmSync(temporary, { force: true }) }
       return this.status()
     })().finally(() => { this.downloading = undefined })
     return this.downloading
+  }
+  async cancel(): Promise<void> {
+    this.generation++
+    this.abort.abort()
+    await Promise.allSettled([this.running, this.downloading])
+    if (!this.closed) this.abort = new AbortController()
   }
   close() { this.closed = true; clearTimeout(this.timer); this.abort.abort() }
 }

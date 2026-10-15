@@ -1,4 +1,4 @@
-import { Clock3 } from 'lucide-react'
+import { Clock3, WifiOff } from 'lucide-react'
 import { formatLocale, t, useLanguage } from './i18n'
 
 /** The time of day, with the date when it is not today. */
@@ -23,5 +23,16 @@ export function ProviderWaitNote({ retryAt }: { retryAt: number }) {
     <Clock3 size={14} className="flex-none text-muted-foreground" aria-hidden="true" />
     <strong className="flex-none font-medium text-foreground">{t('Waiting for a usage limit to reset')}</strong>
     <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground">{t('Resumes around {0}', { '0': time })}</span>
+  </div>
+}
+
+/** Shown in the chat tray while this window's computer is unreachable. Like a usage limit, messages are kept and sent once it is back. */
+export function HostWaitNote({ name }: { name: string }) {
+  useLanguage()
+  const detail = t('{0} is not reachable. You can keep writing: messages wait on this device and are sent in order once it reconnects. They never interrupt a running turn.', { '0': name })
+  return <div role="status" title={detail} className="provider-wait flex items-center gap-2 min-h-7 px-1 text-caption">
+    <WifiOff size={14} className="flex-none text-muted-foreground" aria-hidden="true" />
+    <strong className="flex-none font-medium text-foreground">{t('Waiting for {0}', { '0': name })}</strong>
+    <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground">{t('Messages send when it reconnects')}</span>
   </div>
 }

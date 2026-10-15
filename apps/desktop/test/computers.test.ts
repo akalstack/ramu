@@ -17,6 +17,7 @@ function setup() {
   const servers = new RemoteServers(join(dir, 'remote-servers.json'), { available: false, seal: (t) => t, open: (t) => t })
   const streams = new Map<string, (channel: string, payload: any) => void>(), stops: string[] = [], delivered: [string, string][] = []
   const counts = new Map<string, { running: number; needsInput: number }>()
+  const ssh = { ensure: vi.fn(async () => {}), connect: vi.fn(), close: vi.fn(), closeAll: vi.fn() }
   const deps: ComputerDeps = {
     servers, deviceName: 'My Mac', localName: () => 'This computer', local: '/tmp/local.sock',
     subscribe: (target: RuntimeEndpoint, receive) => { streams.set(urlOf(target), receive); return () => { stops.push(urlOf(target)); streams.delete(urlOf(target)) } },
@@ -25,10 +26,11 @@ function setup() {
       return { running: true }
     }),
     pair: vi.fn(async () => ({ token: 'tok' })),
+    ssh,
     deliver: (id, channel) => delivered.push([id, channel]),
     changed: vi.fn(),
   }
-  return { servers, streams, stops, delivered, counts, deps, registry: new ComputerRegistry(deps) }
+  return { servers, streams, stops, delivered, counts, deps, ssh, registry: new ComputerRegistry(deps) }
 }
 
 it('lists this computer first and connects every saved computer at once', () => {
@@ -221,4 +223,30 @@ it('reciprocal A↔B connections stay direct and never echo events or counts bac
   a.registry.forget(remoteB.id)
   expect(b.registry.status(remoteA.id)).toBe('connected')
   a.registry.stop(); b.registry.stop()
+})
+
+it('brings up the tunnel before subscribing to an SSH computer, and tears it down when forgotten', async () => {
+  const { servers, streams, registry, ssh } = setup()
+  const saved = servers.add('http://127.0.0.1:49200', 'Build box', 'tok', 1, { target: 'build', remote: '127.0.0.1:7788' })
+  registry.start()
+  expect(ssh.ensure).toHaveBeenCalledWith(saved.id, expect.objectContaining({ ssh: { target: 'build', remote: '127.0.0.1:7788' } }))
+  expect(streams.size).toBe(0)
+  await vi.advanceTimersByTimeAsync(0)
+  expect([...streams.keys()]).toEqual(['http://127.0.0.1:49200'])
+  expect(registry.list(LOCAL).computers[1]).toMatchObject({ ssh: 'build', url: 'http://127.0.0.1:49200' })
+  registry.forget(saved.id)
+  expect(ssh.close).toHaveBeenCalledWith(saved.id)
+})
+
+it('shows an SSH computer as offline and retries when its tunnel cannot open', async () => {
+  const { servers, streams, registry, ssh } = setup()
+  ssh.ensure.mockRejectedValueOnce(new Error('build is not a trusted host yet'))
+  const saved = servers.add('http://127.0.0.1:49200', 'Build box', 'tok', 1, { target: 'build', remote: '127.0.0.1:7788' })
+  registry.start()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(registry.status(saved.id)).toBe('offline')
+  expect(streams.size).toBe(0)
+  await vi.advanceTimersByTimeAsync(20_000)
+  expect(ssh.ensure).toHaveBeenCalledTimes(2)
+  expect([...streams.keys()]).toEqual(['http://127.0.0.1:49200'])
 })

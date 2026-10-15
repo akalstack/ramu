@@ -229,10 +229,10 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
     </span>
     <span className={`letter [&.modified]:text-warn [&.added]:text-ok [&.untracked]:text-ok [&.deleted]:text-bad [.commit-file-M_&]:text-warn [.commit-file-R_&]:text-warn tabular-nums font-mono text-caption w-3.5 text-center text-muted-foreground ${isStaged ? e.staged : e.unstaged}`} title={e.origPath ? t("Renamed") : undefined}>{LETTER[(isStaged ? e.staged : e.unstaged) ?? '']}</span>
   </div>
-  const draftMessage = async () => {
+  const draftMessage = async (includeBranch = false) => {
     setGenerating(true)
     try {
-      const value = await withGitBusy(taskId, binding.repoId, () => invoke('git.generateCommit', taskId, binding.repoId, settings))
+      const value = await withGitBusy(taskId, binding.repoId, () => invoke('git.generateCommit', taskId, binding.repoId, settings, includeBranch))
       setDraft(value); setMessage(value.message)
       return value
     } catch (e) { reportError(errorText(e)); return null }
@@ -244,21 +244,23 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
     if (loading || busy || generating || conflicts.length) return
     const branchOptions = action === 'push' || action === 'sync' || action === 'new-branch' ? await chooseCommitBranch(taskId, binding.repoId, action === 'new-branch', action === 'sync' ? 'sync' : 'push') : undefined
     if (branchOptions === null) return
-    if (branchOptions?.newBranch) requireSaved()
+    if (branchOptions?.newBranch || branchOptions?.autoBranch) requireSaved()
     if (stagePaths?.length) await invoke('git.stage', taskId, binding.repoId, stagePaths)
-    let text = message, fingerprint = draft?.fingerprint
+    let text = message, fingerprint = draft?.fingerprint, suggested = draft?.branch
     const amendHead = action === 'amend' ? status?.oid ?? undefined : undefined
     if (action === 'amend' && !amendHead) return
     if (!text.trim() && action !== 'amend') {
-      const value = await draftMessage()
+      // The draft also names the feature branch when one is about to be created.
+      const value = await draftMessage(!!branchOptions?.autoBranch)
       if (!value?.message.trim()) return
-      text = value.message; fingerprint = value.fingerprint
+      text = value.message; fingerprint = value.fingerprint; suggested = value.branch
     }
     await run(async () => {
       if (action === 'sync') requireSaved()
-      await invoke('git.commit', taskId, binding.repoId, text, fingerprint, amendHead, branchOptions)
+      await invoke('git.commit', taskId, binding.repoId, text, fingerprint, amendHead, branchOptions?.autoBranch && suggested ? { ...branchOptions, newBranch: suggested } : branchOptions)
       setMessage(''); setDraft(null)
-      if (action === 'push') await invoke('git.push', taskId, binding.repoId, branchOptions?.newBranch ?? branchOptions?.expectedBranch ?? undefined)
+      const target = branchOptions?.autoBranch ? (await invoke('git.commitBranchInfo', taskId, binding.repoId)).branch : branchOptions?.newBranch ?? branchOptions?.expectedBranch
+      if (action === 'push') await invoke('git.push', taskId, binding.repoId, target ?? undefined)
       if (action === 'sync') await invoke('git.sync', taskId, binding.repoId)
     })
   }
@@ -361,8 +363,8 @@ function RepositoryControl({ taskId, binding, compact = false, collapsed = false
           <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) commit-ai absolute right-1.5 top-1.5" title={t("Draft a commit message from staged changes")} aria-label={t("AI commit message for {0}", { "0": binding.repoName })} disabled={busy || generating || !staged.length || !!conflicts.length} onClick={generate}><Sparkles size={14} className={generating ? 'shimmer text-control [background:linear-gradient(90deg,_var(--muted)_30%,_var(--text)_50%,_var(--muted)_70%)] [background-size:200%_100%] [-webkit-background-clip:text] [background-clip:text] [color:transparent] [animation:shimmer_1.8s_linear_infinite]' : ''} /></Button>
         </div>
         {!syncOnly && <ButtonGroup className="scm-commit-split [&_>_button.scm-commit]:flex-1 [&_>_button.scm-commit]:w-auto [&_>_button.scm-commit]:min-w-0 [&_>_button.scm-commit]:m-0 [&_>_button.scm-commit]:[border-radius:var(--radius-s)_0_0_var(--radius-s)] flex gap-0 mb-1.5" aria-label={t("Commit")}>
-          <Button variant="secondary" size="sm" className="scm-commit" aria-label={commitLabel} disabled={!canRunCommit(commitAction)} title={!staged.length ? t("Stage all changes and commit?") : message.trim() ? undefined : t("Drafts a message with AI, then commits")} onClick={() => requestCommit()}><Check size={14} />{generating ? t("Drafting message…") : busy ? t("Working…") : commitLabel}</Button>
-          <Menu disabled={!canRunCommit(commitAction)} label={t("Commit options")} icon={<ChevronDown size={14} />} className="scm-commit-menu" align="end"  items={[
+          <Button variant="default" size="sm" className="scm-commit bg-primary text-primary-foreground border-transparent font-semibold hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100" aria-label={commitLabel} disabled={!canRunCommit(commitAction)} title={!staged.length ? t("Stage all changes and commit?") : message.trim() ? undefined : t("Drafts a message with AI, then commits")} onClick={() => requestCommit()}><Check size={14} />{generating ? t("Drafting message…") : busy ? t("Working…") : commitLabel}</Button>
+          <Menu disabled={!canRunCommit(commitAction)} label={t("Commit options")} icon={<ChevronDown size={14} />} className="scm-commit-menu bg-primary text-primary-foreground border-transparent border-l border-l-primary-foreground/25 hover:bg-primary-hover aria-expanded:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100" align="end"  items={[
             { key: 'commit', label: t("Commit"), selected: commitAction === 'commit', onSelect: () => selectCommitAction('commit') },
             { key: 'new-branch', label: t("Commit on new branch"), disabled: !canCommit || !staged.length || !!status?.operation, onSelect: () => void commit('new-branch').catch((reason) => reportError(errorText(reason))) },
             { key: 'amend', label: t("Commit (Amend)"), title: t("Replace the latest commit; leave the message empty to keep its message"), disabled: !canAmend, onSelect: () => void commit('amend') },

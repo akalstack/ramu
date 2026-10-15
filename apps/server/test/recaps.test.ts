@@ -64,3 +64,22 @@ it('discards an in-flight recap when recaps are turned off', async () => {
   release({ message: JSON.stringify({ items: [item()] }) }); await generating
   expect(service.snapshot().items).toHaveLength(0)
 })
+
+it('cancels recap generation, ignores a late result and permits manual retry', async () => {
+  let release!: (value: { message: string }) => void
+  let signal!: AbortSignal
+  analyze.mockImplementationOnce((_prompt, _settings, _length, options) => {
+    signal = options.signal
+    return new Promise((resolve) => { release = resolve })
+  })
+  const running = service.refresh()
+  service.cancel()
+  expect(signal.aborted).toBe(true)
+  release({ message: JSON.stringify({ items: [item()] }) })
+  await running
+  expect(service.snapshot()).toMatchObject({ generating: false, error: null, generatedAt: null, items: [] })
+  await service.tick()
+  expect(analyze).toHaveBeenCalledTimes(1)
+  await service.refresh()
+  expect(service.snapshot().items).toHaveLength(1)
+})

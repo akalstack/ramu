@@ -16,6 +16,7 @@ import { attachmentActions } from './attachmentActions'
 import { terminalMenu } from './terminalMenu'
 import { createAgentNotifier } from './agentNotifier'
 import { runtimeInvoke, runtimePair, subscribeRuntime, refreshRuntimeNetwork, runtimeNetwork, PresenceListener } from '@ramu/client-runtime'
+import { SshComputers } from './sshComputers'
 import { RemoteServers } from './remoteServers'
 import { ComputerBroadcaster } from './computerBroadcast'
 import { HiddenEvents } from './hiddenEvents'
@@ -43,6 +44,15 @@ const CSP = [
   "worker-src 'self' blob:",
   "connect-src 'self'",
 ].join('; ')
+
+// `ramu://pair?...` links can arrive before the window exists, so they queue until it can show them.
+const PAIR_LINK = /^ramu:\/\/pair(?:[/?]|$)/i
+const queuedPairLinks: string[] = []
+let showPairLink: ((link: string) => void) | null = null
+const receivePairLink = (link: string) => { if (link.length > 4096 || !PAIR_LINK.test(link)) return; if (showPairLink) showPairLink(link); else queuedPairLinks.push(link) }
+app.on('open-url', (event, url) => { event.preventDefault(); receivePairLink(url) })
+for (const arg of process.argv) receivePairLink(arg)
+if (app.isPackaged) app.setAsDefaultProtocolClient('ramu')
 
 async function main() {
   await app.whenReady()
@@ -124,6 +134,14 @@ async function main() {
     sendTo(visible, 'menu:action', { action })
   }
   updateApplicationMenu()
+  showPairLink = (link) => {
+    if (win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    win.show(); win.focus()
+    sendTo(visible, 'pair:link', { link })
+  }
+  // The window may still be loading; the renderer keeps the link until the screen asks for it.
+  for (const link of queuedPairLinks.splice(0)) setTimeout(() => showPairLink?.(link), 1500)
 
   // Packaged macOS builds take the icon from the bundle; development, Linux and Windows read it from assets/.
   // Packaged builds copy assets/ beside the app; in the monorepo it sits at the repository root.
@@ -243,8 +261,9 @@ async function main() {
   }
   const presence = new PresenceListener()
   await presence.start()
+  const ssh = new SshComputers(servers)
   const computers = new ComputerRegistry({
-    servers, deviceName: hostname(), localName: () => t('This computer'), local: runtime,
+    servers, ssh, deviceName: hostname(), localName: () => t('This computer'), local: runtime,
     subscribe: (target, receive, options) => subscribeRuntime(target, receive, runtimeNetwork, {
       ...options, presencePort: presence.port,
       ...(target.kind === 'http' ? { watchWake: (wake: () => void) => presence.watch(target.token, wake) } : {}),
@@ -265,6 +284,9 @@ async function main() {
     if (url) void view.webContents.loadURL(url); else void view.webContents.loadFile(join(import.meta.dirname, '../renderer/index.html'))
     return view
   }
+  /** How long the outgoing window stays on screen while the incoming one paints. */
+  const SWAP_SETTLE_MS = 150
+  let settleTimer: NodeJS.Timeout | undefined
   /** Brings a computer's window to the front. Every other window keeps running behind it. */
   const openComputer = (id: string) => {
     if (!computers.exists(id)) throw new Error(t('That computer is no longer saved'))
@@ -273,17 +295,29 @@ async function main() {
     if (id !== LOCAL && info.status !== 'connected') throw new Error(t('{name} is not reachable right now.', { name: info.name }))
     const previousId = visible
     const previous = views.get(previousId)
-    if (previousId !== id) sendTo(previousId, 'workspace:visibility', { visible: false })
     visible = id
-    if (id === LOCAL) { if (previous) win.contentView.removeChildView(previous); win.webContents.focus() }
+    // A hidden workspace blanks its page, so the new one is told first and the old one only after it is out of sight.
+    sendTo(id, 'workspace:visibility', { visible: true })
+    if (id === LOCAL) win.webContents.focus()
     else {
       const view = ensureView(id)
-      if (previous && previous !== view) win.contentView.removeChildView(previous)
-      win.contentView.addChildView(view)
+      // Under the old window first, so it repaints out of sight; settling raises it.
+      const below = previous && previous !== view ? win.contentView.children.indexOf(previous) : -1
+      if (below >= 0) win.contentView.addChildView(view, below); else win.contentView.addChildView(view)
       layout()
       view.webContents.focus()
     }
-    sendTo(id, 'workspace:visibility', { visible: true })
+    clearTimeout(settleTimer)
+    const settle = () => {
+      if (visible !== id || win.isDestroyed()) return
+      const shown = views.get(id)
+      if (shown) win.contentView.addChildView(shown)
+      for (const [viewId, view] of views) if (viewId !== id) win.contentView.removeChildView(view)
+      if (previousId !== id) sendTo(previousId, 'workspace:visibility', { visible: false })
+    }
+    const contents = views.get(id)?.webContents
+    if (contents?.isLoading()) { contents.once('did-finish-load', () => { settleTimer = setTimeout(settle, SWAP_SETTLE_MS) }); settleTimer = setTimeout(settle, 3000) }
+    else settleTimer = setTimeout(settle, SWAP_SETTLE_MS)
     sendTo(id, 'background:connection', { connected: info.status === 'connected', rejected: info.status === 'rejected' })
     hiddenEvents.get(id)?.drain((channel, payload) => sendTo(id, channel, payload), t('Older terminal output was truncated while this workspace was hidden.'))
     hiddenEvents.delete(id)
@@ -419,6 +453,15 @@ async function main() {
       if (typeof address !== 'string' || typeof code !== 'string' || (label !== undefined && typeof label !== 'string') || !code.trim()) throw new Error('Enter the address and the pairing code')
       const previous = servers.list()
       await computers.pair(address, code, label)
+      for (const server of previous) if (!computers.exists(server.id)) await closeComputer(server.id)
+      return computers.list(self)
+    }
+    if (method === 'computers.sshHosts') return ssh.hosts()
+    if (method === 'computers.pairSsh') {
+      const [target, label] = args
+      if (typeof target !== 'string' || !target.trim() || (label !== undefined && typeof label !== 'string')) throw new Error('Enter user@host or an alias from your SSH config')
+      const previous = servers.list()
+      await computers.pairSsh(target, label)
       for (const server of previous) if (!computers.exists(server.id)) await closeComputer(server.id)
       return computers.list(self)
     }

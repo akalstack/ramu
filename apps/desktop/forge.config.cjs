@@ -11,6 +11,7 @@ module.exports = {
     // Forge cannot detect the version from a staged copy that has no devDependencies.
     electronVersion: require(join(repoRoot, 'node_modules', 'electron', 'package.json')).version,
     executableName: 'Ramu',
+    protocols: [{ name: 'Ramu pairing link', schemes: ['ramu'] }],
     appBundleId: 'app.ramu.desktop',
     appCategoryType: 'public.app-category.developer-tools',
     // CFBundleIconName selects the Liquid Glass icon in Assets.car (macOS 26+); older systems use icon.icns.

@@ -23,7 +23,7 @@ it('keeps 100 remote connections independent and measures full-list broadcast ov
   const deps: ComputerDeps = {
     servers, deviceName: 'local', localName: () => 'This computer', local: '/tmp/unused.sock',
     subscribe: (target, receive) => { const url = target.kind === 'http' ? target.url : target.path; streams.set(url, receive); return () => { streams.delete(url) } },
-    invoke: async () => ({ running: 0, needsInput: 0 }), pair: async () => ({ token: 'token' }), deliver: () => {},
+    invoke: async () => ({ running: 0, needsInput: 0 }), pair: async () => ({ token: 'token' }), ssh: { ensure: async () => {}, connect: async () => { throw new Error('unused') }, close: () => {}, closeAll: () => {} }, deliver: () => {},
     changed: () => broadcaster.changed(),
   }
   const registry = new ComputerRegistry(deps)

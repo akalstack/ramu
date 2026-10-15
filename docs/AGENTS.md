@@ -16,11 +16,18 @@ Already-running native helpers keep their provider. After a service restart, Ram
 
 ## Usage limits and fallback
 
-**Settings → Access & Fallback** defines an ordered provider/model list. The default is **Only at the limit**; 80%, 90%, and 95% thresholds allow earlier switching. Unavailable or limited entries are skipped. **Return after the limit resets** restores the original provider and model on a later message.
+**Settings → Access & Fallback** holds one list of provider and model pairs, best first. The default is Claude Code, then Codex. A chat uses the highest model on the list that has room:
+
+- When its model reaches the limit, the chat moves to the highest model below it that has room. Unavailable or limited entries are skipped. The default switch point is **Only at the limit**; 80%, 90%, and 95% thresholds switch earlier.
+- Before each message, if a model higher on the list has room again, the chat moves back up. A new chat started lower on the list moves up the same way.
+- A model you pick by hand in a chat stays until it reaches its limit. A model that isn't on the list also stays until its limit. Neither moves up on its own.
+- The composer's usage chip shows where the next message goes. Use it to keep the current model for one message or for the chat.
+
+Background work such as titles, recaps, and commit messages keeps its model until that model reaches its limit.
 
 Fallback requires installed, authenticated providers. It carries visible conversation context into the same chat; private provider reasoning is not transferred. Usage readings can be delayed or unavailable. Authentication errors and tool failures do not trigger usage fallback.
 
-Helpers can use the main fallback policy or their own list and threshold.
+Helpers can use the main list or their own list and threshold. Helpers only move down the list when they reach a limit, so task-type routing is kept.
 
 ### When every provider is limited
 

@@ -115,13 +115,14 @@ ${JSON.stringify({ previousCheckpoint: this.checkpoint(job.sessionId), trace: bo
       const scrubbed = prompt.replace(/(?:sk-|gh[pousr]_|xox[abprs]-)[A-Za-z0-9_-]{10,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[redacted]').replace(/((?:password|passwd|secret|api[_-]?key|token)["']?\s*[:=]\s*["']?)[^"'\s,}\\]+/gi, '$1[redacted]')
       const selected = this.preferences().maintenanceModel
       const result = await this.agents.analyze(scrubbed, { ...DEFAULT_AGENT_SETTINGS, ...session.settings, ...(selected ?? {}) }, 30000, { timeoutMs: 90000, signal: this.abort.signal })
+      this.abort.signal.throwIfAborted()
       const proposal = proposalSchema.parse(JSON.parse(result.message.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')))
       if (!memoryOn) proposal.memories = []
       if (this.stopping || this.preferences().learning === 'off') { this.saveJob({ ...job, status: 'dismissed', error: 'Learning was paused during review' }); return }
       const pending: LearningJob = { ...job, status: 'pending', proposal: JSON.stringify(proposal), memoryVersions, skillVersions: Object.fromEntries(skills.map((skill) => [skill.id, skill.revision])) }
       this.saveJob(pending)
       if (this.preferences().learning === 'auto') this.apply(job.id)
-    } catch (error) { const current = this.jobs().find((entry) => entry.id === job.id) ?? job; this.saveJob({ ...current, status: current.status === 'applied' ? 'applied' : this.stopping ? 'queued' : 'failed', error: String(error) }) }
+    } catch (error) { const current = this.jobs().find((entry) => entry.id === job.id) ?? job; this.saveJob({ ...current, status: current.status === 'applied' ? 'applied' : this.stopping ? 'queued' : this.abort?.signal.aborted ? 'dismissed' : 'failed', error: this.abort?.signal.aborted && !this.stopping ? null : String(error) }) }
     finally { this.running = false; this.abort = undefined; this.changed() }
   }
   apply(id: string): void {
@@ -161,6 +162,7 @@ ${JSON.stringify({ previousCheckpoint: this.checkpoint(job.sessionId), trace: bo
     this.changed()
   }
   retry(id: string) { const job = this.jobs().find((job) => job.id === id); if (!job || !['failed', 'pending'].includes(job.status)) throw new Error('This review cannot be retried'); this.saveJob({ ...job, status: 'queued', proposal: null, error: null, createdAt: Date.now() }) }
+  cancel() { this.abort?.abort() }
   settingsChanged() { if (this.preferences().learning === 'off') this.abort?.abort() }
   dismiss(id: string) { const job = this.jobs().find((job) => job.id === id); if (!job || !['pending', 'queued', 'failed'].includes(job.status)) throw new Error('This review cannot be dismissed'); this.saveJob({ ...job, status: 'dismissed' }) }
   control(id: string, action: 'pin' | 'unpin' | 'disable' | 'archive' | 'restore') {

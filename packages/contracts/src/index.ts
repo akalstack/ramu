@@ -76,3 +76,48 @@ export function decodePairQr(text: string, now = Date.now()): PairQrOffer {
   if (offer.expiresAt <= now) throw new Error('This pairing code has expired. Create a new one on the computer.')
   return { ...offer, url: url.origin }
 }
+
+/** What a person can paste to add a computer: a `ramu://pair` link, a QR payload, an https link with a code, or an address. */
+export interface PairInput { url: string; code?: string; expiresAt?: number; name?: string }
+
+/** `ramu://pair?url=<origin>&code=<code>&exp=<ms>`. Like the QR payload it carries no device token. */
+export function encodePairLink(offer: { url: string; code: string; expiresAt?: number; name?: string }): string {
+  const link = new URL('ramu://pair')
+  link.searchParams.set('url', offer.url)
+  link.searchParams.set('code', offer.code)
+  if (offer.expiresAt) link.searchParams.set('exp', String(offer.expiresAt))
+  if (offer.name) link.searchParams.set('name', offer.name)
+  return link.toString()
+}
+
+const PAIR_CODE = /^[A-Z2-9]{5}-?[A-Z2-9]{5}$/
+export function parsePairInput(input: string, now = Date.now()): PairInput {
+  const text = input.trim()
+  if (!text || text.length > 4096) throw new Error('Paste a Ramu pairing link or an address')
+  if (text.startsWith('{')) { const offer = decodePairQr(text, now); return { url: offer.url, code: offer.code, expiresAt: offer.expiresAt } }
+  let link: URL | null = null
+  try { link = new URL(text) } catch { /* a bare address such as 100.64.0.7:7788 */ }
+  if (link?.protocol === 'ramu:') {
+    if (link.hostname !== 'pair' && link.pathname.replace(/^\/+/, '') !== 'pair') throw new Error('This is not a Ramu pairing link')
+    const url = link.searchParams.get('url'), code = (link.searchParams.get('code') ?? '').trim().toUpperCase()
+    if (!url) throw new Error('This pairing link has no address')
+    if (code && !PAIR_CODE.test(code)) throw new Error('This pairing link has an invalid code')
+    const expiresAt = Number(link.searchParams.get('exp')) || undefined
+    if (expiresAt && expiresAt <= now) throw new Error('This pairing link has expired. Create a new one on the computer.')
+    return { url: parseRemoteUrl(url), ...(code ? { code } : {}), ...(expiresAt ? { expiresAt } : {}), ...(link.searchParams.get('name') ? { name: link.searchParams.get('name')!.slice(0, 60) } : {}) }
+  }
+  if (link && (link.protocol === 'http:' || link.protocol === 'https:')) {
+    // A remote link may carry the code as ?code= or #code, which is not sent to the server.
+    const code = (link.searchParams.get('code') ?? link.hash.replace(/^#(code=)?/, '')).trim().toUpperCase()
+    if (code && !PAIR_CODE.test(code)) throw new Error('This link has an invalid pairing code')
+    return { url: link.origin, ...(code ? { code } : {}) }
+  }
+  return { url: parseRemoteUrl(text) }
+}
+
+/** `user@host`, `host` or an alias from ~/.ssh/config, never something ssh could read as an option. */
+export function parseSshTarget(input: string): string {
+  const text = input.trim().replace(/^ssh:\/\//i, '').replace(/\/$/, '')
+  if (!/^(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9._:\[\]-]+$/.test(text) || text.startsWith('-') || text.length > 255) throw new Error('Enter user@host or an alias from your SSH config')
+  return text
+}

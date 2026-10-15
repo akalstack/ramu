@@ -148,3 +148,23 @@ it('recalls original visible evidence by sequence without transferring provider 
   expect(JSON.stringify(result)).toContain('Provider reasoning is not included')
   expect(JSON.stringify(result)).not.toContain('Hidden provider reasoning')
 })
+
+it('cancels skill learning without applying a late proposal or retrying the dismissed job', async () => {
+  let release!: (value: Awaited<ReturnType<AgentService['analyze']>>) => void
+  let signal!: AbortSignal
+  analyze.mockImplementationOnce((_prompt, _settings, _length, options) => {
+    signal = options!.signal!
+    return new Promise((resolve) => { release = resolve })
+  })
+  const running = service.tick(true)
+  service.cancel()
+  expect(signal.aborted).toBe(true)
+  release({ provider: 'codex', model: 'test', message: JSON.stringify(proposal) })
+  await running
+  expect(service.snapshot().running).toBe(false)
+  expect(service.jobs()[0]).toMatchObject({ status: 'dismissed', error: null })
+  expect(service.skills()).toHaveLength(0)
+  expect(service.checkpoint('s')).toBeNull()
+  await service.tick(true)
+  expect(analyze).toHaveBeenCalledTimes(1)
+})

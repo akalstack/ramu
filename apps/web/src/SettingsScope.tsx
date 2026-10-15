@@ -7,6 +7,8 @@ import { recommendedSets } from '@ramu/shared/modelDefaults'
 import { invoke, ramu } from './ipc'
 import { useComputers, statusText } from './computers'
 import { errorText } from './errors'
+import { readSettingsSnapshot, SettingsUpdateRequired } from './settingsAvailability'
+import { Dropdown } from './Menu'
 import { t } from './i18n'
 
 export type SettingsScope = ReturnType<typeof useSettingsScope>
@@ -19,7 +21,7 @@ function renderPreferences(saved?: AppPreferences): AppPreferences {
   return merge(DEFAULT_APP_PREFERENCES, saved) as AppPreferences
 }
 const currentValue = (snapshot: SettingsSnapshot, path: string) => snapshot.settings.find((field) => field.path === path)?.value
-interface Target { id: string; name: string; snapshot?: SettingsSnapshot; error?: string }
+interface Target { id: string; name: string; snapshot?: SettingsSnapshot; error?: string; updateRequired?: boolean }
 
 export function useSettingsScope() {
   const computers = useComputers()
@@ -29,25 +31,37 @@ export function useSettingsScope() {
   const [revision, setRevision] = useState(0)
   const [edited, setEdited] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
+  const [restarting, setRestarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const dirty = useRef(false)
   const connections = JSON.stringify(computers?.computers.map(({ id, name, status }) => ({ id, name, status })) ?? [])
-  const available = computers?.computers ?? [{ id: '', name: t('This computer'), status: 'connected' as const }]
+  const available = computers?.computers ?? [{ id: '', name: t('This computer'), local: true, status: 'connected' as const }]
   const selected = available.filter((computer) => target === 'all' ? computer.status === 'connected' : computer.id === target)
   const read = (id: string) => id ? invoke('computers.settings.get', id) : invoke('settings.app.snapshot')
+  const loadedTarget = useRef<string | null>(null)
+  const [stale, setStale] = useState(false)
   useEffect(() => {
     if (dirty.current) return
     let active = true
-    setLoading(true); setError(null); setMessage(null)
+    // Any reload keeps showing the current values until the new ones arrive; only the very first load shows loading.
+    const refreshing = loadedTarget.current === target
+    if (!loadedTarget.current) setLoading(true)
+    else setStale(true)
+    setError(null); setMessage(null)
     void Promise.all(selected.map(async ({ id, name }): Promise<Target> => {
       if (available.find((computer) => computer.id === id)?.status !== 'connected') return { id, name, error: t('This computer is offline.') }
       try {
-        const snapshot = await read(id)
-        if (snapshot.protocol !== 1 || !snapshot.preferences) throw new Error(t('Update this computer to edit shared settings.'))
+        const snapshot = await readSettingsSnapshot(() => read(id))
         return { id, name, snapshot }
-      } catch (reason) { return { id, name, error: errorText(reason) } }
-    })).then((next) => { if (active) { setTargets(next); setLoading(false); setEdited(new Set()) } })
+      } catch (reason) {
+        const updateRequired = reason instanceof SettingsUpdateRequired
+        const local = available.find((computer) => computer.id === id)?.local ?? !id
+        return { id, name, updateRequired, error: updateRequired ? local
+          ? t('The background service is from an older version. Restart it to load settings.')
+          : t('Update Ramu and restart the background service on this computer, then reload settings.') : errorText(reason) }
+      }
+    })).then((next) => { if (active) { loadedTarget.current = target; setStale(false); setTargets((previous) => refreshing ? next.map((entry) => entry.error ? previous.find((old) => old.id === entry.id && old.snapshot) ?? entry : entry) : next); setLoading(false); setEdited(new Set()) } })
     return () => { active = false }
   }, [target, connections, revision])
   const ready = !loading && targets.length > 0 && targets.every((entry) => entry.snapshot && available.some((computer) => computer.id === entry.id && computer.status === 'connected')) && (target !== 'all' || selected.every((computer) => targets.some((entry) => entry.id === computer.id)))
@@ -69,8 +83,20 @@ export function useSettingsScope() {
   }
   const mark = (path: string) => { setEdited((current) => new Set([...current, path])); setMessage(null) }
   const reload = () => { dirty.current = false; setEdited(new Set()); setRevision((current) => current + 1) }
+  const restartTarget = targets.find((entry) => entry.updateRequired && (available.find((computer) => computer.id === entry.id)?.local ?? !entry.id))
+  const restart = async () => {
+    if (!restartTarget || restarting) return
+    setRestarting(true); setError(null)
+    try {
+      // Bypass settings readiness; the native restart confirmation remains available even when snapshots fail.
+      if (restartTarget.id) await invoke('computers.settings.invoke', restartTarget.id, 'background.restart', [])
+      else await invoke('background.restart')
+      reload()
+    } catch (reason) { setError(errorText(reason)) }
+    finally { setRestarting(false) }
+  }
   const save = async (draft: AppPreferences, modelDraft: ModelPreferences, paths: string[]) => {
-    if (!ready || saving) return false
+    if (!ready || stale || saving) return false
     setSaving(true); setError(null); setMessage(null); setEdited((current) => new Set([...current, ...paths]))
     const values = new Map([...paths, ...edited].map((path) => [path, path === '$models' ? modelDraft : settingValue(draft, path)]))
     const results = await Promise.all(targets.map(async (entry) => {
@@ -93,8 +119,8 @@ export function useSettingsScope() {
     setSaving(false)
     return !failed.length
   }
-  return { target, setTarget, targets, available, preferences, models, catalogs, currentId: computers?.current ?? '', primaryId: primary?.id, loading, ready, saving, error, message, field, mark, edited, save, reload, dirty, setError, revision,
-    loadKey: `${target}:${revision}:${loading ? 'loading' : targets.map((entry) => entry.id).join(',')}`,
+  return { target, setTarget, targets, available, preferences, models, catalogs, currentId: computers?.current ?? '', primaryId: primary?.id, loading, stale, ready, saving, restarting, restartTarget, restart, error, message, field, mark, edited, save, reload, dirty, setError, revision,
+    loadKey: `${target}:${revision}:${targets.map((entry) => entry.id).join(',')}`,
   }
 }
 
@@ -125,13 +151,13 @@ export function useSettingsInvoke(): typeof invoke {
     if (!scope) return invoke
     return (async (method: string, ...args: unknown[]) => {
       if (method.startsWith('computers.')) return (invoke as any)(method, ...args)
-      if (!scope.ready) throw new Error(t('Select a connected computer.'))
+      if (!scope.ready || scope.stale) throw new Error(t('Select a connected computer.'))
       const readOnly = /\.(get|list|status|history|catalog)$/.test(method) || method === 'advisor.claude'
       if (scope.target === 'all' && scope.targets.length > 1 && !readOnly) throw new Error(t('Choose one computer in the settings header for this action.'))
       const id = scope.primaryId
       return id ? invoke('computers.settings.invoke', id, method, args) : (invoke as any)(method, ...args)
     }) as typeof invoke
-  }, [scope?.target, scope?.ready, scope?.primaryId, scope?.revision])
+  }, [scope?.target, scope?.ready, scope?.stale, scope?.primaryId, scope?.revision])
 }
 
 export function useSettingsEvents(): typeof ramu.on {
@@ -143,8 +169,6 @@ export function useSettingsEvents(): typeof ramu.on {
 export function SettingsTargetSelector({ disabled }: { disabled: boolean }) {
   const scope = useContext(SettingsScopeContext)
   if (!scope) return null
-  return <label className="flex min-w-0 items-center gap-2 text-control"><span className="text-muted-foreground">{t('Apply settings to')}</span><select aria-label={t('Settings environment')} disabled={disabled || scope.saving} value={scope.target} className="max-w-[260px] rounded-md border border-input bg-fill px-2 py-1 text-control" onChange={(event) => scope.setTarget(event.target.value)}>
-    <option value="all">{t('All environments')}</option>
-    {scope.available.map((computer) => <option key={computer.id} value={computer.id}>{computer.name}{computer.status !== 'connected' ? ` · ${statusText(computer.status)}` : ''}</option>)}
-  </select></label>
+  const options = [{ value: 'all', label: t('All environments') }, ...scope.available.map((computer) => ({ value: computer.id, label: `${computer.name}${computer.status !== 'connected' ? ` · ${statusText(computer.status)}` : ''}` }))]
+  return <div className="flex flex-none items-center gap-2 text-control"><span className="whitespace-nowrap text-muted-foreground">{t('Apply settings to')}</span><Dropdown label={t('Settings environment')} value={scope.target} options={options} onChange={scope.setTarget} disabled={disabled || scope.saving} className="min-w-[180px] max-w-[260px]" /></div>
 }

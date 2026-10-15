@@ -59,20 +59,22 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
   if (!status.branch || !status.remote) return showScm(t("{0} has no branch with a remote to push to.", { "0": binding.repoName }))
   const branchOptions = await chooseCommitBranch(ctx, binding.repoId)
   if (!branchOptions) return
-  if (branchOptions.newBranch && Object.values(ws.dirty).some(Boolean)) return showScm(t('Save or close unsaved editor buffers before changing files or branches.'))
+  if ((branchOptions.newBranch || branchOptions.autoBranch) && Object.values(ws.dirty).some(Boolean)) return showScm(t('Save or close unsaved editor buffers before changing files or branches.'))
   const stageAll = !hasStaged(target)
+  let pushedTo = status.branch!
   const run = async () => {
     if (stageAll) await invoke('git.stage', ctx, binding.repoId, status.entries.filter((entry) => entry.unstaged).map((entry) => entry.path))
-    const draft = await invoke('git.generateCommit', ctx, binding.repoId, DEFAULT_AGENT_SETTINGS)
+    const draft = await invoke('git.generateCommit', ctx, binding.repoId, DEFAULT_AGENT_SETTINGS, !!branchOptions.autoBranch)
     if (!draft.message.trim()) throw new Error(t('Could not draft a commit message.'))
-    await invoke('git.commit', ctx, binding.repoId, draft.message, draft.fingerprint, undefined, branchOptions)
-    await invoke('git.push', ctx, binding.repoId, branchOptions.newBranch ?? branchOptions.expectedBranch ?? undefined)
+    await invoke('git.commit', ctx, binding.repoId, draft.message, draft.fingerprint, undefined, branchOptions.autoBranch && draft.branch ? { ...branchOptions, newBranch: draft.branch } : branchOptions)
+    pushedTo = branchOptions.autoBranch ? (await invoke('git.commitBranchInfo', ctx, binding.repoId)).branch ?? status.branch! : branchOptions.newBranch ?? status.branch!
+    await invoke('git.push', ctx, binding.repoId, pushedTo)
     return draft.message.split('\n')[0]!
   }
   const work = withGitBusy(ctx, binding.repoId, run).finally(() => window.dispatchEvent(new Event('ramu:git-updated')))
   void notify.promise(work, {
     loading: { title: t("Committing and pushing {0}…", { "0": binding.repoName }), type: 'loading' },
-    success: (subject) => ({ title: t("Pushed “{0}” to {1}", { "0": subject, "1": branchOptions.newBranch ?? status.branch! }), type: 'success' }),
+    success: (subject) => ({ title: t("Pushed “{0}” to {1}", { "0": subject, "1": pushedTo }), type: 'success' }),
     error: (reason) => ({ title: errorText(reason), description: t("Commit & Push"), type: 'error', timeout: 0 }),
   }).catch(() => {})
   await work.catch(() => {})

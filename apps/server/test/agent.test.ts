@@ -1317,7 +1317,7 @@ describe('switching before a limit', () => {
   })
 
   it('follows the configured chain: same provider, other model, with effort mapped', async () => {
-    const { svc } = withRouting([reading({ window: 'weekly', scope: 'Opus', usedPercent: 98 })], { chains: { 'claude-code': [{ id: 'a', provider: 'claude-code', model: 'sonnet', effort: 'high' }, { id: 'b', provider: 'codex', model: 'codex-test', effort: null }] } })
+    const { svc } = withRouting([reading({ window: 'weekly', scope: 'Opus', usedPercent: 98 })], { order: [{ id: 'a', provider: 'claude-code', model: 'sonnet', effort: 'high' }, { id: 'b', provider: 'codex', model: 'codex-test', effort: null }] })
     const s = svc.start('t', scopeOf(cwd), 'hello', { ...full, model: 'opus' })
     await until(() => svc.get(s.id).state === 'idle')
     await svc.send(s.id, 'continue')
@@ -1345,8 +1345,8 @@ describe('switching before a limit', () => {
     svc.stopAll()
   })
 
-  it('returns to the original provider once its limit has reset, when asked to', async () => {
-    const { svc, store } = withRouting([reading({ usedPercent: 40 })], { returnAfterReset: true })
+  it('moves back up the order once a higher-ranked model has room', async () => {
+    const { svc, store } = withRouting([reading({ usedPercent: 40 })])
     const s = svc.start('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(s.id).state === 'idle')
     store.readings = [reading({ usedPercent: 95, resetsAt: Date.now() + 200 })]
@@ -1355,7 +1355,30 @@ describe('switching before a limit', () => {
     await new Promise((r) => setTimeout(r, 250))
     await svc.send(s.id, 'welcome back')
     await until(() => svc.get(s.id).provider === 'claude-code' && svc.get(s.id).state === 'idle')
-    expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'settings', reason: expect.stringContaining('has reset') }))
+    expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'settings', reason: expect.stringContaining('higher-ranked') }))
+    svc.stopAll()
+  })
+
+  it('keeps a model picked by hand until it runs out, then follows the order again', async () => {
+    const { svc, store } = withRouting([])
+    const s = svc.start('t', scopeOf(cwd), 'hello', full)
+    await until(() => svc.get(s.id).state === 'idle')
+    await svc.configure(s.id, { ...full, provider: 'codex', model: 'codex-test' })
+    expect(svc.providerHold(s.id)).toBe('picked')
+    await svc.send(s.id, 'stay')
+    await until(() => svc.get(s.id).state === 'idle')
+    expect(svc.get(s.id).provider).toBe('codex')
+    store.readings = [reading({ provider: 'codex', usedPercent: 99 })]
+    await svc.send(s.id, 'out')
+    await until(() => svc.get(s.id).provider === 'claude-code' && svc.get(s.id).state === 'idle')
+    expect(svc.providerHold(s.id)).toBeNull()
+    svc.stopAll()
+  })
+
+  it('starts a new chat on the highest-ranked model with room', async () => {
+    const { svc } = withRouting([])
+    const s = await svc.startReviewed('t', scopeOf(cwd), 'hello', { ...full, provider: 'codex', model: 'codex-test' })
+    await until(() => svc.get(s.id).provider === 'claude-code' && svc.get(s.id).state === 'idle')
     svc.stopAll()
   })
 
@@ -1496,7 +1519,7 @@ describe('sub-agents Ramu runs', () => {
     expect(await typed.subagentSettings(typedParent.id, 'Explore')).toMatchObject({ redirect: true, settings: { provider: 'codex', effort: 'high' } })
     expect(await typed.subagentSettings(typedParent.id, 'Plan')).toMatchObject({ redirect: false })
     const reading = (usedPercent: number): UsageReading => ({ provider: 'claude-code', window: 'five_hour', usedPercent, status: 'ok', updatedAt: Date.now(), resetsAt: Date.now() + 1e6 })
-    const pressed = routed({ mode: 'native', single: null, switchAt: 80, fallback: 'separate', chains: { 'claude-code': [codexStep] } }, [reading(85)])
+    const pressed = routed({ mode: 'native', single: null, switchAt: 80, fallback: 'separate', order: [codexStep] }, [reading(85)])
     const pressedParent = await parentOf(pressed)
     expect(await pressed.subagentSettings(pressedParent.id)).toMatchObject({ redirect: true, settings: { provider: 'codex' }, reason: expect.stringContaining('5-hour limit was at 85%') })
     // Below the sub-agents' own earlier threshold nothing moves.
@@ -1860,7 +1883,8 @@ describe('chat continuation after restart', () => {
 describe('Codex sub-agent control', () => {
   const codexStep = { id: 'c', provider: 'codex' as const, model: 'codex-test', effort: null }
   const claudeStep = { id: 'k', provider: 'claude-code' as const, model: 'sonnet', effort: null }
-  const prefsWith = (patch: Partial<AppPreferences['subagents']>): AppPreferences => ({ ...DEFAULT_APP_PREFERENCES, subagents: { ...DEFAULT_APP_PREFERENCES.subagents, ...patch } })
+  // Codex leads the order so these Codex chats aren't moved up to Claude Code.
+  const prefsWith = (patch: Partial<AppPreferences['subagents']>): AppPreferences => ({ ...DEFAULT_APP_PREFERENCES, fallback: { ...DEFAULT_APP_PREFERENCES.fallback, order: [{ id: 'x', provider: 'codex', model: 'codex-test', effort: null }, { id: 'y', provider: 'claude-code', model: 'sonnet', effort: null }] }, subagents: { ...DEFAULT_APP_PREFERENCES.subagents, ...patch } })
 
   it('answers Codex\'s hook: refuse and point at ramu_agent when Ramu should run it, otherwise let it through', async () => {
     const svc = service()
@@ -1948,7 +1972,8 @@ describe('Codex sub-agent control', () => {
     await svc.send(s.id, 'hook decides'); await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toHaveLength(3)
     // Without the hook, the separate sub-agent threshold replaces native tools and recovers after reset.
-    prefs = { ...prefsWith({ mode: 'native', switchAt: 80 }), fallback: { ...DEFAULT_APP_PREFERENCES.fallback, switchAt: 95 } }
+    const pressure = prefsWith({ mode: 'native', switchAt: 80 })
+    prefs = { ...pressure, fallback: { ...pressure.fallback, switchAt: 95 } }
     usage = [{ provider: 'codex', window: 'five_hour', usedPercent: 85, status: 'warning', updatedAt: Date.now() }]
     await svc.send(s.id, 'under pressure'); await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toHaveLength(4)

@@ -193,7 +193,6 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
   const [showAll, setShowAll] = useState(false)
   // Like Codex: the latest few chats, with the rest behind "Show more"; the open chat always shows.
   const tasks = showAll ? sorted : sorted.filter((t) => t.pinnedAt || others.indexOf(t) < recent || t.id === ws.ui.activeTaskId)
-  const archived = all.filter((t) => t.status === 'archived')
   const open = ws.isExpanded(`project:${project.id}`)
   const setOpen = (next: boolean | ((current: boolean) => boolean)) => ws.setExpanded(`project:${project.id}`, typeof next === 'function' ? next(open) : next)
   // The chat list stays mounted while it slides closed, and slides open once it is mounted.
@@ -213,7 +212,6 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
   useLayoutEffect(() => {
     if (mounted && opening.current && list.current) { opening.current = false; slide(list.current, true) }
   }, [mounted])
-  const [showArchived, setShowArchived] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hover, setHover] = useState(false)
@@ -354,14 +352,6 @@ function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
             <ExpandRow expanded={showAll} onToggle={() => setShowAll((s) => !s)} className="h-[30px] min-h-[30px] px-2 text-body leading-5">
               {showAll ? t("Show less") : t("Show more")}
             </ExpandRow>
-          )}
-          {archived.length > 0 && (
-            <>
-              <Button variant="secondary" className="bg-fill hover:bg-fill-hover archived-toggle [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-soft bg-transparent [border:none] text-muted-foreground text-caption p-[2px_10px] gap-1 justify-start" onClick={() => setShowArchived((s) => !s)}>
-                <ChevronRight size={12} className={showArchived ? 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)] open' : 'caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot=\'collapsible-trigger\']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot=\'collapsible-trigger\']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]'} /> {t(" Archived (")}{archived.length})
-              </Button>
-              {showArchived && archived.map((t) => <TaskRow key={t.id} task={t} nested />)}
-            </>
           )}
         </div>
       )}

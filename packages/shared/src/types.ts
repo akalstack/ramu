@@ -442,7 +442,8 @@ export interface GitCommit {
   outgoing?: boolean
 }
 export interface GitBranchInfo { name: string; current: boolean; upstream: string; worktree: string }
-export interface CommitDraft { message: string; fingerprint: string; provider: AgentProvider; model: string }
+/** `branch` is a suggested feature branch name, present when one was asked for. */
+export interface CommitDraft { message: string; fingerprint: string; provider: AgentProvider; model: string; branch?: string }
 
 export interface GitCommitFile { path: string; origPath?: string; status: string }
 export interface GitStash { oid: string; ref: string; subject: string }
@@ -599,10 +600,8 @@ export interface FallbackStep { id: string; provider: AgentProvider; model: stri
 export type SwitchThreshold = 80 | 90 | 95 | null
 export interface FallbackPreferences {
   switchAt: SwitchThreshold
-  /** Go back to the original step once its limit resets. */
-  returnAfterReset: boolean
-  /** Ordered fallback steps per provider. A missing provider uses the built-in default (Claude ↔ Codex). */
-  chains: Partial<Record<AgentProvider, FallbackStep[]>>
+  /** Models ranked best first: a chat uses the highest one with room. Unset uses the built-in Claude Code, then Codex. */
+  order?: FallbackStep[]
 }
 export interface SubagentPreferences {
   /** native: each provider's own sub-agents. single: all run on one step. per-provider: a step (or native) per provider. */
@@ -612,9 +611,9 @@ export interface SubagentPreferences {
   perProvider: Partial<Record<AgentProvider, FallbackStep | null>>
   /** Optional routing by sub-agent type (Explore, Plan, …); null keeps native. Checked before the mode. */
   byType: { id: string; type: string; step: FallbackStep | null }[]
-  /** same: a sub-agent walks the main fallback chain of its provider. separate: its own chains. */
+  /** same: a sub-agent falls back along the main order. separate: along its own. */
   fallback: 'same' | 'separate'
-  chains: Partial<Record<AgentProvider, FallbackStep[]>>
+  order?: FallbackStep[]
   /** 'same' follows the main switch threshold. */
   switchAt: SwitchThreshold | 'same'
   /** Restart native sub-agents that hit a limit on the fallback chain. */
@@ -637,8 +636,8 @@ export interface AdvisorPreferences {
 export const DEFAULT_ADVISOR_PREFERENCES: AdvisorPreferences = { enabled: false, step: null, wait: false }
 /** Result of an advisor request, as the agent's tool sees it. */
 export interface AdviceStatus { requestId: string; status: 'pending' | 'ready' | 'failed'; advice?: string; advisor?: string; error?: string; note?: string }
-export const DEFAULT_FALLBACK_PREFERENCES: FallbackPreferences = { switchAt: null, returnAfterReset: true, chains: {} }
-export const DEFAULT_SUBAGENT_PREFERENCES: SubagentPreferences = { mode: 'native', single: null, perProvider: {}, byType: [], fallback: 'same', chains: {}, switchAt: 'same', continueNative: true, isolate: false, codexHook: false, maxConcurrent: 3, shareContext: false }
+export const DEFAULT_FALLBACK_PREFERENCES: FallbackPreferences = { switchAt: null }
+export const DEFAULT_SUBAGENT_PREFERENCES: SubagentPreferences = { mode: 'native', single: null, perProvider: {}, byType: [], fallback: 'same', switchAt: 'same', continueNative: true, isolate: false, codexHook: false, maxConcurrent: 3, shareContext: false }
 
 /** How much of the model's context window a chat uses right now. */
 export interface ContextUsage { used: number; max: number; percent: number; at: number }
@@ -731,6 +730,8 @@ export interface Computer {
   name: string
   local: boolean
   url: string | null
+  /** The SSH target when this computer is reached through a tunnel. */
+  ssh?: string
   status: ComputerStatus
   enabled?: boolean
   retryMode?: 'events' | 'periodic'
@@ -794,4 +795,5 @@ export interface UndoFile { fileId: string; path: string; repoName: string; stat
 export interface UndoPreview { token: string; reviewId: string; expiresAt: number; files: UndoFile[] }
 
 /** Branch choice captured before a commit, checked again under the repository lock. */
-export interface CommitBranchOptions { expectedBranch: string | null; newBranch?: string }
+/** `autoBranch` names the new branch on the server, like T3 Code: from `newBranch` when given (an AI suggestion), else the commit subject. */
+export interface CommitBranchOptions { expectedBranch: string | null; newBranch?: string; autoBranch?: boolean }

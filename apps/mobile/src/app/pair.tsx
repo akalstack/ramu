@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { KeyboardAvoidingView, Alert, Platform, Pressable, Switch, TextInput, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { needsHttpConsent } from '../runtime/transport'
-import { decodePairQr } from '@ramu/contracts'
+import { decodePairQr, parsePairInput } from '@ramu/contracts'
 import { QrCode, ShieldAlert } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
@@ -17,6 +17,7 @@ export default function Pair() {
   const { c } = useTheme()
   const router = useRouter()
   const { pair } = useStore()
+  const params = useLocalSearchParams<{ url?: string; code?: string; exp?: string; name?: string }>()
   const [address, setAddress] = useState('')
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
@@ -26,6 +27,15 @@ export default function Pair() {
   const [permission, requestPermission] = useCameraPermissions()
   const scanned = useRef(false)
   const codeField = useRef<TextInput>(null)
+  // A `ramu://pair?url=…&code=…` link opened from outside the app arrives as route parameters.
+  useEffect(() => {
+    if (!params.url) return
+    try {
+      const query = new URLSearchParams(Object.entries(params).filter((entry): entry is [string, string] => typeof entry[1] === 'string')).toString()
+      const offer = parsePairInput(`ramu://pair?${query}`)
+      setAddress(offer.url); if (offer.code) setCode(offer.code.replace('-', '')); if (offer.name) setName((current) => current || offer.name!); setHttp(false)
+    } catch (error) { Alert.alert('Cannot use this link', error instanceof Error ? error.message : String(error)) }
+  }, [params.url, params.code, params.exp, params.name])
   const insecure = needsHttpConsent(address)
   const ready = address.trim().length > 3 && code.length === LENGTH && (!insecure || http)
 

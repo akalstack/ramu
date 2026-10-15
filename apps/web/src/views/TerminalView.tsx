@@ -9,6 +9,7 @@ import { errorText } from '../TaskPane'
 import { useWorkspace } from '../workspace'
 import { FILE_DRAG_TYPE } from '../ComposerSuggestions'
 import { trackTerminal } from '../terminalRegistry'
+import { createOutputGate, markTerminalOutput } from '../terminalActivity'
 
 const shellQuote = (path: string) => /^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`
 
@@ -100,7 +101,11 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
         ptyResize.request(term.cols, term.rows)
         const openedAt = Date.now()
         setCwd(info.cwd)
-        offs.push(ramu.on('term:data', ({ id, data }) => id === termId && term.write(data)))
+        // Startup output (the prompt, rc files) doesn't earn the Terminal button's dot. Keystrokes count, not xterm's own replies to the shell.
+        const gate = createOutputGate()
+        offs.push(ramu.on('term:data', ({ id, data }) => { if (id !== termId) return; term.write(data); if (gate.output()) markTerminalOutput(ws.workspaceOf(taskId)) }))
+        const typed = term.onKey(() => gate.arm())
+        offs.push(() => typed.dispose())
         offs.push(
           ramu.on('term:exit', ({ id, code }) => {
             if (id !== termId) return
@@ -116,6 +121,7 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
         }
         const command = initialCommand ?? runOnce.current
         if (command) {
+          gate.arm()
           term.focus()
           void invoke('term.write', info.id, `${command}\r`).catch((e) => setError(errorText(e)))
         }

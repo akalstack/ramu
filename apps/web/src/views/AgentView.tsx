@@ -18,7 +18,7 @@ import { Button } from '@/components/desktop-button'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { Input } from '@/components/ui/input'
 import type { FileContext } from '@ramu/shared/types'
-import { Wrench, Globe, FilePenLine, FileMinus2, ArrowRightLeft, Settings2, Image as ImageIcon, ArrowDown, ArrowLeft, Plus, Bot, Brain, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb, CalendarClock, MessageSquareText, ListChecks, Sparkles } from 'lucide-react'
+import { Wrench, Globe, FilePenLine, FileMinus2, ArrowRightLeft, Settings2, Image as ImageIcon, ArrowDown, ArrowLeft, Plus, Bot, Brain, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, RotateCcw, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb, CalendarClock, MessageSquareText, ListChecks, Sparkles } from 'lucide-react'
 import { describeRamuTool, ramuTool, ramuToolHasOwnUi, summarizeAgentStatuses, type RamuToolIcon } from '@ramu/shared/ramuTools'
 import { Children, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
@@ -65,8 +65,10 @@ import { parseAnswerMessage, questionState, type QuestionState } from '@ramu/sha
 import { localFileLink } from '@ramu/shared/fileLinks'
 import { notifyError } from '../Notifications'
 import { draftKey, loadDraft, useDraftPersistence } from '../drafts'
+import { outbox, useOutbox, OUTBOX_LIMIT } from '../outbox'
+import { useHostConnection } from '../computers'
 import { registerWorkspaceCheckpoint } from '../workspaceCheckpoint'
-import { ProviderWaitNote } from '../ProviderWait'
+import { HostWaitNote, ProviderWaitNote } from '../ProviderWait'
 import { ComposerTray } from '../ComposerTray'
 import { providerWaitOf } from '@ramu/shared/providerWait'
 
@@ -233,8 +235,8 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
   const [liveText, setLiveText] = useState<AgentEvent | null>(null)
   const [draft, setDraft] = useState(() => chatPresentation.get(view.sessionId)?.draft ?? loadDraft(draftKey.chat(view.sessionId)))
   useDraftPersistence(draftKey.chat(view.sessionId), draft)
-  const [editTarget, setEditTarget] = useState<number | null>(null)
-  const [editRestored, setEditRestored] = useState(false)
+  /** The sent message being edited in place: its sequence number, text and attachments. The composer and its draft are left alone. */
+  const [editing, setEditing] = useState<{ seq: number; text: string; files: Attachment[] } | null>(null)
   const [pendingSettings, setPendingSettings] = useState<AgentSettings | null>(null)
   const [configuring, setConfiguring] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -494,6 +496,8 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
       setError(errorText(e))
     } finally { setContinuing(false); setConfirmContinue(false) }
   }
+  const { offline: hostOffline, name: hostName } = useHostConnection()
+  const pending = useOutbox(view.sessionId)
   const supportsSteering = !!session
   const action = supportsSteering ? preferences.busyMessageAction : 'queue'
   const opposite = action === 'queue' ? 'steer' : 'queue'
@@ -513,9 +517,42 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
     requestAnimationFrame(() => { focusComposer(root.current, Number.MAX_SAFE_INTEGER) })
   }
   const editMessage = (text: string, files: Attachment[], seq?: number) => {
-    setEditTarget(seq ?? null); setEditRestored(false)
-    setDraft(text); setAttachments(files)
-    requestAnimationFrame(() => { focusComposer(root.current, text.length) })
+    if (seq === undefined) return
+    setEditing({ seq, text, files })
+  }
+  const cancelEdit = () => {
+    setEditing(null)
+    requestAnimationFrame(() => { focusComposer(root.current, draft.length) })
+  }
+  /** Sends the revised message as a new request; the agent is told it replaces the earlier one. */
+  const submitEdit = (text: string, restored: boolean) => act(async () => {
+    if (!editing) return
+    const outgoing = `${text}\n\n<ramu-context>\nThis revises my earlier message ${editing.seq}.${restored ? ' Selected file changes from that message and later captured runs were restored using Ramu. Inspect current files before acting.' : ' Files have not been restored.'} Treat this revised request as replacing the earlier request; the previous transcript remains as historical evidence.\n</ramu-context>`
+    // Offline, the revision waits in the outbox like any other message; file restore needs the host, so it isn't offered.
+    if (hostOffline) {
+      if (!outbox().add(view.sessionId, outgoing, editing.files)) throw new Error(translate('{0} messages are already waiting. Remove one or wait for {1} to reconnect.', { 0: OUTBOX_LIMIT, 1: hostName }))
+      setEditing(null)
+      stick.current = true
+      requestAnimationFrame(() => { focusComposer(root.current, draft.length) })
+      return
+    }
+    setConfiguring(true)
+    try {
+      if (pendingSettings) { setSession(await invoke('agent.configure', view.sessionId, pendingSettings)); setPendingSettings(null) }
+      await invoke('agent.submit', view.sessionId, outgoing, action, editing.files.map((file) => file.id), [])
+      setEditing(null)
+      stick.current = true
+      requestAnimationFrame(() => { focusComposer(root.current, draft.length) })
+    } finally { setConfiguring(false) }
+  })
+  /** The last plain message you sent, for ↑ in an empty message box. */
+  const editLast = () => {
+    for (const turn of [...turns].reverse()) {
+      const event = turn.user?.kind === 'event' ? turn.user.event : null
+      if (event?.kind !== 'user' || event.agentId || parseAnswerMessage(event.text) || parseTaskStop(event.text) || parseTaskMessage(event.text)) continue
+      editMessage(event.text.split('\n\n<ramu-context>\n')[0] ?? '', event.attachments ?? [], eventSequences.get(event))
+      return
+    }
   }
   /** "/aside question" (or Claude Code's "/btw") asks about the whole chat beside it: the agent keeps working and never sees it. */
   const askAside = (question: string) => act(async () => {
@@ -555,7 +592,16 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
   const sendToAgent = (mode: 'queue' | 'steer', context: FileContext[]) => act(async () => {
     const submitted = draft
     const submittedFiles = attachments
-    const outgoing = editTarget ? `${submitted}\n\n<ramu-context>\nThis revises my earlier message ${editTarget}.${editRestored ? ' Selected file changes from that message and later captured runs were restored using Ramu. Inspect current files before acting.' : ' Files have not been restored.'} Treat this revised request as replacing the earlier request; the previous transcript remains as historical evidence.\n</ramu-context>` : submitted
+    // Review comments live on the host, so a message carrying them waits for the connection rather than the outbox.
+    if (hostOffline && attached.length) throw new Error(translate('Review comments send once {0} is back. Your message is kept.', { 0: hostName }))
+    if (hostOffline) {
+      if (!outbox().add(view.sessionId, submitted, submittedFiles, context)) throw new Error(translate('{0} messages are already waiting. Remove one or wait for {1} to reconnect.', { 0: OUTBOX_LIMIT, 1: hostName }))
+      setDraft((current) => current === submitted ? '' : current)
+      setAttachments((current) => current.filter((file) => !submittedFiles.some((sent) => sent.id === file.id)))
+      stick.current = true
+      return
+    }
+    const outgoing = submitted
     setConfiguring(true)
     try {
       if (pendingSettings) {
@@ -566,7 +612,6 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
         // Review comments go out with this message, as one request to the agent.
         for (const [index, group] of attached.entries()) await invoke('reviews.sendComments', group.review.id, group.ids, index === 0 ? outgoing : '', index === 0 ? submittedFiles.map((file) => file.id) : [], index === 0 ? context : [])
       } else await invoke('agent.submit', view.sessionId, outgoing, mode, submittedFiles.map((file) => file.id), context)
-      setEditTarget(null); setEditRestored(false)
       setDraft((current) => current === submitted ? '' : current)
       setAttachments((current) => current.filter((file) => !submittedFiles.some((sent) => sent.id === file.id)))
       stick.current = true
@@ -600,11 +645,11 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
         {session && events.length > 0 && <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" disabled={continuing} aria-label={translate("Continue in new chat")} title={continuing ? translate("Starting…") : translate("Continue in new chat (starts with this chat as context)")} onClick={() => setConfirmContinue(true)}>{continuing ? <LoaderCircle size={14} className="spin [animation:spin_0.9s_linear_infinite]" /> : <GitFork size={14} />}</Button>}
       </div>
       <div className="agent-split [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex flex-1 min-h-0 min-w-0 [container:agent-split_/_inline-size]">
-      <div className="agent-main flex flex-col [flex:1_1_0] min-w-0 min-h-0">
+      <div className="agent-main relative flex flex-col [flex:1_1_0] min-w-0 min-h-0">
+      {finding && <ChatFind root={scroller} focusRequest={findRequest} initialQuery={findQuery} onClose={closeFind} />}
       {confirmContinue && <Dialog title={translate("Continue in a new chat?")} confirmLabel={translate("Continue in new chat")} busy={continuing} onCancel={() => { if (!continuing) setConfirmContinue(false) }} onConfirm={() => void continueInNewChat()}>
         <p>{translate("Start a new chat in this checkout using the current conversation as context.")}</p>
       </Dialog>}
-      {finding && <ChatFind root={scroller} focusRequest={findRequest} initialQuery={findQuery} onClose={closeFind} />}
       {showQuestions && pendingQuestions.length > 0 && <div className="pending-questions [&_button]:whitespace-normal [&_button]:text-left flex flex-wrap gap-1 p-[6px_12px] [border-bottom:1px_solid_var(--line)] max-h-[130px] overflow-auto" aria-label={translate("Pending questions")}>
         {pendingQuestions.map((question) => <Button variant="ghost" size="sm" key={question.requestId} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption" onClick={() => {
           if (question.kind === 'question') return openQuestion(question.requestId)
@@ -641,7 +686,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
                 ) : b.event.kind === 'agent' ? (
                   b.event.taskType === 'advisor' ? <AdvisorActivity task={b.event} live={live} onOpen={() => setOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)} /> : <AgentTaskCard task={b.event} live={live} onOpen={() => setOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)} onStop={stopTask} />
                 ) : (
-                  <EventRow event={relativize(b.event, session?.cwd ?? '')} taskId={session?.taskId} sessionId={view.sessionId} live={live} generating={working && (b.event === liveText || b.event.kind === 'thinking' && b === turn.items.at(-1))} outcomes={outcomes} questionStates={questionStates} actions={actions} latest={latest} onEdit={(text, files) => editMessage(text, files, eventSequences.get(b.event))} onOpenAgent={setOpenAgent} onOpenQuestion={openQuestion} />
+                  <EventRow event={relativize(b.event, session?.cwd ?? '')} taskId={session?.taskId} sessionId={view.sessionId} live={live} generating={working && (b.event === liveText || b.event.kind === 'thinking' && b === turn.items.at(-1))} outcomes={outcomes} questionStates={questionStates} actions={actions} latest={latest} editor={editing && eventSequences.get(b.event) === editing.seq ? <InlineMessageEdit key={editing.seq} original={editing.text} files={editing.files} sessionId={view.sessionId} seq={editing.seq} busy={configuring} offlineHost={hostOffline ? hostName : undefined} onCancel={cancelEdit} onSubmit={submitEdit} /> : undefined} onEdit={eventSequences.has(b.event) ? (text, files) => editMessage(text, files, eventSequences.get(b.event)) : undefined} onOpenAgent={setOpenAgent} onOpenQuestion={openQuestion} />
                 )}</div>
             }
             // Several sub-agents in a row read as one line with a summary, expanding to their cards.
@@ -675,16 +720,13 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
       <SelectionActions scroller={scroller} onQuote={quoteIntoDraft} onAside={(quote, from) => setOpenAside({ id: null, quote, from })} />
       </div>
       <div className="composer-dock [&_>_*]:w-full [&_>_*]:max-w-[var(--chat-column-width)] [&_>_*]:ml-auto [&_>_*]:mr-auto [&_.error]:mb-1.5 [&_.error]:text-control [&_.composer]:relative [&_.composer]:z-1 flex-none p-[0_calc(24px_+_var(--chat-scrollbar-width,_0px))_14px_24px]">
-        {editTarget && <div className="chat-edit flex items-center flex-wrap gap-2 m-[0_0_8px] p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) text-control bg-card" role="region" aria-label={translate("Editing message")}>
-          <Pencil size={14} /><div className="chat-edit-copy [&_strong]:text-caption [&_strong]:font-medium [&_span]:text-caption [&_span]:text-muted-foreground flex-1 min-w-[180px] grid gap-[3px]"><strong>{translate("Editing message")}</strong><span>{editRestored ? translate("Selected files restored. Send your revised message.") : translate("Restore file changes before sending, if needed.")}</span></div><Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption" disabled={configuring} onClick={() => { setEditTarget(null); setEditRestored(false) }}>{translate("Cancel edit")}</Button>
-          {!editRestored && <UndoRun sessionId={view.sessionId} userSeq={editTarget} onRestored={() => setEditRestored(true)} />}
-        </div>}
         {error && <div className="error text-bad">{error}</div>}
-        {(providerWait || liveGoal || queued.length > 0 || dockQuestions.length > 0) && <ComposerTray className="chat-tray [&_.question-dock_+_*]:mt-0.5 [&_.question-dock_+_*]:pt-0.5 [&_.question-dock_+_*]:[border-top:1px_solid_var(--line)] [&_.provider-wait_+_*]:mt-0.5 [&_.provider-wait_+_*]:pt-0.5 [&_.provider-wait_+_*]:[border-top:1px_solid_var(--line)] [&_.message-queue]:gap-0 [&_.message-queue]:p-0 [&_.message-queue]:m-0 [&_.message-queue]:[border:0] [&_.message-queue]:[border-radius:0] [&_.message-queue]:bg-transparent [&_.message-queue]:max-h-[136px] [&_.goal-bar_+_.message-queue]:mt-0.5 [&_.goal-bar_+_.message-queue]:pt-0.5 [&_.goal-bar_+_.message-queue]:[border-top:1px_solid_var(--line)] flex-col max-w-[calc(var(--chat-column-width)_-_24px)]!">
+        {(hostOffline || providerWait || liveGoal || queued.length > 0 || pending.length > 0 || dockQuestions.length > 0) && <ComposerTray className="chat-tray [&_.question-dock_+_*]:mt-0.5 [&_.question-dock_+_*]:pt-0.5 [&_.question-dock_+_*]:[border-top:1px_solid_var(--line)] [&_.provider-wait_+_*]:mt-0.5 [&_.provider-wait_+_*]:pt-0.5 [&_.provider-wait_+_*]:[border-top:1px_solid_var(--line)] [&_.message-queue]:gap-0 [&_.message-queue]:p-0 [&_.message-queue]:m-0 [&_.message-queue]:[border:0] [&_.message-queue]:[border-radius:0] [&_.message-queue]:bg-transparent [&_.message-queue]:max-h-[136px] [&_.goal-bar_+_.message-queue]:mt-0.5 [&_.goal-bar_+_.message-queue]:pt-0.5 [&_.goal-bar_+_.message-queue]:[border-top:1px_solid_var(--line)] flex-col max-w-[calc(var(--chat-column-width)_-_24px)]!">
         {dockQuestions.length > 0 && <QuestionDock sessionId={view.sessionId} requests={dockQuestions} states={questionStates} open={questionDockOpen} onOpenChange={setQuestionDockOpen} focus={questionFocus} />}
+        {hostOffline && <HostWaitNote name={hostName} />}
         {providerWait && <ProviderWaitNote retryAt={providerWait.retryAt} />}
         {liveGoal && <GoalBar goal={liveGoal} onControl={(action) => { void act(() => invoke('agent.goal.control', view.sessionId, action)) }} />}
-        {queued.length > 0 && <div className="message-queue flex flex-col gap-1.5 p-[8px_12px] mb-2 max-h-[180px] overflow-auto [border:1px_solid_transparent] rounded-(--radius-s) bg-raised" aria-label={translate("Queued messages")}>
+        {(queued.length > 0 || pending.length > 0) && <div className="message-queue flex flex-col gap-1.5 p-[8px_12px] mb-2 max-h-[180px] overflow-auto [border:1px_solid_transparent] rounded-(--radius-s) bg-raised" aria-label={translate("Queued messages")}>
           {queuePaused && <div className="message-queue-heading flex items-center justify-between gap-2"><span className="muted text-muted-foreground small text-caption">{translate("Paused")}</span><Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption" onClick={() => void act(() => invoke('agent.resumeQueue', view.sessionId))}>{translate("Resume messages")}</Button></div>}
           {queued.map((message) => {
             const relay = parseTaskMessage(message.text)
@@ -705,6 +747,22 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
               ]} />
             </div>
           })}
+          {/* Outbox messages wait on this device, after everything the host already queued. Same row, but the host can't send them early. */}
+          {pending.map((item) => {
+            const text = item.text.split('\n\n<ramu-context>\n')[0] || translate("Attachments")
+            const recall = () => { const taken = outbox().remove(item.id); if (!taken) return; setAttachments((current) => [...current, ...taken.attachments.filter((file) => !current.some((entry) => entry.id === file.id))]); setDraft((current) => current ? `${current}\n${text}` : text) }
+            const sending = item.state === 'sending', failed = item.state === 'failed'
+            const status = sending ? translate("Sending…") : failed ? translate("Not sent: {0}", { 0: item.error ?? '' }) : translate("Sends when {0} is back", { 0: hostName })
+            return <div className="queued-message [&_>_span]:flex-1 [&_>_span]:min-w-0 [&_>_span]:whitespace-pre-wrap [&_>_span]:[overflow-wrap:anywhere] [&_button]:flex-none [&_.queued-text]:flex-1 [&_.queued-text]:min-w-0 [&_.queued-text]:whitespace-nowrap [&_.queued-text]:overflow-hidden [&_.queued-text]:text-ellipsis [&_.queued-text]:text-foreground flex items-center text-control gap-2 min-h-8" key={item.id}>
+              {sending ? <LoaderCircle size={15} className="queued-icon flex-none text-muted-foreground spin [animation:spin_0.9s_linear_infinite]" aria-hidden="true" /> : failed ? <CircleAlert size={15} className="queued-icon flex-none text-bad" aria-hidden="true" /> : <ListEnd size={15} className="queued-icon flex-none text-muted-foreground" aria-hidden="true" />}
+              <span className="queued-text" title={`${text}\n\n${status}`}>{text}{item.attachments.length ? <Attachments files={item.attachments} size="small" /> : null}<span className="sr-only">{status}</span></span>
+              {failed && <div className="inline-flex flex-none" title={hostOffline ? status : translate("Retry")}><Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) queued-steer gap-[5px] text-soft disabled:pointer-events-none" aria-label={translate("Retry")} disabled={hostOffline} onClick={() => outbox().retry(item.id)}><RotateCcw size={14} /></Button></div>}
+              <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" disabled={sending} aria-label={translate("Remove queued message")} title={translate("Remove")} onClick={() => outbox().remove(item.id)}><Trash2 size={14} /></Button>
+              <Menu label={translate("Queued message actions")} icon={<MoreHorizontal size={14} />} className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" align="end" items={[
+                { key: 'edit', label: <><Pencil size={14} /> {translate(" Edit message")}</>, disabled: sending, onSelect: recall },
+              ]} />
+            </div>
+          })}
         </div>}
         </ComposerTray>}
         <Composer
@@ -719,13 +777,14 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
           disabled={configuring || !session}
           controls={session && <><AgentControls settings={pendingSettings ?? session.settings} current={session.settings} onChange={changeSettings} disabled={false} running={working} trailing={<><ContextMeter sessionId={view.sessionId} /><CompressionMeter sessionId={view.sessionId} /></>} /></>}
           onChange={setDraft}
+          onArrowUpEmpty={editing ? undefined : editLast}
           chat
           onSubmit={(context) => send(action, context)}
-          onAlternateSubmit={busyAgent && supportsSteering ? (context) => send(opposite, context) : undefined}
+          onAlternateSubmit={busyAgent && supportsSteering && !hostOffline ? (context) => send(opposite, context) : undefined}
           alternateDisabled={configuring || !session}
           alternateLabel={opposite === 'queue' ? 'Queue' : 'Steer'}
-          placeholder={live || busyAgent ? translate("Reply to the agent") : translate("Message the agent")}
-          submitLabel={busyAgent ? action === 'queue' ? 'Queue' : 'Steer' : 'Send'}
+          placeholder={hostOffline ? translate("Message · sends when {0} is back", { 0: hostName }) : live || busyAgent ? translate("Reply to the agent") : translate("Message the agent")}
+          submitLabel={hostOffline ? 'Queue' : busyAgent ? action === 'queue' ? 'Queue' : 'Steer' : 'Send'}
         />
       </div>
       </div>
@@ -942,7 +1001,7 @@ const AssistantText = memo(function AssistantText({ event: e, generating, action
   return (
     <div className={`msg [&.user]:self-end [&.user]:whitespace-pre-wrap [&.user]:max-w-[78%] [&.user]:mt-[18px] [&.user]:w-[fit-content] [&.user]:[background:var(--bubble)] [&.user]:[border:0] [&.user]:[box-shadow:none] [&.user]:text-chat [&.user]:leading-[1.55] [&.user]:p-[10px_16px_11px] [&.user]:rounded-(--radius-l) [&.user]:tracking-[-0.006em] [&.user]:[color:var(--text-body)] [&.assistant]:relative [&.assistant]:tracking-[-0.008em] [&.assistant]:text-chat [&.assistant]:leading-[1.65] [&.assistant]:[color:var(--text-body)] [&.assistant_>_:first-child]:mt-0 [&.assistant_>_:last-child]:mb-0 [&.assistant_p]:m-[0_0_10px] [&.assistant_ul]:pl-5 [&.assistant_ul]:m-[0_0_10px] [&.assistant_ol]:pl-5 [&.assistant_ol]:m-[0_0_10px] [&.assistant_code]:[background:rgba(255,_255,_255,_0.075)] [&.assistant_code]:[border:0] [&.assistant_code]:rounded-(--radius-xs) [&.assistant_code]:p-[0_5px] [&.assistant_code]:[color:var(--text-body)] [&.assistant_code]:text-[length:0.88em] [&.assistant_pre]:overflow-x-auto [&.assistant_pre]:[white-space:pre] [&.assistant_pre]:[background:var(--code-bg)] [&.assistant_pre]:[border:1px_solid_transparent] [&.assistant_pre]:rounded-(--radius-m) [&.assistant_pre]:p-[12px_14px] [&.assistant_pre]:m-[4px_0_12px] [&.assistant_pre]:leading-[1.6] [&.assistant_pre]:[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.02)] [&.assistant_pre]:text-[length:0.88em] [&.assistant_pre_code]:bg-transparent [&.assistant_pre_code]:p-0 [&.assistant_pre_code]:[border:none] [&.assistant_pre_code]:text-[length:inherit] [&.assistant_pre_code]:[color:#dcdce2] [&.assistant_a]:text-brand [&.assistant_a]:[text-decoration:none] [&.assistant_table]:[border-collapse:collapse] [&.assistant_table]:m-[6px_0] [&.assistant_th]:[border:1px_solid_var(--line-strong)] [&.assistant_th]:p-[3px_8px] [&.assistant_td]:[border:1px_solid_var(--line-strong)] [&.assistant_td]:p-[3px_8px] [&.meta]:text-caption [&.meta]:text-muted-foreground [&.error]:text-bad [&.assistant:hover_.msg-actions]:opacity-100 [&.assistant.generating]:[animation:arrive_100ms_var(--ease)] [&.user_.muted.small.block]:mt-0.5 [&.user_.muted.small.block]:[color:rgba(255,_255,_255,_0.7)] [&.assistant_li]:m-[3px_0] [&.assistant_li::marker]:text-muted-foreground [&.assistant_strong]:font-semibold [&.assistant_strong]:[color:#fff] [&.assistant_h1]:text-[length:1em] [&.assistant_h1]:font-semibold [&.assistant_h1]:m-[16px_0_6px] [&.assistant_h1]:tracking-[-0.012em] [&.assistant_h2]:text-[length:1em] [&.assistant_h2]:font-semibold [&.assistant_h2]:m-[16px_0_6px] [&.assistant_h2]:tracking-[-0.012em] [&.assistant_h3]:text-[length:1em] [&.assistant_h3]:font-semibold [&.assistant_h3]:m-[16px_0_6px] [&.assistant_h3]:tracking-[-0.012em] [&.assistant_a:hover]:[text-decoration:underline] [.msg-wrap.user_&.user]:max-w-full [.msg-wrap.user_&.user]:mt-3.5 [&.assistant_.msg-actions]:mt-2 [&.assistant_:is(h1,_h2,_h3,_h4,_strong)]:text-foreground break-words assistant${generating ? ' generating' : ''}`}>
       <Markdown remarkPlugins={[remarkGfm, remarkChatReferences]} urlTransform={(url) => url.startsWith(SKILL_REFERENCE_PREFIX) || localFileLink(url) ? url : defaultUrlTransform(url)} components={components}>{text}</Markdown>
-      {actions && !generating && <div className={`msg-actions [&:focus-within]:opacity-100 [.msg-wrap:hover_&]:opacity-100 [.msg-wrap.user_&]:mr-1 [.msg-wrap.user_&]:mt-2 [&_.copy-btn]:w-6 [&_.copy-btn]:h-6 [&_.copy-btn]:p-0 [&_.copy-btn_svg]:w-3.5 [&_.copy-btn_svg]:h-3.5 [&.always]:opacity-100 flex items-center mt-0.5 opacity-0 [transition:opacity_0.12s_var(--ease)] gap-0.5 h-6${latest ? ' always' : ''}`}><MessageTime at={e.at} /><CopyButton text={e.text} />{latest && sessionId && <ContextMeter sessionId={sessionId} />}</div>}
+      {actions && !generating && <div className={`msg-actions [&:focus-within]:opacity-100 [.msg-wrap:hover_&]:opacity-100 [.msg-wrap.user_&]:mr-1 [.msg-wrap.user_&]:mt-2 [&_.copy-btn]:w-6 [&_.copy-btn]:h-6 [&_.copy-btn]:p-0 [&_.copy-btn_svg]:w-3.5 [&_.copy-btn_svg]:h-3.5 [&.always]:opacity-100 flex items-center mt-0.5 opacity-0 [transition:opacity_0.12s_var(--ease)] gap-0.5 h-6${latest ? ' always' : ''}`}><MessageTime at={e.at} /><CopyButton text={e.text} /></div>}
     </div>
   )
 })
@@ -991,7 +1050,7 @@ function TurnDiff({ diff }: { diff: string }) {
   return <Collapsible className="tool-group [&_>_[data-slot='collapsible-trigger']]:cursor-pointer [&_>_[data-slot='collapsible-trigger']]:[list-style:none] [&_>_[data-slot='collapsible-trigger']]:font-normal [&_>_[data-slot='collapsible-trigger']]:[transition:background_0.12s_var(--ease),_border-color_0.12s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:flex [&_>_[data-slot='collapsible-trigger']]:items-center [&_>_[data-slot='collapsible-trigger']]:justify-start [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:h-auto [&_>_[data-slot='collapsible-trigger']]:min-h-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border:0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:bg-transparent [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:[border:0] [&_>_[data-slot='collapsible-trigger']:hover]:text-soft [&[data-open]_>_summary_.caret]:[transform:rotate(90deg)] [&[data-open]_>_summary]:bg-transparent [&[data-open]_>_summary]:[border:0] [&[data-open]_>_summary]:text-soft [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] text-control text-muted-foreground"><CollapsibleTrigger render={<Button variant="ghost" />}><BookOpen size={14} /><span className="tool-group-label text-[length:inherit]">{translate('Changes in this turn')}</span><ChevronRight size={13} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" /></CollapsibleTrigger><CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:none]"><div className="tool-card [&_.tool-output]:m-0 [&_.tool-output]:[border:0] [&_.tool-output]:[border-radius:0] [&_.tool-output]:bg-transparent [&_.tool-output]:p-[8px_12px_10px] [&_.tool-output]:max-h-[260px] [&_.tool-output]:text-caption [&_.tool-output]:whitespace-pre-wrap [&_.tool-output]:[overflow-wrap:anywhere] [&_.tool-output]:text-muted-foreground m-[6px_0_8px] [border:1px_solid_transparent] rounded-(--radius-m) [background:rgba(255,_255,_255,_0.035)] overflow-hidden"><ShadowPre>{diff}</ShadowPre></div></CollapsibleContent></Collapsible>
 }
 
-function EventRow({ event: e, sessionId, taskId, live, generating = false, outcomes, questionStates, actions = false, latest = false, onEdit, onOpenAgent, onOpenQuestion }: { event: AgentEvent; sessionId: string; taskId?: string; live: boolean; generating?: boolean; outcomes: Map<string, string>; questionStates: Map<string, QuestionState>; actions?: boolean; latest?: boolean; onEdit?: (text: string, attachments: Attachment[]) => void; onOpenAgent?: (agentId: string) => void; onOpenQuestion?: (requestId: string) => void }) {
+function EventRow({ event: e, sessionId, taskId, live, generating = false, outcomes, questionStates, actions = false, latest = false, editor, onEdit, onOpenAgent, onOpenQuestion }: { event: AgentEvent; sessionId: string; taskId?: string; live: boolean; generating?: boolean; outcomes: Map<string, string>; questionStates: Map<string, QuestionState>; actions?: boolean; latest?: boolean; editor?: React.ReactNode; onEdit?: (text: string, attachments: Attachment[]) => void; onOpenAgent?: (agentId: string) => void; onOpenQuestion?: (requestId: string) => void }) {
   useLanguage()
   switch (e.kind) {
     case 'recovery':
@@ -1020,6 +1079,7 @@ function EventRow({ event: e, sessionId, taskId, live, generating = false, outco
       if (answers) return <div className="msg-wrap user"><span className="msg-to [&_+_.msg.user]:mt-1 [.msg-wrap.user_&_+_.msg.user]:mt-1 inline-flex items-center gap-1 mt-3.5 text-muted-foreground text-caption"><ShieldQuestion size={12} />{translate("Answers to the agent's questions")}</span><div className="msg [&.user]:self-end [&.user]:whitespace-pre-wrap [&.user]:max-w-[78%] [&.user]:mt-[18px] [&.user]:w-[fit-content] [&.user]:[background:var(--bubble)] [&.user]:[border:0] [&.user]:[box-shadow:none] [&.user]:text-chat [&.user]:leading-[1.55] [&.user]:p-[10px_16px_11px] [&.user]:rounded-(--radius-l) [&.user]:tracking-[-0.006em] [&.user]:[color:var(--text-body)] [&.assistant]:relative [&.assistant]:tracking-[-0.008em] [&.assistant]:text-chat [&.assistant]:leading-[1.65] [&.assistant]:[color:var(--text-body)] [&.assistant_>_:first-child]:mt-0 [&.assistant_>_:last-child]:mb-0 [&.assistant_p]:m-[0_0_10px] [&.assistant_ul]:pl-5 [&.assistant_ul]:m-[0_0_10px] [&.assistant_ol]:pl-5 [&.assistant_ol]:m-[0_0_10px] [&.assistant_code]:[background:rgba(255,_255,_255,_0.075)] [&.assistant_code]:[border:0] [&.assistant_code]:rounded-(--radius-xs) [&.assistant_code]:p-[0_5px] [&.assistant_code]:[color:var(--text-body)] [&.assistant_code]:text-[length:0.88em] [&.assistant_pre]:overflow-x-auto [&.assistant_pre]:[white-space:pre] [&.assistant_pre]:[background:var(--code-bg)] [&.assistant_pre]:[border:1px_solid_transparent] [&.assistant_pre]:rounded-(--radius-m) [&.assistant_pre]:p-[12px_14px] [&.assistant_pre]:m-[4px_0_12px] [&.assistant_pre]:leading-[1.6] [&.assistant_pre]:[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.02)] [&.assistant_pre]:text-[length:0.88em] [&.assistant_pre_code]:bg-transparent [&.assistant_pre_code]:p-0 [&.assistant_pre_code]:[border:none] [&.assistant_pre_code]:text-[length:inherit] [&.assistant_pre_code]:[color:#dcdce2] [&.assistant_a]:text-brand [&.assistant_a]:[text-decoration:none] [&.assistant_table]:[border-collapse:collapse] [&.assistant_table]:m-[6px_0] [&.assistant_th]:[border:1px_solid_var(--line-strong)] [&.assistant_th]:p-[3px_8px] [&.assistant_td]:[border:1px_solid_var(--line-strong)] [&.assistant_td]:p-[3px_8px] [&.meta]:text-caption [&.meta]:text-muted-foreground [&.error]:text-bad [&.assistant:hover_.msg-actions]:opacity-100 [&.assistant.generating]:[animation:arrive_100ms_var(--ease)] [&.user_.muted.small.block]:mt-0.5 [&.user_.muted.small.block]:[color:rgba(255,_255,_255,_0.7)] [&.assistant_li]:m-[3px_0] [&.assistant_li::marker]:text-muted-foreground [&.assistant_strong]:font-semibold [&.assistant_strong]:[color:#fff] [&.assistant_h1]:text-[length:1em] [&.assistant_h1]:font-semibold [&.assistant_h1]:m-[16px_0_6px] [&.assistant_h1]:tracking-[-0.012em] [&.assistant_h2]:text-[length:1em] [&.assistant_h2]:font-semibold [&.assistant_h2]:m-[16px_0_6px] [&.assistant_h2]:tracking-[-0.012em] [&.assistant_h3]:text-[length:1em] [&.assistant_h3]:font-semibold [&.assistant_h3]:m-[16px_0_6px] [&.assistant_h3]:tracking-[-0.012em] [&.assistant_a:hover]:[text-decoration:underline] [.msg-wrap.user_&.user]:max-w-full [.msg-wrap.user_&.user]:mt-3.5 [&.assistant_.msg-actions]:mt-2 [&.assistant_:is(h1,_h2,_h3,_h4,_strong)]:text-foreground break-words user">{answers.body}</div><div className={`msg-actions [&:focus-within]:opacity-100 [.msg-wrap:hover_&]:opacity-100 [.msg-wrap.user_&]:mr-1 [.msg-wrap.user_&]:mt-2 [&_.copy-btn]:w-6 [&_.copy-btn]:h-6 [&_.copy-btn]:p-0 [&_.copy-btn_svg]:w-3.5 [&_.copy-btn_svg]:h-3.5 [&.always]:opacity-100 flex items-center mt-0.5 opacity-0 [transition:opacity_0.12s_var(--ease)] gap-0.5 h-6${latest ? ' always' : ''}`}><MessageTime at={e.at} /><CopyButton text={answers.body} /></div></div>
       // A message relayed to a sub-agent shows who it is for, not the relay instructions.
       const relay = parseTaskMessage(e.text)
+      if (editor) return <div className="msg-wrap user" aria-current>{e.attachments?.length ? <Attachments files={e.attachments} /> : null}{editor}</div>
       return <div className="msg-wrap user">
         {relay && <span className="msg-to [&_+_.msg.user]:mt-1 [.msg-wrap.user_&_+_.msg.user]:mt-1 inline-flex items-center gap-1 mt-3.5 text-muted-foreground text-caption"><Bot size={12} />{translate("To ")}{relay.name}</span>}
         {e.attachments?.length ? <Attachments files={e.attachments} /> : null}
@@ -1344,4 +1404,38 @@ function ThinkingRow({ text, active = false }: { text: string; active?: boolean 
     <CollapsibleTrigger render={<Button variant="ghost" />}><Brain size={14} className="tool-icon [&.running]:text-brand [&.running]:[animation:pulse_1.6s_ease-in-out_infinite] flex-none text-muted-foreground" /><span className="tool-summary overflow-hidden text-ellipsis whitespace-nowrap min-w-0 font-sans text-chat text-inherit flex-initial">{translate(active ? "Thinking" : "Thought")}</span><ChevronRight size={12} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" /></CollapsibleTrigger>
     <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:none]"><div className="thinking-body m-[2px_0_4px_20px] pl-2.5 [border-left:2px_solid_var(--line-strong)] text-muted-foreground text-control leading-[1.55] whitespace-pre-wrap [overflow-wrap:anywhere] max-h-[260px] overflow-auto">{text}</div></CollapsibleContent>
   </Collapsible>
+}
+
+/** Edits a sent message inside its bubble. Enter sends, Shift+Enter adds a line, Esc cancels. */
+/** `offlineHost` names the unreachable computer: the revision goes to the outbox and file restore is unavailable until it is back. */
+function InlineMessageEdit({ original, files, sessionId, seq, busy, offlineHost, onCancel, onSubmit }: { original: string; files: Attachment[]; sessionId: string; seq: number; busy: boolean; offlineHost?: string; onCancel: () => void; onSubmit: (text: string, restored: boolean) => void }) {
+  useLanguage()
+  const [text, setText] = useState(original)
+  const [restored, setRestored] = useState(false)
+  // Sending an unchanged message only reruns it, so the first press asks.
+  const [confirmSame, setConfirmSame] = useState(false)
+  const empty = !text.trim() && !files.length
+  const submit = () => {
+    if (busy || empty) return
+    if (text.trim() === original.trim() && !restored && !confirmSame) { setConfirmSame(true); return }
+    onSubmit(text, restored)
+  }
+  return <div className="inline-edit self-end mt-[18px] flex w-[min(640px,_100%)] flex-col gap-2 rounded-(--radius-l) [background:var(--bubble)] p-[8px_10px_10px] [box-shadow:0_0_0_1.5px_var(--accent)]" role="region" aria-label={translate("Editing message")}>
+    <Textarea autoFocus value={text} aria-label={translate("Edit your message")} disabled={busy}
+      className="min-h-[44px] max-h-[40vh] resize-none overflow-y-auto border-0 bg-transparent! p-[4px_6px] text-chat leading-[1.55] shadow-none focus-visible:border-0 focus-visible:ring-0"
+      onFocus={(event) => { const end = event.currentTarget.value.length; event.currentTarget.setSelectionRange(end, end) }}
+      onChange={(event) => { setText(event.target.value); setConfirmSame(false) }}
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) return
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onCancel() }
+        else if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit() }
+      }} />
+    {confirmSame && <p className="m-0 px-1.5 text-caption text-warn" role="status">{translate("Nothing changed. Send it again anyway?")}</p>}
+    <div className="flex flex-wrap items-center justify-end gap-1.5">
+      <span className="mr-auto min-w-0 px-1.5 text-caption text-muted-foreground">{restored ? translate("Selected files restored.") : offlineHost ? translate("Replaces this request. Sends when {0} is back; restoring files needs it online.", { 0: offlineHost }) : translate("Replaces this request. Files stay as they are unless you restore them.")}</span>
+      {!restored && !offlineHost && <UndoRun sessionId={sessionId} userSeq={seq} onRestored={() => setRestored(true)} />}
+      <Button variant="ghost" size="sm" className="text-caption" disabled={busy} title={translate("Esc")} onClick={onCancel}>{translate("Cancel")}</Button>
+      <Button variant="default" size="sm" className="text-caption font-semibold" disabled={busy || empty} title={translate("Enter")} onClick={submit}>{confirmSame ? translate("Send anyway") : offlineHost ? translate("Queue") : translate("Send")}</Button>
+    </div>
+  </div>
 }

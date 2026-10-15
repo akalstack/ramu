@@ -107,6 +107,7 @@ export interface RamuMethods {
   'reviews.chatUndoPreview'(sessionId: string, userSeq: number): UndoPreview
   'reviews.chatUndoApply'(token: string, fileIds: string[]): void
   'activity.status'(): BackgroundActivity[]
+  'activity.cancel'(id: string): void
   'updates.status'(): Promise<AppUpdateStatus>
   'updates.check'(): Promise<AppUpdateStatus>
   'updates.download'(): Promise<AppUpdateStatus>
@@ -137,6 +138,9 @@ export interface RamuMethods {
   /** Brings a computer's window to the front. Rejects when it cannot be reached. */
   'computers.open'(id: string): void
   'computers.pair'(url: string, code: string, name?: string): Computers
+  'computers.sshHosts'(): string[]
+  /** Adds a computer over SSH: `target` is user@host or an alias from ~/.ssh/config. */
+  'computers.pairSsh'(target: string, name?: string): Computers
   'computers.forget'(id: string): Computers
   'computers.retry'(id: string): Computers
   'computers.update'(id: string, changes: { name?: string; enabled?: boolean; retryMode?: 'events' | 'periodic' }): Computers
@@ -168,7 +172,7 @@ export interface RamuMethods {
   'projects.list'(): Project[]
   'projects.create'(name: string): Project
   'projects.inspect'(dir: string): FolderInspection
-  'projects.addFolder'(dir: string): { project: Project; repositories: Repository[] }
+  'projects.addFolder'(dir: string, repos?: string[]): { project: Project; repositories: Repository[] }
   'repos.list'(projectId: string): Repository[]
   'repos.add'(projectId: string, dir: string): Repository
   'repos.pick'(purpose?: 'project' | 'repository'): string | null
@@ -258,7 +262,7 @@ export interface RamuMethods {
   'git.commitFileDiff'(taskId: string, repoId: string, oid: string, path: string): DiffContents
   'git.commitDetails'(taskId: string, repoId: string, oid: string): string
   'git.compareUpstream'(taskId: string, repoId: string): string
-  'git.generateCommit'(taskId: string, repoId: string, settings: AgentSettings): CommitDraft
+  'git.generateCommit'(taskId: string, repoId: string, settings: AgentSettings, includeBranch?: boolean): CommitDraft
   'term.open'(taskId: string, repoId: string | null, cols: number, rows: number): TerminalInfo
   'term.openSetup'(cols: number, rows: number): TerminalInfo
   'term.write'(termId: string, data: string): void
@@ -322,7 +326,7 @@ export interface RamuMethods {
   'aside.delete'(sessionId: string, asideId: string): void
   /** Keep the chat's current provider despite the usage threshold: for the next message, for this chat until its limit resets, or clear. */
   'agent.holdProvider'(sessionId: string, scope: 'message' | 'chat' | null): void
-  'agent.providerHold'(sessionId: string): 'message' | 'chat' | null
+  'agent.providerHold'(sessionId: string): 'message' | 'chat' | 'picked' | null
   /** Moves one running command to the background so the agent can carry on (Claude only). False when it already finished. */
   'agent.backgroundTool'(sessionId: string, toolUseId: string): boolean
   /** Stops one sub-agent or background task; the main agent keeps going. */
@@ -342,6 +346,8 @@ export type PushEvents = {
   'settings:models': ModelPreferences
   'activity:changed': BackgroundActivity[]
   'menu:action': { action: 'settings' | 'check-updates' }
+  /** A `ramu://pair` link was opened; the text is validated by the screen that uses it. */
+  'pair:link': { link: string }
   'automation:changed': Record<string, never>
   'memory:changed': Record<string, never>
   /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */

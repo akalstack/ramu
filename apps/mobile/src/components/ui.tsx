@@ -22,17 +22,11 @@ export function T({ tone = 'text', size = font.body, weight, mono, style, ...res
   return <Text {...rest} style={[{ color: c[tone], fontSize: size, fontWeight: weight, fontFamily: mono ? font.mono : undefined }, style]} />
 }
 
-/** Wordmark with the uppercase ALPHA pill, in the desktop title bar's proportions (15px mark, 18px pill, 8px gap) scaled for a phone. */
+/** Wordmark in the desktop title bar's proportions, scaled for a phone. */
 export function Brand() {
-  const { c } = useTheme()
   return (
-    <View style={[styles.row, { gap: 8 }]}>
+    <View style={styles.row}>
       <Wordmark height={17} />
-      <View style={{ height: 20, paddingHorizontal: 7, justifyContent: 'center', borderRadius: radius.full, backgroundColor: c.fill }}>
-        <T size={10.5} weight="600" tone="muted" style={{ letterSpacing: 0.85, textTransform: 'uppercase', lineHeight: 12 }}>
-          alpha
-        </T>
-      </View>
     </View>
   )
 }

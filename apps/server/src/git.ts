@@ -207,6 +207,40 @@ export async function undoCommit(cwd: string, expectedHead: string): Promise<str
   return message
 }
 
+/** A lowercase, ref-safe fragment of at most 64 characters (as T3 Code does); empty when nothing usable is left. */
+export function sanitizeBranchFragment(raw: string): string {
+  const fragment = raw.trim().toLowerCase().replace(/['"`]/g, '').replace(/^[./\s_-]+|[./\s_-]+$/g, '')
+    .replace(/[^a-z0-9/_-]+/g, '-').replace(/\/+/g, '/').replace(/-+/g, '-').replace(/^[./_-]+|[./_-]+$/g, '')
+    .slice(0, 64).replace(/[./_-]+$/g, '')
+  return fragment
+}
+
+/** Used when neither the model nor the commit subject gives a usable name: different each time, as the dialog used to suggest. */
+const fallbackBranchFragment = () => `changes-${Date.now().toString(36)}`
+
+/** Keeps a namespace the name already has; otherwise it goes under `feature/`. */
+export function featureBranchName(raw: string): string {
+  const fragment = sanitizeBranchFragment(raw) || fallbackBranchFragment()
+  return fragment.includes('/') ? fragment : `feature/${fragment}`
+}
+
+/** A free name: each path part blocked by an existing branch (or, for the last part, its children) gets `-2`, `-3`… */
+export function uniqueFeatureBranch(existing: readonly string[], preferred?: string): string {
+  const names = existing.map((name) => name.toLowerCase()), taken = new Set(names)
+  const parts = featureBranchName(preferred ?? '').split('/')
+  let resolved = ''
+  parts.forEach((part, index) => {
+    const base = resolved ? `${resolved}/${part}` : part
+    let candidate = base
+    for (let suffix = 2; taken.has(candidate) || (index === parts.length - 1 && names.some((name) => name.startsWith(`${candidate}/`))); suffix++) candidate = `${base}-${suffix}`
+    resolved = candidate
+  })
+  return resolved
+}
+
+/** The subject line, minus a Conventional Commits `type(scope):` prefix, which makes a poor branch name. */
+const branchHint = (message: string) => (message.trim().split('\n')[0] ?? '').replace(/^[a-z]+(\([^)]*\))?!?:\s*/i, '')
+
 export async function commit(cwd: string, message: string, amendHead?: string, branchOptions?: CommitBranchOptions): Promise<string> {
   // The message goes through stdin so it never needs quoting.
   if (amendHead) {
@@ -217,14 +251,17 @@ export async function commit(cwd: string, message: string, amendHead?: string, b
   if (!message.trim() && !amendHead) throw new Error('A commit message is required.')
   if (branchOptions) {
     if (await currentBranch(cwd) !== branchOptions.expectedBranch) throw new Error('The current branch changed. Review the commit destination again.')
-    if (branchOptions.newBranch) {
+    if (branchOptions.newBranch || branchOptions.autoBranch) {
       if (amendHead) throw new Error('Amend cannot create a feature branch.')
       const current = await status(cwd)
       if (current.operation || current.entries.some(entry => entry.staged === 'unmerged')) throw new Error('Finish the Git operation and resolve conflicts before creating a feature branch.')
       if (!current.entries.some(entry => entry.staged)) throw new Error('Stage changes before committing on a feature branch.')
-      await git(cwd, ['check-ref-format', '--branch', branchOptions.newBranch])
+      const name = branchOptions.autoBranch
+        ? uniqueFeatureBranch((await git(cwd, ['for-each-ref', '--format=%(refname:short)', 'refs/heads'])).split('\n').filter(Boolean), branchOptions.newBranch || branchHint(message))
+        : branchOptions.newBranch!
+      await git(cwd, ['check-ref-format', '--branch', name])
       // Starting at HEAD preserves both the index and working tree, including dirty files.
-      await git(cwd, ['-c', 'branch.autoSetupMerge=false', 'switch', '-c', branchOptions.newBranch])
+      await git(cwd, ['-c', 'branch.autoSetupMerge=false', 'switch', '-c', name])
     }
   }
   const args = ['commit', ...(amendHead ? ['--amend'] : []), ...(message.trim() ? ['--file=-', '--cleanup=strip'] : ['--no-edit'])]

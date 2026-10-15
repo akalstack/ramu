@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SUBAGENT_PREFERENCES, type AgentModel, type FallbackStep, type ProviderCatalog, type UsageReading } from '../src/types'
-import { defaultChain, isOver, nearestEffort, nextStep, peakFor, planRoute, readingCounts, resolveStep, subagentChain, subagentTarget } from '../src/routing'
+import { defaultOrder, isOver, nearestEffort, nextStep, peakFor, planRoute, readingCounts, resolveStep, subagentOrder, subagentTarget } from '../src/routing'
 
 const NOW = 1_800_000_000_000
 const model = (provider: AgentModel['provider'], id: string, extra: Partial<AgentModel> = {}): AgentModel => ({ provider, id, name: id, efforts: ['low', 'medium', 'high'], defaultEffort: 'medium', isDefault: false, ...extra })
@@ -44,9 +44,8 @@ describe('fallback steps', () => {
     expect(resolveStep(step('codex', 'gone'), catalogs)).toBeNull()
     expect(resolveStep(step('opencode', ''), catalogs)).toBeNull()
   })
-  it('defaults to the other subscription provider', () => {
-    expect(defaultChain('claude-code', catalogs)[0]).toMatchObject({ provider: 'codex', model: 'gpt-sol', effort: 'medium' })
-    expect(defaultChain('codex', catalogs)[0]).toMatchObject({ provider: 'claude-code', model: 'claude-opus' })
+  it('defaults to Claude Code, then Codex, on their default models', () => {
+    expect(defaultOrder(catalogs)).toMatchObject([{ provider: 'claude-code', model: 'claude-opus', effort: 'medium' }, { provider: 'codex', model: 'gpt-sol', effort: 'medium' }])
   })
   it('picks the first available entry under the threshold that was not tried', () => {
     const chain = [step('opencode', ''), step('codex', 'gpt-sol', 'high'), step('claude-code', 'claude-sonnet')]
@@ -75,6 +74,21 @@ describe('planRoute', () => {
     expect(planRoute(claude, [step('claude-code', 'claude-opus'), ...chain], { usage, catalogs, switchAt: 90, now: NOW })?.step.provider).toBe('codex')
     expect(planRoute(claude, [step('claude-code', 'claude-opus')], { usage, catalogs, switchAt: 90, now: NOW })).toBeNull()
   })
+  it('moves up to a higher-ranked model with room only when asked', () => {
+    const order = [step('claude-code', 'claude-opus'), step('codex', 'gpt-sol'), step('claude-code', 'claude-sonnet')]
+    const sonnet = { ...claude, model: 'claude-sonnet' }
+    expect(planRoute(sonnet, order, { usage: [], catalogs, switchAt: 90, now: NOW })).toBeNull()
+    const up = planRoute(sonnet, order, { usage: [], catalogs, switchAt: 90, now: NOW, promote: true })
+    expect(up?.step.model).toBe('claude-opus')
+    expect(up?.peak).toBeUndefined()
+    // Opus is out, so the best with room is Codex.
+    expect(planRoute(sonnet, order, { usage: [reading({ window: 'weekly', scope: 'Opus', usedPercent: 99, resetsAt: NOW + 1 })], catalogs, switchAt: 90, now: NOW, promote: true })?.step.model).toBe('gpt-sol')
+  })
+  it('never moves the top model, or one outside the order, up', () => {
+    const order = [step('claude-code', 'claude-opus'), step('codex', 'gpt-sol')]
+    expect(planRoute(claude, order, { usage: [], catalogs, switchAt: 90, now: NOW, promote: true })).toBeNull()
+    expect(planRoute({ ...claude, model: 'claude-haiku' }, order, { usage: [], catalogs, switchAt: 90, now: NOW, promote: true })).toBeNull()
+  })
   it('maps effort onto the target model', () => {
     const usage = [reading({ usedPercent: 99, resetsAt: NOW + 1 })]
     expect(planRoute(claude, [step('codex', 'gpt-sol', 'ultra')], { usage, catalogs, switchAt: 90, now: NOW })?.step.effort).toBe('xhigh')
@@ -94,10 +108,10 @@ describe('sub-agent routing', () => {
     expect(subagentTarget(rules, 'claude-code', 'plan')).toBeNull()
     expect(subagentTarget(rules, 'claude-code', 'other')?.provider).toBe('codex')
   })
-  it('uses the separate chain only when configured', () => {
+  it('uses the separate order only when configured', () => {
     const main = [step('codex', 'gpt-sol')], own = [step('claude-code', 'claude-haiku')]
-    expect(subagentChain({ ...prefs, chains: { 'claude-code': own } }, 'claude-code', main)).toBe(main)
-    expect(subagentChain({ ...prefs, fallback: 'separate', chains: { 'claude-code': own } }, 'claude-code', main)).toBe(own)
-    expect(subagentChain({ ...prefs, fallback: 'separate' }, 'claude-code', main)).toBe(main)
+    expect(subagentOrder({ ...prefs, order: own }, main)).toBe(main)
+    expect(subagentOrder({ ...prefs, fallback: 'separate', order: own }, main)).toBe(own)
+    expect(subagentOrder({ ...prefs, fallback: 'separate' }, main)).toBe(main)
   })
 })

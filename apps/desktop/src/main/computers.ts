@@ -2,10 +2,12 @@
 // Each computer keeps its own window; this module owns the connections, their health and their activity counts.
 import type { RuntimeEndpoint } from '@ramu/contracts'
 import type { Computer, ComputerStatus, Computers } from '@ramu/shared/types'
-import type { ComputerUpdate, RemoteServers } from './remoteServers'
+import type { ComputerUpdate, RemoteServers, SavedServer } from './remoteServers'
+import type { SshComputers } from './sshComputers'
 
 export const LOCAL = 'local'
 const COUNT_DELAY_MS = 800
+const SSH_RETRY_MS = 20_000
 
 interface Live { status: ComputerStatus; waiting?: 'network' | 'computer'; retryAt?: number; running: number; needsInput: number; stop: () => void }
 export interface ComputerDeps {
@@ -17,6 +19,8 @@ export interface ComputerDeps {
   subscribe(target: RuntimeEndpoint, receive: (channel: string, payload: any) => void, options?: { retryMode: 'events' | 'periodic' }): () => void
   invoke(target: string | RuntimeEndpoint, method: string, args?: unknown[], options?: { signal?: AbortSignal; timeoutMs?: number }): Promise<any>
   pair(url: string, code: string, deviceName: string): Promise<{ token: string }>
+  /** Computers reached over SSH keep a tunnel; the registry asks for it before connecting. */
+  ssh: Pick<SshComputers, 'ensure' | 'connect' | 'close' | 'closeAll'>
   /** An event from a computer, for its window and its notifier. */
   deliver(id: string, channel: string, payload: any): void
   /** The list, a status or a count changed. */
@@ -42,10 +46,12 @@ export class ComputerRegistry {
     this.counts.clear(); this.countAgain.clear()
     for (const live of this.live.values()) live.stop()
     this.live.clear()
+    this.deps.ssh.closeAll()
   }
 
   private connect(id: string) {
     this.clearCount(id)
+    clearTimeout(this.timers.get(`ssh:${id}`)); this.timers.delete(`ssh:${id}`)
     this.live.get(id)?.stop()
     const saved = this.deps.servers.get(id)
     if (saved && !saved.enabled) {
@@ -53,11 +59,36 @@ export class ComputerRegistry {
       this.deps.deliver(id, 'background:connection', { connected: false, paused: true })
       return
     }
+    if (saved?.ssh) {
+      const live: Live = { status: 'connecting', running: 0, needsInput: 0, stop: () => {} }
+      this.live.set(id, live)
+      let cancelled = false, detach = () => {}
+      live.stop = () => { cancelled = true; detach() }
+      this.deps.changed()
+      void this.deps.ssh.ensure(id, saved).then(() => {
+        if (cancelled || this.live.get(id) !== live) return
+        detach = this.attach(id, live, this.deps.servers.get(id) ?? saved)
+      }, (error) => {
+        if (cancelled || this.live.get(id) !== live || this.stopped) return
+        live.status = 'offline'; live.waiting = 'computer'; live.retryAt = Date.now() + SSH_RETRY_MS
+        this.deps.deliver(id, 'background:connection', { connected: false, waiting: 'computer', retryAt: live.retryAt, error: error instanceof Error ? error.message : String(error) })
+        this.deps.changed()
+        this.timers.set(`ssh:${id}`, setTimeout(() => { this.timers.delete(`ssh:${id}`); if (!cancelled && !this.stopped && this.live.get(id) === live) this.connect(id) }, SSH_RETRY_MS))
+      })
+      return
+    }
     const endpoint = this.deps.servers.endpoint(id)
     if (!endpoint) { this.live.set(id, { status: 'rejected', running: 0, needsInput: 0, stop: () => {} }); return }
     const live: Live = { status: 'connecting', running: 0, needsInput: 0, stop: () => {} }
     this.live.set(id, live)
-    live.stop = this.deps.subscribe(endpoint, (channel, payload) => {
+    live.stop = this.attach(id, live, saved)
+  }
+
+  /** Subscribes to a computer's events; the returned function unsubscribes. */
+  private attach(id: string, live: Live, saved: SavedServer | undefined): () => void {
+    const endpoint = this.deps.servers.endpoint(id)
+    if (!endpoint) { live.status = 'rejected'; this.deps.changed(); return () => {} }
+    return this.deps.subscribe(endpoint, (channel, payload) => {
       if (this.live.get(id) !== live) return
       if (channel === 'background:connection') {
         live.status = payload.rejected ? 'rejected' : payload.connected ? 'connected' : 'offline'
@@ -132,7 +163,7 @@ export class ComputerRegistry {
       { id: LOCAL, name: this.deps.localName(), local: true, url: null, ...this.local, pairedAt: null },
       ...this.deps.servers.list().map((server): Computer => {
         const live = this.live.get(server.id)
-        return { id: server.id, name: server.name, local: false, url: server.url, status: live?.status ?? 'offline', enabled: server.enabled, retryMode: server.retryMode, waiting: live?.waiting, retryAt: live?.retryAt, running: live?.running ?? 0, needsInput: live?.needsInput ?? 0, pairedAt: server.pairedAt }
+        return { id: server.id, name: server.name, local: false, url: server.url, status: live?.status ?? 'offline', enabled: server.enabled, retryMode: server.retryMode, waiting: live?.waiting, retryAt: live?.retryAt, running: live?.running ?? 0, needsInput: live?.needsInput ?? 0, pairedAt: server.pairedAt, ...(server.ssh ? { ssh: server.ssh.target } : {}) }
       }),
     ]
     return { computers, current, deviceName: this.deps.deviceName }
@@ -153,8 +184,24 @@ export class ComputerRegistry {
     return this.list(LOCAL).computers.find((computer) => computer.id === saved.id)!
   }
 
+  /** Adds a computer by SSH: provisions it, tunnels to it and pairs through the tunnel. */
+  async pairSsh(target: string, label: string | undefined): Promise<Computer> {
+    const opened = await this.deps.ssh.connect(target, this.deps.deviceName, this.deps.pair)
+    try { await this.deps.invoke({ kind: 'http', url: opened.url, token: opened.token }, 'background.status') }
+    catch (error) { opened.discard(); throw error }
+    const saved = this.deps.servers.add(opened.url, label, opened.token, Date.now(), opened.route)
+    opened.release(saved.id)
+    const ids = new Set(this.deps.servers.list().map((server) => server.id))
+    for (const [id, live] of this.live) if (!ids.has(id)) { this.clearCount(id); live.stop(); this.live.delete(id); this.deps.ssh.close(id) }
+    this.connect(saved.id)
+    this.deps.changed()
+    return this.list(LOCAL).computers.find((computer) => computer.id === saved.id)!
+  }
+
   forget(id: string) {
     if (id === LOCAL) throw new Error('This computer cannot be removed')
+    this.deps.ssh.close(id)
+    clearTimeout(this.timers.get(`ssh:${id}`)); this.timers.delete(`ssh:${id}`)
     this.clearCount(id)
     this.live.get(id)?.stop(); this.live.delete(id)
     this.deps.servers.forget(id)

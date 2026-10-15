@@ -1,3 +1,4 @@
+import { offerPairLink } from './pairLink'
 import { BackgroundActivity } from './BackgroundActivity'
 import { AppUpdateNotice } from './AppUpdates'
 import { animatePanelChange, cancelPanelMotion } from './panelMotion'
@@ -14,6 +15,7 @@ import { CalendarClock, Settings, SquarePen, Archive, Files, History, Folders, F
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildCommands, formatKeys, Palette, useKeybindings, type PaletteMode } from './commands'
 import { copyText, invoke, ramu } from './ipc'
+import { setShownTerminal, useUnseenTerminalOutput } from './terminalActivity'
 import { Dropdown, Menu, useContextMenu } from './Menu'
 import { WorkspaceSyncDialog } from './WorkspaceSync'
 import type { GitBranchInfo, GitStatus } from '@ramu/shared/types'
@@ -34,9 +36,10 @@ import { runProjectAction, useProjectActions, WindowActions } from './WindowActi
 import { SearchChats } from './SearchChats'
 import { useGitChangeCount } from './useGitChangeCount'
 import { CreateEntryDialog } from './CreateEntryDialog'
+import { AddProjectDialog } from './AddProjectDialog'
 import { HomePage, NewTask } from './NewTask'
 import { AnimatedMark, BootScreen, Wordmark } from './Brand'
-import { ComputerSwitcher, WorkspaceComputerIndicator } from './computers'
+import { ComputerSwitcher } from './computers'
 import { useAddProject } from './addProject'
 import { ProjectsPanel } from './sidebar/ProjectsPanel'
 import { TaskPane } from './TaskPane'
@@ -108,8 +111,12 @@ function Shell() {
       window.dispatchEvent(new CustomEvent('ramu:settings', { detail: action === 'check-updates' ? { section: 'system', target: 'Check app updates' } : { section: 'appearance' } }))
       if (action === 'check-updates') void invoke('updates.check').catch((reason) => notifyError(errorText(reason), 'Updates'))
     })
+    const offLink = ramu.on('pair:link', ({ link }) => {
+      offerPairLink(link)
+      window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'remote' } }))
+    })
     window.addEventListener('ramu:settings', open)
-    return () => { off(); window.removeEventListener('ramu:settings', open) }
+    return () => { off(); offLink(); window.removeEventListener('ramu:settings', open) }
   }, [])
 
   // Saved project actions join the command list, so they show in the palette and their shortcuts work everywhere.
@@ -163,11 +170,9 @@ function Shell() {
   const terminalShown = !globalPage && !landing && !startProject && !!activePanelState?.views.some(view => view.kind === 'terminal') && (activePanelState.terminalOpen ?? true)
   const unsavedFiles = new Set([...(ws.taskUi[ui.activeTaskId ?? '']?.views ?? []), ...(ws.taskUi[activeWorkspace ?? '']?.views ?? [])].filter(view => view.kind === 'file' && ws.dirty[view.id]).map(view => view.id)).size
   // Output from a terminal nobody is looking at: a dot on the Terminal button until the panel is opened.
-  const [terminalQuiet, setTerminalQuiet] = useState(true)
-  const terminalOpenRef = useRef(false)
-  terminalOpenRef.current = terminalShown
-  useEffect(() => ramu.on('term:data', () => { if (!terminalOpenRef.current) setTerminalQuiet(false) }), [])
-  useEffect(() => { if (terminalShown) setTerminalQuiet(true) }, [terminalShown])
+  // Only this workspace's terminals count, and a freshly opened shell's startup output doesn't (see terminalActivity).
+  const terminalUnseen = useUnseenTerminalOutput(activeWorkspace)
+  useLayoutEffect(() => setShownTerminal(terminalShown ? activeWorkspace : null), [terminalShown, activeWorkspace])
   const attentionChats = ws.tasks.filter(task => task.status !== 'archived' && (ws.unread.has(task.id) || task.status === 'needs-input')).length
   const badge = (count: number, compact = false) => count > 0 && <span className={`activity-badge absolute grid place-items-center rounded-(--radius-row) [background:var(--primary)] [color:var(--primary-ink)] font-semibold leading-[1] tabular-nums pointer-events-none ${compact ? 'right-[-4px] bottom-[-3px] min-w-3 h-3 px-0.5 [box-shadow:0_0_0_1px_var(--window)] text-[length:8px]' : 'right-[-3px] bottom-[-2px] min-w-4 h-4 p-[0_4px] [box-shadow:0_0_0_2px_var(--window)] text-[length:10px]'}`} aria-hidden="true">{count > 99 ? '99+' : count}</span>
 
@@ -190,7 +195,7 @@ function Shell() {
         if (terminal) ws.activateView(id, terminal.id)
         else ws.openView(id, { kind: 'terminal' })
       }
-    }}><SquareTerminal data-icon="inline-start" />{!terminalQuiet && !terminalShown && <span role="status" aria-label={t("New terminal output")} className="absolute right-[3px] bottom-[3px] size-1.5 rounded-full bg-primary pointer-events-none" />}</Button>
+    }}><SquareTerminal data-icon="inline-start" />{terminalUnseen && !terminalShown && <span role="status" aria-label={t("New terminal output")} className="absolute right-[3px] bottom-[3px] size-1.5 rounded-full bg-primary pointer-events-none" />}</Button>
     <Button variant="ghost" size="icon-sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center" aria-expanded={rightShown} aria-pressed={rightShown} aria-label={rightShown ? t("Hide workspace") : t("Show workspace")} title={`${rightShown ? t("Hide workspace") : t("Show workspace")} (${formatKeys('mod+alt+b')})`} disabled={!ui.activeTaskId} onClick={() => { if (ui.activeTaskId) ws.toggleRightPanel(ui.activeTaskId) }}><PanelRight data-icon="inline-start" /></Button>
   </nav>
   // With the sidebar hidden, chats that want attention show on its toggle instead.
@@ -204,16 +209,14 @@ function Shell() {
         <div className="sidebar-titlebar @container flex flex-none items-center gap-2 min-w-0 h-full pr-2 pl-[max(16px,_calc(var(--window-controls-inset,_0px)_+_8px))]" style={{ width: sidebarHidden ? 'calc(var(--window-controls-inset, 0px) + 44px)' : 'var(--nav-width)' }}>
           {!sidebarHidden && <>
             <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover wordmark-link min-w-0 shrink [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:0] [&:hover_.app-wordmark]:opacity-100 bg-transparent [border:0] p-0 min-h-0 rounded-(--radius-s) cursor-pointer [-webkit-app-region:no-drag]" aria-label={t("Home")} title={t("Home")} onClick={() => ws.showHome()}><Wordmark className="app-wordmark block max-w-full [opacity:0.94]" height={15} /></Button>
-            <span className="release-badge hidden @min-[163px]:inline-flex p-[0_6px] h-[18px] items-center [border:0] rounded-full bg-fill text-muted-foreground text-[length:9.5px] font-semibold leading-[1] tracking-[0.08em] [text-transform:uppercase] whitespace-nowrap select-none pointer-events-none">Alpha</span>
           </>}
           <div className="ml-auto flex items-center">{sidebarToggle}</div>
         </div>
         {globalPage ? <header className="task-header [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_.chat-switch-btn:hover_.header-secondary]:text-soft [&_.header-center]:flex [&_.header-center]:items-center [&_.header-center]:gap-2 [&_.header-center]:flex-1 [&_.header-center]:min-w-0 [&_.header-center]:overflow-hidden [&::after]:[content:''] [&::after]:flex-1 [&_.header-title]:relative [&_.header-title]:top-[-1px] [&_.header-title]:leading-[20px] [&_.header-secondary]:relative [&_.header-secondary]:top-[-1px] [&_.header-secondary]:leading-[20px] [&_.header-meta]:relative [&_.header-meta]:top-[-1px] [&_.header-meta]:leading-[20px] [&_.header-meta]:shrink-0 [&_.header-meta]:max-w-[25%] [&_.header-meta]:overflow-hidden [&_.header-meta]:text-ellipsis [&_.chat-switch-btn]:justify-start [&_.chat-switch-btn]:w-[fit-content] [&_.chat-switch-btn]:max-w-[none] [&_.chat-switch-btn]:flex-initial [&_.chat-switch-btn_.header-title]:flex-initial [&_.chat-switch-btn_.header-title]:min-w-0 [&_.chat-switch-btn_.header-title]:max-w-[none] [&_.chat-switch-btn_.header-title]:text-left [&_.chat-switch-btn_.header-secondary]:flex-initial [&_.chat-switch-btn_.header-secondary]:min-w-0 [&_.chat-switch-btn_.header-secondary]:max-w-[none] [&_.chat-switch-btn_.header-secondary]:text-left [&:has(.workspace-tool-buttons)::after]:hidden [&_.workspace-tool-buttons]:ml-auto [&_.header-center_>_svg]:flex-none [&_.header-center_.chat-switch-btn]:max-w-full [&_.header-center_.chat-switch-btn]:min-w-0 flex-none flex items-center gap-2.5 p-[0_12px_0_16px] [-webkit-app-region:drag] min-w-0 h-[46px] [border-bottom-color:var(--line)] [border-bottom:0]"><span className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default">{t("Schedules")}</span></header> : <TaskHeader starting={!!startProject || landing} tools={toolButtons} />}
-        <WorkspaceComputerIndicator />
       </div>
       <ResizablePanelGroup orientation="horizontal" id="shell" onLayoutChanged={onShellLayout} resizePreviewMode={terminalShown ? 'separator' : undefined}>
       <SeparatorOverlay className="bg-[var(--pane-border-active)] -translate-x-[1.5px]" style={{ width: 4 }} />
-      <ResizablePanel id="sidebar" panelRef={sidebarPanel} collapsible collapsedSize={0} minSize={SIDEBAR_WIDTH_RANGE[0]} maxSize={SIDEBAR_WIDTH_RANGE[1]} defaultSize={preferences.sidebarWidth} onResize={onSidebarResize}>
+      <ResizablePanel id="sidebar" panelRef={sidebarPanel} groupResizeBehavior="preserve-pixel-size" collapsible collapsedSize={0} minSize={SIDEBAR_WIDTH_RANGE[0]} maxSize={SIDEBAR_WIDTH_RANGE[1]} defaultSize={preferences.sidebarWidth} onResize={onSidebarResize}>
       <aside id="workspace-sidebar" className="sidebar flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] h-[calc(100%_-_var(--titlebar-h))] bg-transparent opacity-100 visible" aria-hidden={sidebarHidden} inert={sidebarHidden}>
         <nav className="sidebar-nav flex flex-col gap-px p-[2px_8px_6px] flex-none" aria-label={t("Activity")}>
           <ComputerSwitcher />
@@ -263,6 +266,7 @@ function Shell() {
       <CommitBranchDialog />
       <TitleTooltips />
       <CreateEntryDialog />
+      <AddProjectDialog />
     </div>
   )
 }

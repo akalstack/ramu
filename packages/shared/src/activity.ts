@@ -3,4 +3,5 @@ export interface BackgroundActivity {
   id: string
   label: string
   detail?: string
+  cancellable?: boolean
 }

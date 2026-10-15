@@ -59,9 +59,16 @@ const providerBinaries = z.object(Object.fromEntries(['claude-code', 'codex', 'o
 const providerId = z.enum(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'])
 const fallbackStep = z.object({ id: z.string().min(1).max(100), provider: providerId, model: z.string().max(200), effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable(), serviceTier: z.enum(['standard', 'fast']).optional() })
 const threshold = z.union([z.literal(80), z.literal(90), z.literal(95), z.null()])
-const chains = z.partialRecord(providerId, z.array(fallbackStep).max(10))
-const fallbackPreferences = z.object({ switchAt: threshold.default(DEFAULT_FALLBACK_PREFERENCES.switchAt), returnAfterReset: z.boolean().default(DEFAULT_FALLBACK_PREFERENCES.returnAfterReset), chains: chains.default({}) })
-const subagentPreferences = z.object({ mode: z.enum(['native', 'single', 'per-provider']).default('native'), single: fallbackStep.nullable().default(null), perProvider: z.partialRecord(providerId, fallbackStep.nullable()).default({}), byType: z.array(z.object({ id: z.string().min(1).max(100), type: z.string().max(80), step: fallbackStep.nullable() })).max(20).default([]), fallback: z.enum(['same', 'separate']).default('same'), chains: chains.default({}), switchAt: z.union([threshold, z.literal('same')]).default('same'), continueNative: z.boolean().default(true), isolate: z.boolean().default(false), codexHook: z.boolean().default(false), maxConcurrent: z.number().int().min(1).max(8).default(3), shareContext: z.boolean().default(false) })
+const order = z.array(fallbackStep).max(10)
+/** Settings saved with a list per provider become one order: the Claude Code list (or the first set), led by that provider. */
+export function migrateChains(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || 'order' in value || !('chains' in value)) return value
+  const { chains, ...rest } = value as { chains?: Record<string, unknown[] | undefined> }
+  const provider = chains?.['claude-code']?.length ? 'claude-code' : Object.keys(chains ?? {}).find((key) => chains?.[key]?.length)
+  return provider ? { ...rest, order: [{ id: `migrated-${provider}`, provider, model: '', effort: null }, ...chains![provider]!].slice(0, 10) } : rest
+}
+const fallbackPreferences = z.preprocess(migrateChains, z.object({ switchAt: threshold.default(DEFAULT_FALLBACK_PREFERENCES.switchAt), order: order.optional() }))
+const subagentPreferences = z.preprocess(migrateChains, z.object({ mode: z.enum(['native', 'single', 'per-provider']).default('native'), single: fallbackStep.nullable().default(null), perProvider: z.partialRecord(providerId, fallbackStep.nullable()).default({}), byType: z.array(z.object({ id: z.string().min(1).max(100), type: z.string().max(80), step: fallbackStep.nullable() })).max(20).default([]), fallback: z.enum(['same', 'separate']).default('same'), order: order.optional(), switchAt: z.union([threshold, z.literal('same')]).default('same'), continueNative: z.boolean().default(true), isolate: z.boolean().default(false), codexHook: z.boolean().default(false), maxConcurrent: z.number().int().min(1).max(8).default(3), shareContext: z.boolean().default(false) }))
 const advisorPreferences = z.object({ enabled: z.boolean().default(false), step: fallbackStep.nullable().default(null), wait: z.boolean().default(false) })
 const projectAction = z.object({ id: z.string().min(1).max(64), name: z.string().trim().min(1).max(60), command: z.string().trim().min(1).max(4000), keys: z.string().max(40).optional() })
 const appPreferences = z.object({ intelligence: intelligenceSchema.default(() => intelligenceSchema.parse({})), language: z.enum(['system', 'en', 'id']).default('system'), recapsEnabled: z.boolean().default(true), recapTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'), accent: z.enum(['blue', 'violet', 'teal']), fontFamily: z.enum(['system', 'geist']), fontSize: z.number().int().min(12).max(18), fontSmoothing: z.boolean().default(true), reduceMotion: z.boolean().default(false), recentChatMode: z.boolean().default(false), editorFontSize: z.number().int().min(10).max(22), terminalFontSize: z.number().int().min(8).max(22), previewTabs: z.boolean(), hideEmptyStaged: z.boolean(), pullMode: pullMode.default('rebase'), autoPull: z.boolean().default(true), commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'), commitInstructions: z.string().max(2000).default(''), defaultCommitAction: z.enum(['commit', 'push', 'sync']).default('commit'), defaultCommitBranch: z.enum(['new-branch', 'current']).default('new-branch'), recentChats: z.number().int().min(3).max(20), cleanupArchivedDays: z.number().int().min(0).max(3650).default(DEFAULT_APP_PREFERENCES.cleanupArchivedDays), terminalTabPosition: z.enum(['top', 'right']), defaultTerminalDock: z.enum(['right', 'bottom']).default(DEFAULT_APP_PREFERENCES.defaultTerminalDock), defaultAccess: agentSettings.shape.access, defaultAutoFallback: z.boolean(), busyMessageAction: z.enum(['queue', 'steer']).default('steer'), includeTabContext: z.boolean().default(true), sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH), messageBehaviorVersion: z.literal(4).default(4), defaultChatDockOpen: z.boolean(), favoriteModels: z.array(z.string().max(200)).max(100).default([]), notifyAgentDone: z.boolean().default(true), resumeChatsOnRestart: z.boolean().default(true), asyncQuestions: z.boolean().default(true), autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60), providerBinaries: providerBinaries.default({}), providerUpdateChecks: z.boolean().default(true), appUpdateChecks: z.boolean().default(true), appAutoUpdate: z.boolean().default(false), keepAwake: z.boolean().default(false), keepAwakeWhen: z.enum(['plugged-in', 'always']).default('plugged-in'), showUsageLimits: z.boolean().default(true), fallback: fallbackPreferences.default(DEFAULT_FALLBACK_PREFERENCES), subagents: subagentPreferences.default(DEFAULT_SUBAGENT_PREFERENCES), advisor: advisorPreferences.default(DEFAULT_ADVISOR_PREFERENCES), goals: goalPreferencesSchema.default(DEFAULT_GOAL_PREFERENCES), memory: z.object({ enabled: z.boolean().default(true), dream: z.boolean().default(true), staleAfterDays: z.number().int().min(7).max(3650).default(90) }).default(DEFAULT_MEMORY_PREFERENCES) })
@@ -340,7 +347,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'folders.addProject': { args: z.tuple([z.string().max(4096)]), run: async (path: string) => workspace.addProjectFromFolder(await hostFolders.inspect(path)) },
     'folders.clone': { args: z.tuple([z.string().max(4096), z.string().max(200), z.string().max(4096)]), run: (parent: string, name: string, url: string) => hostFolders.clone(parent, name, url) },
     'projects.inspect': { args: z.tuple([z.string().max(4096)]), run: (dir: string) => workspace.inspectFolder(dir) },
-    'projects.addFolder': { args: z.tuple([z.string().max(4096)]), run: (dir: string) => workspace.addProjectFromFolder(dir) },
+    'projects.addFolder': { args: z.tuple([z.string().max(4096), z.array(z.string().max(4096)).max(500).optional()]), run: (dir: string, repos?: string[]) => workspace.addProjectFromFolder(dir, repos) },
     'repos.list': { args: z.tuple([id]), run: (projectId: string) => workspace.listRepositories(projectId) },
     'repos.add': {
       args: z.tuple([id, z.string().max(4096)]),
@@ -454,11 +461,19 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'activity.status': { args: z.tuple([]), run: () => {
       const items: BackgroundActivity[] = activity.status()
       const phase = updates.status().phase
-      if (phase === 'checking' || phase === 'downloading') items.push({ id: 'app-update', label: phase === 'checking' ? 'Checking app updates' : 'Downloading app update' })
-      if (memory?.snapshot().dreaming) items.push({ id: 'memory', label: 'Maintaining memories' })
-      if (learning?.snapshot().running) items.push({ id: 'learning', label: 'Learning skills' })
-      if (recaps.snapshot().generating) items.push({ id: 'recaps', label: 'Generating recaps' })
+      if (phase === 'checking' || phase === 'downloading') items.push({ id: 'app-update', label: phase === 'checking' ? 'Checking app updates' : 'Downloading app update', cancellable: true })
+      if (memory?.snapshot().dreaming) items.push({ id: 'memory', label: 'Maintaining memories', cancellable: true })
+      if (learning?.snapshot().running) items.push({ id: 'learning', label: 'Learning skills', cancellable: true })
+      if (recaps.snapshot().generating) items.push({ id: 'recaps', label: 'Generating recaps', cancellable: true })
       return items
+    } },
+    'activity.cancel': { args: z.tuple([id]), run: async (activityId: string) => {
+      // Cancel only work whose owner supports it; never kill a service or an arbitrary Git/package operation.
+      if (activityId === 'app-update') await updates.cancel()
+      else if (activityId === 'memory') memory?.cancel()
+      else if (activityId === 'learning') learning?.cancel()
+      else if (activityId === 'recaps') recaps.cancel()
+      else throw new Error('This background activity cannot be stopped.')
     } },
     'updates.status': { args: z.tuple([]), run: () => updates.status() },
     'updates.check': { args: z.tuple([]), run: () => updates.check() },
@@ -692,12 +707,12 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
       run: (t: string, r: string, oid: string) => { const cwd = gitCwdOf(t, r); return lock.runMany([`checkout:${cwd}`, `repo:${workspace.getRepository(r).root}`], () => git.undoCommit(cwd, oid)) },
     },
     'git.commit': {
-      args: z.tuple([id, id, z.string().max(100_000), z.string().regex(/^[a-f0-9]{64}$/).optional(), z.string().regex(/^[a-f0-9]{40,64}$/).optional(), z.object({ expectedBranch: z.string().nullable(), newBranch: z.string().min(1).max(200).optional() }).optional()]),
+      args: z.tuple([id, id, z.string().max(100_000), z.string().regex(/^[a-f0-9]{64}$/).optional(), z.string().regex(/^[a-f0-9]{40,64}$/).optional(), z.object({ expectedBranch: z.string().nullable(), newBranch: z.string().min(1).max(200).optional(), autoBranch: z.boolean().optional() }).optional()]),
       run: (taskId: string, repoId: string, message: string, fingerprint?: string, amendHead?: string, branchOptions?: CommitBranchOptions) => {
         const cwd = gitCwdOf(taskId, repoId)
         return lock.runMany([`checkout:${cwd}`, `repo:${workspace.getRepository(repoId).root}`], async () => {
           if (fingerprint && (await git.stagedPatch(cwd)).fingerprint !== fingerprint) throw new Error('Staged changes changed after the AI draft. Regenerate the message or clear the field to write a new one.')
-          if (branchOptions?.newBranch && agents.activeWriter([cwd])) throw new Error('Stop the agent in this checkout before creating a feature branch.')
+          if ((branchOptions?.newBranch || branchOptions?.autoBranch) && agents.activeWriter([cwd])) throw new Error('Stop the agent in this checkout before creating a feature branch.')
           return git.commit(cwd, message, amendHead, branchOptions)
         })
       },
@@ -719,14 +734,14 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'git.commitDetails': { args: z.tuple([id, id, z.string().regex(/^[a-f0-9]{40,64}$/)]), run: (t: string, r: string, oid: string) => git.commitDetails(gitCwdOf(t, r), oid) },
     'git.compareUpstream': { args: z.tuple([id, id]), run: (t: string, r: string) => git.compareUpstream(gitCwdOf(t, r)) },
     'git.generateCommit': {
-      args: z.tuple([id, id, agentSettings]),
-      run: async (t: string, r: string, settings: AgentSettings) => {
+      args: z.tuple([id, id, agentSettings, z.boolean().optional()]),
+      run: async (t: string, r: string, settings: AgentSettings, includeBranch?: boolean) => {
         const cwd = gitCwdOf(t, r)
         const { patch, fingerprint, files } = await lock.run(`checkout:${cwd}`, async () => ({ ...await git.stagedPatch(cwd), files: await git.stagedSummary(cwd) }))
         const prefs = workspace.getAppState<Partial<AppPreferences>>('app-preferences', {})
         const style = prefs.commitStyle ?? DEFAULT_APP_PREFERENCES.commitStyle
         const recentSubjects = style === 'repository' ? (await git.history(cwd).catch(() => [])).slice(0, 20).map((commit) => commit.subject) : []
-        const draft = await agents.draftCommit(patch, settings, { style, instructions: prefs.commitInstructions ?? '', recentSubjects }, files)
+        const draft = await agents.draftCommit(patch, settings, { style, instructions: prefs.commitInstructions ?? '', recentSubjects }, files, includeBranch)
         if ((await git.stagedPatch(cwd)).fingerprint !== fingerprint) throw new Error('Staged changes changed while generating the message. Try again.')
         return { ...draft, fingerprint }
       },

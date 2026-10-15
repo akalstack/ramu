@@ -15,7 +15,7 @@ import { Dropdown } from './Menu'
 import { effortDisplayName, modelDisplayName, useModelSets } from './ModelSets'
 import { ProviderIcon } from './ProviderIcon'
 import { peakUsage, usageTone, useUsage } from './Usage'
-import { defaultChain } from '@ramu/shared/routing'
+import { defaultOrder } from '@ramu/shared/routing'
 
 const NATIVE = '__native'
 const newId = () => crypto.randomUUID()
@@ -48,19 +48,19 @@ function StepPicker({ label, step, onChange, allowNative = false, disabled }: { 
   </div>
 }
 
-/** An ordered list of steps to continue with when `provider` is limited. */
-function ChainEditor({ provider, chain, onChange, onCopy, disabled }: { provider: AgentProvider; chain: FallbackStep[]; onChange: (chain: FallbackStep[]) => void; onCopy?: () => void; disabled?: boolean }) {
+/** Models ranked best first: chats use the highest one with room. */
+function OrderEditor({ title, chain, onChange, onCopy, disabled }: { title: string; chain: FallbackStep[]; onChange: (chain: FallbackStep[]) => void; onCopy?: () => void; disabled?: boolean }) {
   useLanguage()
   const usage = useUsage()
   const { catalogs } = useModelSets()
   const move = (index: number, delta: number) => { const next = [...chain]; const [moved] = next.splice(index, 1); next.splice(index + delta, 0, moved!); onChange(next) }
-  const add = () => { const used = new Set(chain.map((step) => `${step.provider}:${step.model}`)); const model = catalogs.flatMap((catalog) => catalog.models).find((entry) => entry.provider !== provider && !used.has(`${entry.provider}:${entry.id}`)) ?? catalogs.flatMap((catalog) => catalog.models)[0]; if (model) onChange([...chain, stepFor(model)]) }
+  const add = () => { const used = new Set(chain.map((step) => `${step.provider}:${step.model}`)); const model = catalogs.flatMap((catalog) => catalog.models).find((entry) => !used.has(`${entry.provider}:${entry.id}`)) ?? catalogs.flatMap((catalog) => catalog.models)[0]; if (model) onChange([...chain, stepFor(model)]) }
   return <section className="fallback-chain [&_+_.fallback-chain]:mt-2 flex flex-col gap-1.5 p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-fill">
-    <header className="fallback-chain-heading [&_strong]:text-foreground flex items-center gap-[7px] min-h-[26px] text-soft text-control"><ProviderIcon provider={provider} size={14} /><span>{t("When ")}<strong>{providerName(provider)}</strong> {t(" is limited, continue with")}</span><UsageHint provider={provider} usage={usage} /><span className="grow flex-1 min-w-0 text-left" />{onCopy && <Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption" disabled={disabled} onClick={onCopy}><Copy size={12} />{t("Copy from main")}</Button>}</header>
-    {chain.length === 0 && <p className="muted text-muted-foreground small text-caption fallback-empty m-0">{t("No fallback. The chat stops at the limit.")}</p>}
+    <header className="fallback-chain-heading [&_strong]:text-foreground flex items-center gap-[7px] min-h-[26px] text-soft text-control"><strong>{title}</strong><span className="grow flex-1 min-w-0 text-left" />{onCopy && <Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption" disabled={disabled} onClick={onCopy}><Copy size={12} />{t("Copy from main")}</Button>}</header>
+    {chain.length < 2 && <p className="muted text-muted-foreground small text-caption fallback-empty m-0">{t("Add at least two models. With one, the chat waits at the limit.")}</p>}
     {chain.map((step, index) => <div className="fallback-row [&_.fallback-step-picker]:flex-1 flex items-center gap-2" key={step.id}>
       <span className="settings-step-number w-[18px] flex-none text-muted-foreground text-caption text-center">{index + 1}</span>
-      <StepPicker label={t("{0} fallback {1}", { "0": providerName(provider), "1": index + 1 })} step={step} disabled={disabled} onChange={(next) => next && onChange(chain.map((entry) => entry.id === step.id ? next : entry))} />
+      <StepPicker label={t("Model {0}", { "0": index + 1 })} step={step} disabled={disabled} onChange={(next) => next && onChange(chain.map((entry) => entry.id === step.id ? next : entry))} />
       <UsageHint provider={step.provider} usage={usage} />
       <span className="settings-step-actions flex gap-0.5">
         <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Move fallback {0} up", { "0": index + 1 })} title={t("Move up")} disabled={disabled || index === 0} onClick={() => move(index, -1)}><ArrowUp size={13} /></Button>
@@ -85,19 +85,17 @@ function useProviders(): AgentProvider[] {
   return (['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as AgentProvider[]).filter((provider) => providerEnabled(preferences.providerBinaries, provider) && (installed.includes(provider) || provider === 'claude-code' || provider === 'codex'))
 }
 
-/** Settings › Access & Fallback: when to switch, and where each provider goes next. */
+/** Settings › Access & Fallback: when to switch, and the ranked model order. */
 export function FallbackSettings({ value, onChange, busy }: { value: AppPreferences; onChange: (next: AppPreferences) => void; busy: boolean }) {
   useLanguage()
   const { catalogs } = useModelSets()
-  const providers = useProviders()
   const fallback = value.fallback
   const set = (patch: Partial<AppPreferences['fallback']>) => onChange({ ...value, fallback: { ...fallback, ...patch } })
   const off = !value.defaultAutoFallback
   return <>
     <SettingsRow setting="fallback.switchAt" className=""><span><strong>{t("When to switch")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Switch at a usage limit, or earlier at the selected percentage.")}</span></span><Dropdown label={t("When to switch")} value={fromThreshold(fallback.switchAt)} options={THRESHOLDS} disabled={busy || off} onChange={(next) => set({ switchAt: toThreshold(next) })} /></SettingsRow>
-    <SettingsRow setting="fallback.returnAfterReset" className="settings-toggle"><span><strong>{t("Return after the limit resets")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Use the original provider and model again after its usage limit resets.")}</span></span><Switch aria-label={t("Return after the limit resets")} checked={fallback.returnAfterReset} disabled={busy || off} onCheckedChange={(checked) => set({ returnAfterReset: checked })} /></SettingsRow>
-    <div className="settings-intro"><h4>{t("Fallback order")}</h4><p className="muted text-muted-foreground small text-caption">{t("Try these models in order, skipping unavailable or limited options.")}</p></div>
-    {providers.map((provider) => <SettingsField key={provider} path={`fallback.chains.${provider}`}><ChainEditor provider={provider} disabled={busy || off} chain={fallback.chains[provider] ?? defaultChain(provider, catalogs)} onChange={(chain) => set({ chains: { ...fallback.chains, [provider]: chain } })} /></SettingsField>)}
+    <div className="settings-intro"><h4>{t("Fallback order")}</h4><p className="muted text-muted-foreground small text-caption">{t("Put your best model first. Chats use the highest model with room, move down when it runs out, and move back up once a higher one has room again.")}</p></div>
+    <SettingsField path="fallback.order"><OrderEditor title={t("Best first")} disabled={busy || off} chain={fallback.order ?? defaultOrder(catalogs)} onChange={(order) => set({ order })} /></SettingsField>
   </>
 }
 
@@ -129,7 +127,7 @@ export function SubagentSettings({ value, onChange, busy }: { value: AppPreferen
   const sub = value.subagents
   const set = (patch: Partial<SubagentPreferences>) => onChange({ ...value, subagents: { ...sub, ...patch } })
   const firstStep = (): FallbackStep | null => { const model = catalogs.flatMap((catalog) => catalog.models).find((entry) => entry.isDefault); return model ? stepFor(model) : null }
-  const mainChain = (provider: AgentProvider) => value.fallback.chains[provider] ?? defaultChain(provider, catalogs)
+  const mainOrder = () => value.fallback.order ?? defaultOrder(catalogs)
   const toggle = (key: 'continueNative' | 'isolate' | 'shareContext', title: string, description: string) => <SettingsRow setting={`subagents.${key}`} className="settings-toggle"><span><strong>{title}</strong><span className="muted text-muted-foreground block block small text-caption">{description}</span></span><Switch aria-label={title} checked={sub[key]} disabled={busy} onCheckedChange={(checked) => set({ [key]: checked })} /></SettingsRow>
   return <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 subagent-settings mt-8">
     <SettingsGroupTitle>{t("Sub-agents")}</SettingsGroupTitle>
@@ -149,9 +147,9 @@ export function SubagentSettings({ value, onChange, busy }: { value: AppPreferen
     <Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption fallback-add self-start gap-1.5 text-soft" disabled={busy || sub.byType.length >= 20} onClick={() => set({ byType: [...sub.byType, { id: newId(), type: '', step: firstStep() }] })}><Plus size={13} />{t("Add type rule")}</Button>
 
     <div className="settings-intro"><h4>{t("When a sub-agent is limited")}</h4></div>
-    <SettingsRow setting="subagents.fallback" className=""><span><strong>{t("Fallback order")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Use the main fallback list or a separate list for helpers.")}</span></span><Dropdown label={t("Sub-agent fallback order")} value={sub.fallback} disabled={busy} options={[{ value: 'same', label: t("Same as main") }, { value: 'separate', label: t("Separate list") }]} onChange={(next) => set({ fallback: next === 'separate' ? 'separate' : 'same' })} /></SettingsRow>
+    <SettingsRow setting="subagents.fallback" className=""><span><strong>{t("Fallback order")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Use the main order or a separate one for helpers. Helpers only move down when they run out.")}</span></span><Dropdown label={t("Sub-agent fallback order")} value={sub.fallback} disabled={busy} options={[{ value: 'same', label: t("Same as main") }, { value: 'separate', label: t("Separate list") }]} onChange={(next) => set({ fallback: next === 'separate' ? 'separate' : 'same' })} /></SettingsRow>
     <SettingsRow setting="subagents.switchAt" className=""><span><strong>{t("Switch sub-agents")}</strong><span className="muted text-muted-foreground block block small text-caption">{t("Choose when helpers switch to their fallback model.")}</span></span><Dropdown label={t("Switch sub-agents")} value={sub.switchAt === 'same' ? 'same' : fromThreshold(sub.switchAt)} disabled={busy} options={[{ value: 'same', label: t("Same as main") }, ...THRESHOLDS]} onChange={(next) => set({ switchAt: next === 'same' ? 'same' : toThreshold(next) })} /></SettingsRow>
-    {sub.fallback === 'separate' && providers.map((provider) => <SettingsField key={provider} path={`subagents.chains.${provider}`}><ChainEditor provider={provider} disabled={busy} chain={sub.chains[provider] ?? mainChain(provider)} onChange={(chain) => set({ chains: { ...sub.chains, [provider]: chain } })} onCopy={() => set({ chains: { ...sub.chains, [provider]: mainChain(provider).map((step) => ({ ...step, id: newId() })) } })} /></SettingsField>)}
+    {sub.fallback === 'separate' && <SettingsField path="subagents.order"><OrderEditor title={t("Sub-agents, best first")} disabled={busy} chain={sub.order ?? mainOrder()} onChange={(order) => set({ order })} onCopy={() => set({ order: mainOrder().map((step) => ({ ...step, id: newId() })) })} /></SettingsField>}
     <CodexHookRow checked={sub.codexHook} busy={busy} onChange={(checked) => set({ codexHook: checked })} />
     {toggle('continueNative', 'Continue limited native sub-agents', 'When a provider\'s own sub-agent hits a limit, restart its task on the fallback list with what it had done so far.')}
 

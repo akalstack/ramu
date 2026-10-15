@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { createDispatcher, type Services } from '../src/ipc'
+import { createDispatcher, migrateChains, type Services } from '../src/ipc'
 import { configureProviderBinaries } from '../src/providerBinaries'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 
@@ -12,11 +12,20 @@ it('defaults fallback to only at the limit and preserves saved thresholds', () =
     expect(DEFAULT_APP_PREFERENCES.fallback.switchAt).toBeNull()
     expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fallback: { switchAt: null } })
     // A partial saved fallback must use the same default as a fresh install.
-    saved = { fallback: { returnAfterReset: true, chains: {} } as AppPreferences['fallback'] }
-    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fallback: { switchAt: null, returnAfterReset: true } })
+    saved = { fallback: {} as AppPreferences['fallback'] }
+    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fallback: { switchAt: null } })
     for (const switchAt of [80, 90, 95, null] as const) {
-      saved = { fallback: { switchAt, returnAfterReset: false, chains: {} } }
+      saved = { fallback: { switchAt } }
       expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fallback: { switchAt } })
     }
   } finally { dispatcher.close(); configureProviderBinaries({}) }
+})
+
+it('turns lists saved per provider into one order led by Claude Code', () => {
+  const codex = { id: 'c', provider: 'codex', model: 'gpt', effort: null }
+  expect(migrateChains({ switchAt: 90, returnAfterReset: true, chains: { codex: [{ ...codex, provider: 'claude-code', model: 'opus' }], 'claude-code': [codex] } }))
+    .toEqual({ switchAt: 90, returnAfterReset: true, order: [{ id: 'migrated-claude-code', provider: 'claude-code', model: '', effort: null }, codex] })
+  expect(migrateChains({ switchAt: null, chains: {} })).toEqual({ switchAt: null })
+  const current = { switchAt: null, order: [codex] }
+  expect(migrateChains(current)).toBe(current)
 })

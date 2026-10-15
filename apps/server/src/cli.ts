@@ -6,7 +6,7 @@ import { loadToken } from './auth'
 import { runtimeVersion } from './build'
 import { DeviceStore, PAIRING_TTL_MS } from './devices'
 import { candidateUrls } from './network'
-import { parseRemoteUrl } from '@ramu/contracts'
+import { encodePairLink, parseRemoteUrl } from '@ramu/contracts'
 
 const HELP = `ramu — Ramu workspace server (agents, files, Git, terminals, schedules)
 
@@ -15,8 +15,9 @@ Usage:
   ramu status                    Show whether a server is running for this data directory
   ramu stop                      Stop the running server (unfinished chats are not resumed on next start)
   ramu restart                   Restart the running server (unfinished chats resume)
-  ramu pair [--url <address>]
-                                 Create a one-time code to pair another device (valid 10 minutes, works once)
+  ramu pair [--url <address>] [--json]
+                                 Create a one-time code and link to pair another device (valid 10 minutes, works once).
+                                 --json prints { code, expiresAt, links, urls, listening } for scripts and SSH pairing.
   ramu devices                   List paired devices
   ramu devices revoke <id|all>   Revoke one paired device, or all of them
   ramu token [--rotate]          Print the shared access token; --rotate revokes it and every paired device
@@ -39,7 +40,7 @@ A paired device has the same control as the desktop app, including shell access.
 
 function fail(message: string): never { console.error(`ramu: ${message}`); process.exit(1) }
 
-const booleans = new Set(['rotate', 'help', 'version', 'allow-plaintext-remote', 'private-network'])
+const booleans = new Set(['json', 'rotate', 'help', 'version', 'allow-plaintext-remote', 'private-network'])
 const flags = new Map<string, string | true>()
 const positional: string[] = []
 const argv = process.argv.slice(2)
@@ -95,9 +96,17 @@ if (command === 'start') {
     if (!urls.length) fail('No network address found for this computer. Pass --url <address>.')
   }
   const { code } = new DeviceStore(config.devicesPath).createCode()
+  const expiresAt = Date.now() + PAIRING_TTL_MS
+  const links = urls.map(({ url }) => encodePairLink({ url, code, expiresAt }))
+  if (flags.has('json')) {
+    const status = await runtimeInvoke(config.socketPath, 'background.status').catch(() => null)
+    console.log(JSON.stringify({ code, expiresAt, urls: urls.map(({ url }) => url), links, listening: status?.listening ?? null }))
+    process.exit(0)
+  }
   console.log(`Pairing code  ${code}   (works once, expires in ${Math.round(PAIRING_TTL_MS / 60000)} minutes)\n`)
   console.log(`The other device must reach this computer at${urls.length > 1 ? ' one of' : ''}:`)
   for (const { url, note } of urls) console.log(`  ${url}${note}`)
+  console.log(`\nOr open this link on a device that has Ramu:\n  ${links[0]}`)
   console.log(`\nOn that device, send the code to <address>/pair, which returns its own token:\n  curl -s -X POST <address>/pair -H 'Content-Type: application/json' -d '{"code":"${code}","name":"My laptop"}'`)
 } else if (command === 'devices') {
   const store = new DeviceStore(config.devicesPath)

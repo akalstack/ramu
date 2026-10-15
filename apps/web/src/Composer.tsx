@@ -28,6 +28,7 @@ export function Composer({
   alternateLabel,
   alternateDisabled,
   placeholder,
+  onArrowUpEmpty,
   submitLabel,
   disabled,
   autoFocus,
@@ -67,6 +68,8 @@ export function Composer({
   chips?: ReactNode
   /** Lets the message go out with no text, because the chips carry the content. */
   allowEmpty?: boolean
+  /** ↑ in an empty message box, e.g. to edit the last message you sent. */
+  onArrowUpEmpty?: () => void
   /** A chat's own composer, which offers chat-only commands such as /aside. */
   chat?: boolean
   /** This composer has a draft-persistence hook and can be checkpointed before view eviction. */
@@ -269,6 +272,7 @@ export function Composer({
             if (e.key === 'Escape') { e.preventDefault(); suggestions.dismiss(); return }
             if ((e.key === 'Enter' && !e.shiftKey || e.key === 'Tab') && suggestions.choices.length) { e.preventDefault(); choose(suggestions.selected); return }
           }
+          if (e.key === 'ArrowUp' && onArrowUpEmpty && !value && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) { e.preventDefault(); onArrowUpEmpty(); return }
           if (e.key === 'Enter'  && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault()
             if ((e.metaKey || e.ctrlKey) && onAlternateSubmit) { if (canAlternate) alternate() }
