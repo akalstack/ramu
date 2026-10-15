@@ -30,7 +30,15 @@ import { Button, Card, Divider, Sheet, T, tap, type Icon } from './ui'
 import { formatDuration } from '../runtime/turns'
 import { Disclosure, animateLayout } from './Motion'
 
-const toolIcons: Record<ToolKind, Icon> = { read: FileCode2, edit: FilePen, search: Search, execute: SquareTerminal, think: Lightbulb, fetch: Globe, other: Wrench }
+const toolIcons: Record<ToolKind, Icon> = {
+  read: FileCode2,
+  edit: FilePen,
+  search: Search,
+  execute: SquareTerminal,
+  think: Lightbulb,
+  fetch: Globe,
+  other: Wrench,
+}
 
 /** Called before a row expands or collapses by hand; the screen keeps its scroll position instead of following the end. */
 export const RowToggle = createContext<() => void>(() => {})
@@ -39,24 +47,77 @@ export const RowToggle = createContext<() => void>(() => {})
 export function ChatReferences({ chat, children }: { chat: Chat; children: ReactNode }) {
   const files = useOpenFile(chat)
   const store = useStore()
-  const actions = { image: async (href: string) => { if (!chat.taskId) return null; const file = await store.invoke(chat.computerId, 'files.resolveLink', chat.taskId, href); return file ? (await store.invoke(chat.computerId, 'files.media', chat.taskId, file.repoId, file.path)).url : null }, openFile: (href: string) => void files.openLink(href), openUrl: (url: string) => void Linking.openURL(url).catch(() => {}) }
+  const actions = {
+    image: async (href: string) => {
+      if (!chat.taskId) return null
+      const file = await store.invoke(chat.computerId, 'files.resolveLink', chat.taskId, href)
+      return file ? (await store.invoke(chat.computerId, 'files.media', chat.taskId, file.repoId, file.path)).url : null
+    },
+    openFile: (href: string) => void files.openLink(href),
+    openUrl: (url: string) => void Linking.openURL(url).catch(() => {}),
+  }
   return <ReferenceContext.Provider value={actions}>{children}</ReferenceContext.Provider>
 }
 
 /** What a long-pressed message can do, as the desktop's selection menu: quote it into the message box, or ask an aside about it. */
-export const MessageMenu = createContext<{ quote(text: string): void; quoteNew(text: string): void; edit(seq: number, text: string, files: Attachment[]): void; undo(seq: number): void; aside(text: string, from: 'user' | 'assistant'): void } | null>(null)
+export const MessageMenu = createContext<{
+  quote(text: string): void
+  quoteNew(text: string): void
+  edit(seq: number, text: string, files: Attachment[]): void
+  undo(seq: number): void
+  aside(text: string, from: 'user' | 'assistant'): void
+} | null>(null)
 
 /** Long-press a message for Copy, Quote and Ask aside (the native action sheet on iOS, an alert menu on Android). */
-function MessageActions({ text, from, seq, files, children }: { text: string; from: 'user' | 'assistant'; seq?: number; files?: Attachment[]; children: ReactNode }) {
+function MessageActions({
+  text,
+  from,
+  seq,
+  files,
+  children,
+}: {
+  text: string
+  from: 'user' | 'assistant'
+  seq?: number
+  files?: Attachment[]
+  children: ReactNode
+}) {
   const menu = useContext(MessageMenu)
   const open = () => {
     if (!text.trim()) return
     tap()
-    const actions: [string, () => void][] = [['Copy', () => void Clipboard.setStringAsync(text)], ...(menu ? [['Quote in reply', () => menu.quote(text)], ['Quote in new chat', () => menu.quoteNew(text)], ...(from === 'user' && seq !== undefined ? [['Edit and resend', () => menu.edit(seq, text, files ?? [])], ['Undo file changes from here', () => menu.undo(seq)]] as [string, () => void][] : []), ['Ask aside about this', () => menu.aside(text, from)]] as [string, () => void][] : [])]
-    if (Platform.OS === 'ios') ActionSheetIOS.showActionSheetWithOptions({ options: [...actions.map(a => a[0]), 'Cancel'], cancelButtonIndex: actions.length }, index => actions[index]?.[1]())
-    else Alert.alert('Message', undefined, [...actions.map(([label, run]) => ({ text: label, onPress: run })), { text: 'Cancel', style: 'cancel' as const }])
+    const actions: [string, () => void][] = [
+      ['Copy', () => void Clipboard.setStringAsync(text)],
+      ...(menu
+        ? ([
+            ['Quote in reply', () => menu.quote(text)],
+            ['Quote in new chat', () => menu.quoteNew(text)],
+            ...(from === 'user' && seq !== undefined
+              ? ([
+                  ['Edit and resend', () => menu.edit(seq, text, files ?? [])],
+                  ['Undo file changes from here', () => menu.undo(seq)],
+                ] as [string, () => void][])
+              : []),
+            ['Ask aside about this', () => menu.aside(text, from)],
+          ] as [string, () => void][])
+        : []),
+    ]
+    if (Platform.OS === 'ios')
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: [...actions.map((a) => a[0]), 'Cancel'], cancelButtonIndex: actions.length },
+        (index) => actions[index]?.[1](),
+      )
+    else
+      Alert.alert('Message', undefined, [
+        ...actions.map(([label, run]) => ({ text: label, onPress: run })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ])
   }
-  return <Pressable onLongPress={open} delayLongPress={350} accessibilityHint="Long-press for Copy, Quote and Ask aside">{children}</Pressable>
+  return (
+    <Pressable onLongPress={open} delayLongPress={350} accessibilityHint="Long-press for Copy, Quote and Ask aside">
+      {children}
+    </Pressable>
+  )
 }
 
 /** An image in the chat: fits the column, keeps its aspect ratio, and opens full screen when tapped. */
@@ -64,11 +125,34 @@ function ImageBlock({ uri, alt, size }: { uri: string; alt?: string; size?: numb
   const { c } = useTheme()
   const [ratio, setRatio] = useState(4 / 3)
   const [full, setFull] = useState(false)
-  useEffect(() => { Image.getSize(uri, (w, h) => { if (w && h) setRatio(w / h) }, () => {}) }, [uri])
+  useEffect(() => {
+    Image.getSize(
+      uri,
+      (w, h) => {
+        if (w && h) setRatio(w / h)
+      },
+      () => {},
+    )
+  }, [uri])
   return (
     <>
-      <Pressable accessibilityRole="imagebutton" accessibilityLabel={alt ?? 'Image'} onPress={() => { tap(); setFull(true) }}>
-        <Image source={{ uri }} resizeMode="cover" style={size ? { width: size, height: size, borderRadius: radius.s, backgroundColor: c.fill } : { width: '100%', maxWidth: 360, aspectRatio: ratio, borderRadius: radius.m, backgroundColor: c.fill }} />
+      <Pressable
+        accessibilityRole="imagebutton"
+        accessibilityLabel={alt ?? 'Image'}
+        onPress={() => {
+          tap()
+          setFull(true)
+        }}
+      >
+        <Image
+          source={{ uri }}
+          resizeMode="cover"
+          style={
+            size
+              ? { width: size, height: size, borderRadius: radius.s, backgroundColor: c.fill }
+              : { width: '100%', maxWidth: 360, aspectRatio: ratio, borderRadius: radius.m, backgroundColor: c.fill }
+          }
+        />
       </Pressable>
       <Sheet open={full} onClose={() => setFull(false)} title={alt ?? 'Image'}>
         <Image source={{ uri }} resizeMode="contain" style={{ width: '100%', aspectRatio: ratio, maxHeight: 520 }} />
@@ -86,12 +170,30 @@ function AttachmentTile({ file, chat }: { file: Attachment; chat: Chat }) {
   useEffect(() => {
     if (!image || !store.isOnline(chat.computerId)) return
     let alive = true
-    void store.invoke(chat.computerId, 'attachments.preview', file.id).then(value => { if (alive) setUri(value) }, () => {})
-    return () => { alive = false }
+    void store.invoke(chat.computerId, 'attachments.preview', file.id).then(
+      (value) => {
+        if (alive) setUri(value)
+      },
+      () => {},
+    )
+    return () => {
+      alive = false
+    }
   }, [file.id, image, chat.computerId])
   if (image && uri) return <ImageBlock uri={uri} alt={file.name} size={88} />
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, height: 26, paddingHorizontal: 8, borderRadius: radius.s, backgroundColor: c.fill, maxWidth: 220 }}>
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        height: 26,
+        paddingHorizontal: 8,
+        borderRadius: radius.s,
+        backgroundColor: c.fill,
+        maxWidth: 220,
+      }}
+    >
       <T size={font.caption + 1} tone="soft" numberOfLines={1}>{`📎 ${file.name}`}</T>
     </View>
   )
@@ -111,7 +213,16 @@ export function TranscriptItemView({ item, chat, meta }: { item: TranscriptItem;
   const { c } = useTheme()
   return (
     <ChatReferences chat={chat}>
-      {meta?.date ? <T size={font.caption} tone="muted" style={{ textAlign: 'center', marginBottom: space.l, fontVariant: ['tabular-nums'] }} accessibilityRole="header">{meta.date}</T> : null}
+      {meta?.date ? (
+        <T
+          size={font.caption}
+          tone="muted"
+          style={{ textAlign: 'center', marginBottom: space.l, fontVariant: ['tabular-nums'] }}
+          accessibilityRole="header"
+        >
+          {meta.date}
+        </T>
+      ) : null}
       <TranscriptBlock item={item} chat={chat} meta={meta} />
     </ChatReferences>
   )
@@ -122,12 +233,35 @@ function AnswerFooter({ at, text }: { at?: number; text: string }) {
   const { c } = useTheme()
   const store = useStore()
   const [copied, setCopied] = useState(false)
-  useEffect(() => { if (!copied) return; const timer = setTimeout(() => setCopied(false), 2000); return () => clearTimeout(timer) }, [copied])
-  const time = at ? new Date(at).toLocaleTimeString(store.language === 'id' ? 'id-ID' : 'en-US', { hour: 'numeric', minute: '2-digit', hour12: store.language === 'en' }) : ''
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 2000)
+    return () => clearTimeout(timer)
+  }, [copied])
+  const time = at
+    ? new Date(at).toLocaleTimeString(store.language === 'id' ? 'id-ID' : 'en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: store.language === 'en',
+      })
+    : ''
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.xs }}>
-      {time ? <T size={font.caption} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>{time}</T> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel={copied ? 'Copied' : 'Copy reply'} hitSlop={10} onPress={() => { tap(); void Clipboard.setStringAsync(text).then(() => setCopied(true)) }} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+      {time ? (
+        <T size={font.caption} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+          {time}
+        </T>
+      ) : null}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={copied ? 'Copied' : 'Copy reply'}
+        hitSlop={10}
+        onPress={() => {
+          tap()
+          void Clipboard.setStringAsync(text).then(() => setCopied(true))
+        }}
+        style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+      >
         {copied ? <Check size={14} color={c.ok} /> : <Copy size={14} color={c.muted} />}
       </Pressable>
     </View>
@@ -137,9 +271,18 @@ function AnswerFooter({ at, text }: { at?: number; text: string }) {
 function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Chat; meta?: ItemMeta }) {
   switch (item.kind) {
     case 'user':
-      return <MessageActions text={item.text} from="user" seq={item.seq} files={item.attachments}><UserBubble text={item.text} attachments={item.attachments} chat={chat} /></MessageActions>
+      return (
+        <MessageActions text={item.text} from="user" seq={item.seq} files={item.attachments}>
+          <UserBubble text={item.text} attachments={item.attachments} chat={chat} />
+        </MessageActions>
+      )
     case 'text':
-      return <MessageActions text={item.text} from="assistant"><Markdown text={item.text} streaming={meta?.streaming} />{meta?.footer && !meta.streaming ? <AnswerFooter at={item.at} text={item.text} /> : null}</MessageActions>
+      return (
+        <MessageActions text={item.text} from="assistant">
+          <Markdown text={item.text} streaming={meta?.streaming} />
+          {meta?.footer && !meta.streaming ? <AnswerFooter at={item.at} text={item.text} /> : null}
+        </MessageActions>
+      )
     case 'image':
       return <ImageBlock uri={item.uri} alt={item.alt} />
     case 'tool':
@@ -159,7 +302,13 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
     case 'working':
       return <WorkingRule since={item.since} />
     case 'summary':
-      return <TurnSummary label={item.label}>{item.items.map(child => <TranscriptItemView key={child.id} item={child} chat={chat} />)}</TurnSummary>
+      return (
+        <TurnSummary label={item.label}>
+          {item.items.map((child) => (
+            <TranscriptItemView key={child.id} item={child} chat={chat} />
+          ))}
+        </TurnSummary>
+      )
     case 'note':
       return <NoteRow item={item} chat={chat} />
     case 'end':
@@ -174,30 +323,77 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
   const store = useStore()
   const [undoing, setUndoing] = useState(false)
   // As on the desktop: a settings change can be undone, restoring the previous settings for the next message.
-  const undo = item.previous && chat.sessionId ? () => {
-    tap(); setUndoing(true)
-    void store.invoke(chat.computerId, 'agent.configure', chat.sessionId!, item.previous!).then(() => store.refresh(chat.computerId, true)).catch(error => Alert.alert('Could not switch back', error instanceof Error ? error.message : String(error))).finally(() => setUndoing(false))
-  } : undefined
+  const undo =
+    item.previous && chat.sessionId
+      ? () => {
+          tap()
+          setUndoing(true)
+          void store
+            .invoke(chat.computerId, 'agent.configure', chat.sessionId!, item.previous!)
+            .then(() => store.refresh(chat.computerId, true))
+            .catch((error) =>
+              Alert.alert('Could not switch back', error instanceof Error ? error.message : String(error)),
+            )
+            .finally(() => setUndoing(false))
+        }
+      : undefined
   const catalogs = store.catalogs[store.selected] ?? []
   const label = (s: import('@ramu/shared/types').AgentSettings) => {
-    const model = catalogs.flatMap(p => p.models).find(m => m.provider === s.provider && (m.id === s.model || !s.model && m.isDefault))
+    const model = catalogs
+      .flatMap((p) => p.models)
+      .find((m) => m.provider === s.provider && (m.id === s.model || (!s.model && m.isDefault)))
     const name = (model?.name ?? (s.model || providerNames[s.provider])).replace(/^gpt-/i, 'GPT-')
     const effort = s.effort ?? model?.defaultEffort
     return effort ? `${name} ${effort.charAt(0).toUpperCase()}${effort.slice(1)}` : name
   }
   let title = item.title
   if (item.settings) {
-    const next = item.settings, before = item.previous
-    const changes = before ? ([[label(before), label(next)], [ACCESS[before.access], ACCESS[next.access]]] as const).filter(([a, b]) => a !== b).map(([a, b]) => `${a} → ${b}`) : []
+    const next = item.settings,
+      before = item.previous
+    const changes = before
+      ? (
+          [
+            [label(before), label(next)],
+            [ACCESS[before.access], ACCESS[next.access]],
+          ] as const
+        )
+          .filter(([a, b]) => a !== b)
+          .map(([a, b]) => `${a} → ${b}`)
+      : []
     title = changes.length ? changes.join(' · ') : before ? label(next) : [label(next), ACCESS[next.access]].join(' · ')
   }
   return (
-    <View accessible accessibilityRole="text" style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, marginVertical: space.s }}>
+    <View
+      accessible
+      accessibilityRole="text"
+      style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, marginVertical: space.s }}
+    >
       <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: c.lineStrong }} />
       <View style={{ maxWidth: '78%', alignItems: 'center', gap: 2 }}>
-        <T size={font.caption} tone={item.failed ? 'bad' : 'muted'} style={{ textAlign: 'center' }}>{title}</T>
-        {item.detail ? <T size={font.caption} tone="placeholder" style={{ textAlign: 'center' }}>{item.detail}</T> : null}
-        {undo ? <Pressable accessibilityRole="button" accessibilityLabel="Switch back to the previous model and settings" disabled={undoing} onPress={undo} hitSlop={8} style={{ marginTop: 2, opacity: undoing ? 0.5 : 1 }}><T size={font.caption} weight="600" tone="accent">{undoing ? 'Switching back…' : `Switch back to ${item.previous ? label(item.previous) : 'previous model'}`}</T></Pressable> : null}
+        <T size={font.caption} tone={item.failed ? 'bad' : 'muted'} style={{ textAlign: 'center' }}>
+          {title}
+        </T>
+        {item.detail ? (
+          <T size={font.caption} tone="placeholder" style={{ textAlign: 'center' }}>
+            {item.detail}
+          </T>
+        ) : null}
+        {undo ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Switch back to the previous model and settings"
+            disabled={undoing}
+            onPress={undo}
+            hitSlop={8}
+            style={{ marginTop: 2, opacity: undoing ? 0.5 : 1 }}
+          >
+            <T size={font.caption} weight="600" tone="accent">
+              {undoing
+                ? 'Switching back…'
+                : `Switch back to ${item.previous ? label(item.previous) : 'previous model'}`}
+            </T>
+          </Pressable>
+        ) : null}
       </View>
       <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: c.lineStrong }} />
     </View>
@@ -212,7 +408,11 @@ function WorkingRule({ since }: { since?: number }) {
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [])
-  return <T size={font.control} tone="muted" accessibilityRole="text" style={{ fontVariant: ['tabular-nums'] }}>{since ? `Working for ${formatDuration(Math.max(0, now - since))}` : 'Working'}</T>
+  return (
+    <T size={font.control} tone="muted" accessibilityRole="text" style={{ fontVariant: ['tabular-nums'] }}>
+      {since ? `Working for ${formatDuration(Math.max(0, now - since))}` : 'Working'}
+    </T>
+  )
 }
 
 /** "Worked for 12m 48s": a finished turn's routine steps, collapsed until tapped. */
@@ -222,11 +422,27 @@ function TurnSummary({ label, children }: { label: string; children: ReactNode }
   const toggled = useContext(RowToggle)
   return (
     <View style={{ gap: space.m }}>
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => { tap(); toggled(); animateLayout(); setOpen(o => !o) }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 2 }}>
-        <T size={font.control} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>{label}</T>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => {
+          tap()
+          toggled()
+          animateLayout()
+          setOpen((o) => !o)
+        }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 2 }}
+      >
+        <T size={font.control} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+          {label}
+        </T>
         <Disclosure open={open} color={c.muted} />
       </Pressable>
-      {open ? <View style={{ gap: space.m, paddingLeft: space.s, borderLeftWidth: 1, borderLeftColor: c.line }}>{children}</View> : null}
+      {open ? (
+        <View style={{ gap: space.m, paddingLeft: space.s, borderLeftWidth: 1, borderLeftColor: c.line }}>
+          {children}
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -236,24 +452,62 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
   const actions = useContext(ReferenceContext)
   const segments = composerDraft(text + ' ').segments
   // Quotes stand above the message as their own block, like the desktop's quoted reply; the rest flows as text with badges.
-  const quotes = segments.filter((part): part is import('@ramu/shared/composerDraft').DraftChip => part.kind === 'quote')
-  const rest = segments.filter(part => part.kind !== 'quote')
-  const body = rest.map((part, index) => part.kind === 'text' ? (index === rest.length - 1 ? part.source.slice(0, -1) : part.source).replace(/^\n+/, quotes.length && index === 0 ? '' : '$&')
-    : part.kind === 'file' ? <ReferenceBadge key={index} kind="file" label={part.label} onPress={() => actions.openFile(part.target ?? part.label)} />
-    : part.kind === 'skill' ? <ReferenceBadge key={index} kind="skill" label={part.target ?? part.label} />
-    : <ReferenceBadge key={index} kind={part.kind} label={part.label} />)
-  const hasText = rest.some(part => part.kind !== 'text' || part.source.trim())
+  const quotes = segments.filter(
+    (part): part is import('@ramu/shared/composerDraft').DraftChip => part.kind === 'quote',
+  )
+  const rest = segments.filter((part) => part.kind !== 'quote')
+  const body = rest.map((part, index) =>
+    part.kind === 'text' ? (
+      (index === rest.length - 1 ? part.source.slice(0, -1) : part.source).replace(
+        /^\n+/,
+        quotes.length && index === 0 ? '' : '$&',
+      )
+    ) : part.kind === 'file' ? (
+      <ReferenceBadge
+        key={index}
+        kind="file"
+        label={part.label}
+        onPress={() => actions.openFile(part.target ?? part.label)}
+      />
+    ) : part.kind === 'skill' ? (
+      <ReferenceBadge key={index} kind="skill" label={part.target ?? part.label} />
+    ) : (
+      <ReferenceBadge key={index} kind={part.kind} label={part.label} />
+    ),
+  )
+  const hasText = rest.some((part) => part.kind !== 'text' || part.source.trim())
   return (
     <View style={{ alignSelf: 'flex-end', maxWidth: '86%', gap: space.s, alignItems: 'flex-end' }}>
-      {attachments?.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>{attachments.map(file => <AttachmentTile key={file.id} file={file} chat={chat} />)}</View> : null}
+      {attachments?.length ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>
+          {attachments.map((file) => (
+            <AttachmentTile key={file.id} file={file} chat={chat} />
+          ))}
+        </View>
+      ) : null}
       {quotes.length || hasText ? (
-        <View style={{ backgroundColor: c.bubble, borderRadius: radius.l - 2, borderBottomRightRadius: radius.xs, paddingHorizontal: space.m + 2, paddingVertical: space.s + 2, gap: space.s }}>
+        <View
+          style={{
+            backgroundColor: c.bubble,
+            borderRadius: radius.l - 2,
+            borderBottomRightRadius: radius.xs,
+            paddingHorizontal: space.m + 2,
+            paddingVertical: space.s + 2,
+            gap: space.s,
+          }}
+        >
           {quotes.map((part, index) => (
             <View key={index} style={{ borderLeftWidth: 2, borderLeftColor: c.lineStrong, paddingLeft: space.s }}>
-              <T size={font.control} tone="muted" numberOfLines={6}>{part.label}</T>
+              <T size={font.control} tone="muted" numberOfLines={6}>
+                {part.label}
+              </T>
             </View>
           ))}
-          {hasText ? <T tone="text" style={{ lineHeight: 21 }}>{body}</T> : null}
+          {hasText ? (
+            <T tone="text" style={{ lineHeight: 21 }}>
+              {body}
+            </T>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -267,7 +521,10 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
   const toggled = useContext(RowToggle)
   const references = useContext(ReferenceContext)
   // Reads and edits name a file; tapping it opens that file like the desktop's tool rows do.
-  const filePath = item.tool === 'read' || item.tool === 'edit' ? item.subject.match(/[\w@~./-]+\.[A-Za-z0-9]+(?::\d+(?::\d+)?)?/)?.[0] : undefined
+  const filePath =
+    item.tool === 'read' || item.tool === 'edit'
+      ? item.subject.match(/[\w@~./-]+\.[A-Za-z0-9]+(?::\d+(?::\d+)?)?/)?.[0]
+      : undefined
   const I = toolIcons[item.tool]
   // A log is cropped to a few lines inline; the whole thing opens in a sheet (a bottom sheet on iOS and Android alike).
   const PREVIEW_LINES = 6
@@ -291,24 +548,60 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         <T size={font.control} tone={running ? 'soft' : 'muted'} weight="500">
           {item.verb}
         </T>
-        <T size={font.control} tone={failed ? 'bad' : 'muted'} mono={item.tool !== 'search' && item.tool !== 'fetch'} numberOfLines={1} style={{ flexShrink: 1 }}>
+        <T
+          size={font.control}
+          tone={failed ? 'bad' : 'muted'}
+          mono={item.tool !== 'search' && item.tool !== 'fetch'}
+          numberOfLines={1}
+          style={{ flexShrink: 1 }}
+        >
           {item.subject}
         </T>
         {item.detail ? <Disclosure open={open} size={13} color={c.placeholder} /> : null}
       </Pressable>
       {filePath ? (
-        <Pressable accessibilityRole="button" accessibilityLabel={`Open ${filePath}`} onPress={() => { tap(); references.openFile(filePath) }} hitSlop={6} style={{ marginLeft: 22, alignSelf: 'flex-start', paddingVertical: 2 }}>
-          <T size={font.caption} weight="600" tone="accent">Open file</T>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${filePath}`}
+          onPress={() => {
+            tap()
+            references.openFile(filePath)
+          }}
+          hitSlop={6}
+          style={{ marginLeft: 22, alignSelf: 'flex-start', paddingVertical: 2 }}
+        >
+          <T size={font.caption} weight="600" tone="accent">
+            Open file
+          </T>
         </Pressable>
       ) : null}
       {open && item.detail ? (
-        <View style={{ marginLeft: 22, marginTop: 4, padding: space.s + 2, backgroundColor: c.code, borderRadius: radius.s }}>
+        <View
+          style={{
+            marginLeft: 22,
+            marginTop: 4,
+            padding: space.s + 2,
+            backgroundColor: c.code,
+            borderRadius: radius.s,
+          }}
+        >
           <T size={font.caption} mono tone={failed ? 'bad' : 'soft'} numberOfLines={PREVIEW_LINES} ellipsizeMode="tail">
             {item.detail}
           </T>
           {long ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Show full log" onPress={() => { tap(); setFull(true) }} hitSlop={8} style={{ alignSelf: 'flex-start', paddingTop: space.s }}>
-              <T size={font.caption} weight="600" tone="accent">Show full log</T>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Show full log"
+              onPress={() => {
+                tap()
+                setFull(true)
+              }}
+              hitSlop={8}
+              style={{ alignSelf: 'flex-start', paddingTop: space.s }}
+            >
+              <T size={font.caption} weight="600" tone="accent">
+                Show full log
+              </T>
             </Pressable>
           ) : null}
         </View>
@@ -316,7 +609,15 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
       {item.detail ? (
         <Sheet open={full} onClose={() => setFull(false)} title={`${item.verb} ${item.subject}`.trim()}>
           <View style={{ paddingHorizontal: space.l, paddingBottom: space.m }}>
-            <T size={font.caption} mono copyable={item.detail} tone={failed ? 'bad' : 'soft'} style={{ lineHeight: 17 }}>{item.detail}</T>
+            <T
+              size={font.caption}
+              mono
+              copyable={item.detail}
+              tone={failed ? 'bad' : 'soft'}
+              style={{ lineHeight: 17 }}
+            >
+              {item.detail}
+            </T>
           </View>
         </Sheet>
       ) : null}
@@ -329,8 +630,20 @@ function AgentsGroup({ item, chat }: { item: Extract<TranscriptItem, { kind: 'ag
   const store = useStore()
   const [shownId, setShownId] = useState<string | null>(null)
   const [relay, setRelay] = useState('')
-  const shown = item.agents.find(a => a.id === shownId)
-  const stop = (agentId: string) => chat.sessionId && Alert.alert('Stop this sub-agent?', 'The main chat keeps going.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Stop', style: 'destructive', onPress: () => void store.invoke(chat.computerId, 'agent.stopTask', chat.sessionId!, agentId).catch(error => Alert.alert('Could not stop', error instanceof Error ? error.message : String(error))) }])
+  const shown = item.agents.find((a) => a.id === shownId)
+  const stop = (agentId: string) =>
+    chat.sessionId &&
+    Alert.alert('Stop this sub-agent?', 'The main chat keeps going.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Stop',
+        style: 'destructive',
+        onPress: () =>
+          void store
+            .invoke(chat.computerId, 'agent.stopTask', chat.sessionId!, agentId)
+            .catch((error) => Alert.alert('Could not stop', error instanceof Error ? error.message : String(error))),
+      },
+    ])
   const [open, setOpen] = useState(true)
   const toggled = useContext(RowToggle)
   const done = item.agents.filter((a) => a.status !== 'running').length
@@ -358,9 +671,28 @@ function AgentsGroup({ item, chat }: { item: Extract<TranscriptItem, { kind: 'ag
         ? item.agents.map((a, i) => (
             <View key={a.id ?? i}>
               <Divider inset={space.m} />
-              <Pressable accessibilityRole="button" accessibilityLabel={`${a.name}, ${a.status}. Show details`} onPress={() => { tap(); setShownId(a.id) }} style={({ pressed }) => ({ padding: space.m, gap: 3, backgroundColor: pressed ? c.pressed : 'transparent' })}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${a.name}, ${a.status}. Show details`}
+                onPress={() => {
+                  tap()
+                  setShownId(a.id)
+                }}
+                style={({ pressed }) => ({
+                  padding: space.m,
+                  gap: 3,
+                  backgroundColor: pressed ? c.pressed : 'transparent',
+                })}
+              >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: a.status === 'running' ? c.accent : a.status === 'failed' ? c.bad : c.ok }} />
+                  <View
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: a.status === 'running' ? c.accent : a.status === 'failed' ? c.bad : c.ok,
+                    }}
+                  />
                   <T size={font.control} weight="500" style={{ flex: 1 }} numberOfLines={1}>
                     {a.name}
                   </T>
@@ -378,17 +710,74 @@ function AgentsGroup({ item, chat }: { item: Extract<TranscriptItem, { kind: 'ag
       <Sheet open={Boolean(shown)} onClose={() => setShownId(null)} title={shown?.name ?? 'Sub-agent'}>
         {shown ? (
           <View style={{ paddingHorizontal: space.l, paddingBottom: space.m, gap: space.m }}>
-            <T size={font.caption} tone="muted">{[shown.type, shown.status === 'running' ? 'Working' : shown.status === 'failed' ? 'Stopped or failed' : 'Finished'].filter(Boolean).join(' · ')}</T>
-            {shown.prompt ? <View style={{ gap: 4 }}><T size={font.caption} weight="600" tone="muted">TASK</T><T size={font.control} tone="soft" copyable={shown.prompt}>{shown.prompt}</T></View> : null}
-            {shown.log ? <View style={{ gap: 4 }}><T size={font.caption} weight="600" tone="muted">ITS OUTPUT</T><Markdown text={shown.log.slice(-6000)} /></View> : null}
-            <View style={{ gap: 4 }}><T size={font.caption} weight="600" tone="muted">{shown.status === 'running' ? 'PROGRESS' : 'REPORT'}</T>{shown.summary ? <Markdown text={shown.summary} /> : <T tone="muted">Nothing reported yet.</T>}</View>
-            {chat.sessionId && shown.status === 'running' ? (
-              <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'flex-end' }}>
-                <TextInput value={relay} onChangeText={setRelay} multiline placeholder={`Message ${shown.name}`} placeholderTextColor={c.placeholder} style={{ flex: 1, maxHeight: 100, minHeight: 40, padding: space.m, color: c.text, backgroundColor: c.fill, borderRadius: radius.m }} />
-                <Button title="Send" disabled={!relay.trim()} onPress={() => { const text = relay.trim(); setRelay(''); void store.invoke(chat.computerId, 'agent.messageTask', chat.sessionId!, shown.id, text).catch(error => Alert.alert('Could not send', error instanceof Error ? error.message : String(error))) }} />
+            <T size={font.caption} tone="muted">
+              {[
+                shown.type,
+                shown.status === 'running' ? 'Working' : shown.status === 'failed' ? 'Stopped or failed' : 'Finished',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </T>
+            {shown.prompt ? (
+              <View style={{ gap: 4 }}>
+                <T size={font.caption} weight="600" tone="muted">
+                  TASK
+                </T>
+                <T size={font.control} tone="soft" copyable={shown.prompt}>
+                  {shown.prompt}
+                </T>
               </View>
             ) : null}
-            {shown.status === 'running' && chat.sessionId ? <Button kind="danger" title="Stop sub-agent" onPress={() => stop(shown.id)} /> : null}
+            {shown.log ? (
+              <View style={{ gap: 4 }}>
+                <T size={font.caption} weight="600" tone="muted">
+                  ITS OUTPUT
+                </T>
+                <Markdown text={shown.log.slice(-6000)} />
+              </View>
+            ) : null}
+            <View style={{ gap: 4 }}>
+              <T size={font.caption} weight="600" tone="muted">
+                {shown.status === 'running' ? 'PROGRESS' : 'REPORT'}
+              </T>
+              {shown.summary ? <Markdown text={shown.summary} /> : <T tone="muted">Nothing reported yet.</T>}
+            </View>
+            {chat.sessionId && shown.status === 'running' ? (
+              <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'flex-end' }}>
+                <TextInput
+                  value={relay}
+                  onChangeText={setRelay}
+                  multiline
+                  placeholder={`Message ${shown.name}`}
+                  placeholderTextColor={c.placeholder}
+                  style={{
+                    flex: 1,
+                    maxHeight: 100,
+                    minHeight: 40,
+                    padding: space.m,
+                    color: c.text,
+                    backgroundColor: c.fill,
+                    borderRadius: radius.m,
+                  }}
+                />
+                <Button
+                  title="Send"
+                  disabled={!relay.trim()}
+                  onPress={() => {
+                    const text = relay.trim()
+                    setRelay('')
+                    void store
+                      .invoke(chat.computerId, 'agent.messageTask', chat.sessionId!, shown.id, text)
+                      .catch((error) =>
+                        Alert.alert('Could not send', error instanceof Error ? error.message : String(error)),
+                      )
+                  }}
+                />
+              </View>
+            ) : null}
+            {shown.status === 'running' && chat.sessionId ? (
+              <Button kind="danger" title="Stop sub-agent" onPress={() => stop(shown.id)} />
+            ) : null}
           </View>
         ) : null}
       </Sheet>
@@ -396,7 +785,19 @@ function AgentsGroup({ item, chat }: { item: Extract<TranscriptItem, { kind: 'ag
   )
 }
 
-function Option({ label, description, selected, multi, onPress }: { label: string; description?: string; selected: boolean; multi: boolean; onPress: () => void }) {
+function Option({
+  label,
+  description,
+  selected,
+  multi,
+  onPress,
+}: {
+  label: string
+  description?: string
+  selected: boolean
+  multi: boolean
+  onPress: () => void
+}) {
   const { c } = useTheme()
   return (
     <Pressable
@@ -404,9 +805,27 @@ function Option({ label, description, selected, multi, onPress }: { label: strin
         tap()
         onPress()
       }}
-      style={({ pressed }) => ({ flexDirection: 'row', gap: space.m, padding: space.m, borderRadius: radius.s + 2, backgroundColor: selected ? c.accentWash : pressed ? c.pressed : c.fill })}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        gap: space.m,
+        padding: space.m,
+        borderRadius: radius.s + 2,
+        backgroundColor: selected ? c.accentWash : pressed ? c.pressed : c.fill,
+      })}
     >
-      <View style={{ width: 18, height: 18, marginTop: 1, borderRadius: multi ? 5 : 9, borderWidth: 1.5, borderColor: selected ? c.primary : c.lineStrong, backgroundColor: selected ? c.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: 18,
+          height: 18,
+          marginTop: 1,
+          borderRadius: multi ? 5 : 9,
+          borderWidth: 1.5,
+          borderColor: selected ? c.primary : c.lineStrong,
+          backgroundColor: selected ? c.primary : 'transparent',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
         {selected ? <Check size={11} color="#fff" strokeWidth={3} /> : null}
       </View>
       <View style={{ flex: 1, gap: 2 }}>
@@ -427,13 +846,17 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
   const { c } = useTheme()
   const store = useStore()
   const { answer } = store
-  const chat = store.chats.find(c => c.id === chatId)
+  const chat = store.chats.find((c) => c.id === chatId)
   const draftKey = `${chat?.computerId}:input:${chat?.sessionId}:${item.id}`
   let draft: { picked?: Record<string, string[]>; other?: Record<string, string> } = {}
-  try { draft = JSON.parse(store.drafts[draftKey] ?? '{}') } catch {}
+  try {
+    draft = JSON.parse(store.drafts[draftKey] ?? '{}')
+  } catch {}
   const [picked, setPicked] = useState<Record<string, string[]>>(draft.picked ?? {})
   const [other, setOther] = useState<Record<string, string>>(draft.other ?? {})
-  useEffect(() => { store.setDraft(draftKey, JSON.stringify({ picked, other })) }, [draftKey, picked, other])
+  useEffect(() => {
+    store.setDraft(draftKey, JSON.stringify({ picked, other }))
+  }, [draftKey, picked, other])
   if (item.answers) {
     return (
       <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
@@ -444,10 +867,16 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
       </View>
     )
   }
-  const ready = item.questions.every((q) => (picked[q.id ?? q.question]?.length ?? 0) > 0 || other[q.id ?? q.question]?.trim())
+  const ready = item.questions.every(
+    (q) => (picked[q.id ?? q.question]?.length ?? 0) > 0 || other[q.id ?? q.question]?.trim(),
+  )
   return (
     <Card style={{ padding: space.m, gap: space.m, backgroundColor: c.raised2 }}>
-      {item.submitted ? <T tone="muted" size={font.caption}>Already submitted: {Object.values(item.submitted).join(' · ')}</T> : null}
+      {item.submitted ? (
+        <T tone="muted" size={font.caption}>
+          Already submitted: {Object.values(item.submitted).join(' · ')}
+        </T>
+      ) : null}
       {item.questions.map((q) => (
         <View key={q.question} style={{ gap: space.s }}>
           <T size={font.caption} weight="600" tone="warn" style={{ textTransform: 'uppercase', letterSpacing: 0.4 }}>
@@ -468,7 +897,13 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
                 onPress={() =>
                   setPicked((p) => {
                     const cur = p[q.id ?? q.question] ?? []
-                    const next = q.multiSelect ? (sel ? cur.filter((x) => x !== o.label) : [...cur, o.label]) : sel ? [] : [o.label]
+                    const next = q.multiSelect
+                      ? sel
+                        ? cur.filter((x) => x !== o.label)
+                        : [...cur, o.label]
+                      : sel
+                        ? []
+                        : [o.label]
                     return { ...p, [q.id ?? q.question]: next }
                   })
                 }
@@ -480,7 +915,13 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
             placeholderTextColor={c.placeholder}
             value={other[q.id ?? q.question] ?? ''}
             onChangeText={(v) => setOther((o) => ({ ...o, [q.id ?? q.question]: v }))}
-            style={{ color: c.text, fontSize: font.body - 1, padding: space.m, borderRadius: radius.s + 2, backgroundColor: c.fill }}
+            style={{
+              color: c.text,
+              fontSize: font.body - 1,
+              padding: space.m,
+              borderRadius: radius.s + 2,
+              backgroundColor: c.fill,
+            }}
           />
         </View>
       ))}
@@ -493,7 +934,12 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
             answer(
               chatId,
               item.id,
-              Object.fromEntries(item.questions.map((q) => [q.id ?? q.question, [...(picked[q.id ?? q.question] ?? []), other[q.id ?? q.question]?.trim()].filter(Boolean).join(', ')])),
+              Object.fromEntries(
+                item.questions.map((q) => [
+                  q.id ?? q.question,
+                  [...(picked[q.id ?? q.question] ?? []), other[q.id ?? q.question]?.trim()].filter(Boolean).join(', '),
+                ]),
+              ),
             )
           }
         />
@@ -548,7 +994,15 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
       }}
     >
       {({ pressed }) => (
-        <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.m, opacity: pressed ? 0.8 : 1 }}>
+        <Card
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.m,
+            padding: space.m,
+            opacity: pressed ? 0.8 : 1,
+          }}
+        >
           <FilePen size={16} color={c.soft} strokeWidth={1.8} />
           <T size={font.body - 1} weight="500" style={{ flex: 1 }}>
             {item.files} files changed
@@ -581,12 +1035,52 @@ function GoalDone({ item }: { item: Extract<TranscriptItem, { kind: 'goal' }> })
 function ElicitationCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 'elicitation' }>; chatId: string }) {
   const { c } = useTheme()
   const { elicitation } = useStore()
-  const [answers, setAnswers] = useState<Record<string, string>>(() => Object.fromEntries(item.request.fields.map(f => [f.id, f.defaultValue ?? ''])))
-  if (item.outcome) return <T tone="muted">{item.request.message} · {item.outcome}</T>
-  return <Card style={{ padding: space.m, gap: space.m }}>
-    <T weight="600">{item.request.serverName}</T><T>{item.request.message}</T>
-    {item.request.mode === 'url' && item.request.url ? <Button title="Open request" onPress={() => { const url = item.request.url!; if (/^https?:\/\//i.test(url)) void Linking.openURL(url) }} /> : null}
-    {item.request.fields.map(f => <View key={f.id} style={{ gap: space.s }}><T>{f.label}{f.required ? ' *' : ''}</T><T size={font.caption} tone="muted">{f.description || (f.options.length ? f.options.map(o => `${o.label}: ${o.value}`).join(', ') : f.type)}</T><TextInput value={answers[f.id] ?? ''} onChangeText={v => setAnswers(old => ({ ...old, [f.id]: v }))} style={{ color: c.text, backgroundColor: c.fill, padding: space.m }} /></View>)}
-    <View style={{ flexDirection: 'row', gap: space.s }}><Button kind="secondary" title="Decline" onPress={() => elicitation(chatId, item.id, 'decline', {})} /><Button title="Submit" disabled={item.request.fields.some(f => f.required && !answers[f.id]?.trim())} onPress={() => elicitation(chatId, item.id, 'accept', answers)} /></View>
-  </Card>
+  const [answers, setAnswers] = useState<Record<string, string>>(() =>
+    Object.fromEntries(item.request.fields.map((f) => [f.id, f.defaultValue ?? ''])),
+  )
+  if (item.outcome)
+    return (
+      <T tone="muted">
+        {item.request.message} · {item.outcome}
+      </T>
+    )
+  return (
+    <Card style={{ padding: space.m, gap: space.m }}>
+      <T weight="600">{item.request.serverName}</T>
+      <T>{item.request.message}</T>
+      {item.request.mode === 'url' && item.request.url ? (
+        <Button
+          title="Open request"
+          onPress={() => {
+            const url = item.request.url!
+            if (/^https?:\/\//i.test(url)) void Linking.openURL(url)
+          }}
+        />
+      ) : null}
+      {item.request.fields.map((f) => (
+        <View key={f.id} style={{ gap: space.s }}>
+          <T>
+            {f.label}
+            {f.required ? ' *' : ''}
+          </T>
+          <T size={font.caption} tone="muted">
+            {f.description || (f.options.length ? f.options.map((o) => `${o.label}: ${o.value}`).join(', ') : f.type)}
+          </T>
+          <TextInput
+            value={answers[f.id] ?? ''}
+            onChangeText={(v) => setAnswers((old) => ({ ...old, [f.id]: v }))}
+            style={{ color: c.text, backgroundColor: c.fill, padding: space.m }}
+          />
+        </View>
+      ))}
+      <View style={{ flexDirection: 'row', gap: space.s }}>
+        <Button kind="secondary" title="Decline" onPress={() => elicitation(chatId, item.id, 'decline', {})} />
+        <Button
+          title="Submit"
+          disabled={item.request.fields.some((f) => f.required && !answers[f.id]?.trim())}
+          onPress={() => elicitation(chatId, item.id, 'accept', answers)}
+        />
+      </View>
+    </Card>
+  )
 }

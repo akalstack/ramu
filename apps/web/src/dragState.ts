@@ -16,8 +16,19 @@ export function setActiveDrag(next: ActiveDrag) {
   listeners.forEach((listener) => listener())
 }
 /** Announces a drag one tick later: changing the DOM inside `dragstart` can cancel the drag. */
-export const beginDrag = (kind: Exclude<ActiveDrag, null>) => { setTimeout(() => setActiveDrag(kind)) }
-export const useActiveDrag = () => useSyncExternalStore((listener) => { listeners.add(listener); return () => { listeners.delete(listener) } }, () => current)
+export const beginDrag = (kind: Exclude<ActiveDrag, null>) => {
+  setTimeout(() => setActiveDrag(kind))
+}
+export const useActiveDrag = () =>
+  useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    () => current,
+  )
 
 // Bubble phase on purpose: drop targets handle the event first, then the overlay goes away.
 if (typeof window !== 'undefined') {
@@ -26,7 +37,10 @@ if (typeof window !== 'undefined') {
 }
 
 /** Shows `row` as the drag preview with the pointer where it grabbed the handle, so the preview stays under the cursor. */
-export function setRowDragImage(event: { clientX: number; clientY: number; dataTransfer: DataTransfer }, row: Element | null) {
+export function setRowDragImage(
+  event: { clientX: number; clientY: number; dataTransfer: DataTransfer },
+  row: Element | null,
+) {
   if (!row) return
   const box = row.getBoundingClientRect()
   event.dataTransfer.setDragImage(row, Math.max(0, event.clientX - box.left), Math.max(0, event.clientY - box.top))

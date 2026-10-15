@@ -8,7 +8,12 @@ import { _electron as electron } from 'playwright-core'
 
 const appDir = resolve(import.meta.dirname, '..', 'apps', 'desktop')
 const fixture = mkdtempSync(join(tmpdir(), 'ramu-palette-'))
-const env = { ...process.env, RAMU_USER_DATA: join(fixture, 'profile'), RAMU_WORKTREES: join(fixture, 'worktrees'), RAMU_FAKE_AGENT: '1' }
+const env = {
+  ...process.env,
+  RAMU_USER_DATA: join(fixture, 'profile'),
+  RAMU_WORKTREES: join(fixture, 'worktrees'),
+  RAMU_FAKE_AGENT: '1',
+}
 delete env.ELECTRON_RENDERER_URL
 delete env.ELECTRON_RUN_AS_NODE
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
@@ -30,7 +35,7 @@ async function run(label) {
 try {
   app = await electron.launch({ args: [appDir], cwd: appDir, env })
   page = await app.firstWindow()
-  page.on('pageerror', error => errors.push(error.message))
+  page.on('pageerror', (error) => errors.push(error.message))
   await page.waitForSelector('.shell')
 
   // Global navigation must work before any project or chat exists.
@@ -51,7 +56,21 @@ try {
   console.log('ok - New schedule opens its editor from both Schedules and Home without scheduling work')
 
   // Every settings section is discoverable through a direct command.
-  for (const section of ['Appearance', 'Editor & Terminal', 'Chats', 'Git', 'Keyboard shortcuts', 'Providers', 'Access & Fallback', 'Goals', 'Memory', 'Sub-agents', 'Advisor', 'Background & Recaps', 'Updates']) {
+  for (const section of [
+    'Appearance',
+    'Editor & Terminal',
+    'Chats',
+    'Git',
+    'Keyboard shortcuts',
+    'Providers',
+    'Access & Fallback',
+    'Goals',
+    'Memory',
+    'Sub-agents',
+    'Advisor',
+    'Background & Recaps',
+    'Updates',
+  ]) {
     await run(`Open ${section} settings`)
     await page.locator('.settings-page-content').getByRole('heading', { name: section, exact: true }).waitFor()
     await page.keyboard.press('Escape')
@@ -70,14 +89,35 @@ try {
 
   // Chat panel commands reuse the same panels and shortcuts as the chat header.
   const prefs = await api('settings.app.get')
-  await api('settings.app.set', { ...prefs, advisor: { enabled: true, wait: true, step: { id: 'advisor', provider: 'codex', model: 'fake-codex', effort: 'high' } } })
+  await api('settings.app.set', {
+    ...prefs,
+    advisor: {
+      enabled: true,
+      wait: true,
+      step: { id: 'advisor', provider: 'codex', model: 'fake-codex', effort: 'high' },
+    },
+  })
   const task = await api('tasks.create', { projectId: 'no-project', title: 'Palette chat', mode: 'current' })
-  const session = await api('agent.start', task.id, '[advisor] Say hello', { provider: 'claude-code', model: 'fake-claude', effort: 'medium', access: 'full', autoFallback: false })
+  const session = await api('agent.start', task.id, '[advisor] Say hello', {
+    provider: 'claude-code',
+    model: 'fake-claude',
+    effort: 'medium',
+    access: 'full',
+    autoFallback: false,
+  })
   const ui = await api('ui.get')
-  await api('ui.setTask', task.id, { views: [{ id: 'chat', kind: 'agent', sessionId: session.id }], activeViewId: 'chat', activeAgentViewId: 'chat' })
+  await api('ui.setTask', task.id, {
+    views: [{ id: 'chat', kind: 'agent', sessionId: session.id }],
+    activeViewId: 'chat',
+    activeAgentViewId: 'chat',
+  })
   await api('ui.setWorkspace', { ...ui.workspace, openTaskIds: [task.id], activeTaskId: task.id, sidebar: 'projects' })
-  await page.reload(); await page.waitForSelector('.shell')
-  await page.locator('.task-row').filter({ has: page.getByText('Palette chat', { exact: true }) }).click()
+  await page.reload()
+  await page.waitForSelector('.shell')
+  await page
+    .locator('.task-row')
+    .filter({ has: page.getByText('Palette chat', { exact: true }) })
+    .click()
   await page.locator('.agents-chip[aria-pressed]:visible').waitFor()
   await run('Show agents')
   await page.locator('.agent-panel .agent-task-card').filter({ hasText: 'Advisor' }).waitFor()

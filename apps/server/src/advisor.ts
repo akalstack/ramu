@@ -28,24 +28,43 @@ ${transcript}
 }
 
 /** Claude Code's own advisor model from the user's Claude settings, or null when it is off. */
-export function claudeAdvisorModel(configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')): string | null {
+export function claudeAdvisorModel(
+  configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'),
+): string | null {
   try {
     const value = JSON.parse(readFileSync(join(configDir, 'settings.json'), 'utf8'))?.advisorModel
     return typeof value === 'string' && value ? value : null
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 export function registerAdvisorTools(server: McpServer, agents: AgentService, sessionId: string): void {
   const result = async (operation: () => Promise<unknown>) => {
-    try { return { content: [{ type: 'text' as const, text: JSON.stringify(await operation()) }] } }
-    catch (error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }] } }
+    try {
+      return { content: [{ type: 'text' as const, text: JSON.stringify(await operation()) }] }
+    } catch (error) {
+      return {
+        isError: true,
+        content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+      }
+    }
   }
-  server.registerTool('advisor', {
-    description: TOOL_DESCRIPTION,
-    inputSchema: { focus: z.string().max(4000).optional(), wait: z.boolean().default(false) },
-  }, ({ focus, wait }, extra) => result(() => agents.consultAdvisor(sessionId, { focus, wait }, extra.signal)))
-  server.registerTool('wait_for_advice', {
-    description: 'Wait for advice you requested earlier with advisor. Use it only when the next step depends on the advice. Returns the advice, or the error if the advisor failed.',
-    inputSchema: { requestId: z.string().min(1).max(300) },
-  }, ({ requestId }, extra) => result(() => agents.waitForAdvice(sessionId, requestId, extra.signal)))
+  server.registerTool(
+    'advisor',
+    {
+      description: TOOL_DESCRIPTION,
+      inputSchema: { focus: z.string().max(4000).optional(), wait: z.boolean().default(false) },
+    },
+    ({ focus, wait }, extra) => result(() => agents.consultAdvisor(sessionId, { focus, wait }, extra.signal)),
+  )
+  server.registerTool(
+    'wait_for_advice',
+    {
+      description:
+        'Wait for advice you requested earlier with advisor. Use it only when the next step depends on the advice. Returns the advice, or the error if the advisor failed.',
+      inputSchema: { requestId: z.string().min(1).max(300) },
+    },
+    ({ requestId }, extra) => result(() => agents.waitForAdvice(sessionId, requestId, extra.signal)),
+  )
 }

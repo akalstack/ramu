@@ -19,7 +19,9 @@ describe('agent activity labels', () => {
     expect(agentActivityLabel('running', [user, thought, tool])).toBe('Working')
     expect(agentActivityLabel('running', [user, thought, tool, result])).toBe('Working')
     expect(agentActivityLabel('running', [user, tool, result, thought])).toBe('Thinking')
-    expect(agentActivityLabel('running', [user, thought, { kind: 'text', text: 'Here is the answer' }])).toBe('Writing…')
+    expect(agentActivityLabel('running', [user, thought, { kind: 'text', text: 'Here is the answer' }])).toBe(
+      'Writing…',
+    )
   })
 
   it('ignores helper reasoning and bookkeeping events', () => {
@@ -29,7 +31,9 @@ describe('agent activity labels', () => {
   })
 
   it('does not carry reasoning past a completed turn or inactive session', () => {
-    expect(agentActivityLabel('running', [thought, { kind: 'result', isError: false, text: 'Done', costUsd: null }])).toBe('Working')
+    expect(
+      agentActivityLabel('running', [thought, { kind: 'result', isError: false, text: 'Done', costUsd: null }]),
+    ).toBe('Working')
     for (const state of ['idle', 'stopped', 'failed', 'needs-input', undefined] as const) {
       expect(agentActivityLabel(state, [thought])).toBeNull()
     }

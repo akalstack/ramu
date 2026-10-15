@@ -11,10 +11,20 @@ import { Header, Screen, PageScrollView as ScrollView } from '../components/Scre
 import { ProviderIcon } from '../components/Logos'
 import { Card, ConnectionDot, Divider, Row, SectionLabel, T, tap } from '../components/ui'
 
-function Segmented<V extends string>({ value, options, onChange }: { value: V; options: [V, string][]; onChange: (v: V) => void }) {
+function Segmented<V extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: V
+  options: [V, string][]
+  onChange: (v: V) => void
+}) {
   const { c } = useTheme()
   return (
-    <View style={{ flexDirection: 'row', backgroundColor: c.fill, borderRadius: radius.s + 2, padding: 3, margin: space.m }}>
+    <View
+      style={{ flexDirection: 'row', backgroundColor: c.fill, borderRadius: radius.s + 2, padding: 3, margin: space.m }}
+    >
       {options.map(([v, label]) => (
         <Pressable
           key={v}
@@ -22,7 +32,13 @@ function Segmented<V extends string>({ value, options, onChange }: { value: V; o
             tap()
             onChange(v)
           }}
-          style={{ flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: radius.s, backgroundColor: v === value ? c.raised : 'transparent' }}
+          style={{
+            flex: 1,
+            alignItems: 'center',
+            paddingVertical: 8,
+            borderRadius: radius.s,
+            backgroundColor: v === value ? c.raised : 'transparent',
+          }}
         >
           <T size={font.control} weight={v === value ? '600' : '400'} tone={v === value ? 'text' : 'muted'}>
             {label}
@@ -49,7 +65,11 @@ function UsageBar({ r }: { r: UsageReading }) {
           {windowName[r.window]}
           {r.plan ? ` · ${r.plan}` : ''}
         </T>
-        <T size={font.control} weight="600" tone={r.status === 'limited' ? 'bad' : r.status === 'warning' ? 'warn' : 'soft'}>
+        <T
+          size={font.control}
+          weight="600"
+          tone={r.status === 'limited' ? 'bad' : r.status === 'warning' ? 'warn' : 'soft'}
+        >
           {r.usedPercent}%
         </T>
       </View>
@@ -67,7 +87,8 @@ export default function Settings() {
   const { c, appearance, setAppearance } = useTheme()
   const t = useT()
   const router = useRouter()
-  const { computers, selected, language, setLanguage, usage, retry, enablePush, disablePush, drafts, setDraft } = useStore()
+  const { computers, selected, language, setLanguage, usage, retry, enablePush, disablePush, drafts, setDraft } =
+    useStore()
   const pc = computers.find((x) => x.id === selected)
   const readings = usage[selected] ?? []
   return (
@@ -87,7 +108,15 @@ export default function Settings() {
           </Row>
         </Card>
 
-        <SectionLabel right={<T size={font.caption} tone="muted">{pc?.name}</T>}>{t.usage}</SectionLabel>
+        <SectionLabel
+          right={
+            <T size={font.caption} tone="muted">
+              {pc?.name}
+            </T>
+          }
+        >
+          {t.usage}
+        </SectionLabel>
         <Card style={{ marginHorizontal: space.l }}>
           {readings.length ? (
             readings.map((r, i) => (
@@ -105,47 +134,104 @@ export default function Settings() {
 
         <SectionLabel>Chat</SectionLabel>
         <Card style={{ marginHorizontal: space.l }}>
-          <Row style={{ paddingVertical: space.l }} onPress={() => setDraft('pref:model-warning', drafts['pref:model-warning'] === 'off' ? '' : 'off')}>
+          <Row
+            style={{ paddingVertical: space.l }}
+            onPress={() => setDraft('pref:model-warning', drafts['pref:model-warning'] === 'off' ? '' : 'off')}
+          >
             <View style={{ flex: 1, gap: 6 }}>
-              <T weight="500" style={{ lineHeight: 22 }}>Warn before changing model</T>
-              <T size={font.caption} tone="muted" style={{ lineHeight: 19 }}>A new model can't reuse the cache of a conversation in progress, so the first message after switching costs more usage.</T>
+              <T weight="500" style={{ lineHeight: 22 }}>
+                Warn before changing model
+              </T>
+              <T size={font.caption} tone="muted" style={{ lineHeight: 19 }}>
+                A new model can't reuse the cache of a conversation in progress, so the first message after switching
+                costs more usage.
+              </T>
             </View>
-            <Switch value={drafts['pref:model-warning'] !== 'off'} onValueChange={on => setDraft('pref:model-warning', on ? '' : 'off')} />
+            <Switch
+              value={drafts['pref:model-warning'] !== 'off'}
+              onValueChange={(on) => setDraft('pref:model-warning', on ? '' : 'off')}
+            />
           </Row>
         </Card>
 
         <SectionLabel>Notifications</SectionLabel>
         <Card style={{ marginHorizontal: space.l }}>
-          <Row style={{ paddingVertical: space.l }} onPress={() => { void (drafts['push-enabled'] === 'yes' ? disablePush() : enablePush()).catch(e => Alert.alert('Notifications', e.message)) }}>
+          <Row
+            style={{ paddingVertical: space.l }}
+            onPress={() => {
+              void (drafts['push-enabled'] === 'yes' ? disablePush() : enablePush()).catch((e) =>
+                Alert.alert('Notifications', e.message),
+              )
+            }}
+          >
             <View style={{ flex: 1, gap: 6 }}>
-              <T weight="500" style={{ lineHeight: 22 }}>{drafts['push-enabled'] === 'yes' ? 'Disable background alerts' : 'Enable background alerts'}</T>
-              <T size={font.caption} tone="muted" style={{ lineHeight: 19 }}>Get alerts from your paired computers when a task needs your attention.</T>
+              <T weight="500" style={{ lineHeight: 22 }}>
+                {drafts['push-enabled'] === 'yes' ? 'Disable background alerts' : 'Enable background alerts'}
+              </T>
+              <T size={font.caption} tone="muted" style={{ lineHeight: 19 }}>
+                Get alerts from your paired computers when a task needs your attention.
+              </T>
             </View>
           </Row>
         </Card>
-        {Platform.OS === 'ios' ? <>
-          <SectionLabel>Live Activities</SectionLabel>
-          <Card style={{ marginHorizontal: space.l }}><Row style={{ paddingVertical: space.l }}>
-            <View style={{ flex: 1, gap: 6 }}><T weight="500" style={{ lineHeight: 22 }}>Show ongoing work</T><T size={font.caption} tone="muted" style={{ lineHeight: 19 }}>Track tasks on your Lock Screen and Dynamic Island.</T></View>
-            <Switch accessibilityLabel="Show ongoing work in Live Activities" value={drafts['live-activities-enabled'] !== 'no'} onValueChange={value => setDraft('live-activities-enabled', value ? 'yes' : 'no')} trackColor={{ true: c.primary }} />
-          </Row></Card>
-        </> : null}
+        {Platform.OS === 'ios' ? (
+          <>
+            <SectionLabel>Live Activities</SectionLabel>
+            <Card style={{ marginHorizontal: space.l }}>
+              <Row style={{ paddingVertical: space.l }}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <T weight="500" style={{ lineHeight: 22 }}>
+                    Show ongoing work
+                  </T>
+                  <T size={font.caption} tone="muted" style={{ lineHeight: 19 }}>
+                    Track tasks on your Lock Screen and Dynamic Island.
+                  </T>
+                </View>
+                <Switch
+                  accessibilityLabel="Show ongoing work in Live Activities"
+                  value={drafts['live-activities-enabled'] !== 'no'}
+                  onValueChange={(value) => setDraft('live-activities-enabled', value ? 'yes' : 'no')}
+                  trackColor={{ true: c.primary }}
+                />
+              </Row>
+            </Card>
+          </>
+        ) : null}
         <SectionLabel>{t.appearance}</SectionLabel>
         <Card style={{ marginHorizontal: space.l }}>
-          <Segmented<Appearance> value={appearance} onChange={setAppearance} options={[['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]} />
+          <Segmented<Appearance>
+            value={appearance}
+            onChange={setAppearance}
+            options={[
+              ['system', 'System'],
+              ['light', 'Light'],
+              ['dark', 'Dark'],
+            ]}
+          />
         </Card>
 
         <SectionLabel>{t.language}</SectionLabel>
         <Card style={{ marginHorizontal: space.l }}>
-          <Segmented<Language> value={language} onChange={setLanguage} options={[['en', 'English'], ['id', 'Bahasa Indonesia']]} />
+          <Segmented<Language>
+            value={language}
+            onChange={setLanguage}
+            options={[
+              ['en', 'English'],
+              ['id', 'Bahasa Indonesia'],
+            ]}
+          />
         </Card>
 
         <SectionLabel>Connection</SectionLabel>
         <Card style={{ marginHorizontal: space.l }}>
           <Row style={{ paddingVertical: space.l }} onPress={() => pc && retry(pc.id)}>
             <View style={{ flex: 1, gap: 6 }}>
-              <T weight="500" style={{ lineHeight: 22 }}>Reconnect</T>
-              <T size={font.caption} tone="muted" style={{ lineHeight: 19 }}>{pc?.error ?? 'Refresh the connection to this computer.'}</T>
+              <T weight="500" style={{ lineHeight: 22 }}>
+                Reconnect
+              </T>
+              <T size={font.caption} tone="muted" style={{ lineHeight: 19 }}>
+                {pc?.error ?? 'Refresh the connection to this computer.'}
+              </T>
             </View>
           </Row>
         </Card>

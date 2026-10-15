@@ -5,10 +5,30 @@ import { join } from 'node:path'
 import { RemoteServers, type Sealer } from '../src/main/remoteServers'
 
 const dirs: string[] = []
-afterEach(() => { dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true })); dirs.length = 0 })
-const reversible: Sealer = { available: true, seal: (text) => Buffer.from(text).reverse().toString('base64'), open: (text) => Buffer.from(text, 'base64').reverse().toString() }
-const none: Sealer = { available: false, seal: () => { throw new Error('no keychain') }, open: () => { throw new Error('no keychain') } }
-const store = (sealer = reversible) => { const dir = mkdtempSync(join(tmpdir(), 'ramu servers ')); dirs.push(dir); const path = join(dir, 'remote-servers.json'); return { path, servers: new RemoteServers(path, sealer) } }
+afterEach(() => {
+  dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true }))
+  dirs.length = 0
+})
+const reversible: Sealer = {
+  available: true,
+  seal: (text) => Buffer.from(text).reverse().toString('base64'),
+  open: (text) => Buffer.from(text, 'base64').reverse().toString(),
+}
+const none: Sealer = {
+  available: false,
+  seal: () => {
+    throw new Error('no keychain')
+  },
+  open: () => {
+    throw new Error('no keychain')
+  },
+}
+const store = (sealer = reversible) => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu servers '))
+  dirs.push(dir)
+  const path = join(dir, 'remote-servers.json')
+  return { path, servers: new RemoteServers(path, sealer) }
+}
 
 it('saves a computer and hands its token only to the main process', () => {
   const { servers } = store()
@@ -38,12 +58,18 @@ it('replaces a computer paired again at the same address, and keeps several othe
   servers.add('192.168.1.5:7788', 'Old', 'one')
   servers.add('10.0.0.2:7788', 'Other', 'three')
   servers.add('http://192.168.1.5:7788/', 'New', 'two')
-  expect(servers.list().map((s) => s.name).sort()).toEqual(['New', 'Other'])
+  expect(
+    servers
+      .list()
+      .map((s) => s.name)
+      .sort(),
+  ).toEqual(['New', 'Other'])
 })
 
 it('forgets one computer without touching the rest', () => {
   const { servers } = store()
-  const a = servers.add('10.0.0.2:7788', 'A', 'a'), b = servers.add('10.0.0.3:7788', 'B', 'b')
+  const a = servers.add('10.0.0.2:7788', 'A', 'a'),
+    b = servers.add('10.0.0.3:7788', 'B', 'b')
   servers.forget(a.id)
   expect(servers.list().map((s) => s.id)).toEqual([b.id])
 })
@@ -63,7 +89,13 @@ it('persists names and connection policy without changing identity or credential
 
 it('decrypts a saved endpoint once and preserves the cache across metadata changes', () => {
   let decrypts = 0
-  const { servers } = store({ ...reversible, open: (value) => { decrypts++; return reversible.open(value) } })
+  const { servers } = store({
+    ...reversible,
+    open: (value) => {
+      decrypts++
+      return reversible.open(value)
+    },
+  })
   const saved = servers.add('10.0.0.2:7788', 'Studio', 'secret')
   for (let i = 0; i < 100; i++) expect(servers.endpoint(saved.id)?.token).toBe('secret')
   expect(decrypts).toBe(1)

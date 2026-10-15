@@ -13,7 +13,11 @@ describe('search result snippets', () => {
     expect(snippet.after).toBe('="0 0 24 24">')
   })
   it('keeps short leading context and trims indentation', () => {
-    expect(searchSnippet('    const value = 1', 10, 15, 80, measure)).toEqual({ before: 'const ', hit: 'value', after: ' = 1' })
+    expect(searchSnippet('    const value = 1', 10, 15, 80, measure)).toEqual({
+      before: 'const ',
+      hit: 'value',
+      after: ' = 1',
+    })
   })
   it('shows more context when the sidebar is widened', () => {
     const text = 'a'.repeat(60) + 'match'

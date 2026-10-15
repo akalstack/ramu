@@ -6,63 +6,151 @@ import { join, resolve } from 'node:path'
 import { request } from 'node:http'
 import { createHash } from 'node:crypto'
 import { _electron as electron } from 'playwright-core'
-const appDir = process.env.RAMU_E2E_APP_DIR ? resolve(process.env.RAMU_E2E_APP_DIR) : resolve(import.meta.dirname, '..', 'apps', 'desktop'), dir = mkdtempSync(join(tmpdir(), 'ramu-automation-'))
-const profile = join(dir, 'profile'), repo = join(dir, 'demo')
-const shots = process.env.RAMU_E2E_SCREENSHOTS ? resolve(process.env.RAMU_E2E_SCREENSHOTS) : join(appDir, 'output', 'playwright', 'automation'); mkdirSync(shots, { recursive: true })
-mkdirSync(repo); execFileSync('git', ['init', '-q'], { cwd: repo })
+const appDir = process.env.RAMU_E2E_APP_DIR
+    ? resolve(process.env.RAMU_E2E_APP_DIR)
+    : resolve(import.meta.dirname, '..', 'apps', 'desktop'),
+  dir = mkdtempSync(join(tmpdir(), 'ramu-automation-'))
+const profile = join(dir, 'profile'),
+  repo = join(dir, 'demo')
+const shots = process.env.RAMU_E2E_SCREENSHOTS
+  ? resolve(process.env.RAMU_E2E_SCREENSHOTS)
+  : join(appDir, 'output', 'playwright', 'automation')
+mkdirSync(shots, { recursive: true })
+mkdirSync(repo)
+execFileSync('git', ['init', '-q'], { cwd: repo })
 writeFileSync(join(repo, 'notes.md'), 'Saved project notes\n')
 writeFileSync(join(repo, 'other.ts'), 'export const example = 1\n')
-writeFileSync(join(repo, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true, module: 'esnext', target: 'esnext', moduleResolution: 'bundler' } }))
+writeFileSync(
+  join(repo, 'tsconfig.json'),
+  JSON.stringify({
+    compilerOptions: { strict: true, module: 'esnext', target: 'esnext', moduleResolution: 'bundler' },
+  }),
+)
 mkdirSync(join(repo, 'src', 'orders'), { recursive: true })
-writeFileSync(join(repo, 'src', 'orders', 'queue.ts'), 'export class OrderQueue {\n  enqueueUrgent(order: Order): void {\n    this.items.unshift(order)\n  }\n}\n')
+writeFileSync(
+  join(repo, 'src', 'orders', 'queue.ts'),
+  'export class OrderQueue {\n  enqueueUrgent(order: Order): void {\n    this.items.unshift(order)\n  }\n}\n',
+)
 writeFileSync(join(repo, 'format-me.ts'), 'const   x=1\ndebugger\n')
 mkdirSync(join(repo, '.agents', 'skills', 'smoke-skill'), { recursive: true })
-writeFileSync(join(repo, '.agents', 'skills', 'smoke-skill', 'SKILL.md'), '---\nname: smoke-skill\ndescription: Review the smoke fixture notes\n---\nRead notes.md and summarize it.\n')
-const env = { ...process.env, RAMU_USER_DATA: profile, RAMU_WORKTREES: join(dir, 'worktrees'), RAMU_FAKE_AGENT: '1' }; delete env.ELECTRON_RENDERER_URL
-const socketPath = join(tmpdir(), `ramu-${process.getuid()}-${createHash('sha256').update(profile).digest('hex').slice(0, 20)}.sock`)
-const api = (method, args = []) => new Promise((resolve, reject) => { const req = request({ socketPath, path: '/invoke', method: 'POST' }, (res) => { let data = ''; res.on('data', (c) => data += c); res.on('end', () => { try { const response = JSON.parse(data); response.error ? reject(new Error(response.error)) : resolve(response.value) } catch (e) { reject(e) } }) }); req.on('error', reject); req.end(JSON.stringify({ method, args })) })
+writeFileSync(
+  join(repo, '.agents', 'skills', 'smoke-skill', 'SKILL.md'),
+  '---\nname: smoke-skill\ndescription: Review the smoke fixture notes\n---\nRead notes.md and summarize it.\n',
+)
+const env = { ...process.env, RAMU_USER_DATA: profile, RAMU_WORKTREES: join(dir, 'worktrees'), RAMU_FAKE_AGENT: '1' }
+delete env.ELECTRON_RENDERER_URL
+const socketPath = join(
+  tmpdir(),
+  `ramu-${process.getuid()}-${createHash('sha256').update(profile).digest('hex').slice(0, 20)}.sock`,
+)
+const api = (method, args = []) =>
+  new Promise((resolve, reject) => {
+    const req = request({ socketPath, path: '/invoke', method: 'POST' }, (res) => {
+      let data = ''
+      res.on('data', (c) => (data += c))
+      res.on('end', () => {
+        try {
+          const response = JSON.parse(data)
+          response.error ? reject(new Error(response.error)) : resolve(response.value)
+        } catch (e) {
+          reject(e)
+        }
+      })
+    })
+    req.on('error', reject)
+    req.end(JSON.stringify({ method, args }))
+  })
 let lastStep = 'start'
-const check = (value, message) => { if (!value) throw new Error(message); lastStep = message; console.log(`ok - ${message}`) }
+const check = (value, message) => {
+  if (!value) throw new Error(message)
+  lastStep = message
+  console.log(`ok - ${message}`)
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // The daemon scheduler ticks every 5 s, so schedule runs can take two ticks to start and complete.
-async function until(fn, message, attempts = 100) { for (let i = 0; i < attempts; i++) { const result = await fn(); if (result) return result; await sleep(100) } throw new Error(message) }
+async function until(fn, message, attempts = 100) {
+  for (let i = 0; i < attempts; i++) {
+    const result = await fn()
+    if (result) return result
+    await sleep(100)
+  }
+  throw new Error(message)
+}
 let app, page
 const errors = []
 // Monaco's own teardown noise: a cancelled token firing on dispose, and the inline-edit gutter animating after it is torn down.
 const MONACO_NOISE = /^(Canceled|Make sure the ref is set before accessing the element)/
 async function launch() {
-  app = await electron.launch({ ...(process.env.RAMU_PACKAGED_EXECUTABLE ? { executablePath: process.env.RAMU_PACKAGED_EXECUTABLE, args: [] } : { args: [appDir] }), cwd: appDir, env, timeout: 30000 })
-  page = await app.firstWindow(); page.on('pageerror', (e) => !MONACO_NOISE.test(e.message) && errors.push(process.env.RAMU_E2E_STACKS ? `[after: ${lastStep}] ${e.message}\n${e.stack}` : e.message))
+  app = await electron.launch({
+    ...(process.env.RAMU_PACKAGED_EXECUTABLE
+      ? { executablePath: process.env.RAMU_PACKAGED_EXECUTABLE, args: [] }
+      : { args: [appDir] }),
+    cwd: appDir,
+    env,
+    timeout: 30000,
+  })
+  page = await app.firstWindow()
+  page.on(
+    'pageerror',
+    (e) =>
+      !MONACO_NOISE.test(e.message) &&
+      errors.push(process.env.RAMU_E2E_STACKS ? `[after: ${lastStep}] ${e.message}\n${e.stack}` : e.message),
+  )
   await page.waitForSelector('.shell', { timeout: 20000 })
 }
 async function runDropJourney() {
   await launch()
   const { project } = await api('projects.addFolder', [repo])
   const task = await api('tasks.create', [{ projectId: project.id, title: 'Drop checks', mode: 'current' }])
-  const session = await api('agent.start', [task.id, 'Ready for drop checks', { provider: 'claude-code', model: 'fake-claude', effort: 'medium', access: 'full', autoFallback: true }])
+  const session = await api('agent.start', [
+    task.id,
+    'Ready for drop checks',
+    { provider: 'claude-code', model: 'fake-claude', effort: 'medium', access: 'full', autoFallback: true },
+  ])
   await until(async () => (await api('agent.get', [session.id])).state === 'idle', 'Drop fixture did not become idle')
-  const ui = await api('ui.get'), viewId = `drop-${session.id}`
-  await api('ui.setTask', [task.id, { views: [{ id: viewId, kind: 'agent', sessionId: session.id }], activeViewId: viewId, activeAgentViewId: viewId }])
-  await api('ui.setWorkspace', [{ ...ui.workspace, openTaskIds: [task.id], activeTaskId: task.id, sidebar: 'explorer' }])
-  await page.reload(); await page.waitForSelector('.shell')
-  await page.locator('.task-row').filter({ has: page.getByText(task.title, { exact: true }) }).click()
+  const ui = await api('ui.get'),
+    viewId = `drop-${session.id}`
+  await api('ui.setTask', [
+    task.id,
+    { views: [{ id: viewId, kind: 'agent', sessionId: session.id }], activeViewId: viewId, activeAgentViewId: viewId },
+  ])
+  await api('ui.setWorkspace', [
+    { ...ui.workspace, openTaskIds: [task.id], activeTaskId: task.id, sidebar: 'explorer' },
+  ])
+  await page.reload()
+  await page.waitForSelector('.shell')
+  await page
+    .locator('.task-row')
+    .filter({ has: page.getByText(task.title, { exact: true }) })
+    .click()
   await page.getByRole('button', { name: 'Explorer', exact: true }).click()
   await page.waitForSelector('.explorer-panel .tree-root')
-  const desktop = join(dir, 'Desktop fixtures'), folder = join(desktop, 'Dropped folder')
-  mkdirSync(folder, { recursive: true }); mkdirSync(join(folder, 'Nested'))
+  const desktop = join(dir, 'Desktop fixtures'),
+    folder = join(desktop, 'Dropped folder')
+  mkdirSync(folder, { recursive: true })
+  mkdirSync(join(folder, 'Nested'))
   writeFileSync(join(folder, 'Nested', 'context.txt'), 'Folder context from desktop\n')
   writeFileSync(join(desktop, 'note.txt'), 'Desktop note\n')
   const cdp = await page.context().newCDPSession(page)
   const dropFiles = async (locator, paths, bottom = false) => {
-    const box = await locator.boundingBox(); if (!box) throw new Error('Drop target is not visible')
-    const x = box.x + box.width / 2, y = box.y + (bottom ? box.height - 4 : box.height / 2)
+    const box = await locator.boundingBox()
+    if (!box) throw new Error('Drop target is not visible')
+    const x = box.x + box.width / 2,
+      y = box.y + (bottom ? box.height - 4 : box.height / 2)
     const data = { items: [], files: paths, dragOperationsMask: 1 }
-    for (const type of ['dragEnter', 'dragOver', 'drop']) await cdp.send('Input.dispatchDragEvent', { type, x, y, data })
+    for (const type of ['dragEnter', 'dragOver', 'drop'])
+      await cdp.send('Input.dispatchDragEvent', { type, x, y, data })
   }
   const treeRoot = page.locator('.explorer-panel .tree-root').first()
   await dropFiles(treeRoot, [folder, join(desktop, 'note.txt')])
-  await until(() => existsSync(join(repo, 'Dropped folder', 'Nested', 'context.txt')) && existsSync(join(repo, 'note.txt')), 'Desktop drop was not imported')
-  check(readFileSync(join(folder, 'Nested', 'context.txt'), 'utf8') === 'Folder context from desktop\n', 'Explorer imports desktop folders recursively and preserves originals')
+  await until(
+    () => existsSync(join(repo, 'Dropped folder', 'Nested', 'context.txt')) && existsSync(join(repo, 'note.txt')),
+    'Desktop drop was not imported',
+  )
+  check(
+    readFileSync(join(folder, 'Nested', 'context.txt'), 'utf8') === 'Folder context from desktop\n',
+    'Explorer imports desktop folders recursively and preserves originals',
+  )
   await dropFiles(treeRoot, [join(desktop, 'note.txt')])
   await until(() => existsSync(join(repo, 'note copy.txt')), 'Duplicate import did not get a free name')
   check(readFileSync(join(repo, 'note.txt'), 'utf8') === 'Desktop note\n', 'Duplicate drops preserve existing files')
@@ -75,20 +163,35 @@ async function runDropJourney() {
   await dropFiles(page.locator('.explorer-panel .repo-tree').last(), [join(desktop, 'blank-space.txt')], true)
   await until(() => existsSync(join(repo, 'blank-space.txt')), 'Empty Explorer space did not receive the drop')
   check(true, 'Empty Explorer space imports into the repository root')
-  const chat = page.locator('.agent-view:visible'), composer = chat.locator('.composer'), input = composer.locator('[data-composer-input]')
+  const chat = page.locator('.agent-view:visible'),
+    composer = chat.locator('.composer'),
+    input = composer.locator('[data-composer-input]')
   await input.fill('Inspect these folders')
   await dropFiles(composer, [folder, join(desktop, 'note.txt')])
-  await until(async () => (await input.getAttribute('data-draft')).includes(JSON.stringify(folder)), 'Desktop folder path did not reach the draft')
+  await until(
+    async () => (await input.getAttribute('data-draft')).includes(JSON.stringify(folder)),
+    'Desktop folder path did not reach the draft',
+  )
   await composer.locator('.attachment-name').filter({ hasText: 'note.txt' }).waitFor()
   check(true, 'Mixed desktop drops add folder paths and file attachments to the chat input')
-  const emptyFolder = join(desktop, 'Empty folder'); mkdirSync(emptyFolder)
+  const emptyFolder = join(desktop, 'Empty folder')
+  mkdirSync(emptyFolder)
   await dropFiles(chat.locator('.agent-header'), [emptyFolder])
-  await until(async () => (await input.getAttribute('data-draft')).includes(JSON.stringify(emptyFolder)), 'Empty folder did not reach the draft from the conversation')
-  check(await composer.getByRole('alert').count() === 0, 'Conversation drops accept empty desktop folders as path references')
+  await until(
+    async () => (await input.getAttribute('data-draft')).includes(JSON.stringify(emptyFolder)),
+    'Empty folder did not reach the draft from the conversation',
+  )
+  check(
+    (await composer.getByRole('alert').count()) === 0,
+    'Conversation drops accept empty desktop folders as path references',
+  )
   await folderRow.dragTo(composer)
   await composer.getByRole('button', { name: 'Remove Dropped folder/Nested/context.txt', exact: true }).waitFor()
   check(true, 'Explorer folder drops add nested file context')
-  check(await chat.getAttribute('class').then((value) => !value.includes(' dropping')), 'Chat drop highlight clears after input drops')
+  check(
+    await chat.getAttribute('class').then((value) => !value.includes(' dropping')),
+    'Chat drop highlight clears after input drops',
+  )
   check(errors.length === 0, `No renderer errors: ${errors.join(', ')}`)
   await page.screenshot({ path: join(shots, 'file-drops.png') })
   await cdp.detach()
@@ -96,18 +199,42 @@ async function runDropJourney() {
 }
 async function runJourney() {
   await launch()
-  check(await app.evaluate(({ app }) => app.getName()) === 'Ramu', 'Native app identity is Ramu')
-  if (process.platform === 'darwin') check(await app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.items[0]?.label) === 'Ramu', 'macOS app menu is Ramu')
-  await api('settings.models.set', [{ sets: [{ id: 'smoke', name: 'Smoke', steps: [{ id: 'fake', name: 'Fake Claude', provider: 'claude-code', model: 'fake-claude', effort: 'medium' }] }], defaultSetId: 'smoke', defaultStepId: 'fake', defaultBarMode: 'model' }])
-  await page.reload(); await page.waitForSelector('.shell')
-  check(await page.getByRole('heading', { name: 'What should we work on?' }).isVisible(), 'The Chats home page is the startup page')
+  check((await app.evaluate(({ app }) => app.getName())) === 'Ramu', 'Native app identity is Ramu')
+  if (process.platform === 'darwin')
+    check(
+      (await app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.items[0]?.label)) === 'Ramu',
+      'macOS app menu is Ramu',
+    )
+  await api('settings.models.set', [
+    {
+      sets: [
+        {
+          id: 'smoke',
+          name: 'Smoke',
+          steps: [{ id: 'fake', name: 'Fake Claude', provider: 'claude-code', model: 'fake-claude', effort: 'medium' }],
+        },
+      ],
+      defaultSetId: 'smoke',
+      defaultStepId: 'fake',
+      defaultBarMode: 'model',
+    },
+  ])
+  await page.reload()
+  await page.waitForSelector('.shell')
+  check(
+    await page.getByRole('heading', { name: 'What should we work on?' }).isVisible(),
+    'The Chats home page is the startup page',
+  )
   check(await page.getByRole('button', { name: 'Refresh recap', exact: true }).isVisible(), 'Recaps enabled by default')
-  check(await page.locator('[data-slot=button]').count() > 0, 'Home uses shadcn buttons')
+  check((await page.locator('[data-slot=button]').count()) > 0, 'Home uses shadcn buttons')
   await page.keyboard.press('Meta+Shift+p')
   await page.getByRole('dialog', { name: 'Command palette', exact: true }).waitFor()
-  check(await page.locator('[data-slot=command-input]').count() === 1, 'Command palette uses shadcn Command')
+  check((await page.locator('[data-slot=command-input]').count()) === 1, 'Command palette uses shadcn Command')
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  check(await page.locator('[data-slot=dialog-content]').evaluate((el) => getComputedStyle(el).animationName) === 'none', 'Reduced motion disables dialog animation')
+  check(
+    (await page.locator('[data-slot=dialog-content]').evaluate((el) => getComputedStyle(el).animationName)) === 'none',
+    'Reduced motion disables dialog animation',
+  )
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await page.keyboard.press('Escape')
   await page.screenshot({ path: join(shots, 'home.png') })
@@ -122,40 +249,68 @@ async function runJourney() {
   await choices.nth(index).click()
   await choices.first().waitFor({ state: 'detached' })
   await access.click()
-  check(await choices.nth(index).getAttribute('aria-checked') === 'true', 'Dropdown menu items select on click')
+  check((await choices.nth(index).getAttribute('aria-checked')) === 'true', 'Dropdown menu items select on click')
   await choices.nth(original).click()
   await choices.first().waitFor({ state: 'detached' })
   const composer = page.locator('[data-composer-input]:visible').first()
-  await composer.fill('/'); await composer.press('End')
+  await composer.fill('/')
+  await composer.press('End')
   await page.getByRole('option', { name: /\/schedule.*Create a schedule/ }).waitFor()
   check(await page.getByRole('listbox').isVisible(), 'Slash opens a command dropdown')
-  await composer.press('Escape'); await composer.fill('Hello without a project')
+  await composer.press('Escape')
+  await composer.fill('Hello without a project')
   await page.getByRole('button', { name: 'Start chat', exact: true }).click()
   await page.locator('.agent-view:visible[data-state="idle"] .msg.assistant').last().waitFor({ timeout: 10000 })
-  let tasks = await api('tasks.list'); const general = tasks.find((t) => t.projectId === 'no-project')
-  check(await page.locator('.agent-view:visible .msg.assistant').count() === 1, 'Live and stored transcript events do not duplicate')
+  let tasks = await api('tasks.list')
+  const general = tasks.find((t) => t.projectId === 'no-project')
+  check(
+    (await page.locator('.agent-view:visible .msg.assistant').count()) === 1,
+    'Live and stored transcript events do not duplicate',
+  )
   check(general, 'Project-free chat starts without any repository')
-  const scope = await api('agent.scope', [general.id]); check(scope.cwd.includes('chats'), 'Project-free chat has a dedicated working directory')
+  const scope = await api('agent.scope', [general.id])
+  check(scope.cwd.includes('chats'), 'Project-free chat has a dedicated working directory')
   const { project } = await api('projects.addFolder', [repo])
   await page.evaluate(() => window.dispatchEvent(new Event('ramu:settings')))
   await page.getByRole('button', { name: 'Providers & models', exact: true }).click()
   await page.locator('.provider-settings-card').first().waitFor()
-  check(await page.locator('.provider-settings-card').count() === 5, 'Provider settings keeps all five providers')
-  check(await page.getByRole('button', { name: /Install & setup|Update & setup/ }).count() === 0, 'Provider settings removes install/setup panels')
+  check((await page.locator('.provider-settings-card').count()) === 5, 'Provider settings keeps all five providers')
+  check(
+    (await page.getByRole('button', { name: /Install & setup|Update & setup/ }).count()) === 0,
+    'Provider settings removes install/setup panels',
+  )
   // Login rows only exist for providers installed on this machine, so compare buttons with rows instead of assuming a count.
-  check(await page.getByRole('button', { name: /^(Login|Switch login)$/ }).count() === await page.locator('ul[aria-label$=" logins"] > li').count(), 'Every installed provider login row exposes Login')
-  check(await page.getByRole('button', { name: 'Add account', exact: true }).count() === 5, 'Account profiles are offered for every provider')
+  check(
+    (await page.getByRole('button', { name: /^(Login|Switch login)$/ }).count()) ===
+      (await page.locator('ul[aria-label$=" logins"] > li').count()),
+    'Every installed provider login row exposes Login',
+  )
+  check(
+    (await page.getByRole('button', { name: 'Add account', exact: true }).count()) === 5,
+    'Account profiles are offered for every provider',
+  )
   const codexSettings = page.getByRole('region', { name: 'Codex settings', exact: true })
   await codexSettings.getByRole('button', { name: 'Add account', exact: true }).click()
   await codexSettings.getByRole('textbox', { name: 'Account name', exact: true }).fill('Smoke account')
   await codexSettings.getByRole('button', { name: 'Add', exact: true }).click()
-  check((await codexSettings.getByRole('combobox', { name: 'Codex account', exact: true }).textContent()).includes('Smoke account'), 'A new account profile can be named and selected')
+  check(
+    (await codexSettings.getByRole('combobox', { name: 'Codex account', exact: true }).textContent()).includes(
+      'Smoke account',
+    ),
+    'A new account profile can be named and selected',
+  )
   await codexSettings.getByRole('combobox', { name: 'Codex account', exact: true }).click()
   await page.getByRole('option', { name: 'Default CLI account', exact: true }).click()
   await page.screenshot({ path: join(shots, 'provider-settings.png') })
   await page.getByRole('button', { name: 'Background & updates', exact: true }).click()
-  check(await page.getByRole('switch', { name: 'Auto-update Ramu', exact: true }).count() === 0, 'App auto-update is unavailable for unsigned builds')
-  check(await page.getByRole('switch', { name: 'Check app updates', exact: true }).isChecked(), 'GitHub app-update checks are on by default')
+  check(
+    (await page.getByRole('switch', { name: 'Auto-update Ramu', exact: true }).count()) === 0,
+    'App auto-update is unavailable for unsigned builds',
+  )
+  check(
+    await page.getByRole('switch', { name: 'Check app updates', exact: true }).isChecked(),
+    'GitHub app-update checks are on by default',
+  )
   await page.screenshot({ path: join(shots, 'app-updates.png') })
   await page.getByRole('button', { name: 'Background & updates', exact: true }).click()
   const awake = page.getByRole('switch', { name: 'Keep computer awake', exact: true })
@@ -163,14 +318,22 @@ async function runJourney() {
   await awake.check()
   const awakeSource = page.getByRole('combobox', { name: 'When to keep awake', exact: true })
   check((await awakeSource.textContent()).includes('Plugged in only'), 'Keep awake recommends plugged-in-only power')
-  await awakeSource.click(); await page.getByRole('option', { name: 'Plugged in and on battery', exact: true }).click()
+  await awakeSource.click()
+  await page.getByRole('option', { name: 'Plugged in and on battery', exact: true }).click()
   check((await awakeSource.textContent()).includes('on battery'), 'Keep awake also offers battery operation')
-  await awakeSource.click(); await page.getByRole('option', { name: 'Plugged in only (recommended)', exact: true }).click()
+  await awakeSource.click()
+  await page.getByRole('option', { name: 'Plugged in only (recommended)', exact: true }).click()
   await awake.uncheck()
   check(await page.locator('[data-slot=dialog-content].settings-page').isVisible(), 'Settings uses a shadcn modal')
   await page.getByRole('button', { name: 'Chats', exact: true }).click()
-  check(await page.getByRole('switch', { name: 'Continue chats after restart', exact: true }).isChecked(), 'Chat continuation after restart is on by default')
-  check(await page.getByRole('switch', { name: 'Keep working while asking questions', exact: true }).isChecked(), 'Async questions are on by default')
+  check(
+    await page.getByRole('switch', { name: 'Continue chats after restart', exact: true }).isChecked(),
+    'Chat continuation after restart is on by default',
+  )
+  check(
+    await page.getByRole('switch', { name: 'Keep working while asking questions', exact: true }).isChecked(),
+    'Async questions are on by default',
+  )
   await page.getByRole('button', { name: 'Background & updates', exact: true }).click()
   await page.getByRole('switch', { name: /Daily recaps/ }).uncheck()
   await page.getByRole('button', { name: 'Save changes' }).click()
@@ -178,92 +341,182 @@ async function runJourney() {
   await page.getByText(/Settings saved on/).waitFor()
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: 'Home', exact: true }).click()
-  check(await page.getByRole('button', { name: 'Refresh recap', exact: true }).count() === 0, 'Recap toggle hides Home recaps')
-  { const chats = page.getByRole('button', { name: 'Home', exact: true }); if (await chats.getAttribute('aria-pressed') !== 'true') await chats.click() }
+  check(
+    (await page.getByRole('button', { name: 'Refresh recap', exact: true }).count()) === 0,
+    'Recap toggle hides Home recaps',
+  )
+  {
+    const chats = page.getByRole('button', { name: 'Home', exact: true })
+    if ((await chats.getAttribute('aria-pressed')) !== 'true') await chats.click()
+  }
   // Refresh newly added project state through a native automation event.
   await page.evaluate(() => window.ramu.invoke('schedules.list'))
-  await page.reload(); await page.waitForSelector('.shell')
-  { const chats = page.getByRole('button', { name: 'Home', exact: true }); if (await chats.getAttribute('aria-pressed') !== 'true') await chats.click() }
+  await page.reload()
+  await page.waitForSelector('.shell')
+  {
+    const chats = page.getByRole('button', { name: 'Home', exact: true })
+    if ((await chats.getAttribute('aria-pressed')) !== 'true') await chats.click()
+  }
   await page.getByRole('button', { name: `Open ${project.name}`, exact: true }).click()
   await page.getByRole('button', { name: 'Explorer', exact: true }).click()
-  const savedFileTab = async (path) => Object.values((await api('ui.get')).tasks ?? {}).flatMap((state) => state.views ?? []).find((view) => view.kind === 'file' && view.path === path)
-  await page.locator('.explorer-panel').getByRole('button', { name: /other.ts/ }).click()
+  const savedFileTab = async (path) =>
+    Object.values((await api('ui.get')).tasks ?? {})
+      .flatMap((state) => state.views ?? [])
+      .find((view) => view.kind === 'file' && view.path === path)
+  await page
+    .locator('.explorer-panel')
+    .getByRole('button', { name: /other.ts/ })
+    .click()
   await until(async () => (await savedFileTab('other.ts'))?.preview === true, 'Explorer opens a file as a preview')
   check(true, 'Single-click in Explorer still opens a preview tab')
   await page.keyboard.press('Meta+p')
   await page.locator('[data-slot=command-input]').fill('other.ts')
-  await page.getByRole('dialog', { name: 'Command palette', exact: true }).getByRole('option', { name: 'other.ts', exact: true }).click()
-  await until(async () => (await savedFileTab('other.ts'))?.preview === false, 'Command palette keeps an existing preview open')
+  await page
+    .getByRole('dialog', { name: 'Command palette', exact: true })
+    .getByRole('option', { name: 'other.ts', exact: true })
+    .click()
+  await until(
+    async () => (await savedFileTab('other.ts'))?.preview === false,
+    'Command palette keeps an existing preview open',
+  )
   check(true, 'Command palette file selection promotes a preview to a kept-open tab')
   // Open an existing file from Explorer after its directory has loaded.
-  await page.locator('.explorer-panel').getByRole('button', { name: /notes.md/ }).click()
+  await page
+    .locator('.explorer-panel')
+    .getByRole('button', { name: /notes.md/ })
+    .click()
   await page.locator('.monaco-editor:visible').first().waitFor()
   await page.locator('.monaco-editor:visible .view-lines').getByText('Saved project notes', { exact: true }).waitFor()
-  await page.locator('.monaco-editor:visible .view-lines').first().click(); await page.keyboard.press('Meta+a'); await page.keyboard.insertText('Unsaved buffer context')
-  await page.locator('.monaco-editor:visible .view-lines').getByText('Unsaved buffer context', { exact: true }).waitFor()
+  await page.locator('.monaco-editor:visible .view-lines').first().click()
+  await page.keyboard.press('Meta+a')
+  await page.keyboard.insertText('Unsaved buffer context')
+  await page
+    .locator('.monaco-editor:visible .view-lines')
+    .getByText('Unsaved buffer context', { exact: true })
+    .waitFor()
   const prompt = page.locator('[data-composer-input]:visible').first()
   await prompt.fill('/smoke')
   await page.getByRole('option', { name: /smoke-skill/ }).waitFor()
   await page.screenshot({ path: join(shots, 'skills.png') })
-  await prompt.press('Enter'); check((await prompt.getAttribute('data-draft')).includes('$smoke-skill'), 'Skill selection inserts a skill reference')
+  await prompt.press('Enter')
+  check((await prompt.getAttribute('data-draft')).includes('$smoke-skill'), 'Skill selection inserts a skill reference')
   await prompt.fill('@other')
-  await page.getByRole('option', { name: /other.ts/ }).waitFor(); await prompt.press('Enter')
-  check((await prompt.getAttribute('data-draft')).includes('other.ts'), 'File mention selection inserts a file reference')
+  await page.getByRole('option', { name: /other.ts/ }).waitFor()
+  await prompt.press('Enter')
+  check(
+    (await prompt.getAttribute('data-draft')).includes('other.ts'),
+    'File mention selection inserts a file reference',
+  )
   await prompt.fill('Summarize the open file')
   await page.getByRole('button', { name: 'Start chat', exact: true }).click()
   await page.locator('.agent-view:visible[data-state="idle"] .msg.assistant').last().waitFor()
-  tasks = await api('tasks.list'); const projectChat = tasks.find((t) => t.projectId === project.id)
-  const projectSessions = await api('agent.list', [projectChat.id]); const evs = await api('agent.events', [projectSessions[0].id])
-  check(evs.some((e) => e.kind === 'user' && e.text.includes('Unsaved buffer context')), 'Open tabs send unsaved buffer content')
-  check(readFileSync(join(repo, 'notes.md'), 'utf8') === 'Saved project notes\n', 'Sending context does not save or overwrite files')
+  tasks = await api('tasks.list')
+  const projectChat = tasks.find((t) => t.projectId === project.id)
+  const projectSessions = await api('agent.list', [projectChat.id])
+  const evs = await api('agent.events', [projectSessions[0].id])
+  check(
+    evs.some((e) => e.kind === 'user' && e.text.includes('Unsaved buffer context')),
+    'Open tabs send unsaved buffer content',
+  )
+  check(
+    readFileSync(join(repo, 'notes.md'), 'utf8') === 'Saved project notes\n',
+    'Sending context does not save or overwrite files',
+  )
   // Open a source file to check rendering and save behavior.
-  await page.locator('.explorer-panel').getByRole('button', { name: /format-me.ts/ }).click()
+  await page
+    .locator('.explorer-panel')
+    .getByRole('button', { name: /format-me.ts/ })
+    .click()
   await page.locator('.monaco-editor:visible textarea').waitFor()
-  const smoothing = () => page.evaluate(() => ({
-    root: getComputedStyle(document.documentElement).webkitFontSmoothing,
-    editor: getComputedStyle(document.querySelector('.monaco-editor')).webkitFontSmoothing,
-  }))
+  const smoothing = () =>
+    page.evaluate(() => ({
+      root: getComputedStyle(document.documentElement).webkitFontSmoothing,
+      editor: getComputedStyle(document.querySelector('.monaco-editor')).webkitFontSmoothing,
+    }))
   check((await api('settings.app.get')).fontSmoothing === true, 'Font smoothing is enabled by default')
-  check(Object.values(await smoothing()).every((value) => value === 'antialiased'), 'Interface and editor inherit grayscale font smoothing')
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'appearance' } })))
+  check(
+    Object.values(await smoothing()).every((value) => value === 'antialiased'),
+    'Interface and editor inherit grayscale font smoothing',
+  )
+  await page.evaluate(() =>
+    window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'appearance' } })),
+  )
   await page.getByRole('switch', { name: 'Crisper text' }).click()
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
   // Saving keeps the settings dialog open, and Escape is ignored while a save is running; wait for it, then close.
   await page.getByText(/Settings saved on/).waitFor()
   await page.keyboard.press('Escape')
   await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
-  check(Object.values(await smoothing()).every((value) => value === 'auto'), 'Turning smoothing off restores platform rendering in the interface and editor')
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'appearance' } })))
+  check(
+    Object.values(await smoothing()).every((value) => value === 'auto'),
+    'Turning smoothing off restores platform rendering in the interface and editor',
+  )
+  await page.evaluate(() =>
+    window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'appearance' } })),
+  )
   await page.getByRole('switch', { name: 'Crisper text' }).click()
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
   // Saving keeps the settings dialog open, and Escape is ignored while a save is running; wait for it, then close.
   await page.getByText(/Settings saved on/).waitFor()
   await page.keyboard.press('Escape')
   await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
-  check(Object.values(await smoothing()).every((value) => value === 'antialiased'), 'Font smoothing can be re-enabled')
+  check(
+    Object.values(await smoothing()).every((value) => value === 'antialiased'),
+    'Font smoothing can be re-enabled',
+  )
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'editor' } })))
-  check(await page.getByRole('switch', { name: /Lint while editing|Format on save|Language servers|AI inline completion/ }).count() === 0, 'Editor settings contain no linter, formatter, language server or AI completion controls')
+  check(
+    (await page
+      .getByRole('switch', { name: /Lint while editing|Format on save|Language servers|AI inline completion/ })
+      .count()) === 0,
+    'Editor settings contain no linter, formatter, language server or AI completion controls',
+  )
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'detached' })
   await page.locator('.monaco-editor:visible .view-lines').first().click()
-  await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.press('End'); await page.keyboard.insertText('// keep   spacing')
+  await page.keyboard.press('Meta+ArrowDown')
+  await page.keyboard.press('End')
+  await page.keyboard.insertText('// keep   spacing')
   await page.keyboard.press('Meta+s')
-  await until(() => readFileSync(join(repo, 'format-me.ts'), 'utf8').includes('// keep   spacing'), 'Saving writes the edited buffer')
-  check(readFileSync(join(repo, 'format-me.ts'), 'utf8').startsWith('const   x=1\n'), 'Saving preserves existing formatting exactly')
-  check(await page.locator('.ghost-text-decoration, .suggest-widget').count() === 0, 'Editing has no completion UI')
+  await until(
+    () => readFileSync(join(repo, 'format-me.ts'), 'utf8').includes('// keep   spacing'),
+    'Saving writes the edited buffer',
+  )
+  check(
+    readFileSync(join(repo, 'format-me.ts'), 'utf8').startsWith('const   x=1\n'),
+    'Saving preserves existing formatting exactly',
+  )
+  check((await page.locator('.ghost-text-decoration, .suggest-widget').count()) === 0, 'Editing has no completion UI')
   if (process.env.RAMU_E2E_EDITOR_ONLY) {
     await page.keyboard.press('Meta+f')
     await page.locator('.monaco-editor:visible .find-widget.visible').waitFor()
     check(true, 'Editor find remains available')
     await page.keyboard.press('Escape')
     await page.locator('.monaco-editor:visible .view-lines').first().click()
-    await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.insertText(' unsaved')
+    await page.keyboard.press('Meta+ArrowDown')
+    await page.keyboard.insertText(' unsaved')
     writeFileSync(join(repo, 'format-me.ts'), 'const disk = 2\n')
-    await page.locator('.banner.warn').filter({ hasText: 'This file changed on disk while you have unsaved edits.' }).waitFor()
+    await page
+      .locator('.banner.warn')
+      .filter({ hasText: 'This file changed on disk while you have unsaved edits.' })
+      .waitFor()
     await page.getByRole('button', { name: 'Compare', exact: true }).click()
     await page.locator('.monaco-diff-editor:visible').waitFor()
-    check(await page.locator('.monaco-diff-editor:visible .editor.original .view-lines').textContent().then((text) => text.includes('disk')), 'Conflict comparison renders disk content')
-    check(await page.evaluate(() => [...document.querySelectorAll('.monaco-diff-editor .monaco-editor')].every((editor) => getComputedStyle(editor).webkitFontSmoothing === 'antialiased')), 'Diff editors inherit font smoothing')
+    check(
+      await page
+        .locator('.monaco-diff-editor:visible .editor.original .view-lines')
+        .textContent()
+        .then((text) => text.includes('disk')),
+      'Conflict comparison renders disk content',
+    )
+    check(
+      await page.evaluate(() =>
+        [...document.querySelectorAll('.monaco-diff-editor .monaco-editor')].every(
+          (editor) => getComputedStyle(editor).webkitFontSmoothing === 'antialiased',
+        ),
+      ),
+      'Diff editors inherit font smoothing',
+    )
     await page.screenshot({ path: join(shots, 'simple-editor.png') })
     check(errors.length === 0, `No renderer errors: ${errors.join(', ')}`)
     console.log(`Screenshots: ${shots}`)
@@ -282,42 +535,93 @@ async function runJourney() {
   await page.screenshot({ path: join(shots, 'schedules.png') })
   check((await api('schedules.list'))[0].rule.kind === 'once', 'Schedules UI creates a one-time schedule')
   const pending = await api('tasks.create', [{ projectId: 'no-project', title: 'Survives app close', mode: 'current' }])
-  const settings = { provider: 'claude-code', model: 'fake-claude', effort: 'medium', access: 'edits', autoFallback: false }
+  const settings = {
+    provider: 'claude-code',
+    model: 'fake-claude',
+    effort: 'medium',
+    access: 'edits',
+    autoFallback: false,
+  }
   const session = await api('agent.start', [pending.id, 'Continue in background', settings])
   await sleep(200)
   check((await api('agent.get', [session.id])).state === 'needs-input', 'Background agent persists a request for input')
   const requestEvent = (await api('agent.events', [session.id])).findLast((e) => e.kind === 'permission-request')
   // Change only a disposable fixture while the run is paused, exercising before/after capture.
   writeFileSync(join(session.cwd, 'review.txt'), 'Changed during the agent run\n')
-  const scheduled = await api('schedules.save', [{ name: 'Closed app execution', prompt: 'Run without an open window', projectId: 'no-project', timezone: 'Asia/Jakarta', rule: { kind: 'once', at: new Date(Date.now() + 2000).toISOString() }, missedPolicy: 'latest', settings: { ...settings, access: 'full' } }])
+  const scheduled = await api('schedules.save', [
+    {
+      name: 'Closed app execution',
+      prompt: 'Run without an open window',
+      projectId: 'no-project',
+      timezone: 'Asia/Jakarta',
+      rule: { kind: 'once', at: new Date(Date.now() + 2000).toISOString() },
+      missedPolicy: 'latest',
+      settings: { ...settings, access: 'full' },
+    },
+  ])
   const before = await api('background.status')
-  await app.close(); app = null
+  await app.close()
+  app = null
   await api('agent.replyPermission', [session.id, requestEvent.requestId, true])
   for (let i = 0; i < 30 && (await api('agent.get', [session.id])).state !== 'idle'; i++) await sleep(100)
   check((await api('agent.get', [session.id])).state === 'idle', 'Chat completes while the app is closed')
-  await until(async () => (await api('schedules.runs', [scheduled.id])).some((r) => r.status === 'completed'), 'Closed app schedule did not complete', 300)
-  check((await api('schedules.list')).find((s) => s.id === scheduled.id).state === 'completed', 'One-time schedule executes once while the app is closed')
+  await until(
+    async () => (await api('schedules.runs', [scheduled.id])).some((r) => r.status === 'completed'),
+    'Closed app schedule did not complete',
+    300,
+  )
+  check(
+    (await api('schedules.list')).find((s) => s.id === scheduled.id).state === 'completed',
+    'One-time schedule executes once while the app is closed',
+  )
   await launch()
   check((await api('background.status')).pid === before.pid, 'Reopening reconnects to the same daemon')
-  check((await api('agent.events', [session.id])).some((e) => e.kind === 'result'), 'Background output survives close and reopen')
-  const review = await until(async () => (await api('reviews.list', [session.id])).find((r) => r.state === 'ready' && r.files.length), 'No captured changes')
+  check(
+    (await api('agent.events', [session.id])).some((e) => e.kind === 'result'),
+    'Background output survives close and reopen',
+  )
+  const review = await until(
+    async () => (await api('reviews.list', [session.id])).find((r) => r.state === 'ready' && r.files.length),
+    'No captured changes',
+  )
   const openCapturedReview = async () => {
     // Restore this recorded revision through the persisted workspace, then exercise its real UI.
-    const ui = await api('ui.get'), viewId = `smoke-review-${review.id}`
-    await api('ui.setTask', [pending.id, { views: [{ id: viewId, kind: 'review', taskId: pending.id, reviewId: review.id }], activeViewId: viewId }])
-    await api('ui.setWorkspace', [{ ...ui.workspace, openTaskIds: [...new Set([...ui.workspace.openTaskIds, pending.id])], activeTaskId: pending.id }])
-    await page.reload(); await page.locator('.task-row').filter({ has: page.getByText(pending.title, { exact: true }) }).click(); await page.locator('.changes-page:visible').waitFor()
+    const ui = await api('ui.get'),
+      viewId = `smoke-review-${review.id}`
+    await api('ui.setTask', [
+      pending.id,
+      { views: [{ id: viewId, kind: 'review', taskId: pending.id, reviewId: review.id }], activeViewId: viewId },
+    ])
+    await api('ui.setWorkspace', [
+      {
+        ...ui.workspace,
+        openTaskIds: [...new Set([...ui.workspace.openTaskIds, pending.id])],
+        activeTaskId: pending.id,
+      },
+    ])
+    await page.reload()
+    await page
+      .locator('.task-row')
+      .filter({ has: page.getByText(pending.title, { exact: true }) })
+      .click()
+    await page.locator('.changes-page:visible').waitFor()
   }
   await openCapturedReview()
   await page.getByRole('button', { name: 'File comment', exact: true }).click()
   await page.getByRole('textbox', { name: 'Comment on review.txt', exact: true }).fill('Keep the existing behavior too')
   await page.getByRole('button', { name: 'Comment', exact: true }).click()
   await until(async () => (await api('reviews.get', [review.id])).comments.length === 1, 'File comment was not saved')
-  check((await api('agent.events', [session.id])).filter((e) => e.kind === 'user').length === 1, 'Saving a review comment does not send it')
-  check((await api('reviews.get', [review.id])).comments[0].scope === 'file', 'Header comment action saves a file comment')
+  check(
+    (await api('agent.events', [session.id])).filter((e) => e.kind === 'user').length === 1,
+    'Saving a review comment does not send it',
+  )
+  check(
+    (await api('reviews.get', [review.id])).comments[0].scope === 'file',
+    'Header comment action saves a file comment',
+  )
   const viewed = page.getByRole('checkbox', { name: 'Mark review.txt as viewed', exact: true })
   await viewed.check()
-  check(await page.locator('.review-file-card.viewed .review-diff').count() === 0, 'Viewed collapses the file diff')
+  check((await page.locator('.review-file-card.viewed .review-diff').count()) === 0, 'Viewed collapses the file diff')
   // Narrow review panes intentionally hide this counter, but its state must still update.
   await page.getByText('1 / 1 viewed', { exact: true }).waitFor({ state: 'attached' })
   await openCapturedReview()
@@ -327,7 +631,10 @@ async function runJourney() {
   await page.locator('.review-file-card .review-diff .editor.modified .line-numbers').first().click()
   await page.locator('.review-inline-interaction textarea').fill('Line-specific feedback')
   await page.locator('.review-inline-interaction').getByRole('button', { name: 'Comment', exact: true }).click()
-  const lineReview = await until(async () => { const current = await api('reviews.get', [review.id]); return current.comments.length === 2 && current }, 'Line comment was not saved')
+  const lineReview = await until(async () => {
+    const current = await api('reviews.get', [review.id])
+    return current.comments.length === 2 && current
+  }, 'Line comment was not saved')
   const lineComment = lineReview.comments.find((comment) => comment.text === 'Line-specific feedback')
   check(lineComment.scope === 'line' && lineComment.line >= 1, 'Selection comment still saves line scope')
   await api('reviews.removeComment', [review.id, lineComment.id])
@@ -337,8 +644,14 @@ async function runJourney() {
   const chat = page.locator('.agent-view:visible')
   await chat.getByLabel('1 review comment attached', { exact: true }).waitFor()
   await chat.locator('[data-composer-input]').fill('')
-  check(await chat.getByRole('button', { name: 'Send', exact: true }).isEnabled(), 'Review comments enable Send without extra text')
-  writeFileSync(join(session.cwd, 'feedback-context.txt'), 'Additional context for the review: preserve compatibility.\n')
+  check(
+    await chat.getByRole('button', { name: 'Send', exact: true }).isEnabled(),
+    'Review comments enable Send without extra text',
+  )
+  writeFileSync(
+    join(session.cwd, 'feedback-context.txt'),
+    'Additional context for the review: preserve compatibility.\n',
+  )
   const feedbackFile = (await api('files.all', [session.taskId])).find((file) => file.path === 'feedback-context.txt')
   check(!!feedbackFile, 'Review context file is available in the chat workspace')
   await chat.locator('.composer').evaluate((element, file) => {
@@ -348,223 +661,585 @@ async function runJourney() {
   }, feedbackFile)
   await chat.getByRole('button', { name: 'Remove feedback-context.txt', exact: true }).waitFor()
   await chat.getByRole('button', { name: 'Send', exact: true }).click()
-  await until(async () => (await api('agent.events', [session.id])).some((e) => e.kind === 'user' && e.text.includes('Changed during the agent run') && e.text.includes('Keep the existing behavior too') && e.text.includes('<file-context>') && e.text.includes('Additional context for the review: preserve compatibility.')), 'Comments-only feedback did not include the recorded code and pinned file context')
+  await until(
+    async () =>
+      (await api('agent.events', [session.id])).some(
+        (e) =>
+          e.kind === 'user' &&
+          e.text.includes('Changed during the agent run') &&
+          e.text.includes('Keep the existing behavior too') &&
+          e.text.includes('<file-context>') &&
+          e.text.includes('Additional context for the review: preserve compatibility.'),
+      ),
+    'Comments-only feedback did not include the recorded code and pinned file context',
+  )
   check(true, 'Comments-only send delivers review code and pinned file context to the AI')
   await until(async () => (await api('agent.get', [session.id])).state === 'idle', 'Feedback run did not finish')
   await openCapturedReview()
-  check(await page.getByRole('button', { name: 'Preview restore', exact: true }).count() === 0, 'Undo is available in chat Edit, not on the Changes page')
+  check(
+    (await page.getByRole('button', { name: 'Preview restore', exact: true }).count()) === 0,
+    'Undo is available in chat Edit, not on the Changes page',
+  )
   await page.getByRole('button', { name: 'Open chat', exact: true }).click()
   await page.locator('.agent-view:visible').getByRole('button', { name: 'Edit message', exact: true }).first().click()
   await page.getByRole('button', { name: 'Preview restore', exact: true }).click()
   const undo = page.getByRole('alertdialog', { name: 'Restore files before this message' })
   await undo.getByRole('checkbox', { name: 'Restore review.txt' }).waitFor()
-  check(await undo.getByRole('checkbox', { name: 'Restore review.txt' }).isChecked(), 'Undo preview selects only eligible files')
+  check(
+    await undo.getByRole('checkbox', { name: 'Restore review.txt' }).isChecked(),
+    'Undo preview selects only eligible files',
+  )
   await page.screenshot({ path: join(shots, 'undo.png') })
   writeFileSync(join(session.cwd, 'review.txt'), 'Later user edit\n')
   await undo.getByRole('button', { name: 'Restore selected files · 1', exact: true }).click()
   await undo.getByText(/changed after preview/).waitFor()
-  check(readFileSync(join(session.cwd, 'review.txt'), 'utf8') === 'Later user edit\n', 'Stale undo refuses to overwrite later edits')
+  check(
+    readFileSync(join(session.cwd, 'review.txt'), 'utf8') === 'Later user edit\n',
+    'Stale undo refuses to overwrite later edits',
+  )
   await undo.getByRole('button', { name: 'Refresh preview', exact: true }).click()
   await undo.getByText('The added file has later edits; it will not be removed').first().waitFor()
-  check(await undo.getByRole('button', { name: 'Restore selected files · 0', exact: true }).isDisabled(), 'Conflicted files cannot be undone')
+  check(
+    await undo.getByRole('button', { name: 'Restore selected files · 0', exact: true }).isDisabled(),
+    'Conflicted files cannot be undone',
+  )
   writeFileSync(join(session.cwd, 'review.txt'), 'Changed during the agent run\n')
   await undo.getByRole('button', { name: 'Refresh preview', exact: true }).click()
   await undo.getByRole('button', { name: 'Restore selected files · 1', exact: true }).click()
   await until(async () => !existsSync(join(session.cwd, 'review.txt')), 'Undo did not remove the added file')
-  await until(async () => (await api('reviews.get', [review.id])).undoFileIds?.length === 1, 'Undo metadata was not saved')
+  await until(
+    async () => (await api('reviews.get', [review.id])).undoFileIds?.length === 1,
+    'Undo metadata was not saved',
+  )
   check(true, 'Undo keeps the original review as history')
-  check(await page.getByRole('region', { name: 'Editing message', exact: true }).getByText('Selected files restored.', { exact: true }).isVisible(), 'Chat edit offers file restore before resending the revised request')
+  check(
+    await page
+      .getByRole('region', { name: 'Editing message', exact: true })
+      .getByText('Selected files restored.', { exact: true })
+      .isVisible(),
+    'Chat edit offers file restore before resending the revised request',
+  )
   const editing = page.getByRole('region', { name: 'Editing message', exact: true })
   await editing.getByRole('textbox', { name: 'Edit your message', exact: true }).fill('Revised request after restoring')
   await editing.getByRole('button', { name: 'Send', exact: true }).click()
-  await until(async () => (await api('agent.events', [session.id])).some((event) => event.kind === 'user' && event.text.includes('Revised request after restoring') && event.text.includes('were restored using Ramu')), 'Edited request did not carry the restore context')
+  await until(
+    async () =>
+      (await api('agent.events', [session.id])).some(
+        (event) =>
+          event.kind === 'user' &&
+          event.text.includes('Revised request after restoring') &&
+          event.text.includes('were restored using Ramu'),
+      ),
+    'Edited request did not carry the restore context',
+  )
   await until(async () => (await api('agent.get', [session.id])).state === 'idle', 'Revised request did not complete')
   for (const provider of ['claude-code', 'codex']) {
-    const toolTask = await api('tasks.create', [{ projectId: 'no-project', title: `${provider} tools`, mode: 'current' }])
-    const toolSession = await api('agent.start', [toolTask.id, '[schedule tool]', { ...settings, provider, model: provider === 'codex' ? 'fake-codex' : 'fake-claude', access: 'full' }])
-    await until(async () => (await api('agent.events', [toolSession.id])).some((e) => e.kind === 'schedule'), 'Schedule tool did not save a schedule')
-    check((await api('schedules.list')).some((s) => s.sourceTaskId === toolTask.id && s.projectId === 'no-project'), `${provider} creates a scoped schedule through injected tools`)
+    const toolTask = await api('tasks.create', [
+      { projectId: 'no-project', title: `${provider} tools`, mode: 'current' },
+    ])
+    const toolSession = await api('agent.start', [
+      toolTask.id,
+      '[schedule tool]',
+      { ...settings, provider, model: provider === 'codex' ? 'fake-codex' : 'fake-claude', access: 'full' },
+    ])
+    await until(
+      async () => (await api('agent.events', [toolSession.id])).some((e) => e.kind === 'schedule'),
+      'Schedule tool did not save a schedule',
+    )
+    check(
+      (await api('schedules.list')).some((s) => s.sourceTaskId === toolTask.id && s.projectId === 'no-project'),
+      `${provider} creates a scoped schedule through injected tools`,
+    )
   }
-  const liveToolTask = await api('tasks.create', [{ projectId: 'no-project', title: 'Codex live tool output', mode: 'current' }])
-  const liveToolSession = await api('agent.start', [liveToolTask.id, '[live codex tools]', { ...settings, provider: 'codex', model: 'fake-codex', access: 'edits' }])
-  await until(async () => (await api('agent.events', [liveToolSession.id])).some((event) => event.kind === 'permission-request'), 'Live tool fixture did not pause')
-  const liveUi = await api('ui.get'), liveViewId = `live-tools-${liveToolSession.id}`
-  await api('ui.setTask', [liveToolTask.id, { views: [{ id: liveViewId, kind: 'agent', sessionId: liveToolSession.id }], activeViewId: liveViewId }])
-  await api('ui.setWorkspace', [{ ...liveUi.workspace, openTaskIds: [...new Set([...liveUi.workspace.openTaskIds, liveToolTask.id])], activeTaskId: liveToolTask.id }])
+  const liveToolTask = await api('tasks.create', [
+    { projectId: 'no-project', title: 'Codex live tool output', mode: 'current' },
+  ])
+  const liveToolSession = await api('agent.start', [
+    liveToolTask.id,
+    '[live codex tools]',
+    { ...settings, provider: 'codex', model: 'fake-codex', access: 'edits' },
+  ])
+  await until(
+    async () => (await api('agent.events', [liveToolSession.id])).some((event) => event.kind === 'permission-request'),
+    'Live tool fixture did not pause',
+  )
+  const liveUi = await api('ui.get'),
+    liveViewId = `live-tools-${liveToolSession.id}`
+  await api('ui.setTask', [
+    liveToolTask.id,
+    { views: [{ id: liveViewId, kind: 'agent', sessionId: liveToolSession.id }], activeViewId: liveViewId },
+  ])
+  await api('ui.setWorkspace', [
+    {
+      ...liveUi.workspace,
+      openTaskIds: [...new Set([...liveUi.workspace.openTaskIds, liveToolTask.id])],
+      activeTaskId: liveToolTask.id,
+    },
+  ])
   await page.reload()
-  await page.locator('.task-row').filter({ has: page.getByText(liveToolTask.title, { exact: true }) }).click()
+  await page
+    .locator('.task-row')
+    .filter({ has: page.getByText(liveToolTask.title, { exact: true }) })
+    .click()
   const liveChat = page.locator('.agent-view:visible')
   await liveChat.getByRole('button', { name: 'Running pwd', exact: true }).click()
   await liveChat.getByText(/First output line\nSecond output line/).waitFor()
-  check(await liveChat.locator('.tool-icon.running').count() > 0, 'Live command output keeps the tool running until completion')
+  check(
+    (await liveChat.locator('.tool-icon.running').count()) > 0,
+    'Live command output keeps the tool running until completion',
+  )
   await liveChat.getByRole('button', { name: 'Changes in this turn', exact: true }).click()
   await liveChat.getByText(/--- a\/app.ts/).waitFor()
-  check(await liveChat.getByText('Old provisional patch', { exact: true }).count() === 0, 'Live turn diff replaces the earlier snapshot')
+  check(
+    (await liveChat.getByText('Old provisional patch', { exact: true }).count()) === 0,
+    'Live turn diff replaces the earlier snapshot',
+  )
   await page.screenshot({ path: join(shots, 'codex-live-tools.png') })
   await api('agent.replyPermission', [liveToolSession.id, 'fake-codex-permission', true])
-  await until(async () => (await api('agent.get', [liveToolSession.id])).state === 'idle', 'Live tool fixture did not complete')
-  check((await api('agent.events', [liveToolSession.id])).filter((event) => event.kind === 'tool-result').length === 1, 'Completed tool output replaces the streamed result in chat history')
-  await until(async () => await liveChat.locator('.tool-icon.running').count() === 0, 'Finished command kept the running indicator')
+  await until(
+    async () => (await api('agent.get', [liveToolSession.id])).state === 'idle',
+    'Live tool fixture did not complete',
+  )
+  check(
+    (await api('agent.events', [liveToolSession.id])).filter((event) => event.kind === 'tool-result').length === 1,
+    'Completed tool output replaces the streamed result in chat history',
+  )
+  await until(
+    async () => (await liveChat.locator('.tool-icon.running').count()) === 0,
+    'Finished command kept the running indicator',
+  )
   check(true, 'Completed command clears its running indicator')
-  const connectorTask = await api('tasks.create', [{ projectId: 'no-project', title: 'Connector input', mode: 'current' }])
-  const connector = await api('agent.start', [connectorTask.id, '[mcp form]', { ...settings, provider: 'codex', model: 'fake-codex', access: 'full' }])
-  await until(async () => (await api('agent.events', [connector.id])).some((event) => event.kind === 'elicitation'), 'Connector form was not saved')
-  const connectorUi = await api('ui.get'), connectorView = `connector-${connector.id}`
-  await api('ui.setTask', [connectorTask.id, { views: [{ id: connectorView, kind: 'agent', sessionId: connector.id }], activeViewId: connectorView }])
-  await api('ui.setWorkspace', [{ ...connectorUi.workspace, openTaskIds: [...new Set([...connectorUi.workspace.openTaskIds, connectorTask.id])], activeTaskId: connectorTask.id }])
+  const connectorTask = await api('tasks.create', [
+    { projectId: 'no-project', title: 'Connector input', mode: 'current' },
+  ])
+  const connector = await api('agent.start', [
+    connectorTask.id,
+    '[mcp form]',
+    { ...settings, provider: 'codex', model: 'fake-codex', access: 'full' },
+  ])
+  await until(
+    async () => (await api('agent.events', [connector.id])).some((event) => event.kind === 'elicitation'),
+    'Connector form was not saved',
+  )
+  const connectorUi = await api('ui.get'),
+    connectorView = `connector-${connector.id}`
+  await api('ui.setTask', [
+    connectorTask.id,
+    { views: [{ id: connectorView, kind: 'agent', sessionId: connector.id }], activeViewId: connectorView },
+  ])
+  await api('ui.setWorkspace', [
+    {
+      ...connectorUi.workspace,
+      openTaskIds: [...new Set([...connectorUi.workspace.openTaskIds, connectorTask.id])],
+      activeTaskId: connectorTask.id,
+    },
+  ])
   await page.reload()
-  await page.locator('.task-row').filter({ has: page.getByText(connectorTask.title, { exact: true }) }).click()
+  await page
+    .locator('.task-row')
+    .filter({ has: page.getByText(connectorTask.title, { exact: true }) })
+    .click()
   let form = page.locator('.elicitation-card:visible')
   await form.getByLabel('Answer: Worker count', { exact: true }).fill('2')
   await form.getByLabel('No', { exact: true }).check()
   await form.getByLabel('Jakarta', { exact: true }).check()
   const connectorRequest = (await api('agent.events', [connector.id])).find((event) => event.kind === 'elicitation')
-  await until(async () => (await api('agent.events', [connector.id])).some((event) => event.kind === 'question-state' && event.requestId === connectorRequest.requestId && event.drafts.count === '2'), 'Connector drafts were not saved')
-  await app.close(); app = null; await launch()
-  await page.locator('.task-row').filter({ has: page.getByText(connectorTask.title, { exact: true }) }).click()
+  await until(
+    async () =>
+      (await api('agent.events', [connector.id])).some(
+        (event) =>
+          event.kind === 'question-state' &&
+          event.requestId === connectorRequest.requestId &&
+          event.drafts.count === '2',
+      ),
+    'Connector drafts were not saved',
+  )
+  await app.close()
+  app = null
+  await launch()
+  await page
+    .locator('.task-row')
+    .filter({ has: page.getByText(connectorTask.title, { exact: true }) })
+    .click()
   form = page.locator('.elicitation-card:visible')
   await form.waitFor()
-  check(await form.getByLabel('Answer: Worker count', { exact: true }).inputValue() === '2' && await form.getByLabel('No', { exact: true }).isChecked(), 'Connector form drafts survive closing and reopening the app')
+  check(
+    (await form.getByLabel('Answer: Worker count', { exact: true }).inputValue()) === '2' &&
+      (await form.getByLabel('No', { exact: true }).isChecked()),
+    'Connector form drafts survive closing and reopening the app',
+  )
   await form.getByLabel('Answer: Worker count', { exact: true }).fill('999')
   await form.getByRole('button', { name: 'Submit', exact: true }).click()
   await form.getByRole('alert').waitFor()
-  check((await api('agent.get', [connector.id])).state === 'needs-input', 'Invalid connector form keeps the original request pending')
+  check(
+    (await api('agent.get', [connector.id])).state === 'needs-input',
+    'Invalid connector form keeps the original request pending',
+  )
   await form.getByLabel('Answer: Worker count', { exact: true }).fill('2')
   await page.screenshot({ path: join(shots, 'connector-form.png') })
   await form.getByRole('button', { name: 'Submit', exact: true }).click()
-  await until(async () => (await api('agent.get', [connector.id])).state === 'idle', 'Connector input did not release the original turn')
-  check((await api('agent.events', [connector.id])).some((event) => event.kind === 'text' && event.text.includes('"count":2') && event.text.includes('"enabled":false') && event.text.includes('"region":"id"')), 'Connector form returns typed values and underlying option IDs')
+  await until(
+    async () => (await api('agent.get', [connector.id])).state === 'idle',
+    'Connector input did not release the original turn',
+  )
+  check(
+    (await api('agent.events', [connector.id])).some(
+      (event) =>
+        event.kind === 'text' &&
+        event.text.includes('"count":2') &&
+        event.text.includes('"enabled":false') &&
+        event.text.includes('"region":"id"'),
+    ),
+    'Connector form returns typed values and underlying option IDs',
+  )
   await api('agent.submit', [connector.id, '[mcp url]', 'queue'])
-  await until(async () => (await api('agent.events', [connector.id])).some((event) => event.kind === 'elicitation' && event.mode === 'url'), 'Connector link request did not arrive')
-  const linkCard = page.locator('.elicitation-card:visible').filter({ has: page.getByRole('link', { name: 'Open link', exact: true }) })
+  await until(
+    async () =>
+      (await api('agent.events', [connector.id])).some((event) => event.kind === 'elicitation' && event.mode === 'url'),
+    'Connector link request did not arrive',
+  )
+  const linkCard = page
+    .locator('.elicitation-card:visible')
+    .filter({ has: page.getByRole('link', { name: 'Open link', exact: true }) })
   await linkCard.waitFor()
-  check(await linkCard.getByRole('link', { name: 'Open link', exact: true }).getAttribute('href') === 'https://example.com/connect', 'Connector link requests offer an explicit browser link')
+  check(
+    (await linkCard.getByRole('link', { name: 'Open link', exact: true }).getAttribute('href')) ===
+      'https://example.com/connect',
+    'Connector link requests offer an explicit browser link',
+  )
   await linkCard.getByRole('button', { name: 'Decline', exact: true }).click()
-  await until(async () => (await api('agent.get', [connector.id])).state === 'idle', 'Declined connector request stayed blocked')
-  check((await api('agent.events', [connector.id])).some((event) => event.kind === 'request-resolved' && event.outcome === 'declined'), 'Declining a connector request releases it without sending fabricated answers')
+  await until(
+    async () => (await api('agent.get', [connector.id])).state === 'idle',
+    'Declined connector request stayed blocked',
+  )
+  check(
+    (await api('agent.events', [connector.id])).some(
+      (event) => event.kind === 'request-resolved' && event.outcome === 'declined',
+    ),
+    'Declining a connector request releases it without sending fabricated answers',
+  )
   const term = await api('term.open', [general.id, null, 80, 24])
-  const terminalOutput = await page.evaluate((id) => new Promise((resolve, reject) => {
-    let output = ''
-    const timer = setTimeout(() => { off(); reject(new Error('No terminal output')) }, 10000)
-    const off = window.ramu.on('term:data', (event) => { if (event.id !== id) return; output += event.data; if (output.includes('ramu-pty-smoke')) { clearTimeout(timer); off(); resolve(output) } })
-    void window.ramu.invoke('term.write', id, 'printf "ramu-pty-smoke\\n"\n').catch((e) => { clearTimeout(timer); off(); reject(e) })
-  }), term.id)
+  const terminalOutput = await page.evaluate(
+    (id) =>
+      new Promise((resolve, reject) => {
+        let output = ''
+        const timer = setTimeout(() => {
+          off()
+          reject(new Error('No terminal output'))
+        }, 10000)
+        const off = window.ramu.on('term:data', (event) => {
+          if (event.id !== id) return
+          output += event.data
+          if (output.includes('ramu-pty-smoke')) {
+            clearTimeout(timer)
+            off()
+            resolve(output)
+          }
+        })
+        void window.ramu.invoke('term.write', id, 'printf "ramu-pty-smoke\\n"\n').catch((e) => {
+          clearTimeout(timer)
+          off()
+          reject(e)
+        })
+      }),
+    term.id,
+  )
   await api('term.close', [term.id])
   check(terminalOutput.includes('ramu-pty-smoke'), 'Native terminal starts and produces output')
   // Portable question tools run through the same MCP transport on Claude and Codex.
   const openQuestionChat = async (task, session) => {
-    const ui = await api('ui.get'), viewId = `questions-${session.id}`
-    await api('ui.setTask', [task.id, { views: [{ id: viewId, kind: 'agent', sessionId: session.id }], activeViewId: viewId }])
-    await api('ui.setWorkspace', [{ ...ui.workspace, openTaskIds: [...new Set([...ui.workspace.openTaskIds, task.id])], activeTaskId: task.id }])
+    const ui = await api('ui.get'),
+      viewId = `questions-${session.id}`
+    await api('ui.setTask', [
+      task.id,
+      { views: [{ id: viewId, kind: 'agent', sessionId: session.id }], activeViewId: viewId },
+    ])
+    await api('ui.setWorkspace', [
+      { ...ui.workspace, openTaskIds: [...new Set([...ui.workspace.openTaskIds, task.id])], activeTaskId: task.id },
+    ])
     await page.reload()
-    await page.locator('.task-row').filter({ has: page.getByText(task.title, { exact: true }) }).click()
+    await page
+      .locator('.task-row')
+      .filter({ has: page.getByText(task.title, { exact: true }) })
+      .click()
     await page.locator('.question-card:visible, .question-row:visible').first().waitFor()
   }
   for (const provider of ['claude-code', 'codex']) {
-    const task = await api('tasks.create', [{ projectId: 'no-project', title: `${provider} related questions`, mode: 'current' }])
-    const session = await api('agent.start', [task.id, '[questions together]', { ...settings, provider, model: provider === 'codex' ? 'fake-codex' : 'fake-claude', access: 'full' }])
-    await until(async () => (await api('agent.get', [session.id])).state === 'idle', 'Agent did not continue and finish while a question stayed unanswered')
+    const task = await api('tasks.create', [
+      { projectId: 'no-project', title: `${provider} related questions`, mode: 'current' },
+    ])
+    const session = await api('agent.start', [
+      task.id,
+      '[questions together]',
+      { ...settings, provider, model: provider === 'codex' ? 'fake-codex' : 'fake-claude', access: 'full' },
+    ])
+    await until(
+      async () => (await api('agent.get', [session.id])).state === 'idle',
+      'Agent did not continue and finish while a question stayed unanswered',
+    )
     const asked = (await api('agent.events', [session.id])).find((e) => e.kind === 'question')
-    check(asked?.responseMode === 'message', `${provider} finishes independent work with related questions still pending`)
+    check(
+      asked?.responseMode === 'message',
+      `${provider} finishes independent work with related questions still pending`,
+    )
     await openQuestionChat(task, session)
     await page.getByRole('button', { name: 'Questions · 1', exact: true }).click()
-    check(await page.getByLabel('Pending questions', { exact: true }).isVisible(), 'Pending question list links to the related group')
+    check(
+      await page.getByLabel('Pending questions', { exact: true }).isVisible(),
+      'Pending question list links to the related group',
+    )
     // Pending questions float above the message box, one at a time.
-    const card = page.locator('.question-dock .question-card:visible').first(), send = card.getByRole('button', { name: 'Send answers together', exact: true })
-    check(await page.locator('.question-row.pending:visible').count() === 1, 'The transcript keeps a row where the agent asked')
+    const card = page.locator('.question-dock .question-card:visible').first(),
+      send = card.getByRole('button', { name: 'Send answers together', exact: true })
+    check(
+      (await page.locator('.question-row.pending:visible').count()) === 1,
+      'The transcript keeps a row where the agent asked',
+    )
     await card.getByRole('textbox', { name: 'Answer: Which database?', exact: true }).fill('SQLite')
     await card.getByRole('button', { name: 'Next', exact: true }).click()
     check(await send.isDisabled(), 'A related group requires all answers')
-    await until(async () => (await api('agent.events', [session.id])).some((e) => e.kind === 'question-state' && e.drafts?.database === 'SQLite'), 'Question draft was not saved')
+    await until(
+      async () =>
+        (await api('agent.events', [session.id])).some(
+          (e) => e.kind === 'question-state' && e.drafts?.database === 'SQLite',
+        ),
+      'Question draft was not saved',
+    )
     await page.screenshot({ path: join(shots, `${provider}-questions.png`) })
     const daemonPid = (await api('background.status')).pid
-    await app.close(); app = null
-    if (provider === 'claude-code') { process.kill(daemonPid, 'SIGKILL'); await sleep(300) }
+    await app.close()
+    app = null
+    if (provider === 'claude-code') {
+      process.kill(daemonPid, 'SIGKILL')
+      await sleep(300)
+    }
     await launch()
     await openQuestionChat(task, session)
     const restored = page.locator('.question-card:visible').first()
-    check((await restored.locator('.option.selected').innerText()).includes('SQLite'), provider === 'claude-code' ? 'Pending questions and drafts survive a daemon crash' : 'Question drafts survive closing and reopening the app')
+    check(
+      (await restored.locator('.option.selected').innerText()).includes('SQLite'),
+      provider === 'claude-code'
+        ? 'Pending questions and drafts survive a daemon crash'
+        : 'Question drafts survive closing and reopening the app',
+    )
     await restored.getByRole('button', { name: 'Next', exact: true }).click()
     await restored.getByRole('textbox', { name: 'Answer: Which region?', exact: true }).fill('Jakarta')
     await restored.getByRole('button', { name: 'Send answers together', exact: true }).click()
-    await until(async () => (await api('agent.events', [session.id])).some((e) => e.kind === 'request-resolved' && e.requestId === asked.requestId && e.outcome === 'answered'), 'Related question reply did not resolve')
-    await until(async () => { const events = await api('agent.events', [session.id]); return events.some((e) => e.kind === 'user' && e.text.includes('SQLite') && e.text.includes('Jakarta')) && events.filter((e) => e.kind === 'result').length >= 2 && (await api('agent.get', [session.id])).state === 'idle' }, 'Late answer did not finish its new turn')
-    check((await api('agent.events', [session.id])).some((e) => e.kind === 'user' && e.text.includes('SQLite') && e.text.includes('Jakarta')), `${provider} receives the related answers together in the original chat after completion`)
+    await until(
+      async () =>
+        (await api('agent.events', [session.id])).some(
+          (e) => e.kind === 'request-resolved' && e.requestId === asked.requestId && e.outcome === 'answered',
+        ),
+      'Related question reply did not resolve',
+    )
+    await until(async () => {
+      const events = await api('agent.events', [session.id])
+      return (
+        events.some((e) => e.kind === 'user' && e.text.includes('SQLite') && e.text.includes('Jakarta')) &&
+        events.filter((e) => e.kind === 'result').length >= 2 &&
+        (await api('agent.get', [session.id])).state === 'idle'
+      )
+    }, 'Late answer did not finish its new turn')
+    check(
+      (await api('agent.events', [session.id])).some(
+        (e) => e.kind === 'user' && e.text.includes('SQLite') && e.text.includes('Jakarta'),
+      ),
+      `${provider} receives the related answers together in the original chat after completion`,
+    )
   }
-  const independentTask = await api('tasks.create', [{ projectId: 'no-project', title: 'Independent questions', mode: 'current' }])
-  const independentSession = await api('agent.start', [independentTask.id, '[questions independent]', { ...settings, access: 'full' }])
-  await until(async () => (await api('agent.get', [independentSession.id])).state === 'idle', 'Independent question fixture did not finish')
+  const independentTask = await api('tasks.create', [
+    { projectId: 'no-project', title: 'Independent questions', mode: 'current' },
+  ])
+  const independentSession = await api('agent.start', [
+    independentTask.id,
+    '[questions independent]',
+    { ...settings, access: 'full' },
+  ])
+  await until(
+    async () => (await api('agent.get', [independentSession.id])).state === 'idle',
+    'Independent question fixture did not finish',
+  )
   await openQuestionChat(independentTask, independentSession)
   const independentCard = page.locator('.question-card:visible').first()
   await independentCard.getByRole('textbox', { name: 'Answer: Which database?', exact: true }).fill('SQLite')
   await independentCard.getByRole('button', { name: 'Send answer', exact: true }).first().click()
-  await until(async () => (await api('agent.events', [independentSession.id])).some((e) => e.kind === 'question-state' && e.answers?.database === 'SQLite'), 'Independent reply was not saved')
+  await until(
+    async () =>
+      (await api('agent.events', [independentSession.id])).some(
+        (e) => e.kind === 'question-state' && e.answers?.database === 'SQLite',
+      ),
+    'Independent reply was not saved',
+  )
   // The dock moves on to the next open question once its send settles.
-  check(await until(() => independentCard.getByRole('textbox', { name: 'Answer: Which region?', exact: true }).isEnabled(), 'Region answer stayed disabled', 50).catch(() => false), 'Independent questions remain answerable after sending one answer')
+  check(
+    await until(
+      () => independentCard.getByRole('textbox', { name: 'Answer: Which region?', exact: true }).isEnabled(),
+      'Region answer stayed disabled',
+      50,
+    ).catch(() => false),
+    'Independent questions remain answerable after sending one answer',
+  )
   await independentCard.getByRole('button', { name: 'Dismiss', exact: true }).click()
   await page.locator('.question-row:visible').getByText('Dismissed', { exact: true }).waitFor()
   check(true, 'Unanswered async questions can be dismissed without inventing an answer')
-  const obsoleteTask = await api('tasks.create', [{ projectId: 'no-project', title: 'Obsolete questions', mode: 'current' }])
-  const obsoleteSession = await api('agent.start', [obsoleteTask.id, '[questions obsolete]', { ...settings, access: 'full' }])
-  await until(async () => (await api('agent.get', [obsoleteSession.id])).state === 'idle', 'Obsolete question fixture did not finish')
+  const obsoleteTask = await api('tasks.create', [
+    { projectId: 'no-project', title: 'Obsolete questions', mode: 'current' },
+  ])
+  const obsoleteSession = await api('agent.start', [
+    obsoleteTask.id,
+    '[questions obsolete]',
+    { ...settings, access: 'full' },
+  ])
+  await until(
+    async () => (await api('agent.get', [obsoleteSession.id])).state === 'idle',
+    'Obsolete question fixture did not finish',
+  )
   await openQuestionChat(obsoleteTask, obsoleteSession)
-  check(await page.locator('.question-row:visible').getByText('No longer needed: The requested work no longer needs a database.', { exact: true }).isVisible(), 'Obsolete questions keep their reason visible after completion')
+  check(
+    await page
+      .locator('.question-row:visible')
+      .getByText('No longer needed: The requested work no longer needs a database.', { exact: true })
+      .isVisible(),
+    'Obsolete questions keep their reason visible after completion',
+  )
   const questionPreferences = await api('settings.app.get')
   await api('settings.app.set', [{ ...questionPreferences, asyncQuestions: false }])
-  const blockingTask = await api('tasks.create', [{ projectId: 'no-project', title: 'Questions wait when disabled', mode: 'current' }])
-  const blockingSession = await api('agent.start', [blockingTask.id, '[questions together]', { ...settings, access: 'full' }])
-  await until(async () => (await api('agent.get', [blockingSession.id])).state === 'needs-input', 'Disabled async setting did not wait for answers')
+  const blockingTask = await api('tasks.create', [
+    { projectId: 'no-project', title: 'Questions wait when disabled', mode: 'current' },
+  ])
+  const blockingSession = await api('agent.start', [
+    blockingTask.id,
+    '[questions together]',
+    { ...settings, access: 'full' },
+  ])
+  await until(
+    async () => (await api('agent.get', [blockingSession.id])).state === 'needs-input',
+    'Disabled async setting did not wait for answers',
+  )
   await openQuestionChat(blockingTask, blockingSession)
   const blockingCard = page.locator('.question-card:visible').first()
-  check(await blockingCard.getByRole('button', { name: 'Dismiss', exact: true }).count() === 0, 'Blocking questions require answers when async mode is disabled')
+  check(
+    (await blockingCard.getByRole('button', { name: 'Dismiss', exact: true }).count()) === 0,
+    'Blocking questions require answers when async mode is disabled',
+  )
   await blockingCard.getByRole('textbox', { name: 'Answer: Which database?', exact: true }).fill('SQLite')
   await blockingCard.getByRole('button', { name: 'Next', exact: true }).click()
   await blockingCard.getByRole('textbox', { name: 'Answer: Which region?', exact: true }).fill('Jakarta')
   await blockingCard.getByRole('button', { name: 'Send answers together', exact: true }).click()
-  await until(async () => (await api('agent.get', [blockingSession.id])).state === 'idle', 'Blocking tool did not continue after its group was answered')
+  await until(
+    async () => (await api('agent.get', [blockingSession.id])).state === 'idle',
+    'Blocking tool did not continue after its group was answered',
+  )
   check(true, 'Related answers release a blocking question tool and complete the original turn')
   await api('settings.app.set', [questionPreferences])
   // Crash the disposable daemon while a chat waits for approval; reopening must continue the same session.
-  const restartSettings = { provider: 'claude-code', model: 'fake-claude', effort: 'medium', access: 'edits', autoFallback: true, serviceTier: 'standard' }
-  const restartChat = await api('tasks.create', [{ projectId: 'no-project', title: 'Restart recovery', mode: 'current' }])
+  const restartSettings = {
+    provider: 'claude-code',
+    model: 'fake-claude',
+    effort: 'medium',
+    access: 'edits',
+    autoFallback: true,
+    serviceTier: 'standard',
+  }
+  const restartChat = await api('tasks.create', [
+    { projectId: 'no-project', title: 'Restart recovery', mode: 'current' },
+  ])
   const restartSession = await api('agent.start', [restartChat.id, 'Continue the interrupted work', restartSettings])
-  await until(async () => (await api('agent.get', [restartSession.id])).state === 'needs-input', 'Restart fixture did not request approval')
+  await until(
+    async () => (await api('agent.get', [restartSession.id])).state === 'needs-input',
+    'Restart fixture did not request approval',
+  )
   const crashAndReopen = async () => {
     const { pid } = await api('background.status')
-    await app.close(); app = null
+    await app.close()
+    app = null
     process.kill(pid, 'SIGKILL')
     await sleep(300)
     await launch()
   }
   await crashAndReopen()
-  await until(async () => (await api('agent.events', [restartSession.id])).some((e) => e.kind === 'recovery') && (await api('agent.get', [restartSession.id])).state === 'needs-input', 'Interrupted chat did not continue after daemon restart')
+  await until(
+    async () =>
+      (await api('agent.events', [restartSession.id])).some((e) => e.kind === 'recovery') &&
+      (await api('agent.get', [restartSession.id])).state === 'needs-input',
+    'Interrupted chat did not continue after daemon restart',
+  )
   const recoveredEvents = await api('agent.events', [restartSession.id])
-  check(recoveredEvents.filter((e) => e.kind === 'user').length === 1 && recoveredEvents.filter((e) => e.kind === 'recovery').length === 1, 'Daemon restart continues the original chat without duplicating its user message')
-  check(recoveredEvents.filter((e) => e.kind === 'permission-request').length === 2, 'Recovery asks for a fresh approval')
-  await app.close(); app = null
+  check(
+    recoveredEvents.filter((e) => e.kind === 'user').length === 1 &&
+      recoveredEvents.filter((e) => e.kind === 'recovery').length === 1,
+    'Daemon restart continues the original chat without duplicating its user message',
+  )
+  check(
+    recoveredEvents.filter((e) => e.kind === 'permission-request').length === 2,
+    'Recovery asks for a fresh approval',
+  )
+  await app.close()
+  app = null
   await api('background.restart')
-  await until(async () => { try { await api('background.status'); return false } catch { return true } }, 'Service did not finish its clean restart')
+  await until(async () => {
+    try {
+      await api('background.status')
+      return false
+    } catch {
+      return true
+    }
+  }, 'Service did not finish its clean restart')
   await launch()
-  await until(async () => (await api('agent.events', [restartSession.id])).filter((e) => e.kind === 'recovery').length === 2 && (await api('agent.get', [restartSession.id])).state === 'needs-input', 'Chat did not continue after clean service restart')
-  check((await api('agent.events', [restartSession.id])).filter((e) => e.kind === 'user').length === 1, 'Clean service restart preserves unfinished chats for app updates')
+  await until(
+    async () =>
+      (await api('agent.events', [restartSession.id])).filter((e) => e.kind === 'recovery').length === 2 &&
+      (await api('agent.get', [restartSession.id])).state === 'needs-input',
+    'Chat did not continue after clean service restart',
+  )
+  check(
+    (await api('agent.events', [restartSession.id])).filter((e) => e.kind === 'user').length === 1,
+    'Clean service restart preserves unfinished chats for app updates',
+  )
   await api('agent.stop', [restartSession.id])
   const restartPreferences = await api('settings.app.get')
   await api('settings.app.set', [{ ...restartPreferences, resumeChatsOnRestart: false }])
-  const disabledChat = await api('tasks.create', [{ projectId: 'no-project', title: 'Manual recovery', mode: 'current' }])
+  const disabledChat = await api('tasks.create', [
+    { projectId: 'no-project', title: 'Manual recovery', mode: 'current' },
+  ])
   const disabledSession = await api('agent.start', [disabledChat.id, 'Leave this interrupted', restartSettings])
-  await until(async () => (await api('agent.get', [disabledSession.id])).state === 'needs-input', 'Disabled recovery fixture did not request approval')
+  await until(
+    async () => (await api('agent.get', [disabledSession.id])).state === 'needs-input',
+    'Disabled recovery fixture did not request approval',
+  )
   await crashAndReopen()
-  check((await api('agent.get', [disabledSession.id])).state === 'restored' && !(await api('agent.events', [disabledSession.id])).some((e) => e.kind === 'recovery'), 'Turning off restart continuation leaves interrupted chats available for manual recovery')
+  check(
+    (await api('agent.get', [disabledSession.id])).state === 'restored' &&
+      !(await api('agent.events', [disabledSession.id])).some((e) => e.kind === 'recovery'),
+    'Turning off restart continuation leaves interrupted chats available for manual recovery',
+  )
   await api('settings.app.set', [restartPreferences])
   check(errors.length === 0, `No renderer errors: ${errors.join(', ')}`)
   console.log(`Screenshots: ${shots}`)
 }
-try { await (process.env.RAMU_E2E_DROP_ONLY ? runDropJourney() : runJourney()) } catch (error) {
+try {
+  await (process.env.RAMU_E2E_DROP_ONLY ? runDropJourney() : runJourney())
+} catch (error) {
   console.error('Renderer errors:', errors)
-  try { const ts = await api('tasks.list'); for (const t of ts) { const ss = await api('agent.list', [t.id]); console.error('sessions', ss); for (const s of ss) console.error('events', await api('agent.events', [s.id])) } console.error('ui', await api('ui.get')) } catch {}
+  try {
+    const ts = await api('tasks.list')
+    for (const t of ts) {
+      const ss = await api('agent.list', [t.id])
+      console.error('sessions', ss)
+      for (const s of ss) console.error('events', await api('agent.events', [s.id]))
+    }
+    console.error('ui', await api('ui.get'))
+  } catch {}
   await page?.screenshot({ path: join(shots, 'failure.png') }).catch(() => {})
-  console.error(await page?.locator('body').innerText().catch(() => 'No renderer'))
-  try { console.error(readFileSync(join(profile, 'background.log'), 'utf8')) } catch {}
+  console.error(
+    await page
+      ?.locator('body')
+      .innerText()
+      .catch(() => 'No renderer'),
+  )
+  try {
+    console.error(readFileSync(join(profile, 'background.log'), 'utf8'))
+  } catch {}
   throw error
 } finally {
   await app?.close().catch(() => {})

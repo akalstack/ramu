@@ -8,7 +8,20 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { createInterface } from 'node:readline'
-import type { UsageReading, Attachment, AgentEvent, AgentElicitation, ElicitationAction, AgentContent, AgentModel, AgentScope, AgentSettings, AgentSessionInfo, AgentTask, McpConnection } from '@ramu/shared/types'
+import type {
+  UsageReading,
+  Attachment,
+  AgentEvent,
+  AgentElicitation,
+  ElicitationAction,
+  AgentContent,
+  AgentModel,
+  AgentScope,
+  AgentSettings,
+  AgentSessionInfo,
+  AgentTask,
+  McpConnection,
+} from '@ramu/shared/types'
 import type { HelperHistory } from './helperHistory'
 
 // Wire messages are validated by the app-server. Only the consumed fields cross into our domain.
@@ -17,18 +30,50 @@ export class CodexRpc {
   private readonly process: ChildProcessWithoutNullStreams
   private nextId = 0
   private closed = false
-  private readonly waiting = new Map<number, { resolve: (value: Wire) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>()
+  private readonly waiting = new Map<
+    number,
+    { resolve: (value: Wire) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }
+  >()
   onMessage: (message: Wire) => void = () => {}
   onExit: (error: Error) => void = () => {}
   readonly exited: Promise<void>
 
   constructor(connection?: McpConnection, extraConfig: string[] = [], accountId?: string) {
-    this.process = spawn(providerBinary('codex'), ['app-server', '--stdio', ...extraConfig.flatMap((entry) => ['-c', entry]), ...(connection ? ['-c', `mcp_servers.ramu.url=${JSON.stringify(connection.url)}`, '-c', 'mcp_servers.ramu.bearer_token_env_var="RAMU_MCP_TOKEN"', '-c', 'mcp_servers.ramu.tool_timeout_sec=3600', ...(connection.nativeSubagents === false ? ['-c', 'features.multi_agent=false'] : [])] : [])], { stdio: 'pipe', env: { ...providerEnvironment('codex', undefined, accountId), ...(connection ? { RAMU_MCP_TOKEN: connection.token } : {}) } })
+    this.process = spawn(
+      providerBinary('codex'),
+      [
+        'app-server',
+        '--stdio',
+        ...extraConfig.flatMap((entry) => ['-c', entry]),
+        ...(connection
+          ? [
+              '-c',
+              `mcp_servers.ramu.url=${JSON.stringify(connection.url)}`,
+              '-c',
+              'mcp_servers.ramu.bearer_token_env_var="RAMU_MCP_TOKEN"',
+              '-c',
+              'mcp_servers.ramu.tool_timeout_sec=3600',
+              ...(connection.nativeSubagents === false ? ['-c', 'features.multi_agent=false'] : []),
+            ]
+          : []),
+      ],
+      {
+        stdio: 'pipe',
+        env: {
+          ...providerEnvironment('codex', undefined, accountId),
+          ...(connection ? { RAMU_MCP_TOKEN: connection.token } : {}),
+        },
+      },
+    )
     this.process.stderr.resume()
     const lines = createInterface({ input: this.process.stdout })
     lines.on('line', (line) => {
       let m: Wire
-      try { m = JSON.parse(line) } catch { return }
+      try {
+        m = JSON.parse(line)
+      } catch {
+        return
+      }
       const pending = typeof m.id === 'number' && !m.method ? this.waiting.get(m.id) : undefined
       if (pending) {
         this.waiting.delete(m.id)
@@ -39,13 +84,18 @@ export class CodexRpc {
     })
     this.exited = new Promise((resolve) => {
       const finish = (error: Error) => {
-        for (const p of this.waiting.values()) { clearTimeout(p.timer); p.reject(error) }
+        for (const p of this.waiting.values()) {
+          clearTimeout(p.timer)
+          p.reject(error)
+        }
         this.waiting.clear()
         if (!this.closed) this.onExit(error)
         lines.close()
         resolve()
       }
-      this.process.once('error', (error) => finish(new Error(`Cannot start Codex. Install the Codex CLI and sign in first. ${error.message}`)))
+      this.process.once('error', (error) =>
+        finish(new Error(`Cannot start Codex. Install the Codex CLI and sign in first. ${error.message}`)),
+      )
       this.process.once('exit', (code) => finish(new Error(`Codex app-server exited (${code ?? 'signal'})`)))
     })
     this.process.stdin.on('error', () => {})
@@ -57,7 +107,10 @@ export class CodexRpc {
     if (this.closed) return Promise.reject(new Error('Codex connection closed'))
     const id = ++this.nextId
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.waiting.delete(id); reject(new Error(`Codex ${method} timed out`)) }, 30_000)
+      const timer = setTimeout(() => {
+        this.waiting.delete(id)
+        reject(new Error(`Codex ${method} timed out`))
+      }, 30_000)
       this.waiting.set(id, { resolve, reject, timer })
       this.write({ id, method, params })
     })
@@ -87,12 +140,23 @@ export async function codexModels(accountId?: string): Promise<AgentModel[]> {
     do {
       const result = await rpc.request('model/list', { cursor, limit: 100 })
       for (const m of result.data ?? []) {
-        if (!m.hidden) models.push({ provider: 'codex', id: m.model, name: m.displayName, efforts: (m.supportedReasoningEfforts ?? []).map((e: Wire) => e.reasoningEffort), defaultEffort: m.defaultReasoningEffort, isDefault: m.isDefault, serviceTiers: (m.serviceTiers ?? []).map((tier: Wire) => tier.id).concat(m.additionalSpeedTiers ?? []) })
+        if (!m.hidden)
+          models.push({
+            provider: 'codex',
+            id: m.model,
+            name: m.displayName,
+            efforts: (m.supportedReasoningEfforts ?? []).map((e: Wire) => e.reasoningEffort),
+            defaultEffort: m.defaultReasoningEffort,
+            isDefault: m.isDefault,
+            serviceTiers: (m.serviceTiers ?? []).map((tier: Wire) => tier.id).concat(m.additionalSpeedTiers ?? []),
+          })
       }
       cursor = result.nextCursor ?? null
     } while (cursor)
     return models
-  } finally { await rpc.close() }
+  } finally {
+    await rpc.close()
+  }
 }
 
 /** One login's plan usage, read without starting a chat. */
@@ -101,14 +165,17 @@ export async function codexUsage(accountId?: string): Promise<UsageReading[]> {
   try {
     await rpc.initialize()
     return codexReadings((await rpc.request('account/rateLimits/read', {})).rateLimits)
-  } finally { await rpc.close() }
+  } finally {
+    await rpc.close()
+  }
 }
 
 // Compatibility aliases for existing Codex factories.
 export type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from './agentRunner'
 import type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from './agentRunner'
 
-export const createCodexRunner: CodexFactory = (scope, settings, emit, readOnly) => new CodexSession(scope, settings, emit, readOnly)
+export const createCodexRunner: CodexFactory = (scope, settings, emit, readOnly) =>
+  new CodexSession(scope, settings, emit, readOnly)
 class CodexSession implements CodexRunner {
   private readonly requestScope = randomUUID()
   private rpc!: CodexRpc
@@ -128,44 +195,86 @@ class CodexSession implements CodexRunner {
   private readonly thoughts = new Map<string, string>()
   /** Sub-agent threads this thread spawned, so their events can be shown as theirs. */
   private readonly agents = new Set<string>()
-  private readonly pending = new Map<string, { id: number | string; questions?: Wire[]; permissions?: Wire; elicitation?: AgentElicitation }>()
-  constructor(private readonly scope: AgentScope, private readonly settings: AgentSettings, private readonly emit: (event: AgentEvent, usageLimit?: boolean) => void, private readonly readOnly = false) {
-
+  private readonly pending = new Map<
+    string,
+    { id: number | string; questions?: Wire[]; permissions?: Wire; elicitation?: AgentElicitation }
+  >()
+  constructor(
+    private readonly scope: AgentScope,
+    private readonly settings: AgentSettings,
+    private readonly emit: (event: AgentEvent, usageLimit?: boolean) => void,
+    private readonly readOnly = false,
+  ) {}
+  setTools(connection: McpConnection): void {
+    this.connection = connection
   }
-  setTools(connection: McpConnection): void { this.connection = connection }
   private policies() {
     if (this.readOnly) return { approvalPolicy: 'never', sandboxPolicy: { type: 'readOnly' } }
     return this.settings.access === 'full'
       ? { approvalPolicy: 'never', sandboxPolicy: { type: 'dangerFullAccess' } }
-      : { approvalPolicy: this.settings.access === 'auto' ? 'on-request' : 'untrusted', sandboxPolicy: { type: 'workspaceWrite', writableRoots: [this.scope.cwd, ...this.scope.additionalDirs], networkAccess: false } }
+      : {
+          approvalPolicy: this.settings.access === 'auto' ? 'on-request' : 'untrusted',
+          sandboxPolicy: {
+            type: 'workspaceWrite',
+            writableRoots: [this.scope.cwd, ...this.scope.additionalDirs],
+            networkAccess: false,
+          },
+        }
   }
   async start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void> {
-    this.rpc = new CodexRpc(this.connection, this.connection?.interceptSubagents ? [CODEX_HOOK_CONFIG] : [], this.settings.accountId ?? 'default')
+    this.rpc = new CodexRpc(
+      this.connection,
+      this.connection?.interceptSubagents ? [CODEX_HOOK_CONFIG] : [],
+      this.settings.accountId ?? 'default',
+    )
     this.rpc.onMessage = (m) => this.handle(m)
-    this.rpc.onExit = (e) => { if (!this.stopped) { this.emit({ kind: 'error', message: e.message }); this.emit({ kind: 'state', state: 'failed' }) } }
+    this.rpc.onExit = (e) => {
+      if (!this.stopped) {
+        this.emit({ kind: 'error', message: e.message })
+        this.emit({ kind: 'state', state: 'failed' })
+      }
+    }
     await this.rpc.initialize()
     // The first reading, before any turn has run; failures only mean no gauge yet.
-    void this.rpc.request('account/rateLimits/read', {}).then((result) => this.reportUsage(result.rateLimits), () => {})
+    void this.rpc.request('account/rateLimits/read', {}).then(
+      (result) => this.reportUsage(result.rateLimits),
+      () => {},
+    )
     const full = this.settings.access === 'full'
     const result = await this.rpc.request(resume ? 'thread/resume' : 'thread/start', {
-      ...(resume ? { threadId: resume } : {}), cwd: this.scope.cwd,
+      ...(resume ? { threadId: resume } : {}),
+      cwd: this.scope.cwd,
       ...(!resume && this.readOnly ? { ephemeral: true } : {}),
       ...(this.settings.model ? { model: this.settings.model } : {}),
       ...(this.connection?.instructions ? { developerInstructions: this.connection.instructions } : {}),
       serviceTier: this.settings.serviceTier === 'fast' ? 'fast' : 'default',
       ...(this.settings.serviceTier === 'fast' ? { config: { 'features.fast_mode': true } } : {}),
-      approvalPolicy: this.policies().approvalPolicy, sandbox: this.readOnly ? 'read-only' : full ? 'danger-full-access' : 'workspace-write',
+      approvalPolicy: this.policies().approvalPolicy,
+      sandbox: this.readOnly ? 'read-only' : full ? 'danger-full-access' : 'workspace-write',
     })
     this.threadId = result.thread.id
-    this.emit({ kind: 'init', model: result.model || this.settings.model || 'Codex default', cwd: this.scope.cwd, providerSessionId: this.threadId })
+    this.emit({
+      kind: 'init',
+      model: result.model || this.settings.model || 'Codex default',
+      cwd: this.scope.cwd,
+      providerSessionId: this.threadId,
+    })
     await this.send(prompt, attachments)
   }
   async send(prompt: string, attachments?: Attachment[]): Promise<void> {
     if (this.turnId) throw new Error('Wait for the current turn to finish, or interrupt it first.')
     this.limit = false
     const result = await this.rpc.request('turn/start', {
-      threadId: this.threadId, input: [{ type: 'text', text: attachmentPrompt(prompt, attachments) }, ...(attachments ?? []).filter((file) => file.mimeType.startsWith('image/')).map((file) => ({ type: 'localImage', path: file.path }))], cwd: this.scope.cwd,
-      ...this.policies(), ...(this.settings.model ? { model: this.settings.model } : {}),
+      threadId: this.threadId,
+      input: [
+        { type: 'text', text: attachmentPrompt(prompt, attachments) },
+        ...(attachments ?? [])
+          .filter((file) => file.mimeType.startsWith('image/'))
+          .map((file) => ({ type: 'localImage', path: file.path })),
+      ],
+      cwd: this.scope.cwd,
+      ...this.policies(),
+      ...(this.settings.model ? { model: this.settings.model } : {}),
       ...(this.settings.effort ? { effort: this.settings.effort } : {}),
       serviceTier: this.settings.serviceTier === 'fast' ? 'fast' : 'default',
     })
@@ -173,7 +282,16 @@ class CodexSession implements CodexRunner {
   }
   async steer(prompt: string, attachments?: Attachment[]): Promise<void> {
     if (!this.turnId) throw new Error('The turn has finished. Send the message again.')
-    await this.rpc.request('turn/steer', { threadId: this.threadId, expectedTurnId: this.turnId, input: [{ type: 'text', text: attachmentPrompt(prompt, attachments) }, ...(attachments ?? []).filter((file) => file.mimeType.startsWith('image/')).map((file) => ({ type: 'localImage', path: file.path }))] })
+    await this.rpc.request('turn/steer', {
+      threadId: this.threadId,
+      expectedTurnId: this.turnId,
+      input: [
+        { type: 'text', text: attachmentPrompt(prompt, attachments) },
+        ...(attachments ?? [])
+          .filter((file) => file.mimeType.startsWith('image/'))
+          .map((file) => ({ type: 'localImage', path: file.path })),
+      ],
+    })
   }
   async interrupt(): Promise<void> {
     for (const [id, request] of this.pending) if (request.elicitation) this.replyElicitation(id, 'cancel', {})
@@ -181,7 +299,10 @@ class CodexSession implements CodexRunner {
   }
   async stop(): Promise<void> {
     this.stopped = true
-    for (const [id, req] of this.pending) { if (req.elicitation) this.rpc.write({ id: req.id, result: { action: 'cancel', content: null, _meta: null } }); this.emit({ kind: 'request-resolved', requestId: id, outcome: 'cancelled' }) }
+    for (const [id, req] of this.pending) {
+      if (req.elicitation) this.rpc.write({ id: req.id, result: { action: 'cancel', content: null, _meta: null } })
+      this.emit({ kind: 'request-resolved', requestId: id, outcome: 'cancelled' })
+    }
     this.pending.clear()
     await this.rpc?.close()
   }
@@ -189,7 +310,12 @@ class CodexSession implements CodexRunner {
     const req = this.pending.get(id)
     if (!req || req.questions || req.elicitation) throw new Error('That request is no longer pending')
     this.pending.delete(id)
-    this.rpc.write({ id: req.id, result: req.permissions ? { permissions: allow ? req.permissions : {}, scope: 'turn' } : { decision: allow ? 'accept' : 'decline' } })
+    this.rpc.write({
+      id: req.id,
+      result: req.permissions
+        ? { permissions: allow ? req.permissions : {}, scope: 'turn' }
+        : { decision: allow ? 'accept' : 'decline' },
+    })
     this.emit({ kind: 'request-resolved', requestId: id, outcome: allow ? 'allowed' : 'denied' })
     if (!this.pending.size) this.emit({ kind: 'state', state: 'running' })
   }
@@ -197,7 +323,14 @@ class CodexSession implements CodexRunner {
     const req = this.pending.get(id)
     if (!req?.questions) throw new Error('That request is no longer pending')
     this.pending.delete(id)
-    this.rpc.write({ id: req.id, result: { answers: Object.fromEntries(req.questions.map((q) => [q.id, { answers: [answers[q.id] ?? answers[q.question] ?? ''] }])) } })
+    this.rpc.write({
+      id: req.id,
+      result: {
+        answers: Object.fromEntries(
+          req.questions.map((q) => [q.id, { answers: [answers[q.id] ?? answers[q.question] ?? ''] }]),
+        ),
+      },
+    })
     this.emit({ kind: 'request-resolved', requestId: id, outcome: 'answered' })
     if (!this.pending.size) this.emit({ kind: 'state', state: 'running' })
   }
@@ -207,42 +340,84 @@ class CodexSession implements CodexRunner {
     const content = action === 'accept' ? elicitationContent(req.elicitation, answers) : null
     this.rpc.write({ id: req.id, result: { action, content, _meta: null } })
     this.pending.delete(id)
-    this.emit({ kind: 'request-resolved', requestId: id, outcome: action === 'accept' ? 'answered' : action === 'decline' ? 'declined' : 'cancelled' })
+    this.emit({
+      kind: 'request-resolved',
+      requestId: id,
+      outcome: action === 'accept' ? 'answered' : action === 'decline' ? 'declined' : 'cancelled',
+    })
     if (!this.pending.size) this.emit({ kind: 'state', state: this.turnId ? 'running' : 'idle' })
   }
   private reportUsage(snapshot: Wire | undefined): void {
-    const readings = codexReadings(snapshot).map((reading) => ({ ...reading, ...(this.settings.accountId && this.settings.accountId !== 'default' ? { accountId: this.settings.accountId } : {}) }))
+    const readings = codexReadings(snapshot).map((reading) => ({
+      ...reading,
+      ...(this.settings.accountId && this.settings.accountId !== 'default'
+        ? { accountId: this.settings.accountId }
+        : {}),
+    }))
     if (readings.length) this.emit({ kind: 'usage', readings })
   }
 
   /** A collab tool call names the sub-agent threads it touched and their states. */
   private trackAgents(item: Wire): void {
-    const ids: string[] = Array.isArray(item.receiverThreadIds) ? item.receiverThreadIds.filter((value: unknown) => typeof value === 'string') : []
+    const ids: string[] = Array.isArray(item.receiverThreadIds)
+      ? item.receiverThreadIds.filter((value: unknown) => typeof value === 'string')
+      : []
     const states: Wire = item.agentsStates ?? {}
     for (const threadId of ids) {
       const known = this.agents.has(threadId)
       this.agents.add(threadId)
-      const state = Array.isArray(states) ? states.find((entry: Wire) => entry?.threadId === threadId || entry?.id === threadId) : states[threadId]
+      const state = Array.isArray(states)
+        ? states.find((entry: Wire) => entry?.threadId === threadId || entry?.id === threadId)
+        : states[threadId]
       const spawning = item.tool === 'spawnAgent'
-      if (!known || state !== undefined) this.emit({
-        kind: 'agent', agentId: threadId, ...(!known ? { toolUseId: item.id } : {}), name: String(state?.nickname ?? state?.agentNickname ?? (known ? '' : item.prompt ? String(item.prompt).split('\n')[0]!.slice(0, 80) : 'Sub-agent')),
-        ...(state?.role ?? state?.agentRole ? { agentType: String(state.role ?? state.agentRole) } : {}),
-        ...(!known && item.model ? { model: String(item.model) } : {}), ...(!known && item.reasoningEffort ? { effort: item.reasoningEffort } : {}),
-        status: state !== undefined ? codexAgentStatus(state?.status ?? state) : spawning && item.status === 'failed' ? 'failed' : 'running',
-        ...(item.prompt && spawning ? { prompt: String(item.prompt) } : {}), ...(!known ? { startedAt: Date.now() } : {}),
-        ...(state?.message ? { summary: String(state.message) } : {}),
-        address: threadId, canStop: true, canMessage: true, recovered: false, recoveryError: '',
-      })
+      if (!known || state !== undefined)
+        this.emit({
+          kind: 'agent',
+          agentId: threadId,
+          ...(!known ? { toolUseId: item.id } : {}),
+          name: String(
+            state?.nickname ??
+              state?.agentNickname ??
+              (known ? '' : item.prompt ? String(item.prompt).split('\n')[0]!.slice(0, 80) : 'Sub-agent'),
+          ),
+          ...((state?.role ?? state?.agentRole) ? { agentType: String(state.role ?? state.agentRole) } : {}),
+          ...(!known && item.model ? { model: String(item.model) } : {}),
+          ...(!known && item.reasoningEffort ? { effort: item.reasoningEffort } : {}),
+          status:
+            state !== undefined
+              ? codexAgentStatus(state?.status ?? state)
+              : spawning && item.status === 'failed'
+                ? 'failed'
+                : 'running',
+          ...(item.prompt && spawning ? { prompt: String(item.prompt) } : {}),
+          ...(!known ? { startedAt: Date.now() } : {}),
+          ...(state?.message ? { summary: String(state.message) } : {}),
+          address: threadId,
+          canStop: true,
+          canMessage: true,
+          recovered: false,
+          recoveryError: '',
+        })
     }
   }
 
-  private toolKey(threadId: string, itemId: string): string { return `${threadId}:${itemId}` }
-  private toolId(threadId: string, itemId: string): string { return threadId === this.threadId ? itemId : this.toolKey(threadId, itemId) }
+  private toolKey(threadId: string, itemId: string): string {
+    return `${threadId}:${itemId}`
+  }
+  private toolId(threadId: string, itemId: string): string {
+    return threadId === this.threadId ? itemId : this.toolKey(threadId, itemId)
+  }
 
   private liveTool(threadId: string, method: string, p: Wire): boolean {
     const tag = threadId === this.threadId ? {} : { agentId: threadId }
     if (method === 'turn/diff/updated') {
-      if (typeof p.turnId === 'string' && typeof p.diff === 'string') this.emit({ kind: 'turn-diff', turnId: this.toolKey(threadId, p.turnId), diff: p.diff.slice(0, 256_000), ...tag })
+      if (typeof p.turnId === 'string' && typeof p.diff === 'string')
+        this.emit({
+          kind: 'turn-diff',
+          turnId: this.toolKey(threadId, p.turnId),
+          diff: p.diff.slice(0, 256_000),
+          ...tag,
+        })
       return true
     }
     if (method !== 'item/commandExecution/outputDelta' && method !== 'item/fileChange/patchUpdated') return false
@@ -259,15 +434,27 @@ class CodexSession implements CodexRunner {
       this.toolPatches.set(key, p.changes)
       summary = patchSummary(p.changes)
     }
-    this.emit({ kind: 'tool-result', toolUseId: this.toolId(threadId, p.itemId), isError: false, summary, running: true, ...tag })
+    this.emit({
+      kind: 'tool-result',
+      toolUseId: this.toolId(threadId, p.itemId),
+      isError: false,
+      summary,
+      running: true,
+      ...tag,
+    })
     return true
   }
 
   private toolResult(threadId: string, item: Wire): string {
     const key = this.toolKey(threadId, item.id)
-    const summary = item.type === 'commandExecution' ? String(item.aggregatedOutput ?? this.toolOutput.get(key) ?? '').slice(-64_000)
-      : item.type === 'fileChange' ? patchSummary(item.changes ?? this.toolPatches.get(key) ?? []) : JSON.stringify(item.result ?? '')
-    this.toolOutput.delete(key); this.toolPatches.delete(key)
+    const summary =
+      item.type === 'commandExecution'
+        ? String(item.aggregatedOutput ?? this.toolOutput.get(key) ?? '').slice(-64_000)
+        : item.type === 'fileChange'
+          ? patchSummary(item.changes ?? this.toolPatches.get(key) ?? [])
+          : JSON.stringify(item.result ?? '')
+    this.toolOutput.delete(key)
+    this.toolPatches.delete(key)
     this.completedTools.add(key)
     if (this.completedTools.size > 512) this.completedTools.delete(this.completedTools.values().next().value!)
     return summary
@@ -278,50 +465,142 @@ class CodexSession implements CodexRunner {
     const tag = { agentId: threadId }
     if (this.liveTool(threadId, method, p)) return
     if (method === 'turn/started') this.emit({ kind: 'agent', agentId: threadId, name: '', status: 'running' })
-    if (method === 'turn/completed') this.emit({ kind: 'agent', agentId: threadId, name: '', status: p.turn?.status === 'failed' ? 'failed' : p.turn?.status === 'interrupted' ? 'stopped' : 'completed', endedAt: Date.now(), ...(p.turn?.error?.message ? { error: String(p.turn.error.message) } : {}) })
+    if (method === 'turn/completed')
+      this.emit({
+        kind: 'agent',
+        agentId: threadId,
+        name: '',
+        status: p.turn?.status === 'failed' ? 'failed' : p.turn?.status === 'interrupted' ? 'stopped' : 'completed',
+        endedAt: Date.now(),
+        ...(p.turn?.error?.message ? { error: String(p.turn.error.message) } : {}),
+      })
     if (method === 'item/agentMessage/delta') {
-      const key = `${threadId}:${p.itemId}`, text = (this.messages.get(key) || '') + (p.delta || '')
+      const key = `${threadId}:${p.itemId}`,
+        text = (this.messages.get(key) || '') + (p.delta || '')
       this.messages.set(key, text)
       this.emit({ kind: 'text', text, messageId: key, ...tag })
     }
     if (method !== 'item/started' && method !== 'item/completed') return
-    const item = p.item ?? {}, complete = method === 'item/completed'
-    if (item.type === 'agentMessage' && complete && item.text) { this.messages.delete(`${threadId}:${item.id}`); this.emit({ kind: 'text', text: item.text, messageId: `${threadId}:${item.id}`, ...tag }) }
+    const item = p.item ?? {},
+      complete = method === 'item/completed'
+    if (item.type === 'agentMessage' && complete && item.text) {
+      this.messages.delete(`${threadId}:${item.id}`)
+      this.emit({ kind: 'text', text: item.text, messageId: `${threadId}:${item.id}`, ...tag })
+    }
     const extra = toolOfOtherItem(item)
-    if (extra) this.emit(complete ? { kind: 'tool-result', toolUseId: this.toolId(threadId, item.id), isError: item.status === 'failed', summary: extra.result, content: extra.content, ...tag } : { kind: 'tool-use', toolUseId: this.toolId(threadId, item.id), name: extra.name, summary: extra.summary, title: extra.title, content: extra.content, ...tag })
+    if (extra)
+      this.emit(
+        complete
+          ? {
+              kind: 'tool-result',
+              toolUseId: this.toolId(threadId, item.id),
+              isError: item.status === 'failed',
+              summary: extra.result,
+              content: extra.content,
+              ...tag,
+            }
+          : {
+              kind: 'tool-use',
+              toolUseId: this.toolId(threadId, item.id),
+              name: extra.name,
+              summary: extra.summary,
+              title: extra.title,
+              content: extra.content,
+              ...tag,
+            },
+      )
     if (item.type === 'commandExecution' || item.type === 'fileChange' || item.type === 'mcpToolCall') {
-      if (!complete) this.emit({ kind: 'tool-use', toolUseId: this.toolId(threadId, item.id), name: item.type === 'commandExecution' ? 'Bash' : item.type === 'fileChange' ? 'Edit' : item.tool || 'Tool', summary: item.command || (item.changes ?? []).map((c: Wire) => c.path).join(', ') || item.server || '', title: typeof item.description === 'string' ? item.description : toolDescription(item.arguments), input: toolInput(item.arguments ?? item.command), ...tag })
-      else this.emit({ kind: 'tool-result', toolUseId: this.toolId(threadId, item.id), isError: item.status === 'failed' || (item.exitCode != null && item.exitCode !== 0), summary: this.toolResult(threadId, item), ...tag })
+      if (!complete)
+        this.emit({
+          kind: 'tool-use',
+          toolUseId: this.toolId(threadId, item.id),
+          name: item.type === 'commandExecution' ? 'Bash' : item.type === 'fileChange' ? 'Edit' : item.tool || 'Tool',
+          summary: item.command || (item.changes ?? []).map((c: Wire) => c.path).join(', ') || item.server || '',
+          title: typeof item.description === 'string' ? item.description : toolDescription(item.arguments),
+          input: toolInput(item.arguments ?? item.command),
+          ...tag,
+        })
+      else
+        this.emit({
+          kind: 'tool-result',
+          toolUseId: this.toolId(threadId, item.id),
+          isError: item.status === 'failed' || (item.exitCode != null && item.exitCode !== 0),
+          summary: this.toolResult(threadId, item),
+          ...tag,
+        })
     }
   }
 
   restoreAgent(threadId: string, turns: Wire[]): void {
-    for (const turn of turns) for (const item of turn.items ?? []) {
-      this.handleAgent(threadId, 'item/started', { item })
-      if (item.type === 'agentMessage' || !['inProgress', 'running'].includes(item.status)) this.handleAgent(threadId, 'item/completed', { item })
-    }
+    for (const turn of turns)
+      for (const item of turn.items ?? []) {
+        this.handleAgent(threadId, 'item/started', { item })
+        if (item.type === 'agentMessage' || !['inProgress', 'running'].includes(item.status))
+          this.handleAgent(threadId, 'item/completed', { item })
+      }
   }
 
   private handle(m: Wire): void {
     if (this.stopped || !m.method) return
     const p = m.params ?? {}
     const sub = !!p.threadId && !!this.threadId && p.threadId !== this.threadId
-    if (m.method === 'item/reasoning/summaryTextDelta' && typeof p.itemId === 'string' && typeof p.delta === 'string' && (!sub || this.agents.has(p.threadId))) { const key = `${p.threadId ?? this.threadId}:${p.itemId}`; const text = (this.thoughts.get(key) ?? '') + p.delta; this.thoughts.set(key, text); this.emit({ kind: 'thinking', text, messageId: this.toolId(p.threadId ?? this.threadId, p.itemId), ...(sub ? { agentId: p.threadId } : {}) }); return }
+    if (
+      m.method === 'item/reasoning/summaryTextDelta' &&
+      typeof p.itemId === 'string' &&
+      typeof p.delta === 'string' &&
+      (!sub || this.agents.has(p.threadId))
+    ) {
+      const key = `${p.threadId ?? this.threadId}:${p.itemId}`
+      const text = (this.thoughts.get(key) ?? '') + p.delta
+      this.thoughts.set(key, text)
+      this.emit({
+        kind: 'thinking',
+        text,
+        messageId: this.toolId(p.threadId ?? this.threadId, p.itemId),
+        ...(sub ? { agentId: p.threadId } : {}),
+      })
+      return
+    }
     // Requests from a sub-agent thread need an answer like any other, or that agent waits forever.
-    if (sub && m.id === undefined) { if (this.agents.has(p.threadId)) this.handleAgent(p.threadId, m.method, p); return }
+    if (sub && m.id === undefined) {
+      if (this.agents.has(p.threadId)) this.handleAgent(p.threadId, m.method, p)
+      return
+    }
     if (m.id !== undefined) {
       const id = String(m.id)
       if (m.method === 'item/commandExecution/requestApproval' || m.method === 'item/fileChange/requestApproval') {
         this.pending.set(id, { id: m.id })
-        this.emit({ kind: 'permission-request', requestId: id, toolName: m.method.includes('commandExecution') ? 'Bash' : 'Edit', title: m.method.includes('commandExecution') ? 'Allow command?' : 'Allow file changes?', detail: [p.command, p.reason].filter(Boolean).join('\n') })
+        this.emit({
+          kind: 'permission-request',
+          requestId: id,
+          toolName: m.method.includes('commandExecution') ? 'Bash' : 'Edit',
+          title: m.method.includes('commandExecution') ? 'Allow command?' : 'Allow file changes?',
+          detail: [p.command, p.reason].filter(Boolean).join('\n'),
+        })
         this.emit({ kind: 'state', state: 'needs-input' })
       } else if (m.method === 'item/permissions/requestApproval') {
         this.pending.set(id, { id: m.id, permissions: p.permissions })
-        this.emit({ kind: 'permission-request', requestId: id, toolName: 'Permissions', title: 'Allow additional access?', detail: [p.reason, JSON.stringify(p.permissions, null, 2)].filter(Boolean).join('\n') })
+        this.emit({
+          kind: 'permission-request',
+          requestId: id,
+          toolName: 'Permissions',
+          title: 'Allow additional access?',
+          detail: [p.reason, JSON.stringify(p.permissions, null, 2)].filter(Boolean).join('\n'),
+        })
         this.emit({ kind: 'state', state: 'needs-input' })
       } else if (m.method === 'item/tool/requestUserInput') {
         this.pending.set(id, { id: m.id, questions: p.questions })
-        this.emit({ kind: 'question', requestId: id, questions: (p.questions ?? []).map((q: Wire) => ({ id: q.id, question: q.question, header: q.header, multiSelect: false, options: q.options ?? [] })) })
+        this.emit({
+          kind: 'question',
+          requestId: id,
+          questions: (p.questions ?? []).map((q: Wire) => ({
+            id: q.id,
+            question: q.question,
+            header: q.header,
+            multiSelect: false,
+            options: q.options ?? [],
+          })),
+        })
         this.emit({ kind: 'state', state: 'needs-input' })
       } else if (m.method === 'mcpServer/elicitation/request') {
         try {
@@ -332,16 +611,29 @@ class CodexSession implements CodexRunner {
           this.emit({ kind: 'state', state: 'needs-input' })
         } catch (error) {
           this.rpc.write({ id: m.id, result: { action: 'cancel', content: null, _meta: null } })
-          this.emit({ kind: 'error', message: `Could not display ${p.serverName ?? 'MCP server'} input request: ${String(error)}` })
+          this.emit({
+            kind: 'error',
+            message: `Could not display ${p.serverName ?? 'MCP server'} input request: ${String(error)}`,
+          })
         }
       } else this.rpc.write({ id: m.id, error: { code: -32601, message: `Ramu does not support ${m.method}` } })
       return
     }
     if (this.liveTool(this.threadId, m.method, p)) return
     if (m.method === 'account/rateLimits/updated') this.reportUsage(p.rateLimits)
-    if (m.method === 'thread/tokenUsage/updated') { const context = codexContext(p.tokenUsage); if (context) this.emit({ kind: 'context', ...context }) }
-    if (m.method === 'turn/started') { this.turnId = p.turn.id; this.emit({ kind: 'state', state: 'running' }) }
-    if (m.method === 'thread/compacted' && p.turnId !== this.modernCompactionTurn && p.turnId !== this.legacyCompactionTurn) {
+    if (m.method === 'thread/tokenUsage/updated') {
+      const context = codexContext(p.tokenUsage)
+      if (context) this.emit({ kind: 'context', ...context })
+    }
+    if (m.method === 'turn/started') {
+      this.turnId = p.turn.id
+      this.emit({ kind: 'state', state: 'running' })
+    }
+    if (
+      m.method === 'thread/compacted' &&
+      p.turnId !== this.modernCompactionTurn &&
+      p.turnId !== this.legacyCompactionTurn
+    ) {
       this.legacyCompactionTurn = p.turnId
       this.emit({ kind: 'compaction', state: 'completed' })
     }
@@ -360,7 +652,19 @@ class CodexSession implements CodexRunner {
       const complete = m.method === 'item/completed'
       if (item.type === 'agentMessage' && item.delivery === 'async' && item.questions?.length && complete) {
         this.messages.delete(item.id)
-        this.emit({ kind: 'question', requestId: `async:${this.threadId}:${item.id}`, responseMode: 'message', grouping: 'together', questions: item.questions.map((q: Wire, index: number) => ({ id: String(index), question: q.title, header: 'Question', multiSelect: false, options: (q.options ?? []).map((label: string) => ({ label, description: '' })) })) })
+        this.emit({
+          kind: 'question',
+          requestId: `async:${this.threadId}:${item.id}`,
+          responseMode: 'message',
+          grouping: 'together',
+          questions: item.questions.map((q: Wire, index: number) => ({
+            id: String(index),
+            question: q.title,
+            header: 'Question',
+            multiSelect: false,
+            options: (q.options ?? []).map((label: string) => ({ label, description: '' })),
+          })),
+        })
         return
       }
       if (item.type === 'contextCompaction') {
@@ -369,29 +673,67 @@ class CodexSession implements CodexRunner {
           this.compactedItems.add(item.id)
           if (this.compactedItems.size > 100) this.compactedItems.delete(this.compactedItems.values().next().value!)
           this.modernCompactionTurn = p.turnId || this.turnId
-          if (this.modernCompactionTurn !== this.legacyCompactionTurn) this.emit({ kind: 'compaction', state: 'completed' })
+          if (this.modernCompactionTurn !== this.legacyCompactionTurn)
+            this.emit({ kind: 'compaction', state: 'completed' })
         }
       }
-      if (item.type === 'agentMessage' && complete && item.text) this.emit({ kind: 'text', text: item.text, messageId: item.id })
+      if (item.type === 'agentMessage' && complete && item.text)
+        this.emit({ kind: 'text', text: item.text, messageId: item.id })
       if (item.type === 'reasoning' && complete) {
-        const text = (Array.isArray(item.summary) ? item.summary : []).filter((part: unknown) => typeof part === 'string' && part.trim()).join('\n\n')
+        const text = (Array.isArray(item.summary) ? item.summary : [])
+          .filter((part: unknown) => typeof part === 'string' && part.trim())
+          .join('\n\n')
         if (text) this.emit({ kind: 'thinking', text, messageId: item.id })
       }
       // Web searches, page opens and image views are tool calls too; without them a research turn looks like silence.
       if (item.type === 'collabAgentToolCall') this.trackAgents(item)
       const extra = toolOfOtherItem(item)
       if (extra) {
-        if (!complete) this.emit({ kind: 'tool-use', toolUseId: item.id, name: extra.name, summary: extra.summary, title: extra.title, content: extra.content })
-        else this.emit({ kind: 'tool-result', toolUseId: item.id, isError: item.status === 'failed', summary: extra.result, content: extra.content })
+        if (!complete)
+          this.emit({
+            kind: 'tool-use',
+            toolUseId: item.id,
+            name: extra.name,
+            summary: extra.summary,
+            title: extra.title,
+            content: extra.content,
+          })
+        else
+          this.emit({
+            kind: 'tool-result',
+            toolUseId: item.id,
+            isError: item.status === 'failed',
+            summary: extra.result,
+            content: extra.content,
+          })
       }
       if (item.type === 'commandExecution' || item.type === 'fileChange' || item.type === 'mcpToolCall') {
-        if (!complete) this.emit({ kind: 'tool-use', toolUseId: item.id, name: item.type === 'commandExecution' ? 'Bash' : item.type === 'fileChange' ? 'Edit' : item.tool || 'Tool', summary: item.command || (item.changes ?? []).map((c: Wire) => c.path).join(', ') || item.server || '', title: typeof item.description === 'string' ? item.description : toolDescription(item.arguments), input: toolInput(item.arguments ?? item.command) })
-        else this.emit({ kind: 'tool-result', toolUseId: item.id, isError: item.status === 'failed' || (item.exitCode != null && item.exitCode !== 0), summary: this.toolResult(this.threadId, item), ...(Array.isArray(item.result?.content) ? { content: agentContent(item.result.content) } : {}) })
+        if (!complete)
+          this.emit({
+            kind: 'tool-use',
+            toolUseId: item.id,
+            name: item.type === 'commandExecution' ? 'Bash' : item.type === 'fileChange' ? 'Edit' : item.tool || 'Tool',
+            summary: item.command || (item.changes ?? []).map((c: Wire) => c.path).join(', ') || item.server || '',
+            title: typeof item.description === 'string' ? item.description : toolDescription(item.arguments),
+            input: toolInput(item.arguments ?? item.command),
+          })
+        else
+          this.emit({
+            kind: 'tool-result',
+            toolUseId: item.id,
+            isError: item.status === 'failed' || (item.exitCode != null && item.exitCode !== 0),
+            summary: this.toolResult(this.threadId, item),
+            ...(Array.isArray(item.result?.content) ? { content: agentContent(item.result.content) } : {}),
+          })
       }
     }
     if (m.method === 'serverRequest/resolved') {
-      const id = [...this.pending].find(([, request]) => String(request.id) === String(p.requestId))?.[0] ?? String(p.requestId)
-      if (this.pending.delete(id)) { this.emit({ kind: 'request-resolved', requestId: id, outcome: 'cancelled' }); if (!this.pending.size) this.emit({ kind: 'state', state: this.turnId ? 'running' : 'idle' }) }
+      const id =
+        [...this.pending].find(([, request]) => String(request.id) === String(p.requestId))?.[0] ?? String(p.requestId)
+      if (this.pending.delete(id)) {
+        this.emit({ kind: 'request-resolved', requestId: id, outcome: 'cancelled' })
+        if (!this.pending.size) this.emit({ kind: 'state', state: this.turnId ? 'running' : 'idle' })
+      }
     }
     if (m.method === 'turn/completed') {
       this.completedTurns.add(p.turn.id)
@@ -399,7 +741,10 @@ class CodexSession implements CodexRunner {
       this.turnId = ''
       const error = p.turn.error
       this.limit ||= /usageLimitExceeded|rateLimitExceeded/i.test(JSON.stringify(error?.codexErrorInfo ?? ''))
-      this.emit({ kind: 'result', isError: p.turn.status === 'failed', text: error?.message || p.turn.status, costUsd: null }, this.limit)
+      this.emit(
+        { kind: 'result', isError: p.turn.status === 'failed', text: error?.message || p.turn.status, costUsd: null },
+        this.limit,
+      )
       // AgentService owns the state transition and any fallback.
     }
   }
@@ -413,60 +758,133 @@ export async function codexHelperHistory(session: AgentSessionInfo, tasks: Agent
     const root = await rpc.request('thread/read', { threadId: session.providerSessionId, includeTurns: true })
     const known = new Map(tasks.map((task) => [task.agentId, task]))
     // A spawn may have been persisted by Codex just before Ramu crashed, before its notification reached us.
-    for (const turn of root.thread?.turns ?? []) for (const item of turn.items ?? []) {
-      if (item.type !== 'collabAgentToolCall' || item.tool !== 'spawnAgent') continue
-      for (const agentId of item.receiverThreadIds ?? []) if (typeof agentId === 'string' && !known.has(agentId)) known.set(agentId, { agentId, name: String(item.prompt || 'Recovered agent').split('\n')[0]!.slice(0, 80), prompt: item.prompt, status: 'running', toolUseId: item.id, address: agentId })
-    }
+    for (const turn of root.thread?.turns ?? [])
+      for (const item of turn.items ?? []) {
+        if (item.type !== 'collabAgentToolCall' || item.tool !== 'spawnAgent') continue
+        for (const agentId of item.receiverThreadIds ?? [])
+          if (typeof agentId === 'string' && !known.has(agentId))
+            known.set(agentId, {
+              agentId,
+              name: String(item.prompt || 'Recovered agent')
+                .split('\n')[0]!
+                .slice(0, 80),
+              prompt: item.prompt,
+              status: 'running',
+              toolUseId: item.id,
+              address: agentId,
+            })
+      }
     const history: HelperHistory[] = []
     for (const task of known.values()) {
       try {
         const { thread } = await rpc.request('thread/read', { threadId: task.agentId, includeTurns: true })
-        if (!thread || thread.id !== task.agentId) throw new Error('The provider has no saved transcript for this helper.')
+        if (!thread || thread.id !== task.agentId)
+          throw new Error('The provider has no saved transcript for this helper.')
         const events: AgentEvent[] = []
-        new CodexSession(session, session.settings, (event) => events.push(event)).restoreAgent(task.agentId, thread.turns ?? [])
+        new CodexSession(session, session.settings, (event) => events.push(event)).restoreAgent(
+          task.agentId,
+          thread.turns ?? [],
+        )
         const last = thread.turns?.at(-1)
-        const status = task.status !== 'running' ? task.status : last?.status === 'completed' ? 'completed' : last?.status === 'failed' ? 'failed' : 'stopped'
-        history.push({ task: { ...task, status, ...(last?.error?.message ? { error: String(last.error.message) } : {}) }, events })
-      } catch (error) { history.push({ task, events: [], error: String(error) }) }
+        const status =
+          task.status !== 'running'
+            ? task.status
+            : last?.status === 'completed'
+              ? 'completed'
+              : last?.status === 'failed'
+                ? 'failed'
+                : 'stopped'
+        history.push({
+          task: { ...task, status, ...(last?.error?.message ? { error: String(last.error.message) } : {}) },
+          events,
+        })
+      } catch (error) {
+        history.push({ task, events: [], error: String(error) })
+      }
     }
     return history
-  } finally { await rpc.close() }
+  } finally {
+    await rpc.close()
+  }
 }
 
 /**
  * A side question answered on a throwaway fork of a Codex thread: it sees the whole conversation, can only read,
  * asks nothing, and the original thread is never touched.
  */
-export async function codexAside(options: { accountId?: string; threadId: string; cwd: string; model?: string; effort?: string | null; prompt: string; signal?: AbortSignal; timeoutMs?: number }): Promise<string> {
+export async function codexAside(options: {
+  accountId?: string
+  threadId: string
+  cwd: string
+  model?: string
+  effort?: string | null
+  prompt: string
+  signal?: AbortSignal
+  timeoutMs?: number
+}): Promise<string> {
   const rpc = new CodexRpc(undefined, [], options.accountId ?? 'default')
   const abort = () => void rpc.close()
   options.signal?.addEventListener('abort', abort, { once: true })
   try {
-    let fork = '', answer = ''
+    let fork = '',
+      answer = ''
     let finish!: (error?: Error) => void
-    const done = new Promise<void>((resolve, reject) => { finish = (error) => error ? reject(error) : resolve() })
+    const done = new Promise<void>((resolve, reject) => {
+      finish = (error) => (error ? reject(error) : resolve())
+    })
     rpc.onExit = (error) => finish(error)
     rpc.onMessage = (m) => {
       // Nothing may be asked of the user here: every request is declined.
-      if (m.id !== undefined && m.method) { rpc.write({ id: m.id, error: { code: -32601, message: 'Not available in a side question' } }); return }
+      if (m.id !== undefined && m.method) {
+        rpc.write({ id: m.id, error: { code: -32601, message: 'Not available in a side question' } })
+        return
+      }
       const p = m.params ?? {}
       if (!fork || p.threadId !== fork) return
       if (m.method === 'item/completed' && p.item?.type === 'agentMessage' && p.item.text) answer = p.item.text
-      if (m.method === 'turn/completed') finish(p.turn?.status === 'failed' ? new Error(p.turn?.error?.message || 'The side question failed') : undefined)
+      if (m.method === 'turn/completed')
+        finish(
+          p.turn?.status === 'failed' ? new Error(p.turn?.error?.message || 'The side question failed') : undefined,
+        )
     }
     await rpc.initialize()
-    const forked = await rpc.request('thread/fork', { threadId: options.threadId, ephemeral: true, excludeTurns: true, cwd: options.cwd, approvalPolicy: 'never', sandbox: 'read-only', ...(options.model ? { model: options.model } : {}) })
+    const forked = await rpc.request('thread/fork', {
+      threadId: options.threadId,
+      ephemeral: true,
+      excludeTurns: true,
+      cwd: options.cwd,
+      approvalPolicy: 'never',
+      sandbox: 'read-only',
+      ...(options.model ? { model: options.model } : {}),
+    })
     fork = forked.thread.id
-    await rpc.request('turn/start', { threadId: fork, input: [{ type: 'text', text: options.prompt }], cwd: options.cwd, approvalPolicy: 'never', sandboxPolicy: { type: 'readOnly' }, ...(options.model ? { model: options.model } : {}), ...(options.effort ? { effort: options.effort } : {}) })
-    await Promise.race([done, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('The side question timed out')), options.timeoutMs ?? 120_000))])
+    await rpc.request('turn/start', {
+      threadId: fork,
+      input: [{ type: 'text', text: options.prompt }],
+      cwd: options.cwd,
+      approvalPolicy: 'never',
+      sandboxPolicy: { type: 'readOnly' },
+      ...(options.model ? { model: options.model } : {}),
+      ...(options.effort ? { effort: options.effort } : {}),
+    })
+    await Promise.race([
+      done,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('The side question timed out')), options.timeoutMs ?? 120_000),
+      ),
+    ])
     if (!answer.trim()) throw new Error('No answer came back')
     return answer.trim()
-  } finally { options.signal?.removeEventListener('abort', abort); await rpc.close() }
+  } finally {
+    options.signal?.removeEventListener('abort', abort)
+    await rpc.close()
+  }
 }
 
 /** How full Codex's context is: the tokens of the last request against the model's window. */
 export function codexContext(usage: Wire | null | undefined): { used: number; max: number } | null {
-  const used = usage?.last?.totalTokens, max = usage?.modelContextWindow
+  const used = usage?.last?.totalTokens,
+    max = usage?.modelContextWindow
   return typeof used === 'number' && typeof max === 'number' && max > 0 ? { used, max } : null
 }
 
@@ -477,9 +895,20 @@ export function codexReadings(snapshot: Wire | null | undefined, now = Date.now(
   return (['primary', 'secondary'] as const).flatMap((key): UsageReading[] => {
     const window = snapshot[key]
     if (!window || typeof window.usedPercent !== 'number') return []
-    const minutes = typeof window.windowDurationMins === 'number' ? window.windowDurationMins : key === 'primary' ? 300 : 10080
+    const minutes =
+      typeof window.windowDurationMins === 'number' ? window.windowDurationMins : key === 'primary' ? 300 : 10080
     const usedPercent = Math.max(0, Math.min(100, Math.round(window.usedPercent)))
-    return [{ provider: 'codex', window: minutes <= 720 ? 'five_hour' : 'weekly', usedPercent, ...(typeof window.resetsAt === 'number' ? { resetsAt: window.resetsAt * 1000 } : {}), status: usedPercent >= 100 || (reached && usedPercent >= 95) ? 'limited' : usedPercent >= 80 ? 'warning' : 'ok', ...(snapshot.planType ? { plan: String(snapshot.planType) } : {}), updatedAt: now }]
+    return [
+      {
+        provider: 'codex',
+        window: minutes <= 720 ? 'five_hour' : 'weekly',
+        usedPercent,
+        ...(typeof window.resetsAt === 'number' ? { resetsAt: window.resetsAt * 1000 } : {}),
+        status: usedPercent >= 100 || (reached && usedPercent >= 95) ? 'limited' : usedPercent >= 80 ? 'warning' : 'ok',
+        ...(snapshot.planType ? { plan: String(snapshot.planType) } : {}),
+        updatedAt: now,
+      },
+    ]
   })
 }
 
@@ -487,13 +916,23 @@ export function codexReadings(snapshot: Wire | null | undefined, now = Date.now(
  * Codex asks Ramu's own tool before one of its sub-agents starts. `input` is filled in from the hook payload; the call
  * also carries the Codex thread id, and Ramu's per-chat token says which chat it is.
  */
-export const CODEX_HOOK_CONFIG = 'hooks.PreToolUse=[{matcher="spawn_agent",hooks=[{type="mcp_tool",server="ramu",tool="codex_pre_tool_use",input={tool_name="${tool_name}",tool_input="${tool_input}",session_id="${session_id}"}}]}]'
+export const CODEX_HOOK_CONFIG =
+  'hooks.PreToolUse=[{matcher="spawn_agent",hooks=[{type="mcp_tool",server="ramu",tool="codex_pre_tool_use",input={tool_name="${tool_name}",tool_input="${tool_input}",session_id="${session_id}"}}]}]'
 
 /** The hook the app-server reports for Ramu's definition, with the key and hash its trust entry is stored under. */
 async function ramuHook(rpc: CodexRpc, cwd: string): Promise<{ key: string; hash: string; trusted: boolean } | null> {
   const result = await rpc.request('hooks/list', { cwds: [cwd] })
-  const hook = (result.data?.[0]?.hooks ?? []).find((entry: Wire) => entry.source === 'sessionFlags' && entry.handlerType === 'mcpTool' && entry.tool === 'codex_pre_tool_use')
-  return hook ? { key: hook.key, hash: hook.currentHash, trusted: hook.trustStatus === 'trusted' || hook.trustStatus === 'managed' } : null
+  const hook = (result.data?.[0]?.hooks ?? []).find(
+    (entry: Wire) =>
+      entry.source === 'sessionFlags' && entry.handlerType === 'mcpTool' && entry.tool === 'codex_pre_tool_use',
+  )
+  return hook
+    ? {
+        key: hook.key,
+        hash: hook.currentHash,
+        trusted: hook.trustStatus === 'trusted' || hook.trustStatus === 'managed',
+      }
+    : null
 }
 
 /** Whether Codex trusts Ramu's hook, and with `grant`, writes the trust entry into Codex's user config so it does. */
@@ -505,12 +944,18 @@ export async function codexHookTrust(grant: boolean, cwd = tmpdir()): Promise<{ 
     if (!hook) return { trusted: false, error: 'This version of Codex does not report hooks.' }
     if (!hook.trusted && grant) {
       // The same entry Codex's own review writes: the hash of exactly this definition.
-      await rpc.request('config/batchWrite', { edits: [{ keyPath: `hooks.state."${hook.key}".trusted_hash`, mergeStrategy: 'replace', value: hook.hash }], reloadUserConfig: true })
+      await rpc.request('config/batchWrite', {
+        edits: [{ keyPath: `hooks.state."${hook.key}".trusted_hash`, mergeStrategy: 'replace', value: hook.hash }],
+        reloadUserConfig: true,
+      })
       hook = await ramuHook(rpc, cwd)
     }
     return { trusted: !!hook?.trusted }
-  } catch (error) { return { trusted: false, error: error instanceof Error ? error.message : String(error) } }
-  finally { await rpc.close() }
+  } catch (error) {
+    return { trusted: false, error: error instanceof Error ? error.message : String(error) }
+  } finally {
+    await rpc.close()
+  }
 }
 
 /** Maps Codex's sub-agent states onto ours; unknown states count as running. */
@@ -523,21 +968,55 @@ export function codexAgentStatus(value: unknown): 'running' | 'completed' | 'fai
 }
 
 /** Codex items that are tool calls but not commands, edits or MCP calls. */
-export function toolOfOtherItem(item: Wire): { name: string; summary: string; result: string; title?: string; content?: AgentContent[] } | null {
+export function toolOfOtherItem(
+  item: Wire,
+): { name: string; summary: string; result: string; title?: string; content?: AgentContent[] } | null {
   if (item.type === 'webSearch') {
     const action = item.action ?? {}
-    if (action.type === 'openPage') return { name: 'WebFetch', summary: String(action.url ?? item.query ?? ''), result: String(action.url ?? 'Opened page') }
-    if (action.type === 'findInPage') return { name: 'WebFetch', summary: `${action.pattern ?? ''} in ${action.url ?? 'page'}`.trim(), result: String(action.url ?? 'Searched in page') }
+    if (action.type === 'openPage')
+      return {
+        name: 'WebFetch',
+        summary: String(action.url ?? item.query ?? ''),
+        result: String(action.url ?? 'Opened page'),
+      }
+    if (action.type === 'findInPage')
+      return {
+        name: 'WebFetch',
+        summary: `${action.pattern ?? ''} in ${action.url ?? 'page'}`.trim(),
+        result: String(action.url ?? 'Searched in page'),
+      }
     const query = String(action.query ?? item.query ?? '')
     return { name: 'WebSearch', summary: query, result: query ? `Searched: ${query}` : 'Searched the web' }
   }
-  if (item.type === 'imageView') return { name: 'Read', title: 'View image', summary: String(item.path ?? ''), result: String(item.path ?? 'Viewed image'), content: [{ type: 'image', mimeType: 'image/png', uri: String(item.path ?? '') }] }
-  if (item.type === 'dynamicToolCall') return { name: String(item.tool ?? 'Tool'), summary: item.arguments ? JSON.stringify(item.arguments).slice(0, 200) : '', result: JSON.stringify(item.contentItems ?? item.success ?? '').slice(0, 2000), ...(Array.isArray(item.contentItems) ? { content: agentContent(item.contentItems) } : {}), ...(typeof item.description === 'string' ? { title: item.description } : {}) }
-  if (item.type === 'collabAgentToolCall') return { name: 'Agent', summary: String(item.tool ?? item.prompt ?? ''), result: String(item.status ?? '') }
+  if (item.type === 'imageView')
+    return {
+      name: 'Read',
+      title: 'View image',
+      summary: String(item.path ?? ''),
+      result: String(item.path ?? 'Viewed image'),
+      content: [{ type: 'image', mimeType: 'image/png', uri: String(item.path ?? '') }],
+    }
+  if (item.type === 'dynamicToolCall')
+    return {
+      name: String(item.tool ?? 'Tool'),
+      summary: item.arguments ? JSON.stringify(item.arguments).slice(0, 200) : '',
+      result: JSON.stringify(item.contentItems ?? item.success ?? '').slice(0, 2000),
+      ...(Array.isArray(item.contentItems) ? { content: agentContent(item.contentItems) } : {}),
+      ...(typeof item.description === 'string' ? { title: item.description } : {}),
+    }
+  if (item.type === 'collabAgentToolCall')
+    return { name: 'Agent', summary: String(item.tool ?? item.prompt ?? ''), result: String(item.status ?? '') }
   return null
 }
 
 /** Patch notifications replace the snapshot; they are not text deltas. */
 function patchSummary(changes: Wire[]): string {
-  return changes.filter((change) => typeof change?.path === 'string').map((change) => `${change.path}${change.kind?.type ? ` (${change.kind.type})` : ''}\n${typeof change.diff === 'string' ? change.diff : ''}`).join('\n\n').slice(0, 256_000)
+  return changes
+    .filter((change) => typeof change?.path === 'string')
+    .map(
+      (change) =>
+        `${change.path}${change.kind?.type ? ` (${change.kind.type})` : ''}\n${typeof change.diff === 'string' ? change.diff : ''}`,
+    )
+    .join('\n\n')
+    .slice(0, 256_000)
 }

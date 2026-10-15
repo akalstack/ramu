@@ -23,25 +23,51 @@ export interface OutboxItem {
 
 export type Submit = (item: OutboxItem) => Promise<unknown>
 
-export function createOutbox({ store, submit, connected, now = Date.now, uid = () => crypto.randomUUID() }: { store: Store | null; submit: Submit; connected: () => boolean; now?: () => number; uid?: () => string }) {
+export function createOutbox({
+  store,
+  submit,
+  connected,
+  now = Date.now,
+  uid = () => crypto.randomUUID(),
+}: {
+  store: Store | null
+  submit: Submit
+  connected: () => boolean
+  now?: () => number
+  uid?: () => string
+}) {
   const read = (): OutboxItem[] => {
     try {
       const saved = JSON.parse(store?.getItem(KEY) ?? '[]') as OutboxItem[]
       if (!Array.isArray(saved)) return []
       // A send cut off by closing the window may have reached the host, so it needs a person to decide.
-      return saved.filter((item) => item && typeof item.id === 'string' && typeof item.sessionId === 'string' && typeof item.text === 'string')
-        .map((item) => item.state === 'sending' ? { ...item, state: 'failed', error: 'The app closed while sending. Check the chat before retrying.' } : item)
-    } catch { return [] }
+      return saved
+        .filter(
+          (item) =>
+            item && typeof item.id === 'string' && typeof item.sessionId === 'string' && typeof item.text === 'string',
+        )
+        .map((item) =>
+          item.state === 'sending'
+            ? { ...item, state: 'failed', error: 'The app closed while sending. Check the chat before retrying.' }
+            : item,
+        )
+    } catch {
+      return []
+    }
   }
   let items = read()
-  let running: Promise<void> | null = null, again = false
+  let running: Promise<void> | null = null,
+    again = false
   const listeners = new Set<() => void>()
   const write = (next: OutboxItem[]) => {
     items = next
-    try { store?.setItem(KEY, JSON.stringify(next)) } catch {}
+    try {
+      store?.setItem(KEY, JSON.stringify(next))
+    } catch {}
     for (const listener of listeners) listener()
   }
-  const update = (id: string, patch: Partial<OutboxItem>) => write(items.map((item) => item.id === id ? { ...item, ...patch } : item))
+  const update = (id: string, patch: Partial<OutboxItem>) =>
+    write(items.map((item) => (item.id === id ? { ...item, ...patch } : item)))
 
   /** Sends waiting messages oldest first. A failure holds back the rest of its chat so the order is kept. */
   const drain = async () => {
@@ -51,7 +77,10 @@ export function createOutbox({ store, submit, connected, now = Date.now, uid = (
       let next: OutboxItem | undefined
       for (const item of items) {
         if (blocked.has(item.sessionId)) continue
-        if (item.state === 'waiting') { next = item; break }
+        if (item.state === 'waiting') {
+          next = item
+          break
+        }
         blocked.add(item.sessionId)
       }
       if (!next) return
@@ -62,7 +91,10 @@ export function createOutbox({ store, submit, connected, now = Date.now, uid = (
         write(items.filter((item) => item.id !== sending.id))
       } catch (error) {
         // Losing the connection mid-send is not the message's fault; it waits for the next reconnect.
-        if (!connected()) { update(sending.id, { state: 'waiting' }); return }
+        if (!connected()) {
+          update(sending.id, { state: 'waiting' })
+          return
+        }
         update(sending.id, { state: 'failed', error: error instanceof Error ? error.message : String(error) })
         blocked.add(sending.sessionId)
       }
@@ -70,14 +102,29 @@ export function createOutbox({ store, submit, connected, now = Date.now, uid = (
   }
   /** One delivery at a time. A call during a delivery makes it look again once it finishes, and shares its promise. */
   const flush = (): Promise<void> => {
-    if (running) { again = true; return running }
-    running = (async () => { do { again = false; await drain() } while (again) })().finally(() => { running = null })
+    if (running) {
+      again = true
+      return running
+    }
+    running = (async () => {
+      do {
+        again = false
+        await drain()
+      } while (again)
+    })().finally(() => {
+      running = null
+    })
     return running
   }
 
   return {
     list: (sessionId: string) => items.filter((item) => item.sessionId === sessionId),
-    subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
     snapshot: () => items,
     /** Returns false when the chat already holds the limit. */
     add(sessionId: string, text: string, attachments: Attachment[] = [], context: FileContext[] = []): boolean {
@@ -93,7 +140,12 @@ export function createOutbox({ store, submit, connected, now = Date.now, uid = (
       write(items.filter((entry) => entry.id !== id))
       return item
     },
-    retry(id: string) { if (items.find((item) => item.id === id)?.state === 'failed') { update(id, { state: 'waiting', error: undefined }); void flush() } },
+    retry(id: string) {
+      if (items.find((item) => item.id === id)?.state === 'failed') {
+        update(id, { state: 'waiting', error: undefined })
+        void flush()
+      }
+    },
     flush,
   }
 }
@@ -108,15 +160,43 @@ export function outbox(): Outbox {
   const { ramu } = window
   let online = true
   shared = createOutbox({
-    store: (() => { try { return globalThis.localStorage ?? null } catch { return null } })(),
+    store: (() => {
+      try {
+        return globalThis.localStorage ?? null
+      } catch {
+        return null
+      }
+    })(),
     connected: () => online,
-    submit: (item) => ramu.invoke('agent.submit', item.sessionId, item.text, 'queue', item.attachments.map((file) => file.id), item.context),
+    submit: (item) =>
+      ramu.invoke(
+        'agent.submit',
+        item.sessionId,
+        item.text,
+        'queue',
+        item.attachments.map((file) => file.id),
+        item.context,
+      ),
   })
   const instance = shared
-  const set = (value: boolean) => { const back = value && !online; online = value; if (back) void instance.flush() }
+  const set = (value: boolean) => {
+    const back = value && !online
+    online = value
+    if (back) void instance.flush()
+  }
   ramu.on('background:connection', ({ connected }) => set(connected))
-  ramu.on('computers:changed', (state) => { const current = state.computers.find((computer) => computer.id === state.current); if (current) set(current.status === 'connected') })
-  void ramu.invoke('computers.list').then((state) => { const current = state.computers.find((computer) => computer.id === state.current); set(current ? current.status === 'connected' : true); void instance.flush() }, () => {})
+  ramu.on('computers:changed', (state) => {
+    const current = state.computers.find((computer) => computer.id === state.current)
+    if (current) set(current.status === 'connected')
+  })
+  void ramu.invoke('computers.list').then(
+    (state) => {
+      const current = state.computers.find((computer) => computer.id === state.current)
+      set(current ? current.status === 'connected' : true)
+      void instance.flush()
+    },
+    () => {},
+  )
   return instance
 }
 

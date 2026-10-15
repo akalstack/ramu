@@ -12,7 +12,9 @@ export function createTerminalResizeScheduler(send: (cols: number, rows: number)
     send(latest.cols, latest.rows)
   }
   return {
-    get pending() { return !!size },
+    get pending() {
+      return !!size
+    },
     request(cols: number, rows: number) {
       if (disposed) return
       size = { cols: Math.max(2, cols), rows: Math.max(2, rows) }
@@ -21,6 +23,10 @@ export function createTerminalResizeScheduler(send: (cols: number, rows: number)
       timer = setTimeout(flush, 100)
     },
     flush,
-    dispose() { disposed = true; size = undefined; clearTimeout(timer) },
+    dispose() {
+      disposed = true
+      size = undefined
+      clearTimeout(timer)
+    },
   }
 }

@@ -12,21 +12,36 @@ export const ACCOUNT_USAGE_INTERVAL_MS = 5 * 60_000
  */
 export class AccountUsage {
   private last = new Map<string, number>()
-  constructor(private readonly update: (readings: UsageReading[]) => void, private readonly config: () => ProviderConfiguration, private readonly readers: Partial<Record<AgentProvider, AccountUsageReader>>) {}
+  constructor(
+    private readonly update: (readings: UsageReading[]) => void,
+    private readonly config: () => ProviderConfiguration,
+    private readonly readers: Partial<Record<AgentProvider, AccountUsageReader>>,
+  ) {}
 
   async refresh(only?: AgentProvider, now = Date.now()): Promise<void> {
     const config = this.config()
     const jobs: Promise<void>[] = []
     for (const [provider, read] of Object.entries(this.readers) as [AgentProvider, AccountUsageReader][]) {
-      if ((only && provider !== only) || !providerEnabled(config, provider) || !config[provider]?.rotateAccounts) continue
+      if ((only && provider !== only) || !providerEnabled(config, provider) || !config[provider]?.rotateAccounts)
+        continue
       for (const account of providerAccountOrder(config, provider)) {
         const key = `${provider}:${account}`
         if (now - (this.last.get(key) ?? 0) < ACCOUNT_USAGE_INTERVAL_MS) continue
         this.last.set(key, now)
-        jobs.push(read(account).then((readings) => {
-          const tagged = readings.map((reading) => { const { accountId: _ignored, ...rest } = reading; return account === 'default' ? rest : { ...rest, accountId: account } })
-          if (tagged.length) this.update(tagged)
-        }, () => { this.last.delete(key) }))
+        jobs.push(
+          read(account).then(
+            (readings) => {
+              const tagged = readings.map((reading) => {
+                const { accountId: _ignored, ...rest } = reading
+                return account === 'default' ? rest : { ...rest, accountId: account }
+              })
+              if (tagged.length) this.update(tagged)
+            },
+            () => {
+              this.last.delete(key)
+            },
+          ),
+        )
       }
     }
     await Promise.all(jobs)

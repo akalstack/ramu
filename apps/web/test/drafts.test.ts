@@ -5,10 +5,16 @@ function memory() {
   const data = new Map<string, string>()
   return {
     getItem: (key: string) => data.get(key) ?? null,
-    setItem: (key: string, value: string) => { data.set(key, value) },
-    removeItem: (key: string) => { data.delete(key) },
+    setItem: (key: string, value: string) => {
+      data.set(key, value)
+    },
+    removeItem: (key: string) => {
+      data.delete(key)
+    },
     key: (index: number) => [...data.keys()][index] ?? null,
-    get length() { return data.size },
+    get length() {
+      return data.size
+    },
   }
 }
 
@@ -32,7 +38,9 @@ it('removes the draft when the text is cleared or only whitespace', () => {
 })
 
 it('forgets drafts older than 30 days and ignores corrupt entries', () => {
-  const store = memory(), day = 24 * 60 * 60 * 1000, now = Date.now()
+  const store = memory(),
+    day = 24 * 60 * 60 * 1000,
+    now = Date.now()
   saveDraft('chat:old', 'stale', store, now - 31 * day)
   saveDraft('chat:fresh', 'recent', store, now - 29 * day)
   store.setItem('ramu.draft.chat:bad', '{not json')
@@ -45,7 +53,19 @@ it('forgets drafts older than 30 days and ignores corrupt entries', () => {
 })
 
 it('survives storage that throws', () => {
-  const broken = { getItem: () => { throw new Error('denied') }, setItem: () => { throw new Error('quota') }, removeItem: () => { throw new Error('denied') }, key: () => null, length: 0 }
+  const broken = {
+    getItem: () => {
+      throw new Error('denied')
+    },
+    setItem: () => {
+      throw new Error('quota')
+    },
+    removeItem: () => {
+      throw new Error('denied')
+    },
+    key: () => null,
+    length: 0,
+  }
   expect(() => saveDraft('chat:a', 'text', broken)).not.toThrow()
   expect(loadDraft('chat:a', broken)).toBe('')
   expect(() => clearDraft('chat:a', broken)).not.toThrow()

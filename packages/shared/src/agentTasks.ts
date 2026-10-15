@@ -30,7 +30,13 @@ export function parseTaskMessage(text: string): { name: string; address: string;
 /** The latest state of every sub-agent in a transcript, in the order they started. */
 export function latestTasks(events: AgentEvent[]): AgentTask[] {
   const tasks = new Map<string, AgentTask>()
-  for (const event of events) if (event.kind === 'agent') { const task: AgentTask & { kind?: string; at?: number } = { ...event }; delete task.kind; delete task.at; tasks.set(task.agentId, task) }
+  for (const event of events)
+    if (event.kind === 'agent') {
+      const task: AgentTask & { kind?: string; at?: number } = { ...event }
+      delete task.kind
+      delete task.at
+      tasks.set(task.agentId, task)
+    }
   // Older background services saved the delivered advice without a task or its own transcript.
   // Keep those links usable without changing the saved conversation.
   for (const event of events) {
@@ -38,11 +44,19 @@ export function latestTasks(events: AgentEvent[]): AgentTask[] {
     const advice = parseAdvice(event.text)
     if (!advice) continue
     const agentId = advisorAgentId(advice.requestId)
-    if (!tasks.has(agentId)) tasks.set(agentId, {
-      agentId, name: 'Advisor', taskType: 'advisor', status: advice.failed ? 'failed' : 'completed',
-      summary: advice.failed ? undefined : advice.body, error: advice.failed ? advice.body : undefined,
-      background: true, endedAt: event.at, canMessage: false, canStop: false,
-    })
+    if (!tasks.has(agentId))
+      tasks.set(agentId, {
+        agentId,
+        name: 'Advisor',
+        taskType: 'advisor',
+        status: advice.failed ? 'failed' : 'completed',
+        summary: advice.failed ? undefined : advice.body,
+        error: advice.failed ? advice.body : undefined,
+        background: true,
+        endedAt: event.at,
+        canMessage: false,
+        canStop: false,
+      })
   }
   return [...tasks.values()]
 }
@@ -51,13 +65,23 @@ export function latestTasks(events: AgentEvent[]): AgentTask[] {
 export function advisorTranscript(events: AgentEvent[], agentId: string): AgentEvent[] {
   const own = events.filter((event) => event.agentId === agentId && event.kind !== 'agent')
   if (own.some((event) => event.kind === 'text' || event.kind === 'error')) return own
-  const delivered = events.find((event) => event.kind === 'user' && !event.agentId && (() => {
-    const advice = parseAdvice(event.text)
-    return advice && advisorAgentId(advice.requestId) === agentId
-  })())
+  const delivered = events.find(
+    (event) =>
+      event.kind === 'user' &&
+      !event.agentId &&
+      (() => {
+        const advice = parseAdvice(event.text)
+        return advice && advisorAgentId(advice.requestId) === agentId
+      })(),
+  )
   if (delivered?.kind !== 'user') return own
   const advice = parseAdvice(delivered.text)!
-  return [...own, advice.failed ? { kind: 'error', message: advice.body, agentId, at: delivered.at } : { kind: 'text', text: advice.body, agentId, at: delivered.at }]
+  return [
+    ...own,
+    advice.failed
+      ? { kind: 'error', message: advice.body, agentId, at: delivered.at }
+      : { kind: 'text', text: advice.body, agentId, at: delivered.at },
+  ]
 }
 
 /** A process that is gone cannot still be running its agents. */
@@ -87,15 +111,24 @@ export function subagentNotePrompt(name: string, kind: 'says' | 'asks', agentId:
 // Ramu's advisor shows as a card like a sub-agent; advice it delivers later arrives as a message the chat shows as a link to that card.
 export const advisorAgentId = (requestId: string) => `advisor-${requestId}`
 const ADVICE = /^Advice from Ramu's advisor \((.+), request ([\w-]+)\)\. [^\n]*\n\n([\s\S]*)$/
-const ADVICE_FAILED = /^Ramu's advisor could not answer request ([\w-]+): ([\s\S]*?)\. Continue with your own judgment\.$/
+const ADVICE_FAILED =
+  /^Ramu's advisor could not answer request ([\w-]+): ([\s\S]*?)\. Continue with your own judgment\.$/
 
-export function adviceMessage(status: { requestId: string; status: 'ready' | 'failed' | 'pending'; advice?: string; advisor?: string; error?: string }): string {
+export function adviceMessage(status: {
+  requestId: string
+  status: 'ready' | 'failed' | 'pending'
+  advice?: string
+  advisor?: string
+  error?: string
+}): string {
   return status.status === 'ready'
     ? `Advice from Ramu's advisor (${status.advisor}, request ${status.requestId}). Weigh it against what you have since learned; if work is already complete, explain any changes it calls for.\n\n${status.advice}`
     : `Ramu's advisor could not answer request ${status.requestId}: ${status.error}. Continue with your own judgment.`
 }
 
-export function parseAdvice(text: string): { requestId: string; advisor?: string; body: string; failed: boolean } | null {
+export function parseAdvice(
+  text: string,
+): { requestId: string; advisor?: string; body: string; failed: boolean } | null {
   const ready = ADVICE.exec(text)
   if (ready) return { advisor: ready[1]!, requestId: ready[2]!, body: ready[3]!, failed: false }
   const failed = ADVICE_FAILED.exec(text)
@@ -104,5 +137,7 @@ export function parseAdvice(text: string): { requestId: string; advisor?: string
 
 /** What a sub-agent is told, so it works as a helper and ends with something its parent can use. */
 /** Appended to the agent's instructions when long commands may run in the background. */
-export const BACKGROUND_PREAMBLE = 'Long-running commands: when a command may take more than about 30 seconds (dev servers, watchers, full builds, large test suites, installs) and you have other work to do, start it in the background with your shell tool\'s background option instead of waiting for it. Carry on with the other work, then read its output or wait for it to finish before you rely on its result. Run short commands in the foreground.'
-export const SUBAGENT_PREAMBLE = 'You are a sub-agent started by another agent that works in the same workspace. Do the task below, then finish with a concise report of what you did and found: files you changed, results, and anything left open. Ask nothing unless you are blocked; your report goes straight back to the agent that started you. While you work, message_parent sends the agent that started you a short note without stopping, and ask_parent asks it a question and waits for the answer; use ask_parent only when you cannot go on without it, and still end with your report.'
+export const BACKGROUND_PREAMBLE =
+  "Long-running commands: when a command may take more than about 30 seconds (dev servers, watchers, full builds, large test suites, installs) and you have other work to do, start it in the background with your shell tool's background option instead of waiting for it. Carry on with the other work, then read its output or wait for it to finish before you rely on its result. Run short commands in the foreground."
+export const SUBAGENT_PREAMBLE =
+  'You are a sub-agent started by another agent that works in the same workspace. Do the task below, then finish with a concise report of what you did and found: files you changed, results, and anything left open. Ask nothing unless you are blocked; your report goes straight back to the agent that started you. While you work, message_parent sends the agent that started you a short note without stopping, and ask_parent asks it a question and waits for the answer; use ask_parent only when you cannot go on without it, and still end with your report.'

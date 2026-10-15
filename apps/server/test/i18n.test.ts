@@ -49,8 +49,15 @@ describe('app languages', () => {
   it('migrates old preferences, persists language, and validates the preference', () => {
     let saved: unknown = { accent: 'teal' }
     const dispatcher = createDispatcher({ userData: '/tmp/ramu-i18n-test', send: () => {}, native: async () => null }, {
-      workspace: { getAppState: (key: string, fallback: unknown) => key === 'app-preferences' ? saved : fallback, setAppState: (_key: string, value: unknown) => { saved = value } },
-      recaps: { settingsChanged: () => {} }, providers: { settingsChanged: () => {} }, agents: { invalidateCatalog: () => {}, goalsSettingsChanged: () => {} },
+      workspace: {
+        getAppState: (key: string, fallback: unknown) => (key === 'app-preferences' ? saved : fallback),
+        setAppState: (_key: string, value: unknown) => {
+          saved = value
+        },
+      },
+      recaps: { settingsChanged: () => {} },
+      providers: { settingsChanged: () => {} },
+      agents: { invalidateCatalog: () => {}, goalsSettingsChanged: () => {} },
     } as unknown as Services)
     try {
       expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ language: 'system', accent: 'teal' })
@@ -61,6 +68,9 @@ describe('app languages', () => {
       expect(() => dispatcher.invoke('settings.app.set', [{ ...DEFAULT_APP_PREFERENCES, language: 'fr' }])).toThrow()
       dispatcher.invoke('settings.app.set', [{ ...DEFAULT_APP_PREFERENCES, language: undefined }])
       expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ language: 'system' })
-    } finally { dispatcher.close(); configureProviderBinaries({}) }
+    } finally {
+      dispatcher.close()
+      configureProviderBinaries({})
+    }
   })
 })

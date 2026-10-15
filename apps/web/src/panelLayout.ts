@@ -17,7 +17,15 @@ const listeners = new Set<() => void>()
 
 /** Groups remount with this as their key after a reset, so they re-read the now-empty storage. */
 export function useLayoutEpoch() {
-  return useSyncExternalStore((listener) => { listeners.add(listener); return () => { listeners.delete(listener) } }, () => epoch)
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    () => epoch,
+  )
 }
 
 export function resetPanelLayouts() {
@@ -29,10 +37,18 @@ export function resetPanelLayouts() {
 /** Read the layout for the current panel combination. Callers remount the split shell
  * when its panels change, keeping view contents mounted in their own portal hosts. */
 export function usePanelLayout(id: string, panelIds: string[], fallback: (panelIds: string[]) => Layout) {
-  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id, panelIds, storage, onlySaveAfterUserInteractions: true })
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id,
+    panelIds,
+    storage,
+    onlySaveAfterUserInteractions: true,
+  })
   const group = useGroupRef()
   const wanted = defaultLayout ?? fallback(panelIds)
-  const size = (panel: string) => { const value = wanted[panel]; return value === undefined ? undefined : `${value}%` }
+  const size = (panel: string) => {
+    const value = wanted[panel]
+    return value === undefined ? undefined : `${value}%`
+  }
   return { groupRef: group, defaultLayout: wanted, onLayoutChanged, size }
 }
 

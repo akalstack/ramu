@@ -15,7 +15,8 @@ export interface QuestionState {
   reason?: string
 }
 export const questionKey = (question: AgentQuestion): string => question.id ?? question.question
-export const questionAnswer = (answers: Record<string, string>, key: string): string | undefined => Object.hasOwn(answers, key) ? answers[key] : undefined
+export const questionAnswer = (answers: Record<string, string>, key: string): string | undefined =>
+  Object.hasOwn(answers, key) ? answers[key] : undefined
 
 export function questionState(events: AgentEvent[], requestId: string): QuestionState {
   const state: QuestionState = { answers: Object.create(null), drafts: Object.create(null), waiting: false }

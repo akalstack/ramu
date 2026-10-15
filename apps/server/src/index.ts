@@ -25,11 +25,25 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod'
 import { runtimeInvoke, runtimeNetwork } from '@ramu/client-runtime'
 import { HostPresence } from './presence'
-import { CAPABILITIES, MAX_REQUEST_BYTES, PAIR_PATH, PROTOCOL_VERSION, decodeInvoke, type Capability } from '@ramu/contracts'
+import {
+  CAPABILITIES,
+  MAX_REQUEST_BYTES,
+  PAIR_PATH,
+  PROTOCOL_VERSION,
+  decodeInvoke,
+  type Capability,
+} from '@ramu/contracts'
 import { loadConfig } from './config'
 import { TokenStore, authorized } from './auth'
 import { DeviceStore } from './devices'
-import { candidateUrls, localAddresses, readNetworkSetting, validateNetworkSetting, writeNetworkSetting, type NetworkSetting } from './network'
+import {
+  candidateUrls,
+  localAddresses,
+  readNetworkSetting,
+  validateNetworkSetting,
+  writeNetworkSetting,
+  type NetworkSetting,
+} from './network'
 import { openDb } from './db'
 import { Workspace } from './workspace'
 import { AgentService } from './agent'
@@ -49,7 +63,9 @@ mkdirSync(userData, { recursive: true })
 const remoteTokens = new TokenStore(config.tokenPath)
 const devices = new DeviceStore(config.devicesPath)
 const presence = new HostPresence(join(userData, 'presence.json'), (id) => devices.presenceKey(id))
-const stopPresenceNetwork = runtimeNetwork.subscribe(() => { if (network.enabled) presence.announce() })
+const stopPresenceNetwork = runtimeNetwork.subscribe(() => {
+  if (network.enabled) presence.announce()
+})
 // `--listen` / RAMU_LISTEN wins and cannot be changed from Settings. Otherwise Settings decides, and applies without a restart.
 let network: NetworkSetting = config.listen
   ? { enabled: true, host: config.listen.host, port: config.listen.port, acceptUnencrypted: true }
@@ -60,37 +76,76 @@ const stoppedPath = join(userData, 'background.stopped')
 const serviceBuild = runtimeBuild(process.argv[1] ?? '')
 const serviceVersion = runtimeVersion(process.argv[1] ?? '')
 if (process.env.RAMU_SUPERVISOR === '1') {
-  try { unlinkSync(stoppedPath) } catch {}
+  try {
+    unlinkSync(stoppedPath)
+  } catch {}
   for (;;) {
-    try { await runtimeInvoke(socketPath, 'background.status') } catch { break }
+    try {
+      await runtimeInvoke(socketPath, 'background.status')
+    } catch {
+      break
+    }
     await new Promise((resolve) => setTimeout(resolve, 1000))
-    try { readFileSync(stoppedPath); process.exit(0) } catch {}
+    try {
+      readFileSync(stoppedPath)
+      process.exit(0)
+    } catch {}
   }
 }
 const ownerPath = join(userData, 'runtime-owner')
 let owned = false
 for (let attempts = 0; attempts < 20 && !owned; attempts++) {
-  try { mkdirSync(ownerPath, { mode: 0o700 }); writeFileSync(join(ownerPath, 'pid'), String(process.pid)); owned = true }
-  catch {
+  try {
+    mkdirSync(ownerPath, { mode: 0o700 })
+    writeFileSync(join(ownerPath, 'pid'), String(process.pid))
+    owned = true
+  } catch {
     try {
       const pid = Number(readFileSync(join(ownerPath, 'pid'), 'utf8'))
       if (!Number.isInteger(pid) || pid < 1) throw new Error('Invalid owner')
-      try { process.kill(pid, 0); process.exit(0) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error }
+      try {
+        process.kill(pid, 0)
+        process.exit(0)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
+      }
       rmSync(ownerPath, { recursive: true, force: true })
-    } catch { let stale = false; try { stale = Date.now() - statSync(ownerPath).mtimeMs > 10000 } catch {}
-      if (stale) rmSync(ownerPath, { recursive: true, force: true }); else await new Promise((resolve) => setTimeout(resolve, 100)) }
+    } catch {
+      let stale = false
+      try {
+        stale = Date.now() - statSync(ownerPath).mtimeMs > 10000
+      } catch {}
+      if (stale) rmSync(ownerPath, { recursive: true, force: true })
+      else await new Promise((resolve) => setTimeout(resolve, 100))
+    }
   }
 }
 if (!owned) throw new Error('Another service is starting; try again shortly')
-process.once('exit', () => { try { if (readFileSync(join(ownerPath, 'pid'), 'utf8') === String(process.pid)) rmSync(ownerPath, { recursive: true, force: true }) } catch {} })
-try { unlinkSync(socketPath) } catch {}
+process.once('exit', () => {
+  try {
+    if (readFileSync(join(ownerPath, 'pid'), 'utf8') === String(process.pid))
+      rmSync(ownerPath, { recursive: true, force: true })
+  } catch {}
+})
+try {
+  unlinkSync(socketPath)
+} catch {}
 const clients = new Set<ServerResponse>()
 // Only clients on the local socket can answer native dialogs; a remote client's folder picker would open on the wrong machine.
 const hostClients = new Set<ServerResponse>()
-const nativeRequests = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>()
+const nativeRequests = new Map<
+  string,
+  { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
+>()
 const send = (channel: string, payload: unknown) => {
   const message = `data: ${JSON.stringify({ channel, payload })}\n\n`
-  for (const client of clients) { if (client.writableLength > 8 * 1024 * 1024) { client.destroy(); clients.delete(client); hostClients.delete(client) } else client.write(message) }
+  for (const client of clients) {
+    if (client.writableLength > 8 * 1024 * 1024) {
+      client.destroy()
+      clients.delete(client)
+      hostClients.delete(client)
+    } else client.write(message)
+  }
 }
 const changed = () => send('automation:changed', {})
 const db = openDb(join(userData, 'ramu.db'))
@@ -100,80 +155,180 @@ const workspace = new Workspace(db, root)
 // Review first was the stored default for one release; move those saved values to the new Automatic default once.
 if (!workspace.getAppState('migration:learning-auto-default', false)) {
   const saved = workspace.getAppState<{ intelligence?: { learning?: string } } | null>('app-preferences', null)
-  if (saved?.intelligence?.learning === 'review') workspace.setAppState('app-preferences', { ...saved, intelligence: { ...saved.intelligence, learning: 'auto' } })
+  if (saved?.intelligence?.learning === 'review')
+    workspace.setAppState('app-preferences', { ...saved, intelligence: { ...saved.intelligence, learning: 'auto' } })
   workspace.setAppState('migration:learning-auto-default', true)
 }
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./fakeAgent') : null
 let reviews!: ReviewService
 const mobilePush = new MobilePush(join(userData, 'mobile-push.json'), () => devices.list())
-const agents = new AgentService(db, (sessionId, event, seq, revision) => { send('agent:event', { sessionId, event, seq, revision }); queueMicrotask(() => { try { inbox.observe(agents.get(sessionId), event); mobilePush.observe(agents.get(sessionId), event, agents.getGoal(sessionId)); if (['state', 'permission', 'question', 'goal'].includes(event.kind)) mobileLiveActivities.observe() } catch {} }) }, fake?.fakeQuery ?? claudeAcpQuery(query), fake?.fakeCodex, fake?.fakeCodex, fake?.fakeCodex)
-const mobileLiveActivities = new MobileLiveActivities(join(userData, 'mobile-live-activities.json'), () => devices.list(), () => agents.counts())
+const agents = new AgentService(
+  db,
+  (sessionId, event, seq, revision) => {
+    send('agent:event', { sessionId, event, seq, revision })
+    queueMicrotask(() => {
+      try {
+        inbox.observe(agents.get(sessionId), event)
+        mobilePush.observe(agents.get(sessionId), event, agents.getGoal(sessionId))
+        if (['state', 'permission', 'question', 'goal'].includes(event.kind)) mobileLiveActivities.observe()
+      } catch {}
+    })
+  },
+  fake?.fakeQuery ?? claudeAcpQuery(query),
+  fake?.fakeCodex,
+  fake?.fakeCodex,
+  fake?.fakeCodex,
+)
+const mobileLiveActivities = new MobileLiveActivities(
+  join(userData, 'mobile-live-activities.json'),
+  () => devices.list(),
+  () => agents.counts(),
+)
 if (fake) agents.helperHistory = async () => []
 agents.markRestoredOnBoot()
-const terminals = new TerminalService((id, data, cursor) => send('term:data', { id, data, cursor }), (id, code) => send('term:exit', { id, code }), (taskId) => send('term:changed', { taskId }))
-const inbox = new NoticeInbox((items) => send('notices:changed', items), (taskId) => { try { return workspace.getTask(taskId).title } catch { return 'Chat' } })
+const terminals = new TerminalService(
+  (id, data, cursor) => send('term:data', { id, data, cursor }),
+  (id, code) => send('term:exit', { id, code }),
+  (taskId) => send('term:changed', { taskId }),
+)
+const inbox = new NoticeInbox(
+  (items) => send('notices:changed', items),
+  (taskId) => {
+    try {
+      return workspace.getTask(taskId).title
+    } catch {
+      return 'Chat'
+    }
+  },
+)
 const schedules = new ScheduleService(db, workspace, agents, changed)
 schedules.recover()
 reviews = new ReviewService(db, workspace, agents, join(userData, 'reviews'), changed)
 reviews.recover()
-agents.reviewHooks = { begin: (taskId, scope) => reviews!.begin(taskId, scope), bind: (id, sessionId) => reviews!.bind(id, sessionId), abandon: (id, error) => reviews!.abandon(id, error), followup: (sessionId) => reviews!.beforeFollowup(sessionId), complete: (sessionId) => reviews!.complete(sessionId), validateFeedback: (reviewId) => reviews!.requireOriginalCheckout(reviewId) }
+agents.reviewHooks = {
+  begin: (taskId, scope) => reviews!.begin(taskId, scope),
+  bind: (id, sessionId) => reviews!.bind(id, sessionId),
+  abandon: (id, error) => reviews!.abandon(id, error),
+  followup: (sessionId) => reviews!.beforeFollowup(sessionId),
+  complete: (sessionId) => reviews!.complete(sessionId),
+  validateFeedback: (reviewId) => reviews!.requireOriginalCheckout(reviewId),
+}
 const recaps = new RecapService(db, workspace, agents, changed)
 const memory = new MemoryService(db, workspace, agents, () => send('memory:changed', {}), join(userData, 'memory'))
 memory.start()
 const compression = new CompressionService(db)
-const learning = new LearningService(db, workspace, agents, memory, join(userData, 'skills'), () => send('memory:changed', {}))
+const learning = new LearningService(db, workspace, agents, memory, join(userData, 'skills'), () =>
+  send('memory:changed', {}),
+)
 agents.sessionCheckpoint = (id) => learning.checkpoint(id)
 agents.learningInstructions = (session) => learning.instructions(session.id)
-const projectOf = (session: AgentSessionInfo) => { try { return workspace.getTask(session.taskId).projectId } catch { return null } }
+const projectOf = (session: AgentSessionInfo) => {
+  try {
+    return workspace.getTask(session.taskId).projectId
+  } catch {
+    return null
+  }
+}
 agents.memoryInstructions = (session) => memory.instructions(session, projectOf(session))
 // Calls that arrive over the network are marked, so a desktop dialog is never opened on this computer for someone else.
 const origin = new AsyncLocalStorage<{ network: boolean }>()
-const dispatcher = createDispatcher({ userData, send, native: (method, path) => {
-  if (origin.getStore()?.network) return Promise.reject(new Error('This opens a window on the computer that runs Ramu, so it is not available from another computer yet. Do it on that computer.'))
-  if (!hostClients.size) return Promise.reject(new Error('Open Ramu on this computer to use this desktop action'))
-  const requestId = randomUUID()
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { nativeRequests.delete(requestId); reject(new Error('Desktop action timed out')) }, 120000)
-    nativeRequests.set(requestId, { resolve, reject, timer })
-    // Exactly one UI owns a desktop dialog/action.
-    hostClients.values().next().value?.write(`data: ${JSON.stringify({ channel: 'host:request', payload: { requestId, method, path } })}\n\n`)
-  })
-} }, { workspace, terminals, agents, schedules, recaps, reviews, memory, learning, compression, notices: inbox })
+const dispatcher = createDispatcher(
+  {
+    userData,
+    send,
+    native: (method, path) => {
+      if (origin.getStore()?.network)
+        return Promise.reject(
+          new Error(
+            'This opens a window on the computer that runs Ramu, so it is not available from another computer yet. Do it on that computer.',
+          ),
+        )
+      if (!hostClients.size) return Promise.reject(new Error('Open Ramu on this computer to use this desktop action'))
+      const requestId = randomUUID()
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          nativeRequests.delete(requestId)
+          reject(new Error('Desktop action timed out'))
+        }, 120000)
+        nativeRequests.set(requestId, { resolve, reject, timer })
+        // Exactly one UI owns a desktop dialog/action.
+        hostClients
+          .values()
+          .next()
+          .value?.write(
+            `data: ${JSON.stringify({ channel: 'host:request', payload: { requestId, method, path } })}\n\n`,
+          )
+      })
+    },
+  },
+  { workspace, terminals, agents, schedules, recaps, reviews, memory, learning, compression, notices: inbox },
+)
 const startedAt = Date.now()
 let stopping = false
 async function stop(intentional = false) {
   if (intentional) writeFileSync(stoppedPath, String(Date.now()))
-  if (stopping) return; stopping = true
+  if (stopping) return
+  stopping = true
   clearInterval(tick)
   await schedules.stop()
   // Capture after the scheduler drains, so a chat that finished during that wait is not resumed.
   if (!intentional) agents.prepareForRestart()
-  reviews.stop(); agents.stopAll(!intentional)
+  reviews.stop()
+  agents.stopAll(!intentional)
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))
   await Promise.all([recaps.settle(), reviews.settle(), memory.settle(), learning.settle()])
-  terminals.closeAll(); dispatcher.close()
+  terminals.closeAll()
+  dispatcher.close()
   for (const c of clients) c.end()
-  for (const r of nativeRequests.values()) { clearTimeout(r.timer); r.reject(new Error('Service stopping')) }
-  clearInterval(heartbeat); clearInterval(pushReceipts); mobileLiveActivities.dispose()
-  stopPresenceNetwork(); presence.close()
+  for (const r of nativeRequests.values()) {
+    clearTimeout(r.timer)
+    r.reject(new Error('Service stopping'))
+  }
+  clearInterval(heartbeat)
+  clearInterval(pushReceipts)
+  mobileLiveActivities.dispose()
+  stopPresenceNetwork()
+  presence.close()
   clearTimeout(remoteRetry)
-  mcpHttp.close(); runtime.close(); try { remote?.close() } catch {} db.close()
-  try { unlinkSync(socketPath) } catch {}
+  mcpHttp.close()
+  runtime.close()
+  try {
+    remote?.close()
+  } catch {}
+  db.close()
+  try {
+    unlinkSync(socketPath)
+  } catch {}
   process.exit(0)
 }
 async function rawBody(req: import('node:http').IncomingMessage, limit = MAX_REQUEST_BYTES): Promise<string> {
-  let bytes = 0; const chunks: Buffer[] = []
-  for await (const chunk of req) { bytes += chunk.length; if (bytes > limit) throw new Error('Request is too large'); chunks.push(chunk) }
+  let bytes = 0
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    bytes += chunk.length
+    if (bytes > limit) throw new Error('Request is too large')
+    chunks.push(chunk)
+  }
   return Buffer.concat(chunks).toString()
 }
 const body = async (req: import('node:http').IncomingMessage): Promise<any> => decodeInvoke(await rawBody(req))
-const capabilities = (): Capability[] => [CAPABILITIES.invoke, CAPABILITIES.events, CAPABILITIES.mobileCompanion, CAPABILITIES.liveActivities, CAPABILITIES.hostRequests, ...(network.enabled ? [CAPABILITIES.remote, CAPABILITIES.pairing] : [])]
+const capabilities = (): Capability[] => [
+  CAPABILITIES.invoke,
+  CAPABILITIES.events,
+  CAPABILITIES.mobileCompanion,
+  CAPABILITIES.liveActivities,
+  CAPABILITIES.hostRequests,
+  ...(network.enabled ? [CAPABILITIES.remote, CAPABILITIES.pairing] : []),
+]
 const failedAuth = new Map<string, { count: number; until: number }>()
 // Event streams of network clients stay open, so a revoked device must be cut off here, not only refused on its next request.
 const remoteStreams = new Map<ServerResponse, string | undefined>()
-const stillAuthorized = (header: string | undefined) => devices.authenticate(header) !== null || authorized(header, remoteTokens.current())
-const dropRevoked = () => { for (const [stream, header] of remoteStreams) if (!stillAuthorized(header)) stream.end() }
+const stillAuthorized = (header: string | undefined) =>
+  devices.authenticate(header) !== null || authorized(header, remoteTokens.current())
+const dropRevoked = () => {
+  for (const [stream, header] of remoteStreams) if (!stillAuthorized(header)) stream.end()
+}
 const json = { 'Content-Type': 'application/json' }
 // One handler serves both transports. Requests over TCP (`remote`) must present the bearer token.
 const handle = (remote: boolean) => async (req: import('node:http').IncomingMessage, res: ServerResponse) => {
@@ -183,47 +338,83 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
       res.setHeader('Access-Control-Allow-Origin', '*')
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Ramu-Protocol')
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-      if (req.method === 'OPTIONS') { res.writeHead(204).end(); return }
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204).end()
+        return
+      }
     }
     let deviceId: string | undefined
     const path = (req.url ?? '/').split('?')[0]
     if (remote) {
-      if (path === '/health' && req.method === 'GET') { res.writeHead(200, json).end(JSON.stringify({ ok: true, protocol: PROTOCOL_VERSION })); return }
-      const peer = req.socket.remoteAddress ?? 'unknown', limit = failedAuth.get(peer)
-      if (limit && limit.until > Date.now()) { res.writeHead(429).end(); return }
+      if (path === '/health' && req.method === 'GET') {
+        res.writeHead(200, json).end(JSON.stringify({ ok: true, protocol: PROTOCOL_VERSION }))
+        return
+      }
+      const peer = req.socket.remoteAddress ?? 'unknown',
+        limit = failedAuth.get(peer)
+      if (limit && limit.until > Date.now()) {
+        res.writeHead(429).end()
+        return
+      }
       const rejected = (message?: string) => {
         const count = (limit?.count ?? 0) + 1
         failedAuth.set(peer, { count, until: count >= 5 ? Date.now() + Math.min(60000, 1000 * 2 ** (count - 5)) : 0 })
         res.writeHead(401, json).end(message ? JSON.stringify({ error: message }) : undefined)
       }
       if (path === PAIR_PATH && req.method === 'POST') {
-        const request = JSON.parse(await rawBody(req, 4096) || '{}')
-        const paired = typeof request.code === 'string' ? devices.redeem(request.code, typeof request.name === 'string' ? request.name : undefined) : null
-        if (!paired) { rejected('That pairing code is wrong, already used or expired'); return }
+        const request = JSON.parse((await rawBody(req, 4096)) || '{}')
+        const paired =
+          typeof request.code === 'string'
+            ? devices.redeem(request.code, typeof request.name === 'string' ? request.name : undefined)
+            : null
+        if (!paired) {
+          rejected('That pairing code is wrong, already used or expired')
+          return
+        }
         failedAuth.delete(peer)
-        res.writeHead(200, json).end(JSON.stringify({ deviceId: paired.device.id, token: paired.token })); return
+        res.writeHead(200, json).end(JSON.stringify({ deviceId: paired.device.id, token: paired.token }))
+        return
       }
       const device = devices.authenticate(req.headers.authorization)
-      if (!device && !authorized(req.headers.authorization, remoteTokens.current())) { rejected(); return }
+      if (!device && !authorized(req.headers.authorization, remoteTokens.current())) {
+        rejected()
+        return
+      }
       deviceId = device?.id
       failedAuth.delete(peer)
     }
     if (path === '/events' && req.method === 'GET') {
-      if (remote && deviceId && req.socket.remoteAddress) presence.register(deviceId, req.socket.remoteAddress, Number(req.headers['x-ramu-presence-port']))
-      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' }); res.write(': connected\n\n'); clients.add(res)
+      if (remote && deviceId && req.socket.remoteAddress)
+        presence.register(deviceId, req.socket.remoteAddress, Number(req.headers['x-ramu-presence-port']))
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' })
+      res.write(': connected\n\n')
+      clients.add(res)
       if (!remote) hostClients.add(res)
       else remoteStreams.set(res, req.headers.authorization)
-      res.on('close', () => { clients.delete(res); hostClients.delete(res); remoteStreams.delete(res) }); return
+      res.on('close', () => {
+        clients.delete(res)
+        hostClients.delete(res)
+        remoteStreams.delete(res)
+      })
+      return
     }
-    if (req.method !== 'POST' || path !== '/invoke') { res.writeHead(404).end(); return }
+    if (req.method !== 'POST' || path !== '/invoke') {
+      res.writeHead(404).end()
+      return
+    }
     const { method, args } = await body(req)
     let value: unknown
     if (method === 'host.reply') {
       if (remote) throw new Error('Desktop actions are only available on this computer')
       const request = nativeRequests.get(args?.[0])
-      if (request) { clearTimeout(request.timer); nativeRequests.delete(args[0]); args[2] ? request.reject(new Error(String(args[2]))) : request.resolve(args[1]) }
+      if (request) {
+        clearTimeout(request.timer)
+        nativeRequests.delete(args[0])
+        args[2] ? request.reject(new Error(String(args[2]))) : request.resolve(args[1])
+      }
     } else if (method === 'notifications.register') {
-      if (!deviceId || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string') throw new Error('Push registration requires a paired phone')
+      if (!deviceId || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string')
+        throw new Error('Push registration requires a paired phone')
       mobilePush.register(deviceId, args[0], args[1])
     } else if (method === 'notifications.unregister') {
       if (!deviceId) throw new Error('Push registration requires a paired phone')
@@ -237,16 +428,36 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
     } else if (method === 'liveActivity.unregister') {
       if (!deviceId || typeof args?.[0] !== 'string') throw new Error('Live Activities require a paired phone')
       mobileLiveActivities.remove(deviceId, args[0])
-    } else if (method === 'background.status') value = { running: true, hostname: hostname(), platform: process.platform, pid: process.pid, startedAt, build: serviceBuild, version: serviceVersion, protocol: PROTOCOL_VERSION, capabilities: capabilities(), ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}) }
+    } else if (method === 'background.status')
+      value = {
+        running: true,
+        hostname: hostname(),
+        platform: process.platform,
+        pid: process.pid,
+        startedAt,
+        build: serviceBuild,
+        version: serviceVersion,
+        protocol: PROTOCOL_VERSION,
+        capabilities: capabilities(),
+        ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}),
+      }
     else if (method.startsWith('network.')) {
       if (remote) throw new Error('Network access is managed from the computer running Ramu')
       value = await networkMethod(method, args)
-    }
-    else if (method === 'background.stop') { res.writeHead(200, json).end('{}'); void stop(true); return }
-    else if (method === 'background.restart') { res.writeHead(200, json).end('{}'); void stop(); return }
-    else value = await origin.run({ network: remote }, () => dispatcher.invoke(method, args))
+    } else if (method === 'background.stop') {
+      res.writeHead(200, json).end('{}')
+      void stop(true)
+      return
+    } else if (method === 'background.restart') {
+      res.writeHead(200, json).end('{}')
+      void stop()
+      return
+    } else value = await origin.run({ network: remote }, () => dispatcher.invoke(method, args))
     res.writeHead(200, json).end(JSON.stringify({ value }))
-  } catch (error) { if (!res.headersSent) res.writeHead(400, json); res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) })) }
+  } catch (error) {
+    if (!res.headersSent) res.writeHead(400, json)
+    res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }))
+  }
 }
 const runtime = createServer(handle(false))
 let remote: ReturnType<typeof createServer> | null = null
@@ -258,11 +469,22 @@ const mcpHttp = createServer(async (req, res) => {
   const token = req.headers.authorization?.replace(/^Bearer /, '')
   const connection = token ? sessions.get(token) : undefined
   const source = connection?.session
-  if (!source || req.url !== '/mcp' || stopping) { res.writeHead(401).end(); return }
-  if (req.method !== 'POST') { res.writeHead(405).end(); return }
+  if (!source || req.url !== '/mcp' || stopping) {
+    res.writeHead(401).end()
+    return
+  }
+  if (req.method !== 'POST') {
+    res.writeHead(405).end()
+    return
+  }
   const target = new McpServer({ name: 'ramu', version: '0.1.0' })
-  const preferences = { ...DEFAULT_INTELLIGENCE_PREFERENCES, ...workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence }
-  const registry = new ToolRegistry(target, connection!.toolSearch, (result) => compression.compact(source.id, preferences.compression, result))
+  const preferences = {
+    ...DEFAULT_INTELLIGENCE_PREFERENCES,
+    ...workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence,
+  }
+  const registry = new ToolRegistry(target, connection!.toolSearch, (result) =>
+    compression.compact(source.id, preferences.compression, result),
+  )
   const server = registry.server
   learning.register(server, source.id)
   if (preferences.rtk) registerRtkTool(server, agents.get(source.id))
@@ -273,47 +495,272 @@ const mcpHttp = createServer(async (req, res) => {
   if (memory.enabled()) registerMemoryTools(server, memory, source, projectOf(source))
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
   const scope = workspace.getTask(source.taskId)
-  const input = scheduleSchema.omit({ sourceTaskId: true }).extend({ projectId: scheduleSchema.shape.projectId.optional(), workspaceId: scheduleSchema.shape.workspaceId })
-  const resolve = (value: Omit<ScheduleInput, 'sourceTaskId' | 'projectId'> & { projectId?: string }): ScheduleInput => ({ ...value, projectId: value.projectId ?? scope.projectId, workspaceId: value.workspaceId === undefined && (!value.projectId || value.projectId === scope.projectId) ? scope.workspaceId : value.workspaceId, sourceTaskId: scope.id })
+  const input = scheduleSchema
+    .omit({ sourceTaskId: true })
+    .extend({ projectId: scheduleSchema.shape.projectId.optional(), workspaceId: scheduleSchema.shape.workspaceId })
+  const resolve = (
+    value: Omit<ScheduleInput, 'sourceTaskId' | 'projectId'> & { projectId?: string },
+  ): ScheduleInput => ({
+    ...value,
+    projectId: value.projectId ?? scope.projectId,
+    workspaceId:
+      value.workspaceId === undefined && (!value.projectId || value.projectId === scope.projectId)
+        ? scope.workspaceId
+        : value.workspaceId,
+    sourceTaskId: scope.id,
+  })
   const descriptions = {
-    schedule_create: 'Create a one-time or repeating agent schedule when the user requests it. Interpret dates using the current time and requested timezone. Ask about ambiguous timing. Defaults to the current chat scope. Return the saved schedule and next run.',
+    schedule_create:
+      'Create a one-time or repeating agent schedule when the user requests it. Interpret dates using the current time and requested timezone. Ask about ambiguous timing. Defaults to the current chat scope. Return the saved schedule and next run.',
     schedule_update: 'Edit an existing schedule using its ID and full replacement configuration.',
   }
-  const checkReview = (reviewId: string) => { const review = reviews!.get(reviewId); if (review.sessionId !== source.id) throw new Error('This review belongs to another agent session'); return review }
-  server.registerTool('review_reply', { description: 'Reply to a selected review discussion after fixing or investigating it. Explain the change and any remaining limitations. suggestResolved only suggests closure; the human must resolve the thread. Never edit human comments.', inputSchema: { reviewId: z.string(), threadId: z.string(), text: z.string().min(1).max(10000), suggestResolved: z.boolean().default(false) } }, async ({ reviewId, threadId, text, suggestResolved }) => { checkReview(reviewId); return result(reviews!.agentReply(reviewId, threadId, text, suggestResolved)) })
-  server.registerTool('review_add_note', { description: 'Add an explanation or genuine question to a file or line in this session’s review. Prefer replying to an existing thread. New AI notes remain unselected until the human responds or selects them.', inputSchema: { reviewId: z.string(), fileId: z.string(), scope: z.enum(['file', 'line']), side: z.enum(['old', 'new']).default('new'), line: z.number().int().positive().default(1), endLine: z.number().int().positive().default(1), kind: z.enum(['note', 'question']), text: z.string().min(1).max(10000) } }, async ({ reviewId, ...input }) => { checkReview(reviewId); return result(reviews!.agentNote(reviewId, input)) })
-  server.registerTool('schedule_create', { description: descriptions.schedule_create, inputSchema: input.shape }, async (value) => { const saved = schedules.save(resolve(value)); agents.scheduleSaved(source.id, saved); return result(saved) })
-  server.registerTool('schedule_update', { description: descriptions.schedule_update, inputSchema: { id: z.string(), input } }, async (value) => { const saved = schedules.save(resolve(value.input), value.id); agents.scheduleSaved(source.id, saved); return result(saved) })
+  const checkReview = (reviewId: string) => {
+    const review = reviews!.get(reviewId)
+    if (review.sessionId !== source.id) throw new Error('This review belongs to another agent session')
+    return review
+  }
+  server.registerTool(
+    'review_reply',
+    {
+      description:
+        'Reply to a selected review discussion after fixing or investigating it. Explain the change and any remaining limitations. suggestResolved only suggests closure; the human must resolve the thread. Never edit human comments.',
+      inputSchema: {
+        reviewId: z.string(),
+        threadId: z.string(),
+        text: z.string().min(1).max(10000),
+        suggestResolved: z.boolean().default(false),
+      },
+    },
+    async ({ reviewId, threadId, text, suggestResolved }) => {
+      checkReview(reviewId)
+      return result(reviews!.agentReply(reviewId, threadId, text, suggestResolved))
+    },
+  )
+  server.registerTool(
+    'review_add_note',
+    {
+      description:
+        'Add an explanation or genuine question to a file or line in this session’s review. Prefer replying to an existing thread. New AI notes remain unselected until the human responds or selects them.',
+      inputSchema: {
+        reviewId: z.string(),
+        fileId: z.string(),
+        scope: z.enum(['file', 'line']),
+        side: z.enum(['old', 'new']).default('new'),
+        line: z.number().int().positive().default(1),
+        endLine: z.number().int().positive().default(1),
+        kind: z.enum(['note', 'question']),
+        text: z.string().min(1).max(10000),
+      },
+    },
+    async ({ reviewId, ...input }) => {
+      checkReview(reviewId)
+      return result(reviews!.agentNote(reviewId, input))
+    },
+  )
+  server.registerTool(
+    'schedule_create',
+    { description: descriptions.schedule_create, inputSchema: input.shape },
+    async (value) => {
+      const saved = schedules.save(resolve(value))
+      agents.scheduleSaved(source.id, saved)
+      return result(saved)
+    },
+  )
+  server.registerTool(
+    'schedule_update',
+    { description: descriptions.schedule_update, inputSchema: { id: z.string(), input } },
+    async (value) => {
+      const saved = schedules.save(resolve(value.input), value.id)
+      agents.scheduleSaved(source.id, saved)
+      return result(saved)
+    },
+  )
   // Codex asks this before one of its own sub-agents starts (see CODEX_HOOK_CONFIG); the answer is the hook's JSON output.
-  server.registerTool('codex_pre_tool_use', { description: 'Used by Ramu\'s Codex hook; not for the model.', inputSchema: { tool_name: z.string().optional(), tool_input: z.any().optional(), session_id: z.string().optional() } },
-    async (value) => { const decision = await agents.codexSpawnDecision(source.id, value.tool_input).catch(() => null); return result(decision ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: decision.reason } } : {}) })
+  server.registerTool(
+    'codex_pre_tool_use',
+    {
+      description: "Used by Ramu's Codex hook; not for the model.",
+      inputSchema: {
+        tool_name: z.string().optional(),
+        tool_input: z.any().optional(),
+        session_id: z.string().optional(),
+      },
+    },
+    async (value) => {
+      const decision = await agents.codexSpawnDecision(source.id, value.tool_input).catch(() => null)
+      return result(
+        decision
+          ? {
+              hookSpecificOutput: {
+                hookEventName: 'PreToolUse',
+                permissionDecision: 'deny',
+                permissionDecisionReason: decision.reason,
+              },
+            }
+          : {},
+      )
+    },
+  )
   // Sub-agents Ramu runs on another provider or model; a sub-agent itself does not get the tool.
-  if (!agents.get(source.id).parentId) server.registerTool('ramu_agent', { description: 'Start a sub-agent through Ramu, which may run it on a different provider or model than you. Use it when told to, or when the Agent tool is refused. It takes a description, a prompt and optionally a type, a name and background. Without background it waits and returns the sub-agent\'s report; with background it returns at once and the report arrives later as a message.', inputSchema: { description: z.string().min(1).max(200), prompt: z.string().min(1).max(100000), type: z.string().max(80).optional(), name: z.string().max(80).optional(), background: z.boolean().optional() } },
-    async (value, extra) => { try { return result(await agents.spawnSubagent(source.id, value, extra.signal)) } catch (error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }] } } })
+  if (!agents.get(source.id).parentId)
+    server.registerTool(
+      'ramu_agent',
+      {
+        description:
+          "Start a sub-agent through Ramu, which may run it on a different provider or model than you. Use it when told to, or when the Agent tool is refused. It takes a description, a prompt and optionally a type, a name and background. Without background it waits and returns the sub-agent's report; with background it returns at once and the report arrives later as a message.",
+        inputSchema: {
+          description: z.string().min(1).max(200),
+          prompt: z.string().min(1).max(100000),
+          type: z.string().max(80).optional(),
+          name: z.string().max(80).optional(),
+          background: z.boolean().optional(),
+        },
+      },
+      async (value, extra) => {
+        try {
+          return result(await agents.spawnSubagent(source.id, value, extra.signal))
+        } catch (error) {
+          return {
+            isError: true,
+            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+          }
+        }
+      },
+    )
   // A Ramu-run sub-agent talks to the chat that started it; the chat answers its questions.
   if (agents.get(source.id).parentId) {
-    server.registerTool('message_parent', { description: 'Send the agent that started you a short note (a finding, a blocker, progress) without stopping. It does not wait for a reply. Finish with your report as usual.', inputSchema: { text: z.string().min(1).max(20000) } },
-      async ({ text }) => { try { await agents.messageParent(source.id, text); return result({ sent: true }) } catch (error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }] } } })
-    server.registerTool('ask_parent', { description: 'Ask the agent that started you a question and wait for the answer. Use it only when you cannot continue without it. If no answer comes you are told to carry on with your best judgment.', inputSchema: { question: z.string().min(1).max(20000) } },
-      async ({ question }, extra) => { try { return result({ answer: await agents.askParent(source.id, question, extra.signal) }) } catch (error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }] } } })
-  } else server.registerTool('answer_subagent', { description: 'Answer a question a sub-agent asked you (the message names the agent id). The sub-agent then continues.', inputSchema: { agent: z.string(), text: z.string().min(1).max(20000) } },
-    async ({ agent, text }) => { try { agents.answerSubagent(source.id, agent, text); return result({ delivered: true }) } catch (error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }] } } })
-  server.registerTool('schedule_list', { description: 'List saved schedules and next execution times.', inputSchema: {} }, async () => result(schedules.list()))
-  server.registerTool('schedule_pause', { description: 'Pause or resume a schedule.', inputSchema: { id: z.string(), paused: z.boolean() } }, async ({ id, paused }) => result(schedules.pause(id, paused)))
-  server.registerTool('schedule_run_now', { description: 'Run a schedule now without changing its recurrence.', inputSchema: { id: z.string() } }, async ({ id }) => result(schedules.runNow(id)))
-  server.registerTool('schedule_delete', { description: 'Delete a schedule when requested. Existing run chats remain available.', inputSchema: { id: z.string() } }, async ({ id }) => { schedules.delete(id); return result({ deleted: id }) })
-  server.registerTool('schedule_context', { description: 'Get current time, timezone, project and isolated workspace choices before creating a schedule.', inputSchema: {} }, async () => result({ now: new Date().toISOString(), preferences: workspace.getAppState('app-preferences', {}), currentProjectId: scope.projectId, currentWorkspaceId: scope.workspaceId, currentSettings: source.settings, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, projects: workspace.listProjects(), workspaces: workspace.listWorkspaces() }))
+    server.registerTool(
+      'message_parent',
+      {
+        description:
+          'Send the agent that started you a short note (a finding, a blocker, progress) without stopping. It does not wait for a reply. Finish with your report as usual.',
+        inputSchema: { text: z.string().min(1).max(20000) },
+      },
+      async ({ text }) => {
+        try {
+          await agents.messageParent(source.id, text)
+          return result({ sent: true })
+        } catch (error) {
+          return {
+            isError: true,
+            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+          }
+        }
+      },
+    )
+    server.registerTool(
+      'ask_parent',
+      {
+        description:
+          'Ask the agent that started you a question and wait for the answer. Use it only when you cannot continue without it. If no answer comes you are told to carry on with your best judgment.',
+        inputSchema: { question: z.string().min(1).max(20000) },
+      },
+      async ({ question }, extra) => {
+        try {
+          return result({ answer: await agents.askParent(source.id, question, extra.signal) })
+        } catch (error) {
+          return {
+            isError: true,
+            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+          }
+        }
+      },
+    )
+  } else
+    server.registerTool(
+      'answer_subagent',
+      {
+        description:
+          'Answer a question a sub-agent asked you (the message names the agent id). The sub-agent then continues.',
+        inputSchema: { agent: z.string(), text: z.string().min(1).max(20000) },
+      },
+      async ({ agent, text }) => {
+        try {
+          agents.answerSubagent(source.id, agent, text)
+          return result({ delivered: true })
+        } catch (error) {
+          return {
+            isError: true,
+            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+          }
+        }
+      },
+    )
+  server.registerTool(
+    'schedule_list',
+    { description: 'List saved schedules and next execution times.', inputSchema: {} },
+    async () => result(schedules.list()),
+  )
+  server.registerTool(
+    'schedule_pause',
+    { description: 'Pause or resume a schedule.', inputSchema: { id: z.string(), paused: z.boolean() } },
+    async ({ id, paused }) => result(schedules.pause(id, paused)),
+  )
+  server.registerTool(
+    'schedule_run_now',
+    { description: 'Run a schedule now without changing its recurrence.', inputSchema: { id: z.string() } },
+    async ({ id }) => result(schedules.runNow(id)),
+  )
+  server.registerTool(
+    'schedule_delete',
+    {
+      description: 'Delete a schedule when requested. Existing run chats remain available.',
+      inputSchema: { id: z.string() },
+    },
+    async ({ id }) => {
+      schedules.delete(id)
+      return result({ deleted: id })
+    },
+  )
+  server.registerTool(
+    'schedule_context',
+    {
+      description: 'Get current time, timezone, project and isolated workspace choices before creating a schedule.',
+      inputSchema: {},
+    },
+    async () =>
+      result({
+        now: new Date().toISOString(),
+        preferences: workspace.getAppState('app-preferences', {}),
+        currentProjectId: scope.projectId,
+        currentWorkspaceId: scope.workspaceId,
+        currentSettings: source.settings,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        projects: workspace.listProjects(),
+        workspaces: workspace.listWorkspaces(),
+      }),
+  )
   registry.expose()
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
-  res.on('close', () => { void transport.close(); void server.close() })
-  try { await server.connect(transport); await transport.handleRequest(req, res, await body(req)) }
-  catch { if (!res.headersSent) res.writeHead(500).end() }
+  res.on('close', () => {
+    void transport.close()
+    void server.close()
+  })
+  try {
+    await server.connect(transport)
+    await transport.handleRequest(req, res, await body(req))
+  } catch {
+    if (!res.headersSent) res.writeHead(500).end()
+  }
 })
-await new Promise<void>((resolve, reject) => { mcpHttp.once('error', reject); mcpHttp.listen(0, '127.0.0.1', resolve) })
+await new Promise<void>((resolve, reject) => {
+  mcpHttp.once('error', reject)
+  mcpHttp.listen(0, '127.0.0.1', resolve)
+})
 const address = mcpHttp.address() as import('node:net').AddressInfo
-agents.toolConnection = (session) => { const token = randomBytes(32).toString('hex'); sessions.set(token, { session, toolSearch: workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence?.toolSearch ?? true }); return { url: `http://127.0.0.1:${address.port}/mcp`, token } }
+agents.toolConnection = (session) => {
+  const token = randomBytes(32).toString('hex')
+  sessions.set(token, {
+    session,
+    toolSearch: workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence?.toolSearch ?? true,
+  })
+  return { url: `http://127.0.0.1:${address.port}/mcp`, token }
+}
 // Never unlink a socket owned by another live service. The launcher removes stale sockets first.
-await new Promise<void>((resolve, reject) => { runtime.once('error', reject); runtime.listen(socketPath, resolve) })
+await new Promise<void>((resolve, reject) => {
+  runtime.once('error', reject)
+  runtime.listen(socketPath, resolve)
+})
 chmodSync(socketPath, 0o600)
 // A VPN address can be missing at boot (the interface comes up after this service). Keep the local socket and agents
 // running and retry the network listener rather than exiting into a restart loop.
@@ -323,8 +770,12 @@ function listenRemote(server: NonNullable<typeof remote>, attempt = 0) {
     if (remote !== server) return
     remoteError = error.code ?? error.message
     const delay = Math.min(30000, 1000 * 2 ** attempt)
-    console.error(`Ramu cannot listen on ${host}:${port} (${remoteError}). Local clients still work; retrying in ${Math.round(delay / 1000)}s.`)
-    remoteRetry = setTimeout(() => { if (remote === server && !stopping) listenRemote(server, attempt + 1) }, delay)
+    console.error(
+      `Ramu cannot listen on ${host}:${port} (${remoteError}). Local clients still work; retrying in ${Math.round(delay / 1000)}s.`,
+    )
+    remoteRetry = setTimeout(() => {
+      if (remote === server && !stopping) listenRemote(server, attempt + 1)
+    }, delay)
   }
   server.once('error', failed)
   server.listen(port, host, () => {
@@ -332,26 +783,43 @@ function listenRemote(server: NonNullable<typeof remote>, attempt = 0) {
     remoteError = null
     presence.announce()
     server.on('error', (error) => console.error(`Ramu network listener error: ${error.message}`))
-    console.log(`Ramu server listening on ${config.tls ? 'https' : 'http'}://${host}:${port}; pair a device with \`ramu pair\``)
+    console.log(
+      `Ramu server listening on ${config.tls ? 'https' : 'http'}://${host}:${port}; pair a device with \`ramu pair\``,
+    )
   })
 }
 function startRemote() {
   if (!network.enabled || stopping) return
   remoteError = null
-  const server = (remote = config.tls ? createHttpsServer({ cert: readFileSync(config.tls.cert), key: readFileSync(config.tls.key) }, handle(true)) : createServer(handle(true)))
+  const server = (remote = config.tls
+    ? createHttpsServer({ cert: readFileSync(config.tls.cert), key: readFileSync(config.tls.key) }, handle(true))
+    : createServer(handle(true)))
   listenRemote(server)
 }
 function stopRemote() {
   clearTimeout(remoteRetry)
-  const old = remote; remote = null; remoteError = null
+  const old = remote
+  remote = null
+  remoteError = null
   // Event streams from paired devices would keep a closing server open; they reconnect (or are refused) afterwards.
-  if (old) { try { old.close() } catch {}; old.closeAllConnections() }
+  if (old) {
+    try {
+      old.close()
+    } catch {}
+    old.closeAllConnections()
+  }
 }
 function networkStatus() {
   return {
-    enabled: network.enabled, listening: Boolean(remote?.listening), host: network.host, port: network.port,
-    source: config.listen ? 'command-line' as const : 'settings' as const, tls: Boolean(config.tls), error: remoteError,
-    addresses: localAddresses(), devices: devices.list(),
+    enabled: network.enabled,
+    listening: Boolean(remote?.listening),
+    host: network.host,
+    port: network.port,
+    source: config.listen ? ('command-line' as const) : ('settings' as const),
+    tls: Boolean(config.tls),
+    error: remoteError,
+    addresses: localAddresses(),
+    devices: devices.list(),
   }
 }
 async function networkMethod(method: string, args: unknown[]) {
@@ -362,7 +830,10 @@ async function networkMethod(method: string, args: unknown[]) {
     writeNetworkSetting(config.networkPath, next)
     const moved = next.enabled !== network.enabled || next.host !== network.host || next.port !== network.port
     network = next
-    if (moved || (next.enabled && !remote)) { stopRemote(); startRemote() }
+    if (moved || (next.enabled && !remote)) {
+      stopRemote()
+      startRemote()
+    }
     // Turning access off also drops every connected device: their tokens stay valid but nothing is listening for them.
     return networkStatus()
   }
@@ -381,11 +852,30 @@ async function networkMethod(method: string, args: unknown[]) {
 }
 startRemote()
 // Proxies and mobile networks drop idle event streams; a comment line every 20 s keeps them open.
-const pushReceipts = setInterval(() => { void mobilePush.checkReceipts().catch(() => {}) }, 15 * 60_000)
-const heartbeat = setInterval(() => { dropRevoked(); try { mobilePush.prune(); void mobileLiveActivities.flush().catch(() => {}) } catch { /* Push cleanup must not interrupt host agents. */ }; for (const client of clients) client.write(': ping\n\n') }, 20000)
-const tick = setInterval(() => { void agents.resumeInterruptedChats().catch(console.error); void schedules.tick().catch(console.error); void recaps.tick().catch(console.error); void memory.tick().catch(console.error); void learning.tick().catch(console.error) }, 5000)
+const pushReceipts = setInterval(() => {
+  void mobilePush.checkReceipts().catch(() => {})
+}, 15 * 60_000)
+const heartbeat = setInterval(() => {
+  dropRevoked()
+  try {
+    mobilePush.prune()
+    void mobileLiveActivities.flush().catch(() => {})
+  } catch {
+    /* Push cleanup must not interrupt host agents. */
+  }
+  for (const client of clients) client.write(': ping\n\n')
+}, 20000)
+const tick = setInterval(() => {
+  void agents.resumeInterruptedChats().catch(console.error)
+  void schedules.tick().catch(console.error)
+  void recaps.tick().catch(console.error)
+  void memory.tick().catch(console.error)
+  void learning.tick().catch(console.error)
+}, 5000)
 await agents.restoreHelperTranscripts()
 await agents.resumeInterruptedChats()
 agents.goalsSettingsChanged()
-void schedules.tick().catch(console.error); void recaps.tick().catch(console.error)
-process.on('SIGTERM', () => void stop()); process.on('SIGINT', () => void stop())
+void schedules.tick().catch(console.error)
+void recaps.tick().catch(console.error)
+process.on('SIGTERM', () => void stop())
+process.on('SIGINT', () => void stop())

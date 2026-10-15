@@ -13,10 +13,16 @@ export function reviewGroups(reviews: ChangeReview[]): { taskId: string; revisio
 }
 
 /** Steering can create several transcript turns within one captured run. */
-export function reviewsByTurn(reviews: ChangeReview[], sessionId: string, turns: { key: number; sequences: number[] }[]): Map<number, ChangeReview[]> {
+export function reviewsByTurn(
+  reviews: ChangeReview[],
+  sessionId: string,
+  turns: { key: number; sequences: number[] }[],
+): Map<number, ChangeReview[]> {
   const assigned = new Map<number, ChangeReview[]>()
   for (const review of reviews.filter((r) => r.sessionId === sessionId && r.files.length > 0 && r.state === 'ready')) {
-    const target = turns.findLast((turn) => turn.sequences.some((seq) => seq > (review.startSeq ?? 0) && seq <= (review.endSeq ?? 0)))
+    const target = turns.findLast((turn) =>
+      turn.sequences.some((seq) => seq > (review.startSeq ?? 0) && seq <= (review.endSeq ?? 0)),
+    )
     if (target) assigned.set(target.key, [...(assigned.get(target.key) ?? []), review])
   }
   return assigned

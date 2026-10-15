@@ -6,8 +6,9 @@ export class SettingsUpdateRequired extends Error {}
 /** Missing snapshot support means an older service, not a connection failure. */
 export async function readSettingsSnapshot(read: () => Promise<SettingsSnapshot>): Promise<SettingsSnapshot> {
   let snapshot: SettingsSnapshot
-  try { snapshot = await read() }
-  catch (error) {
+  try {
+    snapshot = await read()
+  } catch (error) {
     if (errorText(error) === 'Unknown method settings.app.snapshot') throw new SettingsUpdateRequired()
     throw error
   }

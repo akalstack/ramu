@@ -3,7 +3,13 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentService } from './agent'
 import type { GoalPreferences, ChatGoal } from '@ramu/shared/types'
 
-export const goalPreferencesSchema = z.object({ mode: z.enum(['auto', 'manual', 'off']).default('auto').transform((mode) => mode === 'off' ? 'manual' : mode), maxTurns: z.number().int().min(1).max(1000).nullable().default(10) })
+export const goalPreferencesSchema = z.object({
+  mode: z
+    .enum(['auto', 'manual', 'off'])
+    .default('auto')
+    .transform((mode) => (mode === 'off' ? 'manual' : mode)),
+  maxTurns: z.number().int().min(1).max(1000).nullable().default(10),
+})
 
 const AUTO_GOAL_POLICY = `A goal schedules automatic follow-up agent turns after your response ends; it is not a task plan or progress tracker. Decide in this order:
 1. Respect an explicit request not to create a goal or automatically continue. Questions, explanations, brainstorming and plan-only discussion do not authorize implementation or an implicit goal.
@@ -29,22 +35,52 @@ Audit the latest user instructions and actual evidence first. Finish remaining a
 
 export function registerGoalTools(server: McpServer, agents: AgentService, sessionId: string): void {
   const result = (operation: () => unknown) => {
-    try { return { content: [{ type: 'text' as const, text: JSON.stringify(operation()) }] } }
-    catch (error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }] } }
+    try {
+      return { content: [{ type: 'text' as const, text: JSON.stringify(operation()) }] }
+    } catch (error) {
+      return {
+        isError: true,
+        content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+      }
+    }
   }
-  server.registerTool('set_goal', {
-    description: `Set or refine this chat’s Ramu goal from the user’s requested outcome. The chat's goal mode takes precedence: Off prohibits goals; Manual requires an explicit user goal request; Auto uses the following decision rule. ${AUTO_GOAL_POLICY} Never expand scope or resume a paused goal.`,
-    inputSchema: {
-      objective: z.string().trim().min(1).max(8000),
-      continuationReason: z.string().trim().min(1).max(8000).describe('Name the inspected facts and the authorized work likely to need a later agent turn. Task size, steps, files or tests alone are insufficient. For an explicit user goal request, quote that request instead. For an active goal refinement, explain the remaining continuation need.'),
+  server.registerTool(
+    'set_goal',
+    {
+      description: `Set or refine this chat’s Ramu goal from the user’s requested outcome. The chat's goal mode takes precedence: Off prohibits goals; Manual requires an explicit user goal request; Auto uses the following decision rule. ${AUTO_GOAL_POLICY} Never expand scope or resume a paused goal.`,
+      inputSchema: {
+        objective: z.string().trim().min(1).max(8000),
+        continuationReason: z
+          .string()
+          .trim()
+          .min(1)
+          .max(8000)
+          .describe(
+            'Name the inspected facts and the authorized work likely to need a later agent turn. Task size, steps, files or tests alone are insufficient. For an explicit user goal request, quote that request instead. For an active goal refinement, explain the remaining continuation need.',
+          ),
+      },
     },
-  }, ({ objective, continuationReason }) => result(() => {
-    if (!continuationReason?.trim()) throw new Error('Do the task directly without a goal unless it is likely to require multiple agent turns and automatic continuation. Provide continuationReason based on inspected evidence, or quote an explicit user goal request.')
-    return agents.setGoal(sessionId, objective)
-  }))
-  server.registerTool('get_goal', { description: 'Read this chat’s goal and continuation count.', inputSchema: {} }, () => result(() => agents.getGoal(sessionId)))
-  server.registerTool('update_goal', {
-    description: 'Audit goal completion before ending a turn. Report active with unfinished work, completed with concrete verification evidence, or blocked with the missing input/obstacle. User controls pause/resume/clear.',
-    inputSchema: { status: z.enum(['active', 'completed', 'blocked']), reason: z.string().trim().min(1).max(8000) },
-  }, ({ status, reason }) => result(() => agents.updateGoal(sessionId, status, reason)))
+    ({ objective, continuationReason }) =>
+      result(() => {
+        if (!continuationReason?.trim())
+          throw new Error(
+            'Do the task directly without a goal unless it is likely to require multiple agent turns and automatic continuation. Provide continuationReason based on inspected evidence, or quote an explicit user goal request.',
+          )
+        return agents.setGoal(sessionId, objective)
+      }),
+  )
+  server.registerTool(
+    'get_goal',
+    { description: 'Read this chat’s goal and continuation count.', inputSchema: {} },
+    () => result(() => agents.getGoal(sessionId)),
+  )
+  server.registerTool(
+    'update_goal',
+    {
+      description:
+        'Audit goal completion before ending a turn. Report active with unfinished work, completed with concrete verification evidence, or blocked with the missing input/obstacle. User controls pause/resume/clear.',
+      inputSchema: { status: z.enum(['active', 'completed', 'blocked']), reason: z.string().trim().min(1).max(8000) },
+    },
+    ({ status, reason }) => result(() => agents.updateGoal(sessionId, status, reason)),
+  )
 }

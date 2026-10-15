@@ -23,7 +23,8 @@ export const PAYLOADS = {
   control: '\u0001\u0002\u001b[31mred\u001b[0m\u007f',
   html: '<img src=x onerror=alert(1)><script>alert(1)</script><b>bold</b>',
   htmlAttr: '"><svg onload=alert(1)>',
-  markdown: '# h1\n```\nunclosed fence\n> quote **bold _it_ `code`\n- [ ] task\n| a | b |\n|---|---|\n[x](javascript:alert(1)) ![i](http://x/y.png)',
+  markdown:
+    '# h1\n```\nunclosed fence\n> quote **bold _it_ `code`\n- [ ] task\n| a | b |\n|---|---|\n[x](javascript:alert(1)) ![i](http://x/y.png)',
   markdownDeep: '> '.repeat(500) + 'deep',
   markdownNested: '- '.repeat(300) + 'item',
   template: '${process.exit(1)} {{7*7}} %s %d %n {0} {name} $(whoami) `id`',
@@ -42,6 +43,21 @@ export const PAYLOADS = {
 }
 
 /** A short list for expensive surfaces (those that persist or spawn processes). */
-export const CORE = ['empty', 'spaces', 'long2k', 'unbroken', 'rtl', 'zalgo', 'emoji', 'loneSurrogate', 'nul', 'html', 'markdown', 'shell', 'path', 'dashName']
+export const CORE = [
+  'empty',
+  'spaces',
+  'long2k',
+  'unbroken',
+  'rtl',
+  'zalgo',
+  'emoji',
+  'loneSurrogate',
+  'nul',
+  'html',
+  'markdown',
+  'shell',
+  'path',
+  'dashName',
+]
 
 export const pick = (keys) => Object.fromEntries(keys.map((k) => [k, PAYLOADS[k]]))

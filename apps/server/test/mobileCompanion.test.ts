@@ -6,10 +6,18 @@ import { HostFolders } from '../src/hostFolders'
 import { MobilePush } from '../src/mobilePush'
 let dir: string | undefined
 const previousRoots = process.env.RAMU_BROWSE_ROOTS
-afterEach(() => { if (dir) rmSync(dir, { recursive: true, force: true }); if (previousRoots === undefined) delete process.env.RAMU_BROWSE_ROOTS; else process.env.RAMU_BROWSE_ROOTS = previousRoots; vi.restoreAllMocks() })
+afterEach(() => {
+  if (dir) rmSync(dir, { recursive: true, force: true })
+  if (previousRoots === undefined) delete process.env.RAMU_BROWSE_ROOTS
+  else process.env.RAMU_BROWSE_ROOTS = previousRoots
+  vi.restoreAllMocks()
+})
 it('host browsing rejects path and symlink escapes and creates only a child folder', async () => {
   dir = mkdtempSync(join(tmpdir(), 'ramu-phone-folders-'))
-  const root = join(dir, 'allowed'), outside = join(dir, 'outside'); mkdirSync(root); mkdirSync(outside)
+  const root = join(dir, 'allowed'),
+    outside = join(dir, 'outside')
+  mkdirSync(root)
+  mkdirSync(outside)
   process.env.RAMU_BROWSE_ROOTS = root
   symlinkSync(outside, join(root, 'escape'))
   const folders = new HostFolders(() => [])

@@ -5,11 +5,15 @@ import { describe, expect, it } from 'vitest'
 import { chatReferences, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '../src/chatReferences'
 import { localFileLink } from '../src/fileLinks'
 
-const render = (text: string) => renderToStaticMarkup(createElement(Markdown, {
-  remarkPlugins: [remarkChatReferences],
-  urlTransform: (url) => url.startsWith(SKILL_REFERENCE_PREFIX) || localFileLink(url) ? url : defaultUrlTransform(url),
-  children: text,
-}))
+const render = (text: string) =>
+  renderToStaticMarkup(
+    createElement(Markdown, {
+      remarkPlugins: [remarkChatReferences],
+      urlTransform: (url) =>
+        url.startsWith(SKILL_REFERENCE_PREFIX) || localFileLink(url) ? url : defaultUrlTransform(url),
+      children: text,
+    }),
+  )
 
 describe('inline chat references', () => {
   it('recognizes skill calls and repository-qualified file mentions without changing the message', () => {
@@ -23,7 +27,10 @@ describe('inline chat references', () => {
   })
   it('supports skill namespaces and file line suffixes', () => {
     const parts = chatReferences('$spreadsheets:Spreadsheets @src/App.tsx:12:3')
-    expect(parts.filter((part) => part.kind !== 'text').map((part) => part.target)).toEqual(['spreadsheets:Spreadsheets', 'src/App.tsx:12:3'])
+    expect(parts.filter((part) => part.kind !== 'text').map((part) => part.target)).toEqual([
+      'spreadsheets:Spreadsheets',
+      'src/App.tsx:12:3',
+    ])
   })
   it('preserves prices, environment variables, code examples, and email addresses', () => {
     const text = '$100 $HOME name@example.com `Use $imagegen`\n```sh\n$imagegen\n```'
@@ -33,7 +40,11 @@ describe('inline chat references', () => {
     const text = 'Read @README.md, then $shadcn and @src/index.ts.'
     const parts = chatReferences(text)
     expect(parts.map((part) => part.text).join('')).toBe(text)
-    expect(parts.filter((part) => part.kind !== 'text').map((part) => part.target)).toEqual(['README.md', 'shadcn', 'src/index.ts'])
+    expect(parts.filter((part) => part.kind !== 'text').map((part) => part.target)).toEqual([
+      'README.md',
+      'shadcn',
+      'src/index.ts',
+    ])
   })
   it('does not interpret ordinary social mentions as files', () => {
     expect(chatReferences('Ask @alice')).toEqual([{ kind: 'text', text: 'Ask @alice' }])

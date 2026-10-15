@@ -30,7 +30,16 @@ export default function Computers() {
                   }}
                   style={{ paddingVertical: space.m }}
                 >
-                  <View style={{ width: 34, height: 34, borderRadius: radius.s + 2, backgroundColor: c.fill, alignItems: 'center', justifyContent: 'center' }}>
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: radius.s + 2,
+                      backgroundColor: c.fill,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
                     <I size={17} color={c.soft} strokeWidth={1.8} />
                   </View>
                   <View style={{ flex: 1, gap: 3 }}>
@@ -38,7 +47,11 @@ export default function Computers() {
                       <T weight="600">{pc.name}</T>
                       <ConnectionDot status={pc.status} />
                       <T size={font.caption} tone="muted">
-                        {pc.status === 'online' ? t.online : pc.lastSeen ? `${t[pc.status]} · ${ago(pc.lastSeen)}` : t[pc.status]}
+                        {pc.status === 'online'
+                          ? t.online
+                          : pc.lastSeen
+                            ? `${t[pc.status]} · ${ago(pc.lastSeen)}`
+                            : t[pc.status]}
                       </T>
                     </View>
                     <T size={font.caption} tone="muted" mono numberOfLines={1}>
@@ -46,15 +59,42 @@ export default function Computers() {
                     </T>
                     {n.running || n.waiting ? (
                       <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
-                        {n.running ? <Pill tone="accent" wash={c.accentWash}>{`${n.running} ${t.running}`}</Pill> : null}
+                        {n.running ? (
+                          <Pill tone="accent" wash={c.accentWash}>{`${n.running} ${t.running}`}</Pill>
+                        ) : null}
                         {n.waiting ? <Pill tone="warn" wash={c.warnWash}>{`${n.waiting} ${t.waiting}`}</Pill> : null}
                       </View>
                     ) : null}
                   </View>
                   {pc.id === selected ? <Check size={18} color={c.accent} /> : null}
                 </Row>
-                {pc.error ? <T tone="bad" size={font.caption} style={{ paddingHorizontal: space.m }}>{pc.error}</T> : null}
-                <View style={{ flexDirection: 'row', padding: space.m, gap: space.l }}><Pressable onPress={() => retry(pc.id)}><T tone="accent">Reconnect</T></Pressable><Pressable onPress={() => router.push('/pair')}><T tone="accent">Pair again</T></Pressable><Pressable onPress={() => Alert.alert('Forget computer?', `${pc.name}: removes phone credentials, drafts and outbox. Agents keep running. Revoke the old device on this computer to invalidate its token.`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Forget', style: 'destructive', onPress: () => void forget(pc.id) }])}><T tone="bad">Forget</T></Pressable></View>
+                {pc.error ? (
+                  <T tone="bad" size={font.caption} style={{ paddingHorizontal: space.m }}>
+                    {pc.error}
+                  </T>
+                ) : null}
+                <View style={{ flexDirection: 'row', padding: space.m, gap: space.l }}>
+                  <Pressable onPress={() => retry(pc.id)}>
+                    <T tone="accent">Reconnect</T>
+                  </Pressable>
+                  <Pressable onPress={() => router.push('/pair')}>
+                    <T tone="accent">Pair again</T>
+                  </Pressable>
+                  <Pressable
+                    onPress={() =>
+                      Alert.alert(
+                        'Forget computer?',
+                        `${pc.name}: removes phone credentials, drafts and outbox. Agents keep running. Revoke the old device on this computer to invalidate its token.`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Forget', style: 'destructive', onPress: () => void forget(pc.id) },
+                        ],
+                      )
+                    }
+                  >
+                    <T tone="bad">Forget</T>
+                  </Pressable>
+                </View>
               </View>
             )
           })}

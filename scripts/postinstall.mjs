@@ -25,7 +25,8 @@ for (const file of candidates) {
 // Only patch the local Electron host; Forge sets these values in release bundles.
 if (process.platform === 'darwin') {
   const plist = join(electronRoot, 'dist', 'Electron.app', 'Contents', 'Info.plist')
-  if (existsSync(plist)) for (const key of ['CFBundleName', 'CFBundleDisplayName']) {
-    execFileSync('/usr/bin/plutil', ['-replace', key, '-string', 'Ramu', plist])
-  }
+  if (existsSync(plist))
+    for (const key of ['CFBundleName', 'CFBundleDisplayName']) {
+      execFileSync('/usr/bin/plutil', ['-replace', key, '-string', 'Ramu', plist])
+    }
 }

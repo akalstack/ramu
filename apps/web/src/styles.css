@@ -68,84 +68,215 @@
   @apply [color-scheme:dark];
 }
 /* Grayscale antialiasing is the default; the Appearance setting switches back to the heavier macOS rendering. */
-:root:not([data-font-smoothing='system']) { @apply [-webkit-font-smoothing:antialiased]; @apply [-moz-osx-font-smoothing:grayscale]; }
+:root:not([data-font-smoothing='system']) {
+  @apply [-webkit-font-smoothing:antialiased];
+  @apply [-moz-osx-font-smoothing:grayscale];
+}
 
 /* Controls */
-label input { @apply m-[3px_0_0]; @apply [accent-color:var(--accent)]; }
+label input {
+  @apply m-[3px_0_0];
+  @apply [accent-color:var(--accent)];
+}
 
 @layer base {
-
-* { @apply [box-sizing:border-box]; }
-/* Tailwind's preflight is not loaded, so a bare border utility would draw in currentColor (the text colour). */
-*, ::before, ::after { @apply [border-color:var(--color-border)]; }
-html, body, #root { @apply h-full; @apply m-0; }
-body {
-  @apply [background:var(--canvas)];
-  @apply text-foreground;
-  @apply [font:var(--ui-font-size)/1.5_var(--sans)];
-  @apply tracking-[-0.003em];
-  @apply [text-rendering:optimizeLegibility];
-  @apply [font-optical-sizing:auto];
-  @apply [font-kerning:normal];
-  @apply overflow-hidden;
-  @apply select-none;
+  * {
+    @apply [box-sizing:border-box];
+  }
+  /* Tailwind's preflight is not loaded, so a bare border utility would draw in currentColor (the text colour). */
+  *,
+  ::before,
+  ::after {
+    @apply [border-color:var(--color-border)];
+  }
+  html,
+  body,
+  #root {
+    @apply h-full;
+    @apply m-0;
+  }
+  body {
+    @apply [background:var(--canvas)];
+    @apply text-foreground;
+    @apply [font:var(--ui-font-size)/1.5_var(--sans)];
+    @apply tracking-[-0.003em];
+    @apply [text-rendering:optimizeLegibility];
+    @apply [font-optical-sizing:auto];
+    @apply [font-kerning:normal];
+    @apply overflow-hidden;
+    @apply select-none;
+  }
+  input,
+  textarea,
+  .msg,
+  pre,
+  code,
+  .path,
+  .tool-output {
+    @apply select-text;
+  }
+  ::selection {
+    @apply [background:color-mix(in_srgb,_var(--accent)_30%,_transparent)];
+  }
+  button,
+  input,
+  textarea,
+  select {
+    @apply [font:inherit];
+    @apply text-inherit;
+  }
+  button {
+    @apply inline-flex;
+    @apply items-center;
+    @apply gap-1.5;
+    @apply [background:var(--fill)];
+    @apply [border:1px_solid_transparent];
+    @apply rounded-(--radius-s);
+    @apply p-[3px_10px];
+    @apply cursor-pointer;
+    @apply [transition:background_0.12s_var(--ease),_border-color_0.12s_var(--ease),_color_0.12s_var(--ease)];
+  }
+  button:hover:not(:disabled) {
+    @apply [background:var(--fill-hover)];
+  }
+  button:disabled {
+    @apply [opacity:0.4];
+    @apply cursor-default;
+  }
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  [role='tab']:focus-visible,
+  summary:focus-visible {
+    @apply [outline:2px_solid_var(--line-strong)];
+    @apply [outline-offset:1px];
+  }
+  input,
+  textarea,
+  select {
+    @apply [background:var(--fill)];
+    @apply [border:1px_solid_transparent];
+    @apply rounded-(--radius-s);
+    @apply p-[5px_8px];
+    @apply [outline:none];
+    @apply [transition:border-color_0.12s_var(--ease)];
+  }
+  input:focus,
+  textarea:focus {
+    @apply [border-color:var(--line-strong)];
+  }
+  input::placeholder,
+  textarea::placeholder {
+    @apply [color:var(--placeholder)];
+  }
+  textarea {
+    @apply resize-none;
+    @apply w-full;
+  }
+  code,
+  .path,
+  pre {
+    @apply font-mono;
+    @apply text-caption;
+    @apply tracking-[0];
+  }
+  pre {
+    @apply whitespace-pre-wrap;
+    @apply break-words;
+    @apply m-[6px_0_0];
+  }
+  fieldset {
+    @apply [border:none];
+    @apply m-[8px_0];
+    @apply p-0;
+  }
+  legend {
+    @apply text-muted-foreground;
+    @apply p-0;
+    @apply mb-1;
+    @apply text-control;
+  }
+  label {
+    @apply flex;
+    @apply gap-2;
+    @apply items-start;
+    @apply p-[3px_0];
+    @apply cursor-pointer;
+  }
 }
-input, textarea, .msg, pre, code, .path, .tool-output { @apply select-text; }
-::selection { @apply [background:color-mix(in_srgb,_var(--accent)_30%,_transparent)]; }
-button, input, textarea, select { @apply [font:inherit]; @apply text-inherit; }
-button {
-  @apply inline-flex;
-  @apply items-center;
-  @apply gap-1.5;
-  @apply [background:var(--fill)];
-  @apply [border:1px_solid_transparent];
-  @apply rounded-(--radius-s);
-  @apply p-[3px_10px];
-  @apply cursor-pointer;
-  @apply [transition:background_0.12s_var(--ease),_border-color_0.12s_var(--ease),_color_0.12s_var(--ease)];
-}
-button:hover:not(:disabled) { @apply [background:var(--fill-hover)]; }
-button:disabled { @apply [opacity:0.4]; @apply cursor-default; }
-button:focus-visible, input:focus-visible, textarea:focus-visible, [role='tab']:focus-visible, summary:focus-visible {
-  @apply [outline:2px_solid_var(--line-strong)];
-  @apply [outline-offset:1px];
-}
-input, textarea, select {
-  @apply [background:var(--fill)];
-  @apply [border:1px_solid_transparent];
-  @apply rounded-(--radius-s);
-  @apply p-[5px_8px];
-  @apply [outline:none];
-  @apply [transition:border-color_0.12s_var(--ease)];
-}
-input:focus, textarea:focus { @apply [border-color:var(--line-strong)]; }
-input::placeholder, textarea::placeholder { @apply [color:var(--placeholder)]; }
-textarea { @apply resize-none; @apply w-full; }
-code, .path, pre { @apply font-mono; @apply text-caption; @apply tracking-[0]; }
-pre { @apply whitespace-pre-wrap; @apply break-words; @apply m-[6px_0_0]; }
-fieldset { @apply [border:none]; @apply m-[8px_0]; @apply p-0; }
-legend { @apply text-muted-foreground; @apply p-0; @apply mb-1; @apply text-control; }
-label { @apply flex; @apply gap-2; @apply items-start; @apply p-[3px_0]; @apply cursor-pointer; }
-}
-
 
 /* Shell: a quiet sidebar for navigation, the work area beside it. */
-.shell.no-sidebar { --nav-width: 0px; }
-.shell.with-workspace-tools { --tools-share: min(var(--workspace-tools-w, 340px), 35vw); }
-@media (max-width: 1100px) { .shell.with-workspace-tools:not(.no-sidebar) { --nav-width: min(var(--sidebar-w, 268px), 180px); } }
+.shell.no-sidebar {
+  --nav-width: 0px;
+}
+.shell.with-workspace-tools {
+  --tools-share: min(var(--workspace-tools-w, 340px), 35vw);
+}
+@media (max-width: 1100px) {
+  .shell.with-workspace-tools:not(.no-sidebar) {
+    --nav-width: min(var(--sidebar-w, 268px), 180px);
+  }
+}
 /* The sidebar sits on the window material with no edge of its own; only the work area is raised. */
-kbd { @apply [font:500_var(--font-caption)/16px_var(--sans)]; @apply text-muted-foreground; @apply [background:var(--hover)]; @apply rounded-(--radius-s); @apply p-[1px_5px]; @apply tracking-[0.02em]; }
+kbd {
+  @apply [font:500_var(--font-caption)/16px_var(--sans)];
+  @apply text-muted-foreground;
+  @apply [background:var(--hover)];
+  @apply rounded-(--radius-s);
+  @apply p-[1px_5px];
+  @apply tracking-[0.02em];
+}
 /* Large surfaces use a slightly squarer, continuous corner where Chromium supports it (Codex does the same). */
 @supports (corner-shape: superellipse(1.1)) {
-  :is(.main, .workspace-tools, .composer, .composer-tray, .msg.user, .settings-page, .dialog, .palette, .menu, [data-slot='dropdown-menu-content'], [data-slot='popover-content'], .msg.assistant pre, .tool-group-body, .recap-card, .schedule-card, .home-agents) { @apply [corner-shape:superellipse(1.1)]; }
+  :is(
+    .main,
+    .workspace-tools,
+    .composer,
+    .composer-tray,
+    .msg.user,
+    .settings-page,
+    .dialog,
+    .palette,
+    .menu,
+    [data-slot='dropdown-menu-content'],
+    [data-slot='popover-content'],
+    .msg.assistant pre,
+    .tool-group-body,
+    .recap-card,
+    .schedule-card,
+    .home-agents
+  ) {
+    @apply [corner-shape:superellipse(1.1)];
+  }
 }
-@keyframes pulse { 50% { opacity: 0.35; } }
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
 /* Menus */
-@keyframes pop { from { opacity: 0; transform: translateY(-3px); } }
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
 
 /* Conversation */
-@keyframes arrive { from { opacity: 0; transform: translateY(4px); } }
-@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
 
 /* Source control */
 
@@ -157,62 +288,155 @@ kbd { @apply [font:500_var(--font-caption)/16px_var(--sans)]; @apply text-muted-
     scrollbar-color: color-mix(in srgb, var(--text) 28%, transparent) transparent;
   }
 }
-::-webkit-scrollbar { width: 9px; height: 9px; }
-::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
 ::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--text) 28%, transparent);
   border: 2px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;
 }
-::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text) 42%, transparent); }
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--text) 42%, transparent);
+}
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { @apply [animation:none]!; @apply [transition:none]!; }
+  *,
+  *::before,
+  *::after {
+    @apply [animation:none]!;
+    @apply [transition:none]!;
+  }
 }
 
 /* Sidebar: projects and tasks */
 
 /* Palette and dialogs */
-@keyframes fade { from { opacity: 0; } }
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
 /* Search chats: the palette's look, with a search field like Settings' and two-line message matches. */
-button.danger-btn { @apply [background:color-mix(in_srgb,_var(--bad),_black_30%)]; @apply [border-color:transparent]; @apply [color:#fff]; @apply font-semibold; }
-button.danger-btn:hover:not(:disabled) { @apply [background:color-mix(in_srgb,_var(--bad),_black_18%)]; }
+button.danger-btn {
+  @apply [background:color-mix(in_srgb,_var(--bad),_black_30%)];
+  @apply [border-color:transparent];
+  @apply [color:#fff];
+  @apply font-semibold;
+}
+button.danger-btn:hover:not(:disabled) {
+  @apply [background:color-mix(in_srgb,_var(--bad),_black_18%)];
+}
 
 /* Chat details */
-button.scm-commit.primary { @apply w-full; @apply justify-center; @apply [background:var(--primary)]; @apply [color:var(--primary-ink)]; @apply [border:none]; @apply rounded-(--radius-s); @apply h-7; @apply p-[6px_12px]; @apply gap-2; @apply text-control; }
-button.scm-commit.primary:hover:not(:disabled) { @apply [background:var(--primary-hover)]; @apply [border:none]; }
-button.scm-commit.primary:disabled { @apply [background:var(--primary)]; @apply [opacity:0.5]; }
+button.scm-commit.primary {
+  @apply w-full;
+  @apply justify-center;
+  @apply [background:var(--primary)];
+  @apply [color:var(--primary-ink)];
+  @apply [border:none];
+  @apply rounded-(--radius-s);
+  @apply h-7;
+  @apply p-[6px_12px];
+  @apply gap-2;
+  @apply text-control;
+}
+button.scm-commit.primary:hover:not(:disabled) {
+  @apply [background:var(--primary-hover)];
+  @apply [border:none];
+}
+button.scm-commit.primary:disabled {
+  @apply [background:var(--primary)];
+  @apply [opacity:0.5];
+}
 
 /* Bottom terminal panel, independent of editor and conversation selection. */
 
 /* Model and effort share one title, followed directly by the stepped track. */
-.settings-intro h4 { @apply m-[0_0_4px]; @apply text-[length:var(--ui-font-size)]; }
-.settings-intro p { @apply m-0; @apply text-control; }
-.settings-set-name input { @apply w-full; }
+.settings-intro h4 {
+  @apply m-[0_0_4px];
+  @apply text-[length:var(--ui-font-size)];
+}
+.settings-intro p {
+  @apply m-0;
+  @apply text-control;
+}
+.settings-set-name input {
+  @apply w-full;
+}
 
 /* Access options keep their selected state visible independently of hover. */
-@media (max-width: 760px) {.settings-navigation { @apply w-[155px]; }.settings-page-content { @apply p-[18px]; }.settings-row { @apply gap-3; @apply items-start; @apply flex-wrap; } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { @apply [animation-duration:.001ms]!; @apply [transition-duration:.001ms]!; @apply [scroll-behavior:auto]!; } }
+@media (max-width: 760px) {
+  .settings-navigation {
+    @apply w-[155px];
+  }
+  .settings-page-content {
+    @apply p-[18px];
+  }
+  .settings-row {
+    @apply gap-3;
+    @apply items-start;
+    @apply flex-wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    @apply [animation-duration:.001ms]!;
+    @apply [transition-duration:.001ms]!;
+    @apply [scroll-behavior:auto]!;
+  }
+}
 
 /* Home, durable schedules, and composer discovery. */
-.recap-source-highlight { @apply [background:var(--accent-wash)]; @apply rounded-(--radius-s); @apply [outline:1px_solid_var(--line-strong)]; }
-.review-comment-line { @apply [background:var(--accent-wash)]; }
-.review-comment-glyph::after { @apply [content:'●']; @apply text-brand; @apply text-[length:11px]; @apply pl-1.5; }
+.recap-source-highlight {
+  @apply [background:var(--accent-wash)];
+  @apply rounded-(--radius-s);
+  @apply [outline:1px_solid_var(--line-strong)];
+}
+.review-comment-line {
+  @apply [background:var(--accent-wash)];
+}
+.review-comment-glyph::after {
+  @apply [content:'●'];
+  @apply text-brand;
+  @apply text-[length:11px];
+  @apply pl-1.5;
+}
 
 /* Review inbox remains readable at the minimum window size. */
-@media (max-width: 700px) { .undo-layout { @apply [grid-template-columns:170px_minmax(0,_1fr)]; } .undo-detail-heading { @apply items-start; @apply flex-col; } }
+@media (max-width: 700px) {
+  .undo-layout {
+    @apply [grid-template-columns:170px_minmax(0,_1fr)];
+  }
+  .undo-detail-heading {
+    @apply items-start;
+    @apply flex-col;
+  }
+}
 
 /* shadcn primitives use the workspace tokens and compact desktop rhythm. */
 /* Tree focus stays inside the row, without stacking the primitive's purple ring. */
-[data-slot="button"]:is(.tree-row, .tree-root, .review-tree-row):focus-visible {
+[data-slot='button']:is(.tree-row, .tree-root, .review-tree-row):focus-visible {
   @apply [outline:1px_solid_var(--line-strong)];
   @apply [outline-offset:-1px];
   @apply [box-shadow:none];
 }
 /* Only sticky headers need an opaque backing to cover scrolling content. */
-.explorer-panel { --tree-surface: var(--sidebar); --tree-row-height: 28px; }
-.workspace-tools .explorer-panel { --tree-surface: var(--canvas); }
+.explorer-panel {
+  --tree-surface: var(--sidebar);
+  --tree-row-height: 28px;
+}
+.workspace-tools .explorer-panel {
+  --tree-surface: var(--canvas);
+}
 .explorer-panel :is(.tree-row, .tree-root) {
   @apply flex;
   @apply h-[var(--tree-row-height)];
@@ -220,14 +444,34 @@ button.scm-commit.primary:disabled { @apply [background:var(--primary)]; @apply 
   @apply bg-transparent;
   @apply rounded-(--radius-s);
 }
-.explorer-panel :is(.tree-root, .tree-folder-sticky) { @apply [background:var(--tree-surface)]; }
+.explorer-panel :is(.tree-root, .tree-folder-sticky) {
+  @apply [background:var(--tree-surface)];
+}
 /* Draw ancestor guides above row highlights, including opaque sticky folders. */
-.explorer-panel .tree-children::before { @apply hidden; }
-.explorer-panel .tree-row:not(.tree-folder-sticky) { @apply relative; }
-.tree-row-guides { @apply absolute; @apply inset-0; @apply pointer-events-none; }
-.tree-row-guide { @apply absolute; @apply top-0; @apply bottom-0; @apply w-px; @apply [background:var(--line)]; }
-.repo-tree:hover .tree-row-guide { @apply [background:var(--line-strong)]; }
-.tree-row:is(:hover, .selected, .picked, .drop-target) .tree-row-guide { @apply [background:var(--line-strong)]; }
+.explorer-panel .tree-children::before {
+  @apply hidden;
+}
+.explorer-panel .tree-row:not(.tree-folder-sticky) {
+  @apply relative;
+}
+.tree-row-guides {
+  @apply absolute;
+  @apply inset-0;
+  @apply pointer-events-none;
+}
+.tree-row-guide {
+  @apply absolute;
+  @apply top-0;
+  @apply bottom-0;
+  @apply w-px;
+  @apply [background:var(--line)];
+}
+.repo-tree:hover .tree-row-guide {
+  @apply [background:var(--line-strong)];
+}
+.tree-row:is(:hover, .selected, .picked, .drop-target) .tree-row-guide {
+  @apply [background:var(--line-strong)];
+}
 .explorer-panel :is(.tree-row, .tree-root):hover:not(:disabled) {
   @apply bg-hover;
 }
@@ -249,41 +493,157 @@ button.scm-commit.primary:disabled { @apply [background:var(--primary)]; @apply 
 .explorer-panel :is(.tree-root, .tree-folder-sticky).drop-target {
   @apply [background:linear-gradient(var(--accent-wash),_var(--accent-wash)),_var(--tree-surface)];
 }
-[data-slot="input"] { @apply h-auto; @apply min-h-7; }
+[data-slot='input'] {
+  @apply h-auto;
+  @apply min-h-7;
+}
 /* shadcn fields carry no outline (--color-input is transparent); the fill marks them instead. */
-:is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="input-group"]):not(.composer *, .search-input *, .status-bar *, .control-btn) { @apply bg-fill; }
-:is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]):hover:not(:disabled, :focus-visible, .composer *, .status-bar *, .control-btn) { @apply [background-color:var(--fill-hover)]; }
-[data-slot="textarea"] { @apply min-h-0; }
-[data-slot="checkbox"] { @apply w-4; @apply h-4; @apply p-0; @apply rounded-(--radius-xs); @apply [background:transparent]; @apply [border-color:var(--line-strong)]; @apply flex-none; }
-[data-slot="checkbox"]:is([data-checked], [data-indeterminate], [data-state="checked"]) { @apply [background:var(--primary)]; @apply [border-color:var(--primary)]; @apply [color:var(--primary-ink)]; }
+:is([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger'], [data-slot='input-group']):not(
+  .composer *,
+  .search-input *,
+  .status-bar *,
+  .control-btn
+) {
+  @apply bg-fill;
+}
+:is([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']):hover:not(
+    :disabled,
+    :focus-visible,
+    .composer *,
+    .status-bar *,
+    .control-btn
+  ) {
+  @apply [background-color:var(--fill-hover)];
+}
+[data-slot='textarea'] {
+  @apply min-h-0;
+}
+[data-slot='checkbox'] {
+  @apply w-4;
+  @apply h-4;
+  @apply p-0;
+  @apply rounded-(--radius-xs);
+  @apply [background:transparent];
+  @apply [border-color:var(--line-strong)];
+  @apply flex-none;
+}
+[data-slot='checkbox']:is([data-checked], [data-indeterminate], [data-state='checked']) {
+  @apply [background:var(--primary)];
+  @apply [border-color:var(--primary)];
+  @apply [color:var(--primary-ink)];
+}
 /* One size for the tick in every checkbox, kept inside the 16px box. */
-[data-slot="checkbox"] { @apply inline-flex; @apply items-center; @apply justify-center; @apply [box-sizing:border-box]; }
-[data-slot="checkbox-indicator"] { @apply grid; @apply [place-content:center]; }
-[data-slot="checkbox-indicator"] > svg { @apply w-3; @apply h-3; @apply [stroke-width:3]; }
-[data-slot="checkbox"]:hover:not(:disabled) { @apply [border-color:var(--line-strong)]; }
-[data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"] { @apply [background:var(--raised)]; @apply text-foreground; @apply [border:1px_solid_var(--edge)]; @apply [box-shadow:0_8px_30px_#0006]; @apply z-1100; @apply p-1; @apply [animation-duration:120ms]; }
-[data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="select-item"] { @apply text-control; @apply pt-1.5; @apply pb-1.5; }
-[data-slot="dropdown-menu-item"][data-highlighted], [data-slot="dropdown-menu-radio-item"][data-highlighted], [data-slot="dropdown-menu-sub-trigger"][data-highlighted], [data-slot="select-item"][data-highlighted] { @apply [background:var(--pressed)]; }
-[data-slot="dropdown-menu-item"][data-variant="destructive"] { @apply text-bad; }
-[data-slot="select-trigger"] { @apply w-full; }
+[data-slot='checkbox'] {
+  @apply inline-flex;
+  @apply items-center;
+  @apply justify-center;
+  @apply [box-sizing:border-box];
+}
+[data-slot='checkbox-indicator'] {
+  @apply grid;
+  @apply [place-content:center];
+}
+[data-slot='checkbox-indicator'] > svg {
+  @apply w-3;
+  @apply h-3;
+  @apply [stroke-width:3];
+}
+[data-slot='checkbox']:hover:not(:disabled) {
+  @apply [border-color:var(--line-strong)];
+}
+[data-slot='dropdown-menu-content'],
+[data-slot='dropdown-menu-sub-content'],
+[data-slot='select-content'] {
+  @apply [background:var(--raised)];
+  @apply text-foreground;
+  @apply [border:1px_solid_var(--edge)];
+  @apply [box-shadow:0_8px_30px_#0006];
+  @apply z-1100;
+  @apply p-1;
+  @apply [animation-duration:120ms];
+}
+[data-slot='dropdown-menu-item'],
+[data-slot='dropdown-menu-radio-item'],
+[data-slot='dropdown-menu-sub-trigger'],
+[data-slot='select-item'] {
+  @apply text-control;
+  @apply pt-1.5;
+  @apply pb-1.5;
+}
+[data-slot='dropdown-menu-item'][data-highlighted],
+[data-slot='dropdown-menu-radio-item'][data-highlighted],
+[data-slot='dropdown-menu-sub-trigger'][data-highlighted],
+[data-slot='select-item'][data-highlighted] {
+  @apply [background:var(--pressed)];
+}
+[data-slot='dropdown-menu-item'][data-variant='destructive'] {
+  @apply text-bad;
+}
+[data-slot='select-trigger'] {
+  @apply w-full;
+}
 /* Menus, selects and popovers open above dialogs (1000/1001). shadcn's positioners use z-50, so the layer is set here, not in components/ui. */
-:where(div):has(> :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"], [data-slot="popover-content"])) { @apply z-1100; }
-:where(div):has(> [data-slot="hover-card-content"]) { @apply z-1200; }
-[data-slot="dialog-overlay"] { @apply z-1000; @apply [animation-duration:120ms]; }
-[data-slot="dialog-content"] { @apply z-1001; @apply [animation-duration:140ms]; }
-[data-slot="dialog-title"] { @apply m-[0_0_10px]; @apply text-heading; }
-[data-slot="tooltip-content"] { @apply z-1200; @apply [background:var(--raised)]; @apply text-foreground; @apply [border:1px_solid_var(--edge)]; @apply [animation-duration:100ms]; @apply max-w-[360px]; }
-[data-slot="tooltip-content"] svg { @apply hidden; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { @apply [animation:none]!; @apply [transition:none]!; @apply [scroll-behavior:auto]!; } }
-[data-slot="badge"].chip { @apply [border-color:var(--line-strong)]; @apply font-normal; }
+:where(div):has(
+  > :is(
+    [data-slot='dropdown-menu-content'],
+    [data-slot='dropdown-menu-sub-content'],
+    [data-slot='select-content'],
+    [data-slot='popover-content']
+  )
+) {
+  @apply z-1100;
+}
+:where(div):has(> [data-slot='hover-card-content']) {
+  @apply z-1200;
+}
+[data-slot='dialog-overlay'] {
+  @apply z-1000;
+  @apply [animation-duration:120ms];
+}
+[data-slot='dialog-content'] {
+  @apply z-1001;
+  @apply [animation-duration:140ms];
+}
+[data-slot='dialog-title'] {
+  @apply m-[0_0_10px];
+  @apply text-heading;
+}
+[data-slot='tooltip-content'] {
+  @apply z-1200;
+  @apply [background:var(--raised)];
+  @apply text-foreground;
+  @apply [border:1px_solid_var(--edge)];
+  @apply [animation-duration:100ms];
+  @apply max-w-[360px];
+}
+[data-slot='tooltip-content'] svg {
+  @apply hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    @apply [animation:none]!;
+    @apply [transition:none]!;
+    @apply [scroll-behavior:auto]!;
+  }
+}
+[data-slot='badge'].chip {
+  @apply [border-color:var(--line-strong)];
+  @apply font-normal;
+}
 
 /* ── Refresh: macOS materials + JetBrains Islands ─────────────────────────────────────────────
    Rail and sidebar share the window material; the work area is one raised island beside them.
    Chat follows current Apple conversation UI: neutral bubbles for you, open text for the agent. */
-body { @apply [background:var(--window)]; }
+body {
+  @apply [background:var(--window)];
+}
 
 /* Floating surfaces share one material. */
-[data-slot='dropdown-menu-content'], [data-slot='dropdown-menu-sub-content'], [data-slot='select-content'] {
+[data-slot='dropdown-menu-content'],
+[data-slot='dropdown-menu-sub-content'],
+[data-slot='select-content'] {
   @apply [background:color-mix(in_srgb,_var(--raised)_92%,_transparent)];
   @apply [-webkit-backdrop-filter:blur(30px)_saturate(1.6)];
   @apply [backdrop-filter:blur(30px)_saturate(1.6)];
@@ -293,408 +653,1213 @@ body { @apply [background:var(--window)]; }
 
 /* Optical centring. Labels are mostly lowercase, so text sits ~1px above the geometric centre:
    each row trades 1px of top padding for bottom padding, and dots/icons are nudged back to centre. */
-kbd { @apply p-[0_5px_2px]; }
+kbd {
+  @apply p-[0_5px_2px];
+}
 
 /* Sync: one status bar control with incoming/outgoing counts, sized like the other 22px status items. */
-.sync-button.warn, .sync-button.warn:disabled { @apply text-warn; @apply opacity-100; }
-button.scm-sync { @apply w-full; @apply justify-center; @apply gap-1.5; @apply h-7; @apply min-h-7; @apply mt-1.5; @apply [border:1px_solid_transparent]; @apply rounded-(--radius-s); @apply [background:var(--hover)]; @apply text-foreground; @apply text-control; @apply tabular-nums; }
-button.scm-sync:hover:not(:disabled) { @apply [background:var(--pressed)]; }
+.sync-button.warn,
+.sync-button.warn:disabled {
+  @apply text-warn;
+  @apply opacity-100;
+}
+button.scm-sync {
+  @apply w-full;
+  @apply justify-center;
+  @apply gap-1.5;
+  @apply h-7;
+  @apply min-h-7;
+  @apply mt-1.5;
+  @apply [border:1px_solid_transparent];
+  @apply rounded-(--radius-s);
+  @apply [background:var(--hover)];
+  @apply text-foreground;
+  @apply text-control;
+  @apply tabular-nums;
+}
+button.scm-sync:hover:not(:disabled) {
+  @apply [background:var(--pressed)];
+}
 
 /* Dropdown menus (shadcn) match the compact hand-built menus: content-sized, 28px rows, one radius ladder (item 8px inside a 4px pad = 12px panel). */
-:where([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"]) { @apply w-[max-content]; @apply min-w-[160px]; @apply max-w-[min(320px,_calc(100vw_-_16px))]; }
-[data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"] { @apply p-1; }
-[data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="select-item"] {
-  @apply min-h-7; @apply p-[4px_8px]; @apply gap-2;
-  @apply text-control; @apply leading-[20px]; @apply font-normal; @apply tracking-[-0.006em]; @apply whitespace-nowrap;
+:where([data-slot='dropdown-menu-content'], [data-slot='dropdown-menu-sub-content']) {
+  @apply w-[max-content];
+  @apply min-w-[160px];
+  @apply max-w-[min(320px,_calc(100vw_-_16px))];
 }
-[data-slot="dropdown-menu-radio-item"] { @apply pr-7; }
-[data-slot="select-item"] { @apply pr-7; }
-[data-slot="dropdown-menu-radio-item-indicator"] { @apply right-2; }
-[data-slot="dropdown-menu-item"] svg, [data-slot="dropdown-menu-radio-item"] svg, [data-slot="dropdown-menu-sub-trigger"] svg { @apply w-3.5; @apply h-3.5; @apply [stroke-width:1.6]; @apply flex-none; }
-[data-slot="select-item"] svg, [data-slot="select-trigger"] svg { @apply w-[var(--icon-compact)]; @apply h-[var(--icon-compact)]; @apply flex-none; }
-[data-slot="dropdown-menu-item"] svg:not(.menu-chevron), [data-slot="dropdown-menu-sub-trigger"] > svg:not(:last-child) { @apply text-soft; }
-[data-slot="dropdown-menu-content"] .block, [data-slot="dropdown-menu-sub-content"] .block { @apply block; @apply max-w-[240px]; @apply m-[1px_0_0]; @apply text-caption; @apply leading-[16px]; @apply whitespace-normal; }
-[data-slot="dropdown-menu-separator"] { @apply m-[4px_-4px]; }
+[data-slot='dropdown-menu-content'],
+[data-slot='dropdown-menu-sub-content'],
+[data-slot='select-content'] {
+  @apply p-1;
+}
+[data-slot='dropdown-menu-item'],
+[data-slot='dropdown-menu-radio-item'],
+[data-slot='dropdown-menu-sub-trigger'],
+[data-slot='select-item'] {
+  @apply min-h-7;
+  @apply p-[4px_8px];
+  @apply gap-2;
+  @apply text-control;
+  @apply leading-[20px];
+  @apply font-normal;
+  @apply tracking-[-0.006em];
+  @apply whitespace-nowrap;
+}
+[data-slot='dropdown-menu-radio-item'] {
+  @apply pr-7;
+}
+[data-slot='select-item'] {
+  @apply pr-7;
+}
+[data-slot='dropdown-menu-radio-item-indicator'] {
+  @apply right-2;
+}
+[data-slot='dropdown-menu-item'] svg,
+[data-slot='dropdown-menu-radio-item'] svg,
+[data-slot='dropdown-menu-sub-trigger'] svg {
+  @apply w-3.5;
+  @apply h-3.5;
+  @apply [stroke-width:1.6];
+  @apply flex-none;
+}
+[data-slot='select-item'] svg,
+[data-slot='select-trigger'] svg {
+  @apply w-[var(--icon-compact)];
+  @apply h-[var(--icon-compact)];
+  @apply flex-none;
+}
+[data-slot='dropdown-menu-item'] svg:not(.menu-chevron),
+[data-slot='dropdown-menu-sub-trigger'] > svg:not(:last-child) {
+  @apply text-soft;
+}
+[data-slot='dropdown-menu-content'] .block,
+[data-slot='dropdown-menu-sub-content'] .block {
+  @apply block;
+  @apply max-w-[240px];
+  @apply m-[1px_0_0];
+  @apply text-caption;
+  @apply leading-[16px];
+  @apply whitespace-normal;
+}
+[data-slot='dropdown-menu-separator'] {
+  @apply m-[4px_-4px];
+}
 
 /* Accent focus uses a crisp border, without a glow. */
-[data-slot="input"]:focus-visible, [data-slot="textarea"]:focus-visible, [data-slot="select-trigger"]:focus-visible { @apply [box-shadow:none]; @apply [border-color:var(--line-strong)]; @apply [outline:none]; }
-
+[data-slot='input']:focus-visible,
+[data-slot='textarea']:focus-visible,
+[data-slot='select-trigger']:focus-visible {
+  @apply [box-shadow:none];
+  @apply [border-color:var(--line-strong)];
+  @apply [outline:none];
+}
 
 /* ── Design system pass: one scale for fields, buttons, switches and pills ──────────────────────
    Fields 32px, buttons 28px, radius 8px (12px panels), filled without outlines, a neutral edge only on focus. */
-:is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings) :is(input:not([type="checkbox"], [type="radio"], [data-slot="input-group-control"], [data-slot="command-input"]), select, .dropdown-trigger, [data-slot="select-trigger"]) {
-  @apply h-8; @apply min-h-8; @apply p-[0_10px]; @apply [background:var(--field)]; @apply [border:1px_solid_transparent]; @apply rounded-(--radius-s);
-  @apply [font:inherit]; @apply text-control; @apply leading-[20px]; @apply text-foreground; @apply [box-shadow:none];
+:is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings)
+  :is(
+    input:not([type='checkbox'], [type='radio'], [data-slot='input-group-control'], [data-slot='command-input']),
+    select,
+    .dropdown-trigger,
+    [data-slot='select-trigger']
+  ) {
+  @apply h-8;
+  @apply min-h-8;
+  @apply p-[0_10px];
+  @apply [background:var(--field)];
+  @apply [border:1px_solid_transparent];
+  @apply rounded-(--radius-s);
+  @apply [font:inherit];
+  @apply text-control;
+  @apply leading-[20px];
+  @apply text-foreground;
+  @apply [box-shadow:none];
 }
-:is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings) :is(input:not([type="checkbox"], [type="radio"], [data-slot="input-group-control"], [data-slot="command-input"]), select, .dropdown-trigger, [data-slot="select-trigger"]):hover:not(:disabled) { @apply [background:var(--fill-hover)]; }
-:is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings) textarea {
-  @apply min-h-[64px]; @apply p-[8px_10px]; @apply [background:var(--field)]; @apply [border:1px_solid_transparent]; @apply rounded-(--radius-s); @apply [font:inherit]; @apply text-control; @apply leading-[20px]; @apply text-foreground; @apply [box-shadow:none];
+:is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings)
+  :is(
+    input:not([type='checkbox'], [type='radio'], [data-slot='input-group-control'], [data-slot='command-input']),
+    select,
+    .dropdown-trigger,
+    [data-slot='select-trigger']
+  ):hover:not(:disabled) {
+  @apply [background:var(--fill-hover)];
 }
-:is(.settings-page-content, .schedule-editor, .changes-page, .home-page, .dialog, .model-settings) :is(input, textarea)::placeholder { @apply [color:var(--placeholder)]; }
+:is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings)
+  textarea {
+  @apply min-h-[64px];
+  @apply p-[8px_10px];
+  @apply [background:var(--field)];
+  @apply [border:1px_solid_transparent];
+  @apply rounded-(--radius-s);
+  @apply [font:inherit];
+  @apply text-control;
+  @apply leading-[20px];
+  @apply text-foreground;
+  @apply [box-shadow:none];
+}
+:is(.settings-page-content, .schedule-editor, .changes-page, .home-page, .dialog, .model-settings)
+  :is(input, textarea)::placeholder {
+  @apply [color:var(--placeholder)];
+}
 :is(.settings-page-content, .schedule-editor, .changes-page, .home-page, .dialog, .model-settings) :is(input:not([data-slot="input-group-control"], [data-slot="command-input"]), textarea):is(:focus, :focus-visible),
 /* Pickers get the edge only from the keyboard: after a mouse pick, focus returns to the trigger and would keep it outlined. */
-:is(.settings-page-content, .schedule-editor, .changes-page, .home-page, .dialog, .model-settings) :is(select, .dropdown-trigger, [data-slot="select-trigger"]):focus-visible { @apply [border-color:var(--line-strong)]; @apply [outline:none]; @apply [box-shadow:none]; }
+:is(.settings-page-content, .schedule-editor, .changes-page, .home-page, .dialog, .model-settings) :is(select, .dropdown-trigger, [data-slot="select-trigger"]):focus-visible {
+  @apply [border-color:var(--line-strong)];
+  @apply [outline:none];
+  @apply [box-shadow:none];
+}
 /* Field labels share one look wherever they stack above a control. */
-:is(.settings-form, .schedule-form, .model-settings, .review-comment-composer) label:not(.settings-row) { @apply flex; @apply flex-col; @apply gap-1.5; @apply text-caption; @apply text-soft; }
+:is(.settings-form, .schedule-form, .model-settings, .review-comment-composer) label:not(.settings-row) {
+  @apply flex;
+  @apply flex-col;
+  @apply gap-1.5;
+  @apply text-caption;
+  @apply text-soft;
+}
 
 /* Buttons: 28px, centered label, filled; primary is the only colored one. */
-:is(.settings-page-content, .schedule-editor, .schedule-card, .changes-page, .home-page, .dialog, .model-settings, .automation-heading) button:not(.icon, .small-icon, .link, .chip, .schedule-nav, .dropdown-trigger, [role="tab"], [data-slot="switch"], .review-files button, .tab-close, .scm-group-toggle, .tree-row, .start-project-btn, .chip-btn, .repo-chip, .add-project-btn, .composer button, .start-dock button, .home-agent) {
-  @apply min-h-7; @apply p-[0_12px]; @apply justify-center; @apply text-control; @apply rounded-(--radius-s);
+:is(
+    .settings-page-content,
+    .schedule-editor,
+    .schedule-card,
+    .changes-page,
+    .home-page,
+    .dialog,
+    .model-settings,
+    .automation-heading
+  )
+  button:not(
+    .icon,
+    .small-icon,
+    .link,
+    .chip,
+    .schedule-nav,
+    .dropdown-trigger,
+    [role='tab'],
+    [data-slot='switch'],
+    .review-files button,
+    .tab-close,
+    .scm-group-toggle,
+    .tree-row,
+    .start-project-btn,
+    .chip-btn,
+    .repo-chip,
+    .add-project-btn,
+    .composer button,
+    .start-dock button,
+    .home-agent
+  ) {
+  @apply min-h-7;
+  @apply p-[0_12px];
+  @apply justify-center;
+  @apply text-control;
+  @apply rounded-(--radius-s);
 }
-:is(.settings-page-footer, .dialog-actions) button { @apply min-h-7; @apply p-[0_14px]; @apply rounded-(--radius-s); @apply text-control; }
+:is(.settings-page-footer, .dialog-actions) button {
+  @apply min-h-7;
+  @apply p-[0_14px];
+  @apply rounded-(--radius-s);
+  @apply text-control;
+}
 
 /* Switch: base-ui exposes data-checked, not data-state. */
 /* Secondary actions in page toolbars are filled, so a row of them reads as one group. */
-:is(.review-toolbar, .automation-heading, .schedule-card-title, .recap-actions, .schedule-form-actions) button.ghost:not(.icon, .small-icon) { @apply [background:var(--fill)]; @apply text-soft; }
-:is(.review-toolbar, .automation-heading, .schedule-card-title, .recap-actions, .schedule-form-actions) button.ghost:not(.icon, .small-icon):hover:not(:disabled) { @apply [background:var(--fill-hover)]; @apply text-foreground; }
+:is(.review-toolbar, .automation-heading, .schedule-card-title, .recap-actions, .schedule-form-actions)
+  button.ghost:not(.icon, .small-icon) {
+  @apply [background:var(--fill)];
+  @apply text-soft;
+}
+:is(.review-toolbar, .automation-heading, .schedule-card-title, .recap-actions, .schedule-form-actions)
+  button.ghost:not(.icon, .small-icon):hover:not(:disabled) {
+  @apply [background:var(--fill-hover)];
+  @apply text-foreground;
+}
 
 /* Switch: thumb centered in the track on both axes. */
 
-
 /* Chat state sits on the right, like Codex: a ring while working, a blue dot once it finished unseen. */
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* Pin and archive appear on hover, in place of the time or state, like Codex. */
-.task-actions button { @apply text-muted-foreground; }
-.task-actions button:hover:not(:disabled) { @apply text-foreground; @apply [background:var(--pressed)]; }
+.task-actions button {
+  @apply text-muted-foreground;
+}
+.task-actions button:hover:not(:disabled) {
+  @apply text-foreground;
+  @apply [background:var(--pressed)];
+}
 
 /* Hovering a message reveals its time and a copy button, like Codex. */
-.msg-wrap.user { @apply flex; @apply flex-col; @apply items-end; @apply max-w-[78%]; }
+.msg-wrap.user {
+  @apply flex;
+  @apply flex-col;
+  @apply items-end;
+  @apply max-w-[78%];
+}
 
 /* Editor scrollbars: thin, rounded, quiet. */
-.monaco-editor .scrollbar > .slider { @apply rounded-(--radius-xs); }
-.monaco-editor .scrollbar.vertical > .slider { @apply ml-px; }
-.monaco-editor .scrollbar.horizontal > .slider { @apply mt-px; }
+.monaco-editor .scrollbar > .slider {
+  @apply rounded-(--radius-xs);
+}
+.monaco-editor .scrollbar.vertical > .slider {
+  @apply ml-px;
+}
+.monaco-editor .scrollbar.horizontal > .slider {
+  @apply mt-px;
+}
 
 /* The switch's hidden checkbox must never draw anything. */
-[data-slot="switch"] ~ input[type="checkbox"], [data-slot="switch"] > input { @apply absolute; @apply opacity-0; @apply w-px; @apply h-px; @apply m-0; @apply p-0; @apply [border:0]; @apply pointer-events-none; @apply [appearance:none]; @apply [background:none]; }
-[data-slot="switch"] ~ input[type="checkbox"]::after, [data-slot="switch"] > input::after { @apply [content:none]; }
+[data-slot='switch'] ~ input[type='checkbox'],
+[data-slot='switch'] > input {
+  @apply absolute;
+  @apply opacity-0;
+  @apply w-px;
+  @apply h-px;
+  @apply m-0;
+  @apply p-0;
+  @apply [border:0];
+  @apply pointer-events-none;
+  @apply [appearance:none];
+  @apply [background:none];
+}
+[data-slot='switch'] ~ input[type='checkbox']::after,
+[data-slot='switch'] > input::after {
+  @apply [content:none];
+}
 
 /* Floating menus: translucent so the blur behind them shows. On by default, no setting needed. */
-[data-slot='dropdown-menu-content'], [data-slot='dropdown-menu-sub-content'], [data-slot='select-content'], [data-slot='popover-content'] {
+[data-slot='dropdown-menu-content'],
+[data-slot='dropdown-menu-sub-content'],
+[data-slot='select-content'],
+[data-slot='popover-content'] {
   @apply [background:color-mix(in_srgb,_var(--raised)_74%,_transparent)];
   @apply [-webkit-backdrop-filter:blur(28px)_saturate(1.7)];
   @apply [backdrop-filter:blur(28px)_saturate(1.7)];
 }
 
 /* Working state: a live "Working for 4s" rule above the steps, streamed words fading in, and a quiet "Thinking" below. */
-@keyframes stream-in { from { opacity: 0.2; } to { opacity: 1; } }
+@keyframes stream-in {
+  from {
+    opacity: 0.2;
+  }
+  to {
+    opacity: 1;
+  }
+}
 
 /* Model picker: provider/favorite rail beside a searchable list. */
-.provider-icon.claude { @apply [color:#d97757]; }
-.provider-icon.codex { @apply text-soft; }
+.provider-icon.claude {
+  @apply [color:#d97757];
+}
+.provider-icon.codex {
+  @apply text-soft;
+}
 
 /* Switch thumb: placed by coordinates, so nothing about flex or line height can shift it. */
 /* A step between the canvas and the composer, so the box reads as resting on the tray. */
-:root { --composer-tray: color-mix(in srgb, var(--raised) 55%, var(--canvas)); }
+:root {
+  --composer-tray: color-mix(in srgb, var(--raised) 55%, var(--canvas));
+}
 /* Same size as the composer's own controls below it. */
-.composer-tray .tray-settings { @apply text-muted-foreground; }
+.composer-tray .tray-settings {
+  @apply text-muted-foreground;
+}
 
 /* Floating surfaces: translucent glass, so what is behind shows through blurred (menus, popovers, pickers, palette, dialogs, toasts, suggestions). */
-:root { --float-bg: color-mix(in srgb, var(--raised) 58%, transparent); --float-blur: blur(34px) saturate(1.9); }
-[data-slot='dropdown-menu-content'], [data-slot='dropdown-menu-sub-content'], [data-slot='select-content'], [data-slot='popover-content'], [data-slot='tooltip-content'] {
+:root {
+  --float-bg: color-mix(in srgb, var(--raised) 58%, transparent);
+  --float-blur: blur(34px) saturate(1.9);
+}
+[data-slot='dropdown-menu-content'],
+[data-slot='dropdown-menu-sub-content'],
+[data-slot='select-content'],
+[data-slot='popover-content'],
+[data-slot='tooltip-content'] {
   @apply [background:var(--float-bg)];
   @apply [-webkit-backdrop-filter:var(--float-blur)];
   @apply [backdrop-filter:var(--float-blur)];
   @apply [border:1px_solid_var(--edge)];
   @apply [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgba(255,_255,_255,_0.07)];
 }
-[data-slot="dialog-overlay"] { @apply [-webkit-backdrop-filter:blur(6px)]; @apply [backdrop-filter:blur(6px)]; @apply [background:rgba(0,_0,_0,_0.35)]; }
+[data-slot='dialog-overlay'] {
+  @apply [-webkit-backdrop-filter:blur(6px)];
+  @apply [backdrop-filter:blur(6px)];
+  @apply [background:rgba(0,_0,_0,_0.35)];
+}
 
 /* Draw the glyph once, then let the dot land; hold the finished logo. */
-.animated-mark-reveal .animated-mark-stem { @apply [stroke-dasharray:1]; @apply [animation:ramu-stem_850ms_cubic-bezier(.22,_1,_.36,_1)_both]; }
-.animated-mark-reveal .animated-mark-dot { @apply [animation:ramu-dot_620ms_420ms_both]; @apply [transform-origin:664px_622px]; }
-.animated-mark-tap .animated-mark-stem { @apply [animation:ramu-tap-stem_650ms_ease-in-out_both]; @apply [transform-origin:356px_694px]; }
-.animated-mark-tap .animated-mark-dot { @apply [animation:ramu-tap-dot_650ms_ease-in-out_both]; @apply [transform-origin:664px_622px]; }
+.animated-mark-reveal .animated-mark-stem {
+  @apply [stroke-dasharray:1];
+  @apply [animation:ramu-stem_850ms_cubic-bezier(.22,_1,_.36,_1)_both];
+}
+.animated-mark-reveal .animated-mark-dot {
+  @apply [animation:ramu-dot_620ms_420ms_both];
+  @apply [transform-origin:664px_622px];
+}
+.animated-mark-tap .animated-mark-stem {
+  @apply [animation:ramu-tap-stem_650ms_ease-in-out_both];
+  @apply [transform-origin:356px_694px];
+}
+.animated-mark-tap .animated-mark-dot {
+  @apply [animation:ramu-tap-dot_650ms_ease-in-out_both];
+  @apply [transform-origin:664px_622px];
+}
 @keyframes ramu-startup-r {
-  0%, 24% { transform: translate(var(--r-start-x), var(--r-start-y)) scale(var(--r-start-scale)); }
-  78%, 100% { transform: translate(var(--r-end-x), var(--r-end-y)) scale(1); }
+  0%,
+  24% {
+    transform: translate(var(--r-start-x), var(--r-start-y)) scale(var(--r-start-scale));
+  }
+  78%,
+  100% {
+    transform: translate(var(--r-end-x), var(--r-end-y)) scale(1);
+  }
 }
 @keyframes ramu-startup-letters {
-  0%, 34% { opacity: 0; }
-  80%, 100% { opacity: 1; }
+  0%,
+  34% {
+    opacity: 0;
+  }
+  80%,
+  100% {
+    opacity: 1;
+  }
 }
 @keyframes ramu-startup-dot {
-  0%, 24% { transform: translate(var(--dot-start-x), var(--dot-start-y)) scale(var(--dot-start-scale)); }
-  84%, 100% { transform: translate(var(--dot-end-x), var(--dot-end-y)) scale(1); }
+  0%,
+  24% {
+    transform: translate(var(--dot-start-x), var(--dot-start-y)) scale(var(--dot-start-scale));
+  }
+  84%,
+  100% {
+    transform: translate(var(--dot-end-x), var(--dot-end-y)) scale(1);
+  }
 }
 @keyframes ramu-stem {
-  0% { opacity: 0; stroke-dashoffset: 1; }
-  12% { opacity: 1; }
-  100% { opacity: 1; stroke-dashoffset: 0; }
+  0% {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
 }
 @keyframes ramu-dot {
-  0% { opacity: 0; transform: translateY(-130px) scale(.45); animation-timing-function: cubic-bezier(.55, 0, .8, .45); }
-  48% { opacity: 1; transform: translateY(8px) scale(1.16, .84); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
-  72% { opacity: 1; transform: translateY(-22px) scale(.94, 1.06); animation-timing-function: ease-in; }
-  88% { transform: translateY(3px) scale(1.03, .97); animation-timing-function: ease-out; }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0% {
+    opacity: 0;
+    transform: translateY(-130px) scale(0.45);
+    animation-timing-function: cubic-bezier(0.55, 0, 0.8, 0.45);
+  }
+  48% {
+    opacity: 1;
+    transform: translateY(8px) scale(1.16, 0.84);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  72% {
+    opacity: 1;
+    transform: translateY(-22px) scale(0.94, 1.06);
+    animation-timing-function: ease-in;
+  }
+  88% {
+    transform: translateY(3px) scale(1.03, 0.97);
+    animation-timing-function: ease-out;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 @keyframes ramu-boot {
-  0% { opacity: 0; transform: translateY(8px) scale(.9); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 @keyframes ramu-tap-stem {
-  0%, 100% { transform: rotate(0); }
-  28% { transform: rotate(-9deg); }
-  62% { transform: rotate(4deg); }
-  82% { transform: rotate(-2deg); }
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  28% {
+    transform: rotate(-9deg);
+  }
+  62% {
+    transform: rotate(4deg);
+  }
+  82% {
+    transform: rotate(-2deg);
+  }
 }
 @keyframes ramu-tap-dot {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  18% { transform: translate(0, 8px) scale(1.18, .82); }
-  46% { transform: translate(30px, -110px) scale(.9, 1.1); }
-  76% { transform: translate(0, 6px) scale(1.12, .88); }
-  90% { transform: translate(0, -10px) scale(.97, 1.03); }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  18% {
+    transform: translate(0, 8px) scale(1.18, 0.82);
+  }
+  46% {
+    transform: translate(30px, -110px) scale(0.9, 1.1);
+  }
+  76% {
+    transform: translate(0, 6px) scale(1.12, 0.88);
+  }
+  90% {
+    transform: translate(0, -10px) scale(0.97, 1.03);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .animated-mark-reveal .animated-mark-stem, .animated-mark-reveal .animated-mark-dot,
-  .animated-mark-tap .animated-mark-stem, .animated-mark-tap .animated-mark-dot, .boot-mark { @apply [animation:none]; }
-  .startup-overlay { @apply [transition:none]; }
+  .animated-mark-reveal .animated-mark-stem,
+  .animated-mark-reveal .animated-mark-dot,
+  .animated-mark-tap .animated-mark-stem,
+  .animated-mark-tap .animated-mark-dot,
+  .boot-mark {
+    @apply [animation:none];
+  }
+  .startup-overlay {
+    @apply [transition:none];
+  }
 }
 
 /* Preview controls share the app's compact toolbar and keep large images scrollable. */
-.attachment-open:focus-visible, [role='separator']:focus-visible { @apply [outline:2px_solid_var(--line-strong)]; @apply [outline-offset:-2px]; }
+.attachment-open:focus-visible,
+[role='separator']:focus-visible {
+  @apply [outline:2px_solid_var(--line-strong)];
+  @apply [outline-offset:-2px];
+}
 
 /* Pair review keeps the diff first and feedback in one persistent send bar. */
-.review-resolved > [data-slot="collapsible-trigger"] { @apply cursor-pointer; @apply text-muted-foreground; @apply text-caption; @apply p-[8px_0]; }
-.review-resolved > article { @apply mt-2; }
+.review-resolved > [data-slot='collapsible-trigger'] {
+  @apply cursor-pointer;
+  @apply text-muted-foreground;
+  @apply text-caption;
+  @apply p-[8px_0];
+}
+.review-resolved > article {
+  @apply mt-2;
+}
 
 /* One page scrolls through all files; Monaco keeps horizontal code scrolling. */
-.review-inline-zone { @apply [background:var(--canvas)]; @apply z-2; }
-.review-inline-body { @apply p-[8px_12px]; @apply font-sans; @apply text-control; @apply text-foreground; @apply whitespace-normal; }
-.review-add-glyph::after { @apply [content:'+']; @apply block; @apply w-[18px]; @apply h-[18px]; @apply rounded-(--radius-xs); @apply text-center; @apply [color:var(--primary-ink)]; @apply [background:var(--primary)]; @apply [font:16px/18px_var(--sans)]; @apply cursor-pointer; }
+.review-inline-zone {
+  @apply [background:var(--canvas)];
+  @apply z-2;
+}
+.review-inline-body {
+  @apply p-[8px_12px];
+  @apply font-sans;
+  @apply text-control;
+  @apply text-foreground;
+  @apply whitespace-normal;
+}
+.review-add-glyph::after {
+  @apply [content:'+'];
+  @apply block;
+  @apply w-[18px];
+  @apply h-[18px];
+  @apply rounded-(--radius-xs);
+  @apply text-center;
+  @apply [color:var(--primary-ink)];
+  @apply [background:var(--primary)];
+  @apply [font:16px/18px_var(--sans)];
+  @apply cursor-pointer;
+}
 /* Monaco zones are forms, with wrapping independent of long code lines. */
-.review-inline-zone, .review-inline-body { @apply pointer-events-auto; }
-.review-inline-body { @apply [box-sizing:border-box]; @apply max-w-full; @apply leading-[1.5]; }
-.review-inline-body p { @apply whitespace-pre-wrap; @apply [overflow-wrap:anywhere]; }
-.review-inline-body textarea { @apply whitespace-pre-wrap; }
-
+.review-inline-zone,
+.review-inline-body {
+  @apply pointer-events-auto;
+}
+.review-inline-body {
+  @apply [box-sizing:border-box];
+  @apply max-w-full;
+  @apply leading-[1.5];
+}
+.review-inline-body p {
+  @apply whitespace-pre-wrap;
+  @apply [overflow-wrap:anywhere];
+}
+.review-inline-body textarea {
+  @apply whitespace-pre-wrap;
+}
 
 /* File headings stay pinned under the review bar while their diff scrolls; clip (not hidden) keeps sticky working. */
-[data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="select-item"] { @apply rounded-(--radius-s); }
-
-
+[data-slot='dropdown-menu-item'],
+[data-slot='dropdown-menu-radio-item'],
+[data-slot='dropdown-menu-sub-trigger'],
+[data-slot='select-item'] {
+  @apply rounded-(--radius-s);
+}
 
 /* Scroll areas fade out at an edge that has more content, like Codex. The fade size is a registered property so it can animate. */
-@property --fade-top { syntax: '<length>'; inherits: false; initial-value: 0px; }
-@property --fade-bottom { syntax: '<length>'; inherits: false; initial-value: 0px; }
-.fade-scroll[data-fade-top] { --fade-top: 32px; }
-.fade-scroll[data-fade-bottom] { --fade-bottom: 32px; }
-.scm-repo-body:not(.compact) { @apply contents; }
-.scm-repo-body.compact { @apply [border-bottom:0]; }
+@property --fade-top {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --fade-bottom {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+.fade-scroll[data-fade-top] {
+  --fade-top: 32px;
+}
+.fade-scroll[data-fade-bottom] {
+  --fade-bottom: 32px;
+}
+.scm-repo-body:not(.compact) {
+  @apply contents;
+}
+.scm-repo-body.compact {
+  @apply [border-bottom:0];
+}
 
 /* Messages and the composer share the reading size; work summaries use the control scale. */
-.msg-wrap.user { @apply max-w-[82%]; }
+.msg-wrap.user {
+  @apply max-w-[82%];
+}
 
 /* One border per surface, like the chat composer: the card holds the text box, which has no frame of its own. */
-@keyframes fade-only { from { opacity: 0; } }
+@keyframes fade-only {
+  from {
+    opacity: 0;
+  }
+}
 
 /* Sync every repository in the workspace. */
-.workspace-sync-result .ok { @apply text-ok; }
-.workspace-sync-result .bad { @apply text-bad; }
+.workspace-sync-result .ok {
+  @apply text-ok;
+}
+.workspace-sync-result .bad {
+  @apply text-bad;
+}
 
 /* Long sidebar names fade only at an edge with more text beyond it, and scroll to show the rest while the row is hovered. */
-@property --fade-l { syntax: '<length>'; inherits: false; initial-value: 0px; }
-@property --fade-r { syntax: '<length>'; inherits: false; initial-value: 0px; }
-.fade-text[data-fade-left] { --fade-l: 22px; }
-.fade-text[data-fade-right] { --fade-r: 22px; }
+@property --fade-l {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --fade-r {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+.fade-text[data-fade-left] {
+  --fade-l: 22px;
+}
+.fade-text[data-fade-right] {
+  --fade-r: 22px;
+}
 
 /* The comments chip keeps its size; the × floats over the end of the text, which fades out beneath it. */
-.comments-chip .attachment-open.file, .comments-chip:hover .attachment-open.file, .comments-chip:focus-within .attachment-open.file { @apply pr-3; @apply [transition:--fade-r_0.15s_ease-out]; --fade-r: 0px; @apply [mask-image:linear-gradient(to_right,_#000_calc(100%_-_var(--fade-r)),_transparent_100%)]; }
-.comments-chip:hover .attachment-open.file, .comments-chip:focus-within .attachment-open.file { --fade-r: 34px; }
+.comments-chip .attachment-open.file,
+.comments-chip:hover .attachment-open.file,
+.comments-chip:focus-within .attachment-open.file {
+  @apply pr-3;
+  @apply [transition:--fade-r_0.15s_ease-out];
+  --fade-r: 0px;
+  @apply [mask-image:linear-gradient(to_right,_#000_calc(100%_-_var(--fade-r)),_transparent_100%)];
+}
+.comments-chip:hover .attachment-open.file,
+.comments-chip:focus-within .attachment-open.file {
+  --fade-r: 34px;
+}
 
 /* Comments chip: the × is a solid disc and the text fades out before it, so nothing shows through. */
-.comments-chip:hover .attachment-open.file, .comments-chip:focus-within .attachment-open.file { --fade-r: 56px; }
+.comments-chip:hover .attachment-open.file,
+.comments-chip:focus-within .attachment-open.file {
+  --fade-r: 56px;
+}
 
 /* Dropdown lists grow to fit their longest option (up to a limit) instead of cutting it off at the trigger's width; anything longer gets an ellipsis. */
-[data-slot="select-content"] { @apply w-[max-content]; @apply min-w-[160px]; @apply max-w-[min(320px,_calc(100vw_-_16px))]; }
-[data-slot="select-item"] > :first-child { @apply min-w-0; @apply shrink; @apply overflow-hidden; @apply text-ellipsis; @apply whitespace-nowrap; }
-[data-slot="select-item"] { @apply min-w-0; }
+[data-slot='select-content'] {
+  @apply w-[max-content];
+  @apply min-w-[160px];
+  @apply max-w-[min(320px,_calc(100vw_-_16px))];
+}
+[data-slot='select-item'] > :first-child {
+  @apply min-w-0;
+  @apply shrink;
+  @apply overflow-hidden;
+  @apply text-ellipsis;
+  @apply whitespace-nowrap;
+}
+[data-slot='select-item'] {
+  @apply min-w-0;
+}
 
 /* Settings navigation: an icon per page, search results that name the exact setting. */
-.settings-result-title mark { @apply [background:none]; @apply text-brand; @apply font-semibold; }
-@keyframes settings-flash { 0% { background: var(--accent-wash); box-shadow: 0 0 0 6px var(--accent-wash); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+.settings-result-title mark {
+  @apply [background:none];
+  @apply text-brand;
+  @apply font-semibold;
+}
+@keyframes settings-flash {
+  0% {
+    background: var(--accent-wash);
+    box-shadow: 0 0 0 6px var(--accent-wash);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
 
 /* Find in conversation. */
-::highlight(chat-find) { @apply [background-color:color-mix(in_srgb,_var(--accent)_32%,_transparent)]; @apply text-inherit; }
-::highlight(chat-find-current) { @apply [background-color:var(--accent)]; @apply [color:#fff]; }
+::highlight(chat-find) {
+  @apply [background-color:color-mix(in_srgb,_var(--accent)_32%,_transparent)];
+  @apply text-inherit;
+}
+::highlight(chat-find-current) {
+  @apply [background-color:var(--accent)];
+  @apply [color:#fff];
+}
 /* Split-mode markdown: what is selected on one side, marked on the other. */
-::highlight(md-sync) { @apply [background-color:color-mix(in_srgb,_var(--accent)_30%,_transparent)]; @apply text-inherit; }
+::highlight(md-sync) {
+  @apply [background-color:color-mix(in_srgb,_var(--accent)_30%,_transparent)];
+  @apply text-inherit;
+}
 
 /* A small, slow bounce keeps loading visible without distracting from the conversation. */
-@keyframes loading-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.35; } 30% { transform: translateY(-1.5px); opacity: 1; } }
+@keyframes loading-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-1.5px);
+    opacity: 1;
+  }
+}
 .jump-bottom {
   border: 1px solid var(--edge);
   color: var(--soft);
   background: color-mix(in srgb, var(--canvas) 88%, transparent);
   transition: background-color 120ms var(--ease);
 }
-.jump-bottom:hover:not(:disabled) { border-color: var(--edge); color: var(--soft); background: var(--raised); }
-.jump-bottom:active { translate: none; }
+.jump-bottom:hover:not(:disabled) {
+  border-color: var(--edge);
+  color: var(--soft);
+  background: var(--raised);
+}
+.jump-bottom:active {
+  translate: none;
+}
 /* The chat title is left-aligned inside its switcher, with the chevron right after the text. */
 
-.provider-binary-input { @apply flex; @apply items-center; @apply gap-2.5; }
-.provider-binary-input input { @apply min-w-0; @apply flex-1; }
+.provider-binary-input {
+  @apply flex;
+  @apply items-center;
+  @apply gap-2.5;
+}
+.provider-binary-input input {
+  @apply min-w-0;
+  @apply flex-1;
+}
 
 /* Shared primitives retain compact desktop sizing. */
-[data-slot='hover-card-portal'] > div { @apply z-1200; }
-@media (prefers-reduced-motion: reduce) { .turn-summary-panel { @apply [transition:none]; } }
-@media (prefers-reduced-motion: reduce) { .tool-disclosure-panel { @apply [transition:none]; } }
+[data-slot='hover-card-portal'] > div {
+  @apply z-1200;
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn-summary-panel {
+    @apply [transition:none];
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-disclosure-panel {
+    @apply [transition:none];
+  }
+}
 
 /* Sub-agents: a card where the main agent started one, a header chip while any still run, and a panel with each one's own conversation. */
-.task-status.running { @apply text-foreground; }
-.task-status.completed { @apply text-ok; }
-.task-status.failed { @apply text-bad; }
-.task-status.stopped { @apply text-muted-foreground; }
+.task-status.running {
+  @apply text-foreground;
+}
+.task-status.completed {
+  @apply text-ok;
+}
+.task-status.failed {
+  @apply text-bad;
+}
+.task-status.stopped {
+  @apply text-muted-foreground;
+}
 
 /* Agent and aside panels sit inside the chat's own width: a side drawer when there is room, the whole transcript when the chat pane is narrow. */
-@container transcript-frame (max-width: 560px) { .agent-panel { @apply w-full; @apply [border-left:0]; @apply [box-shadow:none]; } }
+@container transcript-frame (max-width: 560px) {
+  .agent-panel {
+    @apply w-full;
+    @apply [border-left:0];
+    @apply [box-shadow:none];
+  }
+}
 
 /* Context window meter in the composer. */
 
 /* Pending questions remain easy to find after their original turn finishes. */
-.question-card fieldset { @apply grid; @apply gap-2; @apply min-w-0; }
-.question-card fieldset > input { @apply w-full; }
-.elicitation-card fieldset { @apply [border:0]; @apply p-0; @apply m-[16px_0]; @apply min-w-0; }
-.elicitation-card legend { @apply mb-1.5; @apply text-control; }
-.elicitation-link a { @apply inline-flex; @apply items-center; @apply gap-1.5; @apply mr-2.5; }
-
-/* Interpolate real pane geometry so text stays crisp during layout changes. */
-@property --chat-share { syntax: '<length-percentage>'; inherits: false; initial-value: 100%; }
-:root { --motion-curve: cubic-bezier(.22, .8, .25, 1); }
-@media (prefers-reduced-motion: reduce) {
-  .task-body, .shell, .project-row, .task-row, .workspace-tool-buttons .icon, .overlay-scroll-area > [data-slot=scroll-area-scrollbar] { @apply [transition:none]; }
+.question-card fieldset {
+  @apply grid;
+  @apply gap-2;
+  @apply min-w-0;
+}
+.question-card fieldset > input {
+  @apply w-full;
+}
+.elicitation-card fieldset {
+  @apply [border:0];
+  @apply p-0;
+  @apply m-[16px_0];
+  @apply min-w-0;
+}
+.elicitation-card legend {
+  @apply mb-1.5;
+  @apply text-control;
+}
+.elicitation-link a {
+  @apply inline-flex;
+  @apply items-center;
+  @apply gap-1.5;
+  @apply mr-2.5;
 }
 
-
+/* Interpolate real pane geometry so text stays crisp during layout changes. */
+@property --chat-share {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 100%;
+}
+:root {
+  --motion-curve: cubic-bezier(0.22, 0.8, 0.25, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-body,
+  .shell,
+  .project-row,
+  .task-row,
+  .workspace-tool-buttons .icon,
+  .overlay-scroll-area > [data-slot='scroll-area-scrollbar'] {
+    @apply [transition:none];
+  }
+}
 
 /* One window bar over the whole width: native controls, the sidebar toggle beside them, then the title over the work area. */
 @media (prefers-reduced-motion: reduce) {
-  .shell .sidebar, .shell.no-sidebar .sidebar { @apply [transition:none]; }
+  .shell .sidebar,
+  .shell.no-sidebar .sidebar {
+    @apply [transition:none];
+  }
 }
 /* Window-bar actions (project actions, Open, Commit & push): filled 28px buttons; a split button's two halves share one shape. */
-@media (max-width: 1180px) { .window-actions .split-main > span, .window-actions .window-action > span { @apply hidden; } .window-actions .split-main, .window-actions .window-action { @apply p-[0_8px]; } }
-.danger-text, button.ghost.danger-text { @apply text-bad; }
-@media (max-width: 1100px) { .workspace-scope .project-switch-trigger { @apply max-w-[130px]; } }
+@media (max-width: 1180px) {
+  .window-actions .split-main > span,
+  .window-actions .window-action > span {
+    @apply hidden;
+  }
+  .window-actions .split-main,
+  .window-actions .window-action {
+    @apply p-[0_8px];
+  }
+}
+.danger-text,
+button.ghost.danger-text {
+  @apply text-bad;
+}
+@media (max-width: 1100px) {
+  .workspace-scope .project-switch-trigger {
+    @apply max-w-[130px];
+  }
+}
 
 /* One persistent terminal panel moves between grid cells without restarting shells. */
-@property --terminal-size { syntax: '<length-percentage>'; inherits: false; initial-value: 0px; }
-@media (prefers-reduced-motion: reduce) { .task-body, .task-body.with-editor { @apply [transition:none]; } }
+@property --terminal-size {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 0px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-body,
+  .task-body.with-editor {
+    @apply [transition:none];
+  }
+}
 
 /* Scroll fades remain inside the full-width conversation viewport. */
-@media (prefers-reduced-motion: reduce) { .transcript-frame::before, .transcript-frame::after { @apply [transition:none]; } }
+@media (prefers-reduced-motion: reduce) {
+  .transcript-frame::before,
+  .transcript-frame::after {
+    @apply [transition:none];
+  }
+}
 /* The window title follows the conversation edge while navigation controls stay fixed. */
-@media (prefers-reduced-motion: reduce) { .app-titlebar > .task-header { @apply [transition:none]; } }
+@media (prefers-reduced-motion: reduce) {
+  .app-titlebar > .task-header {
+    @apply [transition:none];
+  }
+}
 
 /* One commit action with a separate, keyboard-accessible options trigger. */
-button.scm-commit-menu { @apply relative; @apply w-7; @apply h-7; @apply [border:0]; @apply [border-radius:0_var(--radius-s)_var(--radius-s)_0]; }
-.scm-commit-menu::before { @apply [content:'']; @apply absolute; @apply left-0; @apply top-2; @apply bottom-2; @apply w-px; @apply [background:#ffffff40]; }
-button.scm-commit-menu:disabled { @apply [background:var(--primary)]; @apply [color:var(--primary-ink)]; @apply [opacity:.5]; }
-
+button.scm-commit-menu {
+  @apply relative;
+  @apply w-7;
+  @apply h-7;
+  @apply [border:0];
+  @apply [border-radius:0_var(--radius-s)_var(--radius-s)_0];
+}
+.scm-commit-menu::before {
+  @apply [content:''];
+  @apply absolute;
+  @apply left-0;
+  @apply top-2;
+  @apply bottom-2;
+  @apply w-px;
+  @apply [background:#ffffff40];
+}
+button.scm-commit-menu:disabled {
+  @apply [background:var(--primary)];
+  @apply [color:var(--primary-ink)];
+  @apply [opacity:.5];
+}
 
 /* Git section (branch, commits, stashes). One block: same 8px gutter and 28px rows as the lists above it. */
-button.git-inspector-heading { @apply flex-none; @apply w-auto; @apply justify-start; @apply gap-1.5; @apply h-7; @apply p-[0_6px_0_4px]; @apply [border:0]; @apply [background:none]; @apply text-foreground; @apply text-control; @apply font-semibold; }
-button.git-inspector-heading:hover:not(:disabled) { @apply [background:none]; @apply [border:0]; }
-button.git-inspector-heading > svg { @apply w-[13px]; @apply flex-none; }
+button.git-inspector-heading {
+  @apply flex-none;
+  @apply w-auto;
+  @apply justify-start;
+  @apply gap-1.5;
+  @apply h-7;
+  @apply p-[0_6px_0_4px];
+  @apply [border:0];
+  @apply [background:none];
+  @apply text-foreground;
+  @apply text-control;
+  @apply font-semibold;
+}
+button.git-inspector-heading:hover:not(:disabled) {
+  @apply [background:none];
+  @apply [border:0];
+}
+button.git-inspector-heading > svg {
+  @apply w-[13px];
+  @apply flex-none;
+}
 
 /* Commit graph: a dot per commit on one line. Filled dots are on the upstream; rings are not pushed yet. */
 
-.git-stashes .stash-row { @apply flex; @apply items-center; @apply gap-0.5; @apply min-h-7; @apply p-[0_4px_0_6px]; @apply rounded-(--radius-s); }
-.git-stashes .stash-row:hover, .git-stashes .stash-row:focus-within { @apply [background:var(--hover)]; }
-.git-stashes .stash-name { @apply flex; @apply items-center; @apply flex-1; @apply min-w-0; @apply gap-2; @apply text-soft; @apply text-caption; @apply cursor-default; }
-.git-stashes .stash-name svg { @apply flex-none; @apply text-muted-foreground; }
-.git-stashes .stash-name > span { @apply min-w-0; @apply overflow-hidden; @apply text-ellipsis; @apply whitespace-nowrap; }
-.git-stashes .stash-actions { @apply flex; @apply gap-0.5; @apply opacity-0; }
-.git-stashes .stash-row:hover .stash-actions, .git-stashes .stash-row:focus-within .stash-actions { @apply opacity-100; }
-button.git-stash-new { @apply w-full; @apply justify-start; @apply h-7; @apply min-h-7; @apply p-[0_6px]; @apply gap-2; @apply [border:0]; @apply [background:transparent]; @apply text-muted-foreground; @apply text-caption; }
-button.git-stash-new:hover:not(:disabled) { @apply [background:var(--hover)]; @apply [border:0]; @apply text-foreground; }
-
+.git-stashes .stash-row {
+  @apply flex;
+  @apply items-center;
+  @apply gap-0.5;
+  @apply min-h-7;
+  @apply p-[0_4px_0_6px];
+  @apply rounded-(--radius-s);
+}
+.git-stashes .stash-row:hover,
+.git-stashes .stash-row:focus-within {
+  @apply [background:var(--hover)];
+}
+.git-stashes .stash-name {
+  @apply flex;
+  @apply items-center;
+  @apply flex-1;
+  @apply min-w-0;
+  @apply gap-2;
+  @apply text-soft;
+  @apply text-caption;
+  @apply cursor-default;
+}
+.git-stashes .stash-name svg {
+  @apply flex-none;
+  @apply text-muted-foreground;
+}
+.git-stashes .stash-name > span {
+  @apply min-w-0;
+  @apply overflow-hidden;
+  @apply text-ellipsis;
+  @apply whitespace-nowrap;
+}
+.git-stashes .stash-actions {
+  @apply flex;
+  @apply gap-0.5;
+  @apply opacity-0;
+}
+.git-stashes .stash-row:hover .stash-actions,
+.git-stashes .stash-row:focus-within .stash-actions {
+  @apply opacity-100;
+}
+button.git-stash-new {
+  @apply w-full;
+  @apply justify-start;
+  @apply h-7;
+  @apply min-h-7;
+  @apply p-[0_6px];
+  @apply gap-2;
+  @apply [border:0];
+  @apply [background:transparent];
+  @apply text-muted-foreground;
+  @apply text-caption;
+}
+button.git-stash-new:hover:not(:disabled) {
+  @apply [background:var(--hover)];
+  @apply [border:0];
+  @apply text-foreground;
+}
 
 /* Toasts (shadcn Toast, composed in components/app-toaster): above the status bar on the right, on Ramu's floating surface. */
-[data-slot='toast'] { @apply [background:var(--float-bg)]; @apply [-webkit-backdrop-filter:var(--float-blur)]; @apply [backdrop-filter:var(--float-blur)]; @apply [border-color:var(--edge)]; @apply rounded-(--radius-l); @apply [box-shadow:var(--shadow-float)]; @apply text-foreground; @apply select-text; }
-[data-slot='toast-content'] { @apply p-[14px_14px_14px_16px]; @apply items-center; }
-[data-slot='toast-icon'] { @apply self-start; @apply mt-0.5; @apply text-muted-foreground; }
-[data-slot='toast-title'], [data-slot='toast-description'] { @apply m-0; }
+[data-slot='toast'] {
+  @apply [background:var(--float-bg)];
+  @apply [-webkit-backdrop-filter:var(--float-blur)];
+  @apply [backdrop-filter:var(--float-blur)];
+  @apply [border-color:var(--edge)];
+  @apply rounded-(--radius-l);
+  @apply [box-shadow:var(--shadow-float)];
+  @apply text-foreground;
+  @apply select-text;
+}
+[data-slot='toast-content'] {
+  @apply p-[14px_14px_14px_16px];
+  @apply items-center;
+}
+[data-slot='toast-icon'] {
+  @apply self-start;
+  @apply mt-0.5;
+  @apply text-muted-foreground;
+}
+[data-slot='toast-title'],
+[data-slot='toast-description'] {
+  @apply m-0;
+}
 /* The close button is shadcn's ghost icon button; Ramu's base button fill would otherwise show behind it. */
-[data-slot='toast-action'] { @apply [background:var(--fill)]; @apply [border-color:transparent]; @apply text-foreground; }
-[data-slot='toast-action']:hover:not(:disabled) { @apply [background:var(--fill-hover)]; }
-[data-slot='toast-close'] { @apply [background:transparent]; @apply text-muted-foreground; }
-[data-slot='toast-close']:hover:not(:disabled) { @apply [background:var(--fill-hover)]; @apply text-foreground; }
-[data-slot='toast-title'] { @apply text-body; @apply font-medium; @apply leading-[20px]; @apply [overflow-wrap:anywhere]; }
-[data-slot='toast-description'] { @apply text-control; @apply text-muted-foreground; @apply leading-[18px]; @apply [overflow-wrap:anywhere]; }
+[data-slot='toast-action'] {
+  @apply [background:var(--fill)];
+  @apply [border-color:transparent];
+  @apply text-foreground;
+}
+[data-slot='toast-action']:hover:not(:disabled) {
+  @apply [background:var(--fill-hover)];
+}
+[data-slot='toast-close'] {
+  @apply [background:transparent];
+  @apply text-muted-foreground;
+}
+[data-slot='toast-close']:hover:not(:disabled) {
+  @apply [background:var(--fill-hover)];
+  @apply text-foreground;
+}
+[data-slot='toast-title'] {
+  @apply text-body;
+  @apply font-medium;
+  @apply leading-[20px];
+  @apply [overflow-wrap:anywhere];
+}
+[data-slot='toast-description'] {
+  @apply text-control;
+  @apply text-muted-foreground;
+  @apply leading-[18px];
+  @apply [overflow-wrap:anywhere];
+}
 
 /* shadcn components size every unsized icon to 16px; an icon given an explicit lucide size keeps it.
    Lucide writes width="24" even with no size prop, so its default is left to the component's own sizing.
    Zero specificity, so any Ramu rule that sizes an icon still wins. */
-:where([data-slot] svg.lucide[width]:not([width='24'], [class*='size-'])) { @apply w-[attr(width_px)]; @apply h-[attr(height_px)]; }
+:where([data-slot] svg.lucide[width]:not([width='24'], [class*='size-'])) {
+  @apply w-[attr(width_px)];
+  @apply h-[attr(height_px)];
+}
 
 /* Empty states (shadcn Empty): no outline, in keeping with the borderless surfaces; a readable title. */
-[data-slot='empty'] { @apply [border:0]; }
-[data-slot='empty-title'] { @apply text-heading; @apply font-semibold; }
-[data-slot='empty-description'] { @apply max-w-[420px]; }
+[data-slot='empty'] {
+  @apply [border:0];
+}
+[data-slot='empty-title'] {
+  @apply text-heading;
+  @apply font-semibold;
+}
+[data-slot='empty-description'] {
+  @apply max-w-[420px];
+}
 
 /* Close and clear icons share one size and weight wherever they appear. */
-:is(.tab-close, .comments-chip-x, .attachment-remove, .search-clear, .terminal-tab-close, .settings-page-header button.icon, .schedule-card-title button.icon) > svg { @apply w-[var(--icon-compact)]; @apply h-[var(--icon-compact)]; @apply [stroke-width:2]; }
+:is(
+    .tab-close,
+    .comments-chip-x,
+    .attachment-remove,
+    .search-clear,
+    .terminal-tab-close,
+    .settings-page-header button.icon,
+    .schedule-card-title button.icon
+  )
+  > svg {
+  @apply w-[var(--icon-compact)];
+  @apply h-[var(--icon-compact)];
+  @apply [stroke-width:2];
+}
 
 /* Agent and aside panels dock beside the transcript (it shrinks, nothing is covered) and are separated by one hairline, no shadow. */
-@container transcript-frame (max-width: 560px) { .transcript-frame > .agent-panel { @apply absolute; @apply inset-0; @apply w-full; @apply [border-left:0]; } }
+@container transcript-frame (max-width: 560px) {
+  .transcript-frame > .agent-panel {
+    @apply absolute;
+    @apply inset-0;
+    @apply w-full;
+    @apply [border-left:0];
+  }
+}
 
 /* Agent and aside panels run the full height of the chat, beside the transcript and the message box, which both narrow to make room. */
-@container agent-split (max-width: 560px) { .agent-split > .agent-panel { @apply absolute; @apply inset-0; @apply w-full; @apply [border-left:0]; } }
+@container agent-split (max-width: 560px) {
+  .agent-split > .agent-panel {
+    @apply absolute;
+    @apply inset-0;
+    @apply w-full;
+    @apply [border-left:0];
+  }
+}
 
 /* Narrow chats overlay the dock; shared panel motion animates its surface without moving layout. */
 @container agent-split (max-width: 560px) {
-  .agent-dock { @apply absolute; @apply inset-0; @apply z-6; @apply w-full; @apply [transform:translateX(100%)]; @apply [transition:none]; }
-  .agent-dock.open { @apply w-full; @apply [transform:none]; }
-  .agent-dock > .agent-panel { @apply w-full; @apply [border-left:0]; }
+  .agent-dock {
+    @apply absolute;
+    @apply inset-0;
+    @apply z-6;
+    @apply w-full;
+    @apply [transform:translateX(100%)];
+    @apply [transition:none];
+  }
+  .agent-dock.open {
+    @apply w-full;
+    @apply [transform:none];
+  }
+  .agent-dock > .agent-panel {
+    @apply w-full;
+    @apply [border-left:0];
+  }
 }
-@media (prefers-reduced-motion: reduce) { .agent-dock { @apply [transition:none]; } }
+@media (prefers-reduced-motion: reduce) {
+  .agent-dock {
+    @apply [transition:none];
+  }
+}
 
 /* A folder dragged over the project list: one outline says it will be added as a project. */
-.tasks-panel.folder-drop { @apply [outline:2px_dashed_var(--accent)]; @apply [outline-offset:-4px]; @apply rounded-(--radius-m); @apply [background:var(--accent-wash)]; }
-
+.tasks-panel.folder-drop {
+  @apply [outline:2px_dashed_var(--accent)];
+  @apply [outline-offset:-4px];
+  @apply rounded-(--radius-m);
+  @apply [background:var(--accent-wash)];
+}
 
 /* Transcript text shares one size: messages, tool rows, thinking, tool output and sub-agent cards all follow the chat size. Timestamps and hover meta stay small. */
-:is(.msg.user, .msg.assistant, .tool, .tool-name, .tool-card-title, .tool-card .tool-output, .thinking-body, .agent-task-detail, .compaction-separator, .turn-summary-body) { @apply text-chat; }
+:is(
+  .msg.user,
+  .msg.assistant,
+  .tool,
+  .tool-name,
+  .tool-card-title,
+  .tool-card .tool-output,
+  .thinking-body,
+  .agent-task-detail,
+  .compaction-separator,
+  .turn-summary-body
+) {
+  @apply text-chat;
+}
 
 /* Goal. In progress: the first row of the composer tray, actions as icons. Finished: a quiet transcript row like the turn's tool rows. */
-@media (prefers-reduced-motion: reduce) { .goal-summary .caret { @apply [transition:none]; } }
+@media (prefers-reduced-motion: reduce) {
+  .goal-summary .caret {
+    @apply [transition:none];
+  }
+}
 
 /* Files a turn changed: one quiet surface like Home's chat list, hairlines between parts only. */
-.chat-changes-expand svg { @apply [transition:transform_150ms_var(--ease)]; }
-.chat-changes-expand svg.expanded { @apply [transform:rotate(180deg)]; }
-@container (max-width: 480px) { .chat-changes-heading { @apply flex-wrap; } .chat-changes-actions { @apply ml-auto; } }
+.chat-changes-expand svg {
+  @apply [transition:transform_150ms_var(--ease)];
+}
+.chat-changes-expand svg.expanded {
+  @apply [transform:rotate(180deg)];
+}
+@container (max-width: 480px) {
+  .chat-changes-heading {
+    @apply flex-wrap;
+  }
+  .chat-changes-actions {
+    @apply ml-auto;
+  }
+}
 
 /* Changes tab: one sticky toolbar, a file tree beside the diffs when there is room, file cards on the same surface as the chat's changes card.
    Breakpoints follow the pane (container), not the window, because the tab is usually docked beside a chat. */
 @container (max-width: 720px) {
-  .review-split { @apply [grid-template-columns:minmax(0,_1fr)]; @apply gap-3; }
-  .review-tree { @apply [position:static]; @apply max-h-[240px]; @apply p-2; @apply rounded-(--radius-m); @apply [background:var(--raised-2)]; }
-  .review-file-heading .review-nav { @apply hidden; }
+  .review-split {
+    @apply [grid-template-columns:minmax(0,_1fr)];
+    @apply gap-3;
+  }
+  .review-tree {
+    @apply [position:static];
+    @apply max-h-[240px];
+    @apply p-2;
+    @apply rounded-(--radius-m);
+    @apply [background:var(--raised-2)];
+  }
+  .review-file-heading .review-nav {
+    @apply hidden;
+  }
 }
-@container (max-width: 520px) { .review-viewed-progress, .review-bar-date { @apply hidden; } }
+@container (max-width: 520px) {
+  .review-viewed-progress,
+  .review-bar-date {
+    @apply hidden;
+  }
+}
 /* Extra live-state chips and buttons shrink before the file's own controls get pushed out of a docked pane. */
-@container (max-width: 520px) { .review-viewed > span[aria-hidden] { @apply hidden; } }
+@container (max-width: 520px) {
+  .review-viewed > span[aria-hidden] {
+    @apply hidden;
+  }
+}
 
 /* Reset confirmations sit above the Settings dialog that opened them. */
-[data-slot='alert-dialog-overlay'] { @apply z-1180; }
-[data-slot='alert-dialog-content'] { @apply z-1181; }
+[data-slot='alert-dialog-overlay'] {
+  @apply z-1180;
+}
+[data-slot='alert-dialog-content'] {
+  @apply z-1181;
+}
 
 /* Monaco and diff surfaces follow the same smoothing preference as the interface. */
-.monaco-editor, .monaco-diff-editor, .monaco-component { -webkit-font-smoothing: inherit; -moz-osx-font-smoothing: inherit; }
+.monaco-editor,
+.monaco-diff-editor,
+.monaco-component {
+  -webkit-font-smoothing: inherit;
+  -moz-osx-font-smoothing: inherit;
+}
 
 /* Keep Monaco scrollbars/widgets beneath the sticky review headers. */
-.review-diff-wrap { @apply relative z-0 isolate; }
+.review-diff-wrap {
+  @apply relative z-0 isolate;
+}
 
 /* Branch names size the trigger naturally; long names stop at the status-bar limit. */
-[data-slot="select-trigger"].branch-picker {
+[data-slot='select-trigger'].branch-picker {
   width: fit-content;
   min-width: 0;
   max-width: 220px;
   flex: 0 1 auto;
 }
-.branch-picker > [data-slot="select-value"] {
+.branch-picker > [data-slot='select-value'] {
   display: block;
   flex: 0 1 auto;
   min-width: 0;
@@ -703,29 +1868,64 @@ button.git-stash-new:hover:not(:disabled) { @apply [background:var(--hover)]; @a
   white-space: nowrap;
 }
 /* Staged / Changes headers stay pinned while their rows scroll, so each group keeps its title and actions in reach. */
-.scm-repo { --scm-surface: var(--sidebar); }
-.workspace-tools .scm-repo { --scm-surface: var(--canvas); }
-.scm-repo .sub-title { position: sticky; top: 0; z-index: 3; background: var(--scm-surface); padding-top: 2px; padding-bottom: 2px; }
+.scm-repo {
+  --scm-surface: var(--sidebar);
+}
+.workspace-tools .scm-repo {
+  --scm-surface: var(--canvas);
+}
+.scm-repo .sub-title {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--scm-surface);
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
 /* Compact repositories share the outer list viewport so section headings stick within it. */
 
 /* Panel geometry changes immediately: animated tracks repeatedly reflow the transcript,
    Monaco and xterm, and send a terminal resize for each intermediate frame. */
-[data-workspace-split], [data-group] > [data-panel] {
+[data-workspace-split],
+[data-group] > [data-panel] {
   transition: none;
 }
 
 /* VS Code-style sash: delayed hover, immediate drag/focus, no geometry change. */
 .pane-sash::before {
-  content: ''; position: absolute; z-index: 1; pointer-events: none;
-  inset: 0 -1.5px; background: var(--pane-border-active); opacity: 0;
+  content: '';
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  inset: 0 -1.5px;
+  background: var(--pane-border-active);
+  opacity: 0;
   transition: opacity 100ms ease-out;
 }
-.pane-sash[aria-orientation="horizontal"]::before { inset: -1.5px 0; }
-.pane-sash:hover::before { opacity: 1; transition: opacity 100ms ease-out 300ms; }
-.pane-sash:is([data-separator="active"], [data-sash-active], :focus-visible)::before { opacity: 1; transition: opacity 100ms ease-out 0ms; }
-.pane-sash[data-disabled]::before { opacity: 0; }
-.workspace-rail > .pane-sash::before { inset: 0 1px; }
-.tabs-right .terminal-tab-scroll { order: 1; }
+.pane-sash[aria-orientation='horizontal']::before {
+  inset: -1.5px 0;
+}
+.pane-sash:hover::before {
+  opacity: 1;
+  transition: opacity 100ms ease-out 300ms;
+}
+.pane-sash:is([data-separator='active'], [data-sash-active], :focus-visible)::before {
+  opacity: 1;
+  transition: opacity 100ms ease-out 0ms;
+}
+.pane-sash[data-disabled]::before {
+  opacity: 0;
+}
+.workspace-rail > .pane-sash::before {
+  inset: 0 1px;
+}
+.tabs-right .terminal-tab-scroll {
+  order: 1;
+}
 /* Detached workspaces keep their state without spending work on off-screen layout and animation. */
-html[data-workspace-hidden] body { content-visibility: hidden; }
-html[data-workspace-hidden] * { animation-play-state: paused !important; }
+html[data-workspace-hidden] body {
+  content-visibility: hidden;
+}
+html[data-workspace-hidden] * {
+  animation-play-state: paused !important;
+}

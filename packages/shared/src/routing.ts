@@ -1,4 +1,14 @@
-import type { AgentModel, AgentProvider, AgentSettings, FallbackStep, ProviderCatalog, ReasoningEffort, SubagentPreferences, SwitchThreshold, UsageReading } from './types'
+import type {
+  AgentModel,
+  AgentProvider,
+  AgentSettings,
+  FallbackStep,
+  ProviderCatalog,
+  ReasoningEffort,
+  SubagentPreferences,
+  SwitchThreshold,
+  UsageReading,
+} from './types'
 import { providerName } from './providers'
 
 // One place decides where a chat or sub-agent continues when a provider's plan is nearly used up.
@@ -14,7 +24,13 @@ export const stepKey = (step: { provider: AgentProvider; model: string }) => `${
 export function defaultOrder(catalogs: ProviderCatalog[]): FallbackStep[] {
   return (['claude-code', 'codex'] as const).map((provider) => {
     const model = catalogs.find((catalog) => catalog.provider === provider)?.models.find((entry) => entry.isDefault)
-    return { id: `default-${provider}`, provider, model: model?.id ?? '', effort: model?.defaultEffort ?? null, serviceTier: 'standard' }
+    return {
+      id: `default-${provider}`,
+      provider,
+      model: model?.id ?? '',
+      effort: model?.defaultEffort ?? null,
+      serviceTier: 'standard',
+    }
   })
 }
 
@@ -31,9 +47,17 @@ export function readingCounts(reading: UsageReading, now: number): boolean {
 }
 
 /** The fullest window that applies to this provider and model, or undefined when nothing is known. */
-export function peakFor(usage: UsageReading[], provider: AgentProvider, model: string, now = Date.now()): UsageReading | undefined {
-  return usage.filter((reading) => reading.provider === provider && appliesTo(reading, model) && readingCounts(reading, now))
-    .sort((a, b) => (b.status === 'limited' ? 1 : 0) - (a.status === 'limited' ? 1 : 0) || b.usedPercent - a.usedPercent)[0]
+export function peakFor(
+  usage: UsageReading[],
+  provider: AgentProvider,
+  model: string,
+  now = Date.now(),
+): UsageReading | undefined {
+  return usage
+    .filter((reading) => reading.provider === provider && appliesTo(reading, model) && readingCounts(reading, now))
+    .sort(
+      (a, b) => (b.status === 'limited' ? 1 : 0) - (a.status === 'limited' ? 1 : 0) || b.usedPercent - a.usedPercent,
+    )[0]
 }
 
 export function isOver(reading: UsageReading | undefined, switchAt: SwitchThreshold): boolean {
@@ -45,16 +69,29 @@ export function nearestEffort(wanted: ReasoningEffort | null, model: AgentModel)
   if (!wanted) return model.defaultEffort
   if (model.efforts.includes(wanted)) return wanted
   const at = EFFORT_ORDER.indexOf(wanted)
-  return [...model.efforts].sort((a, b) => Math.abs(EFFORT_ORDER.indexOf(a) - at) - Math.abs(EFFORT_ORDER.indexOf(b) - at) || EFFORT_ORDER.indexOf(a) - EFFORT_ORDER.indexOf(b))[0] ?? model.defaultEffort
+  return (
+    [...model.efforts].sort(
+      (a, b) =>
+        Math.abs(EFFORT_ORDER.indexOf(a) - at) - Math.abs(EFFORT_ORDER.indexOf(b) - at) ||
+        EFFORT_ORDER.indexOf(a) - EFFORT_ORDER.indexOf(b),
+    )[0] ?? model.defaultEffort
+  )
 }
 
 /** Fills in the default model and maps the effort onto what the model supports; null when the model is not available. */
 export function resolveStep(step: FallbackStep, catalogs: ProviderCatalog[]): FallbackStep | null {
   const models = catalogs.find((catalog) => catalog.provider === step.provider)?.models ?? []
-  const model = models.find((entry) => step.model ? entry.id === step.model : entry.isDefault) ?? (step.model ? undefined : models[0])
+  const model =
+    models.find((entry) => (step.model ? entry.id === step.model : entry.isDefault)) ??
+    (step.model ? undefined : models[0])
   if (!model) return null
   const fast = model.serviceTiers?.some((tier) => tier === 'fast' || tier === 'priority')
-  return { ...step, model: model.id, effort: nearestEffort(step.effort, model), serviceTier: fast ? step.serviceTier ?? 'standard' : 'standard' }
+  return {
+    ...step,
+    model: model.id,
+    effort: nearestEffort(step.effort, model),
+    serviceTier: fast ? (step.serviceTier ?? 'standard') : 'standard',
+  }
 }
 
 export interface RouteContext {
@@ -81,7 +118,11 @@ export function nextStep(chain: FallbackStep[], context: RouteContext): Fallback
 }
 
 /** peak is the reading that forced the move; a move up to a higher-ranked entry has none. */
-export interface RouteDecision { step: FallbackStep; reason: string; peak?: UsageReading }
+export interface RouteDecision {
+  step: FallbackStep
+  reason: string
+  peak?: UsageReading
+}
 
 export function windowName(reading: UsageReading): string {
   const base = reading.window === 'five_hour' ? '5-hour' : reading.window === 'monthly' ? 'monthly' : 'weekly'
@@ -89,7 +130,9 @@ export function windowName(reading: UsageReading): string {
 }
 
 export function limitReason(provider: AgentProvider, peak: UsageReading): string {
-  const reset = peak.resetsAt ? ` (resets ${new Date(peak.resetsAt).toLocaleString(undefined, peak.resetsAt - Date.now() > 20 * 3600_000 ? { weekday: 'short', hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' })})` : ''
+  const reset = peak.resetsAt
+    ? ` (resets ${new Date(peak.resetsAt).toLocaleString(undefined, peak.resetsAt - Date.now() > 20 * 3600_000 ? { weekday: 'short', hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' })})`
+    : ''
   return `${providerName(provider)}'s ${windowName(peak)} limit ${peak.status === 'limited' ? 'was reached' : `was at ${peak.usedPercent}%`}${reset}`
 }
 
@@ -98,13 +141,20 @@ export function limitReason(provider: AgentProvider, peak: UsageReading): string
  * or, with `promote`, a higher-ranked entry than the chat's own once it has room.
  * Null means send as planned: fallback is off, nothing is better, or the chat's model is not in the order.
  */
-export function planRoute(settings: Pick<AgentSettings, 'provider' | 'model' | 'autoFallback'>, order: FallbackStep[], context: RouteContext): RouteDecision | null {
+export function planRoute(
+  settings: Pick<AgentSettings, 'provider' | 'model' | 'autoFallback'>,
+  order: FallbackStep[],
+  context: RouteContext,
+): RouteDecision | null {
   if (!settings.autoFallback) return null
   // An empty model means the provider's default: look up which model that is, so model-specific windows and attempts match.
-  const model = resolveStep({ id: '', provider: settings.provider, model: settings.model, effort: null }, context.catalogs)?.model ?? settings.model
+  const model =
+    resolveStep({ id: '', provider: settings.provider, model: settings.model, effort: null }, context.catalogs)
+      ?.model ?? settings.model
   const current = stepKey({ provider: settings.provider, model })
   const attempted = new Set(context.attempted ?? [])
-  attempted.add(stepKey(settings)); attempted.add(current)
+  attempted.add(stepKey(settings))
+  attempted.add(current)
   const peak = peakFor(context.usage, settings.provider, model, context.now)
   if (peak && isOver(peak, context.switchAt)) {
     const step = nextStep(order, { ...context, attempted })
@@ -112,7 +162,10 @@ export function planRoute(settings: Pick<AgentSettings, 'provider' | 'model' | '
   }
   if (!context.promote) return null
   // A model outside the order is the user's own choice; it stays until it runs out.
-  const rank = order.findIndex((entry) => { const step = resolveStep(entry, context.catalogs); return !!step && stepKey(step) === current })
+  const rank = order.findIndex((entry) => {
+    const step = resolveStep(entry, context.catalogs)
+    return !!step && stepKey(step) === current
+  })
   if (rank <= 0) return null
   const step = nextStep(order.slice(0, rank), { ...context, attempted })
   return step ? { step, reason: 'A higher-ranked model has room' } : null
@@ -120,34 +173,58 @@ export function planRoute(settings: Pick<AgentSettings, 'provider' | 'model' | '
 
 /** `provider:model` for a chat's settings, with the provider's default model filled in. */
 export function settingsKey(settings: Pick<AgentSettings, 'provider' | 'model'>, catalogs: ProviderCatalog[]): string {
-  return stepKey({ provider: settings.provider, model: resolveStep({ id: '', provider: settings.provider, model: settings.model, effort: null }, catalogs)?.model ?? settings.model })
+  return stepKey({
+    provider: settings.provider,
+    model:
+      resolveStep({ id: '', provider: settings.provider, model: settings.model, effort: null }, catalogs)?.model ??
+      settings.model,
+  })
 }
 
 /** A sub-agent's order: its own when configured as separate, else the main order. */
 export function subagentOrder(prefs: SubagentPreferences, mainOrder: FallbackStep[]): FallbackStep[] {
-  return prefs.fallback === 'separate' ? prefs.order ?? mainOrder : mainOrder
+  return prefs.fallback === 'separate' ? (prefs.order ?? mainOrder) : mainOrder
 }
 
 /**
  * Which step a new sub-agent should use, or null for the provider's native sub-agents.
  * Type rules win over the mode; a rule or mode that says native keeps native.
  */
-export function subagentTarget(prefs: SubagentPreferences, parentProvider: AgentProvider, type: string | undefined): FallbackStep | null {
-  const rule = type ? prefs.byType.find((entry) => entry.type.trim() && entry.type.trim().toLowerCase() === type.trim().toLowerCase()) : undefined
+export function subagentTarget(
+  prefs: SubagentPreferences,
+  parentProvider: AgentProvider,
+  type: string | undefined,
+): FallbackStep | null {
+  const rule = type
+    ? prefs.byType.find((entry) => entry.type.trim() && entry.type.trim().toLowerCase() === type.trim().toLowerCase())
+    : undefined
   if (rule) return rule.step
   if (prefs.mode === 'single') return prefs.single
   if (prefs.mode === 'per-provider') return prefs.perProvider[parentProvider] ?? null
   return null
 }
 
-export const accountKey = (provider: AgentProvider, accountId: string | undefined) => `${provider}:${accountId || 'default'}`
+export const accountKey = (provider: AgentProvider, accountId: string | undefined) =>
+  `${provider}:${accountId || 'default'}`
 
 /**
  * The next login of the same provider to continue on: the first of `accounts` that is not the chat's own, not tried yet
  * and under the threshold. `usage` holds readings for every account; an account with no reading is assumed to have room.
  */
-export function nextAccount(settings: Pick<AgentSettings, 'provider' | 'model' | 'accountId'>, accounts: string[], context: { usage: UsageReading[]; catalogs: ProviderCatalog[]; switchAt: SwitchThreshold; now?: number; attempted?: ReadonlySet<string> }): string | null {
-  const model = resolveStep({ id: '', provider: settings.provider, model: settings.model, effort: null }, context.catalogs)?.model ?? settings.model
+export function nextAccount(
+  settings: Pick<AgentSettings, 'provider' | 'model' | 'accountId'>,
+  accounts: string[],
+  context: {
+    usage: UsageReading[]
+    catalogs: ProviderCatalog[]
+    switchAt: SwitchThreshold
+    now?: number
+    attempted?: ReadonlySet<string>
+  },
+): string | null {
+  const model =
+    resolveStep({ id: '', provider: settings.provider, model: settings.model, effort: null }, context.catalogs)
+      ?.model ?? settings.model
   const current = settings.accountId || 'default'
   for (const account of accounts) {
     if (account === current || context.attempted?.has(accountKey(settings.provider, account))) continue

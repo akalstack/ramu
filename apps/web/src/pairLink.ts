@@ -2,6 +2,16 @@
 let pending: string | null = null
 const EVENT = 'ramu:pair-link'
 
-export function offerPairLink(link: string) { pending = link; window.dispatchEvent(new Event(EVENT)) }
-export function takePairLink(): string | null { const link = pending; pending = null; return link }
-export function onPairLink(listener: () => void) { window.addEventListener(EVENT, listener); return () => window.removeEventListener(EVENT, listener) }
+export function offerPairLink(link: string) {
+  pending = link
+  window.dispatchEvent(new Event(EVENT))
+}
+export function takePairLink(): string | null {
+  const link = pending
+  pending = null
+  return link
+}
+export function onPairLink(listener: () => void) {
+  window.addEventListener(EVENT, listener)
+  return () => window.removeEventListener(EVENT, listener)
+}

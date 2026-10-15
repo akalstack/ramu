@@ -22,29 +22,37 @@ function Navigator() {
   const router = useRouter()
   return (
     <StartupScreen ready={store.ready}>
-      {store.error ? <Pressable accessibilityRole="button" onPress={store.dismissError} style={{ backgroundColor: c.badWash, padding: 14, paddingTop: 50 }}><T tone="bad">{store.error} · tap to dismiss</T></Pressable> : null}
+      {store.error ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={store.dismissError}
+          style={{ backgroundColor: c.badWash, padding: 14, paddingTop: 50 }}
+        >
+          <T tone="bad">{store.error} · tap to dismiss</T>
+        </Pressable>
+      ) : null}
       <NoticeBanner />
       <ActivityTray />
       <PushRouting />
       <LiveActivityMonitor />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <NavigationThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: Platform.OS !== 'web', contentStyle: { backgroundColor: c.window } }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="activity" />
-        <Stack.Screen name="chat/[id]/index" />
-        <Stack.Screen name="chat/[id]/changes" />
-        <Stack.Screen name="chat/[id]/file" />
-        <Stack.Screen name="chat/[id]/aside" />
-        <Stack.Screen name="chat/[id]/terminal" />
-        <Stack.Screen name="terminal" />
-        <Stack.Screen name="chat/[id]/scm" />
-        <Stack.Screen name="new" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="computers" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="folders" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="pair" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
-      </Stack>
+        <Stack screenOptions={{ headerShown: Platform.OS !== 'web', contentStyle: { backgroundColor: c.window } }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="activity" />
+          <Stack.Screen name="chat/[id]/index" />
+          <Stack.Screen name="chat/[id]/changes" />
+          <Stack.Screen name="chat/[id]/file" />
+          <Stack.Screen name="chat/[id]/aside" />
+          <Stack.Screen name="chat/[id]/terminal" />
+          <Stack.Screen name="terminal" />
+          <Stack.Screen name="chat/[id]/scm" />
+          <Stack.Screen name="new" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="computers" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="folders" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="pair" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+        </Stack>
       </NavigationThemeProvider>
     </StartupScreen>
   )

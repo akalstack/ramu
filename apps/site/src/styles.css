@@ -143,7 +143,9 @@ a {
   text-decoration: none;
   padding: 6px 10px;
   border-radius: var(--radius-s);
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 .nav-links a:hover {
   color: var(--text);
@@ -304,7 +306,9 @@ main > section {
   background: var(--window);
   border: 1px solid var(--line-strong);
   border-radius: calc(var(--radius-l) + 6px);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.45),
+    0 1px 3px rgba(0, 0, 0, 0.3);
   font-size: 14px;
 }
 @media (max-width: 860px) {
@@ -500,7 +504,9 @@ main > section {
   height: 100%;
   background: var(--primary);
   border-radius: 2px;
-  transition: width 0.8s var(--ease), background 0.3s;
+  transition:
+    width 0.8s var(--ease),
+    background 0.3s;
 }
 .is-limited .meter-fill {
   background: var(--bad);

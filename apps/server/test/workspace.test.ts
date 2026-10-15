@@ -1,5 +1,14 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -71,19 +80,32 @@ describe('project-free chat files', () => {
     symlinkSync(join(cwd, 'keep.txt'), join(cwd, 'link.txt'))
     mkdirSync(join(cwd, 'folder'))
     writeFileSync(join(cwd, 'folder', 'nested.txt'), 'Delete this folder')
-    const dispatcher = createDispatcher({ userData: join(tmp, 'profile'), send: () => {}, native: async () => { throw new Error('Deletion must not need a desktop action') } }, { workspace: ws } as Services)
+    const dispatcher = createDispatcher(
+      {
+        userData: join(tmp, 'profile'),
+        send: () => {},
+        native: async () => {
+          throw new Error('Deletion must not need a desktop action')
+        },
+      },
+      { workspace: ws } as Services,
+    )
     try {
       await dispatcher.invoke('files.delete', [task.id, binding.repoId, 'link.txt'])
       expect(existsSync(join(cwd, 'link.txt'))).toBe(false)
       expect(readFileSync(join(cwd, 'keep.txt'), 'utf8')).toBe('Keep the symlink target')
       await dispatcher.invoke('files.delete', [task.id, binding.repoId, 'folder'])
       expect(existsSync(join(cwd, 'folder'))).toBe(false)
-      await expect(dispatcher.invoke('files.delete', [task.id, binding.repoId, ''])).rejects.toThrow('root cannot be deleted')
+      await expect(dispatcher.invoke('files.delete', [task.id, binding.repoId, ''])).rejects.toThrow(
+        'root cannot be deleted',
+      )
       await expect(dispatcher.invoke('files.delete', [task.id, binding.repoId, '../'])).rejects.toThrow(PathEscapeError)
       expect(existsSync(cwd)).toBe(true)
       await dispatcher.invoke('files.delete', [task.id, binding.repoId, 'keep.txt'])
       expect(existsSync(join(cwd, 'keep.txt'))).toBe(false)
-    } finally { dispatcher.close() }
+    } finally {
+      dispatcher.close()
+    }
   })
 
   it('exposes the agent folder for editing and context, with a separate persistent folder per chat', async () => {
@@ -102,17 +124,31 @@ describe('project-free chat files', () => {
     expect(ws.fileBindings(first.id)[0]!.cwd).toBe(binding!.cwd)
     expect(await listFolderFiles(binding!.cwd)).toEqual(['notes.md'])
     expect(await listFolderFiles(other!.cwd)).toEqual([])
-    expect(await withContext(ws, first.id, 'Use these notes', [{ repoId: binding!.repoId, path: 'notes.md', source: 'mention' }])).toContain('Edited notes')
-    const dispatcher = createDispatcher({ userData: join(tmp, 'profile'), send: () => {}, native: async () => undefined }, { workspace: ws } as Services)
+    expect(
+      await withContext(ws, first.id, 'Use these notes', [
+        { repoId: binding!.repoId, path: 'notes.md', source: 'mention' },
+      ]),
+    ).toContain('Edited notes')
+    const dispatcher = createDispatcher(
+      { userData: join(tmp, 'profile'), send: () => {}, native: async () => undefined },
+      { workspace: ws } as Services,
+    )
     try {
       expect(await dispatcher.invoke('tasks.bindings', [first.id])).toEqual([binding])
       expect(await dispatcher.invoke('files.all', [first.id])).toEqual([{ repoId: 'general', path: 'notes.md' }])
       expect(await dispatcher.invoke('files.all', [second.id])).toEqual([])
-      expect(await dispatcher.invoke('files.list', [first.id, 'general', ''])).toEqual([{ name: 'notes.md', path: 'notes.md', kind: 'file' }])
-      const search = await dispatcher.invoke('files.search', [first.id, { query: 'Edited', caseSensitive: false, wholeWord: false, regex: false, include: '', exclude: '' }]) as { matches: { path: string }[] }
+      expect(await dispatcher.invoke('files.list', [first.id, 'general', ''])).toEqual([
+        { name: 'notes.md', path: 'notes.md', kind: 'file' },
+      ])
+      const search = (await dispatcher.invoke('files.search', [
+        first.id,
+        { query: 'Edited', caseSensitive: false, wholeWord: false, regex: false, include: '', exclude: '' },
+      ])) as { matches: { path: string }[] }
       expect(search.matches.map((match) => match.path)).toEqual(['notes.md'])
       expect(() => dispatcher.invoke('git.status', [first.id, 'general'])).toThrow('not a Git repository')
-    } finally { dispatcher.close() }
+    } finally {
+      dispatcher.close()
+    }
     await expect(readText(other!.cwd, 'notes.md')).rejects.toThrow()
     await expect(readText(binding!.cwd, '../private.md')).rejects.toThrow(PathEscapeError)
   })
@@ -120,7 +156,8 @@ describe('project-free chat files', () => {
   it('does not list linked files from another chat', async () => {
     const first = await ws.createTask({ projectId: NO_PROJECT, title: 'First', mode: 'current' })
     const second = await ws.createTask({ projectId: NO_PROJECT, title: 'Second', mode: 'current' })
-    const cwd = ws.agentScope(first.id).cwd, other = ws.agentScope(second.id).cwd
+    const cwd = ws.agentScope(first.id).cwd,
+      other = ws.agentScope(second.id).cwd
     writeFileSync(join(other, 'private.txt'), 'Another chat')
     symlinkSync(other, join(cwd, 'linked-folder'))
     symlinkSync(join(other, 'private.txt'), join(cwd, 'linked-file'))
@@ -286,9 +323,15 @@ describe('git porcelain v2 parsing', () => {
     const root = realpathSync(web)
     const apiBefore = fingerprint(api)
     await git.stage(root, ['unstaged.txt'])
-    expect((await git.status(root)).entries.find((e) => e.path === 'unstaged.txt')).toMatchObject({ staged: 'modified', unstaged: null })
+    expect((await git.status(root)).entries.find((e) => e.path === 'unstaged.txt')).toMatchObject({
+      staged: 'modified',
+      unstaged: null,
+    })
     await git.unstage(root, ['unstaged.txt'])
-    expect((await git.status(root)).entries.find((e) => e.path === 'unstaged.txt')).toMatchObject({ staged: null, unstaged: 'modified' })
+    expect((await git.status(root)).entries.find((e) => e.path === 'unstaged.txt')).toMatchObject({
+      staged: null,
+      unstaged: 'modified',
+    })
     const oid = await git.commit(root, 'Commit "quoted" $(not a shell)')
     expect(sh(root, 'log', '-1', '--format=%s').trim()).toBe('Commit "quoted" $(not a shell)')
     expect(oid).toMatch(/^[0-9a-f]{40}$/)
@@ -407,7 +450,12 @@ describe('repositories belong to the project', () => {
     expect(ws.listBindings(task.id).map((b) => b.repoName)).toEqual(['web app'])
     await ws.addRepository(project.id, api)
     expect(ws.listBindings(task.id).map((b) => b.repoName)).toEqual(['api', 'web app'])
-    expect(ws.listBindings(`project:${project.id}`).map((b) => b.cwd).sort()).toEqual([realpathSync(api), realpathSync(web)].sort())
+    expect(
+      ws
+        .listBindings(`project:${project.id}`)
+        .map((b) => b.cwd)
+        .sort(),
+    ).toEqual([realpathSync(api), realpathSync(web)].sort())
     expect(ws.getTaskUi(`project:${project.id}`)).toEqual({ views: [], activeViewId: null })
   })
 })
@@ -419,7 +467,12 @@ describe('multiple independent conversations in an isolated workspace', () => {
     const first = await ws.createTask({ projectId: project.id, title: 'First conversation', mode: 'worktree' })
     const [binding] = await ws.setupTask(first.id)
     const before = fingerprint(web)
-    const second = await ws.createTask({ projectId: project.id, title: 'Second conversation', mode: 'worktree', workspaceId: first.workspaceId! })
+    const second = await ws.createTask({
+      projectId: project.id,
+      title: 'Second conversation',
+      mode: 'worktree',
+      workspaceId: first.workspaceId!,
+    })
     expect(second.id).not.toBe(first.id)
     expect(second.workspaceId).toBe(first.workspaceId)
     expect(ws.getBinding(second.id, binding!.repoId).cwd).toBe(binding!.cwd)
@@ -430,7 +483,12 @@ describe('multiple independent conversations in an isolated workspace', () => {
     expect(existsSync(binding!.cwd)).toBe(true)
     expect(ws.getBinding(second.id, binding!.repoId).cwd).toBe(binding!.cwd)
     await ws.deleteTask(second.id, false)
-    const third = await ws.createTask({ projectId: project.id, title: 'Later conversation', mode: 'worktree', workspaceId: first.workspaceId! })
+    const third = await ws.createTask({
+      projectId: project.id,
+      title: 'Later conversation',
+      mode: 'worktree',
+      workspaceId: first.workspaceId!,
+    })
     expect(ws.listWorkspaces(project.id)).toHaveLength(1)
     await ws.deleteTask(third.id, true)
     expect(existsSync(binding!.cwd)).toBe(false)
@@ -448,7 +506,9 @@ describe('multiple independent conversations in an isolated workspace', () => {
     expect(first.workspaceId).not.toBe(second.workspaceId)
     const other = ws.createProject('Other')
     await ws.addRepository(other.id, api)
-    await expect(ws.createTask({ projectId: other.id, title: 'Wrong project', mode: 'worktree', workspaceId: first.workspaceId! })).rejects.toThrow(/not in this project/)
+    await expect(
+      ws.createTask({ projectId: other.id, title: 'Wrong project', mode: 'worktree', workspaceId: first.workspaceId! }),
+    ).rejects.toThrow(/not in this project/)
   })
 })
 
@@ -476,8 +536,16 @@ describe('chat activity timestamps', () => {
       const task = await workspace.createTask({ projectId: NO_PROJECT, title: 'Activity', mode: 'current' })
       expect(workspace.getTask(task.id).lastActiveAt).toBe(task.createdAt)
       const start = task.createdAt + 1000
-      const session = (id: string, at: number, parent: string | null = null) => db.prepare('INSERT INTO agent_sessions (id, task_id, provider, cwd, state, created_at, parent_session_id) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, task.id, 'codex', tmp, 'idle', at, parent)
-      const event = (id: string, seq: number, body: object) => db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)').run(id, seq, JSON.stringify(body))
+      const session = (id: string, at: number, parent: string | null = null) =>
+        db
+          .prepare(
+            'INSERT INTO agent_sessions (id, task_id, provider, cwd, state, created_at, parent_session_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(id, task.id, 'codex', tmp, 'idle', at, parent)
+      const event = (id: string, seq: number, body: object) =>
+        db
+          .prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)')
+          .run(id, seq, JSON.stringify(body))
       session('main', start)
       event('main', 1, { kind: 'user', text: 'First', at: start })
       event('main', 2, { kind: 'user', text: 'Follow-up', at: start + 1000 })
@@ -491,7 +559,9 @@ describe('chat activity timestamps', () => {
       session('legacy', start + 6000)
       event('legacy', 1, { kind: 'user', text: 'Old timestamp-free message' })
       expect(workspace.getTask(task.id).lastActiveAt).toBe(start + 6000)
-    } finally { db.close() }
+    } finally {
+      db.close()
+    }
   })
 })
 
@@ -509,7 +579,9 @@ describe('pinning', () => {
 
 describe('project order', () => {
   it('keeps a dragged order and puts unlisted projects after it', async () => {
-    const a = ws.createProject('A'), b = ws.createProject('B'), c = ws.createProject('C')
+    const a = ws.createProject('A'),
+      b = ws.createProject('B'),
+      c = ws.createProject('C')
     expect(ws.listProjects().map((p) => p.name)).toEqual(['A', 'B', 'C'])
     expect(ws.reorderProjects([c.id, a.id]).map((p) => p.name)).toEqual(['C', 'A', 'B'])
     expect(ws.listProjects().map((p) => p.id)).toEqual([c.id, a.id, b.id])

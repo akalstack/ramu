@@ -5,6 +5,12 @@ process.env.RNS_GAMMA_ENABLED ??= '1'
 
 module.exports = ({ config }) => ({
   ...config,
-  extra: { ...config.extra, ...(process.env.EXPO_PUBLIC_EAS_PROJECT_ID ? { eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID } } : {}) },
-  android: { ...config.android, ...(process.env.RAMU_GOOGLE_SERVICES_FILE ? { googleServicesFile: process.env.RAMU_GOOGLE_SERVICES_FILE } : {}) },
+  extra: {
+    ...config.extra,
+    ...(process.env.EXPO_PUBLIC_EAS_PROJECT_ID ? { eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID } } : {}),
+  },
+  android: {
+    ...config.android,
+    ...(process.env.RAMU_GOOGLE_SERVICES_FILE ? { googleServicesFile: process.env.RAMU_GOOGLE_SERVICES_FILE } : {}),
+  },
 })

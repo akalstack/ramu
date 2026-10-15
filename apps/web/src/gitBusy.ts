@@ -12,15 +12,18 @@ const tails = new Map<string, Promise<unknown>>()
 export async function withGitBusy<T>(taskId: string, repoId: string, work: () => Promise<T>): Promise<T> {
   const id = key(taskId, repoId)
   // Counted from the moment it is requested, so controls stay disabled while it waits its turn.
-  counts.set(id, (counts.get(id) ?? 0) + 1); emit()
+  counts.set(id, (counts.get(id) ?? 0) + 1)
+  emit()
   const previous = tails.get(id) ?? Promise.resolve()
   const turn = previous.catch(() => {}).then(work)
   tails.set(id, turn)
-  try { return await turn }
-  finally {
+  try {
+    return await turn
+  } finally {
     if (tails.get(id) === turn) tails.delete(id)
     const next = (counts.get(id) ?? 1) - 1
-    if (next > 0) counts.set(id, next); else counts.delete(id)
+    if (next > 0) counts.set(id, next)
+    else counts.delete(id)
     emit()
   }
 }
@@ -36,13 +39,22 @@ export async function withGitBackground(taskId: string, repoId: string, work: ()
   if (counts.has(id) || tails.has(id)) return false
   const turn = Promise.resolve().then(work)
   tails.set(id, turn)
-  try { await turn } finally { if (tails.get(id) === turn) tails.delete(id) }
+  try {
+    await turn
+  } finally {
+    if (tails.get(id) === turn) tails.delete(id)
+  }
   return true
 }
 
 export function useGitBusy(taskId: string | null | undefined, repoId: string | null | undefined): boolean {
   return useSyncExternalStore(
-    (listener) => { listeners.add(listener); return () => { listeners.delete(listener) } },
+    (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
     () => !!taskId && !!repoId && counts.has(key(taskId, repoId)),
   )
 }

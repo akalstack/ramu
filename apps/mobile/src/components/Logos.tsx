@@ -18,5 +18,13 @@ export function Wordmark({ height = 20 }: { height?: number }) {
 export function ProviderIcon({ provider, size = 14 }: { provider: AgentProvider; size?: number }) {
   const { c } = useTheme()
   const tint = provider === 'claude-code' ? '#d97757' : c.soft
-  return <SvgXml xml={svgs[provider]} width={size} height={size} color={tint} fill={provider === 'opencode' || provider === 'antigravity' ? undefined : tint} />
+  return (
+    <SvgXml
+      xml={svgs[provider]}
+      width={size}
+      height={size}
+      color={tint}
+      fill={provider === 'opencode' || provider === 'antigravity' ? undefined : tint}
+    />
+  )
 }

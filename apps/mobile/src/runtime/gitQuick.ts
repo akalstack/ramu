@@ -7,7 +7,9 @@ type GitChat = Pick<Chat, 'computerId' | 'taskId' | 'sessionId' | 'provider' | '
 
 /** Model settings for drafting a commit message: the chat's own session when it has one. */
 export async function commitSettings(invoke: Invoke, chat: GitChat) {
-  return chat.sessionId ? (await invoke(chat.computerId, 'agent.get', chat.sessionId)).settings : { provider: chat.provider, model: chat.model, effort: null, access: 'auto' as const, autoFallback: true }
+  return chat.sessionId
+    ? (await invoke(chat.computerId, 'agent.get', chat.sessionId)).settings
+    : { provider: chat.provider, model: chat.model, effort: null, access: 'auto' as const, autoFallback: true }
 }
 
 /** Stages everything when nothing is staged, then drafts a message with AI. Shared by Source Control and the header shortcut. */
@@ -22,10 +24,16 @@ export const isStaged = (entry: GitStatus['entries'][number]) => Boolean(entry.s
 export async function commitAndPush(invoke: Invoke, chat: GitChat, repoId: string) {
   const status = await invoke(chat.computerId, 'git.status', chat.taskId, repoId)
   if (!status.entries.length) throw new Error('There are no changes to commit.')
-  const draft = await draftCommit(invoke, chat, repoId, status.entries.some(isStaged) ? undefined : status.entries.map(e => e.path))
+  const draft = await draftCommit(
+    invoke,
+    chat,
+    repoId,
+    status.entries.some(isStaged) ? undefined : status.entries.map((e) => e.path),
+  )
   await invoke(chat.computerId, 'git.commit', chat.taskId, repoId, draft.message, draft.fingerprint)
   await invoke(chat.computerId, 'git.push', chat.taskId, repoId)
   return draft.message
 }
 
-export const pushBranch = (invoke: Invoke, chat: GitChat, repoId: string) => invoke(chat.computerId, 'git.push', chat.taskId, repoId)
+export const pushBranch = (invoke: Invoke, chat: GitChat, repoId: string) =>
+  invoke(chat.computerId, 'git.push', chat.taskId, repoId)

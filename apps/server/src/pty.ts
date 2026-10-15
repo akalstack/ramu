@@ -53,7 +53,7 @@ export class TerminalService {
   }
 
   list(taskId: string): TerminalInfo[] {
-    return [...this.terms.values()].filter(entry => entry.taskId === taskId).map(info)
+    return [...this.terms.values()].filter((entry) => entry.taskId === taskId).map(info)
   }
 
   snapshot(id: string): { output: string; cursor: number; exited: boolean } {
@@ -87,8 +87,17 @@ export class TerminalService {
   busy(id: string): boolean {
     const e = this.terms.get(id)
     if (!e || e.exited) return false
-    const name = (value: string) => value.split(/[\\/]/).pop()!.replace(/^-/, '').replace(/\.exe$/i, '')
-    try { return name(e.pty.process) !== name(e.shell) } catch { return false }
+    const name = (value: string) =>
+      value
+        .split(/[\\/]/)
+        .pop()!
+        .replace(/^-/, '')
+        .replace(/\.exe$/i, '')
+    try {
+      return name(e.pty.process) !== name(e.shell)
+    } catch {
+      return false
+    }
   }
 
   closeTask(taskId: string): void {

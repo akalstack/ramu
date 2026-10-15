@@ -5,8 +5,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { AttachmentStore, attachmentPrompt, nativeBlocks, MAX_ATTACHMENT_BYTES } from '../src/attachments'
 
 const roots: string[] = []
-const setup = () => { const root = mkdtempSync(join(tmpdir(), 'ramu-attachments-')); roots.push(root); return { root, store: new AttachmentStore(root) } }
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
+const setup = () => {
+  const root = mkdtempSync(join(tmpdir(), 'ramu-attachments-'))
+  roots.push(root)
+  return { root, store: new AttachmentStore(root) }
+}
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+})
 
 describe('chat attachments', () => {
   it('persists copies with safe names and resolves them after restarting', () => {
@@ -35,10 +41,15 @@ describe('chat attachments', () => {
   })
   it('sends images and PDFs as native content blocks and leaves other files out', () => {
     const { store } = setup()
-    const image = store.add('shot.png', Buffer.from('img')), pdf = store.add('spec.pdf', Buffer.from('%PDF-1.4')), text = store.add('a.txt', Buffer.from('hi'))
+    const image = store.add('shot.png', Buffer.from('img')),
+      pdf = store.add('spec.pdf', Buffer.from('%PDF-1.4')),
+      text = store.add('a.txt', Buffer.from('hi'))
     const blocks = nativeBlocks([image, pdf, text])
     expect(blocks.map((b) => b.type)).toEqual(['image', 'document'])
-    expect(blocks[1]).toMatchObject({ title: 'spec.pdf', source: { media_type: 'application/pdf', data: Buffer.from('%PDF-1.4').toString('base64') } })
+    expect(blocks[1]).toMatchObject({
+      title: 'spec.pdf',
+      source: { media_type: 'application/pdf', data: Buffer.from('%PDF-1.4').toString('base64') },
+    })
   })
   it('rejects empty, oversized, and excessive attachments', () => {
     const { store } = setup()

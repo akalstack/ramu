@@ -6,7 +6,10 @@ import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types
 it('defaults fallback to only at the limit and preserves saved thresholds', () => {
   let saved: Partial<AppPreferences> = {}
   const dispatcher = createDispatcher({ userData: '/tmp/ramu-test', send: () => {}, native: async () => null }, {
-    workspace: { getAppState: (key: string, fallback: unknown) => key === 'app-preferences' ? saved : fallback, setAppState: vi.fn() },
+    workspace: {
+      getAppState: (key: string, fallback: unknown) => (key === 'app-preferences' ? saved : fallback),
+      setAppState: vi.fn(),
+    },
   } as unknown as Services)
   try {
     expect(DEFAULT_APP_PREFERENCES.fallback.switchAt).toBeNull()
@@ -18,13 +21,25 @@ it('defaults fallback to only at the limit and preserves saved thresholds', () =
       saved = { fallback: { switchAt } }
       expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fallback: { switchAt } })
     }
-  } finally { dispatcher.close(); configureProviderBinaries({}) }
+  } finally {
+    dispatcher.close()
+    configureProviderBinaries({})
+  }
 })
 
 it('turns lists saved per provider into one order led by Claude Code', () => {
   const codex = { id: 'c', provider: 'codex', model: 'gpt', effort: null }
-  expect(migrateChains({ switchAt: 90, returnAfterReset: true, chains: { codex: [{ ...codex, provider: 'claude-code', model: 'opus' }], 'claude-code': [codex] } }))
-    .toEqual({ switchAt: 90, returnAfterReset: true, order: [{ id: 'migrated-claude-code', provider: 'claude-code', model: '', effort: null }, codex] })
+  expect(
+    migrateChains({
+      switchAt: 90,
+      returnAfterReset: true,
+      chains: { codex: [{ ...codex, provider: 'claude-code', model: 'opus' }], 'claude-code': [codex] },
+    }),
+  ).toEqual({
+    switchAt: 90,
+    returnAfterReset: true,
+    order: [{ id: 'migrated-claude-code', provider: 'claude-code', model: '', effort: null }, codex],
+  })
   expect(migrateChains({ switchAt: null, chains: {} })).toEqual({ switchAt: null })
   const current = { switchAt: null, order: [codex] }
   expect(migrateChains(current)).toBe(current)

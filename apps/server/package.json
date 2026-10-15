@@ -4,9 +4,17 @@
   "private": true,
   "description": "Ramu workspace server: agents, files, Git, terminals, schedules and the local database.",
   "type": "module",
-  "bin": { "ramu": "dist/cli.js", "ramu-server": "dist/cli.js" },
-  "exports": { "./build": "./src/build.ts", "./attachments": "./src/attachments.ts" },
-  "engines": { "node": ">=24 <25" },
+  "bin": {
+    "ramu": "dist/cli.js",
+    "ramu-server": "dist/cli.js"
+  },
+  "exports": {
+    "./build": "./src/build.ts",
+    "./attachments": "./src/attachments.ts"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",

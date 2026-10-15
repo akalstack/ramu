@@ -9,5 +9,23 @@ export function toolIsRunning(result: ToolResult | undefined, activeTurn: boolea
 
 export function toolVerb(verb: string, running: boolean): string {
   if (!running) return verb
-  return ({ Ran: 'Running', Edited: 'Editing', Read: 'Reading', Wrote: 'Writing', Searched: 'Searching', Listed: 'Listing', Fetched: 'Fetching', Deleted: 'Deleting', Moved: 'Moving', Thought: 'Thinking', Used: 'Using', 'Changed mode': 'Changing mode', 'Searched the web': 'Searching the web' } as Record<string, string>)[verb] ?? verb
+  return (
+    (
+      {
+        Ran: 'Running',
+        Edited: 'Editing',
+        Read: 'Reading',
+        Wrote: 'Writing',
+        Searched: 'Searching',
+        Listed: 'Listing',
+        Fetched: 'Fetching',
+        Deleted: 'Deleting',
+        Moved: 'Moving',
+        Thought: 'Thinking',
+        Used: 'Using',
+        'Changed mode': 'Changing mode',
+        'Searched the web': 'Searching the web',
+      } as Record<string, string>
+    )[verb] ?? verb
+  )
 }

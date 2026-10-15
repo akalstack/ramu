@@ -9,9 +9,19 @@ type Provider = { id: string; name: string; logo: string; signIn: string }
 const PROVIDERS: Provider[] = [
   { id: 'claude', name: 'Claude Code', logo: '/providers/claude.svg', signIn: 'Install Claude Code and sign in' },
   { id: 'codex', name: 'Codex', logo: '/providers/openai.svg', signIn: 'Install Codex and sign in' },
-  { id: 'opencode', name: 'OpenCode', logo: '/providers/opencode.svg', signIn: 'opencode acp, with your model provider' },
+  {
+    id: 'opencode',
+    name: 'OpenCode',
+    logo: '/providers/opencode.svg',
+    signIn: 'opencode acp, with your model provider',
+  },
   { id: 'cursor', name: 'Cursor', logo: '/providers/cursor.svg', signIn: 'agent login' },
-  { id: 'antigravity', name: 'Antigravity', logo: '/providers/antigravity.svg', signIn: 'Google sign-in from Settings' },
+  {
+    id: 'antigravity',
+    name: 'Antigravity',
+    logo: '/providers/antigravity.svg',
+    signIn: 'Google sign-in from Settings',
+  },
 ]
 
 const byId = (id: string) => PROVIDERS.find((p) => p.id === id)!
@@ -61,7 +71,17 @@ function useReducedMotion() {
   return reduced
 }
 
-function Meter({ provider, value, active, limited }: { provider: Provider; value: number; active: boolean; limited: boolean }) {
+function Meter({
+  provider,
+  value,
+  active,
+  limited,
+}: {
+  provider: Provider
+  value: number
+  active: boolean
+  limited: boolean
+}) {
   return (
     <li className={`meter${active ? ' is-active' : ''}${limited ? ' is-limited' : ''}`}>
       <Logo provider={provider} size={26} />
@@ -95,7 +115,9 @@ function Demo() {
       return
     }
     setStep(0)
-    const timers = STEPS.slice(1).map((_, i) => window.setTimeout(() => setStep(i + 1), 900 * (i + 1) + (i >= 3 ? 700 : 0)))
+    const timers = STEPS.slice(1).map((_, i) =>
+      window.setTimeout(() => setStep(i + 1), 900 * (i + 1) + (i >= 3 ? 700 : 0)),
+    )
     return () => timers.forEach(window.clearTimeout)
   }, [startId, run, reduced])
 
@@ -117,7 +139,12 @@ function Demo() {
         </header>
         <ol className="thread-body" aria-live="polite">
           {STEPS.slice(0, step + 1).map((s, i) => {
-            if (s.kind === 'user') return <li key={i} className="msg msg-user">{s.text}</li>
+            if (s.kind === 'user')
+              return (
+                <li key={i} className="msg msg-user">
+                  {s.text}
+                </li>
+              )
             if (s.kind === 'seam')
               return (
                 <li key={i} className="seam">
@@ -160,7 +187,9 @@ function Demo() {
           ))}
         </ul>
         <div className="side-controls">
-          <label className="side-label" htmlFor="start-with">Start with</label>
+          <label className="side-label" htmlFor="start-with">
+            Start with
+          </label>
           <div className="seg" role="radiogroup" id="start-with">
             {['claude', 'codex', 'cursor'].map((id) => (
               <button
@@ -175,7 +204,12 @@ function Demo() {
               </button>
             ))}
           </div>
-          <button type="button" className="replay" onClick={() => setRun((n) => n + 1)} disabled={!finished && !reduced}>
+          <button
+            type="button"
+            className="replay"
+            onClick={() => setRun((n) => n + 1)}
+            disabled={!finished && !reduced}
+          >
             Replay
           </button>
         </div>
@@ -192,16 +226,18 @@ function Nav() {
   return (
     <header className="nav">
       <div className="nav-inner">
-      <a className="nav-brand" href="#top" aria-label="Ramu home">
-        <img src="/wordmark.svg" alt="Ramu" height={22} />
-      </a>
-      <nav className="nav-links" aria-label="Primary">
-        <a href="#providers">Providers</a>
-        <a href="#work">Work</a>
-        <a href="#review">Review</a>
-        <a href={`${REPO}#guides`}>Docs</a>
-        <a className="nav-cta" href="#download">Download</a>
-      </nav>
+        <a className="nav-brand" href="#top" aria-label="Ramu home">
+          <img src="/wordmark.svg" alt="Ramu" height={22} />
+        </a>
+        <nav className="nav-links" aria-label="Primary">
+          <a href="#providers">Providers</a>
+          <a href="#work">Work</a>
+          <a href="#review">Review</a>
+          <a href={`${REPO}#guides`}>Docs</a>
+          <a className="nav-cta" href="#download">
+            Download
+          </a>
+        </nav>
       </div>
     </header>
   )
@@ -213,12 +249,16 @@ function Hero() {
       <Backdrop />
       <h1>Keep coding when your agent hits its limit.</h1>
       <p className="hero-sub">
-        One desktop workspace for Claude Code, Codex, OpenCode, Cursor, and Antigravity, with your editor,
-        terminals, and Git. When a provider runs out, the chat moves to the next one.
+        One desktop workspace for Claude Code, Codex, OpenCode, Cursor, and Antigravity, with your editor, terminals,
+        and Git. When a provider runs out, the chat moves to the next one.
       </p>
       <div className="hero-actions">
-        <a className="btn btn-primary" href="#download">Download for macOS</a>
-        <a className="btn btn-quiet" href={REPO}>Read the source</a>
+        <a className="btn btn-primary" href="#download">
+          Download for macOS
+        </a>
+        <a className="btn btn-quiet" href={REPO}>
+          Read the source
+        </a>
         <span className="hero-note">Open source alpha for macOS and Linux</span>
       </div>
       <Demo />
@@ -232,8 +272,8 @@ function Providers() {
       <div className="section-head">
         <h2>Use the subscriptions you already have</h2>
         <p>
-          Each agent runs through its own installed runtime and signs in as usual. Ramu doesn’t resell tokens or
-          store passwords. <em>Ramu</em> is Indonesian for blending ingredients into one.
+          Each agent runs through its own installed runtime and signs in as usual. Ramu doesn’t resell tokens or store
+          passwords. <em>Ramu</em> is Indonesian for blending ingredients into one.
         </p>
       </div>
       <ul className="ingredients">
@@ -299,8 +339,8 @@ function Review() {
       <div className="section-head">
         <h2>Review every change, undo any of them</h2>
         <p>
-          Ramu records the diff for each turn. Comment on lines, then undo selectively, with a conflict check if
-          you edited the same lines since.
+          Ramu records the diff for each turn. Comment on lines, then undo selectively, with a conflict check if you
+          edited the same lines since.
         </p>
         <ul className="checks">
           <li>Monaco editor and split terminals beside the chat</li>
@@ -311,22 +351,41 @@ function Review() {
       <figure className="diff" aria-label="Example diff with a review comment">
         <figcaption>
           <span>src/middleware/limit.ts</span>
-          <span className="diff-stat"><b className="add">+42</b> <b className="del">−3</b></span>
+          <span className="diff-stat">
+            <b className="add">+42</b> <b className="del">−3</b>
+          </span>
         </figcaption>
         <pre>
           <code>
-            <span className="ln ctx"><i>12</i>{'export function limit(opts: LimitOptions) {'}</span>
-            <span className="ln del"><i>13</i>{'  const windowMs = 1000'}</span>
-            <span className="ln add"><i>13</i>{'  const windowMs = opts.windowMs ?? 60_000'}</span>
-            <span className="ln add"><i>14</i>{'  const hits = new Map<string, number[]>()'}</span>
-            <span className="ln ctx"><i>15</i>{'  return async (req, res, next) => {'}</span>
+            <span className="ln ctx">
+              <i>12</i>
+              {'export function limit(opts: LimitOptions) {'}
+            </span>
+            <span className="ln del">
+              <i>13</i>
+              {'  const windowMs = 1000'}
+            </span>
+            <span className="ln add">
+              <i>13</i>
+              {'  const windowMs = opts.windowMs ?? 60_000'}
+            </span>
+            <span className="ln add">
+              <i>14</i>
+              {'  const hits = new Map<string, number[]>()'}
+            </span>
+            <span className="ln ctx">
+              <i>15</i>
+              {'  return async (req, res, next) => {'}
+            </span>
           </code>
         </pre>
         <div className="comment">
           <b>You</b> Key by API key, not IP. Several customers share one proxy.
           <div className="comment-actions">
             <span>Sent to Codex</span>
-            <button type="button" tabIndex={-1}>Undo this change</button>
+            <button type="button" tabIndex={-1}>
+              Undo this change
+            </button>
           </div>
         </div>
       </figure>
@@ -340,7 +399,9 @@ function Source() {
       <div className="section-head">
         <h2>MIT licensed. Fork it.</h2>
         <p>Electron, React, TypeScript, Monaco, and xterm.js. The background service also runs headless.</p>
-        <a className="btn btn-quiet" href={REPO}>Browse the source</a>
+        <a className="btn btn-quiet" href={REPO}>
+          Browse the source
+        </a>
       </div>
       <div className="terminal" role="img" aria-label="Terminal commands to run Ramu from source">
         <pre>
@@ -362,13 +423,21 @@ function Download() {
     <section className="download" id="download">
       <div className="download-inner">
         <h2>Try the alpha</h2>
-        <p>Installers and SHA-256 checksums are on GitHub Releases. Alpha builds are unsigned, so install updates manually.</p>
+        <p>
+          Installers and SHA-256 checksums are on GitHub Releases. Alpha builds are unsigned, so install updates
+          manually.
+        </p>
         <div className="hero-actions">
-          <a className="btn btn-primary" href={RELEASES}>macOS (Apple silicon and Intel)</a>
-          <a className="btn btn-quiet" href={RELEASES}>Linux x64</a>
+          <a className="btn btn-primary" href={RELEASES}>
+            macOS (Apple silicon and Intel)
+          </a>
+          <a className="btn btn-quiet" href={RELEASES}>
+            Linux x64
+          </a>
         </div>
         <p className="download-fine">
-          Linux GUI validation is pending. Windows is experimental. Sign in to a provider first; see the <a href={`${REPO}/blob/main/docs/PROVIDERS.md`}>provider setup guide</a>.
+          Linux GUI validation is pending. Windows is experimental. Sign in to a provider first; see the{' '}
+          <a href={`${REPO}/blob/main/docs/PROVIDERS.md`}>provider setup guide</a>.
         </p>
       </div>
     </section>
@@ -393,7 +462,9 @@ function Footer() {
 export function App() {
   return (
     <>
-      <a className="skip" href="#work">Skip to content</a>
+      <a className="skip" href="#work">
+        Skip to content
+      </a>
       <Nav />
       <main>
         <Hero />

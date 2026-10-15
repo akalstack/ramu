@@ -15,16 +15,27 @@ export const draftKey = {
   newChat: (projectId: string) => `new:${projectId}`,
 }
 
-const defaultStore = (): Store | null => { try { return globalThis.localStorage ?? null } catch { return null } }
+const defaultStore = (): Store | null => {
+  try {
+    return globalThis.localStorage ?? null
+  } catch {
+    return null
+  }
+}
 
 export function loadDraft(key: string, store: Store | null = defaultStore(), now = Date.now()): string {
   try {
     const raw = store?.getItem(PREFIX + key)
     if (!raw) return ''
     const saved = JSON.parse(raw) as { text?: unknown; at?: unknown }
-    if (typeof saved.text !== 'string' || typeof saved.at !== 'number' || now - saved.at > MAX_AGE_MS) { store?.removeItem(PREFIX + key); return '' }
+    if (typeof saved.text !== 'string' || typeof saved.at !== 'number' || now - saved.at > MAX_AGE_MS) {
+      store?.removeItem(PREFIX + key)
+      return ''
+    }
     return saved.text
-  } catch { return '' }
+  } catch {
+    return ''
+  }
 }
 
 /** Whitespace-only text is not a draft. Storage failures (quota, privacy mode) are ignored: a draft is a convenience. */
@@ -34,10 +45,16 @@ export function saveDraft(key: string, text: string, store: Store | null = defau
     if (!text.trim()) store?.removeItem(PREFIX + key)
     else store?.setItem(PREFIX + key, JSON.stringify({ text: text.slice(0, MAX_LENGTH), at: now }))
     return text.length <= MAX_LENGTH
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
 
-export function clearDraft(key: string, store: Store | null = defaultStore()): void { try { store?.removeItem(PREFIX + key) } catch {} }
+export function clearDraft(key: string, store: Store | null = defaultStore()): void {
+  try {
+    store?.removeItem(PREFIX + key)
+  } catch {}
+}
 
 /** Drops drafts nobody has touched for 30 days, such as those of deleted chats. */
 export function pruneDrafts(store: Store | null = defaultStore(), now = Date.now()): void {
@@ -58,13 +75,22 @@ export function useDraftPersistence(key: string, value: string): void {
   const pending = useRef<{ key: string; value: string } | null>(null)
   useEffect(() => {
     if (pending.current && pending.current.key !== key) saveDraft(pending.current.key, pending.current.value)
-    const entry = pending.current = { key, value }
-    const timer = setTimeout(() => { saveDraft(entry.key, entry.value); if (pending.current === entry) pending.current = null }, SAVE_DELAY_MS)
+    const entry = (pending.current = { key, value })
+    const timer = setTimeout(() => {
+      saveDraft(entry.key, entry.value)
+      if (pending.current === entry) pending.current = null
+    }, SAVE_DELAY_MS)
     return () => clearTimeout(timer)
   }, [key, value])
   useEffect(() => {
-    const flush = () => { if (pending.current) saveDraft(pending.current.key, pending.current.value); pending.current = null }
+    const flush = () => {
+      if (pending.current) saveDraft(pending.current.key, pending.current.value)
+      pending.current = null
+    }
     window.addEventListener('pagehide', flush)
-    return () => { window.removeEventListener('pagehide', flush); flush() }
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      flush()
+    }
   }, [])
 }

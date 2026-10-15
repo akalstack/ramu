@@ -10,7 +10,10 @@ it('migrates legacy worktree conversations without losing bindings, transcripts,
   const dir = mkdtempSync(join(tmpdir(), 'ramu-migration-'))
   const path = join(dir, 'profile.sqlite')
   const legacy = new DatabaseSync(path)
-  const savedUi = JSON.stringify({ views: [{ id: 'terminal-1', kind: 'terminal', repoId: 'repo' }], activeViewId: 'terminal-1' })
+  const savedUi = JSON.stringify({
+    views: [{ id: 'terminal-1', kind: 'terminal', repoId: 'repo' }],
+    activeViewId: 'terminal-1',
+  })
   legacy.exec(`
     CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, root TEXT, created_at INTEGER NOT NULL);
     CREATE TABLE repositories (id TEXT PRIMARY KEY, project_id TEXT REFERENCES projects(id), name TEXT, root TEXT);
@@ -36,11 +39,19 @@ it('migrates legacy worktree conversations without losing bindings, transcripts,
     expect(ws.getTask('chat')).toMatchObject({ workspaceId: 'chat', title: 'Existing worktree' })
     expect(ws.getTask('current').workspaceId).toBeNull()
     expect(ws.listWorkspaces()).toEqual([{ id: 'chat', projectId: 'project', name: 'Existing worktree', createdAt: 2 }])
-    expect(ws.getBinding('chat', 'repo')).toMatchObject({ cwd: '/isolated/Repo', taskBranch: 'ramu/existing', setupState: 'ready' })
+    expect(ws.getBinding('chat', 'repo')).toMatchObject({
+      cwd: '/isolated/Repo',
+      taskBranch: 'ramu/existing',
+      setupState: 'ready',
+    })
     expect(ws.getBinding('worktree:chat', 'repo').cwd).toBe('/isolated/Repo')
     expect(ws.getTaskUi('worktree:chat')).toEqual(JSON.parse(savedUi))
-    expect(db.prepare('SELECT event FROM agent_events').get()).toEqual({ event: '{"kind":"user","text":"Keep my conversation"}' })
-    expect(JSON.parse((db.prepare('SELECT settings FROM agent_sessions').get() as { settings: string }).settings).access).toBe('edits')
+    expect(db.prepare('SELECT event FROM agent_events').get()).toEqual({
+      event: '{"kind":"user","text":"Keep my conversation"}',
+    })
+    expect(
+      JSON.parse((db.prepare('SELECT settings FROM agent_sessions').get() as { settings: string }).settings).access,
+    ).toBe('edits')
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
   } finally {
     db.close()

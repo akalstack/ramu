@@ -1,10 +1,25 @@
 import { expect, it } from 'vitest'
-import { createOutputGate, hasUnseenTerminalOutput, markTerminalOutput, setShownTerminal, SETTLE_MS } from '../src/terminalActivity'
+import {
+  createOutputGate,
+  hasUnseenTerminalOutput,
+  markTerminalOutput,
+  setShownTerminal,
+  SETTLE_MS,
+} from '../src/terminalActivity'
 
-function clock() { let at = 1_000; return { now: () => at, advance: (ms: number) => { at += ms } } }
+function clock() {
+  let at = 1_000
+  return {
+    now: () => at,
+    advance: (ms: number) => {
+      at += ms
+    },
+  }
+}
 
 it('ignores a new shell’s startup output until it has been quiet', () => {
-  const time = clock(), gate = createOutputGate(time.now)
+  const time = clock(),
+    gate = createOutputGate(time.now)
   expect(gate.output()).toBe(false) // prompt
   time.advance(SETTLE_MS - 1)
   expect(gate.output()).toBe(false) // slow rc file output keeps it in startup

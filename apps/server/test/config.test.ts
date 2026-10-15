@@ -6,8 +6,15 @@ import { authorized, loadToken, TokenStore } from '../src/auth'
 import { defaultUserData, loadConfig, parseListen } from '../src/config'
 
 const dirs: string[] = []
-afterEach(() => { dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true })); dirs.length = 0 })
-const tmp = () => { const dir = mkdtempSync(join(tmpdir(), 'ramu server ')); dirs.push(dir); return dir }
+afterEach(() => {
+  dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true }))
+  dirs.length = 0
+})
+const tmp = () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu server '))
+  dirs.push(dir)
+  return dir
+}
 
 it('parses listen addresses and binds loopback by default', () => {
   expect(parseListen('7788')).toEqual({ host: '127.0.0.1', port: 7788 })
@@ -21,7 +28,9 @@ it('refuses plaintext network listeners unless explicitly allowed', () => {
   const base = { RAMU_USER_DATA: '/tmp/ramu-profile' }
   expect(loadConfig({ ...base, RAMU_LISTEN: '7788' }).listen).toEqual({ host: '127.0.0.1', port: 7788 })
   expect(() => loadConfig({ ...base, RAMU_LISTEN: '0.0.0.0:7788' })).toThrow(/not encrypted/)
-  expect(loadConfig({ ...base, RAMU_LISTEN: '0.0.0.0:7788', RAMU_ALLOW_PLAINTEXT_REMOTE: '1' }).listen?.host).toBe('0.0.0.0')
+  expect(loadConfig({ ...base, RAMU_LISTEN: '0.0.0.0:7788', RAMU_ALLOW_PLAINTEXT_REMOTE: '1' }).listen?.host).toBe(
+    '0.0.0.0',
+  )
   expect(loadConfig(base).listen).toBeNull()
 })
 

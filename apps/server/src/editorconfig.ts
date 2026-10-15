@@ -9,7 +9,8 @@ export async function editorConfigFor(root: string, relPath: string): Promise<Ed
   const out: EditorConfigProps = {}
   if (props.indent_style === 'space') out.indentStyle = 'space'
   else if (props.indent_style === 'tab') out.indentStyle = 'tab'
-  const size = props.indent_size, tab = props.tab_width
+  const size = props.indent_size,
+    tab = props.tab_width
   if (typeof size === 'number' && size > 0) out.indentSize = Math.min(size, 16)
   else if (size === 'tab') out.indentSize = 'tab'
   if (typeof tab === 'number' && tab > 0) out.tabWidth = Math.min(tab, 16)

@@ -8,9 +8,27 @@ import { join } from 'node:path'
 import { query, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Workspace } from '../src/workspace'
-import { AgentService, claudeDefaultEffort, cleanTitle, conversationHandoff, serverToolResult, serverToolUse, isUsageLimit, type QueryFn } from '../src/agent'
+import {
+  AgentService,
+  claudeDefaultEffort,
+  cleanTitle,
+  conversationHandoff,
+  serverToolResult,
+  serverToolUse,
+  isUsageLimit,
+  type QueryFn,
+} from '../src/agent'
 import { openDb, type Db } from '../src/db'
-import { DEFAULT_AGENT_SETTINGS, DEFAULT_APP_PREFERENCES, type AgentEvent, type AgentSessionInfo, type AgentTask, type AppPreferences, type ProviderCatalog, type UsageReading } from '@ramu/shared/types'
+import {
+  DEFAULT_AGENT_SETTINGS,
+  DEFAULT_APP_PREFERENCES,
+  type AgentEvent,
+  type AgentSessionInfo,
+  type AgentTask,
+  type AppPreferences,
+  type ProviderCatalog,
+  type UsageReading,
+} from '@ramu/shared/types'
 import { fakeCodex, fakeQuery as demoQuery } from '../src/fakeAgent'
 import { USER_MESSAGE_PREAMBLE } from '../src/agentInstructions'
 
@@ -19,26 +37,76 @@ function fakeQuery(calls: Options[]): QueryFn {
   return ({ prompt, options }) => {
     calls.push(options)
     async function* run(): AsyncGenerator<SDKMessage, void> {
-      yield { type: 'system', subtype: 'init', session_id: 'provider-1', model: 'fake', cwd: options.cwd! } as SDKMessage
+      yield {
+        type: 'system',
+        subtype: 'init',
+        session_id: 'provider-1',
+        model: 'fake',
+        cwd: options.cwd!,
+      } as SDKMessage
       let first = true
       for await (const m of prompt as AsyncIterable<SDKUserMessage>) {
         const text = m.message.content as string
         if (text.includes('[limit claude]')) {
-          yield { type: 'result', subtype: 'success', is_error: true, result: 'usage_limit_reached', total_cost_usd: 0 } as unknown as SDKMessage
+          yield {
+            type: 'result',
+            subtype: 'success',
+            is_error: true,
+            result: 'usage_limit_reached',
+            total_cost_usd: 0,
+          } as unknown as SDKMessage
           return
         }
         if (first) {
           first = false
-          const res = await options.canUseTool!('Bash', { command: 'touch x' }, { signal: options.abortController!.signal, toolUseID: 't1' } as never)
-          yield { type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: `perm:${res?.behavior}` }] } } as unknown as SDKMessage
+          const res = await options.canUseTool!('Bash', { command: 'touch x' }, {
+            signal: options.abortController!.signal,
+            toolUseID: 't1',
+          } as never)
+          yield {
+            type: 'assistant',
+            parent_tool_use_id: null,
+            message: { content: [{ type: 'text', text: `perm:${res?.behavior}` }] },
+          } as unknown as SDKMessage
         }
         if (text === 'compact' || text === 'compact failed') {
-          yield { type: 'system', subtype: 'status', status: 'compacting', uuid: '00000000-0000-0000-0000-000000000001', session_id: 'provider-1' } as SDKMessage
-          if (text === 'compact') yield { type: 'system', subtype: 'compact_boundary', compact_metadata: { trigger: 'auto', pre_tokens: 212000, post_tokens: 33700 }, uuid: '00000000-0000-0000-0000-000000000002', session_id: 'provider-1' } as SDKMessage
-          else yield { type: 'system', subtype: 'status', status: null, compact_result: 'failed', uuid: '00000000-0000-0000-0000-000000000003', session_id: 'provider-1' } as SDKMessage
+          yield {
+            type: 'system',
+            subtype: 'status',
+            status: 'compacting',
+            uuid: '00000000-0000-0000-0000-000000000001',
+            session_id: 'provider-1',
+          } as SDKMessage
+          if (text === 'compact')
+            yield {
+              type: 'system',
+              subtype: 'compact_boundary',
+              compact_metadata: { trigger: 'auto', pre_tokens: 212000, post_tokens: 33700 },
+              uuid: '00000000-0000-0000-0000-000000000002',
+              session_id: 'provider-1',
+            } as SDKMessage
+          else
+            yield {
+              type: 'system',
+              subtype: 'status',
+              status: null,
+              compact_result: 'failed',
+              uuid: '00000000-0000-0000-0000-000000000003',
+              session_id: 'provider-1',
+            } as SDKMessage
         }
-        yield { type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: `echo:${text}` }] } } as unknown as SDKMessage
-        yield { type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 } as unknown as SDKMessage
+        yield {
+          type: 'assistant',
+          parent_tool_use_id: null,
+          message: { content: [{ type: 'text', text: `echo:${text}` }] },
+        } as unknown as SDKMessage
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'done',
+          total_cost_usd: 0,
+        } as unknown as SDKMessage
       }
     }
     return Object.assign(run(), { interrupt: async () => undefined }) as unknown as Query
@@ -76,9 +144,20 @@ describe('AgentService', () => {
     const steered: string[] = []
     let ready = false
     const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => ({
-      canSteer: true, steerInterrupts: true,
-      start: async () => { emit({ kind: 'state', state: 'running' }); ready = true }, send: async () => {}, steer: async (text) => { steered.push(text) },
-      interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {},
+      canSteer: true,
+      steerInterrupts: true,
+      start: async () => {
+        emit({ kind: 'state', state: 'running' })
+        ready = true
+      },
+      send: async () => {},
+      steer: async (text) => {
+        steered.push(text)
+      },
+      interrupt: async () => {},
+      stop: async () => {},
+      replyPermission: () => {},
+      replyQuestion: () => {},
     })
     const svc = new AgentService(db, () => {}, fakeQuery([]), undefined, factory)
     const chat = svc.start('t', scopeOf(cwd), 'Work', { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', access: 'full' })
@@ -102,10 +181,19 @@ describe('AgentService', () => {
         emit({ kind: 'text', text: 'first answer', messageId: 'm1' })
         emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
       },
-      send: async () => {}, steer: async () => {}, interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {},
+      send: async () => {},
+      steer: async () => {},
+      interrupt: async () => {},
+      stop: async () => {},
+      replyPermission: () => {},
+      replyQuestion: () => {},
     })
     const svc = new AgentService(db, () => {}, fakeQuery([]), undefined, factory)
-    const chat = svc.start('t', scopeOf(cwd), 'remember the word plum', { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', access: 'full' })
+    const chat = svc.start('t', scopeOf(cwd), 'remember the word plum', {
+      ...DEFAULT_AGENT_SETTINGS,
+      provider: 'cursor',
+      access: 'full',
+    })
     await until(() => svc.get(chat.id).state === 'idle')
     await svc.stopAndWait(chat.id)
     await svc.send(chat.id, 'what was the word?')
@@ -113,7 +201,11 @@ describe('AgentService', () => {
     expect(starts.map((entry) => entry.resume)).toEqual([null, 'native-1', null])
     expect(starts[2]!.prompt).toContain('remember the word plum')
     expect(starts[2]!.prompt).toContain('what was the word?')
-    expect(svc.events(chat.id).some((event) => event.kind === 'settings' && event.handoff && /could not resume/.test(event.reason ?? ''))).toBe(true)
+    expect(
+      svc
+        .events(chat.id)
+        .some((event) => event.kind === 'settings' && event.handoff && /could not resume/.test(event.reason ?? '')),
+    ).toBe(true)
     expect(svc.get(chat.id).providerSessionId).toBe('native-3')
     svc.stopAll()
   })
@@ -122,21 +214,61 @@ describe('AgentService', () => {
     const delivered: { event: AgentEvent; seq?: number }[] = []
     const factory: import('../src/codex').CodexFactory = (_scope, _settings, emit) => {
       output = emit
-      return { start: async () => { emit({ kind: 'state', state: 'running' }) }, send: async () => {}, steer: async () => {}, interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
+      return {
+        start: async () => {
+          emit({ kind: 'state', state: 'running' })
+        },
+        send: async () => {},
+        steer: async () => {},
+        interrupt: async () => {},
+        stop: async () => {},
+        replyPermission: () => {},
+        replyQuestion: () => {},
+      }
     }
     const svc = new AgentService(db, (_id, event, seq) => delivered.push({ event, seq }), fakeQuery([]), factory)
-    const chat = svc.start('t', scopeOf(cwd), 'Inspect', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'full' })
+    const chat = svc.start('t', scopeOf(cwd), 'Inspect', {
+      ...DEFAULT_AGENT_SETTINGS,
+      provider: 'codex',
+      access: 'full',
+    })
     await until(() => !!output)
-    output({ kind: 'tool-use', toolUseId: 'one', name: 'shell', summary: 'pnpm test', input: '{"command":"pnpm test"}', title: 'Run tests', status: 'pending' })
-    const firstAt = svc.events(chat.id).find(e => e.kind === 'tool-use')!.at
-    output({ kind: 'tool-use', toolUseId: 'one', name: 'shell', summary: 'pnpm test', input: '{"command":"pnpm test"}', title: 'Check the unit tests', status: 'in_progress' })
-    output({ kind: 'tool-result', toolUseId: 'one', summary: 'Image', isError: false, content: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }] })
+    output({
+      kind: 'tool-use',
+      toolUseId: 'one',
+      name: 'shell',
+      summary: 'pnpm test',
+      input: '{"command":"pnpm test"}',
+      title: 'Run tests',
+      status: 'pending',
+    })
+    const firstAt = svc.events(chat.id).find((e) => e.kind === 'tool-use')!.at
+    output({
+      kind: 'tool-use',
+      toolUseId: 'one',
+      name: 'shell',
+      summary: 'pnpm test',
+      input: '{"command":"pnpm test"}',
+      title: 'Check the unit tests',
+      status: 'in_progress',
+    })
+    output({
+      kind: 'tool-result',
+      toolUseId: 'one',
+      summary: 'Image',
+      isError: false,
+      content: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
+    })
     output({ kind: 'result', text: 'Done', isError: false, costUsd: null })
-    expect(svc.events(chat.id).filter(e => e.kind === 'tool-use')).toEqual([expect.objectContaining({ title: 'Check the unit tests', at: firstAt })])
-    expect(new Set(delivered.filter(e => e.event.kind === 'tool-use').map(e => e.seq)).size).toBe(1)
+    expect(svc.events(chat.id).filter((e) => e.kind === 'tool-use')).toEqual([
+      expect.objectContaining({ title: 'Check the unit tests', at: firstAt }),
+    ])
+    expect(new Set(delivered.filter((e) => e.event.kind === 'tool-use').map((e) => e.seq)).size).toBe(1)
     svc.stopAll()
     const restored = new AgentService(db, () => {}, fakeQuery([]))
-    expect(restored.events(chat.id).find(e => e.kind === 'tool-result')).toMatchObject({ content: [{ type: 'image', data: 'aGVsbG8=' }] })
+    expect(restored.events(chat.id).find((e) => e.kind === 'tool-result')).toMatchObject({
+      content: [{ type: 'image', data: 'aGVsbG8=' }],
+    })
   })
 
   it('passes the configured user Claude CLI to the SDK', async () => {
@@ -148,7 +280,9 @@ describe('AgentService', () => {
       await until(() => svc.get(session.id).state === 'idle')
       expect(calls[0]?.pathToClaudeCodeExecutable).toBe('/custom user bin/claude')
       svc.stop(session.id)
-    } finally { configureProviderBinaries({}) }
+    } finally {
+      configureProviderBinaries({})
+    }
   })
 
   it('emits durable event positions so snapshots and live delivery can merge without duplicates', async () => {
@@ -164,21 +298,53 @@ describe('AgentService', () => {
 
   it('validates connector replies before saving answers and preserves drafts until an old request is cancelled on restart', async () => {
     let requestId = 'mcp-session:1'
-    const request = elicitationRequest(requestId, { serverName: 'Setup', message: 'Choose count', mode: 'form', requestedSchema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 5 } }, required: ['count'] } })
+    const request = elicitationRequest(requestId, {
+      serverName: 'Setup',
+      message: 'Choose count',
+      mode: 'form',
+      requestedSchema: {
+        type: 'object',
+        properties: { count: { type: 'integer', minimum: 1, maximum: 5 } },
+        required: ['count'],
+      },
+    })
     let emit!: (event: AgentEvent) => void
     const factory: import('../src/codex').CodexFactory = (_scope, _settings, output) => {
       emit = output
-      return { start: async () => { output({ kind: 'elicitation', ...request }); output({ kind: 'state', state: 'needs-input' }) }, send: async () => {}, steer: async () => {}, interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {}, replyElicitation: (id, action, answers) => { if (action === 'accept') elicitationContent(request, answers); output({ kind: 'request-resolved', requestId: id, outcome: action === 'accept' ? 'answered' : 'cancelled' }) } }
+      return {
+        start: async () => {
+          output({ kind: 'elicitation', ...request })
+          output({ kind: 'state', state: 'needs-input' })
+        },
+        send: async () => {},
+        steer: async () => {},
+        interrupt: async () => {},
+        stop: async () => {},
+        replyPermission: () => {},
+        replyQuestion: () => {},
+        replyElicitation: (id, action, answers) => {
+          if (action === 'accept') elicitationContent(request, answers)
+          output({ kind: 'request-resolved', requestId: id, outcome: action === 'accept' ? 'answered' : 'cancelled' })
+        },
+      }
     }
     const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
-    const chat = svc.start('t', scopeOf(cwd), 'Connect', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'full' })
+    const chat = svc.start('t', scopeOf(cwd), 'Connect', {
+      ...DEFAULT_AGENT_SETTINGS,
+      provider: 'codex',
+      access: 'full',
+    })
     await until(() => svc.events(chat.id).some((event) => event.kind === 'elicitation'))
     svc.saveElicitationDraft(chat.id, requestId, { count: '2', unknown: 'drop this' })
     expect(() => svc.replyElicitation(chat.id, requestId, 'accept', { count: '999' })).toThrow()
     expect(svc.events(chat.id).some((event) => event.kind === 'request-resolved')).toBe(false)
-    expect(svc.events(chat.id).find((event) => event.kind === 'question-state')).toMatchObject({ drafts: { count: '2' } })
+    expect(svc.events(chat.id).find((event) => event.kind === 'question-state')).toMatchObject({
+      drafts: { count: '2' },
+    })
     svc.replyElicitation(chat.id, requestId, 'accept', { count: '2' })
-    expect(svc.events(chat.id).find((event) => event.kind === 'question-state')).toMatchObject({ answers: { count: '2' } })
+    expect(svc.events(chat.id).find((event) => event.kind === 'question-state')).toMatchObject({
+      answers: { count: '2' },
+    })
     expect(() => svc.replyElicitation(chat.id, requestId, 'accept', { count: '2' })).toThrow(/already closed/)
     requestId = 'mcp-session:2'
     emit({ kind: 'elicitation', ...request, requestId })
@@ -186,8 +352,12 @@ describe('AgentService', () => {
     svc.stopAll()
     const restored = new AgentService(db, () => {}, fakeQuery([]))
     restored.markRestoredOnBoot()
-    expect(restored.events(chat.id).find((event) => event.kind === 'request-resolved' && event.requestId === requestId)).toMatchObject({ outcome: 'cancelled' })
-    expect(restored.events(chat.id).find((event) => event.kind === 'question-state' && event.requestId === requestId)).toMatchObject({ drafts: { count: '3' } })
+    expect(
+      restored.events(chat.id).find((event) => event.kind === 'request-resolved' && event.requestId === requestId),
+    ).toMatchObject({ outcome: 'cancelled' })
+    expect(
+      restored.events(chat.id).find((event) => event.kind === 'question-state' && event.requestId === requestId),
+    ).toMatchObject({ drafts: { count: '3' } })
     expect(() => restored.replyElicitation(chat.id, requestId, 'accept', { count: '3' })).toThrow(/already closed/)
   })
 
@@ -197,8 +367,19 @@ describe('AgentService', () => {
     const delivered: { event: AgentEvent; seq?: number }[] = []
     const factory: import('../src/codex').CodexFactory = (_scope, _settings, emit) => {
       output = emit
-      return { start: async () => { emit({ kind: 'state', state: 'running' }); emit({ kind: 'tool-use', toolUseId: 'command', name: 'Bash', summary: 'test' }); emit({ kind: 'tool-use', toolUseId: 'second', name: 'Bash', summary: 'other test' }) },
-        send: async () => {}, steer, interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
+      return {
+        start: async () => {
+          emit({ kind: 'state', state: 'running' })
+          emit({ kind: 'tool-use', toolUseId: 'command', name: 'Bash', summary: 'test' })
+          emit({ kind: 'tool-use', toolUseId: 'second', name: 'Bash', summary: 'other test' })
+        },
+        send: async () => {},
+        steer,
+        interrupt: async () => {},
+        stop: async () => {},
+        replyPermission: () => {},
+        replyQuestion: () => {},
+      }
     }
     const svc = new AgentService(db, (_id, event, seq) => delivered.push({ event, seq }), fakeQuery([]), factory)
     const chat = svc.start('t', scopeOf(cwd), 'Work', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'full' })
@@ -214,39 +395,92 @@ describe('AgentService', () => {
     expect(steer).not.toHaveBeenCalled()
     output({ kind: 'tool-result', toolUseId: 'second', isError: false, summary: 'done' })
     await until(() => steer.mock.calls.length === 1)
-    expect(svc.events(chat.id).filter((event) => event.kind === 'tool-result' && event.toolUseId === 'command')).toEqual([expect.objectContaining({ summary: 'final output' })])
-    expect(svc.events(chat.id).filter((event) => event.kind === 'tool-result' && event.toolUseId === 'command')[0]).not.toHaveProperty('running')
-    expect(svc.events(chat.id).filter((event) => event.kind === 'turn-diff')).toEqual([expect.objectContaining({ diff: 'latest diff' })])
-    expect(new Set(delivered.filter(({ event }) => event.kind === 'tool-result' && event.toolUseId === 'command').map(({ seq }) => seq)).size).toBe(1)
+    expect(
+      svc.events(chat.id).filter((event) => event.kind === 'tool-result' && event.toolUseId === 'command'),
+    ).toEqual([expect.objectContaining({ summary: 'final output' })])
+    expect(
+      svc.events(chat.id).filter((event) => event.kind === 'tool-result' && event.toolUseId === 'command')[0],
+    ).not.toHaveProperty('running')
+    expect(svc.events(chat.id).filter((event) => event.kind === 'turn-diff')).toEqual([
+      expect.objectContaining({ diff: 'latest diff' }),
+    ])
+    expect(
+      new Set(
+        delivered
+          .filter(({ event }) => event.kind === 'tool-result' && event.toolUseId === 'command')
+          .map(({ seq }) => seq),
+      ).size,
+    ).toBe(1)
     expect(new Set(delivered.filter(({ event }) => event.kind === 'turn-diff').map(({ seq }) => seq)).size).toBe(1)
     svc.stopAll()
   })
 
   it('streams Claude text before completion and replaces partial rows with durable final IDs for main and helper messages', async () => {
     let release!: () => void
-    const gate = new Promise<void>((resolve) => { release = resolve })
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
     const delivered: { event: AgentEvent; seq?: number }[] = []
-    const partial = (parent: string | null, event: unknown) => ({ type: 'stream_event', parent_tool_use_id: parent, event, uuid: 'frame', session_id: 'provider-1' }) as unknown as SDKMessage
+    const partial = (parent: string | null, event: unknown) =>
+      ({
+        type: 'stream_event',
+        parent_tool_use_id: parent,
+        event,
+        uuid: 'frame',
+        session_id: 'provider-1',
+      }) as unknown as SDKMessage
     let options: Options | undefined
     const query: QueryFn = (params) => {
       options = params.options
       async function* run(): AsyncGenerator<SDKMessage> {
         yield { type: 'system', subtype: 'init', session_id: 'provider-1', model: 'fake', cwd } as SDKMessage
-        yield { type: 'system', subtype: 'task_started', task_id: 'helper', tool_use_id: 'spawn', description: 'Helper', task_type: 'local_agent' } as unknown as SDKMessage
+        yield {
+          type: 'system',
+          subtype: 'task_started',
+          task_id: 'helper',
+          tool_use_id: 'spawn',
+          description: 'Helper',
+          task_type: 'local_agent',
+        } as unknown as SDKMessage
         for (const parent of [null, 'spawn']) {
           yield partial(parent, { type: 'message_start', message: { id: 'shared-native-id' } })
-          yield partial(parent, { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } })
-          yield partial(parent, { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Provider-visible reasoning' } })
+          yield partial(parent, {
+            type: 'content_block_start',
+            index: 0,
+            content_block: { type: 'thinking', thinking: '' },
+          })
+          yield partial(parent, {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'thinking_delta', thinking: 'Provider-visible reasoning' },
+          })
           yield partial(parent, { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } })
-          yield partial(parent, { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: parent ? 'Helper partial' : 'Main partial' } })
+          yield partial(parent, {
+            type: 'content_block_delta',
+            index: 1,
+            delta: { type: 'text_delta', text: parent ? 'Helper partial' : 'Main partial' },
+          })
         }
         await gate
         for (const parent of [null, 'spawn']) {
-          yield partial(parent, { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: ' complete' } })
+          yield partial(parent, {
+            type: 'content_block_delta',
+            index: 1,
+            delta: { type: 'text_delta', text: ' complete' },
+          })
           yield partial(parent, { type: 'content_block_stop', index: 1 })
           // Complete frames carry a single block, even though it streamed at index 1.
-          const final = { type: 'assistant', uuid: parent ? 'helper-final' : 'main-final', parent_tool_use_id: parent, message: { id: 'shared-native-id', content: [{ type: 'text', text: parent ? 'Helper partial complete' : 'Main partial complete' }] } } as unknown as SDKMessage
-          yield final; yield final
+          const final = {
+            type: 'assistant',
+            uuid: parent ? 'helper-final' : 'main-final',
+            parent_tool_use_id: parent,
+            message: {
+              id: 'shared-native-id',
+              content: [{ type: 'text', text: parent ? 'Helper partial complete' : 'Main partial complete' }],
+            },
+          } as unknown as SDKMessage
+          yield final
+          yield final
           yield partial(parent, { type: 'message_stop' })
         }
         yield { type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 } as SDKMessage
@@ -257,28 +491,62 @@ describe('AgentService', () => {
     const chat = svc.start('t', scopeOf(cwd), 'Stream', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
     await until(() => svc.events(chat.id).filter((event) => event.kind === 'text').length === 2)
     expect(options?.includePartialMessages).toBe(true)
-    expect(svc.events(chat.id).filter((event) => event.kind === 'text').map((event) => [event.text, event.agentId])).toEqual([['Main partial', undefined], ['Helper partial', 'helper']])
-    expect(svc.events(chat.id).filter((event) => event.kind === 'thinking').map(event => [event.text, event.agentId])).toEqual([['Provider-visible reasoning', undefined], ['Provider-visible reasoning', 'helper']])
+    expect(
+      svc
+        .events(chat.id)
+        .filter((event) => event.kind === 'text')
+        .map((event) => [event.text, event.agentId]),
+    ).toEqual([
+      ['Main partial', undefined],
+      ['Helper partial', 'helper'],
+    ])
+    expect(
+      svc
+        .events(chat.id)
+        .filter((event) => event.kind === 'thinking')
+        .map((event) => [event.text, event.agentId]),
+    ).toEqual([
+      ['Provider-visible reasoning', undefined],
+      ['Provider-visible reasoning', 'helper'],
+    ])
     const positions = delivered.filter(({ event }) => event.kind === 'text').map(({ seq }) => seq)
     release()
     await until(() => svc.events(chat.id).some((event) => event.kind === 'result'))
-    expect(svc.events(chat.id).filter((event) => event.kind === 'text').map((event) => [event.text, event.messageId, event.agentId])).toEqual([
-      ['Main partial complete', 'claude:main-final:0', undefined], ['Helper partial complete', 'claude:helper-final:0', 'helper'],
+    expect(
+      svc
+        .events(chat.id)
+        .filter((event) => event.kind === 'text')
+        .map((event) => [event.text, event.messageId, event.agentId]),
+    ).toEqual([
+      ['Main partial complete', 'claude:main-final:0', undefined],
+      ['Helper partial complete', 'claude:helper-final:0', 'helper'],
     ])
-    expect(delivered.filter(({ event }) => event.kind === 'text').every(({ seq }) => positions.includes(seq))).toBe(true)
+    expect(delivered.filter(({ event }) => event.kind === 'text').every(({ seq }) => positions.includes(seq))).toBe(
+      true,
+    )
     svc.stopAll()
   })
 
-  it.each(['compact', 'compact failed'])('records Claude compaction status and completion durably: %s', async (prompt) => {
-    const svc = new AgentService(db, () => {}, fakeQuery([]))
-    const session = svc.start('t', scopeOf(cwd), prompt, { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
-    await until(() => svc.get(session.id).state === 'idle')
-    expect(svc.events(session.id).filter((e) => e.kind === 'compaction').map(({ at, ...e }) => e)).toEqual([
-      { kind: 'compaction', state: 'started' },
-      prompt === 'compact' ? { kind: 'compaction', state: 'completed', beforeTokens: 212000, afterTokens: 33700 } : { kind: 'compaction', state: 'failed' },
-    ])
-    svc.stop(session.id)
-  })
+  it.each(['compact', 'compact failed'])(
+    'records Claude compaction status and completion durably: %s',
+    async (prompt) => {
+      const svc = new AgentService(db, () => {}, fakeQuery([]))
+      const session = svc.start('t', scopeOf(cwd), prompt, { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
+      await until(() => svc.get(session.id).state === 'idle')
+      expect(
+        svc
+          .events(session.id)
+          .filter((e) => e.kind === 'compaction')
+          .map(({ at, ...e }) => e),
+      ).toEqual([
+        { kind: 'compaction', state: 'started' },
+        prompt === 'compact'
+          ? { kind: 'compaction', state: 'completed', beforeTokens: 212000, afterTokens: 33700 }
+          : { kind: 'compaction', state: 'failed' },
+      ])
+      svc.stop(session.id)
+    },
+  )
 
   it('launches in the binding cwd, routes permission requests and records the transcript', async () => {
     const calls: Options[] = []
@@ -288,12 +556,23 @@ describe('AgentService', () => {
 
     await until(() => events.some((e) => e.event.kind === 'permission-request'))
     expect(svc.get(s.id).state).toBe('needs-input')
-    const req = events.find((e) => e.event.kind === 'permission-request')!.event as Extract<AgentEvent, { kind: 'permission-request' }>
+    const req = events.find((e) => e.event.kind === 'permission-request')!.event as Extract<
+      AgentEvent,
+      { kind: 'permission-request' }
+    >
     svc.replyPermission(s.id, req.requestId, true)
 
     await until(() => svc.get(s.id).state === 'idle')
     const kinds = svc.events(s.id).map((e) => (e.kind === 'text' ? e.text : e.kind))
-    expect(kinds).toEqual(['user', 'init', 'permission-request', 'request-resolved', 'perm:allow', 'echo:hello', 'result'])
+    expect(kinds).toEqual([
+      'user',
+      'init',
+      'permission-request',
+      'request-resolved',
+      'perm:allow',
+      'echo:hello',
+      'result',
+    ])
     expect(svc.get(s.id).providerSessionId).toBe('provider-1')
     expect(svc.list('t')[0]!.title).toBe('hello')
 
@@ -301,7 +580,11 @@ describe('AgentService', () => {
     await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:again'))
     svc.stop(s.id)
     expect(svc.get(s.id).state).toBe('stopped')
-    expect(svc.events(s.id).findLast((event) => event.kind === 'state')).toMatchObject({ kind: 'state', state: 'stopped', at: expect.any(Number) })
+    expect(svc.events(s.id).findLast((event) => event.kind === 'state')).toMatchObject({
+      kind: 'state',
+      state: 'stopped',
+      at: expect.any(Number),
+    })
     svc.stop(s.id)
     expect(svc.events(s.id).filter((event) => event.kind === 'state' && event.state === 'stopped')).toHaveLength(1)
   })
@@ -315,17 +598,38 @@ describe('AgentService', () => {
       // The turn is over but the background agent is still working.
       expect(svc.get(s.id).state).toBe('idle')
       const running = svc.task(s.id, svc.events(s.id).find((e) => e.kind === 'agent')!.agentId!)!
-      expect(running).toMatchObject({ name: 'Map the auth module', agentType: 'Explore', status: 'running', background: true, address: 'auth-mapper', canMessage: true, summary: 'Reading session.ts', toolUses: 1 })
-      expect(svc.events(s.id).filter((e) => e.agentId === running.agentId && e.kind !== 'agent').map((e) => e.kind)).toEqual(['text', 'tool-use', 'tool-result'])
+      expect(running).toMatchObject({
+        name: 'Map the auth module',
+        agentType: 'Explore',
+        status: 'running',
+        background: true,
+        address: 'auth-mapper',
+        canMessage: true,
+        summary: 'Reading session.ts',
+        toolUses: 1,
+      })
+      expect(
+        svc
+          .events(s.id)
+          .filter((e) => e.agentId === running.agentId && e.kind !== 'agent')
+          .map((e) => e.kind),
+      ).toEqual(['text', 'tool-use', 'tool-result'])
       // One event per agent, updated in place.
       expect(svc.events(s.id).filter((e) => e.kind === 'agent')).toHaveLength(1)
       await svc.messageTask(s.id, running.agentId, 'Also list TODOs')
-      await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'Passed your message to Map the auth module.'))
+      await until(() =>
+        svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'Passed your message to Map the auth module.'),
+      )
       await until(() => svc.task(s.id, running.agentId)?.status === 'completed')
-      expect(svc.task(s.id, running.agentId)).toMatchObject({ summary: 'src/auth has one file, session.ts, exporting `session`.', tokens: 3200 })
+      expect(svc.task(s.id, running.agentId)).toMatchObject({
+        summary: 'src/auth has one file, session.ts, exporting `session`.',
+        tokens: 3200,
+      })
       expect(conversationHandoff(svc.events(s.id))).not.toContain('Looking through')
 
-      await until(() => svc.get(s.id).state === 'idle' && svc.events(s.id).filter((e) => e.kind === 'result').length >= 3)
+      await until(
+        () => svc.get(s.id).state === 'idle' && svc.events(s.id).filter((e) => e.kind === 'result').length >= 3,
+      )
       await svc.send(s.id, '[agents] again')
       await until(() => svc.events(s.id).filter((e) => e.kind === 'agent').length === 2)
       const second = svc.events(s.id).filter((e) => e.kind === 'agent')[1]!.agentId!
@@ -333,12 +637,15 @@ describe('AgentService', () => {
       await svc.stopTask(s.id, second)
       await until(() => svc.task(s.id, second)?.status === 'stopped')
       svc.stop(s.id)
-    } finally { vi.unstubAllEnvs() }
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('moves a running Claude command to the background, and refuses when no Claude chat is live', async () => {
     const backgroundTasks = vi.fn(async () => true)
-    const svc = new AgentService(db, () => {}, ((args: Parameters<QueryFn>[0]) => Object.assign(demoQuery(args), { backgroundTasks })) as QueryFn)
+    const svc = new AgentService(db, () => {}, ((args: Parameters<QueryFn>[0]) =>
+      Object.assign(demoQuery(args), { backgroundTasks })) as QueryFn)
     const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
     expect(await svc.backgroundTool(s.id, 'toolu_1')).toBe(true)
     expect(backgroundTasks).toHaveBeenCalledWith('toolu_1')
@@ -351,9 +658,11 @@ describe('AgentService', () => {
     vi.useFakeTimers()
     try {
       const backgroundTasks = vi.fn(async () => true)
-      const svc = new AgentService(db, () => {}, ((args: Parameters<QueryFn>[0]) => Object.assign(demoQuery(args), { backgroundTasks })) as QueryFn)
+      const svc = new AgentService(db, () => {}, ((args: Parameters<QueryFn>[0]) =>
+        Object.assign(demoQuery(args), { backgroundTasks })) as QueryFn)
       const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
-      const record = (event: AgentEvent) => (svc as unknown as { record(id: string, event: AgentEvent): void }).record(s.id, event)
+      const record = (event: AgentEvent) =>
+        (svc as unknown as { record(id: string, event: AgentEvent): void }).record(s.id, event)
       expect(DEFAULT_APP_PREFERENCES.autoBackgroundSeconds).toBe(60)
       // Off: nothing is scheduled.
       svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, autoBackgroundSeconds: 0 })
@@ -370,14 +679,16 @@ describe('AgentService', () => {
       await vi.advanceTimersByTimeAsync(2_000)
       expect(backgroundTasks.mock.calls).toEqual([['slow']])
       svc.stopAll()
-    } finally { vi.useRealTimers() }
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('tells agents to background long commands unless auto-background is off', async () => {
     const seen: string[] = []
     const capture = ((args: Parameters<QueryFn>[0]) => {
       const prompt = args.options?.systemPrompt
-      seen.push(typeof prompt === 'object' && prompt && 'append' in prompt ? prompt.append ?? '' : '')
+      seen.push(typeof prompt === 'object' && prompt && 'append' in prompt ? (prompt.append ?? '') : '')
       return demoQuery(args)
     }) as QueryFn
     const svc = new AgentService(db, () => {}, capture)
@@ -401,7 +712,9 @@ describe('AgentService', () => {
     const factory: import('../src/codex').CodexFactory = (_scope, _settings, emit) => {
       let connection!: import('@ramu/shared/types').McpConnection
       return {
-        setTools: (value) => { connection = value },
+        setTools: (value) => {
+          connection = value
+        },
         start: async (_prompt, resume) => {
           connections.push({ ...connection })
           resumes.push(resume)
@@ -409,15 +722,28 @@ describe('AgentService', () => {
           emit({ kind: 'state', state: 'running' })
           emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
         },
-        send: async () => {}, steer: async () => {}, interrupt: async () => {},
-        stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {},
+        send: async () => {},
+        steer: async () => {},
+        interrupt: async () => {},
+        stop: async () => {},
+        replyPermission: () => {},
+        replyQuestion: () => {},
       }
     }
     const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
     vi.spyOn(svc, 'catalog').mockResolvedValue([])
     svc.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 't' })
-    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions: false, autoBackgroundSeconds: 0, goals: { mode: 'manual', maxTurns: 10 } })
-    const session = svc.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
+    svc.preferences = () => ({
+      ...DEFAULT_APP_PREFERENCES,
+      asyncQuestions: false,
+      autoBackgroundSeconds: 0,
+      goals: { mode: 'manual', maxTurns: 10 },
+    })
+    const session = svc.start('t', scopeOf(cwd), 'initial', {
+      ...DEFAULT_AGENT_SETTINGS,
+      access: 'full' as const,
+      provider: 'codex',
+    })
     await until(() => svc.get(session.id).state === 'idle')
     await svc.stopAndWait(session.id)
     await svc.send(session.id, 'follow-up')
@@ -428,45 +754,83 @@ describe('AgentService', () => {
     svc.stopAll()
   })
 
-  it.each(['codex', 'opencode', 'cursor', 'antigravity'] as const)('delivers shared guidance and updated response styles to %s', async (provider) => {
-    const prompts: string[] = []
-    const connections: import('@ramu/shared/types').McpConnection[] = []
-    const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
-      const complete = (prompt: string) => { prompts.push(prompt); emit({ kind: 'result', text: 'done', isError: false, costUsd: null }) }
-      return { setTools: (connection) => connections.push(connection), start: async (prompt) => complete(prompt), send: async (prompt) => complete(prompt), steer: async () => {}, interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
-    }
-    const service = new AgentService(db, () => {}, fakeQuery([]), factory, factory, factory)
-    vi.spyOn(service, 'catalog').mockResolvedValue([])
-    service.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 'test' })
-    service.memoryInstructions = () => 'Shared memory instructions fixture'
-    let style: 'adhd' | 'detailed' | 'default' = 'adhd'
-    service.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, intelligence: { ...DEFAULT_APP_PREFERENCES.intelligence, responseStyle: style } })
-    const chat = service.start('t', scopeOf(cwd), 'Do the work', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider })
-    await until(() => service.get(chat.id).state === 'idle')
-    expect(prompts[0]).toContain('numbered steps')
-    expect(connections[0]?.instructions).toContain('tool_search')
-    if (provider !== 'codex') expect(prompts[0]).toContain('Shared memory instructions fixture')
-    style = 'detailed'
-    await service.send(chat.id, 'Explain the result')
-    expect(prompts[1]).toContain('Explain the reasoning')
-    style = 'default'
-    await service.send(chat.id, 'Use the normal style again')
-    expect(prompts[2]).toContain('replacing earlier Ramu style preferences')
-    service.stopAll()
-  })
+  it.each(['codex', 'opencode', 'cursor', 'antigravity'] as const)(
+    'delivers shared guidance and updated response styles to %s',
+    async (provider) => {
+      const prompts: string[] = []
+      const connections: import('@ramu/shared/types').McpConnection[] = []
+      const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
+        const complete = (prompt: string) => {
+          prompts.push(prompt)
+          emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
+        }
+        return {
+          setTools: (connection) => connections.push(connection),
+          start: async (prompt) => complete(prompt),
+          send: async (prompt) => complete(prompt),
+          steer: async () => {},
+          interrupt: async () => {},
+          stop: async () => {},
+          replyPermission: () => {},
+          replyQuestion: () => {},
+        }
+      }
+      const service = new AgentService(db, () => {}, fakeQuery([]), factory, factory, factory)
+      vi.spyOn(service, 'catalog').mockResolvedValue([])
+      service.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 'test' })
+      service.memoryInstructions = () => 'Shared memory instructions fixture'
+      let style: 'adhd' | 'detailed' | 'default' = 'adhd'
+      service.preferences = () => ({
+        ...DEFAULT_APP_PREFERENCES,
+        intelligence: { ...DEFAULT_APP_PREFERENCES.intelligence, responseStyle: style },
+      })
+      const chat = service.start('t', scopeOf(cwd), 'Do the work', {
+        ...DEFAULT_AGENT_SETTINGS,
+        access: 'full' as const,
+        provider,
+      })
+      await until(() => service.get(chat.id).state === 'idle')
+      expect(prompts[0]).toContain('numbered steps')
+      expect(connections[0]?.instructions).toContain('tool_search')
+      if (provider !== 'codex') expect(prompts[0]).toContain('Shared memory instructions fixture')
+      style = 'detailed'
+      await service.send(chat.id, 'Explain the result')
+      expect(prompts[1]).toContain('Explain the reasoning')
+      style = 'default'
+      await service.send(chat.id, 'Use the normal style again')
+      expect(prompts[2]).toContain('replacing earlier Ramu style preferences')
+      service.stopAll()
+    },
+  )
 
   it('keeps the checkout while a background agent works, without holding back the chat itself', async () => {
     vi.stubEnv('RAMU_FAKE_AGENT_DELAY', '500')
     try {
       const svc = new AgentService(db, () => {}, demoQuery)
       const captured: string[] = []
-      svc.reviewHooks = { begin: async () => 'r', bind: () => {}, abandon: () => {}, followup: async () => {}, complete: async (id) => { captured.push(`${id}:${svc.events(id).filter((e) => e.kind === 'agent').map((e) => e.kind === 'agent' && e.status).join(',')}`) } }
+      svc.reviewHooks = {
+        begin: async () => 'r',
+        bind: () => {},
+        abandon: () => {},
+        followup: async () => {},
+        complete: async (id) => {
+          captured.push(
+            `${id}:${svc
+              .events(id)
+              .filter((e) => e.kind === 'agent')
+              .map((e) => e.kind === 'agent' && e.status)
+              .join(',')}`,
+          )
+        },
+      }
       const s = svc.start('t', scopeOf(cwd), '[agents] map auth', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
       await until(() => svc.events(s.id).some((e) => e.kind === 'result'))
       expect(svc.get(s.id).state).toBe('idle')
       expect(svc.activeWriter([cwd])?.id).toBe(s.id)
       expect(svc.activeWriter([cwd], s.id)).toBeNull()
-      expect(() => svc.start('t2', scopeOf(cwd), 'hi', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })).toThrow(/already writing/)
+      expect(() => svc.start('t2', scopeOf(cwd), 'hi', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })).toThrow(
+        /already writing/,
+      )
       // Its own follow-up goes straight out instead of waiting for its helper.
       await svc.submit(s.id, 'meanwhile, a question', 'queue')
       expect(svc.queued(s.id)).toHaveLength(0)
@@ -476,7 +840,9 @@ describe('AgentService', () => {
       expect(captured[0]).toContain('completed')
       await until(() => svc.activeWriter([cwd]) === null)
       svc.stop(s.id)
-    } finally { vi.unstubAllEnvs() }
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('marks sub-agents stopped when their chat is stopped', async () => {
@@ -486,8 +852,15 @@ describe('AgentService', () => {
       const s = svc.start('t', scopeOf(cwd), '[agents] map auth', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
       await until(() => svc.events(s.id).some((e) => e.kind === 'result'))
       svc.stop(s.id)
-      expect(svc.events(s.id).filter((e) => e.kind === 'agent').map((e) => e.kind === 'agent' && e.status)).toEqual(['stopped'])
-    } finally { vi.unstubAllEnvs() }
+      expect(
+        svc
+          .events(s.id)
+          .filter((e) => e.kind === 'agent')
+          .map((e) => e.kind === 'agent' && e.status),
+      ).toEqual(['stopped'])
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('allows one active writer per canonical checkout, across tasks', async () => {
@@ -538,7 +911,12 @@ describe.runIf(process.env.RAMU_REAL_AGENT === '1')('Claude Code via Agent SDK (
   it('runs in the binding cwd and edits files there only after approval', { timeout: 180_000 }, async () => {
     execFileSync('git', ['init', '-q'], { cwd })
     const svc = new AgentService(db, (id, event) => events.push({ id, event }), query as unknown as QueryFn)
-    const s = svc.start('t', scopeOf(cwd), 'Create a file named hello.txt in the current directory containing exactly the text: hi from ramu. Do nothing else.', { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
+    const s = svc.start(
+      't',
+      scopeOf(cwd),
+      'Create a file named hello.txt in the current directory containing exactly the text: hi from ramu. Do nothing else.',
+      { ...DEFAULT_AGENT_SETTINGS, access: 'edits' },
+    )
 
     // Approve whatever the agent asks for, recording what was asked.
     const asked: string[] = []
@@ -565,8 +943,32 @@ describe.runIf(process.env.RAMU_REAL_AGENT === '1')('Claude Code via Agent SDK (
 })
 
 const catalog: ProviderCatalog[] = [
-  { provider: 'claude-code', models: [{ provider: 'claude-code', id: 'sonnet', name: 'Sonnet', efforts: ['low', 'medium', 'high'], defaultEffort: 'medium', isDefault: true }] },
-  { provider: 'codex', models: [{ provider: 'codex', id: 'codex-test', name: 'Codex test', efforts: ['low', 'high'], defaultEffort: 'low', isDefault: true }] },
+  {
+    provider: 'claude-code',
+    models: [
+      {
+        provider: 'claude-code',
+        id: 'sonnet',
+        name: 'Sonnet',
+        efforts: ['low', 'medium', 'high'],
+        defaultEffort: 'medium',
+        isDefault: true,
+      },
+    ],
+  },
+  {
+    provider: 'codex',
+    models: [
+      {
+        provider: 'codex',
+        id: 'codex-test',
+        name: 'Codex test',
+        efforts: ['low', 'high'],
+        defaultEffort: 'low',
+        isDefault: true,
+      },
+    ],
+  },
 ]
 function service(calls: Options[] = []) {
   const svc = new AgentService(db, (id, event) => events.push({ id, event }), fakeQuery(calls), fakeCodex)
@@ -582,7 +984,12 @@ describe('Conversation provider settings and handoffs', () => {
     const settings = { ...full, model: 'sonnet', effort: 'high' as const }
     const s = svc.start('t', scopeOf(cwd), 'hello', settings)
     await until(() => svc.get(s.id).state === 'idle')
-    expect(calls[0]).toMatchObject({ model: 'sonnet', effort: 'high', permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true })
+    expect(calls[0]).toMatchObject({
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'bypassPermissions',
+      allowDangerouslySkipPermissions: true,
+    })
     expect(svc.get(s.id).settings).toEqual(settings)
     expect(svc.events(s.id).some((e) => e.kind === 'permission-request')).toBe(false)
     svc.stopAll()
@@ -596,9 +1003,24 @@ describe('Conversation provider settings and handoffs', () => {
     await svc.send(s.id, 'Now implement it')
     await until(() => svc.get(s.id).state === 'idle')
     expect(svc.list('t')).toHaveLength(1)
-    expect(svc.get(s.id)).toMatchObject({ id: s.id, provider: 'codex', cwd, additionalDirs: ['/other/repo'], covers: [cwd, '/other/repo'] })
+    expect(svc.get(s.id)).toMatchObject({
+      id: s.id,
+      provider: 'codex',
+      cwd,
+      additionalDirs: ['/other/repo'],
+      covers: [cwd, '/other/repo'],
+    })
     expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'settings', handoff: true }))
-    expect(svc.events(s.id).some((e) => e.kind === 'text' && e.text.includes('USER: Remember the password reset task') && e.text.includes('Now implement it'))).toBe(true)
+    expect(
+      svc
+        .events(s.id)
+        .some(
+          (e) =>
+            e.kind === 'text' &&
+            e.text.includes('USER: Remember the password reset task') &&
+            e.text.includes('Now implement it'),
+        ),
+    ).toBe(true)
     expect(svc.events(s.id).filter((e) => e.kind === 'user')).toHaveLength(2)
     svc.stopAll()
   })
@@ -638,12 +1060,22 @@ describe('Conversation provider settings and handoffs', () => {
       const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'auto' })
       await until(() => svc.get(s.id).state === 'needs-input')
       await svc.configure(s.id, { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
-      expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'request-resolved', outcome: 'cancelled' }))
+      expect(svc.events(s.id)).toContainEqual(
+        expect.objectContaining({ kind: 'request-resolved', outcome: 'cancelled' }),
+      )
       await until(() => svc.get(s.id).state === 'idle')
       expect(svc.get(s.id).settings.access).toBe('full')
       await svc.send(s.id, 'continue')
-      await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:continue') && svc.get(s.id).state === 'idle')
-      expect(calls.at(-1)).toMatchObject({ resume: 'provider-1', permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true })
+      await until(
+        () =>
+          svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:continue') &&
+          svc.get(s.id).state === 'idle',
+      )
+      expect(calls.at(-1)).toMatchObject({
+        resume: 'provider-1',
+        permissionMode: 'bypassPermissions',
+        allowDangerouslySkipPermissions: true,
+      })
       // The tool call after the switch is approved silently, and the chat is not left waiting.
       expect(requests(svc, s.id)).toHaveLength(1)
       expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'text', text: 'perm:allow' }))
@@ -657,9 +1089,15 @@ describe('Conversation provider settings and handoffs', () => {
       await svc.configure(s.id, { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
       await until(() => svc.get(s.id).state === 'idle')
       await svc.send(s.id, 'one')
-      await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:one') && svc.get(s.id).state === 'idle')
+      await until(
+        () =>
+          svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:one') && svc.get(s.id).state === 'idle',
+      )
       await svc.send(s.id, 'two')
-      await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:two') && svc.get(s.id).state === 'idle')
+      await until(
+        () =>
+          svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:two') && svc.get(s.id).state === 'idle',
+      )
       expect(requests(svc, s.id)).toHaveLength(1)
       svc.stopAll()
     })
@@ -703,7 +1141,11 @@ describe('Conversation provider settings and handoffs', () => {
       await until(() => svc.get(s.id).state === 'idle')
       expect(svc.get(s.id).settings.access).toBe('full')
       await svc.send(s.id, 'run it')
-      await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text.includes('received: run it')) && svc.get(s.id).state === 'idle')
+      await until(
+        () =>
+          svc.events(s.id).some((e) => e.kind === 'text' && e.text.includes('received: run it')) &&
+          svc.get(s.id).state === 'idle',
+      )
       expect(requests(svc, s.id)).toHaveLength(1)
       svc.stopAll()
     })
@@ -715,7 +1157,13 @@ describe('Conversation provider settings and handoffs', () => {
     await until(() => svc.get(s.id).provider === 'codex' && svc.get(s.id).state === 'idle')
     expect(svc.get(s.id).settings.access).toBe('full')
     expect(svc.events(s.id).filter((e) => e.kind === 'user')).toHaveLength(1)
-    expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'settings', reason: expect.stringContaining('usage limit reached'), handoff: true }))
+    expect(svc.events(s.id)).toContainEqual(
+      expect.objectContaining({
+        kind: 'settings',
+        reason: expect.stringContaining('usage limit reached'),
+        handoff: true,
+      }),
+    )
     svc.stopAll()
   })
 
@@ -741,12 +1189,22 @@ describe('Conversation provider settings and handoffs', () => {
   })
 
   /** Moves the recorded retry time into the past, as if the provider's limit had reset. */
-  const expireWait = (svc: AgentService, id: string) => (svc as unknown as { record: (id: string, event: AgentEvent) => void }).record(id, { kind: 'provider-wait', retryAt: Date.now() - 1, retryDelay: 1000, updatedAt: Date.now() })
-  const waiting = (svc: AgentService, id: string) => { const last = svc.events(id).findLast((e) => e.kind === 'provider-wait'); return last?.kind === 'provider-wait' && last.retryAt !== null }
+  const expireWait = (svc: AgentService, id: string) =>
+    (svc as unknown as { record: (id: string, event: AgentEvent) => void }).record(id, {
+      kind: 'provider-wait',
+      retryAt: Date.now() - 1,
+      retryDelay: 1000,
+      updatedAt: Date.now(),
+    })
+  const waiting = (svc: AgentService, id: string) => {
+    const last = svc.events(id).findLast((e) => e.kind === 'provider-wait')
+    return last?.kind === 'provider-wait' && last.retryAt !== null
+  }
 
   /** The wait ended and a turn then finished. */
   const resumedAfterReset = (svc: AgentService, id: string) => {
-    const events = svc.events(id), cleared = events.findLastIndex((e) => e.kind === 'provider-wait' && e.retryAt === null)
+    const events = svc.events(id),
+      cleared = events.findLastIndex((e) => e.kind === 'provider-wait' && e.retryAt === null)
     return cleared >= 0 && events.slice(cleared).some((e) => e.kind === 'result')
   }
 
@@ -762,7 +1220,13 @@ describe('Conversation provider settings and handoffs', () => {
     expect(svc.events(s.id).filter((e) => e.kind === 'user')).toHaveLength(1)
     expireWait(svc, s.id)
     await until(() => !waiting(svc, s.id) && svc.queued(s.id).length === 0 && svc.get(s.id).state === 'idle')
-    expect(svc.events(s.id).filter((e) => e.kind === 'user').map((e) => e.kind === 'user' ? e.text : '').at(-1)).toBe('typed during the limit\n\nalso during the limit')
+    expect(
+      svc
+        .events(s.id)
+        .filter((e) => e.kind === 'user')
+        .map((e) => (e.kind === 'user' ? e.text : ''))
+        .at(-1),
+    ).toBe('typed during the limit\n\nalso during the limit')
     svc.stopAll()
   })
 
@@ -778,7 +1242,12 @@ describe('Conversation provider settings and handoffs', () => {
     svc.stopAll()
   })
 
-  const pauseQueue = (svc: AgentService, id: string) => (svc as unknown as { updateQueue: (id: string, messages: unknown[], paused: boolean) => void }).updateQueue(id, svc.queued(id), true)
+  const pauseQueue = (svc: AgentService, id: string) =>
+    (svc as unknown as { updateQueue: (id: string, messages: unknown[], paused: boolean) => void }).updateQueue(
+      id,
+      svc.queued(id),
+      true,
+    )
 
   it('continues after the reset even if an empty queue was left paused', async () => {
     const svc = service()
@@ -799,7 +1268,12 @@ describe('Conversation provider settings and handoffs', () => {
     expect(svc.events(s.id).findLast((e) => e.kind === 'queue')).toMatchObject({ paused: false })
     expireWait(svc, s.id)
     await until(() => !waiting(svc, s.id) && svc.queued(s.id).length === 0 && svc.get(s.id).state === 'idle')
-    expect(svc.events(s.id).filter((e) => e.kind === 'user').at(-1)).toMatchObject({ text: 'typed during the limit' })
+    expect(
+      svc
+        .events(s.id)
+        .filter((e) => e.kind === 'user')
+        .at(-1),
+    ).toMatchObject({ text: 'typed during the limit' })
     svc.stopAll()
   })
 
@@ -837,7 +1311,9 @@ describe('Conversation provider settings and handoffs', () => {
     await until(() => waiting(svc, s.id))
     const wait = svc.events(s.id).findLast((e) => e.kind === 'provider-wait')
     expect(workspace.getTask('t').waitingUntil).toBe(wait?.kind === 'provider-wait' ? wait.retryAt : -1)
-    expect(workspace.listTasks().find((task) => task.id === 't')?.waitingUntil).toBe(workspace.getTask('t').waitingUntil)
+    expect(workspace.listTasks().find((task) => task.id === 't')?.waitingUntil).toBe(
+      workspace.getTask('t').waitingUntil,
+    )
     svc.stop(s.id)
     expect(workspace.getTask('t').waitingUntil).toBeNull()
     svc.stopAll()
@@ -867,7 +1343,9 @@ describe('Conversation provider settings and handoffs', () => {
     const svc = service()
     const s = svc.start('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(s.id).state === 'idle')
-    await expect(svc.configure(s.id, { ...full, provider: 'codex', model: 'codex-test', effort: 'ultra' })).rejects.toThrow(/does not support/)
+    await expect(
+      svc.configure(s.id, { ...full, provider: 'codex', model: 'codex-test', effort: 'ultra' }),
+    ).rejects.toThrow(/does not support/)
     expect(svc.get(s.id).provider).toBe('claude-code')
     expect(svc.get(s.id).state).toBe('idle')
     svc.stopAll()
@@ -878,7 +1356,11 @@ describe('Conversation provider settings and handoffs', () => {
     const s = svc.start('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(s.id).state === 'idle')
     let resolve!: (c: ProviderCatalog[]) => void
-    vi.mocked(svc.catalog).mockReturnValue(new Promise((r) => { resolve = r }))
+    vi.mocked(svc.catalog).mockReturnValue(
+      new Promise((r) => {
+        resolve = r
+      }),
+    )
     const changing = svc.configure(s.id, { ...full, provider: 'codex', model: 'codex-test' })
     svc.stop(s.id)
     resolve(catalog)
@@ -893,7 +1375,12 @@ describe('Conversation provider settings and handoffs', () => {
     expect(isUsageLimit({ codexErrorInfo: 'usageLimitExceeded' })).toBe(true)
     expect(isUsageLimit(new Error('Unauthorized'))).toBe(false)
     expect(isUsageLimit('file does not exist')).toBe(false)
-    expect(conversationHandoff([{ kind: 'user', text: 'fix login' }, { kind: 'tool-result', toolUseId: 'x', isError: false, summary: 'already edited login.ts' }])).toContain('already edited login.ts')
+    expect(
+      conversationHandoff([
+        { kind: 'user', text: 'fix login' },
+        { kind: 'tool-result', toolUseId: 'x', isError: false, summary: 'already edited login.ts' },
+      ]),
+    ).toContain('already edited login.ts')
   })
 })
 
@@ -901,7 +1388,11 @@ describe('AI commit message drafts', () => {
   it('uses no Claude tools, denies any attempted tool, and never creates an agent chat', async () => {
     const calls: Options[] = []
     const svc = service(calls)
-    const result = await svc.draftCommit('diff --git a/login.ts b/login.ts\n+fixLogin()', { ...full, model: 'sonnet', effort: 'low' })
+    const result = await svc.draftCommit('diff --git a/login.ts b/login.ts\n+fixLogin()', {
+      ...full,
+      model: 'sonnet',
+      effort: 'low',
+    })
     expect(result.message).toContain('fixLogin')
     expect(calls[0]).toMatchObject({ tools: [], maxTurns: 1, permissionMode: 'default', effort: 'low' })
     expect(calls[0]!.cwd).not.toBe(cwd)
@@ -919,8 +1410,15 @@ describe('AI commit message drafts', () => {
   it('drafts a large commit from every staged file and a cut-short patch', async () => {
     const calls: Options[] = []
     const svc = service(calls)
-    const analyze = vi.spyOn(svc as unknown as { analyze: (prompt: string) => Promise<unknown> }, 'analyze').mockResolvedValue({ message: 'feat: big change', provider: 'claude-code', model: 'sonnet' })
-    await svc.draftCommit(`diff --git a/big.ts b/big.ts\n+${'x'.repeat(200_000)}`, full, undefined, 'M\tbig.ts\nA\tsrc/new.ts')
+    const analyze = vi
+      .spyOn(svc as unknown as { analyze: (prompt: string) => Promise<unknown> }, 'analyze')
+      .mockResolvedValue({ message: 'feat: big change', provider: 'claude-code', model: 'sonnet' })
+    await svc.draftCommit(
+      `diff --git a/big.ts b/big.ts\n+${'x'.repeat(200_000)}`,
+      full,
+      undefined,
+      'M\tbig.ts\nA\tsrc/new.ts',
+    )
     const prompt = analyze.mock.calls[0]![0]
     expect(prompt).toContain('<staged_files>\nM\tbig.ts\nA\tsrc/new.ts\n</staged_files>')
     expect(prompt).toContain('[truncated]')
@@ -934,18 +1432,31 @@ it('AI drafts fall back on a structured Codex usage error while remaining read-o
   let readOnly: boolean | undefined
   const limitCodex: import('../src/codex').CodexFactory = (_scope, _settings, emit, readonly) => {
     readOnly = readonly
-    return { start: async () => { emit({ kind: 'error', message: 'Limit reached' }, true) }, send: async () => {}, steer: async () => {}, stop: async () => {}, interrupt: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
+    return {
+      start: async () => {
+        emit({ kind: 'error', message: 'Limit reached' }, true)
+      },
+      send: async () => {},
+      steer: async () => {},
+      stop: async () => {},
+      interrupt: async () => {},
+      replyPermission: () => {},
+      replyQuestion: () => {},
+    }
   }
   const svc = new AgentService(db, () => {}, fakeQuery(calls), limitCodex)
   vi.spyOn(svc, 'catalog').mockResolvedValue(catalog)
-  const result = await svc.draftCommit('diff --git a/login.ts b/login.ts\n+fixLogin()', { ...full, provider: 'codex', model: 'codex-test' })
+  const result = await svc.draftCommit('diff --git a/login.ts b/login.ts\n+fixLogin()', {
+    ...full,
+    provider: 'codex',
+    model: 'codex-test',
+  })
   expect(readOnly).toBe(true)
   expect(result.provider).toBe('claude-code')
   expect(calls[0]!.tools).toEqual([])
   expect(svc.list('t')).toHaveLength(0)
   svc.stopAll()
 })
-
 
 describe('busy agent messages', () => {
   function setup() {
@@ -954,23 +1465,59 @@ describe('busy agent messages', () => {
     const steer = vi.fn(async (_text: string) => {})
     const factory: import('../src/codex').CodexFactory = (_scope, _settings, output) => {
       emit = output
-      return { start: async () => { emit({ kind: 'state', state: 'running' }) }, send, steer,
-        interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
+      return {
+        start: async () => {
+          emit({ kind: 'state', state: 'running' })
+        },
+        send,
+        steer,
+        interrupt: async () => {},
+        stop: async () => {},
+        replyPermission: () => {},
+        replyQuestion: () => {},
+      }
     }
     const service = new AgentService(db, () => {}, fakeQuery([]), factory)
-    const session = service.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
-    return { service, session, send, steer, complete: () => emit({ kind: 'result', text: 'done', isError: false, costUsd: null }) }
+    const session = service.start('t', scopeOf(cwd), 'initial', {
+      ...DEFAULT_AGENT_SETTINGS,
+      access: 'full' as const,
+      provider: 'codex',
+    })
+    return {
+      service,
+      session,
+      send,
+      steer,
+      complete: () => emit({ kind: 'result', text: 'done', isError: false, costUsd: null }),
+    }
   }
 
   it('queues another chat until the previous run snapshot is complete', async () => {
     const { service, session, complete } = setup()
     let release!: () => void
-    const capture = new Promise<void>((resolve) => { release = resolve })
-    const begin = vi.fn(async () => 'review'), followup = vi.fn(async () => {})
-    service.reviewHooks = { begin, bind: () => {}, abandon: () => {}, followup, complete: async (id) => { if (id === session.id) await capture } }
-    const second = await service.startReviewed('t2', scopeOf(cwd), 'second chat', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
-    expect(second.state).toBe('idle'); expect(service.queued(second.id)[0]?.text).toBe('second chat')
-    expect(begin).not.toHaveBeenCalled(); expect(followup).not.toHaveBeenCalled()
+    const capture = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const begin = vi.fn(async () => 'review'),
+      followup = vi.fn(async () => {})
+    service.reviewHooks = {
+      begin,
+      bind: () => {},
+      abandon: () => {},
+      followup,
+      complete: async (id) => {
+        if (id === session.id) await capture
+      },
+    }
+    const second = await service.startReviewed('t2', scopeOf(cwd), 'second chat', {
+      ...DEFAULT_AGENT_SETTINGS,
+      access: 'full' as const,
+      provider: 'codex',
+    })
+    expect(second.state).toBe('idle')
+    expect(service.queued(second.id)[0]?.text).toBe('second chat')
+    expect(begin).not.toHaveBeenCalled()
+    expect(followup).not.toHaveBeenCalled()
     complete()
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(service.activeWriter([cwd])?.id).toBe(session.id)
@@ -979,19 +1526,32 @@ describe('busy agent messages', () => {
     await until(() => service.get(second.id).state === 'running')
     expect(followup).toHaveBeenCalledWith(second.id)
     expect(service.queued(second.id)).toEqual([])
-    service.stopAll(); await service.stopAndWait(session.id); await service.stopAndWait(second.id)
+    service.stopAll()
+    await service.stopAndWait(session.id)
+    await service.stopAndWait(second.id)
   })
 
   it('pauses queued review feedback if its checkout changed before execution', async () => {
     const { service, session, send, complete } = setup()
-    const validateFeedback = vi.fn(async (): Promise<void> => { throw new Error('Return to branch main') })
-    service.reviewHooks = { begin: async () => 'r', bind: () => {}, abandon: () => {}, followup: async () => {}, validateFeedback }
+    const validateFeedback = vi.fn(async (): Promise<void> => {
+      throw new Error('Return to branch main')
+    })
+    service.reviewHooks = {
+      begin: async () => 'r',
+      bind: () => {},
+      abandon: () => {},
+      followup: async () => {},
+      validateFeedback,
+    }
     await service.submit(session.id, 'review feedback', 'queue', [], 'r')
     complete()
     await until(() => validateFeedback.mock.calls.length === 1)
     await until(() => service.queued(session.id).length === 1)
     expect(send).not.toHaveBeenCalled()
-    expect(service.events(session.id).findLast((e) => e.kind === 'queue')).toMatchObject({ paused: true, messages: [{ text: 'review feedback', reviewId: 'r' }] })
+    expect(service.events(session.id).findLast((e) => e.kind === 'queue')).toMatchObject({
+      paused: true,
+      messages: [{ text: 'review feedback', reviewId: 'r' }],
+    })
     validateFeedback.mockResolvedValue(undefined)
     service.resumeQueue(session.id)
     await until(() => send.mock.calls.length === 1)
@@ -1012,7 +1572,13 @@ describe('busy agent messages', () => {
 
   it('keeps a review follow-up out of the batch so it can be validated on its own', async () => {
     const { service, session, send, complete } = setup()
-    service.reviewHooks = { begin: async () => 'r', bind: () => {}, abandon: () => {}, followup: async () => {}, validateFeedback: async () => {} }
+    service.reviewHooks = {
+      begin: async () => 'r',
+      bind: () => {},
+      abandon: () => {},
+      followup: async () => {},
+      validateFeedback: async () => {},
+    }
     await service.submit(session.id, 'review feedback', 'queue', [], 'r')
     await service.submit(session.id, 'plain follow-up', 'queue')
     complete()
@@ -1061,15 +1627,26 @@ describe('busy agent messages', () => {
 
   it('sends a message from a paused queue right away and leaves the rest paused', async () => {
     const { service, session, send, complete } = setup()
-    const validateFeedback = vi.fn(async (): Promise<void> => { throw new Error('Return to branch main') })
-    service.reviewHooks = { begin: async () => 'r', bind: () => {}, abandon: () => {}, followup: async () => {}, validateFeedback }
+    const validateFeedback = vi.fn(async (): Promise<void> => {
+      throw new Error('Return to branch main')
+    })
+    service.reviewHooks = {
+      begin: async () => 'r',
+      bind: () => {},
+      abandon: () => {},
+      followup: async () => {},
+      validateFeedback,
+    }
     await service.submit(session.id, 'review feedback', 'queue', [], 'r')
     await service.submit(session.id, 'plain follow-up', 'queue')
     complete()
     await until(() => validateFeedback.mock.calls.length === 1 && service.queued(session.id).length === 2)
     await service.sendQueuedNow(session.id, service.queued(session.id)[1]!.id)
     expect(send).toHaveBeenCalledWith('plain follow-up', [])
-    expect(service.events(session.id).findLast((e) => e.kind === 'queue')).toMatchObject({ paused: true, messages: [{ text: 'review feedback' }] })
+    expect(service.events(session.id).findLast((e) => e.kind === 'queue')).toMatchObject({
+      paused: true,
+      messages: [{ text: 'review feedback' }],
+    })
     service.stopAll()
   })
 
@@ -1094,15 +1671,31 @@ describe('busy agent messages', () => {
 
 it('Claude steering buffers without interrupting response text or tools', async () => {
   let release!: () => void
-  const interrupt = vi.fn(async () => { release() })
+  const interrupt = vi.fn(async () => {
+    release()
+  })
   const query: QueryFn = ({ prompt }) => {
     async function* run(): AsyncGenerator<SDKMessage, void> {
       yield { type: 'system', subtype: 'init', session_id: 'steering-test', model: 'fake', cwd } as SDKMessage
       let first = true
       for await (const message of prompt) {
-        if (first) { first = false; await new Promise<void>((resolve) => { release = resolve }) }
-        yield { type: 'assistant', message: { content: [{ type: 'text', text: String(message.message.content) }] } } as unknown as SDKMessage
-        yield { type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 } as unknown as SDKMessage
+        if (first) {
+          first = false
+          await new Promise<void>((resolve) => {
+            release = resolve
+          })
+        }
+        yield {
+          type: 'assistant',
+          message: { content: [{ type: 'text', text: String(message.message.content) }] },
+        } as unknown as SDKMessage
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'done',
+          total_cost_usd: 0,
+        } as unknown as SDKMessage
       }
     }
     return Object.assign(run(), { interrupt }) as unknown as Query
@@ -1120,7 +1713,12 @@ it('Claude steering buffers without interrupting response text or tools', async 
   release()
   await until(() => service.events(session.id).some((event) => event.kind === 'text' && event.text === 'later'))
   expect(interrupt).not.toHaveBeenCalled()
-  expect(service.events(session.id).filter((event) => event.kind === 'user').map((event) => event.text)).toEqual(['initial', 'steer first', 'later'])
+  expect(
+    service
+      .events(session.id)
+      .filter((event) => event.kind === 'user')
+      .map((event) => event.text),
+  ).toEqual(['initial', 'steer first', 'later'])
   service.stopAll()
 })
 
@@ -1141,7 +1739,11 @@ it('keeps queued text when dispatch fails and does not retry in a loop', async (
 
 it('pause retains the queue until explicitly resumed', async () => {
   const svc = new AgentService(db, () => {}, fakeQuery([]), fakeCodex)
-  const session = svc.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'edits' })
+  const session = svc.start('t', scopeOf(cwd), 'initial', {
+    ...DEFAULT_AGENT_SETTINGS,
+    provider: 'codex',
+    access: 'edits',
+  })
   await until(() => svc.get(session.id).state === 'needs-input')
   await svc.submit(session.id, 'later', 'queue')
   const send = vi.spyOn(svc, 'send')
@@ -1164,7 +1766,13 @@ it('Claude receives images as native content blocks and text files as context', 
     async function* run(): AsyncGenerator<SDKMessage, void> {
       for await (const message of prompt) {
         content = message.message.content
-        yield { type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 } as unknown as SDKMessage
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'done',
+          total_cost_usd: 0,
+        } as unknown as SDKMessage
       }
     }
     return Object.assign(run(), { interrupt: async () => undefined }) as unknown as Query
@@ -1174,7 +1782,10 @@ it('Claude receives images as native content blocks and text files as context', 
   await until(() => content !== undefined)
   expect(content).toEqual([
     expect.objectContaining({ type: 'text', text: expect.stringContaining('Expected behavior') }),
-    { type: 'image', source: { type: 'base64', media_type: 'image/png', data: Buffer.from('image bytes').toString('base64') } },
+    {
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/png', data: Buffer.from('image bytes').toString('base64') },
+    },
   ])
   expect(svc.events(session.id)[0]).toMatchObject({ kind: 'user', attachments: [image, text] })
   svc.stopAll()
@@ -1191,10 +1802,27 @@ describe('cleanTitle', () => {
 
 describe('server-side tools (web search and fetch)', () => {
   it('turns server_tool_use and its result into tool events', () => {
-    expect(serverToolUse({ id: 'srv1', name: 'web_search', input: { query: 'jadwal imunisasi IDAI 2024' } })).toEqual({ toolUseId: 'srv1', name: 'WebSearch', summary: 'jadwal imunisasi IDAI 2024' })
-    expect(serverToolUse({ id: 'srv2', name: 'web_fetch', input: { url: 'https://idai.or.id' } })).toMatchObject({ name: 'WebFetch', summary: 'https://idai.or.id' })
-    expect(serverToolResult({ tool_use_id: 'srv1', content: [{ type: 'web_search_result', title: 'Jadwal', url: 'https://idai.or.id/x' }] })).toMatchObject({ isError: false, summary: 'Jadwal — https://idai.or.id/x' })
-    expect(serverToolResult({ tool_use_id: 'srv1', content: { type: 'web_search_tool_result_error', error_code: 'unavailable' } })).toMatchObject({ isError: true, summary: 'unavailable' })
+    expect(serverToolUse({ id: 'srv1', name: 'web_search', input: { query: 'jadwal imunisasi IDAI 2024' } })).toEqual({
+      toolUseId: 'srv1',
+      name: 'WebSearch',
+      summary: 'jadwal imunisasi IDAI 2024',
+    })
+    expect(serverToolUse({ id: 'srv2', name: 'web_fetch', input: { url: 'https://idai.or.id' } })).toMatchObject({
+      name: 'WebFetch',
+      summary: 'https://idai.or.id',
+    })
+    expect(
+      serverToolResult({
+        tool_use_id: 'srv1',
+        content: [{ type: 'web_search_result', title: 'Jadwal', url: 'https://idai.or.id/x' }],
+      }),
+    ).toMatchObject({ isError: false, summary: 'Jadwal — https://idai.or.id/x' })
+    expect(
+      serverToolResult({
+        tool_use_id: 'srv1',
+        content: { type: 'web_search_tool_result_error', error_code: 'unavailable' },
+      }),
+    ).toMatchObject({ isError: true, summary: 'unavailable' })
   })
 })
 
@@ -1206,38 +1834,68 @@ describe('claudeDefaultEffort', () => {
   })
 })
 
-it.each(['cursor', 'antigravity', 'opencode'] as const)('routes %s through its native runner and persists the provider session', async (provider) => {
-  const native = vi.fn(fakeCodex)
-  const unused = vi.fn(() => { throw new Error('Wrong provider adapter') })
-  const svc = new AgentService(db, (id, event) => events.push({ id, event }), fakeQuery([]), unused, native, native)
-  const session = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider, model: 'native-model' })
-  await until(() => svc.get(session.id).state === 'idle')
-  expect(native).toHaveBeenCalledOnce()
-  expect(unused).not.toHaveBeenCalled()
-  expect(svc.get(session.id).provider).toBe(provider)
-  expect(svc.get(session.id).providerSessionId).toBeTruthy()
-  await svc.send(session.id, 'follow-up')
-  await until(() => svc.get(session.id).state === 'idle')
-  expect(native).toHaveBeenCalledOnce()
-  await svc.stopAndWait(session.id)
-  expect(svc.activeWriter([cwd])).toBeNull()
-})
+it.each(['cursor', 'antigravity', 'opencode'] as const)(
+  'routes %s through its native runner and persists the provider session',
+  async (provider) => {
+    const native = vi.fn(fakeCodex)
+    const unused = vi.fn(() => {
+      throw new Error('Wrong provider adapter')
+    })
+    const svc = new AgentService(db, (id, event) => events.push({ id, event }), fakeQuery([]), unused, native, native)
+    const session = svc.start('t', scopeOf(cwd), 'hello', {
+      ...DEFAULT_AGENT_SETTINGS,
+      access: 'full' as const,
+      provider,
+      model: 'native-model',
+    })
+    await until(() => svc.get(session.id).state === 'idle')
+    expect(native).toHaveBeenCalledOnce()
+    expect(unused).not.toHaveBeenCalled()
+    expect(svc.get(session.id).provider).toBe(provider)
+    expect(svc.get(session.id).providerSessionId).toBeTruthy()
+    await svc.send(session.id, 'follow-up')
+    await until(() => svc.get(session.id).state === 'idle')
+    expect(native).toHaveBeenCalledOnce()
+    await svc.stopAndWait(session.id)
+    expect(svc.activeWriter([cwd])).toBeNull()
+  },
+)
 
 it('keeps steering queued until every active tool has completed, without interruption', async () => {
   let emit!: (event: AgentEvent) => void
   const steer = vi.fn(async () => {})
   const interrupt = vi.fn(async () => {})
-  const svc = new AgentService(db, () => {}, fakeQuery([]), (_scope, _settings, callback) => {
-    emit = callback
-    return { start: async () => { emit({ kind: 'state', state: 'running' }) }, send: async () => {}, steer, interrupt, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
+  const svc = new AgentService(
+    db,
+    () => {},
+    fakeQuery([]),
+    (_scope, _settings, callback) => {
+      emit = callback
+      return {
+        start: async () => {
+          emit({ kind: 'state', state: 'running' })
+        },
+        send: async () => {},
+        steer,
+        interrupt,
+        stop: async () => {},
+        replyPermission: () => {},
+        replyQuestion: () => {},
+      }
+    },
+  )
+  const session = svc.start('t', scopeOf(cwd), 'initial', {
+    ...DEFAULT_AGENT_SETTINGS,
+    access: 'full' as const,
+    provider: 'codex',
   })
-  const session = svc.start('t', scopeOf(cwd), 'initial', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
   emit({ kind: 'tool-use', toolUseId: 'one', name: 'Bash', summary: 'first command' })
   emit({ kind: 'tool-use', toolUseId: 'two', name: 'Bash', summary: 'second command' })
   await svc.submit(session.id, 'change direction', 'steer')
   expect(svc.queued(session.id)).toMatchObject([{ text: 'change direction', mode: 'steer' }])
   expect(steer).not.toHaveBeenCalled()
-  emit({ kind: 'tool-result', toolUseId: 'one', isError: false, summary: 'done' }); await Promise.resolve()
+  emit({ kind: 'tool-result', toolUseId: 'one', isError: false, summary: 'done' })
+  await Promise.resolve()
   expect(steer).not.toHaveBeenCalled()
   emit({ kind: 'tool-result', toolUseId: 'two', isError: true, summary: 'failed but finished' })
   await until(() => svc.queued(session.id).length === 0)
@@ -1248,12 +1906,34 @@ it('keeps steering queued until every active tool has completed, without interru
 
 describe('switching before a limit', () => {
   const NOW = Date.now()
-  const reading = (r: Partial<UsageReading>): UsageReading => ({ provider: 'claude-code', window: 'five_hour', usedPercent: 50, status: 'ok', updatedAt: Date.now(), resetsAt: NOW + 3_600_000, ...r })
+  const reading = (r: Partial<UsageReading>): UsageReading => ({
+    provider: 'claude-code',
+    window: 'five_hour',
+    usedPercent: 50,
+    status: 'ok',
+    updatedAt: Date.now(),
+    resetsAt: NOW + 3_600_000,
+    ...r,
+  })
   const withRouting = (readings: UsageReading[], prefs: Partial<AppPreferences['fallback']> = {}) => {
     const svc = service()
-    const store = { readings, list: () => store.readings, update: (next: UsageReading[]) => { store.readings = [...store.readings.filter((r) => !next.some((n) => n.provider === r.provider && n.window === r.window && n.scope === r.scope)), ...next] } }
+    const store = {
+      readings,
+      list: () => store.readings,
+      update: (next: UsageReading[]) => {
+        store.readings = [
+          ...store.readings.filter(
+            (r) => !next.some((n) => n.provider === r.provider && n.window === r.window && n.scope === r.scope),
+          ),
+          ...next,
+        ]
+      },
+    }
     svc.usage = store
-    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, fallback: { ...DEFAULT_APP_PREFERENCES.fallback, switchAt: 90, ...prefs } })
+    svc.preferences = () => ({
+      ...DEFAULT_APP_PREFERENCES,
+      fallback: { ...DEFAULT_APP_PREFERENCES.fallback, switchAt: 90, ...prefs },
+    })
     return { svc, store }
   }
 
@@ -1265,7 +1945,13 @@ describe('switching before a limit', () => {
     svc.usage!.update([reading({ usedPercent: 93 })])
     await svc.send(s.id, 'continue')
     await until(() => svc.get(s.id).provider === 'codex' && svc.get(s.id).state === 'idle')
-    expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'settings', handoff: true, reason: expect.stringContaining('5-hour limit was at 93%') }))
+    expect(svc.events(s.id)).toContainEqual(
+      expect.objectContaining({
+        kind: 'settings',
+        handoff: true,
+        reason: expect.stringContaining('5-hour limit was at 93%'),
+      }),
+    )
     expect(svc.events(s.id).filter((e) => e.kind === 'error')).toHaveLength(0)
     expect(svc.events(s.id).filter((e) => e.kind === 'user')).toHaveLength(2)
     svc.stopAll()
@@ -1312,12 +1998,23 @@ describe('switching before a limit', () => {
     const { svc } = withRouting([reading({ usedPercent: 96 })])
     const s = await svc.startReviewed('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(s.id).provider === 'codex' && svc.get(s.id).state === 'idle')
-    expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'settings', handoff: false, previous: expect.objectContaining({ provider: 'claude-code' }) }))
+    expect(svc.events(s.id)).toContainEqual(
+      expect.objectContaining({
+        kind: 'settings',
+        handoff: false,
+        previous: expect.objectContaining({ provider: 'claude-code' }),
+      }),
+    )
     svc.stopAll()
   })
 
   it('follows the configured chain: same provider, other model, with effort mapped', async () => {
-    const { svc } = withRouting([reading({ window: 'weekly', scope: 'Opus', usedPercent: 98 })], { order: [{ id: 'a', provider: 'claude-code', model: 'sonnet', effort: 'high' }, { id: 'b', provider: 'codex', model: 'codex-test', effort: null }] })
+    const { svc } = withRouting([reading({ window: 'weekly', scope: 'Opus', usedPercent: 98 })], {
+      order: [
+        { id: 'a', provider: 'claude-code', model: 'sonnet', effort: 'high' },
+        { id: 'b', provider: 'codex', model: 'codex-test', effort: null },
+      ],
+    })
     const s = svc.start('t', scopeOf(cwd), 'hello', { ...full, model: 'opus' })
     await until(() => svc.get(s.id).state === 'idle')
     await svc.send(s.id, 'continue')
@@ -1355,7 +2052,9 @@ describe('switching before a limit', () => {
     await new Promise((r) => setTimeout(r, 250))
     await svc.send(s.id, 'welcome back')
     await until(() => svc.get(s.id).provider === 'claude-code' && svc.get(s.id).state === 'idle')
-    expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'settings', reason: expect.stringContaining('higher-ranked') }))
+    expect(svc.events(s.id)).toContainEqual(
+      expect.objectContaining({ kind: 'settings', reason: expect.stringContaining('higher-ranked') }),
+    )
     svc.stopAll()
   })
 
@@ -1384,9 +2083,16 @@ describe('switching before a limit', () => {
 
   it('records Codex usage from its runner without putting it in the chat', async () => {
     const { svc, store } = withRouting([])
-    const s = svc.start('t', scopeOf(cwd), 'hello [codex-usage 64]', { ...full, provider: 'codex', model: 'codex-test' })
+    const s = svc.start('t', scopeOf(cwd), 'hello [codex-usage 64]', {
+      ...full,
+      provider: 'codex',
+      model: 'codex-test',
+    })
     await until(() => svc.get(s.id).state === 'idle')
-    expect(store.readings.filter((r) => r.provider === 'codex').map((r) => [r.window, r.usedPercent])).toEqual([['five_hour', 64], ['weekly', 32]])
+    expect(store.readings.filter((r) => r.provider === 'codex').map((r) => [r.window, r.usedPercent])).toEqual([
+      ['five_hour', 64],
+      ['weekly', 32],
+    ])
     expect(svc.events(s.id).some((e) => e.kind === 'usage')).toBe(false)
     svc.stopAll()
   })
@@ -1397,21 +2103,29 @@ describe('sub-agents Ramu runs', () => {
   const routed = (patch: Partial<AppPreferences['subagents']> = {}, usage: UsageReading[] = []) => {
     const svc = service()
     svc.usage = { list: () => usage, update: () => {} }
-    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, subagents: { ...DEFAULT_APP_PREFERENCES.subagents, mode: 'single', single: codexStep, ...patch } })
+    svc.preferences = () => ({
+      ...DEFAULT_APP_PREFERENCES,
+      subagents: { ...DEFAULT_APP_PREFERENCES.subagents, mode: 'single', single: codexStep, ...patch },
+    })
     return svc
   }
   const parentOf = async (svc: AgentService, access: 'full' | 'edits' = 'full') => {
     const s = svc.start('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(s.id).state === 'idle')
     // Sub-agents inherit the chat's access: ask first, so they wait for approval.
-    if (access === 'edits') db.prepare('UPDATE agent_sessions SET settings = ? WHERE id = ?').run(JSON.stringify({ ...full, access }), s.id)
+    if (access === 'edits')
+      db.prepare('UPDATE agent_sessions SET settings = ? WHERE id = ?').run(JSON.stringify({ ...full, access }), s.id)
     return s
   }
 
   it('runs a foreground sub-agent on another provider and returns its report', async () => {
     const svc = routed()
     const parent = await parentOf(svc)
-    const result = await svc.spawnSubagent(parent.id, { description: 'Survey the tests', prompt: 'List the test files', type: 'Explore' })
+    const result = await svc.spawnSubagent(parent.id, {
+      description: 'Survey the tests',
+      prompt: 'List the test files',
+      type: 'Explore',
+    })
     expect(result).toMatchObject({ status: 'completed', provider: 'codex', model: 'codex-test' })
     expect(result.report).toContain('Fake Codex')
     // A session of its own, hidden from the chat list, one writer group with its chat.
@@ -1420,8 +2134,18 @@ describe('sub-agents Ramu runs', () => {
     expect(svc.activeWriter([cwd], parent.id)).toBeNull()
     // Its work shows in the chat as one card, with its own output tagged to it.
     const events = svc.events(parent.id)
-    expect(svc.task(parent.id, result.agentId)).toMatchObject({ name: 'Survey the tests', status: 'completed', provider: 'codex', model: 'codex-test', canMessage: true, canStop: true, agentType: 'Explore' })
-    expect(events.some((e) => e.kind === 'text' && e.agentId === result.agentId && e.text.includes('Fake Codex'))).toBe(true)
+    expect(svc.task(parent.id, result.agentId)).toMatchObject({
+      name: 'Survey the tests',
+      status: 'completed',
+      provider: 'codex',
+      model: 'codex-test',
+      canMessage: true,
+      canStop: true,
+      agentType: 'Explore',
+    })
+    expect(events.some((e) => e.kind === 'text' && e.agentId === result.agentId && e.text.includes('Fake Codex'))).toBe(
+      true,
+    )
     expect(events.some((e) => e.kind === 'tool-use' && e.agentId === result.agentId)).toBe(true)
     expect(events.filter((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent'))).toHaveLength(0)
     svc.stopAll()
@@ -1432,7 +2156,9 @@ describe('sub-agents Ramu runs', () => {
     const parent = await parentOf(svc)
     const started = await svc.spawnSubagent(parent.id, { description: 'Survey', prompt: 'List', background: true })
     expect(started.status).toBe('running')
-    await until(() => svc.events(parent.id).some((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Survey" finished]')))
+    await until(() =>
+      svc.events(parent.id).some((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Survey" finished]')),
+    )
     expect(svc.task(parent.id, started.agentId)?.status).toBe('completed')
     svc.stopAll()
   })
@@ -1440,13 +2166,26 @@ describe('sub-agents Ramu runs', () => {
   it('lets a running sub-agent note or ask its chat, and the chat or you answer it', async () => {
     const svc = routed()
     const parent = await parentOf(svc, 'edits')
-    const started = await svc.spawnSubagent(parent.id, { description: 'Edit', prompt: 'Change it', background: true }, undefined, { step: { ...codexStep }, reason: 'test' })
+    const started = await svc.spawnSubagent(
+      parent.id,
+      { description: 'Edit', prompt: 'Change it', background: true },
+      undefined,
+      { step: { ...codexStep }, reason: 'test' },
+    )
     // The sub-agent is held on an approval, so it is still running.
     await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
     await svc.messageParent(started.agentId, 'Found two call sites')
-    await until(() => svc.events(parent.id).some((e) => e.kind === 'user' && e.text === '[Sub-agent "Edit" says]\nFound two call sites'))
+    await until(() =>
+      svc
+        .events(parent.id)
+        .some((e) => e.kind === 'user' && e.text === '[Sub-agent "Edit" says]\nFound two call sites'),
+    )
     const answer = svc.askParent(started.agentId, 'Rename or wrap?')
-    await until(() => svc.events(parent.id).some((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Edit" asks]\nRename or wrap?')))
+    await until(() =>
+      svc
+        .events(parent.id)
+        .some((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Edit" asks]\nRename or wrap?')),
+    )
     await expect(svc.askParent(started.agentId, 'again')).rejects.toThrow(/already waiting/)
     expect(() => svc.answerSubagent('other', started.agentId, 'x')).toThrow(/Unknown/)
     svc.answerSubagent(parent.id, started.agentId, ' Wrap it ')
@@ -1454,20 +2193,29 @@ describe('sub-agents Ramu runs', () => {
     expect(() => svc.answerSubagent(parent.id, started.agentId, 'late')).toThrow(/not waiting/)
     // You can answer from the sub-agent's card too.
     const second = svc.askParent(started.agentId, 'Which file?')
-    await until(() => svc.events(parent.id).some((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Edit" asks]\nWhich file?')))
+    await until(() =>
+      svc.events(parent.id).some((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Edit" asks]\nWhich file?')),
+    )
     await svc.messageTask(parent.id, started.agentId, 'a.ts')
     expect(await second).toBe('a.ts')
     // A finished sub-agent can no longer reach its chat.
-    svc.replyPermission(parent.id, (svc.events(parent.id).find((e) => e.kind === 'permission-request') as { requestId: string }).requestId, true)
+    svc.replyPermission(
+      parent.id,
+      (svc.events(parent.id).find((e) => e.kind === 'permission-request') as { requestId: string }).requestId,
+      true,
+    )
     await until(() => svc.task(parent.id, started.agentId)?.status === 'completed')
     await expect(svc.messageParent(started.agentId, 'too late')).rejects.toThrow(/running sub-agent/)
     svc.stopAll()
   })
 
-  it('hands a foreground sub-agent\'s question back as its call result so the blocked chat can answer', async () => {
+  it("hands a foreground sub-agent's question back as its call result so the blocked chat can answer", async () => {
     const svc = routed()
     const parent = await parentOf(svc, 'edits')
-    const call = svc.spawnSubagent(parent.id, { description: 'Edit', prompt: 'Change it' }, undefined, { step: { ...codexStep }, reason: 'test' })
+    const call = svc.spawnSubagent(parent.id, { description: 'Edit', prompt: 'Change it' }, undefined, {
+      step: { ...codexStep },
+      reason: 'test',
+    })
     await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
     const agentId = [...svc.events(parent.id)].find((e) => e.kind === 'agent')!.agentId
     const answer = svc.askParent(agentId, 'Which branch?')
@@ -1479,10 +2227,15 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
-  it('shows a sub-agent\'s approvals in the chat and sends the answer to it; messages and Stop go straight to it', async () => {
+  it("shows a sub-agent's approvals in the chat and sends the answer to it; messages and Stop go straight to it", async () => {
     const svc = routed()
     const parent = await parentOf(svc, 'edits')
-    const started = await svc.spawnSubagent(parent.id, { description: 'Edit', prompt: 'Change it', background: true }, undefined, { step: { ...codexStep }, reason: 'test' })
+    const started = await svc.spawnSubagent(
+      parent.id,
+      { description: 'Edit', prompt: 'Change it', background: true },
+      undefined,
+      { step: { ...codexStep }, reason: 'test' },
+    )
     await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
     const request = svc.events(parent.id).find((e) => e.kind === 'permission-request')
     expect(request).toMatchObject({ kind: 'permission-request', title: 'Edit: Allow command?' })
@@ -1493,7 +2246,11 @@ describe('sub-agents Ramu runs', () => {
     // A message to it is a message in its own session, not a relay through the chat.
     await svc.messageTask(parent.id, started.agentId, 'Also add a test')
     await until(() => svc.events(started.agentId).filter((e) => e.kind === 'user').length === 2)
-    expect(svc.events(parent.id).some((e) => e.kind === 'user' && e.agentId === started.agentId && e.text === 'Also add a test')).toBe(true)
+    expect(
+      svc
+        .events(parent.id)
+        .some((e) => e.kind === 'user' && e.agentId === started.agentId && e.text === 'Also add a test'),
+    ).toBe(true)
     await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request' && e !== request))
     await svc.stopTask(parent.id, started.agentId)
     expect(svc.task(parent.id, started.agentId)?.status).toBe('stopped')
@@ -1504,7 +2261,9 @@ describe('sub-agents Ramu runs', () => {
     const svc = routed({ maxConcurrent: 1 })
     const parent = await parentOf(svc, 'edits')
     const first = await svc.spawnSubagent(parent.id, { description: 'One', prompt: 'a', background: true })
-    await expect(svc.spawnSubagent(parent.id, { description: 'Two', prompt: 'b', background: true })).rejects.toThrow(/already running/)
+    await expect(svc.spawnSubagent(parent.id, { description: 'Two', prompt: 'b', background: true })).rejects.toThrow(
+      /already running/,
+    )
     svc.stop(parent.id)
     expect(svc.get(first.agentId).state).toBe('stopped')
     expect(svc.task(parent.id, first.agentId)?.status).toBe('stopped')
@@ -1513,15 +2272,34 @@ describe('sub-agents Ramu runs', () => {
   it('chooses where a sub-agent runs: type rules, then the fallback list when its provider is nearly out', async () => {
     const native = routed({ mode: 'native', single: null })
     const parent = await parentOf(native)
-    expect(await native.subagentSettings(parent.id, 'Explore')).toMatchObject({ redirect: false, settings: { provider: 'claude-code' } })
+    expect(await native.subagentSettings(parent.id, 'Explore')).toMatchObject({
+      redirect: false,
+      settings: { provider: 'claude-code' },
+    })
     const typed = routed({ mode: 'native', single: null, byType: [{ id: 'x', type: 'explore', step: codexStep }] })
     const typedParent = await parentOf(typed)
-    expect(await typed.subagentSettings(typedParent.id, 'Explore')).toMatchObject({ redirect: true, settings: { provider: 'codex', effort: 'high' } })
+    expect(await typed.subagentSettings(typedParent.id, 'Explore')).toMatchObject({
+      redirect: true,
+      settings: { provider: 'codex', effort: 'high' },
+    })
     expect(await typed.subagentSettings(typedParent.id, 'Plan')).toMatchObject({ redirect: false })
-    const reading = (usedPercent: number): UsageReading => ({ provider: 'claude-code', window: 'five_hour', usedPercent, status: 'ok', updatedAt: Date.now(), resetsAt: Date.now() + 1e6 })
-    const pressed = routed({ mode: 'native', single: null, switchAt: 80, fallback: 'separate', order: [codexStep] }, [reading(85)])
+    const reading = (usedPercent: number): UsageReading => ({
+      provider: 'claude-code',
+      window: 'five_hour',
+      usedPercent,
+      status: 'ok',
+      updatedAt: Date.now(),
+      resetsAt: Date.now() + 1e6,
+    })
+    const pressed = routed({ mode: 'native', single: null, switchAt: 80, fallback: 'separate', order: [codexStep] }, [
+      reading(85),
+    ])
     const pressedParent = await parentOf(pressed)
-    expect(await pressed.subagentSettings(pressedParent.id)).toMatchObject({ redirect: true, settings: { provider: 'codex' }, reason: expect.stringContaining('5-hour limit was at 85%') })
+    expect(await pressed.subagentSettings(pressedParent.id)).toMatchObject({
+      redirect: true,
+      settings: { provider: 'codex' },
+      reason: expect.stringContaining('5-hour limit was at 85%'),
+    })
     // Below the sub-agents' own earlier threshold nothing moves.
     const calm = routed({ mode: 'native', single: null, switchAt: 90 }, [reading(85)])
     expect(await calm.subagentSettings((await parentOf(calm)).id)).toMatchObject({ redirect: false })
@@ -1529,51 +2307,113 @@ describe('sub-agents Ramu runs', () => {
   })
 
   it.each(['same', null] as const)('preserves the only-at-the-limit sub-agent policy (%s)', async (switchAt) => {
-    const reading: UsageReading = { provider: 'claude-code', window: 'five_hour', usedPercent: 99, status: 'warning', updatedAt: Date.now(), resetsAt: Date.now() + 1e6 }
+    const reading: UsageReading = {
+      provider: 'claude-code',
+      window: 'five_hour',
+      usedPercent: 99,
+      status: 'warning',
+      updatedAt: Date.now(),
+      resetsAt: Date.now() + 1e6,
+    }
     const svc = routed({ mode: 'native', single: null, switchAt }, [reading])
-    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, fallback: { ...DEFAULT_APP_PREFERENCES.fallback, switchAt: switchAt === 'same' ? null : 80 }, subagents: { ...DEFAULT_APP_PREFERENCES.subagents, switchAt } })
+    svc.preferences = () => ({
+      ...DEFAULT_APP_PREFERENCES,
+      fallback: { ...DEFAULT_APP_PREFERENCES.fallback, switchAt: switchAt === 'same' ? null : 80 },
+      subagents: { ...DEFAULT_APP_PREFERENCES.subagents, switchAt },
+    })
     const parent = await parentOf(svc)
-    expect(await svc.subagentSettings(parent.id)).toMatchObject({ redirect: false, settings: { provider: 'claude-code' } })
+    expect(await svc.subagentSettings(parent.id)).toMatchObject({
+      redirect: false,
+      settings: { provider: 'claude-code' },
+    })
     reading.status = 'limited'
     expect(await svc.subagentSettings(parent.id)).toMatchObject({ redirect: true, settings: { provider: 'codex' } })
     svc.stopAll()
   })
 
-  it('refuses Claude\'s own Agent tool when Ramu should run the sub-agent', async () => {
+  it("refuses Claude's own Agent tool when Ramu should run the sub-agent", async () => {
     const svc = routed()
     const parent = await parentOf(svc)
-    const hook = (svc as unknown as { subagentHooks(id: string): { PreToolUse: { hooks: ((input: unknown) => Promise<{ hookSpecificOutput?: { permissionDecision?: string; permissionDecisionReason?: string } }>)[] }[] } }).subagentHooks(parent.id)
-    const out = await hook.PreToolUse[0]!.hooks[0]!({ hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { subagent_type: 'Explore' } })
-    expect(out.hookSpecificOutput).toMatchObject({ permissionDecision: 'deny', permissionDecisionReason: expect.stringContaining('ramu_agent') })
+    const hook = (
+      svc as unknown as {
+        subagentHooks(id: string): {
+          PreToolUse: {
+            hooks: ((
+              input: unknown,
+            ) => Promise<{ hookSpecificOutput?: { permissionDecision?: string; permissionDecisionReason?: string } }>)[]
+          }[]
+        }
+      }
+    ).subagentHooks(parent.id)
+    const out = await hook.PreToolUse[0]!.hooks[0]!({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Agent',
+      tool_input: { subagent_type: 'Explore' },
+    })
+    expect(out.hookSpecificOutput).toMatchObject({
+      permissionDecision: 'deny',
+      permissionDecisionReason: expect.stringContaining('ramu_agent'),
+    })
     svc.preferences = () => DEFAULT_APP_PREFERENCES
-    expect(await hook.PreToolUse[0]!.hooks[0]!({ hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: {} })).toEqual({})
+    expect(
+      await hook.PreToolUse[0]!.hooks[0]!({ hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: {} }),
+    ).toEqual({})
     svc.stopAll()
   })
 
   it('continues a native sub-agent that hit a limit on the fallback list', async () => {
     const svc = routed({ mode: 'native', single: null })
     const parent = await parentOf(svc)
-    const update = (patch: Record<string, unknown>) => (svc as unknown as { updateTask(id: string, agentId: string, patch: Record<string, unknown>): void }).updateTask(parent.id, 'native-1', patch)
-    update({ name: 'Map auth', status: 'running', prompt: 'Map every auth file', agentType: 'Explore', canMessage: true })
+    const update = (patch: Record<string, unknown>) =>
+      (svc as unknown as { updateTask(id: string, agentId: string, patch: Record<string, unknown>): void }).updateTask(
+        parent.id,
+        'native-1',
+        patch,
+      )
+    update({
+      name: 'Map auth',
+      status: 'running',
+      prompt: 'Map every auth file',
+      agentType: 'Explore',
+      canMessage: true,
+    })
     update({ status: 'failed', error: 'usage_limit_reached' })
-    await until(() => svc.events(parent.id).some((e) => e.kind === 'agent' && e.taskType === 'ramu_agent' && e.status === 'completed'))
-    expect(svc.task(parent.id, 'native-1')).toMatchObject({ status: 'stopped', summary: expect.stringContaining('Continuing on Codex') })
+    await until(() =>
+      svc.events(parent.id).some((e) => e.kind === 'agent' && e.taskType === 'ramu_agent' && e.status === 'completed'),
+    )
+    expect(svc.task(parent.id, 'native-1')).toMatchObject({
+      status: 'stopped',
+      summary: expect.stringContaining('Continuing on Codex'),
+    })
     const card = svc.events(parent.id).findLast((e) => e.kind === 'agent' && e.taskType === 'ramu_agent')
-    expect(card).toMatchObject({ provider: 'codex', name: 'Map auth', steps: [expect.objectContaining({ provider: 'claude-code' }), expect.objectContaining({ provider: 'codex', reason: expect.stringContaining('limit reached') })] })
-    await until(() => svc.events(parent.id).some((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Map auth" finished]')))
+    expect(card).toMatchObject({
+      provider: 'codex',
+      name: 'Map auth',
+      steps: [
+        expect.objectContaining({ provider: 'claude-code' }),
+        expect.objectContaining({ provider: 'codex', reason: expect.stringContaining('limit reached') }),
+      ],
+    })
+    await until(() =>
+      svc.events(parent.id).some((e) => e.kind === 'user' && e.text.startsWith('[Sub-agent "Map auth" finished]')),
+    )
     svc.stopAll()
   })
 })
 
 describe('context window', () => {
-  it('reports how full Claude\'s and Codex\'s context is, without recording it in the chat', async () => {
+  it("reports how full Claude's and Codex's context is, without recording it in the chat", async () => {
     const svc = service()
     const seen: [string, number][] = []
     svc.onContext = (id, context) => seen.push([id, context.percent])
     const claude = svc.start('t', scopeOf(cwd), 'hello', { ...full, model: 'sonnet' })
     await until(() => svc.get(claude.id).state === 'idle')
     // The fake query has no getContextUsage here, so Claude reports nothing, and nothing breaks.
-    const codex = svc.start('t2', scopeOf(cwd), 'hello [context 100]', { ...full, provider: 'codex', model: 'codex-test' })
+    const codex = svc.start('t2', scopeOf(cwd), 'hello [context 100]', {
+      ...full,
+      provider: 'codex',
+      model: 'codex-test',
+    })
     await until(() => svc.get(codex.id).state === 'idle')
     expect(svc.context(codex.id)).toMatchObject({ used: 100_000, max: 400_000, percent: 25 })
     expect(seen).toContainEqual([codex.id, 25])
@@ -1583,7 +2423,7 @@ describe('context window', () => {
 })
 
 describe('side questions on a fork', () => {
-  it('asks a throwaway fork of the chat\'s own session, with no tools, and leaves the chat alone', async () => {
+  it("asks a throwaway fork of the chat's own session, with no tools, and leaves the chat alone", async () => {
     const calls: Options[] = []
     const svc = service(calls)
     const s = svc.start('t', scopeOf(cwd), 'hello', { ...full, model: 'sonnet' })
@@ -1591,8 +2431,16 @@ describe('side questions on a fork', () => {
     const before = svc.events(s.id).length
     const answer = await svc.forkAnswer(s.id, '<question>\nwhy?\n</question>')
     expect(answer).toMatchObject({ provider: 'claude-code', model: 'sonnet', text: expect.stringContaining('why?') })
-    expect(calls.at(-1)).toMatchObject({ resume: 'provider-1', forkSession: true, tools: [], maxTurns: 1, model: 'sonnet' })
-    expect(await calls.at(-1)!.canUseTool!('Bash', {}, { signal: new AbortController().signal, toolUseID: 'x' } as never)).toMatchObject({ behavior: 'deny' })
+    expect(calls.at(-1)).toMatchObject({
+      resume: 'provider-1',
+      forkSession: true,
+      tools: [],
+      maxTurns: 1,
+      model: 'sonnet',
+    })
+    expect(
+      await calls.at(-1)!.canUseTool!('Bash', {}, { signal: new AbortController().signal, toolUseID: 'x' } as never),
+    ).toMatchObject({ behavior: 'deny' })
     expect(svc.events(s.id)).toHaveLength(before)
     expect(svc.get(s.id).state).toBe('idle')
     svc.stopAll()
@@ -1610,38 +2458,75 @@ describe('isolated sub-agents', () => {
     const { execFileSync } = await import('node:child_process')
     const { existsSync, mkdirSync, writeFileSync } = await import('node:fs')
     const sh = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' })
-    sh('init', '-q', '-b', 'main'); for (const [k, v] of [['user.email', 'a@b.c'], ['user.name', 'X'], ['commit.gpgsign', 'false']]) sh('config', k!, v!)
-    writeFileSync(join(cwd, 'app.txt'), 'v1\n'); sh('add', '.'); sh('commit', '-qm', 'init')
+    sh('init', '-q', '-b', 'main')
+    for (const [k, v] of [
+      ['user.email', 'a@b.c'],
+      ['user.name', 'X'],
+      ['commit.gpgsign', 'false'],
+    ])
+      sh('config', k!, v!)
+    writeFileSync(join(cwd, 'app.txt'), 'v1\n')
+    sh('add', '.')
+    sh('commit', '-qm', 'init')
     const svc = service()
     svc.isolationRoot = join(cwd, '..', `iso-${Date.now()}`)
     svc.usage = { list: () => [], update: () => {} }
-    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, subagents: { ...DEFAULT_APP_PREFERENCES.subagents, mode: 'single', single: { id: 'c', provider: 'codex', model: 'codex-test', effort: null }, isolate: true } })
+    svc.preferences = () => ({
+      ...DEFAULT_APP_PREFERENCES,
+      subagents: {
+        ...DEFAULT_APP_PREFERENCES.subagents,
+        mode: 'single',
+        single: { id: 'c', provider: 'codex', model: 'codex-test', effort: null },
+        isolate: true,
+      },
+    })
     const parent = svc.start('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(parent.id).state === 'idle')
-    db.prepare('UPDATE agent_sessions SET settings = ? WHERE id = ?').run(JSON.stringify({ ...full, access: 'edits' }), parent.id)
-    const started = await svc.spawnSubagent(parent.id, { description: 'Edit app', prompt: 'change it', background: true })
+    db.prepare('UPDATE agent_sessions SET settings = ? WHERE id = ?').run(
+      JSON.stringify({ ...full, access: 'edits' }),
+      parent.id,
+    )
+    const started = await svc.spawnSubagent(parent.id, {
+      description: 'Edit app',
+      prompt: 'change it',
+      background: true,
+    })
     // It runs in a worktree, not in the checkout, and waits for approval there.
     const child = svc.get(started.agentId)
     expect(child.cwd).not.toBe(cwd)
     expect(svc.task(parent.id, started.agentId)).toMatchObject({ isolated: true, canMessage: false, status: 'running' })
     await until(() => svc.events(parent.id).some((e) => e.kind === 'permission-request'))
-    writeFileSync(join(child.cwd, 'app.txt'), 'v1\nby sub-agent\n'); writeFileSync(join(child.cwd, 'added.txt'), 'new\n')
+    writeFileSync(join(child.cwd, 'app.txt'), 'v1\nby sub-agent\n')
+    writeFileSync(join(child.cwd, 'added.txt'), 'new\n')
     expect(await import('node:fs').then((fs) => fs.readFileSync(join(cwd, 'app.txt'), 'utf8'))).toBe('v1\n')
-    svc.replyPermission(parent.id, (svc.events(parent.id).find((e) => e.kind === 'permission-request') as { requestId: string }).requestId, true)
+    svc.replyPermission(
+      parent.id,
+      (svc.events(parent.id).find((e) => e.kind === 'permission-request') as { requestId: string }).requestId,
+      true,
+    )
     await until(() => svc.task(parent.id, started.agentId)?.status === 'completed')
     expect(svc.task(parent.id, started.agentId)?.summary).toContain('applied to the checkout')
-    expect(await import('node:fs').then((fs) => fs.readFileSync(join(cwd, 'app.txt'), 'utf8'))).toBe('v1\nby sub-agent\n')
+    expect(await import('node:fs').then((fs) => fs.readFileSync(join(cwd, 'app.txt'), 'utf8'))).toBe(
+      'v1\nby sub-agent\n',
+    )
     expect(existsSync(join(cwd, 'added.txt'))).toBe(true)
     expect(existsSync(child.cwd)).toBe(false)
     expect(sh('worktree', 'list').trim().split('\n')).toHaveLength(1)
     mkdirSync(join(cwd, '.keep'), { recursive: true })
-    await until(() => svc.events(parent.id).some((e) => e.kind === 'user' && e.text.includes('applied to the checkout')))
+    await until(() =>
+      svc.events(parent.id).some((e) => e.kind === 'user' && e.text.includes('applied to the checkout')),
+    )
     svc.stopAll()
   })
 })
 
 describe('chat continuation after restart', () => {
-  const persist = (id: string, event: AgentEvent) => db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM agent_events WHERE session_id = ?), ?)').run(id, id, JSON.stringify(event))
+  const persist = (id: string, event: AgentEvent) =>
+    db
+      .prepare(
+        'INSERT INTO agent_events (session_id, seq, event) VALUES (?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM agent_events WHERE session_id = ?), ?)',
+      )
+      .run(id, id, JSON.stringify(event))
 
   it('merges provider helper history before continuing, preserves event positions, and deduplicates another boot', async () => {
     const original = new AgentService(db, () => {}, fakeQuery([]))
@@ -1649,35 +2534,122 @@ describe('chat continuation after restart', () => {
     await until(() => original.get(chat.id).state === 'idle')
     original.stopAll()
     db.prepare("UPDATE agent_sessions SET state = 'running' WHERE id = ?").run(chat.id)
-    persist(chat.id, { kind: 'agent', agentId: 'helper', toolUseId: 'spawn', name: 'Survey', status: 'running', canMessage: true, canStop: true })
+    persist(chat.id, {
+      kind: 'agent',
+      agentId: 'helper',
+      toolUseId: 'spawn',
+      name: 'Survey',
+      status: 'running',
+      canMessage: true,
+      canStop: true,
+    })
     persist(chat.id, { kind: 'text', agentId: 'spawn', text: 'Already received', at: 123 })
-    persist(chat.id, { kind: 'text', agentId: 'helper', text: 'Newly recovered', messageId: 'claude-stream:interrupted:1', nativeMessageId: 'native-partial', at: 124 })
-    persist(chat.id, { kind: 'tool-use', agentId: 'helper', toolUseId: 'native-tool', name: 'Bash', summary: 'local readable input' })
-    persist(chat.id, { kind: 'tool-result', agentId: 'helper', toolUseId: 'native-tool', isError: false, summary: 'partial output', running: true })
+    persist(chat.id, {
+      kind: 'text',
+      agentId: 'helper',
+      text: 'Newly recovered',
+      messageId: 'claude-stream:interrupted:1',
+      nativeMessageId: 'native-partial',
+      at: 124,
+    })
+    persist(chat.id, {
+      kind: 'tool-use',
+      agentId: 'helper',
+      toolUseId: 'native-tool',
+      name: 'Bash',
+      summary: 'local readable input',
+    })
+    persist(chat.id, {
+      kind: 'tool-result',
+      agentId: 'helper',
+      toolUseId: 'native-tool',
+      isError: false,
+      summary: 'partial output',
+      running: true,
+    })
     const inputs: string[] = []
     const base = fakeQuery([])
-    const restored = new AgentService(db, () => {}, ({ prompt, options }) => base({ options, prompt: (async function* () { for await (const msg of prompt) { inputs.push(String(msg.message.content)); yield msg } })() }))
-    const loader = vi.fn(async () => [{ task: { agentId: 'helper', toolUseId: 'spawn', name: 'Survey', status: 'completed' as const }, events: [
-      { kind: 'text' as const, agentId: 'helper', messageId: 'saved-1', text: 'Already received' },
-      { kind: 'text' as const, agentId: 'helper', messageId: 'saved-2', nativeMessageId: 'native-partial', text: 'Newly recovered findings' },
-      { kind: 'tool-use' as const, agentId: 'helper', toolUseId: 'helper:native-tool', name: 'Bash', summary: 'provider input' },
-      { kind: 'tool-result' as const, agentId: 'helper', toolUseId: 'helper:native-tool', isError: false, summary: 'final output' },
-    ] }])
+    const restored = new AgentService(
+      db,
+      () => {},
+      ({ prompt, options }) =>
+        base({
+          options,
+          prompt: (async function* () {
+            for await (const msg of prompt) {
+              inputs.push(String(msg.message.content))
+              yield msg
+            }
+          })(),
+        }),
+    )
+    const loader = vi.fn(async () => [
+      {
+        task: { agentId: 'helper', toolUseId: 'spawn', name: 'Survey', status: 'completed' as const },
+        events: [
+          { kind: 'text' as const, agentId: 'helper', messageId: 'saved-1', text: 'Already received' },
+          {
+            kind: 'text' as const,
+            agentId: 'helper',
+            messageId: 'saved-2',
+            nativeMessageId: 'native-partial',
+            text: 'Newly recovered findings',
+          },
+          {
+            kind: 'tool-use' as const,
+            agentId: 'helper',
+            toolUseId: 'helper:native-tool',
+            name: 'Bash',
+            summary: 'provider input',
+          },
+          {
+            kind: 'tool-result' as const,
+            agentId: 'helper',
+            toolUseId: 'helper:native-tool',
+            isError: false,
+            summary: 'final output',
+          },
+        ],
+      },
+    ])
     restored.helperHistory = loader
-    restored.markRestoredOnBoot(); await restored.resumeInterruptedChats()
+    restored.markRestoredOnBoot()
+    await restored.resumeInterruptedChats()
     await until(() => inputs.length === 1)
     const saved = restored.events(chat.id)
-    expect(saved.filter((event) => event.kind === 'text' && event.text === 'Already received')).toEqual([{ kind: 'text', agentId: 'helper', messageId: 'saved-1', text: 'Already received', at: 123 }])
-    expect(saved.filter((event) => event.kind === 'text' && event.nativeMessageId === 'native-partial')).toEqual([{ kind: 'text', agentId: 'helper', messageId: 'saved-2', nativeMessageId: 'native-partial', text: 'Newly recovered findings', at: 124 }])
-    expect(saved.find((event) => event.kind === 'agent')).toMatchObject({ status: 'completed', recovered: true, canStop: false, canMessage: false })
-    expect(saved.filter((event) => event.kind === 'tool-use')).toEqual([expect.objectContaining({ toolUseId: 'helper:native-tool', summary: 'local readable input' })])
-    expect(saved.filter((event) => event.kind === 'tool-result')).toEqual([expect.objectContaining({ toolUseId: 'helper:native-tool', summary: 'final output' })])
+    expect(saved.filter((event) => event.kind === 'text' && event.text === 'Already received')).toEqual([
+      { kind: 'text', agentId: 'helper', messageId: 'saved-1', text: 'Already received', at: 123 },
+    ])
+    expect(saved.filter((event) => event.kind === 'text' && event.nativeMessageId === 'native-partial')).toEqual([
+      {
+        kind: 'text',
+        agentId: 'helper',
+        messageId: 'saved-2',
+        nativeMessageId: 'native-partial',
+        text: 'Newly recovered findings',
+        at: 124,
+      },
+    ])
+    expect(saved.find((event) => event.kind === 'agent')).toMatchObject({
+      status: 'completed',
+      recovered: true,
+      canStop: false,
+      canMessage: false,
+    })
+    expect(saved.filter((event) => event.kind === 'tool-use')).toEqual([
+      expect.objectContaining({ toolUseId: 'helper:native-tool', summary: 'local readable input' }),
+    ])
+    expect(saved.filter((event) => event.kind === 'tool-result')).toEqual([
+      expect.objectContaining({ toolUseId: 'helper:native-tool', summary: 'final output' }),
+    ])
     expect(saved.filter((event) => event.kind === 'tool-result')[0]).not.toHaveProperty('running')
     expect(inputs[0]).toContain('Newly recovered findings')
     expect(saved.filter((event) => event.kind === 'user')).toHaveLength(1)
     restored.stopAll()
-    const again = new AgentService(db, () => {}, fakeQuery([])); again.helperHistory = loader
-    again.markRestoredOnBoot(); await again.restoreHelperTranscripts()
+    const again = new AgentService(db, () => {}, fakeQuery([]))
+    again.helperHistory = loader
+    again.markRestoredOnBoot()
+    await again.restoreHelperTranscripts()
     expect(again.events(chat.id).filter((event) => event.kind === 'text' && event.agentId === 'helper')).toHaveLength(2)
     expect(loader).toHaveBeenCalledTimes(2)
   })
@@ -1685,51 +2657,90 @@ describe('chat continuation after restart', () => {
   it('recovers helpers from earlier providers even if the current provider history fails, without resuming either', async () => {
     const original = new AgentService(db, () => {}, fakeQuery([]))
     const chat = original.start('t', scopeOf(cwd), 'Survey tests', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
-    await until(() => original.get(chat.id).state === 'idle'); original.stopAll()
+    await until(() => original.get(chat.id).state === 'idle')
+    original.stopAll()
     const oldId = original.get(chat.id).providerSessionId!
     persist(chat.id, { kind: 'agent', agentId: 'old-helper', name: 'Old helper', status: 'running' })
     const codex = { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' as const }
-    persist(chat.id, { kind: 'settings', previous: DEFAULT_AGENT_SETTINGS, settings: codex, reason: 'Fallback', handoff: true })
+    persist(chat.id, {
+      kind: 'settings',
+      previous: DEFAULT_AGENT_SETTINGS,
+      settings: codex,
+      reason: 'Fallback',
+      handoff: true,
+    })
     persist(chat.id, { kind: 'init', providerSessionId: 'codex-current', model: 'codex', cwd })
     persist(chat.id, { kind: 'agent', agentId: 'current-helper', name: 'Current helper', status: 'running' })
-    db.prepare("UPDATE agent_sessions SET provider = 'codex', settings = ?, provider_session_id = 'codex-current' WHERE id = ?").run(JSON.stringify(codex), chat.id)
+    db.prepare(
+      "UPDATE agent_sessions SET provider = 'codex', settings = ?, provider_session_id = 'codex-current' WHERE id = ?",
+    ).run(JSON.stringify(codex), chat.id)
     const calls: Options[] = []
     const restored = new AgentService(db, () => {}, fakeQuery(calls))
     restored.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, resumeChatsOnRestart: false })
     const loader = vi.fn(async (source: AgentSessionInfo, tasks: AgentTask[]) => {
       if (source.provider === 'codex') throw new Error('Current provider unavailable')
-      return tasks.map((task) => ({ task: { ...task, status: 'completed' as const }, events: [{ kind: 'text' as const, agentId: task.agentId, messageId: 'old-saved', text: 'Earlier provider findings' }] }))
+      return tasks.map((task) => ({
+        task: { ...task, status: 'completed' as const },
+        events: [
+          { kind: 'text' as const, agentId: task.agentId, messageId: 'old-saved', text: 'Earlier provider findings' },
+        ],
+      }))
     })
     restored.helperHistory = loader
-    restored.markRestoredOnBoot(); await restored.resumeInterruptedChats()
-    expect(loader.mock.calls.map(([source, tasks]) => [source.provider, source.providerSessionId, tasks.map((task) => task.agentId)])).toEqual([
-      ['claude-code', oldId, ['old-helper']], ['codex', 'codex-current', ['current-helper']],
+    restored.markRestoredOnBoot()
+    await restored.resumeInterruptedChats()
+    expect(
+      loader.mock.calls.map(([source, tasks]) => [
+        source.provider,
+        source.providerSessionId,
+        tasks.map((task) => task.agentId),
+      ]),
+    ).toEqual([
+      ['claude-code', oldId, ['old-helper']],
+      ['codex', 'codex-current', ['current-helper']],
     ])
     expect(restored.task(chat.id, 'old-helper')).toMatchObject({ status: 'completed', recovered: true })
-    expect(restored.task(chat.id, 'current-helper')).toMatchObject({ status: 'stopped', recoveryError: 'Current provider unavailable' })
-    expect(restored.events(chat.id)).toContainEqual(expect.objectContaining({ kind: 'text', text: 'Earlier provider findings' }))
+    expect(restored.task(chat.id, 'current-helper')).toMatchObject({
+      status: 'stopped',
+      recoveryError: 'Current provider unavailable',
+    })
+    expect(restored.events(chat.id)).toContainEqual(
+      expect.objectContaining({ kind: 'text', text: 'Earlier provider findings' }),
+    )
     expect(calls).toHaveLength(0)
     expect(restored.get(chat.id)).toMatchObject({ provider: 'codex', providerSessionId: 'codex-current' })
-    const again = new AgentService(db, () => {}, fakeQuery([])); again.helperHistory = loader
-    again.markRestoredOnBoot(); await again.restoreHelperTranscripts()
-    expect(again.events(chat.id).filter((event) => event.kind === 'text' && event.messageId === 'old-saved')).toHaveLength(1)
+    const again = new AgentService(db, () => {}, fakeQuery([]))
+    again.helperHistory = loader
+    again.markRestoredOnBoot()
+    await again.restoreHelperTranscripts()
+    expect(
+      again.events(chat.id).filter((event) => event.kind === 'text' && event.messageId === 'old-saved'),
+    ).toHaveLength(1)
     expect(loader.mock.calls.at(-2)?.[1].map((task) => task.agentId)).toEqual(['old-helper'])
   })
 
   it('recovers transcripts with automatic continuation off and keeps local evidence when the provider fails', async () => {
     const original = new AgentService(db, () => {}, fakeQuery([]))
     const chat = original.start('t', scopeOf(cwd), 'Survey tests', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
-    await until(() => original.get(chat.id).state === 'idle'); original.stopAll()
+    await until(() => original.get(chat.id).state === 'idle')
+    original.stopAll()
     persist(chat.id, { kind: 'agent', agentId: 'helper', name: 'Survey', status: 'running' })
     persist(chat.id, { kind: 'text', agentId: 'helper', text: 'Local evidence' })
     const calls: Options[] = []
     const restored = new AgentService(db, () => {}, fakeQuery(calls))
     restored.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, resumeChatsOnRestart: false })
-    restored.helperHistory = vi.fn(async () => { throw new Error('Provider history unavailable') })
-    restored.markRestoredOnBoot(); await restored.resumeInterruptedChats()
+    restored.helperHistory = vi.fn(async () => {
+      throw new Error('Provider history unavailable')
+    })
+    restored.markRestoredOnBoot()
+    await restored.resumeInterruptedChats()
     expect(calls).toHaveLength(0)
     expect(restored.events(chat.id)).toContainEqual(expect.objectContaining({ kind: 'text', text: 'Local evidence' }))
-    expect(restored.events(chat.id).find((event) => event.kind === 'agent')).toMatchObject({ status: 'stopped', recovered: true, recoveryError: 'Provider history unavailable' })
+    expect(restored.events(chat.id).find((event) => event.kind === 'agent')).toMatchObject({
+      status: 'stopped',
+      recovered: true,
+      recoveryError: 'Provider history unavailable',
+    })
     await restored.resumeInterruptedChats()
     expect(restored.helperHistory).toHaveBeenCalledOnce()
   })
@@ -1737,23 +2748,37 @@ describe('chat continuation after restart', () => {
   it('discards an outdated history read when the user resumes the chat during recovery', async () => {
     const original = new AgentService(db, () => {}, fakeQuery([]))
     const chat = original.start('t', scopeOf(cwd), 'Survey tests', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
-    await until(() => original.get(chat.id).state === 'idle'); original.stopAll()
+    await until(() => original.get(chat.id).state === 'idle')
+    original.stopAll()
     persist(chat.id, { kind: 'agent', agentId: 'helper', name: 'Survey', status: 'running' })
     const restored = new AgentService(db, () => {}, fakeQuery([]))
     let finish!: (value: Awaited<ReturnType<typeof restored.helperHistory>>) => void
-    restored.helperHistory = () => new Promise((resolve) => { finish = resolve })
+    restored.helperHistory = () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
     restored.markRestoredOnBoot()
     const recovery = restored.restoreHelperTranscripts()
     await restored.send(chat.id, 'Manual continuation')
-    finish([{ task: { agentId: 'helper', name: 'Old task', status: 'completed' }, events: [{ kind: 'text', agentId: 'helper', text: 'Outdated history' }] }])
+    finish([
+      {
+        task: { agentId: 'helper', name: 'Old task', status: 'completed' },
+        events: [{ kind: 'text', agentId: 'helper', text: 'Outdated history' }],
+      },
+    ])
     await recovery
-    expect(restored.events(chat.id).some((event) => event.kind === 'text' && event.text === 'Outdated history')).toBe(false)
+    expect(restored.events(chat.id).some((event) => event.kind === 'text' && event.text === 'Outdated history')).toBe(
+      false,
+    )
     restored.stopAll()
   })
   it('defaults on and resumes an unfinished Claude chat without duplicating its user message or approvals', async () => {
     expect(DEFAULT_APP_PREFERENCES.resumeChatsOnRestart).toBe(true)
     const original = service()
-    const chat = original.start('t', scopeOf(cwd), 'Finish the original work', { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
+    const chat = original.start('t', scopeOf(cwd), 'Finish the original work', {
+      ...DEFAULT_AGENT_SETTINGS,
+      access: 'edits',
+    })
     await until(() => original.get(chat.id).state === 'needs-input')
     const oldRequest = original.events(chat.id).find((e) => e.kind === 'permission-request')!
     original.prepareForRestart()
@@ -1765,7 +2790,9 @@ describe('chat continuation after restart', () => {
     await until(() => restored.get(chat.id).state === 'needs-input')
     expect(calls.at(-1)?.resume).toBe('provider-1')
     expect(restored.events(chat.id).filter((e) => e.kind === 'user')).toHaveLength(1)
-    expect(restored.events(chat.id)).toContainEqual(expect.objectContaining({ kind: 'request-resolved', requestId: oldRequest.requestId, outcome: 'cancelled' }))
+    expect(restored.events(chat.id)).toContainEqual(
+      expect.objectContaining({ kind: 'request-resolved', requestId: oldRequest.requestId, outcome: 'cancelled' }),
+    )
     expect(restored.events(chat.id).filter((e) => e.kind === 'recovery')).toHaveLength(1)
     expect(restored.events(chat.id).filter((e) => e.kind === 'permission-request')).toHaveLength(2)
     await restored.resumeInterruptedChats()
@@ -1777,11 +2804,13 @@ describe('chat continuation after restart', () => {
     const original = service()
     const chat = original.start('t', scopeOf(cwd), 'pending', { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
     await until(() => original.get(chat.id).state === 'needs-input')
-    original.prepareForRestart(); original.stopAll(true)
+    original.prepareForRestart()
+    original.stopAll(true)
     const calls: Options[] = []
     const restored = new AgentService(db, () => {}, fakeQuery(calls))
     restored.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, resumeChatsOnRestart: false })
-    restored.markRestoredOnBoot(); await restored.resumeInterruptedChats()
+    restored.markRestoredOnBoot()
+    await restored.resumeInterruptedChats()
     expect(calls).toHaveLength(0)
     expect(restored.get(chat.id).state).toBe('restored')
     restored.preferences = () => DEFAULT_APP_PREFERENCES
@@ -1789,7 +2818,8 @@ describe('chat continuation after restart', () => {
     expect(calls).toHaveLength(0)
     for (const state of ['idle', 'failed', 'stopped']) {
       db.prepare('UPDATE agent_sessions SET state = ? WHERE id = ?').run(state, chat.id)
-      restored.markRestoredOnBoot(); await restored.resumeInterruptedChats()
+      restored.markRestoredOnBoot()
+      await restored.resumeInterruptedChats()
       expect(calls).toHaveLength(0)
     }
   })
@@ -1797,18 +2827,32 @@ describe('chat continuation after restart', () => {
   it('keeps restart intent across repeated boots and resumes Codex in the original native thread', async () => {
     const launches: { prompt: string; resume: string | null }[] = []
     const factory: import('../src/codex').CodexFactory = (_scope, _settings, output) => ({
-      start: async (prompt, resume) => { launches.push({ prompt, resume }); output({ kind: 'init', providerSessionId: 'original-codex-thread', model: 'fake', cwd }); output({ kind: 'state', state: 'running' }) },
-      send: async () => {}, steer: async () => {}, interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {},
+      start: async (prompt, resume) => {
+        launches.push({ prompt, resume })
+        output({ kind: 'init', providerSessionId: 'original-codex-thread', model: 'fake', cwd })
+        output({ kind: 'state', state: 'running' })
+      },
+      send: async () => {},
+      steer: async () => {},
+      interrupt: async () => {},
+      stop: async () => {},
+      replyPermission: () => {},
+      replyQuestion: () => {},
     })
     const original = new AgentService(db, () => {}, fakeQuery([]), factory)
     const chat = original.start('t', scopeOf(cwd), 'original instruction', { ...full, provider: 'codex' })
     await until(() => original.get(chat.id).state === 'running')
-    original.prepareForRestart(); original.stopAll(true)
+    original.prepareForRestart()
+    original.stopAll(true)
     const restored = new AgentService(db, () => {}, fakeQuery([]), factory)
-    restored.markRestoredOnBoot(); restored.markRestoredOnBoot()
+    restored.markRestoredOnBoot()
+    restored.markRestoredOnBoot()
     await restored.resumeInterruptedChats()
     await until(() => launches.length === 2)
-    expect(launches[1]).toMatchObject({ resume: 'original-codex-thread', prompt: expect.stringContaining('do not repeat completed work') })
+    expect(launches[1]).toMatchObject({
+      resume: 'original-codex-thread',
+      prompt: expect.stringContaining('do not repeat completed work'),
+    })
     expect(restored.events(chat.id).filter((e) => e.kind === 'user')).toHaveLength(1)
     expect(restored.isRecoveryPending(chat.id)).toBe(false)
     restored.stopAll()
@@ -1819,7 +2863,8 @@ describe('chat continuation after restart', () => {
     const chat = original.start('t', scopeOf(cwd), 'pending', { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
     await until(() => original.get(chat.id).state === 'needs-input')
     await original.submit(chat.id, 'follow-up', 'queue')
-    original.prepareForRestart(); original.stopAll(true)
+    original.prepareForRestart()
+    original.stopAll(true)
     const calls: Options[] = []
     const restored = new AgentService(db, () => {}, fakeQuery(calls))
     restored.markRestoredOnBoot()
@@ -1840,12 +2885,27 @@ describe('chat continuation after restart', () => {
     const original = service()
     const chat = original.start('t', scopeOf(cwd), 'Original work', { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
     await until(() => original.get(chat.id).state === 'needs-input')
-    original.prepareForRestart(); original.stopAll(true)
+    original.prepareForRestart()
+    original.stopAll(true)
     db.prepare('UPDATE agent_sessions SET provider_session_id = NULL WHERE id = ?').run(chat.id)
     const inputs: string[] = []
     const base = fakeQuery([])
-    const restored = new AgentService(db, () => {}, ({ prompt, options }) => base({ options, prompt: (async function* () { for await (const message of prompt) { inputs.push(String(message.message.content)); yield message } })() }))
-    restored.markRestoredOnBoot(); await restored.resumeInterruptedChats()
+    const restored = new AgentService(
+      db,
+      () => {},
+      ({ prompt, options }) =>
+        base({
+          options,
+          prompt: (async function* () {
+            for await (const message of prompt) {
+              inputs.push(String(message.message.content))
+              yield message
+            }
+          })(),
+        }),
+    )
+    restored.markRestoredOnBoot()
+    await restored.resumeInterruptedChats()
     await until(() => inputs.length > 0)
     expect(inputs[0]).toContain('Original work')
     expect(inputs[0]).toContain('Inspect the current files')
@@ -1855,18 +2915,28 @@ describe('chat continuation after restart', () => {
   it('starts the next recovering chat only after the shared checkout writer finishes', async () => {
     const outputs: ((event: AgentEvent) => void)[] = []
     const factory: import('../src/codex').CodexFactory = (_scope, _settings, output) => ({
-      start: async () => { outputs.push(output); output({ kind: 'state', state: 'running' }) },
-      send: async () => {}, steer: async () => {}, interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {},
+      start: async () => {
+        outputs.push(output)
+        output({ kind: 'state', state: 'running' })
+      },
+      send: async () => {},
+      steer: async () => {},
+      interrupt: async () => {},
+      stop: async () => {},
+      replyPermission: () => {},
+      replyQuestion: () => {},
     })
     const original = new AgentService(db, () => {}, fakeQuery([]), factory)
     const a = original.start('t', scopeOf(cwd), 'first', { ...full, provider: 'codex' })
     const b = original.start('t2', scopeOf('/another-checkout'), 'second', { ...full, provider: 'codex' })
     await until(() => outputs.length === 2)
-    original.prepareForRestart(); original.stopAll(true)
+    original.prepareForRestart()
+    original.stopAll(true)
     db.prepare('UPDATE agent_sessions SET cwd = ?, covers = ? WHERE id = ?').run(cwd, JSON.stringify([cwd]), b.id)
     outputs.length = 0
     const restored = new AgentService(db, () => {}, fakeQuery([]), factory)
-    restored.markRestoredOnBoot(); await restored.resumeInterruptedChats()
+    restored.markRestoredOnBoot()
+    await restored.resumeInterruptedChats()
     expect(outputs).toHaveLength(1)
     expect(restored.get(a.id).state).toBe('running')
     expect(restored.isRecoveryPending(b.id)).toBe(true)
@@ -1884,9 +2954,19 @@ describe('Codex sub-agent control', () => {
   const codexStep = { id: 'c', provider: 'codex' as const, model: 'codex-test', effort: null }
   const claudeStep = { id: 'k', provider: 'claude-code' as const, model: 'sonnet', effort: null }
   // Codex leads the order so these Codex chats aren't moved up to Claude Code.
-  const prefsWith = (patch: Partial<AppPreferences['subagents']>): AppPreferences => ({ ...DEFAULT_APP_PREFERENCES, fallback: { ...DEFAULT_APP_PREFERENCES.fallback, order: [{ id: 'x', provider: 'codex', model: 'codex-test', effort: null }, { id: 'y', provider: 'claude-code', model: 'sonnet', effort: null }] }, subagents: { ...DEFAULT_APP_PREFERENCES.subagents, ...patch } })
+  const prefsWith = (patch: Partial<AppPreferences['subagents']>): AppPreferences => ({
+    ...DEFAULT_APP_PREFERENCES,
+    fallback: {
+      ...DEFAULT_APP_PREFERENCES.fallback,
+      order: [
+        { id: 'x', provider: 'codex', model: 'codex-test', effort: null },
+        { id: 'y', provider: 'claude-code', model: 'sonnet', effort: null },
+      ],
+    },
+    subagents: { ...DEFAULT_APP_PREFERENCES.subagents, ...patch },
+  })
 
-  it('answers Codex\'s hook: refuse and point at ramu_agent when Ramu should run it, otherwise let it through', async () => {
+  it("answers Codex's hook: refuse and point at ramu_agent when Ramu should run it, otherwise let it through", async () => {
     const svc = service()
     svc.usage = { list: () => [], update: () => {} }
     svc.preferences = () => prefsWith({ mode: 'native' })
@@ -1894,22 +2974,41 @@ describe('Codex sub-agent control', () => {
     await until(() => svc.get(s.id).state === 'idle')
     expect(await svc.codexSpawnDecision(s.id, { task_name: 'x' })).toBeNull()
     svc.preferences = () => prefsWith({ mode: 'native', byType: [{ id: 'a', type: 'Explore', step: claudeStep }] })
-    expect(await svc.codexSpawnDecision(s.id, { agent_type: 'explore' })).toMatchObject({ deny: true, reason: expect.stringContaining('ramu_agent') })
+    expect(await svc.codexSpawnDecision(s.id, { agent_type: 'explore' })).toMatchObject({
+      deny: true,
+      reason: expect.stringContaining('ramu_agent'),
+    })
     expect(await svc.codexSpawnDecision(s.id, JSON.stringify({ agent_type: 'explore' }))).toMatchObject({ deny: true })
     expect(await svc.codexSpawnDecision(s.id, { agent_type: 'worker' })).toBeNull()
     svc.preferences = () => prefsWith({ mode: 'single', single: claudeStep })
-    expect(await svc.codexSpawnDecision(s.id, undefined)).toMatchObject({ deny: true, reason: expect.stringContaining('Claude sonnet') })
+    expect(await svc.codexSpawnDecision(s.id, undefined)).toMatchObject({
+      deny: true,
+      reason: expect.stringContaining('Claude sonnet'),
+    })
     svc.stopAll()
   })
 
   it('hides turned-off providers and accounts from catalogs and refuses to start them', async () => {
     const svc = new AgentService(db, () => {}, fakeQuery([]))
-    vi.spyOn(svc as any, 'discoverCatalog').mockResolvedValue([...catalog, { provider: 'opencode', models: [{ provider: 'opencode', id: 'a/m', name: 'M', efforts: [], defaultEffort: null, isDefault: true }] }])
-    let providerBinaries: AppPreferences['providerBinaries'] = { codex: { binary: '', enabled: false }, opencode: { binary: '', accounts: [{ id: 'work', name: 'Work', enabled: false }] } }
+    vi.spyOn(svc as any, 'discoverCatalog').mockResolvedValue([
+      ...catalog,
+      {
+        provider: 'opencode',
+        models: [{ provider: 'opencode', id: 'a/m', name: 'M', efforts: [], defaultEffort: null, isDefault: true }],
+      },
+    ])
+    let providerBinaries: AppPreferences['providerBinaries'] = {
+      codex: { binary: '', enabled: false },
+      opencode: { binary: '', accounts: [{ id: 'work', name: 'Work', enabled: false }] },
+    }
     svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, providerBinaries })
     expect((await svc.catalog()).map((entry) => entry.provider)).toEqual(['claude-code', 'opencode'])
-    await expect(svc.validateSettings({ ...full, provider: 'codex', model: 'codex-test' })).rejects.toThrow(/turned off/)
-    await expect(svc.validateSettings({ ...full, provider: 'opencode', model: 'a/m', accountId: 'work' })).rejects.toThrow(/account "Work" is turned off/)
+    await expect(svc.validateSettings({ ...full, provider: 'codex', model: 'codex-test' })).rejects.toThrow(
+      /turned off/,
+    )
+    await expect(
+      svc.validateSettings({ ...full, provider: 'opencode', model: 'a/m', accountId: 'work' }),
+    ).rejects.toThrow(/account "Work" is turned off/)
     await expect(svc.validateSettings({ ...full, provider: 'opencode', model: 'a/m' })).resolves.toBeUndefined()
     providerBinaries = {}
     expect((await svc.catalog()).map((entry) => entry.provider)).toContain('codex')
@@ -1919,21 +3018,46 @@ describe('Codex sub-agent control', () => {
     const launches: { native?: boolean; resume: string | null }[] = []
     const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, output) => {
       let connection: { nativeSubagents?: boolean } | undefined
-      return { setTools: (c) => { connection = c }, start: async (_prompt, resume) => { launches.push({ native: connection?.nativeSubagents, resume }); output({ kind: 'init', providerSessionId: 'acp-session', model: 'm', cwd }); output({ kind: 'state', state: 'running' }); output({ kind: 'result', isError: false, text: 'ok', costUsd: null }) },
-        send: async () => { output({ kind: 'state', state: 'running' }); output({ kind: 'result', isError: false, text: 'ok', costUsd: null }) }, steer: async () => {},
-        interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
+      return {
+        setTools: (c) => {
+          connection = c
+        },
+        start: async (_prompt, resume) => {
+          launches.push({ native: connection?.nativeSubagents, resume })
+          output({ kind: 'init', providerSessionId: 'acp-session', model: 'm', cwd })
+          output({ kind: 'state', state: 'running' })
+          output({ kind: 'result', isError: false, text: 'ok', costUsd: null })
+        },
+        send: async () => {
+          output({ kind: 'state', state: 'running' })
+          output({ kind: 'result', isError: false, text: 'ok', costUsd: null })
+        },
+        steer: async () => {},
+        interrupt: async () => {},
+        stop: async () => {},
+        replyPermission: () => {},
+        replyQuestion: () => {},
+      }
     }
     const svc = new AgentService(db, () => {}, fakeQuery([]), undefined, undefined, factory)
-    vi.spyOn(svc, 'catalog').mockResolvedValue([...catalog, { provider: 'opencode', models: [{ provider: 'opencode', id: 'a/m', name: 'M', efforts: [], defaultEffort: null, isDefault: true }] }])
+    vi.spyOn(svc, 'catalog').mockResolvedValue([
+      ...catalog,
+      {
+        provider: 'opencode',
+        models: [{ provider: 'opencode', id: 'a/m', name: 'M', efforts: [], defaultEffort: null, isDefault: true }],
+      },
+    ])
     svc.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 't' })
     let prefs = prefsWith({ mode: 'native' })
     svc.preferences = () => prefs
     const s = svc.start('t', scopeOf(cwd), 'hello', { ...full, provider: 'opencode', model: 'a/m' })
     await until(() => svc.get(s.id).state === 'idle')
-    await svc.send(s.id, 'again'); await until(() => svc.get(s.id).state === 'idle')
+    await svc.send(s.id, 'again')
+    await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toEqual([{ native: undefined, resume: null }])
     prefs = prefsWith({ mode: 'single', single: claudeStep })
-    await svc.send(s.id, 'now with ramu agents'); await until(() => svc.get(s.id).state === 'idle' && launches.length === 2)
+    await svc.send(s.id, 'now with ramu agents')
+    await until(() => svc.get(s.id).state === 'idle' && launches.length === 2)
     expect(launches[1]).toEqual({ native: false, resume: 'acp-session' })
     svc.stopAll()
   })
@@ -1942,8 +3066,26 @@ describe('Codex sub-agent control', () => {
     const launches: { nativeSubagents?: boolean; interceptSubagents?: boolean }[] = []
     const factory: import('../src/codex').CodexFactory = (_scope, _settings, output) => {
       let connection: { nativeSubagents?: boolean; interceptSubagents?: boolean } | undefined
-      return { setTools: (c) => { connection = c }, start: async () => { launches.push({ ...connection }); output({ kind: 'init', providerSessionId: 'codex-resume', model: 'codex-test', cwd }); output({ kind: 'state', state: 'running' }); output({ kind: 'result', text: 'done', isError: false, costUsd: null }) }, send: async () => { output({ kind: 'state', state: 'running' }); output({ kind: 'result', text: 'done', isError: false, costUsd: null }) }, steer: async () => {},
-        interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {} }
+      return {
+        setTools: (c) => {
+          connection = c
+        },
+        start: async () => {
+          launches.push({ ...connection })
+          output({ kind: 'init', providerSessionId: 'codex-resume', model: 'codex-test', cwd })
+          output({ kind: 'state', state: 'running' })
+          output({ kind: 'result', text: 'done', isError: false, costUsd: null })
+        },
+        send: async () => {
+          output({ kind: 'state', state: 'running' })
+          output({ kind: 'result', text: 'done', isError: false, costUsd: null })
+        },
+        steer: async () => {},
+        interrupt: async () => {},
+        stop: async () => {},
+        replyPermission: () => {},
+        replyQuestion: () => {},
+      }
     }
     const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
     vi.spyOn(svc, 'catalog').mockResolvedValue(catalog)
@@ -1956,30 +3098,36 @@ describe('Codex sub-agent control', () => {
     await until(() => svc.get(s.id).state === 'idle')
     expect(launches[0]).toMatchObject({ nativeSubagents: undefined, interceptSubagents: false })
     // Nothing changed: the process stays.
-    await svc.send(s.id, 'again'); await until(() => svc.get(s.id).state === 'idle')
+    await svc.send(s.id, 'again')
+    await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toHaveLength(1)
     // Routing now replaces Codex's own sub-agents: the next message starts a process without them.
     prefs = prefsWith({ mode: 'single', single: claudeStep })
-    await svc.send(s.id, 'now with ramu agents'); await until(() => svc.get(s.id).state === 'idle' && launches.length === 2)
+    await svc.send(s.id, 'now with ramu agents')
+    await until(() => svc.get(s.id).state === 'idle' && launches.length === 2)
     expect(launches[1]).toMatchObject({ nativeSubagents: false, interceptSubagents: false })
     expect(svc.get(s.id).providerSessionId).toBeDefined()
     // Installing the hook needs one restart; native tools stay available for per-type decisions.
     prefs = prefsWith({ mode: 'native', codexHook: true })
-    await svc.send(s.id, 'hook mode'); await until(() => svc.get(s.id).state === 'idle')
+    await svc.send(s.id, 'hook mode')
+    await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toHaveLength(3)
     expect(launches[2]).toMatchObject({ nativeSubagents: undefined, interceptSubagents: true })
     prefs = prefsWith({ mode: 'single', single: claudeStep, codexHook: true })
-    await svc.send(s.id, 'hook decides'); await until(() => svc.get(s.id).state === 'idle')
+    await svc.send(s.id, 'hook decides')
+    await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toHaveLength(3)
     // Without the hook, the separate sub-agent threshold replaces native tools and recovers after reset.
     const pressure = prefsWith({ mode: 'native', switchAt: 80 })
     prefs = { ...pressure, fallback: { ...pressure.fallback, switchAt: 95 } }
     usage = [{ provider: 'codex', window: 'five_hour', usedPercent: 85, status: 'warning', updatedAt: Date.now() }]
-    await svc.send(s.id, 'under pressure'); await until(() => svc.get(s.id).state === 'idle')
+    await svc.send(s.id, 'under pressure')
+    await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toHaveLength(4)
     expect(launches[3]).toMatchObject({ nativeSubagents: false, interceptSubagents: false })
     usage = []
-    await svc.send(s.id, 'recovered'); await until(() => svc.get(s.id).state === 'idle')
+    await svc.send(s.id, 'recovered')
+    await until(() => svc.get(s.id).state === 'idle')
     expect(launches).toHaveLength(5)
     expect(launches[4]).toMatchObject({ nativeSubagents: undefined, interceptSubagents: false })
     svc.stopAll()
@@ -1996,23 +3144,42 @@ describe('questions while work continues', () => {
     const starts: { prompt: string; resume: string | null }[] = []
     const steers: string[] = []
     let key = 0
-    const svc = new AgentService(db, () => {}, fakeQuery([]), (_scope, _settings, emit) => {
-      const name = String(++key)
-      outputs.set(name, emit)
-      return {
-        start: async (prompt: string, resume: string | null) => { starts.push({ prompt, resume }); emit({ kind: 'init', model: 'fake', cwd, providerSessionId: 'native-questions' }); emit({ kind: 'state', state: 'running' }) },
-        send: async (prompt: string) => { starts.push({ prompt, resume: 'native-questions' }); emit({ kind: 'state', state: 'running' }) },
-        steer: async (prompt: string) => { steers.push(prompt) },
-        interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {},
-      }
-    })
-    const start = (taskId = 't') => svc.start(taskId, scopeOf(cwd), 'Do the work', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'full' })
+    const svc = new AgentService(
+      db,
+      () => {},
+      fakeQuery([]),
+      (_scope, _settings, emit) => {
+        const name = String(++key)
+        outputs.set(name, emit)
+        return {
+          start: async (prompt: string, resume: string | null) => {
+            starts.push({ prompt, resume })
+            emit({ kind: 'init', model: 'fake', cwd, providerSessionId: 'native-questions' })
+            emit({ kind: 'state', state: 'running' })
+          },
+          send: async (prompt: string) => {
+            starts.push({ prompt, resume: 'native-questions' })
+            emit({ kind: 'state', state: 'running' })
+          },
+          steer: async (prompt: string) => {
+            steers.push(prompt)
+          },
+          interrupt: async () => {},
+          stop: async () => {},
+          replyPermission: () => {},
+          replyQuestion: () => {},
+        }
+      },
+    )
+    const start = (taskId = 't') =>
+      svc.start(taskId, scopeOf(cwd), 'Do the work', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'full' })
     return { svc, start, outputs, starts, steers }
   }
 
   it('defaults on, keeps related answers atomic, and uses IDs for identical question text', async () => {
     expect(DEFAULT_APP_PREFERENCES.asyncQuestions).toBe(true)
-    const { svc, start, steers } = fixture(), chat = start()
+    const { svc, start, steers } = fixture(),
+      chat = start()
     const asked = await svc.askQuestion(chat.id, { questions, dependsOn: 'Database setup' })
     expect(svc.get(chat.id).state).toBe('running')
     expect(asked.request).toMatchObject({ responseMode: 'message', grouping: 'together', dependsOn: 'Database setup' })
@@ -2023,13 +3190,19 @@ describe('questions while work continues', () => {
     await until(() => steers.length === 1)
     expect(steers[0]).toContain('SQLite')
     expect(steers[0]).toContain('Jakarta')
-    expect(svc.questionStatus(chat.id, asked.request.requestId)).toMatchObject({ outcome: 'answered', answers: { db: 'SQLite', region: 'Jakarta' } })
-    expect(() => svc.replyQuestion(chat.id, asked.request.requestId, { db: 'Again', region: 'Again' })).toThrow('closed')
+    expect(svc.questionStatus(chat.id, asked.request.requestId)).toMatchObject({
+      outcome: 'answered',
+      answers: { db: 'SQLite', region: 'Jakarta' },
+    })
+    expect(() => svc.replyQuestion(chat.id, asked.request.requestId, { db: 'Again', region: 'Again' })).toThrow(
+      'closed',
+    )
     svc.stopAll()
   })
 
   it('sends independent answers separately without closing other questions or requests', async () => {
-    const { svc, start, steers } = fixture(), chat = start()
+    const { svc, start, steers } = fixture(),
+      chat = start()
     const first = await svc.askQuestion(chat.id, { questions, grouping: 'independent' })
     const second = await svc.askQuestion(chat.id, { questions: [questions[0]!] })
     svc.replyQuestion(chat.id, first.request.requestId, { db: 'SQLite' })
@@ -2044,7 +3217,8 @@ describe('questions while work continues', () => {
   })
 
   it('waits only when dependent work is reached and returns the related answers through the waiting tool', async () => {
-    const { svc, start, steers } = fixture(), chat = start()
+    const { svc, start, steers } = fixture(),
+      chat = start()
     const asked = await svc.askQuestion(chat.id, { questions })
     const waiting = svc.waitForAnswer(chat.id, asked.request.requestId)
     expect(svc.get(chat.id).state).toBe('needs-input')
@@ -2057,7 +3231,8 @@ describe('questions while work continues', () => {
   })
 
   it('makes new Ramu questions block when disabled, and does not change existing async requests', async () => {
-    const { svc, start } = fixture(), chat = start()
+    const { svc, start } = fixture(),
+      chat = start()
     const existing = await svc.askQuestion(chat.id, { questions })
     svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions: false })
     const waiting = svc.askQuestion(chat.id, { questions })
@@ -2072,7 +3247,8 @@ describe('questions while work continues', () => {
   })
 
   it('delivers late answers in the same chat after completion', async () => {
-    const { svc, start, outputs, starts } = fixture(), chat = start()
+    const { svc, start, outputs, starts } = fixture(),
+      chat = start()
     const asked = await svc.askQuestion(chat.id, { questions })
     outputs.get('1')!({ kind: 'result', isError: false, text: 'Done', costUsd: null })
     expect(svc.get(chat.id).state).toBe('idle')
@@ -2085,14 +3261,16 @@ describe('questions while work continues', () => {
   })
 
   it('delivers late answers after the chat failed or was stopped', async () => {
-    const failed = fixture(), failedChat = failed.start()
+    const failed = fixture(),
+      failedChat = failed.start()
     const failedAsk = await failed.svc.askQuestion(failedChat.id, { questions })
     failed.outputs.get('1')!({ kind: 'result', isError: true, text: 'Boom', costUsd: null })
     expect(failed.svc.get(failedChat.id).state).toBe('failed')
     failed.svc.replyQuestion(failedChat.id, failedAsk.request.requestId, { db: 'SQLite', region: 'Jakarta' })
     await until(() => failed.starts.length === 2)
     failed.svc.stopAll()
-    const stopped = fixture(), stoppedChat = stopped.start()
+    const stopped = fixture(),
+      stoppedChat = stopped.start()
     const stoppedAsk = await stopped.svc.askQuestion(stoppedChat.id, { questions })
     stopped.svc.stop(stoppedChat.id)
     expect(stopped.svc.get(stoppedChat.id).state).toBe('stopped')
@@ -2114,10 +3292,12 @@ describe('questions while work continues', () => {
   })
 
   it('preserves pending async questions and drafts through restart and resumes without duplicates', async () => {
-    const first = fixture(), chat = first.start()
+    const first = fixture(),
+      chat = first.start()
     const asked = await first.svc.askQuestion(chat.id, { questions })
     first.svc.saveQuestionDraft(chat.id, asked.request.requestId, { db: 'SQLite' })
-    first.svc.prepareForRestart(); first.svc.stopAll(true)
+    first.svc.prepareForRestart()
+    first.svc.stopAll(true)
     const restored = fixture()
     restored.svc.markRestoredOnBoot()
     expect(restored.svc.questionStatus(chat.id, asked.request.requestId)).toMatchObject({ drafts: { db: 'SQLite' } })
@@ -2132,7 +3312,8 @@ describe('questions while work continues', () => {
   })
 
   it('closes obsolete questions with a reason and allows dismissal without fabricating an answer', async () => {
-    const { svc, start, steers } = fixture(), chat = start()
+    const { svc, start, steers } = fixture(),
+      chat = start()
     const asked = await svc.askQuestion(chat.id, { questions })
     expect(() => svc.questionStatus('missing', asked.request.requestId)).toThrow()
     expect(() => svc.closeQuestion(chat.id, asked.request.requestId, 'obsolete')).toThrow('Explain')
@@ -2147,7 +3328,8 @@ describe('questions while work continues', () => {
   })
 
   it('cancels a dependency wait on Stop while leaving the async question answerable', async () => {
-    const { svc, start } = fixture(), chat = start()
+    const { svc, start } = fixture(),
+      chat = start()
     const asked = await svc.askQuestion(chat.id, { questions })
     const waiting = svc.waitForAnswer(chat.id, asked.request.requestId)
     const rejected = expect(waiting).rejects.toThrow('cancelled')
@@ -2158,7 +3340,8 @@ describe('questions while work continues', () => {
   })
 
   it('keeps a late answer queued while another chat owns the shared checkout', async () => {
-    const { svc, start, outputs, starts } = fixture(), chat = start()
+    const { svc, start, outputs, starts } = fixture(),
+      chat = start()
     const asked = await svc.askQuestion(chat.id, { questions })
     outputs.get('1')!({ kind: 'result', isError: false, text: 'Done', costUsd: null })
     start('t2')
@@ -2180,11 +3363,27 @@ it('allows scoped Claude question tools without extra approval while preserving 
   await until(() => svc.get(chat.id).state === 'needs-input')
   const permissionCount = svc.events(chat.id).filter((e) => e.kind === 'permission-request').length
   for (const tool of ['ask_user', 'question_status', 'wait_for_answer', 'close_question']) {
-    const result = await calls[0]!.canUseTool!(`mcp__ramu__${tool}`, {}, { signal: new AbortController().signal, toolUseID: tool } as never)
+    const result = await calls[0]!.canUseTool!(`mcp__ramu__${tool}`, {}, {
+      signal: new AbortController().signal,
+      toolUseID: tool,
+    } as never)
     expect(result?.behavior).toBe('allow')
   }
   expect(svc.events(chat.id).filter((e) => e.kind === 'permission-request')).toHaveLength(permissionCount)
-  const native = calls[0]!.canUseTool!('AskUserQuestion', { questions: [{ question: 'Native choice?', header: 'Choice', multiSelect: false, options: [{ label: 'A', description: '' }] }] }, { signal: new AbortController().signal, toolUseID: 'native-question' } as never)
+  const native = calls[0]!.canUseTool!(
+    'AskUserQuestion',
+    {
+      questions: [
+        {
+          question: 'Native choice?',
+          header: 'Choice',
+          multiSelect: false,
+          options: [{ label: 'A', description: '' }],
+        },
+      ],
+    },
+    { signal: new AbortController().signal, toolUseID: 'native-question' } as never,
+  )
   const request = svc.events(chat.id).findLast((e) => e.kind === 'question')!
   expect(request).not.toHaveProperty('responseMode')
   svc.replyQuestion(chat.id, request.requestId, { 'Native choice?': 'A' })
@@ -2196,38 +3395,71 @@ it('allows scoped Claude question tools without extra approval while preserving 
 describe('AgentService.searchMessages', () => {
   it('finds your messages and the agent replies across chats, newest first, as plain one-line excerpts', async () => {
     const svc = new AgentService(db, () => {}, fakeQuery([]))
-    const first = svc.start('t', scopeOf(cwd), 'Add a **Password** reset\n- with `tokens`', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
+    const first = svc.start('t', scopeOf(cwd), 'Add a **Password** reset\n- with `tokens`', {
+      ...DEFAULT_AGENT_SETTINGS,
+      access: 'full',
+    })
     await until(() => svc.get(first.id).state === 'idle')
-    const second = svc.start('t2', scopeOf(cwd), 'Rotate password hashes', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
+    const second = svc.start('t2', scopeOf(cwd), 'Rotate password hashes', {
+      ...DEFAULT_AGENT_SETTINGS,
+      access: 'full',
+    })
     await until(() => svc.get(second.id).state === 'idle')
     const hits = svc.searchMessages('PASSWORD')
-    expect(hits.map((hit) => [hit.taskId, hit.role])).toEqual([['t2', 'agent'], ['t2', 'user'], ['t', 'agent'], ['t', 'user']])
-    expect(hits.find((hit) => hit.taskId === 't' && hit.role === 'user')?.snippet).toBe('Add a Password reset with tokens')
+    expect(hits.map((hit) => [hit.taskId, hit.role])).toEqual([
+      ['t2', 'agent'],
+      ['t2', 'user'],
+      ['t', 'agent'],
+      ['t', 'user'],
+    ])
+    expect(hits.find((hit) => hit.taskId === 't' && hit.role === 'user')?.snippet).toBe(
+      'Add a Password reset with tokens',
+    )
     expect(svc.searchMessages('p')).toEqual([])
     expect(svc.searchMessages('no such text')).toEqual([])
-    svc.stop(first.id); svc.stop(second.id)
+    svc.stop(first.id)
+    svc.stop(second.id)
   })
 })
 
 it('pins provider accounts for existing chats when the default account changes', async () => {
-  const accounts = [{ id: 'work', name: 'Work' }, { id: 'personal', name: 'Personal' }]
+  const accounts = [
+    { id: 'work', name: 'Work' },
+    { id: 'personal', name: 'Personal' },
+  ]
   const svc = new AgentService(db, () => {}, fakeQuery([]), fakeCodex)
   try {
     configureProviderBinaries({ codex: { binary: '', accounts, accountId: 'work' } })
-    const first = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
+    const first = svc.start('t', scopeOf(cwd), 'hello', {
+      ...DEFAULT_AGENT_SETTINGS,
+      access: 'full' as const,
+      provider: 'codex',
+    })
     await until(() => svc.get(first.id).state === 'idle')
     expect(svc.get(first.id).settings.accountId).toBe('work')
     configureProviderBinaries({ codex: { binary: '', accounts, accountId: 'personal' } })
     expect(svc.get(first.id).settings.accountId).toBe('work')
-    const second = svc.start('t2', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' as const, provider: 'codex' })
+    const second = svc.start('t2', scopeOf(cwd), 'hello', {
+      ...DEFAULT_AGENT_SETTINGS,
+      access: 'full' as const,
+      provider: 'codex',
+    })
     await until(() => svc.get(second.id).state === 'idle')
     expect(svc.get(second.id).settings.accountId).toBe('personal')
-  } finally { svc.stopAll(); configureProviderBinaries({}) }
+  } finally {
+    svc.stopAll()
+    configureProviderBinaries({})
+  }
 })
 
-
 it('preserves original user constraints and recent results when using a checkpoint handoff', () => {
-  const trace: AgentEvent[] = [{ kind: 'user', text: 'Keep the public API unchanged and use pnpm.' }, { kind: 'tool-result', toolUseId: 'old', isError: false, summary: 'old output'.repeat(10000) }, { kind: 'text', text: 'Migrated the implementation.' }, { kind: 'user', text: 'Also preserve the error code.' }, { kind: 'tool-result', toolUseId: 'recent', isError: true, summary: 'integration test failed' }]
+  const trace: AgentEvent[] = [
+    { kind: 'user', text: 'Keep the public API unchanged and use pnpm.' },
+    { kind: 'tool-result', toolUseId: 'old', isError: false, summary: 'old output'.repeat(10000) },
+    { kind: 'text', text: 'Migrated the implementation.' },
+    { kind: 'user', text: 'Also preserve the error code.' },
+    { kind: 'tool-result', toolUseId: 'recent', isError: true, summary: 'integration test failed' },
+  ]
   const handoff = conversationHandoff(trace, { seq: 3, summary: 'Implementation migrated; verification remains.' })
   expect(handoff).toContain('Keep the public API unchanged and use pnpm.')
   expect(handoff).toContain('Also preserve the error code.')

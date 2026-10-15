@@ -4,11 +4,13 @@ export const SKILL_REFERENCE_PREFIX = 'ramu-skill:'
 /** Explicit mentions become chips; code, prices, shell variables, and email addresses stay text. */
 export function chatReferences(text: string): ChatReference[] {
   const parts: ChatReference[] = []
-  const pattern = /(```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|`[^`\n]*`)|(^|[\s(])(\$[A-Za-z][A-Za-z\d_:-]*|@"[^"\n]+"|@[\w./-]+(?::\d+(?::\d+)?)?)/g
+  const pattern =
+    /(```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|`[^`\n]*`)|(^|[\s(])(\$[A-Za-z][A-Za-z\d_:-]*|@"[^"\n]+"|@[\w./-]+(?::\d+(?::\d+)?)?)/g
   let cursor = 0
   for (const match of text.matchAll(pattern)) {
     if (match[1]) continue
-    const raw = match[3]!, start = match.index! + (match[2]?.length ?? 0)
+    const raw = match[3]!,
+      start = match.index! + (match[2]?.length ?? 0)
     const quoted = raw.startsWith('@"')
     const token = raw.startsWith('$') || quoted ? raw : raw.replace(/[.,]+$/, '')
     const kind = token.startsWith('$') ? 'skill' : 'file'
@@ -23,17 +25,31 @@ export function chatReferences(text: string): ChatReference[] {
   return parts
 }
 
-interface ReferenceNode { type: string; value?: string; url?: string; children?: ReferenceNode[] }
+interface ReferenceNode {
+  type: string
+  value?: string
+  url?: string
+  children?: ReferenceNode[]
+}
 /** Transform prose text only: existing links, images, and code retain their meaning. */
 export function remarkChatReferences() {
   return (tree: ReferenceNode) => {
     const visit = (node: ReferenceNode) => {
       if (!node.children || ['link', 'linkReference', 'code', 'inlineCode', 'html'].includes(node.type)) return
       node.children = node.children.flatMap((child) => {
-        if (child.type !== 'text') { visit(child); return [child] }
-        return chatReferences(child.value ?? '').map((part): ReferenceNode => part.kind === 'text'
-          ? { type: 'text', value: part.text }
-          : { type: 'link', url: part.kind === 'skill' ? SKILL_REFERENCE_PREFIX + encodeURIComponent(part.target) : part.target, children: [{ type: 'text', value: part.text }] })
+        if (child.type !== 'text') {
+          visit(child)
+          return [child]
+        }
+        return chatReferences(child.value ?? '').map((part): ReferenceNode =>
+          part.kind === 'text'
+            ? { type: 'text', value: part.text }
+            : {
+                type: 'link',
+                url: part.kind === 'skill' ? SKILL_REFERENCE_PREFIX + encodeURIComponent(part.target) : part.target,
+                children: [{ type: 'text', value: part.text }],
+              },
+        )
       })
     }
     visit(tree)

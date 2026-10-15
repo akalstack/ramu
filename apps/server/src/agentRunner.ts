@@ -1,4 +1,11 @@
-import type { AgentEvent, ElicitationAction, AgentScope, AgentSettings, Attachment, McpConnection } from '@ramu/shared/types'
+import type {
+  AgentEvent,
+  ElicitationAction,
+  AgentScope,
+  AgentSettings,
+  Attachment,
+  McpConnection,
+} from '@ramu/shared/types'
 
 export interface AgentRunner {
   /** Whether `steer` accepts input during a turn. Runners without it are always queued. */
@@ -15,4 +22,9 @@ export interface AgentRunner {
   replyElicitation?(id: string, action: ElicitationAction, answers: Record<string, string>): void
   replyQuestion(id: string, answers: Record<string, string>): void
 }
-export type AgentRunnerFactory = (scope: AgentScope, settings: AgentSettings, emit: (event: AgentEvent, usageLimit?: boolean) => void, readOnly?: boolean) => AgentRunner
+export type AgentRunnerFactory = (
+  scope: AgentScope,
+  settings: AgentSettings,
+  emit: (event: AgentEvent, usageLimit?: boolean) => void,
+  readOnly?: boolean,
+) => AgentRunner

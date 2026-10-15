@@ -25,35 +25,57 @@ module.exports = {
       /^\/node_modules\/\.cache(\/|$)/,
     ],
     ...(process.env.RAMU_SIGN_IDENTITY ? { osxSign: { identity: process.env.RAMU_SIGN_IDENTITY } } : {}),
-    ...(process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER ? { osxNotarize: { appleApiKey: process.env.APPLE_API_KEY, appleApiKeyId: process.env.APPLE_API_KEY_ID, appleApiIssuer: process.env.APPLE_API_ISSUER } } : {}),
+    ...(process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER
+      ? {
+          osxNotarize: {
+            appleApiKey: process.env.APPLE_API_KEY,
+            appleApiKeyId: process.env.APPLE_API_KEY_ID,
+            appleApiIssuer: process.env.APPLE_API_ISSUER,
+          },
+        }
+      : {}),
   },
   rebuildConfig: {},
   makers: [
-    { name: '@electron-forge/maker-dmg', platforms: ['darwin'], config: { overwrite: true, icon: join(repoRoot, 'assets', 'icon.icns') } },
+    {
+      name: '@electron-forge/maker-dmg',
+      platforms: ['darwin'],
+      config: { overwrite: true, icon: join(repoRoot, 'assets', 'icon.icns') },
+    },
     { name: '@electron-forge/maker-zip', platforms: ['darwin', 'linux', 'win32'] },
-    { name: '@electron-forge/maker-deb', platforms: ['linux'], config: { options: { maintainer: 'Ramu contributors' } } },
+    {
+      name: '@electron-forge/maker-deb',
+      platforms: ['linux'],
+      config: { options: { maintainer: 'Ramu contributors' } },
+    },
     { name: '@electron-forge/maker-squirrel', platforms: ['win32'], config: { name: 'ramu' } },
   ],
   hooks: {
     prePackage: async (_config, platform, arch) => {
-      if (!existsSync(join(repoRoot, 'node_modules', '@anthropic-ai', `claude-agent-sdk-${platform}-${arch}`))) throw new Error(`Claude SDK executable for ${platform}/${arch} is missing. Install dependencies and build on the target platform.`)
-      if (!existsSync(join(__dirname, 'out', 'main', 'daemon.js'))) throw new Error('Build the desktop app first: run packaging through scripts/desktop-package.mjs.')
+      if (!existsSync(join(repoRoot, 'node_modules', '@anthropic-ai', `claude-agent-sdk-${platform}-${arch}`)))
+        throw new Error(
+          `Claude SDK executable for ${platform}/${arch} is missing. Install dependencies and build on the target platform.`,
+        )
+      if (!existsSync(join(__dirname, 'out', 'main', 'daemon.js')))
+        throw new Error('Build the desktop app first: run packaging through scripts/desktop-package.mjs.')
     },
     packageAfterCopy: async (_config, buildPath, _version, platform) => {
       // Linux and Windows read the window icon from assets/ next to the app.
       mkdirSync(join(buildPath, 'assets'), { recursive: true })
       copyFileSync(join(repoRoot, 'assets', 'icon.png'), join(buildPath, 'assets', 'icon.png'))
       // buildPath is Contents/Resources/app; Assets.car (compiled from assets/Ramu.icon) must sit beside it, before signing.
-      if (platform === 'darwin') copyFileSync(join(repoRoot, 'assets', 'Assets.car'), join(buildPath, '..', 'Assets.car'))
+      if (platform === 'darwin')
+        copyFileSync(join(repoRoot, 'assets', 'Assets.car'), join(buildPath, '..', 'Assets.car'))
     },
     packageAfterPrune: async (_config, buildPath, _version, platform, arch) => {
       const root = join(buildPath, 'node_modules', 'node-pty')
       const candidates = [join(root, 'build', 'Release', 'spawn-helper')]
       const prebuilds = join(root, 'prebuilds')
-      if (existsSync(prebuilds)) for (const name of readdirSync(prebuilds)) {
-        if (name !== `${platform}-${arch}`) rmSync(join(prebuilds, name), { recursive: true, force: true })
-        else candidates.push(join(prebuilds, name, 'spawn-helper'))
-      }
+      if (existsSync(prebuilds))
+        for (const name of readdirSync(prebuilds)) {
+          if (name !== `${platform}-${arch}`) rmSync(join(prebuilds, name), { recursive: true, force: true })
+          else candidates.push(join(prebuilds, name, 'spawn-helper'))
+        }
       for (const file of candidates) if (existsSync(file)) chmodSync(file, 0o755)
     },
   },

@@ -7,7 +7,11 @@ import { git, headOid, topLevel } from './git'
 // (committed and uncommitted changes to tracked files). When the sub-agent finishes, its changes are applied back to the
 // checkout, where the chat's own change review picks them up.
 
-export interface IsolatedRepo { source: string; worktree: string; base: string }
+export interface IsolatedRepo {
+  source: string
+  worktree: string
+  base: string
+}
 export interface Isolation {
   root: string
   cwd: string
@@ -27,12 +31,17 @@ async function snapshotCommit(repo: string): Promise<string> {
  * Worktrees for the repositories a chat covers, laid out like the original so relative paths still make sense.
  * Returns null when nothing covered is a git repository: there is nothing to isolate.
  */
-export async function createIsolation(options: { cwd: string; covers: string[]; root: string }): Promise<Isolation | null> {
+export async function createIsolation(options: {
+  cwd: string
+  covers: string[]
+  root: string
+}): Promise<Isolation | null> {
   const repos: { source: string; dir: string }[] = []
   for (const cover of options.covers) {
     const source = await topLevel(cover).then(resolve, () => null)
     // A cover that is a folder inside a repository is not isolated on its own.
-    if (source && source === resolve(cover) && !repos.some((entry) => entry.source === source)) repos.push({ source, dir: cover })
+    if (source && source === resolve(cover) && !repos.some((entry) => entry.source === source))
+      repos.push({ source, dir: cover })
   }
   if (!repos.length) return null
   mkdirSync(options.root, { recursive: true })
@@ -42,7 +51,11 @@ export async function createIsolation(options: { cwd: string; covers: string[]; 
     for (const [index, repo] of repos.entries()) {
       const inside = relative(resolve(options.cwd), repo.source)
       const inCwd = inside === '' || (!inside.startsWith('..') && !inside.startsWith('/'))
-      const worktree = inCwd ? (inside === '' ? options.root : join(options.root, inside)) : join(options.root, '__extra', `${index}-${basename(repo.source)}`)
+      const worktree = inCwd
+        ? inside === ''
+          ? options.root
+          : join(options.root, inside)
+        : join(options.root, '__extra', `${index}-${basename(repo.source)}`)
       const base = await snapshotCommit(repo.source)
       if (!base) throw new Error(`${basename(repo.source)} has no commits yet, so it cannot be copied for a sub-agent.`)
       mkdirSync(dirname(worktree), { recursive: true })
@@ -54,7 +67,13 @@ export async function createIsolation(options: { cwd: string; covers: string[]; 
     await removeIsolation({ root: options.root, cwd: options.root, additionalDirs: [], covers: [], repos: made })
     throw error
   }
-  return { root: options.root, cwd: options.root, additionalDirs: extra, covers: made.map((entry) => entry.worktree), repos: made }
+  return {
+    root: options.root,
+    cwd: options.root,
+    additionalDirs: extra,
+    covers: made.map((entry) => entry.worktree),
+    repos: made,
+  }
 }
 
 /** What the sub-agent changed in one worktree, as a binary-safe patch against its base; empty when nothing changed. */
@@ -65,7 +84,11 @@ export async function collectPatch(repo: IsolatedRepo): Promise<{ patch: string;
   return { patch: await git(repo.worktree, ['diff', '--cached', '--binary', repo.base]), files }
 }
 
-export interface ApplyOutcome { applied: number; failed: { repo: string; reason: string }[]; kept: string[] }
+export interface ApplyOutcome {
+  applied: number
+  failed: { repo: string; reason: string }[]
+  kept: string[]
+}
 
 /**
  * Brings the sub-agent's changes back into the real checkouts. A repository whose patch does not apply cleanly is left
@@ -75,14 +98,22 @@ export async function applyIsolation(isolation: Isolation): Promise<ApplyOutcome
   const outcome: ApplyOutcome = { applied: 0, failed: [], kept: [] }
   for (const repo of isolation.repos) {
     const { patch, files } = await collectPatch(repo)
-    if (!files.length) { await removeWorktree(repo); continue }
+    if (!files.length) {
+      await removeWorktree(repo)
+      continue
+    }
     try {
       await git(repo.source, ['apply', '--check', '--binary', '--whitespace=nowarn'], { input: patch })
       await git(repo.source, ['apply', '--binary', '--whitespace=nowarn'], { input: patch })
       outcome.applied += files.length
       await removeWorktree(repo)
     } catch (error) {
-      outcome.failed.push({ repo: basename(repo.source), reason: String(error instanceof Error ? error.message : error).split('\n')[0]!.slice(0, 200) })
+      outcome.failed.push({
+        repo: basename(repo.source),
+        reason: String(error instanceof Error ? error.message : error)
+          .split('\n')[0]!
+          .slice(0, 200),
+      })
       outcome.kept.push(repo.worktree)
     }
   }

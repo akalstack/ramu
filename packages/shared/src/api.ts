@@ -4,8 +4,29 @@ import type { AppUpdateStatus } from './updates'
 import type { ProviderConfiguration, ProviderStatus } from './providers'
 // The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
 import type {
-  PullMode, CommitBranchOptions,
-  ChangeReview, ChangeFile, ReviewBranchState, ReviewFileState, ReviewComment, UndoPreview, FileContext, SkillInfo, ScheduleInput, ScheduleRule, Schedule, ScheduleRun, RecapSnapshot, BackgroundStatus, NetworkStatus, NetworkSettingsInput, PairingOffer, Computers, Memory, MemoryInput, MemorySnapshot,
+  PullMode,
+  CommitBranchOptions,
+  ChangeReview,
+  ChangeFile,
+  ReviewBranchState,
+  ReviewFileState,
+  ReviewComment,
+  UndoPreview,
+  FileContext,
+  SkillInfo,
+  ScheduleInput,
+  ScheduleRule,
+  Schedule,
+  ScheduleRun,
+  RecapSnapshot,
+  BackgroundStatus,
+  NetworkStatus,
+  NetworkSettingsInput,
+  PairingOffer,
+  Computers,
+  Memory,
+  MemoryInput,
+  MemorySnapshot,
   SearchOptions,
   SearchResults,
   ReplaceFilePreview,
@@ -82,7 +103,13 @@ export interface RamuMethods {
   'learning.revert'(id: string, revision: number): void
   'learning.run'(): void
   'agent.checkpoint'(id: string): import('./types').SessionCheckpoint | null
-  'agent.compression'(id: string): { outputs: number; originalCharacters: number; compactCharacters: number; estimatedTokensAvoided: number; note: string }
+  'agent.compression'(id: string): {
+    outputs: number
+    originalCharacters: number
+    compactCharacters: number
+    estimatedTokensAvoided: number
+    note: string
+  }
   'memory.revert'(id: string, index: number, updatedAt: number): Memory
 
   'app.systemLanguages': () => string[]
@@ -92,14 +119,24 @@ export interface RamuMethods {
   'reviews.inspect'(id: string): ReviewFileState[]
   'reviews.compareCurrent'(id: string, fileId: string): ChangeFile
   'reviews.locate'(id: string, fileId: string, path: string): void
-  'reviews.comment'(id: string, comment: Pick<ReviewComment, 'fileId' | 'side' | 'line' | 'endLine' | 'text' | 'scope'>, commentId?: string): ChangeReview
+  'reviews.comment'(
+    id: string,
+    comment: Pick<ReviewComment, 'fileId' | 'side' | 'line' | 'endLine' | 'text' | 'scope'>,
+    commentId?: string,
+  ): ChangeReview
   'reviews.select'(id: string, commentIds: string[], selected: boolean): ChangeReview
   'reviews.reopenComment'(id: string, commentId: string): ChangeReview
   'reviews.reply'(id: string, commentId: string, text: string, replyId?: string): ChangeReview
   'reviews.removeReply'(id: string, commentId: string, replyId: string): ChangeReview
   'reviews.removeComment'(id: string, commentId: string): ChangeReview
   'reviews.resolveComment'(id: string, commentId: string): ChangeReview
-  'reviews.sendComments'(id: string, commentIds: string[], note?: string, attachmentIds?: string[], context?: FileContext[]): ChangeReview
+  'reviews.sendComments'(
+    id: string,
+    commentIds: string[],
+    note?: string,
+    attachmentIds?: string[],
+    context?: FileContext[],
+  ): ChangeReview
   'reviews.ai'(id: string): ChangeReview
   'reviews.markReviewed'(id: string, reviewed: boolean): ChangeReview
   'reviews.undoPreview'(id: string): UndoPreview
@@ -147,7 +184,10 @@ export interface RamuMethods {
   'computers.pairSsh'(target: string, name?: string): Computers
   'computers.forget'(id: string): Computers
   'computers.retry'(id: string): Computers
-  'computers.update'(id: string, changes: { name?: string; enabled?: boolean; retryMode?: 'events' | 'periodic' }): Computers
+  'computers.update'(
+    id: string,
+    changes: { name?: string; enabled?: boolean; retryMode?: 'events' | 'periodic' },
+  ): Computers
   /** Renderer acknowledgement after its workspace has been safely persisted. */
   'computers.checkpoint'(requestId: string, safe: boolean): boolean
   'skills.list'(taskId: string): SkillInfo[]
@@ -166,7 +206,9 @@ export interface RamuMethods {
   'memory.archive'(id: string): Memory
   'memory.restore'(id: string): Memory
   'memory.delete'(id: string): void
-  'memory.history'(id: string): { action: string; actor: string; reason: string | null; before: Partial<Memory> | null; at: number }[]
+  'memory.history'(
+    id: string,
+  ): { action: string; actor: string; reason: string | null; before: Partial<Memory> | null; at: number }[]
   'memory.dream'(): MemorySnapshot
   'folders.roots'(): string[]
   'folders.list'(path: string): { path: string; parent: string | null; folders: { name: string; path: string }[] }
@@ -201,7 +243,10 @@ export interface RamuMethods {
   'tasks.bindings'(taskId: string): RepositoryBinding[]
   'settings.models.get'(): ModelPreferences | null
   'providers.status'(configuration?: ProviderConfiguration, checkLatest?: boolean): Promise<ProviderStatus[]>
-  'providers.loginCommand'(provider: ProviderStatus['provider'], configuration?: ProviderConfiguration): Promise<string | null>
+  'providers.loginCommand'(
+    provider: ProviderStatus['provider'],
+    configuration?: ProviderConfiguration,
+  ): Promise<string | null>
   /** In-app sign-in for runtimes without a login command (Antigravity). Resolves after the browser flow completes. */
   'providers.signIn'(provider: ProviderStatus['provider'], accountId?: string): Promise<void>
   'providers.update'(provider: ProviderStatus['provider']): Promise<ProviderStatus>
@@ -218,7 +263,12 @@ export interface RamuMethods {
   'ui.setTask'(taskId: string, ui: TaskUiState): void
   'files.search'(taskId: string, options: SearchOptions): SearchResults
   'files.replacePreview'(taskId: string, options: SearchOptions, replacement: string): ReplaceFilePreview[]
-  'files.replaceApply'(taskId: string, options: SearchOptions, replacement: string, expected: ReplaceFilePreview[]): void
+  'files.replaceApply'(
+    taskId: string,
+    options: SearchOptions,
+    replacement: string,
+    expected: ReplaceFilePreview[],
+  ): void
   'files.create'(taskId: string, repoId: string, path: string, kind: 'file' | 'dir'): void
   'files.rename'(taskId: string, repoId: string, path: string, destination: string): void
   'files.copy'(taskId: string, repoId: string, path: string, destination: string): void
@@ -237,7 +287,11 @@ export interface RamuMethods {
   'git.diff'(taskId: string, repoId: string, path: string, staged: boolean): DiffContents
   'git.stage'(taskId: string, repoId: string, paths: string[]): void
   'git.unstage'(taskId: string, repoId: string, paths: string[]): void
-  'git.discardPreview'(taskId: string, repoId: string, paths: string[]): { fingerprint: string; files: { path: string; untracked: boolean }[] }
+  'git.discardPreview'(
+    taskId: string,
+    repoId: string,
+    paths: string[],
+  ): { fingerprint: string; files: { path: string; untracked: boolean }[] }
   'git.discard'(taskId: string, repoId: string, paths: string[], fingerprint?: string): void
   'git.undoCommit'(taskId: string, repoId: string, expectedHead: string): string
   'git.commitBranchInfo'(taskId: string, repoId: string): { branch: string | null; defaultBranch: string | null }
@@ -250,7 +304,14 @@ export interface RamuMethods {
   'git.popStash'(taskId: string, repoId: string, oid: string): void
   'git.applyStash'(taskId: string, repoId: string, oid: string): void
   'git.dropStash'(taskId: string, repoId: string, oid: string): void
-  'git.commit'(taskId: string, repoId: string, message: string, fingerprint?: string, amendHead?: string, branchOptions?: CommitBranchOptions): string
+  'git.commit'(
+    taskId: string,
+    repoId: string,
+    message: string,
+    fingerprint?: string,
+    amendHead?: string,
+    branchOptions?: CommitBranchOptions,
+  ): string
   'git.history'(taskId: string, repoId: string): GitCommit[]
   'git.branches'(taskId: string, repoId: string): GitBranchInfo[]
   'git.checkout'(taskId: string, repoId: string, branch: string): void
@@ -274,7 +335,10 @@ export interface RamuMethods {
   'term.close'(termId: string): void
   /** How many of these terminals have a command running in the foreground. */
   'term.busy'(termIds: string[]): number
-  'editor.menu'(options: { selection: string; editable: boolean; comment: boolean }, point: { x: number; y: number }): 'cut' | 'undo' | 'redo' | 'selectAll' | 'find' | 'comment' | { paste: string } | null
+  'editor.menu'(
+    options: { selection: string; editable: boolean; comment: boolean },
+    point: { x: number; y: number },
+  ): 'cut' | 'undo' | 'redo' | 'selectAll' | 'find' | 'comment' | { paste: string } | null
   'clipboard.write'(text: string): void
   'term.menu'(selection: string, point: { x: number; y: number }): 'selectAll' | 'clear' | { paste: string } | null
   'agent.list'(taskId: string): AgentSessionInfo[]
@@ -297,13 +361,28 @@ export interface RamuMethods {
   'attachments.save'(id: string): boolean
   'attachments.copy'(id: string): void
   'attachments.reveal'(id: string): void
-  'agent.start'(taskId: string, prompt: string, settings?: AgentSettings, attachments?: string[], context?: FileContext[]): AgentSessionInfo
+  'agent.start'(
+    taskId: string,
+    prompt: string,
+    settings?: AgentSettings,
+    attachments?: string[],
+    context?: FileContext[],
+  ): AgentSessionInfo
   'agent.catalog'(refresh?: boolean): ProviderCatalog[]
   'agent.configure'(sessionId: string, settings: AgentSettings): AgentSessionInfo
   'files.all'(taskId: string): { repoId: string; path: string }[]
-  'files.resolveLink'(taskId: string, href: string): { repoId: string; path: string; line?: number; column?: number } | null
+  'files.resolveLink'(
+    taskId: string,
+    href: string,
+  ): { repoId: string; path: string; line?: number; column?: number } | null
   'agent.send'(sessionId: string, text: string): void
-  'agent.submit'(sessionId: string, text: string, mode: 'queue' | 'steer', attachments?: string[], context?: FileContext[]): void
+  'agent.submit'(
+    sessionId: string,
+    text: string,
+    mode: 'queue' | 'steer',
+    attachments?: string[],
+    context?: FileContext[],
+  ): void
   'agent.removeQueued'(sessionId: string, messageId: string): void
   'agent.resumeQueue'(sessionId: string): void
   'agent.sendQueuedNow'(sessionId: string, messageId: string): void
@@ -328,7 +407,13 @@ export interface RamuMethods {
   /** Side questions about a chat; they never reach the main conversation. */
   'aside.list'(sessionId: string): Aside[]
   /** Starts an aside (asideId null) or continues one. Returns at once; the answer arrives as aside:changed. */
-  'aside.ask'(sessionId: string, asideId: string | null, quote: string, quoteFrom: 'assistant' | 'user', question: string): Aside
+  'aside.ask'(
+    sessionId: string,
+    asideId: string | null,
+    quote: string,
+    quoteFrom: 'assistant' | 'user',
+    question: string,
+  ): Aside
   'aside.delete'(sessionId: string, asideId: string): void
   /** Keep the chat's current provider despite the usage threshold: for the next message, for this chat until its limit resets, or clear. */
   'agent.holdProvider'(sessionId: string, scope: 'message' | 'chat' | null): void
@@ -341,7 +426,12 @@ export interface RamuMethods {
   'agent.messageTask'(sessionId: string, agentId: string, text: string): void
   'agent.replyPermission'(sessionId: string, requestId: string, allow: boolean, message?: string): void
   'agent.replyQuestion'(sessionId: string, requestId: string, answers: Record<string, string>): void
-  'agent.replyElicitation'(sessionId: string, requestId: string, action: import('./types').ElicitationAction, answers: Record<string, string>): void
+  'agent.replyElicitation'(
+    sessionId: string,
+    requestId: string,
+    action: import('./types').ElicitationAction,
+    answers: Record<string, string>,
+  ): void
   'agent.elicitationDraft'(sessionId: string, requestId: string, drafts: Record<string, string>): void
   'agent.questionDraft'(sessionId: string, requestId: string, drafts: Record<string, string>): void
   'agent.dismissQuestion'(sessionId: string, requestId: string): void
@@ -380,7 +470,10 @@ export type PushEvents = {
 }
 
 export interface RamuBridge {
-  invoke<M extends keyof RamuMethods>(method: M, ...args: Parameters<RamuMethods[M]>): Promise<Awaited<ReturnType<RamuMethods[M]>>>
+  invoke<M extends keyof RamuMethods>(
+    method: M,
+    ...args: Parameters<RamuMethods[M]>
+  ): Promise<Awaited<ReturnType<RamuMethods[M]>>>
   on<E extends keyof PushEvents>(event: E, listener: (payload: PushEvents[E]) => void): () => void
   /** The on-disk path of a file or folder dropped onto the window ('' when it has none). */
   pathForFile(file: File): string

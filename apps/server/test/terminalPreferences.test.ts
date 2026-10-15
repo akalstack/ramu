@@ -5,23 +5,41 @@ import { configureProviderBinaries } from '../src/providerBinaries'
 
 it('loads older preferences and persists terminal docking separately from tab layout', () => {
   let saved: unknown = { terminalTabPosition: 'right' }
-  const dispatcher = createDispatcher({ userData: '/tmp/ramu-terminal-preferences-test', send: () => {}, native: async () => null }, {
-    workspace: {
-      getAppState: (key: string, fallback: unknown) => key === 'app-preferences' ? saved : fallback,
-      setAppState: (_key: string, value: unknown) => { saved = value },
-    },
-    recaps: { settingsChanged: () => {} },
-    providers: { settingsChanged: () => {} },
-    agents: { invalidateCatalog: () => {}, goalsSettingsChanged: () => {} },
-  } as unknown as Services)
+  const dispatcher = createDispatcher(
+    { userData: '/tmp/ramu-terminal-preferences-test', send: () => {}, native: async () => null },
+    {
+      workspace: {
+        getAppState: (key: string, fallback: unknown) => (key === 'app-preferences' ? saved : fallback),
+        setAppState: (_key: string, value: unknown) => {
+          saved = value
+        },
+      },
+      recaps: { settingsChanged: () => {} },
+      providers: { settingsChanged: () => {} },
+      agents: { invalidateCatalog: () => {}, goalsSettingsChanged: () => {} },
+    } as unknown as Services,
+  )
   try {
-    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ defaultTerminalDock: 'bottom', terminalTabPosition: 'right' })
+    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({
+      defaultTerminalDock: 'bottom',
+      terminalTabPosition: 'right',
+    })
     for (const dock of ['right', 'bottom'] as const) {
-      dispatcher.invoke('settings.app.set', [{ ...DEFAULT_APP_PREFERENCES, defaultTerminalDock: dock, terminalTabPosition: 'right' }])
-      expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ defaultTerminalDock: dock, terminalTabPosition: 'right' })
+      dispatcher.invoke('settings.app.set', [
+        { ...DEFAULT_APP_PREFERENCES, defaultTerminalDock: dock, terminalTabPosition: 'right' },
+      ])
+      expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({
+        defaultTerminalDock: dock,
+        terminalTabPosition: 'right',
+      })
     }
-    expect(() => dispatcher.invoke('settings.app.set', [{ ...DEFAULT_APP_PREFERENCES, defaultTerminalDock: 'top' }])).toThrow()
+    expect(() =>
+      dispatcher.invoke('settings.app.set', [{ ...DEFAULT_APP_PREFERENCES, defaultTerminalDock: 'top' }]),
+    ).toThrow()
     dispatcher.invoke('settings.app.set', [{ ...DEFAULT_APP_PREFERENCES, defaultTerminalDock: undefined }])
     expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ defaultTerminalDock: 'bottom' })
-  } finally { dispatcher.close(); configureProviderBinaries({}) }
+  } finally {
+    dispatcher.close()
+    configureProviderBinaries({})
+  }
 })

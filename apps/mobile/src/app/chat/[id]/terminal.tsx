@@ -8,6 +8,17 @@ export default function ChatTerminal() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const chat = useChat(id)
   const router = useRouter()
-  if (!chat?.taskId) return <Screen><Header title="Chat not found" /></Screen>
-  return <TerminalScreen computerId={chat.computerId} ctx={terminalCtx(chat)} onBack={() => router.dismissTo({ pathname: '/chat/[id]', params: { id } })} />
+  if (!chat?.taskId)
+    return (
+      <Screen>
+        <Header title="Chat not found" />
+      </Screen>
+    )
+  return (
+    <TerminalScreen
+      computerId={chat.computerId}
+      ctx={terminalCtx(chat)}
+      onBack={() => router.dismissTo({ pathname: '/chat/[id]', params: { id } })}
+    />
+  )
 }

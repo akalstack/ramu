@@ -21,12 +21,17 @@ export function loadToken(path: string, rotate = false): string {
 
 export function authorized(header: string | undefined, token: string): boolean {
   if (!header?.startsWith(`${AUTH_SCHEME} `)) return false
-  const given = Buffer.from(header.slice(AUTH_SCHEME.length + 1)), expected = Buffer.from(token)
+  const given = Buffer.from(header.slice(AUTH_SCHEME.length + 1)),
+    expected = Buffer.from(token)
   return given.length === expected.length && timingSafeEqual(given, expected)
 }
 
 /** Reads the token file on every check (it is 65 bytes), so `ramu token --rotate` revokes paired clients without a restart. */
 export class TokenStore {
-  constructor(private readonly path: string) { this.current() }
-  current(): string { return loadToken(this.path) }
+  constructor(private readonly path: string) {
+    this.current()
+  }
+  current(): string {
+    return loadToken(this.path)
+  }
 }

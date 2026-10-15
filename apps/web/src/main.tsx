@@ -28,25 +28,49 @@ function Startup() {
       document.fonts.load('13px "Geist Variable"'),
       document.fonts.load('600 13px "Geist Variable"'),
       document.fonts.load('13px "Geist Mono Variable"'),
-    ]).catch(() => undefined).then(() => {
-      if (disposed) return
-      monaco.editor.remeasureFonts()
-      setFontsReady(true)
-    })
-    return () => { disposed = true }
+    ])
+      .catch(() => undefined)
+      .then(() => {
+        if (disposed) return
+        monaco.editor.remeasureFonts()
+        setFontsReady(true)
+      })
+    return () => {
+      disposed = true
+    }
   }, [])
   useEffect(() => {
     const offs = [
-      ramu.on('fs:changed', () => { void invalidateData('files', 'git') }),
-      ramu.on('automation:changed', () => { void invalidateData('reviews', 'tasks') }),
-      ramu.on('agent:event', () => { void invalidateData('agent') }),
-      ramu.on('background:connection', ({ connected }) => { if (connected) void invalidateData() }),
+      ramu.on('fs:changed', () => {
+        void invalidateData('files', 'git')
+      }),
+      ramu.on('automation:changed', () => {
+        void invalidateData('reviews', 'tasks')
+      }),
+      ramu.on('agent:event', () => {
+        void invalidateData('agent')
+      }),
+      ramu.on('background:connection', ({ connected }) => {
+        if (connected) void invalidateData()
+      }),
     ]
-    return () => offs.forEach(off => off())
+    return () => offs.forEach((off) => off())
   }, [])
-  return <StartupScreen ready={fontsReady && appReady}><ErrorBoundary scope="app"><TooltipProvider delay={350}><App onReady={onReady} /></TooltipProvider></ErrorBoundary></StartupScreen>
+  return (
+    <StartupScreen ready={fontsReady && appReady}>
+      <ErrorBoundary scope="app">
+        <TooltipProvider delay={350}>
+          <App onReady={onReady} />
+        </TooltipProvider>
+      </ErrorBoundary>
+    </StartupScreen>
+  )
 }
 
 // Fonts and application data load behind one continuous logo-to-wordmark reveal.
 pruneDrafts()
-createRoot(document.getElementById('root')!).render(<QueryClientProvider client={queryClient}><Startup /></QueryClientProvider>)
+createRoot(document.getElementById('root')!).render(
+  <QueryClientProvider client={queryClient}>
+    <Startup />
+  </QueryClientProvider>,
+)

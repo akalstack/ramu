@@ -68,6 +68,9 @@ importers:
       playwright-core:
         specifier: ^1.64.0
         version: 1.64.0
+      prettier:
+        specifier: ^3.9.10
+        version: 3.9.10
       react:
         specifier: 'catalog:'
         version: 19.3.0
@@ -5094,6 +5097,11 @@ packages:
   powershell-utils@0.2.1:
     resolution: {integrity: sha512-C+y9x90UElAddDZmV4qOx9W53B61PO7cIqWz2dQsWlwswuq4mr8NEwytdGKboYbQlGZ3awrkTeNvcZiZNHnQ8A==}
     engines: {node: '>=20'}
+
+  prettier@3.9.10:
+    resolution: {integrity: sha512-skGHTH1Yb9QvaTC4hWnRTzEYtCpApF0UMBPz+t/0ZPzP8ihefo/btKd+QA7pUE0fEwA1SbS/NmhyEcstdXOIdA==}
+    engines: {node: '>=14'}
+    hasBin: true
 
   pretty-format@29.7.0:
     resolution: {integrity: sha512-Pdlw/oPxN+aXdmM9R00JVC9WVFoCLTKJvDVLgmJ+qAffBMxsV85l/Lu7sNx4zSzPyoL2euImuEwHhOXdEgNFZQ==}
@@ -11904,6 +11912,8 @@ snapshots:
       commander: 9.5.0
 
   powershell-utils@0.2.1: {}
+
+  prettier@3.9.10: {}
 
   pretty-format@29.7.0:
     dependencies:

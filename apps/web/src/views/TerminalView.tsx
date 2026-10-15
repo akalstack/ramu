@@ -11,9 +11,29 @@ import { FILE_DRAG_TYPE } from '../ComposerSuggestions'
 import { allShells, beginOpening, forgetTerminal, shellOf, takeAdopted, trackTerminal } from '../terminalRegistry'
 import { createOutputGate, markTerminalOutput } from '../terminalActivity'
 
-const shellQuote = (path: string) => /^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`
+const shellQuote = (path: string) => (/^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`)
 
-export function TerminalView({ viewId, taskId, repoId, label, active, onExit, actions, initialCommand, run }: { viewId?: string; taskId: string; repoId: string | null; label: string; active: boolean; onExit?: () => void; actions?: ReactNode; initialCommand?: string; /** Typed into the task's shell once it opens (project actions). */ run?: string }) {
+export function TerminalView({
+  viewId,
+  taskId,
+  repoId,
+  label,
+  active,
+  onExit,
+  actions,
+  initialCommand,
+  run,
+}: {
+  viewId?: string
+  taskId: string
+  repoId: string | null
+  label: string
+  active: boolean
+  onExit?: () => void
+  actions?: ReactNode
+  initialCommand?: string
+  /** Typed into the task's shell once it opens (project actions). */ run?: string
+}) {
   const { preferences } = useAppSettings()
   const ws = useWorkspace()
   const terminal = useRef<Terminal | null>(null)
@@ -29,7 +49,10 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
   const runOnce = useRef(run)
 
   useEffect(() => {
-    if (terminal.current) { terminal.current.options.fontSize = preferences.terminalFontSize; scheduleFitRef.current?.() }
+    if (terminal.current) {
+      terminal.current.options.fontSize = preferences.terminalFontSize
+      scheduleFitRef.current?.()
+    }
   }, [preferences.terminalFontSize])
 
   useEffect(() => {
@@ -65,35 +88,54 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
         if (disposed) return
         fitPending = false
         if (host.current?.offsetParent) fit.fit()
-        if (flushOnFit) { flushOnFit = false; ptyResize.flush() }
+        if (flushOnFit) {
+          flushOnFit = false
+          ptyResize.flush()
+        }
       })
     }
     scheduleFitRef.current = scheduleFit
     const endResize = () => {
-      if (fitPending || ptyResize.pending) { flushOnFit = true; scheduleFit() }
+      if (fitPending || ptyResize.pending) {
+        flushOnFit = true
+        scheduleFit()
+      }
     }
-    const release = new MutationObserver(() => { if (!dragging()) endResize() })
-    release.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['data-separator', 'data-dragging'] })
+    const release = new MutationObserver(() => {
+      if (!dragging()) endResize()
+    })
+    release.observe(document.documentElement, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-separator', 'data-dragging'],
+    })
     window.addEventListener('pointerup', endResize)
     window.addEventListener('pointercancel', endResize)
     // Install input before opening the shell so early typing is not dropped.
     let pendingInput = ''
     const input = term.onData((data) => {
-      if (!termId) { pendingInput += data; return }
+      if (!termId) {
+        pendingInput += data
+        return
+      }
       void invoke('term.write', termId, data).catch((e) => setError(errorText(e)))
     })
     const resize = term.onResize(({ cols, rows }) => {
       if (termId) ptyResize.request(cols, rows)
     })
-    offs.push(() => input.dispose(), () => resize.dispose())
+    offs.push(
+      () => input.dispose(),
+      () => resize.dispose(),
+    )
     if (host.current?.offsetParent) fit.fit()
 
     // A terminal view restored after restart gets a new shell; say so instead of pretending it survived.
-    const cols = Math.max(term.cols, 2), rows = Math.max(term.rows, 2)
+    const cols = Math.max(term.cols, 2),
+      rows = Math.max(term.rows, 2)
     // Back in this view after a project switch: reattach to the shell that kept running, with its output replayed.
     let replayed = 0
     const reattach = (async () => {
-      let known = viewId && !initialCommand ? shellOf(viewId) ?? takeAdopted(taskId) : undefined
+      let known = viewId && !initialCommand ? (shellOf(viewId) ?? takeAdopted(taskId)) : undefined
       // A fresh view (after a restart, or one the phone opened) takes a live shell nobody shows yet before starting another.
       if (!known && viewId && !initialCommand) {
         const live = await invoke('term.list', taskId).catch(() => [])
@@ -107,20 +149,40 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
       try {
         const snap = await invoke('term.snapshot', shell)
         const info = (await invoke('term.list', taskId)).find((entry) => entry.id === shell)
-        if (!info || snap.exited) { if (viewId) forgetTerminal(viewId, shell); return null }
-        term.write(snap.output); replayed = snap.cursor
+        if (!info || snap.exited) {
+          if (viewId) forgetTerminal(viewId, shell)
+          return null
+        }
+        term.write(snap.output)
+        replayed = snap.cursor
         return info
-      } catch { if (viewId) forgetTerminal(viewId, shell); return null }
+      } catch {
+        if (viewId) forgetTerminal(viewId, shell)
+        return null
+      }
     })()
     const opening = reattach.then((info) => {
       if (info) return { info, resumed: true }
       const settled = beginOpening(taskId)
-      return (initialCommand ? invoke('term.openSetup', cols, rows) : invoke('term.open', taskId, repoId, cols, rows)).then((created) => { if (viewId) trackTerminal(viewId, created.id); settled(); return { info: created, resumed: false } }, (error) => { settled(); throw error })
+      return (
+        initialCommand ? invoke('term.openSetup', cols, rows) : invoke('term.open', taskId, repoId, cols, rows)
+      ).then(
+        (created) => {
+          if (viewId) trackTerminal(viewId, created.id)
+          settled()
+          return { info: created, resumed: false }
+        },
+        (error) => {
+          settled()
+          throw error
+        },
+      )
     })
     void opening.then(
       ({ info, resumed }) => {
         // Only a shell this view created is cleaned up here; a resumed one belongs to its tab.
-        if (disposed) return void (resumed ? undefined : viewId ? trackTerminal(viewId, info.id) : invoke('term.close', info.id))
+        if (disposed)
+          return void (resumed ? undefined : viewId ? trackTerminal(viewId, info.id) : invoke('term.close', info.id))
         termId = info.id
         if (viewId) trackTerminal(viewId, info.id)
         // Geometry may have changed while the shell was opening, before its
@@ -130,14 +192,22 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
         setCwd(info.cwd)
         // Startup output (the prompt, rc files) doesn't earn the Terminal button's dot. Keystrokes count, not xterm's own replies to the shell.
         const gate = createOutputGate()
-        offs.push(ramu.on('term:data', ({ id, data, cursor }) => { if (id !== termId) return; if (cursor !== undefined && cursor <= replayed) return; term.write(data); if (gate.output()) markTerminalOutput(ws.workspaceOf(taskId)) }))
+        offs.push(
+          ramu.on('term:data', ({ id, data, cursor }) => {
+            if (id !== termId) return
+            if (cursor !== undefined && cursor <= replayed) return
+            term.write(data)
+            if (gate.output()) markTerminalOutput(ws.workspaceOf(taskId))
+          }),
+        )
         const typed = term.onKey(() => gate.arm())
         offs.push(() => typed.dispose())
         offs.push(
           ramu.on('term:exit', ({ id, code }) => {
             if (id !== termId) return
             // Like other editors, a shell that exits closes its tab. A shell that fails right away stays open so its error is readable.
-            if (code !== 0 && Date.now() - openedAt < 1500) term.write(`\r\n\x1b[2m[process exited with code ${code}]\x1b[0m\r\n`)
+            if (code !== 0 && Date.now() - openedAt < 1500)
+              term.write(`\r\n\x1b[2m[process exited with code ${code}]\x1b[0m\r\n`)
             else exitRef.current?.()
           }),
         )
@@ -146,7 +216,7 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
           void invoke('term.write', info.id, pendingInput).catch((e) => setError(errorText(e)))
           pendingInput = ''
         }
-        const command = resumed ? undefined : initialCommand ?? runOnce.current
+        const command = resumed ? undefined : (initialCommand ?? runOnce.current)
         if (command) {
           gate.arm()
           term.focus()
@@ -212,52 +282,92 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
   return (
     <div className="terminal-view flex flex-col flex-1 min-h-0 min-w-0">
       <div className="view-header [&_.path]:flex-1 [&_button]:text-control [&_button]:p-[2px_8px] [&_[aria-pressed='true']]:bg-hover [&_[aria-pressed='true']]:text-foreground flex gap-2.5 items-center h-8 p-[0_12px] flex-none min-w-0 text-control text-soft">
-        <span className="strong font-semibold" title={cwd ?? undefined}>{label}</span>
-        <span className="grow flex-1 min-w-0 text-left" />{actions}
+        <span className="strong font-semibold" title={cwd ?? undefined}>
+          {label}
+        </span>
+        <span className="grow flex-1 min-w-0 text-left" />
+        {actions}
       </div>
-      {error && <div className="error text-bad banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control">{error}</div>}
-      <div className="terminal-host [contain:layout_paint] flex flex-1 min-h-0 min-w-0 overflow-hidden p-[4px_0_0_12px]" onDragOver={(event) => {
-        if (event.dataTransfer.types.includes(FILE_DRAG_TYPE) || event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy' }
-      }} onDrop={(event) => {
-        // Dropped files and Explorer entries are typed into the shell as quoted absolute paths.
-        const dragged = event.dataTransfer.getData(FILE_DRAG_TYPE), files = [...event.dataTransfer.files]
-        const paths: string[] = []
-        if (dragged) {
-          try {
-            const item = JSON.parse(dragged) as { repoId?: string; path?: string; items?: { path: string }[] }
-            const cwd = item.repoId ? ws.binding(taskId, item.repoId)?.cwd : undefined
-            if (cwd) for (const entry of item.items?.length ? item.items : item.path ? [{ path: item.path }] : []) paths.push(`${cwd}/${entry.path}`)
-          } catch { /* not ours */ }
-        } else for (const file of files) { const path = ramu.pathForFile(file); if (path) paths.push(path) }
-        if (!paths.length) return
-        event.preventDefault()
-        terminal.current?.paste(`${paths.map(shellQuote).join(' ')} `)
-        terminal.current?.focus()
-      }} onPointerDown={(event) => {
-        // Padding has no native input target; keep the browser from blurring xterm after focus.
-        if (!(event.target as HTMLElement).closest('.xterm')) event.preventDefault()
-        terminal.current?.focus()
-      }} onContextMenu={(event) => {
-        event.preventDefault(); event.stopPropagation()
-        const term = terminal.current
-        if (!term) return
-        void invoke('term.menu', term.getSelection(), { x: event.clientX, y: event.clientY }).then((action) => {
-          if (action === 'selectAll') term.selectAll()
-          else if (action === 'clear') term.clear()
-          else if (action && typeof action === 'object') term.paste(action.paste)
-        }, (error) => setError(errorText(error)))
-      }} onKeyDown={(event) => {
-        if (initialCommand && event.key === 'Escape') { event.stopPropagation(); return }
-        if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return
-        event.preventDefault(); event.stopPropagation()
-        const term = terminal.current, rect = event.currentTarget.getBoundingClientRect()
-        if (!term) return
-        void invoke('term.menu', term.getSelection(), { x: rect.left + 12, y: rect.top + 12 }).then((action) => {
-          if (action === 'selectAll') term.selectAll()
-          else if (action === 'clear') term.clear()
-          else if (action && typeof action === 'object') term.paste(action.paste)
-        }, (error) => setError(errorText(error)))
-      }}><div ref={host} className="flex-1 min-h-0 min-w-0 overflow-hidden" /></div>
+      {error && (
+        <div className="error text-bad banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control">
+          {error}
+        </div>
+      )}
+      <div
+        className="terminal-host [contain:layout_paint] flex flex-1 min-h-0 min-w-0 overflow-hidden p-[4px_0_0_12px]"
+        onDragOver={(event) => {
+          if (event.dataTransfer.types.includes(FILE_DRAG_TYPE) || event.dataTransfer.types.includes('Files')) {
+            event.preventDefault()
+            event.dataTransfer.dropEffect = 'copy'
+          }
+        }}
+        onDrop={(event) => {
+          // Dropped files and Explorer entries are typed into the shell as quoted absolute paths.
+          const dragged = event.dataTransfer.getData(FILE_DRAG_TYPE),
+            files = [...event.dataTransfer.files]
+          const paths: string[] = []
+          if (dragged) {
+            try {
+              const item = JSON.parse(dragged) as { repoId?: string; path?: string; items?: { path: string }[] }
+              const cwd = item.repoId ? ws.binding(taskId, item.repoId)?.cwd : undefined
+              if (cwd)
+                for (const entry of item.items?.length ? item.items : item.path ? [{ path: item.path }] : [])
+                  paths.push(`${cwd}/${entry.path}`)
+            } catch {
+              /* not ours */
+            }
+          } else
+            for (const file of files) {
+              const path = ramu.pathForFile(file)
+              if (path) paths.push(path)
+            }
+          if (!paths.length) return
+          event.preventDefault()
+          terminal.current?.paste(`${paths.map(shellQuote).join(' ')} `)
+          terminal.current?.focus()
+        }}
+        onPointerDown={(event) => {
+          // Padding has no native input target; keep the browser from blurring xterm after focus.
+          if (!(event.target as HTMLElement).closest('.xterm')) event.preventDefault()
+          terminal.current?.focus()
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          const term = terminal.current
+          if (!term) return
+          void invoke('term.menu', term.getSelection(), { x: event.clientX, y: event.clientY }).then(
+            (action) => {
+              if (action === 'selectAll') term.selectAll()
+              else if (action === 'clear') term.clear()
+              else if (action && typeof action === 'object') term.paste(action.paste)
+            },
+            (error) => setError(errorText(error)),
+          )
+        }}
+        onKeyDown={(event) => {
+          if (initialCommand && event.key === 'Escape') {
+            event.stopPropagation()
+            return
+          }
+          if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return
+          event.preventDefault()
+          event.stopPropagation()
+          const term = terminal.current,
+            rect = event.currentTarget.getBoundingClientRect()
+          if (!term) return
+          void invoke('term.menu', term.getSelection(), { x: rect.left + 12, y: rect.top + 12 }).then(
+            (action) => {
+              if (action === 'selectAll') term.selectAll()
+              else if (action === 'clear') term.clear()
+              else if (action && typeof action === 'object') term.paste(action.paste)
+            },
+            (error) => setError(errorText(error)),
+          )
+        }}
+      >
+        <div ref={host} className="flex-1 min-h-0 min-w-0 overflow-hidden" />
+      </div>
     </div>
   )
 }

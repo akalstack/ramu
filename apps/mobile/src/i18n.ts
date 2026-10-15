@@ -29,7 +29,8 @@ const en = {
   language: 'Language',
   usage: 'Usage',
   about: 'About',
-  offlineHint: 'This computer is not reachable. You can still send messages and start chats; they wait in the outbox until it is back.',
+  offlineHint:
+    'This computer is not reachable. You can still send messages and start chats; they wait in the outbox until it is back.',
   empty: 'No chats yet',
   outbox: 'Outbox',
 }
@@ -63,7 +64,8 @@ const id: typeof en = {
   language: 'Bahasa',
   usage: 'Pemakaian',
   about: 'Tentang',
-  offlineHint: 'Komputer ini tidak terjangkau. Kamu tetap bisa mengirim pesan dan memulai obrolan; semuanya menunggu di kotak keluar sampai komputer kembali.',
+  offlineHint:
+    'Komputer ini tidak terjangkau. Kamu tetap bisa mengirim pesan dan memulai obrolan; semuanya menunggu di kotak keluar sampai komputer kembali.',
   empty: 'Belum ada obrolan',
   outbox: 'Kotak keluar',
 }

@@ -5,14 +5,22 @@ import { dirname } from 'node:path'
 import { isIP } from 'node:net'
 import { networkInterfaces } from 'node:os'
 
-export interface Candidate { url: string; interface: string }
+export interface Candidate {
+  url: string
+  interface: string
+}
 type Interfaces = ReturnType<typeof networkInterfaces>
 
 const isWildcard = (host: string) => host === '0.0.0.0' || host === '::'
 const isLinkLocal = (address: string) => /^fe80:/i.test(address) || /^169\.254\./.test(address)
 
 /** `host` is what the server listens on. A wildcard listens on every interface, so each usable address is a candidate. */
-export function candidateUrls(host: string, port: number, tls: boolean, interfaces: Interfaces = networkInterfaces()): Candidate[] {
+export function candidateUrls(
+  host: string,
+  port: number,
+  tls: boolean,
+  interfaces: Interfaces = networkInterfaces(),
+): Candidate[] {
   const scheme = tls ? 'https' : 'http'
   const make = (address: string) => `${scheme}://${address.includes(':') ? `[${address}]` : address}:${port}`
   if (!isWildcard(host)) return [{ url: make(host), interface: 'listen address' }]
@@ -28,15 +36,26 @@ export function candidateUrls(host: string, port: number, tls: boolean, interfac
 }
 
 /** What the Settings screen saves: whether to accept other devices, and where. A command-line `--listen` overrides it. */
-export interface NetworkSetting { enabled: boolean; host: string; port: number; acceptUnencrypted: boolean }
+export interface NetworkSetting {
+  enabled: boolean
+  host: string
+  port: number
+  acceptUnencrypted: boolean
+}
 export const DEFAULT_NETWORK_PORT = 7788
-export const DEFAULT_NETWORK_SETTING: NetworkSetting = { enabled: false, host: '0.0.0.0', port: DEFAULT_NETWORK_PORT, acceptUnencrypted: false }
+export const DEFAULT_NETWORK_SETTING: NetworkSetting = {
+  enabled: false,
+  host: '0.0.0.0',
+  port: DEFAULT_NETWORK_PORT,
+  acceptUnencrypted: false,
+}
 
 /** Every address another device could reach this computer on, for choosing which network to listen on. */
 export function localAddresses(interfaces: Interfaces = networkInterfaces()): { name: string; address: string }[] {
   const found: { name: string; address: string }[] = []
   for (const [name, addresses] of Object.entries(interfaces)) {
-    for (const info of addresses ?? []) if (!info.internal && !isLinkLocal(info.address)) found.push({ name, address: info.address })
+    for (const info of addresses ?? [])
+      if (!info.internal && !isLinkLocal(info.address)) found.push({ name, address: info.address })
   }
   return found
 }
@@ -46,11 +65,18 @@ export function validateNetworkSetting(input: unknown, tls: boolean, addresses =
   const value = input as Partial<NetworkSetting> | null
   if (!value || typeof value !== 'object') throw new Error('Invalid network settings')
   const { enabled, host, port, acceptUnencrypted } = value
-  if (typeof enabled !== 'boolean' || typeof host !== 'string' || typeof port !== 'number' || typeof acceptUnencrypted !== 'boolean') throw new Error('Invalid network settings')
+  if (
+    typeof enabled !== 'boolean' ||
+    typeof host !== 'string' ||
+    typeof port !== 'number' ||
+    typeof acceptUnencrypted !== 'boolean'
+  )
+    throw new Error('Invalid network settings')
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Choose a port between 1024 and 65535')
   const known = isWildcard(host) || isLoopback(host) || addresses.some((entry) => entry.address === host)
   if (!isIP(host) || !known) throw new Error('Choose one of this computer’s addresses, or all networks')
-  if (enabled && !isLoopback(host) && !tls && !acceptUnencrypted) throw new Error('Confirm that you trust the network: Ramu does not encrypt this connection')
+  if (enabled && !isLoopback(host) && !tls && !acceptUnencrypted)
+    throw new Error('Confirm that you trust the network: Ramu does not encrypt this connection')
   return { enabled, host, port, acceptUnencrypted }
 }
 
@@ -61,7 +87,9 @@ export function readNetworkSetting(path: string, tls: boolean): NetworkSetting {
   try {
     const saved = JSON.parse(readFileSync(path, 'utf8'))
     return validateNetworkSetting(saved, tls, [{ name: 'saved', address: saved?.host }])
-  } catch { return { ...DEFAULT_NETWORK_SETTING } }
+  } catch {
+    return { ...DEFAULT_NETWORK_SETTING }
+  }
 }
 
 export function writeNetworkSetting(path: string, setting: NetworkSetting) {

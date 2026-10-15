@@ -8,10 +8,16 @@ export function useNearViewport(ref: RefObject<HTMLElement | null>, enabled = tr
   const [near, setNear] = useState(false)
   useEffect(() => {
     const element = ref.current
-    if (!enabled || !element) { setNear(false); return }
-    observer ??= new IntersectionObserver((entries) => {
-      for (const entry of entries) listeners.get(entry.target)?.(entry.isIntersecting)
-    }, { rootMargin: '150px' })
+    if (!enabled || !element) {
+      setNear(false)
+      return
+    }
+    observer ??= new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) listeners.get(entry.target)?.(entry.isIntersecting)
+      },
+      { rootMargin: '150px' },
+    )
     listeners.set(element, (value) => {
       // Keep an editor alive while its selection or comment form has keyboard focus.
       if (!value && element.contains(document.activeElement)) return
@@ -21,7 +27,10 @@ export function useNearViewport(ref: RefObject<HTMLElement | null>, enabled = tr
     return () => {
       observer?.unobserve(element)
       listeners.delete(element)
-      if (!listeners.size) { observer?.disconnect(); observer = null }
+      if (!listeners.size) {
+        observer?.disconnect()
+        observer = null
+      }
     }
   }, [ref, enabled])
   return enabled && near

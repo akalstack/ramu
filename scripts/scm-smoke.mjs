@@ -6,11 +6,24 @@ import { join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import assert from 'node:assert/strict'
 const cwd = resolve(import.meta.dirname, '..', 'apps', 'desktop')
-const fixture = mkdtempSync(join(tmpdir(), 'ramu-scm-')), repo = join(fixture, 'repo'), remote = join(fixture, 'remote.git')
+const fixture = mkdtempSync(join(tmpdir(), 'ramu-scm-')),
+  repo = join(fixture, 'repo'),
+  remote = join(fixture, 'remote.git')
 const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
-mkdirSync(repo); writeFileSync(join(repo, 'file.txt'), 'fixture\n')
+mkdirSync(repo)
+writeFileSync(join(repo, 'file.txt'), 'fixture\n')
 execFileSync('git', ['init', '-q', '--bare', remote])
-for (const args of [['init', '-q', '-b', 'main'], ['config', 'user.name', 'Test'], ['config', 'user.email', 'test@example.com'], ['config', 'commit.gpgsign', 'false'], ['add', '.'], ['commit', '-qm', 'initial'], ['remote', 'add', 'origin', remote], ['push', '-q', '-u', 'origin', 'main']]) git(...args)
+for (const args of [
+  ['init', '-q', '-b', 'main'],
+  ['config', 'user.name', 'Test'],
+  ['config', 'user.email', 'test@example.com'],
+  ['config', 'commit.gpgsign', 'false'],
+  ['add', '.'],
+  ['commit', '-qm', 'initial'],
+  ['remote', 'add', 'origin', remote],
+  ['push', '-q', '-u', 'origin', 'main'],
+])
+  git(...args)
 const env = { ...process.env, RAMU_USER_DATA: join(fixture, 'profile'), RAMU_FAKE_AGENT: '1' }
 delete env.ELECTRON_RENDERER_URL
 const app = await electron.launch({ args: [cwd], cwd, env })
@@ -25,12 +38,14 @@ try {
   const { project } = await api('projects.addFolder', repo)
   const task = await api('tasks.create', { projectId: project.id, title: 'Source control', mode: 'current' })
   await api('tasks.setup', task.id)
-  await page.reload(); await page.locator('.task-row').first().click()
+  await page.reload()
+  await page.locator('.task-row').first().click()
   await page.getByRole('button', { name: 'Source Control', exact: true }).click()
   await page.locator('.scm-panel').waitFor()
 
   const pushed = git('rev-parse', 'HEAD')
-  writeFileSync(join(repo, 'file.txt'), 'staged\n'); git('add', 'file.txt')
+  writeFileSync(join(repo, 'file.txt'), 'staged\n')
+  git('add', 'file.txt')
   writeFileSync(join(repo, 'file.txt'), 'unstaged\n')
   await page.getByRole('button', { name: 'Refresh source control', exact: true }).click()
   await page.getByRole('button', { name: 'Commit 1 staged', exact: true }).waitFor()
@@ -38,7 +53,11 @@ try {
   assert.notEqual(await amend.getAttribute('aria-disabled'), 'true', 'a pushed commit can be amended')
   await amend.click()
   await page.getByRole('button', { name: 'Commit 0 staged', exact: true }).waitFor()
-  assert.equal(await page.locator('[role=alertdialog]:not([data-slot=toast])').count(), 0, 'amend runs without confirmation')
+  assert.equal(
+    await page.locator('[role=alertdialog]:not([data-slot=toast])').count(),
+    0,
+    'amend runs without confirmation',
+  )
   assert.notEqual(git('rev-parse', 'HEAD'), pushed)
   assert.equal(git('rev-list', '--count', 'HEAD'), '1')
   assert.equal(git('show', 'HEAD:file.txt'), 'staged')
@@ -48,7 +67,9 @@ try {
   console.log('ok - pushed commit amends immediately, preserving its message and unstaged edits')
 
   const amended = git('rev-parse', 'HEAD')
-  await page.getByRole('textbox', { name: 'Commit message for repo', exact: true }).fill('Revised title\n\nRevised body')
+  await page
+    .getByRole('textbox', { name: 'Commit message for repo', exact: true })
+    .fill('Revised title\n\nRevised body')
   await (await amendItem()).click()
   await page.waitForFunction(() => document.querySelector('.commit-msg')?.value === '')
   assert.notEqual(git('rev-parse', 'HEAD'), amended)
@@ -56,26 +77,44 @@ try {
   assert.equal(git('show', 'HEAD:file.txt'), 'staged')
   assert.equal(git('rev-parse', 'origin/main'), pushed)
   console.log('ok - message-only amend replaces the full message without staging unstaged edits')
-  git('add', 'file.txt'); git('commit', '-qm', 'Undo title\n\nUndo body')
-  const undoHead = git('rev-parse', 'HEAD'), undoParent = git('rev-parse', 'HEAD~1')
+  git('add', 'file.txt')
+  git('commit', '-qm', 'Undo title\n\nUndo body')
+  const undoHead = git('rev-parse', 'HEAD'),
+    undoParent = git('rev-parse', 'HEAD~1')
   await page.getByRole('button', { name: 'Refresh source control', exact: true }).click()
   const headRow = page.locator('.commit-history-entry').first()
   await headRow.getByText('Undo title', { exact: true }).waitFor()
   await headRow.locator('.commit-history-head').hover()
   await headRow.getByRole('button', { name: 'Undo commit', exact: true }).waitFor()
-  assert.equal(await page.getByRole('button', { name: 'Undo commit', exact: true }).count(), 1, 'only HEAD offers inline undo')
+  assert.equal(
+    await page.getByRole('button', { name: 'Undo commit', exact: true }).count(),
+    1,
+    'only HEAD offers inline undo',
+  )
   await headRow.getByRole('button', { name: 'Undo commit', exact: true }).click()
-  await page.locator('[role=alertdialog]:not([data-slot=toast])').getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page
+    .locator('[role=alertdialog]:not([data-slot=toast])')
+    .getByRole('button', { name: 'Cancel', exact: true })
+    .click()
   assert.equal(git('rev-parse', 'HEAD'), undoHead, 'cancel keeps the commit')
   await headRow.locator('.commit-history-head').hover()
   await headRow.getByRole('button', { name: 'Commit actions', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Undo commit', exact: true }).click()
-  await page.locator('[role=alertdialog]:not([data-slot=toast])').getByRole('button', { name: 'Undo commit', exact: true }).click()
+  await page
+    .locator('[role=alertdialog]:not([data-slot=toast])')
+    .getByRole('button', { name: 'Undo commit', exact: true })
+    .click()
   await page.getByRole('button', { name: 'Commit 1 staged', exact: true }).waitFor()
   assert.equal(git('rev-parse', 'HEAD'), undoParent)
   assert.equal(git('diff', '--cached').includes('+unstaged'), true)
-  assert.equal(await page.getByRole('textbox', { name: 'Commit message for repo', exact: true }).inputValue(), 'Undo title\n\nUndo body')
+  assert.equal(
+    await page.getByRole('textbox', { name: 'Commit message for repo', exact: true }).inputValue(),
+    'Undo title\n\nUndo body',
+  )
   console.log('ok - HEAD inline/context undo preserves staged changes and restores the full message; Cancel keeps HEAD')
   await page.screenshot({ path: join(fixture, 'scm.png') })
   console.log(`Screenshots: ${fixture}`)
-} finally { await api('background.stop').catch(() => {}); await app.close() }
+} finally {
+  await api('background.stop').catch(() => {})
+  await app.close()
+}

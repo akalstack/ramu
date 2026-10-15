@@ -14,11 +14,16 @@ export function goalChanges(events: readonly AgentEvent[]): Map<AgentEvent, Goal
   for (const event of events) {
     if (event.kind !== 'goal') continue
     const goal = event.goal
-    const add = (type: GoalChangeType, shown: ChatGoal) => { changes.set(event, { type, goal: shown }) }
-    if (!goal) { if (previous && previous.status !== 'completed') add('cleared', previous) }
-    else if (!previous || previous.id !== goal.id) { if (goal.status !== 'completed') add('set', goal) }
-    else if (previous.status === 'completed') { /* a finished goal is closed; its row is the completion */ }
-    else if (goal.objective !== previous.objective) add('edited', goal)
+    const add = (type: GoalChangeType, shown: ChatGoal) => {
+      changes.set(event, { type, goal: shown })
+    }
+    if (!goal) {
+      if (previous && previous.status !== 'completed') add('cleared', previous)
+    } else if (!previous || previous.id !== goal.id) {
+      if (goal.status !== 'completed') add('set', goal)
+    } else if (previous.status === 'completed') {
+      /* a finished goal is closed; its row is the completion */
+    } else if (goal.objective !== previous.objective) add('edited', goal)
     else if (goal.status !== previous.status) {
       if (goal.status === 'paused') add('paused', goal)
       else if (goal.status === 'blocked') add('blocked', goal)

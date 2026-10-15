@@ -1,11 +1,43 @@
 const extensions: Record<string, string> = {
-  javascript: 'js', js: 'js', jsx: 'jsx', typescript: 'ts', ts: 'ts', tsx: 'tsx',
-  python: 'py', py: 'py', shell: 'sh', bash: 'sh', sh: 'sh', zsh: 'sh',
-  json: 'json', html: 'html', xml: 'xml', css: 'css', scss: 'scss',
-  yaml: 'yaml', yml: 'yaml', markdown: 'md', md: 'md', sql: 'sql',
-  rust: 'rs', rs: 'rs', go: 'go', java: 'java', c: 'c', cpp: 'cpp',
-  csharp: 'cs', cs: 'cs', ruby: 'rb', rb: 'rb', php: 'php', swift: 'swift',
-  kotlin: 'kt', kt: 'kt', text: 'txt', plaintext: 'txt', txt: 'txt',
+  javascript: 'js',
+  js: 'js',
+  jsx: 'jsx',
+  typescript: 'ts',
+  ts: 'ts',
+  tsx: 'tsx',
+  python: 'py',
+  py: 'py',
+  shell: 'sh',
+  bash: 'sh',
+  sh: 'sh',
+  zsh: 'sh',
+  json: 'json',
+  html: 'html',
+  xml: 'xml',
+  css: 'css',
+  scss: 'scss',
+  yaml: 'yaml',
+  yml: 'yaml',
+  markdown: 'md',
+  md: 'md',
+  sql: 'sql',
+  rust: 'rs',
+  rs: 'rs',
+  go: 'go',
+  java: 'java',
+  c: 'c',
+  cpp: 'cpp',
+  csharp: 'cs',
+  cs: 'cs',
+  ruby: 'rb',
+  rb: 'rb',
+  php: 'php',
+  swift: 'swift',
+  kotlin: 'kt',
+  kt: 'kt',
+  text: 'txt',
+  plaintext: 'txt',
+  txt: 'txt',
 }
 
 /** Prefer the fence's language; infer only recognizable syntax in unlabeled blocks. */
@@ -17,7 +49,12 @@ export function codeLanguage(source: string, hint?: string): string {
   }
   const text = source.trim()
   if (!text) return 'txt'
-  try { const value: unknown = JSON.parse(text); if (value !== null && typeof value === 'object') return 'json' } catch { /* Other code. */ }
+  try {
+    const value: unknown = JSON.parse(text)
+    if (value !== null && typeof value === 'object') return 'json'
+  } catch {
+    /* Other code. */
+  }
   const typed = /\b(?:interface|type)\s+\w+\s*(?:[={<])|\b(?:const|let|function)\s+\w+[^\n]*:\s*\w+/.test(text)
   const jsx = /<\/?[A-Z][\w.]*(?:\s|>|\/)|\bclassName\s*=|\{[^\n]*\}\s*<\//.test(text)
   if (jsx) return typed ? 'tsx' : 'jsx'

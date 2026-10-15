@@ -16,24 +16,39 @@ const message = (schema: z.ZodType, value: unknown) => {
 
 describe('validation messages', () => {
   it('names the field and the limit instead of dumping the schema issues', () => {
-    expect(message(z.object({ name: z.string().max(200) }), { name: 'x'.repeat(201) })).toBe('Name is too long (200 characters at most).')
-    expect(message(z.object({ maxTurns: z.number().int().max(1000) }), { maxTurns: 5000 })).toBe('Max turns must be 1,000 or less.')
+    expect(message(z.object({ name: z.string().max(200) }), { name: 'x'.repeat(201) })).toBe(
+      'Name is too long (200 characters at most).',
+    )
+    expect(message(z.object({ maxTurns: z.number().int().max(1000) }), { maxTurns: 5000 })).toBe(
+      'Max turns must be 1,000 or less.',
+    )
     expect(message(z.object({ title: z.string().trim().min(1) }), { title: '   ' })).toBe("Title can't be empty.")
-    expect(message(z.object({ weekdays: z.array(z.number()).min(1) }), { weekdays: [] })).toBe('Weekdays needs at least one item.')
+    expect(message(z.object({ weekdays: z.array(z.number()).min(1) }), { weekdays: [] })).toBe(
+      'Weekdays needs at least one item.',
+    )
     expect(message(z.object({ minutes: z.number().int().min(5) }), { minutes: 2 })).toBe('Minutes must be 5 or more.')
   })
   it('handles tuple arguments, which only have positions', () => {
-    expect(message(z.tuple([z.string(), z.string().max(10)]), ['a', 'y'.repeat(11)])).toBe('This text is too long (10 characters at most).')
+    expect(message(z.tuple([z.string(), z.string().max(10)]), ['a', 'y'.repeat(11)])).toBe(
+      'This text is too long (10 characters at most).',
+    )
   })
   it('explains non-integers, NaN and wrong types in plain words', () => {
     expect(message(z.object({ day: z.number().int() }), { day: 1.5 })).toBe('Day must be a whole number.')
     expect(message(z.object({ minutes: z.number() }), { minutes: Number.NaN })).toBe('Minutes must be a number.')
     expect(message(z.object({ minutes: z.number() }), {})).toBe('Minutes must be a number.')
     expect(message(z.object({ name: z.string() }), {})).toBe('Name is missing or not valid.')
-    expect(message(z.object({ time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/) }), { time: '25:61' })).toBe('Time is not in a valid format.')
+    expect(message(z.object({ time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/) }), { time: '25:61' })).toBe(
+      'Time is not in a valid format.',
+    )
   })
   it('keeps messages that were already written for people', () => {
-    expect(message(z.string().refine(() => false, 'Unknown timezone'), 'Mars')).toBe('Unknown timezone')
+    expect(
+      message(
+        z.string().refine(() => false, 'Unknown timezone'),
+        'Mars',
+      ),
+    ).toBe('Unknown timezone')
   })
 })
 
@@ -62,7 +77,10 @@ describe('clipText', () => {
 
 describe('file names', () => {
   let root: string
-  beforeEach(() => { root = realpathSync(mkdtempSync(join(tmpdir(), 'ramu-chaos-'))); writeFileSync(join(root, 'a.txt'), 'a') })
+  beforeEach(() => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), 'ramu-chaos-')))
+    writeFileSync(join(root, 'a.txt'), 'a')
+  })
   afterEach(() => rmSync(root, { recursive: true, force: true }))
 
   it('reports over-long names instead of leaking ENAMETOOLONG', async () => {

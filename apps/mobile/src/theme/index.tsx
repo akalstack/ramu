@@ -75,7 +75,11 @@ export const font = {
   heading: 17,
   title: 22,
   hero: 28,
-  mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace, SFMono-Regular, Menlo, monospace' }),
+  mono: Platform.select({
+    ios: 'Menlo',
+    android: 'monospace',
+    default: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+  }),
 } as const
 
 export type Appearance = 'system' | 'light' | 'dark'
@@ -92,9 +96,15 @@ const ThemeContext = createContext<ThemeValue | null>(null)
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const system = useColorScheme()
   const [appearance, updateAppearance] = useState<Appearance>(readAppearance)
-  const setAppearance = (value: Appearance) => { saveAppearance(value); updateAppearance(value) }
+  const setAppearance = (value: Appearance) => {
+    saveAppearance(value)
+    updateAppearance(value)
+  }
   const scheme = appearance === 'system' ? (system === 'light' ? 'light' : 'dark') : appearance
-  const value = useMemo(() => ({ c: scheme === 'light' ? light : dark, scheme, appearance, setAppearance }), [scheme, appearance])
+  const value = useMemo(
+    () => ({ c: scheme === 'light' ? light : dark, scheme, appearance, setAppearance }),
+    [scheme, appearance],
+  )
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }
 

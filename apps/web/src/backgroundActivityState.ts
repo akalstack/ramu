@@ -5,9 +5,13 @@ export async function readBackgroundActivity(
   readActivity: () => Promise<BackgroundActivity[]>,
   readService: () => Promise<{ running: boolean }>,
 ): Promise<{ activities: BackgroundActivity[]; connected: boolean }> {
-  try { return { activities: await readActivity(), connected: true } }
-  catch {
-    try { return { activities: [], connected: (await readService()).running } }
-    catch { return { activities: [], connected: false } }
+  try {
+    return { activities: await readActivity(), connected: true }
+  } catch {
+    try {
+      return { activities: [], connected: (await readService()).running }
+    } catch {
+      return { activities: [], connected: false }
+    }
   }
 }

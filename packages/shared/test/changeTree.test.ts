@@ -12,10 +12,15 @@ describe('source control change tree', () => {
     expect(tree.paths).toHaveLength(3)
   })
   it('compresses chains of single folders into one row', () => {
-    const tree = changeTree(entries('src/renderer/src/App.tsx', 'src/renderer/src/views/AgentView.tsx', 'src/main/index.ts'))
+    const tree = changeTree(
+      entries('src/renderer/src/App.tsx', 'src/renderer/src/views/AgentView.tsx', 'src/main/index.ts'),
+    )
     const src = tree.folders[0]!
     expect(src.name).toBe('src')
-    expect(src.folders.map((folder) => [folder.name, folder.path])).toEqual([['main', 'src/main'], ['renderer/src', 'src/renderer/src']])
+    expect(src.folders.map((folder) => [folder.name, folder.path])).toEqual([
+      ['main', 'src/main'],
+      ['renderer/src', 'src/renderer/src'],
+    ])
     expect(src.folders[1]!.folders[0]!.path).toBe('src/renderer/src/views')
   })
   it('lists every changed path under a folder for folder actions', () => {

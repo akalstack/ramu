@@ -5,5 +5,11 @@ import { TerminalScreen } from '../components/TerminalScreen'
 export default function WorkspaceTerminal() {
   const { computer, ctx } = useLocalSearchParams<{ computer: string; ctx: string }>()
   const router = useRouter()
-  return <TerminalScreen computerId={computer} ctx={ctx} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} />
+  return (
+    <TerminalScreen
+      computerId={computer}
+      ctx={ctx}
+      onBack={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+    />
+  )
 }

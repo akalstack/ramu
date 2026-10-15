@@ -5,9 +5,20 @@ import { join } from 'node:path'
 import { replacementPlan, searchText } from '../src/files'
 import type { SearchOptions } from '@ramu/shared/types'
 let root: string
-beforeEach(async () => { root = await realpath(await mkdtemp(join(tmpdir(), 'ramu-replace-'))) })
-afterEach(async () => { await rm(root, { recursive: true, force: true }) })
-const options = (query: string, regex = false): SearchOptions => ({ query, regex, caseSensitive: true, wholeWord: false, include: '', exclude: '' })
+beforeEach(async () => {
+  root = await realpath(await mkdtemp(join(tmpdir(), 'ramu-replace-')))
+})
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true })
+})
+const options = (query: string, regex = false): SearchOptions => ({
+  query,
+  regex,
+  caseSensitive: true,
+  wholeWord: false,
+  include: '',
+  exclude: '',
+})
 async function replace(content: string, query: SearchOptions, replacement: string) {
   await writeFile(join(root, 'file.txt'), content)
   const found = await searchText(root, 'repo', query, 500)
@@ -48,5 +59,7 @@ it('reviews every replacement beyond the display limit', async () => {
 it('rejects excessively expanded content before building the replacement output', async () => {
   await writeFile(join(root, 'file.txt'), 'view\n'.repeat(650))
   const found = await searchText(root, 'repo', options('view'), 20_000)
-  await expect(replacementPlan(root, 'repo', options('view'), 'x'.repeat(100_000), found.matches)).rejects.toThrow('produces too much content')
+  await expect(replacementPlan(root, 'repo', options('view'), 'x'.repeat(100_000), found.matches)).rejects.toThrow(
+    'produces too much content',
+  )
 })

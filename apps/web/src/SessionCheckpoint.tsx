@@ -14,17 +14,40 @@ export function SessionCheckpointButton({ sessionId }: { sessionId: string }) {
     queryKey: ipcQueryKey('agent.checkpoint', sessionId),
     queryFn: () => ramu.invoke('agent.checkpoint', sessionId),
   })
-  useEffect(() => ramu.on('memory:changed', () => { void refetch() }), [refetch])
-  useEffect(() => { setOpen(false) }, [sessionId])
+  useEffect(
+    () =>
+      ramu.on('memory:changed', () => {
+        void refetch()
+      }),
+    [refetch],
+  )
+  useEffect(() => {
+    setOpen(false)
+  }, [sessionId])
   if (!checkpoint) return null
-  return <>
-    <Button variant="ghost" size="sm" onClick={() => setOpen(true)} title={t('Saved progress for this chat')}>
-      <BookOpen data-icon="inline-start" />{t('Session checkpoint')}
-    </Button>
-    {open && <Dialog title={t('Session checkpoint')} confirmLabel={t('Done')} onConfirm={() => setOpen(false)} onCancel={() => setOpen(false)}>
-      <p className="text-muted-foreground">{t('Progress for this chat only. Current messages and files take precedence over this summary.')}</p>
-      <p className="text-muted-foreground">{new Date(checkpoint.updatedAt).toLocaleString(formatLocale())} · {t('Through event {0}', { 0: checkpoint.seq })}</p>
-      <p className="whitespace-pre-wrap">{checkpoint.summary}</p>
-    </Dialog>}
-  </>
+  return (
+    <>
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)} title={t('Saved progress for this chat')}>
+        <BookOpen data-icon="inline-start" />
+        {t('Session checkpoint')}
+      </Button>
+      {open && (
+        <Dialog
+          title={t('Session checkpoint')}
+          confirmLabel={t('Done')}
+          onConfirm={() => setOpen(false)}
+          onCancel={() => setOpen(false)}
+        >
+          <p className="text-muted-foreground">
+            {t('Progress for this chat only. Current messages and files take precedence over this summary.')}
+          </p>
+          <p className="text-muted-foreground">
+            {new Date(checkpoint.updatedAt).toLocaleString(formatLocale())} ·{' '}
+            {t('Through event {0}', { 0: checkpoint.seq })}
+          </p>
+          <p className="whitespace-pre-wrap">{checkpoint.summary}</p>
+        </Dialog>
+      )}
+    </>
+  )
 }

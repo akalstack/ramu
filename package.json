@@ -2,7 +2,7 @@
   "name": "ramu-monorepo",
   "version": "0.1.0-alpha.1",
   "private": true,
-  "description": "Ramu \u2014 your project, every repo, one workspace.",
+  "description": "Ramu — your project, every repo, one workspace.",
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @ramu/desktop dev",
@@ -23,7 +23,7 @@
     "test:learning": "node scripts/learning-smoke.mjs",
     "test:e2e": "node scripts/automation-smoke.mjs",
     "test:terminal": "node scripts/terminal-smoke.mjs",
-    "check": "pnpm typecheck && pnpm test && pnpm test:scripts && pnpm build",
+    "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm test:scripts && pnpm build",
     "test:scripts": "node --test scripts/release.test.mjs",
     "release:prepare": "node scripts/release.mjs prepare",
     "release:draft": "node scripts/release.mjs draft",
@@ -32,11 +32,14 @@
     "test:fps": "node scripts/layout-fps-smoke.mjs",
     "test:acp-ui": "node scripts/acp-ui-smoke.mjs",
     "test:chaos": "node scripts/chaos-smoke.mjs",
-    "test:mobile": "node scripts/mobile-smoke.mjs"
+    "test:mobile": "node scripts/mobile-smoke.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "electron": "catalog:",
     "playwright-core": "^1.64.0",
+    "prettier": "^3.9.10",
     "react": "catalog:",
     "react-dom": "catalog:",
     "typescript": "catalog:"

@@ -4,7 +4,10 @@ import { readFile, stat } from 'node:fs/promises'
 import { hashOf, resolveInRoot } from './files'
 const exec = promisify(execFile)
 
-export interface ReviewCheckout { head?: string; branch?: string }
+export interface ReviewCheckout {
+  head?: string
+  branch?: string
+}
 export async function reviewCheckout(cwd: string): Promise<ReviewCheckout> {
   try {
     const { stdout } = await exec('git', ['rev-parse', 'HEAD', '--abbrev-ref', 'HEAD'], { cwd, timeout: 5000 })
@@ -12,15 +15,22 @@ export async function reviewCheckout(cwd: string): Promise<ReviewCheckout> {
     return { head, branch }
   } catch {
     // An unborn branch has a symbolic HEAD even though no commit exists yet.
-    try { const { stdout } = await exec('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd, timeout: 5000 }); return { branch: stdout.trim() || undefined } }
-    catch { return {} }
+    try {
+      const { stdout } = await exec('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd, timeout: 5000 })
+      return { branch: stdout.trim() || undefined }
+    } catch {
+      return {}
+    }
   }
 }
 
 /** Only Git's explicit rename records are used for automatic relocation. */
 export async function reviewRenames(cwd: string, head?: string): Promise<Map<string, string>> {
   const result = new Map<string, string>()
-  for (const args of [head ? ['diff', '--name-status', '-z', '-M', head, 'HEAD'] : [], ['diff', '--name-status', '-z', '-M', 'HEAD']]) {
+  for (const args of [
+    head ? ['diff', '--name-status', '-z', '-M', head, 'HEAD'] : [],
+    ['diff', '--name-status', '-z', '-M', 'HEAD'],
+  ]) {
     if (!args.length) continue
     try {
       const { stdout } = await exec('git', args, { cwd, timeout: 5000, maxBuffer: 4_000_000 })
@@ -37,12 +47,17 @@ export async function reviewRenames(cwd: string, head?: string): Promise<Map<str
           }
         }
       }
-    } catch { /* Non-Git folders and expired commits still support snapshot review. */ }
+    } catch {
+      /* Non-Git folders and expired commits still support snapshot review. */
+    }
   }
   return result
 }
 
-export async function readReviewCurrent(cwd: string, path: string): Promise<{ hash: string; content: string; binary: boolean } | null> {
+export async function readReviewCurrent(
+  cwd: string,
+  path: string,
+): Promise<{ hash: string; content: string; binary: boolean } | null> {
   const absolute = await resolveInRoot(cwd, path)
   try {
     const info = await stat(absolute)

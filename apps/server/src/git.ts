@@ -4,7 +4,19 @@ import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { execFile } from 'node:child_process'
-import type { DiffContents, GitCommitFile, GitBranchInfo, GitCommit, GitFileState, GitStatus, GitStatusEntry, GitStash, GitOperation, PullMode, CommitBranchOptions } from '@ramu/shared/types'
+import type {
+  DiffContents,
+  GitCommitFile,
+  GitBranchInfo,
+  GitCommit,
+  GitFileState,
+  GitStatus,
+  GitStatusEntry,
+  GitStash,
+  GitOperation,
+  PullMode,
+  CommitBranchOptions,
+} from '@ramu/shared/types'
 
 export class GitError extends Error {
   constructor(
@@ -26,8 +38,9 @@ const LOCKED = /Unable to create '[^']*\.lock': File exists|Another git process 
 /** Retries a briefly locked repository with quadratic backoff, like VS Code, instead of failing the action. */
 export async function git(cwd: string, args: string[], opts: { input?: string } = {}): Promise<string> {
   for (let attempt = 1; ; attempt++) {
-    try { return await gitOnce(cwd, args, opts) }
-    catch (error) {
+    try {
+      return await gitOnce(cwd, args, opts)
+    } catch (error) {
       if (attempt > 5 || !(error instanceof GitError) || !LOCKED.test(error.stderr ?? error.message)) throw error
       await new Promise((resolve) => setTimeout(resolve, attempt * attempt * 100))
     }
@@ -97,7 +110,15 @@ const XY: Record<string, GitFileState | null> = {
 
 /** Parses `git status --porcelain=v2 --branch -z`. */
 export function parseStatus(raw: string): GitStatus {
-  const status: GitStatus = { branch: null, detached: false, oid: null, upstream: null, ahead: 0, behind: 0, entries: [] }
+  const status: GitStatus = {
+    branch: null,
+    detached: false,
+    oid: null,
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    entries: [],
+  }
   const records = raw.split('\0')
   for (let i = 0; i < records.length; i++) {
     const rec = records[i]
@@ -160,13 +181,30 @@ function splitN(s: string, sep: string, n: number): string[] {
 }
 
 export async function status(cwd: string): Promise<GitStatus> {
-  const [raw, op, remotes] = await Promise.all([git(cwd, ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all']), operation(cwd), git(cwd, ['remote'])])
+  const [raw, op, remotes] = await Promise.all([
+    git(cwd, ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all']),
+    operation(cwd),
+    git(cwd, ['remote']),
+  ])
   return { ...parseStatus(raw), operation: op, remote: !!remotes.trim() }
 }
 
 /** A rebase or merge in progress. --git-path resolves per-worktree state, where `.git` may be a file. */
 export async function operation(cwd: string): Promise<GitOperation | null> {
-  const [merge, apply, mergeHead] = (await git(cwd, ['rev-parse', '--git-path', 'rebase-merge', '--git-path', 'rebase-apply', '--git-path', 'MERGE_HEAD'])).trim().split('\n').map((path) => resolve(cwd, path))
+  const [merge, apply, mergeHead] = (
+    await git(cwd, [
+      'rev-parse',
+      '--git-path',
+      'rebase-merge',
+      '--git-path',
+      'rebase-apply',
+      '--git-path',
+      'MERGE_HEAD',
+    ])
+  )
+    .trim()
+    .split('\n')
+    .map((path) => resolve(cwd, path))
   if (existsSync(merge!) || existsSync(apply!)) return 'rebase'
   return existsSync(mergeHead!) ? 'merge' : null
 }
@@ -200,8 +238,10 @@ export async function discardTracked(cwd: string, paths: string[]): Promise<void
 export async function undoCommit(cwd: string, expectedHead: string): Promise<string> {
   const current = await status(cwd)
   if (current.oid !== expectedHead) throw new Error('The latest commit changed. Refresh before undoing it.')
-  if (current.detached || current.operation || current.entries.some((entry) => entry.staged === 'unmerged')) throw new Error('Resolve the repository state before undoing a commit.')
-  if (current.upstream && current.ahead === 0) throw new Error('This commit is already on the upstream branch. Use a revert instead.')
+  if (current.detached || current.operation || current.entries.some((entry) => entry.staged === 'unmerged'))
+    throw new Error('Resolve the repository state before undoing a commit.')
+  if (current.upstream && current.ahead === 0)
+    throw new Error('This commit is already on the upstream branch. Use a revert instead.')
   const message = (await git(cwd, ['log', '-1', '--format=%B', expectedHead])).trimEnd()
   await git(cwd, ['reset', '--soft', `${expectedHead}^`])
   return message
@@ -209,9 +249,17 @@ export async function undoCommit(cwd: string, expectedHead: string): Promise<str
 
 /** A lowercase, ref-safe fragment of at most 64 characters (as T3 Code does); empty when nothing usable is left. */
 export function sanitizeBranchFragment(raw: string): string {
-  const fragment = raw.trim().toLowerCase().replace(/['"`]/g, '').replace(/^[./\s_-]+|[./\s_-]+$/g, '')
-    .replace(/[^a-z0-9/_-]+/g, '-').replace(/\/+/g, '/').replace(/-+/g, '-').replace(/^[./_-]+|[./_-]+$/g, '')
-    .slice(0, 64).replace(/[./_-]+$/g, '')
+  const fragment = raw
+    .trim()
+    .toLowerCase()
+    .replace(/['"`]/g, '')
+    .replace(/^[./\s_-]+|[./\s_-]+$/g, '')
+    .replace(/[^a-z0-9/_-]+/g, '-')
+    .replace(/\/+/g, '/')
+    .replace(/-+/g, '-')
+    .replace(/^[./_-]+|[./_-]+$/g, '')
+    .slice(0, 64)
+    .replace(/[./_-]+$/g, '')
   return fragment
 }
 
@@ -226,13 +274,19 @@ export function featureBranchName(raw: string): string {
 
 /** A free name: each path part blocked by an existing branch (or, for the last part, its children) gets `-2`, `-3`… */
 export function uniqueFeatureBranch(existing: readonly string[], preferred?: string): string {
-  const names = existing.map((name) => name.toLowerCase()), taken = new Set(names)
+  const names = existing.map((name) => name.toLowerCase()),
+    taken = new Set(names)
   const parts = featureBranchName(preferred ?? '').split('/')
   let resolved = ''
   parts.forEach((part, index) => {
     const base = resolved ? `${resolved}/${part}` : part
     let candidate = base
-    for (let suffix = 2; taken.has(candidate) || (index === parts.length - 1 && names.some((name) => name.startsWith(`${candidate}/`))); suffix++) candidate = `${base}-${suffix}`
+    for (
+      let suffix = 2;
+      taken.has(candidate) || (index === parts.length - 1 && names.some((name) => name.startsWith(`${candidate}/`)));
+      suffix++
+    )
+      candidate = `${base}-${suffix}`
     resolved = candidate
   })
   return resolved
@@ -241,30 +295,46 @@ export function uniqueFeatureBranch(existing: readonly string[], preferred?: str
 /** The subject line, minus a Conventional Commits `type(scope):` prefix, which makes a poor branch name. */
 const branchHint = (message: string) => (message.trim().split('\n')[0] ?? '').replace(/^[a-z]+(\([^)]*\))?!?:\s*/i, '')
 
-export async function commit(cwd: string, message: string, amendHead?: string, branchOptions?: CommitBranchOptions): Promise<string> {
+export async function commit(
+  cwd: string,
+  message: string,
+  amendHead?: string,
+  branchOptions?: CommitBranchOptions,
+): Promise<string> {
   // The message goes through stdin so it never needs quoting.
   if (amendHead) {
     const current = await status(cwd)
     if (current.oid !== amendHead) throw new Error('The latest commit changed. Refresh before amending it.')
-    if (current.operation || current.entries.some(entry => entry.staged === 'unmerged')) throw new Error('Finish the Git operation and resolve conflicts before amending.')
+    if (current.operation || current.entries.some((entry) => entry.staged === 'unmerged'))
+      throw new Error('Finish the Git operation and resolve conflicts before amending.')
   }
   if (!message.trim() && !amendHead) throw new Error('A commit message is required.')
   if (branchOptions) {
-    if (await currentBranch(cwd) !== branchOptions.expectedBranch) throw new Error('The current branch changed. Review the commit destination again.')
+    if ((await currentBranch(cwd)) !== branchOptions.expectedBranch)
+      throw new Error('The current branch changed. Review the commit destination again.')
     if (branchOptions.newBranch || branchOptions.autoBranch) {
       if (amendHead) throw new Error('Amend cannot create a feature branch.')
       const current = await status(cwd)
-      if (current.operation || current.entries.some(entry => entry.staged === 'unmerged')) throw new Error('Finish the Git operation and resolve conflicts before creating a feature branch.')
-      if (!current.entries.some(entry => entry.staged)) throw new Error('Stage changes before committing on a feature branch.')
+      if (current.operation || current.entries.some((entry) => entry.staged === 'unmerged'))
+        throw new Error('Finish the Git operation and resolve conflicts before creating a feature branch.')
+      if (!current.entries.some((entry) => entry.staged))
+        throw new Error('Stage changes before committing on a feature branch.')
       const name = branchOptions.autoBranch
-        ? uniqueFeatureBranch((await git(cwd, ['for-each-ref', '--format=%(refname:short)', 'refs/heads'])).split('\n').filter(Boolean), branchOptions.newBranch || branchHint(message))
+        ? uniqueFeatureBranch(
+            (await git(cwd, ['for-each-ref', '--format=%(refname:short)', 'refs/heads'])).split('\n').filter(Boolean),
+            branchOptions.newBranch || branchHint(message),
+          )
         : branchOptions.newBranch!
       await git(cwd, ['check-ref-format', '--branch', name])
       // Starting at HEAD preserves both the index and working tree, including dirty files.
       await git(cwd, ['-c', 'branch.autoSetupMerge=false', 'switch', '-c', name])
     }
   }
-  const args = ['commit', ...(amendHead ? ['--amend'] : []), ...(message.trim() ? ['--file=-', '--cleanup=strip'] : ['--no-edit'])]
+  const args = [
+    'commit',
+    ...(amendHead ? ['--amend'] : []),
+    ...(message.trim() ? ['--file=-', '--cleanup=strip'] : ['--no-edit']),
+  ]
   await git(cwd, args, message.trim() ? { input: message } : undefined)
   return (await headOid(cwd)) ?? ''
 }
@@ -276,9 +346,11 @@ export async function commitBranchInfo(cwd: string): Promise<{ branch: string | 
   const remote = remotes.includes('origin') ? 'origin' : remotes.length === 1 ? remotes[0] : null
   if (remote) {
     const ref = (await git(cwd, ['symbolic-ref', '--quiet', `refs/remotes/${remote}/HEAD`]).catch(() => '')).trim()
-    if (ref.startsWith(`refs/remotes/${remote}/`)) return { branch, defaultBranch: ref.slice(`refs/remotes/${remote}/`.length) }
+    if (ref.startsWith(`refs/remotes/${remote}/`))
+      return { branch, defaultBranch: ref.slice(`refs/remotes/${remote}/`.length) }
   }
-  for (const name of ['main', 'master']) if (await branchExists(cwd, name) || branch === name) return { branch, defaultBranch: name }
+  for (const name of ['main', 'master'])
+    if ((await branchExists(cwd, name)) || branch === name) return { branch, defaultBranch: name }
   return { branch, defaultBranch: null }
 }
 
@@ -304,29 +376,53 @@ export async function worktreePaths(repoRoot: string): Promise<string[]> {
 }
 
 export async function history(cwd: string): Promise<GitCommit[]> {
-  if (!await headOid(cwd)) return []
+  if (!(await headOid(cwd))) return []
   // Commits not yet on the upstream; without an upstream nothing is marked.
   const [raw, ahead] = await Promise.all([
     git(cwd, ['log', '--max-count=30', '--format=%H%x00%h%x00%an%x00%at%x00%s%x00%D']),
     git(cwd, ['rev-list', '--max-count=30', '@{upstream}..HEAD']).catch(() => ''),
   ])
   const outgoing = new Set(ahead.split('\n').filter(Boolean))
-  return raw.trimEnd().split('\n').map((line) => {
-    const [oid, shortOid, author, timestamp, subject, refs] = line.split('\0')
-    return { oid: oid!, shortOid: shortOid!, author: author!, timestamp: Number(timestamp) * 1000, subject: subject!, refs: refs ?? '', outgoing: outgoing.has(oid!) }
-  })
+  return raw
+    .trimEnd()
+    .split('\n')
+    .map((line) => {
+      const [oid, shortOid, author, timestamp, subject, refs] = line.split('\0')
+      return {
+        oid: oid!,
+        shortOid: shortOid!,
+        author: author!,
+        timestamp: Number(timestamp) * 1000,
+        subject: subject!,
+        refs: refs ?? '',
+        outgoing: outgoing.has(oid!),
+      }
+    })
 }
 export async function branches(cwd: string): Promise<GitBranchInfo[]> {
-  const raw = await git(cwd, ['for-each-ref', '--sort=-committerdate', '--format=%(refname:short)%00%(HEAD)%00%(upstream:short)%00%(worktreepath)', 'refs/heads'])
-  return raw.trimEnd().split('\n').filter(Boolean).map((line) => {
-    const [name, current, upstream, worktree] = line.split('\0')
-    return { name: name!, current: current === '*', upstream: upstream ?? '', worktree: worktree ?? '' }
-  })
+  const raw = await git(cwd, [
+    'for-each-ref',
+    '--sort=-committerdate',
+    '--format=%(refname:short)%00%(HEAD)%00%(upstream:short)%00%(worktreepath)',
+    'refs/heads',
+  ])
+  return raw
+    .trimEnd()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [name, current, upstream, worktree] = line.split('\0')
+      return { name: name!, current: current === '*', upstream: upstream ?? '', worktree: worktree ?? '' }
+    })
 }
 export async function requireClean(cwd: string, autostash = false): Promise<void> {
   const current = await status(cwd)
-  if (current.operation) throw new Error(`A ${current.operation} is in progress. Continue or abort it in Source Control first.`)
-  if (current.entries.length && (!autostash || current.entries.some((entry) => entry.staged === 'unmerged'))) throw new Error('Commit or stash your working changes before switching branches or pulling. Ramu does not stash them automatically.')
+  if (current.operation)
+    throw new Error(`A ${current.operation} is in progress. Continue or abort it in Source Control first.`)
+  if (current.entries.length && (!autostash || current.entries.some((entry) => entry.staged === 'unmerged')))
+    throw new Error(
+      'Commit or stash your working changes before switching branches or pulling. Ramu does not stash them automatically.',
+    )
 }
 export async function createBranch(cwd: string, name: string): Promise<void> {
   await requireClean(cwd)
@@ -339,7 +435,14 @@ export async function deleteBranch(cwd: string, name: string): Promise<void> {
 }
 export async function stashes(cwd: string): Promise<GitStash[]> {
   const output = await git(cwd, ['stash', 'list', '--format=%H%x00%gd%x00%s'])
-  return output.trimEnd().split('\n').filter(Boolean).map((line) => { const [oid, ref, subject] = line.split('\0'); return { oid: oid!, ref: ref!, subject: subject! } })
+  return output
+    .trimEnd()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [oid, ref, subject] = line.split('\0')
+      return { oid: oid!, ref: ref!, subject: subject! }
+    })
 }
 /** A stash's third parent stores files captured with --include-untracked or --all. */
 async function stashUntrackedParent(cwd: string, oid: string): Promise<string | undefined> {
@@ -350,7 +453,10 @@ async function stashUntrackedParent(cwd: string, oid: string): Promise<string | 
 }
 export async function stashFiles(cwd: string, oid: string): Promise<GitCommitFile[]> {
   const untracked = await stashUntrackedParent(cwd, oid)
-  const [trackedFiles, untrackedFiles] = await Promise.all([commitFiles(cwd, oid), untracked ? commitFiles(cwd, untracked) : []])
+  const [trackedFiles, untrackedFiles] = await Promise.all([
+    commitFiles(cwd, oid),
+    untracked ? commitFiles(cwd, untracked) : [],
+  ])
   return [...trackedFiles, ...untrackedFiles]
 }
 export async function stashFileDiff(cwd: string, oid: string, path: string): Promise<DiffContents> {
@@ -361,10 +467,18 @@ export async function stashFileDiff(cwd: string, oid: string, path: string): Pro
 }
 export async function stash(cwd: string, name: string, stagedOnly = false): Promise<void> {
   const current = await status(cwd)
-  if (!current.oid || !current.entries.length || current.entries.some((entry) => entry.staged === 'unmerged')) throw new Error('Stash requires an existing commit and changes without merge conflicts.')
-  if (stagedOnly && !current.entries.some((entry) => entry.staged)) throw new Error('There are no staged changes to stash.')
+  if (!current.oid || !current.entries.length || current.entries.some((entry) => entry.staged === 'unmerged'))
+    throw new Error('Stash requires an existing commit and changes without merge conflicts.')
+  if (stagedOnly && !current.entries.some((entry) => entry.staged))
+    throw new Error('There are no staged changes to stash.')
   // --staged needs Git 2.35+; older versions report their own error.
-  await git(cwd, ['stash', 'push', ...(stagedOnly ? ['--staged'] : ['--include-untracked']), '--message', name || 'Ramu workspace changes'])
+  await git(cwd, [
+    'stash',
+    'push',
+    ...(stagedOnly ? ['--staged'] : ['--include-untracked']),
+    '--message',
+    name || 'Ramu workspace changes',
+  ])
 }
 /** Applies a stash and removes it. pop and drop take a stash@{n} reference, not an oid. */
 export async function popStash(cwd: string, oid: string): Promise<void> {
@@ -375,7 +489,8 @@ export async function popStash(cwd: string, oid: string): Promise<void> {
 }
 export async function applyStash(cwd: string, oid: string): Promise<void> {
   await requireClean(cwd)
-  if (!(await stashes(cwd)).some((entry) => entry.oid === oid)) throw new Error('This stash is no longer available. Refresh first.')
+  if (!(await stashes(cwd)).some((entry) => entry.oid === oid))
+    throw new Error('This stash is no longer available. Refresh first.')
   await git(cwd, ['stash', 'apply', '--index', oid])
 }
 export async function dropStash(cwd: string, oid: string): Promise<void> {
@@ -385,14 +500,24 @@ export async function dropStash(cwd: string, oid: string): Promise<void> {
 }
 export async function checkout(cwd: string, branch: string): Promise<void> {
   await requireClean(cwd)
-  if (!await branchExists(cwd, branch)) throw new Error('Select an existing local branch')
+  if (!(await branchExists(cwd, branch))) throw new Error('Select an existing local branch')
   await git(cwd, ['switch', '--', branch])
 }
-export async function fetch(cwd: string): Promise<void> { await git(cwd, ['fetch', '--all']) }
+export async function fetch(cwd: string): Promise<void> {
+  await git(cwd, ['fetch', '--all'])
+}
 /** Integrate fetched commits only when no local work needs to be reconciled. */
 export async function autoPull(cwd: string): Promise<boolean> {
   const current = await status(cwd)
-  if (!current.branch || !current.upstream || !current.behind || current.ahead || current.entries.length || current.operation) return false
+  if (
+    !current.branch ||
+    !current.upstream ||
+    !current.behind ||
+    current.ahead ||
+    current.entries.length ||
+    current.operation
+  )
+    return false
   const target = (await git(cwd, ['rev-parse', '--verify', '@{upstream}'])).trim()
   // Do not inherit merge.autoStash, pull.rebase, or pull.ff from user configuration.
   await git(cwd, ['merge', '--ff-only', '--no-autostash', '--no-overwrite-ignore', '--no-edit', target])
@@ -407,22 +532,29 @@ const PULL_FLAGS: Record<PullMode, string[]> = {
 /** Explicit flags: recent Git refuses divergent pulls when no mode is configured. */
 export async function pull(cwd: string, mode: PullMode = 'rebase'): Promise<void> {
   await requireClean(cwd, true)
-  try { await git(cwd, ['pull', ...PULL_FLAGS[mode]]) } catch (error) {
+  try {
+    await git(cwd, ['pull', ...PULL_FLAGS[mode]])
+  } catch (error) {
     // A conflict leaves the checkout mid-rebase or mid-merge; say what to do instead of echoing Git's hints.
     const op = await operation(cwd)
     if (!op) throw error
     const conflicted = (await status(cwd)).entries.filter((entry) => entry.staged === 'unmerged').length
-    throw new Error(`Pull stopped on ${conflicted === 1 ? 'a conflict in 1 file' : `conflicts in ${conflicted} files`}. Resolve and stage ${conflicted === 1 ? 'it' : 'them'} in Source Control, then Continue, or Abort the ${op}. Nothing was pushed.`)
+    throw new Error(
+      `Pull stopped on ${conflicted === 1 ? 'a conflict in 1 file' : `conflicts in ${conflicted} files`}. Resolve and stage ${conflicted === 1 ? 'it' : 'them'} in Source Control, then Continue, or Abort the ${op}. Nothing was pushed.`,
+    )
   }
   // Git can exit successfully when restoring the autostash leaves conflicts.
   if ((await status(cwd)).entries.some((entry) => entry.staged === 'unmerged')) {
-    throw new Error('Remote commits were pulled, but restoring your autostashed changes caused conflicts. Resolve them in Source Control. Git kept the autostash in Stashes. Nothing was pushed.')
+    throw new Error(
+      'Remote commits were pulled, but restoring your autostashed changes caused conflicts. Resolve them in Source Control. Git kept the autostash in Stashes. Nothing was pushed.',
+    )
   }
 }
 /** VS Code's Sync: publish a branch without an upstream; otherwise pull, then push only if still ahead. A failed pull never pushes. */
 export async function sync(cwd: string, mode: PullMode = 'rebase'): Promise<void> {
   const before = await status(cwd)
-  if (before.operation) throw new Error(`A ${before.operation} is in progress. Continue or abort it in Source Control first.`)
+  if (before.operation)
+    throw new Error(`A ${before.operation} is in progress. Continue or abort it in Source Control first.`)
   if (!before.branch) throw new Error('Switch to a branch before syncing')
   if (!before.upstream) return push(cwd)
   await git(cwd, ['fetch'])
@@ -432,7 +564,8 @@ export async function sync(cwd: string, mode: PullMode = 'rebase'): Promise<void
 export async function continueOperation(cwd: string): Promise<void> {
   const op = await operation(cwd)
   if (!op) throw new Error('No rebase or merge is in progress.')
-  if ((await status(cwd)).entries.some((entry) => entry.staged === 'unmerged')) throw new Error('Resolve and stage every conflicted file before continuing.')
+  if ((await status(cwd)).entries.some((entry) => entry.staged === 'unmerged'))
+    throw new Error('Resolve and stage every conflicted file before continuing.')
   await git(cwd, [op, '--continue'])
 }
 export async function abortOperation(cwd: string): Promise<void> {
@@ -442,9 +575,15 @@ export async function abortOperation(cwd: string): Promise<void> {
 }
 export async function push(cwd: string, expectedBranch?: string): Promise<void> {
   const s = await status(cwd)
-  if (expectedBranch !== undefined && s.branch !== expectedBranch) throw new Error('The current branch changed after committing. Nothing was pushed. Review the branch before pushing.')
+  if (expectedBranch !== undefined && s.branch !== expectedBranch)
+    throw new Error(
+      'The current branch changed after committing. Nothing was pushed. Review the branch before pushing.',
+    )
   if (!s.branch) throw new Error('Switch to a branch before pushing')
-  if (s.upstream) { await git(cwd, ['push']); return }
+  if (s.upstream) {
+    await git(cwd, ['push'])
+    return
+  }
   const remotes = (await git(cwd, ['remote'])).trim().split('\n').filter(Boolean)
   const remote = remotes.includes('origin') ? 'origin' : remotes.length === 1 ? remotes[0] : null
   if (!remote) throw new Error('Configure a Git remote or upstream before publishing this branch')
@@ -476,15 +615,19 @@ async function commitParent(cwd: string, oid: string): Promise<string | null> {
 /** Merge commits compare with their first parent, matching the history file tree. */
 export async function commitFiles(cwd: string, oid: string): Promise<GitCommitFile[]> {
   const parent = await commitParent(cwd, oid)
-  const raw = await git(cwd, parent
-    ? ['diff', '--no-ext-diff', '--name-status', '-z', '-M', parent, oid, '--']
-    : ['diff-tree', '--root', '--no-commit-id', '-r', '--name-status', '-z', '-M', oid, '--'])
+  const raw = await git(
+    cwd,
+    parent
+      ? ['diff', '--no-ext-diff', '--name-status', '-z', '-M', parent, oid, '--']
+      : ['diff-tree', '--root', '--no-commit-id', '-r', '--name-status', '-z', '-M', oid, '--'],
+  )
   const fields = raw.split('\0').filter(Boolean)
   const result: GitCommitFile[] = []
   for (let index = 0; index < fields.length;) {
     const status = fields[index++]!
     const first = fields[index++]!
-    if (status.startsWith('R') || status.startsWith('C')) result.push({ status: status[0]!, origPath: first, path: fields[index++]! })
+    if (status.startsWith('R') || status.startsWith('C'))
+      result.push({ status: status[0]!, origPath: first, path: fields[index++]! })
     else result.push({ status: status[0]!, path: first })
   }
   return result
@@ -494,7 +637,8 @@ export async function commitFileDiff(cwd: string, oid: string, path: string): Pr
   const entry = (await commitFiles(cwd, oid)).find((file) => file.path === path)
   if (!entry) throw new Error('This file is not part of the selected commit')
   const parent = await commitParent(cwd, oid)
-  const original = !parent || entry.status === 'A' ? '' : await git(cwd, ['show', `${parent}:${entry.origPath ?? path}`])
+  const original =
+    !parent || entry.status === 'A' ? '' : await git(cwd, ['show', `${parent}:${entry.origPath ?? path}`])
   const modified = entry.status === 'D' ? '' : await git(cwd, ['show', `${oid}:${path}`])
   return { original, modified }
 }

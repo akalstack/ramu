@@ -2,7 +2,13 @@ import { t } from './localization'
 import { Notification, type BrowserWindow } from 'electron'
 import type { AgentSessionInfo, AgentSessionState, AppPreferences, ChatGoal, Task } from '@ramu/shared/types'
 
-export type AgentNotice = { sessionId: string; taskId: string; kind: 'done' | 'input' | 'failed'; title: string; body: string }
+export type AgentNotice = {
+  sessionId: string
+  taskId: string
+  kind: 'done' | 'input' | 'failed'
+  title: string
+  body: string
+}
 
 const COPY = { done: 'Finished', input: 'Needs your input', failed: 'Stopped with an error' } as const
 const ACTIVE: AgentSessionState[] = ['starting', 'running', 'needs-input']
@@ -32,41 +38,77 @@ export function createAgentNotifier(options: {
     const win = options.window
     if (win.isDestroyed()) return
     if (win.isMinimized()) win.restore()
-    win.show(); win.focus()
+    win.show()
+    win.focus()
     const target = { taskId: notice.taskId, sessionId: notice.sessionId }
     if (options.reveal) options.reveal(target)
     else options.send('notify:open', target)
   }
   const deliver = async (sessionId: string, kind: AgentNotice['kind'], body?: string) => {
     try {
-      const prefs = options.preferences ? await options.preferences() : await options.invoke('settings.app.get') as AppPreferences
+      const prefs = options.preferences
+        ? await options.preferences()
+        : ((await options.invoke('settings.app.get')) as AppPreferences)
       if (!prefs.notifyAgentDone) return
-      const session = await options.invoke('agent.get', [sessionId]) as AgentSessionInfo
+      const session = (await options.invoke('agent.get', [sessionId])) as AgentSessionInfo
       if (kind === 'done') {
-        const goal = await options.invoke('agent.goal', [sessionId]) as ChatGoal | null
+        const goal = (await options.invoke('agent.goal', [sessionId])) as ChatGoal | null
         if (goal && ['active', 'waiting-provider', 'blocked'].includes(goal.status)) return
       }
       const task = ((await options.invoke('tasks.list')) as Task[]).find((entry) => entry.id === session.taskId)
       // A sub-agent only ever needs you when it asks for approval; finishing or failing is reported in its chat.
       if (session.parentId && kind !== 'input') return
-      const notice: AgentNotice = { sessionId: session.parentId ?? sessionId, taskId: session.taskId, kind, title: [options.label?.(), task?.title || session.title || t('Chat')].filter(Boolean).join(' · '), body: t(body ?? COPY[kind]) }
+      const notice: AgentNotice = {
+        sessionId: session.parentId ?? sessionId,
+        taskId: session.taskId,
+        kind,
+        title: [options.label?.(), task?.title || session.title || t('Chat')].filter(Boolean).join(' · '),
+        body: t(body ?? COPY[kind]),
+      }
       const win = options.window
       if (win.isDestroyed()) return
-      if (win.isFocused() && win.isVisible() && !win.isMinimized() && (options.visible?.() ?? true)) { options.send('notify:inapp', notice); return }
+      if (win.isFocused() && win.isVisible() && !win.isMinimized() && (options.visible?.() ?? true)) {
+        options.send('notify:inapp', notice)
+        return
+      }
       if (!Notification.isSupported()) return
       const system = new Notification({ title: notice.title, body: notice.body, silent: false })
       live.add(system)
-      system.on('click', () => { live.delete(system); open(notice) })
+      system.on('click', () => {
+        live.delete(system)
+        open(notice)
+      })
       system.on('close', () => live.delete(system))
       system.show()
-    } catch { /* A notification is never worth interrupting the app for. */ }
+    } catch {
+      /* A notification is never worth interrupting the app for. */
+    }
   }
   return {
     observe(channel: string, payload: unknown) {
       if (channel !== 'agent:event') return
-      const { sessionId, event } = payload as { sessionId: string; event: { kind: string; state?: AgentSessionState; responseMode?: string; requestId?: string; goal?: ChatGoal | null } }
-      if (event.kind === 'goal' && event.goal && ['blocked', 'turn-limit'].includes(event.goal.status)) void deliver(sessionId, 'input', event.goal.status === 'blocked' ? 'Goal needs input' : 'Goal turn limit reached')
-      if (event.kind === 'question' && event.responseMode === 'message' && event.requestId && !questionsSeen.has(event.requestId)) {
+      const { sessionId, event } = payload as {
+        sessionId: string
+        event: {
+          kind: string
+          state?: AgentSessionState
+          responseMode?: string
+          requestId?: string
+          goal?: ChatGoal | null
+        }
+      }
+      if (event.kind === 'goal' && event.goal && ['blocked', 'turn-limit'].includes(event.goal.status))
+        void deliver(
+          sessionId,
+          'input',
+          event.goal.status === 'blocked' ? 'Goal needs input' : 'Goal turn limit reached',
+        )
+      if (
+        event.kind === 'question' &&
+        event.responseMode === 'message' &&
+        event.requestId &&
+        !questionsSeen.has(event.requestId)
+      ) {
         questionsSeen.add(event.requestId)
         if (questionsSeen.size > 500) questionsSeen.delete(questionsSeen.values().next().value!)
         void deliver(sessionId, 'input', 'Has a question. Independent work can continue.')

@@ -16,10 +16,12 @@ export function useTabScroll(selection: string | undefined | null, horizontal = 
       const rect = item.getBoundingClientRect()
       if (horizontal) {
         if (rect.left < bounds.left) strip.scrollLeft += rect.left - bounds.left
-        else if (rect.right > bounds.right) strip.scrollLeft += Math.min(rect.right - bounds.right, rect.left - bounds.left)
+        else if (rect.right > bounds.right)
+          strip.scrollLeft += Math.min(rect.right - bounds.right, rect.left - bounds.left)
       } else {
         if (rect.top < bounds.top) strip.scrollTop += rect.top - bounds.top
-        else if (rect.bottom > bounds.bottom) strip.scrollTop += Math.min(rect.bottom - bounds.bottom, rect.top - bounds.top)
+        else if (rect.bottom > bounds.bottom)
+          strip.scrollTop += Math.min(rect.bottom - bounds.bottom, rect.top - bounds.top)
       }
     }
     reveal()
@@ -33,9 +35,12 @@ export function useTabScroll(selection: string | undefined | null, horizontal = 
         event.preventDefault()
         if (Math.abs(delta) < 1.5 || event.timeStamp - lastSwitch.current < 150) return
         const tabs = Array.from(strip.querySelectorAll<HTMLElement>('[role="tab"]'))
-        const index = tabs.findIndex(tab => tab.getAttribute('aria-selected') === 'true')
+        const index = tabs.findIndex((tab) => tab.getAttribute('aria-selected') === 'true')
         const next = tabs[index + (delta > 0 ? 1 : -1)]
-        if (index >= 0 && next) { lastSwitch.current = event.timeStamp; next.click() }
+        if (index >= 0 && next) {
+          lastSwitch.current = event.timeStamp
+          next.click()
+        }
         return
       }
       if (strip.scrollWidth <= strip.clientWidth) return
@@ -44,9 +49,17 @@ export function useTabScroll(selection: string | undefined | null, horizontal = 
       strip.scrollLeft += pixels
     }
     const release = new MutationObserver(reveal)
-    release.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['data-separator', 'data-dragging'] })
+    release.observe(document.documentElement, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-separator', 'data-dragging'],
+    })
     strip.addEventListener('wheel', wheel, { passive: false })
-    return () => { observer.disconnect(); release.disconnect(); strip.removeEventListener('wheel', wheel) }
+    return () => {
+      observer.disconnect()
+      release.disconnect()
+      strip.removeEventListener('wheel', wheel)
+    }
   }, [selection, horizontal, visible])
   return ref
 }

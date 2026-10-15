@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Animated, Dimensions, Easing, Keyboard, LayoutAnimation, Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
+import {
+  Animated,
+  Dimensions,
+  Easing,
+  Keyboard,
+  LayoutAnimation,
+  Platform,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { space } from '../theme'
 
@@ -11,23 +21,37 @@ import { space } from '../theme'
 export function useKeyboardHeight(onWillMove?: (to: number) => void) {
   const value = useRef(new Animated.Value(0)).current
   const [height, setHeight] = useState(0)
-  const notify = useRef(onWillMove); notify.current = onWillMove
+  const notify = useRef(onWillMove)
+  notify.current = onWillMove
   useEffect(() => {
     const move = (to: number, duration: number) => {
       // Before the state change renders, so a screen can note whether the reader was at the bottom.
       notify.current?.(to)
       setHeight(to)
-      Animated.timing(value, { toValue: to, duration: duration || 220, easing: Platform.OS === 'ios' ? Easing.bezier(0.17, 0.59, 0.4, 0.77) : Easing.out(Easing.cubic), useNativeDriver: true }).start()
+      Animated.timing(value, {
+        toValue: to,
+        duration: duration || 220,
+        easing: Platform.OS === 'ios' ? Easing.bezier(0.17, 0.59, 0.4, 0.77) : Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start()
     }
     if (Platform.OS === 'android') {
       const show = Keyboard.addListener('keyboardDidShow', (e) => move(e.endCoordinates.height, 0))
       const hide = Keyboard.addListener('keyboardDidHide', () => move(0, 0))
-      return () => { show.remove(); hide.remove() }
+      return () => {
+        show.remove()
+        hide.remove()
+      }
     }
     if (Platform.OS !== 'ios') return
-    const frame = Keyboard.addListener('keyboardWillChangeFrame', (e) => move(Math.max(0, Dimensions.get('window').height - e.endCoordinates.screenY), e.duration))
+    const frame = Keyboard.addListener('keyboardWillChangeFrame', (e) =>
+      move(Math.max(0, Dimensions.get('window').height - e.endCoordinates.screenY), e.duration),
+    )
     const hide = Keyboard.addListener('keyboardWillHide', (e) => move(0, e.duration))
-    return () => { frame.remove(); hide.remove() }
+    return () => {
+      frame.remove()
+      hide.remove()
+    }
   }, [value])
   return { value, height }
 }
@@ -42,18 +66,27 @@ export function useKeyboardInset() {
   const [height, setHeight] = useState(0)
   useEffect(() => {
     const move = (to: number, duration: number) => {
-      if (duration) LayoutAnimation.configureNext({ duration, update: { duration, type: LayoutAnimation.Types.keyboard } })
+      if (duration)
+        LayoutAnimation.configureNext({ duration, update: { duration, type: LayoutAnimation.Types.keyboard } })
       setHeight(to)
     }
     if (Platform.OS === 'android') {
       const show = Keyboard.addListener('keyboardDidShow', (e) => move(e.endCoordinates.height, 220))
       const hide = Keyboard.addListener('keyboardDidHide', () => move(0, 220))
-      return () => { show.remove(); hide.remove() }
+      return () => {
+        show.remove()
+        hide.remove()
+      }
     }
     if (Platform.OS !== 'ios') return
-    const frame = Keyboard.addListener('keyboardWillChangeFrame', (e) => move(Math.max(0, Dimensions.get('screen').height - e.endCoordinates.screenY), e.duration))
+    const frame = Keyboard.addListener('keyboardWillChangeFrame', (e) =>
+      move(Math.max(0, Dimensions.get('screen').height - e.endCoordinates.screenY), e.duration),
+    )
     const hide = Keyboard.addListener('keyboardWillHide', (e) => move(0, e.duration))
-    return () => { frame.remove(); hide.remove() }
+    return () => {
+      frame.remove()
+      hide.remove()
+    }
   }, [])
   return height ? Math.max(0, height - Math.max(0, insets.bottom - space.s)) : 0
 }
@@ -62,9 +95,24 @@ export function useKeyboardInset() {
  * Pins its children to the bottom edge and lifts them above the keyboard. The home-indicator padding
  * the children carry is hidden behind the keys, so it is taken back out to keep them snug.
  */
-export function KeyboardLift({ keyboard, children, style }: { keyboard: ReturnType<typeof useKeyboardHeight>; children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function KeyboardLift({
+  keyboard,
+  children,
+  style,
+}: {
+  keyboard: ReturnType<typeof useKeyboardHeight>
+  children: ReactNode
+  style?: StyleProp<ViewStyle>
+}) {
   const insets = useSafeAreaInsets()
   const slack = Math.max(0, insets.bottom - space.s)
-  const translateY = useMemo(() => keyboard.value.interpolate({ inputRange: [0, 1, 2000], outputRange: [0, slack - 1, slack - 2000] }), [keyboard.value, slack])
-  return <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style, { transform: [{ translateY }] }]}>{children}</Animated.View>
+  const translateY = useMemo(
+    () => keyboard.value.interpolate({ inputRange: [0, 1, 2000], outputRange: [0, slack - 1, slack - 2000] }),
+    [keyboard.value, slack],
+  )
+  return (
+    <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style, { transform: [{ translateY }] }]}>
+      {children}
+    </Animated.View>
+  )
 }

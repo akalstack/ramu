@@ -140,7 +140,8 @@ export interface EditorConfigProps {
 
 export type SaveResult = { ok: true; hash: string } | { ok: false; reason: 'changed-on-disk'; diskHash: string }
 
-export type GitFileState = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'type-changed' | 'untracked' | 'unmerged'
+export type GitFileState =
+  'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'type-changed' | 'untracked' | 'unmerged'
 
 export interface GitStatusEntry {
   path: string
@@ -184,7 +185,14 @@ export type AgentProvider = 'claude-code' | 'codex' | 'opencode' | 'cursor' | 'a
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
 export const RESPONSE_STYLES = ['default', 'concise', 'detailed', 'adhd', 'caveman', 'custom'] as const
 export type ResponseStyle = (typeof RESPONSE_STYLES)[number]
-export const RESPONSE_STYLE_LABELS: Record<ResponseStyle, string> = { default: 'Default', concise: 'Concise', detailed: 'Detailed', adhd: 'ADHD-friendly', caveman: 'Caveman', custom: 'Custom' }
+export const RESPONSE_STYLE_LABELS: Record<ResponseStyle, string> = {
+  default: 'Default',
+  concise: 'Concise',
+  detailed: 'Detailed',
+  adhd: 'ADHD-friendly',
+  caveman: 'Caveman',
+  custom: 'Custom',
+}
 export interface IntelligencePreferences {
   responseStyle: ResponseStyle
   responseInstructions: string
@@ -197,11 +205,58 @@ export interface IntelligencePreferences {
   dailyReviews: number
   archiveSkillDays: number
 }
-export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = { responseStyle: 'default', responseInstructions: '', responseSkill: '', toolSearch: true, rtk: false, compression: 'balanced', learning: 'auto', maintenanceModel: null, dailyReviews: 5, archiveSkillDays: 90 }
-export interface ManagedSkill { id: string; projectId: string | null; name: string; description: string; content: string; status: 'active' | 'disabled' | 'archived'; pinned: boolean; revision: number; createdAt: number; updatedAt: number; lastUsedAt: number | null; useCount: number; sourceSessionId: string; sourceSeq: number }
-export interface LearningJob { sessionTitle?: string; memoryVersions?: Record<string, number>; skillVersions?: Record<string, number>; id: string; sessionId: string; projectId: string | null; seq: number; status: 'queued' | 'running' | 'pending' | 'applied' | 'dismissed' | 'failed'; createdAt: number; error: string | null; proposal: string | null }
-export interface LearningSnapshot { skills: ManagedSkill[]; jobs: LearningJob[]; running: boolean }
-export interface SessionCheckpoint { sessionId: string; seq: number; summary: string; updatedAt: number }
+export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
+  responseStyle: 'default',
+  responseInstructions: '',
+  responseSkill: '',
+  toolSearch: true,
+  rtk: false,
+  compression: 'balanced',
+  learning: 'auto',
+  maintenanceModel: null,
+  dailyReviews: 5,
+  archiveSkillDays: 90,
+}
+export interface ManagedSkill {
+  id: string
+  projectId: string | null
+  name: string
+  description: string
+  content: string
+  status: 'active' | 'disabled' | 'archived'
+  pinned: boolean
+  revision: number
+  createdAt: number
+  updatedAt: number
+  lastUsedAt: number | null
+  useCount: number
+  sourceSessionId: string
+  sourceSeq: number
+}
+export interface LearningJob {
+  sessionTitle?: string
+  memoryVersions?: Record<string, number>
+  skillVersions?: Record<string, number>
+  id: string
+  sessionId: string
+  projectId: string | null
+  seq: number
+  status: 'queued' | 'running' | 'pending' | 'applied' | 'dismissed' | 'failed'
+  createdAt: number
+  error: string | null
+  proposal: string | null
+}
+export interface LearningSnapshot {
+  skills: ManagedSkill[]
+  jobs: LearningJob[]
+  running: boolean
+}
+export interface SessionCheckpoint {
+  sessionId: string
+  seq: number
+  summary: string
+  updatedAt: number
+}
 
 export interface AgentSettings {
   provider: AgentProvider
@@ -229,7 +284,14 @@ export interface ProviderCatalog {
   models: AgentModel[]
   error?: string
 }
-export const DEFAULT_AGENT_SETTINGS: AgentSettings = { provider: 'claude-code', model: '', effort: null, access: 'auto', autoFallback: true, serviceTier: 'standard' }
+export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
+  provider: 'claude-code',
+  model: '',
+  effort: null,
+  access: 'auto',
+  autoFallback: true,
+  serviceTier: 'standard',
+}
 
 export type AgentSessionState =
   | 'starting'
@@ -261,10 +323,23 @@ export interface AgentSessionInfo {
 }
 
 export interface ElicitationField {
-  id: string; label: string; description?: string; type: 'string' | 'number' | 'integer' | 'boolean' | 'array'; required: boolean
-  options: { value: string; label: string }[]; defaultValue?: string
+  id: string
+  label: string
+  description?: string
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'array'
+  required: boolean
+  options: { value: string; label: string }[]
+  defaultValue?: string
 }
-export interface AgentElicitation { requestId: string; serverName: string; message: string; mode: 'form' | 'url'; fields: ElicitationField[]; url?: string; schema?: Record<string, unknown> }
+export interface AgentElicitation {
+  requestId: string
+  serverName: string
+  message: string
+  mode: 'form' | 'url'
+  fields: ElicitationField[]
+  url?: string
+  schema?: Record<string, unknown>
+}
 export type ElicitationAction = 'accept' | 'decline' | 'cancel'
 
 export interface AgentQuestion {
@@ -275,8 +350,20 @@ export interface AgentQuestion {
   options: { label: string; description: string }[]
 }
 
-export interface Attachment { id: string; name: string; size: number; mimeType: string; path: string }
-export interface QueuedMessage { id: string; text: string; mode?: 'queue' | 'steer'; attachments?: Attachment[]; reviewId?: string }
+export interface Attachment {
+  id: string
+  name: string
+  size: number
+  mimeType: string
+  path: string
+}
+export interface QueuedMessage {
+  id: string
+  text: string
+  mode?: 'queue' | 'steer'
+  attachments?: Attachment[]
+  reviewId?: string
+}
 
 /** When the event was recorded (ms). Absent on events stored before timestamps existed.
  *  `agentId` marks text and tool events that a sub-agent produced; they belong to that agent's own transcript, not the main one. */
@@ -325,13 +412,22 @@ export interface AgentTask {
   steps?: { provider: AgentProvider; model?: string; reason: string; at: number }[]
 }
 /** The shared ACP tool taxonomy; native adapters can supply the same metadata. */
-export type AgentToolKind = 'read' | 'edit' | 'delete' | 'move' | 'search' | 'execute' | 'think' | 'fetch' | 'switch_mode' | 'other'
+export type AgentToolKind =
+  'read' | 'edit' | 'delete' | 'move' | 'search' | 'execute' | 'think' | 'fetch' | 'switch_mode' | 'other'
 export type AgentToolStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
 export type AgentContent =
   | { type: 'text'; text: string }
   | { type: 'image'; mimeType: string; data?: string; uri?: string; alt?: string }
   | { type: 'audio'; mimeType: string; data: string }
-  | { type: 'resource'; uri: string; name: string; mimeType?: string; text?: string; blob?: string; description?: string }
+  | {
+      type: 'resource'
+      uri: string
+      name: string
+      mimeType?: string
+      text?: string
+      blob?: string
+      description?: string
+    }
   | { type: 'diff'; path: string; oldText: string | null; newText: string }
   | { type: 'terminal'; terminalId: string; output?: string }
   | { type: 'unsupported'; label: string; detail?: string }
@@ -353,11 +449,25 @@ type AgentEventBody =
   | { kind: 'init'; model: string; cwd: string; providerSessionId: string; provider?: AgentProvider }
   | { kind: 'text'; text: string; messageId?: string; nativeMessageId?: string }
   | { kind: 'content'; content: AgentContent[]; messageId?: string }
-  | { kind: 'plan'; messageId: string; entries: { content: string; status: 'pending' | 'in_progress' | 'completed'; priority: 'low' | 'medium' | 'high' }[] }
+  | {
+      kind: 'plan'
+      messageId: string
+      entries: {
+        content: string
+        status: 'pending' | 'in_progress' | 'completed'
+        priority: 'low' | 'medium' | 'high'
+      }[]
+    }
   | ({ kind: 'tool-use'; toolUseId: string; name: string; summary: string } & AgentToolDetails)
-  | ({ kind: 'tool-result'; toolUseId: string; isError: boolean; summary: string; running?: boolean } & AgentToolDetails)
+  | ({
+      kind: 'tool-result'
+      toolUseId: string
+      isError: boolean
+      summary: string
+      running?: boolean
+    } & AgentToolDetails)
   | { kind: 'turn-diff'; turnId: string; diff: string }
-  | { kind: 'permission-request'; requestId: string; toolName: string; title: string; detail: string; }
+  | { kind: 'permission-request'; requestId: string; toolName: string; title: string; detail: string }
   /** Plan usage a provider reported. Handed to the usage store and never recorded in the chat. */
   | { kind: 'usage'; readings: UsageReading[] }
   /** How full the model's context window is. Pushed to the chat's view and never recorded. */
@@ -365,8 +475,22 @@ type AgentEventBody =
   /** Reasoning the provider chose to show: Claude thinking blocks, Codex reasoning summaries. */
   | { kind: 'thinking'; text: string; messageId?: string }
   | ({ kind: 'elicitation' } & AgentElicitation)
-  | { kind: 'question'; requestId: string; questions: AgentQuestion[]; responseMode?: 'message' | 'ramu'; grouping?: 'together' | 'independent'; dependsOn?: string }
-  | { kind: 'question-state'; requestId: string; answers?: Record<string, string>; drafts?: Record<string, string>; waiting?: boolean; reason?: string }
+  | {
+      kind: 'question'
+      requestId: string
+      questions: AgentQuestion[]
+      responseMode?: 'message' | 'ramu'
+      grouping?: 'together' | 'independent'
+      dependsOn?: string
+    }
+  | {
+      kind: 'question-state'
+      requestId: string
+      answers?: Record<string, string>
+      drafts?: Record<string, string>
+      waiting?: boolean
+      reason?: string
+    }
   | { kind: 'recovery'; state: 'resumed' }
   | { kind: 'request-resolved'; requestId: string; outcome: string }
   | { kind: 'result'; isError: boolean; text: string; costUsd: number | null }
@@ -383,10 +507,35 @@ export type QuestionReply = { requestId: string; answers: Record<string, string>
 
 export type ViewDescriptor =
   | { kind: 'agent'; id: string; sessionId: string; repoId?: string; sourceSeq?: number; sourceRequestId?: string }
-  | { kind: 'file'; id: string; repoId: string; path: string; preview?: boolean; selection?: { line: number; column: number; endColumn: number; requestId: string } }
-  | { kind: 'diff'; id: string; repoId: string; path: string; staged: boolean; stash?: boolean; oid?: string; preview?: boolean }
+  | {
+      kind: 'file'
+      id: string
+      repoId: string
+      path: string
+      preview?: boolean
+      selection?: { line: number; column: number; endColumn: number; requestId: string }
+    }
+  | {
+      kind: 'diff'
+      id: string
+      repoId: string
+      path: string
+      staged: boolean
+      stash?: boolean
+      oid?: string
+      preview?: boolean
+    }
   | { kind: 'git'; id: string; repoId: string; title: string; oid?: string; preview?: boolean }
-  | { kind: 'review'; id: string; repoId?: string; reviewId: string; taskId: string; fileId?: string; threadId?: string; requestId?: string }
+  | {
+      kind: 'review'
+      id: string
+      repoId?: string
+      reviewId: string
+      taskId: string
+      fileId?: string
+      threadId?: string
+      requestId?: string
+    }
   /** Without a repoId the terminal starts where the task's agent runs (the workspace). */
   /** A project action's terminal carries its name and command; the command runs once, right after `runAt`, and not again when the view is restored. */
   | { kind: 'terminal'; id: string; repoId?: string; title?: string; command?: string; runAt?: number }
@@ -441,21 +590,82 @@ export interface GitCommit {
   /** Not yet on the branch's upstream. */
   outgoing?: boolean
 }
-export interface GitBranchInfo { name: string; current: boolean; upstream: string; worktree: string }
+export interface GitBranchInfo {
+  name: string
+  current: boolean
+  upstream: string
+  worktree: string
+}
 /** `branch` is a suggested feature branch name, present when one was asked for. */
-export interface CommitDraft { message: string; fingerprint: string; provider: AgentProvider; model: string; branch?: string }
+export interface CommitDraft {
+  message: string
+  fingerprint: string
+  provider: AgentProvider
+  model: string
+  branch?: string
+}
 
-export interface GitCommitFile { path: string; origPath?: string; status: string }
-export interface GitStash { oid: string; ref: string; subject: string }
+export interface GitCommitFile {
+  path: string
+  origPath?: string
+  status: string
+}
+export interface GitStash {
+  oid: string
+  ref: string
+  subject: string
+}
 
-export interface ModelStep { id: string; name: string; provider: AgentProvider; model: string; effort: ReasoningEffort | null }
-export interface ModelSet { id: string; name: string; steps: ModelStep[] }
-export interface ModelPreferences { defaultBarMode?: 'effort' | 'model'; sets: ModelSet[]; defaultSetId: string; defaultStepId: string }
+export interface ModelStep {
+  id: string
+  name: string
+  provider: AgentProvider
+  model: string
+  effort: ReasoningEffort | null
+}
+export interface ModelSet {
+  id: string
+  name: string
+  steps: ModelStep[]
+}
+export interface ModelPreferences {
+  defaultBarMode?: 'effort' | 'model'
+  sets: ModelSet[]
+  defaultSetId: string
+  defaultStepId: string
+}
 
-export interface SearchOptions { query: string; caseSensitive: boolean; wholeWord: boolean; regex: boolean; include: string; exclude: string; repoId?: string }
-export interface SearchMatch { repoId: string; path: string; line: number; column: number; endColumn: number; text: string; start: number; end: number }
-export interface SearchResults { matches: SearchMatch[]; limited: boolean }
-export interface ReplaceFilePreview { repoId: string; path: string; hash: string; count: number; before: string; after: string }
+export interface SearchOptions {
+  query: string
+  caseSensitive: boolean
+  wholeWord: boolean
+  regex: boolean
+  include: string
+  exclude: string
+  repoId?: string
+}
+export interface SearchMatch {
+  repoId: string
+  path: string
+  line: number
+  column: number
+  endColumn: number
+  text: string
+  start: number
+  end: number
+}
+export interface SearchResults {
+  matches: SearchMatch[]
+  limited: boolean
+}
+export interface ReplaceFilePreview {
+  repoId: string
+  path: string
+  hash: string
+  count: number
+  before: string
+  after: string
+}
 
 export interface AppPreferences {
   language: 'system' | 'en' | 'id'
@@ -552,15 +762,36 @@ export interface Memory {
   /** Why it was archived: stale, merged, contradicted, forgotten by an agent or by the user. */
   archivedReason: string | null
   /** Who created it. confirmed: the user wrote the current text, so it is never forgotten automatically and is quoted in agent instructions. */
-  source: { actor: 'user' | 'agent' | 'dream'; provider?: AgentProvider; sessionId?: string; taskId?: string; confirmed?: boolean; eventSeq?: number }
+  source: {
+    actor: 'user' | 'agent' | 'dream'
+    provider?: AgentProvider
+    sessionId?: string
+    taskId?: string
+    confirmed?: boolean
+    eventSeq?: number
+  }
   createdAt: number
   updatedAt: number
   lastUsedAt: number | null
   useCount: number
   expiresAt: number | null
 }
-export interface MemoryInput { projectId: string | null; kind: MemoryKind; title: string; content: string; tags?: string[]; importance?: number; expiresAt?: number | null }
-export interface MemorySnapshot { memories: Memory[]; dreamedAt: number | null; dreaming: boolean; error: string | null; /** Folder holding the markdown files. */ dir?: string | null }
+export interface MemoryInput {
+  projectId: string | null
+  kind: MemoryKind
+  title: string
+  content: string
+  tags?: string[]
+  importance?: number
+  expiresAt?: number | null
+}
+export interface MemorySnapshot {
+  memories: Memory[]
+  dreamedAt: number | null
+  dreaming: boolean
+  error: string | null
+  /** Folder holding the markdown files. */ dir?: string | null
+}
 
 export interface GoalPreferences {
   mode: 'auto' | 'manual'
@@ -597,7 +828,13 @@ export interface UsageReading {
 }
 
 /** A provider, model, effort and service tier to continue with. */
-export interface FallbackStep { id: string; provider: AgentProvider; model: string; effort: ReasoningEffort | null; serviceTier?: 'standard' | 'fast' }
+export interface FallbackStep {
+  id: string
+  provider: AgentProvider
+  model: string
+  effort: ReasoningEffort | null
+  serviceTier?: 'standard' | 'fast'
+}
 /** Percent of a usage window at which Ramu moves on; null waits for the limit itself. */
 export type SwitchThreshold = 80 | 90 | 95 | null
 export interface FallbackPreferences {
@@ -637,36 +874,140 @@ export interface AdvisorPreferences {
 }
 export const DEFAULT_ADVISOR_PREFERENCES: AdvisorPreferences = { enabled: false, step: null, wait: false }
 /** Result of an advisor request, as the agent's tool sees it. */
-export interface AdviceStatus { requestId: string; status: 'pending' | 'ready' | 'failed'; advice?: string; advisor?: string; error?: string; note?: string }
+export interface AdviceStatus {
+  requestId: string
+  status: 'pending' | 'ready' | 'failed'
+  advice?: string
+  advisor?: string
+  error?: string
+  note?: string
+}
 export const DEFAULT_FALLBACK_PREFERENCES: FallbackPreferences = { switchAt: null }
-export const DEFAULT_SUBAGENT_PREFERENCES: SubagentPreferences = { mode: 'native', single: null, perProvider: {}, byType: [], fallback: 'same', switchAt: 'same', continueNative: true, isolate: false, codexHook: false, maxConcurrent: 3, shareContext: false }
+export const DEFAULT_SUBAGENT_PREFERENCES: SubagentPreferences = {
+  mode: 'native',
+  single: null,
+  perProvider: {},
+  byType: [],
+  fallback: 'same',
+  switchAt: 'same',
+  continueNative: true,
+  isolate: false,
+  codexHook: false,
+  maxConcurrent: 3,
+  shareContext: false,
+}
 
 /** How much of the model's context window a chat uses right now. */
-export interface ContextUsage { used: number; max: number; percent: number; at: number }
+export interface ContextUsage {
+  used: number
+  max: number
+  percent: number
+  at: number
+}
 
 /** A side question about the chat, answered without touching the main conversation. */
-export interface AsideMessage { id: string; role: 'user' | 'assistant'; text: string; at: number; provider?: AgentProvider; model?: string; error?: boolean }
-export interface Aside { id: string; sessionId: string; quote: string; quoteFrom: 'assistant' | 'user'; messages: AsideMessage[]; createdAt: number }
+export interface AsideMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  at: number
+  provider?: AgentProvider
+  model?: string
+  error?: boolean
+}
+export interface Aside {
+  id: string
+  sessionId: string
+  quote: string
+  quoteFrom: 'assistant' | 'user'
+  messages: AsideMessage[]
+  createdAt: number
+}
 export const DEFAULT_SIDEBAR_WIDTH = 268
 export const SIDEBAR_WIDTH_RANGE = [200, 520] as const
-export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, reduceMotion: false, recentChatMode: false, editorFontSize: 13, terminalFontSize: 12, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', defaultCommitAction: 'commit', defaultCommitBranch: 'new-branch', recentChats: 10, cleanupArchivedDays: 90, terminalTabPosition: 'top', defaultTerminalDock: 'bottom', defaultAccess: 'auto', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, memory: DEFAULT_MEMORY_PREFERENCES, intelligence: DEFAULT_INTELLIGENCE_PREFERENCES, includeTabContext: true, warnModelChange: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
-
+export const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  language: 'system',
+  recapsEnabled: true,
+  recapTime: '08:00',
+  accent: 'violet',
+  fontFamily: 'system',
+  fontSize: 14,
+  fontSmoothing: true,
+  reduceMotion: false,
+  recentChatMode: false,
+  editorFontSize: 13,
+  terminalFontSize: 12,
+  previewTabs: true,
+  hideEmptyStaged: true,
+  pullMode: 'rebase',
+  autoPull: true,
+  commitStyle: 'conventional',
+  commitInstructions: '',
+  defaultCommitAction: 'commit',
+  defaultCommitBranch: 'new-branch',
+  recentChats: 10,
+  cleanupArchivedDays: 90,
+  terminalTabPosition: 'top',
+  defaultTerminalDock: 'bottom',
+  defaultAccess: 'auto',
+  defaultAutoFallback: true,
+  defaultChatDockOpen: true,
+  favoriteModels: [],
+  notifyAgentDone: true,
+  resumeChatsOnRestart: true,
+  asyncQuestions: true,
+  autoBackgroundSeconds: 60,
+  providerBinaries: {},
+  providerUpdateChecks: true,
+  appUpdateChecks: true,
+  appAutoUpdate: false,
+  keepAwake: false,
+  keepAwakeWhen: 'plugged-in',
+  showUsageLimits: true,
+  fallback: DEFAULT_FALLBACK_PREFERENCES,
+  subagents: DEFAULT_SUBAGENT_PREFERENCES,
+  advisor: DEFAULT_ADVISOR_PREFERENCES,
+  goals: DEFAULT_GOAL_PREFERENCES,
+  memory: DEFAULT_MEMORY_PREFERENCES,
+  intelligence: DEFAULT_INTELLIGENCE_PREFERENCES,
+  includeTabContext: true,
+  warnModelChange: true,
+  sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+  busyMessageAction: 'steer',
+  messageBehaviorVersion: 4,
+}
 
 /** Internal scope ID; omitted from the user project list. */
 export const NO_PROJECT = 'no-project'
-export interface SkillInfo { name: string; description: string; path: string }
+export interface SkillInfo {
+  name: string
+  description: string
+  path: string
+}
 export interface FileContext {
   repoId: string
   path: string
   content?: string
   /** Other open tabs are references; their content is fetched only when the agent needs it. */
   referenceOnly?: boolean
-  selection?: { startLine: number; startColumn: number; endLine: number; endColumn: number; side?: 'original' | 'modified' }
+  selection?: {
+    startLine: number
+    startColumn: number
+    endLine: number
+    endColumn: number
+    side?: 'original' | 'modified'
+  }
   diff?: { staged: boolean; oid?: string; stash?: boolean }
   source: 'tab' | 'mention'
 }
 /** The per-chat tool server a provider connects to. `nativeSubagents: false` turns the provider's own sub-agent tools off so Ramu's `ramu_agent` is used instead. */
-export interface McpConnection { url: string; token: string; nativeSubagents?: boolean; instructions?: string; /** Codex only: a hook asks Ramu before each of Codex's own sub-agents starts, so Ramu can send it elsewhere. */ interceptSubagents?: boolean }
+export interface McpConnection {
+  url: string
+  token: string
+  nativeSubagents?: boolean
+  instructions?: string
+  /** Codex only: a hook asks Ramu before each of Codex's own sub-agents starts, so Ramu can send it elsewhere. */ interceptSubagents?: boolean
+}
 export type ScheduleRule =
   | { kind: 'once'; at: string }
   | { kind: 'daily'; time: string }
@@ -674,30 +1015,81 @@ export type ScheduleRule =
   | { kind: 'monthly'; time: string; day: number }
   | { kind: 'interval'; minutes: number; anchor: string }
 export interface ScheduleInput {
-  name: string; prompt: string; projectId: string; workspaceId?: string | null
-  sourceTaskId?: string | null; timezone: string; rule: ScheduleRule
-  missedPolicy: 'latest' | 'skip'; settings: AgentSettings
+  name: string
+  prompt: string
+  projectId: string
+  workspaceId?: string | null
+  sourceTaskId?: string | null
+  timezone: string
+  rule: ScheduleRule
+  missedPolicy: 'latest' | 'skip'
+  settings: AgentSettings
 }
 export interface Schedule extends ScheduleInput {
-  id: string; state: 'active' | 'paused' | 'completed'; nextRunAt: number | null; createdAt: number
+  id: string
+  state: 'active' | 'paused' | 'completed'
+  nextRunAt: number | null
+  createdAt: number
 }
 export interface ScheduleRun {
-  id: string; scheduleId: string; dueAt: number; taskId: string | null; sessionId: string | null
+  id: string
+  scheduleId: string
+  dueAt: number
+  taskId: string | null
+  sessionId: string | null
   status: 'queued' | 'running' | 'needs-input' | 'completed' | 'failed' | 'missed' | 'interrupted'
-  attempts: number; retryAt: number | null; error: string | null; createdAt: number
+  attempts: number
+  retryAt: number | null
+  error: string | null
+  createdAt: number
 }
 export interface RecapItem {
-  id: string; key: string; group: 'attention' | 'recent'; title: string; detail: string
-  taskId: string; sessionId: string; sourceSeq: number
-  status: 'open' | 'done' | 'dismissed' | 'snoozed'; snoozedUntil: number | null; updatedAt: number
+  id: string
+  key: string
+  group: 'attention' | 'recent'
+  title: string
+  detail: string
+  taskId: string
+  sessionId: string
+  sourceSeq: number
+  status: 'open' | 'done' | 'dismissed' | 'snoozed'
+  snoozedUntil: number | null
+  updatedAt: number
 }
-export interface RecapSnapshot { items: RecapItem[]; generatedAt: number | null; generating: boolean; error: string | null }
-export interface BackgroundStatus { /** The computer's own name, offered as the default label when another device pairs with it. */ hostname?: string; platform?: string; protocol?: number; capabilities?: string[]; running: boolean; pid: number; startedAt: number; loginEnabled: boolean; version?: string; build?: string; bundledVersion?: string; bundledBuild?: string; updateAvailable?: boolean }
+export interface RecapSnapshot {
+  items: RecapItem[]
+  generatedAt: number | null
+  generating: boolean
+  error: string | null
+}
+export interface BackgroundStatus {
+  /** The computer's own name, offered as the default label when another device pairs with it. */ hostname?: string
+  platform?: string
+  protocol?: number
+  capabilities?: string[]
+  running: boolean
+  pid: number
+  startedAt: number
+  loginEnabled: boolean
+  version?: string
+  build?: string
+  bundledVersion?: string
+  bundledBuild?: string
+  updateAvailable?: boolean
+}
 
 /** A device that has paired with this computer's server and holds its own access token. */
-export interface NetworkDevice { id: string; name: string; createdAt: number; lastSeenAt: number | null }
+export interface NetworkDevice {
+  id: string
+  name: string
+  createdAt: number
+  lastSeenAt: number | null
+}
 /** An address this computer has, which another device may reach it on (LAN, VPN, ...). */
-export interface NetworkAddress { name: string; address: string }
+export interface NetworkAddress {
+  name: string
+  address: string
+}
 export interface NetworkStatus {
   /** Network access is switched on (it may not be listening yet; see `error`). */
   enabled: boolean
@@ -719,7 +1111,11 @@ export interface NetworkSettingsInput {
   /** Required to listen beyond this computer without TLS: the user accepts that Ramu does not encrypt the traffic. */
   acceptUnencrypted: boolean
 }
-export interface PairingOffer { code: string; expiresAt: number; urls: { url: string; interface: string }[] }
+export interface PairingOffer {
+  code: string
+  expiresAt: number
+  urls: { url: string; interface: string }[]
+}
 /**
  * `connecting`: reaching it now. `offline`: not answering; it keeps retrying. `rejected`: it no longer accepts this
  * device (revoked), so it has to be paired again. This computer is always `connected`.
@@ -753,17 +1149,27 @@ export interface Computers {
 }
 
 export interface ChangeFile {
-  id: string; repoId: string; repoName: string; path: string
-  status: 'added' | 'modified' | 'deleted'; binary: boolean
-  oldContent: string; newContent: string
-  oldHash?: string; newHash?: string
+  id: string
+  repoId: string
+  repoName: string
+  path: string
+  status: 'added' | 'modified' | 'deleted'
+  binary: boolean
+  oldContent: string
+  newContent: string
+  oldHash?: string
+  newHash?: string
   oldMode?: number
-  addedLines?: number; removedLines?: number
+  addedLines?: number
+  removedLines?: number
 }
 /** Branch context for a saved run; the diff itself remains a before/after snapshot. */
 export interface ReviewBranchState {
-  repoId: string; repoName: string
-  currentBranch: string | null; targetBranch: string | null; recordedBranch: string | null
+  repoId: string
+  repoName: string
+  currentBranch: string | null
+  targetBranch: string | null
+  recordedBranch: string | null
 }
 /** Live state is separate from the immutable run snapshot. */
 export interface ReviewFileState {
@@ -777,25 +1183,69 @@ export interface ReviewFileState {
   newerReview?: { id: string; taskId: string; fileId: string }
   outdatedCommentIds?: string[]
 }
-export interface ReviewReply { id: string; author?: 'human' | 'ai'; text: string; createdAt: number; state: 'draft' | 'sent' }
+export interface ReviewReply {
+  id: string
+  author?: 'human' | 'ai'
+  text: string
+  createdAt: number
+  state: 'draft' | 'sent'
+}
 export interface ReviewComment {
-  id: string; fileId: string; side: 'old' | 'new'; line: number; endLine: number
-  readyToSend?: boolean; sentAt?: number; resolutionSuggestion?: { text: string; createdAt: number }
-  scope?: 'file' | 'line'; kind?: 'comment' | 'note' | 'question' | 'finding'; replies?: ReviewReply[]
-  text: string; author: 'human' | 'ai'; severity?: 'high' | 'medium' | 'low'
-  state: 'draft' | 'sent' | 'resolved'; createdAt: number
+  id: string
+  fileId: string
+  side: 'old' | 'new'
+  line: number
+  endLine: number
+  readyToSend?: boolean
+  sentAt?: number
+  resolutionSuggestion?: { text: string; createdAt: number }
+  scope?: 'file' | 'line'
+  kind?: 'comment' | 'note' | 'question' | 'finding'
+  replies?: ReviewReply[]
+  text: string
+  author: 'human' | 'ai'
+  severity?: 'high' | 'medium' | 'low'
+  state: 'draft' | 'sent' | 'resolved'
+  createdAt: number
 }
 export interface ChangeReview {
-  id: string; taskId: string; sessionId: string | null; createdAt: number
-  state: 'recording' | 'ready' | 'failed'; error: string | null
-  files: ChangeFile[]; comments: ReviewComment[]
-  aiState: 'idle' | 'running' | 'completed' | 'failed'; aiSummary: string | null
-  startSeq?: number; endSeq?: number; reviewedAt?: number | null
-  undoneAt?: number | null; undoFileIds?: string[]
+  id: string
+  taskId: string
+  sessionId: string | null
+  createdAt: number
+  state: 'recording' | 'ready' | 'failed'
+  error: string | null
+  files: ChangeFile[]
+  comments: ReviewComment[]
+  aiState: 'idle' | 'running' | 'completed' | 'failed'
+  aiSummary: string | null
+  startSeq?: number
+  endSeq?: number
+  reviewedAt?: number | null
+  undoneAt?: number | null
+  undoFileIds?: string[]
 }
-export interface UndoFile { fileId: string; path: string; repoName: string; status: 'ready' | 'conflict' | 'unchanged' | 'unavailable'; reason: string; currentContent: string; resultContent: string; remove: boolean }
-export interface UndoPreview { token: string; reviewId: string; expiresAt: number; files: UndoFile[] }
+export interface UndoFile {
+  fileId: string
+  path: string
+  repoName: string
+  status: 'ready' | 'conflict' | 'unchanged' | 'unavailable'
+  reason: string
+  currentContent: string
+  resultContent: string
+  remove: boolean
+}
+export interface UndoPreview {
+  token: string
+  reviewId: string
+  expiresAt: number
+  files: UndoFile[]
+}
 
 /** Branch choice captured before a commit, checked again under the repository lock. */
 /** `autoBranch` names the new branch on the server, like T3 Code: from `newBranch` when given (an AI suggestion), else the commit subject. */
-export interface CommitBranchOptions { expectedBranch: string | null; newBranch?: string; autoBranch?: boolean }
+export interface CommitBranchOptions {
+  expectedBranch: string | null
+  newBranch?: string
+  autoBranch?: boolean
+}

@@ -2,8 +2,12 @@ import { desktopLanguage, t } from './localization'
 import type { ContextMenuParams, MenuItemConstructorOptions } from 'electron'
 
 /** Only text editing and selection get native menus; app actions keep their own menus. */
-export function editMenuItems({ isEditable, selectionText, editFlags }: Pick<ContextMenuParams, 'isEditable' | 'selectionText' | 'editFlags'>): MenuItemConstructorOptions[] {
-  const label = (source: string) => desktopLanguage() === 'id' ? { label: t(source) } : {}
+export function editMenuItems({
+  isEditable,
+  selectionText,
+  editFlags,
+}: Pick<ContextMenuParams, 'isEditable' | 'selectionText' | 'editFlags'>): MenuItemConstructorOptions[] {
+  const label = (source: string) => (desktopLanguage() === 'id' ? { label: t(source) } : {})
   if (!isEditable) return selectionText ? [{ ...label('Copy'), role: 'copy', enabled: editFlags.canCopy }] : []
   return [
     { ...label('Undo'), role: 'undo', enabled: editFlags.canUndo },

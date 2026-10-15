@@ -17,8 +17,13 @@ export function paneTransition(elements: (HTMLElement | null | undefined)[], pro
   if (!targets.length || reducedMotion() || document.hidden) return () => {}
   const value = properties.map((property) => `${property} ${PANE_MOTION}`).join(', ')
   for (const element of targets) element.style.transition = value
-  const done = window.setTimeout(() => { for (const element of targets) element.style.transition = '' }, SETTLE_MS)
-  return () => { window.clearTimeout(done); for (const element of targets) element.style.transition = '' }
+  const done = window.setTimeout(() => {
+    for (const element of targets) element.style.transition = ''
+  }, SETTLE_MS)
+  return () => {
+    window.clearTimeout(done)
+    for (const element of targets) element.style.transition = ''
+  }
 }
 
 /**
@@ -35,7 +40,10 @@ export function paneFadeIn(element: HTMLElement | null | undefined): () => void 
 export function useRetained<T>(value: T | null | undefined, ms = SETTLE_MS): T | null {
   const [kept, setKept] = useState<T | null>(value ?? null)
   useEffect(() => {
-    if (value != null) { setKept(value); return }
+    if (value != null) {
+      setKept(value)
+      return
+    }
     const timer = window.setTimeout(() => setKept(null), ms)
     return () => window.clearTimeout(timer)
   }, [value, ms])
@@ -43,7 +51,15 @@ export function useRetained<T>(value: T | null | undefined, ms = SETTLE_MS): T |
 }
 
 /** A pane that exists only while open (the tool rail): it appears in one step with a fade, and goes away at once. */
-export function SlidePane({ open, children, className = '' }: { open: boolean; children: ReactNode; className?: string }) {
+export function SlidePane({
+  open,
+  children,
+  className = '',
+}: {
+  open: boolean
+  children: ReactNode
+  className?: string
+}) {
   const element = useRef<HTMLDivElement>(null)
   const shown = useRef(open)
   useLayoutEffect(() => {
@@ -52,5 +68,9 @@ export function SlidePane({ open, children, className = '' }: { open: boolean; c
     return open ? paneFadeIn(element.current) : undefined
   }, [open])
   if (!open) return null
-  return <div ref={element} className={`flex-none min-h-0 flex ${className}`}>{children}</div>
+  return (
+    <div ref={element} className={`flex-none min-h-0 flex ${className}`}>
+      {children}
+    </div>
+  )
 }

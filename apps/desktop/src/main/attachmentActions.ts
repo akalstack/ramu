@@ -16,7 +16,9 @@ export function attachmentActions(win: BrowserWindow, store: AttachmentStore) {
     if (file.mimeType.startsWith('image/')) {
       const image = nativeImage.createFromPath(file.path)
       if (image.isEmpty()) throw new Error('This image could not be copied')
-      await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' }) })])
+      await clipboard.write([
+        new ClipboardItem({ 'image/png': new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' }) }),
+      ])
     } else await clipboard.writeText(file.name)
   }
   const reveal = (id: string) => shell.showItemInFolder(store.get(id).path)
@@ -25,10 +27,22 @@ export function attachmentActions(win: BrowserWindow, store: AttachmentStore) {
     return new Promise<'preview' | 'remove' | null>((resolve) => {
       Menu.buildFromTemplate([
         { label: t('Preview'), click: () => resolve('preview') },
-        { label: file.mimeType.startsWith('image/') ? t('Copy image') : t('Copy filename'), click: () => { void copy(id).catch((error) => dialog.showMessageBox(win, { type: 'error', message: String(error) })) } },
-        { label: t('Save as…'), click: () => { void save(id).catch((error) => dialog.showMessageBox(win, { type: 'error', message: String(error) })) } },
+        {
+          label: file.mimeType.startsWith('image/') ? t('Copy image') : t('Copy filename'),
+          click: () => {
+            void copy(id).catch((error) => dialog.showMessageBox(win, { type: 'error', message: String(error) }))
+          },
+        },
+        {
+          label: t('Save as…'),
+          click: () => {
+            void save(id).catch((error) => dialog.showMessageBox(win, { type: 'error', message: String(error) }))
+          },
+        },
         { label: process.platform === 'darwin' ? t('Reveal in Finder') : t('Show in folder'), click: () => reveal(id) },
-        ...(removable ? [{ type: 'separator' as const }, { label: t('Remove attachment'), click: () => resolve('remove') }] : []),
+        ...(removable
+          ? [{ type: 'separator' as const }, { label: t('Remove attachment'), click: () => resolve('remove') }]
+          : []),
       ]).popup({ window: win, x: Math.round(point.x), y: Math.round(point.y), callback: () => resolve(null) })
     })
   }

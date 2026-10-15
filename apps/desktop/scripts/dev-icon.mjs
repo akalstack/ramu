@@ -19,9 +19,17 @@ try {
   if (existsSync(done) && readFileSync(done, 'utf8') === stamp) process.exit(0)
   copyFileSync(car, target)
   const edit = (command) => execFileSync('/usr/libexec/PlistBuddy', ['-c', command, plist], { stdio: 'ignore' })
-  try { edit('Set :CFBundleIconName Ramu') } catch { edit('Add :CFBundleIconName string Ramu') }
+  try {
+    edit('Set :CFBundleIconName Ramu')
+  } catch {
+    edit('Add :CFBundleIconName string Ramu')
+  }
   // Changing the bundle invalidates its signature; ad-hoc signing keeps it launchable.
   execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'ignore' })
   writeFileSync(done, stamp)
-  console.log('Ramu Liquid Glass icon applied to the dev Electron app (restart the Dock if the old icon lingers: killall Dock).')
-} catch (error) { console.warn(`Could not apply the dev icon: ${error instanceof Error ? error.message : error}`) }
+  console.log(
+    'Ramu Liquid Glass icon applied to the dev Electron app (restart the Dock if the old icon lingers: killall Dock).',
+  )
+} catch (error) {
+  console.warn(`Could not apply the dev icon: ${error instanceof Error ? error.message : error}`)
+}

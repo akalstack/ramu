@@ -79,7 +79,9 @@ export class Workspace {
 
   listProjects(): Project[] {
     return this.db
-      .prepare("SELECT id, name, root, created_at AS createdAt FROM projects WHERE id != 'no-project' ORDER BY position IS NULL, position, created_at")
+      .prepare(
+        "SELECT id, name, root, created_at AS createdAt FROM projects WHERE id != 'no-project' ORDER BY position IS NULL, position, created_at",
+      )
       .all() as unknown as Project[]
   }
 
@@ -91,7 +93,10 @@ export class Workspace {
     try {
       ids.filter((id) => known.has(id)).forEach((id, index) => update.run(index, id))
       this.db.exec('COMMIT')
-    } catch (error) { this.db.exec('ROLLBACK'); throw error }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
     return this.listProjects()
   }
 
@@ -110,7 +115,10 @@ export class Workspace {
    */
   async inspectFolder(dir: string): Promise<FolderInspection> {
     const root = await realpath(dir)
-    const top = await gitCli.topLevel(root).then((p) => realpath(p), () => null)
+    const top = await gitCli.topLevel(root).then(
+      (p) => realpath(p),
+      () => null,
+    )
     if (top) return { kind: 'repo', root: top, name: basename(top) }
     const repos: string[] = []
     for (const entry of await readdir(root, { withFileTypes: true, encoding: 'utf8' })) {
@@ -133,7 +141,7 @@ export class Workspace {
     // Not a Git repository: the folder itself becomes the project, and Source Control offers to initialize it.
     const project = this.createProject(found.kind === 'none' ? basename(found.root) : found.name, found.root)
     if (found.kind === 'none') return { project, repositories: [this.addFolderRepository(project.id, found.root)] }
-    const paths = found.kind === 'repo' ? [found.root] : chosen ?? found.repos
+    const paths = found.kind === 'repo' ? [found.root] : (chosen ?? found.repos)
     const repositories: Repository[] = []
     for (const p of paths) repositories.push(await this.addRepository(project.id, p))
     return { project, repositories }
@@ -145,7 +153,10 @@ export class Workspace {
    * single-repository project; repositories outside that folder are passed as extra directories.
    */
   agentScope(ctx: string): AgentScope {
-    if (ctx === `${PROJECT_PREFIX}${NO_PROJECT}` || !isProjectCtx(ctx) && !isWorktreeCtx(ctx) && this.getTask(ctx).projectId === NO_PROJECT) {
+    if (
+      ctx === `${PROJECT_PREFIX}${NO_PROJECT}` ||
+      (!isProjectCtx(ctx) && !isWorktreeCtx(ctx) && this.getTask(ctx).projectId === NO_PROJECT)
+    ) {
       const cwd = join(this.worktreesRoot, '..', 'chats', isProjectCtx(ctx) ? 'general' : this.getTask(ctx).id)
       mkdirSync(cwd, { recursive: true })
       return { cwd: realpathSync(cwd), additionalDirs: [], covers: [realpathSync(cwd)] }
@@ -192,27 +203,35 @@ export class Workspace {
     const names = new Set(existing.map((r) => r.name))
     for (let n = 2; names.has(name); n++) name = `${basename(root)}-${n}`
     const repo: Repository = { id: randomUUID(), projectId, name, root }
-    this.db.prepare('INSERT INTO repositories (id, project_id, name, root) VALUES (?, ?, ?, ?)').run(repo.id, projectId, name, root)
+    this.db
+      .prepare('INSERT INTO repositories (id, project_id, name, root) VALUES (?, ?, ?, ?)')
+      .run(repo.id, projectId, name, root)
     return repo
   }
 
   /** Registers a plain folder as the project's only repository entry; it works as files and terminals until initialized. */
   private addFolderRepository(projectId: string, root: string): Repository {
     const repo: Repository = { id: randomUUID(), projectId, name: basename(root), root }
-    this.db.prepare('INSERT INTO repositories (id, project_id, name, root) VALUES (?, ?, ?, ?)').run(repo.id, projectId, repo.name, root)
+    this.db
+      .prepare('INSERT INTO repositories (id, project_id, name, root) VALUES (?, ?, ?, ?)')
+      .run(repo.id, projectId, repo.name, root)
     return repo
   }
 
   private getProject(id: string): Project {
-    const p = this.db.prepare('SELECT id, name, root, created_at AS createdAt FROM projects WHERE id = ?').get(id) as unknown as
-      | Project
-      | undefined
+    const p = this.db
+      .prepare('SELECT id, name, root, created_at AS createdAt FROM projects WHERE id = ?')
+      .get(id) as unknown as Project | undefined
     if (!p) throw new Error(`Unknown project ${id}`)
     return p
   }
 
   listWorkspaces(projectId?: string): WorktreeWorkspace[] {
-    return this.db.prepare(`SELECT id, project_id AS projectId, name, created_at AS createdAt FROM workspaces ${projectId ? 'WHERE project_id = ?' : ''} ORDER BY created_at DESC`).all(...(projectId ? [projectId] : [])) as unknown as WorktreeWorkspace[]
+    return this.db
+      .prepare(
+        `SELECT id, project_id AS projectId, name, created_at AS createdAt FROM workspaces ${projectId ? 'WHERE project_id = ?' : ''} ORDER BY created_at DESC`,
+      )
+      .all(...(projectId ? [projectId] : [])) as unknown as WorktreeWorkspace[]
   }
 
   getWorktreeWorkspace(id: string): WorktreeWorkspace {
@@ -222,7 +241,11 @@ export class Workspace {
   }
 
   workspaceIdOf(ctx: string): string | null {
-    return isWorktreeCtx(ctx) ? this.getWorktreeWorkspace(ctx.slice(WORKTREE_PREFIX.length)).id : isProjectCtx(ctx) ? null : this.getTask(ctx).workspaceId
+    return isWorktreeCtx(ctx)
+      ? this.getWorktreeWorkspace(ctx.slice(WORKTREE_PREFIX.length)).id
+      : isProjectCtx(ctx)
+        ? null
+        : this.getTask(ctx).workspaceId
   }
 
   // ---- Chats ----
@@ -234,9 +257,7 @@ export class Workspace {
   }
 
   getTask(id: string): Task {
-    const t = this.db
-      .prepare(`SELECT ${TASK_COLUMNS} FROM tasks t WHERE id = ?`)
-      .get(id) as unknown as Task | undefined
+    const t = this.db.prepare(`SELECT ${TASK_COLUMNS} FROM tasks t WHERE id = ?`).get(id) as unknown as Task | undefined
     if (!t) throw new Error(`Unknown chat ${id}`)
     return t
   }
@@ -256,12 +277,19 @@ export class Workspace {
   /** An AI-written title. Unless forced (an explicit "Rename with AI"), a title the user typed is left alone. */
   setGeneratedTitle(id: string, title: string, force = false): Task {
     this.getTask(id)
-    this.db.prepare("UPDATE tasks SET title = ?, title_source = 'ai' WHERE id = ? AND (title_source != 'manual' OR ?)").run(cleanLabel(title) || 'New chat', id, force ? 1 : 0)
+    this.db
+      .prepare("UPDATE tasks SET title = ?, title_source = 'ai' WHERE id = ? AND (title_source != 'manual' OR ?)")
+      .run(cleanLabel(title) || 'New chat', id, force ? 1 : 0)
     return this.getTask(id)
   }
 
   titleSource(id: string): 'prompt' | 'ai' | 'manual' {
-    return (this.db.prepare('SELECT title_source AS source FROM tasks WHERE id = ?').get(id) as { source: 'prompt' | 'ai' | 'manual' } | undefined)?.source ?? 'prompt'
+    return (
+      (
+        this.db.prepare('SELECT title_source AS source FROM tasks WHERE id = ?').get(id) as
+          { source: 'prompt' | 'ai' | 'manual' } | undefined
+      )?.source ?? 'prompt'
+    )
   }
 
   setPinned(id: string, pinned: boolean): Task {
@@ -284,20 +312,35 @@ export class Workspace {
   async deleteTask(id: string, removeWorktrees: boolean): Promise<void> {
     const chat = this.getTask(id)
     const workspaceId = chat.workspaceId
-    const shared = workspaceId ? (this.db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE workspace_id = ? AND id != ?').get(workspaceId, id) as { n: number }).n : 0
-    if (removeWorktrees && shared) throw new Error('This isolated workspace is used by other chats. Delete only this chat or remove the other chats first.')
+    const shared = workspaceId
+      ? (
+          this.db
+            .prepare('SELECT COUNT(*) AS n FROM tasks WHERE workspace_id = ? AND id != ?')
+            .get(workspaceId, id) as { n: number }
+        ).n
+      : 0
+    if (removeWorktrees && shared)
+      throw new Error(
+        'This isolated workspace is used by other chats. Delete only this chat or remove the other chats first.',
+      )
     if (removeWorktrees) {
-      const owned = this.listBindings(id).filter((b) => b.mode === 'worktree' && b.setupState === 'ready' && existsSync(b.cwd))
+      const owned = this.listBindings(id).filter(
+        (b) => b.mode === 'worktree' && b.setupState === 'ready' && existsSync(b.cwd),
+      )
       const dirty: string[] = []
       for (const b of owned) if ((await gitCli.status(b.cwd)).entries.length) dirty.push(b.repoName)
       if (dirty.length) {
-        throw new Error(`Not deleted: ${dirty.join(', ')} ${dirty.length > 1 ? 'have' : 'has'} uncommitted changes in the worktree. Commit or discard them first.`)
+        throw new Error(
+          `Not deleted: ${dirty.join(', ')} ${dirty.length > 1 ? 'have' : 'has'} uncommitted changes in the worktree. Commit or discard them first.`,
+        )
       }
       for (const b of owned) await gitCli.worktreeRemove(this.getRepository(b.repoId).root, b.cwd)
     }
     this.db.exec('BEGIN')
     try {
-      this.db.prepare('DELETE FROM agent_events WHERE session_id IN (SELECT id FROM agent_sessions WHERE task_id = ?)').run(id)
+      this.db
+        .prepare('DELETE FROM agent_events WHERE session_id IN (SELECT id FROM agent_sessions WHERE task_id = ?)')
+        .run(id)
       this.db.prepare('DELETE FROM agent_sessions WHERE task_id = ?').run(id)
       this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id)
       if (removeWorktrees && workspaceId) {
@@ -341,7 +384,9 @@ export class Workspace {
 
   /** Disconnects a repository from the project; refused while a worktree task has a copy of it. */
   removeRepository(id: string): void {
-    const used = this.db.prepare("SELECT COUNT(*) AS n FROM bindings WHERE repo_id = ? AND mode = 'worktree'").get(id) as { n: number }
+    const used = this.db
+      .prepare("SELECT COUNT(*) AS n FROM bindings WHERE repo_id = ? AND mode = 'worktree'")
+      .get(id) as { n: number }
     if (used.n) throw new Error('An isolated workspace still uses this repository. Remove its worktrees first.')
     this.db.prepare("DELETE FROM bindings WHERE repo_id = ? AND mode = 'current'").run(id)
     this.db.prepare('DELETE FROM repositories WHERE id = ?').run(id)
@@ -357,7 +402,10 @@ export class Workspace {
     for (const repoId of repoIds) {
       const repo = this.getRepository(repoId)
       if (repo.projectId !== projectId) throw new Error(`Repository ${repo.name} is not in this project`)
-      if (!existsSync(join(repo.root, '.git'))) throw new Error(`${repo.name} is not a Git repository. Initialize it in Source Control to use isolated worktrees.`)
+      if (!existsSync(join(repo.root, '.git')))
+        throw new Error(
+          `${repo.name} is not a Git repository. Initialize it in Source Control to use isolated worktrees.`,
+        )
       const baseRef = (await gitCli.currentBranch(repo.root)) ?? (await gitCli.headOid(repo.root))
       if (!baseRef) throw new Error(`${repo.name} has no commits to branch from`)
       let taskBranch = `ramu/${slug}${suffix}`
@@ -383,18 +431,27 @@ export class Workspace {
     // Repositories belong to the project: a task always covers all of them.
     const repos = this.listRepositories(input.projectId)
     if (!repos.length && input.projectId !== NO_PROJECT) throw new Error('This project has no repositories')
-    if (input.projectId === NO_PROJECT && (input.mode !== 'current' || input.workspaceId)) throw new Error('Project-free chats cannot use worktrees')
+    if (input.projectId === NO_PROJECT && (input.mode !== 'current' || input.workspaceId))
+      throw new Error('Project-free chats cannot use worktrees')
 
     if (input.workspaceId) {
       const existing = this.getWorktreeWorkspace(input.workspaceId)
-      if (input.mode !== 'worktree' || existing.projectId !== input.projectId) throw new Error('Isolated workspace is not in this project')
+      if (input.mode !== 'worktree' || existing.projectId !== input.projectId)
+        throw new Error('Isolated workspace is not in this project')
       const bindings = this.listBindings(`worktree:${existing.id}`)
-      if (!bindings.length || bindings.some((b) => b.setupState !== 'ready' || !existsSync(b.cwd))) throw new Error('This isolated workspace is not ready')
-      for (const b of bindings) if (!await this.registeredWorktree(this.getRepository(b.repoId).root, b.cwd)) throw new Error(`${b.repoName} is no longer a registered worktree`)
+      if (!bindings.length || bindings.some((b) => b.setupState !== 'ready' || !existsSync(b.cwd)))
+        throw new Error('This isolated workspace is not ready')
+      for (const b of bindings)
+        if (!(await this.registeredWorktree(this.getRepository(b.repoId).root, b.cwd)))
+          throw new Error(`${b.repoName} is no longer a registered worktree`)
       if (plan) throw new Error('An existing workspace does not need a worktree plan')
     }
     if (input.mode === 'worktree' && !input.workspaceId) {
-      plan ??= await this.planWorktrees(input.projectId, title, repos.map((r) => r.id))
+      plan ??= await this.planWorktrees(
+        input.projectId,
+        title,
+        repos.map((r) => r.id),
+      )
       if (plan.length !== repos.length || !repos.every((r) => plan!.some((p) => p.repoId === r.id))) {
         throw new Error('Worktree plan does not match the selected repositories')
       }
@@ -405,7 +462,7 @@ export class Workspace {
       projectId: input.projectId,
       title,
       mode: input.mode,
-      workspaceId: input.mode === 'worktree' ? input.workspaceId ?? randomUUID() : null,
+      workspaceId: input.mode === 'worktree' ? (input.workspaceId ?? randomUUID()) : null,
       status: 'idle',
       createdAt: Date.now(),
       pinnedAt: null,
@@ -417,9 +474,14 @@ export class Workspace {
     )
     this.db.exec('BEGIN')
     try {
-      if (input.mode === 'worktree' && !input.workspaceId) this.db.prepare('INSERT INTO workspaces (id, project_id, name, created_at) VALUES (?, ?, ?, ?)').run(task.workspaceId!, task.projectId, title, task.createdAt)
+      if (input.mode === 'worktree' && !input.workspaceId)
+        this.db
+          .prepare('INSERT INTO workspaces (id, project_id, name, created_at) VALUES (?, ?, ?, ?)')
+          .run(task.workspaceId!, task.projectId, title, task.createdAt)
       this.db
-        .prepare('INSERT INTO tasks (id, project_id, title, mode, status, created_at, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .prepare(
+          'INSERT INTO tasks (id, project_id, title, mode, status, created_at, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
         .run(task.id, task.projectId, task.title, task.mode, task.status, task.createdAt, task.workspaceId)
       // Current-checkout tasks store no bindings; they follow the project's repositories live.
       if (input.mode === 'worktree' && !input.workspaceId) {
@@ -454,7 +516,9 @@ export class Workspace {
         }
         const cwd = await realpath(b.cwd)
         this.db
-          .prepare("UPDATE bindings SET cwd = ?, setup_state = 'ready', setup_error = NULL WHERE task_id = ? AND repo_id = ?")
+          .prepare(
+            "UPDATE bindings SET cwd = ?, setup_state = 'ready', setup_error = NULL WHERE task_id = ? AND repo_id = ?",
+          )
           .run(cwd, this.workspaceIdOf(taskId)!, b.repoId)
       } catch (err) {
         this.db
@@ -511,24 +575,38 @@ export class Workspace {
   /** File surfaces also expose each project-free chat's existing working folder. */
   fileBindings(ctx: string): RepositoryBinding[] {
     if (this.projectIdOf(ctx) !== NO_PROJECT) return this.listBindings(ctx)
-    return [{ taskId: ctx, repoId: 'general', repoName: 'Chat files', folderOnly: true,
-      cwd: this.agentScope(ctx).cwd, mode: 'current', taskBranch: null, baseRef: null,
-      setupState: 'ready', setupError: null }]
+    return [
+      {
+        taskId: ctx,
+        repoId: 'general',
+        repoName: 'Chat files',
+        folderOnly: true,
+        cwd: this.agentScope(ctx).cwd,
+        mode: 'current',
+        taskBranch: null,
+        baseRef: null,
+        setupState: 'ready',
+        setupError: null,
+      },
+    ]
   }
 
   /** The binding for (context, repo), which must be ready before any surface may use it. */
   getBinding(ctx: string, repoId: string): RepositoryBinding {
     const binding = this.fileBindings(ctx).find((b) => b.repoId === repoId)
     if (!binding) throw new Error('Repository is not part of this project')
-    if (binding.setupState !== 'ready') throw new Error(`${binding.repoName} worktree is not ready (${binding.setupState})`)
+    if (binding.setupState !== 'ready')
+      throw new Error(`${binding.repoName} worktree is not ready (${binding.setupState})`)
     return binding
   }
 
   // ---- UI state ----
 
   getTaskUi(ctx: string): TaskUiState {
-    if (isProjectCtx(ctx) || isWorktreeCtx(ctx)) return this.getAppState<TaskUiState>(`ui:${ctx}`, { views: [], activeViewId: null })
-    const row = this.db.prepare('SELECT ui_state FROM tasks WHERE id = ?').get(ctx) as { ui_state: string | null } | undefined
+    if (isProjectCtx(ctx) || isWorktreeCtx(ctx))
+      return this.getAppState<TaskUiState>(`ui:${ctx}`, { views: [], activeViewId: null })
+    const row = this.db.prepare('SELECT ui_state FROM tasks WHERE id = ?').get(ctx) as
+      { ui_state: string | null } | undefined
     if (!row) throw new Error(`Unknown chat ${ctx}`)
     return row.ui_state ? (JSON.parse(row.ui_state) as TaskUiState) : { views: [], activeViewId: null }
   }

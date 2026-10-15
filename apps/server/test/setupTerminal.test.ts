@@ -16,25 +16,43 @@ it('opens a setup PTY at home without a task and sends commands through terminal
     dispatcher.invoke('term.write', ['terminal', 'echo setup\r'])
     expect(write).toHaveBeenCalledWith('terminal', 'echo setup\r')
     expect(() => dispatcher.invoke('term.openSetup', [1, 30])).toThrow()
-  } finally { dispatcher.close(); configureProviderBinaries({}) }
+  } finally {
+    dispatcher.close()
+    configureProviderBinaries({})
+  }
 })
 
 it('migrates the busy-message default to Steer while preserving a newly saved Queue choice', () => {
   let saved = { busyMessageAction: 'queue', messageBehaviorVersion: 3 }
   const dispatcher = createDispatcher({ userData: '/tmp/ramu-test', send: () => {}, native: async () => null }, {
-    workspace: { getAppState: (key: string, fallback: unknown) => key === 'app-preferences' ? saved : fallback, setAppState: vi.fn() },
+    workspace: {
+      getAppState: (key: string, fallback: unknown) => (key === 'app-preferences' ? saved : fallback),
+      setAppState: vi.fn(),
+    },
   } as unknown as Services)
   try {
-    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ busyMessageAction: 'steer', messageBehaviorVersion: 4 })
+    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({
+      busyMessageAction: 'steer',
+      messageBehaviorVersion: 4,
+    })
     saved = { busyMessageAction: 'queue', messageBehaviorVersion: 4 }
-    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ busyMessageAction: 'queue', messageBehaviorVersion: 4 })
-  } finally { dispatcher.close(); configureProviderBinaries({}) }
+    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({
+      busyMessageAction: 'queue',
+      messageBehaviorVersion: 4,
+    })
+  } finally {
+    dispatcher.close()
+    configureProviderBinaries({})
+  }
 })
 
 it('ignores removed editor settings and preserves an explicit font smoothing choice', () => {
   let saved: Record<string, unknown> = { formatOnSave: true, languageServers: true, aiCompletion: { enabled: true } }
   const dispatcher = createDispatcher({ userData: '/tmp/ramu-test', send: () => {}, native: async () => null }, {
-    workspace: { getAppState: (key: string, fallback: unknown) => key === 'app-preferences' ? saved : fallback, setAppState: vi.fn() },
+    workspace: {
+      getAppState: (key: string, fallback: unknown) => (key === 'app-preferences' ? saved : fallback),
+      setAppState: vi.fn(),
+    },
   } as unknown as Services)
   try {
     const preferences = dispatcher.invoke('settings.app.get', [])
@@ -42,6 +60,10 @@ it('ignores removed editor settings and preserves an explicit font smoothing cho
     for (const key of ['formatOnSave', 'languageServers', 'aiCompletion']) expect(preferences).not.toHaveProperty(key)
     saved = { ...saved, fontSmoothing: false, reduceMotion: true }
     expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fontSmoothing: false, reduceMotion: true })
-    for (const method of ['files.format', 'lsp.open', 'completion.complete']) expect(() => dispatcher.invoke(method, [])).toThrow()
-  } finally { dispatcher.close(); configureProviderBinaries({}) }
+    for (const method of ['files.format', 'lsp.open', 'completion.complete'])
+      expect(() => dispatcher.invoke(method, [])).toThrow()
+  } finally {
+    dispatcher.close()
+    configureProviderBinaries({})
+  }
 })

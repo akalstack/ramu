@@ -29,14 +29,40 @@ monaco.editor.defineTheme('ramu', {
   base: 'vs-dark',
   inherit: true,
   rules: [],
-  colors: { 'scrollbarSlider.background': '#ffffff1a', 'scrollbarSlider.hoverBackground': '#ffffff30', 'scrollbarSlider.activeBackground': '#ffffff40', 'editorOverviewRuler.border': '#00000000', 'editor.background': '#1c1c1e', 'editorGutter.background': '#1c1c1e', 'editor.lineHighlightBackground': '#ffffff08', 'editorWidget.background': '#2c2c2e', 'diffEditor.insertedTextBackground': '#5fbd9128', 'diffEditor.insertedLineBackground': '#5fbd9110', 'diffEditor.removedTextBackground': '#e5808728', 'diffEditor.removedLineBackground': '#e5808710', 'editorGutter.addedBackground': '#5fbd91', 'editorGutter.modifiedBackground': '#d9a462', 'editorGutter.deletedBackground': '#e58087' },
+  colors: {
+    'scrollbarSlider.background': '#ffffff1a',
+    'scrollbarSlider.hoverBackground': '#ffffff30',
+    'scrollbarSlider.activeBackground': '#ffffff40',
+    'editorOverviewRuler.border': '#00000000',
+    'editor.background': '#1c1c1e',
+    'editorGutter.background': '#1c1c1e',
+    'editor.lineHighlightBackground': '#ffffff08',
+    'editorWidget.background': '#2c2c2e',
+    'diffEditor.insertedTextBackground': '#5fbd9128',
+    'diffEditor.insertedLineBackground': '#5fbd9110',
+    'diffEditor.removedTextBackground': '#e5808728',
+    'diffEditor.removedLineBackground': '#e5808710',
+    'editorGutter.addedBackground': '#5fbd91',
+    'editorGutter.modifiedBackground': '#d9a462',
+    'editorGutter.deletedBackground': '#e58087',
+  },
 })
 
 // Static chat code blocks share the editor's token colors even before an editor opens.
 monaco.editor.setTheme('ramu')
 
 // Slim scrollbars everywhere, to match the rest of the app.
-const SLIM = { scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, verticalSliderSize: 6, horizontalSliderSize: 6, useShadows: false }, overviewRulerBorder: false, hideCursorInOverviewRuler: true } as const
+const SLIM = {
+  scrollbar: {
+    verticalScrollbarSize: 8,
+    horizontalScrollbarSize: 8,
+    verticalSliderSize: 6,
+    horizontalSliderSize: 6,
+    useShadows: false,
+  },
+  overviewRulerBorder: false,
+  hideCursorInOverviewRuler: true,
+} as const
 monaco.editor.onDidCreateEditor((editor) => editor.updateOptions(SLIM))
 monaco.editor.onDidCreateDiffEditor((diff) => diff.updateOptions({ ...SLIM, renderOverviewRuler: false }))
 

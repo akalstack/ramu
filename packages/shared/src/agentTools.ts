@@ -1,6 +1,17 @@
 import type { AgentToolDetails, AgentToolKind } from './types'
 
-export const TOOL_KINDS: AgentToolKind[] = ['read', 'edit', 'delete', 'move', 'search', 'execute', 'think', 'fetch', 'switch_mode', 'other']
+export const TOOL_KINDS: AgentToolKind[] = [
+  'read',
+  'edit',
+  'delete',
+  'move',
+  'search',
+  'execute',
+  'think',
+  'fetch',
+  'switch_mode',
+  'other',
+]
 export function toolKind(tool: AgentToolDetails & { name: string }): AgentToolKind {
   if (tool.toolKind) return tool.toolKind
   const name = tool.name.toLowerCase().replace(/[^a-z]/g, '')
@@ -15,5 +26,27 @@ export function toolKind(tool: AgentToolDetails & { name: string }): AgentToolKi
   if (name === 'switchmode') return 'switch_mode'
   return 'other'
 }
-export const KIND_VERB: Record<AgentToolKind, string> = { read: 'Read', edit: 'Edited', delete: 'Deleted', move: 'Moved', search: 'Searched', execute: 'Ran', think: 'Thought', fetch: 'Fetched', switch_mode: 'Changed mode', other: 'Used' }
-export const KIND_LABEL: Record<AgentToolKind, string> = { read: 'Read', edit: 'Edit', delete: 'Delete', move: 'Move', search: 'Search', execute: 'Shell', think: 'Thinking', fetch: 'Fetch', switch_mode: 'Mode', other: 'Tool' }
+export const KIND_VERB: Record<AgentToolKind, string> = {
+  read: 'Read',
+  edit: 'Edited',
+  delete: 'Deleted',
+  move: 'Moved',
+  search: 'Searched',
+  execute: 'Ran',
+  think: 'Thought',
+  fetch: 'Fetched',
+  switch_mode: 'Changed mode',
+  other: 'Used',
+}
+export const KIND_LABEL: Record<AgentToolKind, string> = {
+  read: 'Read',
+  edit: 'Edit',
+  delete: 'Delete',
+  move: 'Move',
+  search: 'Search',
+  execute: 'Shell',
+  think: 'Thinking',
+  fetch: 'Fetch',
+  switch_mode: 'Mode',
+  other: 'Tool',
+}

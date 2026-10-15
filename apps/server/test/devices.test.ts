@@ -6,8 +6,16 @@ import { DeviceStore, PAIRING_TTL_MS } from '../src/devices'
 import { candidateUrls } from '../src/network'
 
 const dirs: string[] = []
-afterEach(() => { dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true })); dirs.length = 0 })
-const store = () => { const dir = mkdtempSync(join(tmpdir(), 'ramu devices ')); dirs.push(dir); const path = join(dir, 'remote-devices.json'); return { path, devices: new DeviceStore(path) } }
+afterEach(() => {
+  dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true }))
+  dirs.length = 0
+})
+const store = () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu devices '))
+  dirs.push(dir)
+  const path = join(dir, 'remote-devices.json')
+  return { path, devices: new DeviceStore(path) }
+}
 
 it('pairs a device with a one-time code and recognises its token', () => {
   const { devices } = store()
@@ -47,7 +55,8 @@ it('keeps only the five newest pending codes', () => {
 
 it('revokes one device without a restart and leaves the others working', () => {
   const { devices } = store()
-  const a = devices.redeem(devices.createCode().code, 'a')!, b = devices.redeem(devices.createCode().code, 'b')!
+  const a = devices.redeem(devices.createCode().code, 'a')!,
+    b = devices.redeem(devices.createCode().code, 'b')!
   // A second store on the same file stands in for the CLI running beside the server.
   const cli = new DeviceStore((devices as unknown as { path: string }).path)
   expect(cli.revoke(a.device.id.slice(0, 4)).map((d) => d.name)).toEqual(['a'])
@@ -79,9 +88,23 @@ it('tolerates a corrupt device file', () => {
 })
 
 it('lists reachable addresses from any interface, VPN or not', () => {
-  const info = (address: string, family: 'IPv4' | 'IPv6', internal = false) => ({ address, family, internal, netmask: '', mac: '', cidr: null, scopeid: 0 }) as NetworkInterfaceInfo
-  const interfaces: ReturnType<typeof networkInterfaces> = { lo0: [info('127.0.0.1', 'IPv4', true)], en0: [info('192.168.1.5', 'IPv4'), info('fe80::1', 'IPv6')], wt0: [info('100.64.0.7', 'IPv4'), info('fd00::7', 'IPv6')] }
-  expect(candidateUrls('0.0.0.0', 7788, false, interfaces)).toEqual([{ url: 'http://192.168.1.5:7788', interface: 'en0' }, { url: 'http://100.64.0.7:7788', interface: 'wt0' }])
-  expect(candidateUrls('::', 7788, true, interfaces).map((c) => c.url)).toEqual(['https://192.168.1.5:7788', 'https://100.64.0.7:7788', 'https://[fd00::7]:7788'])
-  expect(candidateUrls('100.64.0.7', 7788, false, interfaces)).toEqual([{ url: 'http://100.64.0.7:7788', interface: 'listen address' }])
+  const info = (address: string, family: 'IPv4' | 'IPv6', internal = false) =>
+    ({ address, family, internal, netmask: '', mac: '', cidr: null, scopeid: 0 }) as NetworkInterfaceInfo
+  const interfaces: ReturnType<typeof networkInterfaces> = {
+    lo0: [info('127.0.0.1', 'IPv4', true)],
+    en0: [info('192.168.1.5', 'IPv4'), info('fe80::1', 'IPv6')],
+    wt0: [info('100.64.0.7', 'IPv4'), info('fd00::7', 'IPv6')],
+  }
+  expect(candidateUrls('0.0.0.0', 7788, false, interfaces)).toEqual([
+    { url: 'http://192.168.1.5:7788', interface: 'en0' },
+    { url: 'http://100.64.0.7:7788', interface: 'wt0' },
+  ])
+  expect(candidateUrls('::', 7788, true, interfaces).map((c) => c.url)).toEqual([
+    'https://192.168.1.5:7788',
+    'https://100.64.0.7:7788',
+    'https://[fd00::7]:7788',
+  ])
+  expect(candidateUrls('100.64.0.7', 7788, false, interfaces)).toEqual([
+    { url: 'http://100.64.0.7:7788', interface: 'listen address' },
+  ])
 })

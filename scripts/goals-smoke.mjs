@@ -9,11 +9,17 @@ const root = resolve(import.meta.dirname, '..', 'apps', 'desktop')
 const dir = mkdtempSync(join(tmpdir(), 'ramu-goals-'))
 const shots = join(root, 'output', 'playwright', 'goals')
 mkdirSync(shots, { recursive: true })
-const env = { ...process.env, RAMU_USER_DATA: join(dir, 'profile'), RAMU_WORKTREES: join(dir, 'worktrees'), RAMU_FAKE_AGENT: '1' }
+const env = {
+  ...process.env,
+  RAMU_USER_DATA: join(dir, 'profile'),
+  RAMU_WORKTREES: join(dir, 'worktrees'),
+  RAMU_FAKE_AGENT: '1',
+}
 delete env.ELECTRON_RENDERER_URL
 let app, page
 const errors = []
-const invoke = (method, ...args) => page.evaluate(({ method, args }) => window.ramu.invoke(method, ...args), { method, args })
+const invoke = (method, ...args) =>
+  page.evaluate(({ method, args }) => window.ramu.invoke(method, ...args), { method, args })
 const waitForGoal = async (id, predicate) => {
   const end = Date.now() + 15_000
   while (Date.now() < end) {
@@ -36,10 +42,13 @@ const select = async (name, option) => {
 try {
   app = await electron.launch({ args: [root], cwd: root, env, timeout: 30_000 })
   page = await app.firstWindow()
-  page.on('pageerror', (e) => { if (!/^(Canceled|Make sure the ref is set)/.test(e.message)) errors.push(e.message) })
+  page.on('pageerror', (e) => {
+    if (!/^(Canceled|Make sure the ref is set)/.test(e.message)) errors.push(e.message)
+  })
   await page.locator('.shell').waitFor()
-  await invoke('settings.app.set', { ...await invoke('settings.app.get'), language: 'en', recapsEnabled: false })
-  await page.reload(); await page.locator('.shell').waitFor()
+  await invoke('settings.app.set', { ...(await invoke('settings.app.get')), language: 'en', recapsEnabled: false })
+  await page.reload()
+  await page.locator('.shell').waitFor()
   await page.emulateMedia({ reducedMotion: 'reduce' })
   assert.deepEqual((await invoke('settings.app.get')).goals, { mode: 'auto', maxTurns: 10 })
   await openSettings()
@@ -51,12 +60,20 @@ try {
   await page.keyboard.press('Escape')
   await page.locator('.settings-page').waitFor({ state: 'detached' })
   assert.deepEqual((await invoke('settings.app.get')).goals, { mode: 'auto', maxTurns: null })
-  await openSettings(); await page.getByRole('switch', { name: 'Automatic goals', exact: true }).click()
+  await openSettings()
+  await page.getByRole('switch', { name: 'Automatic goals', exact: true }).click()
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   assert.equal((await invoke('settings.app.get')).goals.mode, 'auto')
   console.log('ok - Goals settings default, Unlimited, Save and Cancel')
 
-  const settings = { provider: 'codex', model: 'fake-codex', effort: null, serviceTier: 'standard', access: 'full', autoFallback: false }
+  const settings = {
+    provider: 'codex',
+    model: 'fake-codex',
+    effort: null,
+    serviceTier: 'standard',
+    access: 'full',
+    autoFallback: false,
+  }
   const task = await invoke('tasks.create', { projectId: 'no-project', title: 'Goal smoke', mode: 'current' })
   const session = await invoke('agent.start', task.id, 'Verify goals [goal tool]', settings)
   const goal = await waitForGoal(session.id, (goal) => goal?.status === 'completed')
@@ -77,19 +94,35 @@ try {
   const pausedSession = await invoke('agent.start', pausedTask.id, '/goal Keep working on the fixture', settings)
   await invoke('agent.stop', pausedSession.id)
   assert.equal((await invoke('agent.goal', pausedSession.id)).status, 'paused')
-  const ui = await invoke('ui.get'), viewId = `goal-smoke-${pausedSession.id}`
-  await invoke('ui.setTask', pausedTask.id, { views: [{ id: viewId, kind: 'agent', sessionId: pausedSession.id }], activeViewId: viewId })
-  await invoke('ui.setWorkspace', { ...ui.workspace, openTaskIds: [...new Set([...ui.workspace.openTaskIds, pausedTask.id])], activeTaskId: pausedTask.id })
-  await page.reload(); await page.locator('.shell').waitFor()
-  await page.locator('.task-row').filter({ has: page.getByText(pausedTask.title, { exact: true }) }).click()
+  const ui = await invoke('ui.get'),
+    viewId = `goal-smoke-${pausedSession.id}`
+  await invoke('ui.setTask', pausedTask.id, {
+    views: [{ id: viewId, kind: 'agent', sessionId: pausedSession.id }],
+    activeViewId: viewId,
+  })
+  await invoke('ui.setWorkspace', {
+    ...ui.workspace,
+    openTaskIds: [...new Set([...ui.workspace.openTaskIds, pausedTask.id])],
+    activeTaskId: pausedTask.id,
+  })
+  await page.reload()
+  await page.locator('.shell').waitFor()
+  await page
+    .locator('.task-row')
+    .filter({ has: page.getByText(pausedTask.title, { exact: true }) })
+    .click()
   const bar = page.locator('.goal-bar:visible')
   await bar.getByText('Goal paused', { exact: true }).waitFor()
   await page.screenshot({ path: join(shots, 'chat-paused.png'), animations: 'disabled' })
   await bar.getByRole('button', { name: 'Resume goal', exact: true }).click()
   await waitForGoal(pausedSession.id, (goal) => goal?.turns >= 1)
   await invoke('agent.stop', pausedSession.id)
-  await page.reload(); await page.locator('.shell').waitFor()
-  await page.locator('.task-row').filter({ has: page.getByText(pausedTask.title, { exact: true }) }).click()
+  await page.reload()
+  await page.locator('.shell').waitFor()
+  await page
+    .locator('.task-row')
+    .filter({ has: page.getByText(pausedTask.title, { exact: true }) })
+    .click()
   assert.equal((await invoke('settings.app.get')).goals.maxTurns, null)
   assert.equal((await invoke('agent.goal', pausedSession.id)).status, 'paused')
   await page.locator('.goal-bar:visible').getByRole('button', { name: 'Clear goal', exact: true }).click()
@@ -99,7 +132,9 @@ try {
   console.log('ok - Stop pauses, Resume restarts, and goal/settings survive renderer reload')
   await invoke('background.stop')
 } finally {
-  try { await invoke('background.stop') } catch {}
+  try {
+    await invoke('background.stop')
+  } catch {}
   await app?.close()
   rmSync(dir, { recursive: true, force: true })
 }

@@ -2,7 +2,14 @@ import { expect, it } from 'vitest'
 import { NoticeInbox } from '../src/notices'
 
 const session = { id: 's1', taskId: 't1' }
-const make = () => { const seen: number[] = []; const inbox = new NoticeInbox((items) => seen.push(items.length), () => 'Fix login'); return { inbox, seen } }
+const make = () => {
+  const seen: number[] = []
+  const inbox = new NoticeInbox(
+    (items) => seen.push(items.length),
+    () => 'Fix login',
+  )
+  return { inbox, seen }
+}
 
 it('keeps one notice per chat until it is acted on or the chat moves on', () => {
   const { inbox, seen } = make()

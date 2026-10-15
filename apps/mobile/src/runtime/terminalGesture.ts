@@ -39,7 +39,8 @@ export class TerminalGesture {
   }
   move(x: number, y: number, now: number) {
     if (this.started === null) return
-    const dx = x - this.x, dy = y - this.y
+    const dx = x - this.x,
+      dy = y - this.y
     if (!this.active) {
       if (now - this.started < HOLD_MS) {
         // Ordinary swipes remain normal terminal scrolling/selection.
@@ -55,10 +56,17 @@ export class TerminalGesture {
       // Small diagonal drift must not switch between history and cursor motion.
       const horizontal = this.direction === 'left' || this.direction === 'right'
       const vertical = this.direction === 'up' || this.direction === 'down'
-      const useX = horizontal ? Math.abs(dy) < Math.abs(dx) * 1.25 : vertical ? Math.abs(dx) > Math.abs(dy) * 1.25 : Math.abs(dx) >= Math.abs(dy)
-      direction = useX ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'
+      const useX = horizontal
+        ? Math.abs(dy) < Math.abs(dx) * 1.25
+        : vertical
+          ? Math.abs(dx) > Math.abs(dy) * 1.25
+          : Math.abs(dx) >= Math.abs(dy)
+      direction = useX ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down'
     }
-    if (direction !== this.direction) { this.progress = 0; this.lastTick = now }
+    if (direction !== this.direction) {
+      this.progress = 0
+      this.lastTick = now
+    }
     this.direction = direction
     this.speed = direction ? Math.min(1, (distance - DEAD_ZONE) / (MAX_DRAG - DEAD_ZONE)) : 0
   }
@@ -73,10 +81,21 @@ export class TerminalGesture {
       const elapsed = Math.max(0, Math.min(64, now - this.lastTick))
       const interval = 650 * Math.pow(70 / 650, this.speed)
       this.progress += elapsed / interval
-      if (this.progress >= 1) { steps = 1; this.progress %= 1 }
+      if (this.progress >= 1) {
+        steps = 1
+        this.progress %= 1
+      }
     }
     this.lastTick = now
-    return { active: this.active, direction: this.direction, speed: this.speed, progress: steps ? 1 : this.progress, steps, x: this.x, y: this.y }
+    return {
+      active: this.active,
+      direction: this.direction,
+      speed: this.speed,
+      progress: steps ? 1 : this.progress,
+      steps,
+      x: this.x,
+      y: this.y,
+    }
   }
 }
 
@@ -87,9 +106,11 @@ export function arrowSequence(direction: Direction, applicationCursorKeys = fals
 
 /** Stay beside the hold origin, away from the finger, without chasing each move. */
 export function gestureOverlayPosition(x: number, y: number, width: number, height: number, size = 112) {
-  const margin = 12, gap = 24
+  const margin = 12,
+    gap = 24
   const left = x + gap + size <= width - margin ? x + gap : x - gap - size
   const top = y - gap - size >= margin ? y - gap - size : y + gap
-  const clamp = (value: number, available: number) => Math.max(0, Math.min(Math.max(margin, value), Math.max(0, available - size - margin)))
+  const clamp = (value: number, available: number) =>
+    Math.max(0, Math.min(Math.max(margin, value), Math.max(0, available - size - margin)))
   return { left: clamp(left, width), top: clamp(top, height) }
 }

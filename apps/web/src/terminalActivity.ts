@@ -7,13 +7,16 @@ export const SETTLE_MS = 2000
 
 /** Per terminal: is this output news? Not until the shell has settled, someone typed, or a command was run in it. */
 export function createOutputGate(now = Date.now, settleMs = SETTLE_MS) {
-  let armed = false, last = now()
+  let armed = false,
+    last = now()
   return {
-    arm() { armed = true },
+    arm() {
+      armed = true
+    },
     output(): boolean {
       if (armed) return true
       const at = now()
-      if (at - last >= settleMs) return armed = true
+      if (at - last >= settleMs) return (armed = true)
       last = at
       return false
     },
@@ -23,13 +26,21 @@ export function createOutputGate(now = Date.now, settleMs = SETTLE_MS) {
 const unseen = new Set<string>()
 const listeners = new Set<() => void>()
 let shown: string | null = null
-const publish = () => { for (const listener of listeners) listener() }
-const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }
+const publish = () => {
+  for (const listener of listeners) listener()
+}
+const subscribe = (listener: () => void) => {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
 
 /** A terminal in `workspace` printed news. Ignored while that workspace's terminal panel is on screen. */
 export function markTerminalOutput(workspace: string) {
   if (workspace === shown || unseen.has(workspace)) return
-  unseen.add(workspace); publish()
+  unseen.add(workspace)
+  publish()
 }
 
 /** The workspace whose terminal panel is on screen, if any. Showing it counts as seeing its output. */

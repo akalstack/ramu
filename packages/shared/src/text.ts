@@ -22,10 +22,18 @@ const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[
 
 /** A single-line label that cannot disguise itself: line breaks collapse to spaces, the rest of the invisible characters go. */
 export function cleanLabel(text: string): string {
-  return text.replace(LONE_SURROGATE, '�').replace(/[\r\n\t]+/g, ' ').replace(MISLEADING, '').replace(/ {2,}/g, ' ').trim()
+  return text
+    .replace(LONE_SURROGATE, '�')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(MISLEADING, '')
+    .replace(/ {2,}/g, ' ')
+    .trim()
 }
 
 /** For names Ramu does not own (files already on disk): show the disguise instead of hiding it, like a code editor does. */
 export function visibleName(name: string): string {
-  return name.replace(MISLEADING, (character) => `‹U+${character.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}›`)
+  return name.replace(
+    MISLEADING,
+    (character) => `‹U+${character.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}›`,
+  )
 }

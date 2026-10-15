@@ -1,23 +1,26 @@
 import { useSettingsField } from '../../settingsField'
-import { Switch as SwitchPrimitive } from "@base-ui/react/switch"
-import { cn } from "cn"
+import { Switch as SwitchPrimitive } from '@base-ui/react/switch'
+import { cn } from 'cn'
 
 function Switch({
   className,
-  size = "default",
+  size = 'default',
   ...props
 }: SwitchPrimitive.Root.Props & {
-  size?: "sm" | "default"
+  size?: 'sm' | 'default'
 }) {
   const field = useSettingsField()
-  const onCheckedChange: typeof props.onCheckedChange = (...args) => { field?.mark(); props.onCheckedChange?.(...args) }
+  const onCheckedChange: typeof props.onCheckedChange = (...args) => {
+    field?.mark()
+    props.onCheckedChange?.(...args)
+  }
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
       data-size={size}
       className={cn(
-        "peer group/switch relative inline-block shrink-0 rounded-full border border-transparent p-0 outline-none bg-[var(--pressed)] focus-visible:outline-2 focus-visible:outline-[var(--line-strong)] focus-visible:outline-offset-2 aria-invalid:border-destructive data-[size=default]:h-5 data-[size=default]:w-[34px] data-[size=sm]:h-4 data-[size=sm]:w-[26px] data-checked:bg-primary data-disabled:cursor-not-allowed data-disabled:opacity-50",
-        className
+        'peer group/switch relative inline-block shrink-0 rounded-full border border-transparent p-0 outline-none bg-[var(--pressed)] focus-visible:outline-2 focus-visible:outline-[var(--line-strong)] focus-visible:outline-offset-2 aria-invalid:border-destructive data-[size=default]:h-5 data-[size=default]:w-[34px] data-[size=sm]:h-4 data-[size=sm]:w-[26px] data-checked:bg-primary data-disabled:cursor-not-allowed data-disabled:opacity-50',
+        className,
       )}
       {...props}
       disabled={props.disabled || field?.disabled}

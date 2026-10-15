@@ -29,13 +29,18 @@ describe('pairing links', () => {
     expect(parsePairInput(link)).toMatchObject({ url: 'http://100.64.0.7:7788', code: 'K7QM2-X9RTD', expiresAt: soon })
   })
   it('rejects expired links, bad codes and other schemes', () => {
-    expect(() => parsePairInput(encodePairLink({ url: 'http://h:1', code: 'K7QM2-X9RTD', expiresAt: Date.now() - 1 }))).toThrow(/expired/)
+    expect(() =>
+      parsePairInput(encodePairLink({ url: 'http://h:1', code: 'K7QM2-X9RTD', expiresAt: Date.now() - 1 })),
+    ).toThrow(/expired/)
     expect(() => parsePairInput('ramu://pair?url=http://h:1&code=nope')).toThrow(/invalid code/)
     expect(() => parsePairInput('ramu://other?url=http://h:1')).toThrow(/not a Ramu pairing link/)
     expect(() => parsePairInput('ftp://h')).toThrow()
   })
   it('accepts https links with a code, and bare addresses', () => {
-    expect(parsePairInput('https://box.example.com/#k7qm2-x9rtd')).toEqual({ url: 'https://box.example.com', code: 'K7QM2-X9RTD' })
+    expect(parsePairInput('https://box.example.com/#k7qm2-x9rtd')).toEqual({
+      url: 'https://box.example.com',
+      code: 'K7QM2-X9RTD',
+    })
     expect(parsePairInput('100.64.0.7:7788')).toEqual({ url: 'http://100.64.0.7:7788' })
   })
   it('only accepts safe ssh targets', () => {

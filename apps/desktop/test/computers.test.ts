@@ -7,20 +7,43 @@ import { ComputerRegistry, LOCAL, type ComputerDeps } from '../src/main/computer
 import { RemoteServers } from '../src/main/remoteServers'
 
 const dirs: string[] = []
-beforeEach(() => { vi.useFakeTimers() })
-afterEach(() => { vi.useRealTimers(); dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true })); dirs.length = 0 })
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+afterEach(() => {
+  vi.useRealTimers()
+  dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true }))
+  dirs.length = 0
+})
 
-const urlOf = (target: string | RuntimeEndpoint) => typeof target === 'string' ? target : target.kind === 'http' ? target.url : target.path
+const urlOf = (target: string | RuntimeEndpoint) =>
+  typeof target === 'string' ? target : target.kind === 'http' ? target.url : target.path
 
 function setup() {
-  const dir = mkdtempSync(join(tmpdir(), 'ramu computers ')); dirs.push(dir)
-  const servers = new RemoteServers(join(dir, 'remote-servers.json'), { available: false, seal: (t) => t, open: (t) => t })
-  const streams = new Map<string, (channel: string, payload: any) => void>(), stops: string[] = [], delivered: [string, string][] = []
+  const dir = mkdtempSync(join(tmpdir(), 'ramu computers '))
+  dirs.push(dir)
+  const servers = new RemoteServers(join(dir, 'remote-servers.json'), {
+    available: false,
+    seal: (t) => t,
+    open: (t) => t,
+  })
+  const streams = new Map<string, (channel: string, payload: any) => void>(),
+    stops: string[] = [],
+    delivered: [string, string][] = []
   const counts = new Map<string, { running: number; needsInput: number }>()
   const ssh = { ensure: vi.fn(async () => {}), connect: vi.fn(), close: vi.fn(), closeAll: vi.fn() }
   const deps: ComputerDeps = {
-    servers, deviceName: 'My Mac', localName: () => 'This computer', local: '/tmp/local.sock',
-    subscribe: (target: RuntimeEndpoint, receive) => { streams.set(urlOf(target), receive); return () => { stops.push(urlOf(target)); streams.delete(urlOf(target)) } },
+    servers,
+    deviceName: 'My Mac',
+    localName: () => 'This computer',
+    local: '/tmp/local.sock',
+    subscribe: (target: RuntimeEndpoint, receive) => {
+      streams.set(urlOf(target), receive)
+      return () => {
+        stops.push(urlOf(target))
+        streams.delete(urlOf(target))
+      }
+    },
     invoke: vi.fn(async (target: string | RuntimeEndpoint, method: string) => {
       if (method === 'agent.counts') return counts.get(urlOf(target)) ?? { running: 0, needsInput: 0 }
       return { running: true }
@@ -35,7 +58,8 @@ function setup() {
 
 it('lists this computer first and connects every saved computer at once', () => {
   const { servers, streams, registry } = setup()
-  const a = servers.add('10.0.0.2:7788', 'Studio', 'a'), b = servers.add('10.0.0.3:7788', 'Server', 'b')
+  const a = servers.add('10.0.0.2:7788', 'Studio', 'a'),
+    b = servers.add('10.0.0.3:7788', 'Server', 'b')
   registry.start()
   expect([...streams.keys()].sort()).toEqual(['http://10.0.0.2:7788', 'http://10.0.0.3:7788'])
   const list = registry.list(LOCAL)
@@ -48,7 +72,8 @@ it('lists this computer first and connects every saved computer at once', () => 
 
 it('tracks each computer’s connection independently, including a rejected token', () => {
   const { servers, streams, registry, deps } = setup()
-  const a = servers.add('10.0.0.2:7788', 'Studio', 'a'), b = servers.add('10.0.0.3:7788', 'Server', 'b')
+  const a = servers.add('10.0.0.2:7788', 'Studio', 'a'),
+    b = servers.add('10.0.0.3:7788', 'Server', 'b')
   registry.start()
   streams.get('http://10.0.0.2:7788')!('background:connection', { connected: true })
   streams.get('http://10.0.0.3:7788')!('background:connection', { connected: false, rejected: true })
@@ -61,7 +86,8 @@ it('tracks each computer’s connection independently, including a rejected toke
 
 it('retrying an offline computer keeps the other computer connected and delivering events', () => {
   const { servers, streams, stops, delivered, registry } = setup()
-  const a = servers.add('10.0.0.2:7788', 'Studio', 'a'), b = servers.add('10.0.0.3:7788', 'Server', 'b')
+  const a = servers.add('10.0.0.2:7788', 'Studio', 'a'),
+    b = servers.add('10.0.0.3:7788', 'Server', 'b')
   registry.start()
   streams.get('http://10.0.0.2:7788')!('background:connection', { connected: false, waiting: 'network' })
   const other = streams.get('http://10.0.0.3:7788')!
@@ -80,7 +106,10 @@ it('counts working and waiting chats per computer when their state changes', asy
   registry.start()
   counts.set('http://10.0.0.2:7788', { running: 2, needsInput: 1 })
   streams.get('http://10.0.0.2:7788')!('agent:event', { sessionId: 's', event: { kind: 'state', state: 'running' } })
-  streams.get('http://10.0.0.2:7788')!('agent:event', { sessionId: 's', event: { kind: 'state', state: 'needs-input' } })
+  streams.get('http://10.0.0.2:7788')!('agent:event', {
+    sessionId: 's',
+    event: { kind: 'state', state: 'needs-input' },
+  })
   await vi.advanceTimersByTimeAsync(1000)
   expect(registry.list(LOCAL).computers.find((c) => c.id === a.id)).toMatchObject({ running: 2, needsInput: 1 })
   counts.set('/tmp/local.sock', { running: 1, needsInput: 0 })
@@ -132,7 +161,8 @@ it('forgets a computer and stops its connection, but never this computer', () =>
 
 it('pauses one computer persistently and resumes without disturbing another connection', () => {
   const { servers, streams, stops, deps, registry } = setup()
-  const a = servers.add('10.0.0.2:7788', 'Studio', 'a'), b = servers.add('10.0.0.3:7788', 'Server', 'b')
+  const a = servers.add('10.0.0.2:7788', 'Studio', 'a'),
+    b = servers.add('10.0.0.3:7788', 'Server', 'b')
   registry.start()
   const other = streams.get(b.url)
   registry.update(a.id, { enabled: false, name: 'Workstation' })
@@ -171,7 +201,12 @@ it('ignores activity replies from a connection that has gone offline', async () 
   const { servers, streams, deps, registry } = setup()
   const saved = servers.add('10.0.0.2:7788', 'Studio', 'a')
   let reply!: (counts: { running: number; needsInput: number }) => void
-  vi.mocked(deps.invoke).mockImplementationOnce(() => new Promise((resolve) => { reply = resolve }))
+  vi.mocked(deps.invoke).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        reply = resolve
+      }),
+  )
   registry.start()
   const receive = streams.get('http://10.0.0.2:7788')!
   receive('background:connection', { connected: true })
@@ -179,19 +214,31 @@ it('ignores activity replies from a connection that has gone offline', async () 
   receive('background:connection', { connected: false })
   reply({ running: 2, needsInput: 1 })
   await Promise.resolve()
-  expect(registry.list(LOCAL).computers.find((c) => c.id === saved.id)).toMatchObject({ status: 'offline', running: 0, needsInput: 0 })
+  expect(registry.list(LOCAL).computers.find((c) => c.id === saved.id)).toMatchObject({
+    status: 'offline',
+    running: 0,
+    needsInput: 0,
+  })
 })
 
 it('keeps only one activity request in flight and coalesces further changes', async () => {
   const { servers, streams, deps, registry } = setup()
   const saved = servers.add('10.0.0.2:7788', 'Studio', 'a')
   let reply!: (counts: { running: number; needsInput: number }) => void
-  vi.mocked(deps.invoke).mockImplementationOnce(() => new Promise((resolve) => { reply = resolve }))
+  vi.mocked(deps.invoke).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        reply = resolve
+      }),
+  )
   registry.start()
   const receive = streams.get(saved.url)!
   receive('background:connection', { connected: true })
   await vi.advanceTimersByTimeAsync(1000)
-  for (let i = 0; i < 100; i++) { receive('agent:event', { event: { kind: 'state' } }); await vi.advanceTimersByTimeAsync(20) }
+  for (let i = 0; i < 100; i++) {
+    receive('agent:event', { event: { kind: 'state' } })
+    await vi.advanceTimersByTimeAsync(20)
+  }
   expect(deps.invoke).toHaveBeenCalledTimes(1)
   reply({ running: 1, needsInput: 0 })
   await vi.advanceTimersByTimeAsync(1000)
@@ -200,12 +247,14 @@ it('keeps only one activity request in flight and coalesces further changes', as
 })
 
 it('reciprocal A↔B connections stay direct and never echo events or counts back to their origin', async () => {
-  const a = setup(), b = setup()
+  const a = setup(),
+    b = setup()
   const remoteB = a.servers.add('10.0.0.2:7788', 'B', 'a-on-b')
   const remoteA = b.servers.add('10.0.0.1:7788', 'A', 'b-on-a')
   a.counts.set(remoteB.url, { running: 2, needsInput: 1 })
   b.counts.set(remoteA.url, { running: 3, needsInput: 0 })
-  a.registry.start(); b.registry.start()
+  a.registry.start()
+  b.registry.start()
   a.streams.get(remoteB.url)!('background:connection', { connected: true })
   b.streams.get(remoteA.url)!('background:connection', { connected: true })
   a.streams.get(remoteB.url)!('agent:event', { sessionId: 'b-task', event: { kind: 'state', state: 'running' } })
@@ -217,19 +266,31 @@ it('reciprocal A↔B connections stay direct and never echo events or counts bac
   expect(b.delivered.filter(([, channel]) => channel === 'agent:event')).toEqual([[remoteA.id, 'agent:event']])
   expect(a.deps.invoke).toHaveBeenCalledTimes(1)
   expect(b.deps.invoke).toHaveBeenCalledTimes(1)
-  expect(a.deps.invoke).toHaveBeenCalledWith(expect.objectContaining({ url: remoteB.url, token: 'a-on-b' }), 'agent.counts', [], expect.any(Object))
+  expect(a.deps.invoke).toHaveBeenCalledWith(
+    expect.objectContaining({ url: remoteB.url, token: 'a-on-b' }),
+    'agent.counts',
+    [],
+    expect.any(Object),
+  )
   expect(a.registry.list(LOCAL).computers[1]).toMatchObject({ running: 2, needsInput: 1 })
   expect(b.registry.list(LOCAL).computers[1]).toMatchObject({ running: 3, needsInput: 0 })
   a.registry.forget(remoteB.id)
   expect(b.registry.status(remoteA.id)).toBe('connected')
-  a.registry.stop(); b.registry.stop()
+  a.registry.stop()
+  b.registry.stop()
 })
 
 it('brings up the tunnel before subscribing to an SSH computer, and tears it down when forgotten', async () => {
   const { servers, streams, registry, ssh } = setup()
-  const saved = servers.add('http://127.0.0.1:49200', 'Build box', 'tok', 1, { target: 'build', remote: '127.0.0.1:7788' })
+  const saved = servers.add('http://127.0.0.1:49200', 'Build box', 'tok', 1, {
+    target: 'build',
+    remote: '127.0.0.1:7788',
+  })
   registry.start()
-  expect(ssh.ensure).toHaveBeenCalledWith(saved.id, expect.objectContaining({ ssh: { target: 'build', remote: '127.0.0.1:7788' } }))
+  expect(ssh.ensure).toHaveBeenCalledWith(
+    saved.id,
+    expect.objectContaining({ ssh: { target: 'build', remote: '127.0.0.1:7788' } }),
+  )
   expect(streams.size).toBe(0)
   await vi.advanceTimersByTimeAsync(0)
   expect([...streams.keys()]).toEqual(['http://127.0.0.1:49200'])
@@ -241,7 +302,10 @@ it('brings up the tunnel before subscribing to an SSH computer, and tears it dow
 it('shows an SSH computer as offline and retries when its tunnel cannot open', async () => {
   const { servers, streams, registry, ssh } = setup()
   ssh.ensure.mockRejectedValueOnce(new Error('build is not a trusted host yet'))
-  const saved = servers.add('http://127.0.0.1:49200', 'Build box', 'tok', 1, { target: 'build', remote: '127.0.0.1:7788' })
+  const saved = servers.add('http://127.0.0.1:49200', 'Build box', 'tok', 1, {
+    target: 'build',
+    remote: '127.0.0.1:7788',
+  })
   registry.start()
   await vi.advanceTimersByTimeAsync(0)
   expect(registry.status(saved.id)).toBe('offline')

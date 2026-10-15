@@ -1,13 +1,51 @@
-<!doctype html><html><head><meta charset="utf-8"></head><body><div id="root"></div><script type="module">
-window.ramu = { on: () => () => {}, invoke: async () => [] };
-const React = await import('react');
-const {createRoot} = await import('react-dom/client');
-const {BackgroundActivityIndicator} = await import('/src/BackgroundActivity.tsx');
-await import('/src/ui.css'); await import('/src/styles.css');
-function QA() {
-  const [items,setItems] = React.useState([{id:'memory',label:'Maintaining memories',cancellable:true},{id:'git',label:'Pulling repository updates',detail:'ramu'}]);
-  const stop = async (id) => { window.qaStopped = id; await new Promise((resolve,reject) => { window.qaFinish=()=>{setItems(current=>current.filter(item=>item.id!==id));resolve()}; window.qaFail=()=>reject(new Error('Stop failed')); }); };
-  return React.createElement('footer', {style:{position:'absolute',bottom:6,right:6,left:6,height:28,display:'flex',alignItems:'center',padding:'0 6px',borderTop:'1px solid var(--line)'}}, React.createElement(BackgroundActivityIndicator,{items,onStop:stop}));
-}
-createRoot(document.getElementById('root')).render(React.createElement(QA));
-</script></body></html>
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      window.ramu = { on: () => () => {}, invoke: async () => [] }
+      const React = await import('react')
+      const { createRoot } = await import('react-dom/client')
+      const { BackgroundActivityIndicator } = await import('/src/BackgroundActivity.tsx')
+      await import('/src/ui.css')
+      await import('/src/styles.css')
+      function QA() {
+        const [items, setItems] = React.useState([
+          { id: 'memory', label: 'Maintaining memories', cancellable: true },
+          { id: 'git', label: 'Pulling repository updates', detail: 'ramu' },
+        ])
+        const stop = async (id) => {
+          window.qaStopped = id
+          await new Promise((resolve, reject) => {
+            window.qaFinish = () => {
+              setItems((current) => current.filter((item) => item.id !== id))
+              resolve()
+            }
+            window.qaFail = () => reject(new Error('Stop failed'))
+          })
+        }
+        return React.createElement(
+          'footer',
+          {
+            style: {
+              position: 'absolute',
+              bottom: 6,
+              right: 6,
+              left: 6,
+              height: 28,
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 6px',
+              borderTop: '1px solid var(--line)',
+            },
+          },
+          React.createElement(BackgroundActivityIndicator, { items, onStop: stop }),
+        )
+      }
+      createRoot(document.getElementById('root')).render(React.createElement(QA))
+    </script>
+  </body>
+</html>

@@ -9,7 +9,10 @@ interface Props {
   /** Changing this clears a previous failure, e.g. when a different file or chat is shown. */
   resetKey?: string
 }
-interface State { error: Error | null; key: string | undefined }
+interface State {
+  error: Error | null
+  key: string | undefined
+}
 
 /** A render error in one view must not blank the whole window. */
 export class ErrorBoundary extends Component<Props, State> {
@@ -32,15 +35,28 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!error) return this.props.children
     const app = this.props.scope === 'app'
     return (
-      <div role="alert" className={`error-boundary flex flex-col items-center justify-center gap-3 p-8 text-center ${app ? 'h-screen w-screen bg-background text-foreground' : 'size-full min-h-0 min-w-0'}`}>
-        <strong className="text-heading font-semibold">{t("Something went wrong")}</strong>
+      <div
+        role="alert"
+        className={`error-boundary flex flex-col items-center justify-center gap-3 p-8 text-center ${app ? 'h-screen w-screen bg-background text-foreground' : 'size-full min-h-0 min-w-0'}`}
+      >
+        <strong className="text-heading font-semibold">{t('Something went wrong')}</strong>
         <p className="max-w-[420px] text-control text-muted-foreground [overflow-wrap:anywhere]">
-          {app ? t("Ramu hit an unexpected error. Your chats and files are safe.") : t("This view hit an unexpected error. The rest of Ramu still works.")}
+          {app
+            ? t('Ramu hit an unexpected error. Your chats and files are safe.')
+            : t('This view hit an unexpected error. The rest of Ramu still works.')}
         </p>
-        <p className="max-w-[420px] max-h-24 overflow-hidden text-caption text-muted-foreground [overflow-wrap:anywhere]">{error.message.slice(0, 300)}</p>
+        <p className="max-w-[420px] max-h-24 overflow-hidden text-caption text-muted-foreground [overflow-wrap:anywhere]">
+          {error.message.slice(0, 300)}
+        </p>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => this.setState({ error: null })}>{t("Try again")}</Button>
-          {app && <Button variant="default" onClick={() => window.location.reload()}>{t("Reload")}</Button>}
+          <Button variant="secondary" onClick={() => this.setState({ error: null })}>
+            {t('Try again')}
+          </Button>
+          {app && (
+            <Button variant="default" onClick={() => window.location.reload()}>
+              {t('Reload')}
+            </Button>
+          )}
         </div>
       </div>
     )

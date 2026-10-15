@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { toolIsRunning, toolVerb } from '../src/toolStatus'
 import type { AgentEvent } from '../src/types'
-const result = (running?: boolean, isError = false): Extract<AgentEvent, { kind: 'tool-result' }> => ({ kind: 'tool-result', toolUseId: 'command', summary: 'output', isError, running })
+const result = (running?: boolean, isError = false): Extract<AgentEvent, { kind: 'tool-result' }> => ({
+  kind: 'tool-result',
+  toolUseId: 'command',
+  summary: 'output',
+  isError,
+  running,
+})
 describe('tool progress labels', () => {
   it('keeps streamed output running until a terminal result arrives', () => {
     expect(toolVerb('Ran', toolIsRunning(undefined, true))).toBe('Running')

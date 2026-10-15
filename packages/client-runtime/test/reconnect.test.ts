@@ -5,25 +5,53 @@ import type { NetworkMonitor, NetworkState } from '../src/network'
 const requests = vi.hoisted(() => [] as { request: any; respond: (response: any) => void }[])
 vi.mock('node:http', async () => {
   const { EventEmitter } = await import('node:events')
-  return { request: vi.fn((_options, respond) => {
-    const request = Object.assign(new EventEmitter(), { end: vi.fn(), destroy: vi.fn(function (this: EventEmitter) { this.emit('close') }) })
-    requests.push({ request, respond })
-    return request
-  }) }
+  return {
+    request: vi.fn((_options, respond) => {
+      const request = Object.assign(new EventEmitter(), {
+        end: vi.fn(),
+        destroy: vi.fn(function (this: EventEmitter) {
+          this.emit('close')
+        }),
+      })
+      requests.push({ request, respond })
+      return request
+    }),
+  }
 })
 import { subscribeRuntime } from '../src'
 
 let stop: () => void
-beforeEach(() => { vi.useFakeTimers(); requests.length = 0 })
-afterEach(() => { stop?.(); vi.useRealTimers() })
+beforeEach(() => {
+  vi.useFakeTimers()
+  requests.length = 0
+})
+afterEach(() => {
+  stop?.()
+  vi.useRealTimers()
+})
 
 function setup(available = true, policy: Parameters<typeof subscribeRuntime>[3] = {}) {
   let state: NetworkState = { available, fingerprint: 'initial' }
   const listeners = new Set<(force?: boolean) => void>()
-  const monitor: NetworkMonitor = { current: () => state, subscribe: (notify) => { listeners.add(notify); return () => { listeners.delete(notify) } } }
+  const monitor: NetworkMonitor = {
+    current: () => state,
+    subscribe: (notify) => {
+      listeners.add(notify)
+      return () => {
+        listeners.delete(notify)
+      }
+    },
+  }
   const receive = vi.fn()
   stop = subscribeRuntime({ kind: 'http', url: 'http://10.0.0.2:7788', token: 'token' }, receive, monitor, policy)
-  return { receive, listeners, change: (available: boolean, force = false) => { state = { available, fingerprint: String(Date.now()) }; for (const notify of listeners) notify(force) } }
+  return {
+    receive,
+    listeners,
+    change: (available: boolean, force = false) => {
+      state = { available, fingerprint: String(Date.now()) }
+      for (const notify of listeners) notify(force)
+    },
+  }
 }
 const fail = () => requests.at(-1)!.request.emit('error', new Error('Host unreachable'))
 function response(statusCode = 200) {
@@ -35,9 +63,12 @@ function response(statusCode = 200) {
 it('tries briefly then makes only one quiet availability check per five minutes', async () => {
   setup()
   fail()
-  await vi.advanceTimersByTimeAsync(1000); fail()
-  await vi.advanceTimersByTimeAsync(2000); fail()
-  await vi.advanceTimersByTimeAsync(4000); fail()
+  await vi.advanceTimersByTimeAsync(1000)
+  fail()
+  await vi.advanceTimersByTimeAsync(2000)
+  fail()
+  await vi.advanceTimersByTimeAsync(4000)
+  fail()
   expect(requests).toHaveLength(4)
   await vi.advanceTimersByTimeAsync(299999)
   expect(requests).toHaveLength(4)
@@ -48,14 +79,24 @@ it('tries briefly then makes only one quiet availability check per five minutes'
 it('event mode stops probing and an announcement wakes only its offline connection', async () => {
   let wake!: () => void
   const unwatch = vi.fn()
-  setup(true, { retryMode: 'events', watchWake: (callback) => { wake = callback; return unwatch } })
+  setup(true, {
+    retryMode: 'events',
+    watchWake: (callback) => {
+      wake = callback
+      return unwatch
+    },
+  })
   fail()
-  await vi.advanceTimersByTimeAsync(1000); fail()
-  await vi.advanceTimersByTimeAsync(2000); fail()
-  await vi.advanceTimersByTimeAsync(4000); fail()
+  await vi.advanceTimersByTimeAsync(1000)
+  fail()
+  await vi.advanceTimersByTimeAsync(2000)
+  fail()
+  await vi.advanceTimersByTimeAsync(4000)
+  fail()
   await vi.advanceTimersByTimeAsync(3600000)
   expect(requests).toHaveLength(4)
-  wake(); wake()
+  wake()
+  wake()
   expect(requests).toHaveLength(5)
   response()
   wake()
@@ -68,7 +109,11 @@ it('sends no requests without a network and wakes as soon as an interface return
   const { receive, change } = setup(false)
   await vi.advanceTimersByTimeAsync(600000)
   expect(requests).toHaveLength(0)
-  expect(receive).toHaveBeenLastCalledWith('background:connection', { connected: false, waiting: 'network', retryAt: undefined })
+  expect(receive).toHaveBeenLastCalledWith('background:connection', {
+    connected: false,
+    waiting: 'network',
+    retryAt: undefined,
+  })
   change(true)
   expect(requests).toHaveLength(1)
 })

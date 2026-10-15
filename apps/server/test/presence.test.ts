@@ -5,15 +5,27 @@ import { join } from 'node:path'
 import { PresenceListener, presenceKey } from '@ramu/client-runtime'
 import { HostPresence } from '../src/presence'
 
-const dirs: string[] = [], cleanup: (() => void)[] = []
-afterEach(() => { for (const close of cleanup) close(); cleanup.length = 0; for (const dir of dirs) rmSync(dir, { recursive: true, force: true }); dirs.length = 0 })
+const dirs: string[] = [],
+  cleanup: (() => void)[] = []
+afterEach(() => {
+  for (const close of cleanup) close()
+  cleanup.length = 0
+  for (const dir of dirs) rmSync(dir, { recursive: true, force: true })
+  dirs.length = 0
+})
 
 it('persists only authenticated recipient addresses and announces after a host restart', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'ramu-presence-')); dirs.push(dir)
-  const path = join(dir, 'presence.json'), key = presenceKey('private-device-token')
-  const listener = new PresenceListener(); await listener.start(); cleanup.push(() => listener.close())
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-presence-'))
+  dirs.push(dir)
+  const path = join(dir, 'presence.json'),
+    key = presenceKey('private-device-token')
+  const listener = new PresenceListener()
+  await listener.start()
+  cleanup.push(() => listener.close())
   let wakes = 0
-  listener.watch('private-device-token', () => { wakes++ })
+  listener.watch('private-device-token', () => {
+    wakes++
+  })
   const keys = new Map([['device', key]])
   const host = new HostPresence(path, (id) => keys.get(id) ?? null)
   cleanup.push(() => host.close())
