@@ -2,11 +2,13 @@
   "name": "ramu-monorepo",
   "version": "0.1.0-alpha.1",
   "private": true,
-  "description": "Ramu — your project, every repo, one workspace.",
+  "description": "Ramu \u2014 your project, every repo, one workspace.",
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @ramu/desktop dev",
     "dev:server": "pnpm --filter @ramu/server dev",
+    "dev:mobile": "pnpm --filter @ramu/mobile dev",
+    "dev:mobile:tunnel": "pnpm --filter @ramu/mobile dev --tunnel",
     "build": "pnpm --filter @ramu/desktop build && pnpm --filter @ramu/server build",
     "start": "pnpm --filter @ramu/desktop start",
     "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
@@ -27,11 +29,14 @@
     "release:assets": "node scripts/release.mjs assets",
     "test:fps": "node scripts/layout-fps-smoke.mjs",
     "test:acp-ui": "node scripts/acp-ui-smoke.mjs",
-    "test:chaos": "node scripts/chaos-smoke.mjs"
+    "test:chaos": "node scripts/chaos-smoke.mjs",
+    "test:mobile": "node scripts/mobile-smoke.mjs"
   },
   "devDependencies": {
     "electron": "catalog:",
     "playwright-core": "^1.64.0",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "catalog:"
   },
   "license": "MIT",

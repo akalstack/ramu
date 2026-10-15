@@ -1,3 +1,4 @@
+import { useSettingsField } from './settingsField'
 import { t, useLanguage, formatLocale } from './i18n'
 import { Separator } from '@/components/ui/separator'
 import { Dialog as ShadcnDialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -201,7 +202,8 @@ export function timeAgo(ts: number): string {
 }
 
 /** Every value picker uses the same compact menu, selection mark and trigger. */
-export function Dropdown({ label, value, options, onChange, icon, placeholder = t('Select…'), className = '', disabled = false, title }: {
+export function Dropdown({ label, value, options, onChange, icon, placeholder = t('Select…'), className = '', disabled = false, title, settingNavigation = false }: {
+  settingNavigation?: boolean
   label: string
   value: string
   options: { value: string; label: string; disabled?: boolean }[]
@@ -213,6 +215,19 @@ export function Dropdown({ label, value, options, onChange, icon, placeholder = 
   title?: string
 }) {
   useLanguage()
+  const inheritedField = useSettingsField()
+  const field = settingNavigation ? null : inheritedField
+  const alternatives = field?.schema?.anyOf
+  const structured = ['object', 'array'].includes(field?.schema?.type ?? '') || Array.isArray(alternatives) && alternatives.some((option) => option && typeof option === 'object' && ['object', 'array'].includes(String(option.type)))
+  const scalar = field && !structured
+  const mixed = scalar && field.mixed
+  if (scalar && field.schema?.enum) options = options.filter((option) => field.schema!.enum!.some((value) => String(value) === option.value))
+  if (scalar && ['number', 'integer'].includes(field.schema?.type ?? '')) options = options.filter((option) => Number(option.value) >= (field.schema!.minimum ?? -Infinity) && Number(option.value) <= (field.schema!.maximum ?? Infinity))
+  if (mixed) options = [{ value: '__ramu_mixed__', label: t('Mixed'), disabled: true }, ...options]
+  if (mixed) value = '__ramu_mixed__'
+  const selectValue = onChange
+  onChange = (value) => { field?.mark(); selectValue(value) }
+  disabled = disabled || !!field?.disabled
   // Base UI Select treats null as unselected, so an empty option needs a sentinel value.
   const emptyValue = '__ramu_empty_option__'
   return <Select value={value || (options.some((o) => o.value === '') ? emptyValue : '')} items={options.map((o) => ({ value: o.value || emptyValue, label: o.label }))} onValueChange={(next) => { if (next !== null) onChange(next === emptyValue ? '' : next) }} disabled={disabled || !options.length}>

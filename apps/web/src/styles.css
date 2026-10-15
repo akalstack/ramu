@@ -552,7 +552,7 @@ button.scm-sync:hover:not(:disabled) { @apply [background:var(--pressed)]; }
 /* Context window meter in the composer. */
 
 /* Pending questions remain easy to find after their original turn finishes. */
-.question-card fieldset { @apply grid; @apply gap-2; @apply mb-3; @apply min-w-0; }
+.question-card fieldset { @apply grid; @apply gap-2; @apply min-w-0; }
 .question-card fieldset > input { @apply w-full; }
 .elicitation-card fieldset { @apply [border:0]; @apply p-0; @apply m-[16px_0]; @apply min-w-0; }
 .elicitation-card legend { @apply mb-1.5; @apply text-control; }
@@ -721,3 +721,6 @@ button.git-stash-new:hover:not(:disabled) { @apply [background:var(--hover)]; @a
 .pane-sash:is([data-separator="active"], [data-sash-active], :focus-visible)::before { opacity: 1; transition-delay: 0ms; }
 .pane-sash[data-disabled]::before { opacity: 0; }
 .tabs-right .terminal-tab-scroll { order: 1; }
+/* Detached workspaces keep their state without spending work on off-screen layout and animation. */
+html[data-workspace-hidden] body { content-visibility: hidden; }
+html[data-workspace-hidden] * { animation-play-state: paused !important; }

@@ -10,6 +10,7 @@ import type { Attachment, FileContext } from '@ramu/shared/types'
 import { invoke, ramu } from './ipc'
 import { ComposerSuggestions, FILE_DRAG_TYPE, MAX_PINNED_FILES, useComposerSuggestions } from './ComposerSuggestions'
 import { Attachments } from './Attachments'
+import { registerWorkspaceCheckpoint } from './workspaceCheckpoint'
 
 const CHIPS_SHOWN = 4
 // Keep long documents out of the prompt box while leaving ordinary pastes inline.
@@ -40,6 +41,7 @@ export function Composer({
   chips,
   allowEmpty = false,
   chat = false,
+  persistentDraft = false,
 }: {
   value: string
   scopeId?: string
@@ -67,6 +69,8 @@ export function Composer({
   allowEmpty?: boolean
   /** A chat's own composer, which offers chat-only commands such as /aside. */
   chat?: boolean
+  /** This composer has a draft-persistence hook and can be checkpointed before view eviction. */
+  persistentDraft?: boolean
 }) {
   useLanguage()
   const [caret, setCaret] = useState(value.length)
@@ -84,6 +88,11 @@ export function Composer({
   const [dragging, setDragging] = useState(false)
   const currentFiles = useRef(attachments)
   currentFiles.current = attachments
+  const uploadState = useRef(uploading)
+  uploadState.current = uploading
+  const pinnedCount = useRef(suggestions.pinned.length)
+  pinnedCount.current = suggestions.pinned.length
+  useEffect(() => registerWorkspaceCheckpoint(async () => !submissionPending.current && !uploadState.current && !pendingUploads.current && !currentFiles.current.length && !pinnedCount.current), [])
   const uploadQueue = useRef(Promise.resolve())
   const pendingUploads = useRef(0)
   const pastedCount = useRef(0)
@@ -221,6 +230,7 @@ export function Composer({
       {attachments.length > 0 && <Attachments files={attachments} onRemove={(id) => onAttachmentsChange?.(attachments.filter((file) => file.id !== id))} />}
       {attachmentError && <div className="error text-bad small text-caption" role="alert">{attachmentError}</div>}
       <ComposerInput
+          data-persistent-draft={persistentDraft || undefined}
         ref={ref}
         autoFocus={autoFocus}
         value={value}

@@ -1,3 +1,7 @@
+import { applySettingEdits, validateSettingModels } from './sharedSettings'
+import { portableSettings, sameValue, schemaKey, type SettingsSnapshot, type SettingSchema } from '@ramu/shared/settingsCompatibility'
+import { discardPreview } from './discardPreview'
+import { HostFolders } from './hostFolders'
 import { ActivityService, operationLabels } from './activity'
 import type { BackgroundActivity } from '@ramu/shared/activity'
 import type { LearningService } from './learning'
@@ -13,6 +17,7 @@ import { configureProviderAccounts } from './providerBinaries'
 import { providerEnabled, type ProviderConfiguration, type ProviderStatus } from '@ramu/shared/providers'
 // The renderer's only door into privileged code: one validated method table.
 import { readFileSync, statSync, watch, type FSWatcher } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { withContext as withFileContext, discoverSkills } from './context'
 import { resolveFileLink } from './fileLinks'
 import { scheduleSchema, ruleSchema, previewOccurrences, type ScheduleService } from './schedules'
@@ -141,11 +146,12 @@ export interface Services {
 export interface RuntimeHost {
   userData: string
   send(channel: string, payload: unknown): void
-  native(method: 'pickExecutable' | 'pickDirectory' | 'pickAttachments' | 'reveal' | 'trash', path?: string): Promise<unknown>
+  native(method: 'pickExecutable' | 'pickDirectory' | 'pickAttachments' | 'reveal', path?: string): Promise<unknown>
 }
 
 
 export function createDispatcher(host: RuntimeHost, { workspace, terminals, agents, schedules, recaps, reviews, memory, learning, compression }: Services) {
+  const hostFolders = new HostFolders(() => workspace.listProjects().flatMap(p => p.root ? [p.root] : []))
   const activity = new ActivityService((items) => host.send('activity:changed', items))
   configureProviderAccounts(join(host.userData, 'provider-accounts'))
   const managedSkills = (taskId: string) => learning?.catalog(workspace.projectIdOf(taskId)) ?? []
@@ -166,7 +172,19 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
   const lock = new KeyedLock()
   const usage = new UsageService(() => workspace.getAppState<UsageReading[]>('usage-limits', []), (readings) => workspace.setAppState('usage-limits', readings), (readings) => host.send('usage:changed', readings))
   const extraUsage = new ExtraUsageReader((readings) => usage.update(readings), () => { const config = loadPreferences().providerBinaries; return { cursor: providerEnabled(config, 'cursor'), antigravity: providerEnabled(config, 'antigravity'), keychain: !!config.cursor?.usageKeychain } })
+  const sharedSettingsSchema = z.toJSONSchema(appPreferences, { unrepresentable: 'any' }) as SettingSchema
   const loadPreferences = (): AppPreferences => { const saved = workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}); return appPreferences.parse({ ...DEFAULT_APP_PREFERENCES, ...saved, ...(saved.messageBehaviorVersion === 4 ? {} : { busyMessageAction: 'steer', messageBehaviorVersion: 4 }) }) }
+  const savePreferences = (preferences: AppPreferences) => { workspace.setAppState('app-preferences', preferences); host.send('settings:changed', preferences); recaps.settingsChanged(); providers.settingsChanged(); awake.settingsChanged(); host.send('usage:changed', usage.list()); updates.settingsChanged(); agents.invalidateCatalog(); agents.goalsSettingsChanged(); memory?.settingsChanged(); learning?.settingsChanged() }
+  const modelSettingsSchema = z.toJSONSchema(modelPreferences.nullable(), { unrepresentable: 'any' }) as SettingSchema
+  const modelSettings = () => workspace.getAppState<ModelPreferences | null>('model-preferences', null)
+  const settingsSnapshot = async (): Promise<SettingsSnapshot> => {
+    const preferences = loadPreferences(), models = modelSettings()
+    return { protocol: 1, preferences, models, catalogs: agents ? await agents.catalog() : [], settings: [
+      ...portableSettings(sharedSettingsSchema, preferences as unknown as Record<string, unknown>),
+      { path: '$models', schema: modelSettingsSchema, value: models },
+    ] }
+  }
+
   // Archived chats unused for `cleanupArchivedDays` are deleted (worktrees and branches are kept); 0 turns it off.
   const cleanupArchived = async () => {
     const days = loadPreferences().cleanupArchivedDays
@@ -316,6 +334,11 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'recaps.act': { args: z.tuple([id, z.enum(['open', 'done', 'dismissed', 'snoozed'])]), run: (itemId: string, action: 'open' | 'done' | 'dismissed' | 'snoozed') => recaps.act(itemId, action) },
     'projects.list': { args: z.tuple([]), run: () => workspace.listProjects() },
     'projects.create': { args: z.tuple([z.string().max(200)]), run: (name: string) => workspace.createProject(name) },
+    'folders.roots': { args: z.tuple([]), run: () => hostFolders.roots() },
+    'folders.list': { args: z.tuple([z.string().max(4096)]), run: (path: string) => hostFolders.list(path) },
+    'folders.create': { args: z.tuple([z.string().max(4096), z.string().max(200)]), run: (path: string, name: string) => hostFolders.create(path, name) },
+    'folders.addProject': { args: z.tuple([z.string().max(4096)]), run: async (path: string) => workspace.addProjectFromFolder(await hostFolders.inspect(path)) },
+    'folders.clone': { args: z.tuple([z.string().max(4096), z.string().max(200), z.string().max(4096)]), run: (parent: string, name: string, url: string) => hostFolders.clone(parent, name, url) },
     'projects.inspect': { args: z.tuple([z.string().max(4096)]), run: (dir: string) => workspace.inspectFolder(dir) },
     'projects.addFolder': { args: z.tuple([z.string().max(4096)]), run: (dir: string) => workspace.addProjectFromFolder(dir) },
     'repos.list': { args: z.tuple([id]), run: (projectId: string) => workspace.listRepositories(projectId) },
@@ -404,7 +427,29 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
       },
     },
     'settings.app.get': { args: z.tuple([]), run: loadPreferences },
-    'settings.app.set': { args: z.tuple([appPreferences]), run: (preferences: AppPreferences) => { workspace.setAppState('app-preferences', preferences); recaps.settingsChanged(); providers.settingsChanged(); awake.settingsChanged(); host.send('usage:changed', usage.list()); updates.settingsChanged(); agents.invalidateCatalog(); agents.goalsSettingsChanged(); memory?.settingsChanged(); learning?.settingsChanged() } },
+    'settings.app.snapshot': { args: z.tuple([]), run: settingsSnapshot },
+    'settings.app.patch': { args: z.tuple([z.array(z.object({ path: z.string().min(1).max(200), schema: z.record(z.string(), z.unknown()), before: z.unknown().optional(), value: z.unknown().optional() })).min(1).max(200)]), run: async (edits: import('@ramu/shared/settingsCompatibility').SettingEdit[]) => {
+      // Resolve dynamic choices before reading current values; comparison and persistence then stay synchronous.
+      const catalogs = agents ? await agents.catalog() : null
+      const modelEdits = edits.filter((edit) => edit.path === '$models')
+      if (modelEdits.length > 1) throw new Error('Duplicate model settings')
+      const modelEdit = modelEdits[0]
+      if (modelEdit && schemaKey(modelEdit.schema) !== schemaKey(modelSettingsSchema)) throw new Error('Model options changed. Reload before saving.')
+      if (modelEdit && !sameValue(modelSettings(), modelEdit.before) && !sameValue(modelSettings(), modelEdit.value)) throw new Error('Model sets changed elsewhere. Reload before saving.')
+      const models = modelEdit ? modelPreferences.parse(modelEdit.value) : undefined
+      const preferences = applySettingEdits(sharedSettingsSchema, appPreferences, loadPreferences(), edits.filter((edit) => edit.path !== '$models'))
+      for (const edit of edits) {
+        const match = /^providerBinaries\.([^.]+)\.(accountId|accounts)$/.exec(edit.path)
+        if (!match) continue
+        const config = (preferences.providerBinaries as Record<string, { accountId?: string; accounts?: { id: string; enabled?: boolean }[] }>)[match[1]!]
+        if (config?.accountId && config.accountId !== 'default' && !config.accounts?.some((account) => account.id === config.accountId && account.enabled !== false)) throw new Error('Provider account options changed. Reload before saving.')
+      }
+      if (catalogs) validateSettingModels(edits, catalogs)
+      if (models) { workspace.setAppState('model-preferences', models); host.send('settings:models', models) }
+      savePreferences(preferences)
+      return settingsSnapshot()
+    } },
+    'settings.app.set': { args: z.tuple([appPreferences]), run: (preferences: AppPreferences) => savePreferences(preferences) },
     'background.keepAwake': { args: z.tuple([]), run: () => awake.status() },
     'activity.status': { args: z.tuple([]), run: () => {
       const items: BackgroundActivity[] = activity.status()
@@ -429,7 +474,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
       const saved = workspace.getAppState<(Omit<ModelPreferences, 'defaultBarMode'> & { defaultBarMode?: string }) | null>('model-preferences', null)
       return saved ? { ...saved, defaultBarMode: saved.defaultBarMode === 'effort' ? 'effort' : 'model' } : null
     } },
-    'settings.models.set': { args: z.tuple([modelPreferences]), run: (preferences: ModelPreferences) => workspace.setAppState('model-preferences', preferences) },
+    'settings.models.set': { args: z.tuple([modelPreferences]), run: (preferences: ModelPreferences) => { workspace.setAppState('model-preferences', preferences); host.send('settings:models', preferences) } },
     'ui.get': {
       args: z.tuple([]),
       run: () => {
@@ -532,14 +577,15 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
       args: z.tuple([z.array(z.string().min(1).max(4096)).max(100)]),
       run: (paths: string[]) => files.describeDroppedPaths(paths),
     },
-    'files.trash': {
+    // Deletion is permanent: it works the same on this computer and on a remote one, with no system Trash involved.
+    'files.delete': {
       args: z.tuple([id, id, relPath]),
       run: (t: string, r: string, path: string) => {
         const cwd = cwdOf(t, r)
         return lock.run(`checkout:${cwd}`, async () => {
           const absolute = await files.resolveEntryInRoot(cwd, path)
           if (absolute === cwd) throw new Error('The repository root cannot be deleted.')
-          await host.native('trash', absolute)
+          await rm(absolute, { recursive: true, force: true })
         })
       },
     },
@@ -620,11 +666,13 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
         return lock.run(`checkout:${cwd}`, () => git.unstage(cwd, paths))
       },
     },
+    'git.discardPreview': { args: z.tuple([id, id, z.array(relPath).min(1).max(10_000)]), run: (t: string, r: string, paths: string[]) => { const cwd = gitCwdOf(t, r); return lock.run(`checkout:${cwd}`, () => discardPreview(cwd, paths)) } },
     'git.discard': {
-      args: z.tuple([id, id, z.array(relPath).min(1).max(10_000)]),
-      run: (t: string, r: string, paths: string[]) => {
+      args: z.tuple([id, id, z.array(relPath).min(1).max(10_000), z.string().regex(/^[a-f0-9]{64}$/).optional()]),
+      run: (t: string, r: string, paths: string[], fingerprint?: string) => {
         const cwd = gitCwdOf(t, r)
         return lock.run(`checkout:${cwd}`, async () => {
+          if (fingerprint && (await discardPreview(cwd, paths)).fingerprint !== fingerprint) throw new Error('Files changed since the discard preview. Refresh and review them again.')
           const current = await git.status(cwd)
           const tracked: string[] = [], untracked: string[] = []
           for (const path of [...new Set(paths)]) {
@@ -635,7 +683,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
             else tracked.push(path)
           }
           await git.discardTracked(cwd, tracked)
-          for (const path of untracked) await host.native('trash', await files.resolveEntryInRoot(cwd, path))
+          for (const path of untracked) await rm(await files.resolveEntryInRoot(cwd, path), { recursive: true, force: true })
         })
       },
     },
@@ -755,9 +803,13 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'term.close': { args: z.tuple([id]), run: (t: string) => terminals.close(t) },
     'term.busy': { args: z.tuple([z.array(id).max(200)]), run: (ids: string[]) => ids.filter((t) => terminals.busy(t)).length },
     'agent.list': { args: z.tuple([id]), run: (taskId: string) => agents.list(taskId) },
+    'agent.counts': { args: z.tuple([]), run: () => agents.counts() },
     'agent.get': { args: z.tuple([id]), run: (sessionId: string) => agents.get(sessionId) },
     'agent.goal': { args: z.tuple([id]), run: (s: string) => agents.getGoal(s) },
     'agent.goal.control': { args: z.tuple([id, z.enum(['pause', 'resume', 'clear'])]), run: (s: string, action: 'pause' | 'resume' | 'clear') => agents.controlGoal(s, action) },
+    'agent.snapshot': { args: z.tuple([id]), run: (sessionId: string) => agents.snapshot(sessionId) },
+    'term.list': { args: z.tuple([id]), run: (taskId: string) => terminals.list(taskId) },
+    'term.snapshot': { args: z.tuple([id]), run: (termId: string) => terminals.snapshot(termId) },
     'agent.events': { args: z.tuple([id]), run: (sessionId: string) => agents.events(sessionId) },
     'agent.searchMessages': { args: z.tuple([z.string().max(200)]), run: (query: string) => agents.searchMessages(query) },
     'agent.scope': { args: z.tuple([id]), run: (taskId: string) => workspace.agentScope(taskId) },

@@ -188,6 +188,7 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
           <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) tray-settings" aria-label={t("Chat settings")} title={t("Chat settings")} onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git' } }))}><Settings size={14} /></Button>
         </ComposerTray>
         <Composer
+          persistentDraft
           scopeId={workspaceId ? `worktree:${workspaceId}` : `project:${projectId}`}
           attachments={attachments}
           onAttachmentsChange={setAttachments}

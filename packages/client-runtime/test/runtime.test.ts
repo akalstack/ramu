@@ -59,3 +59,27 @@ it('streams events and reports connection state', async () => {
   await expect.poll(() => seen).toEqual(['background:connection', 'automation:changed'])
   stop()
 })
+
+it('stops retrying when the server rejects the token, so a revoked device is not locked out of pairing', async () => {
+  let requests = 0
+  const server = await listen((_req, res) => { requests++; res.writeHead(401).end() }, 0)
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const seen: { connected: boolean; rejected?: boolean }[] = []
+  const stop = subscribeRuntime({ kind: 'http', url, token: 'revoked' }, (_channel, payload) => seen.push(payload))
+  await expect.poll(() => seen).toEqual([{ connected: false, rejected: true }])
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  expect(requests).toBe(1)
+  stop()
+})
+
+it('retries a dropped network server with growing delays', async () => {
+  let requests = 0
+  const server = await listen((_req, res) => { requests++; res.writeHead(503).end() }, 0)
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const stop = subscribeRuntime({ kind: 'http', url, token: 'x' }, () => {})
+  await new Promise((resolve) => setTimeout(resolve, 3500))
+  stop()
+  // 1 s then 2 s: attempts at 0, 1 and 3 s. A fixed one-second retry would make four or five.
+  expect(requests).toBeGreaterThanOrEqual(2)
+  expect(requests).toBeLessThanOrEqual(3)
+})

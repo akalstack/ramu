@@ -74,7 +74,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
   const children: Record<string, DirEntry[]> = {}
   directories.forEach((dir, index) => { const data = listings[index]?.data; if (data) children[dir] = data })
   const [target, setTarget] = useState<DirEntry>({ name: binding.repoName, path: '', kind: 'dir' })
-  const [action, setAction] = useState<{ type: 'create'; parent: string; kind: 'file' | 'dir' } | { type: 'rename'; entry: DirEntry } | { type: 'trash'; entries: DirEntry[] } | null>(null)
+  const [action, setAction] = useState<{ type: 'create'; parent: string; kind: 'file' | 'dir' } | { type: 'rename'; entry: DirEntry } | { type: 'delete'; entries: DirEntry[] } | null>(null)
   const [name, setName] = useState('')
   const [picked, setPicked] = useState<string[]>([])
   const [showFolderSelection, setShowFolderSelection] = useState(true)
@@ -83,7 +83,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const nameInput = useRef<HTMLInputElement>(null)
-  useLayoutEffect(() => { if (action && action.type !== 'trash') { nameInput.current?.focus(); nameInput.current?.select() } }, [action])
+  useLayoutEffect(() => { if (action && action.type !== 'delete') { nameInput.current?.focus(); nameInput.current?.select() } }, [action])
   const selectedRow = useRef<HTMLButtonElement>(null)
   const pendingReveal = useRef<string | null>(null)
   const state = ws.taskUi[taskId]
@@ -154,9 +154,9 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
   const entryAt = (path: string): DirEntry | undefined => (children[parentOf(path)] ?? []).find((entry) => entry.path === path)
   const visible = (dir: string): DirEntry[] => (children[dir] ?? []).flatMap((entry) => entry.kind === 'dir' && open.has(entry.path) ? [entry, ...visible(entry.path)] : [entry])
   const pickedEntries = picked.map(entryAt).filter((entry): entry is DirEntry => !!entry)
-  const trashPicked = (clicked?: DirEntry) => {
+  const deletePicked = (clicked?: DirEntry) => {
     const entries = clicked && !picked.includes(clicked.path) ? [clicked] : pickedEntries.length ? pickedEntries : clicked ? [clicked] : []
-    if (entries.length) begin({ type: 'trash', entries })
+    if (entries.length) begin({ type: 'delete', entries })
   }
   const reloadAll = async () => { await Promise.all([...open].map(load)) }
   const fail = (reason: unknown) => notifyError(errorText(reason), 'Explorer')
@@ -244,7 +244,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
     else if (mod && key === 'x' && picked.length) { event.preventDefault(); setClip(picked, true) }
     else if (mod && key === 'v' && clip) { event.preventDefault(); const entry = pickedEntries[0]; void pasteInto(entry ? dirOfTarget(entry) : '') }
     else if (mod && key === 'a') { event.preventDefault(); setPicked(visible('').map((entry) => entry.path)) }
-    else if (event.key === 'Delete' || event.metaKey && event.key === 'Backspace') { event.preventDefault(); trashPicked() }
+    else if (event.key === 'Delete' || event.metaKey && event.key === 'Backspace') { event.preventDefault(); deletePicked() }
     else if (event.key === 'F2' && pickedEntries.length === 1) { event.preventDefault(); begin({ type: 'rename', entry: pickedEntries[0]! }) }
     else if (event.key === 'Escape' && picked.length > 1) setPicked(picked.slice(-1))
     else if (['ArrowDown', 'ArrowUp'].includes(event.key)) {
@@ -282,7 +282,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
     { key: 'copy-paths', label: t("Copy paths"), onSelect: () => void copy(targets.map((entry) => `${binding.cwd}/${entry.path}`).join('\n')) },
     { key: 'copy-relative', label: t("Copy relative paths"), onSelect: () => void copy(targets.map((entry) => entry.path).join('\n')) },
     { key: 'separator', separator: true as const },
-    { key: 'trash', label: <><Trash2 size={14} />{t("Move ")}{targets.length} {t(" items to Trash…")}</>, disabled: busy, danger: true, onSelect: () => trashPicked(target) },
+    { key: 'delete', label: <><Trash2 size={14} />{t("Delete {0} items…", { "0": targets.length })}</>, disabled: busy, danger: true, onSelect: () => deletePicked(target) },
   ] : [
     ...(target.kind === 'dir' ? [
       { key: 'new-file', label: <><FilePlus size={14} />{t("New file…")}</>, disabled: busy, onSelect: () => begin({ type: 'create', parent: target.path, kind: 'file' }) },
@@ -303,7 +303,7 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
     ...(target.path ? [
       { key: 'separator', separator: true as const },
       { key: 'rename', label: <><Pencil size={14} />{t("Rename…")}</>, disabled: busy, onSelect: () => begin({ type: 'rename', entry: target }) },
-      { key: 'trash', label: <><Trash2 size={14} />{t("Move to Trash…")}</>, disabled: busy, danger: true, onSelect: () => trashPicked(target) },
+      { key: 'delete', label: <><Trash2 size={14} />{t("Delete…")}</>, disabled: busy, danger: true, onSelect: () => deletePicked(target) },
     ] : []),
   ])
   const confirmAction = async () => {
@@ -318,11 +318,11 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
         await load(action.parent)
         if (action.kind === 'file') ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path, preview: false })
         else await load(path)
-      } else if (action.type === 'trash') {
+      } else if (action.type === 'delete') {
         const inside = (view: { path: string }) => action.entries.some((entry) => view.path === entry.path || view.path.startsWith(`${entry.path}/`))
         const affected = (ws.taskUi[ws.workspaceOf(taskId)]?.views ?? []).filter((view) => (view.kind === 'file' || view.kind === 'diff' && !view.oid) && view.repoId === binding.repoId && inside(view))
         if (affected.some((view) => ws.dirty[view.id])) throw new Error('Save or close unsaved files in these items before continuing.')
-        for (const entry of action.entries) await invoke('files.trash', taskId, binding.repoId, entry.path)
+        for (const entry of action.entries) await invoke('files.delete', taskId, binding.repoId, entry.path)
         ws.closeViews(taskId, affected.map((view) => view.id))
         setPicked([])
         await Promise.all([...new Set(action.entries.map((entry) => parentOf(entry.path)))].map(load))
@@ -394,8 +394,8 @@ function RepoTree({ taskId, binding, primary }: { taskId: string; binding: Repos
   return (
     <div className="repo-tree [&:hover_.tree-children::before]:[background:var(--line-strong)] mb-1.5" onDragOver={(event) => dragOver(event, '')} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropDir(null) }} onDrop={(event) => dropInto(event, '')} onKeyDown={onTreeKey} onFocusCapture={() => { lastRepo = binding.repoId }}>
       {context.menu}
-      {action && <Dialog title={action.type === 'create' ? action.kind === 'file' ? t("New file") : t("New folder") : action.type === 'rename' ? t("Rename") : t("Move to Trash?")} confirmLabel={action.type === 'create' ? t("Create") : action.type === 'rename' ? t("Rename") : t("Move to Trash")} danger={action.type === 'trash'} busy={busy} error={error} onCancel={() => { if (!busy) setAction(null) }} onConfirm={() => void confirmAction()}>
-        {action.type === 'trash' ? <><p>{action.entries.length === 1 ? t("This item and its contents will move") : t("These {0} items and their contents will move", { "0": action.entries.length })} {t(" to the macOS Trash.")}</p><pre className="confirm-paths max-h-[240px] overflow-auto p-2.5 [border:1px_solid_transparent] rounded-(--radius-s) text-caption bg-fill">{action.entries.map((entry) => entry.path).join('\n')}</pre></> : <><label className="explorer-name-field [&_input]:w-full flex flex-col items-stretch">{t("Name")}<Input ref={nameInput} value={name} maxLength={255} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void confirmAction() }} /></label><p className="muted text-muted-foreground small text-caption">{binding.repoName}{action.type === 'create' && action.parent ? ` / ${action.parent}` : ''}</p></>}
+      {action && <Dialog title={action.type === 'create' ? action.kind === 'file' ? t("New file") : t("New folder") : action.type === 'rename' ? t("Rename") : t("Delete permanently?")} confirmLabel={action.type === 'create' ? t("Create") : action.type === 'rename' ? t("Rename") : t("Delete")} danger={action.type === 'delete'} busy={busy} error={error} onCancel={() => { if (!busy) setAction(null) }} onConfirm={() => void confirmAction()}>
+        {action.type === 'delete' ? <><p>{action.entries.length === 1 ? t("This item and its contents will be deleted permanently.") : t("These {0} items and their contents will be deleted permanently.", { "0": action.entries.length })}</p><pre className="confirm-paths max-h-[240px] overflow-auto p-2.5 [border:1px_solid_transparent] rounded-(--radius-s) text-caption bg-fill">{action.entries.map((entry) => entry.path).join('\n')}</pre></> : <><label className="explorer-name-field [&_input]:w-full flex flex-col items-stretch">{t("Name")}<Input ref={nameInput} value={name} maxLength={255} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void confirmAction() }} /></label><p className="muted text-muted-foreground small text-caption">{binding.repoName}{action.type === 'create' && action.parent ? ` / ${action.parent}` : ''}</p></>}
       </Dialog>}
       <Button variant="tree" className={`tree-root [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&:focus-visible]:[outline-color:var(--line-strong)] [&_>_span]:relative [&_>_span]:top-[-1px] [&.drop-target]:bg-brand-wash [&.drop-target]:[box-shadow:none] flex items-center w-full bg-transparent [border:none] rounded-(--radius-s) p-[3px_4px] gap-1.5 text-left whitespace-nowrap text-soft mb-0.5 justify-start${dropDir === '' ? ' drop-target' : ''}`} onDragOver={(event) => dragOver(event, '')} onDragLeave={() => setDropDir(null)} onDrop={(event) => dropInto(event, '')} onContextMenu={(event) => { setTarget({ name: binding.repoName, path: '', kind: 'dir' }); context.onContextMenu(event) }} onKeyDown={(event) => { if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') { setTarget({ name: binding.repoName, path: '', kind: 'dir' }); context.onKeyDown(event) } }} onClick={() => toggle('')} title={binding.cwd}>
         <ChevronRight size={12} className={open.has('') ? 'tree-caret [&.open]:[transform:rotate(90deg)] w-3 flex-none text-muted-foreground [transition:transform_0.12s_var(--ease)] open' : 'tree-caret [&.open]:[transform:rotate(90deg)] w-3 flex-none text-muted-foreground [transition:transform_0.12s_var(--ease)]'} />

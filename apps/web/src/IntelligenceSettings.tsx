@@ -1,3 +1,4 @@
+import { useSettingsInvoke } from './SettingsScope'
 import { useCallback, useEffect, useState } from 'react'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
@@ -18,10 +19,10 @@ const withCurrent = (values: number[], current: number) => [...new Set([...value
 export function ResponseSettings({ value, onChange }: Props) {
   return <>
     <SettingsGroupTitle>{t('Responses')}</SettingsGroupTitle>
-    <SettingsRow><SettingsLabel title={t('Response style')} help={t('How the agent words its replies. Applies from the next message.')} /><Dropdown label={t('Response style')} value={value.responseStyle} options={RESPONSE_STYLES.map((style) => ({ value: style, label: t(RESPONSE_STYLE_LABELS[style]) }))} onChange={(style) => onChange({ ...value, responseStyle: style as IntelligencePreferences['responseStyle'] })} /></SettingsRow>
+    <SettingsRow setting="intelligence.responseStyle"><SettingsLabel title={t('Response style')} help={t('How the agent words its replies. Applies from the next message.')} /><Dropdown label={t('Response style')} value={value.responseStyle} options={RESPONSE_STYLES.map((style) => ({ value: style, label: t(RESPONSE_STYLE_LABELS[style]) }))} onChange={(style) => onChange({ ...value, responseStyle: style as IntelligencePreferences['responseStyle'] })} /></SettingsRow>
     {value.responseStyle === 'custom' && <>
-      <SettingsRow className="settings-stack"><SettingsLabel title={t('Custom style instructions')} help={t('Describe the tone and format you want.')} /><Textarea aria-label={t('Custom style instructions')} value={value.responseInstructions} maxLength={4000} rows={4} onChange={(e) => onChange({ ...value, responseInstructions: e.target.value })} /></SettingsRow>
-      <SettingsRow><SettingsLabel title={t('Style skill name')} help={t('Optional. Name of an installed skill to follow as well.')} /><Input aria-label={t('Style skill name')} value={value.responseSkill} maxLength={200} onChange={(e) => onChange({ ...value, responseSkill: e.target.value })} /></SettingsRow>
+      <SettingsRow setting="intelligence.responseInstructions" className="settings-stack"><SettingsLabel title={t('Custom style instructions')} help={t('Describe the tone and format you want.')} /><Textarea aria-label={t('Custom style instructions')} value={value.responseInstructions} maxLength={4000} rows={4} onChange={(e) => onChange({ ...value, responseInstructions: e.target.value })} /></SettingsRow>
+      <SettingsRow setting="intelligence.responseSkill"><SettingsLabel title={t('Style skill name')} help={t('Optional. Name of an installed skill to follow as well.')} /><Input aria-label={t('Style skill name')} value={value.responseSkill} maxLength={200} onChange={(e) => onChange({ ...value, responseSkill: e.target.value })} /></SettingsRow>
     </>}
   </>
 }
@@ -29,9 +30,9 @@ export function ResponseSettings({ value, onChange }: Props) {
 export function EfficiencySettings({ value, onChange }: Props) {
   return <>
     <SettingsGroupTitle>{t('Token efficiency')}</SettingsGroupTitle>
-    <SettingsRow><SettingsLabel title={t('Tool output compression')} help={t('Shorten large tool results before the model reads them. The full output stays available on request.')} /><Dropdown label={t('Tool output compression')} value={value.compression} options={[{ value: 'off', label: t('Off') }, { value: 'balanced', label: t('Balanced (recommended)') }, { value: 'aggressive', label: t('Aggressive') }]} onChange={(mode) => onChange({ ...value, compression: mode as IntelligencePreferences['compression'] })} /></SettingsRow>
-    <SettingsRow><SettingsLabel title={t('Load tools on demand')} help={t('Keep optional Ramu tools out of the prompt until the agent needs them. Applies to new provider sessions.')} /><Switch aria-label={t('Load tools on demand')} checked={value.toolSearch} onCheckedChange={(toolSearch) => onChange({ ...value, toolSearch })} /></SettingsRow>
-    <SettingsRow><SettingsLabel title={t('RTK command tool')} help={t('Advanced. Lets full-access chats run commands through an installed RTK binary. Normal shell commands are unchanged.')} /><Switch aria-label={t('RTK command tool')} checked={value.rtk} onCheckedChange={(rtk) => onChange({ ...value, rtk })} /></SettingsRow>
+    <SettingsRow setting="intelligence.compression"><SettingsLabel title={t('Tool output compression')} help={t('Shorten large tool results before the model reads them. The full output stays available on request.')} /><Dropdown label={t('Tool output compression')} value={value.compression} options={[{ value: 'off', label: t('Off') }, { value: 'balanced', label: t('Balanced (recommended)') }, { value: 'aggressive', label: t('Aggressive') }]} onChange={(mode) => onChange({ ...value, compression: mode as IntelligencePreferences['compression'] })} /></SettingsRow>
+    <SettingsRow setting="intelligence.toolSearch"><SettingsLabel title={t('Load tools on demand')} help={t('Keep optional Ramu tools out of the prompt until the agent needs them. Applies to new provider sessions.')} /><Switch aria-label={t('Load tools on demand')} checked={value.toolSearch} onCheckedChange={(toolSearch) => onChange({ ...value, toolSearch })} /></SettingsRow>
+    <SettingsRow setting="intelligence.rtk"><SettingsLabel title={t('RTK command tool')} help={t('Advanced. Lets full-access chats run commands through an installed RTK binary. Normal shell commands are unchanged.')} /><Switch aria-label={t('RTK command tool')} checked={value.rtk} onCheckedChange={(rtk) => onChange({ ...value, rtk })} /></SettingsRow>
   </>
 }
 
@@ -43,11 +44,12 @@ export function MaintenanceModelSettings({ value, onChange, cleanup }: Props & {
   if (value.learning === 'off' && !cleanup) return null
   return <div className="settings-form flex flex-col gap-0 mt-6">
     <SettingsGroupTitle>{t('Background model')}</SettingsGroupTitle>
-      <SettingsRow><SettingsLabel title={t('Model for background maintenance')} help={t('Used for learning reviews and memory cleanup. A cheaper model keeps token use low.')} /><Dropdown label={t('Model for background maintenance')} value={modelId} options={[{ value: '', label: t('Same as chat') }, ...steps.map((step) => ({ value: step.id, label: modelStepName(step, models.catalogs) }))]} onChange={(id) => { const step = steps.find((step) => step.id === id); onChange({ ...value, maintenanceModel: step ? { provider: step.provider, model: step.model, effort: step.effort } : null }) }} /></SettingsRow>
+      <SettingsRow setting="intelligence.maintenanceModel"><SettingsLabel title={t('Model for background maintenance')} help={t('Used for learning reviews and memory cleanup. A cheaper model keeps token use low.')} /><Dropdown label={t('Model for background maintenance')} value={modelId} options={[{ value: '', label: t('Same as chat') }, ...steps.map((step) => ({ value: step.id, label: modelStepName(step, models.catalogs) }))]} onChange={(id) => { const step = steps.find((step) => step.id === id); onChange({ ...value, maintenanceModel: step ? { provider: step.provider, model: step.model, effort: step.effort } : null }) }} /></SettingsRow>
   </div>
 }
 
 export function LearningSettings({ value, onChange }: Props) {
+  const invoke = useSettingsInvoke()
   const [snapshot, setSnapshot] = useState<LearningSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState<ManagedSkill[]>([])
@@ -62,10 +64,10 @@ export function LearningSettings({ value, onChange }: Props) {
   })
   return <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 mt-6">
     <SettingsGroupTitle>{t('Learning & skills')}</SettingsGroupTitle>
-    <SettingsRow><SettingsLabel title={t('Automatic learning')} help={t('After a chat, look for lasting notes and reusable skills. Uses model tokens when idle.')} /><Dropdown label={t('Automatic learning')} value={value.learning} options={[{ value: 'off', label: t('Off') }, { value: 'review', label: t('Ask me first') }, { value: 'auto', label: t('Save automatically (recommended)') }]} onChange={(learning) => onChange({ ...value, learning: learning as IntelligencePreferences['learning'] })} /></SettingsRow>
+    <SettingsRow setting="intelligence.learning"><SettingsLabel title={t('Automatic learning')} help={t('After a chat, look for lasting notes and reusable skills. Uses model tokens when idle.')} /><Dropdown label={t('Automatic learning')} value={value.learning} options={[{ value: 'off', label: t('Off') }, { value: 'review', label: t('Ask me first') }, { value: 'auto', label: t('Save automatically (recommended)') }]} onChange={(learning) => onChange({ ...value, learning: learning as IntelligencePreferences['learning'] })} /></SettingsRow>
     {value.learning !== 'off' && <>
-      <SettingsRow><SettingsLabel title={t('Reviews per day')} help={t('Upper limit on background reviews, to cap token use.')} /><Dropdown label={t('Reviews per day')} value={String(value.dailyReviews)} options={withCurrent([1, 3, 5, 10, 20], value.dailyReviews).map((n) => ({ value: String(n), label: String(n) }))} onChange={(n) => onChange({ ...value, dailyReviews: Number(n) })} /></SettingsRow>
-      <SettingsRow><SettingsLabel title={t('Archive unused skills after')} help={t('Only skills Ramu created are archived. Pinned skills are kept.')} /><Dropdown label={t('Archive unused skills after')} value={String(value.archiveSkillDays)} options={withCurrent([30, 60, 90, 180, 365], value.archiveSkillDays).map((days) => ({ value: String(days), label: t('{0} days', { 0: days }) }))} onChange={(days) => onChange({ ...value, archiveSkillDays: Number(days) })} /></SettingsRow>
+      <SettingsRow setting="intelligence.dailyReviews"><SettingsLabel title={t('Reviews per day')} help={t('Upper limit on background reviews, to cap token use.')} /><Dropdown label={t('Reviews per day')} value={String(value.dailyReviews)} options={withCurrent([1, 3, 5, 10, 20], value.dailyReviews).map((n) => ({ value: String(n), label: String(n) }))} onChange={(n) => onChange({ ...value, dailyReviews: Number(n) })} /></SettingsRow>
+      <SettingsRow setting="intelligence.archiveSkillDays"><SettingsLabel title={t('Archive unused skills after')} help={t('Only skills Ramu created are archived. Pinned skills are kept.')} /><Dropdown label={t('Archive unused skills after')} value={String(value.archiveSkillDays)} options={withCurrent([30, 60, 90, 180, 365], value.archiveSkillDays).map((days) => ({ value: String(days), label: t('{0} days', { 0: days }) }))} onChange={(days) => onChange({ ...value, archiveSkillDays: Number(days) })} /></SettingsRow>
     </>}
     <Button disabled={busy || snapshot?.running || value.learning === 'off'} variant="secondary" className="bg-fill hover:bg-fill-hover self-start mb-4 mt-1" onClick={() => void act(() => invoke('learning.run'))}>{snapshot?.running ? t('Reviewing…') : t('Run learning maintenance')}</Button>
     {reviews?.slice(0, 30).map((job) => <article key={job.id} className="bg-card rounded-(--radius-m) p-3 mb-2 flex flex-col gap-2">

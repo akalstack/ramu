@@ -39,7 +39,7 @@ export function foldChatTurn(items: ChatBlock[], outcomes: Map<string, string>, 
     const foldable = event.kind === 'text' || event.kind === 'content' || event.kind === 'thinking'
       || event.kind === 'plan' && event.entries.every(entry => entry.status === 'completed')
       || event.kind === 'agent' && event.taskType !== 'advisor' && event.status === 'completed' && !openGroup.has(block)
-      || (event.kind === 'permission-request' || event.kind === 'elicitation' || event.kind === 'question') && ['approved', 'accepted', 'answered', 'allow', 'allowed'].includes(outcomes.get(event.requestId) ?? '')
+      || (event.kind === 'permission-request' || event.kind === 'elicitation') && ['approved', 'accepted', 'answered', 'allow', 'allowed'].includes(outcomes.get(event.requestId) ?? '')
     ;(foldable ? folded : kept).push(block)
   }
   return { folded, kept, answer: items.slice(start) }

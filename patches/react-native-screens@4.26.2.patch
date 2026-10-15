@@ -1,0 +1,29 @@
+diff --git a/ios/RNSScreen.mm b/ios/RNSScreen.mm
+index 9b66012dc8db1e3af0cb5457f8dad86e7f2fe5e3..6729f74658434917ec049f698c1b0d8fa79b62d7 100644
+--- a/ios/RNSScreen.mm
++++ b/ios/RNSScreen.mm
+@@ -26,6 +26,7 @@
+ #import "RNSScreenStack.h"
+ #import "RNSScreenStackHeaderConfig.h"
+ #import "RNSScrollViewFinder.h"
++#import "RNSScrollViewSeeking.h"
+ #import "RNSScrollViewHelper.h"
+ #import "RNSTabBarController.h"
+ 
+@@ -1105,6 +1106,16 @@ - (void)overrideScrollViewBehaviorInFirstDescendantChainIfNeeded
+   }
+ }
+ 
++// Bridge the library's native ScrollViewMarker to legacy Stack screens.
++// Registration happens after the marked scroll view mounts, so toolbar views
++// and React wrappers cannot obscure UIKit's content-scroll-view discovery.
++- (void)registerDescendantScrollView:(UIScrollView *)scrollView fromMarker:(RNSScrollViewMarkerComponentView *)marker
++{
++  if (@available(iOS 15.0, *)) {
++    [_controller setContentScrollView:scrollView forEdge:NSDirectionalRectEdgeTop];
++  }
++}
++
+ - (void)updateContentScrollViewEdgeEffectsIfExists
+ {
+   [RNSScrollEdgeEffectApplicator applyToScrollView:[RNSScrollViewFinder findScrollViewInFirstDescendantChainFrom:self]

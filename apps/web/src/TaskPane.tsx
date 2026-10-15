@@ -34,7 +34,7 @@ import { beginDrag, setActiveDrag, TAB_DRAG_TYPE, TERMINAL_DRAG_TYPE, useActiveD
 import { useAppSettings } from './AppSettings'
 import { useChatHidden, useEditorSide } from './layoutPrefs'
 import { isPreviewable, isWorkspaceCtx, tabOrder, useWorkspace } from './workspace'
-import { WorkspaceTools, workspaceToolOf } from './WorkspaceTools'
+import { WorkspaceRail, workspaceToolOf } from './WorkspaceTools'
 
 
 /**
@@ -112,7 +112,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   const terminalDock = state.terminalDock ?? preferences.defaultTerminalDock
   const rightTerminal = terminalOpen && terminalDock === 'right' && !composing
   const bottomTerminal = terminalOpen && terminalDock === 'bottom' && !composing
-  const editorOpen = (!!editorView || !!workspaceTool) && !composing
+  const editorOpen = !!editorView && !composing
   useLayoutEffect(() => {
     const slot = rightTerminal ? rightSlot : bottomTerminal ? bottomSlot : null
     if (slot && terminalHost.parentElement !== slot) slot.appendChild(terminalHost)
@@ -169,7 +169,8 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
           </Button>
         </div>
       )}
-      <div className="task-body flex-1 min-h-0 min-w-0 relative" ref={body}>
+      <div className="task-body flex-1 min-h-0 min-w-0 flex" ref={body}>
+      <div className="task-main relative flex-1 min-h-0 min-w-0">
         <DockZones taskId={taskId} editorOpen={editorOpen} onEditorSide={setEditorSide} />
         <WorkspaceSplit id={`${workspaceId}.terminal-bottom`} orientation="vertical" resizePreview open={bottomTerminal} label={t("Resize terminal panel")} defaultShare={30} primaryMin={240} secondaryMin={120}
           primary={
@@ -185,6 +186,8 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
           }
           secondary={<div className="h-full w-full min-w-0 min-h-0" ref={setBottomSlot} />}
         />
+      </div>
+      {workspaceTool && <WorkspaceRail tool={workspaceTool} />}
         {createPortal(
         <div className="main-chat h-full w-full [&_>_.home-page]:flex-1 [&_>_.home-page]:min-h-0 flex-1 min-w-0 flex-col bg-canvas" style={{ display: 'flex' }}>
           {(showLauncherMain || (editorView && !chatView)) && isWorkspaceCtx(taskId) && (
@@ -274,7 +277,6 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
         </div>
         {!editorView && <Empty className="flex-1"><EmptyHeader><EmptyMedia variant="icon"><FileText /></EmptyMedia><EmptyTitle>{t("Select a file to open it here.")}</EmptyTitle></EmptyHeader></Empty>}
       </div>
-      {workspaceTool && <div className="workspace-rail flex-none h-full w-[260px] min-w-0 [border-left:1px_solid_var(--pane-border-color)]"><WorkspaceTools tool={workspaceTool} /></div>}
       </div>, editorHost)}
         {createPortal(<TerminalPanel taskId={workspaceId} visible={visible} hidden={composing} dock={terminalDock} />, terminalHost)}
       </div>

@@ -91,7 +91,7 @@ export function ChangeReviewTab({ view, visible = true }: { view: Extract<ViewDe
       catch (reason) { if (!disposed && seq === request) setBranchError(errorText(reason)) }
     }
     void refresh()
-    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void refresh() }, 15000)
+    const timer = window.setInterval(() => { if (!document.documentElement.hasAttribute('data-workspace-hidden') && document.visibilityState === 'visible') void refresh() }, 15000)
     window.addEventListener('focus', refresh)
     const off = ramu.on('fs:changed', ({ path }) => { if (path === '.git/HEAD') void refresh() })
     return () => { disposed = true; clearInterval(timer); window.removeEventListener('focus', refresh); off() }

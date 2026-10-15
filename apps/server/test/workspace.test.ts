@@ -63,6 +63,29 @@ beforeEach(() => {
 afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
 describe('project-free chat files', () => {
+  it('deletes files and folders directly, unlinks selected symlinks, and protects the root', async () => {
+    const task = await ws.createTask({ projectId: NO_PROJECT, title: 'Delete files', mode: 'current' })
+    const binding = ws.fileBindings(task.id)[0]!
+    const cwd = binding.cwd
+    writeFileSync(join(cwd, 'keep.txt'), 'Keep the symlink target')
+    symlinkSync(join(cwd, 'keep.txt'), join(cwd, 'link.txt'))
+    mkdirSync(join(cwd, 'folder'))
+    writeFileSync(join(cwd, 'folder', 'nested.txt'), 'Delete this folder')
+    const dispatcher = createDispatcher({ userData: join(tmp, 'profile'), send: () => {}, native: async () => { throw new Error('Deletion must not need a desktop action') } }, { workspace: ws } as Services)
+    try {
+      await dispatcher.invoke('files.delete', [task.id, binding.repoId, 'link.txt'])
+      expect(existsSync(join(cwd, 'link.txt'))).toBe(false)
+      expect(readFileSync(join(cwd, 'keep.txt'), 'utf8')).toBe('Keep the symlink target')
+      await dispatcher.invoke('files.delete', [task.id, binding.repoId, 'folder'])
+      expect(existsSync(join(cwd, 'folder'))).toBe(false)
+      await expect(dispatcher.invoke('files.delete', [task.id, binding.repoId, ''])).rejects.toThrow('root cannot be deleted')
+      await expect(dispatcher.invoke('files.delete', [task.id, binding.repoId, '../'])).rejects.toThrow(PathEscapeError)
+      expect(existsSync(cwd)).toBe(true)
+      await dispatcher.invoke('files.delete', [task.id, binding.repoId, 'keep.txt'])
+      expect(existsSync(join(cwd, 'keep.txt'))).toBe(false)
+    } finally { dispatcher.close() }
+  })
+
   it('exposes the agent folder for editing and context, with a separate persistent folder per chat', async () => {
     const first = await ws.createTask({ projectId: NO_PROJECT, title: 'Notes', mode: 'current' })
     const second = await ws.createTask({ projectId: NO_PROJECT, title: 'Other notes', mode: 'current' })

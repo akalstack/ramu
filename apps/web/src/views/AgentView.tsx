@@ -28,7 +28,8 @@ import { foldChatTurn as foldTurn, toolNeedsAttention, type ChatBlock as Block }
 import { toolIsRunning, toolVerb } from '@ramu/shared/toolStatus'
 import { agentActivityLabel } from '@ramu/shared/agentActivity'
 import { ChatActivityButton } from '../ChatActivity'
-import { GoalBar, GoalDone } from '../GoalBar'
+import { GoalBar, GoalDone, GoalNote } from '../GoalBar'
+import { goalChanges } from '@ramu/shared/goalHistory'
 import { accessName, AgentControls, providerName } from '../AgentControls'
 import { useAppSettings } from '../AppSettings'
 import { reviewsByTurn } from '@ramu/shared/reviewGroups'
@@ -64,6 +65,7 @@ import { parseAnswerMessage, questionState, type QuestionState } from '@ramu/sha
 import { localFileLink } from '@ramu/shared/fileLinks'
 import { notifyError } from '../Notifications'
 import { draftKey, loadDraft, useDraftPersistence } from '../drafts'
+import { registerWorkspaceCheckpoint } from '../workspaceCheckpoint'
 import { ProviderWaitNote } from '../ProviderWait'
 import { ComposerTray } from '../ComposerTray'
 import { providerWaitOf } from '@ramu/shared/providerWait'
@@ -86,6 +88,7 @@ function toBlocks(events: AgentEvent[]): Block[] {
   const blocks: Block[] = []
   const agentUpdates = new Map(events.flatMap(event => event.kind === 'agent' && event.taskType !== 'local_bash' ? [[event.agentId, event] as const] : []))
   const seenAgents = new Set<string>()
+  const goalNotes = goalChanges(events)
   const failed = new Set(events.flatMap(event => event.kind === 'tool-result' && event.isError ? [event.toolUseId] : []))
   // The call that started a sub-agent is the card it produced.
   const agentCalls = new Set(events.flatMap(event => event.kind === 'agent' && event.taskType !== 'local_bash' && event.toolUseId ? [event.toolUseId] : []))
@@ -108,6 +111,8 @@ function toBlocks(events: AgentEvent[]): Block[] {
     if (event.kind === 'tool-use' && isAdvisorTool(event)) continue
     // Questions, goals, schedules and sub-agents have their own place in the chat; a failed call stays, since nothing else shows it.
     if (event.kind === 'tool-use' && (ramuToolHasOwnUi(event) || agentCalls.has(event.toolUseId)) && !failed.has(event.toolUseId)) continue
+    // A goal leaves a line at each turning point; the rest of its ticks live in the tray.
+    if (event.kind === 'goal' && goalNotes.has(event)) { blocks.push({ kind: 'event', event }); continue }
     if (event.kind === 'goal' || event.kind === 'queue' || event.kind === 'tool-result' || event.kind === 'state' || event.kind === 'request-resolved' || event.kind === 'question-state') continue
     const last = blocks.at(-1)
     if (event.kind === 'tool-use') {
@@ -237,6 +242,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
   const stick = useRef(chatPresentation.get(view.sessionId)?.stick ?? true)
   const latestChat = useRef({ session, events, draft, attachments })
   latestChat.current = { session, events, draft, attachments }
+  useEffect(() => registerWorkspaceCheckpoint(async () => latestChat.current.attachments.length === 0), [])
   useLayoutEffect(() => {
     const saved = chatPresentation.get(view.sessionId)
     if (saved && scroller.current) scroller.current.scrollTop = saved.top
@@ -316,7 +322,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
     const measure = () => {
       // Measuring the transcript forces layout. Defer this stable scrollbar
       // gutter until release instead of doing it for every live drag frame.
-      if (document.querySelector('[data-separator="active"], [data-workspace-split][data-dragging]')) return
+      if (document.querySelector('[data-separator="active"], [data-workspace-split][data-dragging], [data-rail-dragging]')) return
       const width = el.offsetWidth - el.clientWidth
       if (width === previousWidth) return
       previousWidth = width
@@ -326,7 +332,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     const release = new MutationObserver(measure)
-    release.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['data-separator', 'data-dragging'] })
+    release.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['data-separator', 'data-dragging', 'data-rail-dragging'] })
     return () => { observer.disconnect(); release.disconnect() }
   }, [])
 
@@ -383,6 +389,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
   const openQuestion = (requestId: string) => setQuestionFocus({ requestId, at: Date.now() })
   const results = useMemo(() => new Map(events.flatMap((e) => (e.kind === 'tool-result' ? [[e.toolUseId, e] as const] : []))), [events])
   const blocks = useMemo(() => toBlocks(events), [events])
+  const goalNotes = useMemo(() => goalChanges(events), [events])
   const latestAssistant = blocks.findLast((block) => block.kind === 'event' && block.event.kind === 'text')
   const handledSource = useRef<string | null>(null)
   useEffect(() => {
@@ -629,6 +636,8 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
               return <div key={index} data-block-index={index}>
                 {b.kind === 'tools' ? (
                   <ToolGroup tools={b.tools} results={results} cwd={session?.cwd ?? ''} active={busyAgent && !finished} activity={b === statusGroup ? translate(activityLabel ?? "Working") : undefined} taskId={session?.taskId} onBackground={session?.provider === 'claude-code' && live ? backgroundTool : undefined} />
+                ) : b.event.kind === 'goal' ? (
+                  goalNotes.has(b.event) ? <GoalNote change={goalNotes.get(b.event)!} /> : null
                 ) : b.event.kind === 'agent' ? (
                   b.event.taskType === 'advisor' ? <AdvisorActivity task={b.event} live={live} onOpen={() => setOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)} /> : <AgentTaskCard task={b.event} live={live} onOpen={() => setOpenAgent(b.event.kind === 'agent' ? b.event.agentId : null)} onStop={stopTask} />
                 ) : (
@@ -670,9 +679,9 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
           <Pencil size={14} /><div className="chat-edit-copy [&_strong]:text-caption [&_strong]:font-medium [&_span]:text-caption [&_span]:text-muted-foreground flex-1 min-w-[180px] grid gap-[3px]"><strong>{translate("Editing message")}</strong><span>{editRestored ? translate("Selected files restored. Send your revised message.") : translate("Restore file changes before sending, if needed.")}</span></div><Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption" disabled={configuring} onClick={() => { setEditTarget(null); setEditRestored(false) }}>{translate("Cancel edit")}</Button>
           {!editRestored && <UndoRun sessionId={view.sessionId} userSeq={editTarget} onRestored={() => setEditRestored(true)} />}
         </div>}
-        {dockQuestions.length > 0 && <QuestionDock sessionId={view.sessionId} requests={dockQuestions} states={questionStates} open={questionDockOpen} onOpenChange={setQuestionDockOpen} focus={questionFocus} />}
         {error && <div className="error text-bad">{error}</div>}
-        {(providerWait || liveGoal || queued.length > 0) && <ComposerTray className="chat-tray [&_.provider-wait_+_*]:mt-0.5 [&_.provider-wait_+_*]:pt-0.5 [&_.provider-wait_+_*]:[border-top:1px_solid_var(--line)] [&_.message-queue]:gap-0 [&_.message-queue]:p-0 [&_.message-queue]:m-0 [&_.message-queue]:[border:0] [&_.message-queue]:[border-radius:0] [&_.message-queue]:bg-transparent [&_.message-queue]:max-h-[136px] [&_.goal-bar_+_.message-queue]:mt-0.5 [&_.goal-bar_+_.message-queue]:pt-0.5 [&_.goal-bar_+_.message-queue]:[border-top:1px_solid_var(--line)] flex-col max-w-[calc(var(--chat-column-width)_-_24px)]!">
+        {(providerWait || liveGoal || queued.length > 0 || dockQuestions.length > 0) && <ComposerTray className="chat-tray [&_.question-dock_+_*]:mt-0.5 [&_.question-dock_+_*]:pt-0.5 [&_.question-dock_+_*]:[border-top:1px_solid_var(--line)] [&_.provider-wait_+_*]:mt-0.5 [&_.provider-wait_+_*]:pt-0.5 [&_.provider-wait_+_*]:[border-top:1px_solid_var(--line)] [&_.message-queue]:gap-0 [&_.message-queue]:p-0 [&_.message-queue]:m-0 [&_.message-queue]:[border:0] [&_.message-queue]:[border-radius:0] [&_.message-queue]:bg-transparent [&_.message-queue]:max-h-[136px] [&_.goal-bar_+_.message-queue]:mt-0.5 [&_.goal-bar_+_.message-queue]:pt-0.5 [&_.goal-bar_+_.message-queue]:[border-top:1px_solid_var(--line)] flex-col max-w-[calc(var(--chat-column-width)_-_24px)]!">
+        {dockQuestions.length > 0 && <QuestionDock sessionId={view.sessionId} requests={dockQuestions} states={questionStates} open={questionDockOpen} onOpenChange={setQuestionDockOpen} focus={questionFocus} />}
         {providerWait && <ProviderWaitNote retryAt={providerWait.retryAt} />}
         {liveGoal && <GoalBar goal={liveGoal} onControl={(action) => { void act(() => invoke('agent.goal.control', view.sessionId, action)) }} />}
         {queued.length > 0 && <div className="message-queue flex flex-col gap-1.5 p-[8px_12px] mb-2 max-h-[180px] overflow-auto [border:1px_solid_transparent] rounded-(--radius-s) bg-raised" aria-label={translate("Queued messages")}>
@@ -699,6 +708,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
         </div>}
         </ComposerTray>}
         <Composer
+          persistentDraft
           attachments={attachments}
           onAttachmentsChange={setAttachments}
           stop={{ active: live && busyAgent, onStop: () => { setInterrupted(true); void act(() => invoke('agent.interrupt', view.sessionId)) } }}

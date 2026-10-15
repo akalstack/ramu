@@ -36,6 +36,7 @@ import { useGitChangeCount } from './useGitChangeCount'
 import { CreateEntryDialog } from './CreateEntryDialog'
 import { HomePage, NewTask } from './NewTask'
 import { AnimatedMark, BootScreen, Wordmark } from './Brand'
+import { ComputerSwitcher, WorkspaceComputerIndicator } from './computers'
 import { useAddProject } from './addProject'
 import { ProjectsPanel } from './sidebar/ProjectsPanel'
 import { TaskPane } from './TaskPane'
@@ -208,12 +209,14 @@ function Shell() {
           <div className="ml-auto flex items-center">{sidebarToggle}</div>
         </div>
         {globalPage ? <header className="task-header [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_.chat-switch-btn:hover_.header-secondary]:text-soft [&_.header-center]:flex [&_.header-center]:items-center [&_.header-center]:gap-2 [&_.header-center]:flex-1 [&_.header-center]:min-w-0 [&_.header-center]:overflow-hidden [&::after]:[content:''] [&::after]:flex-1 [&_.header-title]:relative [&_.header-title]:top-[-1px] [&_.header-title]:leading-[20px] [&_.header-secondary]:relative [&_.header-secondary]:top-[-1px] [&_.header-secondary]:leading-[20px] [&_.header-meta]:relative [&_.header-meta]:top-[-1px] [&_.header-meta]:leading-[20px] [&_.header-meta]:shrink-0 [&_.header-meta]:max-w-[25%] [&_.header-meta]:overflow-hidden [&_.header-meta]:text-ellipsis [&_.chat-switch-btn]:justify-start [&_.chat-switch-btn]:w-[fit-content] [&_.chat-switch-btn]:max-w-[none] [&_.chat-switch-btn]:flex-initial [&_.chat-switch-btn_.header-title]:flex-initial [&_.chat-switch-btn_.header-title]:min-w-0 [&_.chat-switch-btn_.header-title]:max-w-[none] [&_.chat-switch-btn_.header-title]:text-left [&_.chat-switch-btn_.header-secondary]:flex-initial [&_.chat-switch-btn_.header-secondary]:min-w-0 [&_.chat-switch-btn_.header-secondary]:max-w-[none] [&_.chat-switch-btn_.header-secondary]:text-left [&:has(.workspace-tool-buttons)::after]:hidden [&_.workspace-tool-buttons]:ml-auto [&_.header-center_>_svg]:flex-none [&_.header-center_.chat-switch-btn]:max-w-full [&_.header-center_.chat-switch-btn]:min-w-0 flex-none flex items-center gap-2.5 p-[0_12px_0_16px] [-webkit-app-region:drag] min-w-0 h-[46px] [border-bottom-color:var(--line)] [border-bottom:0]"><span className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default">{t("Schedules")}</span></header> : <TaskHeader starting={!!startProject || landing} tools={toolButtons} />}
+        <WorkspaceComputerIndicator />
       </div>
       <ResizablePanelGroup orientation="horizontal" id="shell" onLayoutChanged={onShellLayout} resizePreviewMode={terminalShown ? 'separator' : undefined}>
       <SeparatorOverlay className="bg-[var(--pane-border-active)] -translate-x-[1.5px]" style={{ width: 4 }} />
       <ResizablePanel id="sidebar" panelRef={sidebarPanel} collapsible collapsedSize={0} minSize={SIDEBAR_WIDTH_RANGE[0]} maxSize={SIDEBAR_WIDTH_RANGE[1]} defaultSize={preferences.sidebarWidth} onResize={onSidebarResize}>
       <aside id="workspace-sidebar" className="sidebar flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] h-[calc(100%_-_var(--titlebar-h))] bg-transparent opacity-100 visible" aria-hidden={sidebarHidden} inert={sidebarHidden}>
         <nav className="sidebar-nav flex flex-col gap-px p-[2px_8px_6px] flex-none" aria-label={t("Activity")}>
+          <ComputerSwitcher />
           <div className="sidebar-actions @container flex items-center gap-1">
             <Button variant="secondary" className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] flex-1 min-w-0 bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start" onClick={() => ws.newTask()}>
               <SquarePen data-icon="inline-start" /> <span className="grow flex-1 min-w-0 truncate text-left">{t("New chat")}</span> <Kbd className="hidden @min-[230px]:inline-flex">{formatKeys('mod+n')}</Kbd>

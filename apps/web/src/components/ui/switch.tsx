@@ -1,3 +1,4 @@
+import { useSettingsField } from '../../settingsField'
 import { Switch as SwitchPrimitive } from "@base-ui/react/switch"
 import { cn } from "cn"
 
@@ -8,6 +9,8 @@ function Switch({
 }: SwitchPrimitive.Root.Props & {
   size?: "sm" | "default"
 }) {
+  const field = useSettingsField()
+  const onCheckedChange: typeof props.onCheckedChange = (...args) => { field?.mark(); props.onCheckedChange?.(...args) }
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
@@ -17,6 +20,8 @@ function Switch({
         className
       )}
       {...props}
+      disabled={props.disabled || field?.disabled}
+      onCheckedChange={onCheckedChange}
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"

@@ -8,6 +8,7 @@ import type { EditorConfigProps, RepositoryBinding, ViewDescriptor } from '@ramu
 import { useAppSettings } from '../AppSettings'
 import { invoke, ramu } from '../ipc'
 import { registerBuffer, registerSelection } from '../editorBuffers'
+import { onWorkspaceVisibility, workspaceVisible } from '../workspaceLifetime'
 import { monaco } from '../monaco'
 import { applyEditorConfig, normalizeForSave } from '../editorConfig'
 import { errorText } from '../TaskPane'
@@ -157,8 +158,8 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
         )
 
         // Agents, terminals and other tools write to the same files.
-        const off = ramu.on('fs:changed', async ({ cwd, path }) => {
-            if (cwd !== binding.cwd || path !== view.path || !loaded.current) return
+        const readDisk = async () => {
+            if (!loaded.current || !workspaceVisible()) return
             const current = ++diskRequest
             const disk = await invoke('files.read', taskId, binding.repoId, view.path).catch(() => null)
             if (disposed || current !== diskRequest) return
@@ -172,11 +173,13 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
             } else {
                 setConflict({ disk: disk?.content ?? null, diskHash })
             }
-        })
+        }
+        const off = ramu.on('fs:changed', ({ cwd, path }) => { if (cwd === binding.cwd && path === view.path) void readDisk() })
+        const visibility = onWorkspaceVisibility(() => { if (workspaceVisible()) void readDisk() })
 
         return () => {
             disposed = true
-            off()
+            off(); visibility()
             window.removeEventListener('ramu:save-all', saveAll)
             sub.dispose()
             editor.dispose()

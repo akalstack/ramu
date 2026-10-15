@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync, statSync } from 'node:fs'
+import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import type { AgentProvider } from '@ramu/shared/types'
@@ -10,6 +10,18 @@ let accountsRoot = join(homedir(), '.ramu', 'provider-accounts')
 let runtimesRoot = join(homedir(), '.ramu', 'provider-clis')
 export function configureProviderAccounts(root: string) { accountsRoot = root; runtimesRoot = join(dirname(root), 'provider-clis') }
 export function providerRuntimeHome(provider: AgentProvider) { return join(runtimesRoot, provider) }
+/** The Antigravity runtime Ramu downloaded itself: `active.json` names the version directory that holds the executable and its helper. */
+export const antigravityFileNames = () => process.platform === 'win32' ? { executable: 'agy_acp_server.exe', harness: 'localharness_external.exe' } : { executable: 'agy_acp_server.par', harness: 'localharness_external' }
+export function managedAntigravity(): { executable: string; harness: string; version: string } | null {
+  try {
+    const home = providerRuntimeHome('antigravity')
+    const version = JSON.parse(readFileSync(join(home, 'active.json'), 'utf8'))?.version
+    if (typeof version !== 'string' || !/^[\w.-]{1,40}$/.test(version)) return null
+    const names = antigravityFileNames(), directory = join(home, 'versions', version)
+    const executable = join(directory, names.executable), harness = join(directory, names.harness)
+    return existsSync(executable) && existsSync(harness) ? { executable, harness, version } : null
+  } catch { return null }
+}
 export function providerAccountId(provider: AgentProvider) { return configuration[provider]?.accountId || 'default' }
 export function providerAccountClearedEnv(provider: AgentProvider): string[] {
   return provider === 'codex' ? ['OPENAI_API_KEY', 'CODEX_API_KEY'] : provider === 'opencode' ? ['OPENCODE_DB', 'OPENCODE_AUTH_CONTENT', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'MISTRAL_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY', 'CEREBRAS_API_KEY', 'XAI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENCODE_API_KEY', 'OPENCODE_ZEN_API_KEY'] : []
@@ -29,6 +41,7 @@ export function providerBinary(provider: AgentProvider, overrides = configuratio
   if (custom) return expand(custom)
   const env = process.env[`RAMU_${provider === 'claude-code' ? 'CLAUDE' : provider.toUpperCase()}_BIN`]
   if (env) return expand(env)
+  if (provider === 'antigravity') { const runtime = managedAntigravity(); if (runtime) return runtime.executable }
   const managed = join(providerRuntimeHome(provider), 'node_modules', '.bin', process.platform === 'win32' ? 'codex.cmd' : 'codex')
   if (provider === 'codex' && existsSync(managed)) return managed
   const names = { 'claude-code': ['claude'], codex: ['codex'], opencode: ['opencode'], cursor: ['agent', 'cursor-agent'], antigravity: [process.platform === 'win32' ? 'agy_acp_server.exe' : 'agy_acp_server.par'] }[provider]

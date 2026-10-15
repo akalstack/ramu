@@ -11,8 +11,8 @@ import { errorText } from './TaskPane'
 const EMPTY: QuestionState = { answers: {}, drafts: {}, waiting: false }
 
 /**
- * Questions waiting for the user float above the message box, as in Codex and T3 Code: one question at a time,
- * numbered options, and the transcript keeps a short row where the agent asked.
+ * Questions waiting for the user are the first row of the tray the message box rests on, with goals and queued messages:
+ * one question at a time, numbered options, and the transcript keeps a row where the agent asked.
  */
 export function QuestionDock({ sessionId, requests, states, open, onOpenChange, focus }: { sessionId: string; requests: QuestionRequest[]; states: Map<string, QuestionState>; open: boolean; onOpenChange: (open: boolean) => void; focus: { requestId: string; at: number } | null }) {
   useLanguage()
@@ -29,14 +29,14 @@ export function QuestionDock({ sessionId, requests, states, open, onOpenChange, 
     <span className="muted text-muted-foreground small text-caption">{index + 1}/{requests.length}</span>
     <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" aria-label={t("Next question request")} disabled={index === requests.length - 1} onClick={() => setCurrentId(requests[index + 1]!.requestId)}><ChevronRight size={13} /></Button>
   </span>
-  if (!open) return <div className={`question-dock [&.blocking]:[border-color:color-mix(in_srgb,_var(--warn)_55%,_var(--line-strong))] [&.blocking_.question-dock-header_>_svg]:text-warn [&.blocking_.question-dock-bar_>_svg:first-child]:text-warn w-[calc(100%_-_24px)] max-w-[696px] m-[0_auto_8px] [border:1px_solid_var(--edge)] rounded-(--radius-l) bg-raised [box-shadow:var(--shadow-float)] overflow-hidden [animation:fade-only_120ms_var(--ease)] collapsed${blocking ? ' blocking' : ''}`} role="region" aria-label={t("Questions from the agent")}>
+  if (!open) return <div className={`question-dock [&.blocking_.question-dock-header_>_svg]:text-warn [&.blocking_.question-dock-bar_>_svg:first-child]:text-warn w-full min-w-0 m-0 [border:0] rounded-(--radius-m) bg-transparent overflow-hidden [animation:fade-only_120ms_var(--ease)] collapsed${blocking ? ' blocking' : ''}`} role="region" aria-label={t("Questions from the agent")}>
     <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover question-dock-bar [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&_>_svg:first-child]:flex-none [&_>_svg:first-child]:text-muted-foreground flex items-center justify-start gap-2 w-full h-[36px] p-[0_12px] [border:0] [border-radius:0] bg-transparent text-left text-foreground font-normal" aria-expanded={false} onClick={() => onOpenChange(true)}>
       <ShieldQuestion size={14} />
       <span className="question-dock-bar-text flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{blocking ? t("The agent is waiting for your answer") : t("{0} waiting for your answer", { "0": remaining.length === 1 ? t("1 question") : t("{0} questions", { "0": remaining.length }) })}<span className="muted text-muted-foreground"> · {request.dependsOn || remaining[0]?.question}</span></span>
       <ChevronUp size={13} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />
     </Button>
   </div>
-  return <div className={`question-dock [&.blocking]:[border-color:color-mix(in_srgb,_var(--warn)_55%,_var(--line-strong))] [&.blocking_.question-dock-header_>_svg]:text-warn [&.blocking_.question-dock-bar_>_svg:first-child]:text-warn w-[calc(100%_-_24px)] max-w-[696px] m-[0_auto_8px] [border:1px_solid_var(--edge)] rounded-(--radius-l) bg-raised [box-shadow:var(--shadow-float)] overflow-hidden [animation:fade-only_120ms_var(--ease)] ${blocking ? ' blocking' : ''}`} role="region" aria-label={t("Questions from the agent")}>
+  return <div className={`question-dock [&.blocking_.question-dock-header_>_svg]:text-warn [&.blocking_.question-dock-bar_>_svg:first-child]:text-warn w-full min-w-0 m-0 [border:0] rounded-(--radius-m) bg-transparent overflow-hidden [animation:fade-only_120ms_var(--ease)] ${blocking ? ' blocking' : ''}`} role="region" aria-label={t("Questions from the agent")}>
     <QuestionForm key={request.requestId} sessionId={sessionId} request={request} status={status} blocking={blocking} pager={pager} focusAt={focus?.requestId === request.requestId ? focus.at : null} onCollapse={() => onOpenChange(false)} />
   </div>
 }
@@ -105,8 +105,8 @@ function QuestionForm({ sessionId, request, status, blocking, pager, focusAt, on
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && (typing || event.target === root.current)) { event.preventDefault(); advance(); return }
     if (!typing && /^[1-9]$/.test(event.key) && !answered) { const option = q.options[Number(event.key) - 1]; if (option) { event.preventDefault(); choose(option.label) } }
   }
-  return <div ref={root} className="question-card question-dock-card [&_fieldset]:grid [&_fieldset]:gap-2 [&_fieldset]:m-0 [&_fieldset]:p-0 [&_fieldset]:[border:0] [&_fieldset]:min-w-0 [&_legend]:p-0 [&_legend]:mb-1 [&_legend]:font-semibold [&_legend]:text-chat [&_legend]:text-foreground [&_.option]:flex [&_.option]:items-center [&_.option]:gap-2.5 [&_.option]:p-[7px_10px] [&_.option]:[border:1px_solid_transparent] [&_.option]:rounded-(--radius-s) [&_.option]:cursor-pointer [&_.option]:bg-fill [&_.option:hover]:bg-hover [&_.option.selected]:[border-color:var(--line-strong)] [&_.option.selected]:bg-hover [&_.option_input]:absolute [&_.option_input]:opacity-0 [&_.option_input]:pointer-events-none [&_.option.selected_.question-option-key]:[border-color:var(--text)] [&_.option.selected_.question-option-key]:text-foreground flex flex-col gap-2.5 max-h-[min(52vh,_460px)] overflow-auto p-[12px_14px] outline-none" data-question-request={request.requestId} tabIndex={-1} onKeyDown={onKeyDown}>
-    <header className="question-dock-header [&_>_svg]:flex-none [&_>_svg]:text-muted-foreground flex items-center gap-2 text-control text-soft">
+  return <div ref={root} className="question-card question-dock-card [&_fieldset]:grid [&_fieldset]:gap-1.5 [&_fieldset]:m-0 [&_fieldset]:p-0 [&_fieldset]:[border:0] [&_fieldset]:min-w-0 [&_legend]:p-0 [&_legend]:mb-0.5 [&_legend]:font-semibold [&_legend]:text-chat [&_legend]:text-foreground [&_.option]:flex [&_.option]:items-center [&_.option]:gap-2.5 [&_.option]:min-h-8 [&_.option]:p-[0_10px] [&_.option]:[border:1px_solid_transparent] [&_.option]:rounded-(--radius-s) [&_.option]:cursor-pointer [&_.option]:bg-fill [&_.option:hover]:bg-hover [&_.option.selected]:[border-color:var(--line-strong)] [&_.option.selected]:bg-hover [&_.option_input]:absolute [&_.option_input]:opacity-0 [&_.option_input]:pointer-events-none [&_.option.selected_.question-option-key]:[border-color:var(--text)] [&_.option.selected_.question-option-key]:text-foreground flex flex-col gap-2 max-h-[min(52vh,_460px)] overflow-auto p-[2px_5px_8px] outline-none" data-question-request={request.requestId} tabIndex={-1} onKeyDown={onKeyDown}>
+    <header className="question-dock-header [&_>_svg]:flex-none [&_>_svg]:text-muted-foreground flex items-center gap-2 min-h-8 text-control text-soft">
       <ShieldQuestion size={14} />
       <span className="question-dock-title flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{blocking ? t("The agent is waiting for your answer") : t("The agent can keep working. You can answer later.")}</span>
       {questions.length > 1 && <span className="muted text-muted-foreground small text-caption question-dock-step flex-none tabular-nums">{t("Question {0} of {1}", { "0": page + 1, "1": questions.length })}</span>}
@@ -122,11 +122,11 @@ function QuestionForm({ sessionId, request, status, blocking, pager, focusAt, on
         {index < 9 && <Kbd className="question-option-key flex-none min-w-5 h-5 inline-grid place-items-center [border:1px_solid_transparent] rounded-(--radius-xs) [font:500_11px_var(--mono)] text-muted-foreground bg-fill" aria-hidden="true">{index + 1}</Kbd>}
         <span>{option.label}{option.description && <span className="muted text-muted-foreground block block small text-caption">{option.description}</span>}</span>
       </label>)}</div>}
-      <Input aria-label={t("Answer: {0}", { "0": q.question })} placeholder={q.options.length ? t("Or type your own answer") : t("Type your answer")} value={typed} maxLength={10000} onChange={(event) => setDrafts((old) => ({ ...old, [key]: event.target.value }))} />
+      <Input className="h-8 rounded-(--radius-s) bg-fill border-transparent" aria-label={t("Answer: {0}", { "0": q.question })} placeholder={q.options.length ? t("Or type your own answer") : t("Type your answer")} value={typed} maxLength={10000} onChange={(event) => setDrafts((old) => ({ ...old, [key]: event.target.value }))} />
       {answered && <p className="outcome text-caption text-muted-foreground mt-1.5">{t("Answer submitted: {0}", { "0": answered })}</p>}
     </fieldset>
     {error && <p className="error text-bad" role="alert">{error}</p>}
-    <div className="question-dock-actions flex items-center gap-1.5">
+    <div className="question-dock-actions flex items-center gap-1.5 pt-1">
       {async && <Button variant="ghost" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover" disabled={busy} onClick={() => void dismiss()}>{t("Dismiss")}</Button>}
       <span className="grow flex-1 min-w-0 text-left" />
       {page > 0 && <Button variant="secondary" className="bg-fill hover:bg-fill-hover" disabled={busy} onClick={() => setPage(page - 1)}>{t("Back")}</Button>}

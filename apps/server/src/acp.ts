@@ -16,6 +16,8 @@ type AcpProvider = 'cursor' | 'antigravity' | 'opencode'
 export function acpCommand(provider: AcpProvider): { command: string; args: string[] } {
   return { command: providerBinary(provider), args: provider === 'cursor' || provider === 'opencode' ? ['acp'] : process.platform === 'linux' ? ['--uid='] : [] }
 }
+/** The runtime cannot continue the saved session (no resume support, or it no longer has it). The chat can still go on from its transcript. */
+export class AcpResumeUnavailable extends Error {}
 export class AcpRpc {
   private child: ChildProcessWithoutNullStreams
   private nextId = 0
@@ -39,7 +41,7 @@ export class AcpRpc {
         if (!pending) return
         this.pending.delete(m.id); clearTimeout(pending.timer)
         // Antigravity has no login command; point at Ramu's own sign-in instead of the runtime's settings file.
-        if (m.error) pending.reject(new Error(provider === 'antigravity' && /authentication required/i.test(m.error.message ?? '') ? 'Sign in to Antigravity first: Settings → Providers → Antigravity → Login.' : m.error.message || `${providerName(provider)} request failed`))
+        if (m.error) pending.reject(Object.assign(new Error(provider === 'antigravity' && /authentication required/i.test(m.error.message ?? '') ? 'Sign in to Antigravity first: Settings → Providers → Antigravity → Login.' : m.error.message || `${providerName(provider)} request failed`), { rpc: true }))
         else pending.resolve(m.result ?? {})
       } else this.onMessage(m)
     })
@@ -160,6 +162,7 @@ class AcpSession implements AgentRunner {
   private events: AcpEvents
   private pending = new Map<string, Wire>()
   private session: Wire = {}
+  private prompts?: { image?: boolean }
   constructor(private scope: AgentScope, private settings: AgentSettings, private emit: (event: AgentEvent, limit?: boolean) => void, private readOnly = false) {
     this.events = new AcpEvents(false, settings.provider === 'antigravity' ? ['invoke_subagent'] : ['task', 'subagent'])
   }
@@ -170,10 +173,22 @@ class AcpSession implements AgentRunner {
     this.rpc.onMessage = (m) => this.handle(m)
     this.rpc.onExit = (e) => { if (!this.stopped) { this.emit({ kind: 'error', message: e.message }); this.emit({ kind: 'state', state: 'failed' }) } }
     const init = await this.rpc.initialize()
-    if (resume && !init.agentCapabilities?.loadSession) throw new Error(`${providerName(provider)} does not support resuming this session. Start a new chat.`)
+    const capabilities = init.agentCapabilities ?? {}
+    this.prompts = capabilities.promptCapabilities
+    // `session/resume` continues without replaying history; `session/load` is the older way. With neither, the caller continues from the transcript.
+    const method = !resume ? 'session/new' : capabilities.sessionCapabilities?.resume ? 'session/resume' : capabilities.loadSession ? 'session/load' : null
+    if (!method) throw new AcpResumeUnavailable(`${providerName(provider)} does not support resuming this session. Start a new chat.`)
+    // HTTP MCP is optional in ACP. A runtime that lists its MCP support without HTTP cannot reach Ramu's tools, so say so instead of losing them silently.
+    const mcp = capabilities.mcpCapabilities
+    const tools = this.connection && !(mcp && mcp.http !== true) ? this.connection : undefined
+    if (this.connection && !tools) this.emit({ kind: 'error', message: `${providerName(provider)} cannot connect to Ramu's tools over HTTP, so questions, helpers and advice are unavailable in this chat.` })
     this.loading = true
     try {
-      this.session = await this.rpc.request(resume ? 'session/load' : 'session/new', { ...(resume ? { sessionId: resume } : {}), cwd: this.scope.cwd, additionalDirectories: this.scope.additionalDirs, mcpServers: this.connection ? [{ type: 'http', name: 'ramu', url: this.connection.url, headers: [{ name: 'Authorization', value: `Bearer ${this.connection.token}` }] }] : [] })
+      this.session = await this.rpc.request(method, { ...(resume ? { sessionId: resume } : {}), cwd: this.scope.cwd, additionalDirectories: this.scope.additionalDirs, mcpServers: tools ? [{ type: 'http', name: 'ramu', url: tools.url, headers: [{ name: 'Authorization', value: `Bearer ${tools.token}` }] }] : [] })
+    } catch (e) {
+      // The runtime answered but no longer has the session; a crash or timeout is a different failure and stays one.
+      if (resume && (e as { rpc?: boolean }).rpc) throw new AcpResumeUnavailable(`${providerName(provider)} no longer has this session: ${(e as Error).message}`)
+      throw e
     } finally { this.loading = false }
     this.sessionId = resume || this.session.sessionId
     if (!this.sessionId) throw new Error('ACP runtime did not return a session ID')
@@ -202,8 +217,12 @@ class AcpSession implements AgentRunner {
     if (this.active) throw new Error('Wait for the current turn to finish, or interrupt it first.')
     if (!this.rpc || this.stopped) throw new Error('ACP session is not running')
     this.events.beginTurn(); this.turnText.clear(); this.turnTools = 0; this.seenTools.clear()
-    const content: Wire[] = [{ type: 'text', text: attachmentPrompt(prompt, attachments) }]
-    for (const file of attachments.filter((f) => f.mimeType.startsWith('image/'))) content.push({ type: 'image', mimeType: file.mimeType, data: readFileSync(file.path).toString('base64') })
+    // Image blocks are optional in ACP. A runtime that lists its prompt support without images gets the saved path in the text instead.
+    const images = attachments.filter((f) => f.mimeType.startsWith('image/'))
+    const inline = !this.prompts || this.prompts.image === true
+    const unsent = inline ? [] : images.map((file) => `Image attachment ${JSON.stringify(file.name)} is saved at ${JSON.stringify(file.path)}. This runtime cannot receive images directly; inspect it with your file tools if you can.`)
+    const content: Wire[] = [{ type: 'text', text: [attachmentPrompt(prompt, attachments), ...unsent].join('\n\n') }]
+    if (inline) for (const file of images) content.push({ type: 'image', mimeType: file.mimeType, data: readFileSync(file.path).toString('base64') })
     this.emit({ kind: 'state', state: 'running' })
     this.active = this.rpc.request('session/prompt', { sessionId: this.sessionId, prompt: content }, 0).then((r) => {
       this.active = undefined; this.cancelPending()
@@ -283,6 +302,10 @@ class AcpSession implements AgentRunner {
     if (m.method === 'opencode/session/child_update') {
       // Sub-agent progress; rootSessionId ties it to this chat.
       if (!this.loading && p.rootSessionId === this.sessionId && p.type === 'update' && p.update && typeof p.childSessionId === 'string') for (const event of this.events.consumeChild(p.childSessionId, String(p.title ?? ''), p.update)) this.emit(event)
+      return
+    }
+    if (m.method === 'cursor/update_todos') {
+      if (!this.loading && (p.sessionId === undefined || p.sessionId === this.sessionId)) for (const event of this.events.updateTodos(p)) this.emit(event)
       return
     }
     if (m.id === undefined) return

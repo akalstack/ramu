@@ -15,6 +15,37 @@ export function toolDescription(input: unknown): string | undefined {
   return input && typeof input === 'object' && typeof (input as Update).description === 'string' ? (input as Update).description : undefined
 }
 
+/** Inline image bytes would bloat the stored transcript, and `formatted_output` repeats the output a runtime already sent. */
+export function stripToolBulk(value: unknown, depth = 0): unknown {
+  if (depth > 12) return undefined
+  if (typeof value === 'string') return /^data:image\//i.test(value) ? undefined : value
+  if (Array.isArray(value)) return value.flatMap((entry) => { const kept = stripToolBulk(entry, depth + 1); return kept === undefined ? [] : [kept] })
+  if (!value || typeof value !== 'object') return value
+  const object = value as Update
+  const image = object.type === 'image' || typeof object.mimeType === 'string' && object.mimeType.startsWith('image/')
+  const entries = Object.entries(object).flatMap(([key, entry]): [string, unknown][] => {
+    if (image && (key === 'data' || key === 'blob')) return []
+    if ((key === 'formatted_output' || key === 'formattedOutput') && (entry === object.combinedOutput || entry === object.combined_output)) return []
+    const kept = stripToolBulk(entry, depth + 1)
+    return kept === undefined ? [] : [[key, kept]]
+  })
+  return Object.fromEntries(entries)
+}
+const field = (source: unknown, ...names: string[]): unknown => {
+  if (!source || typeof source !== 'object') return undefined
+  for (const name of names) if ((source as Update)[name] != null) return (source as Update)[name]
+  return undefined
+}
+/** Antigravity's shell tool reports its command and result under its own field names rather than in standard tool content. */
+export function nativeShell(rawInput: unknown, rawOutput: unknown): { command?: string; cwd?: string; output?: string; exitCode?: number } | undefined {
+  const command = text(field(rawInput, 'CommandLine', 'command_line', 'commandLine', 'command') ?? field(rawOutput, 'commandLine', 'command_line'))?.trim()
+  const output = text(field(rawOutput, 'combinedOutput', 'combined_output'))
+  const exitCode = field(rawOutput, 'exitCode', 'exit_code')
+  const cwd = text(field(rawInput, 'Cwd', 'WorkingDirectory', 'working_dir', 'workingDir', 'cwd') ?? field(rawOutput, 'workingDir', 'working_dir'))?.trim()
+  if (!command && output === undefined) return undefined
+  return { ...(command ? { command } : {}), ...(cwd ? { cwd } : {}), ...(output !== undefined ? { output } : {}), ...(Number.isInteger(exitCode) ? { exitCode: exitCode as number } : {}) }
+}
+
 /** One ACP boundary for external runtimes and Ramu-owned hosts. Updates are snapshots; chunks are deltas. */
 export class AcpEvents {
   private stream?: { kind: 'text' | 'thinking'; messageId: string; text: string }
@@ -24,6 +55,8 @@ export class AcpEvents {
   private children = new Map<string, { agentId?: string; events: AcpEvents }>()
   /** Antigravity runs a separate `start_subagent` step; its outcome is the helper's real one. */
   private launches = new Map<string, { failed: boolean; report: string }>()
+  /** Cursor's running todo list; it belongs to the session, so it carries across turns. */
+  private todos = new Map<string, { content: string; status: 'pending' | 'in_progress' | 'completed' }>()
   /** `subagentTools` names tool calls that start a sub-agent, so they also appear as task cards. */
   constructor(private nativeExtensions = false, private subagentTools: string[] = []) {}
   beginTurn(): void { this.stream = undefined; this.tools.clear(); this.planId = randomUUID() }
@@ -41,6 +74,17 @@ export class AcpEvents {
     if (!agentId) return []
     return child.events.consume(update).flatMap((event): AgentEvent[] =>
       event.kind === 'text' || event.kind === 'thinking' || event.kind === 'tool-use' || event.kind === 'tool-result' ? [{ ...event, agentId }] : [])
+  }
+  /** Cursor reports its todo list through `cursor/update_todos` rather than a standard `plan` update; `merge` patches the list instead of replacing it. */
+  updateTodos(p: Update): AgentEvent[] {
+    if (!Array.isArray(p.todos)) return []
+    if (p.merge !== true) this.todos.clear()
+    for (const todo of p.todos) {
+      const content = text(todo?.content)?.trim()
+      if (!content) continue
+      this.todos.set(text(todo.id) ?? content, { content, status: todo.status === 'in_progress' ? 'in_progress' : todo.status === 'completed' || todo.status === 'cancelled' ? 'completed' : 'pending' })
+    }
+    return this.todos.size ? [{ kind: 'plan', messageId: this.planId, entries: [...this.todos.values()].map((entry) => ({ ...entry, priority: 'medium' as const })) }] : []
   }
   /** Extra details a runtime sends about a sub-agent outside its tool call (Cursor's `cursor/task`). */
   updateAgent(toolCallId: string, patch: Partial<AgentTask>): AgentEvent | undefined {
@@ -98,6 +142,7 @@ export class AcpEvents {
     if (u.sessionUpdate === 'tool_call' || u.sessionUpdate === 'tool_call_update') {
       this.stream = undefined
       if (typeof u.toolCallId !== 'string' || !u.toolCallId) return []
+      u = { ...u, ...(u.rawInput != null ? { rawInput: stripToolBulk(u.rawInput) } : {}), ...(u.rawOutput != null ? { rawOutput: stripToolBulk(u.rawOutput) } : {}), ...(Array.isArray(u.content) ? { content: stripToolBulk(u.content) } : {}) }
       const previous = this.tools.get(u.toolCallId)
       // A late progress packet must not revive a completed tool.
       if (terminal(previous?.status) && !terminal(u.status)) return []
@@ -109,7 +154,15 @@ export class AcpEvents {
       else if (text(u.description)?.trim()) details.title = u.description
       else if (!details.title && toolDescription(u.rawInput)) details.title = toolDescription(u.rawInput)
       if (u.rawInput != null) details.input = toolInput(u.rawInput)
-      if (Array.isArray(u.content)) details.content = agentContent(u.content)
+      const shell = nativeShell(u.rawInput, u.rawOutput)
+      if (shell) {
+        // Show the command itself rather than the runtime's generic "Running run_command" title.
+        if (!details.toolKind || details.toolKind === 'other') details.toolKind = 'execute'
+        if (shell.command && (!details.title || /^(?:Running|Run) [\w.-]+\??$/.test(details.title))) details.title = shell.command
+      }
+      if (Array.isArray(u.content) && u.content.length) details.content = agentContent(u.content)
+      else if (shell?.output !== undefined && !details.content?.length) details.content = shell.output ? [{ type: 'text', text: shell.output }] : []
+      else if (Array.isArray(u.content)) details.content = agentContent(u.content)
       else if (u.rawOutput != null && !details.content?.length) details.content = typeof u.rawOutput === 'string' || Array.isArray(u.rawOutput) && u.rawOutput.every((b: Update) => b && typeof b.type === 'string') ? agentContent(u.rawOutput) : [{ type: 'text', text: toolInput(u.rawOutput) ?? '' }]
       if (Array.isArray(u.locations)) details.locations = u.locations.filter((l: Update) => typeof l?.path === 'string').map((l: Update) => ({ path: l.path, ...(Number.isInteger(l.line) && l.line >= 0 ? { line: l.line } : {}) }))
       const name = text(u.name)?.trim() || previous?.name || text(u.kind) || 'Tool'

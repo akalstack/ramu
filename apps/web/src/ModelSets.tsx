@@ -3,10 +3,10 @@ import { errorText } from './errors'
 import { t } from './i18n'
 import { providerName } from '@ramu/shared/providers'
 import { BootScreen } from './Brand'
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode, type ContextType } from 'react'
 import { DEFAULT_AGENT_SETTINGS, type AgentModel, type AgentProvider, type AgentSettings, type ModelPreferences, type ModelStep, type ProviderCatalog, type ReasoningEffort } from '@ramu/shared/types'
 import { useAppSettings } from './AppSettings'
-import { invoke } from './ipc'
+import { invoke, ramu } from './ipc'
 
 export const modelDisplayName = (name: string) => name.replace(/^gpt-/i, 'GPT-').replace(/-(sol|luna|astra|terra)\b/gi, (_, family: string) => ` ${family[0]!.toUpperCase()}${family.slice(1).toLowerCase()}`)
 export const effortDisplayName = (effort: ReasoningEffort | null, provider: AgentProvider) => effort === 'low' && provider === 'codex' ? t('Light') : effort === 'xhigh' ? t('Extra High') : effort ? t(effort[0]!.toUpperCase() + effort.slice(1)) : provider === 'claude-code' || provider === 'codex' ? '' : t('Default')
@@ -51,6 +51,7 @@ export function ModelSetsProvider({ children }: { children: ReactNode }) {
     })
     return () => { disposed = true }
   }, [])
+  useEffect(() => ramu.on('settings:models', (value) => { setPreferences(value); setError(null) }), [])
   if (!preferences) return <BootScreen />
   const selected = preferences.sets.find((set) => set.id === preferences.defaultSetId)?.steps.find((step) => step.id === preferences.defaultStepId) ?? preferences.sets[0]!.steps[0]!
   return <Context.Provider value={{ preferences, catalogs, error,
@@ -64,3 +65,5 @@ export function useModelSets() {
   if (!value) throw new Error('ModelSetsProvider missing')
   return value
 }
+
+export function ModelSetsOverride({ value, children }: { value: NonNullable<ContextType<typeof Context>>; children: ReactNode }) { return <Context.Provider value={value}>{children}</Context.Provider> }

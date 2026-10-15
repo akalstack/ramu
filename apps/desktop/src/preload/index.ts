@@ -3,7 +3,7 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import type { PushEvents, RamuBridge } from '@ramu/shared/api'
 
-const PUSH_EVENTS = new Set<string>(['activity:changed', 'menu:action', 'updates:changed', 'providers:updates', 'automation:changed', 'memory:changed', 'notify:inapp', 'notify:open', 'background:connection', 'agent:event', 'term:data', 'term:exit', 'fs:changed', 'usage:changed', 'aside:changed', 'context:changed'])
+const PUSH_EVENTS = new Set<string>(['settings:changed', 'settings:models', 'workspace:visibility', 'workspace:checkpoint', 'activity:changed', 'menu:action', 'updates:changed', 'providers:updates', 'automation:changed', 'memory:changed', 'notify:inapp', 'notify:open', 'background:connection', 'computers:changed', 'agent:event', 'term:data', 'term:exit', 'fs:changed', 'usage:changed', 'aside:changed', 'context:changed'])
 
 let controlsInset = process.platform === 'darwin' ? 84 : 0
 const applyWindowChrome = () => document.documentElement?.style.setProperty('--window-controls-inset', `${controlsInset}px`)

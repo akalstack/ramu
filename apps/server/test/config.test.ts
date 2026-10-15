@@ -25,6 +25,16 @@ it('refuses plaintext network listeners unless explicitly allowed', () => {
   expect(loadConfig(base).listen).toBeNull()
 })
 
+it('serves a network listener over TLS without the plaintext opt-in, and needs both files', () => {
+  const base = { RAMU_USER_DATA: '/tmp/ramu-profile', RAMU_LISTEN: '0.0.0.0:7788' }
+  const config = loadConfig({ ...base, RAMU_TLS_CERT: '/c.pem', RAMU_TLS_KEY: '/k.pem' })
+  expect(config.tls).toEqual({ cert: '/c.pem', key: '/k.pem' })
+  expect(config.listen?.host).toBe('0.0.0.0')
+  expect(() => loadConfig({ ...base, RAMU_TLS_CERT: '/c.pem' })).toThrow(/both/)
+  expect(() => loadConfig({ ...base, RAMU_LISTEN: '7788', RAMU_TLS_KEY: '/k.pem' })).toThrow(/both/)
+  expect(loadConfig({ RAMU_USER_DATA: '/tmp/p' }).devicesPath).toBe('/tmp/p/remote-devices.json')
+})
+
 it('uses the desktop profile directory by default', () => {
   expect(defaultUserData('darwin', {})).toMatch(/Library\/Application Support\/Ramu$/)
   expect(defaultUserData('linux', { XDG_CONFIG_HOME: '/x' })).toBe('/x/Ramu')

@@ -1,0 +1,88 @@
+{
+  "expo": {
+    "name": "Ramu",
+    "slug": "ramu",
+    "scheme": "ramu",
+    "version": "0.1.0",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#131315",
+    "ios": {
+      "bundleIdentifier": "dev.ramu.mobile",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Connect to the Ramu workspace on your paired computer.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true,
+          "NSAllowsArbitraryLoads": true
+        }
+      },
+      "icon": "../../assets/Ramu.icon"
+    },
+    "android": {
+      "package": "dev.ramu.mobile",
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon-foreground.png",
+        "monochromeImage": "./assets/icon-monochrome.png",
+        "backgroundColor": "#232327"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan a one-time Ramu pairing offer."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Attach photos to a chat on your paired computer.",
+          "cameraPermission": "Take a photo to attach to a Ramu chat."
+        }
+      ],
+      "expo-notifications",
+      "./plugins/withTrustedHttp.cjs",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/splash-light.png",
+          "imageWidth": 110,
+          "dark": {
+            "backgroundColor": "#1c1c1f",
+            "image": "./assets/icon-foreground.png"
+          }
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "enablePushNotifications": true,
+          "groupIdentifier": "group.dev.ramu.mobile",
+          "bundleIdentifier": "dev.ramu.mobile.activities",
+          "widgets": []
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "icon": "./assets/icon.png"
+  }
+}

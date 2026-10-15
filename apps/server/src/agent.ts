@@ -1,7 +1,7 @@
 import { responseInstructions, TOOL_DISCOVERY_INSTRUCTIONS } from './intelligence'
 import { providerBinary, providerAccountId } from './providerBinaries'
 import { clipText } from '@ramu/shared/text'
-import { createAcpRunner, acpModels, acpAside } from './acp'
+import { createAcpRunner, acpModels, acpAside, AcpResumeUnavailable } from './acp'
 import { toolDescription, toolInput } from './acpEvents'
 import { agentContent } from '@ramu/shared/agentContent'
 import { acpHostedRunner } from './acpNativeHost'
@@ -546,7 +546,7 @@ export class AgentService {
 
   constructor(
     private readonly db: Db,
-    private readonly emit: (sessionId: string, event: AgentEvent, seq?: number) => void,
+    private readonly onEvent: (sessionId: string, event: AgentEvent, seq?: number, revision?: number) => void,
     private readonly queryFn: QueryFn,
     private readonly codexFactory: CodexFactory = acpHostedRunner(createCodexRunner),
     private readonly acpFactory: AgentRunnerFactory = createAcpRunner,
@@ -677,6 +677,13 @@ export class AgentService {
     } finally { this.recoveringChats = false }
   }
 
+  /** Top-level chats that are working or waiting for the user, for the computer switcher. */
+  counts(): { running: number; needsInput: number } {
+    const rows = this.db.prepare("SELECT state, COUNT(*) AS n FROM agent_sessions WHERE parent_session_id IS NULL AND state IN ('starting', 'running', 'needs-input') GROUP BY state").all() as unknown as { state: AgentSessionState; n: number }[]
+    const count = (...states: AgentSessionState[]) => rows.filter((row) => states.includes(row.state)).reduce((sum, row) => sum + Number(row.n), 0)
+    return { running: count('starting', 'running'), needsInput: count('needs-input') }
+  }
+
   list(taskId: string): AgentSessionInfo[] {
     const rows = this.db
       .prepare(`SELECT s.*, ${TITLE_SQL} FROM agent_sessions s WHERE task_id = ? AND parent_session_id IS NULL ORDER BY created_at`)
@@ -701,6 +708,17 @@ export class AgentService {
       WHERE s.parent_session_id IS NULL AND json_extract(e.event, '$.kind') IN ('user', 'text') AND instr(lower(json_extract(e.event, '$.text')), ?) > 0
       ORDER BY e.rowid DESC LIMIT ?`).all(needle, limit) as { taskId: string; sessionId: string; seq: number; kind: string; text: string }[]
     return rows.map(({ taskId, sessionId, seq, kind, text }) => ({ taskId, sessionId, seq, role: kind === 'user' ? 'user' : 'agent', snippet: excerpt(text, needle) }))
+  }
+
+  private eventRevision = 0
+  private emit(id: string, event: AgentEvent, seq?: number) {
+    this.onEvent(id, event, seq, ++this.eventRevision)
+  }
+
+  snapshot(id: string): { revision: number; events: { seq: number; event: AgentEvent }[] } {
+    this.get(id)
+    const rows = this.db.prepare('SELECT seq, event FROM agent_events WHERE session_id = ? ORDER BY seq').all(id) as { seq: number; event: string }[]
+    return { revision: this.eventRevision, events: rows.map(row => ({ seq: row.seq, event: JSON.parse(row.event) as AgentEvent })) }
   }
 
   events(id: string): AgentEvent[] {
@@ -940,14 +958,14 @@ export class AgentService {
   }
 
   private async dispatchSteering(id: string): Promise<void> {
-    if (this.activeTools.get(id)?.size || this.steering.has(id) || this.queuePaused(id) || this.shutdown || this.transitioning.has(id)) return
+    if (this.shutdown || this.activeTools.get(id)?.size || this.steering.has(id) || this.queuePaused(id) || this.transitioning.has(id)) return
     // With no turn in progress there is nothing to steer; holding the flag would stop dispatchQueued from resuming a failed or stopped chat.
     if (!WRITING_STATES.includes(this.get(id).state)) return
     this.steering.add(id)
     try {
       // Brief window so messages sent within milliseconds of each other are steered as one request.
       await new Promise((resolve) => setTimeout(resolve, 75))
-      while (this.get(id).state === 'running' && !this.queuePaused(id) && !this.activeTools.get(id)?.size) {
+      while (!this.shutdown && this.get(id).state === 'running' && !this.queuePaused(id) && !this.activeTools.get(id)?.size) {
         const batch = this.queued(id).filter((message) => message.mode === 'steer')
         if (!batch.length) break
         const codex = this.runners.get(id)
@@ -969,14 +987,15 @@ export class AgentService {
       }
     } finally {
       this.steering.delete(id)
-      const state = this.get(id).state
+      const state = this.shutdown ? null : this.get(id).state
       if (state === 'idle') queueMicrotask(() => { void this.dispatchQueued(id) })
       // A failed or stopped chat that is waiting on the workspace queue (e.g. a late answer) was refused while this flag was held.
-      else if (!WRITING_STATES.includes(state) && this.workspaceQueue.has(id)) this.wakeWorkspaceQueue()
+      else if (state && !WRITING_STATES.includes(state) && this.workspaceQueue.has(id)) this.wakeWorkspaceQueue()
     }
   }
 
   private async dispatchQueued(id: string, resumeStopped = false): Promise<void> {
+    if (this.shutdown) return
     const state = this.get(id).state
     if (this.providerWait(id)) { this.scheduleProvider(id); return }
     if (this.shutdown || this.queuePaused(id) || this.steering.has(id) || this.transitioning.has(id) || (state !== 'idle' && (!resumeStopped || WRITING_STATES.includes(state)))) return
@@ -2079,7 +2098,19 @@ export class AgentService {
             runner.setTools?.(connection)
           }
           if (this.runners.get(id) === runner) await runner.start(s.provider === 'codex' || !connection?.instructions ? actualPrompt : `<ramu-session-guidance>\n${connection.instructions}\n</ramu-session-guidance>\n\n${actualPrompt}`, resume, attachments)
-        })().catch((e) => { if (this.runners.get(id) === runner) { this.halt(id); this.fail(id, e) } })
+        })().catch(async (e) => {
+          if (this.runners.get(id) !== runner) return
+          this.halt(id)
+          // A runtime that cannot continue its saved session still gets the whole conversation, as when switching providers.
+          if (e instanceof AcpResumeUnavailable && resume && !this.shutdown) {
+            await this.draining.get(id)
+            this.db.prepare('UPDATE agent_sessions SET provider_session_id = NULL WHERE id = ?').run(id)
+            this.record(id, { kind: 'settings', settings: s.settings, reason: `${providerName(s.provider)} could not resume its saved session — continuing from the conversation`, handoff: true, previous: s.settings })
+            this.launch(id, prompt, null, false, attachments)
+            return
+          }
+          this.fail(id, e)
+        })
       } catch (e) { this.fail(id, e) }
       return
     }

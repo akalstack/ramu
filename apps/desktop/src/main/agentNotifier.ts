@@ -10,11 +10,20 @@ const ACTIVE: AgentSessionState[] = ['starting', 'running', 'needs-input']
 /**
  * Tells the user when an agent finishes, needs input or fails. In the foreground the app shows its own
  * toast; in the background it sends a system notification. Clicking either opens the chat.
+ * One notifier serves one computer: `send` and `invoke` reach that computer's window and server.
  */
 export function createAgentNotifier(options: {
   window: BrowserWindow
   send: (channel: string, payload: unknown) => void
   invoke: (method: string, args?: unknown[]) => Promise<unknown>
+  /** Name shown before the chat title when this is not the computer the app runs on. */
+  label?: () => string
+  /** Whether this computer's window is the one on screen. A hidden one gets a system notification instead of a toast. */
+  visible?: () => boolean
+  /** Brings this computer's window to the front before the chat opens. */
+  reveal?: (notice: { taskId: string; sessionId: string }) => void
+  /** Where "notify when done" is read from; this computer's setting, even for a paired computer. */
+  preferences?: () => Promise<AppPreferences>
 }) {
   const last = new Map<string, AgentSessionState>()
   const live = new Set<Notification>()
@@ -24,11 +33,13 @@ export function createAgentNotifier(options: {
     if (win.isDestroyed()) return
     if (win.isMinimized()) win.restore()
     win.show(); win.focus()
-    options.send('notify:open', { taskId: notice.taskId, sessionId: notice.sessionId })
+    const target = { taskId: notice.taskId, sessionId: notice.sessionId }
+    if (options.reveal) options.reveal(target)
+    else options.send('notify:open', target)
   }
   const deliver = async (sessionId: string, kind: AgentNotice['kind'], body?: string) => {
     try {
-      const prefs = await options.invoke('settings.app.get') as AppPreferences
+      const prefs = options.preferences ? await options.preferences() : await options.invoke('settings.app.get') as AppPreferences
       if (!prefs.notifyAgentDone) return
       const session = await options.invoke('agent.get', [sessionId]) as AgentSessionInfo
       if (kind === 'done') {
@@ -38,10 +49,10 @@ export function createAgentNotifier(options: {
       const task = ((await options.invoke('tasks.list')) as Task[]).find((entry) => entry.id === session.taskId)
       // A sub-agent only ever needs you when it asks for approval; finishing or failing is reported in its chat.
       if (session.parentId && kind !== 'input') return
-      const notice: AgentNotice = { sessionId: session.parentId ?? sessionId, taskId: session.taskId, kind, title: task?.title || session.title || t('Chat'), body: t(body ?? COPY[kind]) }
+      const notice: AgentNotice = { sessionId: session.parentId ?? sessionId, taskId: session.taskId, kind, title: [options.label?.(), task?.title || session.title || t('Chat')].filter(Boolean).join(' · '), body: t(body ?? COPY[kind]) }
       const win = options.window
       if (win.isDestroyed()) return
-      if (win.isFocused() && win.isVisible() && !win.isMinimized()) { options.send('notify:inapp', notice); return }
+      if (win.isFocused() && win.isVisible() && !win.isMinimized() && (options.visible?.() ?? true)) { options.send('notify:inapp', notice); return }
       if (!Notification.isSupported()) return
       const system = new Notification({ title: notice.title, body: notice.body, silent: false })
       live.add(system)

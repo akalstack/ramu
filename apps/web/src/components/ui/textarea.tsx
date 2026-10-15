@@ -1,7 +1,11 @@
+import { t } from '../../i18n'
+import { useSettingsField } from '../../settingsField'
 import * as React from "react"
 import { cn } from "cn"
 
 function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
+  const field = useSettingsField()
+  const mixed = field?.mixed && field.schema?.type === 'string'
   return (
     <textarea
       data-slot="textarea"
@@ -10,6 +14,11 @@ function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
         className
       )}
       {...props}
+      disabled={props.disabled || field?.disabled}
+      maxLength={field?.schema?.maxLength === undefined ? props.maxLength : Math.min(props.maxLength ?? Infinity, field.schema.maxLength)}
+      value={mixed ? '' : props.value}
+      placeholder={mixed ? t('Mixed') : props.placeholder}
+      onChange={(event) => { field?.mark(); props.onChange?.(event) }}
     />
   )
 }

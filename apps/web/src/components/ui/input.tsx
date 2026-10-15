@@ -1,8 +1,12 @@
+import { t } from '../../i18n'
+import { useSettingsField } from '../../settingsField'
 import * as React from "react"
 import { Input as InputPrimitive } from "@base-ui/react/input"
 import { cn } from "cn"
 
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+  const field = useSettingsField()
+  const mixed = field?.mixed && ['string', 'number', 'integer'].includes(field.schema?.type ?? '')
   return (
     <InputPrimitive
       type={type}
@@ -12,6 +16,13 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
         className
       )}
       {...props}
+      disabled={props.disabled || field?.disabled}
+      min={field?.schema?.minimum === undefined ? props.min : Math.max(Number(props.min ?? -Infinity), field.schema.minimum)}
+      max={field?.schema?.maximum === undefined ? props.max : Math.min(Number(props.max ?? Infinity), field.schema.maximum)}
+      maxLength={field?.schema?.maxLength === undefined ? props.maxLength : Math.min(props.maxLength ?? Infinity, field.schema.maxLength)}
+      value={mixed ? '' : props.value}
+      placeholder={mixed ? t('Mixed') : props.placeholder}
+      onChange={(event) => { field?.mark(); props.onChange?.(event) }}
     />
   )
 }

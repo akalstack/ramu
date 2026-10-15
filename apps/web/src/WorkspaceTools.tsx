@@ -1,6 +1,6 @@
 import { Button } from '@/components/desktop-button'
 import { X } from 'lucide-react'
-import { useRef, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { t, useLanguage } from './i18n'
 import { ExplorerPanel } from './sidebar/ExplorerPanel'
 import { ScmPanel } from './sidebar/ScmPanel'
@@ -41,4 +41,39 @@ function CachedTool({ active, children }: { active: boolean; children: ReactNode
   if (active) visited.current = true
   if (!visited.current) return null
   return <div className="sidebar-body flex-col flex-1 min-h-0 min-w-0 overflow-auto [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:overflow-hidden" style={{ display: active ? 'flex' : 'none' }} inert={!active} aria-hidden={!active}>{children}</div>
+}
+
+const RAIL_WIDTH = { key: 'ramu.layout.tools-rail', min: 220, max: 480, fallback: 280 }
+const savedRailWidth = () => Math.min(RAIL_WIDTH.max, Math.max(RAIL_WIDTH.min, Number(localStorage.getItem(RAIL_WIDTH.key)) || RAIL_WIDTH.fallback))
+
+/** The tools rail beside the whole task stack, full height, with a draggable inner edge. The width is written straight to the element while dragging and saved on release. */
+export function WorkspaceRail({ tool }: { tool: WorkspaceTool }) {
+  const rail = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(savedRailWidth)
+  const drag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const handle = event.currentTarget, startX = event.clientX, start = rail.current!.offsetWidth
+    handle.setPointerCapture(event.pointerId)
+    document.documentElement.dataset.railDragging = ''
+    let next = start
+    const move = (e: PointerEvent) => { next = Math.round(Math.min(RAIL_WIDTH.max, Math.max(RAIL_WIDTH.min, start + startX - e.clientX))); rail.current!.style.width = `${next}px` }
+    const end = () => {
+      handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end)
+      delete document.documentElement.dataset.railDragging
+      localStorage.setItem(RAIL_WIDTH.key, String(next)); setWidth(next)
+    }
+    handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end)
+  }
+  const keyboard = (event: React.KeyboardEvent) => {
+    const step = event.key === 'ArrowLeft' ? 16 : event.key === 'ArrowRight' ? -16 : 0
+    if (!step) return
+    event.preventDefault()
+    const next = Math.min(RAIL_WIDTH.max, Math.max(RAIL_WIDTH.min, width + step))
+    localStorage.setItem(RAIL_WIDTH.key, String(next)); setWidth(next)
+  }
+  return (
+    <div ref={rail} className="workspace-rail relative flex-none h-full min-w-0 [border-left:1px_solid_var(--pane-border-color)]" style={{ width }}>
+      <div role="separator" aria-orientation="vertical" aria-label={t("Resize tools panel")} aria-valuemin={RAIL_WIDTH.min} aria-valuemax={RAIL_WIDTH.max} aria-valuenow={width} tabIndex={0} onPointerDown={drag} onKeyDown={keyboard} className="absolute inset-y-0 -left-[3px] z-10 w-[5px] cursor-col-resize hover:bg-[var(--pane-border-active)] focus-visible:bg-[var(--pane-border-active)] outline-none" />
+      <WorkspaceTools tool={tool} />
+    </div>
+  )
 }

@@ -1,4 +1,5 @@
 import { elicitationRequest, elicitationContent } from '../src/elicitation'
+import { AcpResumeUnavailable } from '../src/acp'
 import { configureProviderBinaries } from '../src/providerBinaries'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
@@ -88,6 +89,32 @@ describe('AgentService', () => {
     await svc.submit(chat.id, 'change course', 'steer', [], undefined, true)
     await until(() => steered.length === 1)
     expect(steered).toEqual(['change course'])
+    svc.stopAll()
+  })
+  it('continues an ACP chat from its transcript when the runtime cannot resume the saved session', async () => {
+    const starts: { prompt: string; resume: string | null }[] = []
+    const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => ({
+      start: async (prompt, resume) => {
+        starts.push({ prompt, resume })
+        if (resume) throw new AcpResumeUnavailable('Cursor does not support resuming this session. Start a new chat.')
+        emit({ kind: 'init', providerSessionId: `native-${starts.length}`, model: 'fake', cwd })
+        emit({ kind: 'state', state: 'running' })
+        emit({ kind: 'text', text: 'first answer', messageId: 'm1' })
+        emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
+      },
+      send: async () => {}, steer: async () => {}, interrupt: async () => {}, stop: async () => {}, replyPermission: () => {}, replyQuestion: () => {},
+    })
+    const svc = new AgentService(db, () => {}, fakeQuery([]), undefined, factory)
+    const chat = svc.start('t', scopeOf(cwd), 'remember the word plum', { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', access: 'full' })
+    await until(() => svc.get(chat.id).state === 'idle')
+    await svc.stopAndWait(chat.id)
+    await svc.send(chat.id, 'what was the word?')
+    await until(() => starts.length === 3 && svc.get(chat.id).state === 'idle')
+    expect(starts.map((entry) => entry.resume)).toEqual([null, 'native-1', null])
+    expect(starts[2]!.prompt).toContain('remember the word plum')
+    expect(starts[2]!.prompt).toContain('what was the word?')
+    expect(svc.events(chat.id).some((event) => event.kind === 'settings' && event.handoff && /could not resume/.test(event.reason ?? ''))).toBe(true)
+    expect(svc.get(chat.id).providerSessionId).toBe('native-3')
     svc.stopAll()
   })
   it('updates tool descriptions in one durable row and keeps rich results after restart', async () => {

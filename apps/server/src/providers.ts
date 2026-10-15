@@ -13,6 +13,7 @@ type Release = { version: string; checkedAt: string; downloadUrl?: string }
 type Cache = Partial<Record<AgentProvider, Release>>
 export const parseProviderVersion = (output: string): string | null => output.match(/\b\d{4}\.\d{2}\.\d{2}-[a-z0-9]+\b/i)?.[0] ?? output.match(/\bv?(\d+\.\d+\.\d+(?:-[\w.-]+)?)/)?.[1] ?? null
 import { newerVersion } from '@ramu/shared/version'
+import { installAntigravity } from './antigravityInstall'
 export { newerVersion }
 export function providerSetup(provider: AgentProvider, version: string | null): Pick<ProviderStatus, 'docsUrl' | 'installCommand' | 'updateCommand' | 'setupCommand' | 'setupNote'> {
   const windows = process.platform === 'win32'
@@ -24,7 +25,7 @@ export function providerSetup(provider: AgentProvider, version: string | null): 
       const v1 = version?.startsWith('1.')
       return { docsUrl: v1 ? 'https://opencode.ai/docs/' : 'https://opencode.ai/v2/docs/', installCommand: windows ? null : `curl -fsSL https://opencode.ai/${v1 ? '' : 'v2/'}install | bash`, updateCommand: windows ? null : `curl -fsSL https://opencode.ai/${v1 ? '' : 'v2/'}install | bash`, setupCommand: 'opencode', setupNote: 'Open OpenCode in a terminal and use /connect to configure model providers. Version checks stay on your installed major version. On Windows, download the standalone CLI from the setup guide.' }
     }
-    case 'antigravity': return { docsUrl: 'https://antigravity.google/docs/ide/extensions', installCommand: null, updateCommand: null, setupCommand: null, setupNote: 'Download and extract the official ACP runtime for your platform, select agy_acp_server.par (or .exe), and select its localharness_external helper if it is not beside the runtime. Follow the setup guide to sign in; the Antigravity IDE binary is a separate application.' }
+    case 'antigravity': return { docsUrl: 'https://antigravity.google/docs/ide/extensions', installCommand: null, updateCommand: null, setupCommand: null, setupNote: 'Ramu downloads Google\'s official ACP runtime for you: choose Install runtime, then Login (opens Google sign-in in your browser). To use your own copy, select agy_acp_server.par (or .exe) and its localharness_external helper under Advanced. The Antigravity IDE is a separate application.' }
   }
 }
 async function officialText(url: string): Promise<string> {
@@ -163,9 +164,15 @@ export class ProviderService {
     if (pending) return pending
     const update = async () => {
       const config = this.preferences().providerBinaries
+      if (provider === 'antigravity') {
+        // Ramu downloads Google's official runtime itself; a runtime the user picked by path or env keeps its own updater.
+        if (config.antigravity?.binary?.trim() || process.env.RAMU_ANTIGRAVITY_BIN) throw new Error('Update this custom Antigravity runtime yourself, or clear its path to let Ramu manage it.')
+        this.updateErrors.delete(provider)
+        await installAntigravity()
+        return (await this.status()).find((status) => status.provider === provider)!
+      }
       const binary = providerBinary(provider, config)
       if (!findExecutable(binary)) throw new Error('Select an installed CLI before updating it.')
-      if (provider === 'antigravity') throw new Error('This runtime requires a manual download from its official release page.')
       if (provider === 'codex' && (config.codex?.binary?.trim() || process.env.RAMU_CODEX_BIN)) throw new Error('Update this custom Codex installation with its package manager.')
       const command = provider === 'codex' ? (findExecutable(process.platform === 'win32' ? 'npm.cmd' : 'npm') ?? 'npm') : binary
       // Own the npm-managed replacement instead of modifying an unrelated global

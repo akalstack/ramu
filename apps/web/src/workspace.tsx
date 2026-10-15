@@ -20,6 +20,8 @@ import { useAppSettings } from './AppSettings'
 import { invoke, ramu } from './ipc'
 import { closeAfterTerminalCheck } from './terminalRegistry'
 import { splitTerminal, terminalFocusAfterClose, terminalGroups, unsplitTerminal } from '@ramu/shared/terminalGroups'
+import { onWorkspaceVisibility, workspaceVisible } from './workspaceLifetime'
+import { registerWorkspaceCheckpoint } from './workspaceCheckpoint'
 
 type ViewInput = ViewDescriptor extends infer V ? (V extends ViewDescriptor ? Omit<V, 'id'> : never) : never
 
@@ -165,6 +167,17 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
   const [dirty, setDirtyMap] = useState<Record<string, boolean>>({})
   const [composing, setComposing] = useState<string | null>(null)
   const dirtyTasks = useRef(new Set<string>())
+  const snapshot = useRef({ loaded, ui, taskUi, dirty, composing, composingWorkspace })
+  snapshot.current = { loaded, ui, taskUi, dirty, composing, composingWorkspace }
+  useEffect(() => registerWorkspaceCheckpoint(async () => {
+    const current = snapshot.current
+    if (!current.loaded || Object.values(current.dirty).some(Boolean) || Object.values(current.taskUi).some((state) => state.views.some((view) => view.kind === 'terminal'))) return false
+    // Keep local UI state authoritative on cache restoration, even if a host's older debounce finished later.
+    const resume = JSON.stringify({ workspace: current.ui, tasks: current.taskUi, composing: current.composing, composingWorkspace: current.composingWorkspace })
+    // A clean offline workspace can sleep too: this checkpoint belongs to the client, not its host.
+    localStorage.setItem('ramu.workspace.resume', resume)
+    return true
+  }), [])
 
   const refresh = useCallback(async () => {
     const ps = await invoke('projects.list')
@@ -199,13 +212,19 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     void (async () => {
       await refresh()
       const saved = await invoke('ui.get')
+      let resume: { workspace: WorkspaceUiState; tasks: Record<string, TaskUiState>; composing: string | null; composingWorkspace: string | null } | null = null
+      try {
+        resume = JSON.parse(localStorage.getItem('ramu.workspace.resume') ?? 'null')
+        if (resume?.workspace && resume?.tasks) { saved.workspace = resume.workspace; saved.tasks = resume.tasks }
+        else resume = null
+      } catch { resume = null }
       saved.tasks = Object.fromEntries(Object.entries(saved.tasks).map(([id, state]) => [id, persistentTaskUi(state)]))
       const known = new Set([...(await invoke('tasks.list')).map((t) => t.id), ...(await invoke('projects.list')).map((p) => projectCtx(p.id)), ...(await invoke('workspaces.list')).map((w) => worktreeCtx(w.id))])
       const openTaskIds = saved.workspace.openTaskIds.filter((t) => known.has(t))
       setUi({
         ...saved.workspace,
         openTaskIds,
-        activeTaskId: null, sidebar: 'projects',
+        activeTaskId: resume && saved.workspace.activeTaskId && known.has(saved.workspace.activeTaskId) ? saved.workspace.activeTaskId : null, sidebar: resume ? saved.workspace.sidebar : 'projects',
       })
       const contextsToRestore = new Set(openTaskIds.filter(isWorkspaceCtx))
       for (const task of (await invoke('tasks.list'))) {
@@ -225,22 +244,25 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         dirtyTasks.current.add(task.id); dirtyTasks.current.add(ctx)
       }
       setTaskUi(saved.tasks)
+      if (resume) for (const id of Object.keys(saved.tasks)) dirtyTasks.current.add(id)
       for (const ctx of Object.keys(saved.tasks).filter((ctx) => contextsToRestore.has(ctx))) await refreshBindings(ctx)
       for (const t of openTaskIds) await refreshBindings(t)
       setLoaded(true)
+      if (resume) { setComposing(resume.composing); setComposingWorkspace(resume.composingWorkspace); localStorage.removeItem('ramu.workspace.resume') }
     })()
   }, [refresh, refreshBindings])
+  useEffect(() => onWorkspaceVisibility(() => { if (workspaceVisible()) void refresh().catch(() => {}) }), [refresh])
 
   // Persist UI state (debounced).
   useEffect(() => {
     if (!loaded) return
-    const t = setTimeout(() => void invoke('ui.setWorkspace', ui), 250)
+    const t = setTimeout(() => void invoke('ui.setWorkspace', ui).catch(() => {}), 250)
     return () => clearTimeout(t)
   }, [ui, loaded])
   useEffect(() => {
     if (!loaded || !dirtyTasks.current.size) return
     const t = setTimeout(() => {
-      for (const id of dirtyTasks.current) void invoke('ui.setTask', id, persistentTaskUi(taskUi[id] ?? EMPTY_TASK_UI))
+      for (const id of dirtyTasks.current) void invoke('ui.setTask', id, persistentTaskUi(taskUi[id] ?? EMPTY_TASK_UI)).catch(() => { dirtyTasks.current.add(id) })
       dirtyTasks.current.clear()
     }, 250)
     return () => clearTimeout(t)

@@ -1,10 +1,13 @@
-import type { ComponentProps } from 'react'
+import { SettingsField, SettingsFieldNotice } from '../SettingsScope'
+import { Children, type ComponentProps } from 'react'
 import { cn } from 'cn'
 import { Field } from '@/components/ui/field'
 
 /** A native Field with the compact row layout shared by desktop Settings. */
-export function SettingsRow({ className, ...props }: ComponentProps<typeof Field>) {
-  return <Field orientation="horizontal" className={cn(
+export function SettingsRow({ className, setting, children, ...props }: ComponentProps<typeof Field> & { setting?: string }) {
+  const cells = Children.toArray(children)
+  if (setting && cells.length) cells[0] = <span key="label">{cells[0]}<SettingsFieldNotice path={setting} /></span>
+  const row = <Field orientation="horizontal" className={cn(
     'settings-row',
     "[&_>_span:first-child]:min-w-0 [&_strong]:font-medium [&_>_span:first-child_.block]:mt-1 [&_>_span:first-child_.block]:leading-[18px]",
     "[&_>_span:first-child_.block]:max-w-[420px] [&_.dropdown-trigger]:min-w-[150px] [&_.dropdown-trigger]:max-w-[230px] [&_.dropdown-trigger]:flex-none",
@@ -16,7 +19,8 @@ export function SettingsRow({ className, ...props }: ComponentProps<typeof Field
     "gap-6 [border-bottom:1px_solid_var(--line)] p-[12px_16px] items-center",
     "bg-fill",
     className,
-  )} {...props} />
+  )} {...props}>{cells}</Field>
+  return setting ? <SettingsField path={setting} compact>{row}</SettingsField> : row
 }
 
 /** Title plus optional one-line help; the first cell of a SettingsRow. */

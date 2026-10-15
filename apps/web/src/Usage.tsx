@@ -12,6 +12,7 @@ import { providerEnabled, providerName } from '@ramu/shared/providers'
 import { invoke, ramu } from './ipc'
 import { ProviderIcon } from './ProviderIcon'
 import { useAppSettings } from './AppSettings'
+import { workspaceVisible, onWorkspaceVisibility } from './workspaceLifetime'
 
 // One shared copy of the account's plan usage; the main process pushes every change.
 let readings: UsageReading[] = []
@@ -28,7 +29,9 @@ function subscribe(listener: () => void) {
     ramu.on('usage:changed', publish)
     // Keep the gauges current between turns: poll while the window is visible and catch up when it regains focus.
     // The main process throttles the actual read, so extra calls are cheap.
-    const refresh = () => { if (document.visibilityState === 'visible' && listeners.size) void invoke('usage.refresh').then(publish, () => {}) }
+    let refreshing = false
+    const refresh = () => { if (workspaceVisible() && document.visibilityState === 'visible' && listeners.size && !refreshing) { refreshing = true; void invoke('usage.refresh').then(publish, () => {}).finally(() => { refreshing = false }) } }
+    onWorkspaceVisibility(refresh)
     window.setInterval(refresh, 5 * 60_000 + 5_000)
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)

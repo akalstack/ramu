@@ -2,9 +2,9 @@ import { cancelPanelMotion } from './panelMotion'
 import { configureLanguage } from './i18n'
 import { errorText } from './errors'
 import { BootScreen } from './Brand'
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode, type ContextType } from 'react'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
-import { invoke } from './ipc'
+import { invoke, ramu } from './ipc'
 import { notifyError } from './Notifications'
 
 const Context = createContext<{ preferences: AppPreferences; reload: () => Promise<void>; save: (preferences: AppPreferences) => Promise<void> } | null>(null)
@@ -14,6 +14,10 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void Promise.all([invoke('settings.app.get'), invoke('app.systemLanguages').catch(() => navigator.languages)]).then(([saved, languages]) => { const next = { ...DEFAULT_APP_PREFERENCES, ...saved }; configureLanguage(next.language, languages); setPreferences(next) }, (reason) => notifyError(errorText(reason), 'Settings')).finally(() => setLoaded(true))
   }, [])
+  useEffect(() => ramu.on('settings:changed', (next) => {
+    setPreferences(next)
+    configureLanguage(next.language, navigator.languages)
+  }), [])
   useEffect(() => {
     if (preferences.language !== 'system') return
     let disposed = false
@@ -37,6 +41,8 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     }
     root.dataset.fontSmoothing = preferences.fontSmoothing ? 'grayscale' : 'system'
   }, [preferences])
-  return <Context.Provider value={{ preferences, reload: async () => { setPreferences({ ...DEFAULT_APP_PREFERENCES, ...await invoke('settings.app.get') }) }, save: async (value) => { await invoke('settings.app.set', value); const languages = value.language === 'system' ? await invoke('app.systemLanguages').catch(() => navigator.languages) : undefined; configureLanguage(value.language, languages); setPreferences(value) } }}>{loaded ? children : <BootScreen />}</Context.Provider>
+  return <Context.Provider value={{ preferences, reload: async () => { const next = { ...DEFAULT_APP_PREFERENCES, ...await invoke('settings.app.get') }; const languages = next.language === 'system' ? await invoke('app.systemLanguages').catch(() => navigator.languages) : undefined; configureLanguage(next.language, languages); setPreferences(next) }, save: async (value) => { await invoke('settings.app.set', value); const languages = value.language === 'system' ? await invoke('app.systemLanguages').catch(() => navigator.languages) : undefined; configureLanguage(value.language, languages); setPreferences(value) } }}>{loaded ? children : <BootScreen />}</Context.Provider>
 }
 export function useAppSettings() { const value = useContext(Context); if (!value) throw new Error('AppSettingsProvider missing'); return value }
+
+export function AppSettingsOverride({ value, children }: { value: NonNullable<ContextType<typeof Context>>; children: ReactNode }) { return <Context.Provider value={value}>{children}</Context.Provider> }

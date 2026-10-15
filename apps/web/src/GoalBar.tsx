@@ -3,6 +3,7 @@ import { ChatActivityButton } from './ChatActivity'
 import { Button } from '@/components/desktop-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import type { ChatGoal } from '@ramu/shared/types'
+import type { GoalChange, GoalChangeType } from '@ramu/shared/goalHistory'
 import { t, useLanguage } from './i18n'
 import { useAppSettings } from './AppSettings'
 
@@ -52,5 +53,30 @@ export function GoalDone({ goal }: { goal: ChatGoal }) {
       <ChevronRight size={14} className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]" />
     </CollapsibleTrigger>
     <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:height_160ms_var(--ease)]"><GoalDetails goal={goal} /></CollapsibleContent>
+  </Collapsible>
+}
+
+const NOTES: Record<GoalChangeType, { label: string; Icon: typeof Target; tone: string }> = {
+  set: { label: 'Goal set', Icon: Target, tone: 'text-brand' },
+  edited: { label: 'Goal updated', Icon: Target, tone: 'text-brand' },
+  paused: { label: 'Goal paused', Icon: CirclePause, tone: 'text-muted-foreground' },
+  resumed: { label: 'Goal resumed', Icon: Play, tone: 'text-brand' },
+  blocked: { label: 'Goal needs input', Icon: CircleAlert, tone: 'text-warn' },
+  'turn-limit': { label: 'Goal turn limit reached', Icon: CircleAlert, tone: 'text-warn' },
+  cleared: { label: 'Goal cleared', Icon: X, tone: 'text-muted-foreground' },
+}
+
+/** A turning point in a goal's life, left in the transcript where it happened. Same quiet line as a finished goal. */
+export function GoalNote({ change }: { change: GoalChange }) {
+  useLanguage()
+  const { label, Icon, tone } = NOTES[change.type]
+  return <Collapsible className="goal-note chat-activity-disclosure [&_.goal-details]:pl-[22px] [&_.goal-details]:text-chat" aria-label={t('Chat goal')}>
+    <CollapsibleTrigger render={<ChatActivityButton />}>
+      <Icon size={14} className={`goal-icon ${tone}`} />
+      <span className="tool-group-label text-[length:inherit]">{t(label)}</span>
+      <span className="goal-objective chat-activity-meta flex-initial min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={change.goal.objective}>{change.goal.objective}</span>
+      <ChevronRight size={14} className="caret flex-none text-muted-foreground [transition:transform_0.15s_var(--ease)] [[data-open]>_[data-slot='collapsible-trigger']_&]:[transform:rotate(90deg)]" />
+    </CollapsibleTrigger>
+    <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:height_160ms_var(--ease)]"><GoalDetails goal={change.goal} /></CollapsibleContent>
   </Collapsible>
 }

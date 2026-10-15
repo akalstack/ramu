@@ -8,12 +8,17 @@ export const PROTOCOL_VERSION = 1
 export const CAPABILITIES = {
   /** POST /invoke with { method, args }; the response is { value } or { error }. */
   invoke: 'invoke',
+  /** Sequenced snapshots, terminal recovery and remote folder browsing. */
+  mobileCompanion: 'mobile-companion',
+  liveActivities: 'mobile-live-activities',
   /** GET /events server-sent events carrying { channel, payload }. */
   events: 'events',
   /** The server can ask a local client to run native dialogs (folder picker, reveal in Finder). */
   hostRequests: 'host-requests',
   /** The server also accepts bearer-authenticated TCP connections. */
   remote: 'remote',
+  /** POST /pair trades a one-time code for a per-device token that can be revoked on its own. */
+  pairing: 'pairing',
 } as const
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES]
 
@@ -23,6 +28,11 @@ export type RuntimeEndpoint =
   | { kind: 'http'; url: string; token: string }
 
 export const AUTH_SCHEME = 'Bearer'
+export const PAIR_PATH = '/pair'
+
+/** Body of `POST /pair`. The code comes from `ramu pair` on the server's computer; it works once and expires. */
+export interface PairRequest { code: string; name?: string }
+export interface PairResponse { deviceId: string; token: string }
 export const PROTOCOL_HEADER = 'x-ramu-protocol'
 export const MAX_REQUEST_BYTES = 16_000_000
 
@@ -50,4 +60,19 @@ export function parseRemoteUrl(input: string): string {
 export function isLoopbackHost(host: string): boolean {
   const value = host.replace(/^\[|\]$/g, '').toLowerCase()
   return value === 'localhost' || value === '::1' || /^127\.\d+\.\d+\.\d+$/.test(value)
+}
+
+/** A short-lived manual pairing offer, safe to display as a QR code. Never contains a device token. */
+export interface PairQrOffer { kind: 'ramu-pair'; version: 1; url: string; code: string; expiresAt: number }
+export function encodePairQr(offer: Omit<PairQrOffer, 'kind' | 'version'>): string {
+  return JSON.stringify({ kind: 'ramu-pair', version: 1, ...offer })
+}
+export function decodePairQr(text: string, now = Date.now()): PairQrOffer {
+  if (text.length > 4096) throw new Error('Unrecognized pairing QR code')
+  const offer = JSON.parse(text) as PairQrOffer
+  if (offer.kind !== 'ramu-pair' || offer.version !== 1 || typeof offer.url !== 'string' || typeof offer.code !== 'string' || !/^[A-Z2-9]{5}-?[A-Z2-9]{5}$/.test(offer.code) || !Number.isFinite(offer.expiresAt)) throw new Error('Unrecognized pairing QR code')
+  const url = new URL(offer.url)
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('Invalid host address in QR code')
+  if (offer.expiresAt <= now) throw new Error('This pairing code has expired. Create a new one on the computer.')
+  return { ...offer, url: url.origin }
 }

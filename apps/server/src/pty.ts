@@ -13,13 +13,15 @@ export interface TerminalInfo {
 interface Entry extends TerminalInfo {
   pty: nodePty.IPty
   shell: string
+  output: string
+  cursor: number
 }
 
 export class TerminalService {
   private readonly terms = new Map<string, Entry>()
 
   constructor(
-    private readonly onData: (id: string, data: string) => void,
+    private readonly onData: (id: string, data: string, cursor: number) => void,
     private readonly onExit: (id: string, code: number) => void,
   ) {}
 
@@ -32,14 +34,27 @@ export class TerminalService {
       rows,
       env: { ...process.env, TERM_PROGRAM: 'Ramu' } as Record<string, string>,
     })
-    const entry: Entry = { id: randomUUID(), taskId, repoId, cwd, exited: false, pty, shell }
+    const entry: Entry = { id: randomUUID(), taskId, repoId, cwd, exited: false, pty, shell, output: '', cursor: 0 }
     this.terms.set(entry.id, entry)
-    pty.onData((d) => this.onData(entry.id, d))
+    pty.onData((d) => {
+      entry.cursor += d.length
+      entry.output = (entry.output + d).slice(-256_000)
+      this.onData(entry.id, d, entry.cursor)
+    })
     pty.onExit(({ exitCode }) => {
       entry.exited = true
       this.onExit(entry.id, exitCode)
     })
     return info(entry)
+  }
+
+  list(taskId: string): TerminalInfo[] {
+    return [...this.terms.values()].filter(entry => entry.taskId === taskId).map(info)
+  }
+
+  snapshot(id: string): { output: string; cursor: number; exited: boolean } {
+    const entry = this.require(id)
+    return { output: entry.output, cursor: entry.cursor, exited: entry.exited }
   }
 
   get(id: string): TerminalInfo | undefined {

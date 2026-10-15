@@ -1,10 +1,11 @@
+import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './activity'
 import type { AppUpdateStatus } from './updates'
 import type { ProviderConfiguration, ProviderStatus } from './providers'
 // The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
 import type {
   PullMode, CommitBranchOptions,
-  ChangeReview, ChangeFile, ReviewBranchState, ReviewFileState, ReviewComment, UndoPreview, FileContext, SkillInfo, ScheduleInput, ScheduleRule, Schedule, ScheduleRun, RecapSnapshot, BackgroundStatus, Memory, MemoryInput, MemorySnapshot,
+  ChangeReview, ChangeFile, ReviewBranchState, ReviewFileState, ReviewComment, UndoPreview, FileContext, SkillInfo, ScheduleInput, ScheduleRule, Schedule, ScheduleRun, RecapSnapshot, BackgroundStatus, NetworkStatus, NetworkSettingsInput, PairingOffer, Computers, Memory, MemoryInput, MemorySnapshot,
   SearchOptions,
   SearchResults,
   ReplaceFilePreview,
@@ -53,6 +54,24 @@ export interface TerminalInfo {
   exited: boolean
 }
 
+/** Counts only: lock-screen content never includes prompts, paths, host names or credentials. */
+export interface MobileLiveActivityContent {
+  running: number
+  waiting: number
+  startedAt: number
+  updatedAt: number
+  locale: 'en' | 'id'
+  phase: 'working' | 'waiting' | 'finished' | 'paused'
+}
+export interface MobileLiveActivityRegistration {
+  activityId: string
+  token: string
+  computerId: string
+  startedAt: number
+  locale: 'en' | 'id'
+  environment: 'sandbox' | 'production'
+}
+
 export interface RamuMethods {
   'learning.get'(): import('./types').LearningSnapshot
   'learning.apply'(id: string): void
@@ -92,12 +111,37 @@ export interface RamuMethods {
   'updates.check'(): Promise<AppUpdateStatus>
   'updates.download'(): Promise<AppUpdateStatus>
   'updates.restart'(): Promise<void>
+  /** Chats working or waiting for the user. */
+  'agent.counts'(): { running: number; needsInput: number }
+  'notifications.register'(token: string, computerId: string): void
+  'notifications.unregister'(): void
+  'liveActivity.status'(): { enabled: boolean }
+  'liveActivity.register'(registration: MobileLiveActivityRegistration): { enabled: boolean }
+  'liveActivity.unregister'(activityId: string): void
   'background.status'(): BackgroundStatus
   'background.stop'(): void
   'background.start'(): void
   'background.restart'(): void
   'background.keepAwake'(): { enabled: boolean; active: boolean; supported: boolean; error: string | null }
   'background.login'(enabled: boolean): { firstInstall: boolean }
+  /** Access from other devices. These run only for the local desktop app, never for a paired device. */
+  'network.status'(): NetworkStatus
+  'network.configure'(input: NetworkSettingsInput): NetworkStatus
+  'network.pair'(): PairingOffer
+  'network.revoke'(deviceId: string): NetworkStatus
+  /** Computers this app is connected to, all at once. Handled by the desktop app itself. */
+  'computers.settings.invoke'(id: string, method: string, args: unknown[]): unknown
+  'computers.settings.get'(id: string): SettingsSnapshot
+  'computers.settings.patch'(id: string, edits: SettingEdit[]): SettingsSnapshot
+  'computers.list'(): Computers
+  /** Brings a computer's window to the front. Rejects when it cannot be reached. */
+  'computers.open'(id: string): void
+  'computers.pair'(url: string, code: string, name?: string): Computers
+  'computers.forget'(id: string): Computers
+  'computers.retry'(id: string): Computers
+  'computers.update'(id: string, changes: { name?: string; enabled?: boolean; retryMode?: 'events' | 'periodic' }): Computers
+  /** Renderer acknowledgement after its workspace has been safely persisted. */
+  'computers.checkpoint'(requestId: string, safe: boolean): boolean
   'skills.list'(taskId: string): SkillInfo[]
   'schedules.list'(): Schedule[]
   'schedules.save'(input: ScheduleInput, id?: string): Schedule
@@ -116,6 +160,11 @@ export interface RamuMethods {
   'memory.delete'(id: string): void
   'memory.history'(id: string): { action: string; actor: string; reason: string | null; before: Partial<Memory> | null; at: number }[]
   'memory.dream'(): MemorySnapshot
+  'folders.roots'(): string[]
+  'folders.list'(path: string): { path: string; parent: string | null; folders: { name: string; path: string }[] }
+  'folders.create'(parent: string, name: string): string
+  'folders.clone'(parent: string, name: string, url: string): string
+  'folders.addProject'(path: string): { project: Project; repositories: Repository[] }
   'projects.list'(): Project[]
   'projects.create'(name: string): Project
   'projects.inspect'(dir: string): FolderInspection
@@ -151,6 +200,8 @@ export interface RamuMethods {
   'providers.updates'(): Promise<ProviderStatus[]>
   'providers.dismissUpdate'(provider: ProviderStatus['provider'], binary: string, latestVersion: string): void
   'providers.pickBinary'(): string | null
+  'settings.app.snapshot'(): SettingsSnapshot
+  'settings.app.patch'(edits: SettingEdit[]): SettingsSnapshot
   'settings.app.get'(): AppPreferences
   'settings.app.set'(preferences: AppPreferences): void
   'settings.models.set'(preferences: ModelPreferences): void
@@ -165,7 +216,8 @@ export interface RamuMethods {
   'files.copy'(taskId: string, repoId: string, path: string, destination: string): void
   'files.import'(taskId: string, repoId: string, dir: string, paths: string[]): string[]
   'files.dropInfo'(paths: string[]): { path: string; kind: 'file' | 'dir' }[]
-  'files.trash'(taskId: string, repoId: string, path: string): void
+  /** Permanently deletes a file or folder inside the checkout. */
+  'files.delete'(taskId: string, repoId: string, path: string): void
   'files.reveal'(taskId: string, repoId: string, path: string): void
   'files.list'(taskId: string, repoId: string, path: string): DirEntry[]
   'files.read'(taskId: string, repoId: string, path: string): FileContent
@@ -177,7 +229,8 @@ export interface RamuMethods {
   'git.diff'(taskId: string, repoId: string, path: string, staged: boolean): DiffContents
   'git.stage'(taskId: string, repoId: string, paths: string[]): void
   'git.unstage'(taskId: string, repoId: string, paths: string[]): void
-  'git.discard'(taskId: string, repoId: string, paths: string[]): void
+  'git.discardPreview'(taskId: string, repoId: string, paths: string[]): { fingerprint: string; files: { path: string; untracked: boolean }[] }
+  'git.discard'(taskId: string, repoId: string, paths: string[], fingerprint?: string): void
   'git.undoCommit'(taskId: string, repoId: string, expectedHead: string): string
   'git.commitBranchInfo'(taskId: string, repoId: string): { branch: string | null; defaultBranch: string | null }
   'git.createBranch'(taskId: string, repoId: string, name: string): void
@@ -221,6 +274,10 @@ export interface RamuMethods {
   'agent.goal'(sessionId: string): ChatGoal | null
   'agent.goal.control'(sessionId: string, action: 'pause' | 'resume' | 'clear'): ChatGoal | null
   'agent.events'(sessionId: string): AgentEvent[]
+  /** Sequenced persisted events for race-free remote hydration. */
+  'agent.snapshot'(sessionId: string): { revision: number; events: { seq: number; event: AgentEvent }[] }
+  'term.list'(taskId: string): TerminalInfo[]
+  'term.snapshot'(termId: string): { output: string; cursor: number; exited: boolean }
   /** Your messages and the agent's replies that contain `query`, newest first, across every chat. */
   'agent.searchMessages'(query: string): ChatSearchHit[]
   'agent.scope'(taskId: string): AgentScope
@@ -281,20 +338,26 @@ export interface RamuMethods {
 }
 
 export type PushEvents = {
+  'settings:changed': AppPreferences
+  'settings:models': ModelPreferences
   'activity:changed': BackgroundActivity[]
   'menu:action': { action: 'settings' | 'check-updates' }
   'automation:changed': Record<string, never>
   'memory:changed': Record<string, never>
-  'background:connection': { connected: boolean }
+  /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */
+  'background:connection': { connected: boolean; rejected?: boolean }
+  'computers:changed': Computers
+  'workspace:visibility': { visible: boolean }
+  'workspace:checkpoint': { requestId: string }
   'updates:changed': AppUpdateStatus
   'providers:updates': ProviderStatus[]
   'notify:inapp': { sessionId: string; taskId: string; kind: 'done' | 'input' | 'failed'; title: string; body: string }
   'notify:open': { sessionId: string; taskId: string }
-  'agent:event': { sessionId: string; event: AgentEvent; seq?: number }
+  'agent:event': { sessionId: string; event: AgentEvent; seq?: number; revision?: number }
   'usage:changed': UsageReading[]
   'context:changed': { sessionId: string; context: ContextUsage }
   'aside:changed': { sessionId: string; aside: Aside | null; asideId: string }
-  'term:data': { id: string; data: string }
+  'term:data': { id: string; data: string; cursor?: number }
   'term:exit': { id: string; code: number }
   'fs:changed': { cwd: string; path: string }
 }

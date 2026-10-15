@@ -1,3 +1,4 @@
+import { useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { errorText } from './errors'
 import { SettingsRow } from '@/components/settings-row'
@@ -102,11 +103,13 @@ function ScheduleEditor({ schedule, onClose, onSaved }: { schedule?: Schedule; o
   </fieldset></section>
 }
 export function BackgroundControls({ compact = false, onInstalled }: { compact?: boolean; onInstalled?: () => void }) {
+  const invoke = useSettingsInvoke()
+  const on = useSettingsEvents()
   useLanguage()
   const app = useAppSettings()
   const [status, setStatus] = useState<BackgroundStatus | null>(null), [connected, setConnected] = useState(true), [busy, setBusy] = useState(false)
   const reload = () => invoke('background.status').then((s) => { setStatus(s); setConnected(true) }, () => setConnected(false))
-  useEffect(() => { void reload(); return ramu.on('background:connection', ({ connected }) => { setConnected(connected); if (connected) void reload() }) }, [])
+  useEffect(() => { void reload(); return on('background:connection', ({ connected }) => { setConnected(connected); if (connected) void reload() }) }, [])
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); await reload() } catch (e) { notifyError(errorText(e), 'Background service') } finally { setBusy(false) } }
   if (compact) return <span className="inline-flex items-center gap-[7px] text-[11px] text-muted-foreground"><span className={`size-1.5 rounded-full ${connected ? 'bg-(--ok)' : 'bg-[#8b8b91]'}`} />{connected ? t("Background service running") : t("Background service stopped")}</span>
   return <>

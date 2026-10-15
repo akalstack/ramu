@@ -1,3 +1,5 @@
+import { MobileLiveActivities } from './mobileLiveActivity'
+import { MobilePush } from './mobilePush'
 import { registerRtkTool } from './rtk'
 import type { AppPreferences } from '@ramu/shared/types'
 import { ToolRegistry } from './toolRegistry'
@@ -6,10 +8,12 @@ import { LearningService } from './learning'
 import { DEFAULT_INTELLIGENCE_PREFERENCES } from '@ramu/shared/types'
 // Independent Node process. Electron windows are clients, never owners of agent lifetimes.
 import { createServer, type ServerResponse } from 'node:http'
+import { createServer as createHttpsServer } from 'node:https'
 import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { randomBytes, randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { claudeAcpQuery } from './claudeAcpQuery'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -18,10 +22,13 @@ import { registerAdvisorTools } from './advisor'
 import { registerGoalTools } from './goals'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
-import { runtimeInvoke } from '@ramu/client-runtime'
-import { CAPABILITIES, MAX_REQUEST_BYTES, PROTOCOL_VERSION, decodeInvoke, type Capability } from '@ramu/contracts'
+import { runtimeInvoke, runtimeNetwork } from '@ramu/client-runtime'
+import { HostPresence } from './presence'
+import { CAPABILITIES, MAX_REQUEST_BYTES, PAIR_PATH, PROTOCOL_VERSION, decodeInvoke, type Capability } from '@ramu/contracts'
 import { loadConfig } from './config'
 import { TokenStore, authorized } from './auth'
+import { DeviceStore } from './devices'
+import { candidateUrls, localAddresses, readNetworkSetting, validateNetworkSetting, writeNetworkSetting, type NetworkSetting } from './network'
 import { openDb } from './db'
 import { Workspace } from './workspace'
 import { AgentService } from './agent'
@@ -37,7 +44,15 @@ import type { AgentSessionInfo, ScheduleInput } from '@ramu/shared/types'
 const config = loadConfig()
 const { userData, socketPath } = config
 mkdirSync(userData, { recursive: true })
-const remoteTokens = config.listen ? new TokenStore(config.tokenPath) : null
+// Network clients present either their own device token (see `ramu pair`) or the older shared token.
+const remoteTokens = new TokenStore(config.tokenPath)
+const devices = new DeviceStore(config.devicesPath)
+const presence = new HostPresence(join(userData, 'presence.json'), (id) => devices.presenceKey(id))
+const stopPresenceNetwork = runtimeNetwork.subscribe(() => { if (network.enabled) presence.announce() })
+// `--listen` / RAMU_LISTEN wins and cannot be changed from Settings. Otherwise Settings decides, and applies without a restart.
+let network: NetworkSetting = config.listen
+  ? { enabled: true, host: config.listen.host, port: config.listen.port, acceptUnencrypted: true }
+  : readNetworkSetting(config.networkPath, Boolean(config.tls))
 // A launchd instance can supervise a daemon that was started by the UI without interrupting it.
 // Intentional stops exit successfully; crashes let launchd restart or take over execution.
 const stoppedPath = join(userData, 'background.stopped')
@@ -89,10 +104,12 @@ if (!workspace.getAppState('migration:learning-auto-default', false)) {
 }
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./fakeAgent') : null
 let reviews!: ReviewService
-const agents = new AgentService(db, (sessionId, event, seq) => { send('agent:event', { sessionId, event, seq }) }, fake?.fakeQuery ?? claudeAcpQuery(query), fake?.fakeCodex, fake?.fakeCodex, fake?.fakeCodex)
+const mobilePush = new MobilePush(join(userData, 'mobile-push.json'), () => devices.list())
+const agents = new AgentService(db, (sessionId, event, seq, revision) => { send('agent:event', { sessionId, event, seq, revision }); queueMicrotask(() => { try { mobilePush.observe(agents.get(sessionId), event, agents.getGoal(sessionId)); if (['state', 'permission', 'question', 'goal'].includes(event.kind)) mobileLiveActivities.observe() } catch {} }) }, fake?.fakeQuery ?? claudeAcpQuery(query), fake?.fakeCodex, fake?.fakeCodex, fake?.fakeCodex)
+const mobileLiveActivities = new MobileLiveActivities(join(userData, 'mobile-live-activities.json'), () => devices.list(), () => agents.counts())
 if (fake) agents.helperHistory = async () => []
 agents.markRestoredOnBoot()
-const terminals = new TerminalService((id, data) => send('term:data', { id, data }), (id, code) => send('term:exit', { id, code }))
+const terminals = new TerminalService((id, data, cursor) => send('term:data', { id, data, cursor }), (id, code) => send('term:exit', { id, code }))
 const schedules = new ScheduleService(db, workspace, agents, changed)
 schedules.recover()
 reviews = new ReviewService(db, workspace, agents, join(userData, 'reviews'), changed)
@@ -107,7 +124,10 @@ agents.sessionCheckpoint = (id) => learning.checkpoint(id)
 agents.learningInstructions = (session) => learning.instructions(session.id)
 const projectOf = (session: AgentSessionInfo) => { try { return workspace.getTask(session.taskId).projectId } catch { return null } }
 agents.memoryInstructions = (session) => memory.instructions(session, projectOf(session))
+// Calls that arrive over the network are marked, so a desktop dialog is never opened on this computer for someone else.
+const origin = new AsyncLocalStorage<{ network: boolean }>()
 const dispatcher = createDispatcher({ userData, send, native: (method, path) => {
+  if (origin.getStore()?.network) return Promise.reject(new Error('This opens a window on the computer that runs Ramu, so it is not available from another computer yet. Do it on that computer.'))
   if (!hostClients.size) return Promise.reject(new Error('Open Ramu on this computer to use this desktop action'))
   const requestId = randomUUID()
   return new Promise((resolve, reject) => {
@@ -133,38 +153,65 @@ async function stop(intentional = false) {
   terminals.closeAll(); dispatcher.close()
   for (const c of clients) c.end()
   for (const r of nativeRequests.values()) { clearTimeout(r.timer); r.reject(new Error('Service stopping')) }
-  clearInterval(heartbeat)
-  mcpHttp.close(); runtime.close(); remote?.close(); db.close()
+  clearInterval(heartbeat); clearInterval(pushReceipts); mobileLiveActivities.dispose()
+  stopPresenceNetwork(); presence.close()
+  clearTimeout(remoteRetry)
+  mcpHttp.close(); runtime.close(); try { remote?.close() } catch {} db.close()
   try { unlinkSync(socketPath) } catch {}
   process.exit(0)
 }
-async function body(req: import('node:http').IncomingMessage): Promise<any> {
+async function rawBody(req: import('node:http').IncomingMessage, limit = MAX_REQUEST_BYTES): Promise<string> {
   let bytes = 0; const chunks: Buffer[] = []
-  for await (const chunk of req) { bytes += chunk.length; if (bytes > MAX_REQUEST_BYTES) throw new Error('Request is too large'); chunks.push(chunk) }
-  return decodeInvoke(Buffer.concat(chunks).toString())
+  for await (const chunk of req) { bytes += chunk.length; if (bytes > limit) throw new Error('Request is too large'); chunks.push(chunk) }
+  return Buffer.concat(chunks).toString()
 }
-const capabilities: Capability[] = [CAPABILITIES.invoke, CAPABILITIES.events, CAPABILITIES.hostRequests, ...(config.listen ? [CAPABILITIES.remote] : [])]
+const body = async (req: import('node:http').IncomingMessage): Promise<any> => decodeInvoke(await rawBody(req))
+const capabilities = (): Capability[] => [CAPABILITIES.invoke, CAPABILITIES.events, CAPABILITIES.mobileCompanion, CAPABILITIES.liveActivities, CAPABILITIES.hostRequests, ...(network.enabled ? [CAPABILITIES.remote, CAPABILITIES.pairing] : [])]
 const failedAuth = new Map<string, { count: number; until: number }>()
+// Event streams of network clients stay open, so a revoked device must be cut off here, not only refused on its next request.
+const remoteStreams = new Map<ServerResponse, string | undefined>()
+const stillAuthorized = (header: string | undefined) => devices.authenticate(header) !== null || authorized(header, remoteTokens.current())
+const dropRevoked = () => { for (const [stream, header] of remoteStreams) if (!stillAuthorized(header)) stream.end() }
 const json = { 'Content-Type': 'application/json' }
 // One handler serves both transports. Requests over TCP (`remote`) must present the bearer token.
 const handle = (remote: boolean) => async (req: import('node:http').IncomingMessage, res: ServerResponse) => {
   try {
+    if (remote) {
+      // Browser companions use the same bearer protocol; cookies are never accepted.
+      res.setHeader('Access-Control-Allow-Origin', '*')
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Ramu-Protocol')
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+      if (req.method === 'OPTIONS') { res.writeHead(204).end(); return }
+    }
+    let deviceId: string | undefined
     const path = (req.url ?? '/').split('?')[0]
     if (remote) {
       if (path === '/health' && req.method === 'GET') { res.writeHead(200, json).end(JSON.stringify({ ok: true, protocol: PROTOCOL_VERSION })); return }
       const peer = req.socket.remoteAddress ?? 'unknown', limit = failedAuth.get(peer)
       if (limit && limit.until > Date.now()) { res.writeHead(429).end(); return }
-      if (!remoteTokens || !authorized(req.headers.authorization, remoteTokens.current())) {
+      const rejected = (message?: string) => {
         const count = (limit?.count ?? 0) + 1
         failedAuth.set(peer, { count, until: count >= 5 ? Date.now() + Math.min(60000, 1000 * 2 ** (count - 5)) : 0 })
-        res.writeHead(401).end(); return
+        res.writeHead(401, json).end(message ? JSON.stringify({ error: message }) : undefined)
       }
+      if (path === PAIR_PATH && req.method === 'POST') {
+        const request = JSON.parse(await rawBody(req, 4096) || '{}')
+        const paired = typeof request.code === 'string' ? devices.redeem(request.code, typeof request.name === 'string' ? request.name : undefined) : null
+        if (!paired) { rejected('That pairing code is wrong, already used or expired'); return }
+        failedAuth.delete(peer)
+        res.writeHead(200, json).end(JSON.stringify({ deviceId: paired.device.id, token: paired.token })); return
+      }
+      const device = devices.authenticate(req.headers.authorization)
+      if (!device && !authorized(req.headers.authorization, remoteTokens.current())) { rejected(); return }
+      deviceId = device?.id
       failedAuth.delete(peer)
     }
     if (path === '/events' && req.method === 'GET') {
+      if (remote && deviceId && req.socket.remoteAddress) presence.register(deviceId, req.socket.remoteAddress, Number(req.headers['x-ramu-presence-port']))
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' }); res.write(': connected\n\n'); clients.add(res)
       if (!remote) hostClients.add(res)
-      res.on('close', () => { clients.delete(res); hostClients.delete(res) }); return
+      else remoteStreams.set(res, req.headers.authorization)
+      res.on('close', () => { clients.delete(res); hostClients.delete(res); remoteStreams.delete(res) }); return
     }
     if (req.method !== 'POST' || path !== '/invoke') { res.writeHead(404).end(); return }
     const { method, args } = await body(req)
@@ -173,15 +220,36 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
       if (remote) throw new Error('Desktop actions are only available on this computer')
       const request = nativeRequests.get(args?.[0])
       if (request) { clearTimeout(request.timer); nativeRequests.delete(args[0]); args[2] ? request.reject(new Error(String(args[2]))) : request.resolve(args[1]) }
-    } else if (method === 'background.status') value = { running: true, pid: process.pid, startedAt, build: serviceBuild, version: serviceVersion, protocol: PROTOCOL_VERSION, capabilities, ...(config.listen ? { listening: `${config.listen.host}:${config.listen.port}` } : {}) }
+    } else if (method === 'notifications.register') {
+      if (!deviceId || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string') throw new Error('Push registration requires a paired phone')
+      mobilePush.register(deviceId, args[0], args[1])
+    } else if (method === 'notifications.unregister') {
+      if (!deviceId) throw new Error('Push registration requires a paired phone')
+      mobilePush.remove(deviceId)
+    } else if (method === 'liveActivity.status') {
+      if (!deviceId) throw new Error('Live Activities require a paired phone')
+      value = { enabled: mobileLiveActivities.enabled }
+    } else if (method === 'liveActivity.register') {
+      if (!deviceId) throw new Error('Live Activities require a paired phone')
+      value = mobileLiveActivities.register(deviceId, args?.[0])
+    } else if (method === 'liveActivity.unregister') {
+      if (!deviceId || typeof args?.[0] !== 'string') throw new Error('Live Activities require a paired phone')
+      mobileLiveActivities.remove(deviceId, args[0])
+    } else if (method === 'background.status') value = { running: true, platform: process.platform, pid: process.pid, startedAt, build: serviceBuild, version: serviceVersion, protocol: PROTOCOL_VERSION, capabilities: capabilities(), ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}) }
+    else if (method.startsWith('network.')) {
+      if (remote) throw new Error('Network access is managed from the computer running Ramu')
+      value = await networkMethod(method, args)
+    }
     else if (method === 'background.stop') { res.writeHead(200, json).end('{}'); void stop(true); return }
     else if (method === 'background.restart') { res.writeHead(200, json).end('{}'); void stop(); return }
-    else value = await dispatcher.invoke(method, args)
+    else value = await origin.run({ network: remote }, () => dispatcher.invoke(method, args))
     res.writeHead(200, json).end(JSON.stringify({ value }))
   } catch (error) { if (!res.headersSent) res.writeHead(400, json); res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) })) }
 }
 const runtime = createServer(handle(false))
-const remote = config.listen ? createServer(handle(true)) : null
+let remote: ReturnType<typeof createServer> | null = null
+let remoteError: string | null = null
+let remoteRetry: NodeJS.Timeout | undefined
 // Per-agent bearer credentials bind tool calls to their originating chat, including no-project chats.
 const sessions = new Map<string, { session: AgentSessionInfo; toolSearch: boolean }>()
 const mcpHttp = createServer(async (req, res) => {
@@ -245,13 +313,74 @@ agents.toolConnection = (session) => { const token = randomBytes(32).toString('h
 // Never unlink a socket owned by another live service. The launcher removes stale sockets first.
 await new Promise<void>((resolve, reject) => { runtime.once('error', reject); runtime.listen(socketPath, resolve) })
 chmodSync(socketPath, 0o600)
-if (remote && config.listen) {
-  const { host, port } = config.listen
-  await new Promise<void>((resolve, reject) => { remote.once('error', reject); remote.listen(port, host, resolve) })
-  console.log(`Ramu server listening on ${host}:${port}; access token in ${config.tokenPath}`)
+// A VPN address can be missing at boot (the interface comes up after this service). Keep the local socket and agents
+// running and retry the network listener rather than exiting into a restart loop.
+function listenRemote(server: NonNullable<typeof remote>, attempt = 0) {
+  const { host, port } = network
+  const failed = (error: NodeJS.ErrnoException) => {
+    if (remote !== server) return
+    remoteError = error.code ?? error.message
+    const delay = Math.min(30000, 1000 * 2 ** attempt)
+    console.error(`Ramu cannot listen on ${host}:${port} (${remoteError}). Local clients still work; retrying in ${Math.round(delay / 1000)}s.`)
+    remoteRetry = setTimeout(() => { if (remote === server && !stopping) listenRemote(server, attempt + 1) }, delay)
+  }
+  server.once('error', failed)
+  server.listen(port, host, () => {
+    server.off('error', failed)
+    remoteError = null
+    presence.announce()
+    server.on('error', (error) => console.error(`Ramu network listener error: ${error.message}`))
+    console.log(`Ramu server listening on ${config.tls ? 'https' : 'http'}://${host}:${port}; pair a device with \`ramu pair\``)
+  })
 }
+function startRemote() {
+  if (!network.enabled || stopping) return
+  remoteError = null
+  const server = (remote = config.tls ? createHttpsServer({ cert: readFileSync(config.tls.cert), key: readFileSync(config.tls.key) }, handle(true)) : createServer(handle(true)))
+  listenRemote(server)
+}
+function stopRemote() {
+  clearTimeout(remoteRetry)
+  const old = remote; remote = null; remoteError = null
+  // Event streams from paired devices would keep a closing server open; they reconnect (or are refused) afterwards.
+  if (old) { try { old.close() } catch {}; old.closeAllConnections() }
+}
+function networkStatus() {
+  return {
+    enabled: network.enabled, listening: Boolean(remote?.listening), host: network.host, port: network.port,
+    source: config.listen ? 'command-line' as const : 'settings' as const, tls: Boolean(config.tls), error: remoteError,
+    addresses: localAddresses(), devices: devices.list(),
+  }
+}
+async function networkMethod(method: string, args: unknown[]) {
+  if (method === 'network.status') return networkStatus()
+  if (method === 'network.configure') {
+    if (config.listen) throw new Error('Network access was set with --listen; change it there')
+    const next = validateNetworkSetting(args[0], Boolean(config.tls))
+    writeNetworkSetting(config.networkPath, next)
+    const moved = next.enabled !== network.enabled || next.host !== network.host || next.port !== network.port
+    network = next
+    if (moved || (next.enabled && !remote)) { stopRemote(); startRemote() }
+    // Turning access off also drops every connected device: their tokens stay valid but nothing is listening for them.
+    return networkStatus()
+  }
+  if (method === 'network.pair') {
+    if (!network.enabled) throw new Error('Turn on network access first')
+    const { code, expiresAt } = devices.createCode()
+    return { code, expiresAt, urls: candidateUrls(network.host, network.port, Boolean(config.tls)) }
+  }
+  if (method === 'network.revoke') {
+    if (typeof args[0] !== 'string') throw new Error('Invalid device')
+    devices.revoke(args[0])
+    dropRevoked()
+    return networkStatus()
+  }
+  throw new Error(`Unknown method ${method}`)
+}
+startRemote()
 // Proxies and mobile networks drop idle event streams; a comment line every 20 s keeps them open.
-const heartbeat = setInterval(() => { for (const client of clients) client.write(': ping\n\n') }, 20000)
+const pushReceipts = setInterval(() => { void mobilePush.checkReceipts().catch(() => {}) }, 15 * 60_000)
+const heartbeat = setInterval(() => { dropRevoked(); try { mobilePush.prune(); void mobileLiveActivities.flush().catch(() => {}) } catch { /* Push cleanup must not interrupt host agents. */ }; for (const client of clients) client.write(': ping\n\n') }, 20000)
 const tick = setInterval(() => { void agents.resumeInterruptedChats().catch(console.error); void schedules.tick().catch(console.error); void recaps.tick().catch(console.error); void memory.tick().catch(console.error); void learning.tick().catch(console.error) }, 5000)
 await agents.restoreHelperTranscripts()
 await agents.resumeInterruptedChats()

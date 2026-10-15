@@ -1,6 +1,7 @@
 // Unsent composer text survives switching chats, closing the window and restarting. It lives in this client's
 // localStorage (per device), keyed by chat or by project for a new chat, and is removed when the message is sent.
 import { useEffect, useRef } from 'react'
+import { registerWorkspaceCheckpoint } from './workspaceCheckpoint'
 
 const PREFIX = 'ramu.draft.'
 const MAX_LENGTH = 200_000
@@ -27,11 +28,13 @@ export function loadDraft(key: string, store: Store | null = defaultStore(), now
 }
 
 /** Whitespace-only text is not a draft. Storage failures (quota, privacy mode) are ignored: a draft is a convenience. */
-export function saveDraft(key: string, text: string, store: Store | null = defaultStore(), now = Date.now()): void {
+export function saveDraft(key: string, text: string, store: Store | null = defaultStore(), now = Date.now()): boolean {
   try {
+    if (!store) return !text.trim()
     if (!text.trim()) store?.removeItem(PREFIX + key)
     else store?.setItem(PREFIX + key, JSON.stringify({ text: text.slice(0, MAX_LENGTH), at: now }))
-  } catch {}
+    return text.length <= MAX_LENGTH
+  } catch { return false }
 }
 
 export function clearDraft(key: string, store: Store | null = defaultStore()): void { try { store?.removeItem(PREFIX + key) } catch {} }
@@ -49,6 +52,9 @@ export function pruneDrafts(store: Store | null = defaultStore(), now = Date.now
 
 /** Saves `value` under `key` shortly after it stops changing, and immediately when the key changes or the page closes. */
 export function useDraftPersistence(key: string, value: string): void {
+  const current = useRef({ key, value })
+  current.current = { key, value }
+  useEffect(() => registerWorkspaceCheckpoint(async () => saveDraft(current.current.key, current.current.value)), [])
   const pending = useRef<{ key: string; value: string } | null>(null)
   useEffect(() => {
     if (pending.current && pending.current.key !== key) saveDraft(pending.current.key, pending.current.value)

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { AcpEventEncoder, AcpEvents } from '../src/acpEvents'
+import { AcpEventEncoder, AcpEvents, nativeShell } from '../src/acpEvents'
 import { agentContent, inlineMedia } from '@ramu/shared/agentContent'
 import { toolKind } from '@ramu/shared/agentTools'
 import type { AgentEvent } from '@ramu/shared/types'
@@ -126,4 +126,31 @@ it('reports an Antigravity helper as failed when its start_subagent step fails',
   decoder.consume({ sessionUpdate: 'tool_call_update', toolCallId: 's:1', status: 'failed', content: [{ type: 'content', content: { type: 'text', text: 'Tool execution failed' } }] })
   const done = decoder.consume({ sessionUpdate: 'tool_call_update', toolCallId: 'agy', status: 'failed', rawOutput: 'Tool call was approved but never executed.' })
   expect(done.find((e) => e.kind === 'agent')).toMatchObject({ status: 'failed', error: 'Tool execution failed' })
+})
+
+it("shows Cursor's todo list as a plan, patching it on merge and ignoring malformed entries", () => {
+  const decoder = new AcpEvents()
+  const first = decoder.updateTodos({ todos: [{ id: 'a', content: 'Read the config', status: 'in_progress' }, { id: 'b', content: 'Fix the bug', status: 'pending' }, { id: 'c' }, null], merge: false })[0]!
+  expect(first).toMatchObject({ kind: 'plan', entries: [{ content: 'Read the config', status: 'in_progress' }, { content: 'Fix the bug', status: 'pending' }] })
+  const patched = decoder.updateTodos({ todos: [{ id: 'a', content: 'Read the config', status: 'completed' }, { id: 'd', content: 'Ship it', status: 'cancelled' }], merge: true })[0]!
+  expect(patched).toMatchObject({ messageId: (first as any).messageId, entries: [{ content: 'Read the config', status: 'completed' }, { content: 'Fix the bug', status: 'pending' }, { content: 'Ship it', status: 'completed' }] })
+  expect(decoder.updateTodos({ todos: [{ id: 'z', content: 'Only this', status: 'pending' }], merge: false })[0]).toMatchObject({ entries: [{ content: 'Only this' }] })
+  expect(decoder.updateTodos({ todos: 'nope' })).toEqual([])
+  decoder.beginTurn()
+  expect(decoder.updateTodos({ todos: [{ id: 'z', content: 'Only this', status: 'completed' }], merge: true })[0]).not.toMatchObject({ messageId: (first as any).messageId })
+})
+
+it("shows Antigravity's shell calls as commands with their output, and drops inline image bytes", () => {
+  const decoder = new AcpEvents()
+  const started = decoder.consume({ sessionUpdate: 'tool_call', toolCallId: 's1', title: 'Running run_command', status: 'in_progress', rawInput: { CommandLine: 'pnpm test', Cwd: '/repo' } })
+  expect(started[0]).toMatchObject({ kind: 'tool-use', title: 'pnpm test', toolKind: 'execute' })
+  const done = decoder.consume({ sessionUpdate: 'tool_call_update', toolCallId: 's1', status: 'completed', rawOutput: { combinedOutput: 'ok\n3 passed', formatted_output: 'ok\n3 passed', exitCode: 0, imagePath: '/tmp/a.png' } })
+  expect(done.find((e) => e.kind === 'tool-result')).toMatchObject({ isError: false, summary: 'ok\n3 passed' })
+  expect(done[0]).toMatchObject({ title: 'pnpm test', toolKind: 'execute', content: [{ type: 'text', text: 'ok\n3 passed' }] })
+  expect(JSON.stringify(done)).not.toContain('formatted_output')
+  const shot = decoder.consume({ sessionUpdate: 'tool_call', toolCallId: 'p1', title: 'Screenshot', status: 'completed', rawOutput: { type: 'image', mimeType: 'image/png', data: 'A'.repeat(5000), caption: 'kept', inline: `data:image/png;base64,${'B'.repeat(5000)}` } })
+  expect(JSON.stringify(shot)).not.toContain('AAAA')
+  expect(JSON.stringify(shot)).not.toContain('BBBB')
+  expect(JSON.stringify(shot)).toContain('kept')
+  expect(nativeShell({ other: 1 }, { nothing: true })).toBeUndefined()
 })

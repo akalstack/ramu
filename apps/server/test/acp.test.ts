@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { isLimitMessage, isLimitReply, limitResetsAt } from '../src/usageLimit'
-import { acpAside, openCodeConfigEnv, acpModels, acpSessionModels, createAcpRunner } from '../src/acp'
-import { DEFAULT_AGENT_SETTINGS, type AgentEvent } from '@ramu/shared/types'
+import { acpAside, openCodeConfigEnv, acpModels, acpSessionModels, createAcpRunner, AcpResumeUnavailable } from '../src/acp'
+import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type Attachment, type McpConnection } from '@ramu/shared/types'
 
 let dir: string
 let events: AgentEvent[]
@@ -23,9 +23,10 @@ const session={sessionId:'session-1',configOptions:[{id:'model',category:'model'
 rl.on('line',line=>{
  fs.appendFileSync(process.env.RAMU_ACP_LOG,line+'\\n');const m=JSON.parse(line);
  if(!m.method){if(m.id===900)finish();return;}
- if(m.method==='initialize')send({id:m.id,result:{protocolVersion:1,agentCapabilities:{loadSession:!process.env.RAMU_NO_RESUME}}});
+ if(m.method==='initialize')send({id:m.id,result:{protocolVersion:1,agentCapabilities:{loadSession:!process.env.RAMU_NO_RESUME,...JSON.parse(process.env.RAMU_CAPS||'{}')}}});
  if(m.method==='authenticate')send({id:m.id,result:{}});
- if(m.method==='session/new'||m.method==='session/load'){
+ if((m.method==='session/load'||m.method==='session/resume')&&process.env.RAMU_LOST){send({id:m.id,error:{code:-32002,message:'Session not found'}});return;}
+ if(m.method==='session/new'||m.method==='session/load'||m.method==='session/resume'){
   if(m.method==='session/load')send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'historical'}}}});
   send({id:m.id,result:session});
  }
@@ -36,6 +37,7 @@ rl.on('line',line=>{
   if(current==='limit'){send({id:m.id,error:{code:-32000,message:'quota exceeded 429'}});return;}
   if(current==='limitreply'){send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:"You've hit your usage limit. Resets at 5pm."}}}});send({id:m.id,result:{stopReason:'end_turn'}});return;}
   if(current==='long')return;
+  if(current==='todos'){send({method:'cursor/update_todos',params:{toolCallId:'t9',todos:[{id:'a',content:'Wire todo',status:'in_progress'}],merge:false}});send({id:m.id,result:{stopReason:'end_turn'}});return;}
   for(const text of ['Hello ','world'])send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text}}}});
   if(current==='question')send({id:900,method:'cursor/ask_question',params:{title:'Choice',questions:[{id:'q1',prompt:'Which?',options:[{id:'one',label:'First'}]}]}});
   else if(current==='interaction')send({id:900,method:'session/request_permission',params:{toolCall:{toolCallId:'interaction_1',title:'Which?'},options:[{optionId:'one',name:'First',kind:'allow_once'}]}});
@@ -189,4 +191,49 @@ it('recognises provider limit wording without flagging ordinary answers', () => 
   expect(isLimitReply("You've hit your usage limit.", 1)).toBe(false)
   expect(isLimitReply('Rate limiting works by counting requests per window; here is how to add it to your API. '.repeat(10))).toBe(false)
   expect(isLimitReply('Added a rate limiter to the API.')).toBe(false)
+})
+
+const startWith = async (prompt: string, caps: object, { resume = null, attachments, tools }: { resume?: string | null; attachments?: Attachment[]; tools?: McpConnection } = {}) => {
+  vi.stubEnv('RAMU_CAPS', JSON.stringify(caps))
+  runner = createAcpRunner({ cwd: dir, additionalDirs: [], covers: [dir] }, { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', model: 'wire-model', access: 'full' }, (e) => events.push(e))
+  if (tools) runner.setTools?.(tools)
+  await runner.start(prompt, resume, attachments)
+}
+it('resumes with session/resume when the runtime offers it, so no history is replayed', async () => {
+  await startWith('hello', { sessionCapabilities: { resume: {} } }, { resume: 'session-1' }); await until(() => events.some((e) => e.kind === 'result'))
+  expect(log().map((m) => m.method)).toContain('session/resume')
+  expect(log().map((m) => m.method)).not.toContain('session/load')
+})
+it('reports a resume the runtime cannot do as recoverable, so the chat can continue from its transcript', async () => {
+  vi.stubEnv('RAMU_NO_RESUME', '1')
+  await expect(start('hello', 'cursor', 'full', 'old')).rejects.toBeInstanceOf(AcpResumeUnavailable)
+  await runner?.stop(); runner = undefined
+  vi.unstubAllEnvs(); vi.stubEnv('RAMU_CURSOR_BIN', join(dir, 'agent')); vi.stubEnv('RAMU_ACP_LOG', join(dir, 'wire')); vi.stubEnv('RAMU_LOST', '1')
+  await expect(start('hello', 'cursor', 'full', 'gone')).rejects.toBeInstanceOf(AcpResumeUnavailable)
+})
+it('sends images only to runtimes that accept them, and otherwise names the saved file', async () => {
+  const path = join(dir, 'shot.png'); writeFileSync(path, 'png')
+  const image: Attachment = { id: 'a', name: 'shot.png', size: 3, mimeType: 'image/png', path }
+  await startWith('look', { promptCapabilities: { image: false } }, { attachments: [image] }); await until(() => events.some((e) => e.kind === 'result'))
+  const refused = log().find((m) => m.method === 'session/prompt').params.prompt
+  expect(refused).toHaveLength(1)
+  expect(refused[0].text).toContain(path)
+  await runner?.stop(); runner = undefined; events = []
+  await startWith('look', { promptCapabilities: { image: true } }, { attachments: [image] }); await until(() => events.some((e) => e.kind === 'result'))
+  expect(log().filter((m) => m.method === 'session/prompt').at(-1).params.prompt.map((block: { type: string }) => block.type)).toEqual(['text', 'image'])
+})
+it('does not hand Ramu tools to a runtime that cannot reach HTTP MCP servers, and says so', async () => {
+  const tools: McpConnection = { url: 'http://127.0.0.1:1/mcp', token: 'secret' }
+  await startWith('hello', { mcpCapabilities: { http: false } }, { tools }); await until(() => events.some((e) => e.kind === 'result'))
+  expect(log().find((m) => m.method === 'session/new').params.mcpServers).toEqual([])
+  expect(events.some((e) => e.kind === 'error' && /Ramu's tools/.test(e.message))).toBe(true)
+  await runner?.stop(); runner = undefined; events = []
+  await startWith('hello', { mcpCapabilities: { http: true } }, { tools }); await until(() => events.some((e) => e.kind === 'result'))
+  expect(log().filter((m) => m.method === 'session/new').at(-1).params.mcpServers).toHaveLength(1)
+  expect(events.some((e) => e.kind === 'error')).toBe(false)
+})
+
+it('turns Cursor todo notifications into a plan during a turn', async () => {
+  await start('todos'); await until(() => events.some((e) => e.kind === 'result'))
+  expect(events.find((e) => e.kind === 'plan')).toMatchObject({ entries: [{ content: 'Wire todo', status: 'in_progress', priority: 'medium' }] })
 })
