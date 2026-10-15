@@ -2,7 +2,7 @@ import { afterEach, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { authorized, loadToken, TokenStore } from '../src/auth'
+import { authorized, loadToken, TokenStore } from '../src/remote/auth'
 import { defaultUserData, loadConfig, parseListen } from '../src/config'
 
 const dirs: string[] = []

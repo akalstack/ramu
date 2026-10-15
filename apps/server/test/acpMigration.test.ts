@@ -1,9 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk'
-import { acpHostedRunner } from '../src/acpNativeHost'
-import { claudeAcpQuery } from '../src/claudeAcpQuery'
+import { acpHostedRunner } from '../src/providers/acpNativeHost'
+import { claudeAcpQuery } from '../src/providers/claudeAcpQuery'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent } from '@ramu/shared/types'
-import type { AgentRunner } from '../src/agentRunner'
+import type { AgentRunner } from '../src/agent/agentRunner'
 
 let close: (() => void | Promise<void>) | undefined
 const until = async (check: () => boolean) => {

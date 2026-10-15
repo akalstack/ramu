@@ -14,7 +14,7 @@ vi.mock('node-pty', () => ({
     process: 'zsh',
   }),
 }))
-import { TerminalService } from '../src/pty'
+import { TerminalService } from '../src/workspace/pty'
 it('terminals reattach with bounded output and a cursor that includes missed chunks', () => {
   const chunks: number[] = []
   const service = new TerminalService(

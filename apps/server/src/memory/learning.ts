@@ -15,9 +15,9 @@ import {
   type ManagedSkill,
   type SessionCheckpoint,
 } from '@ramu/shared/types'
-import type { Db } from './db'
-import type { Workspace } from './workspace'
-import type { AgentService } from './agent'
+import type { Db } from '../db'
+import type { Workspace } from '../workspace/workspace'
+import type { AgentService } from '../agent'
 import { memoryInputSchema, type MemoryService, similarity } from './memory'
 
 const skillSchema = z.object({

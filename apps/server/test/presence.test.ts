@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PresenceListener, presenceKey } from '@ramu/client-runtime'
-import { HostPresence } from '../src/presence'
+import { HostPresence } from '../src/remote/presence'
 
 const dirs: string[] = [],
   cleanup: (() => void)[] = []

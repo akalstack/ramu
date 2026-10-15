@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import { createDispatcher, type Services } from '../src/ipc'
-import { configureProviderBinaries } from '../src/providerBinaries'
+import { configureProviderBinaries } from '../src/providers/providerBinaries'
 
 it('loads older preferences and persists terminal docking separately from tab layout', () => {
   let saved: unknown = { terminalTabPosition: 'right' }

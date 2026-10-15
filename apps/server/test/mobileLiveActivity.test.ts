@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { generateKeyPairSync, verify } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
-import { apnsAuthorization, MobileLiveActivities, type LiveActivitySender } from '../src/mobileLiveActivity'
+import { apnsAuthorization, MobileLiveActivities, type LiveActivitySender } from '../src/remote/mobileLiveActivity'
 
 const directories: string[] = [],
   services: MobileLiveActivities[] = []

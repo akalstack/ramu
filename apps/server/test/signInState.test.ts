@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { signInState } from '../src/providers'
+import { signInState } from '../src/providers/providers'
 
 const dirs: string[] = []
 afterEach(() => {

@@ -2,10 +2,10 @@
 // `ramu` (also `ramu-server`): runs the Ramu workspace server without the desktop app and controls a running one.
 import { runtimeInvoke } from '@ramu/client-runtime'
 import { loadConfig, parseListen } from './config'
-import { loadToken } from './auth'
+import { loadToken } from './remote/auth'
 import { runtimeVersion } from './build'
-import { DeviceStore, PAIRING_TTL_MS } from './devices'
-import { candidateUrls } from './network'
+import { DeviceStore, PAIRING_TTL_MS } from './remote/devices'
+import { candidateUrls } from './remote/network'
 import { encodePairLink, parseRemoteUrl } from '@ramu/contracts'
 
 const HELP = `ramu — Ramu workspace server (agents, files, Git, terminals, schedules)

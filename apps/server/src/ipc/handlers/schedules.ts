@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ScheduleInput } from '@ramu/shared/types'
-import { scheduleSchema, ruleSchema, previewOccurrences } from '../../schedules'
+import { scheduleSchema, ruleSchema, previewOccurrences } from '../../background/schedules'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 

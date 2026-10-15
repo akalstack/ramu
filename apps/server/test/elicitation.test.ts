@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { elicitationRequest, elicitationContent } from '../src/elicitation'
+import { elicitationRequest, elicitationContent } from '../src/agent/elicitation'
 const form = (properties: Record<string, unknown>, required: string[] = []) => ({
   mode: 'form',
   serverName: 'Demo server',

@@ -1,5 +1,5 @@
 import { createDispatcher, type Services } from '../src/ipc'
-import { configureProviderBinaries } from '../src/providerBinaries'
+import { configureProviderBinaries } from '../src/providers/providerBinaries'
 import { expect, it } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS, DEFAULT_INTELLIGENCE_PREFERENCES } from '@ramu/shared/types'
 import { intelligenceSchema, responseInstructions } from '../src/intelligence'

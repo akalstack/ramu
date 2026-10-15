@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { RunUndo } from '../src/undo'
+import { RunUndo } from '../src/review/undo'
 import type { ChangeFile } from '@ramu/shared/types'
 let dir: string, cwd: string, undo: RunUndo
 beforeEach(() => {

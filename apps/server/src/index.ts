@@ -1,30 +1,30 @@
-import { MobileLiveActivities } from './mobileLiveActivity'
-import { MobilePush } from './mobilePush'
+import { MobileLiveActivities } from './remote/mobileLiveActivity'
+import { MobilePush } from './remote/mobilePush'
 import { registerRtkTool } from './rtk'
 import type { AppPreferences } from '@ramu/shared/types'
-import { ToolRegistry } from './toolRegistry'
+import { ToolRegistry } from './agent/toolRegistry'
 import { CompressionService } from './compression'
-import { LearningService } from './learning'
+import { LearningService } from './memory/learning'
 import { DEFAULT_INTELLIGENCE_PREFERENCES } from '@ramu/shared/types'
 // Independent Node process. Electron windows are clients, never owners of agent lifetimes.
 import { createServer, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, rmSync, statSync } from 'node:fs'
 import { homedir, hostname } from 'node:os'
-import { NoticeInbox } from './notices'
+import { NoticeInbox } from './background/notices'
 import { join } from 'node:path'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { claudeAcpQuery } from './claudeAcpQuery'
+import { claudeAcpQuery } from './providers/claudeAcpQuery'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { registerQuestionTools } from './questionTools'
-import { registerAdvisorTools } from './advisor'
-import { registerGoalTools } from './goals'
+import { registerQuestionTools } from './agent/questionTools'
+import { registerAdvisorTools } from './agent/advisor'
+import { registerGoalTools } from './agent/goals'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 import { runtimeInvoke, runtimeNetwork } from '@ramu/client-runtime'
-import { HostPresence } from './presence'
+import { HostPresence } from './remote/presence'
 import {
   CAPABILITIES,
   MAX_REQUEST_BYTES,
@@ -34,8 +34,8 @@ import {
   type Capability,
 } from '@ramu/contracts'
 import { loadConfig } from './config'
-import { TokenStore, authorized } from './auth'
-import { DeviceStore } from './devices'
+import { TokenStore, authorized } from './remote/auth'
+import { DeviceStore } from './remote/devices'
 import {
   candidateUrls,
   localAddresses,
@@ -43,17 +43,17 @@ import {
   validateNetworkSetting,
   writeNetworkSetting,
   type NetworkSetting,
-} from './network'
+} from './remote/network'
 import { openDb } from './db'
-import { Workspace } from './workspace'
+import { Workspace } from './workspace/workspace'
 import { AgentService } from './agent'
-import { TerminalService } from './pty'
+import { TerminalService } from './workspace/pty'
 import { createDispatcher } from './ipc'
-import { ScheduleService, scheduleSchema } from './schedules'
+import { ScheduleService, scheduleSchema } from './background/schedules'
 import { runtimeBuild, runtimeVersion } from './build'
-import { ReviewService } from './reviews'
-import { RecapService } from './recaps'
-import { MemoryService, registerMemoryTools } from './memory'
+import { ReviewService } from './review/reviews'
+import { RecapService } from './memory/recaps'
+import { MemoryService, registerMemoryTools } from './memory/memory'
 import type { AgentSessionInfo, ScheduleInput } from '@ramu/shared/types'
 
 const config = loadConfig()
@@ -159,7 +159,7 @@ if (!workspace.getAppState('migration:learning-auto-default', false)) {
     workspace.setAppState('app-preferences', { ...saved, intelligence: { ...saved.intelligence, learning: 'auto' } })
   workspace.setAppState('migration:learning-auto-default', true)
 }
-const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./fakeAgent') : null
+const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./providers/fakeAgent') : null
 let reviews!: ReviewService
 const mobilePush = new MobilePush(join(userData, 'mobile-push.json'), () => devices.list())
 const agents = new AgentService(

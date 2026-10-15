@@ -8,7 +8,7 @@ import {
   readNetworkSetting,
   validateNetworkSetting,
   writeNetworkSetting,
-} from '../src/network'
+} from '../src/remote/network'
 
 const dirs: string[] = []
 afterEach(() => {

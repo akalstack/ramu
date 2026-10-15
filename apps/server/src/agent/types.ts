@@ -1,6 +1,6 @@
 import type { Options, PermissionResult, Query, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { AdviceStatus, AgentProvider, AgentTaskStatus } from '@ramu/shared/types'
-import type { Isolation } from '../isolation'
+import type { Isolation } from '../workspace/isolation'
 import type { InputQueue } from './inputQueue'
 
 /** Starts one Claude Agent SDK query; replaced in tests. */

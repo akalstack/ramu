@@ -1,4 +1,4 @@
-import { operationLabels } from '../activity'
+import { operationLabels } from '../background/activity'
 import { describeValidationError } from '../validation'
 import { createHandlerContext } from './context'
 import { registerHandlers } from './registry'

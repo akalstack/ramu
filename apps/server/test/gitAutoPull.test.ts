@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
-import * as git from '../src/git'
+import * as git from '../src/workspace/git'
 import { createDispatcher, type Services } from '../src/ipc'
-import { configureProviderBinaries } from '../src/providerBinaries'
+import { configureProviderBinaries } from '../src/providers/providerBinaries'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 
 it('defaults automatic pull on, persists opt-out, and skips active agent writers', async () => {

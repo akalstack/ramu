@@ -4,7 +4,7 @@ import { lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { promisify } from 'node:util'
-import { resolveEntryInRoot } from './files'
+import { resolveEntryInRoot } from '../workspace/files'
 import type { ChangeFile, UndoFile, UndoPreview } from '@ramu/shared/types'
 const exec = promisify(execFile)
 const digest = (text: string) => createHash('sha256').update(text).digest('hex')

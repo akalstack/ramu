@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { UsageReading } from '@ramu/shared/types'
-import { AccountUsage } from '../src/accountUsage'
+import { AccountUsage } from '../src/providers/accountUsage'
 
 const reading = (usedPercent: number): UsageReading => ({
   provider: 'codex',

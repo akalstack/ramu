@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, rmSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { discardPreview } from '../src/discardPreview'
+import { discardPreview } from '../src/workspace/discardPreview'
 it('discard previews change when the same file gets new bytes and identify permanent deletion', async () => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ramu-discard-')))
   const git = (...args: string[]) => execFileSync('git', ['-C', dir, ...args])

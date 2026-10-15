@@ -4,7 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { AgentService } from '../src/agent'
 import { openDb, type Db } from '../src/db'
-import { registerQuestionTools } from '../src/questionTools'
+import { registerQuestionTools } from '../src/agent/questionTools'
 import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
 
 let db: Db, agents: AgentService, server: McpServer, client: Client, sessionId: string

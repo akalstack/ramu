@@ -3,9 +3,9 @@ import { cleanLabel, clipText } from '@ramu/shared/text'
 import { randomUUID } from 'node:crypto'
 import { DateTime } from 'luxon'
 import { z } from 'zod'
-import type { Db } from './db'
-import type { AgentService } from './agent'
-import type { Workspace } from './workspace'
+import type { Db } from '../db'
+import type { AgentService } from '../agent'
+import type { Workspace } from '../workspace/workspace'
 import { NO_PROJECT, type Schedule, type ScheduleInput, type ScheduleRule, type ScheduleRun } from '@ramu/shared/types'
 
 export const settingsSchema = z.object({

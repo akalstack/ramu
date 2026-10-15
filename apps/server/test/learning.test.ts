@@ -9,10 +9,10 @@ import {
   type AgentSessionInfo,
 } from '@ramu/shared/types'
 import { openDb, type Db } from '../src/db'
-import { Workspace } from '../src/workspace'
-import { MemoryService } from '../src/memory'
+import { Workspace } from '../src/workspace/workspace'
+import { MemoryService } from '../src/memory/memory'
 import type { AgentService } from '../src/agent'
-import { LearningService } from '../src/learning'
+import { LearningService } from '../src/memory/learning'
 import { CompressionService } from '../src/compression'
 
 let db: Db, root: string, workspace: Workspace, memory: MemoryService, service: LearningService

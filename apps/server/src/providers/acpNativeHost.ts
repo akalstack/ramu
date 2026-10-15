@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Agent, AgentSideConnection, ContentBlock } from '@agentclientprotocol/sdk'
-import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
+import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 import type { AgentEvent, Attachment, ElicitationAction, McpConnection } from '@ramu/shared/types'
 import { localAcp } from './acpTransport'
 import { AcpEventEncoder, AcpEvents } from './acpEvents'

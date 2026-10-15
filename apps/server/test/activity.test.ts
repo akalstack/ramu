@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { ActivityService } from '../src/activity'
+import { ActivityService } from '../src/background/activity'
 
 it('keeps concurrent operations visible and removes only the completed operation', async () => {
   const changed = vi.fn(),

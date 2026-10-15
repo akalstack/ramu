@@ -1,8 +1,8 @@
 import { tmpdir } from 'node:os'
 import type { Query } from '@anthropic-ai/claude-agent-sdk'
 import type { UsageReading } from '@ramu/shared/types'
-import { providerEnvironment } from '../providerBinaries'
-import { claudeUsageReadings, type ClaudeUsageResponse, type UsageService } from '../usage'
+import { providerEnvironment } from '../providers/providerBinaries'
+import { claudeUsageReadings, type ClaudeUsageResponse, type UsageService } from '../providers/usage'
 import { InputQueue } from './inputQueue'
 import type { QueryFn } from './types'
 

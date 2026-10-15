@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { openDb } from '../src/db'
-import { Workspace } from '../src/workspace'
+import { Workspace } from '../src/workspace/workspace'
 
 it('migrates legacy worktree conversations without losing bindings, transcripts, UI, or saved access settings', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ramu-migration-'))

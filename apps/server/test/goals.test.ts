@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentEvent, AppPreferences, ProviderCatalog, UsageReading } from '@ramu/shared/types'
 import { DEFAULT_AGENT_SETTINGS, DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import { AgentService, type QueryFn } from '../src/agent'
-import type { AgentRunnerFactory } from '../src/agentRunner'
+import type { AgentRunnerFactory } from '../src/agent/agentRunner'
 import { openDb, type Db } from '../src/db'
-import { goalInstructions, goalPreferencesSchema, registerGoalTools } from '../src/goals'
+import { goalInstructions, goalPreferencesSchema, registerGoalTools } from '../src/agent/goals'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 let db: Db, service: AgentService, prefs: AppPreferences, id: string

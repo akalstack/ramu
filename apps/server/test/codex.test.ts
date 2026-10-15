@@ -10,7 +10,7 @@ import {
   codexHelperHistory,
   createCodexRunner,
   toolOfOtherItem,
-} from '../src/codex'
+} from '../src/providers/codex'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent } from '@ramu/shared/types'
 
 let tmp: string

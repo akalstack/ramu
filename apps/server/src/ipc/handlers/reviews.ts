@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { FileContext } from '@ramu/shared/types'
-import type { ReviewService } from '../../reviews'
+import type { ReviewService } from '../../review/reviews'
 import { lockCheckouts } from '../helpers'
 import { attachmentIds, fileContext, id, relPath } from '../schemas'
 import type { RegisterHandlers } from '../types'

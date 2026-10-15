@@ -1,6 +1,6 @@
 import type { UsageReading } from '@ramu/shared/types'
 import { describe, expect, it } from 'vitest'
-import { UsageService, claudeReadings, claudeUsageReadings } from '../src/usage'
+import { UsageService, claudeReadings, claudeUsageReadings } from '../src/providers/usage'
 import { parseTaskMessage, parseTaskReport, subagentNotePrompt, taskMessagePrompt } from '@ramu/shared/agentTasks'
 
 describe('Claude plan usage', () => {
@@ -127,7 +127,7 @@ describe('Claude on-demand usage', () => {
 })
 
 it('keeps account windows separate and only exposes the selected account', async () => {
-  const { configureProviderBinaries } = await import('../src/providerBinaries')
+  const { configureProviderBinaries } = await import('../src/providers/providerBinaries')
   const stored: UsageReading[][] = []
   const service = new UsageService(
     () => [],

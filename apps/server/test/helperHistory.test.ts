@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
-import { claudeHelperEvents, loadHelperHistory, helperRecoverySources } from '../src/helperHistory'
+import { claudeHelperEvents, loadHelperHistory, helperRecoverySources } from '../src/agent/helperHistory'
 import { getSubagentMessages, listSubagents, type SessionMessage } from '@anthropic-ai/claude-agent-sdk'
 
 vi.mock('@anthropic-ai/claude-agent-sdk', async (original) => ({

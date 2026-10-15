@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { configureProviderAccounts, providerEnvironment } from '../src/providerBinaries'
+import { configureProviderAccounts, providerEnvironment } from '../src/providers/providerBinaries'
 
 it('points every provider at its own account directory and drops shared credentials', () => {
   const root = mkdtempSync(join(tmpdir(), 'ramu-accounts-'))

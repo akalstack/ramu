@@ -1,9 +1,9 @@
 // Test-only stand-in for the Claude Agent SDK, enabled with RAMU_FAKE_AGENT=1. It exercises the
 // same event, permission and transcript paths as the real adapter without spending model usage.
 import { randomUUID } from 'node:crypto'
-import { elicitationRequest, elicitationContent } from './elicitation'
+import { elicitationRequest, elicitationContent } from '../agent/elicitation'
 import type { Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import type { QueryFn } from './agent'
+import type { QueryFn } from '../agent'
 import type { McpConnection, AgentElicitation, ElicitationAction } from '@ramu/shared/types'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'

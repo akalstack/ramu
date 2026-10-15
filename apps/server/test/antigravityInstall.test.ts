@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { installAntigravity, resolveAntigravityAsset } from '../src/antigravityInstall'
+import { installAntigravity, resolveAntigravityAsset } from '../src/providers/antigravityInstall'
 import {
   antigravityFileNames,
   configureProviderAccounts,
@@ -11,7 +11,7 @@ import {
   providerBinary,
   providerEnvironment,
   providerRuntimeHome,
-} from '../src/providerBinaries'
+} from '../src/providers/providerBinaries'
 
 let root: string
 beforeEach(() => {

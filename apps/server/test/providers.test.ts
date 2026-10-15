@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { latestProviderRelease, newerVersion, parseProviderVersion, ProviderService } from '../src/providers'
+import { latestProviderRelease, newerVersion, parseProviderVersion, ProviderService } from '../src/providers/providers'
 import {
   configureProviderAccounts,
   configureProviderBinaries,
   findExecutable,
   providerBinary,
   providerEnvironment,
-} from '../src/providerBinaries'
+} from '../src/providers/providerBinaries'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 import type { ProviderStatus } from '@ramu/shared/providers'
 

@@ -2,8 +2,8 @@ import { afterEach, expect, it } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir, type NetworkInterfaceInfo, type networkInterfaces } from 'node:os'
 import { join } from 'node:path'
-import { DeviceStore, PAIRING_TTL_MS } from '../src/devices'
-import { candidateUrls } from '../src/network'
+import { DeviceStore, PAIRING_TTL_MS } from '../src/remote/devices'
+import { candidateUrls } from '../src/remote/network'
 
 const dirs: string[] = []
 afterEach(() => {

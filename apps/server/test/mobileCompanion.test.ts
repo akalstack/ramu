@@ -2,8 +2,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, symlinkSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { HostFolders } from '../src/hostFolders'
-import { MobilePush } from '../src/mobilePush'
+import { HostFolders } from '../src/remote/hostFolders'
+import { MobilePush } from '../src/remote/mobilePush'
 let dir: string | undefined
 const previousRoots = process.env.RAMU_BROWSE_ROOTS
 afterEach(() => {

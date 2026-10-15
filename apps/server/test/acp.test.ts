@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { isLimitMessage, isLimitReply, limitResetsAt } from '../src/usageLimit'
+import { isLimitMessage, isLimitReply, limitResetsAt } from '../src/providers/usageLimit'
 import {
   acpAside,
   openCodeConfigEnv,
@@ -10,7 +10,7 @@ import {
   acpSessionModels,
   createAcpRunner,
   AcpResumeUnavailable,
-} from '../src/acp'
+} from '../src/providers/acp'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type Attachment, type McpConnection } from '@ramu/shared/types'
 
 let dir: string

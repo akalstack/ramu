@@ -2,9 +2,9 @@ import { systemTimezone } from '@ramu/shared/timezone'
 import { randomUUID } from 'node:crypto'
 import { DateTime } from 'luxon'
 import { z } from 'zod'
-import type { AgentService } from './agent'
-import type { Workspace } from './workspace'
-import type { Db } from './db'
+import type { AgentService } from '../agent'
+import type { Workspace } from '../workspace/workspace'
+import type { Db } from '../db'
 import {
   DEFAULT_AGENT_SETTINGS,
   DEFAULT_APP_PREFERENCES,

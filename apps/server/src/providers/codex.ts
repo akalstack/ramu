@@ -1,5 +1,5 @@
-import { elicitationRequest, elicitationContent } from './elicitation'
-import { attachmentPrompt } from './attachments'
+import { elicitationRequest, elicitationContent } from '../agent/elicitation'
+import { attachmentPrompt } from '../attachments'
 import { agentContent } from '@ramu/shared/agentContent'
 import { toolDescription, toolInput } from './acpEvents'
 // Codex's local app-server protocol, using the user's existing CLI login.
@@ -22,7 +22,7 @@ import type {
   AgentTask,
   McpConnection,
 } from '@ramu/shared/types'
-import type { HelperHistory } from './helperHistory'
+import type { HelperHistory } from '../agent/helperHistory'
 
 // Wire messages are validated by the app-server. Only the consumed fields cross into our domain.
 type Wire = Record<string, any>
@@ -171,8 +171,8 @@ export async function codexUsage(accountId?: string): Promise<UsageReading[]> {
 }
 
 // Compatibility aliases for existing Codex factories.
-export type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from './agentRunner'
-import type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from './agentRunner'
+export type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
+import type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
 
 export const createCodexRunner: CodexFactory = (scope, settings, emit, readOnly) =>
   new CodexSession(scope, settings, emit, readOnly)

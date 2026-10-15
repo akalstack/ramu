@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { featureBranchName, sanitizeBranchFragment, uniqueFeatureBranch } from '../src/git'
+import { featureBranchName, sanitizeBranchFragment, uniqueFeatureBranch } from '../src/workspace/git'
 import { splitBranchLine } from '../src/agent'
 
 it('names feature branches the way T3 Code does', () => {

@@ -5,7 +5,7 @@ import { cleanLabel } from '@ramu/shared/text'
 import { existsSync, mkdirSync, realpathSync } from 'node:fs'
 import { mkdir, readdir, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative } from 'node:path'
-import type { Db } from './db'
+import type { Db } from '../db'
 import * as gitCli from './git'
 import { NO_PROJECT } from '@ramu/shared/types'
 import type {

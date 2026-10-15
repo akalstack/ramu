@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { intelligenceSchema } from '../intelligence'
-import { goalPreferencesSchema } from '../goals'
+import { goalPreferencesSchema } from '../agent/goals'
 import {
   DEFAULT_APP_PREFERENCES,
   DEFAULT_GOAL_PREFERENCES,
@@ -133,7 +133,6 @@ export const appPreferences = z.object({
   editorFontSize: z.number().int().min(10).max(22),
   terminalFontSize: z.number().int().min(8).max(22),
   previewTabs: z.boolean(),
-  hideEmptyStaged: z.boolean(),
   pullMode: pullMode.default('rebase'),
   autoPull: z.boolean().default(true),
   commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'),

@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { describeDroppedPaths, importEntries } from '../src/files'
+import { describeDroppedPaths, importEntries } from '../src/workspace/files'
 
 let lab: string, root: string, outside: string
 beforeEach(() => {

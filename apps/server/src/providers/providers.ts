@@ -1,4 +1,4 @@
-import type { ActivityService } from './activity'
+import type { ActivityService } from '../background/activity'
 import { execFile, spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { homedir } from 'node:os'

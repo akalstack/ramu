@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { NoticeInbox } from '../src/notices'
+import { NoticeInbox } from '../src/background/notices'
 
 const session = { id: 's1', taskId: 't1' }
 const make = () => {

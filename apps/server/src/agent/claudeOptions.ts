@@ -1,6 +1,6 @@
 import type { CanUseTool, Options } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionInfo, AppPreferences, McpConnection } from '@ramu/shared/types'
-import { providerEnvironment } from '../providerBinaries'
+import { providerEnvironment } from '../providers/providerBinaries'
 import { baseMode } from './settings'
 
 /** What building a chat's Claude options needs from the service. */

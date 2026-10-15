@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { discoverSkills, withContext } from '../src/context'
-import type { Workspace } from '../src/workspace'
+import type { Workspace } from '../src/workspace/workspace'
 let root: string, cwd: string, ws: Workspace
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'ramu-context-'))

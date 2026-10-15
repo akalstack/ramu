@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { KeepAwakeService } from '../src/keepAwake'
+import { KeepAwakeService } from '../src/background/keepAwake'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 
 it('defaults to off before first background-service installation', () => {

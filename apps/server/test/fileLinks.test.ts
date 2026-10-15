@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { localFileLink } from '@ramu/shared/fileLinks'
-import { resolveFileLink } from '../src/fileLinks'
+import { resolveFileLink } from '../src/workspace/fileLinks'
 import { openDb } from '../src/db'
-import { Workspace } from '../src/workspace'
+import { Workspace } from '../src/workspace/workspace'
 import { NO_PROJECT } from '@ramu/shared/types'
 
 let root: string, ws: Workspace, taskId: string

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { openDb } from '../src/db'
 import { AgentService } from '../src/agent'
-import { fakeQuery } from '../src/fakeAgent'
+import { fakeQuery } from '../src/providers/fakeAgent'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 
 it('pending and late steering callbacks do not access the database after shutdown', async () => {

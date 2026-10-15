@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { codexHookTrust } from '../src/codex'
+import { codexHookTrust } from '../src/providers/codex'
 
 // Against the real Codex CLI, in a throwaway CODEX_HOME so the user's own config is never touched:
 //   RAMU_REAL_CODEX=1 pnpm vitest run test/codexHook.live.test.ts

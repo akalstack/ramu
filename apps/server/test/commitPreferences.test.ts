@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { createDispatcher, type Services } from '../src/ipc'
-import { configureProviderBinaries } from '../src/providerBinaries'
+import { configureProviderBinaries } from '../src/providers/providerBinaries'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 
 it('persists reusable commit actions and the primary branch choice', () => {

@@ -2,7 +2,7 @@ import { mkdtemp, writeFile, symlink, rm, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { readImage } from '../src/files'
+import { readImage } from '../src/workspace/files'
 
 it('loads local preview images while enforcing repository scope and file type', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'ramu-md-images-')))

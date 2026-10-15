@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openDb, type Db } from '../src/db'
-import { Workspace } from '../src/workspace'
-import { nextOccurrence, previewOccurrences, ScheduleService, scheduleSchema } from '../src/schedules'
+import { Workspace } from '../src/workspace/workspace'
+import { nextOccurrence, previewOccurrences, ScheduleService, scheduleSchema } from '../src/background/schedules'
 import { systemTimezone } from '@ramu/shared/timezone'
 import { DEFAULT_AGENT_SETTINGS, NO_PROJECT, type ScheduleInput } from '@ramu/shared/types'
 import { AgentService } from '../src/agent'
-import { fakeQuery } from '../src/fakeAgent'
+import { fakeQuery } from '../src/providers/fakeAgent'
 
 const at = (s: string) => Date.parse(s)
 describe('timezone-aware recurrence', () => {

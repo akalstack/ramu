@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { createDispatcher, migrateChains, type Services } from '../src/ipc'
-import { configureProviderBinaries } from '../src/providerBinaries'
+import { configureProviderBinaries } from '../src/providers/providerBinaries'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 
 it('defaults fallback to only at the limit and preserves saved thresholds', () => {

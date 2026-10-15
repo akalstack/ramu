@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { readFile, stat } from 'node:fs/promises'
-import { hashOf, resolveInRoot } from './files'
+import { hashOf, resolveInRoot } from '../workspace/files'
 const exec = promisify(execFile)
 
 export interface ReviewCheckout {

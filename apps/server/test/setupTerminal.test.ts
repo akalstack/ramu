@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { homedir } from 'node:os'
 import { createDispatcher, type Services } from '../src/ipc'
-import { configureProviderBinaries } from '../src/providerBinaries'
+import { configureProviderBinaries } from '../src/providers/providerBinaries'
 
 it('opens a setup PTY at home without a task and sends commands through terminal input', () => {
   const open = vi.fn(() => ({ id: 'terminal', taskId: 'provider-setup', repoId: null, cwd: homedir(), exited: false }))

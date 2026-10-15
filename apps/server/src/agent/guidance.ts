@@ -1,7 +1,7 @@
 import { BACKGROUND_PREAMBLE } from '@ramu/shared/agentTasks'
 import { QUESTION_PREAMBLE } from '@ramu/shared/questions'
-import { ADVISOR_PREAMBLE } from '../advisor'
-import { TOOL_PRESENTATION_PREAMBLE, USER_MESSAGE_PREAMBLE } from '../agentInstructions'
+import { ADVISOR_PREAMBLE } from './advisor'
+import { TOOL_PRESENTATION_PREAMBLE, USER_MESSAGE_PREAMBLE } from './agentInstructions'
 import { TOOL_DISCOVERY_INSTRUCTIONS } from '../intelligence'
 import { NATIVE_SUBAGENT_PREAMBLE } from './constants'
 

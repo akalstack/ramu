@@ -6,7 +6,7 @@ import {
   REPLACE_CONTENT_LIMIT,
 } from '@ramu/shared/searchLimits'
 import type { ReplaceFilePreview, SearchOptions, SearchMatch } from '@ramu/shared/types'
-import * as files from '../../files'
+import * as files from '../../workspace/files'
 import { lockCheckouts } from '../helpers'
 import { id, relPath } from '../schemas'
 import type { HandlerContext, RegisterHandlers } from '../types'

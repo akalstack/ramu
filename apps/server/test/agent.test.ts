@@ -1,13 +1,13 @@
-import { elicitationRequest, elicitationContent } from '../src/elicitation'
-import { AcpResumeUnavailable } from '../src/acp'
-import { configureProviderBinaries } from '../src/providerBinaries'
+import { elicitationRequest, elicitationContent } from '../src/agent/elicitation'
+import { AcpResumeUnavailable } from '../src/providers/acp'
+import { configureProviderBinaries } from '../src/providers/providerBinaries'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { query, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Workspace } from '../src/workspace'
+import { Workspace } from '../src/workspace/workspace'
 import {
   AgentService,
   claudeDefaultEffort,
@@ -29,8 +29,8 @@ import {
   type ProviderCatalog,
   type UsageReading,
 } from '@ramu/shared/types'
-import { fakeCodex, fakeQuery as demoQuery } from '../src/fakeAgent'
-import { USER_MESSAGE_PREAMBLE } from '../src/agentInstructions'
+import { fakeCodex, fakeQuery as demoQuery } from '../src/providers/fakeAgent'
+import { USER_MESSAGE_PREAMBLE } from '../src/agent/agentInstructions'
 
 /** Minimal stand-in for the SDK: echoes each user message, asks permission once for the first one. */
 function fakeQuery(calls: Options[]): QueryFn {
@@ -143,7 +143,7 @@ describe('AgentService', () => {
   it('lets only the user cancel a turn on providers whose steering interrupts it', async () => {
     const steered: string[] = []
     let ready = false
-    const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => ({
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => ({
       canSteer: true,
       steerInterrupts: true,
       start: async () => {
@@ -172,7 +172,7 @@ describe('AgentService', () => {
   })
   it('continues an ACP chat from its transcript when the runtime cannot resume the saved session', async () => {
     const starts: { prompt: string; resume: string | null }[] = []
-    const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => ({
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => ({
       start: async (prompt, resume) => {
         starts.push({ prompt, resume })
         if (resume) throw new AcpResumeUnavailable('Cursor does not support resuming this session. Start a new chat.')
@@ -212,7 +212,7 @@ describe('AgentService', () => {
   it('updates tool descriptions in one durable row and keeps rich results after restart', async () => {
     let output!: (event: AgentEvent) => void
     const delivered: { event: AgentEvent; seq?: number }[] = []
-    const factory: import('../src/codex').CodexFactory = (_scope, _settings, emit) => {
+    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, emit) => {
       output = emit
       return {
         start: async () => {
@@ -309,7 +309,7 @@ describe('AgentService', () => {
       },
     })
     let emit!: (event: AgentEvent) => void
-    const factory: import('../src/codex').CodexFactory = (_scope, _settings, output) => {
+    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, output) => {
       emit = output
       return {
         start: async () => {
@@ -365,7 +365,7 @@ describe('AgentService', () => {
     let output!: (event: AgentEvent) => void
     const steer = vi.fn(async () => {})
     const delivered: { event: AgentEvent; seq?: number }[] = []
-    const factory: import('../src/codex').CodexFactory = (_scope, _settings, emit) => {
+    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, emit) => {
       output = emit
       return {
         start: async () => {
@@ -709,7 +709,7 @@ describe('AgentService', () => {
   it('supplies user-message delivery instructions to new and resumed Codex threads', async () => {
     const connections: import('@ramu/shared/types').McpConnection[] = []
     const resumes: (string | null)[] = []
-    const factory: import('../src/codex').CodexFactory = (_scope, _settings, emit) => {
+    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, emit) => {
       let connection!: import('@ramu/shared/types').McpConnection
       return {
         setTools: (value) => {
@@ -759,7 +759,7 @@ describe('AgentService', () => {
     async (provider) => {
       const prompts: string[] = []
       const connections: import('@ramu/shared/types').McpConnection[] = []
-      const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
+      const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
         const complete = (prompt: string) => {
           prompts.push(prompt)
           emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
@@ -1430,7 +1430,7 @@ describe('AI commit message drafts', () => {
 it('AI drafts fall back on a structured Codex usage error while remaining read-only', async () => {
   const calls: Options[] = []
   let readOnly: boolean | undefined
-  const limitCodex: import('../src/codex').CodexFactory = (_scope, _settings, emit, readonly) => {
+  const limitCodex: import('../src/providers/codex').CodexFactory = (_scope, _settings, emit, readonly) => {
     readOnly = readonly
     return {
       start: async () => {
@@ -1463,7 +1463,7 @@ describe('busy agent messages', () => {
     let emit!: (event: AgentEvent) => void
     const send = vi.fn(async (_text: string) => {})
     const steer = vi.fn(async (_text: string) => {})
-    const factory: import('../src/codex').CodexFactory = (_scope, _settings, output) => {
+    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, output) => {
       emit = output
       return {
         start: async () => {
@@ -2826,7 +2826,7 @@ describe('chat continuation after restart', () => {
 
   it('keeps restart intent across repeated boots and resumes Codex in the original native thread', async () => {
     const launches: { prompt: string; resume: string | null }[] = []
-    const factory: import('../src/codex').CodexFactory = (_scope, _settings, output) => ({
+    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, output) => ({
       start: async (prompt, resume) => {
         launches.push({ prompt, resume })
         output({ kind: 'init', providerSessionId: 'original-codex-thread', model: 'fake', cwd })
@@ -2914,7 +2914,7 @@ describe('chat continuation after restart', () => {
 
   it('starts the next recovering chat only after the shared checkout writer finishes', async () => {
     const outputs: ((event: AgentEvent) => void)[] = []
-    const factory: import('../src/codex').CodexFactory = (_scope, _settings, output) => ({
+    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, output) => ({
       start: async () => {
         outputs.push(output)
         output({ kind: 'state', state: 'running' })
@@ -3016,7 +3016,7 @@ describe('Codex sub-agent control', () => {
 
   it('restarts an idle ACP runtime when sub-agent routing changes, resuming the same session', async () => {
     const launches: { native?: boolean; resume: string | null }[] = []
-    const factory: import('../src/agentRunner').AgentRunnerFactory = (_scope, _settings, output) => {
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, output) => {
       let connection: { nativeSubagents?: boolean } | undefined
       return {
         setTools: (c) => {
@@ -3064,7 +3064,7 @@ describe('Codex sub-agent control', () => {
 
   it('replaces an idle Codex process when the sub-agent setup changes, so the next message runs with the right tools', async () => {
     const launches: { nativeSubagents?: boolean; interceptSubagents?: boolean }[] = []
-    const factory: import('../src/codex').CodexFactory = (_scope, _settings, output) => {
+    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, output) => {
       let connection: { nativeSubagents?: boolean; interceptSubagents?: boolean } | undefined
       return {
         setTools: (c) => {

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { describeValidationError } from '../src/validation'
 import { clipText } from '@ramu/shared/text'
-import { createEntry, copyEntry, readText, renameEntry, resolveInRoot } from '../src/files'
+import { createEntry, copyEntry, readText, renameEntry, resolveInRoot } from '../src/workspace/files'
 
 const message = (schema: z.ZodType, value: unknown) => {
   const parsed = schema.safeParse(value)

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { Agent } from '@agentclientprotocol/sdk'
-import type { QueryFn } from './agent'
+import type { QueryFn } from '../agent'
 import { localAcp } from './acpTransport'
 
 class Queue<T> implements AsyncIterable<T> {

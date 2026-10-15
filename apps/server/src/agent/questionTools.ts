@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { AgentService } from './agent'
+import type { AgentService } from '../agent'
 import type { QuestionRequest, QuestionState } from '@ramu/shared/questions'
 
 export const questionInputSchema = z.object({

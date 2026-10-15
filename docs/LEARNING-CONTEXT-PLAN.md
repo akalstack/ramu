@@ -8,7 +8,7 @@ Confirmed design constraints: tool search covers only tools exposed by Ramu, inc
 
 | Area | Current implementation | Gap |
 | --- | --- | --- |
-| Shared memory | `apps/server/src/memory.ts`: scoped SQLite notes, lexical BM25-style ranking, duplicate detection, usage/recency ranking, expiry, archival, and audit history | Limited evidence links and automatic extraction from completed turns; flat storage is adequate until evaluations show otherwise |
+| Shared memory | `apps/server/src/memory/memory.ts`: scoped SQLite notes, lexical BM25-style ranking, duplicate detection, usage/recency ranking, expiry, archival, and audit history | Limited evidence links and automatic extraction from completed turns; flat storage is adequate until evaluations show otherwise |
 | Memory maintenance | Hourly hygiene; daily model-assisted cleanup after five changes; scope-separated operations and concurrent-edit checks | No shared maintenance queue or explicit model/token budget; cleanup inputs cap at 300 notes per scope |
 | Skill discovery | `apps/server/src/context.ts`: bounded discovery of project and user skills, nearest project wins by name; explicit `$skill` references become file pointers | No Ramu-owned skill lifecycle, usage tracking, versioning, consolidation, or task-based selection |
 | Tool exposure | `apps/server/src/index.ts`: authenticated, per-chat MCP tools for questions, goals, memory, schedules, reviews, advisor, and helpers | Full registration per HTTP request; no Ramu tool-search registry |

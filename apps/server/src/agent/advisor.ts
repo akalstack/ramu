@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { AgentService } from './agent'
+import type { AgentService } from '../agent'
 
 // Ramu's advisor: a second model, on any provider, that reads the chat and advises the working agent.
 // It replaces Claude Code's server-side advisor, which can only use another Claude model.

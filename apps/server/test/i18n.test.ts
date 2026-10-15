@@ -4,7 +4,7 @@ import { indonesian } from '@ramu/shared/locales/id'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import { formatChatDate } from '@ramu/shared/chatDates'
 import { createDispatcher, type Services } from '../src/ipc'
-import { configureProviderBinaries } from '../src/providerBinaries'
+import { configureProviderBinaries } from '../src/providers/providerBinaries'
 
 describe('app languages', () => {
   it('follows OS language preferences, including regional and legacy Indonesian codes', () => {

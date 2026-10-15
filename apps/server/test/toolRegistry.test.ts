@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { z } from 'zod'
-import { ToolRegistry } from '../src/toolRegistry'
+import { ToolRegistry } from '../src/agent/toolRegistry'
 
 it('defers optional schemas, discovers newly registered tools and validates invocation through real MCP', async () => {
   const server = new McpServer({ name: 'ramu', version: 'test' })

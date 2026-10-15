@@ -4,7 +4,7 @@ import {
   cursorUsageReadings,
   readAntigravityUsage,
   readCursorUsage,
-} from '../src/providerUsage'
+} from '../src/providers/providerUsage'
 
 it('maps Cursor plan usage to a monthly reading with the billing reset', () => {
   expect(cursorUsageReadings({ billingCycleEnd: '1793000000000', planUsage: { totalPercentUsed: 42.26 } }, 5)).toEqual([

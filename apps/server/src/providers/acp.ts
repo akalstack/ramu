@@ -15,9 +15,9 @@ import type {
   McpConnection,
 } from '@ramu/shared/types'
 import { providerName } from '@ramu/shared/providers'
-import { attachmentPrompt } from './attachments'
+import { attachmentPrompt } from '../attachments'
 import { isLimitMessage, isLimitReply, limitResetsAt } from './usageLimit'
-import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
+import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 
 type Wire = Record<string, any>
 type AcpProvider = 'cursor' | 'antigravity' | 'opencode'

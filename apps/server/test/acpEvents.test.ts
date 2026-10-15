@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { AcpEventEncoder, AcpEvents, nativeShell } from '../src/acpEvents'
+import { AcpEventEncoder, AcpEvents, nativeShell } from '../src/providers/acpEvents'
 import { agentContent, inlineMedia } from '@ramu/shared/agentContent'
 import { toolKind } from '@ramu/shared/agentTools'
 import type { AgentEvent } from '@ramu/shared/types'

@@ -19,9 +19,9 @@ import { dirname, join } from 'node:path'
 import { cleanLabel } from '@ramu/shared/text'
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { AgentService } from './agent'
-import type { Workspace } from './workspace'
-import type { Db } from './db'
+import type { AgentService } from '../agent'
+import type { Workspace } from '../workspace/workspace'
+import type { Db } from '../db'
 import {
   ARCHIVE_FILE,
   MEMORY_FILE,

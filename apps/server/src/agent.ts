@@ -1,10 +1,10 @@
 import { responseInstructions } from './intelligence'
-import { providerBinary, providerAccountId } from './providerBinaries'
+import { providerBinary, providerAccountId } from './providers/providerBinaries'
 import { clipText } from '@ramu/shared/text'
-import { createAcpRunner, acpModels, AcpResumeUnavailable } from './acp'
-import { toolDescription, toolInput } from './acpEvents'
+import { createAcpRunner, acpModels, AcpResumeUnavailable } from './providers/acp'
+import { toolDescription, toolInput } from './providers/acpEvents'
 import { agentContent } from '@ramu/shared/agentContent'
-import { acpHostedRunner } from './acpNativeHost'
+import { acpHostedRunner } from './providers/acpNativeHost'
 import {
   providerName,
   providerEnabled,
@@ -12,7 +12,7 @@ import {
   supportsProviderAccounts,
   providerAccountOrder,
 } from '@ramu/shared/providers'
-import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
+import type { AgentRunner, AgentRunnerFactory } from './agent/agentRunner'
 // Structured agent adapter for Claude Code via the Claude Agent SDK.
 // One live SDK query per session, always launched in the session's binding cwd.
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -61,7 +61,7 @@ import {
   stepKey,
   type RouteDecision,
 } from '@ramu/shared/routing'
-import { claudeReadings, type ClaudeRateLimitInfo, type UsageService } from './usage'
+import { claudeReadings, type ClaudeRateLimitInfo, type UsageService } from './providers/usage'
 import {
   SUBAGENT_PREAMBLE,
   subagentNotePrompt,
@@ -69,8 +69,8 @@ import {
   taskReportPrompt,
   taskStopPrompt,
 } from '@ramu/shared/agentTasks'
-import { applyIsolation, collectPatch, createIsolation, removeIsolation } from './isolation'
-import { codexModels, createCodexRunner, type CodexFactory } from './codex'
+import { applyIsolation, collectPatch, createIsolation, removeIsolation } from './workspace/isolation'
+import { codexModels, createCodexRunner, type CodexFactory } from './providers/codex'
 import {
   answerMessage,
   questionKey,
@@ -80,12 +80,12 @@ import {
   type QuestionRequest,
   type QuestionState,
 } from '@ramu/shared/questions'
-import { loadHelperHistory, helperRecoverySources, type HelperHistoryLoader } from './helperHistory'
-import { ClaudeTextStream } from './claudeTextStream'
-import { ADVISOR_TIMEOUT_MS, advisorPrompt } from './advisor'
+import { loadHelperHistory, helperRecoverySources, type HelperHistoryLoader } from './agent/helperHistory'
+import { ClaudeTextStream } from './providers/claudeTextStream'
+import { ADVISOR_TIMEOUT_MS, advisorPrompt } from './agent/advisor'
 import { latestTasks, adviceMessage, advisorAgentId } from '@ramu/shared/agentTasks'
 import { DEFAULT_GOAL_PREFERENCES, type ChatGoal, type ChatSearchHit } from '@ramu/shared/types'
-import { goalInstructions, goalContinuation } from './goals'
+import { goalInstructions, goalContinuation } from './agent/goals'
 
 import type {
   QueryFn,
@@ -1998,7 +1998,7 @@ export class AgentService {
           if (this.shutdown) throw new Error('Background service is stopping')
           if (process.env.RAMU_FAKE_AGENT === '1')
             return {
-              message: (await import('./fakeAgent')).fakeAnalysis(prompt),
+              message: (await import('./providers/fakeAgent')).fakeAnalysis(prompt),
               provider: chosen.provider,
               model: chosen.model,
             }

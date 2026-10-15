@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { AgentSettings, ProjectAction } from '@ramu/shared/types'
-import type { Workspace } from '../../workspace'
+import type { Workspace } from '../../workspace/workspace'
 import { agentSettings, id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 

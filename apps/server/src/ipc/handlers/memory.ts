@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { MemoryInput } from '@ramu/shared/types'
 import { discoverSkills } from '../../context'
-import { memoryInputSchema } from '../../memory'
+import { memoryInputSchema } from '../../memory/memory'
 import { need } from '../helpers'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'

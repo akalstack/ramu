@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { mkdtemp, writeFile, rm, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { replacementPlan, searchText } from '../src/files'
+import { replacementPlan, searchText } from '../src/workspace/files'
 import type { SearchOptions } from '@ramu/shared/types'
 let root: string
 beforeEach(async () => {

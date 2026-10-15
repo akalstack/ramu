@@ -4,9 +4,9 @@ import { join } from 'node:path'
 import type { Options, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentService, type QueryFn } from '../src/agent'
-import { ADVISOR_PREAMBLE, advisorPrompt, claudeAdvisorModel } from '../src/advisor'
+import { ADVISOR_PREAMBLE, advisorPrompt, claudeAdvisorModel } from '../src/agent/advisor'
 import { openDb, type Db } from '../src/db'
-import { fakeCodex } from '../src/fakeAgent'
+import { fakeCodex } from '../src/providers/fakeAgent'
 import { adviceMessage, advisorAgentId, advisorTranscript, latestTasks, parseAdvice } from '@ramu/shared/agentTasks'
 import {
   DEFAULT_AGENT_SETTINGS,

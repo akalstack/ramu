@@ -2,9 +2,9 @@ import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import type { AgentScope, FileContext, SkillInfo } from '@ramu/shared/types'
-import type { Workspace } from './workspace'
-import * as git from './git'
-import { readText, resolveEntryInRoot } from './files'
+import type { Workspace } from './workspace/workspace'
+import * as git from './workspace/git'
+import { readText, resolveEntryInRoot } from './workspace/files'
 
 function field(text: string, key: string): string {
   const match = text.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'))

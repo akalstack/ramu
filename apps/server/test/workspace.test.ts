@@ -13,12 +13,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { openDb } from '../src/db'
-import { PathEscapeError, listFolderFiles, readText, resolveInRoot, writeText } from '../src/files'
+import { PathEscapeError, listFolderFiles, readText, resolveInRoot, writeText } from '../src/workspace/files'
 import { withContext } from '../src/context'
 import { createDispatcher, type Services } from '../src/ipc'
 import { NO_PROJECT } from '@ramu/shared/types'
-import * as git from '../src/git'
-import { Workspace } from '../src/workspace'
+import * as git from '../src/workspace/git'
+import { Workspace } from '../src/workspace/workspace'
 
 function sh(cwd: string, ...args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8' })

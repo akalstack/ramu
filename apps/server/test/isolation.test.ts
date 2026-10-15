@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { applyIsolation, collectPatch, createIsolation, removeIsolation } from '../src/isolation'
+import { applyIsolation, collectPatch, createIsolation, removeIsolation } from '../src/workspace/isolation'
 
 let tmp: string
 const git = (cwd: string, ...args: string[]) =>

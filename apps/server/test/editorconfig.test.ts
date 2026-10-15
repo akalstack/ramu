@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { editorConfigFor } from '../src/editorconfig'
+import { editorConfigFor } from '../src/workspace/editorconfig'
 
 test('resolves .editorconfig per file and leaves unmatched settings unset', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'ec-')))
