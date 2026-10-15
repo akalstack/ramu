@@ -114,6 +114,10 @@ export interface RamuMethods {
   'updates.restart'(): Promise<void>
   /** Chats working or waiting for the user. */
   'agent.counts'(): { running: number; needsInput: number }
+  /** Notices waiting on a person, shared by every device paired with this computer. */
+  'notices.list'(): import('./notices').InboxNotice[]
+  'notices.dismiss'(id: string): void
+  'notices.clear'(): void
   'notifications.register'(token: string, computerId: string): void
   'notifications.unregister'(): void
   'liveActivity.status'(): { enabled: boolean }
@@ -199,7 +203,7 @@ export interface RamuMethods {
   'providers.status'(configuration?: ProviderConfiguration, checkLatest?: boolean): Promise<ProviderStatus[]>
   'providers.loginCommand'(provider: ProviderStatus['provider'], configuration?: ProviderConfiguration): Promise<string | null>
   /** In-app sign-in for runtimes without a login command (Antigravity). Resolves after the browser flow completes. */
-  'providers.signIn'(provider: ProviderStatus['provider']): Promise<void>
+  'providers.signIn'(provider: ProviderStatus['provider'], accountId?: string): Promise<void>
   'providers.update'(provider: ProviderStatus['provider']): Promise<ProviderStatus>
   'providers.updates'(): Promise<ProviderStatus[]>
   'providers.dismissUpdate'(provider: ProviderStatus['provider'], binary: string, latestVersion: string): void
@@ -309,6 +313,8 @@ export interface RamuMethods {
   'agent.stop'(sessionId: string): void
   /** Latest plan usage per provider and window. */
   'usage.get'(): UsageReading[]
+  /** Readings for every login of every provider, not just the selected one. */
+  'usage.accounts'(): UsageReading[]
   /** Reads Claude's plan usage now, without a turn, when the stored reading is old. */
   'usage.refresh'(): UsageReading[]
   /** The context window usage last reported for a chat, if any. */
@@ -349,6 +355,8 @@ export type PushEvents = {
   /** A `ramu://pair` link was opened; the text is validated by the screen that uses it. */
   'pair:link': { link: string }
   'automation:changed': Record<string, never>
+  /** Projects, repositories, chats or sessions were created, renamed, moved or removed (by any client). */
+  'workspace:changed': Record<string, never>
   'memory:changed': Record<string, never>
   /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */
   'background:connection': { connected: boolean; rejected?: boolean }
@@ -365,6 +373,9 @@ export type PushEvents = {
   'aside:changed': { sessionId: string; aside: Aside | null; asideId: string }
   'term:data': { id: string; data: string; cursor?: number }
   'term:exit': { id: string; code: number }
+  /** A shell was opened, ended or closed in this workspace (`taskId` is the workspace context). */
+  'term:changed': { taskId: string }
+  'notices:changed': import('./notices').InboxNotice[]
   'fs:changed': { cwd: string; path: string }
 }
 

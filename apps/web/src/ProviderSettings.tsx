@@ -16,6 +16,7 @@ import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
 import { ProviderIcon } from './ProviderIcon'
 import { runProviderCommand } from './ProviderSetupTerminal'
 import { ramu } from './ipc'
+import { peakUsage, usageTone, useAccountUsage } from './Usage'
 
 export function ProviderSettings({ value, onChange }: { value: AppPreferences; onChange: (value: AppPreferences) => void }) {
   const invoke = useSettingsInvoke()
@@ -25,6 +26,7 @@ export function ProviderSettings({ value, onChange }: { value: AppPreferences; o
   const [signingIn, setSigningIn] = useState<AgentProvider | null>(null)
   const [error, setError] = useState<string | null>(null), [adding, setAdding] = useState<AgentProvider | null>(null), [name, setName] = useState('')
   const sequence = useRef(0), config = value.providerBinaries
+  const accountUsage = useAccountUsage()
   const refresh = async (latest = false) => {
     const request = ++sequence.current
     setBusy(true); setError(null)
@@ -41,7 +43,7 @@ export function ProviderSettings({ value, onChange }: { value: AppPreferences; o
     if (provider === 'antigravity') {
       // The runtime opens the browser itself; the call returns once Google sign-in completes.
       setSigningIn(provider); setError(null)
-      try { await invoke('providers.signIn', provider); void refresh() } catch (reason) { setError(errorText(reason)) } finally { setSigningIn(null) }
+      try { await invoke('providers.signIn', provider, accountId); void refresh() } catch (reason) { setError(errorText(reason)) } finally { setSigningIn(null) }
       return
     }
     const target = accountId === (config[provider]?.accountId || 'default') ? config : { ...config, [provider]: { binary: '', ...config[provider], accountId } }
@@ -75,15 +77,17 @@ export function ProviderSettings({ value, onChange }: { value: AppPreferences; o
         {enabled && status?.installed && <ul className="grid gap-1.5 m-0 p-0 list-none" aria-label={t('{0} logins', { '0': providerName(provider) })}>
           {[{ id: 'default', name: accounts ? t('Default CLI account') : t('CLI login'), enabled: true }, ...(accounts ? preferences?.accounts ?? [] : [])].map((row) => {
             const state = status.signIn?.[row.id]
+            const peak = state?.signedIn ? peakUsage(accountUsage.filter((reading) => (reading.accountId ?? 'default') === row.id), provider) : undefined
             return <li key={row.id} className="flex items-center gap-2.5 min-w-0">
               <span className="grow flex-1 min-w-0 text-left truncate">{row.name}<span className={`block small text-caption ${state?.signedIn ? 'text-brand' : 'muted text-muted-foreground'}`}>{!state ? '' : state.signedIn ? `${t('Signed in')}${state.detail && provider !== 'opencode' ? ` · ${state.detail}` : ''}` : t('Not signed in')}</span></span>
-              <Button variant="secondary" size="sm" className="bg-fill hover:bg-fill-hover" disabled={signingIn === provider} onClick={() => void login(provider, row.id)}><LogIn size={14} />{signingIn === provider ? t('Finish sign-in in your browser…') : state?.signedIn ? t('Switch login') : t('Login')}</Button>
+              {peak && <span className={`flex-none tabular-nums small text-caption ${usageTone(peak) === 'bad' ? 'text-bad' : usageTone(peak) === 'warn' ? 'text-warn' : 'text-soft'}`} title={t('Highest usage window for {0}', { '0': row.name })}>{peak.status === 'limited' ? t('Limited') : `${peak.usedPercent}%`}</span>}<Button variant="secondary" size="sm" className="bg-fill hover:bg-fill-hover" disabled={signingIn === provider} onClick={() => void login(provider, row.id)}><LogIn size={14} />{signingIn === provider ? t('Finish sign-in in your browser…') : state?.signedIn ? t('Switch login') : t('Login')}</Button>
               {row.id !== 'default' && <SettingsField path={`providerBinaries.${provider}.accounts`}> <Switch aria-label={t('Turn account {0} on or off', { '0': row.name })} checked={row.enabled !== false} onCheckedChange={(on) => toggleAccount(provider, row.id, on)} /> </SettingsField>}
             </li>
           })}
         </ul>}
         {accounts && <div className="provider-settings-actions flex items-center gap-2.5 flex-wrap"><SettingsField path={`providerBinaries.${provider}.accountId`}> <Dropdown label={t('{0} account', { '0': providerName(provider) })} value={preferences?.accountId ?? 'default'} options={[{ value: 'default', label: t('Default CLI account') }, ...(preferences?.accounts ?? []).filter((account) => account.enabled !== false).map((account) => ({ value: account.id, label: account.name }))]} onChange={(accountId) => change(provider, { accountId })} /> </SettingsField><Button variant="secondary" size="sm" className="bg-fill hover:bg-fill-hover small text-caption" disabled={(preferences?.accounts?.length ?? 0) >= 20} onClick={() => { setAdding(provider); setName('') }}><Plus size={14} />{t('Add account')}</Button></div>}
         {adding === provider && <div className="provider-settings-actions flex items-center gap-2.5 flex-wrap"><Input aria-label={t('Account name')} placeholder={t('Account name')} value={name} maxLength={80} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); add(provider) } }} /><Button variant="secondary" className="bg-fill hover:bg-fill-hover" disabled={!name.trim()} onClick={() => add(provider)}>{t('Add')}</Button><Button variant="ghost" onClick={() => setAdding(null)}>{t('Cancel')}</Button></div>}
+        {accounts && <SettingsRow setting={`providerBinaries.${provider}.rotateAccounts`} className="settings-toggle"><span className="small text-caption">{t('Use all accounts')}<span className="muted text-muted-foreground block block small text-caption">{t('When the account a chat is using reaches its limit, continue on the next enabled account before switching models. Order: the selected account, the default login, then the others.')}</span></span><Switch aria-label={t('Use all {0} accounts', { '0': providerName(provider) })} checked={preferences?.rotateAccounts ?? false} disabled={(preferences?.accounts?.filter((account) => account.enabled !== false).length ?? 0) < 1} onCheckedChange={(rotateAccounts) => change(provider, { rotateAccounts })} /></SettingsRow>}
         {accounts && <p className="muted text-muted-foreground small text-caption">{t("New chats use this account after saving. Existing chats keep their original account.")}</p>}
         <div className="provider-settings-actions flex items-center gap-2.5 flex-wrap">{canUpdate ? <Button variant="secondary" className="bg-fill hover:bg-fill-hover" disabled={(!status?.installed && provider !== 'antigravity') || updating !== null || status?.updating} onClick={() => void update(provider)}><RefreshCw size={14} className={updating === provider ? 'spin [animation:spin_0.9s_linear_infinite]' : ''} />{provider === 'antigravity' ? (updating === provider ? t(status?.installed ? 'Updating…' : 'Installing…') : t(status?.installed ? 'Update runtime' : 'Install runtime')) : updating === provider ? t('Updating…') : t('Update CLI')}</Button> : <a href={status?.downloadUrl ?? status?.docsUrl} target="_blank" rel="noreferrer">{t('Provider website ↗')}</a>}</div>
         {provider === 'cursor' && <SettingsRow setting={`providerBinaries.${provider}.usageKeychain`} className="settings-toggle"><span className="small text-caption">{t('Show plan usage')}<span className="muted text-muted-foreground block small text-caption">{t('Reads your Cursor login from the macOS Keychain to show monthly usage. macOS asks for permission.')}</span></span><Switch aria-label={t('Show Cursor plan usage')} checked={preferences?.usageKeychain ?? false} onCheckedChange={(usageKeychain) => change(provider, { usageKeychain })} /></SettingsRow>}

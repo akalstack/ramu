@@ -146,7 +146,7 @@ async function main() {
   // Packaged macOS builds take the icon from the bundle; development, Linux and Windows read it from assets/.
   // Packaged builds copy assets/ beside the app; in the monorepo it sits at the repository root.
   const icon = [join(import.meta.dirname, '../../assets/icon.png'), join(import.meta.dirname, '../../../../assets/icon.png')].find((path) => existsSync(path)) ?? ''
-  if (process.platform === 'darwin' && !app.isPackaged && !!icon) app.dock?.setIcon(icon)
+  // In development the dock icon comes from the patched Electron.app (scripts/dev-icon.mjs), so the glass icon is not replaced by a flat PNG.
 
   const win = new BrowserWindow({
     ...(icon ? { icon } : {}),

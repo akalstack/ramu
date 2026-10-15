@@ -103,6 +103,17 @@ export default function Settings() {
           )}
         </Card>
 
+        <SectionLabel>Chat</SectionLabel>
+        <Card style={{ marginHorizontal: space.l }}>
+          <Row style={{ paddingVertical: space.l }} onPress={() => setDraft('pref:model-warning', drafts['pref:model-warning'] === 'off' ? '' : 'off')}>
+            <View style={{ flex: 1, gap: 6 }}>
+              <T weight="500" style={{ lineHeight: 22 }}>Warn before changing model</T>
+              <T size={font.caption} tone="muted" style={{ lineHeight: 19 }}>A new model can't reuse the cache of a conversation in progress, so the first message after switching costs more usage.</T>
+            </View>
+            <Switch value={drafts['pref:model-warning'] !== 'off'} onValueChange={on => setDraft('pref:model-warning', on ? '' : 'off')} />
+          </Row>
+        </Card>
+
         <SectionLabel>Notifications</SectionLabel>
         <Card style={{ marginHorizontal: space.l }}>
           <Row style={{ paddingVertical: space.l }} onPress={() => { void (drafts['push-enabled'] === 'yes' ? disablePush() : enablePush()).catch(e => Alert.alert('Notifications', e.message)) }}>

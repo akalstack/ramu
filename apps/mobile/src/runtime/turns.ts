@@ -29,13 +29,14 @@ export function foldTurns(items: TranscriptItem[], live: boolean, waiting: boole
   }
   return turns.flatMap((turn, index) => {
     const user = turn[0]?.kind === 'user' ? turn[0] : undefined
-    const body = turn.filter(item => item !== user && item.kind !== 'end')
+    const notes = turn.filter(item => item.kind === 'note')
+    const body = turn.filter(item => item !== user && item.kind !== 'end' && item.kind !== 'note')
     const ends = turn.filter((item): item is Extract<TranscriptItem, { kind: 'end' }> => item.kind === 'end')
     const result = ends.find(item => item.ended)
     const isLast = index === turns.length - 1
     const finished = Boolean(result) || !isLast || (!live && !waiting)
     const startedAt = user?.at ?? body.find(item => item.at !== undefined)?.at
-    if (!finished) return [...(user ? [user] : []), { kind: 'working' as const, id: `working-${user?.id ?? index}`, since: startedAt }, ...body]
+    if (!finished) return [...(user ? [user] : []), { kind: 'working' as const, id: `working-${user?.id ?? index}`, since: startedAt }, ...body, ...notes]
     let start = body.length
     while (start > 0 && body[start - 1]!.kind === 'text') start--
     const work = body.slice(0, start)
@@ -45,6 +46,6 @@ export function foldTurns(items: TranscriptItem[], live: boolean, waiting: boole
     const done = Boolean(result) && !result!.interrupted
     const duration = startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : undefined
     const label = done ? duration !== undefined ? `Worked for ${formatDuration(duration)}` : 'Worked' : duration !== undefined ? `Stopped after ${formatDuration(duration)}` : 'Stopped'
-    return [...(user ? [user] : []), ...(folded.length ? [{ kind: 'summary' as const, id: `summary-${user?.id ?? index}`, label, items: folded }] : []), ...kept, ...body.slice(start)]
+    return [...(user ? [user] : []), ...(folded.length ? [{ kind: 'summary' as const, id: `summary-${user?.id ?? index}`, label, items: folded }] : []), ...kept, ...body.slice(start), ...notes]
   })
 }

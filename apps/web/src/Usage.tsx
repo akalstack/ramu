@@ -8,7 +8,7 @@ import { cn } from 'cn'
 import { Gauge } from 'lucide-react'
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { AgentProvider, ContextUsage, UsageReading } from '@ramu/shared/types'
-import { providerEnabled, providerName } from '@ramu/shared/providers'
+import { providerAccountOrder, providerEnabled, providerName } from '@ramu/shared/providers'
 import { invoke, ramu } from './ipc'
 import { ProviderIcon } from './ProviderIcon'
 import { useAppSettings } from './AppSettings'
@@ -42,6 +42,25 @@ function subscribe(listener: () => void) {
 export function useUsage(): UsageReading[] {
   const language = useLanguage()
  return useSyncExternalStore(subscribe, () => readings) }
+
+/** Readings for every login of every provider; the shared copy above only holds the selected one. Reloads when usage changes. */
+export function useAccountUsage(enabled = true): UsageReading[] {
+  const [all, setAll] = useState<UsageReading[]>([])
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    const load = () => { void invoke('usage.accounts').then((next) => { if (!cancelled) setAll(next) }, () => {}) }
+    load()
+    const off = ramu.on('usage:changed', load)
+    return () => { cancelled = true; off() }
+  }, [enabled])
+  return all
+}
+
+/** The login's name as the user knows it: the default CLI login, or the name given when it was added. */
+export function accountLabel(config: { accounts?: { id: string; name: string }[] } | undefined, id: string): string {
+  return id === 'default' ? t("Default CLI account") : config?.accounts?.find((account) => account.id === id)?.name ?? id
+}
 
 /** Readings older than this are shown with their age; providers only report while they run. */
 const STALE_MS = 10 * 60_000
@@ -104,7 +123,7 @@ function Ring({ percent, className }: { percent: number; className: string }) {
 }
 
 /** Everything known about one provider's limits. The age only shows once it is stale, since providers only report while they run. */
-function UsageDetail({ provider, five, weekly, scoped }: ReturnType<typeof byProvider>[number]) {
+function UsageDetail({ provider, five, weekly, scoped, others }: ReturnType<typeof byProvider>[number] & { others: { id: string; name: string; peak: UsageReading | undefined }[] }) {
   useLanguage()
   const all = [five, weekly, ...scoped].filter((r): r is UsageReading => !!r)
   const newest = Math.max(...all.map((r) => r.updatedAt))
@@ -117,6 +136,11 @@ function UsageDetail({ provider, five, weekly, scoped }: ReturnType<typeof byPro
         <Progress value={Math.max(0, Math.min(100, reading.usedPercent))} aria-label={windowLabel(reading)} className={cn('[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-track]]:bg-foreground/10 [&_[data-slot=progress-indicator]]:rounded-full', toneFill[tone])} />
         {reset && <span className="text-caption text-muted-foreground">{reset}</span>}
       </div> })}
+    {others.length > 0 && <div className="flex flex-col gap-1 border-t border-line pt-2" aria-label={t("Other {0} accounts", { "0": providerName(provider) })}>
+      <span className="text-caption text-muted-foreground">{t("Other accounts, used when this one is at its limit")}</span>
+      {others.map(({ id, name, peak }) => { const tone = peak ? usageTone(peak) : 'ok', reset = peak?.status === 'limited' ? resetText(peak.resetsAt) : null
+        return <div key={id} className="flex justify-between gap-2 text-control"><span className="min-w-0 truncate">{name}</span><span className={cn('flex-none tabular-nums', toneText[tone])} title={reset ?? undefined}>{!peak ? t("No data yet") : peak.status === 'limited' ? t("Limit reached") : t("{0}% used", { "0": peak.usedPercent })}</span></div> })}
+    </div>}
     {Date.now() - newest > STALE_MS && <span className="text-caption text-warn">{t("Updated")} {ageText(newest)}{t(" · refreshes when this provider next runs")}</span>}
   </section>
 }
@@ -124,7 +148,16 @@ function UsageDetail({ provider, five, weekly, scoped }: ReturnType<typeof byPro
 function UsagePopover({ trigger, side = 'top', align = 'start' }: { trigger: React.ReactElement; side?: 'top' | 'bottom'; align?: 'start' | 'end' }) {
   useLanguage()
   const groups = byProvider(useVisibleUsage())
+  const { preferences } = useAppSettings()
   const [open, setOpen] = useState(false)
+  const rotating = groups.some(({ provider }) => preferences.providerBinaries[provider]?.rotateAccounts)
+  const accountReadings = useAccountUsage(open && rotating)
+  const othersOf = (provider: AgentProvider) => {
+    const config = preferences.providerBinaries[provider]
+    if (!config?.rotateAccounts) return []
+    const order = providerAccountOrder(preferences.providerBinaries, provider)
+    return order.filter((id) => id !== (config.accountId || 'default')).map((id) => ({ id, name: accountLabel(config, id), peak: peakUsage(accountReadings.filter((reading) => (reading.accountId ?? 'default') === id), provider) }))
+  }
   // Hover peeks; a click on the trigger while peeking pins it open instead of closing it.
   const peeking = useRef(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -149,7 +182,7 @@ function UsagePopover({ trigger, side = 'top', align = 'start' }: { trigger: Rea
   }
   return <Popover open={open} onOpenChange={change}><PopoverTrigger render={trigger} onPointerEnter={enter} onPointerLeave={leave} onFocus={(event) => { if (event.currentTarget.matches(':focus-visible')) { clearTimer(); peek(true) } }} /><PopoverContent side={side} align={align} sideOffset={6} className="usage-popover w-[280px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-32px)] overflow-y-auto gap-3.5 p-3.5 rounded-(--radius-m) border border-edge bg-card text-foreground ring-0 shadow-(--shadow-float)" aria-label={t("Plan usage")} initialFocus={false} onPointerEnter={clearTimer} onPointerLeave={leave}>
     <div className="flex items-center gap-1.5 text-caption text-muted-foreground"><Gauge size={14} /><span>{t("Plan usage")}</span></div>
-    {groups.map((group, index) => <Fragment key={group.provider}>{index > 0 && <Separator className="h-px bg-line" />}<UsageDetail {...group} /></Fragment>)}
+    {groups.map((group, index) => <Fragment key={group.provider}>{index > 0 && <Separator className="h-px bg-line" />}<UsageDetail {...group} others={othersOf(group.provider)} /></Fragment>)}
     <Separator className="h-px bg-line" />
     <p className="m-0 text-caption leading-normal whitespace-normal text-muted-foreground">{t("Fallback continues the chat when a usage limit is reached.")}</p>
   </PopoverContent></Popover>

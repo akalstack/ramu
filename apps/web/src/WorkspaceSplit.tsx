@@ -1,6 +1,7 @@
 import { cn } from 'cn'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { readSize, useLayoutEpoch } from './panelLayout'
+import { paneFadeIn, paneTransition } from './paneMotion'
 
 /** A stable two-track split. Content never participates in track sizing or panel registration. */
 export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, defaultShare, primaryMin = 320, secondaryMin = 240, resizePreview = false, flip = false, primaryCollapsed = false, primary, secondary }: {
@@ -29,6 +30,8 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
   const [dragging, setDragging] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const preview = useRef<HTMLDivElement>(null)
+  const surface = useRef<HTMLDivElement>(null)
+  const settled = useRef(open && !primaryCollapsed)
   const drag = useRef<{ rect: DOMRect; length: number; share: number } | null>(null)
   const currentShare = useRef(share)
   // Window resizes keep the secondary pane's pixel size; only user drags and resets change it.
@@ -40,6 +43,24 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
     if (preview.current) preview.current.style.visibility = 'hidden'
     setDragging(false)
   }, [open])
+  // Runs in the commit that changes the tracks, before paint: the transition set here applies to that very change.
+  useLayoutEffect(() => {
+    const element = root.current, pane = surface.current
+    const visible = open && !primaryCollapsed
+    if (!element || !pane || settled.current === visible) return
+    settled.current = visible
+    // A terminal re-fits its shell and Monaco re-lays out on every size change, so animating their tracks would redo that ~18 times.
+    // They land in one step and fade in on the compositor instead; the rest animate their tracks (see paneMotion).
+    if (/\.(terminal-(bottom|right)|editor)$/.test(id)) {
+      return open ? paneFadeIn(pane) : undefined
+    }
+    // Only an open/close animates, not window resizes or drag releases.
+    const cancel = paneTransition([element], ['grid-template-columns', 'grid-template-rows'])
+    // A closing pane stays drawn until its track has shrunk, then hides.
+    if (!open) pane.style.transition = 'visibility 0s linear 0.3s'
+    const done = window.setTimeout(() => { pane.style.transition = '' }, 340)
+    return () => { cancel(); window.clearTimeout(done); pane.style.transition = '' }
+  }, [open, primaryCollapsed, id])
   useEffect(() => {
     const next = readShare()
     currentShare.current = next
@@ -150,7 +171,7 @@ export function WorkspaceSplit({ id, orientation = 'horizontal', open, label, de
         save()
       }}
     />
-    <div data-panel-surface className="min-w-0 min-h-0 overflow-hidden" inert={!open} aria-hidden={!open} style={{ ...place(1), visibility: open ? 'visible' : 'hidden' }}>{secondary}</div>
+    <div ref={surface} data-panel-surface className="min-w-0 min-h-0 overflow-hidden" inert={!open} aria-hidden={!open} style={{ ...place(1), visibility: open ? 'visible' : 'hidden' }}>{secondary}</div>
     <div ref={preview} data-workspace-divider-preview aria-hidden="true" className={cn('pointer-events-none absolute z-100 bg-[var(--pane-border-active)]', horizontal ? 'inset-y-0 -left-[1.5px] w-1' : 'inset-x-0 -top-[1.5px] h-1')} style={{ visibility: 'hidden' }} />
   </div>
 }

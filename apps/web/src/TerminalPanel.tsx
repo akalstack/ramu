@@ -3,6 +3,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/desktop-button'
 import { ArrowDownToLine, ArrowRightToLine, Columns2, Ellipsis, Plus, Rows2, SquareTerminal, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { invoke, ramu } from './ipc'
+import { forgetTerminal, isOpening, queueAdopt, shellOf, adoptQueued } from './terminalRegistry'
 import { useAppSettings } from './AppSettings'
 import { Menu, useContextMenu } from './Menu'
 import { terminalGroups } from '@ramu/shared/terminalGroups'
@@ -30,6 +32,32 @@ export function TerminalPanel({ taskId, visible, hidden = false, dock = 'right' 
   const tabScroll = useTabScroll(activeGroup?.id, position === 'top', open && visible && !hidden)
   const focusTerminal = () => requestAnimationFrame(() => panel.current?.querySelector<HTMLTextAreaElement>('.terminal-pane.focused textarea')?.focus())
   useEffect(() => { if (open && visible && !hidden && !panel.current?.querySelector('.terminal-tabs')?.contains(document.activeElement)) focusTerminal() }, [open, visible, hidden, focusedId])
+  // Shells opened or closed from another device (the phone) appear and disappear here too. The host's list is the truth.
+  const views = useRef(terminals); views.current = terminals
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined, disposed = false
+    const reconcile = async () => {
+      const list = await invoke('term.list', taskId).catch(() => null)
+      if (disposed || !list) return
+      // This window is still opening its own shell; look again once the host's answer has been recorded.
+      if (isOpening(taskId)) { timer = setTimeout(reconcile, 300); return }
+      const live = new Set(list.map((info) => info.id))
+      const mine = new Set<string>()
+      for (const view of views.current) {
+        const shell = shellOf(view.id)
+        if (!shell) continue
+        if (live.has(shell)) mine.add(shell)
+        else { forgetTerminal(view.id, shell); ws.closeView(taskId, view.id) }
+      }
+      for (const info of list) {
+        if (mine.has(info.id) || info.exited || adoptQueued(taskId, info.id)) continue
+        queueAdopt(taskId, info.id)
+        ws.openView(taskId, { kind: 'terminal', ...(info.repoId ? { repoId: info.repoId } : {}) })
+      }
+    }
+    const off = ramu.on('term:changed', (event) => { if (event.taskId !== taskId) return; clearTimeout(timer); timer = setTimeout(reconcile, 350) })
+    return () => { disposed = true; clearTimeout(timer); off() }
+  }, [taskId])
   const ready = (ws.bindings[taskId] ?? []).filter((b) => b.setupState === 'ready')
   const repoLabel = (repoId?: string) => repoId ? ws.binding(taskId, repoId)?.repoName ?? 'Terminal' : 'Workspace'
   const label = (view?: { repoId?: string; title?: string }) => view?.title ?? repoLabel(view?.repoId)

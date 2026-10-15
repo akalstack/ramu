@@ -1,3 +1,4 @@
+import type { NoticeInbox } from './notices'
 import { applySettingEdits, validateSettingModels } from './sharedSettings'
 import { portableSettings, sameValue, schemaKey, type SettingsSnapshot, type SettingSchema } from '@ramu/shared/settingsCompatibility'
 import { discardPreview } from './discardPreview'
@@ -13,7 +14,7 @@ import { ProviderService } from './providers'
 import { KeepAwakeService } from './keepAwake'
 import { AppUpdateService } from './appUpdates'
 import { runtimeVersion } from './build'
-import { configureProviderAccounts } from './providerBinaries'
+import { configureProviderAccounts, providerEnvironment } from './providerBinaries'
 import { providerEnabled, type ProviderConfiguration, type ProviderStatus } from '@ramu/shared/providers'
 // The renderer's only door into privileged code: one validated method table.
 import { readFileSync, statSync, watch, type FSWatcher } from 'node:fs'
@@ -27,9 +28,10 @@ import { memoryInputSchema, type MemoryService } from './memory'
 import type { Aside, AsideMessage, FileContext, MemoryInput, ProjectAction, ScheduleInput, UsageReading, CommitBranchOptions } from '@ramu/shared/types'
 import { randomUUID } from 'node:crypto'
 import { UsageService } from './usage'
-import { ExtraUsageReader } from './providerUsage'
+import { ExtraUsageReader, readAntigravityUsage, readCursorUsage } from './providerUsage'
+import { AccountUsage } from './accountUsage'
 import { goalPreferencesSchema } from './goals'
-import { codexHookTrust } from './codex'
+import { codexHookTrust, codexUsage } from './codex'
 import { join } from 'node:path'
 import { AttachmentStore, MAX_ATTACHMENT_BYTES } from './attachments'
 import { z } from 'zod'
@@ -55,7 +57,7 @@ const agentSettings = z.object({
 })
 
 const pullMode = z.enum(['rebase', 'merge', 'ff-only'])
-const providerBinaries = z.object(Object.fromEntries(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'].map((provider) => [provider, z.object({ binary: z.string().trim().max(4096).refine((path) => !path.includes('\0'), 'Invalid binary path'), accounts: z.array(z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).refine((id) => id !== 'default'), name: z.string().trim().min(1).max(80), enabled: z.boolean().optional() })).max(20).optional(), accountId: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(), autoUpdate: z.boolean().optional(), enabled: z.boolean().optional(), usageKeychain: z.boolean().optional(), harness: z.string().trim().max(4096).refine((path) => !path.includes('\0'), 'Invalid helper path').optional() }).optional()]))).refine((config) => ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'].some((provider) => (config as Record<string, { enabled?: boolean } | undefined>)[provider]?.enabled !== false), 'Keep at least one provider turned on')
+const providerBinaries = z.object(Object.fromEntries(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'].map((provider) => [provider, z.object({ binary: z.string().trim().max(4096).refine((path) => !path.includes('\0'), 'Invalid binary path'), accounts: z.array(z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).refine((id) => id !== 'default'), name: z.string().trim().min(1).max(80), enabled: z.boolean().optional() })).max(20).optional(), accountId: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(), autoUpdate: z.boolean().optional(), rotateAccounts: z.boolean().optional(), enabled: z.boolean().optional(), usageKeychain: z.boolean().optional(), harness: z.string().trim().max(4096).refine((path) => !path.includes('\0'), 'Invalid helper path').optional() }).optional()]))).refine((config) => ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'].some((provider) => (config as Record<string, { enabled?: boolean } | undefined>)[provider]?.enabled !== false), 'Keep at least one provider turned on')
 const providerId = z.enum(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'])
 const fallbackStep = z.object({ id: z.string().min(1).max(100), provider: providerId, model: z.string().max(200), effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable(), serviceTier: z.enum(['standard', 'fast']).optional() })
 const threshold = z.union([z.literal(80), z.literal(90), z.literal(95), z.null()])
@@ -71,7 +73,7 @@ const fallbackPreferences = z.preprocess(migrateChains, z.object({ switchAt: thr
 const subagentPreferences = z.preprocess(migrateChains, z.object({ mode: z.enum(['native', 'single', 'per-provider']).default('native'), single: fallbackStep.nullable().default(null), perProvider: z.partialRecord(providerId, fallbackStep.nullable()).default({}), byType: z.array(z.object({ id: z.string().min(1).max(100), type: z.string().max(80), step: fallbackStep.nullable() })).max(20).default([]), fallback: z.enum(['same', 'separate']).default('same'), order: order.optional(), switchAt: z.union([threshold, z.literal('same')]).default('same'), continueNative: z.boolean().default(true), isolate: z.boolean().default(false), codexHook: z.boolean().default(false), maxConcurrent: z.number().int().min(1).max(8).default(3), shareContext: z.boolean().default(false) }))
 const advisorPreferences = z.object({ enabled: z.boolean().default(false), step: fallbackStep.nullable().default(null), wait: z.boolean().default(false) })
 const projectAction = z.object({ id: z.string().min(1).max(64), name: z.string().trim().min(1).max(60), command: z.string().trim().min(1).max(4000), keys: z.string().max(40).optional() })
-const appPreferences = z.object({ intelligence: intelligenceSchema.default(() => intelligenceSchema.parse({})), language: z.enum(['system', 'en', 'id']).default('system'), recapsEnabled: z.boolean().default(true), recapTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'), accent: z.enum(['blue', 'violet', 'teal']), fontFamily: z.enum(['system', 'geist']), fontSize: z.number().int().min(12).max(18), fontSmoothing: z.boolean().default(true), reduceMotion: z.boolean().default(false), recentChatMode: z.boolean().default(false), editorFontSize: z.number().int().min(10).max(22), terminalFontSize: z.number().int().min(8).max(22), previewTabs: z.boolean(), hideEmptyStaged: z.boolean(), pullMode: pullMode.default('rebase'), autoPull: z.boolean().default(true), commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'), commitInstructions: z.string().max(2000).default(''), defaultCommitAction: z.enum(['commit', 'push', 'sync']).default('commit'), defaultCommitBranch: z.enum(['new-branch', 'current']).default('new-branch'), recentChats: z.number().int().min(3).max(20), cleanupArchivedDays: z.number().int().min(0).max(3650).default(DEFAULT_APP_PREFERENCES.cleanupArchivedDays), terminalTabPosition: z.enum(['top', 'right']), defaultTerminalDock: z.enum(['right', 'bottom']).default(DEFAULT_APP_PREFERENCES.defaultTerminalDock), defaultAccess: agentSettings.shape.access, defaultAutoFallback: z.boolean(), busyMessageAction: z.enum(['queue', 'steer']).default('steer'), includeTabContext: z.boolean().default(true), sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH), messageBehaviorVersion: z.literal(4).default(4), defaultChatDockOpen: z.boolean(), favoriteModels: z.array(z.string().max(200)).max(100).default([]), notifyAgentDone: z.boolean().default(true), resumeChatsOnRestart: z.boolean().default(true), asyncQuestions: z.boolean().default(true), autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60), providerBinaries: providerBinaries.default({}), providerUpdateChecks: z.boolean().default(true), appUpdateChecks: z.boolean().default(true), appAutoUpdate: z.boolean().default(false), keepAwake: z.boolean().default(false), keepAwakeWhen: z.enum(['plugged-in', 'always']).default('plugged-in'), showUsageLimits: z.boolean().default(true), fallback: fallbackPreferences.default(DEFAULT_FALLBACK_PREFERENCES), subagents: subagentPreferences.default(DEFAULT_SUBAGENT_PREFERENCES), advisor: advisorPreferences.default(DEFAULT_ADVISOR_PREFERENCES), goals: goalPreferencesSchema.default(DEFAULT_GOAL_PREFERENCES), memory: z.object({ enabled: z.boolean().default(true), dream: z.boolean().default(true), staleAfterDays: z.number().int().min(7).max(3650).default(90) }).default(DEFAULT_MEMORY_PREFERENCES) })
+const appPreferences = z.object({ intelligence: intelligenceSchema.default(() => intelligenceSchema.parse({})), language: z.enum(['system', 'en', 'id']).default('system'), recapsEnabled: z.boolean().default(true), recapTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'), accent: z.enum(['blue', 'violet', 'teal']), fontFamily: z.enum(['system', 'geist']), fontSize: z.number().int().min(12).max(18), fontSmoothing: z.boolean().default(true), reduceMotion: z.boolean().default(false), recentChatMode: z.boolean().default(false), editorFontSize: z.number().int().min(10).max(22), terminalFontSize: z.number().int().min(8).max(22), previewTabs: z.boolean(), hideEmptyStaged: z.boolean(), pullMode: pullMode.default('rebase'), autoPull: z.boolean().default(true), commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'), commitInstructions: z.string().max(2000).default(''), defaultCommitAction: z.enum(['commit', 'push', 'sync']).default('commit'), defaultCommitBranch: z.enum(['new-branch', 'current']).default('new-branch'), recentChats: z.number().int().min(3).max(20), cleanupArchivedDays: z.number().int().min(0).max(3650).default(DEFAULT_APP_PREFERENCES.cleanupArchivedDays), terminalTabPosition: z.enum(['top', 'right']), defaultTerminalDock: z.enum(['right', 'bottom']).default(DEFAULT_APP_PREFERENCES.defaultTerminalDock), defaultAccess: agentSettings.shape.access, defaultAutoFallback: z.boolean(), busyMessageAction: z.enum(['queue', 'steer']).default('steer'), includeTabContext: z.boolean().default(true), warnModelChange: z.boolean().default(true), sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH), messageBehaviorVersion: z.literal(4).default(4), defaultChatDockOpen: z.boolean(), favoriteModels: z.array(z.string().max(200)).max(100).default([]), notifyAgentDone: z.boolean().default(true), resumeChatsOnRestart: z.boolean().default(true), asyncQuestions: z.boolean().default(true), autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60), providerBinaries: providerBinaries.default({}), providerUpdateChecks: z.boolean().default(true), appUpdateChecks: z.boolean().default(true), appAutoUpdate: z.boolean().default(false), keepAwake: z.boolean().default(false), keepAwakeWhen: z.enum(['plugged-in', 'always']).default('plugged-in'), showUsageLimits: z.boolean().default(true), fallback: fallbackPreferences.default(DEFAULT_FALLBACK_PREFERENCES), subagents: subagentPreferences.default(DEFAULT_SUBAGENT_PREFERENCES), advisor: advisorPreferences.default(DEFAULT_ADVISOR_PREFERENCES), goals: goalPreferencesSchema.default(DEFAULT_GOAL_PREFERENCES), memory: z.object({ enabled: z.boolean().default(true), dream: z.boolean().default(true), staleAfterDays: z.number().int().min(7).max(3650).default(90) }).default(DEFAULT_MEMORY_PREFERENCES) })
 
 const searchOptions = z.object({ query: z.string().min(1).max(1000), caseSensitive: z.boolean(), wholeWord: z.boolean(), regex: z.boolean(), include: z.string().max(2000), exclude: z.string().max(2000), repoId: id.optional() })
 const replacePreview = z.array(z.object({ repoId: id, path: relPath, hash: z.string().regex(/^[a-f0-9]{64}$/), count: z.number().int().positive(), before: z.string().max(160), after: z.string().max(160) })).max(REPLACE_FILE_LIMIT)
@@ -149,6 +151,7 @@ export interface Services {
   compression?: CompressionService
   memory?: MemoryService
   reviews: ReviewService
+  notices?: NoticeInbox
 }
 export interface RuntimeHost {
   userData: string
@@ -157,7 +160,13 @@ export interface RuntimeHost {
 }
 
 
-export function createDispatcher(host: RuntimeHost, { workspace, terminals, agents, schedules, recaps, reviews, memory, learning, compression }: Services) {
+/** Methods that change which projects, chats or sessions exist, or how the sidebar shows them. */
+const WORKSPACE_MUTATIONS = /^(projects\.(create|addFolder|rename|remove|reorder)|folders\.(addProject|clone)|repos\.(add|remove)|tasks\.(create|rename|pin|archive|delete|setup|generateTitle)|agent\.(start|delete))$/
+
+export function createDispatcher(host: RuntimeHost, { workspace, terminals, agents, schedules, recaps, reviews, memory, learning, compression, notices }: Services) {
+  // Bursts (create + setup + start) collapse into one trailing notification.
+  let workspaceTimer: ReturnType<typeof setTimeout> | undefined
+  const announceWorkspaceChange = () => { clearTimeout(workspaceTimer); workspaceTimer = setTimeout(() => host.send('workspace:changed', {}), 40) }
   const hostFolders = new HostFolders(() => workspace.listProjects().flatMap(p => p.root ? [p.root] : []))
   const activity = new ActivityService((items) => host.send('activity:changed', items))
   configureProviderAccounts(join(host.userData, 'provider-accounts'))
@@ -179,6 +188,13 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
   const lock = new KeyedLock()
   const usage = new UsageService(() => workspace.getAppState<UsageReading[]>('usage-limits', []), (readings) => workspace.setAppState('usage-limits', readings), (readings) => host.send('usage:changed', readings))
   const extraUsage = new ExtraUsageReader((readings) => usage.update(readings), () => { const config = loadPreferences().providerBinaries; return { cursor: providerEnabled(config, 'cursor'), antigravity: providerEnabled(config, 'antigravity'), keychain: !!config.cursor?.usageKeychain } })
+  // Every login's usage, for providers where "use all accounts" is on. Read on demand, never on a timer.
+  const accountUsage = new AccountUsage((readings) => usage.update(readings), () => loadPreferences().providerBinaries, {
+    'claude-code': (account) => agents ? agents.claudeAccountUsage(account) : Promise.resolve([]),
+    codex: (account) => codexUsage(account),
+    cursor: (account) => readCursorUsage(!!loadPreferences().providerBinaries.cursor?.usageKeychain, providerEnvironment('cursor', loadPreferences().providerBinaries, account)),
+    antigravity: (account) => readAntigravityUsage(providerEnvironment('antigravity', loadPreferences().providerBinaries, account)),
+  })
   const sharedSettingsSchema = z.toJSONSchema(appPreferences, { unrepresentable: 'any' }) as SettingSchema
   const loadPreferences = (): AppPreferences => { const saved = workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}); return appPreferences.parse({ ...DEFAULT_APP_PREFERENCES, ...saved, ...(saved.messageBehaviorVersion === 4 ? {} : { busyMessageAction: 'steer', messageBehaviorVersion: 4 }) }) }
   const savePreferences = (preferences: AppPreferences) => { workspace.setAppState('app-preferences', preferences); host.send('settings:changed', preferences); recaps.settingsChanged(); providers.settingsChanged(); awake.settingsChanged(); host.send('usage:changed', usage.list()); updates.settingsChanged(); agents.invalidateCatalog(); agents.goalsSettingsChanged(); memory?.settingsChanged(); learning?.settingsChanged() }
@@ -207,7 +223,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
   }
   setTimeout(() => void cleanupArchived(), 30_000).unref()
   setInterval(() => void cleanupArchived(), 6 * 3_600_000).unref()
-  if (agents) { agents.isolationRoot = join(host.userData, 'subagent-worktrees'); agents.usage = usage; agents.preferences = loadPreferences; agents.onContext = (sessionId, context) => host.send('context:changed', { sessionId, context }) }
+  if (agents) { agents.isolationRoot = join(host.userData, 'subagent-worktrees'); agents.usage = usage; agents.preferences = loadPreferences; agents.refreshAccountUsage = (provider) => accountUsage.refresh(provider); agents.onContext = (sessionId, context) => host.send('context:changed', { sessionId, context }) }
   const asidesOf = (sessionId: string) => workspace.getAppState<Aside[]>(`asides:${sessionId}`, [])
   const saveAside = (aside: Aside) => {
     workspace.setAppState(`asides:${aside.sessionId}`, [...asidesOf(aside.sessionId).filter((entry) => entry.id !== aside.id), aside])
@@ -391,6 +407,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
         terminals.closeTask(taskId)
         const workspaceId = workspace.getTask(taskId).workspaceId
         await workspace.deleteTask(taskId, removeWorktrees)
+        notices?.forgetTask(taskId)
         if (removeWorktrees && workspaceId) terminals.closeTask(`worktree:${workspaceId}`)
       },
     },
@@ -479,7 +496,7 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'updates.check': { args: z.tuple([]), run: () => updates.check() },
     'updates.download': { args: z.tuple([]), run: () => updates.download() },
     'providers.status': { args: z.tuple([providerBinaries.optional(), z.boolean().optional()]), run: (config?: ProviderConfiguration, latest?: boolean) => providers.status(config, latest) },
-    'providers.signIn': { args: z.tuple([agentSettings.shape.provider]), run: (provider: ProviderStatus['provider']) => providers.signIn(provider) },
+    'providers.signIn': { args: z.tuple([agentSettings.shape.provider, agentSettings.shape.accountId]), run: (provider: ProviderStatus['provider'], accountId?: string) => providers.signIn(provider, accountId) },
     'providers.loginCommand': { args: z.tuple([agentSettings.shape.provider, providerBinaries.optional()]), run: (provider: ProviderStatus['provider'], config?: ProviderConfiguration) => providers.loginCommand(provider, config) },
     'providers.update': { args: z.tuple([agentSettings.shape.provider]), run: (provider: ProviderStatus['provider']) => providers.update(provider) },
     'providers.updates': { args: z.tuple([]), run: () => providers.updates() },
@@ -816,6 +833,9 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
       run: (t: string, c: number, r: number) => terminals.resize(t, c, r),
     },
     'term.close': { args: z.tuple([id]), run: (t: string) => terminals.close(t) },
+    'notices.list': { args: z.tuple([]), run: () => notices?.list() ?? [] },
+    'notices.dismiss': { args: z.tuple([z.string().max(300)]), run: (id: string) => notices?.dismiss(id) },
+    'notices.clear': { args: z.tuple([]), run: () => notices?.clear() },
     'term.busy': { args: z.tuple([z.array(id).max(200)]), run: (ids: string[]) => ids.filter((t) => terminals.busy(t)).length },
     'agent.list': { args: z.tuple([id]), run: (taskId: string) => agents.list(taskId) },
     'agent.counts': { args: z.tuple([]), run: () => agents.counts() },
@@ -861,7 +881,8 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
     'agent.interrupt': { args: z.tuple([id]), run: (s: string) => agents.interrupt(s) },
     'agent.stop': { args: z.tuple([id]), run: (s: string) => agents.stopAndWait(s) },
     'usage.get': { args: z.tuple([]), run: () => usage.list() },
-    'usage.refresh': { args: z.tuple([]), run: async () => { await Promise.all([agents.readClaudeUsage(), extraUsage.refresh()]); return usage.list() } },
+    'usage.accounts': { args: z.tuple([]), run: () => usage.all() },
+    'usage.refresh': { args: z.tuple([]), run: async () => { await Promise.all([agents.readClaudeUsage(), extraUsage.refresh(), accountUsage.refresh()]); return usage.list() } },
     'codex.hook.status': { args: z.tuple([]), run: () => codexHookTrust(false) },
     'advisor.claude': { args: z.tuple([]), run: () => ({ model: claudeAdvisorModel() }) },
     'codex.hook.trust': { args: z.tuple([]), run: () => codexHookTrust(true) },
@@ -910,7 +931,12 @@ export function createDispatcher(host: RuntimeHost, { workspace, terminals, agen
       if (label && method.startsWith('git.') && typeof parsed.data[1] === 'string') {
         try { detail = workspace.getRepository(parsed.data[1]).name } catch {}
       }
-      return label ? activity.run(label, detail, run) : run()
+      const result = label ? activity.run(label, detail, run) : run()
+      if (!WORKSPACE_MUTATIONS.test(method)) return result
+      // Every connected client (desktop windows, paired phones) reloads its project and chat lists from this.
+      if (result instanceof Promise) return result.then((value) => { announceWorkspaceChange(); return value })
+      announceWorkspaceChange()
+      return result
     },
     close() { providers.close(); updates.close(); awake.close(); for (const watcher of watchers.values()) watcher.close() },
   }

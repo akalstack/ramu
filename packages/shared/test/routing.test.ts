@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SUBAGENT_PREFERENCES, type AgentModel, type FallbackStep, type ProviderCatalog, type UsageReading } from '../src/types'
-import { defaultOrder, isOver, nearestEffort, nextStep, peakFor, planRoute, readingCounts, resolveStep, subagentOrder, subagentTarget } from '../src/routing'
+import { providerAccountOrder } from '../src/providers'
+import { accountKey, defaultOrder, isOver, nearestEffort, nextAccount, nextStep, peakFor, planRoute, readingCounts, resolveStep, subagentOrder, subagentTarget } from '../src/routing'
 
 const NOW = 1_800_000_000_000
 const model = (provider: AgentModel['provider'], id: string, extra: Partial<AgentModel> = {}): AgentModel => ({ provider, id, name: id, efforts: ['low', 'medium', 'high'], defaultEffort: 'medium', isDefault: false, ...extra })
@@ -113,5 +114,23 @@ describe('sub-agent routing', () => {
     expect(subagentOrder({ ...prefs, order: own }, main)).toBe(main)
     expect(subagentOrder({ ...prefs, fallback: 'separate', order: own }, main)).toBe(own)
     expect(subagentOrder({ ...prefs, fallback: 'separate' }, main)).toBe(main)
+  })
+})
+
+describe('account rotation', () => {
+  const limited = (accountId: string | undefined) => ({ provider: 'codex' as const, ...(accountId ? { accountId } : {}), window: 'five_hour' as const, usedPercent: 100, status: 'limited' as const, updatedAt: Date.now() })
+  const chat = { provider: 'codex' as const, model: 'gpt-sol', accountId: 'a' }
+  it('orders the selected account first, then default, then the others', () => {
+    const config = { codex: { binary: '', rotateAccounts: true, accountId: 'b', accounts: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C', enabled: false }] } }
+    expect(providerAccountOrder(config, 'codex')).toEqual(['b', 'default', 'a'])
+    expect(providerAccountOrder({ codex: { ...config.codex, rotateAccounts: false } }, 'codex')).toEqual(['b'])
+    expect(providerAccountOrder(config, 'claude-code')).toEqual(['default'])
+  })
+  it('skips accounts that are limited or already tried', () => {
+    const accounts = ['a', 'default', 'b']
+    expect(nextAccount(chat, accounts, { usage: [limited('default')], catalogs, switchAt: null })).toBe('b')
+    expect(nextAccount(chat, accounts, { usage: [], catalogs, switchAt: null })).toBe('default')
+    expect(nextAccount(chat, accounts, { usage: [], catalogs, switchAt: null, attempted: new Set([accountKey('codex', 'default')]) })).toBe('b')
+    expect(nextAccount(chat, accounts, { usage: [limited(undefined), limited('b')], catalogs, switchAt: null })).toBeNull()
   })
 })

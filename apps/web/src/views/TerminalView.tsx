@@ -8,7 +8,7 @@ import { invoke, ramu } from '../ipc'
 import { errorText } from '../TaskPane'
 import { useWorkspace } from '../workspace'
 import { FILE_DRAG_TYPE } from '../ComposerSuggestions'
-import { trackTerminal } from '../terminalRegistry'
+import { allShells, beginOpening, forgetTerminal, shellOf, takeAdopted, trackTerminal } from '../terminalRegistry'
 import { createOutputGate, markTerminalOutput } from '../terminalActivity'
 
 const shellQuote = (path: string) => /^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`
@@ -90,12 +90,39 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
 
     // A terminal view restored after restart gets a new shell; say so instead of pretending it survived.
     const cols = Math.max(term.cols, 2), rows = Math.max(term.rows, 2)
-    const opening = initialCommand ? invoke('term.openSetup', cols, rows) : invoke('term.open', taskId, repoId, cols, rows)
+    // Back in this view after a project switch: reattach to the shell that kept running, with its output replayed.
+    let replayed = 0
+    const reattach = (async () => {
+      let known = viewId && !initialCommand ? shellOf(viewId) ?? takeAdopted(taskId) : undefined
+      // A fresh view (after a restart, or one the phone opened) takes a live shell nobody shows yet before starting another.
+      if (!known && viewId && !initialCommand) {
+        const live = await invoke('term.list', taskId).catch(() => [])
+        const shown = new Set(allShells())
+        known = live.find((entry) => !entry.exited && !shown.has(entry.id) && entry.repoId === repoId)?.id
+      }
+      if (!known || disposed) return null
+      // Claimed at once, so another view (or a second pass of this effect) cannot take the same shell.
+      if (viewId) trackTerminal(viewId, known)
+      const shell = known
+      try {
+        const snap = await invoke('term.snapshot', shell)
+        const info = (await invoke('term.list', taskId)).find((entry) => entry.id === shell)
+        if (!info || snap.exited) { if (viewId) forgetTerminal(viewId, shell); return null }
+        term.write(snap.output); replayed = snap.cursor
+        return info
+      } catch { if (viewId) forgetTerminal(viewId, shell); return null }
+    })()
+    const opening = reattach.then((info) => {
+      if (info) return { info, resumed: true }
+      const settled = beginOpening(taskId)
+      return (initialCommand ? invoke('term.openSetup', cols, rows) : invoke('term.open', taskId, repoId, cols, rows)).then((created) => { if (viewId) trackTerminal(viewId, created.id); settled(); return { info: created, resumed: false } }, (error) => { settled(); throw error })
+    })
     void opening.then(
-      (info) => {
-        if (disposed) return void invoke('term.close', info.id)
+      ({ info, resumed }) => {
+        // Only a shell this view created is cleaned up here; a resumed one belongs to its tab.
+        if (disposed) return void (resumed ? undefined : viewId ? trackTerminal(viewId, info.id) : invoke('term.close', info.id))
         termId = info.id
-        if (viewId) offs.push(trackTerminal(viewId, info.id))
+        if (viewId) trackTerminal(viewId, info.id)
         // Geometry may have changed while the shell was opening, before its
         // ID existed and resize notifications could be delivered.
         ptyResize.request(term.cols, term.rows)
@@ -103,7 +130,7 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
         setCwd(info.cwd)
         // Startup output (the prompt, rc files) doesn't earn the Terminal button's dot. Keystrokes count, not xterm's own replies to the shell.
         const gate = createOutputGate()
-        offs.push(ramu.on('term:data', ({ id, data }) => { if (id !== termId) return; term.write(data); if (gate.output()) markTerminalOutput(ws.workspaceOf(taskId)) }))
+        offs.push(ramu.on('term:data', ({ id, data, cursor }) => { if (id !== termId) return; if (cursor !== undefined && cursor <= replayed) return; term.write(data); if (gate.output()) markTerminalOutput(ws.workspaceOf(taskId)) }))
         const typed = term.onKey(() => gate.arm())
         offs.push(() => typed.dispose())
         offs.push(
@@ -119,7 +146,7 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
           void invoke('term.write', info.id, pendingInput).catch((e) => setError(errorText(e)))
           pendingInput = ''
         }
-        const command = initialCommand ?? runOnce.current
+        const command = resumed ? undefined : initialCommand ?? runOnce.current
         if (command) {
           gate.arm()
           term.focus()
@@ -142,7 +169,8 @@ export function TerminalView({ viewId, taskId, repoId, label, active, onExit, ac
       window.removeEventListener('pointercancel', endResize)
       scheduleFitRef.current = null
       for (const off of offs) off()
-      if (termId) void invoke('term.close', termId)
+      // Tabs with a view id keep their shell on the host (see terminalRegistry); one-off setup shells do not.
+      if (termId && !viewId) void invoke('term.close', termId)
       rendererLoss.current?.dispose()
       rendererLoss.current = null
       renderer.current?.dispose()

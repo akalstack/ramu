@@ -29,6 +29,7 @@ import { accessName } from './AgentControls'
 import { formatKeys } from './commands'
 import { errorText } from './TaskPane'
 import { useWorkspace } from './workspace'
+import { setRowDragImage } from './dragState'
 
 export function SettingsPanel({ onClose, initialSection = 'appearance', initialTarget, shortcuts = [] }: { onClose: () => void; initialSection?: SettingsSection; initialTarget?: string; shortcuts?: { title: string; category: string; keys: string }[] }) {
   const language = useLanguage()
@@ -95,7 +96,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', initialT
     finally { setBusy(false) }
   }
   const sizes = (min: number, max: number) => Array.from({ length: max - min + 1 }, (_, index) => ({ value: String(min + index), label: `${min + index} px` }))
-  const toggle = (key: 'previewTabs' | 'hideEmptyStaged' | 'autoPull' | 'defaultAutoFallback' | 'includeTabContext' | 'recapsEnabled' | 'notifyAgentDone' | 'resumeChatsOnRestart' | 'asyncQuestions' | 'showUsageLimits' | 'keepAwake' | 'fontSmoothing' | 'reduceMotion', title: string, description: string) => <SettingsRow setting={key}><SettingsLabel title={t(title)} help={t(description)} /><Switch aria-label={t(title)} checked={appDraft[key]} disabled={busy} onCheckedChange={(checked) => setAppDraft({ ...appDraft, [key]: checked })} /></SettingsRow>
+  const toggle = (key: 'previewTabs' | 'hideEmptyStaged' | 'autoPull' | 'defaultAutoFallback' | 'includeTabContext' | 'warnModelChange' | 'recapsEnabled' | 'notifyAgentDone' | 'resumeChatsOnRestart' | 'asyncQuestions' | 'showUsageLimits' | 'keepAwake' | 'fontSmoothing' | 'reduceMotion', title: string, description: string) => <SettingsRow setting={key}><SettingsLabel title={t(title)} help={t(description)} /><Switch aria-label={t(title)} checked={appDraft[key]} disabled={busy} onCheckedChange={(checked) => setAppDraft({ ...appDraft, [key]: checked })} /></SettingsRow>
   const resetKeys: Partial<Record<typeof page, (keyof AppPreferences)[]>> = {
     system: ['appUpdateChecks', 'appAutoUpdate', 'keepAwake', 'keepAwakeWhen', 'recapsEnabled', 'recapTime'],
     providers: ['providerBinaries', 'providerUpdateChecks', 'showUsageLimits'],
@@ -104,7 +105,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', initialT
     access: ['defaultAccess', 'defaultAutoFallback', 'fallback'],
     workflows: ['goals', 'subagents', 'advisor'],
     memory: ['memory'],
-    chats: ['busyMessageAction', 'includeTabContext', 'notifyAgentDone', 'resumeChatsOnRestart', 'asyncQuestions', 'autoBackgroundSeconds', 'recentChats', 'cleanupArchivedDays'],
+    chats: ['busyMessageAction', 'includeTabContext', 'warnModelChange', 'notifyAgentDone', 'resumeChatsOnRestart', 'asyncQuestions', 'autoBackgroundSeconds', 'recentChats', 'cleanupArchivedDays'],
     git: ['pullMode', 'autoPull', 'commitStyle', 'commitInstructions', 'defaultCommitAction', 'defaultCommitBranch', 'hideEmptyStaged'],
   }
   const pageKeys = resetKeys[page]
@@ -169,6 +170,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', initialT
       <ResponseSettings value={appDraft.intelligence} onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })} />
       <SettingsGroupTitle>{t('Sending messages')}</SettingsGroupTitle>
       <SettingsRow setting="busyMessageAction"><SettingsLabel title={t("Messages while working")} help={t("Steer adds your message after the current tools finish. Queue waits for the whole turn. Cmd/Ctrl+Enter does the other one.")} /><Dropdown label={t("Messages while working")} value={appDraft.busyMessageAction} options={[{ value: 'steer', label: t("Steer") }, { value: 'queue', label: t("Queue") }]} onChange={(value) => setAppDraft({ ...appDraft, busyMessageAction: value === 'steer' ? 'steer' : 'queue' })} /></SettingsRow>
+      {toggle('warnModelChange', 'Warn before changing model', "A new model can't reuse the cache of a conversation in progress, so the first message after switching uses more of your usage.")}
       {toggle('includeTabContext', 'Include open tabs as context', "Send the active file or selection with each message, plus the paths of other open tabs. Unsaved edits are included.")}
       <SettingsGroupTitle>{t('While agents work')}</SettingsGroupTitle>
       {toggle('notifyAgentDone', 'Agent notifications', "Notify when an agent finishes, needs input, or fails.")}
@@ -205,7 +207,7 @@ export function SettingsPanel({ onClose, initialSection = 'appearance', initialT
           onDragOver={(event) => { if (dragFrom === null) return; event.preventDefault(); const box = event.currentTarget.getBoundingClientRect(); setDropAt(event.clientY < box.top + box.height / 2 ? index : index + 1) }}
           onDrop={(event) => { event.preventDefault(); dropStep() }}
           onDragEnd={endDrag}>
-          <div className="settings-step-heading flex items-center gap-2"><span className="settings-step-grip [&:hover]:text-foreground [&:hover]:bg-hover [&:active]:[cursor:grabbing] inline-grid place-items-center w-[18px] h-[22px] flex-none ml-[-4px] text-muted-foreground cursor-grab rounded-(--radius-xs)" role="button" aria-label={t("Drag step {0} to reorder", { "0": index + 1 })} title={t("Drag to reorder")} draggable={!busy} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(index)); const card = event.currentTarget.closest('.settings-step'); if (card) event.dataTransfer.setDragImage(card, 24, 20); setDragFrom(index) }} onDragEnd={endDrag}><GripVertical size={14} /></span><span className="settings-step-number w-[18px] flex-none text-muted-foreground text-caption text-center">{index + 1}</span><span className="settings-step-name flex-1 min-w-0 [overflow-wrap:anywhere]">{modelStepName(step, scope.catalogs)}</span><div className="settings-step-actions flex gap-0.5">
+          <div className="settings-step-heading flex items-center gap-2"><span className="settings-step-grip [&:hover]:text-foreground [&:hover]:bg-hover [&:active]:[cursor:grabbing] inline-grid place-items-center w-[18px] h-[22px] flex-none ml-[-4px] text-muted-foreground cursor-grab rounded-(--radius-xs)" role="button" aria-label={t("Drag step {0} to reorder", { "0": index + 1 })} title={t("Drag to reorder")} draggable={!busy} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(index)); const card = event.currentTarget.closest('.settings-step'); setRowDragImage(event, card); setDragFrom(index) }} onDragEnd={endDrag}><GripVertical size={14} /></span><span className="settings-step-number w-[18px] flex-none text-muted-foreground text-caption text-center">{index + 1}</span><span className="settings-step-name flex-1 min-w-0 [overflow-wrap:anywhere]">{modelStepName(step, scope.catalogs)}</span><div className="settings-step-actions flex gap-0.5">
             <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" title={t("Move step up")} aria-label={t("Move step {0} up", { "0": index + 1 })} disabled={busy || index === 0} onClick={() => move(index, -1)}><ArrowUp size={13} /></Button>
             <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" title={t("Move step down")} aria-label={t("Move step {0} down", { "0": index + 1 })} disabled={busy || index === set.steps.length - 1} onClick={() => move(index, 1)}><ArrowDown size={13} /></Button>
             <Button variant="ghost" size="icon-xs" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)" title={t("Remove step")} aria-label={t("Remove step {0}", { "0": index + 1 })} disabled={busy || set.steps.length < 2} onClick={() => updateSteps(set.steps.filter((entry) => entry.id !== step.id))}><Trash2 size={13} /></Button>

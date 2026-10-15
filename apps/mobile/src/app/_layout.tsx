@@ -1,6 +1,8 @@
 import { LiveActivityMonitor } from '../components/LiveActivityMonitor'
 import { StartupScreen } from '../components/StartupScreen'
 import { PushRouting } from '../components/PushRouting'
+import { NoticeBanner } from '../components/NoticeBanner'
+import { ActivityTray } from '../components/ActivityTray'
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -21,7 +23,8 @@ function Navigator() {
   return (
     <StartupScreen ready={store.ready}>
       {store.error ? <Pressable accessibilityRole="button" onPress={store.dismissError} style={{ backgroundColor: c.badWash, padding: 14, paddingTop: 50 }}><T tone="bad">{store.error} · tap to dismiss</T></Pressable> : null}
-      {store.notifications[0] ? <Pressable onPress={() => { const notice = store.notifications[0]!; store.select(notice.computerId); store.dismissNotification(0); router.push({ pathname: '/chat/[id]', params: { id: notice.chatId } }) }} style={{ backgroundColor: c.accentWash, padding: 14 }}><T>{store.computers.find(pc => pc.id === store.notifications[0]?.computerId)?.name} · {store.notifications[0].title}</T><T tone="muted">{store.notifications[0].body}</T></Pressable> : null}
+      <NoticeBanner />
+      <ActivityTray />
       <PushRouting />
       <LiveActivityMonitor />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
@@ -31,7 +34,10 @@ function Navigator() {
         <Stack.Screen name="activity" />
         <Stack.Screen name="chat/[id]/index" />
         <Stack.Screen name="chat/[id]/changes" />
+        <Stack.Screen name="chat/[id]/file" />
+        <Stack.Screen name="chat/[id]/aside" />
         <Stack.Screen name="chat/[id]/terminal" />
+        <Stack.Screen name="terminal" />
         <Stack.Screen name="chat/[id]/scm" />
         <Stack.Screen name="new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="computers" options={{ presentation: 'modal' }} />

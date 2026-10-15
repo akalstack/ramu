@@ -1,4 +1,4 @@
-import { RESPONSE_STYLE_LABELS } from '@ramu/shared/types'
+import { NO_PROJECT, RESPONSE_STYLE_LABELS } from '@ramu/shared/types'
 import { chatCodeComponents } from '../ChatCodeBlock'
 import { focusComposer } from '../ComposerInput'
 import { clipText } from '@ramu/shared/text'
@@ -18,7 +18,7 @@ import { Button } from '@/components/desktop-button'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { Input } from '@/components/ui/input'
 import type { FileContext } from '@ramu/shared/types'
-import { Wrench, Globe, FilePenLine, FileMinus2, ArrowRightLeft, Settings2, Image as ImageIcon, ArrowDown, ArrowLeft, Plus, Bot, Brain, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, RotateCcw, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb, CalendarClock, MessageSquareText, ListChecks, Sparkles } from 'lucide-react'
+import { SquarePen, Wrench, Globe, FilePenLine, FileMinus2, ArrowRightLeft, Settings2, Image as ImageIcon, ArrowDown, ArrowLeft, Plus, Bot, Brain, MessageCircle, Quote, BookOpen, CircleCheck, CircleSlash, CircleX, LoaderCircle, Search, Send, Square, X, Check, CornerDownRight, GitFork, ListEnd, MoreHorizontal, Pencil, Trash2, RotateCcw, ChevronDown, ChevronRight, CircleAlert, Minimize2, Copy, ShieldQuestion, SquareTerminal, Lightbulb, CalendarClock, MessageSquareText, ListChecks, Sparkles } from 'lucide-react'
 import { describeRamuTool, ramuTool, ramuToolHasOwnUi, summarizeAgentStatuses, type RamuToolIcon } from '@ramu/shared/ramuTools'
 import { Children, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
@@ -36,6 +36,7 @@ import { reviewsByTurn } from '@ramu/shared/reviewGroups'
 import { useReviews } from '../reviews'
 import { FILE_DRAG_TYPE } from '../ComposerSuggestions'
 import { ChatFind } from '../ChatFind'
+import { paneFadeIn } from '../paneMotion'
 import { formatKeys } from '../commands'
 import { advisorTranscript, advisorAgentId, effectiveStatus, latestTasks, parseAdvice, parseTaskMessage, parseTaskReport, parseTaskStop } from '@ramu/shared/agentTasks'
 import type { AgentTask, Aside } from '@ramu/shared/types'
@@ -64,7 +65,7 @@ import { QuestionDock, QuestionRow } from '../QuestionCard'
 import { parseAnswerMessage, questionState, type QuestionState } from '@ramu/shared/questions'
 import { localFileLink } from '@ramu/shared/fileLinks'
 import { notifyError } from '../Notifications'
-import { draftKey, loadDraft, useDraftPersistence } from '../drafts'
+import { draftKey, loadDraft, saveDraft, useDraftPersistence } from '../drafts'
 import { outbox, useOutbox, OUTBOX_LIMIT } from '../outbox'
 import { useHostConnection } from '../computers'
 import { registerWorkspaceCheckpoint } from '../workspaceCheckpoint'
@@ -223,7 +224,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
   // events below reconcile revisions; observers only manage cache lifetime.
   useQuery({ queryKey: ipcQueryKey('agent.get', view.sessionId), queryFn: () => ramu.invoke('agent.get', view.sessionId), enabled: false, notifyOnChangeProps: [] })
   useQuery({ queryKey: ipcQueryKey('agent.events', view.sessionId), queryFn: () => ramu.invoke('agent.events', view.sessionId), enabled: false, notifyOnChangeProps: [] })
-  const { preferences } = useAppSettings()
+  const { preferences, save } = useAppSettings()
   const { reviews } = useReviews()
   const [eventSequences, setEventSequences] = useState<Map<AgentEvent, number>>(() => new Map((cachedData('agent.events', view.sessionId) ?? []).map((event, i) => [event, i + 1])))
   const [attachments, setAttachments] = useState<Attachment[]>(() => chatPresentation.get(view.sessionId)?.attachments ?? [])
@@ -265,6 +266,16 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
   const [openAgent, setOpenAgentState] = useState<string | null>(null)
   // The aside panel: one aside (a new one carries its quote), or '*' for the list.
   const [openAside, setOpenAsideState] = useState<AsideTarget | '*' | null>(null)
+  // The aside and sub-agent dock land in one step and fade in, like the terminal: they hold whole transcripts that would otherwise
+  // reflow on every frame of a width animation.
+  const dock = useRef<HTMLDivElement>(null)
+  const dockOpen = !!(openAside || openAgent)
+  const dockWasOpen = useRef(dockOpen)
+  useLayoutEffect(() => {
+    if (dockWasOpen.current === dockOpen) return
+    dockWasOpen.current = dockOpen
+    return dockOpen ? paneFadeIn(dock.current) : undefined
+  }, [dockOpen])
   // One side panel at a time.
   const setOpenAgent = (value: string | null | ((current: string | null) => string | null)) => animatePanelChange(() => { setOpenAsideState(null); setOpenAgentState(value) }, 'chat', typeof value === 'function' ? () => value(openAgent) !== null : value !== null)
   const setOpenAside = (value: typeof openAside) => animatePanelChange(() => { setOpenAgentState(null); setOpenAsideState(value) }, 'chat', value !== null)
@@ -380,6 +391,9 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
     const el = scroller.current
     if (el && stick.current) el.scrollTop = el.scrollHeight
     measureEdges()
+    // Markdown, code and images settle after the first paint and grow the content; follow that growth once more.
+    const frame = requestAnimationFrame(() => { const node = scroller.current; if (node && stick.current) { node.scrollTop = node.scrollHeight; measureEdges() } })
+    return () => cancelAnimationFrame(frame)
   }, [events, session?.state, reviews])
 
   const outcomes = useMemo(() => new Map(events.flatMap((e) => (e.kind === 'request-resolved' ? [[e.requestId, e.outcome] as const] : []))), [events])
@@ -393,6 +407,8 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
   const blocks = useMemo(() => toBlocks(events), [events])
   const goalNotes = useMemo(() => goalChanges(events), [events])
   const latestAssistant = blocks.findLast((block) => block.kind === 'event' && block.event.kind === 'text')
+  // A long chat draws its latest turns first; see "Earlier turns" below.
+  const [shownTurns, setShownTurns] = useState(TURN_PAGE)
   const handledSource = useRef<string | null>(null)
   useEffect(() => {
     if (!visible || !view.sourceSeq || !events.length) return
@@ -401,8 +417,10 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
     const source = events[view.sourceSeq - 1]
     const index = blocks.findIndex((b) => b.kind === 'event' ? b.event === source : b.tools.some((t) => t === source || source?.kind === 'tool-result' && t.toolUseId === source.toolUseId))
     const node = scroller.current?.querySelector(`[data-block-index="${index}"]`)
+    // The message lives in a turn that is not drawn yet: bring every turn back, then this runs again.
+    if (!node && index >= 0) { setShownTurns(Number.MAX_SAFE_INTEGER); return }
     if (node) { handledSource.current = request; stick.current = false; node.scrollIntoView({ block: 'center' }); return highlightSource(node, () => { if (session?.taskId) ws.consumeSourceNavigation(session.taskId, view.id, view.sourceRequestId) }) }
-  }, [view.sourceSeq, view.sourceRequestId, events.length, visible, session?.taskId])
+  }, [view.sourceSeq, view.sourceRequestId, events.length, visible, session?.taskId, shownTurns])
   const live = session ? LIVE.includes(session.state) : false
   const pendingQuestions = events.filter((e): e is Extract<AgentEvent, { kind: 'question' | 'elicitation' }> => (e.kind === 'question' || e.kind === 'elicitation') && !outcomes.has(e.requestId) && (e.kind === 'elicitation' ? live : e.responseMode === 'message' || live))
   const dockQuestions = useMemo(() => pendingQuestions.filter((e): e is Extract<AgentEvent, { kind: 'question' }> => e.kind === 'question'), [events, live, outcomes])
@@ -424,6 +442,23 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
   const compacting = session?.state !== 'stopped' && session?.state !== 'failed' && isCompacting(events)
   const activityLabel = compacting ? 'Compacting context…' : agentActivityLabel(session?.state, events)
   const turns = useMemo(() => toTurns(blocks, events), [blocks, events])
+  // A long chat draws its latest turns first; "Earlier turns" brings back the previous page, keeping the reader where they were.
+  const hiddenTurns = Math.max(0, turns.length - shownTurns)
+  const pageTurns = hiddenTurns ? turns.slice(hiddenTurns) : turns
+  const pageAnchor = useRef<{ height: number; top: number } | null>(null)
+  useEffect(() => { setShownTurns(TURN_PAGE) }, [view.sessionId])
+  useLayoutEffect(() => {
+    const anchor = pageAnchor.current, el = scroller.current
+    if (!anchor || !el) return
+    pageAnchor.current = null
+    el.scrollTop = anchor.top + (el.scrollHeight - anchor.height)
+    measureEdges()
+  }, [shownTurns])
+  const showEarlierTurns = () => {
+    const el = scroller.current
+    if (el) { pageAnchor.current = { height: el.scrollHeight, top: el.scrollTop }; stick.current = false }
+    setShownTurns((count) => count + TURN_PAGE)
+  }
   const statusGroup = working && !turns.at(-1)?.ended ? turns.at(-1)?.items.findLast((block) => block.kind === 'tools') : undefined
   // A finished goal stays in the turn where it completed, after that turn's answer.
   const completedGoals = useMemo(() => {
@@ -503,7 +538,16 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
   const opposite = action === 'queue' ? 'steer' : 'queue'
   // While the agent is working, a model change takes effect right away and the run continues with the new settings.
   // The model bar hands over one change when the slider is released. While the agent is working it is applied straight away.
+  const [modelWarning, setModelWarning] = useState<AgentSettings | null>(null)
+  const [dontWarn, setDontWarn] = useState(false)
+  // Another model has no cached copy of this conversation, so the first message after a switch is billed in full.
   const changeSettings = (next: AgentSettings) => {
+    const current = pendingSettings ?? session?.settings
+    const switching = !!current && (current.provider !== next.provider || current.model !== next.model) && !(current.provider === next.provider && !current.model)
+    if (switching && preferences.warnModelChange && events.some((event) => event.kind === 'user')) { setDontWarn(false); setModelWarning(next); return }
+    applySettings(next)
+  }
+  const applySettings = (next: AgentSettings) => {
     setPendingSettings(next)
     if (!busyAgent) return
     void invoke('agent.configure', view.sessionId, next).then((updated) => { setSession(updated); setPendingSettings((current) => current === next ? null : current) }, (error) => { setPendingSettings(null); notifyError(errorText(error), 'Model') })
@@ -515,6 +559,12 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
     const quoted = text.trim().split('\n').map((line) => `> ${line}`).join('\n')
     setDraft((current) => current.trim() ? `${current.replace(/\s+$/, '')}\n\n${quoted}\n\n` : `${quoted}\n\n`)
     requestAnimationFrame(() => { focusComposer(root.current, Number.MAX_SAFE_INTEGER) })
+  }
+  /** Opens New chat in this chat's project with the quote already in the box. Nothing is sent. */
+  const quoteIntoNewChat = (text: string) => {
+    const project = ws.task(session?.taskId ?? '')?.projectId ?? NO_PROJECT
+    saveDraft(draftKey.newChat(project), `${text.trim().split('\n').map((line) => `> ${line}`).join('\n')}\n\n`)
+    ws.newTask(project)
   }
   const editMessage = (text: string, files: Attachment[], seq?: number) => {
     if (seq === undefined) return
@@ -647,6 +697,10 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
       <div className="agent-split [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex flex-1 min-h-0 min-w-0 [container:agent-split_/_inline-size]">
       <div className="agent-main relative flex flex-col [flex:1_1_0] min-w-0 min-h-0">
       {finding && <ChatFind root={scroller} focusRequest={findRequest} initialQuery={findQuery} onClose={closeFind} />}
+      {modelWarning && <Dialog title={translate("Change model mid-conversation?")} confirmLabel={translate("Change model")} onCancel={() => setModelWarning(null)} onConfirm={() => { const next = modelWarning; setModelWarning(null); if (dontWarn) void save({ ...preferences, warnModelChange: false }).catch((error) => notifyError(errorText(error), 'Settings')); applySettings(next) }}>
+        <p>{translate("The new model can't reuse the cache built for this conversation, so the first message after the change uses more of your usage than usual.")}</p>
+        <label className="mt-2 flex items-center gap-2 text-control"><input type="checkbox" checked={dontWarn} onChange={(event) => setDontWarn(event.target.checked)} />{translate("Don't show this again")}</label>
+      </Dialog>}
       {confirmContinue && <Dialog title={translate("Continue in a new chat?")} confirmLabel={translate("Continue in new chat")} busy={continuing} onCancel={() => { if (!continuing) setConfirmContinue(false) }} onConfirm={() => void continueInNewChat()}>
         <p>{translate("Start a new chat in this checkout using the current conversation as context.")}</p>
       </Dialog>}
@@ -671,8 +725,9 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
       >
         <div className={`${hydrating && !turns.length ? 'h-full justify-center' : ''} transcript-col [&_>_[data-block-index]:has(>_.msg.user)]:flex [&_>_[data-block-index]:has(>_.msg.user)]:justify-end max-w-[var(--chat-column-width)] m-[0_auto] flex flex-col gap-3.5`}>
           {hydrating && !turns.length && <div className="flex items-center justify-center"><Spinner className="size-5 text-muted-foreground" aria-label={translate("Loading conversation")} /></div>}
-          {turns.map((turn, ti) => {
-            const isLast = ti === turns.length - 1
+          {hiddenTurns > 0 && <Button variant="ghost" size="sm" className="mx-auto mb-2 text-muted-foreground" onClick={showEarlierTurns}>{translate("Earlier turns ({0} more)", { "0": hiddenTurns })}</Button>}
+          {pageTurns.map((turn, ti) => {
+            const isLast = ti === pageTurns.length - 1
             // A turn is done when the agent reported a result, a later message exists, or nothing is running any more.
             const finished = turn.ended || !isLast || (!working && session?.state !== 'needs-input')
             const { folded, kept, answer } = finished ? foldTurn(turn.items, outcomes, results) : { folded: [] as Block[], kept: turn.items, answer: [] as Block[] }
@@ -717,7 +772,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
       {edges.bottom && <Button variant="outline" size="icon-sm" type="button" className={`jump-bottom absolute left-1/2 z-4 [transform:translateX(-50%)] grid place-items-center p-0 rounded-full backdrop-blur-sm bottom-2.5 shadow-sm motion-safe:[animation:fade-only_0.14s_ease-out] ${working ? 'working' : ''}`} aria-label={working ? translate("Agent is working. Scroll to latest") : translate("Scroll to latest")} title={translate("Scroll to latest")} onClick={scrollToLatest}>
         {working ? <LoadingDots /> : <ArrowDown size={14} />}
       </Button>}
-      <SelectionActions scroller={scroller} onQuote={quoteIntoDraft} onAside={(quote, from) => setOpenAside({ id: null, quote, from })} />
+      <SelectionActions scroller={scroller} onQuote={quoteIntoDraft} onQuoteNew={quoteIntoNewChat} onAside={(quote, from) => setOpenAside({ id: null, quote, from })} />
       </div>
       <div className="composer-dock [&_>_*]:w-full [&_>_*]:max-w-[var(--chat-column-width)] [&_>_*]:ml-auto [&_>_*]:mr-auto [&_.error]:mb-1.5 [&_.error]:text-control [&_.composer]:relative [&_.composer]:z-1 flex-none p-[0_calc(24px_+_var(--chat-scrollbar-width,_0px))_14px_24px]">
         {error && <div className="error text-bad">{error}</div>}
@@ -788,7 +843,7 @@ export const AgentView = memo(function AgentView({ view, history, visible = true
         />
       </div>
       </div>
-      <div className={`agent-dock [&.open]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:h-full [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] flex-none w-0 min-h-0 overflow-hidden ${panelOpen ? ' open' : ''}`} inert={!panelOpen} aria-hidden={!panelOpen}>
+      <div ref={dock} className={`agent-dock [&.open]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:h-full [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] flex-none w-0 min-h-0 overflow-hidden ${panelOpen ? ' open' : ''}`} inert={!panelOpen} aria-hidden={!panelOpen}>
         {openAside && <AsidePanel sessionId={view.sessionId} asides={asides} open={openAside} taskId={session?.taskId} onOpen={setOpenAside} onClose={() => setOpenAside(null)} onQuote={quoteIntoDraft} />}
         {openAgent && <AgentTaskPanel tasks={tasks} openId={openAgent} events={events} results={results} cwd={session?.cwd ?? ''} live={live} taskId={session?.taskId} onSelect={setOpenAgent} onClose={() => setOpenAgent(null)} onStop={stopTask}
           onMessage={(task, text) => act(() => invoke('agent.messageTask', view.sessionId, task.agentId, text))} />}
@@ -808,6 +863,8 @@ function relativize(e: AgentEvent, cwd: string): AgentEvent {
 
 /** "Worked for 35s": the run's steps fold into one line once it is done; the answer stays visible. */
 /** Sent when you resume a stopped turn. The visible part is empty, so it never shows as a chat message. */
+/** Turns drawn at a time; a chat can have hundreds. */
+const TURN_PAGE = 20
 const RESUME_PROMPT = '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>'
 
 function TurnSummary({ label, children }: { label: string; children: React.ReactNode; sourceIndex?: number }) {
@@ -824,6 +881,13 @@ function TurnSummary({ label, children }: { label: string; children: React.React
 }
 
 /** A settings change in the transcript: "model effort → model effort", then any other part that changed as "old → new". */
+/** What the button does, not just "Undo": "Switch back to Opus Medium". */
+function SwitchBackLabel({ previous }: { previous: AgentSettings }) {
+  const { catalogs } = useModelSets()
+  const { model, effort } = settingsNames(previous, catalogs)
+  return <>{translate("Switch back to {0}", { "0": effort ? `${model} ${effort}` : model })}</>
+}
+
 function SettingsChange({ next, previous }: { next: AgentSettings; previous?: AgentSettings }) {
   const { catalogs } = useModelSets()
   const label = (s: AgentSettings) => { const { model, effort } = settingsNames(s, catalogs); return effort ? `${model} ${effort}` : model }
@@ -1060,7 +1124,7 @@ function EventRow({ event: e, sessionId, taskId, live, generating = false, outco
     case 'schedule':
       return <ScheduleChatCard schedule={e.schedule} />
     case 'settings':
-      return <div className="conversation-separator [&::before]:[content:''] [&::before]:h-px [&::before]:flex-1 [&::before]:min-w-4 [&::before]:[background:var(--line-strong)] [&::after]:[content:''] [&::after]:h-px [&::after]:flex-1 [&::after]:min-w-4 [&::after]:[background:var(--line-strong)] [&_small]:block [&_small]:text-muted-foreground [&_small]:text-caption [&_small]:mt-[3px] flex items-center gap-3 m-[20px_0] text-caption text-center text-muted-foreground"><span><SettingsChange next={e.settings} previous={e.previous} /><small>{e.reason}{e.handoff ? ' · Conversation context handed over' : ''}</small>{e.previous && live && <Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption separator-action ml-2 h-[22px] min-h-[22px] p-[0_8px] text-soft" title={translate("Restore the previous settings for the next message")} onClick={() => void invoke('agent.configure', sessionId, e.previous!).catch((error) => notifyError(errorText(error), 'Model'))}>{translate("Undo")}</Button>}</span></div>
+      return <div className="conversation-separator [&::before]:[content:''] [&::before]:h-px [&::before]:flex-1 [&::before]:min-w-4 [&::before]:[background:var(--line-strong)] [&::after]:[content:''] [&::after]:h-px [&::after]:flex-1 [&::after]:min-w-4 [&::after]:[background:var(--line-strong)] [&_small]:block [&_small]:text-muted-foreground [&_small]:text-caption [&_small]:mt-[3px] flex items-center gap-3 m-[20px_0] text-caption text-center text-muted-foreground"><span><SettingsChange next={e.settings} previous={e.previous} /><small>{e.reason}{e.handoff ? ' · Conversation context handed over' : ''}</small>{e.previous && live && <Button variant="ghost" size="sm" className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption separator-action ml-2 h-[22px] min-h-[22px] p-[0_8px] text-soft" title={translate("Go back to the previous model and settings")} onClick={() => void invoke('agent.configure', sessionId, e.previous!).catch((error) => notifyError(errorText(error), 'Model'))}><SwitchBackLabel previous={e.previous} /></Button>}</span></div>
     case 'user': {
       if (!e.text.split('\n\n<ramu-context>\n')[0] && !e.attachments?.length && !sentComments(e.text).length) return null
       // A sub-agent's report comes back as a message, shown as a report and not as something you typed.
@@ -1283,7 +1347,7 @@ function AgentTaskPanel({ tasks, openId, events, results, cwd, live, taskId, onS
 }
 
 /** Selected chat text gets a split button: Quote into the message box, or Ask aside without touching the chat. */
-function SelectionActions({ scroller, onQuote, onAside }: { scroller: React.RefObject<HTMLDivElement | null>; onQuote: (text: string) => void; onAside: (text: string, from: 'assistant' | 'user') => void }) {
+function SelectionActions({ scroller, onQuote, onQuoteNew, onAside }: { scroller: React.RefObject<HTMLDivElement | null>; onQuote: (text: string) => void; onQuoteNew: (text: string) => void; onAside: (text: string, from: 'assistant' | 'user') => void }) {
   useLanguage()
   const [pick, setPick] = useState<{ text: string; from: 'assistant' | 'user'; top: number; left: number } | null>(null)
   useEffect(() => {
@@ -1312,6 +1376,7 @@ function SelectionActions({ scroller, onQuote, onAside }: { scroller: React.RefO
     return () => { document.removeEventListener('selectionchange', change); document.removeEventListener('mousedown', down); document.removeEventListener('mouseup', up); el?.removeEventListener('scroll', hide); window.removeEventListener('resize', hide) }
   }, [scroller])
   const quote = () => { if (pick) { onQuote(pick.text); document.getSelection()?.removeAllRanges(); setPick(null) } }
+  const quoteNew = () => { if (pick) { onQuoteNew(pick.text); document.getSelection()?.removeAllRanges(); setPick(null) } }
   const aside = () => { if (pick) { onAside(pick.text, pick.from); document.getSelection()?.removeAllRanges(); setPick(null) } }
   useEffect(() => {
     if (!pick) return
@@ -1328,6 +1393,7 @@ function SelectionActions({ scroller, onQuote, onAside }: { scroller: React.RefO
   // Pressing a half must not clear the selection it acts on.
   return createPortal(<div className="selection-actions fixed z-1150 [translate:-50%_0] inline-flex items-center h-[30px] p-[0_2px] [border:1px_solid_var(--edge)] rounded-full [background:color-mix(in_srgb,_var(--raised-2)_92%,_transparent)] [-webkit-backdrop-filter:blur(16px)] [backdrop-filter:blur(16px)] [box-shadow:0_8px_24px_rgba(0,_0,_0,_0.4)] [animation:pop_0.1s_var(--ease)]" role="toolbar" aria-label={translate("Selected text")} style={{ top: pick.top, left: pick.left }} onMouseDown={(event) => event.preventDefault()}>
     <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover selection-action [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&_svg]:text-soft h-[26px] min-h-[26px] gap-1.5 p-[0_10px] [border:0] rounded-full bg-transparent text-foreground text-control whitespace-nowrap" title={translate("Quote in your message ({0})", { "0": formatKeys('mod+shift+q') })} onClick={quote}><Quote size={13} />{translate("Quote")}</Button>
+    <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover selection-action [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&_svg]:text-soft h-[26px] min-h-[26px] gap-1.5 p-[0_10px] [border:0] rounded-full bg-transparent text-foreground text-control whitespace-nowrap" title={translate("Start a new chat with this quoted")} onClick={quoteNew}><SquarePen size={13} />{translate("Quote in new chat")}</Button>
     <span className="selection-divider w-px h-4 [background:var(--line-strong)] flex-none" aria-hidden="true" />
     <Button variant="secondary" type="button" className="bg-fill hover:bg-fill-hover selection-action [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&_svg]:text-soft h-[26px] min-h-[26px] gap-1.5 p-[0_10px] [border:0] rounded-full bg-transparent text-foreground text-control whitespace-nowrap" title={translate("Ask a side question about this, without interrupting the chat ({0})", { "0": formatKeys('mod+shift+a') })} onClick={aside}><MessageCircle size={13} />{translate("Ask aside")}</Button>
   </div>, document.body)

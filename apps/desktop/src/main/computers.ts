@@ -174,8 +174,9 @@ export class ComputerRegistry {
     const { parseRemoteUrl } = await import('@ramu/contracts')
     const url = parseRemoteUrl(address)
     const { token } = await this.deps.pair(url, code.trim(), this.deps.deviceName)
-    await this.deps.invoke({ kind: 'http', url, token }, 'background.status')
-    const saved = this.deps.servers.add(url, label, token)
+    const status = await this.deps.invoke({ kind: 'http', url, token }, 'background.status') as { hostname?: string } | undefined
+    // Like Tailscale and NetBird: unless you name it, a computer is called what it calls itself.
+    const saved = this.deps.servers.add(url, label?.trim() || status?.hostname, token)
     // Pairing an address again replaces its entry under a new id.
     const ids = new Set(this.deps.servers.list().map((server) => server.id))
     for (const [id, live] of this.live) if (!ids.has(id)) { this.clearCount(id); live.stop(); this.live.delete(id) }
@@ -187,9 +188,10 @@ export class ComputerRegistry {
   /** Adds a computer by SSH: provisions it, tunnels to it and pairs through the tunnel. */
   async pairSsh(target: string, label: string | undefined): Promise<Computer> {
     const opened = await this.deps.ssh.connect(target, this.deps.deviceName, this.deps.pair)
-    try { await this.deps.invoke({ kind: 'http', url: opened.url, token: opened.token }, 'background.status') }
+    let status: { hostname?: string } | undefined
+    try { status = await this.deps.invoke({ kind: 'http', url: opened.url, token: opened.token }, 'background.status') as { hostname?: string } | undefined }
     catch (error) { opened.discard(); throw error }
-    const saved = this.deps.servers.add(opened.url, label, opened.token, Date.now(), opened.route)
+    const saved = this.deps.servers.add(opened.url, label?.trim() || status?.hostname, opened.token, Date.now(), opened.route)
     opened.release(saved.id)
     const ids = new Set(this.deps.servers.list().map((server) => server.id))
     for (const [id, live] of this.live) if (!ids.has(id)) { this.clearCount(id); live.stop(); this.live.delete(id); this.deps.ssh.close(id) }

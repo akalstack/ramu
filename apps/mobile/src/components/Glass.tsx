@@ -1,7 +1,8 @@
-import { createContext, useContext, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Animated, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import { BlurView, BlurTargetView } from 'expo-blur'
 import { GlassContainer, GlassView, isLiquidGlassAvailable, isGlassEffectAPIAvailable } from 'expo-glass-effect'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme'
 
 /** iOS 26+ draws real Liquid Glass; older iOS and web get a blurred material; Android 12+ uses native RenderNode blur with tonal fallbacks. */
@@ -62,6 +63,25 @@ export function BottomFade({ height, color }: { height: number; color?: string }
         <View key={i} style={{ flex: 1, backgroundColor: color ?? c.window, opacity: Math.min(1, ((i + 1) / (steps * 0.5)) ** 1.4) }} />
       ))}
     </View>
+  )
+}
+
+/**
+ * Stand-in for the UIKit scroll-edge effect where the native one is unavailable: clear while the content
+ * rests at the top, then a soft fade beneath the transparent navigation bar once it scrolls under it.
+ */
+export function TopFade({ visible, color }: { visible: boolean; color?: string }) {
+  const { c } = useTheme()
+  const insets = useSafeAreaInsets()
+  const opacity = useRef(new Animated.Value(0)).current
+  useEffect(() => { Animated.timing(opacity, { toValue: visible ? 1 : 0, duration: 180, useNativeDriver: true }).start() }, [visible, opacity])
+  const steps = 12
+  return (
+    <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, height: insets.top + 44 + 20, opacity }}>
+      {Array.from({ length: steps }, (_, i) => (
+        <View key={i} style={{ flex: 1, backgroundColor: color ?? c.window, opacity: Math.min(1, ((steps - i) / (steps * 0.5)) ** 1.4) }} />
+      ))}
+    </Animated.View>
   )
 }
 

@@ -10,7 +10,8 @@ import { DEFAULT_INTELLIGENCE_PREFERENCES } from '@ramu/shared/types'
 import { createServer, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, rmSync, statSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, hostname } from 'node:os'
+import { NoticeInbox } from './notices'
 import { join } from 'node:path'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
@@ -105,11 +106,12 @@ if (!workspace.getAppState('migration:learning-auto-default', false)) {
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./fakeAgent') : null
 let reviews!: ReviewService
 const mobilePush = new MobilePush(join(userData, 'mobile-push.json'), () => devices.list())
-const agents = new AgentService(db, (sessionId, event, seq, revision) => { send('agent:event', { sessionId, event, seq, revision }); queueMicrotask(() => { try { mobilePush.observe(agents.get(sessionId), event, agents.getGoal(sessionId)); if (['state', 'permission', 'question', 'goal'].includes(event.kind)) mobileLiveActivities.observe() } catch {} }) }, fake?.fakeQuery ?? claudeAcpQuery(query), fake?.fakeCodex, fake?.fakeCodex, fake?.fakeCodex)
+const agents = new AgentService(db, (sessionId, event, seq, revision) => { send('agent:event', { sessionId, event, seq, revision }); queueMicrotask(() => { try { inbox.observe(agents.get(sessionId), event); mobilePush.observe(agents.get(sessionId), event, agents.getGoal(sessionId)); if (['state', 'permission', 'question', 'goal'].includes(event.kind)) mobileLiveActivities.observe() } catch {} }) }, fake?.fakeQuery ?? claudeAcpQuery(query), fake?.fakeCodex, fake?.fakeCodex, fake?.fakeCodex)
 const mobileLiveActivities = new MobileLiveActivities(join(userData, 'mobile-live-activities.json'), () => devices.list(), () => agents.counts())
 if (fake) agents.helperHistory = async () => []
 agents.markRestoredOnBoot()
-const terminals = new TerminalService((id, data, cursor) => send('term:data', { id, data, cursor }), (id, code) => send('term:exit', { id, code }))
+const terminals = new TerminalService((id, data, cursor) => send('term:data', { id, data, cursor }), (id, code) => send('term:exit', { id, code }), (taskId) => send('term:changed', { taskId }))
+const inbox = new NoticeInbox((items) => send('notices:changed', items), (taskId) => { try { return workspace.getTask(taskId).title } catch { return 'Chat' } })
 const schedules = new ScheduleService(db, workspace, agents, changed)
 schedules.recover()
 reviews = new ReviewService(db, workspace, agents, join(userData, 'reviews'), changed)
@@ -136,7 +138,7 @@ const dispatcher = createDispatcher({ userData, send, native: (method, path) => 
     // Exactly one UI owns a desktop dialog/action.
     hostClients.values().next().value?.write(`data: ${JSON.stringify({ channel: 'host:request', payload: { requestId, method, path } })}\n\n`)
   })
-} }, { workspace, terminals, agents, schedules, recaps, reviews, memory, learning, compression })
+} }, { workspace, terminals, agents, schedules, recaps, reviews, memory, learning, compression, notices: inbox })
 const startedAt = Date.now()
 let stopping = false
 async function stop(intentional = false) {
@@ -235,7 +237,7 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
     } else if (method === 'liveActivity.unregister') {
       if (!deviceId || typeof args?.[0] !== 'string') throw new Error('Live Activities require a paired phone')
       mobileLiveActivities.remove(deviceId, args[0])
-    } else if (method === 'background.status') value = { running: true, platform: process.platform, pid: process.pid, startedAt, build: serviceBuild, version: serviceVersion, protocol: PROTOCOL_VERSION, capabilities: capabilities(), ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}) }
+    } else if (method === 'background.status') value = { running: true, hostname: hostname(), platform: process.platform, pid: process.pid, startedAt, build: serviceBuild, version: serviceVersion, protocol: PROTOCOL_VERSION, capabilities: capabilities(), ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}) }
     else if (method.startsWith('network.')) {
       if (remote) throw new Error('Network access is managed from the computer running Ramu')
       value = await networkMethod(method, args)

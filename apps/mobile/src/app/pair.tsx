@@ -44,7 +44,7 @@ export default function Pair() {
   return (
     <Screen bg="canvas">
       <Header modal title="Pair a computer" />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={keyboardOffset}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={keyboardOffset}>
         <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: space.l, gap: space.l }} keyboardShouldPersistTaps="handled">
           <Pressable onPress={async () => { if (permission?.granted || (await requestPermission()).granted) { scanned.current = false; setScanning(true) } }} style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
             <Card style={{ alignItems: 'center', paddingVertical: space.xl, gap: space.s }}>
@@ -82,7 +82,7 @@ export default function Pair() {
             <T size={font.control} weight="500" tone="soft">
               Name (optional)
             </T>
-            <TextInput value={name} onChangeText={setName} placeholder="MacBook Pro" placeholderTextColor={c.placeholder} style={field} />
+            <TextInput value={name} onChangeText={setName} placeholder="Defaults to the computer's own name" placeholderTextColor={c.placeholder} style={field} />
           </View>
 
           <View style={{ gap: space.s }}>

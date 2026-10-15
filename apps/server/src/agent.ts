@@ -1,11 +1,11 @@
 import { responseInstructions, TOOL_DISCOVERY_INSTRUCTIONS } from './intelligence'
-import { providerBinary, providerAccountId } from './providerBinaries'
+import { providerBinary, providerAccountId, providerEnvironment } from './providerBinaries'
 import { clipText } from '@ramu/shared/text'
 import { createAcpRunner, acpModels, acpAside, AcpResumeUnavailable } from './acp'
 import { toolDescription, toolInput } from './acpEvents'
 import { agentContent } from '@ramu/shared/agentContent'
 import { acpHostedRunner } from './acpNativeHost'
-import { providerName, providerEnabled, isAcpProvider, supportsProviderAccounts } from '@ramu/shared/providers'
+import { providerName, providerEnabled, isAcpProvider, supportsProviderAccounts, providerAccountOrder } from '@ramu/shared/providers'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 // Structured agent adapter for Claude Code via the Claude Agent SDK.
 // One live SDK query per session, always launched in the session's binding cwd.
@@ -24,7 +24,7 @@ import type {
 import type { Db } from './db'
 import { DEFAULT_AGENT_SETTINGS, DEFAULT_FALLBACK_PREFERENCES, type AdviceStatus, type ContextUsage, type SwitchThreshold, type UsageReading, type FallbackStep, type AppPreferences, type AgentTask, type AgentTaskStatus, type AgentEvent, type AgentQuestion, type AgentScope, type AgentSessionInfo, type AgentSessionState, type AgentSettings, type AgentProvider, type CommitStyle, type ProviderCatalog, type QueuedMessage, type Attachment, type McpConnection, type Schedule } from '@ramu/shared/types'
 import { attachmentPrompt, nativeBlocks } from './attachments'
-import { defaultOrder, resolveStep, subagentOrder, subagentTarget, settingsKey, isOver, limitReason, nextStep, peakFor, planRoute, stepKey, type RouteDecision } from '@ramu/shared/routing'
+import { defaultOrder, resolveStep, subagentOrder, subagentTarget, settingsKey, isOver, limitReason, nextStep, nextAccount, accountKey, peakFor, planRoute, stepKey, type RouteDecision } from '@ramu/shared/routing'
 import { claudeReadings, claudeUsageReadings, type ClaudeUsageResponse, type ClaudeRateLimitInfo, type UsageService } from './usage'
 import { BACKGROUND_PREAMBLE, SUBAGENT_PREAMBLE, subagentNotePrompt, taskMessagePrompt, taskReportPrompt, taskStopPrompt } from '@ramu/shared/agentTasks'
 import { applyIsolation, collectPatch, createIsolation, removeIsolation, type Isolation } from './isolation'
@@ -379,6 +379,8 @@ export class AgentService {
   private readonly transitioning = new Set<string>()
   /** Steps (`provider:model`) a chat has already been through while falling back. */
   private readonly attempted = new Map<string, Set<string>>()
+  /** Logins of the chat's provider already tried since its last message, as `provider:account`. */
+  private readonly attemptedAccounts = new Map<string, Set<string>>()
   /** Chats whose model the user picked by hand: they don't move up the order until they next hit a limit. */
   private readonly pinned = new Set<string>()
   /** Sub-agents Ramu runs as sessions of their own, by child session id. */
@@ -495,7 +497,7 @@ export class AgentService {
     this.record(id, { kind: 'request-resolved', requestId, outcome })
   }
   /** Plan usage per provider. Without it (tests) nothing switches early. */
-  usage: Pick<UsageService, 'list' | 'update'> | undefined
+  usage: (Pick<UsageService, 'list' | 'update'> & Partial<Pick<UsageService, 'all'>>) | undefined
   /** The saved app preferences: fallback chains, threshold and sub-agent routing. */
   preferences: (() => AppPreferences) | undefined
   /** Told whenever a chat's context window usage changes. */
@@ -520,10 +522,25 @@ export class AgentService {
   }
 
   /** Claude's plan usage without a turn, so the gauges are right before anything has run. Throttled; best effort. */
-  private refreshClaudeUsage(query: Query): void {
+  private refreshClaudeUsage(query: Query, account = 'default'): void {
     if (Date.now() - this.lastUsageRead < 5 * 60_000 || !this.usage) return
     this.lastUsageRead = Date.now()
-    void query.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET?.({ skipBehaviors: true }).then((response) => { const readings = claudeUsageReadings(response as ClaudeUsageResponse); if (readings.length) this.usage?.update(readings) }).catch(() => {})
+    void query.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET?.({ skipBehaviors: true }).then((response) => { const readings = claudeUsageReadings(response as ClaudeUsageResponse).map((reading) => account === 'default' ? reading : { ...reading, accountId: account }); if (readings.length) this.usage?.update(readings) }).catch(() => {})
+  }
+
+  /** Called before choosing another login, so its usage is current. */
+  refreshAccountUsage: ((provider: AgentProvider) => Promise<void>) | undefined
+
+  /** One Claude login's plan usage, read with a throwaway process. */
+  async claudeAccountUsage(account: string): Promise<UsageReading[]> {
+    if (this.shutdown || process.env.RAMU_FAKE_AGENT === '1') return []
+    const input = new InputQueue()
+    const env = providerEnvironment('claude-code', this.preferences?.().providerBinaries, account)
+    const query = this.providerQuery({ prompt: input, options: { cwd: tmpdir(), settingSources: [], env, permissionMode: 'default', canUseTool: async () => ({ behavior: 'deny', message: 'Usage read only' }) } })
+    try {
+      const response = await Promise.race([query.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }), new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timed out')), 20_000))])
+      return claudeUsageReadings(response as ClaudeUsageResponse)
+    } finally { input.close(); query.close?.() }
   }
 
   /** Reads Claude's plan usage now with a throwaway process, when the stored reading is old or missing. */
@@ -754,7 +771,7 @@ export class AgentService {
 
   async startReviewed(taskId: string, scope: AgentScope, prompt: string, settings: AgentSettings = DEFAULT_AGENT_SETTINGS, attachments: Attachment[] = []): Promise<AgentSessionInfo> {
     if (this.shutdown) throw new Error('Application is shutting down')
-    if (supportsProviderAccounts(settings.provider) && settings.accountId === undefined) settings = { ...settings, accountId: providerAccountId(settings.provider) }
+    if (supportsProviderAccounts(settings.provider) && settings.accountId === undefined && (LEGACY_ACCOUNT_PROVIDERS.has(settings.provider) || providerAccountId(settings.provider) !== 'default')) settings = { ...settings, accountId: providerAccountId(settings.provider) }
     // A new chat starts on the highest-ranked model with room.
     const route = await this.route(settings, true)
     const requested = settings
@@ -790,14 +807,14 @@ export class AgentService {
       )
     }
     const session = this.createSession(taskId, scope, settings, 'starting')
-    this.attempted.set(session.id, new Set([stepKey(settings)]))
+    this.attempted.set(session.id, new Set([stepKey(settings)])); this.attemptedAccounts.delete(session.id)
     this.launch(session.id, prompt, null, true, attachments)
     return this.get(session.id)
   }
 
   private createSession(taskId: string, scope: AgentScope, settings: AgentSettings, state: AgentSessionState, parentId: string | null = null): AgentSessionInfo {
     const accountId = settings.accountId ?? providerAccountId(settings.provider)
-    if (supportsProviderAccounts(settings.provider)) settings = { ...settings, accountId }
+    if (supportsProviderAccounts(settings.provider) && (LEGACY_ACCOUNT_PROVIDERS.has(settings.provider) || accountId !== 'default')) settings = { ...settings, accountId }
     const row: SessionRow = {
       id: randomUUID(),
       task_id: taskId,
@@ -850,7 +867,7 @@ export class AgentService {
     const style = this.responseStyleInstructions(s)
     const styledText = style ? `${text}\n\n${style}` : text
     const actualText = instructions ? `${styledText}\n\n<ramu-goals>\n${instructions}\n</ramu-goals>` : styledText
-    this.attempted.set(id, new Set([stepKey(s.settings)]))
+    this.attempted.set(id, new Set([stepKey(s.settings)])); this.attemptedAccounts.delete(id)
     const codex = this.runners.get(id)
     if (codex) {
       if (recordUser) this.record(id, { kind: 'user', text, ...(attachments.length ? { attachments } : {}) })
@@ -1072,7 +1089,7 @@ export class AgentService {
     if (account?.enabled === false) throw new Error(`The ${providerName(settings.provider)} account "${account.name}" is turned off in Settings → Providers.`)
     let catalog = (await this.catalog()).find((c) => c.provider === settings.provider)
     // A retained chat may belong to a different profile than today's default.
-    if (process.env.RAMU_FAKE_AGENT !== '1' && settings.accountId && settings.accountId !== providerAccountId(settings.provider) && supportsProviderAccounts(settings.provider)) {
+    if (process.env.RAMU_FAKE_AGENT !== '1' && settings.accountId && settings.accountId !== providerAccountId(settings.provider) && (settings.provider === 'codex' || settings.provider === 'opencode')) {
       const models = settings.provider === 'codex' ? await codexModels(settings.accountId) : await acpModels('opencode', settings.accountId)
       catalog = { provider: settings.provider, models }
     }
@@ -1085,6 +1102,7 @@ export class AgentService {
   /** The user changed model, effort or access. A new model is pinned: it doesn't move up the order until it next runs out. */
   async configure(id: string, settings: AgentSettings): Promise<AgentSessionInfo> {
     const current = this.get(id).settings
+    if (sameSettings(current, settings)) return this.get(id)
     if (stepKey(current) !== stepKey(settings)) this.pinned.add(id)
     this.holds.delete(id)
     return this.applySettings(id, settings)
@@ -1097,7 +1115,7 @@ export class AgentService {
     const accountId = settings.accountId ?? (settings.provider === s.provider ? s.settings.accountId : providerAccountId(settings.provider))
     if (accountId && accountId !== 'default') settings = { ...settings, accountId }
     const sameIdentity = settings.provider === s.provider && (settings.accountId ?? 'default') === (s.settings.accountId ?? 'default')
-    if (JSON.stringify(s.settings) === JSON.stringify(settings)) return s
+    if (sameSettings(s.settings, settings)) return s
     const revision = this.revisions.get(id) ?? 0
     this.transitioning.add(id)
     try {
@@ -1298,7 +1316,7 @@ export class AgentService {
   /** Isolated inference shared by commit drafts, recaps, and change reviews. */
   async analyze(prompt: string, settings: AgentSettings, maxLength = 100000, { timeoutMs = 90_000, signal }: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<{ message: string; provider: AgentProvider; model: string }> {
     if (this.shutdown) throw new Error('Background service is stopping')
-    if (supportsProviderAccounts(settings.provider) && settings.accountId === undefined) settings = { ...settings, accountId: providerAccountId(settings.provider) }
+    if (supportsProviderAccounts(settings.provider) && settings.accountId === undefined && (LEGACY_ACCOUNT_PROVIDERS.has(settings.provider) || providerAccountId(settings.provider) !== 'default')) settings = { ...settings, accountId: providerAccountId(settings.provider) }
     if (signal?.aborted) throw new Error('Background analysis stopped')
     const cwd = mkdtempSync(join(tmpdir(), 'ramu-commit-draft-'))
     const tried = new Set<string>()
@@ -1382,9 +1400,28 @@ export class AgentService {
   }
 
   /** Preferences and usage, once the app has provided them; tests run without. */
-  private routing(settings?: AgentSettings): { prefs: AppPreferences; usage: UsageReading[] } | null {
+  private routing(settings?: AgentSettings): { prefs: AppPreferences; usage: UsageReading[]; all: UsageReading[] } | null {
     if (!this.preferences || !this.usage) return null
-    return { prefs: this.preferences(), usage: this.usage.list(settings ? { [settings.provider]: settings.accountId ?? 'default' } : {}) }
+    return { prefs: this.preferences(), usage: this.usage.list(settings ? { [settings.provider]: settings.accountId ?? 'default' } : {}), all: this.usage.all?.() ?? [] }
+  }
+
+  /** Another login of the same provider with room, when the user turned account rotation on for it; null otherwise. */
+  private otherAccount(settings: AgentSettings, routing: { prefs: AppPreferences }, catalogs: ProviderCatalog[], switchAt: SwitchThreshold, tried?: ReadonlySet<string>): string | null {
+    if (!settings.autoFallback || !supportsProviderAccounts(settings.provider)) return null
+    const accounts = providerAccountOrder(routing.prefs.providerBinaries, settings.provider)
+    if (accounts.length < 2) return null
+    return nextAccount(settings, accounts, { usage: this.usage?.all?.() ?? [], catalogs, switchAt, attempted: tried })
+  }
+
+  /** Waits briefly for a current reading of the provider's other logins; a slow read never holds up the chat. */
+  private async freshAccountUsage(provider: AgentProvider): Promise<void> {
+    if (!this.refreshAccountUsage) return
+    await Promise.race([this.refreshAccountUsage(provider).catch(() => {}), new Promise<void>((resolve) => setTimeout(resolve, 8_000).unref())])
+  }
+
+  private accountName(provider: AgentProvider, accountId: string | undefined): string {
+    if (!accountId || accountId === 'default') return 'the default account'
+    return `account "${this.preferences?.().providerBinaries[provider]?.accounts?.find((entry) => entry.id === accountId)?.name ?? accountId}"`
   }
 
   /** Fallback order and threshold for a session: a sub-agent may use its own order and an earlier threshold. */
@@ -1432,6 +1469,18 @@ export class AgentService {
     const catalogs = await this.catalog()
     const policy = this.policyOf(s, catalogs, routing.prefs)
     const promote = !s.parentId && !this.pinned.has(id)
+    // Another login of the same provider comes before another model.
+    if (!this.holds.has(id) && isOver(peakFor(routing.usage, s.settings.provider, s.settings.model), policy.switchAt)) {
+      const tried = this.attemptedAccounts.get(id) ?? new Set<string>()
+      tried.add(accountKey(s.settings.provider, s.settings.accountId)); this.attemptedAccounts.set(id, tried)
+      await this.freshAccountUsage(s.settings.provider)
+      const account = this.otherAccount(s.settings, routing, catalogs, policy.switchAt, tried)
+      if (account) {
+        tried.add(accountKey(s.settings.provider, account))
+        await this.applySettings(id, { ...s.settings, accountId: account }, `${providerName(s.settings.provider)} on ${this.accountName(s.settings.provider, s.settings.accountId)} is at its limit — continuing on ${this.accountName(s.settings.provider, account)}`)
+        return true
+      }
+    }
     const decision = planRoute(s.settings, policy.order, { usage: routing.usage, catalogs, switchAt: policy.switchAt, now: Date.now(), promote })
     const hold = this.holds.get(id)
     if (!decision) { if (hold === 'chat') this.holds.delete(id); return false }
@@ -1464,6 +1513,22 @@ export class AgentService {
       const routing = this.routing(s.settings)
       const configured = !!routing?.prefs.fallback.order || (!!s.parentId && routing?.prefs.subagents.fallback === 'separate')
       const policy = this.policyOf(s, catalogs, routing?.prefs)
+      const tried = this.attemptedAccounts.get(id) ?? new Set<string>()
+      tried.add(accountKey(s.settings.provider, s.settings.accountId)); this.attemptedAccounts.set(id, tried)
+      // The limit just hit belongs to this login, so try the provider's other logins before leaving it.
+      if (routing) await this.freshAccountUsage(s.provider)
+      const account = routing ? this.otherAccount(s.settings, routing, catalogs, policy.switchAt, tried) : null
+      if (account) {
+        tried.add(accountKey(s.provider, account))
+        const accountSettings = { ...s.settings, accountId: account }
+        this.pinned.delete(id)
+        this.db.prepare('UPDATE agent_sessions SET settings = ?, provider_session_id = ? WHERE id = ?').run(JSON.stringify(accountSettings), null, id)
+        this.record(id, { kind: 'settings', settings: accountSettings, reason: `${providerName(s.provider)} usage limit reached on ${this.accountName(s.provider, s.settings.accountId)} — continuing on ${this.accountName(s.provider, account)}`, handoff: true, previous: s.settings })
+        this.transitioning.delete(id)
+        this.launch(id, 'Continue the unfinished request from the conversation handoff. First inspect the current files and tool results to avoid repeating completed changes.', null, false)
+        return
+      }
+      this.attemptedAccounts.delete(id)
       const step = nextStep(policy.order, { usage: routing?.usage ?? [], catalogs, switchAt: policy.switchAt, attempted })
       if (!step) {
         if (this.waitForGoalProvider(id)) return
@@ -2148,7 +2213,7 @@ export class AgentService {
         ...(s.settings.model ? { model: s.settings.model } : {}),
         ...(s.settings.effort ? { effort: s.settings.effort as Options['effort'] } : {}),
         ...(resume ? { resume } : {}),
-        ...(connection ? { env: { ...process.env, MCP_TOOL_TIMEOUT: String(3_600_000) } } : {}),
+        ...(connection || s.settings.accountId && s.settings.accountId !== 'default' ? { env: { ...providerEnvironment('claude-code', this.preferences?.().providerBinaries, s.settings.accountId ?? 'default'), ...(connection ? { MCP_TOOL_TIMEOUT: String(3_600_000) } : {}) } } : {}),
         ...(!s.parentId && this.preferences ? { hooks: this.subagentHooks(id) } : {}),
         // Sub-agents get their own transcript and progress line in the chat.
         forwardSubagentText: true,
@@ -2162,7 +2227,7 @@ export class AgentService {
     this.setState(id, resume ? 'running' : 'starting')
     this.live.get(id)!.done = this.pump(id, query)
     this.refreshContext(id, query)
-    this.refreshClaudeUsage(query)
+    this.refreshClaudeUsage(query, s.settings.accountId ?? 'default')
   }
 
   private async pump(id: string, query: Query): Promise<void> {
@@ -2185,7 +2250,7 @@ export class AgentService {
         if (this.live.get(id)?.query !== query) return
         if (msg.type !== 'stream_event') flush()
         const wire = msg as SDKMessage & { rate_limit_info?: { status?: string }; api_error?: string }
-        if (wire.type === 'rate_limit_event' && wire.rate_limit_info) { const readings = claudeReadings(wire.rate_limit_info as ClaudeRateLimitInfo, this.usage?.list()); if (readings.length) this.usage?.update(readings) }
+        if (wire.type === 'rate_limit_event' && wire.rate_limit_info) { const account = this.get(id).settings.accountId ?? 'default'; const readings = claudeReadings(wire.rate_limit_info as ClaudeRateLimitInfo, this.usage?.list({ 'claude-code': account })).map((reading) => account === 'default' ? reading : { ...reading, accountId: account }); if (readings.length) this.usage?.update(readings) }
         if (wire.type === 'rate_limit_event' && wire.rate_limit_info?.status === 'rejected') continue
         if (wire.api_error === 'usage_limit_reached' || (msg.type === 'result' && msg.is_error && isUsageLimit(msg))) {
           this.record(id, { kind: 'error', message: 'Claude usage limit reached.' })
@@ -2450,7 +2515,7 @@ function toInfo(r: SessionRow): AgentSessionInfo {
     taskId: r.task_id,
     repoId: r.repo_id,
     provider: r.provider,
-    settings: { ...DEFAULT_AGENT_SETTINGS, ...(supportsProviderAccounts(r.provider) ? { accountId: 'default' } : {}), ...JSON.parse(r.settings), provider: r.provider },
+    settings: { ...DEFAULT_AGENT_SETTINGS, ...(LEGACY_ACCOUNT_PROVIDERS.has(r.provider) ? { accountId: 'default' } : {}), ...JSON.parse(r.settings), provider: r.provider },
     cwd: r.cwd,
     additionalDirs: JSON.parse(r.additional_dirs) as string[],
     covers: JSON.parse(r.covers) as string[],
@@ -2553,6 +2618,9 @@ function baseMode(settings: AgentSettings): 'bypassPermissions' | 'acceptEdits' 
 }
 
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error) }
+/** Providers whose chats have always recorded their account; the others record it only when it is not the default login. */
+const LEGACY_ACCOUNT_PROVIDERS: ReadonlySet<AgentProvider> = new Set(['codex', 'opencode'])
+
 export function isUsageLimit(value: unknown): boolean {
   const text = value instanceof Error ? value.message : typeof value === 'string' ? value : JSON.stringify(value)
   return /usage_limit_reached|usageLimitExceeded|rate_limit_error|rate_limit_exceeded|hit your.*(?:usage|spend|limit)|usage limit|rate limit|spend limit|quota exceeded/i.test(text)
@@ -2599,4 +2667,10 @@ export function splitBranchLine<T extends { message: string }>(draft: T): T & { 
   const match = /\n?[ \t]*branch:[ \t]*`?([^`\n]+?)`?[ \t]*$/i.exec(draft.message.trimEnd())
   if (!match) return draft
   return { ...draft, message: draft.message.trimEnd().slice(0, match.index).trimEnd(), branch: match[1]!.trim() }
+}
+
+/** Settings are equal when every field matches once defaults are filled in; key order and omitted defaults don't count. */
+export function sameSettings(a: AgentSettings, b: AgentSettings): boolean {
+  const norm = (s: AgentSettings) => JSON.stringify([s.provider, s.accountId ?? 'default', s.model, s.effort ?? null, s.serviceTier ?? 'standard', s.access, s.autoFallback, s.responseStyle ?? 'inherit'])
+  return norm(a) === norm(b)
 }

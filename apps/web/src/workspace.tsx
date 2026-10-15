@@ -92,7 +92,7 @@ export interface WorkspaceApi {
 }
 
 const Ctx = createContext<WorkspaceApi | null>(null)
-type WorkspaceActions = Pick<WorkspaceApi, 'task' | 'refresh' | 'openTask' | 'openView' | 'consumeSourceNavigation'>
+type WorkspaceActions = Pick<WorkspaceApi, 'task' | 'refresh' | 'openTask' | 'openView' | 'newTask' | 'consumeSourceNavigation'>
 const ActionsCtx = createContext<WorkspaceActions | null>(null)
 
 /** Commands read fresh state when called, without subscribing to panel/UI changes. */
@@ -292,12 +292,35 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     return () => window.removeEventListener('focus', evaluate)
   }, [tasks, ui.activeTaskId, composing])
 
+  // Unread follows the computer's inbox too: a chat that finished while this window was closed is marked, and opening it
+  // on a paired phone clears the mark here.
+  useEffect(() => {
+    let previous = new Set<string>()
+    const apply = (list: import('@ramu/shared/notices').InboxNotice[]) => {
+      const done = new Set(list.filter((notice) => notice.kind === 'done').map((notice) => notice.taskId))
+      setUnread((current) => {
+        const next = new Set(current)
+        for (const id of done) next.add(id)
+        for (const id of previous) if (!done.has(id)) next.delete(id)
+        if (next.size === current.size && [...next].every((id) => current.has(id))) return current
+        try { localStorage.setItem('ramu.unread', JSON.stringify([...next])) } catch { /* Marks still work for this session. */ }
+        return next
+      })
+      previous = done
+    }
+    void invoke('notices.list').then(apply, () => {})
+    return ramu.on('notices:changed', apply)
+  }, [])
+
   // Chat badges follow authoritative session state, including background projects.
   useEffect(() => {
     let disposed = false
     let timer: ReturnType<typeof setTimeout> | undefined
     let request = 0
     const automation = ramu.on('automation:changed', () => { void refresh() })
+    // Chats and projects created, renamed, pinned or removed from a paired phone (or another window).
+    let pending: ReturnType<typeof setTimeout> | undefined
+    const changed = ramu.on('workspace:changed', () => { clearTimeout(pending); pending = setTimeout(() => void refresh().catch(() => {}), 60) })
     const off = ramu.on('agent:event', ({ event }) => {
       if (event.kind !== 'state' && event.kind !== 'user' && event.kind !== 'provider-wait') return
       clearTimeout(timer)
@@ -306,8 +329,8 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         void invoke('tasks.list').then((chats) => { if (!disposed && current === request) setTasks(chats) }, () => undefined)
       }, 50)
     })
-    return () => { disposed = true; off(); automation(); clearTimeout(timer) }
-  }, [])
+    return () => { disposed = true; off(); automation(); changed(); clearTimeout(timer); clearTimeout(pending) }
+  }, [refresh])
 
   // Branch switches and worktree changes are picked up when bindings are re-read.
   useEffect(() => ramu.on('fs:changed', ({ path }) => {
@@ -664,6 +687,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
   latestActionsApi.current = animatedApi
   const actions = useMemo<WorkspaceActions>(() => ({
     task: taskId => latestActionsApi.current.task(taskId),
+    newTask: projectId => latestActionsApi.current.newTask(projectId),
     refresh: () => latestActionsApi.current.refresh(),
     openTask: taskId => latestActionsApi.current.openTask(taskId),
     openView: (taskId, view) => latestActionsApi.current.openView(taskId, view),

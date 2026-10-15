@@ -490,6 +490,8 @@ export interface AppPreferences {
   busyMessageAction: 'queue' | 'steer'
   /** Send the files open in editor tabs along with each message. */
   includeTabContext: boolean
+  /** Ask before changing a chat's model mid-conversation: the new model has no cache of it, so the next message costs more. */
+  warnModelChange: boolean
   /** Dragged width of the sidebar, in px. */
   sidebarWidth: number
   messageBehaviorVersion: 4
@@ -647,7 +649,7 @@ export interface AsideMessage { id: string; role: 'user' | 'assistant'; text: st
 export interface Aside { id: string; sessionId: string; quote: string; quoteFrom: 'assistant' | 'user'; messages: AsideMessage[]; createdAt: number }
 export const DEFAULT_SIDEBAR_WIDTH = 268
 export const SIDEBAR_WIDTH_RANGE = [200, 520] as const
-export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, reduceMotion: false, recentChatMode: false, editorFontSize: 13, terminalFontSize: 12, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', defaultCommitAction: 'commit', defaultCommitBranch: 'new-branch', recentChats: 10, cleanupArchivedDays: 90, terminalTabPosition: 'top', defaultTerminalDock: 'bottom', defaultAccess: 'auto', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, memory: DEFAULT_MEMORY_PREFERENCES, intelligence: DEFAULT_INTELLIGENCE_PREFERENCES, includeTabContext: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
+export const DEFAULT_APP_PREFERENCES: AppPreferences = { language: 'system', recapsEnabled: true, recapTime: '08:00', accent: 'violet', fontFamily: 'system', fontSize: 14, fontSmoothing: true, reduceMotion: false, recentChatMode: false, editorFontSize: 13, terminalFontSize: 12, previewTabs: true, hideEmptyStaged: true, pullMode: 'rebase', autoPull: true, commitStyle: 'conventional', commitInstructions: '', defaultCommitAction: 'commit', defaultCommitBranch: 'new-branch', recentChats: 10, cleanupArchivedDays: 90, terminalTabPosition: 'top', defaultTerminalDock: 'bottom', defaultAccess: 'auto', defaultAutoFallback: true, defaultChatDockOpen: true, favoriteModels: [], notifyAgentDone: true, resumeChatsOnRestart: true, asyncQuestions: true, autoBackgroundSeconds: 60, providerBinaries: {}, providerUpdateChecks: true, appUpdateChecks: true, appAutoUpdate: false, keepAwake: false, keepAwakeWhen: 'plugged-in', showUsageLimits: true, fallback: DEFAULT_FALLBACK_PREFERENCES, subagents: DEFAULT_SUBAGENT_PREFERENCES, advisor: DEFAULT_ADVISOR_PREFERENCES, goals: DEFAULT_GOAL_PREFERENCES, memory: DEFAULT_MEMORY_PREFERENCES, intelligence: DEFAULT_INTELLIGENCE_PREFERENCES, includeTabContext: true, warnModelChange: true, sidebarWidth: DEFAULT_SIDEBAR_WIDTH, busyMessageAction: 'steer', messageBehaviorVersion: 4 }
 
 
 /** Internal scope ID; omitted from the user project list. */
@@ -690,7 +692,7 @@ export interface RecapItem {
   status: 'open' | 'done' | 'dismissed' | 'snoozed'; snoozedUntil: number | null; updatedAt: number
 }
 export interface RecapSnapshot { items: RecapItem[]; generatedAt: number | null; generating: boolean; error: string | null }
-export interface BackgroundStatus { platform?: string; protocol?: number; capabilities?: string[]; running: boolean; pid: number; startedAt: number; loginEnabled: boolean; version?: string; build?: string; bundledVersion?: string; bundledBuild?: string; updateAvailable?: boolean }
+export interface BackgroundStatus { /** The computer's own name, offered as the default label when another device pairs with it. */ hostname?: string; platform?: string; protocol?: number; capabilities?: string[]; running: boolean; pid: number; startedAt: number; loginEnabled: boolean; version?: string; build?: string; bundledVersion?: string; bundledBuild?: string; updateAvailable?: boolean }
 
 /** A device that has paired with this computer's server and holds its own access token. */
 export interface NetworkDevice { id: string; name: string; createdAt: number; lastSeenAt: number | null }

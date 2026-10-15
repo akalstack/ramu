@@ -1,17 +1,28 @@
-import { Children, Fragment, isValidElement, type ComponentProps, type ReactNode, type Ref } from 'react'
-import { Platform, Pressable, ScrollView, FlatList, View, type FlatListProps, type StyleProp, type ViewStyle } from 'react-native'
+import { Children, Fragment, isValidElement, useCallback, useState, type ComponentProps, type ReactNode, type Ref } from 'react'
+import { Platform, Pressable, ScrollView, type NativeScrollEvent, type NativeSyntheticEvent, FlatList, View, type FlatListProps, type StyleProp, type ViewStyle, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Stack, useRouter } from 'expo-router'
 import { ScrollViewMarker } from 'react-native-screens/experimental'
+import { unstable_hasComponent } from 'react-native/Libraries/NativeComponent/NativeComponentRegistryUnstable'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { Glass, floatingChrome, GlassSurfaceProvider, BlurSurface } from './Glass'
 import { Button, IconButton, T, tap, type Icon } from './ui'
 
 const BAR = 44
+// ScrollViewMarker is a react-native-screens "gamma" view: its native side is only compiled when pods are
+// installed with RNS_GAMMA_ENABLED=1 (app.config.js sets that by default). In a build without it, creating the
+// view throws in Fabric's createNode, so ask the native registry first and fall back to the JS edge below.
+function hasNativeMarker() {
+  try { return Platform.OS === 'ios' && unstable_hasComponent('RNSScrollViewMarker') } catch { return false }
+}
+const scrollViewMarker = hasNativeMarker()
+/** True when UIKit draws the scroll-edge effect and large title itself; otherwise screens use `TopFade` and `LargeTitle`. */
+export const nativeScrollEdge = scrollViewMarker
 const scrollEdges = { top: 'hard', bottom: 'hidden', left: 'hidden', right: 'hidden' } as const
 function PrimaryScroll({ children }: { children: NonNullable<ReactNode> }) {
-  return Platform.OS === 'ios' ? <ScrollViewMarker style={{ flex: 1 }} scrollEdgeEffects={scrollEdges}>{children}</ScrollViewMarker> : <BlurSurface style={{ flex: 1 }}>{children}</BlurSurface>
+  if (Platform.OS === 'ios') return scrollViewMarker ? <ScrollViewMarker style={{ flex: 1 }} scrollEdgeEffects={scrollEdges}>{children}</ScrollViewMarker> : children
+  return <BlurSurface style={{ flex: 1 }}>{children}</BlurSurface>
 }
 export function PageScrollView({ ref, horizontal, ...props }: ComponentProps<typeof ScrollView> & { ref?: Ref<ScrollView> }) {
   const view = <ScrollView {...props} ref={ref} horizontal={horizontal} />
@@ -69,10 +80,13 @@ function ButtonGroup({ children }: { children: ReactNode }) {
  * after scrolling. The scroll view owns the automatic inset below the native bar.
  * Android/web use the shared header spacing below.
  */
-export function Header({ title, subtitle, left, right, back = true, modal }: { title?: ReactNode; subtitle?: ReactNode; left?: ReactNode; right?: ReactNode; back?: boolean; modal?: boolean }) {
+export function Header({ title, subtitle, left, right, back = true, modal, large, collapsed = true }: { title?: ReactNode; subtitle?: ReactNode; left?: ReactNode; right?: ReactNode; back?: boolean; modal?: boolean; large?: boolean; collapsed?: boolean }) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { c } = useTheme()
+  const { width } = useWindowDimensions()
+  // Centered between the back button and up to two trailing items (one glass capsule).
+  const titleWidth = Math.max(120, Math.min(220, width - 220))
   const close = () => router.canGoBack() ? router.back() : router.replace('/')
   if (Platform.OS === 'android') {
     return <Stack.Screen options={{
@@ -108,7 +122,7 @@ export function Header({ title, subtitle, left, right, back = true, modal }: { t
     return <>
       <Stack.Screen options={{ headerShown: true, headerTintColor: c.text, headerStyle: { backgroundColor: 'transparent' }, headerTransparent: true, headerShadowVisible: false, scrollEdgeEffects: { top: 'hard', bottom: 'hidden', left: 'hidden', right: 'hidden' }, headerBackVisible: back && !modal, headerBackButtonDisplayMode: 'minimal' }} />
       <Stack.Header transparent style={{ backgroundColor: 'transparent', color: c.text, shadowColor: 'transparent' }} />
-      {!back && typeof title !== 'string' ? <Stack.Title>{''}</Stack.Title> : !subtitle && typeof title === 'string' ? <Stack.Title style={{ color: c.text, fontSize: 17, fontWeight: '600' }}>{title}</Stack.Title> : <Stack.Title asChild><View style={{ alignItems: 'center', maxWidth: 220 }}><T size={17} weight="600" numberOfLines={1}>{title}</T>{typeof subtitle === 'string' ? <T size={12} tone="muted" numberOfLines={1}>{subtitle}</T> : subtitle}</View></Stack.Title>}
+      {!back && typeof title !== 'string' ? <Stack.Title>{''}</Stack.Title> : !subtitle && typeof title === 'string' ? <Stack.Title large={large && nativeScrollEdge} style={{ color: c.text, fontSize: 17, fontWeight: '600' }} largeStyle={{ color: c.text }}>{large && !nativeScrollEdge && !collapsed ? '' : title}</Stack.Title> : <Stack.Title asChild><View style={{ alignItems: 'center', maxWidth: titleWidth }}><T size={17} weight="600" numberOfLines={1}>{title}</T>{typeof subtitle === 'string' ? <T size={12} tone="muted" numberOfLines={1}>{subtitle}</T> : subtitle}</View></Stack.Title>}
 
       {(modal || left || (!back && typeof title !== 'string')) ? <Stack.Toolbar placement="left">{modal ? <Stack.Toolbar.Button icon="xmark" tintColor={c.text} accessibilityLabel="Close" onPress={close}>Close</Stack.Toolbar.Button> : <Stack.Toolbar.View hidesSharedBackground><View>{left ?? title}</View></Stack.Toolbar.View>}</Stack.Toolbar> : null}
       {right ? <Stack.Toolbar placement="right">{nativeItems(right)}</Stack.Toolbar> : null}
@@ -147,6 +161,23 @@ export function Screen({ children, bg, scrollable = true }: { children: ReactNod
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   return <GlassSurfaceProvider><View style={{ flex: 1, backgroundColor: c[bg ?? 'window'], paddingTop: Platform.OS === 'ios' && !scrollable ? insets.top + BAR : 0 }}>{children}</View></GlassSurfaceProvider>
+}
+
+/**
+ * Tracks whether a scroll view has moved under the transparent navigation bar. `past` is how far, in points,
+ * beyond the resting position (below the bar) before it counts, e.g. the height of a large title.
+ */
+export function useScrolledUnderBar(past = 8) {
+  const insets = useSafeAreaInsets()
+  const [scrolled, setScrolled] = useState(false)
+  const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => setScrolled(event.nativeEvent.contentOffset.y > past - (insets.top + BAR)), [past, insets.top])
+  return { scrolled, onScroll }
+}
+
+/** Large title for builds without the native one: sits left-aligned at the top of the content, then the bar title takes over. */
+export function LargeTitle({ children }: { children: string }) {
+  if (nativeScrollEdge || Platform.OS !== 'ios') return null
+  return <T size={34} weight="700" numberOfLines={1} style={{ paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: space.xs }}>{children}</T>
 }
 
 /** A floating action on glass (iOS 26 toolbar style); primary ones are tinted. Android falls back to the filled Button. */

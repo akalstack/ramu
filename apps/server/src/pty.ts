@@ -23,6 +23,8 @@ export class TerminalService {
   constructor(
     private readonly onData: (id: string, data: string, cursor: number) => void,
     private readonly onExit: (id: string, code: number) => void,
+    /** A shell was opened, ended or closed in this workspace; every device re-reads the list. */
+    private readonly onChange: (taskId: string) => void = () => {},
   ) {}
 
   open(taskId: string, repoId: string | null, cwd: string, cols = 80, rows = 24): TerminalInfo {
@@ -44,7 +46,9 @@ export class TerminalService {
     pty.onExit(({ exitCode }) => {
       entry.exited = true
       this.onExit(entry.id, exitCode)
+      this.onChange(entry.taskId)
     })
+    queueMicrotask(() => this.onChange(taskId))
     return info(entry)
   }
 
@@ -76,6 +80,7 @@ export class TerminalService {
     if (!e) return
     if (!e.exited) e.pty.kill()
     this.terms.delete(id)
+    this.onChange(e.taskId)
   }
 
   /** True while something other than the login shell itself holds the terminal's foreground. */

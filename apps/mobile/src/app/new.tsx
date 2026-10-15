@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
-import { KeyboardAvoidingView, Alert, Platform, Pressable, View } from 'react-native'
+import { Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Check, ChevronDown, Folder, FolderGit2, GitBranch, MessageCircle, Monitor } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { STANDALONE } from '../runtime/types'
 import { useT } from '../i18n'
-import { Header, Screen, useSheetKeyboardOffset, PageScrollView as ScrollView } from '../components/Screen'
+import { Header, Screen } from '../components/Screen'
+import { useKeyboardInset } from '../components/Keyboard'
+import { AnimatedMark } from '../components/AnimatedMark'
 import { Composer, type ModelChoice } from '../components/Composer'
 import { Row, Sheet, T, tap } from '../components/ui'
 
@@ -31,45 +33,55 @@ function TrayButton({ icon: I, label, onPress, prompt }: { icon: typeof Folder; 
 }
 
 export default function NewChat() {
-  const keyboardOffset = useSheetKeyboardOffset()
+  const keyboardInset = useKeyboardInset()
   const { c } = useTheme()
   const t = useT()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { projects, selected, computers, createChat, isOnline } = useStore()
+  const store = useStore()
+  const { projects, selected, computers, createChat, isOnline } = store
   const offline = !isOnline(selected)
   const list = projects.filter((p) => p.computerId === selected)
   // A chat runs in a project's folders, so the project is chosen first rather than defaulted.
-  const [projectId, setProjectId] = useState<string | null>(null)
+  const params = useLocalSearchParams<{ project?: string; quote?: string }>()
+  const [projectId, setProjectId] = useState<string | null>(params.project ?? null)
   const [mode, setMode] = useState<'current' | 'worktree'>('current')
   const [picker, setPicker] = useState<'project' | 'mode' | null>(null)
-  const [model, setModel] = useState<ModelChoice>({ provider: 'claude-code', model: '', effort: '' })
+  // Starts on the computer's default model step (Settings › Models), like the desktop; a pick here overrides it.
+  const [picked, setModel] = useState<ModelChoice | null>(null)
+  const preset = store.defaults[selected]
+  const model: ModelChoice = picked ?? (preset ? { provider: preset.provider, model: preset.model, effort: preset.effort ?? '', settings: { access: preset.access, autoFallback: preset.autoFallback, serviceTier: preset.serviceTier } } : { provider: 'claude-code', model: '', effort: '' })
   const project = list.find((p) => p.id === projectId)
   const pc = computers.find((x) => x.id === selected)
   useEffect(() => {
     // Let the sheet finish presenting before the picker slides up over it.
+    if (params.project) return
     const timer = setTimeout(() => setPicker('project'), 450)
     return () => clearTimeout(timer)
   }, [])
 
   return (
-    <Screen bg="canvas">
+    <Screen bg="canvas" scrollable={false}>
       <Header modal title={t.newChat} subtitle={pc?.name} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={keyboardOffset}>
-        <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', padding: space.l }} keyboardShouldPersistTaps="handled">
-          <View style={{ alignItems: 'center', gap: space.s, paddingBottom: space.xl }}>
-            <T size={font.hero} weight="700" style={{ letterSpacing: -0.6 }}>
-              What&apos;s next?
+      <View style={{ flex: 1, paddingBottom: keyboardInset }}>
+        {/* Nothing here scrolls: the hero simply centers in the space above the composer. */}
+        <View style={{ flex: 1, justifyContent: 'center', padding: space.l }}>
+          <View style={{ alignItems: 'center', gap: space.s }}>
+            {/* The desktop's start screen: the animated mark (tap it) over the same question. */}
+            <View style={{ marginBottom: space.s }}><AnimatedMark size={56} /></View>
+            <T size={font.hero} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
+              {project ? `What should we work on in ${project.name}?` : 'What should we work on?'}
             </T>
             <T tone="muted" style={{ textAlign: 'center' }}>
               {offline ? `${pc?.name} is offline. The chat waits in the outbox and starts when it reconnects.` : `Runs on ${pc?.name} with your host's providers.`}
             </T>
           </View>
-        </ScrollView>
+        </View>
         <View style={{ paddingBottom: Math.max(insets.bottom, space.s) }}>
           <Composer
             key={projectId ?? 'none'}
             running={false}
+            restore={params.quote ? { text: `${params.quote.trim().split('\n').map(line => `> ${line}`).join('\n')}\n\n`, n: 1 } : undefined}
             autoFocus={projectId !== null}
             header={
               <>
@@ -78,6 +90,8 @@ export default function NewChat() {
               </>
             }
             draftKey={`${selected}:new:${projectId ?? 'none'}`}
+            computerId={selected}
+            scope={projectId && projectId !== STANDALONE ? `project:${projectId.slice(projectId.indexOf(':') + 1)}` : undefined}
             offline={offline}
             placeholder={offline ? `What should the agent do? Sends when ${pc?.name ?? 'it'} is back` : t.newPlaceholder}
             model={model}
@@ -89,7 +103,7 @@ export default function NewChat() {
             }}
           />
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       <Sheet open={picker === 'project'} onClose={() => setPicker(null)} title="Project">
         {list.map((p) => (

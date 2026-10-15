@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs'
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, statSync, symlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import type { AgentProvider } from '@ramu/shared/types'
@@ -24,7 +24,28 @@ export function managedAntigravity(): { executable: string; harness: string; ver
 }
 export function providerAccountId(provider: AgentProvider) { return configuration[provider]?.accountId || 'default' }
 export function providerAccountClearedEnv(provider: AgentProvider): string[] {
-  return provider === 'codex' ? ['OPENAI_API_KEY', 'CODEX_API_KEY'] : provider === 'opencode' ? ['OPENCODE_DB', 'OPENCODE_AUTH_CONTENT', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'MISTRAL_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY', 'CEREBRAS_API_KEY', 'XAI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENCODE_API_KEY', 'OPENCODE_ZEN_API_KEY'] : []
+  return provider === 'claude-code' ? ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'] : provider === 'cursor' ? ['CURSOR_API_KEY', 'CURSOR_AUTH_TOKEN'] : provider === 'antigravity' ? ['GEMINI_API_KEY', 'GOOGLE_API_KEY'] : provider === 'codex' ? ['OPENAI_API_KEY', 'CODEX_API_KEY'] : provider === 'opencode' ? ['OPENCODE_DB', 'OPENCODE_AUTH_CONTENT', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'MISTRAL_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY', 'CEREBRAS_API_KEY', 'XAI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENCODE_API_KEY', 'OPENCODE_ZEN_API_KEY'] : []
+}
+/** Environment variables that point a CLI at one account's own config and credential directory. */
+export function providerAccountEnv(provider: AgentProvider, root: string): Record<string, string> {
+  switch (provider) {
+    case 'codex': return { CODEX_HOME: root }
+    case 'opencode': return { XDG_DATA_HOME: join(root, 'data'), XDG_CONFIG_HOME: join(root, 'config'), XDG_STATE_HOME: join(root, 'state') }
+    case 'claude-code': return { CLAUDE_CONFIG_DIR: root }
+    case 'cursor': return { CURSOR_CONFIG_DIR: root, XDG_CONFIG_HOME: join(root, 'config'), XDG_DATA_HOME: join(root, 'data'), AGENT_CLI_CREDENTIAL_STORE: 'file' }
+    case 'antigravity': return { GEMINI_HOME: root }
+  }
+}
+/** Creates the account's directories. A Claude account keeps your user-level settings, skills and agents by linking them in; credentials and history stay its own. */
+export function prepareProviderAccount(provider: AgentProvider, root: string) {
+  mkdirSync(root, { recursive: true, mode: 0o700 })
+  for (const value of Object.values(providerAccountEnv(provider, root))) if (value.startsWith(root) && value !== root) mkdirSync(value, { recursive: true, mode: 0o700 })
+  if (provider !== 'claude-code') return
+  const shared = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
+  for (const name of ['settings.json', 'CLAUDE.md', 'skills', 'agents', 'commands']) {
+    const source = join(shared, name), target = join(root, name)
+    if (existsSync(source) && !existsSync(target) && shared !== root) try { symlinkSync(source, target) } catch {}
+  }
 }
 export function providerAccountHome(provider: AgentProvider, id: string): string {
   if (!supportsProviderAccounts(provider) || !/^[a-zA-Z0-9_-]{1,80}$/.test(id) || id === 'default') throw new Error('Invalid provider account')
@@ -54,8 +75,8 @@ export function providerEnvironment(provider: AgentProvider, overrides = configu
     if (!overrides[provider]?.accounts?.some((account) => account.id === accountId)) throw new Error('The selected provider account no longer exists')
     const root = providerAccountHome(provider, accountId)
     // Credentials remain in the CLI's own store; Ramu stores only profile names/IDs.
-    if (provider === 'codex') env.CODEX_HOME = root
-    if (provider === 'opencode') { env.XDG_DATA_HOME = join(root, 'data'); env.XDG_CONFIG_HOME = join(root, 'config'); env.XDG_STATE_HOME = join(root, 'state') }
+    prepareProviderAccount(provider, root)
+    Object.assign(env, providerAccountEnv(provider, root))
     for (const key of providerAccountClearedEnv(provider)) delete env[key]
   }
   if (provider !== 'antigravity') return env

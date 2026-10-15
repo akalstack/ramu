@@ -4,6 +4,7 @@ import { Button } from '@/components/desktop-button'
 import { Columns2, Eye, Pencil, WrapText } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { MarkdownPreview } from '../MarkdownPreview'
+import { ChatFind } from '../ChatFind'
 import type { EditorConfigProps, RepositoryBinding, ViewDescriptor } from '@ramu/shared/types'
 import { useAppSettings } from '../AppSettings'
 import { invoke, ramu } from '../ipc'
@@ -201,6 +202,113 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
     const markdown = isMarkdown(view.path)
     const [mode, setMode] = useState<'edit' | 'split' | 'preview'>('edit')
     const [previewText, setPreviewText] = useState('')
+    // Find in the rendered preview (the editor's own find only sees source). In split mode the editor keeps Monaco's find;
+    // this one answers when focus is in the preview, or when the preview is all there is.
+    const previewPane = useRef<HTMLDivElement>(null)
+    const [findingPreview, setFindingPreview] = useState(false)
+    const [findRequest, setFindRequest] = useState(0)
+    useEffect(() => { if (markdown && mode === 'preview') previewPane.current?.focus({ preventScroll: true }) }, [markdown, mode])
+    useEffect(() => { if (mode === 'edit') setFindingPreview(false) }, [mode])
+    // Split mode: the editor drives the preview. The line at the top of the editor is matched to the headings around it in the
+    // source and the same headings in the preview, so a long document stays in step even with images and code blocks
+    // (a plain scroll percentage drifts). The preview never scrolls the editor back, which is what makes two-way sync jitter.
+    // Block sync, both ways. A selection in the editor is marked in the preview's rendered text; a selection in the preview selects
+    // the matching source in the editor (without taking focus). The rendered text drops markup, so the match is by words, and a
+    // guard keeps one side's update from echoing back.
+    useEffect(() => {
+        const editor = editorRef.current
+        if (!markdown || mode !== 'split' || !editor) return
+        const registry = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights
+        const pane = () => previewPane.current
+        const words = (text: string) => text.toLowerCase().replace(/[`*_~>#|\\[\]()-]/g, ' ').split(/\s+/).filter(Boolean)
+        let echo = false
+        const mark = () => {
+            const el = pane(), model = editor.getModel(), selection = editor.getSelection()
+            registry?.delete('md-sync')
+            if (!el || !model || !selection || selection.isEmpty() || !registry || !window.Highlight) return
+            const wanted = words(model.getValueInRange(selection)).slice(0, 400)
+            if (wanted.length < 1) return
+            // Walk the preview's text nodes as one word stream and take the span where the selected words occur in order.
+            const nodes: { node: Text; start: number; end: number; word: string }[] = []
+            const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement?.closest('.chat-find-bar, script, style') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT })
+            for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
+                for (const m of n.data.matchAll(/\S+/g)) nodes.push({ node: n, start: m.index!, end: m.index! + m[0].length, word: m[0].toLowerCase().replace(/[`*_~>#|\\[\]()-]/g, '') })
+            }
+            const clean = nodes.filter((entry) => entry.word)
+            const line = editor.getVisibleRanges()[0]?.startLineNumber ?? 1
+            const total = Math.max(1, model.getLineCount())
+            // Several places may read the same words; take the one nearest the same relative position in the document.
+            let best = -1, bestGap = Infinity
+            const expected = ((selection.startLineNumber || line) - 1) / total
+            for (let i = 0; i + wanted.length <= clean.length; i++) {
+                if (clean[i]!.word !== wanted[0] || clean[i + wanted.length - 1]!.word !== wanted[wanted.length - 1]) continue
+                if (!wanted.every((word, k) => clean[i + k]!.word === word.replace(/[`*_~>#|\\[\]()-]/g, ''))) continue
+                const gap = Math.abs(i / Math.max(1, clean.length) - expected)
+                if (gap < bestGap) { best = i; bestGap = gap }
+            }
+            if (best < 0) return
+            const first = clean[best]!, last = clean[best + wanted.length - 1]!
+            const range = new Range()
+            range.setStart(first.node, first.start); range.setEnd(last.node, last.end)
+            registry.set('md-sync', new window.Highlight(range))
+        }
+        const select = () => {
+            const el = pane(), model = editor.getModel(), selection = document.getSelection()
+            if (!el || !model || !selection || selection.isCollapsed || !selection.rangeCount || !el.contains(selection.getRangeAt(0).commonAncestorContainer)) return
+            const all = words(selection.toString())
+            if (!all.length) return
+            const head = all.slice(0, 4), tail = all.slice(-4)
+            const separator = '[\\s`*_~>#|\\[\\]()-]+'
+            const pattern = (list: string[]) => list.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join(separator)
+            const visible = editor.getVisibleRanges()[0]?.startLineNumber ?? 1
+            const nearest = (matches: { range: import('monaco-editor').IRange }[]) => matches.sort((x, y) => Math.abs(x.range.startLineNumber - visible) - Math.abs(y.range.startLineNumber - visible))[0]
+            const start = nearest(model.findMatches(pattern(head), false, true, false, null, false, 200))
+            if (!start) return
+            const ends = model.findMatches(pattern(tail), false, true, false, null, false, 400).filter((m) => m.range.startLineNumber > start.range.startLineNumber || (m.range.startLineNumber === start.range.startLineNumber && m.range.startColumn >= start.range.startColumn))
+            const end = (all.length <= 4 ? start : ends.sort((x, y) => x.range.startLineNumber - y.range.startLineNumber)[0]) ?? start
+            echo = true
+            editor.setSelection({ startLineNumber: start.range.startLineNumber, startColumn: start.range.startColumn, endLineNumber: end.range.endLineNumber, endColumn: end.range.endColumn })
+            editor.revealRangeInCenterIfOutsideViewport(editor.getSelection()!)
+            window.setTimeout(() => { echo = false }, 0)
+        }
+        const cursor = editor.onDidChangeCursorSelection(() => { if (!echo) mark(); else registry?.delete('md-sync') })
+        document.addEventListener('selectionchange', select)
+        mark()
+        return () => { cursor.dispose(); document.removeEventListener('selectionchange', select); registry?.delete('md-sync') }
+    }, [markdown, mode, loadedTick, previewText])
+    useEffect(() => {
+        const editor = editorRef.current
+        if (!markdown || mode !== 'split' || !editor) return
+        const sync = () => {
+            const pane = previewPane.current, model = editor.getModel()
+            if (!pane || !model) return
+            const headings = [...pane.querySelectorAll<HTMLElement>('.md-preview h1, .md-preview h2, .md-preview h3, .md-preview h4, .md-preview h5, .md-preview h6')]
+            const lines: number[] = []
+            let fence = false
+            for (let n = 1; n <= model.getLineCount(); n++) {
+                const text = model.getLineContent(n)
+                if (/^\s*(```|~~~)/.test(text)) { fence = !fence; continue }
+                if (!fence && /^ {0,3}#{1,6}\s/.test(text)) lines.push(n)
+            }
+            const top = editor.getVisibleRanges()[0]?.startLineNumber ?? 1
+            const total = model.getLineCount()
+            const paneTop = pane.getBoundingClientRect().top - pane.scrollTop
+            const offsetOf = (index: number) => headings[index]!.getBoundingClientRect().top - paneTop - 16
+            // Only when both sides saw the same headings; otherwise fall back to the proportional position.
+            let target: number
+            if (lines.length && lines.length === headings.length) {
+                let before = -1
+                for (let i = 0; i < lines.length; i++) if (lines[i]! <= top) before = i
+                const fromLine = before < 0 ? 1 : lines[before]!, toLine = before + 1 < lines.length ? lines[before + 1]! : total + 1
+                const fromY = before < 0 ? 0 : offsetOf(before), toY = before + 1 < lines.length ? offsetOf(before + 1) : pane.scrollHeight - pane.clientHeight
+                target = fromY + (toY - fromY) * Math.min(1, Math.max(0, (top - fromLine) / Math.max(1, toLine - fromLine)))
+            } else target = (top - 1) / Math.max(1, total - 1) * (pane.scrollHeight - pane.clientHeight)
+            pane.scrollTop = target
+        }
+        const subscription = editor.onDidScrollChange((event) => { if (event.scrollTopChanged) sync() })
+        sync()
+        return () => subscription.dispose()
+    }, [markdown, mode, loadedTick, previewText])
     useEffect(() => {
         if (!markdown || mode === 'edit') return
         const model = editorRef.current?.getModel()
@@ -275,7 +383,8 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
             <div className="file-body relative [&_>_.editor-host]:[flex:1_1_0] [&_>_.editor-host]:min-w-0 flex-1 min-h-0 min-w-0 flex" style={{ display: comparing ? 'none' : 'flex' }}>
                 {loading && <ContentSkeleton variant="editor" rows={12} className="absolute inset-0 z-10 bg-canvas" />}
                 <div ref={host} className="editor-host flex-1 min-h-0" style={{ display: markdown && mode === 'preview' ? 'none' : 'block' }} />
-        {markdown && mode !== 'edit' && <div className="md-preview-pane [flex:1_1_0] min-w-0 overflow-auto [border-left:1px_solid_var(--line)] p-[16px_24px_32px]"><div className="md-preview [&_h1]:text-[length:1.6em] [&_h1]:m-[0_0_12px] [&_h1]:pb-1.5 [&_h1]:[border-bottom:1px_solid_var(--line)] [&_h2]:text-[length:1.3em] [&_h2]:m-[20px_0_8px] [&_h2]:pb-1 [&_h2]:[border-bottom:1px_solid_var(--line)] [&_h3]:text-[length:1.1em] [&_img]:max-w-full [&_.md-frontmatter]:mb-4 [&_.md-frontmatter]:p-[8px_12px] [&_.md-frontmatter]:[border:1px_solid_transparent] [&_.md-frontmatter]:rounded-(--radius-s) [&_.md-frontmatter]:text-soft [&_.md-frontmatter]:bg-fill [&_.md-frontmatter_summary]:cursor-pointer [&_.md-frontmatter_summary]:text-control [&_.md-frontmatter_pre]:mb-0 [&_blockquote]:m-[8px_0] [&_blockquote]:p-[2px_12px] [&_blockquote]:[border-left:3px_solid_var(--line-strong)] [&_blockquote]:text-soft [&_hr]:[border:0] [&_hr]:[border-top:1px_solid_var(--line)] [&_hr]:m-[16px_0] max-w-[820px] m-[0_auto] text-chat leading-[1.65] select-text msg [&.user]:self-end [&.user]:whitespace-pre-wrap [&.user]:max-w-[78%] [&.user]:mt-[18px] [&.user]:w-[fit-content] [&.user]:[background:var(--bubble)] [&.user]:[border:0] [&.user]:[box-shadow:none] [&.user]:text-chat [&.user]:leading-[1.55] [&.user]:p-[10px_16px_11px] [&.user]:rounded-(--radius-l) [&.user]:tracking-[-0.006em] [&.user]:[color:var(--text-body)] [&.assistant]:relative [&.assistant]:tracking-[-0.008em] [&.assistant]:text-chat [&.assistant]:leading-[1.65] [&.assistant]:[color:var(--text-body)] [&.assistant_>_:first-child]:mt-0 [&.assistant_>_:last-child]:mb-0 [&.assistant_p]:m-[0_0_10px] [&.assistant_ul]:pl-5 [&.assistant_ul]:m-[0_0_10px] [&.assistant_ol]:pl-5 [&.assistant_ol]:m-[0_0_10px] [&.assistant_code]:[background:rgba(255,_255,_255,_0.075)] [&.assistant_code]:[border:0] [&.assistant_code]:rounded-(--radius-xs) [&.assistant_code]:p-[0_5px] [&.assistant_code]:[color:var(--text-body)] [&.assistant_code]:text-[length:0.88em] [&.assistant_pre]:overflow-x-auto [&.assistant_pre]:[white-space:pre] [&.assistant_pre]:[background:var(--code-bg)] [&.assistant_pre]:[border:1px_solid_transparent] [&.assistant_pre]:rounded-(--radius-m) [&.assistant_pre]:p-[12px_14px] [&.assistant_pre]:m-[4px_0_12px] [&.assistant_pre]:leading-[1.6] [&.assistant_pre]:[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.02)] [&.assistant_pre]:text-[length:0.88em] [&.assistant_pre_code]:bg-transparent [&.assistant_pre_code]:p-0 [&.assistant_pre_code]:[border:none] [&.assistant_pre_code]:text-[length:inherit] [&.assistant_pre_code]:[color:#dcdce2] [&.assistant_a]:text-brand [&.assistant_a]:[text-decoration:none] [&.assistant_table]:[border-collapse:collapse] [&.assistant_table]:m-[6px_0] [&.assistant_th]:[border:1px_solid_var(--line-strong)] [&.assistant_th]:p-[3px_8px] [&.assistant_td]:[border:1px_solid_var(--line-strong)] [&.assistant_td]:p-[3px_8px] [&.meta]:text-caption [&.meta]:text-muted-foreground [&.error]:text-bad [&.assistant:hover_.msg-actions]:opacity-100 [&.assistant.generating]:[animation:arrive_100ms_var(--ease)] [&.user_.muted.small.block]:mt-0.5 [&.user_.muted.small.block]:[color:rgba(255,_255,_255,_0.7)] [&.assistant_li]:m-[3px_0] [&.assistant_li::marker]:text-muted-foreground [&.assistant_strong]:font-semibold [&.assistant_strong]:[color:#fff] [&.assistant_h1]:text-[length:1em] [&.assistant_h1]:font-semibold [&.assistant_h1]:m-[16px_0_6px] [&.assistant_h1]:tracking-[-0.012em] [&.assistant_h2]:text-[length:1em] [&.assistant_h2]:font-semibold [&.assistant_h2]:m-[16px_0_6px] [&.assistant_h2]:tracking-[-0.012em] [&.assistant_h3]:text-[length:1em] [&.assistant_h3]:font-semibold [&.assistant_h3]:m-[16px_0_6px] [&.assistant_h3]:tracking-[-0.012em] [&.assistant_a:hover]:[text-decoration:underline] [.msg-wrap.user_&.user]:max-w-full [.msg-wrap.user_&.user]:mt-3.5 [&.assistant_.msg-actions]:mt-2 [&.assistant_:is(h1,_h2,_h3,_h4,_strong)]:text-foreground break-words assistant"><MarkdownPreview text={previewText} taskId={taskId} repoId={binding.repoId} path={view.path} onOpenFile={(path) => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path })} /></div></div>}
+        {markdown && mode !== 'edit' && <div ref={previewPane} tabIndex={-1} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'f') { event.preventDefault(); event.stopPropagation(); setFindingPreview(true); setFindRequest((n) => n + 1) } }} className="relative outline-none md-preview-pane [flex:1_1_0] min-w-0 overflow-auto [border-left:1px_solid_var(--line)] p-[16px_24px_32px]"><div className="md-preview [&_h1]:text-[length:1.6em] [&_h1]:m-[0_0_12px] [&_h1]:pb-1.5 [&_h1]:[border-bottom:1px_solid_var(--line)] [&_h2]:text-[length:1.3em] [&_h2]:m-[20px_0_8px] [&_h2]:pb-1 [&_h2]:[border-bottom:1px_solid_var(--line)] [&_h3]:text-[length:1.1em] [&_img]:max-w-full [&_.md-frontmatter]:mb-4 [&_.md-frontmatter]:p-[8px_12px] [&_.md-frontmatter]:[border:1px_solid_transparent] [&_.md-frontmatter]:rounded-(--radius-s) [&_.md-frontmatter]:text-soft [&_.md-frontmatter]:bg-fill [&_.md-frontmatter_summary]:cursor-pointer [&_.md-frontmatter_summary]:text-control [&_.md-frontmatter_pre]:mb-0 [&_blockquote]:m-[8px_0] [&_blockquote]:p-[2px_12px] [&_blockquote]:[border-left:3px_solid_var(--line-strong)] [&_blockquote]:text-soft [&_hr]:[border:0] [&_hr]:[border-top:1px_solid_var(--line)] [&_hr]:m-[16px_0] max-w-[820px] m-[0_auto] text-chat leading-[1.65] select-text msg [&.user]:self-end [&.user]:whitespace-pre-wrap [&.user]:max-w-[78%] [&.user]:mt-[18px] [&.user]:w-[fit-content] [&.user]:[background:var(--bubble)] [&.user]:[border:0] [&.user]:[box-shadow:none] [&.user]:text-chat [&.user]:leading-[1.55] [&.user]:p-[10px_16px_11px] [&.user]:rounded-(--radius-l) [&.user]:tracking-[-0.006em] [&.user]:[color:var(--text-body)] [&.assistant]:relative [&.assistant]:tracking-[-0.008em] [&.assistant]:text-chat [&.assistant]:leading-[1.65] [&.assistant]:[color:var(--text-body)] [&.assistant_>_:first-child]:mt-0 [&.assistant_>_:last-child]:mb-0 [&.assistant_p]:m-[0_0_10px] [&.assistant_ul]:pl-5 [&.assistant_ul]:m-[0_0_10px] [&.assistant_ol]:pl-5 [&.assistant_ol]:m-[0_0_10px] [&.assistant_code]:[background:rgba(255,_255,_255,_0.075)] [&.assistant_code]:[border:0] [&.assistant_code]:rounded-(--radius-xs) [&.assistant_code]:p-[0_5px] [&.assistant_code]:[color:var(--text-body)] [&.assistant_code]:text-[length:0.88em] [&.assistant_pre]:overflow-x-auto [&.assistant_pre]:[white-space:pre] [&.assistant_pre]:[background:var(--code-bg)] [&.assistant_pre]:[border:1px_solid_transparent] [&.assistant_pre]:rounded-(--radius-m) [&.assistant_pre]:p-[12px_14px] [&.assistant_pre]:m-[4px_0_12px] [&.assistant_pre]:leading-[1.6] [&.assistant_pre]:[box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.02)] [&.assistant_pre]:text-[length:0.88em] [&.assistant_pre_code]:bg-transparent [&.assistant_pre_code]:p-0 [&.assistant_pre_code]:[border:none] [&.assistant_pre_code]:text-[length:inherit] [&.assistant_pre_code]:[color:#dcdce2] [&.assistant_a]:text-brand [&.assistant_a]:[text-decoration:none] [&.assistant_table]:[border-collapse:collapse] [&.assistant_table]:m-[6px_0] [&.assistant_th]:[border:1px_solid_var(--line-strong)] [&.assistant_th]:p-[3px_8px] [&.assistant_td]:[border:1px_solid_var(--line-strong)] [&.assistant_td]:p-[3px_8px] [&.meta]:text-caption [&.meta]:text-muted-foreground [&.error]:text-bad [&.assistant:hover_.msg-actions]:opacity-100 [&.assistant.generating]:[animation:arrive_100ms_var(--ease)] [&.user_.muted.small.block]:mt-0.5 [&.user_.muted.small.block]:[color:rgba(255,_255,_255,_0.7)] [&.assistant_li]:m-[3px_0] [&.assistant_li::marker]:text-muted-foreground [&.assistant_strong]:font-semibold [&.assistant_strong]:[color:#fff] [&.assistant_h1]:text-[length:1em] [&.assistant_h1]:font-semibold [&.assistant_h1]:m-[16px_0_6px] [&.assistant_h1]:tracking-[-0.012em] [&.assistant_h2]:text-[length:1em] [&.assistant_h2]:font-semibold [&.assistant_h2]:m-[16px_0_6px] [&.assistant_h2]:tracking-[-0.012em] [&.assistant_h3]:text-[length:1em] [&.assistant_h3]:font-semibold [&.assistant_h3]:m-[16px_0_6px] [&.assistant_h3]:tracking-[-0.012em] [&.assistant_a:hover]:[text-decoration:underline] [.msg-wrap.user_&.user]:max-w-full [.msg-wrap.user_&.user]:mt-3.5 [&.assistant_.msg-actions]:mt-2 [&.assistant_:is(h1,_h2,_h3,_h4,_strong)]:text-foreground break-words assistant"><MarkdownPreview text={previewText} taskId={taskId} repoId={binding.repoId} path={view.path} onOpenFile={(path) => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path })} /></div></div>}
+        {markdown && mode !== 'edit' && findingPreview && <ChatFind root={previewPane} focusRequest={findRequest} onClose={() => { setFindingPreview(false); previewPane.current?.focus({ preventScroll: true }) }} />}
             </div>
         </div>
     )

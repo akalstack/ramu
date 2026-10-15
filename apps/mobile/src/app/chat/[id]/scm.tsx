@@ -20,6 +20,7 @@ import {
   Minus,
   Plus,
   RefreshCcw,
+  Search,
   Sparkles,
   Trash2,
   Undo2,
@@ -32,9 +33,12 @@ interface GitCommitInfo { oid: string; subject: string; author: string; at: numb
 type GitStashInfo = GitStash
 import { draftCommit } from '../../../runtime/gitQuick'
 import { ago } from '../../../i18n'
+import * as Clipboard from 'expo-clipboard'
+import { useOpenFile } from '../../../runtime/openFile'
+import { Disclosure } from '../../../components/Motion'
 import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { Glass, floatingChrome } from '../../../components/Glass'
-import { Card, Divider, IconButton, Pill, Row, Sheet, T, tap, type Icon } from '../../../components/ui'
+import { Card, Divider, IconButton, Pill, Row, Segmented, Sheet, T, tap, type Icon } from '../../../components/ui'
 
 // Mirrors the desktop Source Control panel (apps/web/src/sidebar/ScmPanel.tsx) per repository:
 // branch picker + sync, commit box with a Commit & Push split button, Staged / Changes groups,
@@ -64,18 +68,18 @@ function StatusLetter({ status }: { status: ChangedFile['status'] }) {
   )
 }
 
-function FileRow({ file, onStage, onDiscard }: { file: FileState; onStage: () => void; onDiscard?: () => void }) {
+function FileRow({ file, onOpen, onStage, onDiscard }: { file: FileState; onOpen: () => void; onStage: () => void; onDiscard?: () => void }) {
   const dir = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/') + 1) : ''
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingLeft: space.m, paddingRight: 4, minHeight: 46 }}>
-      <View style={{ flex: 1 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Open ${file.staged ? 'staged' : 'unstaged'} changes in ${file.path}`} onPress={() => { tap(); onOpen() }} style={{ flex: 1, justifyContent: 'center', alignSelf: 'stretch' }}>
         <T size={font.body - 1} weight="500" numberOfLines={1}>
           {file.path.slice(dir.length)}
         </T>
         <T size={font.caption} tone="muted" numberOfLines={1}>
           {dir}
         </T>
-      </View>
+      </Pressable>
       {onDiscard ? <IconButton icon={Undo2} label="Discard changes" size={34} tone="muted" onPress={onDiscard} /> : null}
       <IconButton icon={file.staged ? Minus : Plus} label={file.staged ? 'Unstage changes' : 'Stage changes'} size={34} tone="soft" onPress={onStage} />
       <View style={{ width: 28, alignItems: 'center' }}>
@@ -85,16 +89,18 @@ function FileRow({ file, onStage, onDiscard }: { file: FileState; onStage: () =>
   )
 }
 
-function Group({ title, count, action, children }: { title: string; count: number; action?: { icon: Icon; label: string; onPress: () => void }; children: React.ReactNode }) {
+function Group({ title, count, open = true, onToggle, action, children }: { title: string; count: number; open?: boolean; onToggle?: () => void; action?: { icon: Icon; label: string; onPress: () => void }; children: React.ReactNode }) {
+  const { c } = useTheme()
   return (
     <View style={{ gap: space.xs }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, minHeight: 32 }}>
-        <T size={font.control} weight="600" tone="muted" style={{ flex: 1 }}>
-          {title} <T size={font.control} tone="placeholder">{count}</T>
-        </T>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => { tap(); onToggle?.() }} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' }}>
+          <Disclosure open={open} size={14} color={c.muted} />
+          <T size={font.control} weight="600" tone="muted">{title} <T size={font.control} tone="placeholder">{count}</T></T>
+        </Pressable>
         {action ? <IconButton icon={action.icon} label={action.label} size={30} tone="muted" onPress={action.onPress} /> : null}
       </View>
-      {count ? <Card>{children}</Card> : null}
+      {count && open ? <Card>{children}</Card> : null}
     </View>
   )
 }
@@ -117,12 +123,15 @@ export default function SourceControl() {
   const [behind, setBehind] = useState(0)
   const [published, setPublished] = useState(false)
   const [head, setHead] = useState<string | null>(null)
+  const openFile = useOpenFile(chat)
   const [commits, setCommits] = useState<GitCommitInfo[]>([])
   const [stashes, setStashes] = useState<GitStashInfo[]>([])
   const [message, setMessage] = useState('')
   const [draft, setDraft] = useState<CommitDraft | null>(null)
   const [action, setAction] = useState<CommitAction>('commit')
-  const [tab, setTab] = useState<'commits' | 'stashes'>('commits')
+  const [tab, setTab] = useState<'changes' | 'commits' | 'stashes'>('changes')
+  const [filter, setFilter] = useState('')
+  const [folded, setFolded] = useState<{ staged?: boolean; changes?: boolean }>({})
   const [sheet, setSheet] = useState<'repo' | 'branch' | 'action' | 'menu' | null>(null)
   const [busy, setBusy] = useState(false)
   const running = useRef(false)
@@ -146,6 +155,9 @@ export default function SourceControl() {
   const mine = files.filter((f) => f.repo === repo)
   const staged = mine.filter((f) => f.staged)
   const unstaged = mine.filter((f) => !f.staged)
+  const needle = filter.trim().toLowerCase()
+  const shownStaged = needle ? staged.filter(f => f.path.toLowerCase().includes(needle)) : staged
+  const shownUnstaged = needle ? unstaged.filter(f => f.path.toLowerCase().includes(needle)) : unstaged
   const say = (text: string) => { setToast(text); if (toastTimer.current) clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(null), 5000) }
   const run = async (fn: () => Promise<unknown>, done: string) => {
     if (running.current) return
@@ -211,8 +223,8 @@ export default function SourceControl() {
         subtitle={project ? `${project.name} · ${chat?.mode === 'worktree' ? 'worktree' : 'current checkout'}` : undefined}
         right={<HeaderButton icon={Ellipsis} label="Source control actions" onPress={() => setSheet('menu')} />}
       />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l, paddingBottom: insets.bottom + 90 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l, paddingBottom: space.xl }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           {!binding ? <T tone="muted">No repository is attached to this chat.</T> : binding.notGit ? <Row onPress={() => void run(() => store.invoke(chat!.computerId, 'git.init', chat!.taskId, binding.repoId), 'Initialized repository')}><T>Initialize Git in {binding.cwd}</T></Row> : null}
           {/* One picker instead of tabs: a workspace project can hold any number of repositories. */}
           {repos.length > 1 ? (
@@ -250,74 +262,38 @@ export default function SourceControl() {
             </Pressable>
           </View>
 
-          {/* Commit box: an empty message drafts one with AI, as on desktop. */}
-          <View style={{ gap: space.s }}>
-            <View style={{ backgroundColor: c.raised2, borderRadius: radius.m }}>
-              <TextInput
-                value={message}
-                onChangeText={setMessage}
-                multiline
-                placeholder="Message (empty drafts one with AI)"
-                placeholderTextColor={c.placeholder}
-                style={{ color: c.text, fontSize: font.body, minHeight: 64, maxHeight: 140, padding: space.m, paddingRight: 44 }}
-              />
-              <View style={{ position: 'absolute', right: 4, top: 4 }}>
-                <IconButton icon={Sparkles} label="Draft a commit message from staged changes" size={34} tone="accent" onPress={() => void run(generate, 'Drafted commit message')} />
-              </View>
-            </View>
-            <View style={{ flexDirection: 'row', height: 44, borderRadius: radius.m, overflow: 'hidden', opacity: busy ? 0.6 : 1 }}>
-              <Pressable disabled={busy} onPress={() => { tap(); commit() }} style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s, backgroundColor: c.primary, opacity: pressed ? 0.85 : 1 })}>
-                <Check size={16} color={c.primaryInk} strokeWidth={2.2} />
-                <T weight="600" style={{ color: c.primaryInk }}>
-                  {busy ? 'Working…' : label}
-                </T>
-              </Pressable>
-              <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.18)' }} />
-              <Pressable accessibilityLabel="Commit options" onPress={() => { tap(); setSheet('action') }} style={({ pressed }) => ({ width: 46, alignItems: 'center', justifyContent: 'center', backgroundColor: c.primary, opacity: pressed ? 0.85 : 1 })}>
-                <ChevronDown size={17} color={c.primaryInk} />
-              </Pressable>
-            </View>
-            <T size={font.caption} tone="muted" style={{ paddingHorizontal: 2 }}>
-              {staged.length ? `Commits ${staged.length} staged file${staged.length === 1 ? '' : 's'}.` : unstaged.length ? `Nothing staged: stages and commits all ${unstaged.length} change${unstaged.length === 1 ? '' : 's'}.` : 'No changes in this checkout.'}
-            </T>
-          </View>
-
-          <Group title="Staged Changes" count={staged.length} action={staged.length ? { icon: Minus, label: 'Unstage all changes', onPress: () => setStaged(staged.map((f) => f.path), false) } : undefined}>
-            {staged.map((f, i) => (
+          <Segmented value={tab} onChange={setTab} options={[{ key: 'changes', label: 'Changes', count: mine.length }, { key: 'commits', label: 'Commits', count: commits.length }, { key: 'stashes', label: 'Stashes', count: stashes.length }]} />
+          {tab === 'changes' ? (
+            <>
+              {mine.length > 8 ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, height: 40, paddingHorizontal: space.m, borderRadius: radius.m, backgroundColor: c.raised2 }}>
+                  <Search size={15} color={c.muted} />
+                  <TextInput value={filter} onChangeText={setFilter} placeholder={`Filter ${mine.length} files`} placeholderTextColor={c.placeholder} autoCapitalize="none" autoCorrect={false} clearButtonMode="while-editing" style={{ flex: 1, color: c.text, fontSize: font.body }} />
+                </View>
+              ) : null}
+          <Group title="Staged Changes" count={shownStaged.length} open={!folded.staged} onToggle={() => setFolded(f => ({ ...f, staged: !f.staged }))} action={staged.length ? { icon: Minus, label: 'Unstage all changes', onPress: () => setStaged(staged.map((f) => f.path), false) } : undefined}>
+            {shownStaged.map((f, i) => (
               <View key={f.path}>
                 {i ? <Divider inset={space.m} /> : null}
-                <FileRow file={f} onStage={() => setStaged([f.path], false)} />
+                <FileRow file={f} onOpen={() => openFile.open(binding!.repoId, f.path, { mode: 'staged' })} onStage={() => setStaged([f.path], false)} />
               </View>
             ))}
           </Group>
 
-          <Group title="Changes" count={unstaged.length} action={unstaged.length ? { icon: Plus, label: 'Stage all changes', onPress: () => setStaged(unstaged.map((f) => f.path), true) } : undefined}>
-            {unstaged.map((f, i) => (
+          <Group title="Changes" count={shownUnstaged.length} open={!folded.changes} onToggle={() => setFolded(f => ({ ...f, changes: !f.changes }))} action={unstaged.length ? { icon: Plus, label: 'Stage all changes', onPress: () => setStaged(unstaged.map((f) => f.path), true) } : undefined}>
+            {shownUnstaged.map((f, i) => (
               <View key={f.path}>
                 {i ? <Divider inset={space.m} /> : null}
-                <FileRow file={f} onStage={() => setStaged([f.path], true)} onDiscard={() => discard([f])} />
+                <FileRow file={f} onOpen={() => openFile.open(binding!.repoId, f.path, { mode: 'changes' })} onStage={() => setStaged([f.path], true)} onDiscard={() => discard([f])} />
               </View>
             ))}
           </Group>
-
-          {/* Git section: Commits and Stashes tabs. */}
+              {needle && !shownStaged.length && !shownUnstaged.length ? <T tone="muted">No changed file matches.</T> : null}
+              {!mine.length ? <T tone="muted">No changes in this checkout.</T> : null}
+            </>
+          ) : null}
+          {tab !== 'changes' ? (
           <View style={{ gap: space.s }}>
-            <View style={{ flexDirection: 'row', gap: space.xs }}>
-              {(
-                [
-                  ['commits', 'Commits', GitCommitHorizontal, commits.length],
-                  ['stashes', 'Stashes', Archive, stashes.length],
-                ] as const
-              ).map(([key, name, I, n]) => (
-                <Pressable key={key} onPress={() => { tap(); setTab(key) }} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 32, paddingHorizontal: space.m, borderRadius: radius.full, backgroundColor: tab === key ? c.raised : 'transparent' }}>
-                  <I size={14} color={tab === key ? c.text : c.muted} />
-                  <T size={font.control} weight={tab === key ? '600' : '400'} tone={tab === key ? 'text' : 'muted'}>
-                    {name}
-                  </T>
-                  {key === 'stashes' && n ? <T size={font.caption} tone="muted">{n}</T> : null}
-                </Pressable>
-              ))}
-            </View>
             <Card>
               {tab === 'commits'
                 ? commits.map((x, i) => (
@@ -333,9 +309,10 @@ export default function SourceControl() {
                             {x.author} · {ago(x.at)} {x.pushed ? '' : '· not pushed'}
                           </T>
                         </View>
-                        <T size={font.caption} mono tone="muted">
-                          {x.oid}
+                        <T size={font.caption} mono tone="muted" numberOfLines={1} style={{ flexShrink: 0 }}>
+                          {x.oid.slice(0, 7)}
                         </T>
+                        <IconButton icon={Copy} label="Copy commit message" size={32} tone="muted" onPress={() => { void Clipboard.setStringAsync(x.subject); setToast('Copied commit message') }} />
                       </View>
                     </View>
                   ))
@@ -365,7 +342,43 @@ export default function SourceControl() {
                   )}
             </Card>
           </View>
+          ) : null}
         </ScrollView>
+      {tab === 'changes' && binding && !binding.notGit ? (
+        <View style={{ backgroundColor: c.canvas, borderTopWidth: 0.5, borderTopColor: c.lineStrong, paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: Math.max(insets.bottom, space.s) }}>
+                    <View style={{ gap: space.s }}>
+            <View style={{ backgroundColor: c.raised2, borderRadius: radius.m }}>
+              <TextInput
+                value={message}
+                onChangeText={setMessage}
+                multiline
+                placeholder="Message (empty drafts one with AI)"
+                placeholderTextColor={c.placeholder}
+                style={{ color: c.text, fontSize: font.body, minHeight: 48, maxHeight: 140, padding: space.m, paddingRight: 44 }}
+              />
+              <View style={{ position: 'absolute', right: 4, top: 4 }}>
+                <IconButton icon={Sparkles} label="Draft a commit message from staged changes" size={34} tone="accent" onPress={() => void run(generate, 'Drafted commit message')} />
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', height: 44, borderRadius: radius.m, overflow: 'hidden', opacity: busy ? 0.6 : 1 }}>
+              <Pressable disabled={busy} onPress={() => { tap(); commit() }} style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s, backgroundColor: c.primary, opacity: pressed ? 0.85 : 1 })}>
+                <Check size={16} color={c.primaryInk} strokeWidth={2.2} />
+                <T weight="600" style={{ color: c.primaryInk }}>
+                  {busy ? 'Working…' : label}
+                </T>
+              </Pressable>
+              <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.18)' }} />
+              <Pressable accessibilityLabel="Commit options" onPress={() => { tap(); setSheet('action') }} style={({ pressed }) => ({ width: 46, alignItems: 'center', justifyContent: 'center', backgroundColor: c.primary, opacity: pressed ? 0.85 : 1 })}>
+                <ChevronDown size={17} color={c.primaryInk} />
+              </Pressable>
+            </View>
+            <T size={font.caption} tone="muted" style={{ paddingHorizontal: 2 }}>
+              {staged.length ? `Commits ${staged.length} staged file${staged.length === 1 ? '' : 's'}.` : unstaged.length ? `Nothing staged: stages and commits all ${unstaged.length} change${unstaged.length === 1 ? '' : 's'}.` : 'No changes in this checkout.'}
+            </T>
+          </View>
+
+        </View>
+      ) : null}
       </KeyboardAvoidingView>
 
       {toast ? (

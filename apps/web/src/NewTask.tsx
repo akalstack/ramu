@@ -1,7 +1,7 @@
 import { t, useLanguage } from './i18n'
 import { clipText } from '@ramu/shared/text'
 import { useModelSets } from './ModelSets'
-import { FolderClosed, GitBranch, Laptop, Settings } from 'lucide-react'
+import { FolderClosed, GitBranch, Laptop, Monitor, Network, Settings } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_AGENT_SETTINGS, NO_PROJECT, type FileContext, type Attachment, type AgentSettings, type CheckoutMode, type WorktreePlanEntry } from '@ramu/shared/types'
@@ -16,6 +16,8 @@ import { useWorkspace } from './workspace'
 import { HomeFeed } from './Home'
 import { clearDraft, draftKey, loadDraft, useDraftPersistence } from './drafts'
 import { useAddProject } from './addProject'
+import { StatusDot, useComputers } from './computers'
+import { notifyError } from './Notifications'
 
 /** A task's title is the first line of what you asked for. */
 export function titleFrom(prompt: string): string {
@@ -24,6 +26,8 @@ export function titleFrom(prompt: string): string {
   const cut = clipText(line, 60)
   return `${clipText(cut, cut.lastIndexOf(' ') > 30 ? cut.lastIndexOf(' ') : 60)}…`
 }
+
+const CHIP = "chip-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:1px_solid_transparent] [&:hover:not(:disabled)]:text-foreground [&.on]:bg-hover [&.on]:[border:1px_solid_transparent] [&.on]:text-foreground h-7 min-h-7 p-[0_10px] rounded-(--radius-s) bg-transparent [border:1px_solid_transparent] [box-shadow:none] text-soft text-control [.composer-tray_&]:h-7 [.composer-tray_&]:min-h-7 [.composer-tray_&]:p-[0_8px] [.composer-tray_&]:gap-1.5 [.composer-tray_&]:[border:0] [.composer-tray_&]:rounded-full [.composer-tray_&]:bg-transparent [.composer-tray_&]:[box-shadow:none] [.composer-tray_&]:text-soft [.composer-tray_&]:text-caption [.composer-tray_&:hover:not(:disabled)]:[border:0] [.composer-tray_&:hover:not(:disabled)]:bg-hover [.composer-tray_&:hover:not(:disabled)]:text-foreground [.composer-tray_&.on]:[border:0] [.composer-tray_&.on]:bg-hover [.composer-tray_&.on]:text-foreground [.composer-tray_&_svg]:text-muted-foreground [border:none] p-[5px_10px] text-soft text-control gap-1.5 rounded-full bg-hover [box-shadow:inset_0_0_0_1px_var(--line)]"
 
 const MODES: { id: CheckoutMode; label: string; hint: string; Icon: typeof Laptop }[] = [
   { id: 'current', label: 'Current checkout', hint: 'Work on your existing branches and files. Nothing is changed.', Icon: Laptop },
@@ -125,6 +129,16 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
     ),
     onSelect: () => onProjectChange(p.id),
   }))]
+  const computers = useComputers()
+  const currentComputer = computers?.computers.find((c) => c.id === computers.current)
+  // Switching computers reopens the window on that computer's projects, so the chat starts there.
+  const computerItems = (computers?.computers ?? []).map((c) => ({
+    key: c.id,
+    selected: c.id === computers?.current,
+    disabled: !c.local && c.id !== computers?.current && c.status !== 'connected',
+    label: <span className="flex min-w-0 grow items-center gap-2"><StatusDot status={c.status} /><span className="truncate">{c.name}</span></span>,
+    onSelect: () => { if (c.id !== computers?.current) void invoke('computers.open', c.id).catch((error) => notifyError(errorText(error), t('Computers'))) },
+  }))
   const current = existingWorkspace ? { label: existingWorkspace.name, Icon: GitBranch } : MODES.find((m) => m.id === mode)!
 
   const start = (
@@ -151,10 +165,16 @@ export function NewTask({ projectId, onProjectChange, feed = true }: { projectId
           </div>
         )}
         <ComposerTray className="start-chips items-center gap-0.5">
-          <Menu label={t("Project")} className="chip-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:1px_solid_transparent] [&:hover:not(:disabled)]:text-foreground [&.on]:bg-hover [&.on]:[border:1px_solid_transparent] [&.on]:text-foreground h-7 min-h-7 p-[0_10px] rounded-(--radius-s) bg-transparent [border:1px_solid_transparent] [box-shadow:none] text-soft text-control [.composer-tray_&]:h-7 [.composer-tray_&]:min-h-7 [.composer-tray_&]:p-[0_8px] [.composer-tray_&]:gap-1.5 [.composer-tray_&]:[border:0] [.composer-tray_&]:rounded-full [.composer-tray_&]:bg-transparent [.composer-tray_&]:[box-shadow:none] [.composer-tray_&]:text-soft [.composer-tray_&]:text-caption [.composer-tray_&:hover:not(:disabled)]:[border:0] [.composer-tray_&:hover:not(:disabled)]:bg-hover [.composer-tray_&:hover:not(:disabled)]:text-foreground [.composer-tray_&.on]:[border:0] [.composer-tray_&.on]:bg-hover [.composer-tray_&.on]:text-foreground [.composer-tray_&_svg]:text-muted-foreground [border:none] p-[5px_10px] text-soft text-control gap-1.5 rounded-full bg-hover [box-shadow:inset_0_0_0_1px_var(--line)]" icon={<><FolderClosed size={13} /> <span className="chip-label">{project?.name ?? t("No project")}</span></>} items={projectItems} />
+          {computerItems.length > 1 && <Menu
+            label={t("Computer")}
+            className={CHIP}
+            icon={<>{currentComputer?.local ? <Monitor size={13} /> : <Network size={13} />} <span className="chip-label">{currentComputer?.name}</span></>}
+            items={computerItems}
+          />}
+          <Menu label={t("Project")} className={CHIP} icon={<><FolderClosed size={13} /> <span className="chip-label">{project?.name ?? t("No project")}</span></>} items={projectItems} />
           {!general && <Menu
             label={t("Where the work happens")}
-            className="chip-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:1px_solid_transparent] [&:hover:not(:disabled)]:text-foreground [&.on]:bg-hover [&.on]:[border:1px_solid_transparent] [&.on]:text-foreground h-7 min-h-7 p-[0_10px] rounded-(--radius-s) bg-transparent [border:1px_solid_transparent] [box-shadow:none] text-soft text-control [.composer-tray_&]:h-7 [.composer-tray_&]:min-h-7 [.composer-tray_&]:p-[0_8px] [.composer-tray_&]:gap-1.5 [.composer-tray_&]:[border:0] [.composer-tray_&]:rounded-full [.composer-tray_&]:bg-transparent [.composer-tray_&]:[box-shadow:none] [.composer-tray_&]:text-soft [.composer-tray_&]:text-caption [.composer-tray_&:hover:not(:disabled)]:[border:0] [.composer-tray_&:hover:not(:disabled)]:bg-hover [.composer-tray_&:hover:not(:disabled)]:text-foreground [.composer-tray_&.on]:[border:0] [.composer-tray_&.on]:bg-hover [.composer-tray_&.on]:text-foreground [.composer-tray_&_svg]:text-muted-foreground [border:none] p-[5px_10px] text-soft text-control gap-1.5 rounded-full bg-hover [box-shadow:inset_0_0_0_1px_var(--line)]"
+            className={CHIP}
             icon={
               <>
                 <current.Icon size={13} /> <span className="chip-label">{existingWorkspace ? current.label : t(current.label)}</span>

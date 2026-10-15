@@ -12,6 +12,9 @@ export class UsageService {
 
   list(accounts: Partial<Record<AgentProvider, string>> = {}): UsageReading[] { return this.readings.filter((reading) => (reading.accountId ?? 'default') === (accounts[reading.provider] ?? providerAccountId(reading.provider))) }
 
+  /** Every account's readings, for choosing which login a chat continues on. */
+  all(): UsageReading[] { return this.readings }
+
   update(next: UsageReading[]): void {
     if (!next.length) return
     const key = (r: UsageReading) => `${r.provider}:${r.accountId ?? 'default'}:${r.window}:${r.scope ?? ''}`

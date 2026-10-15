@@ -135,8 +135,8 @@ export function openCodeConfigEnv(connection: McpConnection | undefined, existin
   return { OPENCODE_CONFIG_CONTENT: JSON.stringify({ ...config, permission: { ...permission, task: 'deny' } }) }
 }
 /** Runs the runtime's own sign-in. Antigravity opens the browser itself and stores the credentials in its home. */
-export async function acpSignIn(provider: AcpProvider, methodId: string, timeoutMs = 5 * 60_000): Promise<void> {
-  const rpc = new AcpRpc(provider, homedir())
+export async function acpSignIn(provider: AcpProvider, methodId: string, accountId = 'default', timeoutMs = 5 * 60_000): Promise<void> {
+  const rpc = new AcpRpc(provider, homedir(), accountId)
   rpc.onMessage = (m) => { if (m.id !== undefined && m.method) rpc.write({ id: m.id, error: { code: -32601, message: 'Sign-in cannot run tools' } }) }
   try {
     const init = await rpc.initialize()

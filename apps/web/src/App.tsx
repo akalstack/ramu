@@ -39,6 +39,7 @@ import { CreateEntryDialog } from './CreateEntryDialog'
 import { AddProjectDialog } from './AddProjectDialog'
 import { HomePage, NewTask } from './NewTask'
 import { AnimatedMark, BootScreen, Wordmark } from './Brand'
+import { paneFadeIn } from './paneMotion'
 import { ComputerSwitcher } from './computers'
 import { useAddProject } from './addProject'
 import { ProjectsPanel } from './sidebar/ProjectsPanel'
@@ -93,8 +94,12 @@ function Shell() {
   useLayoutEffect(() => {
     const panel = sidebarPanel.current
     if (!panel) return
+    const toggling = sidebarHidden !== panel.isCollapsed()
+    // The sidebar lands in one step and fades in when it comes back; the chat list inside is too heavy to reflow every frame.
+    const fade = toggling && !sidebarHidden ? paneFadeIn(document.getElementById('workspace-sidebar')) : undefined
     if (sidebarHidden && !panel.isCollapsed()) panel.collapse()
     if (!sidebarHidden && panel.isCollapsed()) panel.expand()
+    return fade
   }, [sidebarHidden])
   // Settings → reset layout sizes (and any other change of the saved width) applies to the live panel.
   useEffect(() => {

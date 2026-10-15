@@ -2,12 +2,13 @@ import { createElement, useEffect, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { TerminalGestureOverlay, readGesture, type GestureDisplay } from './TerminalGestureOverlay'
 import { terminalHtml } from '../assets/terminal'
-export interface TerminalViewProps { output: string; enabled?: boolean; keyboardAction?: { sequence: number; visible: boolean }; keyAction?: { sequence: number; key: string }; onInput(data: string): void; onResize(cols: number, rows: number): void }
-export default function TerminalView({ output, onInput, onResize, enabled = true, keyboardAction, keyAction }: TerminalViewProps) {
+export interface TerminalViewProps { /** Which shell `output` belongs to; a different one always starts the screen over. */ session?: string; output: string; enabled?: boolean; keyboardAction?: { sequence: number; visible: boolean }; keyAction?: { sequence: number; key: string }; onInput(data: string): void; onResize(cols: number, rows: number): void }
+export default function TerminalView({ session, output, onInput, onResize, enabled = true, keyboardAction, keyAction }: TerminalViewProps) {
   const frame = useRef<HTMLIFrameElement>(null)
   const callbacks = useRef({ onInput, onResize, enabled }); callbacks.current = { onInput, onResize, enabled }
   const [ready, setReady] = useState(false)
   const previous = useRef('')
+  const shown = useRef(session)
   const consumedKey = useRef<number | undefined>(undefined)
   const [gesture, setGesture] = useState<GestureDisplay | null>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
@@ -20,10 +21,12 @@ export default function TerminalView({ output, onInput, onResize, enabled = true
   }, [])
   useEffect(() => {
     if (!ready) return
-    const incremental = output.startsWith(previous.current)
+    const switched = shown.current !== session
+    shown.current = session
+    const incremental = !switched && output.startsWith(previous.current)
     frame.current?.contentWindow?.postMessage(JSON.stringify({ kind: incremental ? 'output' : 'reset', data: incremental ? output.slice(previous.current.length) : output }), '*')
     previous.current = output
-  }, [output, ready])
+  }, [output, session, ready])
   useEffect(() => {
     if (ready) frame.current?.contentWindow?.postMessage(JSON.stringify({ kind: 'gesture-control', enabled }), '*')
     if (!enabled) setGesture(null)

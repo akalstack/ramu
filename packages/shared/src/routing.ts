@@ -139,3 +139,21 @@ export function subagentTarget(prefs: SubagentPreferences, parentProvider: Agent
   if (prefs.mode === 'per-provider') return prefs.perProvider[parentProvider] ?? null
   return null
 }
+
+export const accountKey = (provider: AgentProvider, accountId: string | undefined) => `${provider}:${accountId || 'default'}`
+
+/**
+ * The next login of the same provider to continue on: the first of `accounts` that is not the chat's own, not tried yet
+ * and under the threshold. `usage` holds readings for every account; an account with no reading is assumed to have room.
+ */
+export function nextAccount(settings: Pick<AgentSettings, 'provider' | 'model' | 'accountId'>, accounts: string[], context: { usage: UsageReading[]; catalogs: ProviderCatalog[]; switchAt: SwitchThreshold; now?: number; attempted?: ReadonlySet<string> }): string | null {
+  const model = resolveStep({ id: '', provider: settings.provider, model: settings.model, effort: null }, context.catalogs)?.model ?? settings.model
+  const current = settings.accountId || 'default'
+  for (const account of accounts) {
+    if (account === current || context.attempted?.has(accountKey(settings.provider, account))) continue
+    const readings = context.usage.filter((reading) => (reading.accountId ?? 'default') === account)
+    if (isOver(peakFor(readings, settings.provider, model, context.now), context.switchAt)) continue
+    return account
+  }
+  return null
+}

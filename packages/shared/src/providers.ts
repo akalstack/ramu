@@ -6,10 +6,10 @@ export const isAcpProvider = (provider: AgentProvider): provider is 'cursor' | '
 
 export interface ProviderAccount { id: string; name: string; /** Off hides the account from pickers and stops new chats from using it. Absent means on. */ enabled?: boolean }
 export interface ProviderSignIn { signedIn: boolean; detail?: string }
-export type ProviderConfiguration = Partial<Record<AgentProvider, { binary: string; harness?: string; accounts?: ProviderAccount[]; accountId?: string; autoUpdate?: boolean; /** Off hides the provider everywhere and stops Ramu from starting it. Absent means on. */ enabled?: boolean; /** Cursor: allow reading its login from the macOS Keychain to show plan usage. */ usageKeychain?: boolean }>>
+export type ProviderConfiguration = Partial<Record<AgentProvider, { binary: string; harness?: string; accounts?: ProviderAccount[]; accountId?: string; autoUpdate?: boolean; /** Off hides the provider everywhere and stops Ramu from starting it. Absent means on. */ enabled?: boolean; /** Cursor: allow reading its login from the macOS Keychain to show plan usage. */ usageKeychain?: boolean; /** Use every enabled account, not just the selected one: when the active account is at its limit, chats continue on the next. */ rotateAccounts?: boolean }>>
 export const providerEnabled = (config: ProviderConfiguration | undefined, provider: AgentProvider): boolean => config?.[provider]?.enabled !== false
 /** Only expose isolated account profiles for CLIs with a supported credential directory. */
-export const supportsProviderAccounts = (provider: AgentProvider) => provider === 'codex' || provider === 'opencode'
+export const supportsProviderAccounts = (_provider: AgentProvider) => true
 export interface ProviderStatus {
   provider: AgentProvider
   binary: string
@@ -33,4 +33,16 @@ export interface ProviderStatus {
   enabled: boolean
   /** Whether the CLI already has a login, per account ID ('default' is the system profile). Absent when it was not checked. */
   signIn?: Record<string, ProviderSignIn>
+}
+
+/**
+ * Accounts a chat may run on, in the order they are tried: the selected account first, then the default login,
+ * then the rest in the order they were added. Just the selected account unless rotation is on.
+ */
+export function providerAccountOrder(config: ProviderConfiguration | undefined, provider: AgentProvider): string[] {
+  const entry = config?.[provider]
+  const primary = entry?.accountId || 'default'
+  if (!entry?.rotateAccounts || !supportsProviderAccounts(provider)) return [primary]
+  const enabled = (entry.accounts ?? []).filter((account) => account.enabled !== false).map((account) => account.id)
+  return [...new Set([primary, 'default', ...enabled])].filter((id) => id === 'default' || enabled.includes(id))
 }

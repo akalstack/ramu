@@ -35,6 +35,7 @@ import { useAppSettings } from './AppSettings'
 import { useChatHidden, useEditorSide } from './layoutPrefs'
 import { isPreviewable, isWorkspaceCtx, tabOrder, useWorkspace } from './workspace'
 import { WorkspaceRail, workspaceToolOf } from './WorkspaceTools'
+import { SlidePane } from './paneMotion'
 
 
 /**
@@ -187,7 +188,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
           secondary={<div className="h-full w-full min-w-0 min-h-0" ref={setBottomSlot} />}
         />
       </div>
-      {workspaceTool && <WorkspaceRail tool={workspaceTool} />}
+      <SlidePane open={!!workspaceTool}>{workspaceTool && <WorkspaceRail tool={workspaceTool} />}</SlidePane>
         {createPortal(
         <div className="main-chat h-full w-full [&_>_.home-page]:flex-1 [&_>_.home-page]:min-h-0 flex-1 min-w-0 flex-col bg-canvas" style={{ display: 'flex' }}>
           {(showLauncherMain || (editorView && !chatView)) && isWorkspaceCtx(taskId) && (

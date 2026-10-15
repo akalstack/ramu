@@ -88,7 +88,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     { id: 'task.new', title: t("New chat"), category: t("Chat"), keys: 'mod+n', run: () => ws.newTask(), when: () => true },
     { id: 'chat.new', title: t("New chat in this project"), category: t("Chat"), keys: 'ctrl+mod+i', run: () => taskId && ws.newTask(ws.projectOf(taskId)?.id), when: () => !!taskId },
     // ⌘F finds in the visible chat, unless the editor or a terminal has focus and wants its own find.
-    { id: 'chat.find', title: t("Find in chat"), category: t("Chat"), keys: 'mod+f', run: () => window.dispatchEvent(new Event('ramu:find-in-chat')), when: () => !document.activeElement?.closest('.monaco-editor, .xterm') && [...document.querySelectorAll('.agent-view')].some((el) => el.checkVisibility()) },
+    { id: 'chat.find', title: t("Find in chat"), category: t("Chat"), keys: 'mod+f', run: () => window.dispatchEvent(new Event('ramu:find-in-chat')), when: () => !document.activeElement?.closest('.monaco-editor, .xterm, .md-preview-pane') && [...document.querySelectorAll('.agent-view')].some((el) => el.checkVisibility()) },
     { id: 'task.next', title: t("Next chat"), category: t("Chat"), run: () => cycleTask(1) },
     { id: 'task.prev', title: t("Previous chat"), category: t("Chat"), run: () => cycleTask(-1) },
     {

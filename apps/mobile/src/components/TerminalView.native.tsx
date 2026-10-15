@@ -7,23 +7,26 @@ import { WebView } from 'react-native-webview'
 import { terminalHtml } from '../assets/terminal'
 import type { TerminalViewProps } from './TerminalView'
 
-export default function TerminalView({ output, onInput, onResize, enabled = true, keyboardAction, keyAction }: TerminalViewProps) {
+export default function TerminalView({ session, output, onInput, onResize, enabled = true, keyboardAction, keyAction }: TerminalViewProps) {
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
   useEffect(() => { const subscription = AppState.addEventListener('change', state => setAppActive(state === 'active')); return () => subscription.remove() }, [])
   const view = useRef<WebView>(null)
   const [ready, setReady] = useState(false)
   const previous = useRef('')
+  const shown = useRef(session)
   const consumedKey = useRef<number | undefined>(undefined)
   const [gesture, setGesture] = useState<GestureDisplay | null>(null)
   const gestureActive = useRef(false)
   const [size, setSize] = useState({ width: 0, height: 0 })
   useEffect(() => {
     if (!ready) return
-    const incremental = output.startsWith(previous.current)
+    const switched = shown.current !== session
+    shown.current = session
+    const incremental = !switched && output.startsWith(previous.current)
     const message = JSON.stringify({ kind: incremental ? 'output' : 'reset', data: incremental ? output.slice(previous.current.length) : output })
     view.current?.injectJavaScript(`window.dispatchEvent(new MessageEvent('message',{data:${JSON.stringify(message)}}));true;`)
     previous.current = output
-  }, [output, ready])
+  }, [output, session, ready])
   useEffect(() => {
     if (!ready) return
     const message = JSON.stringify({ kind: 'gesture-control', enabled: enabled && appActive })

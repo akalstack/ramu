@@ -36,7 +36,7 @@ async function cursorToken(allowKeychain: boolean, env: NodeJS.ProcessEnv): Prom
     if (!allowKeychain) return undefined
     return await new Promise<string | undefined>((resolve) => execFile('/usr/bin/security', ['find-generic-password', '-s', 'cursor-access-token', '-a', 'cursor-user', '-w'], { timeout: 15_000, maxBuffer: 64 * 1024 }, (error, stdout) => resolve(error ? undefined : stdout.trim() || undefined)))
   }
-  const directory = process.platform === 'win32' ? join(env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Cursor') : process.platform === 'darwin' ? join(homedir(), '.cursor') : join(env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'cursor')
+  const directory = env.CURSOR_CONFIG_DIR?.trim() || (process.platform === 'win32' ? join(env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Cursor') : process.platform === 'darwin' ? join(homedir(), '.cursor') : join(env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'cursor'))
   try { const token = JSON.parse(await readFile(join(directory, 'auth.json'), 'utf8')).accessToken; return typeof token === 'string' && token.trim() ? token.trim() : undefined } catch { return undefined }
 }
 export async function readCursorUsage(allowKeychain: boolean, env: NodeJS.ProcessEnv = process.env): Promise<UsageReading[]> {

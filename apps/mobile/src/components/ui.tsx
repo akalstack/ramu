@@ -1,7 +1,8 @@
-import type { ComponentType, ReactNode } from 'react'
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type PressableProps, type StyleProp, type TextProps, type ViewStyle } from 'react-native'
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { Animated, Dimensions, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View, type PressableProps, type StyleProp, type TextProps, type ViewStyle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
+import * as Clipboard from 'expo-clipboard'
 import { CircleAlert, CircleCheck, CircleDot, CircleHelp, Loader, type LucideProps } from 'lucide-react-native'
 import type { TaskStatus } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
@@ -17,9 +18,18 @@ export function tap() {
 
 type Tone = 'text' | 'body' | 'soft' | 'muted' | 'placeholder' | 'accent' | 'ok' | 'warn' | 'bad'
 
-export function T({ tone = 'text', size = font.body, weight, mono, style, ...rest }: TextProps & { tone?: Tone; size?: number; weight?: '400' | '500' | '600' | '700'; mono?: boolean }) {
+/**
+ * The app's text. `copyable` makes a long press copy it (pass the string when the children are not one). It stands in for the
+ * `selectable` prop: selectable text is drawn by a different native view that ignores our colours and renders black.
+ */
+export function T({ tone = 'text', size = font.body, weight, mono, style, copyable, onLongPress, ...rest }: TextProps & { tone?: Tone; size?: number; weight?: '400' | '500' | '600' | '700'; mono?: boolean; copyable?: string | boolean }) {
   const { c } = useTheme()
-  return <Text {...rest} style={[{ color: c[tone], fontSize: size, fontWeight: weight, fontFamily: mono ? font.mono : undefined }, style]} />
+  const value = typeof copyable === 'string' ? copyable : copyable && typeof rest.children === 'string' ? rest.children : undefined
+  const copy = value === undefined ? onLongPress : (event: Parameters<NonNullable<TextProps['onLongPress']>>[0]) => { onLongPress?.(event); void Clipboard.setStringAsync(value).then(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)).catch(() => {}) }
+  // `color: undefined` in a passed style would otherwise replace the tone with the platform default (black); drop it.
+  const flat = StyleSheet.flatten(style)
+  const own = flat && 'color' in flat && flat.color === undefined ? (({ color: _unused, ...restStyle }) => restStyle)(flat) : style
+  return <Text {...rest} onLongPress={copy} style={[{ color: c[tone], fontSize: size, fontWeight: weight, fontFamily: mono ? font.mono : undefined }, own]} />
 }
 
 /** Wordmark in the desktop title bar's proportions, scaled for a phone. */
@@ -134,7 +144,8 @@ export function ConnectionDot({ status, size = 8 }: { status: ComputerStatus; si
 }
 
 /** Bottom sheet built on Modal so it runs in Expo Go. On iOS it floats inset from the edges on glass, like iOS 26 sheets. */
-export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: string; children: ReactNode }) {
+/** `scroll={false}`: the content scrolls itself (a FlatList), so the sheet must not wrap it in a ScrollView. */
+export function Sheet({ open, onClose, title, children, scroll = true }: { open: boolean; onClose: () => void; title?: string; children: ReactNode; scroll?: boolean }) {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const body = (
@@ -147,22 +158,59 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
           {title}
         </T>
       ) : null}
-      <ScrollView bounces={false} contentContainerStyle={{ paddingBottom: space.m }}>
-        {children}
-      </ScrollView>
+      {scroll ? (
+        <ScrollView bounces={false} contentContainerStyle={{ paddingBottom: space.m }}>
+          {children}
+        </ScrollView>
+      ) : <View style={{ paddingBottom: space.m, flexShrink: 1 }}>{children}</View>}
     </>
   )
+  const [mounted, setMounted] = useState(open)
+  const progress = useRef(new Animated.Value(0)).current
+  const rise = () => Animated.spring(progress, { toValue: 1, damping: 26, stiffness: 260, mass: 1, useNativeDriver: true }).start()
+  useEffect(() => {
+    // Reopened while it was still sliding away: the modal never left, so onShow won't fire again.
+    if (open) { if (mounted) rise(); else setMounted(true) }
+    else if (mounted) Animated.timing(progress, { toValue: 0, duration: 200, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => { if (finished) setMounted(false) })
+  }, [open])
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [Dimensions.get('window').height * 0.6, 0] })
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
+    <Modal visible={mounted} transparent animationType="none" statusBarTranslucent navigationBarTranslucent onShow={rise} onRequestClose={onClose}>
+      <Animated.View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.35)', opacity: progress }}>
+        <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
+      </Animated.View>
+      <Animated.View pointerEvents="box-none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, justifyContent: 'flex-end', transform: [{ translateY }] }}>
       {floatingChrome ? (
-        <Glass radius={34} style={{ position: 'absolute', left: 8, right: 8, bottom: Math.max(insets.bottom - 18, 8), maxHeight: '80%' }}>
+        <Glass radius={34} style={{ marginHorizontal: 8, marginBottom: Math.max(insets.bottom - 18, 8), maxHeight: '80%' }}>
           {body}
         </Glass>
       ) : (
         <View style={{ backgroundColor: c.canvas, borderTopLeftRadius: radius.l + 8, borderTopRightRadius: radius.l + 8, paddingBottom: insets.bottom + space.s, maxHeight: '80%' }}>{body}</View>
       )}
+      </Animated.View>
     </Modal>
+  )
+}
+
+/**
+ * The app's one tab switcher (iOS segmented-control style): File / Changes / Staged, Changes / Commits / Stashes, and any
+ * new tabs. Labels are white on the dark theme (the selected one bold on a raised segment), counts sit beside them.
+ * Use this instead of drawing tabs per screen, so they all look and read the same.
+ */
+export function Segmented<K extends string>({ value, onChange, options, style }: { value: K; onChange: (key: K) => void; options: readonly { key: K; label: string; count?: number }[]; style?: StyleProp<ViewStyle> }) {
+  const { c } = useTheme()
+  return (
+    <View accessibilityRole="tablist" style={[{ flexDirection: 'row', backgroundColor: c.raised2, borderRadius: radius.m, padding: 3 }, style]}>
+      {options.map(option => {
+        const selected = option.key === value
+        return (
+          <Pressable key={option.key} accessibilityRole="tab" accessibilityState={{ selected }} accessibilityLabel={option.count ? `${option.label}, ${option.count}` : option.label} onPress={() => { if (!selected) { tap(); onChange(option.key) } }} style={{ flex: 1, height: 34, borderRadius: radius.m - 3, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 5, backgroundColor: selected ? c.raised : 'transparent' }}>
+            <T size={font.control} weight={selected ? '600' : '500'} tone="text" style={{ opacity: selected ? 1 : 0.7 }}>{option.label}</T>
+            {option.count ? <T size={font.caption} tone="text" style={{ opacity: selected ? 0.7 : 0.5 }}>{option.count}</T> : null}
+          </Pressable>
+        )
+      })}
+    </View>
   )
 }
 

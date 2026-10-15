@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { AGENT_PROVIDERS, providerEnabled, supportsProviderAccounts, type ProviderConfiguration, type ProviderSignIn, type ProviderStatus } from '@ramu/shared/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
 import { acpSignIn } from './acp'
-import { configureProviderBinaries, findExecutable, providerAccountClearedEnv, providerAccountHome, providerRuntimeHome, providerBinary, providerEnvironment } from './providerBinaries'
+import { configureProviderBinaries, findExecutable, prepareProviderAccount, providerAccountClearedEnv, providerAccountEnv, providerAccountHome, providerRuntimeHome, providerBinary, providerEnvironment } from './providerBinaries'
 
 type Release = { version: string; checkedAt: string; downloadUrl?: string }
 type Cache = Partial<Record<AgentProvider, Release>>
@@ -142,21 +142,20 @@ export class ProviderService {
     const env = providerEnvironment(provider, config, id)
     if (id !== 'default') {
       const root = providerAccountHome(provider, id)
-      mkdirSync(root, { recursive: true, mode: 0o700 })
-      if (provider === 'opencode') for (const dir of ['data', 'config', 'state']) mkdirSync(join(root, dir), { recursive: true, mode: 0o700 })
+      prepareProviderAccount(provider, root)
     }
     const quote = (value: string) => `'${value.replaceAll("'", process.platform === 'win32' ? "''" : "'\"'\"'")}'`
-    const keys = provider === 'codex' ? ['CODEX_HOME'] : provider === 'opencode' ? ['XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'XDG_STATE_HOME'] : []
+    const keys = Object.keys(providerAccountEnv(provider, providerAccountHome(provider, id === 'default' ? 'x' : id)))
     const assignments = id === 'default' ? '' : keys.map((key) => process.platform === 'win32' ? `$env:${key}=${quote(env[key]!)}; ` : `${key}=${quote(env[key]!)}`).join(process.platform === 'win32' ? '' : ' ') + ' '
     const cleared = providerAccountClearedEnv(provider)
     const clean = id === 'default' || !cleared.length ? '' : process.platform === 'win32' ? `Remove-Item ${cleared.map((key) => `Env:${key}`).join(',')} -ErrorAction SilentlyContinue; ` : `env ${cleared.map((key) => `-u ${key}`).join(' ')} `
     return `${clean}${assignments}${process.platform === 'win32' ? '& ' : ''}${quote(providerBinary(provider, config))} ${args.join(' ')}`
   }
   /** Providers whose sign-in runs inside Ramu instead of a terminal command. */
-  async signIn(provider: AgentProvider): Promise<void> {
+  async signIn(provider: AgentProvider, accountId = 'default'): Promise<void> {
     if (provider !== 'antigravity') throw new Error('Use the Login command for this provider.')
     if (!findExecutable(providerBinary(provider, this.preferences().providerBinaries))) throw new Error('Select the Antigravity ACP runtime first.')
-    await acpSignIn('antigravity', 'oauth-personal')
+    await acpSignIn('antigravity', 'oauth-personal', accountId)
   }
   /** Shell-free updater, shared by manual actions and the detached service timer. */
   update(provider: AgentProvider): Promise<ProviderStatus> {

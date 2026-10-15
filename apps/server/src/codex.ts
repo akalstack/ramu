@@ -95,6 +95,15 @@ export async function codexModels(accountId?: string): Promise<AgentModel[]> {
   } finally { await rpc.close() }
 }
 
+/** One login's plan usage, read without starting a chat. */
+export async function codexUsage(accountId?: string): Promise<UsageReading[]> {
+  const rpc = new CodexRpc(undefined, [], accountId)
+  try {
+    await rpc.initialize()
+    return codexReadings((await rpc.request('account/rateLimits/read', {})).rateLimits)
+  } finally { await rpc.close() }
+}
+
 // Compatibility aliases for existing Codex factories.
 export type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from './agentRunner'
 import type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from './agentRunner'
