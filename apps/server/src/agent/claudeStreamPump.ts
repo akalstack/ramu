@@ -21,7 +21,7 @@ import type { Db } from '../db'
 /** What ClaudeStreamPump needs from the rest of the service. */
 export interface ClaudeStreamPumpHost
   extends
-    Pick<ContextUsageTracker, 'refreshContext'>,
+    Pick<ContextUsageTracker, 'refreshContext' | 'context' | 'setContext'>,
     Pick<SessionProcess, 'fail'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
     Pick<SessionRegistry, 'live'>,
@@ -124,17 +124,39 @@ export class ClaudeStreamPump {
         return
       }
       case 'system':
-        if (msg.subtype === 'status' && msg.status === 'compacting')
-          this.host.record(id, { kind: 'compaction', state: 'started' })
-        else if (msg.subtype === 'status' && msg.compact_result === 'failed')
-          this.host.record(id, { kind: 'compaction', state: 'failed' })
-        else if (msg.subtype === 'compact_boundary')
+        if (msg.subtype === 'status' && msg.status === 'compacting') {
+          const context = this.host.context(id)
           this.host.record(id, {
             kind: 'compaction',
+            state: 'started',
+            ...(context ? { beforeTokens: context.used, contextWindow: context.max } : {}),
+          })
+        } else if (msg.subtype === 'status' && msg.compact_result === 'failed')
+          this.host.record(id, { kind: 'compaction', state: 'failed' })
+        else if (msg.subtype === 'compact_boundary') {
+          const context = this.host.context(id)
+          const event: Extract<AgentEvent, { kind: 'compaction' }> = {
+            kind: 'compaction',
             state: 'completed',
+            compactionId: msg.uuid,
             beforeTokens: msg.compact_metadata.pre_tokens,
             afterTokens: msg.compact_metadata.post_tokens,
-          })
+            ...(context ? { contextWindow: context.max } : {}),
+          }
+          this.host.record(id, event)
+          const query = this.host.live.get(id)?.query
+          // Some SDK versions omit post_tokens. Read the provider's context at the boundary.
+          if (event.afterTokens === undefined && query)
+            void query
+              .getContextUsage?.({ detail: 'summary' })
+              .then((usage) => {
+                if (this.host.live.get(id)?.query !== query) return
+                this.host.setContext(id, usage.totalTokens, usage.maxTokens)
+                this.host.record(id, { ...event, afterTokens: usage.totalTokens, contextWindow: usage.maxTokens })
+              })
+              .catch(() => {})
+          else if (event.afterTokens !== undefined && context) this.host.setContext(id, event.afterTokens, context.max)
+        }
         this.handleTask(id, msg)
         if (msg.subtype === 'init') {
           this.db.prepare('UPDATE agent_sessions SET provider_session_id = ? WHERE id = ?').run(msg.session_id, id)

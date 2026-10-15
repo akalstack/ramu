@@ -32,7 +32,7 @@ export function ProviderAccountPicker({
           label={t('{0} account', { '0': providerName(provider) })}
           value={preferences?.accountId ?? 'default'}
           options={[
-            { value: 'default', label: t('Default CLI account') },
+            { value: 'default', label: t(provider === 'antigravity' ? 'Default account' : 'Default CLI account') },
             ...(preferences?.accounts ?? [])
               .filter((account) => account.enabled !== false)
               .map((account) => ({ value: account.id, label: account.name })),

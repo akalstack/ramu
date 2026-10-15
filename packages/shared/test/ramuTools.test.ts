@@ -70,3 +70,53 @@ describe('Ramu tool calls', () => {
     expect(summarizeAgentStatuses([])).toBe('')
   })
 })
+
+describe('review chat library tools', () => {
+  it('reads each edit as a sentence with its subject and reason', () => {
+    const merged = describeRamuTool(
+      { name: 'memory_merge', args: { ids: ['a', 'b'], title: 'Tabs', reason: 'Same preference' } },
+      JSON.stringify({ kept: { title: 'Tabs' }, archived: ['b'] }),
+    )
+    expect(merged).toMatchObject({ done: 'Merged memories', subject: '“Tabs”' })
+    expect(merged.facts).toContainEqual({ label: 'Merged', value: '2 notes into one' })
+    const archived = describeRamuTool(
+      { name: 'memory_archive', args: { id: 'a', reason: 'Outdated' } },
+      JSON.stringify({ title: 'Old note' }),
+    )
+    expect(archived).toMatchObject({ done: 'Archived a memory', subject: '“Old note”' })
+    expect(archived.facts.map((fact) => fact.label)).toEqual(['Why', 'Restore'])
+    expect(
+      describeRamuTool(
+        { name: 'skill_update', args: { id: 's', reason: 'Clearer' } },
+        JSON.stringify({ name: 'retry' }),
+      ),
+    ).toMatchObject({ done: 'Updated skill', subject: '“retry”' })
+  })
+
+  it('recognises the new tools under every provider naming', () => {
+    for (const name of ['memory_restore', 'skill_archive', 'skill_restore', 'skill_inspect'])
+      expect(ramuTool(use(`mcp__ramu__${name}`, { id: 'x' }))?.name).toBe(name)
+  })
+})
+
+describe('protected edits in review chats', () => {
+  it('marks a protected item changed at the user’s request, and only then', () => {
+    const marked = describeRamuTool(
+      { name: 'memory_update', args: { id: 'm', reason: 'Asked', userRequested: true, userRequest: 'reword it' } },
+      JSON.stringify({ title: 'Tabs', protectedChange: true, userRequest: 'reword it' }),
+    )
+    expect(marked.facts.slice(0, 2)).toEqual([
+      { label: 'Protected', value: 'Protected item changed at your request' },
+      { label: 'You asked', value: '“reword it”' },
+    ])
+    const plain = describeRamuTool(
+      { name: 'memory_update', args: { id: 'm', reason: 'r' } },
+      JSON.stringify({ title: 'x' }),
+    )
+    expect(plain.facts.map((fact) => fact.label)).toEqual(['Why'])
+    // A refused call returns an error text, never the mark.
+    expect(
+      describeRamuTool({ name: 'skill_update', args: { id: 's', userRequested: true } }, 'This skill is pinned').facts,
+    ).toEqual([])
+  })
+})

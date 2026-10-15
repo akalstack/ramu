@@ -43,7 +43,9 @@ export function elicitationRequest(requestId: string, input: unknown): AgentElic
     const alternatives = originalChoices.oneOf ?? originalChoices.anyOf
     if (
       Array.isArray(alternatives) &&
-      alternatives.some((entry) => Object.keys(object(entry)).some((key) => !['const', 'title'].includes(key)))
+      alternatives.some((entry) =>
+        Object.keys(object(entry)).some((key) => !['const', 'title', 'description'].includes(key)),
+      )
     )
       throw new Error(`Unsupported choices for ${id}.`)
     const enumSource = field.type === 'array' ? object(field.items) : field

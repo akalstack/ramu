@@ -11,6 +11,7 @@ import { ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
 import { useModelSets, modelStepName } from '../models/ModelSets'
+import { takeLibraryFocus } from '../summaries/libraryFocus'
 import {
   RESPONSE_STYLES,
   RESPONSE_STYLE_LABELS,
@@ -167,6 +168,22 @@ export function LearningSettings({ value, onChange }: Props) {
   const [history, setHistory] = useState<ManagedSkill[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const reload = useCallback(() => invoke('learning.get').then(setSnapshot), [])
+  // A summary item that was clicked: scroll to the skill and flash it.
+  useEffect(() => {
+    const take = () => {
+      const item = takeLibraryFocus('skill')
+      if (!item) return
+      window.setTimeout(() => {
+        const card = document.getElementById(`skill-${item.id}`)
+        card?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        card?.classList.add('flash')
+        window.setTimeout(() => card?.classList.remove('flash'), 1400)
+      }, 150)
+    }
+    take()
+    window.addEventListener('ramu:library-focus', take)
+    return () => window.removeEventListener('ramu:library-focus', take)
+  }, [snapshot?.skills.length])
   useEffect(() => {
     void reload().catch((e) => notifyError(errorText(e), 'Learning'))
     return ramu.on('memory:changed', () => {
@@ -311,7 +328,11 @@ export function LearningSettings({ value, onChange }: Props) {
         </p>
       )}
       {snapshot?.skills.map((skill) => (
-        <article key={skill.id} className="bg-card rounded-(--radius-m) p-3 mb-2 flex flex-col gap-2">
+        <article
+          key={skill.id}
+          id={`skill-${skill.id}`}
+          className="[&.flash]:[animation:settings-flash_1.4s_ease-out] bg-card rounded-(--radius-m) p-3 mb-2 flex flex-col gap-2"
+        >
           <strong className="font-medium">
             {skill.name} · {t(skill.status)}
             {skill.pinned ? ` · ${t('Pinned')}` : ''}

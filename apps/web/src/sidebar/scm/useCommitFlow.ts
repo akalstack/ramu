@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AgentSettings, CommitDraft, GitStatus, RepositoryBinding } from '@ramu/shared/types'
 import { invoke } from '../../ipc'
+import { useAppSettings } from '../../settings/AppSettings'
 import { errorText } from '../../workspace/TaskPane'
 import { chooseCommitBranch } from '../../git/CommitBranchDialog'
 import { withGitBusy } from '../../git/gitBusy'
@@ -30,15 +31,20 @@ export function useCommitFlow({
   requireSaved: () => void
   reportError: (message: string) => void
 }) {
+  const { preferences } = useAppSettings()
+  const allPaths = preferences.combineGitChanges
+    ? status?.entries.filter((entry) => entry.unstaged && entry.unstaged !== 'unmerged').map((entry) => entry.path)
+    : undefined
   const [message, setMessage] = useState('')
   const [draft, setDraft] = useState<CommitDraft | null>(null)
   const [generating, setGenerating] = useState(false)
-  const draftMessage = async (includeBranch = false) => {
+  const draftMessage = async (includeBranch = false, stageAll = true) => {
     setGenerating(true)
     try {
-      const value = await withGitBusy(taskId, binding.repoId, () =>
-        invoke('git.generateCommit', taskId, binding.repoId, settings, includeBranch),
-      )
+      const value = await withGitBusy(taskId, binding.repoId, async () => {
+        if (stageAll && allPaths?.length) await invoke('git.stage', taskId, binding.repoId, allPaths)
+        return invoke('git.generateCommit', taskId, binding.repoId, settings, includeBranch)
+      })
       setDraft(value)
       setMessage(value.message)
       return value
@@ -62,6 +68,7 @@ export function useCommitFlow({
         : undefined
     if (branchOptions === null) return
     if (branchOptions?.newBranch || branchOptions?.autoBranch) requireSaved()
+    stagePaths = allPaths ?? stagePaths
     if (stagePaths?.length) await invoke('git.stage', taskId, binding.repoId, stagePaths)
     let text = message,
       fingerprint = draft?.fingerprint,
@@ -70,7 +77,7 @@ export function useCommitFlow({
     if (action === 'amend' && !amendHead) return
     if (!text.trim() && action !== 'amend') {
       // The draft also names the feature branch when one is about to be created.
-      const value = await draftMessage(!!branchOptions?.autoBranch)
+      const value = await draftMessage(!!branchOptions?.autoBranch, false)
       if (!value?.message.trim()) return
       text = value.message
       fingerprint = value.fingerprint

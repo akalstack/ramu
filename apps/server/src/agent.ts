@@ -2,7 +2,6 @@
 // queue, goals, routing, sub-agents, ...); this class builds them, wires their hosts and exposes the public API.
 import { providerBinary } from './providers/providerBinaries'
 import { createAcpRunner } from './providers/acp'
-import { acpHostedRunner } from './providers/acpNativeHost'
 import type { AgentRunnerFactory } from './agent/agentRunner'
 import type { Db } from './db'
 import type {
@@ -17,7 +16,6 @@ import type {
   Schedule,
 } from '@ramu/shared/types'
 import type { UsageService } from './providers/usage'
-import { createCodexRunner, type CodexFactory } from './providers/codex'
 import { loadHelperHistory, type HelperHistoryLoader } from './agent/helperHistory'
 import type { QueryFn } from './agent/types'
 import { SessionStore } from './agent/sessionStore'
@@ -85,9 +83,11 @@ export class AgentService {
     private readonly db: Db,
     private readonly onEvent: (sessionId: string, event: AgentEvent, seq?: number, revision?: number) => void,
     private readonly queryFn: QueryFn,
-    private readonly codexFactory: CodexFactory = acpHostedRunner(createCodexRunner),
+    private readonly codexFactory: AgentRunnerFactory = createAcpRunner,
     private readonly acpFactory: AgentRunnerFactory = createAcpRunner,
     private readonly openCodeFactory: AgentRunnerFactory = createAcpRunner,
+    /** When set, Claude chats run through this ACP runner; without it they use the Claude Agent SDK directly. */
+    private readonly claudeFactory?: AgentRunnerFactory,
   ) {
     // Collaborators reach each other (and the settings above) only through this one object.
     const parts = {} as Collaborators
@@ -186,6 +186,7 @@ export class AgentService {
       route: (...a) => parts.router.route(...a),
       routing: (...a) => parts.router.routing(...a),
       runnerFactory: (provider) => this.runnerFactory(provider),
+      usesRunner: (provider) => this.usesRunner(provider),
       get runners() {
         return parts.registry.runners
       },
@@ -194,6 +195,7 @@ export class AgentService {
       scheduleProvider: (...a) => parts.providerWaits.scheduleProvider(...a),
       send: (...a) => this.send(...a),
       sessionCheckpoint: () => this.sessionCheckpoint,
+      context: (...a) => parts.contexts.context(...a),
       setContext: (...a) => parts.contexts.setContext(...a),
       setGoal: (...a) => parts.goals.setGoal(...a),
       setState: (...a) => parts.recorder.setState(...a),
@@ -267,7 +269,18 @@ export class AgentService {
   }
 
   private runnerFactory(provider: AgentProvider): AgentRunnerFactory {
-    return provider === 'codex' ? this.codexFactory : provider === 'opencode' ? this.openCodeFactory : this.acpFactory
+    return provider === 'codex'
+      ? this.codexFactory
+      : provider === 'opencode'
+        ? this.openCodeFactory
+        : provider === 'claude-code'
+          ? this.claudeFactory!
+          : this.acpFactory
+  }
+
+  /** Whether chats on this provider run through a runner instead of the Claude Agent SDK. */
+  private usesRunner(provider: AgentProvider): boolean {
+    return provider !== 'claude-code' || !!this.claudeFactory
   }
 
   async withWorkspaceReservation<T>(covers: string[], action: () => Promise<T>): Promise<T> {

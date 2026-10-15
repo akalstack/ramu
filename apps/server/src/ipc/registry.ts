@@ -3,6 +3,7 @@ import { registerAgentHandlers } from './handlers/agent'
 import { registerAsideHandlers } from './handlers/aside'
 import { registerBackgroundHandlers } from './handlers/background'
 import { registerFileHandlers } from './handlers/files'
+import { registerForgeHandlers } from './handlers/forge'
 import { registerGitHandlers } from './handlers/git'
 import { registerMemoryHandlers } from './handlers/memory'
 import { registerProviderHandlers } from './handlers/providers'
@@ -10,6 +11,7 @@ import { registerReviewHandlers } from './handlers/reviews'
 import { registerScheduleHandlers } from './handlers/schedules'
 import { registerSearchHandlers } from './handlers/search'
 import { registerSettingsHandlers } from './handlers/settings'
+import { registerSummaryHandlers } from './handlers/summaries'
 import { registerTerminalHandlers } from './handlers/terminals'
 import { registerUiHandlers } from './handlers/ui'
 import { registerWorkspaceHandlers } from './handlers/workspace'
@@ -22,11 +24,13 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable =>
     registerAgentHandlers(ctx),
     registerAsideHandlers(ctx),
     registerGitHandlers(ctx),
+    registerForgeHandlers(ctx),
     registerFileHandlers(ctx),
     registerSearchHandlers(ctx),
     registerReviewHandlers(ctx),
     registerTerminalHandlers(ctx),
     registerMemoryHandlers(ctx),
+    registerSummaryHandlers(ctx),
     registerSettingsHandlers(ctx),
     registerProviderHandlers(ctx),
     registerUiHandlers(ctx),

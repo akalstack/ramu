@@ -54,6 +54,11 @@ app.setAboutPanelOptions({ applicationName: 'Ramu', applicationVersion: app.getV
 // Lets tests and screenshots run against a throwaway profile.
 if (process.env.RAMU_USER_DATA) app.setPath('userData', process.env.RAMU_USER_DATA)
 
+// End-to-end runs stay out of the way: windows are created hidden and unfocused, and macOS shows no Dock icon.
+// Hidden pages would otherwise be throttled, so throttling is off; tests emulate focus through Playwright.
+const e2eHeadless = process.env.RAMU_E2E_HEADLESS === '1'
+if (e2eHeadless) app.dock?.hide()
+
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
@@ -249,6 +254,7 @@ async function main() {
     minWidth: 900,
     minHeight: 560,
     title: 'Ramu',
+    show: !e2eHeadless,
     backgroundColor: '#131315',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 16 } } : {}),
@@ -258,6 +264,7 @@ async function main() {
       sandbox: true,
       nodeIntegration: false,
       webSecurity: true,
+      backgroundThrottling: !e2eHeadless,
     },
   })
 
@@ -460,6 +467,7 @@ async function main() {
         sandbox: true,
         nodeIntegration: false,
         webSecurity: true,
+        backgroundThrottling: !e2eHeadless,
         session: session.fromPartition(`persist:ramu-computer-${id}`),
       },
     })
@@ -610,7 +618,7 @@ async function main() {
         throw new Error('That computer is not connected')
       if (
         typeof operation !== 'string' ||
-        !/^(providers\.|updates\.|background\.|network\.|memory\.|learning\.|codex\.hook\.|advisor\.claude$)/.test(
+        !/^(providers\.|updates\.|background\.|network\.|memory\.|learning\.|summaries\.|codex\.hook\.|advisor\.claude$)/.test(
           operation,
         ) ||
         !Array.isArray(parameters)

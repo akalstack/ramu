@@ -13,23 +13,33 @@ const PROVIDERS: Provider[] = [
     id: 'opencode',
     name: 'OpenCode',
     logo: '/providers/opencode.svg',
-    signIn: 'opencode acp, with your model provider',
+    signIn: 'Connect your model provider',
   },
-  { id: 'cursor', name: 'Cursor', logo: '/providers/cursor.svg', signIn: 'agent login' },
+  { id: 'cursor', name: 'Cursor', logo: '/providers/cursor.svg', signIn: 'Sign in with your Cursor account' },
   {
     id: 'antigravity',
     name: 'Antigravity',
     logo: '/providers/antigravity.svg',
-    signIn: 'Google sign-in from Settings',
+    signIn: 'Sign in with Google in Settings',
   },
 ]
 
 const byId = (id: string) => PROVIDERS.find((p) => p.id === id)!
 
 function Logo({ provider, size = 28 }: { provider: Provider; size?: number }) {
+  const monochrome = ['claude', 'codex', 'cursor'].includes(provider.id)
+  const iconSize = size * (provider.id === 'codex' ? 0.88 : 0.64)
+
   return (
-    <span className="logo-tile" style={{ width: size, height: size }}>
-      <img src={provider.logo} alt="" width={size * 0.64} height={size * 0.64} />
+    <span className={`logo-tile logo-${provider.id}`} style={{ width: size, height: size }} aria-hidden="true">
+      {monochrome ? (
+        <span
+          className="logo-mark"
+          style={{ width: iconSize, height: iconSize, maskImage: `url("${provider.logo}")` }}
+        />
+      ) : (
+        <img src={provider.logo} alt="" width={iconSize} height={iconSize} />
+      )}
     </span>
   )
 }
@@ -231,8 +241,9 @@ function Nav() {
         </a>
         <nav className="nav-links" aria-label="Primary">
           <a href="#providers">Providers</a>
-          <a href="#work">Work</a>
+          <a href="#work">Features</a>
           <a href="#review">Review</a>
+          <a href="#mobile">Mobile</a>
           <a href={`${REPO}#guides`}>Docs</a>
           <a className="nav-cta" href="#download">
             Download
@@ -247,19 +258,19 @@ function Hero() {
   return (
     <section className="hero" id="top">
       <Backdrop />
-      <h1>Keep coding when your agent hits its limit.</h1>
+      <h1>Keep your agents moving.</h1>
       <p className="hero-sub">
-        One desktop workspace for Claude Code, Codex, OpenCode, Cursor, and Antigravity, with your editor, terminals,
-        and Git. When a provider runs out, the chat moves to the next one.
+        Bring your coding agents, editor, terminals, and Git together. Keep work moving across provider limits, carry
+        context between models, and continue from your phone.
       </p>
       <div className="hero-actions">
         <a className="btn btn-primary" href="#download">
-          Download for macOS
+          Get Ramu
         </a>
         <a className="btn btn-quiet" href={REPO}>
           Read the source
         </a>
-        <span className="hero-note">Open source alpha for macOS and Linux</span>
+        <span className="hero-note">MIT licensed · Desktop + iOS and Android companion</span>
       </div>
       <Demo />
     </section>
@@ -270,10 +281,10 @@ function Providers() {
   return (
     <section className="section" id="providers">
       <div className="section-head">
-        <h2>Use the subscriptions you already have</h2>
+        <h2>Your agents. Your existing accounts.</h2>
         <p>
-          Each agent runs through its own installed runtime and signs in as usual. Ramu doesn’t resell tokens or store
-          passwords. <em>Ramu</em> is Indonesian for blending ingredients into one.
+          Use Claude Code, Codex, OpenCode, Cursor, and Antigravity in one workspace. Connect your provider accounts and
+          choose the right model for each task.
         </p>
       </div>
       <ul className="ingredients">
@@ -293,24 +304,28 @@ function Providers() {
 
 const WORK = [
   {
-    title: 'Ask a second opinion',
-    body: 'Your agent can ask a model from another provider to check its approach and review the result.',
+    title: 'Keep going through usage limits',
+    body: 'Set your preferred provider order. Ramu switches with visible chat context when a limit is reached. If all are limited, it waits and resumes when capacity returns, even after a restart.',
   },
   {
-    title: 'Hand tasks to helpers',
-    body: 'Send delegated work to another provider by task type. Follow progress, read transcripts, or use an isolated checkout.',
+    title: 'Get another model’s perspective',
+    body: 'Let your agent consult a second model for advice and review. Delegate tasks to helpers across providers, with optional isolated checkouts.',
   },
   {
-    title: 'Set a goal, step away',
-    body: 'Goals span many turns and survive provider changes. Pause, resume, or cap them. Start one with /goal.',
+    title: 'Give longer tasks a goal',
+    body: 'Keep an objective moving across turns and provider changes. Pause, resume, and set continuation limits so you stay in control.',
   },
   {
-    title: 'Remember across providers',
-    body: 'Shared notes carry project knowledge and your preferences between agents, with version history.',
+    title: 'Carry knowledge between agents',
+    body: 'Share project knowledge and preferences across providers. Read, edit, and restore earlier versions of your notes.',
   },
   {
-    title: 'Close the window',
-    body: 'Chats and terminals keep running. Schedule tasks, resume after a restart, and catch up from recaps.',
+    title: 'Turn finished work into lessons',
+    body: 'Capture reusable skills and lessons from completed tasks. Choose automatic updates or review them first, with revision history.',
+  },
+  {
+    title: 'Leave work running',
+    body: 'Chats and terminals keep running when you close the window. Schedule recurring tasks, recover unfinished chats after a restart, and catch up with recaps.',
   },
 ]
 
@@ -318,8 +333,11 @@ function Work() {
   return (
     <section className="section section-split" id="work">
       <div className="section-head sticky">
-        <h2>Work that keeps going</h2>
-        <p>Background work needs your computer awake. Provider capabilities vary.</p>
+        <h2>Less restarting. More finishing.</h2>
+        <p>
+          Keep the objective, conversation, and project knowledge together as the work continues. Your computer must
+          stay awake. Provider capabilities vary.
+        </p>
       </div>
       <ul className="rows">
         {WORK.map((w) => (
@@ -337,10 +355,10 @@ function Review() {
   return (
     <section className="section section-split" id="review">
       <div className="section-head">
-        <h2>Review every change, undo any of them</h2>
+        <h2>See what changed. Decide what stays.</h2>
         <p>
-          Ramu records the diff for each turn. Comment on lines, then undo selectively, with a conflict check if you
-          edited the same lines since.
+          Review recorded changes for each turn and send inline feedback to your agent. Undo selected changes with
+          conflict checks to protect later edits.
         </p>
         <ul className="checks">
           <li>Monaco editor and split terminals beside the chat</li>
@@ -393,12 +411,41 @@ function Review() {
   )
 }
 
+function Mobile() {
+  return (
+    <section className="section section-split" id="mobile">
+      <div className="section-head">
+        <h2>Step away from your desk. Stay with the work.</h2>
+        <p>
+          Pair the iOS or Android companion with your computer. Follow live agent progress, send the next instruction,
+          and respond when an agent needs you.
+        </p>
+        <a className="btn btn-quiet" href={`${REPO}/blob/main/apps/mobile/README.md`}>
+          Set up mobile
+        </a>
+      </div>
+      <div className="section-head">
+        <ul className="checks">
+          <li>Chat, choose models, and manage goals</li>
+          <li>Review diffs and send comments to your agent</li>
+          <li>Stage changes, commit, and sync with Git</li>
+          <li>Use live terminals and switch between paired computers</li>
+        </ul>
+        <p>Agents run on your computer. Keep it awake and reachable while you connect from your phone.</p>
+      </div>
+    </section>
+  )
+}
+
 function Source() {
   return (
     <section className="section section-split" id="source">
       <div className="section-head">
-        <h2>MIT licensed. Fork it.</h2>
-        <p>Electron, React, TypeScript, Monaco, and xterm.js. The background service also runs headless.</p>
+        <h2>Your workspace, open to build on.</h2>
+        <p>
+          MIT licensed, with a desktop app, mobile companion, and a workspace server you can run headless. Read the
+          code, contribute, or make it your own.
+        </p>
         <a className="btn btn-quiet" href={REPO}>
           Browse the source
         </a>
@@ -422,10 +469,10 @@ function Download() {
   return (
     <section className="download" id="download">
       <div className="download-inner">
-        <h2>Try the alpha</h2>
+        <h2>Bring your next task to Ramu.</h2>
         <p>
-          Installers and SHA-256 checksums are on GitHub Releases. Alpha builds are unsigned, so install updates
-          manually.
+          Download the desktop alpha, connect a provider, and open a repository. Add the mobile companion to keep up
+          from your phone.
         </p>
         <div className="hero-actions">
           <a className="btn btn-primary" href={RELEASES}>
@@ -434,10 +481,14 @@ function Download() {
           <a className="btn btn-quiet" href={RELEASES}>
             Linux x64
           </a>
+          <a className="btn btn-quiet" href={`${REPO}/blob/main/apps/mobile/README.md`}>
+            iOS and Android setup
+          </a>
         </div>
         <p className="download-fine">
-          Linux GUI validation is pending. Windows is experimental. Sign in to a provider first; see the{' '}
-          <a href={`${REPO}/blob/main/docs/PROVIDERS.md`}>provider setup guide</a>.
+          Installers and SHA-256 checksums are on GitHub Releases. macOS builds are unsigned and not notarized; install
+          alpha updates manually. Linux GUI validation is pending. Windows is experimental, with no release downloads.
+          See the <a href={`${REPO}/blob/main/docs/PROVIDERS.md`}>provider setup guide</a>.
         </p>
       </div>
     </section>
@@ -471,6 +522,7 @@ export function App() {
         <Providers />
         <Work />
         <Review />
+        <Mobile />
         <Source />
         <Download />
       </main>

@@ -1,5 +1,6 @@
 import type { CanUseTool, Options } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionInfo, AppPreferences, McpConnection } from '@ramu/shared/types'
+import { providerAdapter } from '../providers/adapters'
 import { providerEnvironment } from '../providers/providerBinaries'
 import { baseMode } from './settings'
 
@@ -28,6 +29,9 @@ export function claudeLaunchOptions({
   preferences,
   hooks,
 }: ClaudeLaunch): Options {
+  const plugins = connection?.skillsDir
+    ? (providerAdapter('claude-code').skillsLaunch?.(connection.skillsDir).plugins ?? [])
+    : []
   return {
     cwd: s.cwd,
     ...(connection
@@ -51,12 +55,15 @@ export function claudeLaunchOptions({
         }
       : {}),
     settingSources: ['user', 'project', 'local'],
+    ...(plugins.length ? { plugins: plugins.map((path) => ({ type: 'local' as const, path })) } : {}),
     // Ramu's advisor replaces Claude Code's own, which an empty advisorModel turns off over the user's settings.
     ...(advisorOn ? { settings: { advisorModel: '' } } : {}),
     ...(s.additionalDirs.length ? { additionalDirectories: s.additionalDirs } : {}),
     abortController: abort,
     canUseTool,
     permissionMode: baseMode(s.settings),
+    // A review chat about learned memories has no built-in file, shell or Git tools, only Ramu's own.
+    ...(connection?.restricted ? { tools: [] } : {}),
     ...(s.settings.access === 'full' ? { allowDangerouslySkipPermissions: true } : {}),
     ...(s.settings.model ? { model: s.settings.model } : {}),
     ...(s.settings.effort ? { effort: s.settings.effort as Options['effort'] } : {}),

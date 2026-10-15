@@ -16,6 +16,7 @@ const PUSH_EVENTS = new Set<string>([
   'automation:changed',
   'workspace:changed',
   'memory:changed',
+  'summaries:changed',
   'notify:inapp',
   'notify:open',
   'background:connection',

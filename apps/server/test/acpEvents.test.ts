@@ -1,8 +1,7 @@
 import { expect, it } from 'vitest'
-import { AcpEventEncoder, AcpEvents, nativeShell } from '../src/providers/acpEvents'
+import { AcpEvents, nativeShell } from '../src/providers/acpEvents'
 import { agentContent, inlineMedia } from '@ramu/shared/chat/agentContent'
 import { toolKind } from '@ramu/shared/chat/agentTools'
-import type { AgentEvent } from '@ramu/shared/types'
 const chunk = (text: string, thinking = false) => ({
   sessionUpdate: thinking ? 'agent_thought_chunk' : 'agent_message_chunk',
   content: { type: 'text', text },
@@ -120,29 +119,6 @@ it('keeps plans in one turn-scoped row and converts context usage', () => {
     { kind: 'context', used: 150, max: 1000 },
   ])
 })
-it('native envelopes preserve exact metadata without also creating duplicate standard events', () => {
-  const encoder = new AcpEventEncoder(),
-    decoder = new AcpEvents(true)
-  const event: AgentEvent = {
-    kind: 'tool-use',
-    toolUseId: 'one',
-    name: 'Bash',
-    title: 'Check status',
-    summary: 'git status',
-    input: '{"command":"git status"}',
-    toolKind: 'execute',
-    agentId: 'child',
-  }
-  const encoded = encoder.encode(event)
-  expect(encoded).toMatchObject({ sessionUpdate: 'tool_call', title: 'Check status', kind: 'execute' })
-  expect(decoder.consume(encoded)).toEqual([event])
-  const thought: AgentEvent = { kind: 'thinking', messageId: 'thought', text: 'Consider this' }
-  expect(encoder.encode(thought)).toMatchObject({
-    sessionUpdate: 'agent_thought_chunk',
-    content: { text: 'Consider this' },
-  })
-  expect(encoder.encode({ ...thought, text: 'Consider this next' })).toMatchObject({ content: { text: ' next' } })
-})
 it('supports Claude image sources and OpenCode data URIs while refusing unsafe inline formats', () => {
   expect(
     agentContent({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'aGVsbG8=' } }),
@@ -157,7 +133,7 @@ it('supports Claude image sources and OpenCode data URIs while refusing unsafe i
 })
 
 it('shows OpenCode sub-agent calls as task cards and ignores them for other providers', () => {
-  const decoder = new AcpEvents(false, ['task', 'subagent'])
+  const decoder = new AcpEvents(['task', 'subagent'])
   const started = decoder.consume({
     sessionUpdate: 'tool_call_update',
     toolCallId: 'call',
@@ -195,7 +171,7 @@ it('shows OpenCode sub-agent calls as task cards and ignores them for other prov
 })
 
 it('recognises Cursor sub-agents by the tool named in their input', () => {
-  const decoder = new AcpEvents(false, ['task', 'subagent'])
+  const decoder = new AcpEvents(['task', 'subagent'])
   const call = decoder.consume({
     sessionUpdate: 'tool_call',
     toolCallId: 'c\nfc_1',
@@ -239,7 +215,7 @@ it('recognises Cursor sub-agents by the tool named in their input', () => {
 })
 
 it('attaches child-session updates to the sub-agent card with the same description', () => {
-  const decoder = new AcpEvents(false, ['subagent'])
+  const decoder = new AcpEvents(['subagent'])
   decoder.consume({
     sessionUpdate: 'tool_call_update',
     toolCallId: 'call',
@@ -272,7 +248,7 @@ it('attaches child-session updates to the sub-agent card with the same descripti
 })
 
 it('maps Antigravity invoke_subagent permission calls to one card and ignores its odd launcher failure', () => {
-  const decoder = new AcpEvents(false, ['invoke_subagent'])
+  const decoder = new AcpEvents(['invoke_subagent'])
   const started = decoder.consume({
     sessionUpdate: 'tool_call',
     toolCallId: 'agy',
@@ -303,7 +279,7 @@ it('maps Antigravity invoke_subagent permission calls to one card and ignores it
   ).toBe(false)
 })
 it('merges out-of-band sub-agent details and keeps a stopped card stopped', () => {
-  const decoder = new AcpEvents(false, ['task'])
+  const decoder = new AcpEvents(['task'])
   decoder.consume({
     sessionUpdate: 'tool_call',
     toolCallId: 'c',
@@ -327,7 +303,7 @@ it('merges out-of-band sub-agent details and keeps a stopped card stopped', () =
 })
 
 it('reports an Antigravity helper as failed when its start_subagent step fails', () => {
-  const decoder = new AcpEvents(false, ['invoke_subagent'])
+  const decoder = new AcpEvents(['invoke_subagent'])
   decoder.consume({
     sessionUpdate: 'tool_call',
     toolCallId: 'agy',
@@ -445,4 +421,105 @@ it("shows Antigravity's shell calls as commands with their output, and drops inl
   expect(JSON.stringify(shot)).not.toContain('BBBB')
   expect(JSON.stringify(shot)).toContain('kept')
   expect(nativeShell({ other: 1 }, { nothing: true })).toBeUndefined()
+})
+
+it.each(['early', 'late'])('pairs ACP compaction with usage reports arriving %s', (order) => {
+  const decoder = new AcpEvents()
+  decoder.consume({ sessionUpdate: 'usage_update', used: 212000, size: 258400 })
+  expect(
+    decoder.consume({ sessionUpdate: 'compaction_update', compactionId: 'compact-1', status: 'in_progress' }),
+  ).toEqual([
+    {
+      kind: 'compaction',
+      compactionId: 'compact-1',
+      state: 'started',
+      providerStatus: 'in_progress',
+      beforeTokens: 212000,
+      contextWindow: 258400,
+    },
+  ])
+  // A repeated pre-compaction reading is not an after count.
+  decoder.consume({ sessionUpdate: 'usage_update', used: 212000, size: 258400 })
+  if (order === 'early') decoder.consume({ sessionUpdate: 'usage_update', used: 33700, size: 258400 })
+  const completed = decoder.consume({
+    sessionUpdate: 'compaction_update',
+    compactionId: 'compact-1',
+    status: 'completed',
+  })[0]
+  const result =
+    order === 'early' ? completed : decoder.consume({ sessionUpdate: 'usage_update', used: 33700, size: 258400 })[1]
+  expect(result).toMatchObject({
+    kind: 'compaction',
+    state: 'completed',
+    compactionId: 'compact-1',
+    beforeTokens: 212000,
+    afterTokens: 33700,
+    contextWindow: 258400,
+  })
+  expect(decoder.consume({ sessionUpdate: 'usage_update', used: 40000, size: 258400 })).toEqual([
+    { kind: 'context', used: 40000, max: 258400 },
+  ])
+})
+
+it('does not invent counts from summary text or unrelated usage drops', () => {
+  const decoder = new AcpEvents()
+  expect(decoder.consume({ sessionUpdate: 'usage_update', used: 200, size: 1000 })).toHaveLength(1)
+  expect(decoder.consume({ sessionUpdate: 'usage_update', used: 100, size: 1000 })).toHaveLength(1)
+  expect(
+    decoder.consume({
+      sessionUpdate: 'compaction_update',
+      compactionId: 'no-counts',
+      status: 'completed',
+      summary: [{ type: 'text', text: '100 tokens retained' }],
+    })[0],
+  ).toEqual({
+    kind: 'compaction',
+    compactionId: 'no-counts',
+    state: 'completed',
+    providerStatus: 'completed',
+    summary: [{ type: 'text', text: '100 tokens retained' }],
+  })
+  decoder.beginTurn()
+  expect(decoder.consume({ sessionUpdate: 'usage_update', used: 50, size: 1000 })).toHaveLength(1)
+})
+
+it.each(['failed', 'cancelled', '_paused'])('retains ACP terminal and future states: %s', (status) => {
+  const decoder = new AcpEvents()
+  decoder.consume({ sessionUpdate: 'compaction_update', compactionId: 'c', status: 'in_progress' })
+  expect(
+    decoder.consume({ sessionUpdate: 'compaction_update', compactionId: 'c', status, error: 'Provider details' })[0],
+  ).toMatchObject({
+    state: status === '_paused' ? 'unknown' : status,
+    providerStatus: status,
+    error: 'Provider details',
+  })
+  expect(decoder.consume({ sessionUpdate: 'usage_update', used: 10, size: 100 })).toHaveLength(1)
+})
+
+it('applies ACP summary chunks and replacement/clearing patches to the same entity', () => {
+  const decoder = new AcpEvents()
+  const update = (patch: Record<string, unknown>) =>
+    decoder.consume({ sessionUpdate: 'compaction_update', compactionId: 'c', status: 'in_progress', ...patch })[0]
+  const chunk = (text: string) =>
+    decoder.consume({
+      sessionUpdate: 'compaction_summary_chunk',
+      compactionId: 'c',
+      content: { type: 'text', text },
+    })[0]
+  expect(chunk('First')).toMatchObject({ state: 'started', summary: [{ type: 'text', text: 'First' }] })
+  expect(chunk(' second')).toMatchObject({
+    summary: [
+      { type: 'text', text: 'First' },
+      { type: 'text', text: ' second' },
+    ],
+  })
+  expect(update({ summary: [{ type: 'text', text: 'Replacement' }], error: 'detail' })).toMatchObject({
+    summary: [{ type: 'text', text: 'Replacement' }],
+  })
+  expect(update({})).toMatchObject({ summary: [{ type: 'text', text: 'Replacement' }], error: 'detail' })
+  expect(update({ summary: null, error: null })).toMatchObject({ summary: null, error: null })
+  expect(chunk('New')).toMatchObject({ summary: [{ type: 'text', text: 'New' }] })
+  expect(update({ summary: [] })).toMatchObject({ summary: [] })
+  expect(decoder.consume({ sessionUpdate: 'compaction_update', compactionId: '', status: 'completed' })).toEqual([])
+  expect(decoder.consume({ sessionUpdate: 'compaction_update', compactionId: 'invalid' })).toEqual([])
 })

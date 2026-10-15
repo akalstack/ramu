@@ -34,6 +34,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
     'cleanupArchivedDays',
   ],
   git: [
+    'combineGitChanges',
     'pullMode',
     'autoPull',
     'commitStyle',

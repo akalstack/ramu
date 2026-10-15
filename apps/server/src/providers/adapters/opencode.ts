@@ -48,5 +48,7 @@ export const opencodeAdapter = defineAdapter({
     return stored ? { signedIn: true, detail: String(stored) } : { signedIn: false }
   },
   loginArgs: ['auth', 'login'],
+  // OpenCode's `skills` setting lists extra folders; it travels in the inline config, not the user's config files.
+  skillsLaunch: (exportDir) => ({ configPaths: [join(exportDir, 'skills')] }),
   updatePlan: selfUpdate(['upgrade']),
 })

@@ -251,7 +251,17 @@ type AgentEventBody =
   | { kind: 'recovery'; state: 'resumed' }
   | { kind: 'request-resolved'; requestId: string; outcome: string }
   | { kind: 'result'; isError: boolean; text: string; costUsd: number | null }
-  | { kind: 'compaction'; state: 'started' | 'completed' | 'failed'; beforeTokens?: number; afterTokens?: number }
+  | {
+      kind: 'compaction'
+      state: 'started' | 'completed' | 'failed' | 'cancelled' | 'unknown'
+      providerStatus?: string
+      summary?: AgentContent[] | null
+      error?: string | null
+      compactionId?: string
+      beforeTokens?: number
+      afterTokens?: number
+      contextWindow?: number
+    }
   | { kind: 'error'; message: string }
   | { kind: 'state'; state: AgentSessionState }
   | { kind: 'settings'; settings: AgentSettings; reason: string; handoff: boolean; previous?: AgentSettings }
@@ -293,5 +303,11 @@ export interface McpConnection {
   token: string
   nativeSubagents?: boolean
   instructions?: string
+  /** Review chats about learned memories: Ramu memory and skill tools only, no built-in file, shell or Git tools. */
+  restricted?: boolean
+  /** Ramu's exported managed skills for this chat's scope, set only for providers that load them through their own skill system. */
+  skillsDir?: string
   /** Codex only: a hook asks Ramu before each of Codex's own sub-agents starts, so Ramu can send it elsewhere. */ interceptSubagents?: boolean
+  /** Claude only: Ramu's advisor replaces Claude Code's own, which is turned off. */
+  replaceAdvisor?: boolean
 }

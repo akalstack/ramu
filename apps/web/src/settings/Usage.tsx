@@ -84,10 +84,14 @@ export function useAccountUsage(enabled = true): UsageReading[] {
   return all
 }
 
-/** The login's name as the user knows it: the default CLI login, or the name given when it was added. */
-export function accountLabel(config: { accounts?: { id: string; name: string }[] } | undefined, id: string): string {
+/** The default provider account, or the name given when it was added. */
+export function accountLabel(
+  config: { accounts?: { id: string; name: string }[] } | undefined,
+  id: string,
+  provider: AgentProvider,
+): string {
   return id === 'default'
-    ? t('Default CLI account')
+    ? t(provider === 'antigravity' ? 'Default account' : 'Default CLI account')
     : (config?.accounts?.find((account) => account.id === id)?.name ?? id)
 }
 
@@ -305,7 +309,7 @@ function UsagePopover({
       .filter((id) => id !== (config?.accountId || 'default'))
       .map((id) => ({
         id,
-        name: accountLabel(config, id),
+        name: accountLabel(config, id, provider),
         peak: peakUsage(
           accountReadings.filter((reading) => (reading.accountId ?? 'default') === id),
           provider,
@@ -507,7 +511,11 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
         tone === 'ok' ? 'text-muted-foreground' : toneText[tone],
       )}
       role="img"
-      aria-label={t('Context {0}% full', { '0': context.percent })}
+      aria-label={t('Context {0}% full, {1} of {2} tokens used', {
+        '0': context.percent,
+        '1': context.used.toLocaleString(),
+        '2': context.max.toLocaleString(),
+      })}
       title={t('Context window: {0} of {1} tokens used{2}', {
         '0': k(context.used),
         '1': k(context.max),
@@ -515,7 +523,9 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
       })}
     >
       <Ring percent={context.percent} className={tone === 'ok' ? 'stroke-soft' : toneStroke[tone]} />
-      <span>{context.percent}%</span>
+      <span>
+        {context.percent}% · {k(context.used)} / {k(context.max)}
+      </span>
     </span>
   )
 }

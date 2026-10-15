@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Alert, Platform, Pressable, Switch, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import Constants from 'expo-constants'
@@ -87,8 +88,24 @@ export default function Settings() {
   const { c, appearance, setAppearance } = useTheme()
   const t = useT()
   const router = useRouter()
-  const { computers, selected, language, setLanguage, usage, retry, enablePush, disablePush, drafts, setDraft } =
-    useStore()
+  const store = useStore()
+  const { computers, selected, language, setLanguage, usage, retry, enablePush, disablePush, drafts, setDraft } = store
+  const [savingGit, setSavingGit] = useState(false)
+  const preferences = store.appPreferences[selected]
+  const saveCombinedChanges = async (value: boolean) => {
+    if (savingGit) return
+    setSavingGit(true)
+    try {
+      const snapshot = await store.invoke(selected, 'settings.app.snapshot')
+      const field = snapshot.settings.find((field) => field.path === 'combineGitChanges')
+      if (!field) throw new Error('Update Ramu on this computer to change this setting.')
+      await store.invoke(selected, 'settings.app.patch', [{ ...field, before: field.value, value }])
+    } catch (error) {
+      Alert.alert('Source Control', error instanceof Error ? error.message : String(error))
+    } finally {
+      setSavingGit(false)
+    }
+  }
   const pc = computers.find((x) => x.id === selected)
   const readings = usage[selected] ?? []
   return (
@@ -130,6 +147,36 @@ export default function Settings() {
               Unavailable — this computer has not reported usage.
             </T>
           )}
+        </Card>
+
+        <SectionLabel
+          right={
+            <T size={font.caption} tone="muted">
+              {pc?.name}
+            </T>
+          }
+        >
+          Source Control
+        </SectionLabel>
+        <Card style={{ marginHorizontal: space.l }}>
+          <Row style={{ paddingVertical: space.l }}>
+            <View style={{ flex: 1, gap: 6 }}>
+              <T weight="500" style={{ lineHeight: 22 }}>
+                Combine staged and unstaged changes
+              </T>
+              <T size={font.caption} tone="muted" style={{ lineHeight: 19 }}>
+                Show each file once and commit all changes. Turn off to stage files separately before committing. This
+                setting also applies on this computer's desktop.
+              </T>
+            </View>
+            <Switch
+              accessibilityLabel="Combine staged and unstaged changes"
+              value={preferences?.combineGitChanges ?? true}
+              disabled={savingGit || !preferences || pc?.status !== 'online'}
+              onValueChange={(value) => void saveCombinedChanges(value)}
+              trackColor={{ true: c.primary }}
+            />
+          </Row>
         </Card>
 
         <SectionLabel>Chat</SectionLabel>

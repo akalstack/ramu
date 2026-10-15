@@ -116,6 +116,8 @@ export const antigravityAdapter = defineAdapter({
     }
   },
   loginArgs: null,
+  // The ACP runtime scans `<cwd>/.gemini/skills` and `<cwd>/.agents/skills`; the first is Antigravity's own, so other agents that read `.agents` do not pick the links up.
+  skillsLaunch: (_exportDir, cwd) => ({ linkDirs: cwd ? [join(cwd, '.gemini', 'skills')] : [] }),
   async signIn({ installed, accountId, acpSignIn }) {
     if (!installed) throw new Error('Select the Antigravity ACP runtime first.')
     await acpSignIn('antigravity', 'oauth-personal', accountId)

@@ -145,9 +145,11 @@ export function DiffView({
         <span className="muted text-muted-foreground small text-caption">
           {view.oid
             ? t(view.stash ? '{0} · Base → stash' : '{0} · Parent → commit', { '0': view.oid.slice(0, 7) })
-            : view.staged
-              ? t('Staged changes')
-              : t('Unstaged changes')}
+            : view.staged === 'all'
+              ? t('Changes')
+              : view.staged
+                ? t('Staged changes')
+                : t('Unstaged changes')}
         </span>
         <Button
           variant="secondary"

@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import type { SessionNotification } from '@agentclientprotocol/sdk'
 import type { AgentEvent, AgentTask, AgentToolDetails, AgentToolStatus } from '@ramu/shared/types'
 import { agentContent, contentSummary } from '@ramu/shared/chat/agentContent'
-import { TOOL_KINDS, toolKind } from '@ramu/shared/chat/agentTools'
+import { TOOL_KINDS } from '@ramu/shared/chat/agentTools'
 
 type Update = Record<string, any>
 const text = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined)
@@ -76,6 +75,9 @@ export function nativeShell(
 
 /** One ACP boundary for external runtimes and Ramu-owned hosts. Updates are snapshots; chunks are deltas. */
 export class AcpEvents {
+  private context?: { used: number; max: number }
+  private compactions = new Map<string, Extract<AgentEvent, { kind: 'compaction' }>>()
+  private pendingCompaction?: string
   private stream?: { kind: 'text' | 'thinking'; messageId: string; text: string }
   private tools = new Map<string, Extract<AgentEvent, { kind: 'tool-use' }>>()
   private planId = randomUUID()
@@ -86,12 +88,10 @@ export class AcpEvents {
   /** Cursor's running todo list; it belongs to the session, so it carries across turns. */
   private todos = new Map<string, { content: string; status: 'pending' | 'in_progress' | 'completed' }>()
   /** `subagentTools` names tool calls that start a sub-agent, so they also appear as task cards. */
-  constructor(
-    private nativeExtensions = false,
-    private subagentTools: string[] = [],
-  ) {}
+  constructor(private subagentTools: string[] = []) {}
   beginTurn(): void {
     this.stream = undefined
+    this.pendingCompaction = undefined
     this.tools.clear()
     this.planId = randomUUID()
   }
@@ -214,9 +214,49 @@ export class AcpEvents {
     this.agents.set(call.toolUseId, task)
     return { ...task, kind: 'agent' }
   }
+  private compact(u: Update): AgentEvent[] {
+    if (typeof u.compactionId !== 'string' || !u.compactionId) return []
+    const previous = this.compactions.get(u.compactionId)
+    const chunk = u.sessionUpdate === 'compaction_summary_chunk'
+    if (!chunk && (typeof u.status !== 'string' || !u.status)) return []
+    const state = chunk
+      ? (previous?.state ?? 'started')
+      : u.status === 'in_progress'
+        ? 'started'
+        : ['completed', 'failed', 'cancelled'].includes(u.status)
+          ? (u.status as 'completed' | 'failed' | 'cancelled')
+          : 'unknown'
+    const event: Extract<AgentEvent, { kind: 'compaction' }> = {
+      ...previous,
+      kind: 'compaction',
+      compactionId: u.compactionId,
+      state,
+      ...(!chunk ? { providerStatus: u.status } : {}),
+      ...(!previous && state === 'started' && this.context
+        ? { beforeTokens: this.context.used, contextWindow: this.context.max }
+        : {}),
+    }
+    if (chunk) {
+      if (!u.content) return []
+      event.summary = [...(previous?.summary ?? []), ...agentContent(u.content)]
+    } else {
+      if (u.summary === null || Array.isArray(u.summary))
+        event.summary = u.summary === null ? null : agentContent(u.summary)
+      if (u.error === null || typeof u.error === 'string') event.error = u.error
+    }
+    this.compactions.set(u.compactionId, event)
+    if (!chunk || !previous) {
+      if (state === 'started' || (state === 'completed' && event.afterTokens === undefined))
+        this.pendingCompaction = u.compactionId
+      else if (this.pendingCompaction === u.compactionId) this.pendingCompaction = undefined
+    }
+    // A summary can split two assistant text streams even when it has no displayable content.
+    this.stream = undefined
+    return [event]
+  }
   consume(u: Update): AgentEvent[] {
-    if (this.nativeExtensions && u._meta?.ramu?.version === 1 && u._meta.ramu.event)
-      return [u._meta.ramu.event as AgentEvent]
+    if (u.sessionUpdate === 'compaction_update' || u.sessionUpdate === 'compaction_summary_chunk')
+      return this.compact(u)
     if (u.sessionUpdate === 'agent_message_chunk' || u.sessionUpdate === 'agent_thought_chunk') {
       const content = agentContent(u.content)
       const kind = u.sessionUpdate === 'agent_thought_chunk' ? 'thinking' : 'text'
@@ -323,87 +363,24 @@ export class AcpEvents {
       Number.isFinite(u.size) &&
       u.used >= 0 &&
       u.size > 0
-    )
-      return [{ kind: 'context', used: u.used, max: u.size }]
-    return []
-  }
-}
-
-/** Standard ACP fields remain useful to other clients; native metadata retains exact provider behavior. */
-export class AcpEventEncoder {
-  private snapshots = new Map<string, string>()
-  encode(event: AgentEvent, usageLimit = false): SessionNotification['update'] {
-    let u: Update = { sessionUpdate: 'session_info_update' }
-    if (event.kind === 'text' || event.kind === 'thinking') {
-      const key = `${event.kind}:${event.agentId ?? ''}:${event.messageId ?? ''}`
-      const before = this.snapshots.get(key) ?? ''
-      this.snapshots.set(key, event.text)
-      if (event.text.startsWith(before))
-        u = {
-          sessionUpdate: event.kind === 'text' ? 'agent_message_chunk' : 'agent_thought_chunk',
-          content: { type: 'text', text: event.text.slice(before.length) },
+    ) {
+      this.context = { used: u.used, max: u.size }
+      const events: AgentEvent[] = [{ kind: 'context', ...this.context }]
+      const pending = this.pendingCompaction && this.compactions.get(this.pendingCompaction)
+      if (
+        pending &&
+        (pending.state === 'completed' ||
+          (pending.state === 'started' && pending.beforeTokens !== undefined && u.used < pending.beforeTokens))
+      ) {
+        const event = { ...pending, afterTokens: u.used, contextWindow: pending.contextWindow ?? u.size }
+        this.compactions.set(event.compactionId!, event)
+        if (event.state === 'completed') {
+          events.push(event)
+          this.pendingCompaction = undefined
         }
-    } else if (event.kind === 'tool-use' || event.kind === 'tool-result') {
-      u = {
-        sessionUpdate: event.kind === 'tool-use' ? 'tool_call' : 'tool_call_update',
-        toolCallId: event.toolUseId,
-        ...(event.title ? { title: event.title } : {}),
       }
-      if (event.kind === 'tool-use')
-        Object.assign(u, {
-          title: event.title ?? event.summary ?? event.name,
-          kind: toolKind(event),
-          status: event.status ?? 'in_progress',
-          rawInput: event.input ?? event.summary,
-          name: event.name,
-        })
-      else
-        Object.assign(u, {
-          status: event.status ?? (event.running ? 'in_progress' : event.isError ? 'failed' : 'completed'),
-        })
-      if (event.content)
-        u.content = event.content
-          .filter((c) => c.type !== 'unsupported')
-          .map((c) =>
-            ['diff', 'terminal'].includes(c.type)
-              ? c
-              : {
-                  type: 'content',
-                  content:
-                    c.type === 'resource'
-                      ? c.text === undefined && c.blob === undefined
-                        ? {
-                            type: 'resource_link',
-                            uri: c.uri,
-                            name: c.name,
-                            ...(c.mimeType ? { mimeType: c.mimeType } : {}),
-                          }
-                        : {
-                            type: 'resource',
-                            resource: {
-                              uri: c.uri,
-                              ...(c.mimeType ? { mimeType: c.mimeType } : {}),
-                              ...(c.text !== undefined ? { text: c.text } : { blob: c.blob ?? '' }),
-                            },
-                          }
-                      : c,
-                },
-          )
-      else if (event.kind === 'tool-result')
-        u.content = [{ type: 'content', content: { type: 'text', text: event.summary } }]
-      if (event.locations) u.locations = event.locations
-    } else if (
-      event.kind === 'content' &&
-      event.content[0] &&
-      ['text', 'image', 'audio'].includes(event.content[0].type)
-    )
-      u = { sessionUpdate: 'agent_message_chunk', content: event.content[0] }
-    else if (event.kind === 'plan') u = { sessionUpdate: 'plan', entries: event.entries }
-    else if (event.kind === 'context') u = { sessionUpdate: 'usage_update', used: event.used, size: event.max }
-    if (event.kind === 'result' && !event.agentId)
-      for (const key of this.snapshots.keys())
-        if (key.startsWith('text::') || key.startsWith('thinking::')) this.snapshots.delete(key)
-    u._meta = { ramu: { version: 1, event, usageLimit } }
-    return u as SessionNotification['update']
+      return events
+    }
+    return []
   }
 }

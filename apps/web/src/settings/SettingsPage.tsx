@@ -1,3 +1,4 @@
+import { cn } from 'cn'
 import { SettingsTargetSelector, SettingsScopeContext } from './SettingsScope'
 import { t, useLanguage } from '../i18n'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -42,6 +43,11 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
+  {
+    section: 'git',
+    title: 'Combine staged and unstaged changes',
+    words: 'source control git staging unified combined commit',
+  },
   { section: 'git', title: 'Automatic pull', words: 'git auto fetch remote fast-forward background sync' },
   ...(APP_AUTO_UPDATE
     ? [
@@ -332,7 +338,7 @@ export function SettingsPage({
         )}
         <div className="settings-page-body flex flex-1 min-h-0">
           <nav
-            className="settings-navigation [&_button]:[border:0] [&_button]:bg-transparent [&_button]:text-soft [&_button]:justify-start [&_button]:text-left [&_button]:min-h-8 [&_button]:p-[0_12px] [&_button]:rounded-(--radius-s) [&_button]:text-control [&_button.on]:text-foreground [&_button.on]:bg-accent [&_button.on]:font-medium [&_button]:flex [&_button]:items-center [&_button]:gap-2.5 [&_button]:whitespace-normal [&_button]:py-1 [&_button]:leading-5 [&_button_svg]:flex-none [&_button_svg]:text-muted-foreground [&_button.on_svg]:text-brand flex-none [background:var(--sidebar)] p-[16px_10px] flex flex-col overflow-y-auto gap-0.5 w-[240px]"
+            className="settings-navigation [&_.settings-nav-button]:[border:0] [&_.settings-nav-button]:bg-transparent [&_.settings-nav-button]:text-soft [&_.settings-nav-button]:justify-start [&_.settings-nav-button]:text-left [&_.settings-nav-button]:min-h-8 [&_.settings-nav-button]:p-[0_12px] [&_.settings-nav-button]:rounded-(--radius-s) [&_.settings-nav-button]:text-control [&_.settings-nav-button.on]:text-foreground [&_.settings-nav-button.on]:bg-accent [&_.settings-nav-button.on]:font-medium [&_.settings-nav-button]:flex [&_.settings-nav-button]:items-center [&_.settings-nav-button]:gap-2.5 [&_.settings-nav-button]:whitespace-normal [&_.settings-nav-button]:py-1 [&_.settings-nav-button]:leading-5 [&_.settings-nav-button_svg]:flex-none [&_.settings-nav-button_svg]:text-muted-foreground [&_.settings-nav-button.on_svg]:text-brand flex-none [background:var(--sidebar)] p-[16px_10px] flex flex-col overflow-y-auto gap-0.5 w-[240px]"
             aria-label={t('Settings sections')}
           >
             <SearchInput
@@ -359,7 +365,7 @@ export function SettingsPage({
                     <Button
                       variant="secondary"
                       key={`${entry.section}:${entry.title}`}
-                      className="bg-fill hover:bg-fill-hover settings-result [&_svg]:mt-[3px] items-start! h-auto! min-h-10! p-[7px_12px]!"
+                      className="settings-nav-button bg-fill hover:bg-fill-hover settings-result [&_svg]:mt-[3px] items-start! h-auto! min-h-10! p-[7px_12px]!"
                       disabled={busy || navigationLocked}
                       onClick={() => open(entry)}
                     >
@@ -393,7 +399,7 @@ export function SettingsPage({
                       variant="secondary"
                       key={entry.id}
                       aria-current={entry.id === section ? 'page' : undefined}
-                      className={entry.id === section ? 'on' : ''}
+                      className={cn('settings-nav-button', entry.id === section && 'on')}
                       disabled={busy || navigationLocked}
                       onClick={() => onSection(entry.id)}
                     >
@@ -421,7 +427,7 @@ export function SettingsPage({
             </fieldset>
           </div>
         </div>
-        <footer className="settings-page-footer [&_.error]:flex-1 [&_.error]:[overflow-wrap:anywhere] flex-none flex items-center gap-2 p-[12px_20px] min-h-[58px]">
+        <footer className="settings-page-footer border-t border-line [&_.error]:flex-1 [&_.error]:[overflow-wrap:anywhere] flex-none flex items-center gap-2 p-[12px_20px] min-h-[58px]">
           {error && (
             <span className="error text-bad small text-caption" role="alert">
               {error}

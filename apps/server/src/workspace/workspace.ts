@@ -44,7 +44,8 @@ const TASK_COLUMNS = `t.id, t.project_id AS projectId, t.title, t.mode, t.worksp
       AND json_extract(e.event, '$.agentId') IS NULL), t.created_at) AS lastActiveAt,
   (SELECT MIN(w.retryAt) FROM (SELECT (SELECT json_extract(e.event, '$.retryAt') FROM agent_events e
       WHERE e.session_id = s.id AND json_extract(e.event, '$.kind') = 'provider-wait' ORDER BY e.seq DESC LIMIT 1) AS retryAt
-    FROM agent_sessions s WHERE s.task_id = t.id AND s.parent_session_id IS NULL) w) AS waitingUntil`
+    FROM agent_sessions s WHERE s.task_id = t.id AND s.parent_session_id IS NULL) w) AS waitingUntil,
+  (SELECT 'library-review' FROM library_summary_chats c WHERE c.task_id = t.id) AS kind`
 
 export const PROJECT_PREFIX = 'project:'
 export const WORKTREE_PREFIX = 'worktree:'

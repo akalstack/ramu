@@ -34,6 +34,8 @@ export const codexAdapter = defineAdapter({
       : { signedIn: false }
   },
   loginArgs: ['login'],
+  // The ACP adapter takes no skill roots from the client, but Codex scans `.agents/skills` in the chat's folder.
+  skillsLaunch: (_exportDir, cwd) => ({ linkDirs: cwd ? [join(cwd, '.agents', 'skills')] : [] }),
   updatePlan({ config, binary, findExecutable, runtimeHome }) {
     if (!findExecutable(binary)) throw new Error('Select an installed CLI before updating it.')
     if (config.codex?.binary?.trim() || process.env.RAMU_CODEX_BIN)

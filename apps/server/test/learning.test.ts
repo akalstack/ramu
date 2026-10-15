@@ -268,3 +268,23 @@ it('cancels skill learning without applying a late proposal or retrying the dism
   await service.tick(true)
   expect(analyze).toHaveBeenCalledTimes(1)
 })
+
+it('skips a repeated identical review without a model call, visibly, and retries on request', async () => {
+  await service.tick(true)
+  expect(analyze).toHaveBeenCalledTimes(1)
+  const job = service.jobs()[0]!
+  // The same job comes back (for example re-queued after a restart) with nothing changed.
+  db.prepare('UPDATE learning_jobs SET data=? WHERE id=?').run(JSON.stringify({ ...job, status: 'queued' }), job.id)
+  await service.tick(true)
+  expect(analyze).toHaveBeenCalledTimes(1)
+  expect(service.jobs()[0]).toMatchObject({ status: 'dismissed', error: 'Skipped: nothing changed' })
+  db.prepare('UPDATE learning_jobs SET data=? WHERE id=?').run(JSON.stringify({ ...job, status: 'failed' }), job.id)
+  service.retry(job.id)
+  await service.tick(true)
+  expect(analyze).toHaveBeenCalledTimes(2)
+  // A changed memory is a changed input.
+  memory.save({ projectId: 'p', kind: 'project', title: 'New fact', content: 'Something new' }, { actor: 'user' })
+  db.prepare('UPDATE learning_jobs SET data=? WHERE id=?').run(JSON.stringify({ ...job, status: 'queued' }), job.id)
+  await service.tick(true)
+  expect(analyze).toHaveBeenCalledTimes(3)
+})

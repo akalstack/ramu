@@ -1,29 +1,15 @@
 import { SETTINGS_SECTIONS } from './settings/SettingsPage'
-import { searchableChats } from './chat/chatSearch'
 import { t, useLanguage } from './i18n'
-import { FileIcon } from './editor/FileIcon'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandItem,
-  CommandEmpty,
-  CommandGroup,
-  CommandShortcut,
-} from '@/components/ui/command'
-// Commands, keyboard shortcuts and the command palette.
-import { FolderTree, Sparkles, SquareChevronRight } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { fuzzy, highlight } from './lib/fuzzy'
+// Commands and keyboard shortcuts. The command palette lives in palette/.
+import { useEffect, useRef } from 'react'
 import { notifyError } from './chat/Notifications'
 import { errorText } from './workspace/TaskPane'
-import { useModelSets } from './models/ModelSets'
 import { invoke } from './ipc'
 import { withGitBusy } from './git/gitBusy'
-import { titleFrom } from './NewTask'
 import { commitAndPush } from './git/commitShortcut'
-import { isPreviewable, isWorkspaceCtx, isWorktreeCtx, tabOrder, type WorkspaceApi } from './workspace/workspace'
+import type { PaletteMode } from './palette/sources'
+import { isPreviewable, tabOrder, type WorkspaceApi } from './workspace/workspace'
+import { terminalGroups } from '@ramu/shared/workspace/terminalGroups'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -44,6 +30,7 @@ export function taskAction(taskId: string, action: TaskAction) {
 }
 
 export interface ShellControls {
+  defaultTerminalDock?: 'right' | 'bottom'
   openPalette(mode: PaletteMode): void
   toggleSidebar(): void
   showSearch(): void
@@ -57,6 +44,15 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
   const state = taskId ? ws.taskUi[taskId] : undefined
   const tabs = state ? tabOrder(state.views) : []
   const active = tabs.find((v) => v.id === state?.activeViewId)
+  const groups = state ? terminalGroups(state) : []
+  const workspaceTabs = tabs.filter(
+    (view) =>
+      view.kind !== 'agent' &&
+      (view.kind !== 'terminal' ||
+        ((state?.terminalDock ?? shell.defaultTerminalDock ?? 'bottom') === 'right' &&
+          state?.terminalOpen !== false &&
+          groups.some((group) => group.terminalIds[0] === view.id))),
+  )
   const bindings = taskId ? (ws.bindings[taskId] ?? []).filter((b) => b.setupState === 'ready') : []
   const hasTask = () => !!taskId
   const chat =
@@ -68,11 +64,10 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     [...document.querySelectorAll('.agent-view[data-chat-visible]')].some((el) => el.checkVisibility())
 
   const cycleTab = (delta: number) => {
-    const editorTabs = tabs.filter(
-      (v) => v.kind === 'file' || v.kind === 'diff' || v.kind === 'git' || v.kind === 'review',
-    )
+    const editorTabs = workspaceTabs
     if (!taskId || !editorTabs.length) return
-    const i = editorTabs.findIndex((v) => v.id === active?.id)
+    const activeGroup = groups.find((group) => group.terminalIds.includes(active?.id ?? ''))
+    const i = editorTabs.findIndex((v) => v.id === active?.id || v.id === activeGroup?.terminalIds[0])
     ws.activateView(taskId, editorTabs[(i + delta + editorTabs.length) % editorTabs.length]!.id)
   }
   const cycleTask = (delta: number) => {
@@ -353,7 +348,12 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       title: t('Close editor'),
       category: t('View'),
       keys: 'mod+w',
-      run: () => taskId && active && ws.closeView(taskId, active.id),
+      run: () => {
+        if (!taskId || !active) return
+        const group = active.kind === 'terminal' && groups.find((group) => group.terminalIds.includes(active.id))
+        if (group) ws.closeViews(taskId, group.terminalIds)
+        else ws.closeView(taskId, active.id)
+      },
       when: () => !!active,
     },
     {
@@ -394,15 +394,11 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       category: t('View'),
       keys: `ctrl+${i + 1}`,
       run: () => {
-        const fileTabs = tabs.filter(
-          (v) => v.kind === 'file' || v.kind === 'diff' || v.kind === 'git' || v.kind === 'review',
-        )
+        const fileTabs = workspaceTabs
         const t = i === 8 ? fileTabs.at(-1) : fileTabs[i]
         if (taskId && t) ws.activateView(taskId, t.id)
       },
-      when: () =>
-        tabs.filter((v) => v.kind === 'file' || v.kind === 'diff' || v.kind === 'git' || v.kind === 'review').length >
-        i,
+      when: () => workspaceTabs.length > i,
     })),
     {
       id: 'view.sidebar',
@@ -542,290 +538,4 @@ export function formatKeys(keys: string): string {
     .split('+')
     .map((k) => sym[k] ?? k.toUpperCase())
     .join('')
-}
-
-export type PaletteMode = 'commands' | 'files'
-
-interface Item {
-  key: string
-  icon: ReactNode
-  label: string
-  detail?: string
-  hits?: number[]
-  keys?: string
-  group: string
-  run: () => void
-}
-
-/**
- * One box for everything. No prefix: files in the task's repositories, tasks and conversations.
- * ">" runs commands. Anything else can be sent straight to the agent.
- */
-export function Palette({
-  ws,
-  commands,
-  mode,
-  onClose,
-}: {
-  ws: WorkspaceApi
-  commands: Command[]
-  mode: PaletteMode
-  onClose: () => void
-}) {
-  const language = useLanguage()
-
-  const { initialSettings } = useModelSets()
-  const [query, setQuery] = useState(mode === 'commands' ? '>' : '')
-  const [files, setFiles] = useState<{ repoId: string; path: string }[]>([])
-  const [recent, setRecent] = useState<string[]>(() => {
-    try {
-      const value = JSON.parse(localStorage.getItem('ramu.recent-commands') ?? '[]')
-      return Array.isArray(value)
-        ? value.filter((entry): entry is string => typeof entry === 'string').slice(0, 20)
-        : []
-    } catch {
-      return []
-    }
-  })
-  const [sel, setSel] = useState(0)
-  const list = useRef<HTMLDivElement>(null)
-  const taskId = ws.ui.activeTaskId
-
-  useEffect(() => {
-    let disposed = false
-    setFiles([])
-    if (taskId)
-      void invoke('files.all', taskId).then(
-        (value) => {
-          if (!disposed) setFiles(value)
-        },
-        (reason) => {
-          if (!disposed) notifyError(errorText(reason), 'Quick Open')
-        },
-      )
-    return () => {
-      disposed = true
-    }
-  }, [taskId])
-
-  const items = useMemo<Item[]>(() => {
-    const isCommand = query.startsWith('>')
-    const q = isCommand ? query.slice(1).trim() : query.trim()
-    const ranked: (Item & { score: number })[] = []
-    if (isCommand) {
-      const seen = new Set<string>()
-      for (const c of commands) {
-        if ((c.when && !c.when()) || seen.has(c.title)) continue
-        seen.add(c.title)
-        const m = fuzzy(q, `${c.category}: ${c.title}`)
-        if (m)
-          ranked.push({
-            key: c.id,
-            icon: <SquareChevronRight size={14} />,
-            label: `${c.category}: ${c.title}`,
-            hits: m.hits,
-            keys: c.keys,
-            group: 'Commands',
-            run: c.run,
-            score: m.score + (!q && recent.includes(c.id) ? 1000 - recent.indexOf(c.id) : 0),
-          })
-      }
-      return ranked.sort((a, b) => b.score - a.score).slice(0, 80)
-    }
-    const location = /:(\d+)(?::(\d+))?$/.exec(q)
-    const fileQuery = location ? q.slice(0, location.index) : q
-    const repoName = (repoId: string) => (taskId ? ws.binding(taskId, repoId)?.repoName : undefined) ?? ''
-    const multiRepo = taskId ? (ws.bindings[taskId] ?? []).length > 1 : false
-    for (const f of files) {
-      const m = fuzzy(fileQuery, f.path)
-      if (m) {
-        ranked.push({
-          key: `f:${f.repoId}:${f.path}`,
-          icon: <FileIcon path={f.path} />,
-          label: f.path,
-          hits: m.hits,
-          detail: multiRepo ? repoName(f.repoId) : undefined,
-          group: 'Files',
-          run: () =>
-            taskId &&
-            ws.openView(taskId, {
-              kind: 'file',
-              repoId: f.repoId,
-              path: f.path,
-              preview: false,
-              ...(location
-                ? {
-                    selection: {
-                      line: Math.max(1, Math.min(Number(location[1]), 1_000_000)),
-                      column: Math.max(1, Math.min(Number(location[2] ?? 1), 1_000_000)),
-                      endColumn: Math.max(1, Math.min(Number(location[2] ?? 1), 1_000_000)),
-                      requestId: crypto.randomUUID(),
-                    },
-                  }
-                : {}),
-            }),
-          score: m.score,
-        })
-      }
-    }
-    const out = ranked.sort((a, b) => b.score - a.score).slice(0, q ? 40 : 12) as Item[]
-    for (const project of ws.projects) {
-      const match = fuzzy(q, `${project.name} ${project.root ?? ''}`)
-      if (q && match)
-        out.push({
-          key: `project:${project.id}`,
-          icon: <FolderTree size={14} />,
-          label: project.name,
-          detail: project.root ?? undefined,
-          group: 'Projects',
-          run: () => ws.openProject(project.id),
-        })
-    }
-    for (const chat of searchableChats(ws.tasks)) {
-      const m = fuzzy(q, chat.title)
-      if (m && q)
-        out.push({
-          key: `t:${chat.id}`,
-          icon: <FolderTree size={14} />,
-          label: chat.title,
-          hits: m.hits,
-          detail:
-            [
-              ws.projects.find((p) => p.id === chat.projectId)?.name,
-              chat.status === 'archived' ? t('Archived') : undefined,
-            ]
-              .filter(Boolean)
-              .join(' · ') || undefined,
-          group: 'Chats',
-          run: () => ws.openTask(chat.id),
-        })
-    }
-    if (q && taskId) {
-      // Send what you typed to the agent: the open conversation if there is one, else a new chat.
-      const state = ws.taskUi[taskId]
-      const chat = state?.views.find((v) => v.id === state.activeAgentViewId && v.kind === 'agent')
-      out.push({
-        key: 'ask',
-        icon: <Sparkles size={14} />,
-        label: q,
-        detail: chat ? t('Send to the agent') : t('Start a chat with the agent'),
-        group: 'Agent',
-        run: async () => {
-          if (chat?.kind === 'agent') {
-            await invoke('agent.send', chat.sessionId, q)
-            ws.activateView(taskId, chat.id)
-          } else if (isWorkspaceCtx(taskId)) {
-            // From a project's workspace view, a message starts a new chat (task) in that project.
-            const task = await invoke('tasks.create', {
-              projectId: ws.projectOf(taskId)!.id,
-              title: titleFrom(q),
-              mode: isWorktreeCtx(taskId) ? 'worktree' : 'current',
-              workspaceId: isWorktreeCtx(taskId) ? taskId.slice('worktree:'.length) : undefined,
-            })
-            await ws.refresh()
-            ws.openTask(task.id)
-            const s = await invoke('agent.start', task.id, q, initialSettings)
-            ws.openView(task.id, { kind: 'agent', sessionId: s.id })
-          } else {
-            const s = await invoke('agent.start', taskId, q, initialSettings)
-            ws.openView(taskId, { kind: 'agent', sessionId: s.id })
-          }
-        },
-      })
-    }
-    return out
-  }, [query, files, commands, ws, taskId, recent, initialSettings, language])
-
-  useEffect(() => setSel(0), [query])
-  useEffect(() => setSel((current) => Math.max(0, Math.min(current, items.length - 1))), [items.length])
-  useEffect(() => {
-    list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
-  }, [sel])
-
-  const choose = (item: Item | undefined) => {
-    if (!item) return
-    if (item.group === 'Commands') {
-      const next = [item.key, ...recent.filter((key) => key !== item.key)].slice(0, 20)
-      setRecent(next)
-      try {
-        localStorage.setItem('ramu.recent-commands', JSON.stringify(next))
-      } catch {
-        /* Session history remains available. */
-      }
-    }
-    onClose()
-    void Promise.resolve()
-      .then(item.run)
-      .catch((reason) => notifyError(errorText(reason), 'Command palette'))
-  }
-
-  // The shadcn Command pieces do the layout; items are grouped in the order they were ranked.
-  const groups: { name: string; items: { item: Item; index: number }[] }[] = []
-  items.forEach((item, index) => {
-    const group =
-      groups.find((entry) => entry.name === item.group) ??
-      (groups.push({ name: item.group, items: [] }), groups.at(-1)!)
-    group.items.push({ item, index })
-  })
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose()
-      }}
-    >
-      <DialogContent
-        className="palette [[data-slot='dialog-content']&]:block [[data-slot='dialog-content']&]:p-0 [[data-slot='dialog-content']&]:max-w-[none] [[data-slot='dialog-content']&]:gap-0 [[data-slot='dialog-content']&]:w-[min(640px,_calc(100vw_-_48px))] [[data-slot='dialog-content']&]:top-[12vh]! [[data-slot='dialog-content']&]:[translate:-50%_0]! [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgba(255,_255,_255,_0.07)] [&_[data-slot='command']]:p-1.5 [&_[data-slot='command-input-wrapper']]:p-[2px_2px_6px] [&_[data-slot='command-input']]:text-chat [&_[data-slot='command-input']]:[border:0] [&_[data-slot='command-input']]:[box-shadow:none] [&_[data-slot='command-input']]:[outline:0] [&_[data-slot='command-input']]:bg-transparent [&_[data-slot='command-input']]:p-0 [&_[data-slot='command-input']]:min-h-0 [&_[data-slot='command-input']]:h-full [&_[data-slot='command-item']]:gap-2.5 [&_[data-slot='command-item']]:min-h-8 [&_[data-slot='command-item']]:pt-1 [&_[data-slot='command-item']]:pb-1 [&_[data-slot='command-item']]:rounded-(--radius-s) [&_[data-slot='command-item'][data-selected='true']]:bg-accent [&_[data-slot='command-item'][data-selected='true']]:text-foreground [&_.palette-icon]:flex [&_.palette-icon]:flex-none [&_.palette-icon]:text-muted-foreground [&_[data-slot='command-item'][data-selected='true']_.palette-icon]:text-brand [&_.palette-label]:flex-1 [&_.palette-label]:min-w-0 [&_.palette-label]:overflow-hidden [&_.palette-label]:text-ellipsis [&_.palette-label]:whitespace-nowrap [&_.palette-label_mark]:bg-transparent [&_.palette-label_mark]:text-brand [&_.palette-label_mark]:font-semibold [&_[data-slot='command-shortcut']]:ml-auto [&_[data-slot='command-shortcut']]:pl-3 [&_[data-slot='command-shortcut']]:whitespace-nowrap [&_[data-slot='command-shortcut']]:text-caption [&_[data-slot='command-shortcut']]:tracking-[0] [&_[data-slot='command-input']:focus]:[border:0] [&_[data-slot='command-input']:focus]:[box-shadow:none] [&_[data-slot='command-input']:focus]:[outline:0] [&_[data-slot='command-input']:focus]:bg-transparent [&_[data-slot='command-input']:focus]:p-0 [&_[data-slot='command-input']:focus]:min-h-0 [&_[data-slot='command-input']:focus]:h-full [&_[data-slot='command-input']:focus-visible]:[border:0] [&_[data-slot='command-input']:focus-visible]:[box-shadow:none] [&_[data-slot='command-input']:focus-visible]:[outline:0] [&_[data-slot='command-input']:focus-visible]:bg-transparent [&_[data-slot='command-input']:focus-visible]:p-0 [&_[data-slot='command-input']:focus-visible]:min-h-0 [&_[data-slot='command-input']:focus-visible]:h-full [&_[data-slot='command-input-wrapper']_[data-slot='input-group-addon']]:pl-[9px]! [&_[data-slot='command-input-wrapper']_[data-slot='input-group-addon']]:pr-0 [&_[data-slot='command-input-wrapper']_[data-slot='command-input']]:pl-2.5 w-[min(640px,_calc(100vw_-_48px))] bg-card [border:1px_solid_var(--edge)] [box-shadow:0_24px_64px_rgba(0,_0,_0,_0.55)] overflow-hidden [animation:pop_0.14s_var(--ease)] rounded-(--radius-l)"
-        showCloseButton={false}
-        aria-describedby={undefined}
-      >
-        <DialogTitle className="sr-only">{t('Command palette')}</DialogTitle>
-        <Command
-          shouldFilter={false}
-          value={items[sel]?.key ?? ''}
-          onValueChange={(value) => {
-            const index = items.findIndex((it) => it.key === value)
-            if (index >= 0) setSel(index)
-          }}
-        >
-          <CommandInput
-            autoFocus
-            aria-label={t('Search files and commands')}
-            value={query}
-            placeholder={taskId ? t('Search files, chats, or projects. Type > for commands') : t('Type > for commands')}
-            onValueChange={setQuery}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') onClose()
-            }}
-          />
-          <CommandList id="palette-options" ref={list} className="max-h-[min(440px,calc(100vh-180px))]">
-            <CommandEmpty>{t('No matches')}</CommandEmpty>
-            {groups.map((group) => (
-              <CommandGroup key={group.name} heading={t(group.name)}>
-                {group.items.map(({ item: it, index: i }) => (
-                  <CommandItem key={it.key} value={it.key} id={`palette-option-${i}`} onSelect={() => choose(it)}>
-                    <span className="palette-icon text-muted-foreground flex flex-none">{it.icon}</span>
-                    <span className="palette-label [&_mark]:bg-transparent [&_mark]:text-brand [&_mark]:font-semibold flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-                      {it.hits
-                        ? highlight(it.label, it.hits).map((r, j) =>
-                            r.hit ? <mark key={j}>{r.text}</mark> : <span key={j}>{r.text}</span>,
-                          )
-                        : it.label}
-                    </span>
-                    {it.keys ? (
-                      <CommandShortcut>{formatKeys(it.keys)}</CommandShortcut>
-                    ) : it.detail ? (
-                      <CommandShortcut className="palette-detail text-caption text-muted-foreground whitespace-nowrap">
-                        {it.detail}
-                      </CommandShortcut>
-                    ) : null}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ))}
-          </CommandList>
-        </Command>
-      </DialogContent>
-    </Dialog>
-  )
 }

@@ -2,6 +2,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
+import { createRequire } from 'node:module'
+import { providerAdapter } from './adapters'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { createInterface } from 'node:readline'
 import { AcpEvents } from './acpEvents'
@@ -12,16 +14,30 @@ import type {
   AgentScope,
   AgentSettings,
   Attachment,
+  ElicitationAction,
   McpConnection,
 } from '@ramu/shared/types'
 import { providerName } from '@ramu/shared/providers/providers'
 import { attachmentPrompt } from '../attachments'
+import { elicitationContent, elicitationRequest } from '../agent/elicitation'
+import { baseMode } from '../agent/settings'
 import { isLimitMessage, isLimitReply, limitResetsAt } from './usageLimit'
 import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 
 type Wire = Record<string, any>
-type AcpProvider = 'cursor' | 'antigravity' | 'opencode'
+type AcpProvider = 'cursor' | 'antigravity' | 'opencode' | 'codex' | 'claude-code'
+/** The official Codex ACP adapter ships as a dependency; `RAMU_CODEX_ACP_ENTRY` points at another build. */
+const codexAcpEntry = () =>
+  process.env.RAMU_CODEX_ACP_ENTRY ||
+  createRequire(import.meta.url).resolve('@agentclientprotocol/codex-acp/dist/index.js')
+/** The official Claude ACP adapter ships as a dependency; `RAMU_CLAUDE_ACP_ENTRY` points at another build. */
+const claudeAcpEntry = () =>
+  process.env.RAMU_CLAUDE_ACP_ENTRY ||
+  createRequire(import.meta.url).resolve('@agentclientprotocol/claude-agent-acp/dist/index.js')
 export function acpCommand(provider: AcpProvider): { command: string; args: string[] } {
+  if (provider === 'claude-code') return { command: process.execPath, args: [claudeAcpEntry()] }
+  // The adapter runs the user's own `codex` binary (CODEX_PATH) so accounts and updates stay Ramu-managed.
+  if (provider === 'codex') return { command: process.execPath, args: [codexAcpEntry()] }
   return {
     command: providerBinary(provider),
     args: provider === 'cursor' || provider === 'opencode' ? ['acp'] : process.platform === 'linux' ? ['--uid='] : [],
@@ -132,6 +148,8 @@ export class AcpRpc {
       clientCapabilities: {
         fs: { readTextFile: false, writeTextFile: false },
         terminal: false,
+        session: { compaction: {} },
+        ...(this.provider === 'codex' || this.provider === 'claude-code' ? { elicitation: { form: {} } } : {}),
         ...(this.provider === 'opencode' ? { _meta: { 'opencode/child-session-updates': true } } : {}),
       },
     })
@@ -247,13 +265,17 @@ export async function acpAside({
 }
 /**
  * OpenCode reads inline config from the environment. Denying its `task` permission removes the native sub-agent tool,
- * so every sub-agent goes through `ramu_agent`. Existing inline config is kept.
+ * so every sub-agent goes through `ramu_agent`. Its `skills` setting lists Ramu's managed-skill export without touching the
+ * user's own skill folders. Existing inline config is kept.
  */
 export function openCodeConfigEnv(
   connection: McpConnection | undefined,
   existing = process.env.OPENCODE_CONFIG_CONTENT,
 ): Record<string, string> {
-  if (connection?.nativeSubagents !== false) return {}
+  const skillPaths = connection?.skillsDir
+    ? (providerAdapter('opencode').skillsLaunch?.(connection.skillsDir).configPaths ?? [])
+    : []
+  if (connection?.nativeSubagents !== false && !skillPaths.length) return {}
   let config: Wire
   try {
     config = existing ? JSON.parse(existing) : {}
@@ -265,7 +287,115 @@ export function openCodeConfigEnv(
     config.permission && typeof config.permission === 'object' && !Array.isArray(config.permission)
       ? config.permission
       : {}
-  return { OPENCODE_CONFIG_CONTENT: JSON.stringify({ ...config, permission: { ...permission, task: 'deny' } }) }
+  // `skills` is a list of folders, or the older `{ paths, urls }` object.
+  const legacy = config.skills && typeof config.skills === 'object' && !Array.isArray(config.skills)
+  const listed: string[] = Array.isArray(config.skills) ? config.skills : legacy ? (config.skills.paths ?? []) : []
+  const merged = [...new Set([...listed, ...skillPaths])]
+  return {
+    OPENCODE_CONFIG_CONTENT: JSON.stringify({
+      ...config,
+      ...(connection?.nativeSubagents === false ? { permission: { ...permission, task: 'deny' } } : {}),
+      ...(skillPaths.length ? { skills: legacy ? { ...config.skills, paths: merged } : merged } : {}),
+    }),
+  }
+}
+/**
+ * The Codex adapter replaces `mcp_servers` with the servers ACP passes, which cannot carry a tool timeout, so Ramu's
+ * server travels in the session config instead. Native sub-agents are switched off the way the app server was.
+ */
+export function codexAcpEnv(connection: McpConnection | undefined): Record<string, string> {
+  const config = {
+    ...(connection
+      ? {
+          mcp_servers: {
+            ramu: {
+              url: connection.url,
+              http_headers: { Authorization: `Bearer ${connection.token}` },
+              tool_timeout_sec: 3600,
+            },
+          },
+        }
+      : {}),
+    ...(connection?.nativeSubagents === false ? { features: { multi_agent: false } } : {}),
+    // Codex asks Ramu's own tool before one of its sub-agents starts (see CODEX_HOOK_CONFIG).
+    ...(connection?.interceptSubagents
+      ? {
+          hooks: {
+            PreToolUse: [
+              {
+                matcher: 'spawn_agent',
+                hooks: [
+                  {
+                    type: 'mcp_tool',
+                    server: 'ramu',
+                    tool: 'codex_pre_tool_use',
+                    input: { tool_name: '${tool_name}', tool_input: '${tool_input}', session_id: '${session_id}' },
+                  },
+                ],
+              },
+            ],
+          },
+        }
+      : {}),
+  }
+  return {
+    CODEX_PATH: providerBinary('codex'),
+    ELECTRON_RUN_AS_NODE: '1',
+    ...(Object.keys(config).length ? { CODEX_CONFIG: JSON.stringify(config) } : {}),
+  }
+}
+/** Ramu's own tools that only manage questions, goals, advice and memory; they never grant file or command access. */
+const RAMU_SCOPED_TOOLS = [
+  'ask_user',
+  'question_status',
+  'wait_for_answer',
+  'close_question',
+  'advisor',
+  'wait_for_advice',
+  'set_goal',
+  'get_goal',
+  'update_goal',
+  'tool_search',
+  'tool_result_read',
+  'memory_read',
+  'session_recall',
+]
+/** The adapter runs the user's own `claude` (CLAUDE_CODE_EXECUTABLE), so accounts and updates stay Ramu-managed. */
+export function claudeAcpEnv(connection: McpConnection | undefined): Record<string, string> {
+  return {
+    CLAUDE_CODE_EXECUTABLE: providerBinary('claude-code'),
+    ELECTRON_RUN_AS_NODE: '1',
+    ...(connection ? { MCP_TOOL_TIMEOUT: String(3_600_000) } : {}),
+  }
+}
+/**
+ * What Ramu used to put in the Claude SDK's options, as the adapter's session `_meta`: the guidance as an appended system
+ * prompt, the managed-skill plugin, sub-agent tools switched off when Ramu runs sub-agents, and the tools that need no approval.
+ */
+export function claudeSessionMeta(connection: McpConnection | undefined, settings: AgentSettings): Wire {
+  const plugins = connection?.skillsDir
+    ? (providerAdapter('claude-code').skillsLaunch?.(connection.skillsDir).plugins ?? [])
+    : []
+  const allowed = connection
+    ? connection.restricted
+      ? ['mcp__ramu']
+      : RAMU_SCOPED_TOOLS.map((name) => `mcp__ramu__${name}`)
+    : []
+  return {
+    ...(connection?.instructions ? { systemPrompt: { append: connection.instructions } } : {}),
+    claudeCode: {
+      options: {
+        settingSources: ['user', 'project', 'local'],
+        ...(plugins.length ? { plugins: plugins.map((path) => ({ type: 'local', path })) } : {}),
+        ...(connection?.replaceAdvisor ? { settings: { advisorModel: '' } } : {}),
+        ...(connection?.nativeSubagents === false ? { disallowedTools: ['Agent', 'Task'] } : {}),
+        // A review chat about learned memories has no built-in file, shell or Git tools, only Ramu's own.
+        ...(connection?.restricted ? { tools: [] } : {}),
+        ...(allowed.length ? { allowedTools: allowed } : {}),
+        allowDangerouslySkipPermissions: settings.access === 'full',
+      },
+    },
+  }
 }
 /** Runs the runtime's own sign-in. Antigravity opens the browser itself and stores the credentials in its home. */
 export async function acpSignIn(
@@ -302,7 +432,11 @@ class AcpSession implements AgentRunner {
   private turnTools = 0
   private seenTools = new Set<string>()
   readonly canSteer = true
-  readonly steerInterrupts = true
+  /** A runtime that advertises `_session/steering` takes input into the running turn; the rest cancel it and start over. */
+  private nativeSteering = false
+  get steerInterrupts(): boolean {
+    return !this.nativeSteering
+  }
   private loading = false
   private events: AcpEvents
   private pending = new Map<string, Wire>()
@@ -314,7 +448,13 @@ class AcpSession implements AgentRunner {
     private emit: (event: AgentEvent, limit?: boolean) => void,
     private readOnly = false,
   ) {
-    this.events = new AcpEvents(false, settings.provider === 'antigravity' ? ['invoke_subagent'] : ['task', 'subagent'])
+    this.events = new AcpEvents(
+      settings.provider === 'antigravity'
+        ? ['invoke_subagent']
+        : settings.provider === 'claude-code'
+          ? ['agent', 'task']
+          : ['task', 'subagent'],
+    )
   }
   setTools(connection: McpConnection): void {
     this.connection = connection
@@ -325,7 +465,11 @@ class AcpSession implements AgentRunner {
       provider,
       this.scope.cwd,
       this.settings.accountId ?? 'default',
-      provider === 'opencode' ? openCodeConfigEnv(this.connection) : {},
+      provider === 'opencode'
+        ? openCodeConfigEnv(this.connection)
+        : provider === 'codex'
+          ? codexAcpEnv(this.connection)
+          : {},
     )
     this.rpc.onMessage = (m) => this.handle(m)
     this.rpc.onExit = (e) => {
@@ -337,6 +481,7 @@ class AcpSession implements AgentRunner {
     const init = await this.rpc.initialize()
     const capabilities = init.agentCapabilities ?? {}
     this.prompts = capabilities.promptCapabilities
+    this.nativeSteering = init._meta?.steering?.supported === true
     // `session/resume` continues without replaying history; `session/load` is the older way. With neither, the caller continues from the transcript.
     const method = !resume
       ? 'session/new'
@@ -357,22 +502,25 @@ class AcpSession implements AgentRunner {
         kind: 'error',
         message: `${providerName(provider)} cannot connect to Ramu's tools over HTTP, so questions, helpers and advice are unavailable in this chat.`,
       })
+    this.sessionId = resume ?? ''
     this.loading = true
     try {
       this.session = await this.rpc.request(method, {
         ...(resume ? { sessionId: resume } : {}),
         cwd: this.scope.cwd,
         additionalDirectories: this.scope.additionalDirs,
-        mcpServers: tools
-          ? [
-              {
-                type: 'http',
-                name: 'ramu',
-                url: tools.url,
-                headers: [{ name: 'Authorization', value: `Bearer ${tools.token}` }],
-              },
-            ]
-          : [],
+        ...(provider === 'claude-code' ? { _meta: claudeSessionMeta(this.connection, this.settings) } : {}),
+        mcpServers:
+          tools && provider !== 'codex'
+            ? [
+                {
+                  type: 'http',
+                  name: 'ramu',
+                  url: tools.url,
+                  headers: [{ name: 'Authorization', value: `Bearer ${tools.token}` }],
+                },
+              ]
+            : [],
       })
     } catch (e) {
       // The runtime answered but no longer has the session; a crash or timeout is a different failure and stays one.
@@ -406,12 +554,23 @@ class AcpSession implements AgentRunner {
           value: this.settings.effort,
         })
     }
+    if (provider === 'claude-code' && !this.readOnly) {
+      // Claude's permission mode carries the chat's access level; the adapter starts in its own default.
+      const config = (this.session.configOptions ?? []).find((c: Wire) => c.category === 'mode' || c.id === 'mode')
+      const mode = baseMode(this.settings)
+      if (config && optionsOf(config).some((o) => o.value === mode))
+        await this.rpc.request('session/set_config_option', {
+          sessionId: this.sessionId,
+          configId: config.id,
+          value: mode,
+        })
+    }
     if (this.readOnly) {
       const config = (this.session.configOptions ?? []).find((c: Wire) => c.category === 'mode' || c.id === 'mode')
       const modes = config
         ? optionsOf(config).map((o) => o.value)
         : (this.session.modes?.availableModes ?? []).map((m: Wire) => m.id)
-      const mode = modes.find((id: string) => id === 'ask' || id === 'plan')
+      const mode = modes.find((id: string) => id === 'ask' || id === 'plan' || id === 'read-only')
       if (!mode)
         throw new Error(`${providerName(provider)} does not advertise a read-only mode for background analysis`)
       await this.rpc.request(
@@ -432,13 +591,7 @@ class AcpSession implements AgentRunner {
     })
     await this.send(prompt, attachments)
   }
-  async send(prompt: string, attachments: Attachment[] = []): Promise<void> {
-    if (this.active) throw new Error('Wait for the current turn to finish, or interrupt it first.')
-    if (!this.rpc || this.stopped) throw new Error('ACP session is not running')
-    this.events.beginTurn()
-    this.turnText.clear()
-    this.turnTools = 0
-    this.seenTools.clear()
+  private promptBlocks(prompt: string, attachments: Attachment[]): Wire[] {
     // Image blocks are optional in ACP. A runtime that lists its prompt support without images gets the saved path in the text instead.
     const images = attachments.filter((f) => f.mimeType.startsWith('image/'))
     const inline = !this.prompts || this.prompts.image === true
@@ -452,6 +605,16 @@ class AcpSession implements AgentRunner {
     if (inline)
       for (const file of images)
         content.push({ type: 'image', mimeType: file.mimeType, data: readFileSync(file.path).toString('base64') })
+    return content
+  }
+  async send(prompt: string, attachments: Attachment[] = []): Promise<void> {
+    if (this.active) throw new Error('Wait for the current turn to finish, or interrupt it first.')
+    if (!this.rpc || this.stopped) throw new Error('ACP session is not running')
+    this.events.beginTurn()
+    this.turnText.clear()
+    this.turnTools = 0
+    this.seenTools.clear()
+    const content = this.promptBlocks(prompt, attachments)
     this.emit({ kind: 'state', state: 'running' })
     this.active = this.rpc.request('session/prompt', { sessionId: this.sessionId, prompt: content }, 0).then(
       (r) => {
@@ -481,9 +644,20 @@ class AcpSession implements AgentRunner {
       },
     )
   }
-  /** ACP has no way to add input to a running turn, so steering cancels it and continues the same session with the new message. */
+  /**
+   * `_session/steering` adds the message to the running turn when the runtime offers it. Otherwise ACP has no way to add
+   * input to a running turn, so steering cancels it and continues the same session with the new message.
+   */
   async steer(prompt: string, attachments: Attachment[] = []): Promise<void> {
     if (!this.active || !this.rpc || this.stopped) throw new Error('There is no running turn to steer')
+    if (this.nativeSteering) {
+      // An `injected` outcome continues the running prompt; any other outcome starts a turn the runtime reports itself.
+      await this.rpc.request('_session/steering', {
+        sessionId: this.sessionId,
+        prompt: this.promptBlocks(prompt, attachments),
+      })
+      return
+    }
     this.steering = true
     try {
       this.rpc.write({ method: 'session/cancel', params: { sessionId: this.sessionId } })
@@ -530,7 +704,9 @@ class AcpSession implements AgentRunner {
     for (const [id, m] of this.pending) {
       this.rpc?.write({
         id: m.id,
-        result: { outcome: m.method.startsWith('cursor/') ? 'cancelled' : { outcome: 'cancelled' } },
+        result: m.elicitation
+          ? { action: 'cancel' }
+          : { outcome: m.method.startsWith('cursor/') ? 'cancelled' : { outcome: 'cancelled' } },
       })
       this.emit({ kind: 'request-resolved', requestId: id, outcome: 'cancelled' })
     }
@@ -585,8 +761,10 @@ class AcpSession implements AgentRunner {
     if (this.stopped || !m.method) return
     const p = m.params ?? {}
     if (m.method === 'session/update') {
-      if (this.loading || p.sessionId !== this.sessionId) return
+      if (p.sessionId !== this.sessionId) return
       const u = p.update ?? {}
+      if (this.loading && !['compaction_update', 'compaction_summary_chunk', 'usage_update'].includes(u.sessionUpdate))
+        return
       for (const event of this.events.consume(u)) {
         if (event.kind === 'text' && !event.agentId) this.turnText.set(event.messageId ?? '', event.text)
         if (event.kind === 'tool-use' && !event.agentId && !this.seenTools.has(event.toolUseId)) {
@@ -695,7 +873,8 @@ class AcpSession implements AgentRunner {
                 options: (q.options ?? []).map((o: Wire) => ({ label: o.label, description: '' })),
               })),
         })
-      } else if (this.readOnly) {
+      } else if (this.readOnly || this.connection?.restricted) {
+        // A review chat about learned memories may only use Ramu's own tools, which need no approval.
         this.replyPermission(id, false)
         return
       } else if (
@@ -708,13 +887,46 @@ class AcpSession implements AgentRunner {
         this.emit({
           kind: 'permission-request',
           requestId: id,
-          toolName: p.toolCall?.kind || 'Plan',
+          toolName: p.toolCall?._meta?.claudeCode?.toolName || p.toolCall?.kind || 'Plan',
           title: p.toolCall?.title || p.name || 'Approve plan?',
           detail: p.plan || JSON.stringify(p.toolCall?.rawInput ?? {}),
         })
       this.emit({ kind: 'state', state: 'needs-input' })
       return
     }
+    if (m.method === 'elicitation/create') {
+      const id = String(m.id)
+      if (this.readOnly) {
+        this.rpc?.write({ id: m.id, result: { action: 'cancel' } })
+        return
+      }
+      try {
+        const elicitation = elicitationRequest(id, {
+          serverName: p._meta?.serverName ?? providerName(this.settings.provider),
+          ...p,
+        })
+        this.pending.set(id, { ...m, elicitation })
+        this.emit({ kind: 'elicitation', ...elicitation })
+        this.emit({ kind: 'state', state: 'needs-input' })
+      } catch {
+        // A form Ramu cannot render is declined rather than left waiting.
+        this.rpc?.write({ id: m.id, result: { action: 'decline' } })
+      }
+      return
+    }
     this.rpc?.write({ id: m.id, error: { code: -32601, message: `Unsupported client method: ${m.method}` } })
+  }
+  replyElicitation(id: string, action: ElicitationAction, answers: Record<string, string>): void {
+    const m = this.pending.get(id)
+    if (!m?.elicitation) throw new Error('That input request is no longer pending.')
+    const content = action === 'accept' ? elicitationContent(m.elicitation, answers) : undefined
+    this.pending.delete(id)
+    this.rpc!.write({ id: m.id, result: { action, ...(content ? { content } : {}) } })
+    this.emit({
+      kind: 'request-resolved',
+      requestId: id,
+      outcome: action === 'accept' ? 'answered' : action === 'decline' ? 'declined' : 'cancelled',
+    })
+    if (!this.pending.size) this.emit({ kind: 'state', state: 'running' })
   }
 }

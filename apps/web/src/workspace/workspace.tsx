@@ -161,8 +161,21 @@ export function tabOrder(views: ViewDescriptor[]): ViewDescriptor[] {
 }
 
 /** The active tab is the main content; the last focused conversation is the one docked beside files. */
-function focus(s: TaskUiState, v: ViewDescriptor): TaskUiState {
-  if (v.kind === 'terminal') return { ...s, activeTerminalId: v.id, terminalOpen: true }
+function focus(s: TaskUiState, v: ViewDescriptor, defaultDock: 'right' | 'bottom'): TaskUiState {
+  if (v.kind === 'terminal')
+    return {
+      ...s,
+      activeTerminalId: v.id,
+      terminalOpen: true,
+      ...((s.terminalDock ?? defaultDock) === 'right'
+        ? {
+            activeViewId: v.id,
+            terminalReturnViewId: s.views.some((view) => view.id === s.activeViewId && view.kind === 'terminal')
+              ? s.terminalReturnViewId
+              : s.activeViewId,
+          }
+        : {}),
+    }
   return { ...s, activeViewId: v.id, activeAgentViewId: v.kind === 'agent' ? v.id : s.activeAgentViewId }
 }
 
@@ -533,6 +546,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         dockHidden: shared.dockHidden,
         views: [...own.views.filter((v) => v.kind === 'agent'), ...shared.views.filter((v) => v.kind !== 'agent')],
         activeTerminalId: shared.activeTerminalId,
+        terminalReturnViewId: shared.terminalReturnViewId,
         terminalOpen: shared.terminalOpen,
         terminalLayout: shared.terminalLayout,
         terminalGroups: shared.terminalGroups,
@@ -571,22 +585,25 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       }
       for (const [owner, ids] of owners) {
         updateTaskUi(owner, (state) => {
-          const ordered = tabOrder(state.views).filter((view) => view.kind !== 'terminal')
+          const workspaceTerminals = (state.terminalDock ?? preferences.defaultTerminalDock) === 'right'
+          const ordered = tabOrder(state.views).filter((view) => workspaceTerminals || view.kind !== 'terminal')
           const index = ordered.findIndex((view) => view.id === state.activeViewId)
           const views = state.views.filter((view) => !ids.has(view.id))
-          const remaining = tabOrder(views).filter((view) => view.kind !== 'terminal')
+          const remaining = tabOrder(views).filter((view) => workspaceTerminals || view.kind !== 'terminal')
           const terminals = views.filter((view) => view.kind === 'terminal')
+          const activeViewId = ids.has(state.activeViewId ?? '')
+            ? (remaining[Math.max(0, Math.min(index, remaining.length - 1))]?.id ?? null)
+            : state.activeViewId
+          const selectedTerminal = terminals.find((view) => view.id === activeViewId)
           return {
             ...state,
             views,
-            activeViewId: ids.has(state.activeViewId ?? '')
-              ? (remaining[Math.max(0, Math.min(index, remaining.length - 1))]?.id ?? null)
-              : state.activeViewId,
+            activeViewId,
             activeAgentViewId: ids.has(state.activeAgentViewId ?? '')
               ? (views.filter((view) => view.kind === 'agent').at(-1)?.id ?? null)
               : state.activeAgentViewId,
             terminalGroups: terminalGroups({ ...state, views }),
-            activeTerminalId: terminalFocusAfterClose(state, ids),
+            activeTerminalId: selectedTerminal?.id ?? terminalFocusAfterClose(state, ids),
             terminalOpen: terminals.length ? state.terminalOpen : false,
           }
         })
@@ -780,6 +797,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
                 : {}),
             },
             desc,
+            preferences.defaultTerminalDock,
           )
         })
       },
@@ -812,7 +830,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         if (viewId === targetId) return
         updateTaskUi(workspaceOf(taskId), (state) => {
           const moving = state.views.find((view) => view.id === viewId)
-          if (!moving || moving.kind === 'agent' || moving.kind === 'terminal') return state
+          if (!moving || moving.kind === 'agent') return state
           const rest = state.views.filter((view) => view.id !== viewId)
           const at = rest.findIndex((view) => view.id === targetId)
           if (at < 0) return state
@@ -829,10 +847,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
           return {
             ...state,
             activeViewId: null,
-            lastWorkspaceViewId:
-              current && current.kind !== 'agent' && current.kind !== 'terminal'
-                ? current.id
-                : state.lastWorkspaceViewId,
+            lastWorkspaceViewId: current && current.kind !== 'agent' ? current.id : state.lastWorkspaceViewId,
           }
         })
         if (owner !== taskId) updateTaskUi(taskId, (state) => ({ ...state, activeViewId: null }))
@@ -875,11 +890,16 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       showWorkspace(taskId) {
         if (effectiveUi[taskId]?.restoreTerminal)
           updateTaskUi(workspaceOf(taskId), (state) => ({ ...state, terminalOpen: true, restoreTerminal: false }))
-        const editors = viewsOf(taskId).filter((view) => view.kind !== 'agent' && view.kind !== 'terminal')
+        const state = effectiveUi[taskId]
+        const editors = viewsOf(taskId).filter(
+          (view) =>
+            view.kind !== 'agent' &&
+            (view.kind !== 'terminal' || (state?.terminalDock ?? preferences.defaultTerminalDock) === 'right'),
+        )
         const target = editors.find((view) => view.id === effectiveUi[taskId]?.lastWorkspaceViewId) ?? editors.at(-1)
         if (!target) return
         const owner = workspaceOf(taskId)
-        updateTaskUi(owner, (state) => focus(state, target))
+        updateTaskUi(owner, (state) => focus(state, target, preferences.defaultTerminalDock))
         if (owner !== taskId) updateTaskUi(taskId, (state) => ({ ...state, activeViewId: target.id }))
       },
       activateView(taskId, viewId) {
@@ -887,13 +907,37 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         if (!view) return
         if (view.kind === 'agent') updateTaskUi(workspaceOf(taskId), (state) => ({ ...state, activeViewId: null }))
         const owner = view.kind === 'agent' ? taskId : workspaceOf(taskId)
-        updateTaskUi(owner, (s) => focus(s, view))
+        updateTaskUi(owner, (s) => focus(s, view, preferences.defaultTerminalDock))
         if (owner !== taskId && view.kind !== 'terminal') updateTaskUi(taskId, (s) => ({ ...s, activeViewId: viewId }))
       },
-      setTerminalPanel: (taskId, settings) => updateTaskUi(workspaceOf(taskId), (s) => ({ ...s, ...settings })),
+      setTerminalPanel: (taskId, settings) =>
+        updateTaskUi(workspaceOf(taskId), (s) => {
+          const next = { ...s, ...settings }
+          const active = s.views.find((view) => view.id === s.activeViewId)
+          const terminal = s.views.find((view) => view.id === s.activeTerminalId && view.kind === 'terminal')
+          if (
+            terminal &&
+            (next.terminalDock ?? preferences.defaultTerminalDock) === 'right' &&
+            next.terminalOpen !== false &&
+            (settings.terminalDock === 'right' || settings.terminalOpen === true)
+          )
+            return focus(next, terminal, preferences.defaultTerminalDock)
+          if (active?.kind === 'terminal' && (next.terminalDock === 'bottom' || next.terminalOpen === false))
+            next.activeViewId = s.views.some((view) => view.id === s.terminalReturnViewId && view.kind !== 'terminal')
+              ? s.terminalReturnViewId!
+              : null
+          return next
+        }),
       splitTerminal: (taskId, direction) => {
         const id = crypto.randomUUID()
-        updateTaskUi(workspaceOf(taskId), (s) => splitTerminal(s, direction, id))
+        updateTaskUi(workspaceOf(taskId), (s) => {
+          const next = splitTerminal(s, direction, id)
+          return focus(
+            next,
+            next.views.find((view) => view.id === id)!,
+            preferences.defaultTerminalDock,
+          )
+        })
       },
       unsplitTerminal: (taskId, terminalId) => updateTaskUi(workspaceOf(taskId), (s) => unsplitTerminal(s, terminalId)),
       setDockWidth: (taskId, width) =>

@@ -96,7 +96,10 @@ export class AgentTasks {
       return
     }
     // An ACP runtime's own helper runs inside the turn: steering cancels the turn, which ends the helper, then continues.
-    if (this.host.runners.has(id) && isAcpProvider(this.host.get(id).provider)) {
+    if (
+      this.host.runners.has(id) &&
+      (isAcpProvider(this.host.get(id).provider) || this.host.get(id).provider === 'claude-code')
+    ) {
       this.updateTask(id, agentId, { status: 'stopped', canStop: false, endedAt: Date.now() })
       await this.host.submit(
         id,

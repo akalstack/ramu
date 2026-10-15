@@ -15,7 +15,7 @@ export type ViewDescriptor =
       id: string
       repoId: string
       path: string
-      staged: boolean
+      staged: boolean | 'all'
       stash?: boolean
       oid?: string
       preview?: boolean
@@ -38,7 +38,7 @@ export type ViewDescriptor =
 export interface TaskUiState {
   terminalGroups?: TerminalGroup[]
   views: ViewDescriptor[]
-  /** Active editor or conversation tab. */
+  /** Active workspace tab (file, review, or terminal) or conversation. Bottom terminals have independent focus. */
   activeViewId: string | null
   /** Last focused conversation, kept visible beside the workspace. */
   activeAgentViewId?: string | null
@@ -51,11 +51,13 @@ export interface TaskUiState {
   /** Legacy sidebar visibility, retained for saved profiles; main chat is always visible. */
   dockHidden?: boolean
   activeTerminalId?: string | null
+  /** Workspace selection to restore when a terminal leaves the shared tab area. */
+  terminalReturnViewId?: string | null
   terminalOpen?: boolean
   terminalLayout?: 'tabs' | 'horizontal' | 'vertical'
   terminalTabPosition?: 'top' | 'right'
   terminalHeight?: number
-  /** Docking location, independent of terminal group/tab layout. */
+  /** 'right' shares the workspace file tabs; 'bottom' keeps a separate terminal panel. */
   terminalDock?: 'right' | 'bottom'
 }
 

@@ -56,6 +56,12 @@ import type {
   GitStash,
   GitBranchInfo,
   CommitDraft,
+  ForgeStatus,
+  IssueLink,
+  IssueSummary,
+  PullRequestDraft,
+  PullRequestFeedbackKind,
+  PullRequestInput,
   Project,
   Repository,
   RepositoryBinding,
@@ -210,6 +216,12 @@ export interface RamuMethods {
     id: string,
   ): { action: string; actor: string; reason: string | null; before: Partial<Memory> | null; at: number }[]
   'memory.dream'(): MemorySnapshot
+  'summaries.get'(): import('./types').SummariesSnapshot
+  'summaries.read'(id: string): import('./types').LibrarySummary
+  'summaries.dismiss'(id: string): void
+  'summaries.run'(): import('./types').SummaryRunResult
+  /** Starts a review chat seeded with the summary and links it back. */
+  'summaries.discuss'(id: string, text: string, settings?: AgentSettings): { taskId: string; sessionId: string }
   'folders.roots'(): string[]
   'folders.list'(path: string): { path: string; parent: string | null; folders: { name: string; path: string }[] }
   'folders.create'(parent: string, name: string): string
@@ -284,7 +296,7 @@ export interface RamuMethods {
   'files.media'(taskId: string, repoId: string, path: string): { mimeType: string; size: number; url: string }
   'files.write'(taskId: string, repoId: string, path: string, content: string, baseHash: string | null): SaveResult
   'git.status'(taskId: string, repoId: string): GitStatus
-  'git.diff'(taskId: string, repoId: string, path: string, staged: boolean): DiffContents
+  'git.diff'(taskId: string, repoId: string, path: string, staged: boolean | 'all'): DiffContents
   'git.stage'(taskId: string, repoId: string, paths: string[]): void
   'git.unstage'(taskId: string, repoId: string, paths: string[]): void
   'git.discardPreview'(
@@ -328,6 +340,18 @@ export interface RamuMethods {
   'git.commitDetails'(taskId: string, repoId: string, oid: string): string
   'git.compareUpstream'(taskId: string, repoId: string): string
   'git.generateCommit'(taskId: string, repoId: string, settings: AgentSettings, includeBranch?: boolean): CommitDraft
+  /** The pull request for the checked-out branch, through the GitHub CLI. */
+  'forge.pullRequest'(taskId: string, repoId: string): ForgeStatus
+  'forge.pullRequestDraft'(taskId: string, repoId: string): PullRequestDraft
+  /** Publishes the branch when needed, then opens the pull request. */
+  'forge.createPullRequest'(taskId: string, repoId: string, input: PullRequestInput): ForgeStatus
+  /** An opening message that hands failing checks or open review comments to an agent. */
+  'forge.pullRequestFeedback'(taskId: string, repoId: string, kind: PullRequestFeedbackKind): string
+  'forge.issues'(repoId: string, search: string): IssueSummary[]
+  'forge.issue'(repoId: string, number: number): { link: IssueLink; prompt: string }
+  /** Records the issue a chat was started from, so its pull request can close it. */
+  'forge.linkIssue'(taskId: string, link: IssueLink | null): void
+  'forge.issueLink'(taskId: string): IssueLink | null
   'term.open'(taskId: string, repoId: string | null, cols: number, rows: number): TerminalInfo
   'term.openSetup'(cols: number, rows: number): TerminalInfo
   'term.write'(termId: string, data: string): void
@@ -448,6 +472,8 @@ export type PushEvents = {
   /** Projects, repositories, chats or sessions were created, renamed, moved or removed (by any client). */
   'workspace:changed': Record<string, never>
   'memory:changed': Record<string, never>
+  /** `created` is the id of a summary that just became ready, so clients can raise one notification. */
+  'summaries:changed': { created: string | null }
   /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */
   'background:connection': { connected: boolean; rejected?: boolean }
   'computers:changed': Computers

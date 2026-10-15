@@ -1,22 +1,25 @@
 import { t, useLanguage } from './i18n'
 import { clipText } from '@ramu/shared/text'
 import { useModelSets } from './models/ModelSets'
-import { FolderClosed, GitBranch, Laptop, Monitor, Network, Settings } from 'lucide-react'
+import { CircleDot, FolderClosed, GitBranch, Laptop, Monitor, Network, Settings } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   NO_PROJECT,
   type FileContext,
   type Attachment,
   type AgentSettings,
   type CheckoutMode,
+  type IssueLink,
+  type Repository,
   type WorktreePlanEntry,
 } from '@ramu/shared/types'
 import { AgentControls } from './chat/AgentControls'
 import { Composer } from './composer/Composer'
 import { ComposerTray } from './composer/ComposerTray'
-import { invoke } from './ipc'
-import { Menu } from './Menu'
+import { invoke, ramu } from './ipc'
+import { Combobox, Menu } from './Menu'
 import { AnimatedMark } from './Brand'
 import { errorText } from './workspace/TaskPane'
 import { useWorkspace } from './workspace/workspace'
@@ -32,6 +35,32 @@ export function titleFrom(prompt: string): string {
   if (line.length <= 60) return line
   const cut = clipText(line, 60)
   return `${clipText(cut, cut.lastIndexOf(' ') > 30 ? cut.lastIndexOf(' ') : 60)}…`
+}
+
+const issueValue = (issue: { repoId: string; number: number }) => `${issue.repoId}#${issue.number}`
+
+/**
+ * Open issues of every GitHub repository in the project, newest first. Repositories that are not on
+ * GitHub, or a missing or signed-out GitHub CLI, contribute nothing, so the picker simply stays hidden.
+ */
+function useProjectIssues(repos: Repository[]) {
+  const query = useQuery({
+    queryKey: ['forge-issues', ...repos.map((repo) => repo.id)],
+    enabled: repos.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const lists = await Promise.all(
+        repos.map((repo) =>
+          ramu.invoke('forge.issues', repo.id, '').then(
+            (issues) => issues.map((issue) => ({ ...issue, repoId: repo.id, repoName: repo.name })),
+            () => [],
+          ),
+        ),
+      )
+      return lists.flat().sort((a, b) => b.updatedAt - a.updatedAt)
+    },
+  })
+  return query.data ?? []
 }
 
 const CHIP =
@@ -99,6 +128,22 @@ export function NewTask({
   const [plan, setPlan] = useState<WorktreePlanEntry[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [issue, setIssue] = useState<IssueLink | null>(null)
+  const issues = useProjectIssues(repos)
+  const pickIssue = async (value: string) => {
+    if (!value) return setIssue(null)
+    const picked = issues.find((entry) => issueValue(entry) === value)
+    if (!picked) return
+    setError(null)
+    try {
+      const details = await invoke('forge.issue', picked.repoId, picked.number)
+      setIssue(details.link)
+      setPrompt(details.prompt)
+      setPlan(null)
+    } catch (e) {
+      setError(errorText(e))
+    }
+  }
 
   useEffect(() => setPlan(null), [projectId, repos.length])
   useEffect(() => {
@@ -109,6 +154,7 @@ export function NewTask({
     setAttachments([])
     setPlan(null)
     setError(null)
+    setIssue(null)
   }, [projectId, ws.composing, ws.composingWorkspace])
 
   const title = titleFrom(prompt) || (attachments.length ? `Discuss ${attachments[0]!.name}` : '')
@@ -158,6 +204,9 @@ export function NewTask({
         context,
       )
       created = null
+      // The link lets this chat's pull request close the issue; losing it only loses that line.
+      if (issue) void invoke('forge.linkIssue', task.id, issue).catch(() => {})
+      setIssue(null)
       clearDraft(draftKey.newChat(projectId))
       ws.openTask(task.id)
       ws.openView(task.id, { kind: 'agent', sessionId: session.id })
@@ -266,83 +315,103 @@ export function NewTask({
             </div>
           </div>
         )}
-        <ComposerTray className="start-chips items-center gap-0.5">
-          {computerItems.length > 1 && (
+        <ComposerTray className="start-chips items-start gap-0.5 px-1.5">
+          <div className="start-context flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
+            {computerItems.length > 1 && (
+              <Menu
+                label={t('Computer')}
+                className={CHIP}
+                icon={
+                  <>
+                    {currentComputer?.local ? <Monitor size={13} /> : <Network size={13} />}{' '}
+                    <span className="chip-label">{currentComputer?.name}</span>
+                  </>
+                }
+                items={computerItems}
+              />
+            )}
             <Menu
-              label={t('Computer')}
+              label={t('Project')}
               className={CHIP}
               icon={
                 <>
-                  {currentComputer?.local ? <Monitor size={13} /> : <Network size={13} />}{' '}
-                  <span className="chip-label">{currentComputer?.name}</span>
+                  <FolderClosed size={13} /> <span className="chip-label">{project?.name ?? t('No project')}</span>
                 </>
               }
-              items={computerItems}
+              items={projectItems}
             />
-          )}
-          <Menu
-            label={t('Project')}
-            className={CHIP}
-            icon={
-              <>
-                <FolderClosed size={13} /> <span className="chip-label">{project?.name ?? t('No project')}</span>
-              </>
-            }
-            items={projectItems}
-          />
-          {!general && (
-            <Menu
-              label={t('Where the work happens')}
-              className={CHIP}
-              icon={
-                <>
-                  <current.Icon size={13} />{' '}
-                  <span className="chip-label">{existingWorkspace ? current.label : t(current.label)}</span>
-                </>
-              }
-              items={[
-                ...MODES.map((m) => ({
-                  key: m.id,
-                  label: (
-                    <>
-                      <m.Icon size={14} />
-                      <span>
-                        {t(m.label)}
-                        <span className="muted text-muted-foreground block block">{t(m.hint)}</span>
-                      </span>
-                    </>
-                  ),
-                  onSelect: () => {
-                    setWorkspaceId(null)
-                    setMode(m.id)
-                    setPlan(null)
-                  },
-                })),
-                ...ws.workspaces
-                  .filter((w) => w.projectId === projectId)
-                  .map((w) => ({
-                    key: w.id,
+            {!general && (
+              <Menu
+                label={t('Where the work happens')}
+                className={CHIP}
+                icon={
+                  <>
+                    <current.Icon size={13} />{' '}
+                    <span className="chip-label">{existingWorkspace ? current.label : t(current.label)}</span>
+                  </>
+                }
+                items={[
+                  ...MODES.map((m) => ({
+                    key: m.id,
                     label: (
                       <>
-                        <GitBranch size={14} />
-                        <span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis">
-                          {w.name}
-                          <span className="muted text-muted-foreground block block">
-                            {t('Existing isolated worktree')}
-                          </span>
+                        <m.Icon size={14} />
+                        <span>
+                          {t(m.label)}
+                          <span className="muted text-muted-foreground block block">{t(m.hint)}</span>
                         </span>
                       </>
                     ),
                     onSelect: () => {
-                      setWorkspaceId(w.id)
-                      setMode('worktree')
+                      setWorkspaceId(null)
+                      setMode(m.id)
                       setPlan(null)
                     },
                   })),
-              ]}
-            />
-          )}
-          <span className="grow flex-1 min-w-0 text-left" />
+                  ...ws.workspaces
+                    .filter((w) => w.projectId === projectId)
+                    .map((w) => ({
+                      key: w.id,
+                      label: (
+                        <>
+                          <GitBranch size={14} />
+                          <span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis">
+                            {w.name}
+                            <span className="muted text-muted-foreground block block">
+                              {t('Existing isolated worktree')}
+                            </span>
+                          </span>
+                        </>
+                      ),
+                      onSelect: () => {
+                        setWorkspaceId(w.id)
+                        setMode('worktree')
+                        setPlan(null)
+                      },
+                    })),
+                ]}
+              />
+            )}
+            {!general && issues.length > 0 && (
+              <Combobox
+                label={t('Start from an issue')}
+                searchPlaceholder={t('Search issues…')}
+                value={issue ? issueValue(issue) : ''}
+                icon={<CircleDot size={13} />}
+                className="h-7 min-h-7 p-[0_10px] rounded-full bg-transparent text-soft text-control max-w-[260px]"
+                title={issue?.title}
+                disabled={busy}
+                options={[
+                  { value: '', label: t('No issue') },
+                  ...issues.map((entry) => ({
+                    value: issueValue(entry),
+                    label: `${repos.length > 1 ? `${entry.repoName} ` : ''}#${entry.number} ${entry.title}`,
+                  })),
+                ]}
+                onChange={(value) => void pickIssue(value)}
+              />
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon-xs"

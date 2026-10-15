@@ -964,6 +964,17 @@ button.scm-sync:hover:not(:disabled) {
 :root {
   --composer-tray: color-mix(in srgb, var(--raised) 55%, var(--canvas));
 }
+/* Context choices wrap within the tray while settings stays reachable at the right edge. */
+.start-context > button {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
+}
+.start-context .chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Same size as the composer's own controls below it. */
 .composer-tray .tray-settings {
   @apply text-muted-foreground;
@@ -1325,12 +1336,6 @@ button.scm-sync:hover:not(:disabled) {
   @apply [background-color:var(--accent)];
   @apply [color:#fff];
 }
-/* Split-mode markdown: what is selected on one side, marked on the other. */
-::highlight(md-sync) {
-  @apply [background-color:color-mix(in_srgb,_var(--accent)_30%,_transparent)];
-  @apply text-inherit;
-}
-
 /* A small, slow bounce keeps loading visible without distracting from the conversation. */
 @keyframes loading-dot {
   0%,

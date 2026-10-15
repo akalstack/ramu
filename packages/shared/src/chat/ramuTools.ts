@@ -31,6 +31,14 @@ const KNOWN = new Set([
   'memory_save',
   'memory_update',
   'memory_forget',
+  'memory_archive',
+  'memory_restore',
+  'memory_merge',
+  'skill_inspect',
+  'skill_update',
+  'skill_archive',
+  'skill_restore',
+  // No provider is given these anymore; they stay so transcripts recorded earlier still render.
   'skill_search',
   'skill_read',
   'session_recall',
@@ -114,6 +122,9 @@ export const ramuToolHasOwnUi = (tool: CallSource): boolean => {
 
 const outcome = (result: string | undefined) => record(parse(result))
 
+/** Shown on a review chat's tool row when it changed a memory or skill that is normally protected. */
+const PROTECTED_AT_YOUR_REQUEST = 'Protected item changed at your request'
+
 /** What a Ramu tool call reads as in the transcript: a verb, its subject and the few facts worth showing, never the raw JSON. */
 export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolRow {
   const { args } = call
@@ -130,7 +141,16 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
     done,
     running,
     ...(subject ? { subject } : {}),
-    facts: facts.filter((fact) => fact.value),
+    // A review chat edit to something protected says so, with the words the user asked in.
+    facts: [
+      ...(data.protectedChange === true
+        ? [
+            { label: 'Protected', value: PROTECTED_AT_YOUR_REQUEST },
+            { label: 'You asked', value: quote(text(data.userRequest)) ?? '' },
+          ]
+        : []),
+      ...facts,
+    ].filter((fact) => fact.value),
   })
   const memory = record(data.memory)
   switch (call.name) {
@@ -152,6 +172,36 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       ])
     case 'memory_forget':
       return reply('Forgot a memory', 'Forgetting a memory', 'brain', undefined, [
+        { label: 'Why', value: text(args.reason) ?? '' },
+      ])
+    case 'memory_archive':
+      return reply('Archived a memory', 'Archiving a memory', 'brain', quote(text(data.title)), [
+        { label: 'Why', value: text(args.reason) ?? '' },
+        { label: 'Restore', value: 'Restorable from the Memory page' },
+      ])
+    case 'memory_restore':
+      return reply('Restored a memory', 'Restoring a memory', 'brain', quote(text(data.title)), [
+        { label: 'Why', value: text(args.reason) ?? '' },
+      ])
+    case 'memory_merge': {
+      const ids = Array.isArray(args.ids) ? args.ids.length : 0
+      return reply('Merged memories', 'Merging memories', 'brain', quote(text(args.title)), [
+        { label: 'Merged', value: ids ? `${ids} notes into one` : '' },
+        { label: 'Why', value: text(args.reason) ?? '' },
+      ])
+    }
+    case 'skill_inspect':
+      return reply('Read skill', 'Reading skill', 'sparkles', quote(text(data.name)))
+    case 'skill_update':
+      return reply('Updated skill', 'Updating skill', 'sparkles', quote(text(data.name) ?? text(args.name)), [
+        { label: 'Why', value: text(args.reason) ?? '' },
+      ])
+    case 'skill_archive':
+      return reply('Archived skill', 'Archiving skill', 'sparkles', quote(text(data.name)), [
+        { label: 'Why', value: text(args.reason) ?? '' },
+      ])
+    case 'skill_restore':
+      return reply('Restored skill', 'Restoring skill', 'sparkles', quote(text(data.name)), [
         { label: 'Why', value: text(args.reason) ?? '' },
       ])
     case 'skill_search':

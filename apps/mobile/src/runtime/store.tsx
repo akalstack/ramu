@@ -9,6 +9,7 @@ import type {
   AgentEvent,
   AgentProvider,
   AgentSettings,
+  AppPreferences,
   FileContext,
   ProviderCatalog,
   UsageReading,
@@ -112,6 +113,8 @@ interface Store extends State {
   activity: Record<string, BackgroundActivity[]>
   /** What a new chat starts with on each computer: its default model step and default access, as set in its Settings. */
   defaults: Record<string, AgentSettings>
+  /** Shared preferences on each paired computer, refreshed when its settings change. */
+  appPreferences: Record<string, AppPreferences>
   /** The computer's model sets and steps (Settings › Models), which the step slider walks through. */
   modelPrefs: Record<string, import('@ramu/shared/types').ModelPreferences | null>
   /** What the computer keeps for every device: finished, failed or waiting chats nobody has dealt with yet. */
@@ -178,10 +181,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [activity, setActivity] = useState<Record<string, BackgroundActivity[]>>({})
   const [inbox, setInbox] = useState<Record<string, InboxNotice[]>>({})
   const [modelPrefs, setModelPrefs] = useState<Record<string, import('@ramu/shared/types').ModelPreferences | null>>({})
+  const [appPreferences, setAppPreferences] = useState<Record<string, AppPreferences>>({})
   const [startSettings, setStartSettings] = useState<Record<string, AgentSettings>>({})
   const loadDefaults = (id: string) =>
     void Promise.all([invoke(id, 'settings.models.get'), invoke(id, 'settings.app.get')]).then(
       ([models, app]) => {
+        setAppPreferences((p) => ({ ...p, [id]: app }))
         setModelPrefs((p) => ({ ...p, [id]: models }))
         const step =
           models?.sets
@@ -776,6 +781,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     inbox,
     defaults: startSettings,
     modelPrefs,
+    appPreferences,
     invoke,
     refresh,
     acknowledge: (chatId) => {

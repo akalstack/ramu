@@ -22,13 +22,20 @@ export const isStaged = (entry: GitStatus['entries'][number]) => Boolean(entry.s
 
 /** The header's one-tap Commit & push: stage all if needed, AI message, commit, push. */
 export async function commitAndPush(invoke: Invoke, chat: GitChat, repoId: string) {
-  const status = await invoke(chat.computerId, 'git.status', chat.taskId, repoId)
+  const [status, preferences] = await Promise.all([
+    invoke(chat.computerId, 'git.status', chat.taskId, repoId),
+    invoke(chat.computerId, 'settings.app.get'),
+  ])
   if (!status.entries.length) throw new Error('There are no changes to commit.')
+  if (status.entries.some((entry) => entry.staged === 'unmerged' || entry.unstaged === 'unmerged'))
+    throw new Error('Resolve conflicts before committing.')
   const draft = await draftCommit(
     invoke,
     chat,
     repoId,
-    status.entries.some(isStaged) ? undefined : status.entries.map((e) => e.path),
+    preferences.combineGitChanges !== false || !status.entries.some(isStaged)
+      ? status.entries.filter((entry) => entry.unstaged).map((entry) => entry.path)
+      : undefined,
   )
   await invoke(chat.computerId, 'git.commit', chat.taskId, repoId, draft.message, draft.fingerprint)
   await invoke(chat.computerId, 'git.push', chat.taskId, repoId)

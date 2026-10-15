@@ -1,11 +1,14 @@
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isLimitMessage, isLimitReply, limitResetsAt } from '../src/providers/usageLimit'
 import {
   acpAside,
   openCodeConfigEnv,
+  codexAcpEnv,
+  claudeAcpEnv,
+  claudeSessionMeta,
   acpModels,
   acpSessionModels,
   createAcpRunner,
@@ -39,14 +42,22 @@ const fs=require('node:fs'); const rl=require('node:readline').createInterface({
 const send=m=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',...m})+'\\n');
 let promptID; let current='';
 const finish=()=>send({id:promptID,result:{stopReason:'end_turn'}});
-const session={sessionId:'session-1',configOptions:[{id:'model',category:'model',type:'select',currentValue:'wire-model',options:[{value:'wire-model',name:'Wire model'}]},{id:'mode',category:'mode',type:'select',currentValue:'agent',options:[{value:'agent',name:'Agent'},{value:'ask',name:'Ask'}]}]};
+const session={sessionId:'session-1',configOptions:[{id:'model',category:'model',type:'select',currentValue:'wire-model',options:[{value:'wire-model',name:'Wire model'}]},{id:'mode',category:'mode',type:'select',currentValue:'agent',options:[{value:'agent',name:'Agent'},{value:'ask',name:'Ask'},...JSON.parse(process.env.RAMU_EXTRA_MODES||'[]')]}]};
 rl.on('line',line=>{
  fs.appendFileSync(process.env.RAMU_ACP_LOG,line+'\\n');const m=JSON.parse(line);
- if(!m.method){if(m.id===900)finish();return;}
- if(m.method==='initialize')send({id:m.id,result:{protocolVersion:1,agentCapabilities:{loadSession:!process.env.RAMU_NO_RESUME,...JSON.parse(process.env.RAMU_CAPS||'{}')}}});
+ if(!m.method){if(m.id===900||m.id===901)finish();return;}
+ if(m.method==='initialize')send({id:m.id,result:{protocolVersion:1,agentCapabilities:{loadSession:!process.env.RAMU_NO_RESUME,...JSON.parse(process.env.RAMU_CAPS||'{}')},...(process.env.RAMU_STEER?{_meta:{steering:{supported:true}}}:{})}});
+ if(m.method==='_session/steering')send({id:m.id,result:{outcome:'injected'}});
  if(m.method==='authenticate')send({id:m.id,result:{}});
  if((m.method==='session/load'||m.method==='session/resume')&&process.env.RAMU_LOST){send({id:m.id,error:{code:-32002,message:'Session not found'}});return;}
  if(m.method==='session/new'||m.method==='session/load'||m.method==='session/resume'){
+  if(m.method==='session/load' && process.env.RAMU_REPLAY_COMPACTION){
+    const update=u=>send({method:'session/update',params:{sessionId:'session-1',update:u}});
+    update({sessionUpdate:'usage_update',used:212000,size:258400});
+    update({sessionUpdate:'compaction_update',compactionId:'saved-c',status:'in_progress'});
+    update({sessionUpdate:'compaction_update',compactionId:'saved-c',status:'completed'});
+    update({sessionUpdate:'usage_update',used:33700,size:258400});
+  }
   if(m.method==='session/load')send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'historical'}}}});
   send({id:m.id,result:session});
  }
@@ -57,6 +68,16 @@ rl.on('line',line=>{
   if(current==='limit'){send({id:m.id,error:{code:-32000,message:'quota exceeded 429'}});return;}
   if(current==='limitreply'){send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:"You've hit your usage limit. Resets at 5pm."}}}});send({id:m.id,result:{stopReason:'end_turn'}});return;}
   if(current==='long')return;
+  if(current==='elicit'){send({id:901,method:'elicitation/create',params:{mode:'form',sessionId:'session-1',message:'Pick a name',requestedSchema:{type:'object',properties:{name:{type:'string',title:'Name'}},required:['name']}}});return;}
+  if(current==='compact'){
+    const update=u=>send({method:'session/update',params:{sessionId:'session-1',update:u}});
+    update({sessionUpdate:'usage_update',used:212000,size:258400});
+    update({sessionUpdate:'compaction_update',compactionId:'c1',status:'in_progress'});
+    update({sessionUpdate:'compaction_summary_chunk',compactionId:'c1',content:{type:'text',text:'Retained context'}});
+    update({sessionUpdate:'compaction_update',compactionId:'c1',status:'completed'});
+    update({sessionUpdate:'usage_update',used:33700,size:258400});
+    finish();return;
+  }
   if(current==='todos'){send({method:'cursor/update_todos',params:{toolCallId:'t9',todos:[{id:'a',content:'Wire todo',status:'in_progress'}],merge:false}});send({id:m.id,result:{stopReason:'end_turn'}});return;}
   for(const text of ['Hello ','world'])send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text}}}});
   if(current==='question')send({id:900,method:'cursor/ask_question',params:{title:'Choice',questions:[{id:'q1',prompt:'Which?',options:[{id:'one',label:'First'}]}]}});
@@ -68,6 +89,7 @@ rl.on('line',line=>{
 `,
   )
   chmodSync(bin, 0o755)
+  vi.stubEnv('RAMU_OPENCODE_BIN', bin)
   vi.stubEnv('RAMU_CURSOR_BIN', bin)
   vi.stubEnv('RAMU_ANTIGRAVITY_BIN', bin)
   vi.stubEnv('RAMU_ACP_LOG', join(dir, 'wire'))
@@ -80,7 +102,7 @@ afterEach(async () => {
 })
 const start = async (
   prompt: string,
-  provider: 'cursor' | 'antigravity' = 'cursor',
+  provider: 'cursor' | 'antigravity' | 'opencode' = 'cursor',
   access: 'edits' | 'full' = 'edits',
   resume: string | null = null,
   readOnly = false,
@@ -409,5 +431,182 @@ it('turns Cursor todo notifications into a plan during a turn', async () => {
   await until(() => events.some((e) => e.kind === 'result'))
   expect(events.find((e) => e.kind === 'plan')).toMatchObject({
     entries: [{ content: 'Wire todo', status: 'in_progress', priority: 'medium' }],
+  })
+})
+
+it.each(['cursor', 'antigravity', 'opencode'] as const)(
+  'negotiates and receives compaction through %s ACP',
+  async (provider) => {
+    await start('compact', provider)
+    await until(() => events.some((event) => event.kind === 'result'))
+    expect(log().find((m) => m.method === 'initialize').params.clientCapabilities.session).toEqual({ compaction: {} })
+    expect(events.find((event) => event.kind === 'compaction' && event.state === 'started')).toMatchObject({
+      beforeTokens: 212000,
+      contextWindow: 258400,
+    })
+    expect(events.findLast((event) => event.kind === 'compaction')).toMatchObject({
+      state: 'completed',
+      compactionId: 'c1',
+      beforeTokens: 212000,
+      afterTokens: 33700,
+      contextWindow: 258400,
+      summary: [{ type: 'text', text: 'Retained context' }],
+    })
+  },
+)
+
+it('accepts saved compaction and usage during session replay without duplicating historical messages', async () => {
+  vi.stubEnv('RAMU_REPLAY_COMPACTION', '1')
+  await start('long', 'cursor', 'full', 'session-1')
+  expect(events.findLast((event) => event.kind === 'compaction')).toMatchObject({
+    compactionId: 'saved-c',
+    state: 'completed',
+    beforeTokens: 212000,
+    afterTokens: 33700,
+  })
+  expect(events.some((event) => event.kind === 'text' && event.text.includes('historical'))).toBe(false)
+})
+
+it('steers into the running turn with _session/steering when the runtime offers it, without cancelling', async () => {
+  vi.stubEnv('RAMU_STEER', '1')
+  await startWith('long', {})
+  await until(() => events.some((e) => e.kind === 'state' && e.state === 'running'))
+  expect(runner!.steerInterrupts).toBe(false)
+  await runner!.steer('also add tests')
+  const wire = log()
+  expect(wire.find((m) => m.method === '_session/steering')?.params).toMatchObject({
+    sessionId: 'session-1',
+    prompt: [{ type: 'text', text: expect.stringContaining('also add tests') }],
+  })
+  expect(wire.some((m) => m.method === 'session/cancel')).toBe(false)
+  expect(events.some((e) => e.kind === 'result')).toBe(false)
+})
+it('cancels and restarts the turn to steer a runtime without _session/steering', async () => {
+  await startWith('long', {})
+  await until(() => events.some((e) => e.kind === 'state' && e.state === 'running'))
+  expect(runner!.steerInterrupts).toBe(true)
+})
+describe('Codex through the official ACP adapter', () => {
+  const codexRunner = (readOnly = false) =>
+    createAcpRunner(
+      { cwd: dir, additionalDirs: [], covers: [dir] },
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', model: 'wire-model', access: 'full' },
+      (e) => events.push(e),
+      readOnly,
+    )
+  beforeEach(() => vi.stubEnv('RAMU_CODEX_ACP_ENTRY', join(dir, 'agent')))
+  it('shows an elicitation form and answers it with the typed values', async () => {
+    runner = codexRunner()
+    await runner.start('elicit', null)
+    await until(() => events.some((e) => e.kind === 'elicitation'))
+    const form = events.find((e) => e.kind === 'elicitation')!
+    expect(form).toMatchObject({ message: 'Pick a name', mode: 'form', fields: [{ id: 'name', required: true }] })
+    expect(() => runner!.replyElicitation!(form.requestId, 'accept', {})).toThrow()
+    runner.replyElicitation!(form.requestId, 'accept', { name: 'ramu' })
+    await until(() => events.some((e) => e.kind === 'result'))
+    expect(log().find((m) => m.id === 901)?.result).toEqual({ action: 'accept', content: { name: 'ramu' } })
+    expect(events).toContainEqual({ kind: 'request-resolved', requestId: '901', outcome: 'answered' })
+  })
+  it('declines a form when the user declines it', async () => {
+    runner = codexRunner()
+    await runner.start('elicit', null)
+    await until(() => events.some((e) => e.kind === 'elicitation'))
+    runner.replyElicitation!(events.find((e) => e.kind === 'elicitation')!.requestId, 'decline', {})
+    await until(() => log().some((m) => m.id === 901))
+    expect(log().find((m) => m.id === 901)?.result).toEqual({ action: 'decline' })
+    expect(events).toContainEqual({ kind: 'request-resolved', requestId: '901', outcome: 'declined' })
+  })
+  it('cancels a form that is still open when the turn is interrupted', async () => {
+    runner = codexRunner()
+    await runner.start('elicit', null)
+    await until(() => events.some((e) => e.kind === 'elicitation'))
+    await runner.interrupt()
+    await until(() => log().some((m) => m.id === 901))
+    expect(log().find((m) => m.id === 901)?.result).toEqual({ action: 'cancel' })
+  })
+  it('puts a read-only background analysis into the read-only mode and cancels forms', async () => {
+    runner = codexRunner(true)
+    await runner.start('elicit', null)
+    await until(() => log().some((m) => m.id === 901))
+    expect(log().find((m) => m.id === 901)?.result).toEqual({ action: 'cancel' })
+    expect(events.some((e) => e.kind === 'elicitation')).toBe(false)
+  })
+  it('hands Ramu its tools, sub-agent switch and spawn hook through the adapter config', () => {
+    const connection = { url: 'http://127.0.0.1:9/mcp', token: 't' }
+    expect(JSON.parse(codexAcpEnv(connection).CODEX_CONFIG!)).toEqual({
+      mcp_servers: {
+        ramu: { url: connection.url, http_headers: { Authorization: 'Bearer t' }, tool_timeout_sec: 3600 },
+      },
+    })
+    const off = JSON.parse(
+      codexAcpEnv({ ...connection, nativeSubagents: false, interceptSubagents: true }).CODEX_CONFIG!,
+    )
+    expect(off.features).toEqual({ multi_agent: false })
+    expect(off.hooks.PreToolUse[0]).toMatchObject({
+      matcher: 'spawn_agent',
+      hooks: [{ type: 'mcp_tool', server: 'ramu', tool: 'codex_pre_tool_use' }],
+    })
+    expect(codexAcpEnv(undefined).CODEX_CONFIG).toBeUndefined()
+    expect(codexAcpEnv(undefined).CODEX_PATH).toBeTruthy()
+  })
+})
+
+describe('Claude through the official ACP adapter', () => {
+  const connection = { url: 'http://127.0.0.1:9/mcp', token: 't', instructions: 'Use Ramu tools.' }
+  const settings = { ...DEFAULT_AGENT_SETTINGS, provider: 'claude-code' as const }
+  it('hands Ramu its guidance, tools and sub-agent switch to the adapter as session meta', () => {
+    const meta = claudeSessionMeta(connection, settings)
+    expect(meta.systemPrompt).toEqual({ append: 'Use Ramu tools.' })
+    expect(meta.claudeCode.options).toMatchObject({
+      settingSources: ['user', 'project', 'local'],
+      allowedTools: expect.arrayContaining(['mcp__ramu__ask_user', 'mcp__ramu__advisor']),
+      allowDangerouslySkipPermissions: false,
+    })
+    expect(meta.claudeCode.options.disallowedTools).toBeUndefined()
+    const off = claudeSessionMeta(
+      { ...connection, nativeSubagents: false, replaceAdvisor: true },
+      { ...settings, access: 'full' },
+    )
+    expect(off.claudeCode.options).toMatchObject({
+      disallowedTools: ['Agent', 'Task'],
+      settings: { advisorModel: '' },
+      allowDangerouslySkipPermissions: true,
+    })
+  })
+  it('limits a review chat to Ramu tools, and plugs in the managed-skill export', () => {
+    const meta = claudeSessionMeta({ ...connection, restricted: true, skillsDir: '/skills' }, settings)
+    expect(meta.claudeCode.options).toMatchObject({
+      tools: [],
+      allowedTools: ['mcp__ramu'],
+      plugins: [{ type: 'local', path: '/skills' }],
+    })
+    expect(claudeSessionMeta(undefined, settings).claudeCode.options.allowedTools).toBeUndefined()
+  })
+  it("runs the user's own claude binary with Ramu's long tool timeout", () => {
+    expect(claudeAcpEnv(connection)).toMatchObject({ MCP_TOOL_TIMEOUT: '3600000' })
+    expect(claudeAcpEnv(connection).CLAUDE_CODE_EXECUTABLE).toBeTruthy()
+    expect(claudeAcpEnv(undefined).MCP_TOOL_TIMEOUT).toBeUndefined()
+  })
+  it('sends the session meta and sets the access level as the permission mode when starting', async () => {
+    vi.stubEnv('RAMU_CLAUDE_ACP_ENTRY', join(dir, 'agent'))
+    vi.stubEnv('RAMU_CAPS', JSON.stringify({ mcpCapabilities: { http: true } }))
+    vi.stubEnv('RAMU_EXTRA_MODES', JSON.stringify([{ value: 'acceptEdits', name: 'Accept edits' }]))
+    runner = createAcpRunner(
+      { cwd: dir, additionalDirs: [], covers: [dir] },
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'claude-code', model: 'wire-model', access: 'edits' },
+      (e) => events.push(e),
+    )
+    runner.setTools?.(connection)
+    await runner.start('todos', null)
+    await until(() => events.some((e) => e.kind === 'result'))
+    const created = log().find((m) => m.method === 'session/new')!.params
+    expect(created._meta.claudeCode.options.settingSources).toEqual(['user', 'project', 'local'])
+    expect(created.mcpServers).toEqual([expect.objectContaining({ name: 'ramu', url: connection.url })])
+    // The chat's access level becomes Claude's permission mode.
+    expect(
+      log().find((m) => m.method === 'session/set_config_option' && m.params.configId === 'mode')?.params,
+    ).toMatchObject({
+      value: 'acceptEdits',
+    })
   })
 })

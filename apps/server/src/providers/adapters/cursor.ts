@@ -34,5 +34,7 @@ export const cursorAdapter = defineAdapter({
       : { signedIn: false }
   },
   loginArgs: ['login'],
+  // The agent scans `<workspace>/.cursor/skills` (and follows folder links there); ACP has no option for another folder.
+  skillsLaunch: (_exportDir, cwd) => ({ linkDirs: cwd ? [join(cwd, '.cursor', 'skills')] : [] }),
   updatePlan: selfUpdate(['update']),
 })

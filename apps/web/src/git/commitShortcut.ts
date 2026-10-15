@@ -64,6 +64,7 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
     if (target && target !== 'several') return target.commitAndPush()
     return showScm(target ? SEVERAL() : NOTHING())
   }
+  const preferences = await invoke('settings.app.get')
   const bindings = (ws.bindings[ctx] ?? []).filter((binding) => binding.setupState === 'ready' && !binding.folderOnly)
   const states = (
     await Promise.allSettled(
@@ -74,7 +75,7 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
     state.status.entries.some((entry) => entry.staged && entry.staged !== 'unmerged')
   const target = pick(
     states,
-    hasStaged,
+    preferences.combineGitChanges ? (state) => state.status.entries.length > 0 : hasStaged,
     (state) => state.status.entries.length > 0,
     () => false,
   )
@@ -88,7 +89,7 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
   if (!branchOptions) return
   if ((branchOptions.newBranch || branchOptions.autoBranch) && Object.values(ws.dirty).some(Boolean))
     return showScm(t('Save or close unsaved editor buffers before changing files or branches.'))
-  const stageAll = !hasStaged(target)
+  const stageAll = preferences.combineGitChanges || !hasStaged(target)
   let pushedTo = status.branch!
   const run = async () => {
     if (stageAll)

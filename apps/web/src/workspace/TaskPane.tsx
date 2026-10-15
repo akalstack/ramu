@@ -20,6 +20,7 @@ import {
   GitBranch,
   History,
   FileSearch,
+  Plus,
   Maximize2,
   Minimize2,
   SquareTerminal,
@@ -47,6 +48,7 @@ import { useChatHidden, useEditorSide } from './layoutPrefs'
 import { isPreviewable, isWorkspaceCtx, tabOrder, useWorkspace } from './workspace'
 import { WorkspaceRail, workspaceToolOf } from './WorkspaceTools'
 import { SlidePane } from './paneMotion'
+import { terminalGroups } from '@ramu/shared/workspace/terminalGroups'
 
 /**
  * Chat fills the workspace until a file or review opens beside it on the right.
@@ -65,7 +67,14 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   }, [workspaceId, ws.refreshBindings])
   const state = ws.taskUi[taskId] ?? { views: [], activeViewId: null }
   const bindings = ws.bindings[taskId] ?? []
-  const tabs = tabOrder(state.views).filter((v) => v.kind !== 'terminal')
+  const terminalDock = state.terminalDock ?? preferences.defaultTerminalDock
+  const terminalOpen = state.views.some((view) => view.kind === 'terminal') && (state.terminalOpen ?? true)
+  const groups = terminalGroups(state)
+  const tabs = tabOrder(state.views).filter(
+    (v) =>
+      v.kind !== 'terminal' ||
+      (terminalDock === 'right' && terminalOpen && groups.some((group) => group.terminalIds[0] === v.id)),
+  )
   const agentViews = tabs.filter((v) => v.kind === 'agent')
   const [sessions, setSessions] = useState<AgentSessionInfo[]>(() => cachedData('agent.list', taskId) ?? [])
   const [sessionsError, setSessionsError] = useState<string | null>(null)
@@ -133,8 +142,11 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
     }
   }, [taskId])
 
+  const activeTerminalGroup = groups.find((group) => group.terminalIds.includes(state.activeViewId ?? ''))
   const active =
-    tabs.find((v) => v.id === state.activeViewId) ?? tabs.find((v) => v.id === state.activeAgentViewId) ?? null
+    tabs.find((v) => v.id === state.activeViewId || v.id === activeTerminalGroup?.terminalIds[0]) ??
+    tabs.find((v) => v.id === state.activeAgentViewId) ??
+    null
   const focusedChat = agentViews.find((v) => v.id === state.activeAgentViewId) ?? agentViews.at(-1) ?? null
   // The conversation always stays in the main chat pane beside the active workspace view.
   // Explorer, Search and Source Control live in a rail of this pane, so opening one opens the pane too.
@@ -149,11 +161,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   const tabScroll = useTabScroll(editorView?.id, true, visible && !!editorView && !composing)
   const chatView = composing ? null : active?.kind === 'agent' ? active : editorView ? focusedChat : null
   const showLauncherMain = !editorView && !chatView
-  const terminalOpen =
-    (ws.taskUi[workspaceId]?.views.some((view) => view.kind === 'terminal') ?? false) &&
-    (ws.taskUi[workspaceId]?.terminalOpen ?? true)
-  const terminalDock = state.terminalDock ?? preferences.defaultTerminalDock
-  const rightTerminal = terminalOpen && terminalDock === 'right' && !composing
+  const rightTerminal = terminalOpen && terminalDock === 'right' && editorView?.kind === 'terminal' && !composing
   const bottomTerminal = terminalOpen && terminalDock === 'bottom' && !composing
   const editorOpen = !!editorView && !composing
   useLayoutEffect(() => {
@@ -236,25 +244,15 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
             secondaryMin={120}
             primary={
               <WorkspaceSplit
-                id={`${workspaceId}.terminal-right`}
-                resizePreview
-                open={rightTerminal}
-                label={t('Resize terminal panel')}
-                defaultShare={30}
-                primaryMin={480}
-                primary={
-                  <WorkspaceSplit
-                    id={`${workspaceId}.editor`}
-                    open={editorOpen}
-                    flip={editorSide === 'left'}
-                    primaryCollapsed={chatHidden}
-                    label={t('Resize chat pane')}
-                    defaultShare={55}
-                    primary={<PaneSlot host={chatHost} />}
-                    secondary={<PaneSlot host={editorHost} />}
-                  />
-                }
-                secondary={<div className="h-full w-full min-w-0 min-h-0" ref={setRightSlot} />}
+                id={`${workspaceId}.editor`}
+                resizePreview={rightTerminal}
+                open={editorOpen}
+                flip={editorSide === 'left'}
+                primaryCollapsed={chatHidden}
+                label={t(rightTerminal ? 'Resize terminal panel' : 'Resize chat pane')}
+                defaultShare={55}
+                primary={<PaneSlot host={chatHost} />}
+                secondary={<PaneSlot host={editorHost} />}
               />
             }
             secondary={<div className="h-full w-full min-w-0 min-h-0" ref={setBottomSlot} />}
@@ -409,21 +407,42 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                         taskId={taskId}
                         view={view}
                         tabs={tabs}
-                        active={state.activeViewId === view.id}
+                        active={editorView?.id === view.id}
                         repoName={repoName}
                       />
                     ))}
                 </OverlayScrollArea>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
+                <Menu
+                  label={t('New tab')}
+                  icon={<Plus data-icon="inline-start" />}
                   className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
-                  aria-label={t('Open file')}
-                  title={`${t('Open file')} (${formatKeys('mod+p')})`}
-                  onClick={() => window.dispatchEvent(new Event('ramu:open-file'))}
-                >
-                  <FileSearch data-icon="inline-start" />
-                </Button>
+                  items={[
+                    {
+                      key: 'file',
+                      label: (
+                        <>
+                          <FileSearch data-icon="inline-start" />
+                          {t('Open file')}
+                          <span className="ml-auto text-muted-foreground">{formatKeys('mod+p')}</span>
+                        </>
+                      ),
+                      onSelect: () => window.dispatchEvent(new Event('ramu:open-file')),
+                    },
+                    {
+                      key: 'terminal',
+                      label: (
+                        <>
+                          <SquareTerminal data-icon="inline-start" />
+                          {t('New terminal')}
+                        </>
+                      ),
+                      onSelect: () => {
+                        ws.setTerminalPanel(taskId, { terminalDock: 'right' })
+                        ws.openView(taskId, { kind: 'terminal' })
+                      },
+                    },
+                  ]}
+                />
                 <div className="flex-1 min-w-0" />
                 {editorOpen && (
                   <Button
@@ -453,10 +472,10 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
               </div>
               <div
                 className="editor-area flex-1 min-h-0 min-w-0 flex flex-col"
-                style={{ display: editorView ? 'flex' : 'none' }}
+                style={{ display: editorView && editorView.kind !== 'terminal' ? 'flex' : 'none' }}
               >
                 {tabs
-                  .filter((v) => v.kind !== 'agent')
+                  .filter((v) => v.kind !== 'agent' && v.kind !== 'terminal')
                   .map((v) => {
                     const shown = editorView?.id === v.id && visible
                     const binding = v.repoId ? ws.binding(workspaceId, v.repoId) : undefined
@@ -491,6 +510,11 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                     )
                   })}
               </div>
+              <div
+                className="flex-1 min-w-0 min-h-0"
+                style={{ display: rightTerminal ? 'flex' : 'none' }}
+                ref={setRightSlot}
+              />
               {!editorView && (
                 <Empty className="flex-1">
                   <EmptyHeader>
@@ -506,7 +530,12 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
           editorHost,
         )}
         {createPortal(
-          <TerminalPanel taskId={workspaceId} visible={visible} hidden={composing} dock={terminalDock} />,
+          <TerminalPanel
+            taskId={workspaceId}
+            visible={visible}
+            hidden={composing || (terminalDock === 'right' && !rightTerminal)}
+            dock={terminalDock}
+          />,
           terminalHost,
         )}
       </div>
@@ -625,18 +654,26 @@ function FileTab({
 }) {
   useLanguage()
   const ws = useWorkspace()
-  const files = tabs.filter(
-    (tab) => tab.kind === 'file' || tab.kind === 'diff' || tab.kind === 'git' || tab.kind === 'review',
-  )
+  const files = tabs.filter((tab) => tab.kind !== 'agent')
+  const groups = terminalGroups(ws.taskUi[taskId] ?? { views: [], activeViewId: null })
+  const terminalGroup = groups.find((group) => group.terminalIds.includes(view.id))
+  const activate = () => {
+    const focused = ws.taskUi[taskId]?.activeTerminalId
+    ws.activateView(taskId, terminalGroup?.terminalIds.includes(focused ?? '') ? focused! : view.id)
+  }
   const index = files.findIndex((tab) => tab.id === view.id)
   const others = files.filter((tab) => tab.id !== view.id)
   const toLeft = files.slice(0, index)
   const toRight = files.slice(index + 1)
-  const saved = files.filter((tab) => !ws.dirty[tab.id])
+  const saved = files.filter((tab) => tab.kind !== 'terminal' && !ws.dirty[tab.id])
   const close = (views: ViewDescriptor[]) =>
     ws.closeViews(
       taskId,
-      views.map((tab) => tab.id),
+      views.flatMap((tab) =>
+        tab.kind === 'terminal'
+          ? (groups.find((group) => group.terminalIds.includes(tab.id))?.terminalIds ?? [tab.id])
+          : [tab.id],
+      ),
     )
   const context = useContextMenu('Tab actions', [
     ...(isPreviewable(view) && view.preview
@@ -650,7 +687,7 @@ function FileTab({
           <span className="ml-auto text-muted-foreground">{formatKeys('mod+w')}</span>
         </span>
       ),
-      onSelect: () => ws.closeView(taskId, view.id),
+      onSelect: () => close([view]),
     },
     { key: 'others', label: t('Close Others'), disabled: !others.length, onSelect: () => close(others) },
     { key: 'left', label: t('Close to the Left'), disabled: !toLeft.length, onSelect: () => close(toLeft) },
@@ -754,14 +791,22 @@ function FileTab({
           context.onKeyDown(event)
           if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
             event.preventDefault()
-            ws.activateView(taskId, view.id)
+            activate()
           }
         }}
-        onClick={() => ws.activateView(taskId, view.id)}
-        onAuxClick={(event) => event.button === 1 && ws.closeView(taskId, view.id)}
+        onClick={activate}
+        onAuxClick={(event) => event.button === 1 && close([view])}
       >
         <ViewIcon kind={view.kind} path={view.kind === 'file' || view.kind === 'diff' ? view.path : undefined} />
-        <ViewLabel view={view} all={tabs} repoName={repoName} />
+        {view.kind === 'terminal' ? (
+          <span className="tab-title truncate">
+            {view.title ?? (view.repoId ? repoName(view.repoId) : t('Workspace'))}
+            {groups.length > 1 ? ` ${groups.findIndex((group) => group.id === terminalGroup?.id) + 1}` : ''}
+            {(terminalGroup?.terminalIds.length ?? 0) > 1 ? ` · ${terminalGroup!.terminalIds.length}` : ''}
+          </span>
+        ) : (
+          <ViewLabel view={view} all={tabs} repoName={repoName} />
+        )}
         {ws.dirty[view.id] && (
           <span
             className="dirty w-[7px] h-[7px] rounded-full [background:var(--soft)] flex-none"
@@ -774,7 +819,7 @@ function FileTab({
           aria-label={t('Close view')}
           onClick={(event) => {
             event.stopPropagation()
-            ws.closeView(taskId, view.id)
+            close([view])
           }}
         >
           <X size={12} />
@@ -837,7 +882,7 @@ function ViewLabel({
       {clash && <span className="tab-repo text-muted-foreground text-caption">{repoName(v.repoId)}</span>}
       {v.kind === 'diff' && (
         <span className="tab-repo text-muted-foreground text-caption">
-          {v.oid ? `${v.stash ? 'stash · ' : ''}${v.oid.slice(0, 7)}` : v.staged ? 'staged' : t('changes')}
+          {v.oid ? `${v.stash ? 'stash · ' : ''}${v.oid.slice(0, 7)}` : v.staged === true ? 'staged' : t('changes')}
         </span>
       )}
     </>
@@ -903,7 +948,7 @@ function DockZones({
             ),
           ]
         : [
-            zone('right', t('Dock terminal on right'), 'top-1.5 bottom-[34%] right-1.5 w-[30%]', () =>
+            zone('right', t('Move terminal to workspace tabs'), 'top-1.5 bottom-[34%] right-1.5 w-[30%]', () =>
               ws.setTerminalPanel(taskId, { terminalDock: 'right' }),
             ),
             zone('bottom', t('Dock terminal at bottom'), 'inset-x-1.5 bottom-1.5 h-[30%]', () =>

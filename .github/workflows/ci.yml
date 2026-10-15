@@ -28,13 +28,13 @@ jobs:
         run: if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y ripgrep; else brew install ripgrep; fi
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      # Native Electron integration uses macOS keyboard shortcuts and an isolated profile.
+      # Headless Electron specs use macOS keyboard shortcuts, an isolated profile and simulated providers.
       - if: runner.os == 'macOS'
         run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: failure-${{ matrix.os }}
-          path: apps/desktop/output/playwright/automation/
+          path: e2e/output/
           if-no-files-found: ignore
           retention-days: 7

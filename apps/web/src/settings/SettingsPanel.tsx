@@ -11,6 +11,7 @@ import { resetPanelLayouts } from '../workspace/panelLayout'
 import { DEFAULT_SIDEBAR_WIDTH, type AppPreferences, type ModelPreferences } from '@ramu/shared/types'
 import { GoalSettings } from './GoalSettings'
 import { MemoryBrowser, MemorySettings } from './MemorySettings'
+import { SummarySettings } from '../summaries/SummarySettings'
 import { AdvisorSettings, SubagentSettings } from './FallbackSettings'
 import { RemoteAccessSettings } from './RemoteAccess'
 import { modelStepName, recommendedSets, useModelSets, ModelSetsOverride } from '../models/ModelSets'
@@ -183,6 +184,11 @@ export function SettingsPanel({
                 <LearningSettings
                   value={appDraft.intelligence}
                   onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
+                />
+                <SummarySettings
+                  value={appDraft.intelligence}
+                  onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
+                  hasChanges={hasChanges}
                 />
                 {appDraft.memory.enabled && <MemoryBrowser />}
               </>

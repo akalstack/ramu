@@ -45,7 +45,7 @@ export function EditorSettings({ draft, onChange, busy }: DraftProps) {
           value={draft.defaultTerminalDock}
           options={[
             { value: 'bottom', label: t('Bottom') },
-            { value: 'right', label: t('Right') },
+            { value: 'right', label: t('Workspace tabs') },
           ]}
           onChange={(value) => onChange({ ...draft, defaultTerminalDock: value === 'right' ? 'right' : 'bottom' })}
         />

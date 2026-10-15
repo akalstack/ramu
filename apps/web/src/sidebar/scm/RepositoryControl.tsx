@@ -16,6 +16,7 @@ import { ConfirmationDialog } from './ConfirmationDialog'
 import { ConflictList } from './ConflictList'
 import { GitInspector } from './GitInspector'
 import { OperationBanner } from './OperationBanner'
+import { PullRequestSection } from './PullRequestSection'
 import { ChangeGroupHeader } from './parts'
 import { RepoActionsMenu } from './RepoActionsMenu'
 import { RepoHeader } from './RepoHeader'
@@ -54,7 +55,8 @@ export function RepositoryControl({
   onGitCollapsed?: (collapsed: boolean) => void
 }) {
   useLanguage()
-  useAppSettings()
+  const { preferences } = useAppSettings()
+  const combined = preferences.combineGitChanges
   const reportError = useCallback(
     (message: string) => notifyError(message, `Git · ${binding.repoName}`),
     [binding.repoName],
@@ -76,6 +78,9 @@ export function RepositoryControl({
   const staged = status?.entries.filter((e) => e.staged && e.staged !== 'unmerged') ?? []
   const conflicts = status?.entries.filter((e) => e.staged === 'unmerged') ?? []
   const unstaged = status?.entries.filter((e) => e.unstaged && e.unstaged !== 'unmerged') ?? []
+  const changes = combined
+    ? (status?.entries.filter((entry) => entry.staged !== 'unmerged' && entry.unstaged !== 'unmerged') ?? [])
+    : unstaged
   const canStash = !!status?.oid && !!status.entries.length && !conflicts.length && !status.operation
   const { resolving, resolveWithAi } = useResolveWithAi({
     taskId,
@@ -128,7 +133,7 @@ export function RepositoryControl({
   const root = useCommitShortcut({
     taskId,
     repoId: binding.repoId,
-    staged: staged.length,
+    staged: combined ? changes.length : staged.length,
     unstaged: unstaged.map((entry) => entry.path),
     publishable: !!status?.branch && !!status.remote && !status.operation && !conflicts.length,
     commit: flow.commit,
@@ -148,7 +153,7 @@ export function RepositoryControl({
       taskId={taskId}
       repoId={binding.repoId}
       entry={e}
-      staged={isStaged}
+      staged={combined ? 'all' : isStaged}
       busy={busy}
       contextMenu={fileContext.contextMenu}
       onContextEntry={fileContext.selectEntry}
@@ -231,6 +236,14 @@ export function RepositoryControl({
             onSync={sync}
             reportError={reportError}
           />
+          <PullRequestSection
+            taskId={taskId}
+            binding={binding}
+            status={status}
+            busy={busy}
+            settings={settings}
+            reportError={reportError}
+          />
           {loading && <ContentSkeleton />}
           {!!conflicts.length && (
             <ConflictList
@@ -244,7 +257,7 @@ export function RepositoryControl({
               onMarkResolved={(path) => stagePaths([path], true)}
             />
           )}
-          {!!staged.length && (
+          {!combined && !!staged.length && (
             <>
               <ChangeGroupHeader
                 label={t('Staged')}
@@ -267,10 +280,11 @@ export function RepositoryControl({
           <ChangeGroupHeader
             label={t('Changes')}
             open={changesOpen}
-            count={unstaged.length}
+            count={changes.length}
             actionLabel={t('Stage all')}
             actionIcon={<Plus size={13} />}
             busy={busy}
+            showAction={!combined}
             onToggle={() => setChangesOpen((open) => !open)}
             onAction={() =>
               stagePaths(
@@ -279,7 +293,7 @@ export function RepositoryControl({
               )
             }
           />
-          {changesOpen && unstaged.map((e) => row(e, false))}
+          {changesOpen && changes.map((e) => row(e, false))}
           {!status?.entries.length && status && (
             <p className="muted text-muted-foreground small text-caption scm-empty p-[8px_0]">
               {t('No changes in this checkout.')}

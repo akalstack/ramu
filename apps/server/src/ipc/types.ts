@@ -19,6 +19,7 @@ import type { ScheduleService } from '../background/schedules'
 import type { ReviewService } from '../review/reviews'
 import type { RecapService } from '../memory/recaps'
 import type { MemoryService } from '../memory/memory'
+import type { SummaryService } from '../memory/summaries'
 import type { KeyedLock } from './keyedLock'
 import type { FileWatchers } from './watchers'
 
@@ -31,6 +32,7 @@ export interface Services {
   learning?: LearningService
   compression?: CompressionService
   memory?: MemoryService
+  summaries?: SummaryService
   reviews: ReviewService
   notices?: NoticeInbox
 }

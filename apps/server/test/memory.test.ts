@@ -357,3 +357,18 @@ it('cancels maintenance without applying a late result or recording a failure, a
   await memory.dream()
   expect(analyze).toHaveBeenCalledTimes(2)
 })
+
+it('does not call the model to consolidate notes that are unchanged since the last pass', async () => {
+  memory.save(note('Use pnpm', 'Use pnpm'), agent)
+  memory.save(note('No npm', 'npm breaks the lockfile'), agent)
+  ws.setAppState('app-preferences', { memory: { enabled: true, dream: true, staleAfterDays: 90 } })
+  await memory.dream(false)
+  expect(analyze).toHaveBeenCalledTimes(1)
+  await memory.dream(false)
+  expect(analyze).toHaveBeenCalledTimes(1)
+  memory.save(note('Tests', 'Run pnpm check before pushing'), agent)
+  await memory.dream(false)
+  expect(analyze).toHaveBeenCalledTimes(2)
+  await memory.dream(true)
+  expect(analyze).toHaveBeenCalledTimes(3)
+})

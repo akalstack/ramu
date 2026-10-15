@@ -30,7 +30,9 @@ import {
   Search,
 } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { buildCommands, formatKeys, Palette, useKeybindings, type PaletteMode } from './commands'
+import { buildCommands, formatKeys, useKeybindings } from './commands'
+import { Palette } from './palette/Palette'
+import type { PaletteMode } from './palette/sources'
 import { copyText, invoke, ramu } from './ipc'
 import { setShownTerminal, useUnseenTerminalOutput } from './workspace/terminalActivity'
 import { Dropdown, useContextMenu } from './Menu'
@@ -40,6 +42,7 @@ import { BranchPicker, SyncButton, useAutoFetch } from './git/GitControls'
 import { isGitBusy, useGitBusy, withGitBackground, withGitBusy } from './git/gitBusy'
 import { CommitBranchDialog } from './git/CommitBranchDialog'
 import { Notifications, notifyError } from './chat/Notifications'
+import { SummaryHost } from './summaries/SummaryHost'
 import { TitleTooltips } from './TitleTooltips'
 import { AppSettingsProvider, useAppSettings } from './settings/AppSettings'
 import { ModelSetsProvider } from './models/ModelSets'
@@ -181,6 +184,7 @@ function Shell() {
   const commands = useMemo(
     () => [
       ...buildCommands(ws, {
+        defaultTerminalDock: preferences.defaultTerminalDock,
         openPalette: setPalette,
         toggleSidebar,
         addProject: () => void addProject.add(),
@@ -217,7 +221,7 @@ function Shell() {
           }))
         : []),
     ],
-    [ws, language, actionContext, projectActions, addProject.busy],
+    [ws, language, actionContext, projectActions, addProject.busy, preferences.defaultTerminalDock],
   )
   useKeybindings(commands, palette === null && !settingsOpen && !searchingChats)
   useEffect(() => {
@@ -264,7 +268,9 @@ function Shell() {
     !landing &&
     !startProject &&
     !!activePanelState?.views.some((view) => view.kind === 'terminal') &&
-    (activePanelState.terminalOpen ?? true)
+    (activePanelState.terminalOpen ?? true) &&
+    ((activePanelState.terminalDock ?? preferences.defaultTerminalDock) === 'bottom' ||
+      activePanelState.views.some((view) => view.id === activePanelState.activeViewId && view.kind === 'terminal'))
   const unsavedFiles = new Set(
     [...(ws.taskUi[ui.activeTaskId ?? '']?.views ?? []), ...(ws.taskUi[activeWorkspace ?? '']?.views ?? [])]
       .filter((view) => view.kind === 'file' && ws.dirty[view.id])
@@ -321,7 +327,7 @@ function Shell() {
           {badge(id === 'scm' ? gitChanges : id === 'explorer' ? unsavedFiles : 0, true)}
         </Button>
       ))}
-      <Separator orientation="vertical" className="mx-1 self-center! h-4" />
+      <Separator orientation="vertical" className="mx-0.5 self-center! h-4 bg-muted-foreground/40" />
       <Button
         variant="ghost"
         size="icon-sm"
@@ -568,6 +574,7 @@ function Shell() {
       <AppUpdateNotice />
       <ProviderSetupTerminal />
       <Notifications />
+      <SummaryHost />
       <CommitBranchDialog />
       <TitleTooltips />
       <CreateEntryDialog />

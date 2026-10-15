@@ -53,6 +53,7 @@ export interface SessionProcessHost
   preferencesSource(): (() => AppPreferences) | undefined
   providerQuery: QueryFn
   runnerFactory(provider: AgentProvider): AgentRunnerFactory
+  usesRunner(provider: AgentProvider): boolean
   sessionCheckpoint(): AgentService['sessionCheckpoint']
   shutdown(): AgentService['shutdown']
   toolConnection(): AgentService['toolConnection']
@@ -81,7 +82,7 @@ export class SessionProcess {
     const s = this.host.get(id)
     const prefs = this.host.preferences()
     if (s.parentId || !prefs || !this.host.runners.has(id) || this.host.hasRunningTasks(id)) return
-    if (isAcpProvider(s.provider)) {
+    if (isAcpProvider(s.provider) || s.provider === 'claude-code') {
       // OpenCode's tool permission and the Cursor/Antigravity guidance are fixed when the runtime starts; it resumes the same session.
       if (!this.nativeOffAtLaunch.has(id) || this.host.nativeSubagentsOff(s) === this.nativeOffAtLaunch.get(id)) return
     } else {
@@ -139,7 +140,8 @@ export class SessionProcess {
       })
     }
     if (connection && this.host.nativeSubagentsOff(s)) connection.nativeSubagents = false
-    if (isAcpProvider(s.provider) && connection && !s.parentId)
+    if (connection && s.provider === 'claude-code' && this.host.advisorOn()) connection.replaceAdvisor = true
+    if ((isAcpProvider(s.provider) || s.provider === 'claude-code') && connection && !s.parentId)
       this.nativeOffAtLaunch.set(id, connection.nativeSubagents === false)
     const request = explicitGoal ? prompt.replace(/^\s*\/goal\s+/, 'Work toward this Ramu goal: ') : prompt
     const style = this.responseStyleInstructions(s)
@@ -147,7 +149,7 @@ export class SessionProcess {
     const actualPrompt = handoff
       ? `${conversationHandoff(this.host.events(id), this.host.sessionCheckpoint()?.(id))}\n\nNext request: ${styledRequest}`
       : styledRequest
-    if (s.provider !== 'claude-code') {
+    if (this.host.usesRunner(s.provider)) {
       let runner: AgentRunner
       try {
         runner = this.host.runnerFactory(s.provider)(s, s.settings, (event, limit) => {
@@ -198,7 +200,7 @@ export class SessionProcess {
           }
           if (this.host.runners.get(id) === runner)
             await runner.start(
-              s.provider === 'codex' || !connection?.instructions
+              s.provider === 'codex' || s.provider === 'claude-code' || !connection?.instructions
                 ? actualPrompt
                 : `<ramu-session-guidance>\n${connection.instructions}\n</ramu-session-guidance>\n\n${actualPrompt}`,
               resume,
@@ -236,6 +238,7 @@ export class SessionProcess {
       pending,
       record: (event) => this.host.record(id, event),
       setState: (state) => this.host.setState(id, state),
+      restricted: connection?.restricted,
     })
     const query = this.host.providerQuery({
       prompt: input,

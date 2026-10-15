@@ -117,13 +117,14 @@ export async function withContext(
         ? await (file.diff.stash ? git.stashFileDiff : git.commitFileDiff)(binding.cwd, file.diff.oid, file.path)
         : {
             original: await git.showBlob(binding.cwd, file.diff.staged ? 'HEAD' : 'INDEX', file.path),
-            modified: file.diff.staged
-              ? await git.showBlob(binding.cwd, 'INDEX', file.path)
-              : (file.content ??
-                (await readText(binding.cwd, file.path).then(
-                  (f) => f.content,
-                  () => '',
-                ))),
+            modified:
+              file.diff.staged === true
+                ? await git.showBlob(binding.cwd, 'INDEX', file.path)
+                : (file.content ??
+                  (await readText(binding.cwd, file.path).then(
+                    (f) => f.content,
+                    () => '',
+                  ))),
           }
       content = `Before:\n${diff.original}\nAfter:\n${diff.modified}`
     } else content = file.content ?? (await readText(binding.cwd, file.path)).content

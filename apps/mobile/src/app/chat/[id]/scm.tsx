@@ -59,7 +59,7 @@ const ACTIONS: { key: CommitAction; label: string }[] = [
 ]
 
 interface FileState extends ChangedFile {
-  staged: boolean
+  staged: boolean | 'all'
 }
 
 function StatusLetter({ status }: { status: ChangedFile['status'] }) {
@@ -85,7 +85,7 @@ function FileRow({
 }: {
   file: FileState
   onOpen: () => void
-  onStage: () => void
+  onStage?: () => void
   onDiscard?: () => void
 }) {
   const dir = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/') + 1) : ''
@@ -102,7 +102,7 @@ function FileRow({
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Open ${file.staged ? 'staged' : 'unstaged'} changes in ${file.path}`}
+        accessibilityLabel={`Open ${file.staged === 'all' ? 'all' : file.staged ? 'staged' : 'unstaged'} changes in ${file.path}`}
         onPress={() => {
           tap()
           onOpen()
@@ -117,15 +117,23 @@ function FileRow({
         </T>
       </Pressable>
       {onDiscard ? (
-        <IconButton icon={Undo2} label="Discard changes" size={34} tone="muted" onPress={onDiscard} />
+        <IconButton
+          icon={Undo2}
+          label={file.staged === 'all' ? 'Discard unstaged changes' : 'Discard changes'}
+          size={34}
+          tone="muted"
+          onPress={onDiscard}
+        />
       ) : null}
-      <IconButton
-        icon={file.staged ? Minus : Plus}
-        label={file.staged ? 'Unstage changes' : 'Stage changes'}
-        size={34}
-        tone="soft"
-        onPress={onStage}
-      />
+      {onStage ? (
+        <IconButton
+          icon={file.staged ? Minus : Plus}
+          label={file.staged ? 'Unstage changes' : 'Stage changes'}
+          size={34}
+          tone="soft"
+          onPress={onStage}
+        />
+      ) : null}
       <View style={{ width: 28, alignItems: 'center' }}>
         <StatusLetter status={file.status} />
       </View>
@@ -184,6 +192,7 @@ export default function SourceControl() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const chat = useChat(id)
   const store = useStore()
+  const combined = store.appPreferences[chat?.computerId ?? '']?.combineGitChanges ?? true
   const project = store.projects.find((p) => p.id === chat?.projectId)
   const [bindings, setBindings] = useState<RepositoryBinding[]>([])
   const repos = bindings.filter((b) => !b.folderOnly).map((b) => b.repoName)
@@ -195,6 +204,7 @@ export default function SourceControl() {
   const [ahead, setAhead] = useState(0)
   const [behind, setBehind] = useState(0)
   const [published, setPublished] = useState(false)
+  const [hasConflicts, setHasConflicts] = useState(false)
   const [head, setHead] = useState<string | null>(null)
   const openFile = useOpenFile(chat)
   const [commits, setCommits] = useState<GitCommitInfo[]>([])
@@ -242,6 +252,7 @@ export default function SourceControl() {
       store.invoke(chat.computerId, 'git.stashes', ...args),
     ])
     setBranch(status.branch ?? '(detached)')
+    setHasConflicts(status.entries.some((entry) => entry.staged === 'unmerged' || entry.unstaged === 'unmerged'))
     setHead(status.oid)
     setAhead(status.ahead)
     setBehind(status.behind)
@@ -285,11 +296,15 @@ export default function SourceControl() {
     }
   }, [chat?.computerId, chat?.taskId, binding?.repoId])
   const mine = files.filter((f) => f.repo === repo)
-  const staged = mine.filter((f) => f.staged)
-  const unstaged = mine.filter((f) => !f.staged)
+  const staged = mine.filter((f) => f.staged === true)
+  const unstaged = mine.filter((f) => f.staged === false)
+  const changes: FileState[] = combined
+    ? [...new Map([...staged, ...unstaged].map((file) => [file.path, { ...file, staged: 'all' as const }])).values()]
+    : unstaged
+  const changeCount = combined ? changes.length : mine.length
   const needle = filter.trim().toLowerCase()
   const shownStaged = needle ? staged.filter((f) => f.path.toLowerCase().includes(needle)) : staged
-  const shownUnstaged = needle ? unstaged.filter((f) => f.path.toLowerCase().includes(needle)) : unstaged
+  const shownUnstaged = needle ? changes.filter((f) => f.path.toLowerCase().includes(needle)) : changes
   const say = (text: string) => {
     setToast(text)
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -343,12 +358,13 @@ export default function SourceControl() {
   const sync = () =>
     void run(() => store.invoke(chat!.computerId, 'git.sync', chat!.taskId, binding!.repoId), 'Synced changes')
   const generate = async () => {
+    if (hasConflicts) throw new Error('Resolve conflicts before committing.')
     if (!chat || !binding) throw new Error('Select a repository first.')
     const result = await draftCommit(
       store.invoke,
       chat,
       binding.repoId,
-      staged.length ? undefined : unstaged.map((f) => f.path),
+      combined || !staged.length ? unstaged.map((f) => f.path) : undefined,
     )
     setDraft(result)
     setMessage(result.message)
@@ -356,8 +372,9 @@ export default function SourceControl() {
   }
   const commit = () =>
     void run(async () => {
+      if (hasConflicts) throw new Error('Resolve conflicts before committing.')
       if (!chat || !binding) throw new Error('Select a repository first.')
-      if (!staged.length && unstaged.length)
+      if ((combined || !staged.length) && unstaged.length)
         await call(
           'git.stage',
           unstaged.map((f) => f.path),
@@ -529,7 +546,7 @@ export default function SourceControl() {
                 {repo}
               </T>
               <T size={font.caption} tone="muted" style={{ flex: 1 }} numberOfLines={1}>
-                {mine.length ? `${mine.length} change${mine.length === 1 ? '' : 's'}` : 'no changes'} · {repos.length}{' '}
+                {changeCount ? `${changeCount} change${changeCount === 1 ? '' : 's'}` : 'no changes'} · {repos.length}{' '}
                 repositories
               </T>
               <ChevronDown size={15} color={c.muted} />
@@ -590,14 +607,14 @@ export default function SourceControl() {
             value={tab}
             onChange={setTab}
             options={[
-              { key: 'changes', label: 'Changes', count: mine.length },
+              { key: 'changes', label: 'Changes', count: changeCount },
               { key: 'commits', label: 'Commits', count: commits.length },
               { key: 'stashes', label: 'Stashes', count: stashes.length },
             ]}
           />
           {tab === 'changes' ? (
             <>
-              {mine.length > 8 ? (
+              {changeCount > 8 ? (
                 <View
                   style={{
                     flexDirection: 'row',
@@ -613,7 +630,7 @@ export default function SourceControl() {
                   <TextInput
                     value={filter}
                     onChangeText={setFilter}
-                    placeholder={`Filter ${mine.length} files`}
+                    placeholder={`Filter ${changeCount} files`}
                     placeholderTextColor={c.placeholder}
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -622,36 +639,38 @@ export default function SourceControl() {
                   />
                 </View>
               ) : null}
-              <Group
-                title="Staged Changes"
-                count={shownStaged.length}
-                open={!folded.staged}
-                onToggle={() => setFolded((f) => ({ ...f, staged: !f.staged }))}
-                action={
-                  staged.length
-                    ? {
-                        icon: Minus,
-                        label: 'Unstage all changes',
-                        onPress: () =>
-                          setStaged(
-                            staged.map((f) => f.path),
-                            false,
-                          ),
-                      }
-                    : undefined
-                }
-              >
-                {shownStaged.map((f, i) => (
-                  <View key={f.path}>
-                    {i ? <Divider inset={space.m} /> : null}
-                    <FileRow
-                      file={f}
-                      onOpen={() => openFile.open(binding!.repoId, f.path, { mode: 'staged' })}
-                      onStage={() => setStaged([f.path], false)}
-                    />
-                  </View>
-                ))}
-              </Group>
+              {!combined && (
+                <Group
+                  title="Staged Changes"
+                  count={shownStaged.length}
+                  open={!folded.staged}
+                  onToggle={() => setFolded((f) => ({ ...f, staged: !f.staged }))}
+                  action={
+                    staged.length
+                      ? {
+                          icon: Minus,
+                          label: 'Unstage all changes',
+                          onPress: () =>
+                            setStaged(
+                              staged.map((f) => f.path),
+                              false,
+                            ),
+                        }
+                      : undefined
+                  }
+                >
+                  {shownStaged.map((f, i) => (
+                    <View key={f.path}>
+                      {i ? <Divider inset={space.m} /> : null}
+                      <FileRow
+                        file={f}
+                        onOpen={() => openFile.open(binding!.repoId, f.path, { mode: 'staged' })}
+                        onStage={() => setStaged([f.path], false)}
+                      />
+                    </View>
+                  ))}
+                </Group>
+              )}
 
               <Group
                 title="Changes"
@@ -659,7 +678,7 @@ export default function SourceControl() {
                 open={!folded.changes}
                 onToggle={() => setFolded((f) => ({ ...f, changes: !f.changes }))}
                 action={
-                  unstaged.length
+                  !combined && unstaged.length
                     ? {
                         icon: Plus,
                         label: 'Stage all changes',
@@ -677,17 +696,17 @@ export default function SourceControl() {
                     {i ? <Divider inset={space.m} /> : null}
                     <FileRow
                       file={f}
-                      onOpen={() => openFile.open(binding!.repoId, f.path, { mode: 'changes' })}
-                      onStage={() => setStaged([f.path], true)}
-                      onDiscard={() => discard([f])}
+                      onOpen={() => openFile.open(binding!.repoId, f.path, { mode: combined ? 'all' : 'changes' })}
+                      onStage={combined ? undefined : () => setStaged([f.path], true)}
+                      onDiscard={unstaged.some((entry) => entry.path === f.path) ? () => discard([f]) : undefined}
                     />
                   </View>
                 ))}
               </Group>
-              {needle && !shownStaged.length && !shownUnstaged.length ? (
+              {needle && (combined || !shownStaged.length) && !shownUnstaged.length ? (
                 <T tone="muted">No changed file matches.</T>
               ) : null}
-              {!mine.length ? <T tone="muted">No changes in this checkout.</T> : null}
+              {!changeCount ? <T tone="muted">No changes in this checkout.</T> : null}
             </>
           ) : null}
           {tab !== 'changes' ? (
@@ -885,11 +904,13 @@ export default function SourceControl() {
                 </Pressable>
               </View>
               <T size={font.caption} tone="muted" style={{ paddingHorizontal: 2 }}>
-                {staged.length
-                  ? `Commits ${staged.length} staged file${staged.length === 1 ? '' : 's'}.`
-                  : unstaged.length
-                    ? `Nothing staged: stages and commits all ${unstaged.length} change${unstaged.length === 1 ? '' : 's'}.`
-                    : 'No changes in this checkout.'}
+                {combined && changes.length
+                  ? `Commits all ${changes.length} changed file${changes.length === 1 ? '' : 's'}.`
+                  : staged.length
+                    ? `Commits ${staged.length} staged file${staged.length === 1 ? '' : 's'}.`
+                    : unstaged.length
+                      ? `Nothing staged: stages and commits all ${unstaged.length} change${unstaged.length === 1 ? '' : 's'}.`
+                      : 'No changes in this checkout.'}
               </T>
             </View>
           </View>

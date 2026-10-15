@@ -83,7 +83,7 @@ export function QuestionDock({
         <Button
           variant="secondary"
           type="button"
-          className="bg-fill hover:bg-fill-hover question-dock-bar [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&_>_svg:first-child]:flex-none [&_>_svg:first-child]:text-muted-foreground flex items-center justify-start gap-2 w-full h-[36px] p-[0_12px] [border:0] [border-radius:0] bg-transparent text-left text-foreground font-normal"
+          className="bg-fill hover:bg-fill-hover question-dock-bar [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&_>_svg:first-child]:flex-none [&_>_svg:first-child]:text-muted-foreground flex items-center justify-start gap-2 w-full h-10 px-4 [border:0] [border-radius:0] bg-transparent text-left text-foreground font-normal"
           aria-expanded={false}
           onClick={() => onOpenChange(true)}
         >
@@ -250,7 +250,7 @@ function QuestionForm({
   return (
     <div
       ref={root}
-      className="question-card question-dock-card [&_fieldset]:grid [&_fieldset]:gap-1.5 [&_fieldset]:m-0 [&_fieldset]:p-0 [&_fieldset]:[border:0] [&_fieldset]:min-w-0 [&_legend]:p-0 [&_legend]:mb-0.5 [&_legend]:font-semibold [&_legend]:text-chat [&_legend]:text-foreground [&_.option]:flex [&_.option]:items-center [&_.option]:gap-2.5 [&_.option]:min-h-8 [&_.option]:p-[0_10px] [&_.option]:[border:1px_solid_transparent] [&_.option]:rounded-(--radius-s) [&_.option]:cursor-pointer [&_.option]:bg-fill [&_.option:hover]:bg-hover [&_.option.selected]:[border-color:var(--line-strong)] [&_.option.selected]:bg-hover [&_.option_input]:absolute [&_.option_input]:opacity-0 [&_.option_input]:pointer-events-none [&_.option.selected_.question-option-key]:[border-color:var(--text)] [&_.option.selected_.question-option-key]:text-foreground flex flex-col gap-2 max-h-[min(52vh,_460px)] overflow-auto p-[2px_5px_8px] outline-none"
+      className="question-card question-dock-card"
       data-question-request={request.requestId}
       tabIndex={-1}
       onKeyDown={onKeyDown}
@@ -295,7 +295,7 @@ function QuestionForm({
       <fieldset key={key} disabled={busy || !!answered}>
         <legend>{q.question}</legend>
         {q.options.length > 0 && (
-          <div className="question-options grid gap-1">
+          <div className="question-options grid gap-2">
             {q.options.map((option, index) => (
               <label
                 key={option.label}
@@ -318,9 +318,7 @@ function QuestionForm({
                 <span>
                   {option.label}
                   {option.description && (
-                    <span className="muted text-muted-foreground block block small text-caption">
-                      {option.description}
-                    </span>
+                    <span className="muted text-muted-foreground block small text-caption">{option.description}</span>
                   )}
                 </span>
               </label>
@@ -328,7 +326,7 @@ function QuestionForm({
           </div>
         )}
         <Input
-          className="h-8 rounded-(--radius-s) bg-fill border-transparent"
+          className="question-answer"
           aria-label={t('Answer: {0}', { '0': q.question })}
           placeholder={q.options.length ? t('Or type your own answer') : t('Type your answer')}
           value={typed}
@@ -346,7 +344,7 @@ function QuestionForm({
           {error}
         </p>
       )}
-      <div className="question-dock-actions flex items-center gap-1.5 pt-1">
+      <div className="question-dock-actions flex flex-wrap items-center gap-2 pt-1">
         {async && (
           <Button
             variant="ghost"

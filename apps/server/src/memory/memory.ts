@@ -22,6 +22,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentService } from '../agent'
 import type { Workspace } from '../workspace/workspace'
 import type { Db } from '../db'
+import { fingerprint, InputGate } from '../background/inputGate'
 import {
   ARCHIVE_FILE,
   MEMORY_FILE,
@@ -543,6 +544,8 @@ export class MemoryService {
     actor: Actor,
     id?: string,
     reason?: string,
+    /** The user's own words asking for this change. Lets an agent edit a protected note without taking its protection away. */
+    userRequest?: string,
   ): { action: 'added' | 'updated' | 'exists'; memory: Memory; related: Memory[] } {
     const checked = memoryInputSchema.parse(raw)
     const parsed = { ...checked, title: cleanLabel(checked.title) }
@@ -575,25 +578,35 @@ export class MemoryService {
     // An agent restating a note the user wrote must not rewrite it and strip its protection; point at the original instead.
     if (target && !id && actor.actor === 'agent' && confirmed(target))
       return { action: 'exists', memory: target, related }
-    if (target && actor.actor !== 'user' && (confirmed(target) || target.importance >= ESSENTIAL))
+    const guarded = !!target && actor.actor !== 'user' && (confirmed(target) || target.importance >= ESSENTIAL)
+    if (guarded && !(id && userRequest))
       throw new Error('This memory is protected. Ask the user to edit it; save conflicting evidence separately.')
     if (target) {
       const next = {
         title: input.title,
         content: input.content,
         tags: [...new Set([...(id ? [] : target.tags), ...input.tags])],
-        importance: id
-          ? input.importance
-          : Math.min(
-              Math.max(target.importance, input.importance),
-              actor.actor === 'user' ? ESSENTIAL : AGENT_MAX_IMPORTANCE,
-            ),
+        importance: guarded
+          ? target.importance
+          : id
+            ? input.importance
+            : Math.min(
+                Math.max(target.importance, input.importance),
+                actor.actor === 'user' ? ESSENTIAL : AGENT_MAX_IMPORTANCE,
+              ),
       }
       this.record(target, 'update', actor, reason ?? (id ? 'edited' : 'near-duplicate save merged'))
       // A user edit confirms the text; an agent rewrite takes the confirmation away again.
       const source = {
         ...target.source,
-        confirmed: actor.actor === 'user' ? true : actor.actor === 'agent' ? false : confirmed(target),
+        confirmed:
+          actor.actor === 'user'
+            ? true
+            : guarded
+              ? confirmed(target)
+              : actor.actor === 'agent'
+                ? false
+                : confirmed(target),
       }
       this.db
         .prepare(
@@ -639,9 +652,9 @@ export class MemoryService {
     return { action: 'added', memory: this.get(newId), related }
   }
 
-  archive(id: string, actor: Actor, reason: string): Memory {
+  archive(id: string, actor: Actor, reason: string, userRequest?: string): Memory {
     const m = this.get(id)
-    if (actor.actor !== 'user' && (confirmed(m) || m.importance >= ESSENTIAL))
+    if (actor.actor !== 'user' && !userRequest && (confirmed(m) || m.importance >= ESSENTIAL))
       throw new Error('This memory is protected; only the user can archive it')
     if (m.status === 'archived') return m
     this.record(m, 'archive', actor, reason)
@@ -651,15 +664,74 @@ export class MemoryService {
     this.touch()
     return this.get(id)
   }
-  restore(id: string): Memory {
+  restore(id: string, actor: Actor = { actor: 'user' }, reason: string | null = null): Memory {
     const m = this.get(id)
-    this.record(m, 'restore', { actor: 'user' }, null)
+    this.record(m, 'restore', actor, reason)
     // Restoring counts as use, so the note is not immediately archived as stale again.
     this.db
       .prepare("UPDATE memories SET status = 'active', archived_reason = NULL, last_used_at = ? WHERE id = ?")
       .run(Date.now(), id)
     this.touch()
     return this.get(id)
+  }
+  /** Folds several unprotected notes of one scope into the first, which is rewritten. The others are archived and every step is a restorable revision. */
+  merge(
+    ids: string[],
+    next: { title: string; content: string; tags?: string[] },
+    actor: Actor,
+    reason: string,
+    userRequest?: string,
+  ): { kept: Memory; archived: Memory[] } {
+    const notes = [...new Set(ids)].map((id) => this.get(id))
+    if (notes.length < 2) throw new Error('Name at least two different memories to merge')
+    if (notes.some((m) => m.status !== 'active'))
+      throw new Error('Only active memories can be merged; restore it first')
+    if (new Set(notes.map((m) => m.projectId)).size > 1)
+      throw new Error('Those memories apply to different projects; merge only notes of the same scope')
+    const protectedNote = notes.find((m) => confirmed(m) || m.importance >= ESSENTIAL)
+    if (protectedNote && !userRequest)
+      throw new Error(
+        `"${protectedNote.title}" is protected (you wrote or marked it essential). Ask the user to edit it; save conflicting evidence separately.`,
+      )
+    const title = cleanLabel(next.title)
+    if (!title) throw new Error("A memory's title can't be empty.")
+    if (SECRET.test(`${title}\n${next.content}`))
+      throw new Error('This looks like a credential; never store secrets in memory.')
+    const [keep, ...rest] = notes
+    const now = Date.now()
+    this.db.exec('BEGIN')
+    try {
+      this.record(keep!, 'merge', actor, reason)
+      this.db
+        .prepare(
+          'UPDATE memories SET title = ?, content = ?, tags = ?, importance = ?, use_count = ?, source = ?, updated_at = ? WHERE id = ?',
+        )
+        .run(
+          title,
+          next.content,
+          JSON.stringify([...new Set([...(next.tags ?? []), ...notes.flatMap((m) => m.tags)])].slice(0, 12)),
+          protectedNote
+            ? Math.max(...notes.map((m) => m.importance))
+            : Math.min(Math.max(...notes.map((m) => m.importance)), AGENT_MAX_IMPORTANCE),
+          notes.reduce((n, m) => n + m.useCount, 0),
+          // Merging at your request keeps the protection the notes had; otherwise agent text is never confirmed.
+          JSON.stringify({ ...keep!.source, confirmed: !!protectedNote && notes.some((m) => confirmed(m)) }),
+          Math.max(now, keep!.updatedAt + 1),
+          keep!.id,
+        )
+      for (const m of rest) {
+        this.record(m, 'archive', actor, `merged into ${keep!.id}`)
+        this.db
+          .prepare("UPDATE memories SET status = 'archived', archived_reason = ?, updated_at = ? WHERE id = ?")
+          .run(`merged into "${title}"`, Math.max(now, m.updatedAt + 1), m.id)
+      }
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    this.touch()
+    return { kept: this.get(keep!.id), archived: rest.map((m) => this.get(m.id)) }
   }
   delete(id: string): void {
     this.db.prepare('DELETE FROM memories WHERE id = ?').run(id)
@@ -822,6 +894,11 @@ export class MemoryService {
           lastUsed: m.lastUsedAt ? new Date(m.lastUsedAt).toISOString().slice(0, 10) : null,
           uses: m.useCount,
         }))
+        // Only the notes' content and the model matter; a scheduled pass with nothing edited since the last one stays free.
+        const gate = new InputGate(this.workspace),
+          gateKey = `memory-dream:${projectId ?? 'global'}`,
+          print = this.dreamPrint(bounded)
+        if (!gate.shouldRun(gateKey, print, manual)) continue
         const prompt = `memory-dream: Consolidate an AI coding assistant's long-term memory for ${projectId ? `the project ${JSON.stringify(names.get(projectId) ?? projectId)}` : 'all projects (global memories)'}. Today is ${new Date().toISOString().slice(0, 10)}. Return JSON only: {"merge":[{"ids":["id","id"],"title":"...","content":"...","importance":3,"tags":[],"reason":"..."}],"update":[{"id":"...","title":"optional","content":"optional","importance":3,"reason":"..."}],"archive":[{"id":"...","reason":"..."}]}.
 Rules:
 - merge: notes that state the same fact or should obviously live together. Write one note that keeps every distinct detail of the merged notes.
@@ -836,6 +913,17 @@ ${JSON.stringify(data)}
         const ops = dreamSchema.parse(JSON.parse(result.message.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')))
         if (revision !== this.generation || (!manual && !this.preferences().dream)) break
         this.apply(ops, new Map(bounded.map((m) => [m.id, m])))
+        // Remember the notes as the pass left them, so Ramu's own edits do not trigger another pass.
+        gate.record(
+          gateKey,
+          this.dreamPrint(
+            (this.db.prepare("SELECT * FROM memories WHERE status = 'active'").all() as Row[])
+              .map(fromRow)
+              .filter((m) => m.projectId === projectId)
+              .sort((a, b) => strength(b) - strength(a))
+              .slice(0, 300),
+          ),
+        )
       }
       if (revision === this.generation) this.workspace.setAppState('memory-dreamed-at', Date.now())
     } catch (error) {
@@ -847,6 +935,16 @@ ${JSON.stringify(data)}
       this.changed()
     }
     return this.snapshot()
+  }
+
+  /** Fingerprint of what a consolidation pass reads: note text and the model, not usage counters. */
+  private dreamPrint(notes: Memory[]): string {
+    return fingerprint({
+      notes: notes
+        .map((m) => [m.id, m.kind, m.title, m.content, m.tags, m.importance, m.updatedAt] as const)
+        .sort(([a], [b]) => (a < b ? -1 : 1)),
+      model: this.modelSettings(),
+    })
   }
 
   /** Apply only ops on notes the model was shown and that nobody edited while it was thinking. */

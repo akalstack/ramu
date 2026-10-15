@@ -12,6 +12,7 @@ import { BackgroundControls, formatScheduleTime, useSchedules } from './Automati
 import { invoke, ramu } from './ipc'
 import { notifyError } from './chat/Notifications'
 import { timeAgo } from './Menu'
+import { LearnedCard } from './summaries/LearnedCard'
 
 /**
  * What sits under the start box on Home and New chat: chats still working in the background,
@@ -115,6 +116,7 @@ export function HomeFeed() {
           </div>
         </section>
       )}
+      <LearnedCard />
       {preferences.recapsEnabled && recap?.error && (
         <p className="error text-bad small text-caption" role="alert">
           {recap.error}

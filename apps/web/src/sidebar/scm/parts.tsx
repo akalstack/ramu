@@ -21,6 +21,7 @@ export function ChangeGroupHeader({
   busy,
   onToggle,
   onAction,
+  showAction = true,
 }: {
   label: string
   open: boolean
@@ -29,6 +30,7 @@ export function ChangeGroupHeader({
   actionIcon: ReactNode
   busy: boolean
   onToggle: () => void
+  showAction?: boolean
   onAction: () => void
 }) {
   return (
@@ -38,7 +40,7 @@ export function ChangeGroupHeader({
         {label}
         {!!count && <ScmCount>{count}</ScmCount>}
       </Button>
-      {!!count && (
+      {!!count && showAction && (
         <Button
           variant="ghost"
           size="icon-xs"

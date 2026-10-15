@@ -27,6 +27,10 @@ export const intelligenceSchema = z.object({
     .default(null),
   dailyReviews: z.number().int().min(1).max(50).default(5),
   archiveSkillDays: z.number().int().min(7).max(3650).default(90),
+  summaryInterval: z.enum(['off', 'daily', 'weekly']).default(DEFAULT_INTELLIGENCE_PREFERENCES.summaryInterval),
+  summaryMemory: z.boolean().default(true),
+  summarySkills: z.boolean().default(true),
+  summaryOnHome: z.boolean().default(true),
 })
 
 export function responseInstructions(

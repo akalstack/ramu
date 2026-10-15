@@ -44,7 +44,7 @@ export const fileContext = z
         .optional(),
       diff: z
         .object({
-          staged: z.boolean(),
+          staged: z.union([z.boolean(), z.literal('all')]),
           stash: z.boolean().optional(),
           oid: gitOid.optional(),
         })

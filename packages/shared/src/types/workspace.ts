@@ -73,6 +73,8 @@ export interface Task {
   lastActiveAt: number
   /** Set while every provider is at its usage limit: when Ramu next tries to continue the chat on its own. */
   waitingUntil?: number | null
+  /** A chat started from a "What Ramu learned" summary; it shows a Review label under Chats. */
+  kind?: 'library-review' | null
 }
 
 export type BindingSetupState = 'ready' | 'pending' | 'failed'
@@ -157,6 +159,6 @@ export interface FileContext {
     endColumn: number
     side?: 'original' | 'modified'
   }
-  diff?: { staged: boolean; oid?: string; stash?: boolean }
+  diff?: { staged: boolean | 'all'; oid?: string; stash?: boolean }
   source: 'tab' | 'mention'
 }

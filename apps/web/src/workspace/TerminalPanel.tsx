@@ -148,7 +148,7 @@ export function TerminalPanel({
       style={{ display: open && !hidden ? 'flex' : 'none' }}
     >
       <header className="terminal-toolbar [&_.terminal-tabs]:flex [&_.terminal-tabs]:gap-0.5 [&_.terminal-tabs]:p-0 [&_.terminal-tabs]:[border:0] [&_.terminal-tabs]:overflow-x-auto [&_.terminal-tabs]:min-w-0 [&_.terminal-tabs]:flex-initial flex items-center flex-none [border-bottom-color:var(--line)] h-[36px] p-[4px_6px] [border-bottom:0] gap-1">
-        {position === 'top' ? (
+        {dock === 'right' ? null : position === 'top' ? (
           tabList
         ) : (
           <span className="terminal-panel-title pl-2 text-control font-medium text-soft">Terminal</span>
@@ -218,8 +218,8 @@ export function TerminalPanel({
           variant="ghost"
           size="icon-xs"
           className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-          aria-label={dock === 'right' ? t('Dock terminal at bottom') : t('Dock terminal on right')}
-          title={dock === 'right' ? t('Dock terminal at bottom') : t('Dock terminal on right')}
+          aria-label={dock === 'right' ? t('Dock terminal at bottom') : t('Move terminal to workspace tabs')}
+          title={dock === 'right' ? t('Dock terminal at bottom') : t('Move terminal to workspace tabs')}
           onClick={() => ws.setTerminalPanel(taskId, { terminalDock: dock === 'right' ? 'bottom' : 'right' })}
         >
           {dock === 'right' ? (
@@ -236,7 +236,7 @@ export function TerminalPanel({
           items={[
             {
               key: 'dock-right',
-              label: t('Dock terminal on right'),
+              label: t('Move terminal to workspace tabs'),
               selected: dock === 'right',
               onSelect: () => ws.setTerminalPanel(taskId, { terminalDock: 'right' }),
             },
@@ -285,7 +285,7 @@ export function TerminalPanel({
       <div
         className={`terminal-panel-body [&.tabs-top]:flex-col [&.tabs-right_.terminal-tabs]:[order:1] [&.tabs-right_.terminal-tabs]:w-[164px] [&.tabs-right_.terminal-tabs]:flex-col [&.tabs-right_.terminal-tabs]:[border-bottom:none] [&.tabs-right_.terminal-tabs]:p-1 flex flex-1 min-h-0 min-w-0 tabs-${position}`}
       >
-        {position === 'right' && tabList}
+        {dock === 'bottom' && position === 'right' && tabList}
         <TabsContent
           value={activeGroup?.id ?? null}
           keepMounted

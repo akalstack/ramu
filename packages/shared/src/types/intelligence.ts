@@ -11,6 +11,11 @@ export interface IntelligencePreferences {
   maintenanceModel: { provider: AgentProvider; model: string; effort: ReasoningEffort | null } | null
   dailyReviews: number
   archiveSkillDays: number
+  /** How often "What Ramu learned" is written. */
+  summaryInterval: 'off' | 'daily' | 'weekly'
+  summaryMemory: boolean
+  summarySkills: boolean
+  summaryOnHome: boolean
 }
 export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
   responseStyle: 'default',
@@ -23,6 +28,10 @@ export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
   maintenanceModel: null,
   dailyReviews: 5,
   archiveSkillDays: 90,
+  summaryInterval: 'weekly',
+  summaryMemory: true,
+  summarySkills: true,
+  summaryOnHome: true,
 }
 export interface ManagedSkill {
   id: string
@@ -39,6 +48,10 @@ export interface ManagedSkill {
   useCount: number
   sourceSessionId: string
   sourceSeq: number
+  /** Who made this revision. Absent on revisions saved before summaries existed. */
+  changedBy?: 'learning' | 'cleanup' | 'user' | 'review'
+  /** Why a review chat made this revision. */
+  changeNote?: string
 }
 export interface LearningJob {
   sessionTitle?: string

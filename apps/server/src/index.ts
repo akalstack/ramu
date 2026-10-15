@@ -15,8 +15,8 @@ import { NoticeInbox } from './background/notices'
 import { join } from 'node:path'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { claudeAcpQuery } from './providers/claudeAcpQuery'
 import { query } from '@anthropic-ai/claude-agent-sdk'
+import { createAcpRunner } from './providers/acp'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { registerQuestionTools } from './agent/questionTools'
 import { registerAdvisorTools } from './agent/advisor'
@@ -54,6 +54,8 @@ import { runtimeBuild, runtimeVersion } from './build'
 import { ReviewService } from './review/reviews'
 import { RecapService } from './memory/recaps'
 import { MemoryService, registerMemoryTools } from './memory/memory'
+import { SummaryService, registerLibraryTools, withoutTools } from './memory/summaries'
+import { discoverSkills } from './context'
 import type { AgentSessionInfo, ScheduleInput } from '@ramu/shared/types'
 
 const config = loadConfig()
@@ -174,10 +176,12 @@ const agents = new AgentService(
       } catch {}
     })
   },
-  fake?.fakeQuery ?? claudeAcpQuery(query),
+  fake?.fakeQuery ?? query,
   fake?.fakeCodex,
   fake?.fakeCodex,
   fake?.fakeCodex,
+  // Claude chats run through the official ACP adapter; one-shot asides, catalogs and usage reads keep using the SDK.
+  fake ? undefined : createAcpRunner,
 )
 const mobileLiveActivities = new MobileLiveActivities(
   join(userData, 'mobile-live-activities.json'),
@@ -221,8 +225,12 @@ const compression = new CompressionService(db)
 const learning = new LearningService(db, workspace, agents, memory, join(userData, 'skills'), () =>
   send('memory:changed', {}),
 )
+const summaries = new SummaryService(db, workspace, agents, memory, learning, (created) =>
+  send('summaries:changed', { created }),
+)
 agents.sessionCheckpoint = (id) => learning.checkpoint(id)
-agents.learningInstructions = (session) => learning.instructions(session.id)
+agents.learningInstructions = (session) =>
+  [learning.instructions(session.id), summaries.instructions(session)].filter(Boolean).join('\n\n')
 const projectOf = (session: AgentSessionInfo) => {
   try {
     return workspace.getTask(session.taskId).projectId
@@ -262,7 +270,19 @@ const dispatcher = createDispatcher(
       })
     },
   },
-  { workspace, terminals, agents, schedules, recaps, reviews, memory, learning, compression, notices: inbox },
+  {
+    workspace,
+    terminals,
+    agents,
+    schedules,
+    recaps,
+    reviews,
+    memory,
+    learning,
+    summaries,
+    compression,
+    notices: inbox,
+  },
 )
 const startedAt = Date.now()
 let stopping = false
@@ -278,7 +298,7 @@ async function stop(intentional = false) {
   agents.stopAll(!intentional)
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))
-  await Promise.all([recaps.settle(), reviews.settle(), memory.settle(), learning.settle()])
+  await Promise.all([recaps.settle(), reviews.settle(), memory.settle(), learning.settle(), summaries.settle()])
   terminals.closeAll()
   dispatcher.close()
   for (const c of clients) c.end()
@@ -486,7 +506,15 @@ const mcpHttp = createServer(async (req, res) => {
   const registry = new ToolRegistry(target, connection!.toolSearch, (result) =>
     compression.compact(source.id, preferences.compression, result),
   )
-  const server = registry.server
+  // A review chat about learned memories gets Ramu's memory and skill tools and nothing else: later registrations are ignored.
+  const review = summaries.isReviewChat(source.taskId)
+  if (review)
+    registerLibraryTools(
+      registry.server,
+      { memory, learning, db, installedSkills: () => discoverSkills(workspace.agentScope(source.taskId)) },
+      source,
+    )
+  const server = review ? withoutTools(registry.server) : registry.server
   learning.register(server, source.id)
   if (preferences.rtk) registerRtkTool(server, agents.get(source.id))
   compression.register(server, source.id)
@@ -753,9 +781,18 @@ agents.toolConnection = (session) => {
   const token = randomBytes(32).toString('hex')
   sessions.set(token, {
     session,
-    toolSearch: workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence?.toolSearch ?? true,
+    toolSearch:
+      !summaries.isReviewChat(session.taskId) &&
+      (workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence?.toolSearch ?? true),
   })
-  return { url: `http://127.0.0.1:${address.port}/mcp`, token }
+  const review = summaries.isReviewChat(session.taskId)
+  const skillsDir = review ? null : learning.exportDir(projectOf(session), session.provider, session.cwd)
+  return {
+    url: `http://127.0.0.1:${address.port}/mcp`,
+    token,
+    ...(review ? { restricted: true } : {}),
+    ...(skillsDir ? { skillsDir } : {}),
+  }
 }
 // Never unlink a socket owned by another live service. The launcher removes stale sockets first.
 await new Promise<void>((resolve, reject) => {
@@ -872,6 +909,7 @@ const tick = setInterval(() => {
   void recaps.tick().catch(console.error)
   void memory.tick().catch(console.error)
   void learning.tick().catch(console.error)
+  void summaries.tick().catch(console.error)
 }, 5000)
 await agents.restoreHelperTranscripts()
 await agents.resumeInterruptedChats()

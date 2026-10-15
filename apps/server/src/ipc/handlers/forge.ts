@@ -1,0 +1,100 @@
+import { z } from 'zod'
+import type { IssueLink, PullRequestFeedbackKind, PullRequestInput } from '@ramu/shared/types'
+import * as forge from '../../workspace/forge'
+import * as git from '../../workspace/git'
+import { gitExclusive } from '../helpers'
+import { id } from '../schemas'
+import type { HandlerContext, RegisterHandlers } from '../types'
+
+const issueNumber = z.number().int().positive()
+const issueLink = z.object({
+  repoId: id,
+  number: issueNumber,
+  title: z.string().max(1000),
+  url: z.string().url().max(2000),
+})
+const pullRequestInput = z.object({
+  title: z.string().trim().min(1).max(500),
+  body: z.string().max(100_000),
+  base: z.string().min(1).max(200),
+  draft: z.boolean(),
+})
+
+const issueKey = (taskId: string) => `issue:${taskId}`
+
+/**
+ * The issue behind the work in this checkout: the most recently active chat that was started from an
+ * issue in this repository and works in the same checkout.
+ */
+function linkedIssue(ctx: HandlerContext, cwd: string, repoId: string): IssueLink | null {
+  const { workspace } = ctx
+  const chats = workspace
+    .listTasks()
+    .map((task) => ({ task, link: workspace.getAppState<IssueLink | null>(issueKey(task.id), null) }))
+    .filter(({ link }) => link?.repoId === repoId)
+    .sort((a, b) => b.task.lastActiveAt - a.task.lastActiveAt)
+  for (const { task, link } of chats) {
+    try {
+      if (workspace.getBinding(task.id, repoId).cwd === cwd) return link
+    } catch {
+      // A worktree that is gone or not ready is not this checkout.
+    }
+  }
+  return null
+}
+
+/** Pull requests for a checkout's branch and issues for a repository, through the GitHub CLI. */
+export const registerForgeHandlers: RegisterHandlers = (ctx) => {
+  const { workspace, gitCwdOf } = ctx
+  const repoRoot = (repoId: string) => workspace.getRepository(repoId).root
+
+  return {
+    'forge.pullRequest': {
+      args: z.tuple([id, id]),
+      run: (taskId: string, repoId: string) => forge.pullRequestStatus(gitCwdOf(taskId, repoId)),
+    },
+    'forge.pullRequestDraft': {
+      args: z.tuple([id, id]),
+      run: (taskId: string, repoId: string) => {
+        const cwd = gitCwdOf(taskId, repoId)
+        return forge.pullRequestDraft(cwd, linkedIssue(ctx, cwd, repoId))
+      },
+    },
+    'forge.createPullRequest': {
+      args: z.tuple([id, id, pullRequestInput]),
+      run: (taskId: string, repoId: string, input: PullRequestInput) =>
+        gitExclusive(ctx, taskId, repoId, async (cwd) => {
+          // The branch must be on the remote first; push publishes it when it has no upstream yet.
+          await git.push(cwd)
+          return forge.createPullRequest(cwd, input)
+        }),
+    },
+    'forge.pullRequestFeedback': {
+      args: z.tuple([id, id, z.enum(['checks', 'reviews'])]),
+      run: (taskId: string, repoId: string, kind: PullRequestFeedbackKind) =>
+        forge.pullRequestFeedback(gitCwdOf(taskId, repoId), kind),
+    },
+    'forge.issues': {
+      args: z.tuple([id, z.string().max(500)]),
+      run: (repoId: string, search: string) => forge.listIssues(repoRoot(repoId), search),
+    },
+    'forge.issue': {
+      args: z.tuple([id, issueNumber]),
+      run: async (repoId: string, number: number) => {
+        const issue = await forge.issueDetails(repoRoot(repoId), number)
+        return { link: { repoId, number, title: issue.title, url: issue.url }, prompt: issue.prompt }
+      },
+    },
+    'forge.linkIssue': {
+      args: z.tuple([id, issueLink.nullable()]),
+      run: (taskId: string, link: IssueLink | null) => {
+        workspace.getTask(taskId)
+        workspace.setAppState(issueKey(taskId), link)
+      },
+    },
+    'forge.issueLink': {
+      args: z.tuple([id]),
+      run: (taskId: string) => workspace.getAppState<IssueLink | null>(issueKey(taskId), null),
+    },
+  }
+}

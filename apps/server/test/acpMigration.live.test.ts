@@ -3,62 +3,11 @@ import { expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { query } from '@anthropic-ai/claude-agent-sdk'
-import { claudeAcpQuery } from '../src/providers/claudeAcpQuery'
-import { providerBinary } from '../src/providers/providerBinaries'
-import { acpHostedRunner } from '../src/providers/acpNativeHost'
-import { createCodexRunner } from '../src/providers/codex'
 import { createAcpRunner } from '../src/providers/acp'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent } from '@ramu/shared/types'
 
 const enabled = process.env.RAMU_ACP_MIGRATION_LIVE === '1'
-it.skipIf(!enabled)(
-  'Claude completes a tool-free, nonpersistent turn through the ACP host',
-  async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'ramu-acp-claude-live-'))
-    const client = claudeAcpQuery(query)({
-      prompt: (async function* () {
-        yield {
-          type: 'user' as const,
-          parent_tool_use_id: null,
-          message: { role: 'user' as const, content: 'Reply exactly RAMU_ACP_OK. Do not use tools.' },
-        }
-      })(),
-      options: {
-        cwd,
-        tools: [],
-        persistSession: false,
-        settingSources: [],
-        maxTurns: 1,
-        permissionMode: 'default',
-        pathToClaudeCodeExecutable: providerBinary('claude-code'),
-        canUseTool: async () => ({ behavior: 'deny', message: 'Tool-free ACP verification' }),
-      },
-    })
-    let text = '',
-      completed = false
-    try {
-      for await (const message of client) {
-        if (message.type === 'assistant')
-          for (const block of message.message.content) if (block.type === 'text') text += block.text
-        if (message.type === 'result') {
-          expect(message.is_error).toBe(false)
-          completed = true
-        }
-      }
-      expect(text).toContain('RAMU_ACP_OK')
-      expect(completed).toBe(true)
-    } finally {
-      client.close()
-      rmSync(cwd, { recursive: true, force: true })
-    }
-  },
-  90_000,
-)
-for (const [provider, factory] of [
-  ['codex', createCodexRunner],
-  ['opencode', createAcpRunner],
-] as const) {
+for (const provider of ['codex', 'claude-code', 'opencode'] as const) {
   it.skipIf(!enabled)(
     `${provider} completes background analysis through the ACP host`,
     async () => {
@@ -68,7 +17,7 @@ for (const [provider, factory] of [
       const done = new Promise<void>((resolve) => {
         finish = resolve
       })
-      const runner = (provider === 'opencode' ? factory : acpHostedRunner(factory))(
+      const runner = createAcpRunner(
         { cwd, additionalDirs: [], covers: [] },
         { ...DEFAULT_AGENT_SETTINGS, provider, accountId: 'default', access: 'edits' },
         (event) => {
@@ -98,3 +47,42 @@ for (const [provider, factory] of [
     90_000,
   )
 }
+for (const provider of ['codex', 'claude-code'] as const)
+  it.skipIf(!enabled)(
+    `${provider} takes a steering message into the running turn without cancelling it`,
+    async () => {
+      const cwd = mkdtempSync(join(tmpdir(), 'ramu-acp-codex-steer-live-')),
+        events: AgentEvent[] = []
+      let finish!: () => void
+      const done = new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      let steered: Promise<void> | undefined
+      const runner = createAcpRunner(
+        { cwd, additionalDirs: [], covers: [] },
+        { ...DEFAULT_AGENT_SETTINGS, provider, accountId: 'default', access: 'full' },
+        (event) => {
+          events.push(event)
+          if (event.kind === 'tool-use' && !steered)
+            steered = runner.steer('New instruction from the user: stop the earlier task and reply with only the word STEERED_OK.')
+          if (event.kind === 'result' || event.kind === 'error') finish()
+        },
+      )
+      const timer = setTimeout(finish, 100_000)
+      try {
+        await runner.start('Run `sleep 6` in the shell, then reply with the word DONE.', null)
+        await done
+        await steered
+        expect(runner.steerInterrupts).toBe(false)
+        expect(events.filter((event) => event.kind === 'result')).toHaveLength(1)
+        expect(events.filter((event) => event.kind === 'text').at(-1)).toMatchObject({
+          text: expect.stringContaining('STEERED_OK'),
+        })
+      } finally {
+        clearTimeout(timer)
+        await runner.stop()
+        rmSync(cwd, { recursive: true, force: true })
+      }
+    },
+    120_000,
+  )

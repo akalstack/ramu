@@ -1,6 +1,6 @@
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
-import { compactionLabel } from '@ramu/shared/chat/compaction'
+import { compactionLabel, compactionCounts } from '@ramu/shared/chat/compaction'
 import { Button } from '@/components/desktop-button'
 import { CircleAlert, Minimize2 } from 'lucide-react'
 import type { Attachment, AgentEvent } from '@ramu/shared/types'
@@ -58,18 +58,40 @@ export function EventRow({
           <span>{translate('Continued after restart')}</span>
         </div>
       )
-    case 'compaction':
-      return e.state === 'started' ? null : (
+    case 'compaction': {
+      if (e.state === 'started') return null
+      const counts = compactionCounts(e)
+      return (
         <div
-          className={`compaction-separator [&::before]:[content:''] [&::before]:h-[var(--pane-border-width)] [&::before]:[background:var(--pane-border-color)] [&::before]:flex-1 [&::after]:[content:''] [&::after]:h-[var(--pane-border-width)] [&::after]:[background:var(--pane-border-color)] [&::after]:flex-1 [&_>_span]:inline-flex [&_>_span]:items-center [&_>_span]:justify-center [&_>_span]:gap-2 [&_>_span]:text-center [&.error]:text-muted-foreground flex items-center gap-3.5 m-[18px_0] text-muted-foreground text-control${e.state === 'failed' ? ' error text-bad' : ''}`}
+          className="compaction-separator my-4 flex items-center gap-3 text-control text-muted-foreground"
           role="status"
         >
-          <span>
-            <Minimize2 size={14} />
-            {compactionLabel(e)}
-          </span>
+          <span className="h-px min-w-4 flex-1 bg-border" aria-hidden="true" />
+          <div className="flex min-w-0 flex-col items-center gap-1 text-center">
+            <span className="inline-flex items-center gap-2">
+              <Minimize2 size={14} aria-hidden="true" />
+              {compactionLabel(e)}
+            </span>
+            {e.state === 'completed' && (
+              <span className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-caption tabular-nums">
+                <span>
+                  {counts.before === 'Not reported'
+                    ? translate('Before: Not reported')
+                    : translate('Before: {0} tokens', { '0': counts.before })}
+                </span>
+                <span>
+                  {counts.after === 'Not reported'
+                    ? translate('After: Not reported')
+                    : translate('After: {0} tokens', { '0': counts.after })}
+                </span>
+                {counts.window && <span>{translate('Context window: {0} tokens', { '0': counts.window })}</span>}
+              </span>
+            )}
+          </div>
+          <span className="h-px min-w-4 flex-1 bg-border" aria-hidden="true" />
         </div>
       )
+    }
     case 'schedule':
       return <ScheduleChatCard schedule={e.schedule} />
     case 'settings':

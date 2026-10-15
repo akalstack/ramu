@@ -45,5 +45,7 @@ export const claudeCodeAdapter = defineAdapter({
     }
   },
   loginArgs: ['auth', 'login'],
+  // A local plugin adds the export as `ramu-managed:<skill>` without touching ~/.claude or the project.
+  skillsLaunch: (exportDir) => ({ plugins: [exportDir] }),
   updatePlan: selfUpdate(['update']),
 })

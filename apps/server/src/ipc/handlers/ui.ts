@@ -31,7 +31,7 @@ const viewSchema = z.discriminatedUnion('kind', [
     id,
     repoId: id,
     path: relPath,
-    staged: z.boolean(),
+    staged: z.union([z.boolean(), z.literal('all')]),
     stash: z.boolean().optional(),
     oid: z
       .string()
@@ -66,6 +66,7 @@ const taskUiSchema = z.object({
   dockWidth: z.number().int().min(280).max(2000).optional(),
   dockHidden: z.boolean().optional(),
   activeTerminalId: id.nullable().optional(),
+  terminalReturnViewId: id.nullable().optional(),
   terminalOpen: z.boolean().optional(),
   terminalLayout: z.enum(['tabs', 'horizontal', 'vertical']).optional(),
   terminalGroups: z

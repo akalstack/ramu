@@ -27,12 +27,12 @@ function CommandInput({ className, ...props }: React.ComponentProps<typeof Comma
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
-            'h-full w-full rounded-none border-0 bg-transparent p-0 text-sm outline-hidden focus:border-0 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+            'h-full w-full min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm outline-hidden focus:border-0 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
             className,
           )}
           {...props}
         />
-        <InputGroupAddon>
+        <InputGroupAddon className="shrink-0">
           <SearchIcon className="size-4 shrink-0 opacity-50" />
         </InputGroupAddon>
       </InputGroup>
@@ -55,19 +55,6 @@ function CommandEmpty({ className, ...props }: React.ComponentProps<typeof Comma
     <CommandPrimitive.Empty
       data-slot="command-empty"
       className={cn('py-6 text-center text-sm', className)}
-      {...props}
-    />
-  )
-}
-
-function CommandGroup({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Group>) {
-  return (
-    <CommandPrimitive.Group
-      data-slot="command-group"
-      className={cn(
-        'overflow-hidden p-1 text-foreground **:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:py-1.5 **:[[cmdk-group-heading]]:text-xs **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:text-muted-foreground',
-        className,
-      )}
       {...props}
     />
   )
@@ -102,4 +89,4 @@ function CommandShortcut({ className, ...props }: React.ComponentProps<'span'>) 
   )
 }
 
-export { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandShortcut }
+export { Command, CommandInput, CommandList, CommandEmpty, CommandItem, CommandShortcut }

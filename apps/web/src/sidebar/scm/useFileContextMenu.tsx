@@ -24,7 +24,7 @@ export function useFileContextMenu({
   reportError: (message: string) => void
 }) {
   const ws = useWorkspace()
-  const [contextEntry, setContextEntry] = useState<{ entry: GitStatusEntry; staged: boolean } | null>(null)
+  const [contextEntry, setContextEntry] = useState<{ entry: GitStatusEntry; staged: boolean | 'all' } | null>(null)
   const copyPath = async (path: string) => {
     try {
       await copyText(path)
@@ -55,28 +55,37 @@ export function useFileContextMenu({
                 {t('Open file')}
               </>
             ),
-            disabled: (contextEntry.staged ? contextEntry.entry.staged : contextEntry.entry.unstaged) === 'deleted',
+            disabled:
+              (contextEntry.staged === 'all'
+                ? (contextEntry.entry.unstaged ?? contextEntry.entry.staged)
+                : contextEntry.staged
+                  ? contextEntry.entry.staged
+                  : contextEntry.entry.unstaged) === 'deleted',
             onSelect: () => ws.openView(taskId, { kind: 'file', repoId, path: contextEntry.entry.path }),
           },
-          {
-            key: 'stage',
-            label: (
-              <>
-                {contextEntry.staged ? <Minus size={14} /> : <Plus size={14} />}
-                {contextEntry.staged ? t('Unstage changes') : t('Stage changes')}
-              </>
-            ),
-            disabled: busy,
-            onSelect: () => stagePaths([contextEntry.entry.path], !contextEntry.staged),
-          },
-          ...(!contextEntry.staged
+          ...(contextEntry.staged !== 'all'
+            ? [
+                {
+                  key: 'stage',
+                  label: (
+                    <>
+                      {contextEntry.staged ? <Minus size={14} /> : <Plus size={14} />}
+                      {contextEntry.staged ? t('Unstage changes') : t('Stage changes')}
+                    </>
+                  ),
+                  disabled: busy,
+                  onSelect: () => stagePaths([contextEntry.entry.path], !contextEntry.staged),
+                },
+              ]
+            : []),
+          ...(contextEntry.staged !== true && !!contextEntry.entry.unstaged
             ? [
                 {
                   key: 'discard',
                   label: (
                     <>
                       <Undo2 size={14} />
-                      {t('Discard changes…')}
+                      {t(contextEntry.staged === 'all' ? 'Discard unstaged changes…' : 'Discard changes…')}
                     </>
                   ),
                   danger: true,
@@ -98,6 +107,6 @@ export function useFileContextMenu({
         ]
       : [],
   )
-  const selectEntry = (entry: GitStatusEntry, staged: boolean) => setContextEntry({ entry, staged })
+  const selectEntry = (entry: GitStatusEntry, staged: boolean | 'all') => setContextEntry({ entry, staged })
   return { contextMenu, selectEntry }
 }

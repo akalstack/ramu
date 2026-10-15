@@ -387,7 +387,7 @@ async function* ramuToolsTurn(): AsyncGenerator<SDKMessage, void> {
     },
   })
   yield done('save', '{"action":"created","memory":{"id":"m1","title":"Prefers tabs over spaces"}}')
-  yield use('skill', 'mcp__ramu__skill_read', { id: 'skill-1' })
+  yield use('skill', 'mcp__ramu__skill_inspect', { id: 'skill-1' })
   yield done('skill', '{"id":"skill-1","name":"Release checklist"}')
   yield use('ask', 'mcp__ramu__ask_user', { questions: [] })
   yield done('ask', '{"requestId":"q1"}')
@@ -661,7 +661,7 @@ export const fakeQuery: QueryFn = ({ prompt, options }) => {
 }
 
 /** Test-only Codex adapter; no account or model usage. */
-export const fakeCodex: import('./codex').CodexFactory = (scope, settings, emit) => {
+export const fakeCodex: import('../agent/agentRunner').AgentRunnerFactory = (scope, settings, emit) => {
   let connection: McpConnection | undefined
   let stopped = false
   let resolvePermission: (() => void) | null = null
@@ -671,6 +671,28 @@ export const fakeCodex: import('./codex').CodexFactory = (scope, settings, emit)
     emit({ kind: 'state', state: 'running' })
     if (prompt.includes('[limit codex]')) {
       emit({ kind: 'result', isError: true, text: 'usageLimitExceeded', costUsd: null }, true)
+      return
+    }
+    if (prompt.includes('[compaction]')) {
+      const compactionId = randomUUID()
+      const before = { beforeTokens: 212000, contextWindow: 258400 }
+      emit({ kind: 'context', used: 212000, max: 258400 })
+      emit({
+        kind: 'tool-use',
+        toolUseId: 'before-compaction',
+        name: 'Bash',
+        summary: 'pwd',
+        input: '{"command":"pwd"}',
+      })
+      emit({ kind: 'tool-result', toolUseId: 'before-compaction', summary: 'workspace', isError: false })
+      emit({ kind: 'compaction', state: 'started', compactionId, ...before })
+      await sleep(3000)
+      if (stopped) return
+      emit({ kind: 'compaction', state: 'completed', compactionId, ...before })
+      emit({ kind: 'context', used: 33700, max: 258400 })
+      emit({ kind: 'compaction', state: 'completed', compactionId, ...before, afterTokens: 33700 })
+      emit({ kind: 'text', text: 'Continued after compaction.' })
+      emit({ kind: 'result', isError: false, text: 'done', costUsd: null })
       return
     }
     const fill = /\[context (\d+)\]/.exec(prompt)

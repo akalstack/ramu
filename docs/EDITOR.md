@@ -1,10 +1,16 @@
 # Editor
 
-Ramu uses Monaco for syntax highlighting, find/replace, multiple cursors, folding, word wrap, Markdown preview, and diffs. It has no project language server or AI inline completion.
+Ramu uses Monaco for syntax highlighting, find/replace, multiple cursors, folding, word wrap, and diffs. It has no project language server or AI inline completion.
 
 Explorer single-clicks and search results open preview tabs. Open another preview to replace the tab; double-click or edit to keep it. Deliberate opens from the command palette keep the tab open.
 
 Saving writes the buffer exactly. Ramu checks for disk conflicts and can send unsaved buffers as agent context.
+
+## Markdown
+
+Markdown opens in a rich text editor. Formatting stays visible as you type, with a toolbar for headings, bold, italic, links, lists, checkboxes, tables, and code. **Locked** switches to reading, and **Source** opens the same buffer in Monaco. There is no split view.
+
+Cmd/Ctrl+S saves. Undo, unsaved agent context, and disk conflict handling share the source buffer. Opening a file or switching modes does not rewrite it. Rich text edits serialize back to Markdown and can normalize its formatting. Frontmatter is retained, and embedded HTML blocks remain editable as source.
 
 ## Drag and drop
 

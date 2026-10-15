@@ -548,8 +548,13 @@ export const AgentView = memo(function AgentView({
                     ctx={transcript}
                   />
                 ))}
-                {activityLabel && !statusGroup && (
-                  <div className={WORKING_CLASS} role="status">
+                {activityLabel && (compacting || !statusGroup) && (
+                  <div
+                    className={WORKING_CLASS}
+                    role="status"
+                    aria-live="polite"
+                    data-compacting={compacting || undefined}
+                  >
                     <WorkingText>{translate(activityLabel)}</WorkingText>
                   </div>
                 )}
@@ -583,7 +588,7 @@ export const AgentView = memo(function AgentView({
               queued.length > 0 ||
               pending.length > 0 ||
               dockQuestions.length > 0) && (
-              <ComposerTray className="chat-tray [&_.question-dock_+_*]:mt-0.5 [&_.question-dock_+_*]:pt-0.5 [&_.question-dock_+_*]:[border-top:1px_solid_var(--line)] [&_.provider-wait_+_*]:mt-0.5 [&_.provider-wait_+_*]:pt-0.5 [&_.provider-wait_+_*]:[border-top:1px_solid_var(--line)] [&_.message-queue]:gap-0 [&_.message-queue]:p-0 [&_.message-queue]:m-0 [&_.message-queue]:[border:0] [&_.message-queue]:[border-radius:0] [&_.message-queue]:bg-transparent [&_.message-queue]:max-h-[136px] [&_.goal-bar_+_.message-queue]:mt-0.5 [&_.goal-bar_+_.message-queue]:pt-0.5 [&_.goal-bar_+_.message-queue]:[border-top:1px_solid_var(--line)] flex-col max-w-[calc(var(--chat-column-width)_-_24px)]!">
+              <ComposerTray className="chat-tray [&_.question-dock_+_*]:mt-0.5 [&_.question-dock_+_*]:pt-0.5 [&_.question-dock_+_*]:[border-top:1px_solid_var(--line)] [&_.provider-wait_+_*]:mt-0.5 [&_.provider-wait_+_*]:pt-0.5 [&_.provider-wait_+_*]:[border-top:1px_solid_var(--line)] [&_.message-queue]:gap-0 [&_.message-queue]:p-0 [&_.message-queue]:m-0 [&_.message-queue]:[border:0] [&_.message-queue]:[border-radius:0] [&_.message-queue]:bg-transparent [&_.message-queue]:max-h-[136px] [&_.goal-bar_+_.message-queue]:mt-0.5 [&_.goal-bar_+_.message-queue]:pt-0.5 [&_.goal-bar_+_.message-queue]:[border-top:1px_solid_var(--line)] flex-col">
                 {dockQuestions.length > 0 && (
                   <QuestionDock
                     sessionId={view.sessionId}

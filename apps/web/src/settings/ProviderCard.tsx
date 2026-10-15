@@ -84,7 +84,7 @@ export function ProviderCard({
           {!status
             ? t('Detecting…')
             : !status.installed
-              ? t('CLI not found')
+              ? t(provider === 'antigravity' ? 'Runtime not found' : 'CLI not found')
               : status.updateAvailable
                 ? t('Update available')
                 : t('Installed')}
@@ -107,7 +107,13 @@ export function ProviderCard({
       {enabled && status?.installed && (
         <ul className="grid gap-1.5 m-0 p-0 list-none" aria-label={t('{0} logins', { '0': providerName(provider) })}>
           {[
-            { id: 'default', name: accounts ? t('Default CLI account') : t('CLI login'), enabled: true },
+            {
+              id: 'default',
+              name: accounts
+                ? t(provider === 'antigravity' ? 'Default account' : 'Default CLI account')
+                : t('CLI login'),
+              enabled: true,
+            },
             ...(accounts ? (preferences?.accounts ?? []) : []),
           ].map((row) => (
             <ProviderLoginRow
@@ -188,13 +194,15 @@ export function ProviderCard({
           className="settings-toggle [&:not(:has(+_.settings-row))]:mb-0"
         >
           <span className="small text-caption">
-            {t('Auto-update CLI')}
+            {t(provider === 'antigravity' ? 'Auto-update runtime' : 'Auto-update CLI')}
             <span className="muted text-muted-foreground block block small text-caption">
               {t('Updates apply to new provider processes. Running chats stay connected.')}
             </span>
           </span>
           <Switch
-            aria-label={t('Auto-update {0} CLI', { '0': providerName(provider) })}
+            aria-label={t(provider === 'antigravity' ? 'Auto-update {0} runtime' : 'Auto-update {0} CLI', {
+              '0': providerName(provider),
+            })}
             checked={preferences?.autoUpdate ?? false}
             onCheckedChange={(autoUpdate) => onChange({ autoUpdate })}
           />
@@ -216,7 +224,7 @@ export function ProviderCard({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <label className="provider-binary-label block text-caption m-[12px_0_6px]" htmlFor={`provider-${provider}`}>
-            {t('Binary path')}
+            {t(provider === 'antigravity' ? 'Runtime path' : 'Binary path')}
           </label>
           <div className="provider-binary-input">
             <SettingsField path={`providerBinaries.${provider}.binary`}>
@@ -233,7 +241,9 @@ export function ProviderCard({
               variant="secondary"
               size="icon-sm"
               className={BROWSE_BUTTON_CLASS}
-              aria-label={t('Browse {0} binary', { '0': providerName(provider) })}
+              aria-label={t(provider === 'antigravity' ? 'Browse {0} runtime' : 'Browse {0} binary', {
+                '0': providerName(provider),
+              })}
               onClick={() => onBrowse('binary')}
             >
               <FolderOpen size={16} />

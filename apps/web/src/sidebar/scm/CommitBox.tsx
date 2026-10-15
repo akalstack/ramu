@@ -61,7 +61,7 @@ export function CommitBox({
     canCommit && (action === 'commit' || (!!status?.branch && !!status.remote && !status.operation))
   const requestCommit = (action: CommitAction = commitAction) => {
     if (!canRunCommit(action)) return
-    if (!stagedCount) onSmartCommit(action)
+    if (!stagedCount && !preferences.combineGitChanges) onSmartCommit(action)
     else void commit(action).catch((reason) => reportError(errorText(reason)))
   }
   const selectCommitAction = (action: CommitAction) => {
@@ -103,9 +103,15 @@ export function CommitBox({
           variant="ghost"
           size="icon-xs"
           className={`${ICON_BUTTON} commit-ai absolute right-1.5 top-1.5`}
-          title={t('Draft a commit message from staged changes')}
+          title={t(
+            preferences.combineGitChanges
+              ? 'Draft a commit message from all changes'
+              : 'Draft a commit message from staged changes',
+          )}
           aria-label={t('AI commit message for {0}', { '0': repoName })}
-          disabled={busy || generating || !stagedCount || !!conflictCount}
+          disabled={
+            busy || generating || !(stagedCount || (preferences.combineGitChanges && unstagedCount)) || !!conflictCount
+          }
           onClick={onGenerate}
         >
           <Sparkles
@@ -130,7 +136,7 @@ export function CommitBox({
             aria-label={commitLabel}
             disabled={!canRunCommit(commitAction)}
             title={
-              !stagedCount
+              !stagedCount && !preferences.combineGitChanges
                 ? t('Stage all changes and commit?')
                 : message.trim()
                   ? undefined
@@ -157,7 +163,7 @@ export function CommitBox({
               {
                 key: 'new-branch',
                 label: t('Commit on new branch'),
-                disabled: !canCommit || !stagedCount || !!status?.operation,
+                disabled: !canCommit || (!stagedCount && !preferences.combineGitChanges) || !!status?.operation,
                 onSelect: () => void commit('new-branch').catch((reason) => reportError(errorText(reason))),
               },
               {

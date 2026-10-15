@@ -7,7 +7,8 @@ import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Archive, History, Moon, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { takeLibraryFocus } from '../summaries/libraryFocus'
 import { DateTime } from 'luxon'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
@@ -105,6 +106,36 @@ export function MemoryBrowser() {
   const [status, setStatus] = useState<Memory['status']>('active')
   const [editing, setEditing] = useState<{ id?: string; input: MemoryInput } | null>(null)
   const reload = useCallback(() => invoke('memory.get').then(setSnapshot), [])
+  // A summary item that was clicked: show just that note, wherever it is.
+  const focused = useRef<{ id: string; title: string } | null>(null)
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+  useEffect(() => {
+    const take = () => {
+      const item = takeLibraryFocus('memory')
+      if (!item) return
+      focused.current = item
+      setQuery(item.title)
+      setScope('all')
+    }
+    take()
+    window.addEventListener('ramu:library-focus', take)
+    return () => window.removeEventListener('ramu:library-focus', take)
+  }, [])
+  useEffect(() => {
+    const target = focused.current && snapshot?.memories.find((m) => m.id === focused.current!.id)
+    if (!target) return
+    focused.current = null
+    setStatus(target.status)
+    setFocusedId(target.id)
+  }, [snapshot])
+  useEffect(() => {
+    if (!focusedId) return
+    const card = document.getElementById(`memory-${focusedId}`)
+    card?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    card?.classList.add('flash')
+    const timer = window.setTimeout(() => card?.classList.remove('flash'), 1400)
+    return () => window.clearTimeout(timer)
+  }, [focusedId, status])
   useEffect(() => {
     void reload().catch((e) => notifyError(errorText(e), 'Memory'))
     return ramu.on('memory:changed', () => {
@@ -246,7 +277,8 @@ export function MemoryBrowser() {
         ) : (
           <article
             key={m.id}
-            className="memory-card group bg-fill rounded-(--radius-m) p-3 [border:1px_solid_transparent]"
+            id={`memory-${m.id}`}
+            className="memory-card [&.flash]:[animation:settings-flash_1.4s_ease-out] group bg-fill rounded-(--radius-m) p-3 [border:1px_solid_transparent]"
           >
             <div className="flex items-center gap-2 mb-1">
               <Badge variant="secondary">{t(KIND_LABELS[m.kind])}</Badge>

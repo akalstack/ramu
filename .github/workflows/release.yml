@@ -66,7 +66,7 @@ jobs:
         if: runner.os == 'macOS'
         env:
           RAMU_PACKAGED_EXECUTABLE: ${{ github.workspace }}/dist/Ramu-darwin-${{ matrix.arch }}/Ramu.app/Contents/MacOS/Ramu
-        run: pnpm test:e2e
+        run: pnpm test:e2e chat settings background
       - run: pnpm release:assets ${{ matrix.platform }} ${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:

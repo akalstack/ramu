@@ -119,6 +119,12 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
         />
       </SettingsRow>
       <SettingsGroupTitle>{t('Source control')}</SettingsGroupTitle>
+      <ToggleRow
+        {...toggleProps}
+        setting="combineGitChanges"
+        title="Combine staged and unstaged changes"
+        description="Show each file once and commit all changes. Turn off to stage files separately before committing."
+      />
       <p className="muted text-muted-foreground small text-caption">
         {t('Discard and delete actions show their affected files before running. Explorer deletion is permanent.')}
       </p>

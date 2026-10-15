@@ -25,17 +25,17 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
       run: (taskId: string, repoId: string) => git.status(gitCwdOf(taskId, repoId)),
     },
     'git.diff': {
-      args: z.tuple([id, id, relPath, z.boolean()]),
-      run: async (taskId: string, repoId: string, path: string, staged: boolean): Promise<DiffContents> => {
+      args: z.tuple([id, id, relPath, z.union([z.boolean(), z.literal('all')])]),
+      run: async (taskId: string, repoId: string, path: string, staged: boolean | 'all'): Promise<DiffContents> => {
         const cwd = gitCwdOf(taskId, repoId)
         await files.resolveInRoot(cwd, path)
-        if (staged)
+        if (staged === true)
           return { original: await git.showBlob(cwd, 'HEAD', path), modified: await git.showBlob(cwd, 'INDEX', path) }
         const working = await files.readText(cwd, path).then(
           (f) => f.content,
           () => '',
         )
-        return { original: await git.showBlob(cwd, 'INDEX', path), modified: working }
+        return { original: await git.showBlob(cwd, staged === 'all' ? 'HEAD' : 'INDEX', path), modified: working }
       },
     },
     'git.stage': {

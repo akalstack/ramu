@@ -24,7 +24,7 @@ Schedules support Once, Daily, Weekly, Monthly, and intervals of at least five m
 
 **Run now** does not change the recurrence. Pause cancels queued runs, not work already running. Missed runs either execute the latest occurrence once or skip it. Busy checkouts wait and scheduled runs do not overlap.
 
-Home recaps summarize recent chats and unfinished work. Items link to their source conversation and can be marked done, dismissed, or snoozed. Recaps use model tokens. Their daily time follows the current system timezone.
+Home recaps summarize recent chats and unfinished work. Items link to their source conversation and can be marked done, dismissed, or snoozed. Recaps use model tokens, but only when a chat's recent activity or the recap model changed since the last successful recap; otherwise the daily run just shows up to date. **Refresh** always asks the model unless there is no activity to summarize. Their daily time follows the current system timezone.
 
 ## File context
 

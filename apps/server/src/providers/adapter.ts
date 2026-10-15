@@ -39,6 +39,19 @@ export interface UpdateContext {
   installRuntime: () => Promise<void>
 }
 
+/**
+ * How a provider is pointed at Ramu's managed-skill export for one chat, without touching the user's own skill
+ * directories or config. The export holds `.claude-plugin/plugin.json` and `skills/<ramu-name>/SKILL.md`.
+ */
+export interface SkillsLaunch {
+  /** Local plugin directories (Claude Agent SDK `plugins`). */
+  plugins?: string[]
+  /** Skill folders merged into the provider's inline config (OpenCode `skills`). */
+  configPaths?: string[]
+  /** Skills folders the provider scans in the chat's working directory; Ramu links each `ramu-<name>` export folder into them. */
+  linkDirs?: string[]
+}
+
 /** Everything that varies per provider. Shared mechanics (spawning, caching, timeouts) stay in providers.ts / providerBinaries.ts. */
 export interface ProviderAdapter {
   readonly id: AgentProvider
@@ -76,6 +89,8 @@ export interface ProviderAdapter {
     accountId: string
     acpSignIn: (provider: 'antigravity', methodId: string, accountId: string) => Promise<void>
   }): Promise<void>
+  /** Loads the managed-skill export through the provider's own skills. `cwd`, when known, is the chat's working directory for providers that scan one. */
+  skillsLaunch?(exportDir: string, cwd?: string): SkillsLaunch
   /** Decides how to update; throws when this installation cannot be updated by Ramu. */
   updatePlan(ctx: UpdateContext): UpdatePlan
 }

@@ -10,6 +10,8 @@ import { ModelPicker } from './ModelPicker'
 import { ProviderIcon } from './ProviderIcon'
 import { Menu } from '../Menu'
 import { effortDisplayName, modelDisplayName, settingsNames, useModelSets } from './ModelSets'
+import { notifyError } from '../chat/Notifications'
+import { errorText } from '../lib/errors'
 
 /** `current` is what the chat runs now; while a different choice waits for the next send, the chip shows current → new. */
 export function ModelBar({
@@ -26,7 +28,7 @@ export function ModelBar({
   running?: boolean
 }) {
   useLanguage()
-  const { preferences, catalogs } = useModelSets()
+  const { preferences, catalogs, save } = useModelSets()
   type PendingModel = { choice: Pick<AgentSettings, 'provider' | 'model' | 'effort' | 'serviceTier'>; deadline: number }
   const [pending, setPending] = useState<PendingModel | null>(null)
   const pendingRef = useRef<PendingModel | null>(null)
@@ -93,8 +95,13 @@ export function ModelBar({
   // While the slider is held, the bar previews the step under the thumb; the choice is applied when it is released.
   const [drag, setDrag] = useState<AgentSettings | null>(null)
   const shown = drag ?? settings
-  const [mode, setMode] = useState<'effort' | 'model'>(preferences.defaultBarMode ?? 'model')
-  useEffect(() => setMode(preferences.defaultBarMode ?? 'model'), [preferences.defaultBarMode])
+  const [mode, setSelectedMode] = useState<'effort' | 'model'>(preferences.defaultBarMode ?? 'model')
+  useEffect(() => setSelectedMode(preferences.defaultBarMode ?? 'model'), [preferences.defaultBarMode])
+  const setMode = (next: 'effort' | 'model') => {
+    setSelectedMode(next)
+    if (next !== (preferences.defaultBarMode ?? 'model'))
+      void save({ ...preferences, defaultBarMode: next }).catch((error) => notifyError(errorText(error), 'Model'))
+  }
   useEffect(() => {
     if (!preferences.sets.some((set) => set.id === setId)) setSetId(preferences.defaultSetId)
   }, [preferences, setId])

@@ -10,7 +10,7 @@ providers (no paid model calls).
   permission replies, ID-based questions, sequenced snapshots, stale discard
   rejection, staging/diffs/commit/expected-HEAD undo, real PTY output/recovery,
   and independent revocation passed.
-- `node scripts/smoke/remote-access-smoke.mjs`: desktop network enablement, pairing,
+- `pnpm test:e2e remote-access`: desktop network enablement, pairing,
   revocation, hidden hosts, workspace switching, token protection and forget passed.
 - Collaborative browser at phone size: manual pairing to a real disposable host,
   new Standalone chat, permission approval and multi-question submission passed.

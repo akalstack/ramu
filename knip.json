@@ -3,7 +3,7 @@
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
-      "entry": ["scripts/**/*.mjs"],
+      "entry": ["scripts/**/*.mjs", "e2e/run.mjs", "e2e/specs/*.spec.mjs", "e2e/perf/*.spec.mjs"],
       "ignoreBinaries": ["swift"],
       "ignoreDependencies": ["node-pty"],
       "ignoreUnresolved": ["\\.\\./apps/mobile/src/runtime/transport\\.ts"]
@@ -28,7 +28,8 @@
       "entry": ["plugins/*.cjs"]
     },
     "apps/server": {
-      "ignoreBinaries": ["rtk"]
+      "ignoreBinaries": ["rtk"],
+      "ignoreDependencies": ["@agentclientprotocol/codex-acp", "@agentclientprotocol/claude-agent-acp"]
     }
   }
 }

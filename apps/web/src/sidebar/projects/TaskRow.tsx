@@ -172,6 +172,11 @@ export function TaskRow({
               className="grow flex-1 min-w-0 text-left task-title overflow-hidden whitespace-nowrap"
               text={task.title}
             />
+            {task.kind === 'library-review' && (
+              <span className="task-kind flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
+                {t('Review')}
+              </span>
+            )}
           </>
         )}
         {task.pinnedAt && !archived && !hidePin && (

@@ -13,7 +13,7 @@ import { CodeTokens, grammarFor, highlightLines } from '../../../components/Code
 import { Markdown } from '../../../components/Markdown'
 import { Segmented, T, tap } from '../../../components/ui'
 
-type Mode = 'file' | 'changes' | 'staged'
+type Mode = 'file' | 'changes' | 'staged' | 'all'
 const IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i
 const OTHER_MEDIA = /\.(pdf|mp3|wav|ogg|m4a|flac|mp4|mov|webm)$/i
 const MODES = [
@@ -37,8 +37,10 @@ export default function FileScreen() {
   } = useLocalSearchParams<{ id: string; repoId: string; path: string; line?: string; mode?: Mode }>()
   const chat = useChat(id)
   const store = useStore()
+  const combined = store.appPreferences[chat?.computerId ?? '']?.combineGitChanges ?? true
   const { c } = useTheme()
   const [mode, setMode] = useState<Mode>(initial ?? 'file')
+  const diffMode = mode === 'file' ? 'file' : combined ? 'all' : mode === 'all' ? 'changes' : mode
   const [state, setState] = useState<
     | { kind: 'loading' }
     | { kind: 'error'; message: string }
@@ -75,8 +77,15 @@ export default function FileScreen() {
     let alive = true
     setState({ kind: 'loading' })
     const run = async () => {
-      if (mode !== 'file') {
-        const diff = await store.invoke(computerId, 'git.diff', taskId, repoId, path, mode === 'staged')
+      if (diffMode !== 'file') {
+        const diff = await store.invoke(
+          computerId,
+          'git.diff',
+          taskId,
+          repoId,
+          path,
+          diffMode === 'all' ? 'all' : diffMode === 'staged',
+        )
         return {
           kind: 'diff' as const,
           file: diff.original === diff.modified ? null : changedFile(path, repoName, diff.original, diff.modified),
@@ -108,7 +117,7 @@ export default function FileScreen() {
     taskId,
     repoId,
     path,
-    mode,
+    diffMode,
     repoName,
     store.computers.find((x) => x.id === computerId)?.status === 'online',
   ])
@@ -146,7 +155,19 @@ export default function FileScreen() {
         {[repoName, dir].filter(Boolean).join('/') || path}
       </T>
       <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
-        <Segmented value={mode} onChange={setMode} options={MODES} style={{ flex: 1 }} />
+        <Segmented<Mode>
+          value={diffMode}
+          onChange={setMode}
+          options={
+            combined
+              ? [
+                  { key: 'file', label: 'File' },
+                  { key: 'all', label: 'Changes' },
+                ]
+              : MODES
+          }
+          style={{ flex: 1 }}
+        />
         {markdown && state.kind === 'text' ? (
           <Pressable
             accessibilityRole="button"
@@ -257,7 +278,11 @@ export default function FileScreen() {
               <DiffLines file={state.file} />
             ) : (
               <T tone="muted">
-                {mode === 'staged' ? 'Nothing is staged for this file.' : 'No unstaged changes in this file.'}
+                {diffMode === 'all'
+                  ? 'No changes in this file.'
+                  : diffMode === 'staged'
+                    ? 'Nothing is staged for this file.'
+                    : 'No unstaged changes in this file.'}
               </T>
             )
           ) : null}

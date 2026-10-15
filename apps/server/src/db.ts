@@ -149,6 +149,13 @@ const MIGRATIONS: string[] = [
   CREATE TABLE session_checkpoints (session_id TEXT PRIMARY KEY REFERENCES agent_sessions(id) ON DELETE CASCADE, data TEXT NOT NULL);
   CREATE TABLE tool_payloads (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE, content TEXT NOT NULL, compact_chars INTEGER NOT NULL, created_at INTEGER NOT NULL);
   CREATE INDEX payloads_by_session ON tool_payloads(session_id, created_at);`,
+  // "What Ramu learned": one row per summary, plus the review chats started from it.
+  `CREATE TABLE library_summaries (id TEXT PRIMARY KEY, period_start INTEGER NOT NULL, period_end INTEGER NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL, created_at INTEGER NOT NULL);
+  CREATE TABLE library_summary_chats (summary_id TEXT NOT NULL REFERENCES library_summaries(id) ON DELETE CASCADE, task_id TEXT NOT NULL PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE, created_at INTEGER NOT NULL);
+  CREATE INDEX library_summary_chats_by_summary ON library_summary_chats(summary_id);`,
+  // Backups of installed SKILL.md files a review chat changed at the user's request, so each edit can be restored.
+  `CREATE TABLE installed_skill_revisions (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL, name TEXT NOT NULL, content TEXT NOT NULL, reason TEXT, session_id TEXT, at INTEGER NOT NULL);
+  CREATE INDEX installed_skill_revisions_by_path ON installed_skill_revisions(path, id);`,
 ]
 
 export type Db = DatabaseSync

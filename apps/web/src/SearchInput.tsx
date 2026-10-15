@@ -1,12 +1,12 @@
 import { t, useLanguage } from './i18n'
-import { InputGroup, InputGroupAddon, InputGroupButton } from '@/components/ui/input-group'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Search, X } from 'lucide-react'
 import { forwardRef, type ComponentProps, type ReactNode } from 'react'
 import { cn } from 'cn'
 
 /**
- * Shared search field, built like the ⌘P palette's CommandInput: a plain input inside an InputGroup, so there is no
- * purple focus ring and nothing nests. `actions` adds controls at the end, such as option toggles.
+ * Shared search field. The input and its fixed-size addons share one surface.
+ * `actions` adds controls at the end, such as option toggles.
  */
 export const SearchInput = forwardRef<
   HTMLInputElement,
@@ -16,35 +16,34 @@ export const SearchInput = forwardRef<
   return (
     <InputGroup
       className={cn(
-        'search-input h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-2!',
+        'search-input h-8! shrink-0 gap-2 rounded-lg! border-input/30 bg-input/30 shadow-none! focus-within:border-input/30! focus-within:ring-0!',
         className,
       )}
     >
-      <input
+      <InputGroupInput
         ref={ref}
-        data-slot="command-input"
         value={value}
-        className="w-full min-w-0 flex-1 rounded-none! border-0! bg-transparent! py-0! pr-2! pl-1! text-sm shadow-none! outline-none! focus-visible:outline-none! disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-none! border-0! bg-transparent! py-0! pr-2! pl-0! shadow-none! focus-visible:outline-none!"
         {...props}
       />
-      <InputGroupAddon>
+      <InputGroupAddon className="shrink-0">
         <Search className="size-4 shrink-0 opacity-50" aria-hidden="true" />
       </InputGroupAddon>
-      {actions ? (
-        <InputGroupAddon align="inline-end" role="group" className="search-actions gap-px">
+      {actions || (onClear && value) ? (
+        <InputGroupAddon align="inline-end" className="search-actions shrink-0 gap-1 m-0! py-0! pr-1! pl-0!">
           {actions}
-        </InputGroupAddon>
-      ) : null}
-      {onClear && value ? (
-        <InputGroupAddon align="inline-end" className="pr-1.5!">
-          <InputGroupButton
-            size="icon-xs"
-            className="search-clear size-6 rounded-md! bg-transparent! text-muted-foreground hover:bg-hover! hover:text-foreground"
-            aria-label={t('Clear search')}
-            onClick={onClear}
-          >
-            <X size={13} />
-          </InputGroupButton>
+          {onClear && value ? (
+            <InputGroupButton
+              size="icon-xs"
+              className="search-clear size-6 rounded-md! bg-transparent! text-muted-foreground hover:bg-hover! hover:text-foreground"
+              aria-label={t('Clear search')}
+              disabled={props.disabled}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onClear}
+            >
+              <X size={13} />
+            </InputGroupButton>
+          ) : null}
         </InputGroupAddon>
       ) : null}
     </InputGroup>

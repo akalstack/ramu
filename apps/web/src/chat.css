@@ -7,6 +7,78 @@
   padding: 12px 10px 8px 16px;
   box-shadow: none;
 }
+/* Question and message surfaces share an edge and a 16px content inset. */
+.question-dock-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(52vh, 460px);
+  overflow: auto;
+  padding: 8px 16px 12px;
+  outline: none;
+}
+.question-dock-card fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.question-dock-card legend {
+  max-width: 100%;
+  margin-bottom: 10px;
+  padding: 0;
+  color: var(--text);
+  font-size: var(--font-chat);
+  font-weight: 600;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.question-dock-card .option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  background: var(--fill);
+  cursor: pointer;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.question-dock-card .option:hover,
+.question-dock-card .option.selected {
+  background: var(--hover);
+}
+.question-dock-card .option.selected {
+  border-color: var(--line-strong);
+}
+.question-dock-card .option:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.question-dock-card .option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.question-dock-card .option.selected .question-option-key {
+  border-color: var(--text);
+  color: var(--text);
+}
+.question-dock-card .question-answer {
+  height: 36px;
+  border-radius: var(--radius-s);
+  font-size: var(--font-chat);
+}
+.question-dock-card fieldset:disabled .option {
+  cursor: default;
+  opacity: 0.5;
+}
 .composer:focus-within {
   background: color-mix(in srgb, var(--raised) 97%, var(--text));
 }
@@ -49,14 +121,15 @@
 .composer-bar .agent-controls,
 .composer-bar .agent-control-options {
   gap: 2px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   min-width: 0;
-  overflow: hidden;
 }
 .composer-bar .agent-control-options {
-  flex: none;
+  flex: 0 1 auto;
+  max-width: 100%;
 }
 .composer-bar .control-btn {
+  max-width: 100%;
   height: 30px;
   min-height: 30px;
   padding: 4px 8px;
@@ -76,18 +149,22 @@
 }
 .composer-bar .model-bar-trigger {
   flex: 0 1 auto;
-  min-width: 0;
+  min-width: min(160px, 100%);
+  max-width: 100%;
   overflow: hidden;
 }
 .composer-bar .model-bar-trigger > * {
   min-width: 0;
 }
 .composer-bar .model-bar-trigger > span {
+  flex: 1 1 auto;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .composer-bar > button.icon {
+  align-self: flex-end;
   width: 30px;
   height: 30px;
   min-height: 30px;

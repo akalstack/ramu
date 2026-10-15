@@ -212,7 +212,7 @@ describe('AgentService', () => {
   it('updates tool descriptions in one durable row and keeps rich results after restart', async () => {
     let output!: (event: AgentEvent) => void
     const delivered: { event: AgentEvent; seq?: number }[] = []
-    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, emit) => {
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
       output = emit
       return {
         start: async () => {
@@ -309,7 +309,7 @@ describe('AgentService', () => {
       },
     })
     let emit!: (event: AgentEvent) => void
-    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, output) => {
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, output) => {
       emit = output
       return {
         start: async () => {
@@ -365,7 +365,7 @@ describe('AgentService', () => {
     let output!: (event: AgentEvent) => void
     const steer = vi.fn(async () => {})
     const delivered: { event: AgentEvent; seq?: number }[] = []
-    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, emit) => {
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
       output = emit
       return {
         start: async () => {
@@ -541,12 +541,43 @@ describe('AgentService', () => {
       ).toEqual([
         { kind: 'compaction', state: 'started' },
         prompt === 'compact'
-          ? { kind: 'compaction', state: 'completed', beforeTokens: 212000, afterTokens: 33700 }
+          ? {
+              kind: 'compaction',
+              state: 'completed',
+              compactionId: '00000000-0000-0000-0000-000000000002',
+              beforeTokens: 212000,
+              afterTokens: 33700,
+            }
           : { kind: 'compaction', state: 'failed' },
       ])
       svc.stop(session.id)
     },
   )
+
+  it('reads Claude context at the compaction boundary when post_tokens is omitted', async () => {
+    const base = fakeQuery([])
+    const query: QueryFn = (args) => {
+      const original = base(args)
+      async function* stream() {
+        for await (const message of original) {
+          if (message.type === 'system' && message.subtype === 'compact_boundary') {
+            const { post_tokens: _, ...metadata } = message.compact_metadata
+            yield { ...message, compact_metadata: metadata } as SDKMessage
+          } else yield message
+        }
+      }
+      return Object.assign(stream(), {
+        getContextUsage: async () => ({ totalTokens: 33700, maxTokens: 258400, percentage: 13 }),
+      }) as unknown as Query
+    }
+    const svc = new AgentService(db, () => {}, query)
+    const chat = svc.start('t', scopeOf(cwd), 'compact', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
+    await until(() => svc.events(chat.id).some((event) => event.kind === 'compaction' && event.afterTokens === 33700))
+    const completed = svc.events(chat.id).filter((event) => event.kind === 'compaction' && event.state === 'completed')
+    expect(completed).toHaveLength(1)
+    expect(completed[0]).toMatchObject({ beforeTokens: 212000, afterTokens: 33700, contextWindow: 258400 })
+    svc.stopAll()
+  })
 
   it('launches in the binding cwd, routes permission requests and records the transcript', async () => {
     const calls: Options[] = []
@@ -709,7 +740,7 @@ describe('AgentService', () => {
   it('supplies user-message delivery instructions to new and resumed Codex threads', async () => {
     const connections: import('@ramu/shared/types').McpConnection[] = []
     const resumes: (string | null)[] = []
-    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, emit) => {
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
       let connection!: import('@ramu/shared/types').McpConnection
       return {
         setTools: (value) => {
@@ -1430,7 +1461,7 @@ describe('AI commit message drafts', () => {
 it('AI drafts fall back on a structured Codex usage error while remaining read-only', async () => {
   const calls: Options[] = []
   let readOnly: boolean | undefined
-  const limitCodex: import('../src/providers/codex').CodexFactory = (_scope, _settings, emit, readonly) => {
+  const limitCodex: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit, readonly) => {
     readOnly = readonly
     return {
       start: async () => {
@@ -1463,7 +1494,7 @@ describe('busy agent messages', () => {
     let emit!: (event: AgentEvent) => void
     const send = vi.fn(async (_text: string) => {})
     const steer = vi.fn(async (_text: string) => {})
-    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, output) => {
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, output) => {
       emit = output
       return {
         start: async () => {
@@ -2402,6 +2433,23 @@ describe('sub-agents Ramu runs', () => {
 })
 
 describe('context window', () => {
+  it('enriches a compaction boundary in place and persists both counts', async () => {
+    const delivered: { event: AgentEvent; seq: number | undefined }[] = []
+    const svc = new AgentService(db, (_id, event, seq) => delivered.push({ event, seq }), fakeQuery([]), fakeCodex)
+    const chat = svc.start('t', scopeOf(cwd), '[compaction]', { ...full, provider: 'codex' })
+    await until(() => svc.get(chat.id).state === 'idle')
+    const completed = delivered.filter(({ event }) => event.kind === 'compaction' && event.state === 'completed')
+    expect(completed).toHaveLength(2)
+    expect(completed[0]!.seq).toBe(completed[1]!.seq)
+    const lifecycle = delivered.filter(({ event }) => event.kind === 'compaction')
+    expect(new Set(lifecycle.map(({ seq }) => seq)).size).toBe(1)
+    expect(completed.at(-1)!.event.at).toBe(lifecycle[0]!.event.at)
+    const stored = svc.events(chat.id).filter((event) => event.kind === 'compaction' && event.state === 'completed')
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toMatchObject({ beforeTokens: 212000, afterTokens: 33700, contextWindow: 258400 })
+    svc.stopAll()
+  })
+
   it("reports how full Claude's and Codex's context is, without recording it in the chat", async () => {
     const svc = service()
     const seen: [string, number][] = []
@@ -2826,7 +2874,7 @@ describe('chat continuation after restart', () => {
 
   it('keeps restart intent across repeated boots and resumes Codex in the original native thread', async () => {
     const launches: { prompt: string; resume: string | null }[] = []
-    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, output) => ({
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, output) => ({
       start: async (prompt, resume) => {
         launches.push({ prompt, resume })
         output({ kind: 'init', providerSessionId: 'original-codex-thread', model: 'fake', cwd })
@@ -2914,7 +2962,7 @@ describe('chat continuation after restart', () => {
 
   it('starts the next recovering chat only after the shared checkout writer finishes', async () => {
     const outputs: ((event: AgentEvent) => void)[] = []
-    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, output) => ({
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, output) => ({
       start: async () => {
         outputs.push(output)
         output({ kind: 'state', state: 'running' })
@@ -3063,7 +3111,7 @@ describe('Codex sub-agent control', () => {
 
   it('replaces an idle Codex process when the sub-agent setup changes, so the next message runs with the right tools', async () => {
     const launches: { nativeSubagents?: boolean; interceptSubagents?: boolean }[] = []
-    const factory: import('../src/providers/codex').CodexFactory = (_scope, _settings, output) => {
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, output) => {
       let connection: { nativeSubagents?: boolean; interceptSubagents?: boolean } | undefined
       return {
         setTools: (c) => {

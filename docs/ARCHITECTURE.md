@@ -21,7 +21,8 @@ The UI never touches the filesystem, Git, or providers directly. It calls named 
 | `packages/shared` | Domain types, the API method table, and pure helpers used by every app, grouped into `chat/`, `review/`, `search/`, `workspace/` and `providers/` (import as `@ramu/shared/<folder>/<module>`). |
 | `packages/contracts` | Wire protocol: versions, capabilities, request encoding. |
 | `packages/client-runtime` | Node client for a server: local socket or authenticated HTTP, reconnects, limits. |
-| `scripts/` | `smoke/` Electron and integration checks, `release/` packaging and release tooling. |
+| `e2e/` | End-to-end specs (`specs/`), on-demand performance checks (`perf/`) and their shared launcher (`support/`). |
+| `scripts/` | `release/` packaging and release tooling. |
 
 ## Calling the server
 
@@ -69,14 +70,14 @@ Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockChe
 
 ## Providers
 
-Chats run through provider adapters selected per chat (`AgentSettings.provider`). Provider-specific setup behavior (executable and `RAMU_*_BIN` variable, account profiles, sign-in detection, login and update) is a `ProviderAdapter` in `apps/server/src/providers/adapters/`; `providers.ts` and `providerBinaries.ts` keep the shared spawning, caching and parsing. To add a provider, add an adapter, register it in `adapters/index.ts`, and add its id to `AgentProvider` in `packages/shared`. `providers/fakeAgent.ts` implements the same events, permission requests and transcript paths without model usage; the Electron smoke tests depend on it.
+Chats run through provider adapters selected per chat (`AgentSettings.provider`). Provider-specific setup behavior (executable and `RAMU_*_BIN` variable, account profiles, sign-in detection, login and update) is a `ProviderAdapter` in `apps/server/src/providers/adapters/`; `providers.ts` and `providerBinaries.ts` keep the shared spawning, caching and parsing. To add a provider, add an adapter, register it in `adapters/index.ts`, and add its id to `AgentProvider` in `packages/shared`. An adapter may also define `skillsLaunch`, which points the provider at Ramu's per-scope managed-skill export for one chat (a Claude plugin, a Codex skill root, an OpenCode `skills` entry, or `linkDirs` for Cursor and Antigravity, which scan a fixed folder in the chat's working directory and get git-excluded symlinks from `memory/skillLinks.ts`; see [learning](LEARNING.md)). `providers/fakeAgent.ts` implements the same events, permission requests and transcript paths without model usage; the end-to-end specs depend on it.
 
 Accounts: every enabled account of a provider is tried in order (selected account, the default login, then the others) when a chat reaches a usage limit, before Ramu falls back to another model. Turn an account off in Settings to remove it from the rotation.
 
 ## Testing
 
 - `pnpm check`: format, typecheck, unit tests, release-script tests, build. CI runs it on macOS and Linux.
-- `pnpm test:e2e`: a full Electron journey with simulated providers and an isolated profile (macOS). Other `scripts/smoke/` checks cover layout, SCM, remote access, localization and performance; see [CONTRIBUTING](../CONTRIBUTING.md).
+- `pnpm test:e2e`: the headless end-to-end specs in `e2e/specs/` (chat, review and undo, settings, source control, layout, remote access and more) with simulated providers and an isolated profile (macOS); `pnpm test:e2e:perf` runs the on-demand performance checks. See [e2e/README.md](../e2e/README.md).
 - Server tests are in `apps/server/test`, mirroring `src` by file name.
 
 ## Code quality
@@ -86,5 +87,4 @@ Accounts: every enabled account of a provider is tried in order (selected accoun
 ## Known follow-ups
 
 - Warnings remain for `react-hooks/exhaustive-deps` and `@typescript-eslint/no-explicit-any`; they are not errors yet.
-- Several older smoke scripts in `scripts/smoke/` (for example the SCM and UI ones) still expect UI text from before the settings and commit-menu redesigns and are not part of CI.
 - Provider install, login and update flows are only exercised by live providers; validate changes there against real CLIs.

@@ -63,6 +63,23 @@ export class SessionRecorder {
       }
     }
     const event: AgentEvent = recorded.at ? recorded : { ...recorded, at: Date.now() }
+    // Compaction updates retain their first timeline position, including late token readings.
+    if (event.kind === 'compaction' && event.compactionId) {
+      const previous = this.db
+        .prepare(
+          "SELECT seq, event FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'compaction' AND json_extract(event, '$.compactionId') = ? AND COALESCE(json_extract(event, '$.agentId'), '') = ? LIMIT 1",
+        )
+        .get(id, event.compactionId, event.agentId ?? '') as { seq: number; event: string } | undefined
+      if (previous) {
+        const earlier = JSON.parse(previous.event) as Extract<AgentEvent, { kind: 'compaction' }>
+        const merged = { ...earlier, ...event, at: earlier.at }
+        this.db
+          .prepare('UPDATE agent_events SET event = ? WHERE session_id = ? AND seq = ?')
+          .run(JSON.stringify(merged), id, previous.seq)
+        this.host.emit(id, merged, previous.seq)
+        return
+      }
+    }
     if (event.kind === 'question-state') {
       const previous = this.db
         .prepare(

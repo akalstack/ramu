@@ -4,7 +4,7 @@ import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { useStore } from './store'
 import type { Chat } from './types'
 
-export type FileMode = 'file' | 'changes' | 'staged'
+export type FileMode = 'file' | 'changes' | 'staged' | 'all'
 
 /**
  * Opens files the way the desktop does: from a reference in the chat (an `@file`, a markdown link, a tool's path),

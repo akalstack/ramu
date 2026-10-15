@@ -39,6 +39,8 @@ export interface AppPreferences {
   editorFontSize: number
   terminalFontSize: number
   previewTabs: boolean
+  /** Combine staged and unstaged files and commit all changes from Source Control. */
+  combineGitChanges: boolean
   /** How Pull and Sync integrate incoming commits. */
   pullMode: PullMode
   autoPull: boolean
@@ -115,6 +117,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   editorFontSize: 13,
   terminalFontSize: 12,
   previewTabs: true,
+  combineGitChanges: true,
   pullMode: 'rebase',
   autoPull: true,
   commitStyle: 'conventional',

@@ -3,6 +3,20 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from 'cn'
 
 import { Button } from '@/components/ui/button'
+import { Input as InputPrimitive } from '@base-ui/react/input'
+
+function InputGroupInput({ className, ...props }: React.ComponentProps<typeof InputPrimitive>) {
+  return (
+    <InputPrimitive
+      data-slot="input-group-control"
+      className={cn(
+        'h-full w-full min-w-0 flex-1 border-0 bg-transparent text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
 
 function InputGroup({ className, ...props }: React.ComponentProps<'div'>) {
   return (
@@ -93,4 +107,4 @@ function InputGroupButton({
   )
 }
 
-export { InputGroup, InputGroupAddon, InputGroupButton }
+export { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput }

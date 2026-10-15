@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center">An open-source desktop workspace for coding with agents.</p>
+<p align="center">An open-source workspace for coding with agents, on desktop and mobile.</p>
 
 <p align="center">
   <a href="https://github.com/ahxar/ramu/actions/workflows/ci.yml"><img src="https://github.com/ahxar/ramu/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
@@ -14,30 +14,29 @@
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-Ramu brings agent chats, an editor, terminals, and Git into one desktop workspace. Work across multiple repositories or start a standalone chat.
+Ramu is an **Agent Development Environment (ADE)** that brings agent chats, an editor, terminals, Git, and code review into one workspace. Use Claude Code, Codex, OpenCode, Cursor, or Antigravity with your existing provider accounts.
+
+Built-in orchestration coordinates agents across providers with automatic fallback, advisors, helpers, and persistent goals. Work across repositories on your computer and continue from your phone.
 
 Inspired by **T3 Code**, **Codex**, and **VS Code**.
 
 ## Why Ramu
 
-- **Cross-provider advisor:** let your working agent consult a second model, even from another provider, for guidance on its approach and a final review. The advisor reads the conversation and tool summaries; the agent can continue independent work while advice arrives.
-- **Automatic provider fallback:** keep working when a provider reaches its usage limit. Rank providers and models best first: chats use the highest one with room, move down at the limit or an earlier usage threshold, and move back up once a higher one has room again. Visible conversation context carries into the same chat. When every provider in the list is limited, the chat is not failed: it waits in the background, keeps accepting messages, and continues on its own once a limit resets, even after a restart.
-- **Automatic goals:** agents can create a persistent goal when authorized work is likely to need multiple turns. Ramu starts follow-up turns toward that objective, keeps the goal across provider changes, and gives you pause, resume, and continuation limits. You can also start a goal explicitly with `/goal`.
-- **Cross-provider helpers:** route delegated tasks to another provider or model, with rules by task type and separate fallback policies. Inspect helper progress and transcripts, or use isolated checkouts for their changes.
-- **Shared memory across providers:** carry project knowledge and personal preferences between agents through shared notes. Browse and edit memories, restore earlier versions, and use model-assisted cleanup to merge duplicates and archive outdated notes.
-- **Learning and context efficiency:** review completed work for reusable skills and lasting lessons, with automatic or review-first updates and revision history. Choose response styles including ADHD-friendly and Caveman, discover Ramu tools on demand, and compact large tool results with full output available when needed. See [learning and context efficiency](docs/LEARNING.md).
-- **Persistent background work:** chats and terminals keep running when you close the window. Resume unfinished chats after a service restart, schedule recurring tasks, and catch up through recaps linked to the original conversations.
+- **Keep working through usage limits.** Rank providers and models for automatic fallback, carrying visible conversation context into the same chat. When all are limited, Ramu waits and resumes when capacity returns, even after a restart.
+- **Follow goals across turns.** Persistent goals keep agents working toward an objective across provider changes, with pause, resume, and continuation limits. Schedule recurring work and leave chats and terminals running after closing the window.
+- **Bring models together.** Ask a second model for advice or review, and delegate tasks to helpers across providers, with optional isolated checkouts.
+- **Carry knowledge forward.** Share project memory and preferences across providers. Turn completed work into reusable skills and lessons, with editable notes and revision history. A periodic "What Ramu learned" summary says what was saved, merged or archived, and a review chat can fix it.
+- **Continue from your phone.** Pair the iOS or Android app with your computer to chat, review changes, manage Git, use terminals, and respond to agent requests.
 
 ## Features
 
-- **Agents:** Claude Code, Codex, OpenCode, Cursor, and Antigravity, with model selection, file context, and follow-ups.
-- **Workspace:** Monaco editor, split terminals, and Git branches, staging, stashes, and sync.
-- **Reviews:** recorded diffs, file and line comments, and selective undo with conflict checks.
-- **Background work:** persistent chats, goals, schedules, shared memory, helper agents, and provider fallback that waits out usage limits.
-- **Drafts:** unsent text in a chat or new-chat composer is kept per chat and per project, across tab switches and restarts, until you send it or it goes unused for 30 days. Drafts are stored on the device you typed them on.
-- **Appearance:** configurable fonts and colors, with English and Bahasa Indonesia.
+- Monaco editor, split terminals, and Git branches, staging, stashes, and sync.
+- Recorded diffs, inline review comments, and selective undo with conflict checks.
+- GitHub pull requests and issues: start a chat from an issue, open a pull request that closes it, and hand failing checks or review comments back to an agent.
+- File attachments, saved drafts, configurable fonts and colors, and English/Bahasa Indonesia.
+- A standalone workspace server for [headless use](docs/HEADLESS-SERVER.md) and mobile access.
 
-Provider capabilities vary. Background work requires an awake computer.
+Provider capabilities vary. Agents run on your computer, which must stay awake; mobile access also requires a reachable connection.
 
 ## Get started
 
@@ -45,7 +44,7 @@ Download installers and SHA-256 checksums from [GitHub Releases](https://github.
 
 Ramu is in alpha. Release targets are **macOS arm64/x64** and **Linux x64**; Linux packaged GUI validation is pending. Windows is experimental, with no release downloads. CI macOS builds are unsigned and not notarized. Install alpha updates manually; automatic installation requires a signed macOS app and excludes prereleases.
 
-Install and sign in to an agent provider, select it in **Settings → Providers**, then add a repository or start a chat. See [provider setup](docs/PROVIDERS.md).
+Install and sign in to an agent provider, select it in **Settings → Providers**, then add a repository or start a chat. See [provider setup](docs/PROVIDERS.md). For iOS and Android setup and pairing, see the [mobile guide](apps/mobile/README.md).
 
 ### Run from source
 
@@ -61,7 +60,7 @@ pnpm dev
 
 ## Development
 
-Built with Electron, React, TypeScript, Monaco, and xterm.js. A pnpm workspace: `apps/desktop` (Electron), `apps/web` (React UI), `apps/server` (the background service, also runnable [headless](docs/HEADLESS-SERVER.md)), and shared `packages/`.
+Built with Electron, React, React Native, and TypeScript. See the [architecture](docs/ARCHITECTURE.md) for the desktop, mobile, and server layout.
 
 | Command | Purpose |
 | --- | --- |
@@ -75,7 +74,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and validation requirements. [R
 
 ## Guides
 
-[Providers](docs/PROVIDERS.md) · [Agents and routing](docs/AGENTS.md) · [Background work and reviews](docs/AUTOMATION.md) · [Goals](docs/GOALS.md) · [Shared memory](docs/MEMORY.md) · [Editor](docs/EDITOR.md) · [Headless server](docs/HEADLESS-SERVER.md) · [Architecture](docs/ARCHITECTURE.md)
+[Providers](docs/PROVIDERS.md) · [Agents and routing](docs/AGENTS.md) · [Goals](docs/GOALS.md) · [Background work and reviews](docs/AUTOMATION.md) · [Pull requests and issues](docs/PULL-REQUESTS.md) · [Memory](docs/MEMORY.md) · [Learning](docs/LEARNING.md) · [Mobile](apps/mobile/README.md) · [Editor](docs/EDITOR.md)
 
 ## License
 
