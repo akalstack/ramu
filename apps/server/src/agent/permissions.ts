@@ -25,6 +25,10 @@ export function createCanUseTool({ settings, pending, record, setState, restrict
             ? { behavior: 'allow', updatedInput: toolInput }
             : { behavior: 'deny', message: 'This review thread can only use Ramu memory and skill tools.' },
         )
+      // Auto trusts the app-owned MCP server, including tools discovered through tool_invoke.
+      // Their handlers still enforce session scope and any tool-specific checks.
+      if (settings.access === 'auto' && /^mcp__ramu__/.test(toolName))
+        return resolve({ behavior: 'allow', updatedInput: toolInput })
       // These scoped tools only manage questions; they never authorize file or command access.
       if (
         /^mcp__ramu__(ask_user|question_status|wait_for_answer|close_question|advisor|wait_for_advice|set_goal|get_goal|update_goal|tool_search|tool_result_read|memory_read|session_recall)$/.test(
