@@ -129,13 +129,6 @@ export interface RamuMethods {
   'learning.revert'(id: string, revision: number): void
   'learning.run'(): void
   'agent.checkpoint'(id: string): import('./types').SessionCheckpoint | null
-  'agent.compression'(id: string): {
-    outputs: number
-    originalCharacters: number
-    compactCharacters: number
-    estimatedTokensAvoided: number
-    note: string
-  }
   'memory.revert'(id: string, index: number, updatedAt: number): Memory
 
   'app.systemLanguages': () => string[]

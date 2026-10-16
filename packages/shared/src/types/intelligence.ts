@@ -4,7 +4,6 @@ export interface IntelligencePreferences {
   toolSearch: boolean
   crossThreadRecall: boolean
   toolAwareSkills: boolean
-  compression: 'off' | 'balanced' | 'aggressive'
   learning: 'off' | 'review' | 'auto'
   maintenanceModel: { provider: AgentProvider; model: string; effort: ReasoningEffort | null } | null
   dailyReviews: number
@@ -19,7 +18,6 @@ export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
   toolSearch: true,
   crossThreadRecall: true,
   toolAwareSkills: true,
-  compression: 'balanced',
   learning: 'auto',
   maintenanceModel: null,
   dailyReviews: 5,

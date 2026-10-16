@@ -17,7 +17,6 @@ const CORE = new Set([
   'get_goal',
   'update_goal',
   'codex_pre_tool_use',
-  'tool_result_read',
 ])
 const words = (text: string): string[] => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
 const ALIASES: Record<string, string> = {
@@ -38,7 +37,6 @@ export class ToolRegistry {
   constructor(
     private readonly target: McpServer,
     private readonly deferred: boolean,
-    private readonly transform: (result: CallToolResult) => CallToolResult = (result) => result,
   ) {
     this.server = new Proxy(target, {
       get: (object, key) => (key === 'registerTool' ? this.register.bind(this) : Reflect.get(object, key, object)),
@@ -52,11 +50,7 @@ export class ToolRegistry {
     const schema = z.object(config.inputSchema ?? {})
     this.entries.set(name, { name, description: config.description ?? '', schema, handler })
     if (!this.deferred || CORE.has(name))
-      return this.target.registerTool(name, config, async (args, extra) =>
-        name === 'tool_result_read'
-          ? await handler(args as never, extra as never)
-          : this.transform(await handler(args as never, extra as never)),
-      )
+      return this.target.registerTool(name, config, async (args, extra) => handler(args as never, extra as never))
     return { remove: () => this.entries.delete(name) }
   }
   search(query: string, limit = 5) {
@@ -95,7 +89,7 @@ export class ToolRegistry {
       return { isError: true, content: [{ type: 'text', text: 'Unknown or unavailable Ramu tool. Search again.' }] }
     try {
       const result = await entry.handler(entry.schema.parse(args) as never, extra as never)
-      return name === 'tool_result_read' ? result : this.transform(result)
+      return result
     } catch (error) {
       return {
         isError: true,

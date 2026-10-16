@@ -74,12 +74,6 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string;
   { section: 'workflows', title: 'Custom turn limit', words: 'goal max number turns' },
   {
     section: 'chats',
-    title: 'Tool output compression',
-    advanced: true,
-    words: 'input tokens efficiency shorten results',
-  },
-  {
-    section: 'chats',
     title: 'Load tools on demand',
     advanced: true,
     words: 'tool search tokens deferred optional ramu',

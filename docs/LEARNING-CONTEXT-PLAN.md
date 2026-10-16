@@ -1,6 +1,6 @@
 # Learning, response styles, tool discovery, and memory
 
-> Response styles and the RTK tool described below were removed on 2026-10-16 in favour of adaptive learning. Kept as research history.
+> Response styles and the RTK tool described below were removed on 2026-10-16 in favour of adaptive learning, and tool output compression (with `tool_result_read` and the "tokens avoided" estimate) on 2026-10-17. Kept as research history.
 
 Research and implementation plan, 2026-10-14. The implementation now includes response styles, shared provider guidance, Ramu-only tool discovery/invocation, persistent learning reviews and managed Markdown skills, protected memory/history restoration, session checkpoints, exact tool-result recovery. See [Learning and context efficiency](LEARNING.md) for shipped behavior and controls.
 

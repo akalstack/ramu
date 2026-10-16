@@ -38,11 +38,7 @@ With **Settings → Threads → Ramu tool search** enabled, essential conversati
 
 Invocation validates the original schema and runs the original scope checks. Tool exposure mode is fixed for a provider connection; changing the preference applies to new connections. The portable search/invocation interface works without native provider deferred-tool support.
 
-## Input compression and continuity
-
-**Settings → Threads → Input compression** offers Off, Balanced (default), and Aggressive. It compacts large textual results from Ramu tools before the provider receives them. Omitted content is marked, and `tool_result_read` retrieves exact character ranges from the original result within the same thread. Error results pass through intact. Stored originals remain available for the lifetime of the thread.
-
-The composer shows a character-based estimate of tokens avoided for compacted Ramu output. It excludes detail rereads, provider cache effects, and provider-native operations; provider usage remains the billing observation.
+## Continuity
 
 Memory supports concise search followed by `memory_read` for full text and sources. Approved session checkpoints can reduce older tool output in same-thread provider handoffs while retaining original user requirements and recent events. `session_recall` retrieves original events by sequence number when a checkpoint omits necessary evidence. Files should still be inspected live with the provider's ordinary tools.
 
@@ -72,7 +68,6 @@ This example offers a shell procedure when `browser_open` is missing. `requires_
 The agent uses `skill_resolve` with its current `availableTools` and `availableToolsets` to list compatible skills, then passes a skill `id` to retrieve its procedure and supporting-file directory. Missing-tool fallbacks require `inventoryComplete: true`; otherwise Ramu withholds them because a tool may still exist in a deferred catalog. Ramu does not guess native tools from provider names. Compatibility uses the agent-reported inventory and does not grant permissions or execute anything.
 
 Conditional skills load through a small provider-native wrapper that asks the agent to resolve compatibility before using the procedure. Wrappers stay stable when different providers share a checkout, and require a fresh resolution after a provider or tool change. Project skill precedence, disabled/archived status, and installed-skill protections still apply. Learned skills can carry the same optional `activation` fields; review threads can inspect or update those fields through `skill_inspect` and `skill_update` (`activation: null` clears an override).
-
 
 ## Validation
 

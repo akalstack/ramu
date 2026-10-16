@@ -176,6 +176,9 @@ const MIGRATIONS: string[] = [
     DELETE FROM session_search_fts WHERE rowid=old.rowid;
     INSERT INTO session_search_fts(rowid, session_id, seq, text) SELECT id, session_id, seq, text FROM session_search_messages WHERE id=new.rowid AND text IS NOT NULL;
   END;`,
+  // Tool output compression was removed; its saved payloads are no longer read.
+  `DROP INDEX IF EXISTS payloads_by_session;
+  DROP TABLE IF EXISTS tool_payloads;`,
 ]
 
 export type Db = DatabaseSync

@@ -3,10 +3,8 @@ import { MobileLiveActivities } from './remote/mobileLiveActivity'
 import { MobilePush } from './remote/mobilePush'
 import type { AppPreferences } from '@ramu/shared/types'
 import { ToolRegistry } from './agent/toolRegistry'
-import { CompressionService } from './compression'
 import { ExternalSkills } from './memory/externalSkills'
 import { LearningService } from './memory/learning'
-import { DEFAULT_INTELLIGENCE_PREFERENCES } from '@ramu/shared/types'
 // Independent Node process. Electron windows are clients, never owners of agent lifetimes.
 import { createServer, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
@@ -222,7 +220,6 @@ agents.reviewHooks = {
 const recaps = new RecapService(db, workspace, agents, changed)
 const memory = new MemoryService(db, workspace, agents, () => send('memory:changed', {}), join(userData, 'memory'))
 memory.start()
-const compression = new CompressionService(db)
 const learning = new LearningService(db, workspace, agents, memory, join(userData, 'skills'), () =>
   send('memory:changed', {}),
 )
@@ -288,7 +285,6 @@ const dispatcher = createDispatcher(
     externalSkills,
     diagnostics,
     summaries,
-    compression,
     notices: inbox,
   },
 )
@@ -508,13 +504,7 @@ const mcpHttp = createServer(async (req, res) => {
     return
   }
   const target = new McpServer({ name: 'ramu', version: '0.1.0' })
-  const preferences = {
-    ...DEFAULT_INTELLIGENCE_PREFERENCES,
-    ...workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence,
-  }
-  const registry = new ToolRegistry(target, connection!.toolSearch, (result) =>
-    compression.compact(source.id, preferences.compression, result),
-  )
+  const registry = new ToolRegistry(target, connection!.toolSearch)
   // A review chat about learned memories gets Ramu's memory and skill tools and nothing else: later registrations are ignored.
   const review = summaries.isReviewChat(source.taskId)
   if (review)
@@ -527,7 +517,6 @@ const mcpHttp = createServer(async (req, res) => {
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
   learning.register(server, source.id)
-  compression.register(server, source.id)
   // With async questions off, Claude and Codex ask through their own blocking question tools instead.
   if (usesRamuQuestions(agents.preferences?.(), source)) registerQuestionTools(server, agents, source.id)
   if (!source.parentId) registerGoalTools(server, agents, source.id)

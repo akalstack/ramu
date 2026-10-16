@@ -24,7 +24,7 @@ import { ChatFind } from '../chat/ChatFind'
 import { effectiveStatus, latestTasks, parseTaskMessage, parseTaskStop } from '@ramu/shared/chat/agentTasks'
 import type { AgentTask } from '@ramu/shared/types'
 import { ProviderRouteChip } from '../models/ProviderRoute'
-import { CompressionMeter, ContextMeter } from '../settings/Usage'
+import { ContextMeter } from '../settings/Usage'
 import { CommentsChip, pendingComments } from '../git/ReviewChip'
 import { Composer } from '../composer/Composer'
 import { invoke } from '../ipc'
@@ -695,12 +695,7 @@ export const AgentView = memo(function AgentView({
                       onChange={changeSettings}
                       disabled={false}
                       running={working}
-                      trailing={
-                        <>
-                          <ContextMeter sessionId={view.sessionId} />
-                          <CompressionMeter sessionId={view.sessionId} />
-                        </>
-                      }
+                      trailing={<ContextMeter sessionId={view.sessionId} />}
                     />
                   </>
                 )

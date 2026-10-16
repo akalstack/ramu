@@ -11,10 +11,10 @@ const changed = (): AppPreferences => ({
   keepAwake: !DEFAULT_APP_PREFERENCES.keepAwake,
   intelligence: {
     ...DEFAULT_APP_PREFERENCES.intelligence,
-    compression: 'aggressive' as const,
     learning: other(DEFAULT_APP_PREFERENCES.intelligence.learning),
     crossThreadRecall: false,
     toolAwareSkills: false,
+    toolSearch: !DEFAULT_APP_PREFERENCES.intelligence.toolSearch,
   },
 })
 
@@ -26,13 +26,13 @@ it('resets only the preferences a section owns', () => {
 
 it('splits the intelligence preferences between Threads and Memory', () => {
   const chats = resetSection(changed(), 'chats')
-  expect(chats.intelligence.compression).toBe(DEFAULT_APP_PREFERENCES.intelligence.compression)
+  expect(chats.intelligence.toolSearch).toBe(DEFAULT_APP_PREFERENCES.intelligence.toolSearch)
   expect(chats.intelligence.learning).toBe(other(DEFAULT_APP_PREFERENCES.intelligence.learning))
   expect(chats.intelligence.crossThreadRecall).toBe(false)
   expect(chats.intelligence.toolAwareSkills).toBe(false)
   const memory = resetSection(changed(), 'memory')
   expect(memory.intelligence.learning).toBe(DEFAULT_APP_PREFERENCES.intelligence.learning)
-  expect(memory.intelligence.compression).toBe('aggressive')
+  expect(memory.intelligence.toolSearch).toBe(!DEFAULT_APP_PREFERENCES.intelligence.toolSearch)
   expect(memory.intelligence.crossThreadRecall).toBe(true)
   expect(memory.intelligence.toolAwareSkills).toBe(true)
 })
@@ -57,7 +57,7 @@ it('matches setting paths to the section that resets them', () => {
   expect(resetSection({ ...changed(), autoWatchPullRequests: true }, 'git').autoWatchPullRequests).toBe(false)
   expect(inResetSection('git', 'autoWatchPullRequests')).toBe(true)
   expect(inResetSection('chats', 'warnModelChange')).toBe(true)
-  expect(inResetSection('chats', 'intelligence.compression')).toBe(true)
+  expect(inResetSection('chats', 'intelligence.toolSearch')).toBe(true)
   expect(inResetSection('chats', 'intelligence.learning')).toBe(false)
   expect(inResetSection('memory', 'memory.enabled')).toBe(true)
   expect(inResetSection('memory', 'intelligence.crossThreadRecall')).toBe(true)

@@ -3,7 +3,6 @@ import type { FileContext, SkillInfo, AppPreferences } from '@ramu/shared/types'
 import type { NoticeInbox } from '../background/notices'
 import type { ActivityService } from '../background/activity'
 import type { LearningService } from '../memory/learning'
-import type { CompressionService } from '../compression'
 import type { ProviderService } from '../providers/providers'
 import type { KeepAwakeService } from '../background/keepAwake'
 import type { AppUpdateService } from '../background/appUpdates'
@@ -34,7 +33,6 @@ export interface Services {
   pullRequestWatches?: PullRequestWatchService
   recaps: RecapService
   learning?: LearningService
-  compression?: CompressionService
   memory?: MemoryService
   summaries?: SummaryService
   reviews: ReviewService

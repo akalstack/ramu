@@ -21,24 +21,6 @@ export function EfficiencySettings({ value, onChange }: Props) {
   return (
     <>
       <SettingsGroupTitle>{t('Token efficiency')}</SettingsGroupTitle>
-      <SettingsRow setting="intelligence.compression">
-        <SettingsLabel
-          title={t('Tool output compression')}
-          help={t(
-            'Shorten large tool results before the model reads them. The full output stays available on request.',
-          )}
-        />
-        <Dropdown
-          label={t('Tool output compression')}
-          value={value.compression}
-          options={[
-            { value: 'off', label: t('Off') },
-            { value: 'balanced', label: t('Balanced (recommended)') },
-            { value: 'aggressive', label: t('Aggressive') },
-          ]}
-          onChange={(mode) => onChange({ ...value, compression: mode as IntelligencePreferences['compression'] })}
-        />
-      </SettingsRow>
       <SettingsRow setting="intelligence.toolSearch">
         <SettingsLabel
           title={t('Load tools on demand')}

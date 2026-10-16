@@ -527,32 +527,3 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
     </span>
   )
 }
-
-/** Estimates apply only to Ramu output views; billing still comes from providers. */
-export function CompressionMeter({ sessionId }: { sessionId: string }) {
-  const [stats, setStats] = useState<{ estimatedTokensAvoided: number; note: string } | null>(null)
-  useEffect(() => {
-    let disposed = false
-    const refresh = () => {
-      void invoke('agent.compression', sessionId).then(
-        (value) => {
-          if (!disposed) setStats(value)
-        },
-        () => {},
-      )
-    }
-    refresh()
-    const off = ramu.on('agent:event', (event) => {
-      if (event.sessionId === sessionId && event.event.kind === 'result') refresh()
-    })
-    return () => {
-      disposed = true
-      off()
-    }
-  }, [sessionId])
-  return stats && stats.estimatedTokensAvoided > 0 ? (
-    <span className="text-caption text-muted-foreground" title={stats.note}>
-      {t('~{0} tokens avoided', { 0: stats.estimatedTokensAvoided.toLocaleString() })}
-    </span>
-  ) : null
-}

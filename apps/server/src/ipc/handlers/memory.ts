@@ -12,7 +12,6 @@ export const registerMemoryHandlers: RegisterHandlers = ({
   workspace,
   memory,
   learning,
-  compression,
   managedSkills,
   externalSkills,
 }) => ({
@@ -66,7 +65,6 @@ export const registerMemoryHandlers: RegisterHandlers = ({
     run: (skillId: string, revision: number) => need(learning).revert(skillId, revision),
   },
   'learning.run': { args: z.tuple([]), run: () => need(learning).tick(true) },
-  'agent.compression': { args: z.tuple([id]), run: (sessionId: string) => need(compression).stats(sessionId) },
   'agent.checkpoint': { args: z.tuple([id]), run: (sessionId: string) => need(learning).checkpoint(sessionId) },
   'memory.revert': {
     args: z.tuple([id, z.number().int().min(0), z.number().int()]),

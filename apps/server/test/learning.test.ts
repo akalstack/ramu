@@ -13,7 +13,6 @@ import { Workspace } from '../src/workspace/workspace'
 import { MemoryService } from '../src/memory/memory'
 import type { AgentService } from '../src/agent'
 import { LearningService } from '../src/memory/learning'
-import { CompressionService } from '../src/compression'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
@@ -196,20 +195,6 @@ it('rejects stale skill revisions atomically and protects pinned procedures from
   service.control(skill.id, 'pin')
   expect(() => service.apply(job.id)).toThrow(/Skill changed|pinned/)
   expect(service.skills()[0]).toMatchObject({ content: skill.content, pinned: true })
-})
-
-it('preserves exact compacted data, isolates retrieval by thread and leaves failures intact', () => {
-  const compression = new CompressionService(db)
-  const text = 'header\n' + 'repeat line\n'.repeat(3000) + 'tail: 42'
-  const full = { content: [{ type: 'text' as const, text }] }
-  const compacted = compression.compact('s', 'aggressive', full)
-  const block = compacted.content[0]!
-  if (block.type !== 'text') throw new Error('Expected text')
-  const id = JSON.parse(block.text).resultId
-  expect(compression.read('s', id, 8, 100).content).toBe(text.slice(8, 108))
-  expect(() => compression.read('other', id, 0, 10)).toThrow(/this thread/)
-  expect(compression.compact('s', 'aggressive', { ...full, isError: true })).toEqual({ ...full, isError: true })
-  expect(compression.stats('s').estimatedTokensAvoided).toBeGreaterThan(0)
 })
 
 it('rolls back all skill mutations if a later operation conflicts', async () => {

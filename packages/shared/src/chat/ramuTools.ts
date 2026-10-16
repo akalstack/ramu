@@ -25,7 +25,7 @@ const KNOWN = new Set([
   'update_goal',
   'tool_search',
   'tool_invoke',
-  'tool_result_read',
+  'tool_result_read', // removed with compression; kept so old transcripts still read well
   'memory_search',
   'memory_read',
   'memory_save',

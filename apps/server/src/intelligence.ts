@@ -5,7 +5,6 @@ export const intelligenceSchema = z.object({
   toolSearch: z.boolean().default(true),
   crossThreadRecall: z.boolean().default(DEFAULT_INTELLIGENCE_PREFERENCES.crossThreadRecall),
   toolAwareSkills: z.boolean().default(DEFAULT_INTELLIGENCE_PREFERENCES.toolAwareSkills),
-  compression: z.enum(['off', 'balanced', 'aggressive']).default('balanced'),
   learning: z.enum(['off', 'review', 'auto']).default(DEFAULT_INTELLIGENCE_PREFERENCES.learning),
   maintenanceModel: z
     .object({
