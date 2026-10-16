@@ -49,7 +49,12 @@ function Segmented<V extends string>({
   )
 }
 
-const windowName: Record<UsageReading['window'], string> = { five_hour: '5-hour', weekly: 'Weekly', monthly: 'Monthly' }
+const windowName: Record<UsageReading['window'], string> = {
+  five_hour: '5-hour',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  quota: 'Quota',
+}
 
 function UsageBar({ r }: { r: UsageReading }) {
   const { c } = useTheme()

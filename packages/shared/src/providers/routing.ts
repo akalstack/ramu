@@ -125,7 +125,14 @@ export interface RouteDecision {
 }
 
 export function windowName(reading: UsageReading): string {
-  const base = reading.window === 'five_hour' ? '5-hour' : reading.window === 'monthly' ? 'monthly' : 'weekly'
+  const base =
+    reading.window === 'five_hour'
+      ? '5-hour'
+      : reading.window === 'monthly'
+        ? 'monthly'
+        : reading.window === 'quota'
+          ? 'quota'
+          : 'weekly'
   return reading.scope ? `${reading.scope} ${base}` : base
 }
 

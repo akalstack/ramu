@@ -133,7 +133,25 @@ export function peakUsage(all: UsageReading[], provider: AgentProvider): UsageRe
   return all.filter((reading) => reading.provider === provider).sort((a, b) => b.usedPercent - a.usedPercent)[0]
 }
 
+/** Cursor's headline number is the two allowances combined, not a third quota. */
+const isCursorOverall = (reading: UsageReading) =>
+  reading.provider === 'cursor' && reading.window === 'monthly' && !reading.scope
+
+/** What a window means, for the providers whose windows are not obvious from their name. */
+export function usageHint(reading: UsageReading): string | undefined {
+  if (reading.provider === 'cursor') {
+    if (isCursorOverall(reading)) return t('Combined usage across both allowances, not a third quota.')
+    if (reading.scope === 'Cursor models') return t('Grok and Composer use this first. Auto can use either pool.')
+    if (reading.scope === 'Other models')
+      return t('Claude, GPT, and Gemini use this pool. Grok and Composer fall back here.')
+  }
+  if (reading.provider === 'antigravity' && (reading.scope === 'Claude' || reading.scope === 'GPT'))
+    return t('Claude and GPT share one allowance.')
+  return undefined
+}
+
 export function windowLabel(reading: UsageReading, short = false): string {
+  if (isCursorOverall(reading)) return t('Overall')
   const base =
     reading.window === 'five_hour'
       ? short
@@ -143,9 +161,11 @@ export function windowLabel(reading: UsageReading, short = false): string {
         ? short
           ? t('mo')
           : t('Monthly')
-        : short
-          ? t('wk')
-          : t('Weekly')
+        : reading.window === 'quota'
+          ? t('Quota')
+          : short
+            ? t('wk')
+            : t('Weekly')
   return reading.scope ? `${reading.scope} ${short ? base : base.toLowerCase()}` : base
 }
 
@@ -230,7 +250,11 @@ function UsageDetail({
         const tone = usageTone(reading),
           reset = resetText(reading.resetsAt)
         return (
-          <div key={`${reading.window}:${reading.scope ?? ''}`} className="flex flex-col gap-1.5">
+          <div
+            key={`${reading.window}:${reading.scope ?? ''}`}
+            className="flex flex-col gap-1.5"
+            title={usageHint(reading)}
+          >
             <div className="flex justify-between gap-2 text-control">
               <span>{windowLabel(reading)}</span>
               <span className={cn('tabular-nums', toneText[tone])}>

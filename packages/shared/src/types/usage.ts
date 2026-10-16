@@ -4,7 +4,8 @@ import type { AgentProvider } from './agent'
 export interface UsageReading {
   provider: AgentProvider
   accountId?: string
-  window: 'five_hour' | 'weekly' | 'monthly'
+  /** `quota` is a limit the provider reports without saying how long its window is. */
+  window: 'five_hour' | 'weekly' | 'monthly' | 'quota'
   /** Set for a model-specific window, e.g. Claude's Opus weekly limit. */
   scope?: string
   /** 0–100. */

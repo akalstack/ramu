@@ -18,22 +18,34 @@ async function json(url: string, init: RequestInit): Promise<Json> {
   return (await response.json()) as Json
 }
 
-/** Cursor's monthly plan usage from the CLI's own login. The Keychain is only touched when the user allowed it. */
+/**
+ * Cursor's monthly plan usage from the CLI's own login, as the dashboard shows it. Overall is the combined figure and
+ * is not a third quota; Cursor models (Composer, Grok) and Other models (Claude, GPT, Gemini) are the two allowances
+ * behind it. The pools carry a scope for display only: no model id contains it, so they never block a model on their own.
+ */
+const CURSOR_POOLS = [
+  { key: 'totalPercentUsed' },
+  { key: 'autoPercentUsed', scope: 'Cursor models' },
+  { key: 'apiPercentUsed', scope: 'Other models' },
+] as const
 export function cursorUsageReadings(response: Json, now = Date.now()): UsageReading[] {
-  const used = response?.planUsage?.totalPercentUsed
-  if (typeof used !== 'number' || !Number.isFinite(used)) return []
-  const end = Number(response.billingCycleEnd)
-  const usedPercent = Math.round(clamp(used) * 10) / 10
-  return [
-    {
-      provider: 'cursor',
-      window: 'monthly',
-      usedPercent,
-      status: statusOf(usedPercent),
-      ...(end > 0 ? { resetsAt: end } : {}),
-      updatedAt: now,
-    },
-  ]
+  const end = Number(response?.billingCycleEnd)
+  return CURSOR_POOLS.flatMap((pool): UsageReading[] => {
+    const used = response?.planUsage?.[pool.key]
+    if (typeof used !== 'number' || !Number.isFinite(used)) return []
+    const usedPercent = Math.round(clamp(used) * 10) / 10
+    return [
+      {
+        provider: 'cursor',
+        window: 'monthly',
+        ...('scope' in pool ? { scope: pool.scope } : {}),
+        usedPercent,
+        status: statusOf(usedPercent),
+        ...(end > 0 ? { resetsAt: end } : {}),
+        updatedAt: now,
+      },
+    ]
+  })
 }
 async function cursorToken(allowKeychain: boolean, env: NodeJS.ProcessEnv): Promise<string | undefined> {
   const given = env.CURSOR_AUTH_TOKEN?.trim()
@@ -109,25 +121,67 @@ export function antigravityUsageReadings(summary: Json, now = Date.now()): Usage
     const window = bucket.window === 'weekly' ? 'weekly' : bucket.window === '5h' ? 'five_hour' : undefined
     if (!window) continue
     // The scope is matched against model IDs, so it names the model family.
-    const scope = bucket.bucketId.startsWith('gemini-')
-      ? 'Gemini'
+    // Claude and GPT draw on one shared allowance, so it counts against both.
+    const scopes = bucket.bucketId.startsWith('gemini-')
+      ? ['Gemini']
       : bucket.bucketId.startsWith('3p-')
-        ? 'Claude'
-        : undefined
-    if (!scope) continue
+        ? ['Claude', 'GPT']
+        : []
     const usedPercent = Math.round(clamp((1 - Math.max(0, Math.min(1, bucket.remainingFraction))) * 100) * 10) / 10
     const resetsAt = bucket.resetTime ? Date.parse(bucket.resetTime) : NaN
-    const reading: UsageReading = {
-      provider: 'antigravity',
-      window,
-      scope,
-      usedPercent,
-      status: statusOf(usedPercent),
-      ...(Number.isFinite(resetsAt) ? { resetsAt } : {}),
-      updatedAt: now,
+    for (const scope of scopes) {
+      const reading: UsageReading = {
+        provider: 'antigravity',
+        window,
+        scope,
+        usedPercent,
+        status: statusOf(usedPercent),
+        ...(Number.isFinite(resetsAt) ? { resetsAt } : {}),
+        updatedAt: now,
+      }
+      const key = `${scope}:${window}`
+      if ((readings.get(key)?.usedPercent ?? -1) < usedPercent) readings.set(key, reading)
     }
-    const key = `${scope}:${window}`
-    if ((readings.get(key)?.usedPercent ?? -1) < usedPercent) readings.set(key, reading)
+  }
+  return [...readings.values()]
+}
+
+type Quota = { remainingFraction?: number; resetTime?: string }
+/**
+ * Older accounts have no quota summary; their model list reports a quota per model instead. A quota with no stated
+ * window is a `quota` reading (no invented reset cadence); a weekly one is weekly. The fullest model per family wins.
+ */
+export function antigravityModelReadings(models: Json, now = Date.now()): UsageReading[] {
+  const readings = new Map<string, UsageReading>()
+  for (const [id, model] of Object.entries<Json>(models?.models ?? {})) {
+    const family =
+      model?.modelProvider === 'MODEL_PROVIDER_GOOGLE' || id.startsWith('gemini-')
+        ? 'Gemini'
+        : model?.modelProvider === 'MODEL_PROVIDER_ANTHROPIC' || id.startsWith('claude-')
+          ? 'Claude'
+          : model?.modelProvider === 'MODEL_PROVIDER_OPENAI' || id.startsWith('gpt-')
+            ? 'GPT'
+            : undefined
+    if (!family) continue
+    for (const [window, quota] of [
+      ['quota', model.quotaInfo as Quota | undefined],
+      ['weekly', model.weeklyQuotaInfo as Quota | undefined],
+    ] as const) {
+      if (typeof quota?.remainingFraction !== 'number' || !Number.isFinite(quota.remainingFraction)) continue
+      const usedPercent = Math.round(clamp((1 - Math.max(0, Math.min(1, quota.remainingFraction))) * 100) * 10) / 10
+      const resetsAt = quota.resetTime ? Date.parse(quota.resetTime) : NaN
+      const key = `${family}:${window}`
+      if ((readings.get(key)?.usedPercent ?? -1) >= usedPercent) continue
+      readings.set(key, {
+        provider: 'antigravity',
+        window,
+        scope: family,
+        usedPercent,
+        status: statusOf(usedPercent),
+        ...(Number.isFinite(resetsAt) ? { resetsAt } : {}),
+        updatedAt: now,
+      })
+    }
   }
   return [...readings.values()]
 }
@@ -154,20 +208,25 @@ export async function readAntigravityUsage(env: NodeJS.ProcessEnv = process.env)
     }),
   })
   if (typeof refreshed.access_token !== 'string') return []
-  for (const endpoint of AGY_ENDPOINTS) {
-    try {
-      const summary = await json(`${endpoint}/v1internal:retrieveUserQuotaSummary`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${refreshed.access_token}`, 'content-type': 'application/json' },
-        body: JSON.stringify(
-          typeof file.project_id === 'string' && file.project_id ? { project: file.project_id } : {},
-        ),
-      })
-      const readings = antigravityUsageReadings(summary)
-      if (readings.length) return readings
-    } catch {}
+  const headers = {
+    Authorization: `Bearer ${refreshed.access_token}`,
+    'content-type': 'application/json',
+    'User-Agent': `antigravity/hub/1.0.0 (aidev_client; os_type=${process.platform}; arch=${process.arch})`,
   }
-  return []
+  const body = JSON.stringify(
+    typeof file.project_id === 'string' && file.project_id ? { project: file.project_id } : {},
+  )
+  const ask = async (operation: string, parse: (response: Json) => UsageReading[]) => {
+    for (const endpoint of AGY_ENDPOINTS) {
+      try {
+        const readings = parse(await json(`${endpoint}/v1internal:${operation}`, { method: 'POST', headers, body }))
+        if (readings.length) return readings
+      } catch {}
+    }
+    return []
+  }
+  const summary = await ask('retrieveUserQuotaSummary', (response) => antigravityUsageReadings(response))
+  return summary.length ? summary : await ask('fetchAvailableModels', (response) => antigravityModelReadings(response))
 }
 
 /** Reads the extra providers' usage at most every five minutes each, skipping any the user turned off. */
