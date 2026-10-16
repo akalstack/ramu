@@ -2,6 +2,7 @@
 // and an explicit, canonical working directory.
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { execFile } from 'node:child_process'
 import type {
@@ -187,6 +188,37 @@ export async function status(cwd: string): Promise<GitStatus> {
     git(cwd, ['remote']),
   ])
   return { ...parseStatus(raw), operation: op, remote: !!remotes.trim() }
+}
+
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+/** New files larger than this, or past the first few hundred, are left out of the line count. */
+const COUNT_LIMIT = { bytes: 1_000_000, files: 300 }
+
+/** Lines added and removed across every uncommitted change, staged or not, including new files. Binary files count as none. */
+export async function lineStats(cwd: string): Promise<{ added: number; removed: number }> {
+  const base = (await headOid(cwd)) ?? EMPTY_TREE
+  const [diff, untracked] = await Promise.all([
+    git(cwd, ['-c', 'core.quotePath=false', 'diff', base, '--numstat', '--no-renames', '--no-ext-diff', '-z']),
+    git(cwd, ['ls-files', '--others', '--exclude-standard', '-z']),
+  ])
+  let added = 0,
+    removed = 0
+  for (const line of diff.split('\0')) {
+    const [plus, minus] = line.split('\t')
+    if (plus && plus !== '-') added += Number(plus) || 0
+    if (minus && minus !== '-') removed += Number(minus) || 0
+  }
+  for (const path of untracked.split('\0').filter(Boolean).slice(0, COUNT_LIMIT.files)) {
+    try {
+      const file = resolve(cwd, path)
+      if ((await stat(file)).size > COUNT_LIMIT.bytes) continue
+      const text = await readFile(file)
+      if (text.includes(0)) continue
+      const lines = text.toString('utf8').split('\n').length
+      added += text.at(-1) === 10 ? lines - 1 : lines
+    } catch {}
+  }
+  return { added, removed }
 }
 
 /** A rebase or merge in progress. --git-path resolves per-worktree state, where `.git` may be a file. */

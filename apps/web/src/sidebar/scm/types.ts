@@ -1,8 +1,5 @@
-import type { CommitAction } from '@ramu/shared/types'
-
 /** The pending confirmation (or name prompt) shown in the repository dialog. */
 export type Confirmation =
-  | { kind: 'smart-commit'; action: CommitAction }
   | { kind: 'discard'; paths: string[] }
   | { kind: 'undo'; oid: string; title: string }
   | { kind: 'branch' }

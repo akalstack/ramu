@@ -41,6 +41,7 @@ import type { GitBranchInfo, GitStatus } from '@ramu/shared/types'
 import { BranchPicker, SyncButton, useAutoFetch } from './git/GitControls'
 import { isGitBusy, useGitBusy, withGitBackground, withGitBusy } from './git/gitBusy'
 import { CommitBranchDialog } from './git/CommitBranchDialog'
+import { CommitDialog } from './git/CommitDialog'
 import { Notifications, notifyError } from './chat/Notifications'
 import { SummaryHost } from './summaries/SummaryHost'
 import { TitleTooltips } from './TitleTooltips'
@@ -55,6 +56,7 @@ import { ProjectSwitcher } from './workspace/ProjectSwitcher'
 import { runProjectAction, useProjectActions, WindowActions } from './WindowActions'
 import { SearchChats } from './chat/SearchChats'
 import { useGitChangeCount } from './git/useGitChangeCount'
+import { CommitPushButton } from './git/CommitPushButton'
 import { CreateEntryDialog } from './workspace/CreateEntryDialog'
 import { AddProjectDialog } from './workspace/AddProjectDialog'
 import { HomePage, NewTask } from './NewTask'
@@ -258,7 +260,8 @@ function Shell() {
       ? worktreeCtx(ws.composingWorkspace)
       : projectCtx(startProject)
     : null
-  if (startContext && panes.has(startContext)) panes.set(startContext, startContext)
+  // New chat in a project always runs in that project's pane, so it has the same rail and tools as its chats.
+  if (startContext && (panes.has(startContext) || startProject !== NO_PROJECT)) panes.set(startContext, startContext)
 
   const gitChanges = useGitChangeCount(ui.activeTaskId, ws.bindings[ui.activeTaskId ?? ''] ?? [])
   const activeWorkspace = ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : null
@@ -586,6 +589,7 @@ function Shell() {
       <Notifications />
       <SummaryHost />
       <CommitBranchDialog />
+      <CommitDialog />
       <TitleTooltips />
       <CreateEntryDialog />
       <AddProjectDialog />
@@ -711,6 +715,12 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
         )}
         {error && <span className="error text-bad small text-caption">{error}</span>}
       </div>
+      {ctx && isProject && !starting && (
+        // No chat header here; Source Control's badge already counts the changes, so only Commit & Push is added.
+        <div className="project-git flex flex-none items-center no-drag [-webkit-app-region:no-drag]">
+          <CommitPushButton taskId={ctx} />
+        </div>
+      )}
       {ctx && project && !starting && <WindowActions ctx={ctx} projectId={project.id} />}
       {tools}
       {contextMenu.menu}

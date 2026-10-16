@@ -1,4 +1,5 @@
-import { Columns2, MessageSquare, PanelLeft, Rows2 } from 'lucide-react'
+import { MessageSquare, PanelLeft } from 'lucide-react'
+import { DiffLayoutToggle } from '../git/diffLayout'
 import type { ChangeReview } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { formatChatDate } from '@ramu/shared/chat/chatDates'
@@ -84,35 +85,12 @@ export function ReviewToolbar({
           '1': review.files.length,
         })}
       </span>
-      <div
-        className="review-layout-toggle inline-flex gap-0.5 p-0.5 rounded-(--radius-s) bg-fill"
-        role="group"
-        aria-label={t('Layout for all file diffs')}
-      >
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className={ICON_BUTTON_CLASS}
-          aria-pressed={!split}
-          aria-label={t('Inline')}
-          title={t('Inline')}
-          onClick={() => onChangeLayout(false)}
-        >
-          <Rows2 size={14} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className={ICON_BUTTON_CLASS}
-          aria-pressed={split}
-          disabled={narrow}
-          aria-label={t('Split')}
-          title={narrow ? t('Split needs a wider pane') : t('Split')}
-          onClick={() => onChangeLayout(true)}
-        >
-          <Columns2 size={14} />
-        </Button>
-      </div>
+      <DiffLayoutToggle
+        split={split}
+        narrow={narrow}
+        label={t('Layout for all file diffs')}
+        onChange={onChangeLayout}
+      />
       {review.sessionId && (
         <Button
           variant="ghost"

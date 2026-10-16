@@ -4,10 +4,10 @@
 
 | Provider | Runtime | Setup |
 | --- | --- | --- |
-| Claude Code | Ramu ACP host over Claude Agent SDK | Install Claude Code and sign in |
-| Codex | Ramu ACP host over Codex app-server | Install Codex and sign in |
-| OpenCode | `opencode acp` | Install OpenCode and configure a model provider |
-| Cursor | `agent acp` | Install Cursor CLI and run `agent login` |
+| Claude Code | Claude Agent SDK | Install Claude Code and sign in |
+| Codex | Codex app-server | Install Codex and sign in |
+| OpenCode | OpenCode 2 HTTP API (`@opencode/client`), one `opencode serve` per chat; 1.x uses `opencode acp` | Install OpenCode and configure a model provider |
+| Cursor | Cursor SDK (`@cursor/sdk`) | **Login** (opens Cursor's browser sign-in) or set `CURSOR_API_KEY`. The CLI's `agent login` does not carry over |
 | Antigravity | Official ACP runtime | **Settings → Providers → Antigravity → Install runtime** (Ramu downloads it), then **Login** (opens Google sign-in in your browser) |
 
 Use **Settings → Providers** to log in, select accounts, update CLIs, and set executable paths under Advanced. Ramu reads model IDs from the installed runtime.
@@ -24,18 +24,23 @@ Version checks run in the background service. CLI auto-update is opt-in and affe
 
 ## Capabilities
 
-All active providers use ACP. Claude and Codex retain native session, history, usage, and helper controls through Ramu's local hosts. OpenCode, Cursor, and Antigravity connect to native ACP executables.
+Each provider runs through its own SDK or app protocol where one exists: Claude on the Claude Agent SDK, Codex on its app-server, OpenCode 2 on its HTTP API, and Cursor on its SDK. Antigravity and OpenCode 1.x use ACP. Each provider's chat runner is listed in `apps/server/src/providers/runners.ts`.
 
-Claude and Codex support steering and async Ramu questions. OpenCode, Cursor and Antigravity all connect over ACP, which works with OpenCode 1.x and 2.x alike.
+Ramu uses a provider's own features first, such as Claude Code's advisor and Claude's and Codex's blocking question tools, and adds its own only where the native one cannot follow Ramu's flow: another provider or model, async answers, or goals that survive fallback. See `NativeFeatures` in `providers/adapter.ts`.
+
+- **OpenCode 2:** Ramu's tools travel in the chat process's inline config (`mcp.servers.ramu`), so nothing is written to your OpenCode config or database. Permission prompts and forms (questions) appear in Ramu, and full access answers permission prompts automatically. Steering adds your message to the running turn. Reasoning effort is passed as the model variant.
+- **Cursor:** the SDK has no approval step. Full access runs unsandboxed; other access levels run in Cursor's sandbox, which keeps writes in the workspace and blocks network access. Steering uses the SDK's `steer`; when Cursor declines it, the message runs as the next turn. Models come from Cursor's API once you are signed in, and from the CLI before that.
+
+The rest of this section describes the ACP runtimes (Antigravity, OpenCode 1.x).
 
 - **Steering:** these runtimes cannot take input mid-turn, so **Steer** cancels the running turn and continues the same session with your message; the cancelled turn is not reported as finished. Only messages you send (including Send now, and stopping or messaging a helper) do this. Ramu's own messages, such as late advice, async answers and helper reports, are queued so they never discard the agent's work. **Queue** waits for the turn to end.
 - **Resuming:** a chat continues its saved session with `session/resume` when the runtime offers it, otherwise `session/load`. If neither works, or the runtime no longer has the session, Ramu starts a new session and hands it the conversation transcript, the same as when switching providers. The transcript shows a settings row saying so.
 - **Optional protocol features:** images are sent as image blocks only when the runtime advertises them; otherwise the saved file path goes in the text. Ramu's tools (questions, `ramu_agent`, advice) reach the runtime over HTTP MCP, and a runtime that lists its MCP support without HTTP gets a visible warning in the chat instead of silently losing them.
-- **Plans and tool output:** Cursor's todo list (`cursor/update_todos`) shows as a plan. Antigravity's shell calls show their command and output, and inline image bytes are dropped from tool payloads so they don't fill the transcript.
+- **Plans and tool output:** Antigravity's shell calls show their command and output, and inline image bytes are dropped from tool payloads so they don't fill the transcript.
 - **Limits and fallback:** there is no usage API. A rejected request or a reply that is only a limit notice (quota exhausted, usage limit reached, rate limited, HTTP 429) triggers fallback and is recorded as a *limited* reading, so routing avoids that provider until the notice's stated wait passes, or for 15 minutes.
-- **Reasoning effort:** offered when the runtime advertises a `thought_level` option (OpenCode). Cursor and Antigravity encode effort in their model names, so each level is a separate model.
+- **Reasoning effort:** offered when the runtime advertises a `thought_level` option (OpenCode 1.x). Antigravity encodes effort in its model names, so each level is a separate model.
 - **Sub-agents:** native helpers from all three appear as task cards that can be stopped (stopping cancels the turn and continues without the helper). OpenCode also streams each helper's tool calls and replies into its card; Cursor and Antigravity report only start and finish. Native helpers cannot receive messages; helpers started through `ramu_agent` can.
-- **Routing sub-agents through Ramu:** OpenCode's own sub-agent tool is switched off (its `task` permission is denied for that chat process) and Antigravity's `invoke_subagent` requests are refused, so helpers go through `ramu_agent`. Cursor cannot switch its tool off, so the chat guidance tells it not to use it. A routing change restarts an idle chat's runtime before the next message, resuming the same session.
+- **Routing sub-agents through Ramu:** OpenCode's own sub-agent tool is switched off (its `task` permission is denied for that session), Cursor's `task` tool is disallowed, and Antigravity's `invoke_subagent` requests are refused, so helpers go through `ramu_agent`. A routing change restarts an idle chat's runtime before the next message, resuming the same session.
 - **Side questions:** run on a throwaway fork of the OpenCode session, with every tool refused. Cursor and Antigravity cannot fork, so they answer from the visible conversation.
 
 Read-only analysis requires the provider's read-only mode or native sandbox policy. See [agents and routing](AGENTS.md) and [background workflows](AUTOMATION.md).

@@ -13,6 +13,8 @@
       "ignoreDependencies": [
         "@agentclientprotocol/sdk",
         "@anthropic-ai/claude-agent-sdk",
+        "@cursor/sdk",
+        "@opencode/client",
         "@modelcontextprotocol/sdk",
         "editorconfig",
         "luxon",
@@ -28,8 +30,7 @@
       "entry": ["plugins/*.cjs"]
     },
     "apps/server": {
-      "ignoreBinaries": ["rtk"],
-      "ignoreDependencies": ["@agentclientprotocol/codex-acp", "@agentclientprotocol/claude-agent-acp"]
+      "ignoreBinaries": ["rtk"]
     }
   }
 }

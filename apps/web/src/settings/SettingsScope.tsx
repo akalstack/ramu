@@ -49,9 +49,22 @@ interface Target {
   updateRequired?: boolean
 }
 
-export function useSettingsScope() {
+/** These pages configure one machine (binaries, login, service, network), so "all environments" has no meaning. */
+const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = ['providers', 'system', 'remote']
+/** Remote access always describes the environment being used; it is not selectable. */
+const CURRENT_ENVIRONMENT_SECTIONS: readonly string[] = ['remote']
+export const isSingleEnvironmentSection = (section: string) => SINGLE_ENVIRONMENT_SECTIONS.includes(section)
+export const isCurrentEnvironmentSection = (section: string) => CURRENT_ENVIRONMENT_SECTIONS.includes(section)
+
+export function useSettingsScope(section: string) {
   const computers = useComputers()
-  const [target, setTarget] = useState('all')
+  const [requested, setTarget] = useState('all')
+  const current = computers?.current ?? ''
+  const target = isCurrentEnvironmentSection(section)
+    ? current
+    : requested === 'all' && isSingleEnvironmentSection(section)
+      ? current
+      : requested
   const [targets, setTargets] = useState<Target[]>([])
   const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
@@ -72,11 +85,11 @@ export function useSettingsScope() {
   const loadedTarget = useRef<string | null>(null)
   const [stale, setStale] = useState(false)
   useEffect(() => {
-    if (dirty.current) return
+    if (dirty.current && loadedTarget.current === target) return
     let active = true
     // Any reload keeps showing the current values until the new ones arrive; only the very first load shows loading.
     const refreshing = loadedTarget.current === target
-    if (!loadedTarget.current) setLoading(true)
+    if (!loadedTarget.current || !refreshing) setLoading(true)
     else setStale(true)
     setError(null)
     setMessage(null)
@@ -238,6 +251,7 @@ export function useSettingsScope() {
   return {
     target,
     setTarget,
+    section,
     targets,
     available,
     preferences,
@@ -351,8 +365,9 @@ export function useSettingsEvents(): typeof ramu.on {
 export function SettingsTargetSelector({ disabled }: { disabled: boolean }) {
   const scope = useContext(SettingsScopeContext)
   if (!scope) return null
+  if (isCurrentEnvironmentSection(scope.section)) return null
   const options = [
-    { value: 'all', label: t('All environments') },
+    ...(isSingleEnvironmentSection(scope.section) ? [] : [{ value: 'all', label: t('All environments') }]),
     ...scope.available.map((computer) => ({
       value: computer.id,
       label: `${computer.name}${computer.status !== 'connected' ? ` · ${statusText(computer.status)}` : ''}`,

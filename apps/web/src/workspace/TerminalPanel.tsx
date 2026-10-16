@@ -271,16 +271,18 @@ export function TerminalPanel({
             },
           ]}
         />
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-          aria-label={t('Hide terminal panel')}
-          title={t('Hide terminal panel')}
-          onClick={() => ws.setTerminalPanel(taskId, { terminalOpen: false })}
-        >
-          <X data-icon="inline-start" />
-        </Button>
+        {dock === 'bottom' && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
+            aria-label={t('Hide terminal panel')}
+            title={t('Hide terminal panel')}
+            onClick={() => ws.setTerminalPanel(taskId, { terminalOpen: false })}
+          >
+            <X data-icon="inline-start" />
+          </Button>
+        )}
       </header>
       <div
         className={`terminal-panel-body [&.tabs-top]:flex-col [&.tabs-right_.terminal-tabs]:[order:1] [&.tabs-right_.terminal-tabs]:w-[164px] [&.tabs-right_.terminal-tabs]:flex-col [&.tabs-right_.terminal-tabs]:[border-bottom:none] [&.tabs-right_.terminal-tabs]:p-1 flex flex-1 min-h-0 min-w-0 tabs-${position}`}

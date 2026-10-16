@@ -44,6 +44,8 @@ minimumReleaseAgeExclude:
   - expo-notifications@57.0.23
   - '@expo/ui@57.0.24'
   - expo-widgets@57.0.25
-  - '@agentclientprotocol/claude-agent-acp@0.91.0'
+  - '@opencode/client@2.0.30'
+  - '@opencode/protocol@2.0.30'
+  - '@opencode/schema@2.0.30'
 patchedDependencies:
   react-native-screens@4.26.2: patches/react-native-screens@4.26.2.patch

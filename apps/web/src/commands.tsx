@@ -42,6 +42,7 @@ export interface ShellControls {
 export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[] {
   const taskId = ws.ui.activeTaskId
   const state = taskId ? ws.taskUi[taskId] : undefined
+  const terminalDock = state?.terminalDock ?? shell.defaultTerminalDock ?? 'bottom'
   const tabs = state ? tabOrder(state.views) : []
   const active = tabs.find((v) => v.id === state?.activeViewId)
   const groups = state ? terminalGroups(state) : []
@@ -82,11 +83,13 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
   const newTerminal = (repoId?: string) => taskId && ws.openView(taskId, { kind: 'terminal', repoId })
   const toggleTerminal = () => {
     if (!taskId) return
-    if (state?.terminalOpen) {
+    if (terminalDock === 'bottom' && state?.views.some((v) => v.kind === 'terminal') && state.terminalOpen !== false) {
       ws.setTerminalPanel(taskId, { terminalOpen: false })
       return
     }
-    const term = [...tabs].reverse().find((v) => v.kind === 'terminal')
+    const term =
+      tabs.find((v) => v.kind === 'terminal' && v.id === state?.activeTerminalId) ??
+      [...tabs].reverse().find((v) => v.kind === 'terminal')
     if (term) ws.activateView(taskId, term.id)
     else newTerminal()
   }
@@ -170,7 +173,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     },
     {
       id: 'term.toggle',
-      title: t('Toggle terminal'),
+      title: terminalDock === 'right' ? t('Show terminal') : t('Toggle terminal'),
       category: 'Terminal',
       keys: 'ctrl+`',
       run: toggleTerminal,
@@ -178,7 +181,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     },
     {
       id: 'term.toggle2',
-      title: t('Toggle panel'),
+      title: terminalDock === 'right' ? t('Show terminal') : t('Toggle panel'),
       category: t('View'),
       keys: 'mod+j',
       run: toggleTerminal,
@@ -465,6 +468,24 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       keys: 'mod+alt+p',
       run: () => taskId && commitAndPush(ws, taskId),
       when: hasTask,
+    },
+    {
+      id: 'app.reload-window',
+      title: t('Reload window'),
+      category: t('Application'),
+      run: () => window.location.reload(),
+    },
+    {
+      id: 'app.restart',
+      title: t('Restart Ramu'),
+      category: t('Application'),
+      run: () => void invoke('app.relaunch').catch((e) => notifyError(errorText(e), t('Restart Ramu'))),
+    },
+    {
+      id: 'app.restart-service',
+      title: t('Restart Ramu and the background service'),
+      category: t('Application'),
+      run: () => void invoke('background.restart').catch((e) => notifyError(errorText(e), t('Restart service'))),
     },
     {
       id: 'view.scm',

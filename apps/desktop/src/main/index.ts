@@ -834,6 +834,12 @@ async function main() {
       app.quit()
       return
     }
+    if (method === 'app.relaunch') {
+      if (remote) throw new Error(t('Not available while connected to another computer'))
+      app.relaunch()
+      app.quit()
+      return
+    }
     if (method === 'updates.restart') {
       const choice = await dialog.showMessageBox(win, {
         type: 'question',

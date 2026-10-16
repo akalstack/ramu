@@ -1,9 +1,9 @@
 // Source Control against real Git repositories: amend, undo, Commit & Push with the default-branch choice,
 // and per-repository staging in a multi-repository project. The user's own edits must survive every operation.
 import assert from 'node:assert/strict'
-import { writeFileSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { git, modifier, openSettings, showTask, startRamu } from '../support/index.mjs'
+import { git, modifier, showTask, startRamu } from '../support/index.mjs'
 
 const ramu = await startRamu('source-control', {
   repos: { repo: [{ 'file.txt': 'fixture\n' }, { remote: true }] },
@@ -43,49 +43,23 @@ ramu.test('opens Source Control for a project task', async () => {
   await page.locator('.scm-panel').waitFor()
 })
 
-ramu.test('combined changes show each file once, compare HEAD to working tree and commit everything', async () => {
-  const { repoId } = (await ramu.api('tasks.bindings', task.id))[0]
-  assert.equal((await ramu.api('settings.app.get')).combineGitChanges, true)
-  writeFileSync(join(repo, 'file.txt'), 'staged combined\n')
-  await write('add', 'file.txt')
+ramu.test('commit with nothing staged opens the commit popup and commits the ticked files', async () => {
   writeFileSync(join(repo, 'file.txt'), 'working combined\n')
   writeFileSync(join(repo, 'new.txt'), 'new combined\n')
   await refresh()
-  const rows = page.locator('.scm-panel .change-name')
-  await ramu.until(async () => (await rows.count()) === 2, 'combined files were not listed once')
-  assert.equal(await page.getByRole('button', { name: 'Unstage all', exact: true }).count(), 0)
-  assert.equal(await page.getByRole('button', { name: 'Stage all', exact: true }).count(), 0)
-  assert.deepEqual(await ramu.api('git.diff', task.id, repoId, 'file.txt', 'all'), {
-    original: 'fixture\n',
-    modified: 'working combined\n',
-  })
-  assert.equal((await ramu.api('git.diff', task.id, repoId, 'file.txt', true)).modified, 'staged combined\n')
-  await rows.filter({ hasText: 'file.txt' }).click()
-  await page.locator('.view-header').getByText('Changes', { exact: true }).waitFor()
-  await message().fill('Combined commit')
+  await message().fill('Popup commit')
   await page.getByRole('button', { name: 'Commit', exact: true }).click()
-  await ramu.until(() => git(repo, 'log', '-1', '--format=%s') === 'Combined commit', 'combined commit never ran')
+  const dialog = page.getByRole('dialog', { name: /^Commit / })
+  await dialog.waitFor()
+  assert.equal((await dialog.getByRole('checkbox').count()) >= 2, true, 'every changed file is listed')
+  await dialog.getByRole('checkbox', { name: /new\.txt/ }).uncheck()
+  await dialog.getByRole('button', { name: /^Commit \d+$/ }).click()
+  await ramu.until(() => git(repo, 'log', '-1', '--format=%s') === 'Popup commit', 'popup commit never ran')
   assert.equal(git(repo, 'show', 'HEAD:file.txt'), 'working combined')
-  assert.equal(git(repo, 'show', 'HEAD:new.txt'), 'new combined')
-  assert.equal(git(repo, 'status', '--porcelain'), '')
+  assert.equal(git(repo, 'status', '--porcelain'), '?? new.txt', 'the unticked file stays uncommitted')
   // Restore the fixture so the staged-only journey below keeps its original history assertions.
+  rmSync(join(repo, 'new.txt'))
   await write('reset', '--hard', 'HEAD~1')
-})
-
-ramu.test('disabling combined changes persists and restores the staging workflow', async () => {
-  await openSettings(ramu, 'Git')
-  const toggle = page.getByRole('switch', { name: 'Combine staged and unstaged changes', exact: true })
-  assert.equal(await toggle.isChecked(), true)
-  await toggle.uncheck()
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
-  await page.getByText(/Settings saved on/).waitFor()
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-  await page.locator('.settings-page').waitFor({ state: 'detached' })
-  assert.equal((await ramu.api('settings.app.get')).combineGitChanges, false)
-  await openSettings(ramu, 'Git')
-  assert.equal(await toggle.isChecked(), false)
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-  await page.locator('.settings-page').waitFor({ state: 'detached' })
 })
 
 let pushed

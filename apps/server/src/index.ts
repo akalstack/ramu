@@ -16,9 +16,9 @@ import { join } from 'node:path'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import { createAcpRunner } from './providers/acp'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { registerQuestionTools } from './agent/questionTools'
+import { usesRamuQuestions } from './agent/nativeFeatures'
 import { registerAdvisorTools } from './agent/advisor'
 import { registerGoalTools } from './agent/goals'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -178,10 +178,6 @@ const agents = new AgentService(
   },
   fake?.fakeQuery ?? query,
   fake?.fakeCodex,
-  fake?.fakeCodex,
-  fake?.fakeCodex,
-  // Claude chats run through the official ACP adapter; one-shot asides, catalogs and usage reads keep using the SDK.
-  fake ? undefined : createAcpRunner,
 )
 const mobileLiveActivities = new MobileLiveActivities(
   join(userData, 'mobile-live-activities.json'),
@@ -229,6 +225,7 @@ const summaries = new SummaryService(db, workspace, agents, memory, learning, (c
   send('summaries:changed', { created }),
 )
 agents.sessionCheckpoint = (id) => learning.checkpoint(id)
+agents.onRewound = (sessionId, seq) => send('agent:rewound', { sessionId, seq })
 agents.learningInstructions = (session) =>
   [learning.instructions(session.id), summaries.instructions(session)].filter(Boolean).join('\n\n')
 const projectOf = (session: AgentSessionInfo) => {
@@ -518,7 +515,8 @@ const mcpHttp = createServer(async (req, res) => {
   learning.register(server, source.id)
   if (preferences.rtk) registerRtkTool(server, agents.get(source.id))
   compression.register(server, source.id)
-  registerQuestionTools(server, agents, source.id)
+  // With async questions off, Claude and Codex ask through their own blocking question tools instead.
+  if (usesRamuQuestions(agents.preferences?.(), source)) registerQuestionTools(server, agents, source.id)
   if (!source.parentId) registerGoalTools(server, agents, source.id)
   if (agents.advisorStep(source.id)) registerAdvisorTools(server, agents, source.id)
   if (memory.enabled()) registerMemoryTools(server, memory, source, projectOf(source))

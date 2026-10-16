@@ -2,13 +2,21 @@ import { useEffect, useState } from 'react'
 import type { RepositoryBinding } from '@ramu/shared/types'
 import { invoke, ramu } from '../ipc'
 
-/** Watch the active checkout even when Source Control is closed. */
-export function useGitChangeCount(taskId: string | null, bindings: RepositoryBinding[]) {
+export interface GitChanges {
+  count: number
+  /** Lines added and removed across the checkout; only loaded when asked for. */
+  added: number
+  removed: number
+}
+const NONE: GitChanges = { count: 0, added: 0, removed: 0 }
+
+/** Watch the active checkout's changes even when Source Control is closed; `lines` also totals added and removed lines. */
+export function useGitChanges(taskId: string | null, bindings: RepositoryBinding[], lines = false): GitChanges {
   const key = JSON.stringify(
     bindings.filter((b) => b.setupState === 'ready' && !b.folderOnly).map((b) => ({ repoId: b.repoId, cwd: b.cwd })),
   )
-  const [result, setResult] = useState({ context: '', count: 0 })
-  const context = `${taskId}:${key}`
+  const [result, setResult] = useState({ context: '', changes: NONE })
+  const context = `${taskId}:${key}:${lines}`
   useEffect(() => {
     if (!taskId) return
     const repositories = JSON.parse(key) as { repoId: string; cwd: string }[]
@@ -17,18 +25,28 @@ export function useGitChangeCount(taskId: string | null, bindings: RepositoryBin
     let timer: ReturnType<typeof setTimeout> | undefined
     const load = async () => {
       const request = ++sequence
-      const results = await Promise.allSettled(repositories.map((repo) => invoke('git.status', taskId, repo.repoId)))
+      const [statuses, stats] = await Promise.all([
+        Promise.allSettled(repositories.map((repo) => invoke('git.status', taskId, repo.repoId))),
+        lines
+          ? Promise.allSettled(repositories.map((repo) => invoke('git.lineStats', taskId, repo.repoId)))
+          : Promise.resolve([]),
+      ])
       // A failed read says nothing about the changes; keep showing the last count.
-      if (!disposed && request === sequence && results.every((result) => result.status === 'fulfilled'))
-        setResult({
-          context,
-          count: results.reduce(
-            (count, result) =>
-              count +
-              (result.status === 'fulfilled' ? new Set(result.value.entries.map((entry) => entry.path)).size : 0),
-            0,
-          ),
-        })
+      if (disposed || request !== sequence || !statuses.every((result) => result.status === 'fulfilled')) return
+      const count = statuses.reduce(
+        (count, result) =>
+          count + (result.status === 'fulfilled' ? new Set(result.value.entries.map((entry) => entry.path)).size : 0),
+        0,
+      )
+      const fulfilled = stats.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []))
+      setResult({
+        context,
+        changes: {
+          count,
+          added: fulfilled.reduce((sum, value) => sum + value.added, 0),
+          removed: fulfilled.reduce((sum, value) => sum + value.removed, 0),
+        },
+      })
     }
     const refresh = () => {
       clearTimeout(timer)
@@ -47,6 +65,11 @@ export function useGitChangeCount(taskId: string | null, bindings: RepositoryBin
       window.removeEventListener('ramu:git-updated', refresh)
       window.removeEventListener('focus', refresh)
     }
-  }, [taskId, key, context])
-  return result.context === context ? result.count : 0
+  }, [taskId, key, lines, context])
+  return result.context === context ? result.changes : NONE
+}
+
+/** The number of changed files in the active checkout. */
+export function useGitChangeCount(taskId: string | null, bindings: RepositoryBinding[]) {
+  return useGitChanges(taskId, bindings).count
 }

@@ -69,6 +69,18 @@ export class MessageDispatcher {
     )
   }
 
+  /** Puts the queue in the given order. Messages missing from `order` keep their place at the end; unknown ids are ignored. */
+  reorderQueued(id: string, order: string[]): void {
+    this.host.get(id)
+    const messages = this.host.queued(id)
+    const rank = new Map(order.map((messageId, index) => [messageId, index]))
+    const sorted = [...messages].sort(
+      (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    )
+    if (sorted.every((message, index) => message.id === messages[index]!.id)) return
+    this.updateQueue(id, sorted)
+  }
+
   /** Sends one queued message ahead of the rest: steers a running turn, or starts a turn now even while the queue is paused. */
   async sendQueuedNow(id: string, messageId: string): Promise<void> {
     const session = this.host.get(id)

@@ -1,6 +1,8 @@
 import { Button } from '@/components/desktop-button'
 import { FolderPlus, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { t, useLanguage } from '../i18n'
 import { invoke } from '../ipc'
@@ -47,7 +49,14 @@ export function ProjectsPanel() {
   const latest = recentMode
     ? ws.tasks.filter((t) => t.status !== 'archived' && !t.pinnedAt).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
     : []
-  const { dnd, folderOver, onDragOver, onDragLeave, onDrop } = useProjectsDragDrop()
+  const { reorder, folderOver, onDragOver, onDragLeave, onDrop } = useProjectsDragDrop()
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  const projectIds = ws.projects.map((project) => project.id)
+  const dropProject = (event: DragEndEvent) => {
+    const from = projectIds.indexOf(String(event.active.id)),
+      to = event.over ? projectIds.indexOf(String(event.over.id)) : -1
+    if (from >= 0 && to >= 0 && from !== to) void reorder(arrayMove(projectIds, from, to))
+  }
 
   return (
     <div
@@ -121,7 +130,15 @@ export function ProjectsPanel() {
             </Button>
           </div>
         )}
-        {!recentMode && ws.projects.map((p) => <ProjectGroup key={p.id} project={p} dnd={dnd} />)}
+        {!recentMode && (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropProject}>
+            <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
+              {ws.projects.map((p) => (
+                <ProjectGroup key={p.id} project={p} />
+              ))}
+            </SortableContext>
+          </DndContext>
+        )}
       </Collapse>
       {!recentMode && (
         <>

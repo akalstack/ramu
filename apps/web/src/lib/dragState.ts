@@ -35,13 +35,3 @@ if (typeof window !== 'undefined') {
   window.addEventListener('dragend', () => setActiveDrag(null))
   window.addEventListener('drop', () => setActiveDrag(null))
 }
-
-/** Shows `row` as the drag preview with the pointer where it grabbed the handle, so the preview stays under the cursor. */
-export function setRowDragImage(
-  event: { clientX: number; clientY: number; dataTransfer: DataTransfer },
-  row: Element | null,
-) {
-  if (!row) return
-  const box = row.getBoundingClientRect()
-  event.dataTransfer.setDragImage(row, Math.max(0, event.clientX - box.left), Math.max(0, event.clientY - box.top))
-}

@@ -138,7 +138,6 @@ export function EventRow({
           event={e}
           generating={generating}
           actions={actions}
-          latest={latest}
           taskId={taskId}
           sessionId={sessionId}
         />

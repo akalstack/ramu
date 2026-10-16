@@ -1,8 +1,8 @@
 // Structured agent service: the façade over the collaborators in ./agent/. Each owns one slice of the state (sessions,
 // queue, goals, routing, sub-agents, ...); this class builds them, wires their hosts and exposes the public API.
 import { providerBinary } from './providers/providerBinaries'
-import { createAcpRunner } from './providers/acp'
-import type { AgentRunnerFactory } from './agent/agentRunner'
+import { DEFAULT_RUNNERS, sameRunnerForAll } from './providers/runners'
+import type { AgentRunnerFactory, ProviderRunners } from './agent/agentRunner'
 import type { Db } from './db'
 import type {
   ContextUsage,
@@ -69,12 +69,17 @@ export class AgentService {
   usage: (Pick<UsageService, 'list' | 'update'> & Partial<Pick<UsageService, 'all'>>) | undefined
   /** The saved app preferences: fallback chains, threshold and sub-agent routing. */
   preferences: (() => AppPreferences) | undefined
+  /** Told when a chat's transcript is cut back, so clients drop the events from `seq` on. */
+  onRewound: ((id: string, seq: number) => void) | undefined
   /** Told whenever a chat's context window usage changes. */
   onContext: ((id: string, context: ContextUsage) => void) | undefined
   /** Where sub-agents that work in their own copy of the checkout are given their worktrees. */
   isolationRoot: string | undefined
   /** Called before choosing another login, so its usage is current. */
   refreshAccountUsage: ((provider: AgentProvider) => Promise<void>) | undefined
+
+  /** A bare factory serves every provider except Claude Code, which keeps the SDK loop. */
+  private readonly runners: ProviderRunners
 
   private providerQuery: QueryFn = (args) =>
     this.queryFn({ ...args, options: { ...args.options, pathToClaudeCodeExecutable: providerBinary('claude-code') } })
@@ -83,12 +88,9 @@ export class AgentService {
     private readonly db: Db,
     private readonly onEvent: (sessionId: string, event: AgentEvent, seq?: number, revision?: number) => void,
     private readonly queryFn: QueryFn,
-    private readonly codexFactory: AgentRunnerFactory = createAcpRunner,
-    private readonly acpFactory: AgentRunnerFactory = createAcpRunner,
-    private readonly openCodeFactory: AgentRunnerFactory = createAcpRunner,
-    /** When set, Claude chats run through this ACP runner; without it they use the Claude Agent SDK directly. */
-    private readonly claudeFactory?: AgentRunnerFactory,
+    runners: ProviderRunners | AgentRunnerFactory = DEFAULT_RUNNERS,
   ) {
+    this.runners = typeof runners === 'function' ? sameRunnerForAll(runners) : runners
     // Collaborators reach each other (and the settings above) only through this one object.
     const parts = {} as Collaborators
     const host: AgentHost = {
@@ -97,7 +99,7 @@ export class AgentService {
         return parts.recorder.activeTools
       },
       activeWriter: (...a) => parts.registry.activeWriter(...a),
-      advisorOn: (...a) => parts.advisor.advisorOn(...a),
+      claudeAdvisorModel: (...a) => parts.advisor.claudeAdvisorModel(...a),
       advisorStep: (...a) => parts.advisor.advisorStep(...a),
       get agentCalls() {
         return parts.pump.agentCalls
@@ -269,18 +271,14 @@ export class AgentService {
   }
 
   private runnerFactory(provider: AgentProvider): AgentRunnerFactory {
-    return provider === 'codex'
-      ? this.codexFactory
-      : provider === 'opencode'
-        ? this.openCodeFactory
-        : provider === 'claude-code'
-          ? this.claudeFactory!
-          : this.acpFactory
+    const factory = this.runners[provider]
+    if (!factory) throw new Error(`${provider} has no chat runner`)
+    return factory
   }
 
   /** Whether chats on this provider run through a runner instead of the Claude Agent SDK. */
   private usesRunner(provider: AgentProvider): boolean {
-    return provider !== 'claude-code' || !!this.claudeFactory
+    return !!this.runners[provider]
   }
 
   async withWorkspaceReservation<T>(covers: string[], action: () => Promise<T>): Promise<T> {
@@ -433,6 +431,10 @@ export class AgentService {
     return this.parts.dispatcher.removeQueued(...args)
   }
 
+  reorderQueued(...args: Parameters<MessageDispatcher['reorderQueued']>) {
+    return this.parts.dispatcher.reorderQueued(...args)
+  }
+
   sendQueuedNow(...args: Parameters<MessageDispatcher['sendQueuedNow']>) {
     return this.parts.dispatcher.sendQueuedNow(...args)
   }
@@ -551,6 +553,43 @@ export class AgentService {
 
   stop(...args: Parameters<SessionProcess['stop']>) {
     return this.parts.process.stop(...args)
+  }
+
+  /**
+   * Rewinds a chat to just before one of your messages, as if it was never sent: the chat stops, that message and
+   * everything after it are removed, and the provider's saved session is dropped. The next message starts a fresh
+   * provider session that is handed the remaining conversation, the same way a provider switch carries it over, so
+   * this works for every provider. Files are left alone; restoring them is a separate step.
+   */
+  async rewind(id: string, userSeq: number): Promise<void> {
+    const s = this.get(id)
+    if (s.parentId) throw new Error('Helper chats cannot be rewound. Edit a message in the main chat.')
+    const row = this.db.prepare('SELECT event FROM agent_events WHERE session_id = ? AND seq = ?').get(id, userSeq) as
+      { event: string } | undefined
+    const event = row ? (JSON.parse(row.event) as AgentEvent) : null
+    if (event?.kind !== 'user' || event.agentId) throw new Error('That message is no longer in this chat.')
+    await this.stopAndWait(id)
+    this.db.exec('BEGIN')
+    try {
+      this.db.prepare('DELETE FROM agent_events WHERE session_id = ? AND seq >= ?').run(id, userSeq)
+      this.db.prepare('UPDATE agent_sessions SET provider_session_id = NULL WHERE id = ?').run(id)
+      // A progress summary that covers removed turns would bring them back.
+      this.db
+        .prepare("DELETE FROM session_checkpoints WHERE session_id = ? AND json_extract(data, '$.seq') >= ?")
+        .run(id, userSeq)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    this.onRewound?.(id, userSeq)
+    this.record(id, {
+      kind: 'settings',
+      settings: s.settings,
+      reason: 'Rewound to before an edited message — the next message continues from the conversation above',
+      handoff: true,
+      previous: s.settings,
+    })
   }
 
   stopAndWait(...args: Parameters<SessionProcess['stopAndWait']>) {

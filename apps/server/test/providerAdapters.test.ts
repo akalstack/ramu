@@ -47,11 +47,12 @@ describe('provider adapter registry', () => {
       'claude-code': ['auth', 'login'],
       codex: ['login'],
       opencode: ['auth', 'login'],
-      cursor: ['login'],
+      // Cursor signs in through its SDK's browser login, not the CLI.
+      cursor: null,
       antigravity: null,
     })
-    expect(providerAdapter('antigravity').signIn).toBeTypeOf('function')
-    for (const id of AGENT_PROVIDERS.filter((id) => id !== 'antigravity'))
+    for (const id of ['antigravity', 'cursor'] as const) expect(providerAdapter(id).signIn).toBeTypeOf('function')
+    for (const id of AGENT_PROVIDERS.filter((id) => id !== 'antigravity' && id !== 'cursor'))
       expect(providerAdapter(id).signIn).toBeUndefined()
   })
 
@@ -122,11 +123,11 @@ describe('login command shapes', () => {
   it('quotes the binary and appends the adapter login args', () => {
     const quoted = process.platform === 'win32' ? "& '/b/tool'" : "'/b/tool'"
     expect(service('/b/tool').loginCommand('codex')).toBe(`${quoted} login`)
-    expect(service('/b/tool').loginCommand('cursor')).toBe(`${quoted} login`)
   })
 
-  it('has no terminal login for Antigravity', () => {
+  it('has no terminal login for Antigravity or Cursor', () => {
     expect(service('/b/tool').loginCommand('antigravity')).toBeNull()
+    expect(service('/b/tool').loginCommand('cursor')).toBeNull()
   })
 
   it('refuses in-app sign-in for providers that use the terminal command', async () => {

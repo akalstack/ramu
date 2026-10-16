@@ -132,11 +132,14 @@ export class ProviderWaits {
     }
   }
 
-  /** A quota failure keeps the goal durable. Known resets schedule a retry; unknown resets back off. */
+  /**
+   * A quota failure keeps the chat durable instead of failing it: with fallback off the chat resumes on the same provider
+   * once the limit resets, and a goal waits the same way. Known resets schedule a retry; unknown resets back off.
+   */
   waitForGoalProvider(id: string): boolean {
     const goal = this.host.getGoal(id)
     const session = this.host.get(id)
-    if (session.parentId || (!session.settings.autoFallback && !goal)) return false
+    if (session.parentId) return false
     const now = Date.now(),
       previous = this.providerWait(id)
     const readings = this.host.routing(session.settings)?.usage ?? []

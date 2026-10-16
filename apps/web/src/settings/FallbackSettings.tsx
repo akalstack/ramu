@@ -5,8 +5,25 @@ import { t, useLanguage } from '../i18n'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ArrowDown, ArrowUp, Copy, GripVertical, Plus, Trash2 } from 'lucide-react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { useEffect, useState, type ReactNode } from 'react'
 import type {
   AdvisorPreferences,
   AgentModel,
@@ -138,6 +155,50 @@ function StepPicker({
   )
 }
 
+/** One draggable row of an order list; the grip is the drag handle. */
+function SortableRow({
+  id,
+  index,
+  disabled,
+  children,
+}: {
+  id: string
+  index: number
+  disabled?: boolean
+  children: ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      className="fallback-row [&_.fallback-step-picker]:flex-1 flex items-center gap-2 relative"
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : undefined,
+        zIndex: isDragging ? 1 : undefined,
+      }}
+    >
+      <button
+        type="button"
+        ref={setActivatorNodeRef}
+        className="inline-grid place-items-center w-[18px] h-[22px] flex-none text-muted-foreground cursor-grab touch-none rounded-(--radius-xs) hover:text-foreground hover:bg-hover active:cursor-grabbing disabled:cursor-default"
+        aria-label={t('Drag fallback {0} to reorder', { '0': index + 1 })}
+        title={t('Drag to reorder')}
+        disabled={disabled}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical size={14} />
+      </button>
+      {children}
+    </div>
+  )
+}
+
 /** Models ranked best first: chats use the highest one with room. */
 function OrderEditor({
   title,
@@ -160,6 +221,15 @@ function OrderEditor({
     const [moved] = next.splice(index, 1)
     next.splice(index + delta, 0, moved!)
     onChange(next)
+  }
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+  const drop = (event: DragEndEvent) => {
+    const from = chain.findIndex((step) => step.id === event.active.id),
+      to = chain.findIndex((step) => step.id === event.over?.id)
+    if (from >= 0 && to >= 0 && from !== to) onChange(arrayMove(chain, from, to))
   }
   const add = () => {
     const used = new Set(chain.map((step) => `${step.provider}:${step.model}`))
@@ -191,55 +261,59 @@ function OrderEditor({
           {t('Add at least two models. With one, the chat waits at the limit.')}
         </p>
       )}
-      {chain.map((step, index) => (
-        <div className="fallback-row [&_.fallback-step-picker]:flex-1 flex items-center gap-2" key={step.id}>
-          <span className="settings-step-number w-[18px] flex-none text-muted-foreground text-caption text-center">
-            {index + 1}
-          </span>
-          <StepPicker
-            label={t('Model {0}', { '0': index + 1 })}
-            step={step}
-            disabled={disabled}
-            onChange={(next) => next && onChange(chain.map((entry) => (entry.id === step.id ? next : entry)))}
-          />
-          <UsageHint provider={step.provider} usage={usage} />
-          <span className="settings-step-actions flex gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-              aria-label={t('Move fallback {0} up', { '0': index + 1 })}
-              title={t('Move up')}
-              disabled={disabled || index === 0}
-              onClick={() => move(index, -1)}
-            >
-              <ArrowUp size={13} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-              aria-label={t('Move fallback {0} down', { '0': index + 1 })}
-              title={t('Move down')}
-              disabled={disabled || index === chain.length - 1}
-              onClick={() => move(index, 1)}
-            >
-              <ArrowDown size={13} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-              aria-label={t('Remove fallback {0}', { '0': index + 1 })}
-              title={t('Remove')}
-              disabled={disabled}
-              onClick={() => onChange(chain.filter((entry) => entry.id !== step.id))}
-            >
-              <Trash2 size={13} />
-            </Button>
-          </span>
-        </div>
-      ))}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={drop}>
+        <SortableContext items={chain.map((step) => step.id)} strategy={verticalListSortingStrategy}>
+          {chain.map((step, index) => (
+            <SortableRow key={step.id} id={step.id} index={index} disabled={disabled || chain.length < 2}>
+              <span className="settings-step-number w-[18px] flex-none text-muted-foreground text-caption text-center">
+                {index + 1}
+              </span>
+              <StepPicker
+                label={t('Model {0}', { '0': index + 1 })}
+                step={step}
+                disabled={disabled}
+                onChange={(next) => next && onChange(chain.map((entry) => (entry.id === step.id ? next : entry)))}
+              />
+              <UsageHint provider={step.provider} usage={usage} />
+              <span className="settings-step-actions flex gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
+                  aria-label={t('Move fallback {0} up', { '0': index + 1 })}
+                  title={t('Move up')}
+                  disabled={disabled || index === 0}
+                  onClick={() => move(index, -1)}
+                >
+                  <ArrowUp size={13} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
+                  aria-label={t('Move fallback {0} down', { '0': index + 1 })}
+                  title={t('Move down')}
+                  disabled={disabled || index === chain.length - 1}
+                  onClick={() => move(index, 1)}
+                >
+                  <ArrowDown size={13} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
+                  aria-label={t('Remove fallback {0}', { '0': index + 1 })}
+                  title={t('Remove')}
+                  disabled={disabled}
+                  onClick={() => onChange(chain.filter((entry) => entry.id !== step.id))}
+                >
+                  <Trash2 size={13} />
+                </Button>
+              </span>
+            </SortableRow>
+          ))}
+        </SortableContext>
+      </DndContext>
       <Button
         variant="ghost"
         size="sm"
@@ -310,7 +384,7 @@ export function FallbackSettings({
           onChange={(next) => set({ switchAt: toThreshold(next) })}
         />
       </SettingsRow>
-      <div className="settings-intro">
+      <div className="settings-intro mb-3">
         <h4>{t('Fallback order')}</h4>
         <p className="muted text-muted-foreground small text-caption">
           {t(

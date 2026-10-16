@@ -155,6 +155,8 @@ export interface RamuMethods {
   'updates.check'(): Promise<AppUpdateStatus>
   'updates.download'(): Promise<AppUpdateStatus>
   'updates.restart'(): Promise<void>
+  /** Quits and reopens the desktop app; the background service keeps running. */
+  'app.relaunch'(): void
   /** Chats working or waiting for the user. */
   'agent.counts'(): { running: number; needsInput: number }
   /** Notices waiting on a person, shared by every device paired with this computer. */
@@ -296,6 +298,7 @@ export interface RamuMethods {
   'files.media'(taskId: string, repoId: string, path: string): { mimeType: string; size: number; url: string }
   'files.write'(taskId: string, repoId: string, path: string, content: string, baseHash: string | null): SaveResult
   'git.status'(taskId: string, repoId: string): GitStatus
+  'git.lineStats'(taskId: string, repoId: string): { added: number; removed: number }
   'git.diff'(taskId: string, repoId: string, path: string, staged: boolean | 'all'): DiffContents
   'git.stage'(taskId: string, repoId: string, paths: string[]): void
   'git.unstage'(taskId: string, repoId: string, paths: string[]): void
@@ -408,12 +411,14 @@ export interface RamuMethods {
     context?: FileContext[],
   ): void
   'agent.removeQueued'(sessionId: string, messageId: string): void
+  'agent.reorderQueued'(sessionId: string, order: string[]): void
   'agent.resumeQueue'(sessionId: string): void
   'agent.sendQueuedNow'(sessionId: string, messageId: string): void
   'agent.interrupt'(sessionId: string): void
   /** Opening message for a new chat that continues this one, carrying the transcript as context. */
   'agent.continuationPrompt'(sessionId: string): string
   'agent.stop'(sessionId: string): void
+  'agent.rewind'(sessionId: string, userSeq: number): void
   /** Latest plan usage per provider and window. */
   'usage.get'(): UsageReading[]
   /** Readings for every login of every provider, not just the selected one. */
@@ -484,6 +489,8 @@ export type PushEvents = {
   'notify:inapp': { sessionId: string; taskId: string; kind: 'done' | 'input' | 'failed'; title: string; body: string }
   'notify:open': { sessionId: string; taskId: string }
   'agent:event': { sessionId: string; event: AgentEvent; seq?: number; revision?: number }
+  /** The chat's transcript was cut back: events from `seq` on are gone. */
+  'agent:rewound': { sessionId: string; seq: number }
   'usage:changed': UsageReading[]
   'context:changed': { sessionId: string; context: ContextUsage }
   'aside:changed': { sessionId: string; aside: Aside | null; asideId: string }

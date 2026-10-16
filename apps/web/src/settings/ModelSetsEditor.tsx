@@ -3,7 +3,17 @@ import type { useSettingsScope } from './SettingsScope'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Plus, RotateCcw, Trash2 } from 'lucide-react'
-import { useState, type Dispatch, type SetStateAction } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { ModelPreferences, ModelStep } from '@ramu/shared/types'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
@@ -42,21 +52,14 @@ export function ModelSetsEditor({
         next.defaultStepId = steps[0]!.id
       return next
     })
-  // Drag a step by its grip to reorder; a line shows where it will land.
-  const [dragFrom, setDragFrom] = useState<number | null>(null)
-  const [dropAt, setDropAt] = useState<number | null>(null)
-  const endDrag = () => {
-    setDragFrom(null)
-    setDropAt(null)
-  }
-  const dropStep = () => {
-    if (dragFrom !== null && dropAt !== null) {
-      const steps = [...set.steps],
-        moved = steps.splice(dragFrom, 1)[0]!
-      steps.splice(dropAt > dragFrom ? dropAt - 1 : dropAt, 0, moved)
-      updateSteps(steps)
-    }
-    endDrag()
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+  const dropStep = (event: DragEndEvent) => {
+    const from = set.steps.findIndex((step) => step.id === event.active.id),
+      to = set.steps.findIndex((step) => step.id === event.over?.id)
+    if (from >= 0 && to >= 0 && from !== to) updateSteps(arrayMove(set.steps, from, to))
   }
   const move = (index: number, delta: number) => {
     const steps = [...set.steps]
@@ -175,37 +178,26 @@ export function ModelSetsEditor({
             }
           />
         </label>
-        <div className="settings-steps flex flex-col gap-2">
-          {set.steps.map((step, index) => (
-            <ModelStepCard
-              key={step.id}
-              step={step}
-              index={index}
-              count={set.steps.length}
-              models={models}
-              catalogs={catalogs}
-              busy={busy}
-              dragging={dragFrom === index}
-              dropBefore={dropAt === index}
-              dropAfter={dropAt === set.steps.length && index === set.steps.length - 1}
-              onDragOver={(event) => {
-                if (dragFrom === null) return
-                event.preventDefault()
-                const box = event.currentTarget.getBoundingClientRect()
-                setDropAt(event.clientY < box.top + box.height / 2 ? index : index + 1)
-              }}
-              onDrop={(event) => {
-                event.preventDefault()
-                dropStep()
-              }}
-              onDragEnd={endDrag}
-              onGripDragStart={() => setDragFrom(index)}
-              onMove={(delta) => move(index, delta)}
-              onRemove={() => updateSteps(set.steps.filter((entry) => entry.id !== step.id))}
-              onUpdate={(next) => updateSteps(set.steps.map((entry) => (entry.id === next.id ? next : entry)))}
-            />
-          ))}
-        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropStep}>
+          <SortableContext items={set.steps.map((step) => step.id)} strategy={verticalListSortingStrategy}>
+            <div className="settings-steps flex flex-col gap-2">
+              {set.steps.map((step, index) => (
+                <ModelStepCard
+                  key={step.id}
+                  step={step}
+                  index={index}
+                  count={set.steps.length}
+                  models={models}
+                  catalogs={catalogs}
+                  busy={busy}
+                  onMove={(delta) => move(index, delta)}
+                  onRemove={() => updateSteps(set.steps.filter((entry) => entry.id !== step.id))}
+                  onUpdate={(next) => updateSteps(set.steps.map((entry) => (entry.id === next.id ? next : entry)))}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
         <div className="settings-set-footer [&_>_span]:ml-auto flex items-center gap-2">
           <Button
             variant="ghost"

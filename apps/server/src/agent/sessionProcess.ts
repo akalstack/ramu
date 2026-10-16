@@ -1,7 +1,6 @@
 import { responseInstructions } from '../intelligence'
-import { AcpResumeUnavailable } from '../providers/acp'
 import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
-import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
+import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from './agentRunner'
 import type { AppPreferences, AgentSessionInfo, AgentProvider, Attachment } from '@ramu/shared/types'
 import { goalInstructions } from './goals'
 import type { QueryFn, PendingRequest } from './types'
@@ -10,6 +9,7 @@ import { errorMessage } from './util'
 import { createCanUseTool } from './permissions'
 import { claudeLaunchOptions } from './claudeOptions'
 import { sessionGuidance } from './guidance'
+import { usesRamuQuestions } from './nativeFeatures'
 import { conversationHandoff } from './handoff'
 import { isUsageLimit } from './usageLimit'
 import type { AdvisorService } from './advisorService'
@@ -31,7 +31,7 @@ import type { Db } from '../db'
 /** What SessionProcess needs from the rest of the service. */
 export interface SessionProcessHost
   extends
-    Pick<AdvisorService, 'advisorOn' | 'advisorStep'>,
+    Pick<AdvisorService, 'advisorStep' | 'claudeAdvisorModel'>,
     Pick<ContextUsageTracker, 'refreshContext' | 'setContext' | 'usageReader'>,
     Pick<MessageDispatcher, 'pauseQueue' | 'steering'>,
     Pick<GoalManager, 'controlGoal' | 'getGoal' | 'goalPreferences' | 'saveGoal' | 'setGoal'>,
@@ -83,7 +83,7 @@ export class SessionProcess {
     const prefs = this.host.preferences()
     if (s.parentId || !prefs || !this.host.runners.has(id) || this.host.hasRunningTasks(id)) return
     if (isAcpProvider(s.provider) || s.provider === 'claude-code') {
-      // OpenCode's tool permission and the Cursor/Antigravity guidance are fixed when the runtime starts; it resumes the same session.
+      // Sub-agent switches for OpenCode, Cursor and Antigravity are fixed when the runner starts; it resumes the same session.
       if (!this.nativeOffAtLaunch.has(id) || this.host.nativeSubagentsOff(s) === this.nativeOffAtLaunch.get(id)) return
     } else {
       if (s.provider !== 'codex') return
@@ -128,19 +128,25 @@ export class SessionProcess {
     const connection = this.host.toolConnection()?.(s)
     if (connection) {
       connection.instructions = sessionGuidance({
-        asyncQuestions: this.host.preferences()?.asyncQuestions !== false,
+        questions: !usesRamuQuestions(this.host.preferences(), s)
+          ? 'native'
+          : this.host.preferences()?.asyncQuestions !== false
+            ? 'async'
+            : 'blocking',
         background: (this.host.preferences()?.autoBackgroundSeconds ?? 1) !== 0,
         advisor: !!this.host.advisorStep(id),
         goal: !s.parentId ? goalInstructions(this.host.goalPreferences(), this.host.getGoal(id)) : null,
         nativeSubagentNote:
-          (s.provider === 'cursor' || s.provider === 'antigravity') && this.host.nativeSubagentsOff(s),
+          // Antigravity's sub-agent tool cannot be switched off; Cursor's and OpenCode's are, at launch.
+          s.provider === 'antigravity' && this.host.nativeSubagentsOff(s),
         memory: this.host.memoryInstructions()?.(s),
         toolSearch: this.host.preferences()?.intelligence?.toolSearch !== false,
         learning: this.host.learningInstructions()?.(s),
       })
     }
     if (connection && this.host.nativeSubagentsOff(s)) connection.nativeSubagents = false
-    if (connection && s.provider === 'claude-code' && this.host.advisorOn()) connection.replaceAdvisor = true
+    if (connection && s.provider === 'claude-code' && this.host.claudeAdvisorModel(id) === '')
+      connection.replaceAdvisor = true
     if ((isAcpProvider(s.provider) || s.provider === 'claude-code') && connection && !s.parentId)
       this.nativeOffAtLaunch.set(id, connection.nativeSubagents === false)
     const request = explicitGoal ? prompt.replace(/^\s*\/goal\s+/, 'Work toward this Ramu goal: ') : prompt
@@ -210,7 +216,7 @@ export class SessionProcess {
           if (this.host.runners.get(id) !== runner) return
           this.halt(id)
           // A runtime that cannot continue its saved session still gets the whole conversation, as when switching providers.
-          if (e instanceof AcpResumeUnavailable && resume && !this.host.shutdown()) {
+          if (e instanceof ResumeUnavailable && resume && !this.host.shutdown()) {
             await this.host.draining.get(id)
             this.db.prepare('UPDATE agent_sessions SET provider_session_id = NULL WHERE id = ?').run(id)
             this.host.record(id, {
@@ -245,7 +251,7 @@ export class SessionProcess {
       options: claudeLaunchOptions({
         session: s,
         connection,
-        advisorOn: this.host.advisorOn(),
+        advisorModel: this.host.claudeAdvisorModel(id),
         abort,
         canUseTool,
         resume,

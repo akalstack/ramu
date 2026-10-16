@@ -1,41 +1,34 @@
 import { Input } from '@/components/ui/input'
 import { t } from '../../i18n'
 import { Dialog } from '../../Menu'
-import { commitActionLabel } from './helpers'
 import type { Confirmation } from './types'
 
 function confirmTitle(confirmation: Confirmation) {
-  return confirmation.kind === 'smart-commit'
-    ? t('Stage all changes and commit?')
-    : confirmation.kind === 'discard'
-      ? t('Discard changes?')
-      : confirmation.kind === 'undo'
-        ? t('Undo last commit?')
-        : confirmation.kind === 'branch'
-          ? t('Create branch')
-          : confirmation.kind === 'stash'
-            ? confirmation.staged
-              ? t('Stash staged changes')
-              : t('Stash changes')
-            : confirmation.kind === 'delete-branch'
-              ? t('Delete branch?')
-              : t('Delete stash?')
+  return confirmation.kind === 'discard'
+    ? t('Discard changes?')
+    : confirmation.kind === 'undo'
+      ? t('Undo last commit?')
+      : confirmation.kind === 'branch'
+        ? t('Create branch')
+        : confirmation.kind === 'stash'
+          ? confirmation.staged
+            ? t('Stash staged changes')
+            : t('Stash changes')
+          : confirmation.kind === 'delete-branch'
+            ? t('Delete branch?')
+            : t('Delete stash?')
 }
 
 function confirmLabel(confirmation: Confirmation) {
-  return confirmation.kind === 'smart-commit'
-    ? confirmation.action === 'commit'
-      ? t('Stage all and commit')
-      : commitActionLabel(confirmation.action)
-    : confirmation.kind === 'discard'
-      ? t('Discard changes')
-      : confirmation.kind === 'undo'
-        ? t('Undo commit')
-        : confirmation.kind === 'branch'
-          ? t('Create branch')
-          : confirmation.kind === 'stash'
-            ? t('Stash')
-            : t('Delete')
+  return confirmation.kind === 'discard'
+    ? t('Discard changes')
+    : confirmation.kind === 'undo'
+      ? t('Undo commit')
+      : confirmation.kind === 'branch'
+        ? t('Create branch')
+        : confirmation.kind === 'stash'
+          ? t('Stash')
+          : t('Delete')
 }
 
 /** Confirmation (and name prompt for branches and stashes) for destructive or multi-step repository actions. */
@@ -65,9 +58,7 @@ export function ConfirmationDialog({
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
-      {confirmation.kind === 'smart-commit' ? (
-        <p>{t('No changes are staged. All unstaged changes in this repository will be staged and committed.')}</p>
-      ) : confirmation.kind === 'discard' ? (
+      {confirmation.kind === 'discard' ? (
         <>
           <p>
             {t(

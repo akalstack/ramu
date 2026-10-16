@@ -30,7 +30,6 @@ export function CommitBox({
   onDraft,
   onGenerate,
   commit,
-  onSmartCommit,
   onSync,
   reportError,
 }: {
@@ -48,8 +47,6 @@ export function CommitBox({
   onDraft: (draft: CommitDraft | null) => void
   onGenerate: () => void
   commit: CommitFn
-  /** Asks to stage everything first when a commit is requested with nothing staged. */
-  onSmartCommit: (action: CommitAction) => void
   onSync: () => void
   reportError: (message: string) => void
 }) {
@@ -61,8 +58,8 @@ export function CommitBox({
     canCommit && (action === 'commit' || (!!status?.branch && !!status.remote && !status.operation))
   const requestCommit = (action: CommitAction = commitAction) => {
     if (!canRunCommit(action)) return
-    if (!stagedCount && !preferences.combineGitChanges) onSmartCommit(action)
-    else void commit(action).catch((reason) => reportError(errorText(reason)))
+    // Nothing staged: the commit takes every change (see useCommitFlow).
+    void commit(action).catch((reason) => reportError(errorText(reason)))
   }
   const selectCommitAction = (action: CommitAction) => {
     void (async () => {
@@ -103,15 +100,11 @@ export function CommitBox({
           variant="ghost"
           size="icon-xs"
           className={`${ICON_BUTTON} commit-ai absolute right-1.5 top-1.5`}
-          title={t(
-            preferences.combineGitChanges
-              ? 'Draft a commit message from all changes'
-              : 'Draft a commit message from staged changes',
-          )}
-          aria-label={t('AI commit message for {0}', { '0': repoName })}
-          disabled={
-            busy || generating || !(stagedCount || (preferences.combineGitChanges && unstagedCount)) || !!conflictCount
+          title={
+            stagedCount ? t('Draft a commit message from staged changes') : t('Draft a commit message from all changes')
           }
+          aria-label={t('AI commit message for {0}', { '0': repoName })}
+          disabled={busy || generating || !(stagedCount || unstagedCount) || !!conflictCount}
           onClick={onGenerate}
         >
           <Sparkles
@@ -132,26 +125,39 @@ export function CommitBox({
           <Button
             variant="default"
             size="sm"
-            className="scm-commit bg-primary text-primary-foreground border-transparent font-semibold hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
+            className="scm-commit primary bg-primary! text-primary-foreground! border-transparent font-semibold hover:bg-primary-hover! disabled:opacity-50"
             aria-label={commitLabel}
             disabled={!canRunCommit(commitAction)}
             title={
-              !stagedCount && !preferences.combineGitChanges
-                ? t('Stage all changes and commit?')
-                : message.trim()
-                  ? undefined
-                  : t('Drafts a message with AI, then commits')
+              !canRunCommit(commitAction)
+                ? loading
+                  ? t('Loading changes…')
+                  : conflictCount
+                    ? t('Resolve the conflicts first')
+                    : !stagedCount && !unstagedCount
+                      ? t('There is nothing to commit.')
+                      : commitAction !== 'commit' && !(status?.branch && status.remote)
+                        ? t('This repository has no branch with a remote.')
+                        : status?.operation
+                          ? t('Finish the {0} in progress first', { '0': status.operation })
+                          : undefined
+                : stagedCount
+                  ? t('Commits the {0} staged files', { '0': stagedCount })
+                  : t('Nothing is staged, so every change is committed')
             }
             onClick={() => requestCommit()}
           >
             <Check size={14} />
             {generating ? t('Drafting message…') : busy ? t('Working…') : commitLabel}
+            {!generating && !busy && !stagedCount && unstagedCount > 0 && (
+              <span className="font-normal opacity-80">{t('all {0}', { '0': unstagedCount })}</span>
+            )}
           </Button>
           <Menu
             disabled={!canRunCommit(commitAction)}
             label={t('Commit options')}
             icon={<ChevronDown size={14} />}
-            className="scm-commit-menu bg-primary text-primary-foreground border-transparent border-l border-l-primary-foreground/25 hover:bg-primary-hover aria-expanded:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
+            className="scm-commit-menu bg-primary! text-primary-foreground! border-transparent border-l border-l-primary-foreground/25 hover:bg-primary-hover! aria-expanded:bg-primary-hover! disabled:opacity-50"
             align="end"
             items={[
               {
@@ -163,7 +169,7 @@ export function CommitBox({
               {
                 key: 'new-branch',
                 label: t('Commit on new branch'),
-                disabled: !canCommit || (!stagedCount && !preferences.combineGitChanges) || !!status?.operation,
+                disabled: !canCommit || !!status?.operation,
                 onSelect: () => void commit('new-branch').catch((reason) => reportError(errorText(reason))),
               },
               {

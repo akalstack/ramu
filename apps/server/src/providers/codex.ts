@@ -1,15 +1,23 @@
+import { elicitationRequest, elicitationContent } from '../agent/elicitation'
+import { attachmentPrompt } from '../attachments'
 import { agentContent } from '@ramu/shared/chat/agentContent'
 import { toolDescription, toolInput } from './acpEvents'
 // Codex's local app-server protocol, using the user's existing CLI login.
+import { randomUUID } from 'node:crypto'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { createInterface } from 'node:readline'
 import type {
   UsageReading,
+  Attachment,
   AgentEvent,
+  AgentElicitation,
+  ElicitationAction,
   AgentContent,
   AgentModel,
+  AgentScope,
+  AgentSettings,
   AgentSessionInfo,
   AgentTask,
   McpConnection,
@@ -159,6 +167,586 @@ export async function codexUsage(accountId?: string): Promise<UsageReading[]> {
     return codexReadings((await rpc.request('account/rateLimits/read', {})).rateLimits)
   } finally {
     await rpc.close()
+  }
+}
+
+// Compatibility aliases for existing Codex factories.
+export type { AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
+import type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
+
+export const createCodexRunner: CodexFactory = (scope, settings, emit, readOnly) =>
+  new CodexSession(scope, settings, emit, readOnly)
+class CodexSession implements CodexRunner {
+  private readonly requestScope = randomUUID()
+  private rpc!: CodexRpc
+  private connection?: McpConnection
+  private threadId = ''
+  private turnId = ''
+  private readonly completedTurns = new Set<string>()
+  private readonly compactedItems = new Set<string>()
+  private modernCompactionTurn = ''
+  private legacyCompactionTurn = ''
+  private stopped = false
+  private limit = false
+  private readonly toolOutput = new Map<string, string>()
+  private readonly toolPatches = new Map<string, Wire[]>()
+  private readonly completedTools = new Set<string>()
+  private readonly messages = new Map<string, string>()
+  private readonly thoughts = new Map<string, string>()
+  /** Sub-agent threads this thread spawned, so their events can be shown as theirs. */
+  private readonly agents = new Set<string>()
+  private readonly pending = new Map<
+    string,
+    { id: number | string; questions?: Wire[]; permissions?: Wire; elicitation?: AgentElicitation }
+  >()
+  constructor(
+    private readonly scope: AgentScope,
+    private readonly settings: AgentSettings,
+    private readonly emit: (event: AgentEvent, usageLimit?: boolean) => void,
+    private readonly readOnly = false,
+  ) {}
+  setTools(connection: McpConnection): void {
+    this.connection = connection
+  }
+  private policies() {
+    if (this.readOnly) return { approvalPolicy: 'never', sandboxPolicy: { type: 'readOnly' } }
+    return this.settings.access === 'full'
+      ? { approvalPolicy: 'never', sandboxPolicy: { type: 'dangerFullAccess' } }
+      : {
+          approvalPolicy: this.settings.access === 'auto' ? 'on-request' : 'untrusted',
+          sandboxPolicy: {
+            type: 'workspaceWrite',
+            writableRoots: [this.scope.cwd, ...this.scope.additionalDirs],
+            networkAccess: false,
+          },
+        }
+  }
+  async start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void> {
+    this.rpc = new CodexRpc(
+      this.connection,
+      this.connection?.interceptSubagents ? [CODEX_HOOK_CONFIG] : [],
+      this.settings.accountId ?? 'default',
+    )
+    this.rpc.onMessage = (m) => this.handle(m)
+    this.rpc.onExit = (e) => {
+      if (!this.stopped) {
+        this.emit({ kind: 'error', message: e.message })
+        this.emit({ kind: 'state', state: 'failed' })
+      }
+    }
+    await this.rpc.initialize()
+    // The first reading, before any turn has run; failures only mean no gauge yet.
+    void this.rpc.request('account/rateLimits/read', {}).then(
+      (result) => this.reportUsage(result.rateLimits),
+      () => {},
+    )
+    const full = this.settings.access === 'full'
+    const result = await this.rpc.request(resume ? 'thread/resume' : 'thread/start', {
+      ...(resume ? { threadId: resume } : {}),
+      cwd: this.scope.cwd,
+      ...(!resume && this.readOnly ? { ephemeral: true } : {}),
+      ...(this.settings.model ? { model: this.settings.model } : {}),
+      ...(this.connection?.instructions ? { developerInstructions: this.connection.instructions } : {}),
+      serviceTier: this.settings.serviceTier === 'fast' ? 'fast' : 'default',
+      ...(this.settings.serviceTier === 'fast' ? { config: { 'features.fast_mode': true } } : {}),
+      approvalPolicy: this.policies().approvalPolicy,
+      sandbox: this.readOnly ? 'read-only' : full ? 'danger-full-access' : 'workspace-write',
+    })
+    this.threadId = result.thread.id
+    this.emit({
+      kind: 'init',
+      model: result.model || this.settings.model || 'Codex default',
+      cwd: this.scope.cwd,
+      providerSessionId: this.threadId,
+    })
+    await this.send(prompt, attachments)
+  }
+  async send(prompt: string, attachments?: Attachment[]): Promise<void> {
+    if (this.turnId) throw new Error('Wait for the current turn to finish, or interrupt it first.')
+    this.limit = false
+    const result = await this.rpc.request('turn/start', {
+      threadId: this.threadId,
+      input: [
+        { type: 'text', text: attachmentPrompt(prompt, attachments) },
+        ...(attachments ?? [])
+          .filter((file) => file.mimeType.startsWith('image/'))
+          .map((file) => ({ type: 'localImage', path: file.path })),
+      ],
+      cwd: this.scope.cwd,
+      ...this.policies(),
+      ...(this.settings.model ? { model: this.settings.model } : {}),
+      ...(this.settings.effort ? { effort: this.settings.effort } : {}),
+      serviceTier: this.settings.serviceTier === 'fast' ? 'fast' : 'default',
+    })
+    this.turnId = this.completedTurns.has(result.turn.id) ? '' : result.turn.id
+  }
+  async steer(prompt: string, attachments?: Attachment[]): Promise<void> {
+    if (!this.turnId) throw new Error('The turn has finished. Send the message again.')
+    await this.rpc.request('turn/steer', {
+      threadId: this.threadId,
+      expectedTurnId: this.turnId,
+      input: [
+        { type: 'text', text: attachmentPrompt(prompt, attachments) },
+        ...(attachments ?? [])
+          .filter((file) => file.mimeType.startsWith('image/'))
+          .map((file) => ({ type: 'localImage', path: file.path })),
+      ],
+    })
+  }
+  async interrupt(): Promise<void> {
+    for (const [id, request] of this.pending) if (request.elicitation) this.replyElicitation(id, 'cancel', {})
+    if (this.turnId) await this.rpc.request('turn/interrupt', { threadId: this.threadId, turnId: this.turnId })
+  }
+  async stop(): Promise<void> {
+    this.stopped = true
+    for (const [id, req] of this.pending) {
+      if (req.elicitation) this.rpc.write({ id: req.id, result: { action: 'cancel', content: null, _meta: null } })
+      this.emit({ kind: 'request-resolved', requestId: id, outcome: 'cancelled' })
+    }
+    this.pending.clear()
+    await this.rpc?.close()
+  }
+  replyPermission(id: string, allow: boolean): void {
+    const req = this.pending.get(id)
+    if (!req || req.questions || req.elicitation) throw new Error('That request is no longer pending')
+    this.pending.delete(id)
+    this.rpc.write({
+      id: req.id,
+      result: req.permissions
+        ? { permissions: allow ? req.permissions : {}, scope: 'turn' }
+        : { decision: allow ? 'accept' : 'decline' },
+    })
+    this.emit({ kind: 'request-resolved', requestId: id, outcome: allow ? 'allowed' : 'denied' })
+    if (!this.pending.size) this.emit({ kind: 'state', state: 'running' })
+  }
+  replyQuestion(id: string, answers: Record<string, string>): void {
+    const req = this.pending.get(id)
+    if (!req?.questions) throw new Error('That request is no longer pending')
+    this.pending.delete(id)
+    this.rpc.write({
+      id: req.id,
+      result: {
+        answers: Object.fromEntries(
+          req.questions.map((q) => [q.id, { answers: [answers[q.id] ?? answers[q.question] ?? ''] }]),
+        ),
+      },
+    })
+    this.emit({ kind: 'request-resolved', requestId: id, outcome: 'answered' })
+    if (!this.pending.size) this.emit({ kind: 'state', state: 'running' })
+  }
+  replyElicitation(id: string, action: ElicitationAction, answers: Record<string, string>): void {
+    const req = this.pending.get(id)
+    if (!req?.elicitation) throw new Error('That input request is no longer pending.')
+    const content = action === 'accept' ? elicitationContent(req.elicitation, answers) : null
+    this.rpc.write({ id: req.id, result: { action, content, _meta: null } })
+    this.pending.delete(id)
+    this.emit({
+      kind: 'request-resolved',
+      requestId: id,
+      outcome: action === 'accept' ? 'answered' : action === 'decline' ? 'declined' : 'cancelled',
+    })
+    if (!this.pending.size) this.emit({ kind: 'state', state: this.turnId ? 'running' : 'idle' })
+  }
+  private reportUsage(snapshot: Wire | undefined): void {
+    const readings = codexReadings(snapshot).map((reading) => ({
+      ...reading,
+      ...(this.settings.accountId && this.settings.accountId !== 'default'
+        ? { accountId: this.settings.accountId }
+        : {}),
+    }))
+    if (readings.length) this.emit({ kind: 'usage', readings })
+  }
+
+  /** A collab tool call names the sub-agent threads it touched and their states. */
+  private trackAgents(item: Wire): void {
+    const ids: string[] = Array.isArray(item.receiverThreadIds)
+      ? item.receiverThreadIds.filter((value: unknown) => typeof value === 'string')
+      : []
+    const states: Wire = item.agentsStates ?? {}
+    for (const threadId of ids) {
+      const known = this.agents.has(threadId)
+      this.agents.add(threadId)
+      const state = Array.isArray(states)
+        ? states.find((entry: Wire) => entry?.threadId === threadId || entry?.id === threadId)
+        : states[threadId]
+      const spawning = item.tool === 'spawnAgent'
+      if (!known || state !== undefined)
+        this.emit({
+          kind: 'agent',
+          agentId: threadId,
+          ...(!known ? { toolUseId: item.id } : {}),
+          name: String(
+            state?.nickname ??
+              state?.agentNickname ??
+              (known ? '' : item.prompt ? String(item.prompt).split('\n')[0]!.slice(0, 80) : 'Sub-agent'),
+          ),
+          ...((state?.role ?? state?.agentRole) ? { agentType: String(state.role ?? state.agentRole) } : {}),
+          ...(!known && item.model ? { model: String(item.model) } : {}),
+          ...(!known && item.reasoningEffort ? { effort: item.reasoningEffort } : {}),
+          status:
+            state !== undefined
+              ? codexAgentStatus(state?.status ?? state)
+              : spawning && item.status === 'failed'
+                ? 'failed'
+                : 'running',
+          ...(item.prompt && spawning ? { prompt: String(item.prompt) } : {}),
+          ...(!known ? { startedAt: Date.now() } : {}),
+          ...(state?.message ? { summary: String(state.message) } : {}),
+          address: threadId,
+          canStop: true,
+          canMessage: true,
+          recovered: false,
+          recoveryError: '',
+        })
+    }
+  }
+
+  private toolKey(threadId: string, itemId: string): string {
+    return `${threadId}:${itemId}`
+  }
+  private toolId(threadId: string, itemId: string): string {
+    return threadId === this.threadId ? itemId : this.toolKey(threadId, itemId)
+  }
+
+  private liveTool(threadId: string, method: string, p: Wire): boolean {
+    const tag = threadId === this.threadId ? {} : { agentId: threadId }
+    if (method === 'turn/diff/updated') {
+      if (typeof p.turnId === 'string' && typeof p.diff === 'string')
+        this.emit({
+          kind: 'turn-diff',
+          turnId: this.toolKey(threadId, p.turnId),
+          diff: p.diff.slice(0, 256_000),
+          ...tag,
+        })
+      return true
+    }
+    if (method !== 'item/commandExecution/outputDelta' && method !== 'item/fileChange/patchUpdated') return false
+    if (typeof p.itemId !== 'string') return true
+    const key = this.toolKey(threadId, p.itemId)
+    if (this.completedTools.has(key)) return true
+    let summary: string
+    if (method === 'item/commandExecution/outputDelta') {
+      if (typeof p.delta !== 'string') return true
+      summary = ((this.toolOutput.get(key) ?? '') + p.delta).slice(-64_000)
+      this.toolOutput.set(key, summary)
+    } else {
+      if (!Array.isArray(p.changes)) return true
+      this.toolPatches.set(key, p.changes)
+      summary = patchSummary(p.changes)
+    }
+    this.emit({
+      kind: 'tool-result',
+      toolUseId: this.toolId(threadId, p.itemId),
+      isError: false,
+      summary,
+      running: true,
+      ...tag,
+    })
+    return true
+  }
+
+  private toolResult(threadId: string, item: Wire): string {
+    const key = this.toolKey(threadId, item.id)
+    const summary =
+      item.type === 'commandExecution'
+        ? String(item.aggregatedOutput ?? this.toolOutput.get(key) ?? '').slice(-64_000)
+        : item.type === 'fileChange'
+          ? patchSummary(item.changes ?? this.toolPatches.get(key) ?? [])
+          : JSON.stringify(item.result ?? '')
+    this.toolOutput.delete(key)
+    this.toolPatches.delete(key)
+    this.completedTools.add(key)
+    if (this.completedTools.size > 512) this.completedTools.delete(this.completedTools.values().next().value!)
+    return summary
+  }
+
+  /** Output from a sub-agent's own thread, marked as that agent's. Agent updates leave `name` empty to keep the recorded one. */
+  private handleAgent(threadId: string, method: string, p: Wire): void {
+    const tag = { agentId: threadId }
+    if (this.liveTool(threadId, method, p)) return
+    if (method === 'turn/started') this.emit({ kind: 'agent', agentId: threadId, name: '', status: 'running' })
+    if (method === 'turn/completed')
+      this.emit({
+        kind: 'agent',
+        agentId: threadId,
+        name: '',
+        status: p.turn?.status === 'failed' ? 'failed' : p.turn?.status === 'interrupted' ? 'stopped' : 'completed',
+        endedAt: Date.now(),
+        ...(p.turn?.error?.message ? { error: String(p.turn.error.message) } : {}),
+      })
+    if (method === 'item/agentMessage/delta') {
+      const key = `${threadId}:${p.itemId}`,
+        text = (this.messages.get(key) || '') + (p.delta || '')
+      this.messages.set(key, text)
+      this.emit({ kind: 'text', text, messageId: key, ...tag })
+    }
+    if (method !== 'item/started' && method !== 'item/completed') return
+    const item = p.item ?? {},
+      complete = method === 'item/completed'
+    if (item.type === 'agentMessage' && complete && item.text) {
+      this.messages.delete(`${threadId}:${item.id}`)
+      this.emit({ kind: 'text', text: item.text, messageId: `${threadId}:${item.id}`, ...tag })
+    }
+    const extra = toolOfOtherItem(item)
+    if (extra)
+      this.emit(
+        complete
+          ? {
+              kind: 'tool-result',
+              toolUseId: this.toolId(threadId, item.id),
+              isError: item.status === 'failed',
+              summary: extra.result,
+              content: extra.content,
+              ...tag,
+            }
+          : {
+              kind: 'tool-use',
+              toolUseId: this.toolId(threadId, item.id),
+              name: extra.name,
+              summary: extra.summary,
+              title: extra.title,
+              content: extra.content,
+              ...tag,
+            },
+      )
+    if (item.type === 'commandExecution' || item.type === 'fileChange' || item.type === 'mcpToolCall') {
+      if (!complete)
+        this.emit({
+          kind: 'tool-use',
+          toolUseId: this.toolId(threadId, item.id),
+          name: item.type === 'commandExecution' ? 'Bash' : item.type === 'fileChange' ? 'Edit' : item.tool || 'Tool',
+          summary: item.command || (item.changes ?? []).map((c: Wire) => c.path).join(', ') || item.server || '',
+          title: typeof item.description === 'string' ? item.description : toolDescription(item.arguments),
+          input: toolInput(item.arguments ?? item.command),
+          ...tag,
+        })
+      else
+        this.emit({
+          kind: 'tool-result',
+          toolUseId: this.toolId(threadId, item.id),
+          isError: item.status === 'failed' || (item.exitCode != null && item.exitCode !== 0),
+          summary: this.toolResult(threadId, item),
+          ...tag,
+        })
+    }
+  }
+
+  restoreAgent(threadId: string, turns: Wire[]): void {
+    for (const turn of turns)
+      for (const item of turn.items ?? []) {
+        this.handleAgent(threadId, 'item/started', { item })
+        if (item.type === 'agentMessage' || !['inProgress', 'running'].includes(item.status))
+          this.handleAgent(threadId, 'item/completed', { item })
+      }
+  }
+
+  private handle(m: Wire): void {
+    if (this.stopped || !m.method) return
+    const p = m.params ?? {}
+    const sub = !!p.threadId && !!this.threadId && p.threadId !== this.threadId
+    if (
+      m.method === 'item/reasoning/summaryTextDelta' &&
+      typeof p.itemId === 'string' &&
+      typeof p.delta === 'string' &&
+      (!sub || this.agents.has(p.threadId))
+    ) {
+      const key = `${p.threadId ?? this.threadId}:${p.itemId}`
+      const text = (this.thoughts.get(key) ?? '') + p.delta
+      this.thoughts.set(key, text)
+      this.emit({
+        kind: 'thinking',
+        text,
+        messageId: this.toolId(p.threadId ?? this.threadId, p.itemId),
+        ...(sub ? { agentId: p.threadId } : {}),
+      })
+      return
+    }
+    // Requests from a sub-agent thread need an answer like any other, or that agent waits forever.
+    if (sub && m.id === undefined) {
+      if (this.agents.has(p.threadId)) this.handleAgent(p.threadId, m.method, p)
+      return
+    }
+    if (m.id !== undefined) {
+      const id = String(m.id)
+      if (m.method === 'item/commandExecution/requestApproval' || m.method === 'item/fileChange/requestApproval') {
+        this.pending.set(id, { id: m.id })
+        this.emit({
+          kind: 'permission-request',
+          requestId: id,
+          toolName: m.method.includes('commandExecution') ? 'Bash' : 'Edit',
+          title: m.method.includes('commandExecution') ? 'Allow command?' : 'Allow file changes?',
+          detail: [p.command, p.reason].filter(Boolean).join('\n'),
+        })
+        this.emit({ kind: 'state', state: 'needs-input' })
+      } else if (m.method === 'item/permissions/requestApproval') {
+        this.pending.set(id, { id: m.id, permissions: p.permissions })
+        this.emit({
+          kind: 'permission-request',
+          requestId: id,
+          toolName: 'Permissions',
+          title: 'Allow additional access?',
+          detail: [p.reason, JSON.stringify(p.permissions, null, 2)].filter(Boolean).join('\n'),
+        })
+        this.emit({ kind: 'state', state: 'needs-input' })
+      } else if (m.method === 'item/tool/requestUserInput') {
+        this.pending.set(id, { id: m.id, questions: p.questions })
+        this.emit({
+          kind: 'question',
+          requestId: id,
+          questions: (p.questions ?? []).map((q: Wire) => ({
+            id: q.id,
+            question: q.question,
+            header: q.header,
+            multiSelect: false,
+            options: q.options ?? [],
+          })),
+        })
+        this.emit({ kind: 'state', state: 'needs-input' })
+      } else if (m.method === 'mcpServer/elicitation/request') {
+        try {
+          const requestId = `mcp:${this.requestScope}:${id}`
+          const request = elicitationRequest(requestId, p)
+          this.pending.set(requestId, { id: m.id, elicitation: request })
+          this.emit({ kind: 'elicitation', ...request })
+          this.emit({ kind: 'state', state: 'needs-input' })
+        } catch (error) {
+          this.rpc.write({ id: m.id, result: { action: 'cancel', content: null, _meta: null } })
+          this.emit({
+            kind: 'error',
+            message: `Could not display ${p.serverName ?? 'MCP server'} input request: ${String(error)}`,
+          })
+        }
+      } else this.rpc.write({ id: m.id, error: { code: -32601, message: `Ramu does not support ${m.method}` } })
+      return
+    }
+    if (this.liveTool(this.threadId, m.method, p)) return
+    if (m.method === 'account/rateLimits/updated') this.reportUsage(p.rateLimits)
+    if (m.method === 'thread/tokenUsage/updated') {
+      const context = codexContext(p.tokenUsage)
+      if (context) this.emit({ kind: 'context', ...context })
+    }
+    if (m.method === 'turn/started') {
+      this.turnId = p.turn.id
+      this.emit({ kind: 'state', state: 'running' })
+    }
+    if (
+      m.method === 'thread/compacted' &&
+      p.turnId !== this.modernCompactionTurn &&
+      p.turnId !== this.legacyCompactionTurn
+    ) {
+      this.legacyCompactionTurn = p.turnId
+      this.emit({ kind: 'compaction', state: 'completed' })
+    }
+    if (m.method === 'error') {
+      const info = JSON.stringify(p.error?.codexErrorInfo ?? '')
+      this.limit ||= /usageLimitExceeded|rateLimitExceeded/i.test(info)
+      if (!p.willRetry) this.emit({ kind: 'error', message: p.error?.message || 'Codex failed' }, this.limit)
+    }
+    if (m.method === 'item/agentMessage/delta') {
+      const text = (this.messages.get(p.itemId) || '') + (p.delta || '')
+      this.messages.set(p.itemId, text)
+      this.emit({ kind: 'text', text, messageId: p.itemId })
+    }
+    if (m.method === 'item/started' || m.method === 'item/completed') {
+      const item = p.item ?? {}
+      const complete = m.method === 'item/completed'
+      if (item.type === 'agentMessage' && item.delivery === 'async' && item.questions?.length && complete) {
+        this.messages.delete(item.id)
+        this.emit({
+          kind: 'question',
+          requestId: `async:${this.threadId}:${item.id}`,
+          responseMode: 'message',
+          grouping: 'together',
+          questions: item.questions.map((q: Wire, index: number) => ({
+            id: String(index),
+            question: q.title,
+            header: 'Question',
+            multiSelect: false,
+            options: (q.options ?? []).map((label: string) => ({ label, description: '' })),
+          })),
+        })
+        return
+      }
+      if (item.type === 'contextCompaction') {
+        if (!complete) this.emit({ kind: 'compaction', state: 'started' })
+        else if (!this.compactedItems.has(item.id)) {
+          this.compactedItems.add(item.id)
+          if (this.compactedItems.size > 100) this.compactedItems.delete(this.compactedItems.values().next().value!)
+          this.modernCompactionTurn = p.turnId || this.turnId
+          if (this.modernCompactionTurn !== this.legacyCompactionTurn)
+            this.emit({ kind: 'compaction', state: 'completed' })
+        }
+      }
+      if (item.type === 'agentMessage' && complete && item.text)
+        this.emit({ kind: 'text', text: item.text, messageId: item.id })
+      if (item.type === 'reasoning' && complete) {
+        const text = (Array.isArray(item.summary) ? item.summary : [])
+          .filter((part: unknown) => typeof part === 'string' && part.trim())
+          .join('\n\n')
+        if (text) this.emit({ kind: 'thinking', text, messageId: item.id })
+      }
+      // Web searches, page opens and image views are tool calls too; without them a research turn looks like silence.
+      if (item.type === 'collabAgentToolCall') this.trackAgents(item)
+      const extra = toolOfOtherItem(item)
+      if (extra) {
+        if (!complete)
+          this.emit({
+            kind: 'tool-use',
+            toolUseId: item.id,
+            name: extra.name,
+            summary: extra.summary,
+            title: extra.title,
+            content: extra.content,
+          })
+        else
+          this.emit({
+            kind: 'tool-result',
+            toolUseId: item.id,
+            isError: item.status === 'failed',
+            summary: extra.result,
+            content: extra.content,
+          })
+      }
+      if (item.type === 'commandExecution' || item.type === 'fileChange' || item.type === 'mcpToolCall') {
+        if (!complete)
+          this.emit({
+            kind: 'tool-use',
+            toolUseId: item.id,
+            name: item.type === 'commandExecution' ? 'Bash' : item.type === 'fileChange' ? 'Edit' : item.tool || 'Tool',
+            summary: item.command || (item.changes ?? []).map((c: Wire) => c.path).join(', ') || item.server || '',
+            title: typeof item.description === 'string' ? item.description : toolDescription(item.arguments),
+            input: toolInput(item.arguments ?? item.command),
+          })
+        else
+          this.emit({
+            kind: 'tool-result',
+            toolUseId: item.id,
+            isError: item.status === 'failed' || (item.exitCode != null && item.exitCode !== 0),
+            summary: this.toolResult(this.threadId, item),
+            ...(Array.isArray(item.result?.content) ? { content: agentContent(item.result.content) } : {}),
+          })
+      }
+    }
+    if (m.method === 'serverRequest/resolved') {
+      const id =
+        [...this.pending].find(([, request]) => String(request.id) === String(p.requestId))?.[0] ?? String(p.requestId)
+      if (this.pending.delete(id)) {
+        this.emit({ kind: 'request-resolved', requestId: id, outcome: 'cancelled' })
+        if (!this.pending.size) this.emit({ kind: 'state', state: this.turnId ? 'running' : 'idle' })
+      }
+    }
+    if (m.method === 'turn/completed') {
+      this.completedTurns.add(p.turn.id)
+      if (this.completedTurns.size > 100) this.completedTurns.delete(this.completedTurns.values().next().value!)
+      this.turnId = ''
+      const error = p.turn.error
+      this.limit ||= /usageLimitExceeded|rateLimitExceeded/i.test(JSON.stringify(error?.codexErrorInfo ?? ''))
+      this.emit(
+        { kind: 'result', isError: p.turn.status === 'failed', text: error?.message || p.turn.status, costUsd: null },
+        this.limit,
+      )
+      // AgentService owns the state transition and any fallback.
+    }
   }
 }
 
@@ -426,6 +1014,14 @@ export async function codexHookTrust(grant: boolean, cwd = tmpdir()): Promise<{ 
   } finally {
     await rpc.close()
   }
+}
+
+function codexAgentStatus(value: unknown): 'running' | 'completed' | 'failed' | 'stopped' {
+  const text = typeof value === 'string' ? value : JSON.stringify(value ?? '')
+  if (/error|fail/i.test(text)) return 'failed'
+  if (/interrupt|cancel|stop|kill|shutdown|closed|notfound/i.test(text)) return 'stopped'
+  if (/complete|done|finish|idle/i.test(text)) return 'completed'
+  return 'running'
 }
 
 /** Codex items that are tool calls but not commands, edits or MCP calls. */

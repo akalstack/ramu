@@ -6,6 +6,7 @@ import { adviceMessage, advisorAgentId } from '@ramu/shared/chat/agentTasks'
 import type { AdviceRequest } from './types'
 import { WRITING_STATES } from './constants'
 import { errorMessage } from './util'
+import { nativeAdvisorModel } from './nativeFeatures'
 import { transcriptOf } from './handoff'
 import type { BackgroundAnalysis } from './backgroundAnalysis'
 import type { MessageDispatcher } from './messageDispatcher'
@@ -40,9 +41,24 @@ export class AdvisorService {
     return !!advisor?.enabled && !!advisor.step
   }
 
-  /** The advisor step for a chat: main chats only, like ramu_agent. */
+  /** The advisor step Ramu runs for a chat: main chats only, like ramu_agent, and not when the provider's own advisor serves it. */
   advisorStep(id: string): FallbackStep | null {
-    return this.advisorOn() && !this.host.get(id).parentId ? this.host.preferences()!.advisor.step : null
+    const s = this.host.get(id)
+    if (!this.advisorOn() || s.parentId || this.nativeAdvisor(id)) return null
+    return this.host.preferences()!.advisor.step
+  }
+
+  /** The model for the provider's own advisor, when it serves the configured advisor step. */
+  nativeAdvisor(id: string): string | null {
+    return nativeAdvisorModel(this.host.preferences(), this.host.get(id))
+  }
+
+  /**
+   * Claude Code's `advisorModel` for a chat: the configured model when its own advisor serves the step, empty (off) while
+   * Ramu's advisor runs, and unset otherwise so the user's own setting applies.
+   */
+  claudeAdvisorModel(id: string): string | undefined {
+    return this.nativeAdvisor(id) ?? (this.advisorOn() ? '' : undefined)
   }
 
   /**

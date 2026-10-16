@@ -1,5 +1,5 @@
 // Captured reviews and undo: comments, viewed state, sending review feedback, and restoring files from chat Edit.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fakeAgent, showTask, startRamu } from '../support/index.mjs'
 
@@ -95,51 +95,29 @@ ramu.test('comments alone can be sent with pinned file context', async () => {
   await until(async () => (await api('agent.get', session.id)).state === 'idle', 'feedback run to finish')
 })
 
-ramu.test('undo lives in chat Edit, refuses stale and conflicted files, and keeps history', async () => {
+ramu.test('editing a message rewinds the chat to before it and can revert its files', async () => {
   await openReview()
   check(
-    (await page.getByRole('button', { name: 'Preview restore', exact: true }).count()) === 0,
-    'Undo is not offered on the Changes page',
+    (await page.getByRole('button', { name: /^Revert .* too$/ }).count()) === 0,
+    'Reverting is not offered on the Changes page',
   )
   await page.getByRole('button', { name: 'Open chat', exact: true }).click()
+  const before = (await userEvents()).length
   await page.locator('.agent-view:visible').getByRole('button', { name: 'Edit message', exact: true }).first().click()
-  await page.getByRole('button', { name: 'Preview restore', exact: true }).click()
-  const undo = page.getByRole('alertdialog', { name: 'Restore files before this message' })
-  const restore = (count) => undo.getByRole('button', { name: `Restore selected files · ${count}`, exact: true })
-  await undo.getByRole('checkbox', { name: 'Restore review.txt' }).waitFor()
-  check(
-    await undo.getByRole('checkbox', { name: 'Restore review.txt' }).isChecked(),
-    'Undo preview selects eligible files',
-  )
-  await ramu.shot('undo')
-  writeFileSync(join(session.cwd, 'review.txt'), 'Later user edit\n')
-  await restore(1).click()
-  await undo.getByText(/changed after preview/).waitFor()
-  check(
-    readFileSync(join(session.cwd, 'review.txt'), 'utf8') === 'Later user edit\n',
-    'Stale undo refuses to overwrite later edits',
-  )
-  await undo.getByRole('button', { name: 'Refresh preview', exact: true }).click()
-  await undo.getByText('The added file has later edits; it will not be removed').first().waitFor()
-  check(await restore(0).isDisabled(), 'Conflicted files cannot be undone')
-  writeFileSync(join(session.cwd, 'review.txt'), 'Changed during the agent run\n')
-  await undo.getByRole('button', { name: 'Refresh preview', exact: true }).click()
-  await restore(1).click()
-  await until(() => !existsSync(join(session.cwd, 'review.txt')), 'undo to remove the added file')
-  await until(async () => (await api('reviews.get', review.id)).undoFileIds?.length === 1, 'undo metadata saved')
-  const editing = page.getByRole('region', { name: 'Editing message', exact: true })
-  check(
-    await editing.getByText('Selected files restored.', { exact: true }).isVisible(),
-    'Edit offers file restore before resending',
-  )
-  await editing.getByRole('textbox', { name: 'Edit your message', exact: true }).fill('Revised request after restoring')
-  await editing.getByRole('button', { name: 'Send', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit from here?' })
+  const revert = dialog.getByRole('button', { name: 'Revert 1 file too', exact: true })
+  await revert.waitFor()
+  await ramu.shot('edit-from-here')
+  await revert.click()
+  await until(() => !existsSync(join(session.cwd, 'review.txt')), 'revert to remove the added file')
+  await until(async () => (await userEvents()).length < before, 'the edited message and later turns to leave the chat')
+  const box = page.locator('.agent-view:visible [data-composer-input]')
+  await until(async () => (await box.textContent())?.trim().length > 0, 'the message to return to the message box')
+  await box.fill('Revised request after rewinding')
+  await box.press('Enter')
   await until(
-    async () =>
-      (await userEvents()).some(
-        (e) => e.text.includes('Revised request after restoring') && e.text.includes('were restored using Ramu'),
-      ),
-    'edited request with restore context',
+    async () => (await userEvents()).some((e) => e.text.includes('Revised request after rewinding')),
+    'the revised request to be sent',
   )
   await until(async () => (await api('agent.get', session.id)).state === 'idle', 'revised request to finish')
   ramu.noErrors()

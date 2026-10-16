@@ -8,7 +8,8 @@ export const ACCOUNT_USAGE_INTERVAL_MS = 5 * 60_000
 /**
  * Keeps the plan usage of every login fresh for providers where "use all accounts" is on, so Ramu knows which
  * account has room before it needs one. Reads are on demand (the gauges' existing refresh, and just before an
- * account switch) and throttled per login; there is no timer of its own.
+ * account switch) and throttled per login; the server also calls it on a timer.
+ * Providers in `standalone` are read even with a single login, because their own reading only arrives while they run.
  */
 export class AccountUsage {
   private last = new Map<string, number>()
@@ -16,6 +17,7 @@ export class AccountUsage {
     private readonly update: (readings: UsageReading[]) => void,
     private readonly config: () => ProviderConfiguration,
     private readonly readers: Partial<Record<AgentProvider, AccountUsageReader>>,
+    private readonly standalone: AgentProvider[] = [],
   ) {}
 
   async refresh(only?: AgentProvider, now = Date.now()): Promise<void> {
@@ -23,9 +25,11 @@ export class AccountUsage {
     const jobs: Promise<void>[] = []
     for (const [provider, read] of Object.entries(this.readers) as [AgentProvider, AccountUsageReader][]) {
       if ((only && provider !== only) || !providerEnabled(config, provider)) continue
-      const order = providerAccountOrder(config, provider)
-      // A single account is already covered by the provider's own usage reading.
-      if (order.length < 2) continue
+      const accounts = providerAccountOrder(config, provider)
+      const single = this.standalone.includes(provider)
+      // A single account is already covered by the provider's own usage reading, unless that only updates while it runs.
+      if (accounts.length < 2 && !single) continue
+      const order = accounts.length ? accounts : ['default']
       for (const account of order) {
         const key = `${provider}:${account}`
         if (now - (this.last.get(key) ?? 0) < ACCOUNT_USAGE_INTERVAL_MS) continue

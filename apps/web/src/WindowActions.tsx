@@ -19,6 +19,22 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { ProjectAction } from '@ramu/shared/types'
 import { formatKeys } from './commands'
 import { invoke } from './ipc'
@@ -373,6 +389,41 @@ function ActionDialog({
 }
 
 /** Every action in one place: drag rows or use the arrows to set their order (the first is the default button until one is run), edit, delete or add. Order changes are saved as they are made. */
+/** One row of the Manage actions list; the grip is the drag handle. */
+function SortableActionRow({ id, busy, children }: { id: string; busy: boolean; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled: busy,
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      role="listitem"
+      className="flex items-center gap-1.5 min-h-10 p-[0_4px_0_4px] rounded-(--radius-s) bg-fill text-control relative"
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : undefined,
+        zIndex: isDragging ? 1 : undefined,
+      }}
+    >
+      <button
+        type="button"
+        ref={setActivatorNodeRef}
+        className="flex-none cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing disabled:cursor-default"
+        aria-label={t('Drag to reorder')}
+        title={t('Drag to reorder')}
+        disabled={busy}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical size={14} />
+      </button>
+      {children}
+    </div>
+  )
+}
+
 function ManageDialog({
   projectId,
   actions,
@@ -385,8 +436,10 @@ function ManageDialog({
   onClose: () => void
 }) {
   useLanguage()
-  const [dragging, setDragging] = useState<number | null>(null)
-  const [over, setOver] = useState<number | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const save = async (next: ProjectAction[]) => {
@@ -407,6 +460,11 @@ function ManageDialog({
     next.splice(to, 0, next.splice(from, 1)[0]!)
     void save(next)
   }
+  const drop = (event: DragEndEvent) => {
+    const from = actions.findIndex((action) => action.id === event.active.id),
+      to = actions.findIndex((action) => action.id === event.over?.id)
+    if (from >= 0 && to >= 0) move(from, to)
+  }
   return (
     <ShadcnDialog
       open
@@ -416,95 +474,73 @@ function ManageDialog({
     >
       <DialogContent className={ACTION_DIALOG_CLASS} showCloseButton={false} aria-describedby={undefined}>
         <DialogTitle>{t('Manage actions')}</DialogTitle>
-        <div className="flex flex-col gap-1 mt-3" role="list">
-          {actions.length === 0 && (
-            <div className="p-[10px_4px] text-caption text-muted-foreground">{t('No actions yet.')}</div>
-          )}
-          {actions.map((action, index) => (
-            <div
-              key={action.id}
-              role="listitem"
-              draggable={!busy}
-              className={`flex items-center gap-1.5 min-h-10 p-[0_4px_0_4px] rounded-(--radius-s) bg-fill text-control${dragging === index ? ' opacity-45' : ''}${over === index && dragging !== index ? ' [box-shadow:0_0_0_1px_var(--accent)]' : ''}`}
-              onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = 'move'
-                event.dataTransfer.setData('text/plain', action.id)
-                setDragging(index)
-              }}
-              onDragOver={(event) => {
-                if (dragging === null) return
-                event.preventDefault()
-                if (over !== index) setOver(index)
-              }}
-              onDrop={(event) => {
-                event.preventDefault()
-                if (dragging !== null) move(dragging, index)
-                setDragging(null)
-                setOver(null)
-              }}
-              onDragEnd={() => {
-                setDragging(null)
-                setOver(null)
-              }}
-            >
-              <GripVertical size={14} className="flex-none text-muted-foreground cursor-grab" aria-hidden="true" />
-              <span className="flex-1 min-w-0 flex flex-col text-left">
-                <span className="overflow-hidden text-ellipsis whitespace-nowrap">{action.name}</span>
-                <span
-                  className="overflow-hidden text-ellipsis whitespace-nowrap font-mono text-caption text-muted-foreground"
-                  title={action.command}
-                >
-                  {action.command}
-                </span>
-              </span>
-              {action.keys && <Kbd>{formatKeys(action.keys)}</Kbd>}
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                type="button"
-                className="flex-none"
-                aria-label={t('Move {0} up', { '0': action.name })}
-                disabled={busy || index === 0}
-                onClick={() => move(index, index - 1)}
-              >
-                <ArrowUp size={14} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                type="button"
-                className="flex-none"
-                aria-label={t('Move {0} down', { '0': action.name })}
-                disabled={busy || index === actions.length - 1}
-                onClick={() => move(index, index + 1)}
-              >
-                <ArrowDown size={14} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                type="button"
-                className="flex-none"
-                aria-label={t('Edit {0}', { '0': action.name })}
-                disabled={busy}
-                onClick={() => onEdit(action)}
-              >
-                <Pencil size={14} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                type="button"
-                className="flex-none"
-                aria-label={t('Delete {0}', { '0': action.name })}
-                disabled={busy}
-                onClick={() => void save(actions.filter((current) => current.id !== action.id))}
-              >
-                <Trash2 size={14} />
-              </Button>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={drop}>
+          <SortableContext items={actions.map((action) => action.id)} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-1 mt-3" role="list">
+              {actions.length === 0 && (
+                <div className="p-[10px_4px] text-caption text-muted-foreground">{t('No actions yet.')}</div>
+              )}
+              {actions.map((action, index) => (
+                <SortableActionRow key={action.id} id={action.id} busy={busy}>
+                  <span className="flex-1 min-w-0 flex flex-col text-left">
+                    <span className="overflow-hidden text-ellipsis whitespace-nowrap">{action.name}</span>
+                    <span
+                      className="overflow-hidden text-ellipsis whitespace-nowrap font-mono text-caption text-muted-foreground"
+                      title={action.command}
+                    >
+                      {action.command}
+                    </span>
+                  </span>
+                  {action.keys && <Kbd>{formatKeys(action.keys)}</Kbd>}
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    className="flex-none"
+                    aria-label={t('Move {0} up', { '0': action.name })}
+                    disabled={busy || index === 0}
+                    onClick={() => move(index, index - 1)}
+                  >
+                    <ArrowUp size={14} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    className="flex-none"
+                    aria-label={t('Move {0} down', { '0': action.name })}
+                    disabled={busy || index === actions.length - 1}
+                    onClick={() => move(index, index + 1)}
+                  >
+                    <ArrowDown size={14} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    className="flex-none"
+                    aria-label={t('Edit {0}', { '0': action.name })}
+                    disabled={busy}
+                    onClick={() => onEdit(action)}
+                  >
+                    <Pencil size={14} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    className="flex-none"
+                    aria-label={t('Delete {0}', { '0': action.name })}
+                    disabled={busy}
+                    onClick={() => void save(actions.filter((current) => current.id !== action.id))}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </SortableActionRow>
+              ))}
             </div>
-          ))}
-        </div>
+          </SortableContext>
+        </DndContext>
         {error && (
           <div className="error text-bad small text-caption mt-2" role="alert">
             {error}

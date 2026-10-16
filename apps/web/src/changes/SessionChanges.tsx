@@ -3,35 +3,77 @@ import { memo, useMemo, useState } from 'react'
 import type { ChangeFile, ChangeReview } from '@ramu/shared/types'
 import { ExpandRow } from '@/components/expand-row'
 import { Button } from '@/components/desktop-button'
-import { t, useLanguage } from '../i18n'
+import { formatLocale, t, useLanguage } from '../i18n'
 import { useWorkspace } from '../workspace/workspace'
 import { UndoReview } from '../chat/UndoRun'
 import { LineStats } from '../git/LineStats'
 import { useReviews, openReview } from '../git/reviews'
+import { useGitChanges } from '../git/useGitChangeCount'
+import { Menu } from '../Menu'
 import { VirtualList } from '../lib/VirtualList'
 import { FilePath } from './FilePath'
 import { DISCUSSION_COUNT_CLASS, TEXT_BUTTON_CLASS } from './styles'
 
-export function SessionChangesButton({ sessionId }: { sessionId: string }) {
+/**
+ * Every uncommitted change in the chat's checkout, whoever made it. When this chat's agent changed files too, the button
+ * opens a choice between reviewing those and opening Source Control; otherwise it goes straight to Source Control.
+ */
+export function SessionChangesButton({ sessionId, taskId }: { sessionId?: string; taskId?: string }) {
   useLanguage()
   const ws = useWorkspace(),
     { reviews } = useReviews(),
-    review = reviews.find((r) => r.sessionId === sessionId && r.files.length > 0)
-  // Only chats that changed files get a review to open.
-  if (!review || !review.files.length) return null
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className={TEXT_BUTTON_CLASS}
-      onClick={() => {
-        openReview(ws, { id: review.id, taskId: review.taskId })
-      }}
-    >
+    review = sessionId ? reviews.find((r) => r.sessionId === sessionId && r.files.length > 0) : undefined
+  const checkout = useGitChanges(taskId ?? null, taskId ? (ws.bindings[taskId] ?? []) : [], true),
+    total = checkout.count
+  // A chat that changed files keeps its review even after they were committed.
+  const count = Math.max(total, review?.files.length ?? 0)
+  if (!count) return null
+  const lines = (n: number) => n.toLocaleString(formatLocale())
+  const label = (
+    <>
       <FileDiff size={13} />
-      {t('Changes · ')}
-      {review.files.length}
-    </Button>
+      {t('Changes')}
+      {(checkout.added > 0 || checkout.removed > 0) && (
+        <span
+          className="ml-0.5 inline-flex gap-1 tabular-nums"
+          aria-label={t('{0} lines added, {1} lines removed', { '0': checkout.added, '1': checkout.removed })}
+        >
+          <span className="text-ok">+{lines(checkout.added)}</span>
+          <span className="text-bad">−{lines(checkout.removed)}</span>
+        </span>
+      )}
+    </>
+  )
+  if (!review)
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className={TEXT_BUTTON_CLASS}
+        title={t('Open Source Control')}
+        onClick={() => ws.setSidebar('scm')}
+      >
+        {label}
+      </Button>
+    )
+  return (
+    <Menu
+      label={t('Changes')}
+      icon={label}
+      className={TEXT_BUTTON_CLASS}
+      items={[
+        {
+          key: 'review',
+          label: t('Review this chat’s changes ({0})', { '0': review.files.length }),
+          onSelect: () => openReview(ws, { id: review.id, taskId: review.taskId }),
+        },
+        {
+          key: 'scm',
+          label: t('All changes in Source Control ({0})', { '0': total }),
+          onSelect: () => ws.setSidebar('scm'),
+        },
+      ]}
+    />
   )
 }
 

@@ -1,5 +1,6 @@
 import { join } from 'node:path'
-import { defineAdapter, runCli, selfUpdate } from '../adapter'
+import { defineAdapter, selfUpdate } from '../adapter'
+import { loadCursorSdk } from '../cursor'
 
 export const cursorAdapter = defineAdapter({
   id: 'cursor',
@@ -20,20 +21,29 @@ export const cursorAdapter = defineAdapter({
         : 'curl https://cursor.com/install -fsS | bash',
     updateCommand: 'agent update',
     setupCommand: 'agent login',
-    setupNote: 'Install the Cursor CLI and sign in. Ramu connects through its ACP mode.',
+    setupNote:
+      'Ramu runs Cursor chats through the Cursor SDK. Sign in with Login (opens your browser) or set CURSOR_API_KEY. The CLI is used for updates and as a fallback model list.',
   }),
   async latestRelease(_current, fetchText) {
     const script = await fetchText(`https://cursor.com/install${process.platform === 'win32' ? '?win32=true' : ''}`)
     return { version: /downloads\.cursor\.com\/lab\/([^/"\s]+)/.exec(script)?.[1] }
   },
-  async signInState(binary, env) {
-    const { out } = await runCli(binary, ['status'], env)
-    const match = /logged in(?: as (\S+))?/i.exec(out)
-    return match && !/not logged in/i.test(out)
-      ? { signedIn: true, ...(match[1] ? { detail: match[1] } : {}) }
-      : { signedIn: false }
+  // The SDK takes an API key, or its own stored login; the CLI's `agent login` session does not carry over.
+  async signInState(_binary, env) {
+    if (env.CURSOR_API_KEY) return { signedIn: true, detail: 'API key' }
+    try {
+      const status = await (await loadCursorSdk()).Cursor.auth.status()
+      return status.status === 'logged-in'
+        ? { signedIn: true, ...(status.email ? { detail: status.email } : {}) }
+        : { signedIn: false }
+    } catch {
+      return { signedIn: false }
+    }
   },
-  loginArgs: ['login'],
+  loginArgs: null,
+  async signIn() {
+    await (await loadCursorSdk()).Cursor.auth.login()
+  },
   // The agent scans `<workspace>/.cursor/skills` (and follows folder links there); ACP has no option for another folder.
   skillsLaunch: (_exportDir, cwd) => ({ linkDirs: cwd ? [join(cwd, '.cursor', 'skills')] : [] }),
   updatePlan: selfUpdate(['update']),

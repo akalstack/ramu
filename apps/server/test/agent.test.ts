@@ -159,7 +159,7 @@ describe('AgentService', () => {
       replyPermission: () => {},
       replyQuestion: () => {},
     })
-    const svc = new AgentService(db, () => {}, fakeQuery([]), undefined, factory)
+    const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
     const chat = svc.start('t', scopeOf(cwd), 'Work', { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', access: 'full' })
     await until(() => ready)
     await svc.submit(chat.id, 'helper report', 'steer')
@@ -188,7 +188,7 @@ describe('AgentService', () => {
       replyPermission: () => {},
       replyQuestion: () => {},
     })
-    const svc = new AgentService(db, () => {}, fakeQuery([]), undefined, factory)
+    const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
     const chat = svc.start('t', scopeOf(cwd), 'remember the word plum', {
       ...DEFAULT_AGENT_SETTINGS,
       provider: 'cursor',
@@ -207,6 +207,51 @@ describe('AgentService', () => {
         .some((event) => event.kind === 'settings' && event.handoff && /could not resume/.test(event.reason ?? '')),
     ).toBe(true)
     expect(svc.get(chat.id).providerSessionId).toBe('native-3')
+    svc.stopAll()
+  })
+  it('rewinds to before an edited message and hands only the earlier conversation to a fresh provider session', async () => {
+    const starts: { prompt: string; resume: string | null }[] = []
+    const rewound: number[] = []
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => ({
+      start: async (prompt, resume) => {
+        starts.push({ prompt, resume })
+        emit({ kind: 'init', providerSessionId: `native-${starts.length}`, model: 'fake', cwd })
+        emit({ kind: 'state', state: 'running' })
+        emit({ kind: 'text', text: `answer ${starts.length}`, messageId: `m${starts.length}` })
+        emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
+      },
+      send: async () => {},
+      steer: async () => {},
+      interrupt: async () => {},
+      stop: async () => {},
+      replyPermission: () => {},
+      replyQuestion: () => {},
+    })
+    const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
+    svc.onRewound = (_id, seq) => rewound.push(seq)
+    const settings = { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor' as const, access: 'full' as const }
+    const chat = svc.start('t', scopeOf(cwd), 'remember the word plum', settings)
+    await until(() => svc.get(chat.id).state === 'idle')
+    await svc.stopAndWait(chat.id)
+    await svc.send(chat.id, 'now say banana')
+    await until(() => starts.length === 2 && svc.get(chat.id).state === 'idle')
+    const second = svc
+      .snapshot(chat.id)
+      .events.find((e) => e.event.kind === 'user' && e.event.text === 'now say banana')!
+    await svc.rewind(chat.id, second.seq)
+    expect(rewound).toEqual([second.seq])
+    const kept = svc.events(chat.id)
+    expect(kept.some((e) => e.kind === 'user' && e.text === 'now say banana')).toBe(false)
+    expect(kept.some((e) => e.kind === 'text' && e.text === 'answer 2')).toBe(false)
+    expect(kept.some((e) => e.kind === 'text' && e.text === 'answer 1')).toBe(true)
+    expect(svc.get(chat.id).providerSessionId).toBeNull()
+    await svc.send(chat.id, 'say cherry instead')
+    await until(() => starts.length === 3 && svc.get(chat.id).state === 'idle')
+    expect(starts[2]!.resume).toBeNull()
+    expect(starts[2]!.prompt).toContain('remember the word plum')
+    expect(starts[2]!.prompt).not.toContain('now say banana')
+    expect(starts[2]!.prompt).toContain('say cherry instead')
+    await expect(svc.rewind(chat.id, 999)).rejects.toThrow('no longer in this chat')
     svc.stopAll()
   })
   it('updates tool descriptions in one durable row and keeps rich results after restart', async () => {
@@ -806,7 +851,7 @@ describe('AgentService', () => {
           replyQuestion: () => {},
         }
       }
-      const service = new AgentService(db, () => {}, fakeQuery([]), factory, factory, factory)
+      const service = new AgentService(db, () => {}, fakeQuery([]), factory)
       vi.spyOn(service, 'catalog').mockResolvedValue([])
       service.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 'test' })
       service.memoryInstructions = () => 'Shared memory instructions fixture'
@@ -1361,10 +1406,11 @@ describe('Conversation provider settings and handoffs', () => {
     svc.stopAll()
   })
 
-  it('pauses on limits when fallback is off', async () => {
+  it('waits on the same provider at a limit when fallback is off', async () => {
     const svc = service()
     const s = svc.start('t', scopeOf(cwd), '[limit claude]', { ...full, autoFallback: false })
-    await until(() => svc.get(s.id).state === 'failed')
+    await until(() => waiting(svc, s.id))
+    expect(svc.get(s.id).state).toBe('idle')
     expect(svc.get(s.id).provider).toBe('claude-code')
     expect(svc.events(s.id).some((e) => e.kind === 'settings')).toBe(false)
     svc.stopAll()
@@ -1872,7 +1918,12 @@ it.each(['cursor', 'antigravity', 'opencode'] as const)(
     const unused = vi.fn(() => {
       throw new Error('Wrong provider adapter')
     })
-    const svc = new AgentService(db, (id, event) => events.push({ id, event }), fakeQuery([]), unused, native, native)
+    const svc = new AgentService(db, (id, event) => events.push({ id, event }), fakeQuery([]), {
+      codex: unused,
+      cursor: native,
+      antigravity: native,
+      opencode: native,
+    })
     const session = svc.start('t', scopeOf(cwd), 'hello', {
       ...DEFAULT_AGENT_SETTINGS,
       access: 'full' as const,
@@ -3086,7 +3137,7 @@ describe('Codex sub-agent control', () => {
         replyQuestion: () => {},
       }
     }
-    const svc = new AgentService(db, () => {}, fakeQuery([]), undefined, undefined, factory)
+    const svc = new AgentService(db, () => {}, fakeQuery([]), { opencode: factory })
     vi.spyOn(svc, 'catalog').mockResolvedValue([
       ...catalog,
       {

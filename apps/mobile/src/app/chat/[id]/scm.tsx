@@ -192,7 +192,6 @@ export default function SourceControl() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const chat = useChat(id)
   const store = useStore()
-  const combined = store.appPreferences[chat?.computerId ?? '']?.combineGitChanges ?? true
   const project = store.projects.find((p) => p.id === chat?.projectId)
   const [bindings, setBindings] = useState<RepositoryBinding[]>([])
   const repos = bindings.filter((b) => !b.folderOnly).map((b) => b.repoName)
@@ -298,10 +297,8 @@ export default function SourceControl() {
   const mine = files.filter((f) => f.repo === repo)
   const staged = mine.filter((f) => f.staged === true)
   const unstaged = mine.filter((f) => f.staged === false)
-  const changes: FileState[] = combined
-    ? [...new Map([...staged, ...unstaged].map((file) => [file.path, { ...file, staged: 'all' as const }])).values()]
-    : unstaged
-  const changeCount = combined ? changes.length : mine.length
+  const changes: FileState[] = unstaged
+  const changeCount = mine.length
   const needle = filter.trim().toLowerCase()
   const shownStaged = needle ? staged.filter((f) => f.path.toLowerCase().includes(needle)) : staged
   const shownUnstaged = needle ? changes.filter((f) => f.path.toLowerCase().includes(needle)) : changes
@@ -364,7 +361,7 @@ export default function SourceControl() {
       store.invoke,
       chat,
       binding.repoId,
-      combined || !staged.length ? unstaged.map((f) => f.path) : undefined,
+      !staged.length ? unstaged.map((f) => f.path) : undefined,
     )
     setDraft(result)
     setMessage(result.message)
@@ -374,7 +371,7 @@ export default function SourceControl() {
     void run(async () => {
       if (hasConflicts) throw new Error('Resolve conflicts before committing.')
       if (!chat || !binding) throw new Error('Select a repository first.')
-      if ((combined || !staged.length) && unstaged.length)
+      if (!staged.length && unstaged.length)
         await call(
           'git.stage',
           unstaged.map((f) => f.path),
@@ -639,7 +636,7 @@ export default function SourceControl() {
                   />
                 </View>
               ) : null}
-              {!combined && (
+              {
                 <Group
                   title="Staged Changes"
                   count={shownStaged.length}
@@ -670,7 +667,7 @@ export default function SourceControl() {
                     </View>
                   ))}
                 </Group>
-              )}
+              }
 
               <Group
                 title="Changes"
@@ -678,7 +675,7 @@ export default function SourceControl() {
                 open={!folded.changes}
                 onToggle={() => setFolded((f) => ({ ...f, changes: !f.changes }))}
                 action={
-                  !combined && unstaged.length
+                  unstaged.length
                     ? {
                         icon: Plus,
                         label: 'Stage all changes',
@@ -696,14 +693,14 @@ export default function SourceControl() {
                     {i ? <Divider inset={space.m} /> : null}
                     <FileRow
                       file={f}
-                      onOpen={() => openFile.open(binding!.repoId, f.path, { mode: combined ? 'all' : 'changes' })}
-                      onStage={combined ? undefined : () => setStaged([f.path], true)}
+                      onOpen={() => openFile.open(binding!.repoId, f.path, { mode: 'changes' })}
+                      onStage={() => setStaged([f.path], true)}
                       onDiscard={unstaged.some((entry) => entry.path === f.path) ? () => discard([f]) : undefined}
                     />
                   </View>
                 ))}
               </Group>
-              {needle && (combined || !shownStaged.length) && !shownUnstaged.length ? (
+              {needle && !shownStaged.length && !shownUnstaged.length ? (
                 <T tone="muted">No changed file matches.</T>
               ) : null}
               {!changeCount ? <T tone="muted">No changes in this checkout.</T> : null}
@@ -904,13 +901,11 @@ export default function SourceControl() {
                 </Pressable>
               </View>
               <T size={font.caption} tone="muted" style={{ paddingHorizontal: 2 }}>
-                {combined && changes.length
-                  ? `Commits all ${changes.length} changed file${changes.length === 1 ? '' : 's'}.`
-                  : staged.length
-                    ? `Commits ${staged.length} staged file${staged.length === 1 ? '' : 's'}.`
-                    : unstaged.length
-                      ? `Nothing staged: stages and commits all ${unstaged.length} change${unstaged.length === 1 ? '' : 's'}.`
-                      : 'No changes in this checkout.'}
+                {staged.length
+                  ? `Commits ${staged.length} staged file${staged.length === 1 ? '' : 's'}.`
+                  : unstaged.length
+                    ? `Nothing staged: stages and commits all ${unstaged.length} change${unstaged.length === 1 ? '' : 's'}.`
+                    : 'No changes in this checkout.'}
               </T>
             </View>
           </View>

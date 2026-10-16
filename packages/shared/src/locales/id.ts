@@ -1,7 +1,6 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
-  "Combine staged and unstaged changes": "Gabungkan perubahan staged dan unstaged",
   "Show each file once and commit all changes. Turn off to stage files separately before committing.": "Tampilkan setiap file sekali dan commit semua perubahan. Nonaktifkan untuk melakukan staging file secara terpisah sebelum commit.",
   "Draft a commit message from all changes": "Buat pesan commit dari semua perubahan",
   "Discard unstaged changes": "Buang perubahan yang belum di-stage",
@@ -80,7 +79,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Send the active file or selection with each message, plus the paths of other open tabs. Unsaved edits are included.": "Kirim file atau seleksi aktif di setiap pesan, beserta path tab lain yang terbuka. Perubahan yang belum disimpan ikut dikirim.",
   "Show recent chats and unfinished work on Home. Uses model tokens to write the summary.": "Tampilkan chat terbaru dan pekerjaan yang belum selesai di Beranda. Memakai token model untuk menulis ringkasan.",
   "Stop your Mac sleeping from idle while the service runs. Display sleep and manual sleep still work.": "Cegah Mac tidur saat idle selama layanan berjalan. Layar mati dan tidur manual tetap berfungsi.",
-  "Switch to another provider when a usage limit is reached. Applies to new chats.": "Beralih ke provider lain saat batas penggunaan tercapai. Berlaku untuk chat baru.",
+  "Switch to another provider when a usage limit is reached. When off, a chat waits and resumes on the same provider once the limit resets. Applies to new chats.": "Beralih ke provider lain saat batas penggunaan tercapai. Jika mati, chat menunggu dan lanjut di provider yang sama setelah batas direset. Berlaku untuk chat baru.",
   "Applies to project notes nobody has used. Notes you wrote and essential memories are kept.": "Berlaku untuk catatan proyek yang tidak pernah dipakai. Catatan yang kamu tulis dan memori penting tetap disimpan.",
   "Goals resume after a usage limit resets, and Stop pauses them. Changes also apply to goals already running.": "Goal berlanjut setelah batas penggunaan direset, dan Stop menjeda goal. Perubahan juga berlaku untuk goal yang sedang berjalan.",
   "How Pull and Sync combine local and remote commits. Tracked edits are stashed and restored for you.": "Cara Pull dan Sync menggabungkan commit lokal dan remote. Perubahan yang dilacak di-stash lalu dipulihkan otomatis.",
@@ -1327,6 +1326,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Discard changes to {0}": "Buang perubahan pada {0}",
   "Dismiss {0} update": "Tutup pembaruan {0}",
   "Drag step {0} to reorder": "Geser langkah {0} untuk urutkan",
+  "Drag fallback {0} to reorder": "Geser cadangan {0} untuk urutkan",
   "Find in conversation ({0})": "Cari di percakapan ({0})",
   "Go back to {0} for the next message": "Kembali ke {0} untuk pesan berikutnya",
   "Highest usage window for {0}": "Periode pemakaian tertinggi untuk {0}",
@@ -1483,7 +1483,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Show Cursor plan usage": "Tampilkan penggunaan paket Cursor",
   "Turn {0} on or off": "Aktifkan atau nonaktifkan {0}",
   "Turn account {0} on or off": "Aktifkan atau nonaktifkan akun {0}",
-  "Turned off: hidden from model pickers and never started.": "Nonaktif: disembunyikan dari pemilih model dan tidak pernah dijalankan.",
+  "Hidden from model pickers and never started. Turn it on to use it again.": "Disembunyikan dari pemilih model dan tidak pernah dijalankan. Aktifkan untuk memakainya lagi.",
   "{0} logins": "Akun masuk {0}",
   "mo": "bln",
   "resets now": "reset sekarang",

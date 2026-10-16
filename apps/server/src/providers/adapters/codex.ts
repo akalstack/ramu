@@ -34,6 +34,7 @@ export const codexAdapter = defineAdapter({
       : { signedIn: false }
   },
   loginArgs: ['login'],
+  native: { blockingQuestions: true },
   // The ACP adapter takes no skill roots from the client, but Codex scans `.agents/skills` in the chat's folder.
   skillsLaunch: (_exportDir, cwd) => ({ linkDirs: cwd ? [join(cwd, '.agents', 'skills')] : [] }),
   updatePlan({ config, binary, findExecutable, runtimeHome }) {

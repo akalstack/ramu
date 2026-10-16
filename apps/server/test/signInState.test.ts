@@ -29,11 +29,11 @@ it('reads Claude, Cursor and OpenCode login state', async () => {
     await signInState('claude-code', cli('echo \'{"loggedIn":true,"authMethod":"oauth_token"}\''), process.env),
   ).toEqual({ signedIn: true, detail: 'oauth_token' })
   expect(await signInState('claude-code', cli('echo \'{"loggedIn":false}\''), process.env)).toEqual({ signedIn: false })
-  expect(await signInState('cursor', cli('echo "✓ Logged in as me@example.com"'), process.env)).toEqual({
+  // Cursor chats run on its SDK, which takes an API key (or its own stored login), not the CLI's session.
+  expect(await signInState('cursor', cli('exit 1'), { ...process.env, CURSOR_API_KEY: 'key' })).toEqual({
     signedIn: true,
-    detail: 'me@example.com',
+    detail: 'API key',
   })
-  expect(await signInState('cursor', cli('echo "Not logged in"'), process.env)).toEqual({ signedIn: false })
   expect(
     await signInState(
       'opencode',

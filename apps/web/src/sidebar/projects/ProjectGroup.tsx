@@ -24,13 +24,14 @@ import { projectCtx, useWorkspace } from '../../workspace/workspace'
 import { useAppSettings } from '../../settings/AppSettings'
 import { FadeText } from '../../FadeText'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS, pinnedFirst } from './constants'
-import { PROJECT_DRAG_TYPE, type ProjectDnd } from './dnd'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { InlineEdit } from './InlineEdit'
 import { ProjectHoverCard } from './ProjectHoverCard'
 import { TaskRow } from './TaskRow'
 import { useSlideMount } from './useSlideMount'
 
-export function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectDnd }) {
+export function ProjectGroup({ project }: { project: Project }) {
   useLanguage()
   const ws = useWorkspace()
   const repos = ws.repos[project.id] ?? []
@@ -50,6 +51,10 @@ export function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectD
   // The chat list stays mounted while it slides closed, and slides open once it is mounted.
   const { ref: list, visible } = useSlideMount(open)
   const [renaming, setRenaming] = useState(false)
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: project.id,
+    disabled: renaming,
+  })
   const [error, setError] = useState<string | null>(null)
   const [hover, setHover] = useState(false)
   const active = ws.ui.activeTaskId === projectCtx(project.id) && !ws.composing
@@ -170,49 +175,22 @@ export function ProjectGroup({ project, dnd }: { project: Project; dnd: ProjectD
 
   return (
     <section
-      className={`project-group [&.dragging]:[opacity:0.45] [&.drop-before::before]:[content:''] [&.drop-before::before]:absolute [&.drop-before::before]:left-1.5 [&.drop-before::before]:right-1.5 [&.drop-before::before]:h-0.5 [&.drop-before::before]:[border-radius:1px] [&.drop-before::before]:[background:var(--accent)] [&.drop-before::before]:pointer-events-none [&.drop-before::before]:z-2 [&.drop-before::before]:top-[-2px] [&.drop-after::after]:[content:''] [&.drop-after::after]:absolute [&.drop-after::after]:left-1.5 [&.drop-after::after]:right-1.5 [&.drop-after::after]:h-0.5 [&.drop-after::after]:[border-radius:1px] [&.drop-after::after]:[background:var(--accent)] [&.drop-after::after]:pointer-events-none [&.drop-after::after]:z-2 [&.drop-after::after]:bottom-[-2px] mb-0 [&:has(.task-list)]:mb-2.5 relative${dnd.dragging === project.id ? ' dragging' : ''}${dnd.drop?.id === project.id && dnd.dragging !== project.id ? (dnd.drop.after ? ' drop-after' : ' drop-before') : ''}`}
-      onDragOver={(event) => {
-        if (
-          !dnd.enabled ||
-          !dnd.dragging ||
-          dnd.dragging === project.id ||
-          !event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)
-        )
-          return
-        event.preventDefault()
-        // Half of the project's own row decides, so the whole row works and not just the chats below it.
-        const box = (
-          event.currentTarget.querySelector('[draggable="true"]') ?? event.currentTarget
-        ).getBoundingClientRect()
-        const after = event.clientY > box.top + box.height / 2
-        if (dnd.drop?.id !== project.id || dnd.drop.after !== after) dnd.setDrop({ id: project.id, after })
-      }}
-      onDrop={(event) => {
-        const dragged = event.dataTransfer.getData(PROJECT_DRAG_TYPE)
-        if (!dragged || !dnd.drop) return
-        event.preventDefault()
-        const target = dnd.drop
-        dnd.setDragging(null)
-        dnd.setDrop(null)
-        if (dragged !== target.id) void dnd.reorder(dragged, target)
+      ref={setNodeRef}
+      className="project-group mb-0 [&:has(.task-list)]:mb-2.5 relative"
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : undefined,
+        zIndex: isDragging ? 3 : undefined,
       }}
     >
       {contextMenu.menu}
-      <HoverCard open={hover && !renaming && !dnd.dragging} onOpenChange={setHover}>
+      <HoverCard open={hover && !renaming && !isDragging} onOpenChange={setHover}>
         <HoverCardTrigger
           delay={150}
           closeDelay={120}
           render={<div />}
-          draggable={dnd.enabled && !renaming}
-          onDragStart={(event) => {
-            event.dataTransfer.setData(PROJECT_DRAG_TYPE, project.id)
-            event.dataTransfer.effectAllowed = 'move'
-            dnd.setDragging(project.id)
-          }}
-          onDragEnd={() => {
-            dnd.setDragging(null)
-            dnd.setDrop(null)
-          }}
+          {...listeners}
           className={
             active
               ? 'project-row [&:hover]:bg-accent [&:hover]:text-foreground [&:hover_.row-actions]:opacity-100 [&.active]:bg-accent [&.active]:text-foreground [&_.row-actions]:gap-0.5 [&_.row-actions]:mr-0 [&_.caret]:[transition:transform_0.15s_var(--ease)] [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 rounded-(--radius-s) cursor-default text-soft text-body leading-5 min-h-[30px] p-[0_8px] active'

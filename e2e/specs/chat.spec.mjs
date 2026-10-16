@@ -117,7 +117,8 @@ ramu.test('mixed command progress settles from Running to Ran, and chat search s
   const running = group('Running 3 commands')
   await running.waitFor()
   await ramu.until(
-    async () => (await running.locator('.tool-summary').allTextContents()).filter((t) => t.startsWith('Ran ')).length === 2,
+    async () =>
+      (await running.locator('.tool-summary').allTextContents()).filter((t) => t.startsWith('Ran ')).length === 2,
     'two of the three commands never completed',
   )
   assert.deepEqual(await running.locator('.tool-summary').allTextContents(), [

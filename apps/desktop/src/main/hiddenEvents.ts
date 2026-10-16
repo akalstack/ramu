@@ -40,6 +40,7 @@ export class HiddenEvents {
     if (
       [
         'agent:event',
+        'agent:rewound',
         'fs:changed',
         'context:changed',
         'aside:changed',

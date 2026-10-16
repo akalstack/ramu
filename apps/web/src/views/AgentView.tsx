@@ -70,6 +70,8 @@ import { WorkingText } from './agent/components/WorkingText'
 import { AsidePanel } from './agent/components/AsidePanel'
 import { AgentTaskPanel } from './agent/components/AgentTaskPanel'
 import { SelectionActions } from './agent/components/SelectionActions'
+import { EditFromHereDialog } from './agent/components/EditFromHereDialog'
+import { MESSAGE_ACTION_EVENT, type MessageActionDetail } from './agent/components/MessageQuoteActions'
 import { WORKING_CLASS } from './agent/styles'
 
 /** A chat with an agent: its transcript, the message box and the side panels for sub-agents and asides. */
@@ -246,10 +248,6 @@ export const AgentView = memo(function AgentView({
   })
   const attached = pendingComments(reviews, view.sessionId)
   // Editing keeps history and offers a provider-independent file restore before resending.
-  const refocusComposer = () =>
-    requestAnimationFrame(() => {
-      focusComposer(root.current, draft.length)
-    })
   /** Sends a pending settings change to the host before the message that follows it. */
   const applyPendingSettings = async () => {
     if (!pendingSettings) return
@@ -270,6 +268,19 @@ export const AgentView = memo(function AgentView({
     saveDraft(draftKey.newChat(project), `${quoteLines(text)}\n\n`)
     ws.newTask(project)
   }
+  // Quote, Ask aside and Quote in new chat from a message's action row (MessageQuoteActions).
+  const messageAction = useRef<(detail: MessageActionDetail) => void>(() => {})
+  messageAction.current = ({ action, text, from }) => {
+    if (action === 'quote') quoteIntoDraft(text)
+    else if (action === 'quote-new') quoteIntoNewChat(text)
+    else setOpenAside({ id: null, quote: text, from })
+  }
+  useEffect(() => {
+    const el = root.current
+    const listener = (event: Event) => messageAction.current((event as CustomEvent<MessageActionDetail>).detail)
+    el?.addEventListener(MESSAGE_ACTION_EVENT, listener)
+    return () => el?.removeEventListener(MESSAGE_ACTION_EVENT, listener)
+  }, [])
   /** Moves a queued message back into the message box. */
   const recallIntoComposer = (files: Attachment[], text: string) => {
     setAttachments((current) => [...current, ...files.filter((file) => !current.some((entry) => entry.id === file.id))])
@@ -279,41 +290,14 @@ export const AgentView = memo(function AgentView({
     if (seq === undefined) return
     setEditing({ seq, text, files })
   }
-  const cancelEdit = () => {
+  /** After a rewind the message comes back into the box above anything already typed there, ready to change and send. */
+  const editRewound = (text: string, files: Attachment[]) => {
     setEditing(null)
-    refocusComposer()
+    setAttachments((current) => [...files, ...current.filter((file) => !files.some((entry) => entry.id === file.id))])
+    setDraft((current) => (current.trim() ? `${text}\n\n${current}` : text))
+    stick.current = true
+    requestAnimationFrame(() => focusComposer(root.current, text.length))
   }
-  /** Sends the revised message as a new request; the agent is told it replaces the earlier one. */
-  const submitEdit = (text: string, restored: boolean) =>
-    act(async () => {
-      if (!editing) return
-      const outgoing = `${text}\n\n<ramu-context>\nThis revises my earlier message ${editing.seq}.${restored ? ' Selected file changes from that message and later captured runs were restored using Ramu. Inspect current files before acting.' : ' Files have not been restored.'} Treat this revised request as replacing the earlier request; the previous transcript remains as historical evidence.\n</ramu-context>`
-      // Offline, the revision waits in the outbox like any other message; file restore needs the host, so it isn't offered.
-      if (hostOffline) {
-        if (!outbox().add(view.sessionId, outgoing, editing.files)) throw outboxFullError(hostName)
-        setEditing(null)
-        stick.current = true
-        refocusComposer()
-        return
-      }
-      setConfiguring(true)
-      try {
-        await applyPendingSettings()
-        await invoke(
-          'agent.submit',
-          view.sessionId,
-          outgoing,
-          action,
-          editing.files.map((file) => file.id),
-          [],
-        )
-        setEditing(null)
-        stick.current = true
-        refocusComposer()
-      } finally {
-        setConfiguring(false)
-      }
-    })
   /** The last plain message you sent, for ↑ in an empty message box. */
   const editLast = () => {
     for (const turn of [...turns].reverse()) {
@@ -408,17 +392,12 @@ export const AgentView = memo(function AgentView({
     elapsed,
     latestAssistant,
     hasSourceSeq: !!view.sourceSeq,
-    editing,
     eventSequences,
-    configuring,
-    offlineHost: hostOffline ? hostName : undefined,
     onBackground: session?.provider === 'claude-code' && live ? backgroundTool : undefined,
     onOpenAgent: setOpenAgent,
     onStopTask: stopTask,
     onOpenQuestion: openQuestion,
     onEditMessage: editMessage,
-    onCancelEdit: cancelEdit,
-    onSubmitEdit: submitEdit,
   }
 
   return (
@@ -468,12 +447,23 @@ export const AgentView = memo(function AgentView({
           setOpenAgent((current) => (current ? null : runningTasks.length === 1 ? runningTasks[0]!.agentId : '*'))
         }
         onFind={() => openFind()}
+        taskId={session?.taskId}
         canContinue={!!session && events.length > 0}
         continuing={continuing}
         onContinue={() => setConfirmContinue(true)}
       />
       <div className="agent-split [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex flex-1 min-h-0 min-w-0 [container:agent-split_/_inline-size]">
         <div className="agent-main relative flex flex-col [flex:1_1_0] min-w-0 min-h-0">
+          {editing && (
+            <EditFromHereDialog
+              edit={editing}
+              sessionId={view.sessionId}
+              live={live || busyAgent}
+              offlineHost={hostOffline ? hostName : undefined}
+              onCancel={() => setEditing(null)}
+              onRewound={editRewound}
+            />
+          )}
           {finding && (
             <ChatFind root={scroller} focusRequest={findRequest} initialQuery={findQuery} onClose={closeFind} />
           )}

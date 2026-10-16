@@ -47,6 +47,20 @@ export async function withGitBackground(taskId: string, repoId: string, work: ()
   return true
 }
 
+/** Whether any of a checkout's repositories has git work running or waiting. */
+export function useAnyGitBusy(taskId: string | null | undefined, repoIds: string[]): boolean {
+  const ids = repoIds.join('\0')
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    () => !!taskId && ids !== '' && ids.split('\0').some((repoId) => counts.has(key(taskId, repoId))),
+  )
+}
+
 export function useGitBusy(taskId: string | null | undefined, repoId: string | null | undefined): boolean {
   return useSyncExternalStore(
     (listener) => {

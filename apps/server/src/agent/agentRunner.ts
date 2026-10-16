@@ -1,11 +1,15 @@
 import type {
   AgentEvent,
+  AgentProvider,
   ElicitationAction,
   AgentScope,
   AgentSettings,
   Attachment,
   McpConnection,
 } from '@ramu/shared/types'
+
+/** The provider cannot continue the saved session (no resume support, or it no longer has it). The chat goes on from its transcript. */
+export class ResumeUnavailable extends Error {}
 
 export interface AgentRunner {
   /** Whether `steer` accepts input during a turn. Runners without it are always queued. */
@@ -28,3 +32,9 @@ export type AgentRunnerFactory = (
   emit: (event: AgentEvent, usageLimit?: boolean) => void,
   readOnly?: boolean,
 ) => AgentRunner
+
+/**
+ * How each provider runs a chat. A provider listed here runs through its runner; one that is not (Claude Code) uses the
+ * Claude Agent SDK query loop. Adding a provider means writing one `AgentRunnerFactory` and listing it here.
+ */
+export type ProviderRunners = Partial<Record<AgentProvider, AgentRunnerFactory>>

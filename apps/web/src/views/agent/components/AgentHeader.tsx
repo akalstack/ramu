@@ -3,6 +3,7 @@ import { Button } from '@/components/desktop-button'
 import { Bot, GitFork, LoaderCircle, MessageCircle, MoreHorizontal, Search, ShieldQuestion, Square } from 'lucide-react'
 import type { AgentSessionState, AgentTask } from '@ramu/shared/types'
 import { formatKeys } from '../../../commands'
+import { CommitPushButton } from '../../../git/CommitPushButton'
 import { Menu } from '../../../Menu'
 import { SessionChangesButton } from '../../../Changes'
 import { SessionCheckpointButton } from '../../../chat/SessionCheckpoint'
@@ -27,6 +28,7 @@ export function AgentHeader({
   agentsOpen,
   onToggleAgents,
   onFind,
+  taskId,
   canContinue,
   continuing,
   onContinue,
@@ -47,6 +49,8 @@ export function AgentHeader({
   agentsOpen: boolean
   onToggleAgents: () => void
   onFind: () => void
+  /** The chat's checkout, for Changes and Commit & push. */
+  taskId?: string
   canContinue: boolean
   continuing: boolean
   onContinue: () => void
@@ -55,7 +59,8 @@ export function AgentHeader({
   return (
     <div className="agent-header [&_.path]:flex-1 [&:not(:has(>_:not(.grow)))]:hidden [&_.grow]:hidden [&_.state]:mr-auto [&_.small]:gap-1.5 [&_.small]:text-soft [&_>_*]:flex-none [&_>_*]:whitespace-nowrap flex items-center flex-none text-control min-w-0 justify-end h-auto min-h-[36px] p-[4px_10px_0] gap-1.5 flex-wrap gap-y-1 pb-1">
       {history}
-      <SessionChangesButton sessionId={sessionId} />
+      <SessionChangesButton sessionId={sessionId} taskId={taskId} />
+      {taskId && <CommitPushButton taskId={taskId} />}
       <SessionCheckpointButton sessionId={sessionId} />
       {state && STATE_LABEL[state] && (
         <span

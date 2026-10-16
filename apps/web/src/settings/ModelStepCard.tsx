@@ -1,9 +1,9 @@
 import { Button } from '@/components/desktop-button'
 import { ArrowDown, ArrowUp, GripVertical, Trash2 } from 'lucide-react'
-import type { DragEvent } from 'react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { providerName } from '@ramu/shared/providers/providers'
 import type { ModelStep } from '@ramu/shared/types'
-import { setRowDragImage } from '../lib/dragState'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
 import { effortDisplayName, modelDisplayName, modelStepName } from '../models/ModelSets'
@@ -20,13 +20,6 @@ export function ModelStepCard({
   models,
   catalogs,
   busy,
-  dragging,
-  dropBefore,
-  dropAfter,
-  onDragOver,
-  onDrop,
-  onDragEnd,
-  onGripDragStart,
   onMove,
   onRemove,
   onUpdate,
@@ -37,17 +30,14 @@ export function ModelStepCard({
   models: CatalogModel[]
   catalogs: Catalogs
   busy: boolean
-  dragging: boolean
-  dropBefore: boolean
-  dropAfter: boolean
-  onDragOver: (event: DragEvent<HTMLElement>) => void
-  onDrop: (event: DragEvent<HTMLElement>) => void
-  onDragEnd: () => void
-  onGripDragStart: () => void
   onMove: (delta: number) => void
   onRemove: () => void
   onUpdate: (step: ModelStep) => void
 }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: step.id,
+    disabled: busy || count < 2,
+  })
   const model = models.find(
     (entry) => entry.provider === step.provider && (entry.id === step.model || (!step.model && entry.isDefault)),
   )
@@ -65,29 +55,28 @@ export function ModelStepCard({
     })
   return (
     <section
-      className={`settings-step [&.dragging]:[opacity:0.45] [&.drop-before::before]:[content:''] [&.drop-before::before]:absolute [&.drop-before::before]:left-0 [&.drop-before::before]:right-0 [&.drop-before::before]:h-0.5 [&.drop-before::before]:[border-radius:1px] [&.drop-before::before]:[background:var(--accent)] [&.drop-before::before]:pointer-events-none [&.drop-before::before]:top-[-5px] [&.drop-after::after]:[content:''] [&.drop-after::after]:absolute [&.drop-after::after]:left-0 [&.drop-after::after]:right-0 [&.drop-after::after]:h-0.5 [&.drop-after::after]:[border-radius:1px] [&.drop-after::after]:[background:var(--accent)] [&.drop-after::after]:pointer-events-none [&.drop-after::after]:bottom-[-5px] p-2.5 [border:1px_solid_transparent] rounded-(--radius-s) flex flex-col gap-2 relative bg-fill${dragging ? ' dragging' : ''}${dropBefore ? ' drop-before' : ''}${dropAfter ? ' drop-after' : ''}`}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
+      ref={setNodeRef}
+      className="settings-step p-2.5 [border:1px_solid_transparent] rounded-(--radius-s) flex flex-col gap-2 relative bg-fill"
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : undefined,
+        zIndex: isDragging ? 1 : undefined,
+      }}
     >
       <div className="settings-step-heading flex items-center gap-2">
-        <span
-          className="settings-step-grip [&:hover]:text-foreground [&:hover]:bg-hover [&:active]:[cursor:grabbing] inline-grid place-items-center w-[18px] h-[22px] flex-none ml-[-4px] text-muted-foreground cursor-grab rounded-(--radius-xs)"
-          role="button"
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          className="settings-step-grip [&:hover]:text-foreground [&:hover]:bg-hover [&:active]:[cursor:grabbing] inline-grid place-items-center w-[18px] h-[22px] flex-none ml-[-4px] text-muted-foreground cursor-grab touch-none rounded-(--radius-xs) disabled:cursor-default"
           aria-label={t('Drag step {0} to reorder', { '0': index + 1 })}
           title={t('Drag to reorder')}
-          draggable={!busy}
-          onDragStart={(event) => {
-            event.dataTransfer.effectAllowed = 'move'
-            event.dataTransfer.setData('text/plain', String(index))
-            const card = event.currentTarget.closest('.settings-step')
-            setRowDragImage(event, card)
-            onGripDragStart()
-          }}
-          onDragEnd={onDragEnd}
+          disabled={busy || count < 2}
+          {...attributes}
+          {...listeners}
         >
           <GripVertical size={14} />
-        </span>
+        </button>
         <span className="settings-step-number w-[18px] flex-none text-muted-foreground text-caption text-center">
           {index + 1}
         </span>

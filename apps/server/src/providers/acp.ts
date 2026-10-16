@@ -2,7 +2,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { createRequire } from 'node:module'
 import { providerAdapter } from './adapters'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { createInterface } from 'node:readline'
@@ -20,31 +19,19 @@ import type {
 import { providerName } from '@ramu/shared/providers/providers'
 import { attachmentPrompt } from '../attachments'
 import { elicitationContent, elicitationRequest } from '../agent/elicitation'
-import { baseMode } from '../agent/settings'
-import { isLimitMessage, isLimitReply, limitResetsAt } from './usageLimit'
+import { isLimitMessage, isLimitReply, limitedReading } from './usageLimit'
 import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 
 type Wire = Record<string, any>
-type AcpProvider = 'cursor' | 'antigravity' | 'opencode' | 'codex' | 'claude-code'
-/** The official Codex ACP adapter ships as a dependency; `RAMU_CODEX_ACP_ENTRY` points at another build. */
-const codexAcpEntry = () =>
-  process.env.RAMU_CODEX_ACP_ENTRY ||
-  createRequire(import.meta.url).resolve('@agentclientprotocol/codex-acp/dist/index.js')
-/** The official Claude ACP adapter ships as a dependency; `RAMU_CLAUDE_ACP_ENTRY` points at another build. */
-const claudeAcpEntry = () =>
-  process.env.RAMU_CLAUDE_ACP_ENTRY ||
-  createRequire(import.meta.url).resolve('@agentclientprotocol/claude-agent-acp/dist/index.js')
+type AcpProvider = 'cursor' | 'antigravity' | 'opencode'
 export function acpCommand(provider: AcpProvider): { command: string; args: string[] } {
-  if (provider === 'claude-code') return { command: process.execPath, args: [claudeAcpEntry()] }
-  // The adapter runs the user's own `codex` binary (CODEX_PATH) so accounts and updates stay Ramu-managed.
-  if (provider === 'codex') return { command: process.execPath, args: [codexAcpEntry()] }
   return {
     command: providerBinary(provider),
     args: provider === 'cursor' || provider === 'opencode' ? ['acp'] : process.platform === 'linux' ? ['--uid='] : [],
   }
 }
-/** The runtime cannot continue the saved session (no resume support, or it no longer has it). The chat can still go on from its transcript. */
-export class AcpResumeUnavailable extends Error {}
+export { ResumeUnavailable as AcpResumeUnavailable } from '../agent/agentRunner'
+import { ResumeUnavailable as AcpResumeUnavailable } from '../agent/agentRunner'
 export class AcpRpc {
   private child: ChildProcessWithoutNullStreams
   private nextId = 0
@@ -149,7 +136,6 @@ export class AcpRpc {
         fs: { readTextFile: false, writeTextFile: false },
         terminal: false,
         session: { compaction: {} },
-        ...(this.provider === 'codex' || this.provider === 'claude-code' ? { elicitation: { form: {} } } : {}),
         ...(this.provider === 'opencode' ? { _meta: { 'opencode/child-session-updates': true } } : {}),
       },
     })
@@ -299,104 +285,6 @@ export function openCodeConfigEnv(
     }),
   }
 }
-/**
- * The Codex adapter replaces `mcp_servers` with the servers ACP passes, which cannot carry a tool timeout, so Ramu's
- * server travels in the session config instead. Native sub-agents are switched off the way the app server was.
- */
-export function codexAcpEnv(connection: McpConnection | undefined): Record<string, string> {
-  const config = {
-    ...(connection
-      ? {
-          mcp_servers: {
-            ramu: {
-              url: connection.url,
-              http_headers: { Authorization: `Bearer ${connection.token}` },
-              tool_timeout_sec: 3600,
-            },
-          },
-        }
-      : {}),
-    ...(connection?.nativeSubagents === false ? { features: { multi_agent: false } } : {}),
-    // Codex asks Ramu's own tool before one of its sub-agents starts (see CODEX_HOOK_CONFIG).
-    ...(connection?.interceptSubagents
-      ? {
-          hooks: {
-            PreToolUse: [
-              {
-                matcher: 'spawn_agent',
-                hooks: [
-                  {
-                    type: 'mcp_tool',
-                    server: 'ramu',
-                    tool: 'codex_pre_tool_use',
-                    input: { tool_name: '${tool_name}', tool_input: '${tool_input}', session_id: '${session_id}' },
-                  },
-                ],
-              },
-            ],
-          },
-        }
-      : {}),
-  }
-  return {
-    CODEX_PATH: providerBinary('codex'),
-    ELECTRON_RUN_AS_NODE: '1',
-    ...(Object.keys(config).length ? { CODEX_CONFIG: JSON.stringify(config) } : {}),
-  }
-}
-/** Ramu's own tools that only manage questions, goals, advice and memory; they never grant file or command access. */
-const RAMU_SCOPED_TOOLS = [
-  'ask_user',
-  'question_status',
-  'wait_for_answer',
-  'close_question',
-  'advisor',
-  'wait_for_advice',
-  'set_goal',
-  'get_goal',
-  'update_goal',
-  'tool_search',
-  'tool_result_read',
-  'memory_read',
-  'session_recall',
-]
-/** The adapter runs the user's own `claude` (CLAUDE_CODE_EXECUTABLE), so accounts and updates stay Ramu-managed. */
-export function claudeAcpEnv(connection: McpConnection | undefined): Record<string, string> {
-  return {
-    CLAUDE_CODE_EXECUTABLE: providerBinary('claude-code'),
-    ELECTRON_RUN_AS_NODE: '1',
-    ...(connection ? { MCP_TOOL_TIMEOUT: String(3_600_000) } : {}),
-  }
-}
-/**
- * What Ramu used to put in the Claude SDK's options, as the adapter's session `_meta`: the guidance as an appended system
- * prompt, the managed-skill plugin, sub-agent tools switched off when Ramu runs sub-agents, and the tools that need no approval.
- */
-export function claudeSessionMeta(connection: McpConnection | undefined, settings: AgentSettings): Wire {
-  const plugins = connection?.skillsDir
-    ? (providerAdapter('claude-code').skillsLaunch?.(connection.skillsDir).plugins ?? [])
-    : []
-  const allowed = connection
-    ? connection.restricted
-      ? ['mcp__ramu']
-      : RAMU_SCOPED_TOOLS.map((name) => `mcp__ramu__${name}`)
-    : []
-  return {
-    ...(connection?.instructions ? { systemPrompt: { append: connection.instructions } } : {}),
-    claudeCode: {
-      options: {
-        settingSources: ['user', 'project', 'local'],
-        ...(plugins.length ? { plugins: plugins.map((path) => ({ type: 'local', path })) } : {}),
-        ...(connection?.replaceAdvisor ? { settings: { advisorModel: '' } } : {}),
-        ...(connection?.nativeSubagents === false ? { disallowedTools: ['Agent', 'Task'] } : {}),
-        // A review chat about learned memories has no built-in file, shell or Git tools, only Ramu's own.
-        ...(connection?.restricted ? { tools: [] } : {}),
-        ...(allowed.length ? { allowedTools: allowed } : {}),
-        allowDangerouslySkipPermissions: settings.access === 'full',
-      },
-    },
-  }
-}
 /** Runs the runtime's own sign-in. Antigravity opens the browser itself and stores the credentials in its home. */
 export async function acpSignIn(
   provider: AcpProvider,
@@ -449,11 +337,7 @@ class AcpSession implements AgentRunner {
     private readOnly = false,
   ) {
     this.events = new AcpEvents(
-      settings.provider === 'antigravity'
-        ? ['invoke_subagent']
-        : settings.provider === 'claude-code'
-          ? ['agent', 'task']
-          : ['task', 'subagent'],
+      settings.provider === 'antigravity' ? ['invoke_subagent'] : ['task', 'subagent'],
     )
   }
   setTools(connection: McpConnection): void {
@@ -465,11 +349,7 @@ class AcpSession implements AgentRunner {
       provider,
       this.scope.cwd,
       this.settings.accountId ?? 'default',
-      provider === 'opencode'
-        ? openCodeConfigEnv(this.connection)
-        : provider === 'codex'
-          ? codexAcpEnv(this.connection)
-          : {},
+      provider === 'opencode' ? openCodeConfigEnv(this.connection) : {},
     )
     this.rpc.onMessage = (m) => this.handle(m)
     this.rpc.onExit = (e) => {
@@ -509,9 +389,8 @@ class AcpSession implements AgentRunner {
         ...(resume ? { sessionId: resume } : {}),
         cwd: this.scope.cwd,
         additionalDirectories: this.scope.additionalDirs,
-        ...(provider === 'claude-code' ? { _meta: claudeSessionMeta(this.connection, this.settings) } : {}),
         mcpServers:
-          tools && provider !== 'codex'
+          tools
             ? [
                 {
                   type: 'http',
@@ -552,17 +431,6 @@ class AcpSession implements AgentRunner {
           sessionId: this.sessionId,
           configId: level.id,
           value: this.settings.effort,
-        })
-    }
-    if (provider === 'claude-code' && !this.readOnly) {
-      // Claude's permission mode carries the chat's access level; the adapter starts in its own default.
-      const config = (this.session.configOptions ?? []).find((c: Wire) => c.category === 'mode' || c.id === 'mode')
-      const mode = baseMode(this.settings)
-      if (config && optionsOf(config).some((o) => o.value === mode))
-        await this.rpc.request('session/set_config_option', {
-          sessionId: this.sessionId,
-          configId: config.id,
-          value: mode,
         })
     }
     if (this.readOnly) {
@@ -682,23 +550,7 @@ class AcpSession implements AgentRunner {
   }
   /** No usage API exists for these runtimes, so a limit response is recorded as a reading and routing avoids the provider until it lifts. */
   private markLimited(text: string): void {
-    const resetsAt = limitResetsAt(text)
-    const accountId =
-      this.settings.accountId && this.settings.accountId !== 'default' ? { accountId: this.settings.accountId } : {}
-    this.emit({
-      kind: 'usage',
-      readings: [
-        {
-          provider: this.settings.provider,
-          ...accountId,
-          window: 'five_hour',
-          usedPercent: 100,
-          status: 'limited',
-          ...(resetsAt ? { resetsAt } : {}),
-          updatedAt: Date.now(),
-        },
-      ],
-    })
+    this.emit({ kind: 'usage', readings: [limitedReading(this.settings, text)] })
   }
   private cancelPending(): void {
     for (const [id, m] of this.pending) {

@@ -24,6 +24,10 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id]),
       run: (taskId: string, repoId: string) => git.status(gitCwdOf(taskId, repoId)),
     },
+    'git.lineStats': {
+      args: z.tuple([id, id]),
+      run: (taskId: string, repoId: string) => git.lineStats(gitCwdOf(taskId, repoId)),
+    },
     'git.diff': {
       args: z.tuple([id, id, relPath, z.union([z.boolean(), z.literal('all')])]),
       run: async (taskId: string, repoId: string, path: string, staged: boolean | 'all'): Promise<DiffContents> => {

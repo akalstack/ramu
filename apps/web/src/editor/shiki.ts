@@ -79,7 +79,8 @@ function createHighlighter() {
     const ramu = {
       ...theme,
       name: 'ramu',
-      colors: { ...theme.colors, ...RAMU_EDITOR_COLORS },
+      // Only the token colors come from GitHub's theme; the surfaces are Ramu's own.
+      colors: RAMU_EDITOR_COLORS,
       rules: monacoRules(theme),
     } as typeof theme
     return createHighlighterCore({

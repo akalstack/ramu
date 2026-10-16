@@ -154,7 +154,7 @@ it('loads the export as a Claude plugin only when the chat has one', () => {
     claudeLaunchOptions({
       session: { ...session(), cwd: '/tmp', additionalDirs: [] } as AgentSessionInfo,
       connection: { url: 'http://127.0.0.1:1/mcp', token: 't', instructions: '', ...(skillsDir ? { skillsDir } : {}) },
-      advisorOn: false,
+      advisorModel: undefined,
       abort: new AbortController(),
       canUseTool: async () => ({ behavior: 'deny', message: '' }),
       resume: null,

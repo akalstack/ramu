@@ -1,22 +1,11 @@
 import { useEffect, useState, type RefObject } from 'react'
+import { useDiffLayout } from '../git/diffLayout'
 
 const NARROW_REVIEW = 720
 
 /** Diff layout and file-tree visibility, remembered in localStorage and adapted to the pane width. */
 export function useReviewLayout(root: RefObject<HTMLDivElement | null>, reviewId: string | undefined) {
-  const [sideBySide, setSideBySide] = useState(() => {
-    try {
-      return localStorage.getItem('ramu.review-layout') !== 'inline'
-    } catch {
-      return true
-    }
-  })
-  const changeLayout = (split: boolean) => {
-    setSideBySide(split)
-    try {
-      localStorage.setItem('ramu.review-layout', split ? 'split' : 'inline')
-    } catch {}
-  }
+  const [sideBySide, changeLayout] = useDiffLayout()
   // A docked pane is too narrow for split diffs and a file tree beside them: diffs go inline (the saved choice is kept) and the tree folds away.
   const [narrow, setNarrow] = useState(false)
   const [treeOpen, setTreeOpen] = useState(() => {

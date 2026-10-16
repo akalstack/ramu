@@ -13,7 +13,7 @@ import { runtimeVersion } from '../build'
 import { configureProviderAccounts, providerEnvironment } from '../providers/providerBinaries'
 import { UsageService } from '../providers/usage'
 import { ExtraUsageReader, readAntigravityUsage, readCursorUsage } from '../providers/providerUsage'
-import { AccountUsage } from '../providers/accountUsage'
+import { ACCOUNT_USAGE_INTERVAL_MS, AccountUsage } from '../providers/accountUsage'
 import { codexUsage } from '../providers/codex'
 import type { Workspace } from '../workspace/workspace'
 import { KeyedLock } from './keyedLock'
@@ -65,7 +65,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
       }
     },
   )
-  // Every login's usage, for providers where "use all accounts" is on. Read on demand, never on a timer.
+  // Every login's usage, for providers where "use all accounts" is on, and Codex's even with one login. Read on demand and on a timer below.
   const accountUsage = new AccountUsage(
     (readings) => usage.update(readings),
     () => loadPreferences().providerBinaries,
@@ -80,6 +80,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
       antigravity: (account) =>
         readAntigravityUsage(providerEnvironment('antigravity', loadPreferences().providerBinaries, account)),
     },
+    ['codex'],
   )
   const loadPreferences = (): AppPreferences => {
     const saved = storedPreferences()
@@ -120,6 +121,11 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
       }
     })
   }
+  // Plan usage only arrives while a provider runs, so poll it too; each read is throttled per login.
+  const refreshUsage = () =>
+    void Promise.allSettled([agents?.readClaudeUsage(), extraUsage.refresh(), accountUsage.refresh()])
+  setTimeout(refreshUsage, 15_000).unref()
+  setInterval(refreshUsage, ACCOUNT_USAGE_INTERVAL_MS).unref()
   setTimeout(() => void cleanupArchived(), 30_000).unref()
   setInterval(() => void cleanupArchived(), 6 * 3_600_000).unref()
   if (agents) {

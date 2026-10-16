@@ -70,7 +70,7 @@ export function ProviderCard({
   return (
     <Card
       role="region"
-      className={`gap-3 overflow-visible ring-0 text-body provider-settings-card ${enabled ? '' : 'opacity-60'} [&_header]:flex [&_header]:items-center [&_header]:gap-2.5 [border:1px_solid_transparent] rounded-(--radius-row) p-4 min-w-0 bg-fill`}
+      className={`gap-3 overflow-visible ring-0 text-body provider-settings-card [&_header]:flex [&_header]:items-center [&_header]:gap-2.5 [border:1px_solid_transparent] rounded-(--radius-row) p-4 min-w-0 bg-fill`}
       aria-label={t('{0} settings', { '0': providerName(provider) })}
     >
       <header>
@@ -81,13 +81,15 @@ export function ProviderCard({
         <span
           className={`small text-caption ${status?.updateAvailable ? 'provider-update-label text-brand' : 'muted text-muted-foreground'}`}
         >
-          {!status
-            ? t('Detecting…')
-            : !status.installed
-              ? t(provider === 'antigravity' ? 'Runtime not found' : 'CLI not found')
-              : status.updateAvailable
-                ? t('Update available')
-                : t('Installed')}
+          {!enabled
+            ? t('Off')
+            : !status
+              ? t('Detecting…')
+              : !status.installed
+                ? t(provider === 'antigravity' ? 'Runtime not found' : 'CLI not found')
+                : status.updateAvailable
+                  ? t('Update available')
+                  : t('Installed')}
         </span>
         <SettingsField path={`providerBinaries.${provider}.enabled`}>
           {' '}
@@ -101,185 +103,202 @@ export function ProviderCard({
       </header>
       {!enabled && (
         <p className="muted text-muted-foreground small text-caption">
-          {t('Turned off: hidden from model pickers and never started.')}
+          {t('Hidden from model pickers and never started. Turn it on to use it again.')}
         </p>
       )}
-      {enabled && status?.installed && (
-        <ul className="grid gap-1.5 m-0 p-0 list-none" aria-label={t('{0} logins', { '0': providerName(provider) })}>
-          {[
-            {
-              id: 'default',
-              name: accounts
-                ? t(provider === 'antigravity' ? 'Default account' : 'Default CLI account')
-                : t('CLI login'),
-              enabled: true,
-            },
-            ...(accounts ? (preferences?.accounts ?? []) : []),
-          ].map((row) => (
-            <ProviderLoginRow
-              key={row.id}
-              provider={provider}
-              row={row}
-              state={status.signIn?.[row.id]}
-              accountUsage={accountUsage}
-              signingIn={signingIn}
-              onLogin={() => onLogin(row.id)}
-              onToggleAccount={(on) => onToggleAccount(row.id, on)}
-            />
-          ))}
-        </ul>
-      )}
-      {accounts && (
-        <ProviderAccountPicker
-          provider={provider}
-          preferences={preferences}
-          onSelect={(accountId) => onChange({ accountId })}
-          onAdd={onStartAdd}
-        />
-      )}
-      {adding && (
-        <ProviderAddAccountForm name={accountName} onName={onAccountName} onAdd={onAddAccount} onCancel={onCancelAdd} />
-      )}
-      {accounts && (
-        <p className="muted text-muted-foreground small text-caption">
-          {t(
-            'New chats use the selected account after saving; existing chats keep theirs. When the account a chat is using reaches its limit, it continues on the next enabled account before switching models.',
-          )}
-        </p>
-      )}
-      <div className={PROVIDER_ACTIONS_CLASS}>
-        {canUpdate ? (
-          <Button
-            variant="secondary"
-            className={SECONDARY_BUTTON_CLASS}
-            disabled={(!status?.installed && provider !== 'antigravity') || updating !== null || status?.updating}
-            onClick={onUpdate}
-          >
-            <RefreshCw
-              size={14}
-              className={updating === provider ? 'spin [animation:spin_0.9s_linear_infinite]' : ''}
-            />
-            {provider === 'antigravity'
-              ? updating === provider
-                ? t(status?.installed ? 'Updating…' : 'Installing…')
-                : t(status?.installed ? 'Update runtime' : 'Install runtime')
-              : updating === provider
-                ? t('Updating…')
-                : t('Update CLI')}
-          </Button>
-        ) : (
-          <a href={status?.downloadUrl ?? status?.docsUrl} target="_blank" rel="noreferrer">
-            {t('Provider website ↗')}
-          </a>
-        )}
-      </div>
-      {provider === 'cursor' && (
-        <SettingsRow setting={`providerBinaries.${provider}.usageKeychain`} className="settings-toggle">
-          <span className="small text-caption">
-            {t('Show plan usage')}
-            <span className="muted text-muted-foreground block small text-caption">
-              {t('Reads your Cursor login from the macOS Keychain to show monthly usage. macOS asks for permission.')}
-            </span>
-          </span>
-          <Switch
-            aria-label={t('Show Cursor plan usage')}
-            checked={preferences?.usageKeychain ?? false}
-            onCheckedChange={(usageKeychain) => onChange({ usageKeychain })}
-          />
-        </SettingsRow>
-      )}
-      {canUpdate && (
-        <SettingsRow
-          setting={`providerBinaries.${provider}.autoUpdate`}
-          className="settings-toggle [&:not(:has(+_.settings-row))]:mb-0"
-        >
-          <span className="small text-caption">
-            {t(provider === 'antigravity' ? 'Auto-update runtime' : 'Auto-update CLI')}
-            <span className="muted text-muted-foreground block block small text-caption">
-              {t('Updates apply to new provider processes. Running chats stay connected.')}
-            </span>
-          </span>
-          <Switch
-            aria-label={t(provider === 'antigravity' ? 'Auto-update {0} runtime' : 'Auto-update {0} CLI', {
-              '0': providerName(provider),
-            })}
-            checked={preferences?.autoUpdate ?? false}
-            onCheckedChange={(autoUpdate) => onChange({ autoUpdate })}
-          />
-        </SettingsRow>
-      )}
-      {status?.latestVersion && status.updateAvailable && (
-        <p className="muted text-muted-foreground small text-caption">
-          {t('Available version: {0}', { '0': status.latestVersion })}
-        </p>
-      )}
-      {[status?.versionError, status?.error, status?.updateError].filter(Boolean).map((message) => (
-        <p key={message} className="error text-bad small text-caption" role="alert">
-          {message}
-        </p>
-      ))}
-      <Collapsible>
-        <CollapsibleTrigger render={<Button size="sm" variant="ghost" className="small text-caption" />}>
-          {t('Advanced')}
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <label className="provider-binary-label block text-caption m-[12px_0_6px]" htmlFor={`provider-${provider}`}>
-            {t(provider === 'antigravity' ? 'Runtime path' : 'Binary path')}
-          </label>
-          <div className="provider-binary-input">
-            <SettingsField path={`providerBinaries.${provider}.binary`}>
-              {' '}
-              <Input
-                id={`provider-${provider}`}
-                maxLength={4096}
-                placeholder={t('Automatic detection')}
-                value={preferences?.binary ?? ''}
-                onChange={(event) => onChange({ binary: event.target.value })}
-              />{' '}
-            </SettingsField>
-            <Button
-              variant="secondary"
-              size="icon-sm"
-              className={BROWSE_BUTTON_CLASS}
-              aria-label={t(provider === 'antigravity' ? 'Browse {0} runtime' : 'Browse {0} binary', {
-                '0': providerName(provider),
-              })}
-              onClick={() => onBrowse('binary')}
+      {enabled && (
+        <>
+          {status?.installed && (
+            <ul
+              className="grid gap-1.5 m-0 p-0 list-none"
+              aria-label={t('{0} logins', { '0': providerName(provider) })}
             >
-              <FolderOpen size={16} />
-            </Button>
-          </div>
-          {status && (
+              {[
+                {
+                  id: 'default',
+                  name: accounts
+                    ? t(provider === 'antigravity' ? 'Default account' : 'Default CLI account')
+                    : t('CLI login'),
+                  enabled: true,
+                },
+                ...(accounts ? (preferences?.accounts ?? []) : []),
+              ].map((row) => (
+                <ProviderLoginRow
+                  key={row.id}
+                  provider={provider}
+                  row={row}
+                  state={status.signIn?.[row.id]}
+                  accountUsage={accountUsage}
+                  signingIn={signingIn}
+                  onLogin={() => onLogin(row.id)}
+                  onToggleAccount={(on) => onToggleAccount(row.id, on)}
+                />
+              ))}
+            </ul>
+          )}
+          {accounts && (
+            <ProviderAccountPicker
+              provider={provider}
+              preferences={preferences}
+              onSelect={(accountId) => onChange({ accountId })}
+              onAdd={onStartAdd}
+            />
+          )}
+          {adding && (
+            <ProviderAddAccountForm
+              name={accountName}
+              onName={onAccountName}
+              onAdd={onAddAccount}
+              onCancel={onCancelAdd}
+            />
+          )}
+          {accounts && (
             <p className="muted text-muted-foreground small text-caption">
-              <code>{status.binary}</code>
+              {t(
+                'New chats use the selected account after saving; existing chats keep theirs. When the account a chat is using reaches its limit, it continues on the next enabled account before switching models.',
+              )}
             </p>
           )}
-          {provider === 'antigravity' && (
-            <>
-              <label htmlFor="provider-harness">{t('Harness helper path')}</label>
+          <div className={PROVIDER_ACTIONS_CLASS}>
+            {canUpdate ? (
+              <Button
+                variant="secondary"
+                className={SECONDARY_BUTTON_CLASS}
+                disabled={(!status?.installed && provider !== 'antigravity') || updating !== null || status?.updating}
+                onClick={onUpdate}
+              >
+                <RefreshCw
+                  size={14}
+                  className={updating === provider ? 'spin [animation:spin_0.9s_linear_infinite]' : ''}
+                />
+                {provider === 'antigravity'
+                  ? updating === provider
+                    ? t(status?.installed ? 'Updating…' : 'Installing…')
+                    : t(status?.installed ? 'Update runtime' : 'Install runtime')
+                  : updating === provider
+                    ? t('Updating…')
+                    : t('Update CLI')}
+              </Button>
+            ) : (
+              <a href={status?.downloadUrl ?? status?.docsUrl} target="_blank" rel="noreferrer">
+                {t('Provider website ↗')}
+              </a>
+            )}
+          </div>
+          {provider === 'cursor' && (
+            <SettingsRow setting={`providerBinaries.${provider}.usageKeychain`} className="settings-toggle">
+              <span className="small text-caption">
+                {t('Show plan usage')}
+                <span className="muted text-muted-foreground block small text-caption">
+                  {t(
+                    'Reads your Cursor login from the macOS Keychain to show monthly usage. macOS asks for permission.',
+                  )}
+                </span>
+              </span>
+              <Switch
+                aria-label={t('Show Cursor plan usage')}
+                checked={preferences?.usageKeychain ?? false}
+                onCheckedChange={(usageKeychain) => onChange({ usageKeychain })}
+              />
+            </SettingsRow>
+          )}
+          {canUpdate && (
+            <SettingsRow
+              setting={`providerBinaries.${provider}.autoUpdate`}
+              className="settings-toggle [&:not(:has(+_.settings-row))]:mb-0"
+            >
+              <span className="small text-caption">
+                {t(provider === 'antigravity' ? 'Auto-update runtime' : 'Auto-update CLI')}
+                <span className="muted text-muted-foreground block block small text-caption">
+                  {t('Updates apply to new provider processes. Running chats stay connected.')}
+                </span>
+              </span>
+              <Switch
+                aria-label={t(provider === 'antigravity' ? 'Auto-update {0} runtime' : 'Auto-update {0} CLI', {
+                  '0': providerName(provider),
+                })}
+                checked={preferences?.autoUpdate ?? false}
+                onCheckedChange={(autoUpdate) => onChange({ autoUpdate })}
+              />
+            </SettingsRow>
+          )}
+          {status?.latestVersion && status.updateAvailable && (
+            <p className="muted text-muted-foreground small text-caption">
+              {t('Available version: {0}', { '0': status.latestVersion })}
+            </p>
+          )}
+          {[status?.versionError, status?.error, status?.updateError].filter(Boolean).map((message) => (
+            <p key={message} className="error text-bad small text-caption" role="alert">
+              {message}
+            </p>
+          ))}
+          <Collapsible>
+            <CollapsibleTrigger render={<Button size="sm" variant="ghost" className="small text-caption" />}>
+              {t('Advanced')}
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <label
+                className="provider-binary-label block text-caption m-[12px_0_6px]"
+                htmlFor={`provider-${provider}`}
+              >
+                {t(provider === 'antigravity' ? 'Runtime path' : 'Binary path')}
+              </label>
               <div className="provider-binary-input">
-                <SettingsField path={`providerBinaries.${provider}.harness`}>
+                <SettingsField path={`providerBinaries.${provider}.binary`}>
                   {' '}
                   <Input
-                    id="provider-harness"
-                    value={preferences?.harness ?? ''}
-                    onChange={(event) => onChange({ harness: event.target.value })}
+                    id={`provider-${provider}`}
+                    maxLength={4096}
+                    placeholder={t('Automatic detection')}
+                    value={preferences?.binary ?? ''}
+                    onChange={(event) => onChange({ binary: event.target.value })}
                   />{' '}
                 </SettingsField>
                 <Button
                   variant="secondary"
                   size="icon-sm"
                   className={BROWSE_BUTTON_CLASS}
-                  aria-label={t('Browse Antigravity harness helper')}
-                  onClick={() => onBrowse('harness')}
+                  aria-label={t(provider === 'antigravity' ? 'Browse {0} runtime' : 'Browse {0} binary', {
+                    '0': providerName(provider),
+                  })}
+                  onClick={() => onBrowse('binary')}
                 >
                   <FolderOpen size={16} />
                 </Button>
               </div>
-            </>
-          )}
-        </CollapsibleContent>
-      </Collapsible>
+              {status && (
+                <p className="muted text-muted-foreground small text-caption">
+                  <code>{status.binary}</code>
+                </p>
+              )}
+              {provider === 'antigravity' && (
+                <>
+                  <label htmlFor="provider-harness">{t('Harness helper path')}</label>
+                  <div className="provider-binary-input">
+                    <SettingsField path={`providerBinaries.${provider}.harness`}>
+                      {' '}
+                      <Input
+                        id="provider-harness"
+                        value={preferences?.harness ?? ''}
+                        onChange={(event) => onChange({ harness: event.target.value })}
+                      />{' '}
+                    </SettingsField>
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      className={BROWSE_BUTTON_CLASS}
+                      aria-label={t('Browse Antigravity harness helper')}
+                      onClick={() => onBrowse('harness')}
+                    >
+                      <FolderOpen size={16} />
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+        </>
+      )}
     </Card>
   )
 }

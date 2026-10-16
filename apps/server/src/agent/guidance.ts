@@ -7,7 +7,8 @@ import { NATIVE_SUBAGENT_PREAMBLE } from './constants'
 
 /** Which optional sections a chat's guidance includes; the text of each section is supplied by the caller or defined here. */
 export interface GuidanceSections {
-  asyncQuestions: boolean
+  /** Ramu's async questions, Ramu's questions made blocking, or only the provider's own question tool. */
+  questions: 'async' | 'blocking' | 'native'
   background: boolean
   advisor: boolean
   /** Goal instructions; main chats only. */
@@ -21,9 +22,12 @@ export interface GuidanceSections {
 
 /** The guidance appended to a chat's system prompt (or sent ahead of its first prompt) through the Ramu tool connection. */
 export function sessionGuidance(sections: GuidanceSections): string {
-  const questions = sections.asyncQuestions
-    ? QUESTION_PREAMBLE
-    : `${QUESTION_PREAMBLE}\nAsync questions are disabled. Use ask_user (Ramu will wait for an answer) or a native blocking question. Do not use request_user_input_async.`
+  const questions =
+    sections.questions === 'async'
+      ? QUESTION_PREAMBLE
+      : sections.questions === 'blocking'
+        ? `${QUESTION_PREAMBLE}\nAsync questions are disabled. Use ask_user (Ramu will wait for an answer) or a native blocking question. Do not use request_user_input_async.`
+        : 'When you need a decision from the user, ask with your built-in question tool and wait for the answer. Never assume an unanswered decision.'
   let instructions = `${USER_MESSAGE_PREAMBLE}\n\n${TOOL_PRESENTATION_PREAMBLE}\n\n${questions}`
   if (sections.background) instructions += `\n\n${BACKGROUND_PREAMBLE}`
   if (sections.advisor) instructions += `\n\n${ADVISOR_PREAMBLE}`

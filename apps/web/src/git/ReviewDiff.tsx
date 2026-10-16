@@ -130,6 +130,15 @@ export function ReviewDiff({
       overviewRulerLanes: 0,
       minimap: { enabled: false },
       fontSize: preferences.editorFontSize,
+      lineHeight: Math.round(preferences.editorFontSize * 1.6),
+      // A review is read-only: no caret, bracket boxes or current-line band competing with the changes.
+      renderLineHighlight: 'none',
+      matchBrackets: 'never',
+      guides: { indentation: false, bracketPairs: false },
+      cursorStyle: 'line-thin',
+      cursorBlinking: 'solid',
+      occurrencesHighlight: 'off',
+      selectionHighlight: false,
       accessibilityVerbose: true,
       scrollBeyondLastLine: false,
       ...(flow
@@ -257,7 +266,11 @@ export function ReviewDiff({
     if (active) diff.layout()
   }, [near, requested, mounted])
   useLayoutEffect(() => {
-    editor.current?.updateOptions({ renderSideBySide: sideBySide, fontSize: preferences.editorFontSize })
+    editor.current?.updateOptions({
+      renderSideBySide: sideBySide,
+      fontSize: preferences.editorFontSize,
+      lineHeight: Math.round(preferences.editorFontSize * 1.6),
+    })
     size()
   }, [sideBySide, preferences.editorFontSize, mounted])
   useLayoutEffect(() => {

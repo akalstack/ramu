@@ -43,11 +43,6 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
-  {
-    section: 'git',
-    title: 'Combine staged and unstaged changes',
-    words: 'source control git staging unified combined commit',
-  },
   { section: 'git', title: 'Automatic pull', words: 'git auto fetch remote fast-forward background sync' },
   ...(APP_AUTO_UPDATE
     ? [

@@ -1,3 +1,5 @@
+import type { AgentSettings, UsageReading } from '@ramu/shared/types'
+
 // Providers without a usage API (OpenCode, Cursor, Antigravity) only reveal a limit through what they say or fail with.
 
 /** An error or rejection that means the provider is out of quota, credits or rate allowance. */
@@ -37,4 +39,18 @@ export function limitResetsAt(text: string, now = Date.now()): number | undefine
   if (!match) return undefined
   const ms = Number(match[1]) * UNIT_MS[match[2]!.toLowerCase()]!
   return ms > 0 && ms <= 31 * 86_400_000 ? now + ms : undefined
+}
+
+/** The reading recorded when a provider without a usage API says it is limited, so routing avoids it until it lifts. */
+export function limitedReading(settings: Pick<AgentSettings, 'provider' | 'accountId'>, text: string): UsageReading {
+  const resetsAt = limitResetsAt(text)
+  return {
+    provider: settings.provider,
+    ...(settings.accountId && settings.accountId !== 'default' ? { accountId: settings.accountId } : {}),
+    window: 'five_hour',
+    usedPercent: 100,
+    status: 'limited',
+    ...(resetsAt ? { resetsAt } : {}),
+    updatedAt: Date.now(),
+  }
 }

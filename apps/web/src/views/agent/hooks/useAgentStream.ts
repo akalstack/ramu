@@ -79,6 +79,14 @@ export function useAgentStream(sessionId: string) {
     const reconnect = ramu.on('background:connection', ({ connected }) => {
       if (connected) void hydrate().catch(() => {})
     })
+    // A rewind removes the edited message and everything after it.
+    const rewound = ramu.on('agent:rewound', ({ sessionId: eventSessionId, seq }) => {
+      if (eventSessionId !== sessionId) return
+      revision++
+      for (const key of [...stored.keys()]) if (key >= seq) stored.delete(key)
+      setLiveText(null)
+      refreshEvents()
+    })
     const off = ramu.on('agent:event', ({ sessionId: eventSessionId, event, seq }) => {
       if (eventSessionId !== sessionId) return
       revision++
@@ -106,6 +114,7 @@ export function useAgentStream(sessionId: string) {
     return () => {
       cancelled = true
       off()
+      rewound()
       reconnect()
     }
   }, [sessionId])

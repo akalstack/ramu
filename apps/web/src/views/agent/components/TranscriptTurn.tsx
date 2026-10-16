@@ -11,7 +11,6 @@ import { AdvisorActivity } from './AdvisorActivity'
 import { AgentGroup } from './AgentGroup'
 import { AgentTaskCard } from './AgentTaskCard'
 import { EventRow } from './EventRow'
-import { InlineMessageEdit } from './InlineMessageEdit'
 import { ToolGroup } from './ToolGroup'
 import { TurnSummary } from './TurnSummary'
 
@@ -35,7 +34,6 @@ function TranscriptBlock({
   latest?: boolean
 }) {
   const index = blockIndex(b, ctx.blocks)
-  const { editing } = ctx
   return (
     <div data-block-index={index}>
       {b.kind === 'tools' ? (
@@ -80,21 +78,6 @@ function TranscriptBlock({
           questionStates={ctx.questionStates}
           actions={actions}
           latest={latest}
-          editor={
-            editing && ctx.eventSequences.get(b.event) === editing.seq ? (
-              <InlineMessageEdit
-                key={editing.seq}
-                original={editing.text}
-                files={editing.files}
-                sessionId={ctx.sessionId}
-                seq={editing.seq}
-                busy={ctx.configuring}
-                offlineHost={ctx.offlineHost}
-                onCancel={ctx.onCancelEdit}
-                onSubmit={ctx.onSubmitEdit}
-              />
-            ) : undefined
-          }
           onEdit={
             ctx.eventSequences.has(b.event)
               ? (text, files) => ctx.onEditMessage(text, files, ctx.eventSequences.get(b.event))

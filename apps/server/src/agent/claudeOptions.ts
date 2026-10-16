@@ -8,8 +8,8 @@ import { baseMode } from './settings'
 export interface ClaudeLaunch {
   session: AgentSessionInfo
   connection: McpConnection | undefined
-  /** Whether Ramu's advisor replaces Claude Code's own. */
-  advisorOn: boolean
+  /** Claude Code's `advisorModel`: a model, '' to turn its advisor off for Ramu's, or undefined for the user's setting. */
+  advisorModel: string | undefined
   abort: AbortController
   canUseTool: CanUseTool
   resume: string | null
@@ -22,7 +22,7 @@ export interface ClaudeLaunch {
 export function claudeLaunchOptions({
   session: s,
   connection,
-  advisorOn,
+  advisorModel,
   abort,
   canUseTool,
   resume,
@@ -56,8 +56,8 @@ export function claudeLaunchOptions({
       : {}),
     settingSources: ['user', 'project', 'local'],
     ...(plugins.length ? { plugins: plugins.map((path) => ({ type: 'local' as const, path })) } : {}),
-    // Ramu's advisor replaces Claude Code's own, which an empty advisorModel turns off over the user's settings.
-    ...(advisorOn ? { settings: { advisorModel: '' } } : {}),
+    // Overrides the user's settings: Claude Code's own advisor on the configured model, or off while Ramu's runs.
+    ...(advisorModel !== undefined ? { settings: { advisorModel } } : {}),
     ...(s.additionalDirs.length ? { additionalDirectories: s.additionalDirs } : {}),
     abortController: abort,
     canUseTool,

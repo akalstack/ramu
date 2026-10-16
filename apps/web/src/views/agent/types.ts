@@ -57,17 +57,10 @@ export interface TranscriptContext {
   latestAssistant: Block | undefined
   /** Whether a source message was requested, so folded work keeps its block indexes for navigation. */
   hasSourceSeq: boolean
-  editing: MessageEdit | null
   eventSequences: Map<AgentEvent, number>
-  /** A message revision or settings change is being applied. */
-  configuring: boolean
-  /** The unreachable computer, when edits go to the outbox. */
-  offlineHost: string | undefined
   onBackground: ((toolUseId: string) => void) | undefined
   onOpenAgent: (agentId: string | null) => void
   onStopTask: (task: AgentTask) => void
   onOpenQuestion: (requestId: string) => void
   onEditMessage: (text: string, files: Attachment[], seq?: number) => void
-  onCancelEdit: () => void
-  onSubmitEdit: (text: string, restored: boolean) => Promise<void>
 }

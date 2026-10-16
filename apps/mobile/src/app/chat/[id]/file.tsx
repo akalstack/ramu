@@ -37,10 +37,9 @@ export default function FileScreen() {
   } = useLocalSearchParams<{ id: string; repoId: string; path: string; line?: string; mode?: Mode }>()
   const chat = useChat(id)
   const store = useStore()
-  const combined = store.appPreferences[chat?.computerId ?? '']?.combineGitChanges ?? true
   const { c } = useTheme()
   const [mode, setMode] = useState<Mode>(initial ?? 'file')
-  const diffMode = mode === 'file' ? 'file' : combined ? 'all' : mode === 'all' ? 'changes' : mode
+  const diffMode = mode === 'all' ? 'changes' : mode
   const [state, setState] = useState<
     | { kind: 'loading' }
     | { kind: 'error'; message: string }
@@ -78,14 +77,7 @@ export default function FileScreen() {
     setState({ kind: 'loading' })
     const run = async () => {
       if (diffMode !== 'file') {
-        const diff = await store.invoke(
-          computerId,
-          'git.diff',
-          taskId,
-          repoId,
-          path,
-          diffMode === 'all' ? 'all' : diffMode === 'staged',
-        )
+        const diff = await store.invoke(computerId, 'git.diff', taskId, repoId, path, diffMode === 'staged')
         return {
           kind: 'diff' as const,
           file: diff.original === diff.modified ? null : changedFile(path, repoName, diff.original, diff.modified),
@@ -155,19 +147,7 @@ export default function FileScreen() {
         {[repoName, dir].filter(Boolean).join('/') || path}
       </T>
       <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
-        <Segmented<Mode>
-          value={diffMode}
-          onChange={setMode}
-          options={
-            combined
-              ? [
-                  { key: 'file', label: 'File' },
-                  { key: 'all', label: 'Changes' },
-                ]
-              : MODES
-          }
-          style={{ flex: 1 }}
-        />
+        <Segmented<Mode> value={diffMode} onChange={setMode} options={MODES} style={{ flex: 1 }} />
         {markdown && state.kind === 'text' ? (
           <Pressable
             accessibilityRole="button"
@@ -278,11 +258,7 @@ export default function FileScreen() {
               <DiffLines file={state.file} />
             ) : (
               <T tone="muted">
-                {diffMode === 'all'
-                  ? 'No changes in this file.'
-                  : diffMode === 'staged'
-                    ? 'Nothing is staged for this file.'
-                    : 'No unstaged changes in this file.'}
+                {diffMode === 'staged' ? 'Nothing is staged for this file.' : 'No unstaged changes in this file.'}
               </T>
             )
           ) : null}

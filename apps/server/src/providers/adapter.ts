@@ -52,6 +52,17 @@ export interface SkillsLaunch {
   linkDirs?: string[]
 }
 
+/**
+ * Features the provider has itself. Ramu uses them by default and adds its own tool only where the native one cannot
+ * follow Ramu's flow (another provider or model, async answers, fallback across providers).
+ */
+export interface NativeFeatures {
+  /** An advisor whose model Ramu can set per chat (Claude Code `advisorModel`). */
+  advisor?: boolean
+  /** A built-in blocking question tool whose requests reach Ramu (Claude `AskUserQuestion`, Codex `requestUserInput`). */
+  blockingQuestions?: boolean
+}
+
 /** Everything that varies per provider. Shared mechanics (spawning, caching, timeouts) stay in providers.ts / providerBinaries.ts. */
 export interface ProviderAdapter {
   readonly id: AgentProvider
@@ -89,6 +100,7 @@ export interface ProviderAdapter {
     accountId: string
     acpSignIn: (provider: 'antigravity', methodId: string, accountId: string) => Promise<void>
   }): Promise<void>
+  readonly native?: NativeFeatures
   /** Loads the managed-skill export through the provider's own skills. `cwd`, when known, is the chat's working directory for providers that scan one. */
   skillsLaunch?(exportDir: string, cwd?: string): SkillsLaunch
   /** Decides how to update; throws when this installation cannot be updated by Ramu. */

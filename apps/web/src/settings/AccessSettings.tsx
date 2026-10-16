@@ -38,7 +38,7 @@ export function AccessSettings({
         busy={busy}
         setting="defaultAutoFallback"
         title="Automatic provider fallback"
-        description="Switch to another provider when a usage limit is reached. Applies to new chats."
+        description="Switch to another provider when a usage limit is reached. When off, a chat waits and resumes on the same provider once the limit resets. Applies to new chats."
       />
       <FallbackSettings value={draft} onChange={onChange} busy={busy} />
     </div>

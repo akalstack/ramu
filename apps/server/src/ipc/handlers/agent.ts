@@ -89,6 +89,10 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id]),
       run: (s: string, messageId: string) => agents.removeQueued(s, messageId),
     },
+    'agent.reorderQueued': {
+      args: z.tuple([id, z.array(id).max(1000)]),
+      run: (s: string, order: string[]) => lockSession(ctx, s, async () => agents.reorderQueued(s, order)),
+    },
     'agent.send': {
       args: z.tuple([id, text]),
       run: (s: string, t: string) => lockSession(ctx, s, () => agents.send(s, t)),
@@ -101,6 +105,10 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'agent.continuationPrompt': { args: z.tuple([id]), run: (s: string) => agents.continuationPrompt(s) },
     'agent.interrupt': { args: z.tuple([id]), run: (s: string) => agents.interrupt(s) },
     'agent.stop': { args: z.tuple([id]), run: (s: string) => agents.stopAndWait(s) },
+    'agent.rewind': {
+      args: z.tuple([id, z.number().int().positive()]),
+      run: (s: string, userSeq: number) => lockSession(ctx, s, () => agents.rewind(s, userSeq)),
+    },
     'agent.context': { args: z.tuple([id]), run: (s: string) => agents.context(s) },
     'agent.holdProvider': {
       args: z.tuple([id, z.enum(['message', 'chat']).nullable()]),

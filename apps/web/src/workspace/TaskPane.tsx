@@ -150,7 +150,8 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   const focusedChat = agentViews.find((v) => v.id === state.activeAgentViewId) ?? agentViews.at(-1) ?? null
   // The conversation always stays in the main chat pane beside the active workspace view.
   // Explorer, Search and Source Control live in a rail of this pane, so opening one opens the pane too.
-  const workspaceTool = visible && !composing ? workspaceToolOf(ws.ui.sidebar) : null
+  // New chat keeps the rail too, so Explorer, Search and Source Control open beside the message box.
+  const workspaceTool = visible ? workspaceToolOf(ws.ui.sidebar) : null
   // With a tool open the pane shows a file tab if there is one; otherwise an empty-state hint beside the rail.
   const editorView =
     active && active.kind !== 'agent'
@@ -158,12 +159,13 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
       : workspaceTool
         ? (tabs.findLast((v) => v.kind !== 'agent') ?? null)
         : null
-  const tabScroll = useTabScroll(editorView?.id, true, visible && !!editorView && !composing)
+  // New chat only replaces the conversation: open files, terminals and the rail stay as they were.
+  const tabScroll = useTabScroll(editorView?.id, true, visible && !!editorView)
   const chatView = composing ? null : active?.kind === 'agent' ? active : editorView ? focusedChat : null
   const showLauncherMain = !editorView && !chatView
-  const rightTerminal = terminalOpen && terminalDock === 'right' && editorView?.kind === 'terminal' && !composing
-  const bottomTerminal = terminalOpen && terminalDock === 'bottom' && !composing
-  const editorOpen = !!editorView && !composing
+  const rightTerminal = terminalOpen && terminalDock === 'right' && editorView?.kind === 'terminal'
+  const bottomTerminal = terminalOpen && terminalDock === 'bottom'
+  const editorOpen = !!editorView
   useLayoutEffect(() => {
     const slot = rightTerminal ? rightSlot : bottomTerminal ? bottomSlot : null
     if (slot && terminalHost.parentElement !== slot) slot.appendChild(terminalHost)
@@ -349,7 +351,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
               >
                 <OverlayScrollArea
                   horizontal
-                  className="flex-initial min-w-0 w-max max-w-full h-[27px] [&:focus-within_>_[data-slot='scroll-area-scrollbar']]:opacity-0 [&_>_[data-slot='scroll-area-scrollbar'][data-scrolling]]:opacity-0 [&:hover_>_[data-slot='scroll-area-scrollbar']]:opacity-100 [&_>_[data-slot='scroll-area-scrollbar'][data-dragging]]:opacity-100 [&_>_[data-slot='scroll-area-scrollbar']]:h-[3px] [&_>_[data-slot='scroll-area-scrollbar']]:p-0 [&_>_[data-slot='scroll-area-scrollbar']]:bottom-px [&_[data-slot='scroll-area-thumb']]:[background:color-mix(in_srgb,_var(--text)_22%,_transparent)] [&_[data-slot='scroll-area-thumb']:hover]:[background:color-mix(in_srgb,_var(--text)_38%,_transparent)]"
+                  className="flex-initial min-w-0 w-max max-w-full h-[27px] [&:focus-within_>_[data-slot='scroll-area-scrollbar']]:opacity-0 [&_>_[data-slot='scroll-area-scrollbar'][data-scrolling]]:opacity-0 [&:hover_>_[data-slot='scroll-area-scrollbar']]:opacity-100 [&_>_[data-slot='scroll-area-scrollbar'][data-dragging]]:opacity-100 [&_>_[data-slot='scroll-area-scrollbar']]:h-[9px] [&_>_[data-slot='scroll-area-scrollbar']]:p-0 [&_>_[data-slot='scroll-area-scrollbar']]:pt-[6px] [&_>_[data-slot='scroll-area-scrollbar']]:bottom-px [&_[data-slot='scroll-area-thumb']]:[background:color-mix(in_srgb,_var(--text)_22%,_transparent)] [&_[data-slot='scroll-area-thumb']:hover]:[background:color-mix(in_srgb,_var(--text)_38%,_transparent)]"
                   viewportRef={tabScroll}
                   viewportClassName="view-tabs"
                   contentClassName="flex items-center gap-1 w-max! min-w-full!"
@@ -413,8 +415,9 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                     ))}
                 </OverlayScrollArea>
                 <Menu
+                  standard
                   label={t('New tab')}
-                  icon={<Plus data-icon="inline-start" />}
+                  icon={<Plus />}
                   className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
                   items={[
                     {
@@ -533,7 +536,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
           <TerminalPanel
             taskId={workspaceId}
             visible={visible}
-            hidden={composing || (terminalDock === 'right' && !rightTerminal)}
+            hidden={terminalDock === 'right' && !rightTerminal}
             dock={terminalDock}
           />,
           terminalHost,

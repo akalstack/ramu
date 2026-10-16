@@ -133,7 +133,6 @@ export const appPreferences = z.object({
   editorFontSize: z.number().int().min(10).max(22),
   terminalFontSize: z.number().int().min(8).max(22),
   previewTabs: z.boolean(),
-  combineGitChanges: z.boolean().default(true),
   pullMode: pullMode.default('rebase'),
   autoPull: z.boolean().default(true),
   commitStyle: z.enum(['conventional', 'repository', 'custom']).default('conventional'),

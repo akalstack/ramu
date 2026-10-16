@@ -654,7 +654,8 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
           }
           const ctx = selectedWorkspace ? worktreeCtx(selectedWorkspace) : projectCtx(target)
           void refreshBindings(ctx)
-          updateTaskUi(ctx, (state) => ({ ...state, activeViewId: null }))
+          // Same project: keep the open file or terminal beside New chat. Another project starts on New chat alone.
+          if (target !== current) updateTaskUi(ctx, (state) => ({ ...state, activeViewId: null }))
           setUi((u) => ({
             ...u,
             openTaskIds: [...new Set([...u.openTaskIds, ctx])],

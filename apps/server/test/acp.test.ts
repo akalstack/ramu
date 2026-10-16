@@ -1,14 +1,11 @@
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { isLimitMessage, isLimitReply, limitResetsAt } from '../src/providers/usageLimit'
 import {
   acpAside,
   openCodeConfigEnv,
-  codexAcpEnv,
-  claudeAcpEnv,
-  claudeSessionMeta,
   acpModels,
   acpSessionModels,
   createAcpRunner,
@@ -485,128 +482,4 @@ it('cancels and restarts the turn to steer a runtime without _session/steering',
   await startWith('long', {})
   await until(() => events.some((e) => e.kind === 'state' && e.state === 'running'))
   expect(runner!.steerInterrupts).toBe(true)
-})
-describe('Codex through the official ACP adapter', () => {
-  const codexRunner = (readOnly = false) =>
-    createAcpRunner(
-      { cwd: dir, additionalDirs: [], covers: [dir] },
-      { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', model: 'wire-model', access: 'full' },
-      (e) => events.push(e),
-      readOnly,
-    )
-  beforeEach(() => vi.stubEnv('RAMU_CODEX_ACP_ENTRY', join(dir, 'agent')))
-  it('shows an elicitation form and answers it with the typed values', async () => {
-    runner = codexRunner()
-    await runner.start('elicit', null)
-    await until(() => events.some((e) => e.kind === 'elicitation'))
-    const form = events.find((e) => e.kind === 'elicitation')!
-    expect(form).toMatchObject({ message: 'Pick a name', mode: 'form', fields: [{ id: 'name', required: true }] })
-    expect(() => runner!.replyElicitation!(form.requestId, 'accept', {})).toThrow()
-    runner.replyElicitation!(form.requestId, 'accept', { name: 'ramu' })
-    await until(() => events.some((e) => e.kind === 'result'))
-    expect(log().find((m) => m.id === 901)?.result).toEqual({ action: 'accept', content: { name: 'ramu' } })
-    expect(events).toContainEqual({ kind: 'request-resolved', requestId: '901', outcome: 'answered' })
-  })
-  it('declines a form when the user declines it', async () => {
-    runner = codexRunner()
-    await runner.start('elicit', null)
-    await until(() => events.some((e) => e.kind === 'elicitation'))
-    runner.replyElicitation!(events.find((e) => e.kind === 'elicitation')!.requestId, 'decline', {})
-    await until(() => log().some((m) => m.id === 901))
-    expect(log().find((m) => m.id === 901)?.result).toEqual({ action: 'decline' })
-    expect(events).toContainEqual({ kind: 'request-resolved', requestId: '901', outcome: 'declined' })
-  })
-  it('cancels a form that is still open when the turn is interrupted', async () => {
-    runner = codexRunner()
-    await runner.start('elicit', null)
-    await until(() => events.some((e) => e.kind === 'elicitation'))
-    await runner.interrupt()
-    await until(() => log().some((m) => m.id === 901))
-    expect(log().find((m) => m.id === 901)?.result).toEqual({ action: 'cancel' })
-  })
-  it('puts a read-only background analysis into the read-only mode and cancels forms', async () => {
-    runner = codexRunner(true)
-    await runner.start('elicit', null)
-    await until(() => log().some((m) => m.id === 901))
-    expect(log().find((m) => m.id === 901)?.result).toEqual({ action: 'cancel' })
-    expect(events.some((e) => e.kind === 'elicitation')).toBe(false)
-  })
-  it('hands Ramu its tools, sub-agent switch and spawn hook through the adapter config', () => {
-    const connection = { url: 'http://127.0.0.1:9/mcp', token: 't' }
-    expect(JSON.parse(codexAcpEnv(connection).CODEX_CONFIG!)).toEqual({
-      mcp_servers: {
-        ramu: { url: connection.url, http_headers: { Authorization: 'Bearer t' }, tool_timeout_sec: 3600 },
-      },
-    })
-    const off = JSON.parse(
-      codexAcpEnv({ ...connection, nativeSubagents: false, interceptSubagents: true }).CODEX_CONFIG!,
-    )
-    expect(off.features).toEqual({ multi_agent: false })
-    expect(off.hooks.PreToolUse[0]).toMatchObject({
-      matcher: 'spawn_agent',
-      hooks: [{ type: 'mcp_tool', server: 'ramu', tool: 'codex_pre_tool_use' }],
-    })
-    expect(codexAcpEnv(undefined).CODEX_CONFIG).toBeUndefined()
-    expect(codexAcpEnv(undefined).CODEX_PATH).toBeTruthy()
-  })
-})
-
-describe('Claude through the official ACP adapter', () => {
-  const connection = { url: 'http://127.0.0.1:9/mcp', token: 't', instructions: 'Use Ramu tools.' }
-  const settings = { ...DEFAULT_AGENT_SETTINGS, provider: 'claude-code' as const }
-  it('hands Ramu its guidance, tools and sub-agent switch to the adapter as session meta', () => {
-    const meta = claudeSessionMeta(connection, settings)
-    expect(meta.systemPrompt).toEqual({ append: 'Use Ramu tools.' })
-    expect(meta.claudeCode.options).toMatchObject({
-      settingSources: ['user', 'project', 'local'],
-      allowedTools: expect.arrayContaining(['mcp__ramu__ask_user', 'mcp__ramu__advisor']),
-      allowDangerouslySkipPermissions: false,
-    })
-    expect(meta.claudeCode.options.disallowedTools).toBeUndefined()
-    const off = claudeSessionMeta(
-      { ...connection, nativeSubagents: false, replaceAdvisor: true },
-      { ...settings, access: 'full' },
-    )
-    expect(off.claudeCode.options).toMatchObject({
-      disallowedTools: ['Agent', 'Task'],
-      settings: { advisorModel: '' },
-      allowDangerouslySkipPermissions: true,
-    })
-  })
-  it('limits a review chat to Ramu tools, and plugs in the managed-skill export', () => {
-    const meta = claudeSessionMeta({ ...connection, restricted: true, skillsDir: '/skills' }, settings)
-    expect(meta.claudeCode.options).toMatchObject({
-      tools: [],
-      allowedTools: ['mcp__ramu'],
-      plugins: [{ type: 'local', path: '/skills' }],
-    })
-    expect(claudeSessionMeta(undefined, settings).claudeCode.options.allowedTools).toBeUndefined()
-  })
-  it("runs the user's own claude binary with Ramu's long tool timeout", () => {
-    expect(claudeAcpEnv(connection)).toMatchObject({ MCP_TOOL_TIMEOUT: '3600000' })
-    expect(claudeAcpEnv(connection).CLAUDE_CODE_EXECUTABLE).toBeTruthy()
-    expect(claudeAcpEnv(undefined).MCP_TOOL_TIMEOUT).toBeUndefined()
-  })
-  it('sends the session meta and sets the access level as the permission mode when starting', async () => {
-    vi.stubEnv('RAMU_CLAUDE_ACP_ENTRY', join(dir, 'agent'))
-    vi.stubEnv('RAMU_CAPS', JSON.stringify({ mcpCapabilities: { http: true } }))
-    vi.stubEnv('RAMU_EXTRA_MODES', JSON.stringify([{ value: 'acceptEdits', name: 'Accept edits' }]))
-    runner = createAcpRunner(
-      { cwd: dir, additionalDirs: [], covers: [dir] },
-      { ...DEFAULT_AGENT_SETTINGS, provider: 'claude-code', model: 'wire-model', access: 'edits' },
-      (e) => events.push(e),
-    )
-    runner.setTools?.(connection)
-    await runner.start('todos', null)
-    await until(() => events.some((e) => e.kind === 'result'))
-    const created = log().find((m) => m.method === 'session/new')!.params
-    expect(created._meta.claudeCode.options.settingSources).toEqual(['user', 'project', 'local'])
-    expect(created.mcpServers).toEqual([expect.objectContaining({ name: 'ramu', url: connection.url })])
-    // The chat's access level becomes Claude's permission mode.
-    expect(
-      log().find((m) => m.method === 'session/set_config_option' && m.params.configId === 'mode')?.params,
-    ).toMatchObject({
-      value: 'acceptEdits',
-    })
-  })
 })

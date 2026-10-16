@@ -902,6 +902,22 @@ button.scm-sync:hover:not(:disabled) {
 }
 
 /* Editor scrollbars: thin, rounded, quiet. */
+/* "N hidden lines" in review diffs: a quiet strip in Ramu's caption type instead of Monaco's bar. */
+.monaco-editor .diff-hidden-lines .center {
+  @apply text-caption;
+  @apply font-sans;
+  @apply [border-block:1px_solid_var(--line)];
+}
+.monaco-editor .diff-hidden-lines .center .codicon {
+  @apply text-muted-foreground;
+}
+.monaco-editor .diff-hidden-lines .center a:hover {
+  @apply text-foreground;
+}
+.review-diff .monaco-editor .cursors-layer .cursor {
+  @apply hidden;
+}
+
 .monaco-editor .scrollbar > .slider {
   @apply rounded-(--radius-xs);
 }

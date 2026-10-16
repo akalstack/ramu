@@ -1,29 +1,21 @@
 import { useState } from 'react'
 import { invoke } from '../../ipc'
-import { errorText } from '../../workspace/TaskPane'
-import type { CommitFn } from './useCommitFlow'
 import type { Confirmation, GitRun } from './types'
 
 /** State and execution of the repository confirmation dialog. */
 export function useConfirmation({
   taskId,
   repoId,
-  unstagedPaths,
   busy,
   run,
   requireSaved,
-  commit,
-  reportError,
   onUndone,
 }: {
   taskId: string
   repoId: string
-  unstagedPaths: string[]
   busy: boolean
   run: GitRun
   requireSaved: () => void
-  commit: CommitFn
-  reportError: (message: string) => void
   /** Called with the undone commit's message so it can be edited and recommitted. */
   onUndone: (message: string) => void
 }) {
@@ -39,11 +31,6 @@ export function useConfirmation({
   }
   const confirm = () => {
     if (!confirmation) return
-    if (confirmation.kind === 'smart-commit') {
-      setConfirmation(null)
-      void commit(confirmation.action, unstagedPaths).catch((reason) => reportError(errorText(reason)))
-      return
-    }
     void run(async () => {
       requireSaved()
       if (confirmation.kind === 'discard') await invoke('git.discard', taskId, repoId, confirmation.paths)

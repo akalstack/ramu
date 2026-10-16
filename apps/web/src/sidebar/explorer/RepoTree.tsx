@@ -55,6 +55,11 @@ export function RepoTree({
     selected && (selected.kind === 'file' || selected.kind === 'diff') && selected.repoId === binding.repoId
       ? selected.path
       : null
+  useLayoutEffect(() => {
+    // Tab changes replace the previous tree selection as well as the active-file highlight.
+    setPicked(selectedPath ? [selectedPath] : [])
+    anchor.current = selectedPath
+  }, [selectedPath])
   const { open, setOpen, children, load, toggle, reloadAll } = useRepoListing(
     taskId,
     binding,

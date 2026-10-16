@@ -43,3 +43,19 @@ it('retries a failed read on the next refresh', async () => {
   // The default login failed and is retried; the working login is still inside its interval.
   expect(read).toHaveBeenCalledTimes(3)
 })
+
+it('reads a single login for standalone providers, whose own reading only arrives while they run', async () => {
+  const update = vi.fn(),
+    read = vi.fn(async () => [reading(30)]),
+    other = vi.fn(async () => [reading(1)])
+  const usage = new AccountUsage(
+    update,
+    () => ({ codex: { binary: '' }, cursor: { binary: '' } }),
+    { codex: read, cursor: other },
+    ['codex'],
+  )
+  await usage.refresh(undefined, 1_000_000)
+  expect(read).toHaveBeenCalledTimes(1)
+  expect(other).not.toHaveBeenCalled()
+  expect(update).toHaveBeenCalledWith([expect.not.objectContaining({ accountId: expect.anything() })])
+})

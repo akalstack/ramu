@@ -9,6 +9,7 @@ import type { AgentEvent } from '@ramu/shared/types'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { MessageTime } from './MessageTime'
 import { CopyButton } from './CopyButton'
+import { MessageQuoteActions } from './MessageQuoteActions'
 import { MSG_ACTIONS_CLASS, MSG_CLASS } from '../styles'
 
 // Streamed words fade in on the compositor: each is a CSS animation, so nothing runs in JavaScript per frame. Words that arrive
@@ -65,13 +66,11 @@ export const AssistantText = memo(function AssistantText({
   event: e,
   generating,
   actions,
-  latest = false,
   taskId,
 }: {
   event: Extract<AgentEvent, { kind: 'text' }>
   generating: boolean
   actions: boolean
-  latest?: boolean
   taskId?: string
   sessionId?: string
 }) {
@@ -118,9 +117,10 @@ export const AssistantText = memo(function AssistantText({
         {e.text}
       </Markdown>
       {actions && !generating && (
-        <div className={`${MSG_ACTIONS_CLASS}${latest ? ' always' : ''}`}>
+        <div className={`${MSG_ACTIONS_CLASS} always`}>
           <MessageTime at={e.at} />
           <CopyButton text={e.text} />
+          <MessageQuoteActions text={e.text} />
         </div>
       )}
     </div>

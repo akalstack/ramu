@@ -23,10 +23,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@agentclientprotocol/claude-agent-acp": "0.91.0",
-    "@agentclientprotocol/codex-acp": "2.2.2",
     "@anthropic-ai/claude-agent-sdk": "catalog:",
+    "@cursor/sdk": "1.0.37",
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@opencode/client": "2.0.30",
     "editorconfig": "^3.0.2",
     "luxon": "catalog:",
     "node-pty": "catalog:",

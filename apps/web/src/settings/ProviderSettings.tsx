@@ -1,5 +1,4 @@
 import { useSettingsInvoke } from './SettingsScope'
-import { ContentSkeleton } from '@/components/content-skeleton'
 import { errorText } from '../lib/errors'
 import { SettingsRow } from '@/components/settings-row'
 import { t, useLanguage } from '../i18n'
@@ -32,9 +31,10 @@ export function ProviderSettings({
   const sequence = useRef(0),
     config = value.providerBinaries
   const accountUsage = useAccountUsage()
-  const refresh = async (latest = false) => {
+  // Background refreshes (config edits, focus) update statuses in place; only the button shows progress.
+  const refresh = async (latest = false, quiet = false) => {
     const request = ++sequence.current
-    setBusy(true)
+    if (!quiet) setBusy(true)
     setError(null)
     try {
       const next = await invoke('providers.status', config, latest)
@@ -46,7 +46,7 @@ export function ProviderSettings({
     }
   }
   useEffect(() => {
-    const timer = setTimeout(() => void refresh(), 350)
+    const timer = setTimeout(() => void refresh(false, true), 350)
     return () => {
       clearTimeout(timer)
       sequence.current++
@@ -63,7 +63,7 @@ export function ProviderSettings({
     }
   }
   useEffect(() => {
-    const onFocus = () => void refresh()
+    const onFocus = () => void refresh(false, true)
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [config])
@@ -134,7 +134,6 @@ export function ProviderSettings({
           onCheckedChange={(checked) => onChange({ ...value, providerUpdateChecks: checked })}
         />
       </SettingsRow>
-      {busy && !statuses.length && <ContentSkeleton variant="cards" rows={2} label={t('Checking providers…')} />}
       <div className="provider-settings-actions flex items-center gap-2.5 flex-wrap">
         <Button
           variant="secondary"
@@ -151,10 +150,11 @@ export function ProviderSettings({
           {error}
         </p>
       )}
-      {(busy && !statuses.length ? [] : AGENT_PROVIDERS).map((provider) => {
+      {AGENT_PROVIDERS.map((provider) => {
         const status = statuses.find((item) => item.provider === provider),
           preferences = config[provider]
-        const enabled = status?.enabled ?? providerEnabled(config, provider),
+        // The draft decides, so the switch answers instantly; the status only catches up after the next check.
+        const enabled = providerEnabled(config, provider),
           onCount = AGENT_PROVIDERS.filter((item) => providerEnabled(config, item)).length
         return (
           <ProviderCard

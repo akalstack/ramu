@@ -9,6 +9,7 @@ import { errorText } from '../workspace/TaskPane'
 import { useAppSettings } from '../settings/AppSettings'
 import { useWorkspace } from '../workspace/workspace'
 import { registerSelection } from '../editor/editorBuffers'
+import { DiffLayoutToggle, useDiffLayout } from '../git/diffLayout'
 
 type DiffViewDesc = Extract<ViewDescriptor, { kind: 'diff' }>
 
@@ -28,6 +29,7 @@ export function DiffView({
   const host = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [split, setSplit] = useDiffLayout()
 
   useEffect(() => {
     let disposed = false,
@@ -54,7 +56,7 @@ export function DiffView({
       fontLigatures: true,
       lineHeight: Math.round(preferences.editorFontSize * 1.6),
       smoothScrolling: true,
-      renderSideBySide: true,
+      renderSideBySide: split,
     })
     editor.setModel({ original, modified })
 
@@ -129,6 +131,10 @@ export function DiffView({
   }, [taskId, binding.repoId, binding.cwd, view.path, view.staged, view.oid, view.stash])
 
   useEffect(() => {
+    editorRef.current?.updateOptions({ renderSideBySide: split })
+  }, [split])
+
+  useEffect(() => {
     editorRef.current?.updateOptions({
       fontSize: preferences.editorFontSize,
       lineHeight: Math.round(preferences.editorFontSize * 1.6),
@@ -151,6 +157,7 @@ export function DiffView({
                 ? t('Staged changes')
                 : t('Unstaged changes')}
         </span>
+        <DiffLayoutToggle split={split} onChange={setSplit} />
         <Button
           variant="secondary"
           className="bg-fill hover:bg-fill-hover"
@@ -169,7 +176,7 @@ export function DiffView({
         {loading && (
           <div className="absolute inset-0 flex bg-canvas">
             <ContentSkeleton variant="editor" rows={12} className="flex-1" />
-            <ContentSkeleton variant="editor" rows={12} className="flex-1 border-l border-border" />
+            {split && <ContentSkeleton variant="editor" rows={12} className="flex-1 border-l border-border" />}
           </div>
         )}
       </div>

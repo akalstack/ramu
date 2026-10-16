@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import type { AgentSettings, CommitDraft, GitStatus, RepositoryBinding } from '@ramu/shared/types'
 import { invoke } from '../../ipc'
-import { useAppSettings } from '../../settings/AppSettings'
 import { errorText } from '../../workspace/TaskPane'
 import { chooseCommitBranch } from '../../git/CommitBranchDialog'
+import { applyCommitScope, chooseCommit, type CommitPlan } from '../../git/CommitDialog'
 import { withGitBusy } from '../../git/gitBusy'
 import type { GitRun } from './types'
 
@@ -31,10 +31,11 @@ export function useCommitFlow({
   requireSaved: () => void
   reportError: (message: string) => void
 }) {
-  const { preferences } = useAppSettings()
-  const allPaths = preferences.combineGitChanges
-    ? status?.entries.filter((entry) => entry.unstaged && entry.unstaged !== 'unmerged').map((entry) => entry.path)
-    : undefined
+  // Smart commit: what is staged gets committed; with nothing staged, every change is staged first.
+  const hasStaged = !!status?.entries.some((entry) => entry.staged && entry.staged !== 'unmerged')
+  const allPaths = hasStaged
+    ? undefined
+    : status?.entries.filter((entry) => entry.unstaged && entry.unstaged !== 'unmerged').map((entry) => entry.path)
   const [message, setMessage] = useState('')
   const [draft, setDraft] = useState<CommitDraft | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -60,17 +61,38 @@ export function useCommitFlow({
   const commit = async (
     action: 'commit' | 'amend' | 'push' | 'sync' | 'new-branch' = 'commit',
     stagePaths?: string[],
+    /** Open the commit popup even when files are staged (the shortcut and the header button do). */
+    ask = false,
   ) => {
     if (loading || busy || generating || conflictCount) return
-    const branchOptions =
-      action === 'push' || action === 'sync' || action === 'new-branch'
+    // The popup picks files, message, action and branch; with files staged, Source Control's own button skips it.
+    let plan: CommitPlan | null = null
+    if (status && (action === 'commit' || action === 'push' || action === 'sync') && (ask || !hasStaged)) {
+      plan = await chooseCommit({
+        taskId,
+        repoId: binding.repoId,
+        repoName: binding.repoName,
+        status,
+        action,
+        message,
+      })
+      if (!plan) return
+      action = plan.action
+      setMessage(plan.message)
+    }
+    const branchOptions = plan
+      ? plan.branch
+      : action === 'push' || action === 'sync' || action === 'new-branch'
         ? await chooseCommitBranch(taskId, binding.repoId, action === 'new-branch', action === 'sync' ? 'sync' : 'push')
         : undefined
     if (branchOptions === null) return
     if (branchOptions?.newBranch || branchOptions?.autoBranch) requireSaved()
-    stagePaths = allPaths ?? stagePaths
-    if (stagePaths?.length) await invoke('git.stage', taskId, binding.repoId, stagePaths)
-    let text = message,
+    if (plan && status) await applyCommitScope(taskId, binding.repoId, status, plan.paths)
+    else {
+      stagePaths = allPaths ?? stagePaths
+      if (stagePaths?.length) await invoke('git.stage', taskId, binding.repoId, stagePaths)
+    }
+    let text = plan ? plan.message : message,
       fingerprint = draft?.fingerprint,
       suggested = draft?.branch
     const amendHead = action === 'amend' ? (status?.oid ?? undefined) : undefined

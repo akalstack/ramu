@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { GitCommit, GitStatusEntry, RepositoryBinding } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
-import { useAppSettings } from '../../settings/AppSettings'
 import { invoke } from '../../ipc'
 import { notifyError } from '../../chat/Notifications'
 import { useGitBusy } from '../../git/gitBusy'
@@ -55,8 +54,6 @@ export function RepositoryControl({
   onGitCollapsed?: (collapsed: boolean) => void
 }) {
   useLanguage()
-  const { preferences } = useAppSettings()
-  const combined = preferences.combineGitChanges
   const reportError = useCallback(
     (message: string) => notifyError(message, `Git · ${binding.repoName}`),
     [binding.repoName],
@@ -78,9 +75,7 @@ export function RepositoryControl({
   const staged = status?.entries.filter((e) => e.staged && e.staged !== 'unmerged') ?? []
   const conflicts = status?.entries.filter((e) => e.staged === 'unmerged') ?? []
   const unstaged = status?.entries.filter((e) => e.unstaged && e.unstaged !== 'unmerged') ?? []
-  const changes = combined
-    ? (status?.entries.filter((entry) => entry.staged !== 'unmerged' && entry.unstaged !== 'unmerged') ?? [])
-    : unstaged
+  const changes = unstaged
   const canStash = !!status?.oid && !!status.entries.length && !conflicts.length && !status.operation
   const { resolving, resolveWithAi } = useResolveWithAi({
     taskId,
@@ -106,12 +101,9 @@ export function RepositoryControl({
   const dialog = useConfirmation({
     taskId,
     repoId: binding.repoId,
-    unstagedPaths: unstaged.map((entry) => entry.path),
     busy,
     run: actions.run,
     requireSaved: actions.requireSaved,
-    commit: flow.commit,
-    reportError,
     onUndone: (message) => {
       flow.setMessage(message)
       flow.setDraft(null)
@@ -133,7 +125,7 @@ export function RepositoryControl({
   const root = useCommitShortcut({
     taskId,
     repoId: binding.repoId,
-    staged: combined ? changes.length : staged.length,
+    staged: staged.length,
     unstaged: unstaged.map((entry) => entry.path),
     publishable: !!status?.branch && !!status.remote && !status.operation && !conflicts.length,
     commit: flow.commit,
@@ -153,7 +145,7 @@ export function RepositoryControl({
       taskId={taskId}
       repoId={binding.repoId}
       entry={e}
-      staged={combined ? 'all' : isStaged}
+      staged={isStaged}
       busy={busy}
       contextMenu={fileContext.contextMenu}
       onContextEntry={fileContext.selectEntry}
@@ -232,7 +224,6 @@ export function RepositoryControl({
             onDraft={flow.setDraft}
             onGenerate={flow.generate}
             commit={flow.commit}
-            onSmartCommit={(action) => requestConfirmation({ kind: 'smart-commit', action })}
             onSync={sync}
             reportError={reportError}
           />
@@ -257,7 +248,7 @@ export function RepositoryControl({
               onMarkResolved={(path) => stagePaths([path], true)}
             />
           )}
-          {!combined && !!staged.length && (
+          {!!staged.length && (
             <>
               <ChangeGroupHeader
                 label={t('Staged')}
@@ -284,7 +275,6 @@ export function RepositoryControl({
             actionLabel={t('Stage all')}
             actionIcon={<Plus size={13} />}
             busy={busy}
-            showAction={!combined}
             onToggle={() => setChangesOpen((open) => !open)}
             onAction={() =>
               stagePaths(

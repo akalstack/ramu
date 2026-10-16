@@ -105,7 +105,8 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
 ) {
   const root = useRef<HTMLDivElement>(null),
     composing = useRef(false),
-    pendingCaret = useRef<number | null>(null)
+    pendingCaret = useRef<number | null>(null),
+    mounted = useRef(false)
   const current = useRef(value)
   current.current = value
   const [portals, setPortals] = useState<{ node: HTMLElement; chip: DraftChip }[]>([])
@@ -153,7 +154,9 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
     const element = root.current
     if (!element || composing.current) return
     const focused = document.activeElement === element
-    const caret = pendingCaret.current ?? (focused ? offsets(element).start : value.length)
+    // Text that arrives from outside into an empty box (a restored draft, a quote) leaves the caret after it.
+    const filled = !internalChange.current && !lastRendered.current && !!value
+    const caret = pendingCaret.current ?? (focused && !filled ? offsets(element).start : value.length)
     if (lastRendered.current !== value && !internalChange.current) {
       if (!value) {
         history.current.past = []
@@ -179,10 +182,12 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
     nodes.push(document.createTextNode(''))
     element.replaceChildren(...nodes)
     setPortals(chips)
-    if (focused || (autoFocus && !value)) {
+    // Autofocus also covers a box that mounts with a draft already in it.
+    if (focused || (autoFocus && (!value || !mounted.current))) {
       element.focus()
       selectComposerInput(element, Math.min(caret, value.length))
     }
+    mounted.current = true
   }, [value])
   const insert = (text: string) => {
     const position = root.current ? offsets(root.current) : { start: value.length, end: value.length }

@@ -22,6 +22,7 @@ const PUSH_EVENTS = new Set<string>([
   'background:connection',
   'computers:changed',
   'agent:event',
+  'agent:rewound',
   'term:data',
   'term:exit',
   'term:changed',

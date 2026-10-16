@@ -46,9 +46,9 @@ export function SettingsPanel({
   useLanguage()
 
   const app = useAppSettings()
-  const scope = useSettingsScope()
   const [page, setPage] = useState<SettingsSection>(initialSection)
   useEffect(() => setPage(initialSection), [initialSection])
+  const scope = useSettingsScope(page)
   const [appDraft, setAppDraft] = useState<AppPreferences>(() => structuredClone(scope.preferences))
   const store = useModelSets()
   const [draft, setDraft] = useState<ModelPreferences>(() => structuredClone(scope.models))

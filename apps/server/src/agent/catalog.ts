@@ -2,6 +2,7 @@ import type { Query } from '@anthropic-ai/claude-agent-sdk'
 import { providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider, ProviderCatalog } from '@ramu/shared/types'
 import { acpModels } from '../providers/acp'
+import { cursorModels } from '../providers/cursor'
 import { codexModels } from '../providers/codex'
 import { InputQueue } from './inputQueue'
 import { claudeDefaultEffort } from './settings'
@@ -94,7 +95,12 @@ export function discoverCatalogs({ providerOff, providerQuery }: CatalogSource):
         query?.close()
       }
     })(),
-    ...(['cursor', 'antigravity'] as const).map((provider) =>
+    // Cursor chats run on the SDK, so its catalog is the SDK's; before an SDK sign-in, the CLI's list stands in.
+    (providerOff('cursor') ? Promise.resolve([]) : cursorModels().catch(() => acpModels('cursor'))).then(
+      (models): ProviderCatalog => ({ provider: 'cursor', models }),
+      (e): ProviderCatalog => ({ provider: 'cursor', models: [], error: errorMessage(e) }),
+    ),
+    ...(['antigravity'] as const).map((provider) =>
       (providerOff(provider) ? Promise.resolve([]) : acpModels(provider)).then(
         (models): ProviderCatalog => ({ provider, models }),
         (e): ProviderCatalog => ({ provider, models: [], error: errorMessage(e) }),

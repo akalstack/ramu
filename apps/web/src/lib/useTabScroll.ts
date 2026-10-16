@@ -9,6 +9,7 @@ export function useTabScroll(selection: string | undefined | null, horizontal = 
     if (!strip || !visible) return
     const reveal = () => {
       if (document.querySelector('[data-separator="active"], [data-workspace-split][data-dragging]')) return
+      if (strip.parentElement?.querySelector("[data-slot='scroll-area-scrollbar'][data-dragging]")) return
       const tab = strip.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
       const item = tab?.closest<HTMLElement>('.tab-slot, .terminal-tab') ?? tab
       if (!item) return
@@ -48,7 +49,16 @@ export function useTabScroll(selection: string | undefined | null, horizontal = 
       event.preventDefault()
       strip.scrollLeft += pixels
     }
-    const release = new MutationObserver(reveal)
+    const release = new MutationObserver((records) => {
+      // Scrollbars also toggle data-dragging. Revealing on their release undoes manual scrolling.
+      if (
+        records.some(
+          (record) =>
+            record.target instanceof Element && record.target.matches('[data-separator], [data-workspace-split]'),
+        )
+      )
+        reveal()
+    })
     release.observe(document.documentElement, {
       subtree: true,
       attributes: true,

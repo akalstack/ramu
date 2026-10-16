@@ -1,4 +1,4 @@
-import { chooseCommitBranch } from './CommitBranchDialog'
+import { applyCommitScope, chooseCommit } from './CommitDialog'
 import { withGitBusy } from './gitBusy'
 import { t } from '../i18n'
 import { notify } from '@/components/app-toaster'
@@ -64,7 +64,6 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
     if (target && target !== 'several') return target.commitAndPush()
     return showScm(target ? SEVERAL() : NOTHING())
   }
-  const preferences = await invoke('settings.app.get')
   const bindings = (ws.bindings[ctx] ?? []).filter((binding) => binding.setupState === 'ready' && !binding.folderOnly)
   const states = (
     await Promise.allSettled(
@@ -75,7 +74,7 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
     state.status.entries.some((entry) => entry.staged && entry.staged !== 'unmerged')
   const target = pick(
     states,
-    preferences.combineGitChanges ? (state) => state.status.entries.length > 0 : hasStaged,
+    hasStaged,
     (state) => state.status.entries.length > 0,
     () => false,
   )
@@ -85,27 +84,24 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
     return showScm(t('Resolve the conflicts in {0} first.', { '0': binding.repoName }))
   if (!status.branch || !status.remote)
     return showScm(t('{0} has no branch with a remote to push to.', { '0': binding.repoName }))
-  const branchOptions = await chooseCommitBranch(ctx, binding.repoId)
-  if (!branchOptions) return
+  const plan = await chooseCommit({
+    taskId: ctx,
+    repoId: binding.repoId,
+    repoName: binding.repoName,
+    status,
+    action: 'push',
+    message: '',
+  })
+  if (!plan) return
+  const branchOptions = plan.branch
   if ((branchOptions.newBranch || branchOptions.autoBranch) && Object.values(ws.dirty).some(Boolean))
     return showScm(t('Save or close unsaved editor buffers before changing files or branches.'))
-  const stageAll = preferences.combineGitChanges || !hasStaged(target)
   let pushedTo = status.branch!
   const run = async () => {
-    if (stageAll)
-      await invoke(
-        'git.stage',
-        ctx,
-        binding.repoId,
-        status.entries.filter((entry) => entry.unstaged).map((entry) => entry.path),
-      )
-    const draft = await invoke(
-      'git.generateCommit',
-      ctx,
-      binding.repoId,
-      DEFAULT_AGENT_SETTINGS,
-      !!branchOptions.autoBranch,
-    )
+    await applyCommitScope(ctx, binding.repoId, status, plan.paths)
+    const draft = plan.message.trim()
+      ? { message: plan.message, fingerprint: undefined, branch: undefined as string | undefined }
+      : await invoke('git.generateCommit', ctx, binding.repoId, DEFAULT_AGENT_SETTINGS, !!branchOptions.autoBranch)
     if (!draft.message.trim()) throw new Error(t('Could not draft a commit message.'))
     await invoke(
       'git.commit',
@@ -119,7 +115,8 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
     pushedTo = branchOptions.autoBranch
       ? ((await invoke('git.commitBranchInfo', ctx, binding.repoId)).branch ?? status.branch!)
       : (branchOptions.newBranch ?? status.branch!)
-    await invoke('git.push', ctx, binding.repoId, pushedTo)
+    if (plan.action === 'sync') await invoke('git.sync', ctx, binding.repoId)
+    else if (plan.action === 'push') await invoke('git.push', ctx, binding.repoId, pushedTo)
     return draft.message.split('\n')[0]!
   }
   const work = withGitBusy(ctx, binding.repoId, run).finally(() => window.dispatchEvent(new Event('ramu:git-updated')))

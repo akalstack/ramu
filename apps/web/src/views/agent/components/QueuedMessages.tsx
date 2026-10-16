@@ -1,8 +1,26 @@
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
   CircleAlert,
   CornerDownRight,
+  GripVertical,
   ListEnd,
   LoaderCircle,
   MoreHorizontal,
@@ -77,6 +95,7 @@ function HostQueuedRow({
   busyAgent,
   supportsSteering,
   configuring,
+  reorderDisabled,
   act,
   onRecall,
 }: {
@@ -85,6 +104,7 @@ function HostQueuedRow({
   busyAgent: boolean
   supportsSteering: boolean
   configuring: boolean
+  reorderDisabled: boolean
   act: Act
   onRecall: (attachments: Attachment[], text: string) => void
 }) {
@@ -106,8 +126,36 @@ function HostQueuedRow({
       : supportsSteering
         ? translate('Send after active tools finish')
         : translate("This provider can't steer a running turn")
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: message.id,
+    disabled: configuring || reorderDisabled,
+  })
   return (
-    <div className={QUEUED_MESSAGE_CLASS}>
+    <div
+      ref={setNodeRef}
+      className={QUEUED_MESSAGE_CLASS}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : undefined,
+        position: 'relative',
+        zIndex: isDragging ? 1 : undefined,
+      }}
+    >
+      {reorderDisabled ? null : (
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          className="flex-none cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing disabled:cursor-default"
+          aria-label={translate('Drag to reorder')}
+          title={translate('Drag to reorder')}
+          disabled={configuring}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={14} />
+        </button>
+      )}
       <ListEnd size={15} className="queued-icon flex-none text-muted-foreground" aria-hidden="true" />
       <span className="queued-text" title={text}>
         {text}
@@ -231,6 +279,17 @@ export function QueuedMessages({
   onRecall: (attachments: Attachment[], text: string) => void
 }) {
   useLanguage()
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+  const ids = queued.map((message) => message.id)
+  const reorder = (event: DragEndEvent) => {
+    const from = ids.indexOf(String(event.active.id)),
+      to = event.over ? ids.indexOf(String(event.over.id)) : -1
+    if (from < 0 || to < 0 || from === to) return
+    void act(() => invoke('agent.reorderQueued', sessionId, arrayMove(ids, from, to)))
+  }
   return (
     <div
       className="message-queue flex flex-col gap-1.5 p-[8px_12px] mb-2 max-h-[180px] overflow-auto [border:1px_solid_transparent] rounded-(--radius-s) bg-raised"
@@ -249,18 +308,23 @@ export function QueuedMessages({
           </Button>
         </div>
       )}
-      {queued.map((message) => (
-        <HostQueuedRow
-          key={message.id}
-          message={message}
-          sessionId={sessionId}
-          busyAgent={busyAgent}
-          supportsSteering={supportsSteering}
-          configuring={configuring}
-          act={act}
-          onRecall={onRecall}
-        />
-      ))}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorder}>
+        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+          {queued.map((message) => (
+            <HostQueuedRow
+              key={message.id}
+              message={message}
+              sessionId={sessionId}
+              busyAgent={busyAgent}
+              supportsSteering={supportsSteering}
+              configuring={configuring}
+              reorderDisabled={queued.length < 2}
+              act={act}
+              onRecall={onRecall}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
       {/* Outbox messages wait on this device, after everything the host already queued. Same row, but the host can't send them early. */}
       {pending.map((item) => (
         <OutboxRow key={item.id} item={item} hostName={hostName} hostOffline={hostOffline} onRecall={onRecall} />
