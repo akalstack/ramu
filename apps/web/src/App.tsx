@@ -50,7 +50,7 @@ import { TitleTooltips } from './TitleTooltips'
 import { AppSettingsProvider, useAppSettings } from './settings/AppSettings'
 import { ModelSetsProvider } from './models/ModelSets'
 import type { SettingsSection } from './settings/SettingsPage'
-import { ScheduleNavigation, SchedulesPage } from './Automation'
+import { SchedulesPage } from './Automation'
 import { InboxPage } from './inbox/InboxPage'
 import { useRecaps } from './inbox/recaps'
 import { DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
@@ -537,8 +537,7 @@ function Shell() {
               </Button>
             </nav>
             <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden flex-1 overflow-auto min-h-0">
-              {ui.sidebar !== 'schedules' && <ProjectsPanel />}
-              {ui.sidebar === 'schedules' && <ScheduleNavigation />}
+              <ProjectsPanel />
             </div>
             <div className="sidebar-footer flex flex-col gap-1.5 p-[6px_8px_8px] flex-none">
               {!sidebarHidden && <UsageFooter />}

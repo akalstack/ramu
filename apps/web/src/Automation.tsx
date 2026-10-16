@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/desktop-button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
-import { CalendarClock, Clock, Pause, Play, Plus, Trash2, X } from 'lucide-react'
+import { CalendarClock, ChevronRight, Clock, Pause, Pencil, Play, Plus, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { DateTime } from 'luxon'
 import {
@@ -27,6 +27,7 @@ import { AgentControls } from './chat/AgentControls'
 import { useModelSets } from './models/ModelSets'
 import { useAppSettings } from './settings/AppSettings'
 import { useWorkspace } from './workspace/workspace'
+import { usePaged } from './settings/cards'
 import { invoke, ramu } from './ipc'
 import { notifyError } from './chat/Notifications'
 
@@ -57,48 +58,6 @@ export function useSchedules() {
     return off
   }, [reload])
   return { schedules, runs, reload, loading }
-}
-export function ScheduleNavigation() {
-  useLanguage()
-  const { schedules, loading } = useSchedules()
-  const select = (id?: string) => window.dispatchEvent(new CustomEvent('ramu:schedule', { detail: { id } }))
-  return (
-    <div className="panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] p-[2px_8px_16px]">
-      <Button
-        variant="secondary"
-        className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start"
-        onClick={() => select()}
-      >
-        <Plus size={15} />
-        {t('New schedule')}
-      </Button>
-      <div className="section-head [.review-inbox_>_&]:gap-2 [&_button.small-icon]:mr-0 flex items-center justify-between text-control text-muted-foreground p-[5px_8px]">
-        {t('Schedules')}
-      </div>
-      {schedules.map((s) => (
-        <Button
-          variant="secondary"
-          className="schedule-nav flex h-auto min-h-8 w-full items-start justify-start gap-[9px] rounded-(--radius-row) bg-transparent px-2 py-1.5 text-left font-normal text-soft [border:0] [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground dark:hover:bg-hover [&_>_svg]:mt-[2px] [&_>_svg]:shrink-0 [&_>_svg]:text-muted-foreground [&_>_span]:min-w-0 [&_>_span]:flex-1 [&_>_span]:overflow-hidden [&_>_span]:text-ellipsis [&_>_span]:whitespace-nowrap"
-          key={s.id}
-          onClick={() => select(s.id)}
-        >
-          <CalendarClock size={15} />
-          <span>
-            <span className="block truncate text-control text-foreground">{s.name}</span>
-            <span className="muted text-muted-foreground small text-caption block truncate">
-              {s.state === 'active' ? formatScheduleTime(s.nextRunAt, s.timezone) : t(s.state)}
-            </span>
-          </span>
-        </Button>
-      ))}
-      {loading && <ContentSkeleton />}
-      {!loading && !schedules.length && (
-        <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">
-          {t('Choose when to run this task.')}
-        </p>
-      )}
-    </div>
-  )
 }
 export function SchedulesPage({
   createRequested = false,
@@ -148,8 +107,8 @@ export function SchedulesPage({
     if (run.sessionId) ws.openView(run.taskId, { kind: 'agent', sessionId: run.sessionId })
   }
   return (
-    <div className="automation-page w-full h-full overflow-auto p-[28px_clamp(20px,_4vw,_48px)]">
-      <div className="mx-auto w-full max-w-[820px]">
+    <div className="automation-page h-full w-full overflow-auto">
+      <div className="mx-auto flex w-full max-w-[760px] flex-col gap-4 px-6 pt-6 pb-10">
         <header className="automation-heading [&_h1]:text-heading [&_h1]:font-semibold [&_h1]:tracking-[-0.01em] [&_h1]:m-[0_0_4px] [&_p]:m-0 [&_p]:text-control flex items-center justify-between gap-5 mb-6">
           <div>
             <h1>{t('Schedules')}</h1>
@@ -199,135 +158,196 @@ export function SchedulesPage({
             </EmptyContent>
           </Empty>
         )}
-        {!editing &&
-          schedules.map((s) => (
-            <section
-              className={`schedule-card [&.selected]:[border-color:var(--line-strong)] p-4 [border:1px_solid_var(--line)] rounded-(--radius-m) mb-3 bg-fill${selected === s.id ? ' selected' : ''}`}
-              key={s.id}
-            >
-              <div className="schedule-card-title [&_h2]:text-heading [&_h2]:font-semibold [&_h2]:m-0 flex items-center gap-2">
-                <h2>{s.name}</h2>
-                <Badge
-                  variant="outline"
-                  className="chip tabular-nums text-caption bg-hover rounded-full p-[1px_8px] text-soft whitespace-nowrap"
-                >
-                  {t(s.state)}
-                </Badge>
-                <span className="grow flex-1 min-w-0 text-left" />
-                <Button
-                  variant="secondary"
-                  className="bg-fill hover:bg-fill-hover"
-                  disabled={busy}
-                  onClick={() => setEditing(s)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
-                  aria-label={t('Run {0} now', { '0': s.name })}
-                  title={t('Run now')}
-                  disabled={busy}
-                  onClick={() => void act(() => invoke('schedules.runNow', s.id))}
-                >
-                  <Play size={14} />
-                </Button>
-                {s.state !== 'completed' && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
-                    aria-label={`${s.state === 'paused' ? t('Resume') : t('Pause')} ${s.name}`}
-                    disabled={busy}
-                    onClick={() => void act(() => invoke('schedules.pause', s.id, s.state !== 'paused'))}
-                  >
-                    {s.state === 'paused' ? <Play size={14} /> : <Pause size={14} />}
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
-                  aria-label={t('Delete {0}', { '0': s.name })}
-                  disabled={busy}
-                  onClick={() => {
-                    if (confirm(t('Delete “{name}”? Its run threads will remain.', { name: s.name })))
-                      void act(() => invoke('schedules.delete', s.id))
-                  }}
-                >
-                  <Trash2 size={14} />
-                </Button>
-              </div>
-              <p className="schedule-prompt whitespace-pre-wrap leading-[1.5] m-[14px_0_10px]">{s.prompt}</p>
-              <div className="muted text-muted-foreground small text-caption">
-                {s.projectId === NO_PROJECT
-                  ? t('No project')
-                  : (ws.projects.find((p) => p.id === s.projectId)?.name ?? t('Unavailable project'))}
-                {s.workspaceId &&
-                  ` · ${ws.workspaces.find((w) => w.id === s.workspaceId)?.name ?? 'Isolated workspace'}`}{' '}
-                · {s.rule.kind === 'once' ? t('Once') : t(s.rule.kind)} · {s.timezone}
-              </div>
-              <p className="schedule-next flex items-center gap-2 m-[12px_0] text-caption">
-                <Clock size={13} />
-                {formatScheduleTime(s.nextRunAt, s.timezone)}
-              </p>
-              {s.sourceTaskId && ws.tasks.some((t) => t.id === s.sourceTaskId) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption"
-                  onClick={() => ws.openTask(s.sourceTaskId!)}
-                >
-                  {t('Open originating thread')}
-                </Button>
-              )}
-              {runs.some((r) => r.scheduleId === s.id) && (
-                <div className="schedule-history [border-top:1px_solid_var(--line)] pt-3 mt-3">
-                  <strong className="small text-caption">{t('Recent runs')}</strong>
-                  {runs
-                    .filter((r) => r.scheduleId === s.id)
-                    .slice(0, 10)
-                    .map((r) => (
-                      <div
-                        className="schedule-run [&_.chip]:min-w-[70px] [&_.chip]:text-center flex gap-2 p-[9px_0] items-start"
-                        key={r.id}
-                      >
-                        <span
-                          className={`chip tabular-nums text-caption bg-hover rounded-full p-[1px_8px] text-soft whitespace-nowrap run-${r.status} [&.run-failed]:text-bad [&.run-interrupted]:text-bad [&.run-needs-input]:text-warn [&.run-completed]:text-ok`}
-                        >
-                          {t(r.status)}
-                        </span>
-                        <span className="small text-caption grow flex-1 min-w-0 text-left">
-                          {formatScheduleTime(r.dueAt, s.timezone)}
-                          {r.error && <span className="muted text-muted-foreground block block">{r.error}</span>}
-                          {r.retryAt && (
-                            <span className="muted text-muted-foreground block block">
-                              {t('Retry: ')}
-                              {formatScheduleTime(r.retryAt, s.timezone)}
-                            </span>
-                          )}
-                        </span>
-                        {r.taskId && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption"
-                            onClick={() => void openRun(r)}
-                          >
-                            {t('Open thread')}
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                </div>
-              )}
-            </section>
-          ))}
+        {!editing && schedules.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            {[...schedules]
+              .sort((x, y) => (x.nextRunAt ?? Infinity) - (y.nextRunAt ?? Infinity))
+              .map((s) => (
+                <ScheduleCard
+                  key={s.id}
+                  schedule={s}
+                  runs={runs.filter((r) => r.scheduleId === s.id)}
+                  selected={selected === s.id}
+                  busy={busy}
+                  onEdit={() => setEditing(s)}
+                  onAct={act}
+                  onOpenRun={(run) => void openRun(run)}
+                />
+              ))}
+          </div>
+        )}
       </div>
     </div>
   )
 }
+const ICON_BTN =
+  'ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)'
+
+/** One schedule as a compact card: name, state and next run on top (actions replace the time on hover), then prompt and meta. */
+function ScheduleCard({
+  schedule: s,
+  runs,
+  selected,
+  busy,
+  onEdit,
+  onAct,
+  onOpenRun,
+}: {
+  schedule: Schedule
+  runs: ScheduleRun[]
+  selected: boolean
+  busy: boolean
+  onEdit: () => void
+  onAct: (work: () => Promise<unknown>) => Promise<void>
+  onOpenRun: (run: ScheduleRun) => void
+}) {
+  useLanguage()
+  const ws = useWorkspace()
+  const [open, setOpen] = useState(false)
+  const paged = usePaged(runs, 5)
+  const project =
+    s.projectId === NO_PROJECT
+      ? t('No project')
+      : (ws.projects.find((p) => p.id === s.projectId)?.name ?? t('Unavailable project'))
+  const isolated = s.workspaceId && (ws.workspaces.find((w) => w.id === s.workspaceId)?.name ?? t('Isolated workspace'))
+  const meta = [project, isolated, s.rule.kind === 'once' ? t('Once') : t(s.rule.kind), s.timezone].filter(Boolean)
+  return (
+    <article
+      className={`schedule-card flex flex-col gap-0.5 rounded-(--radius-m) bg-card px-3 py-2 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:flex [&:hover_.row-time]:hidden [&:focus-within_.row-time]:hidden ${selected ? 'ring-1 ring-(--line-strong)' : ''}`}
+    >
+      <div className="flex min-h-7 items-center gap-2">
+        <CalendarClock size={14} className="flex-none text-muted-foreground" />
+        <strong className="min-w-0 truncate text-control font-medium">{s.name}</strong>
+        <Badge variant="outline" className="flex-none rounded-full px-1.5 text-caption text-muted-foreground">
+          {t(s.state)}
+        </Badge>
+        <span className="min-w-0 flex-1" />
+        <span className="row-time flex flex-none items-center gap-1.5 text-caption text-muted-foreground">
+          <Clock size={12} />
+          {formatScheduleTime(s.nextRunAt, s.timezone)}
+        </span>
+        <span className="row-actions hidden flex-none items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={ICON_BTN}
+            aria-label={t('Run {0} now', { '0': s.name })}
+            title={t('Run now')}
+            disabled={busy}
+            onClick={() => void onAct(() => invoke('schedules.runNow', s.id))}
+          >
+            <Play size={13} />
+          </Button>
+          {s.state !== 'completed' && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={ICON_BTN}
+              aria-label={`${s.state === 'paused' ? t('Resume') : t('Pause')} ${s.name}`}
+              title={s.state === 'paused' ? t('Resume') : t('Pause')}
+              disabled={busy}
+              onClick={() => void onAct(() => invoke('schedules.pause', s.id, s.state !== 'paused'))}
+            >
+              {s.state === 'paused' ? <Play size={13} /> : <Pause size={13} />}
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={ICON_BTN}
+            aria-label={`${t('Edit')} ${s.name}`}
+            title={t('Edit')}
+            disabled={busy}
+            onClick={onEdit}
+          >
+            <Pencil size={13} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={ICON_BTN}
+            aria-label={t('Delete {0}', { '0': s.name })}
+            title={t('Delete')}
+            disabled={busy}
+            onClick={() => {
+              if (confirm(t('Delete “{name}”? Its run threads will remain.', { name: s.name })))
+                void onAct(() => invoke('schedules.delete', s.id))
+            }}
+          >
+            <Trash2 size={13} />
+          </Button>
+        </span>
+      </div>
+      <p className="schedule-prompt m-0 truncate text-control text-soft" title={s.prompt}>
+        {s.prompt}
+      </p>
+      <div className="flex min-h-6 items-center gap-2 text-caption text-muted-foreground">
+        <span className="min-w-0 truncate">{meta.join(' · ')}</span>
+        <span className="min-w-0 flex-1" />
+        {s.sourceTaskId && ws.tasks.some((task) => task.id === s.sourceTaskId) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 flex-none px-1.5 text-caption text-muted-foreground"
+            onClick={() => ws.openTask(s.sourceTaskId!)}
+          >
+            {t('Open originating thread')}
+          </Button>
+        )}
+        {runs.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 flex-none gap-0.5 bg-transparent px-1.5 text-caption text-muted-foreground"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            {t('Recent runs')} · {runs.length}
+            <ChevronRight size={12} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+          </Button>
+        )}
+      </div>
+      {open && (
+        <div className="schedule-history mt-1 flex flex-col border-t border-(--line) pt-1">
+          {paged.shown.map((r) => (
+            <div key={r.id} className="schedule-run flex min-h-8 items-center gap-2 text-caption">
+              <span
+                className={`flex-none rounded-full bg-hover px-2 text-caption whitespace-nowrap ${
+                  r.status === 'failed' || r.status === 'interrupted' ? 'text-bad' : 'text-soft'
+                }`}
+              >
+                {t(r.status)}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-soft">
+                {formatScheduleTime(r.dueAt, s.timezone)}
+                {r.error && <span className="text-muted-foreground"> · {r.error}</span>}
+                {r.retryAt && (
+                  <span className="text-muted-foreground">
+                    {' '}
+                    · {t('Retry: ')}
+                    {formatScheduleTime(r.retryAt, s.timezone)}
+                  </span>
+                )}
+              </span>
+              {r.taskId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 flex-none px-1.5 text-caption text-muted-foreground"
+                  onClick={() => onOpenRun(r)}
+                >
+                  {t('Open thread')}
+                </Button>
+              )}
+            </div>
+          ))}
+          {paged.more}
+        </div>
+      )}
+    </article>
+  )
+}
+
 function ScheduleEditor({
   schedule,
   onClose,

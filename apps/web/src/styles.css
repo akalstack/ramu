@@ -831,7 +831,6 @@ button.scm-sync:hover:not(:disabled) {
     .small-icon,
     .link,
     .chip,
-    .schedule-nav,
     .dropdown-trigger,
     [role='tab'],
     [data-slot='switch'],
