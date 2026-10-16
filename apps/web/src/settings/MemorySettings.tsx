@@ -1,3 +1,4 @@
+import { usePaged } from './cards'
 import { useSettingsInvoke } from './SettingsScope'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { errorText } from '../lib/errors'
@@ -160,6 +161,7 @@ export function MemoryBrowser() {
       (scope === 'all' || (scope === GLOBAL ? m.projectId === null : m.projectId === scope)) &&
       words.every((w) => `${m.title} ${m.content} ${m.tags.join(' ')}`.toLowerCase().includes(w)),
   )
+  const paged = usePaged(shown, 20)
   const author = (m: Memory) =>
     m.source.actor === 'agent' && m.source.provider
       ? providerName(m.source.provider)
@@ -264,7 +266,7 @@ export function MemoryBrowser() {
           {status === 'archived' ? t('No archived memories.') : t('No saved memories.')}
         </p>
       )}
-      {shown.map((m) =>
+      {paged.shown.map((m) =>
         editing?.id === m.id ? (
           <MemoryEditor
             key={m.id}
@@ -278,9 +280,9 @@ export function MemoryBrowser() {
           <article
             key={m.id}
             id={`memory-${m.id}`}
-            className="memory-card [&.flash]:[animation:settings-flash_1.4s_ease-out] group bg-fill rounded-(--radius-m) p-3 [border:1px_solid_transparent]"
+            className="memory-card [&.flash]:[animation:settings-flash_1.4s_ease-out] group bg-fill rounded-(--radius-m) px-3 py-2 [border:1px_solid_transparent]"
           >
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex min-h-7 items-center gap-2">
               <Badge variant="secondary">{t(KIND_LABELS[m.kind])}</Badge>
               <span className="muted text-muted-foreground small text-caption">{projectName(m.projectId)}</span>
               {m.importance >= 4 && (
@@ -347,7 +349,7 @@ export function MemoryBrowser() {
               )}
             </div>
             <h4 className="text-body font-medium m-0">{m.title}</h4>
-            <p className="muted text-muted-foreground whitespace-pre-wrap leading-[1.5] m-[4px_0_6px] line-clamp-4">
+            <p className="muted text-muted-foreground whitespace-pre-wrap leading-[1.5] m-[2px_0_4px] line-clamp-3">
               {m.content}
             </p>
             <div className="flex items-center gap-2">
@@ -410,6 +412,7 @@ export function MemoryBrowser() {
           </article>
         ),
       )}
+      {paged.more}
     </div>
   )
 }

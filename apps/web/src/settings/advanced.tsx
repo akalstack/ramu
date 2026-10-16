@@ -45,11 +45,11 @@ export function Advanced({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(all)
   useEffect(() => setOpen(all), [all])
   return (
-    <div className="settings-advanced mt-4">
+    <div className="settings-advanced mt-4 w-full self-stretch">
       <button
         type="button"
         aria-expanded={open}
-        className="settings-group-title m-[4px_0_10px] flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-left text-caption font-medium text-muted-foreground hover:text-foreground"
+        className="settings-group-title m-[4px_0_10px] flex w-full cursor-pointer items-center justify-start! gap-1.5 border-0 bg-transparent p-0 text-left text-caption font-medium text-muted-foreground hover:text-foreground"
         onClick={() => setOpen(!open)}
       >
         <ChevronRight size={13} className={open ? 'rotate-90' : undefined} />

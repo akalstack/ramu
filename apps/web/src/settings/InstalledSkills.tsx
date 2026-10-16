@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dialog, Dropdown } from '../Menu'
 import { useSettingsInvoke } from './SettingsScope'
+import { SettingsCard, SettingsCardList, usePaged } from './cards'
 import { useWorkspace } from '../workspace/workspace'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
@@ -25,6 +26,7 @@ export function InstalledSkills() {
   const [removing, setRemoving] = useState<ManagedSkill | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('')
+  const paged = usePaged(skills, 10)
   const load = useCallback(async () => {
     const snapshot = await invoke('learning.get')
     setSkills(snapshot.skills.filter((skill) => skill.installation))
@@ -106,53 +108,65 @@ export function InstalledSkills() {
           {error}
         </p>
       )}
-      {skills.map((skill) => (
-        <article key={skill.id} className="rounded-lg border border-border p-3 flex flex-col gap-2">
-          <strong>
-            {skill.name} <Badge variant="secondary">{t('Installed')}</Badge>{' '}
-            <Badge variant="outline">
-              {skill.projectId ? projects.find((p) => p.id === skill.projectId)?.name : t('All projects')}
-            </Badge>
-          </strong>
-          <p className="text-caption text-muted-foreground">{skill.description}</p>
-          <p className="text-caption break-all">
-            {skill.installation!.source} · {t(skill.status)}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy || !available}
-              onClick={() => void act(async () => stage(await invoke('skills.updateSource', skill.id)))}
-            >
-              {t('Update')}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
+      <SettingsCardList>
+        {paged.shown.map((skill) => (
+          <SettingsCard
+            key={skill.id}
+            title={skill.name}
+            badges={
+              <>
+                <Badge variant="secondary">{t('Installed')}</Badge>
+                <Badge variant="outline">
+                  {skill.projectId ? projects.find((p) => p.id === skill.projectId)?.name : t('All projects')}
+                </Badge>
+              </>
+            }
+            meta={skill.description}
+            actions={
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy || !available}
+                  onClick={() => void act(async () => stage(await invoke('skills.updateSource', skill.id)))}
+                >
+                  {t('Update')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() =>
+                    void act(() =>
+                      invoke('learning.control', skill.id, skill.status === 'active' ? 'disable' : 'restore'),
+                    )
+                  }
+                >
+                  {skill.status === 'active' ? t('Disable') : t('Enable')}
+                </Button>
+                <Button variant="ghost" size="sm" disabled={busy} onClick={() => setRemoving(skill)}>
+                  {t('Remove')}
+                </Button>
+              </>
+            }
+          >
+            <p className="m-0 truncate text-caption text-muted-foreground">
+              {skill.installation!.source} · {t(skill.status)}
+            </p>
+            <Dropdown
+              label={`${t('Move skill')}: ${skill.name}`}
+              value={skill.projectId ?? ''}
+              options={[
+                { value: '', label: t('All projects') },
+                ...projects.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+              onChange={(id) => void act(() => invoke('skills.move', skill.id, id || null))}
               disabled={busy}
-              onClick={() =>
-                void act(() => invoke('learning.control', skill.id, skill.status === 'active' ? 'disable' : 'restore'))
-              }
-            >
-              {skill.status === 'active' ? t('Disable') : t('Enable')}
-            </Button>
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => setRemoving(skill)}>
-              {t('Remove')}
-            </Button>
-          </div>
-          <Dropdown
-            label={`${t('Move skill')}: ${skill.name}`}
-            value={skill.projectId ?? ''}
-            options={[
-              { value: '', label: t('All projects') },
-              ...projects.map((p) => ({ value: p.id, label: p.name })),
-            ]}
-            onChange={(id) => void act(() => invoke('skills.move', skill.id, id || null))}
-            disabled={busy}
-          />
-        </article>
-      ))}
+            />
+          </SettingsCard>
+        ))}
+        {paged.more}
+      </SettingsCardList>
       {preview && (
         <Dialog
           title={t('Review skill installation')}

@@ -523,9 +523,7 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
       })}
     >
       <Ring percent={context.percent} className={tone === 'ok' ? 'stroke-soft' : toneStroke[tone]} />
-      <span>
-        {context.percent}% · {k(context.used)} / {k(context.max)}
-      </span>
+      <span>{context.percent}%</span>
     </span>
   )
 }

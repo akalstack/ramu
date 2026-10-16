@@ -11,6 +11,7 @@ import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
 import { useModelSets, modelStepName } from '../models/ModelSets'
 import { takeLibraryFocus } from '../summaries/libraryFocus'
+import { SettingsCard, SettingsCardList, usePaged } from './cards'
 import { type IntelligencePreferences, type LearningSnapshot, type ManagedSkill } from '@ramu/shared/types'
 
 type Props = { value: IntelligencePreferences; onChange: (value: IntelligencePreferences) => void }
@@ -176,6 +177,7 @@ export function LearningSettings({ value, onChange }: Props) {
     const change = JSON.parse(job.proposal) as { memories: unknown[]; skills: unknown[]; archive: unknown[] }
     return change.memories.length + change.skills.length + change.archive.length > 0
   })
+  const pagedReviews = usePaged(reviews ?? [], 10)
   return (
     <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 mt-6">
       <SettingsGroupTitle>{t('Learning & skills')}</SettingsGroupTitle>
@@ -229,60 +231,68 @@ export function LearningSettings({ value, onChange }: Props) {
       >
         {snapshot?.running ? t('Reviewing…') : t('Run learning maintenance')}
       </Button>
-      {reviews?.slice(0, 30).map((job) => (
-        <article key={job.id} className="bg-card rounded-(--radius-m) p-3 mb-2 flex flex-col gap-2">
-          <strong className="font-medium">
-            {t('Learning review')} · {t(job.status)}
-          </strong>
-          <p className="muted text-muted-foreground small text-caption m-0!">
-            {new Date(job.createdAt).toLocaleString()} · {job.sessionTitle ?? t('Thread')}
-          </p>
-          {job.error && (
-            <p role="alert" className="text-bad small text-caption m-0!">
-              {job.error}
-            </p>
-          )}
-          {job.proposal && (
-            <LearningProposal
-              proposal={job.proposal}
-              skills={snapshot?.skills ?? []}
-              showCheckpoint={job.status !== 'applied'}
-            />
-          )}
-          <div className="flex gap-2 flex-wrap">
-            {job.status === 'pending' && (
-              <Button
-                disabled={busy}
-                variant="default"
-                className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover"
-                onClick={() => void act(() => invoke('learning.apply', job.id))}
-              >
-                {t('Apply')}
-              </Button>
+      <SettingsCardList>
+        {pagedReviews.shown.map((job) => (
+          <SettingsCard
+            key={job.id}
+            title={
+              <>
+                {t('Learning review')} · {t(job.status)}
+              </>
+            }
+            meta={`${new Date(job.createdAt).toLocaleString()} · ${job.sessionTitle ?? t('Thread')}`}
+            actions={
+              <>
+                {job.status === 'pending' && (
+                  <Button
+                    disabled={busy}
+                    variant="default"
+                    size="sm"
+                    className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover"
+                    onClick={() => void act(() => invoke('learning.apply', job.id))}
+                  >
+                    {t('Apply')}
+                  </Button>
+                )}
+                {['pending', 'failed'].includes(job.status) && (
+                  <Button
+                    disabled={busy}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void act(() => invoke('learning.retry', job.id))}
+                  >
+                    {t('Retry review')}
+                  </Button>
+                )}
+                {['queued', 'pending', 'failed'].includes(job.status) && (
+                  <Button
+                    disabled={busy}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void act(() => invoke('learning.dismiss', job.id))}
+                  >
+                    {t('Dismiss')}
+                  </Button>
+                )}
+              </>
+            }
+          >
+            {job.error && (
+              <p role="alert" className="text-bad small text-caption m-0!">
+                {job.error}
+              </p>
             )}
-            {['pending', 'failed'].includes(job.status) && (
-              <Button
-                disabled={busy}
-                variant="secondary"
-                className="bg-fill hover:bg-fill-hover"
-                onClick={() => void act(() => invoke('learning.retry', job.id))}
-              >
-                {t('Retry review')}
-              </Button>
+            {job.proposal && (
+              <LearningProposal
+                proposal={job.proposal}
+                skills={snapshot?.skills ?? []}
+                showCheckpoint={job.status !== 'applied'}
+              />
             )}
-            {['queued', 'pending', 'failed'].includes(job.status) && (
-              <Button
-                disabled={busy}
-                variant="secondary"
-                className="bg-fill hover:bg-fill-hover"
-                onClick={() => void act(() => invoke('learning.dismiss', job.id))}
-              >
-                {t('Dismiss')}
-              </Button>
-            )}
-          </div>
-        </article>
-      ))}
+          </SettingsCard>
+        ))}
+        {pagedReviews.more}
+      </SettingsCardList>
       <InstalledSkills />
       <SettingsGroupTitle className="mt-5!">{t('Managed skills')}</SettingsGroupTitle>
       {!snapshot?.skills.length && (
@@ -296,7 +306,7 @@ export function LearningSettings({ value, onChange }: Props) {
           <article
             key={skill.id}
             id={`skill-${skill.id}`}
-            className="[&.flash]:[animation:settings-flash_1.4s_ease-out] bg-card rounded-(--radius-m) p-3 mb-2 flex flex-col gap-2"
+            className="[&.flash]:[animation:settings-flash_1.4s_ease-out] bg-card rounded-(--radius-m) px-3 py-2 mb-1.5 flex flex-col gap-1"
           >
             <strong className="font-medium">
               {skill.name} · {t(skill.status)}

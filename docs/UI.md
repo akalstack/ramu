@@ -14,6 +14,10 @@ Terminal tabs contain groups of panes. Splitting keeps the shell in its group; m
 
 Editors, terminals, and attachments use native context menus. Keep clipboard and save-dialog operations in the main process.
 
+## Settings lists
+
+Lists in Settings (memories, saved approvals, installed skills, learning reviews) use the compact `SettingsCard` from `apps/web/src/settings/cards.tsx`: a header row with the title, badges and small actions, one quiet meta line, no borders. Long lists page with `usePaged`: the first 20 items (10 for skills and reviews), then **Show more**. New Settings lists should use both.
+
 ## Command palette
 
 The palette (`apps/web/src/palette/`) is a set of sources, each drawn as its own group. No prefix searches files, projects, threads and text inside project files; `>` runs commands only; `#` searches file contents only. Results stay in their group (never one flat ranking), show the first few with **Show more**, and render through `VirtualList`.

@@ -6,6 +6,7 @@ import { Dropdown } from '../Menu'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
 import { useSettingsInvoke } from './SettingsScope'
+import { SettingsCard, SettingsCardList, usePaged } from './cards'
 
 export function PermissionRules({ disabled }: { disabled: boolean }) {
   const invoke = useSettingsInvoke()
@@ -63,6 +64,7 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
       (target === 'projects' && rule.scope === 'project') ||
       target === `project:${rule.projectId}`,
   )
+  const paged = usePaged(shown, 20)
   return (
     <div className="space-y-3">
       <SettingsGroupTitle>{t('Saved approvals')}</SettingsGroupTitle>
@@ -93,21 +95,23 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
       {!shown.length && (
         <p className="m-0 text-caption text-muted-foreground">{t('No saved approvals in this scope.')}</p>
       )}
-      {shown.map((rule) => (
-        <div key={rule.id} className="flex items-start justify-between gap-3 rounded-md border border-border p-3">
-          <div className="min-w-0">
-            <code className="block whitespace-pre-wrap break-all text-caption">{rule.label}</code>
-            <p className="m-0 mt-1 text-caption text-muted-foreground">
-              {rule.provider} · {rule.autoOnly && `${t('Auto only')} · `}
-              {rule.behavior === 'ask' ? `${t('Always ask')} · ` : `${t('Allow')} · `}{' '}
-              {rule.scope === 'user' ? t('User — all projects') : `${t('Project')}: ${rule.projectName}`}
-            </p>
-          </div>
-          <Button variant="ghost" size="sm" disabled={disabled || busy} onClick={() => void change(rule.id)}>
-            {t('Remove')}
-          </Button>
-        </div>
-      ))}
+      <SettingsCardList>
+        {paged.shown.map((rule) => (
+          <SettingsCard
+            key={rule.id}
+            title={<code className="truncate text-caption">{rule.label}</code>}
+            meta={`${rule.provider} · ${
+              rule.scope === 'user' ? t('User — all projects') : `${t('Project')}: ${rule.projectName}`
+            }`}
+            actions={
+              <Button variant="ghost" size="sm" disabled={disabled || busy} onClick={() => void change(rule.id)}>
+                {t('Remove')}
+              </Button>
+            }
+          />
+        ))}
+        {paged.more}
+      </SettingsCardList>
       {error && (
         <p role="alert" className="m-0 text-caption text-bad">
           {error}
