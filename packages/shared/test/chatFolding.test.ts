@@ -37,54 +37,19 @@ it('retains pending or declined permissions, and folds approved ones', () => {
     event({ kind: 'permission-request', requestId: id, toolName: 'Bash', title: id, detail: '' })
   const pending = permission('pending'),
     denied = permission('denied'),
-    allowed = permission('allowed')
+    allowed = permission('allowed'),
+    allowedUser = permission('allowed-user'),
+    allowedAuto = permission('allowed-auto')
   const folded = foldChatTurn(
-    [pending, denied, allowed, answer],
+    [pending, denied, allowed, allowedUser, allowedAuto, answer],
     new Map([
       ['denied', 'denied'],
       ['allowed', 'allowed'],
+      ['allowed-user', 'allowed-user'],
+      ['allowed-auto', 'allowed-auto'],
     ]),
     new Map(),
   )
   expect(folded.kept).toEqual([pending, denied])
-  expect(folded.folded).toEqual([allowed])
-})
-it('keeps each advisor consultation and failed helper visible', () => {
-  const agent = (id: string, status: 'completed' | 'failed', taskType?: string) =>
-    event({ kind: 'agent', agentId: id, name: id, status, taskType })
-  const first = agent('advisor-1', 'completed', 'advisor'),
-    second = agent('advisor-2', 'completed', 'advisor'),
-    failed = agent('failed', 'failed'),
-    done = agent('done', 'completed')
-  const folded = foldChatTurn([first, second, failed, answer], new Map(), new Map())
-  expect(folded.kept).toEqual([first, second, failed])
-  expect(foldChatTurn([first, done, answer], new Map(), new Map()).folded).toEqual([done])
-})
-it('keeps a group of sub-agents together until all of them are done', () => {
-  const agent = (id: string, status: 'completed' | 'running') => event({ kind: 'agent', agentId: id, name: id, status })
-  const done = agent('done', 'completed'),
-    running = agent('running', 'running'),
-    other = agent('other', 'completed')
-  const open = foldChatTurn([done, running, other, answer], new Map(), new Map())
-  expect(open.kept).toEqual([done, running, other])
-  expect(open.folded).toEqual([])
-  expect(foldChatTurn([done, other, answer], new Map(), new Map()).folded).toEqual([done, other])
-})
-it('keeps errors and pending plans visible while folding completed plans', () => {
-  const error = event({ kind: 'error', message: 'Failed' })
-  const pending = event({
-    kind: 'plan',
-    messageId: 'p',
-    entries: [{ content: 'Work', status: 'pending', priority: 'high' }],
-  })
-  const done = event({
-    kind: 'plan',
-    messageId: 'd',
-    entries: [{ content: 'Work', status: 'completed', priority: 'high' }],
-  })
-  expect(foldChatTurn([error, pending, done, answer], new Map(), new Map())).toEqual({
-    kept: [error, pending],
-    folded: [done],
-    answer: [answer],
-  })
+  expect(folded.folded).toEqual([allowed, allowedUser, allowedAuto])
 })

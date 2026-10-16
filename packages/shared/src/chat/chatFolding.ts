@@ -46,6 +46,7 @@ export function foldChatTurn(items: ChatBlock[], outcomes: Map<string, string>, 
       continue
     }
     const event = block.event
+    const outcome = 'requestId' in event && typeof event.requestId === 'string' ? outcomes.get(event.requestId) ?? '' : ''
     const foldable =
       event.kind === 'text' ||
       event.kind === 'content' ||
@@ -56,7 +57,7 @@ export function foldChatTurn(items: ChatBlock[], outcomes: Map<string, string>, 
         event.status === 'completed' &&
         !openGroup.has(block)) ||
       ((event.kind === 'permission-request' || event.kind === 'elicitation') &&
-        ['approved', 'accepted', 'answered', 'allow', 'allowed'].includes(outcomes.get(event.requestId) ?? ''))
+        ['approved', 'accepted', 'answered', 'allow', 'allowed'].some((val) => outcome.startsWith(val)))
     ;(foldable ? folded : kept).push(block)
   }
   return { folded, kept, answer: items.slice(start) }

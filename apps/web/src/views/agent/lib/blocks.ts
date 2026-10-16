@@ -1,4 +1,5 @@
 import { ramuTool, ramuToolHasOwnUi } from '@ramu/shared/chat/ramuTools'
+import { requestOutcomes } from '@ramu/shared/chat/questions'
 import type { AgentEvent } from '@ramu/shared/types'
 import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { goalChanges } from '@ramu/shared/chat/goalHistory'
@@ -14,6 +15,7 @@ export function toBlocks(events: AgentEvent[]): Block[] {
   )
   const seenAgents = new Set<string>()
   const goalNotes = goalChanges(events)
+  const outcomes = requestOutcomes(events)
   const failed = new Set(
     events.flatMap((event) => (event.kind === 'tool-result' && event.isError ? [event.toolUseId] : [])),
   )
@@ -61,6 +63,11 @@ export function toBlocks(events: AgentEvent[]): Block[] {
       event.kind === 'question-state'
     )
       continue
+    // Approved permission requests are dismissed; the executed tool stands for them.
+    if (event.kind === 'permission-request') {
+      const outcome = outcomes.get(event.requestId)
+      if (outcome && (outcome.startsWith('allowed') || outcome === 'approved' || outcome === 'allow')) continue
+    }
     const last = blocks.at(-1)
     if (event.kind === 'tool-use') {
       if (last?.kind === 'tools') last.tools.push(event)

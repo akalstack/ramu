@@ -1509,6 +1509,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Commands and edits run without asking, including anything your OpenCode rules would block.": "Perintah dan edit berjalan tanpa bertanya, termasuk yang diblokir aturan OpenCode-mu.",
   "Approves permission requests automatically. OpenCode deny rules still apply.": "Menyetujui permintaan izin secara otomatis. Aturan penolakan OpenCode tetap berlaku.",
   "Auto (rules)": "Auto (aturan)",
+  "Allowed by Auto": "Diizinkan oleh Auto",
   "Auto only": "Hanya Auto",
   "Always ask": "Selalu minta izin",
   "Edits run automatically. Read-only command rules skip routine prompts; other commands ask.": "Edit berjalan otomatis. Aturan perintah baca melewati permintaan rutin; perintah lain meminta izin.",

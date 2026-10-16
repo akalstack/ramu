@@ -65,12 +65,14 @@ const streaming = (words: WordPlan): Components => ({
 export const AssistantText = memo(function AssistantText({
   event: e,
   generating,
-  actions,
+  actions = true,
+  latest = false,
   taskId,
 }: {
   event: Extract<AgentEvent, { kind: 'text' }>
   generating: boolean
-  actions: boolean
+  actions?: boolean
+  latest?: boolean
   taskId?: string
   sessionId?: string
 }) {
@@ -119,7 +121,7 @@ export const AssistantText = memo(function AssistantText({
         {e.text}
       </Markdown>
       {actions && !generating && (
-        <div className={`${MSG_ACTIONS_CLASS} always`}>
+        <div className={`${MSG_ACTIONS_CLASS}${latest ? ' always' : ''}`}>
           <MessageTime at={e.at} />
           <CopyButton text={e.text} />
           <MessageQuoteActions text={e.text} />

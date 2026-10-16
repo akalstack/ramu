@@ -1,3 +1,4 @@
+import { PermissionApprovals } from '../src/agent/permissionApprovals'
 import { elicitationRequest, elicitationContent } from '../src/agent/elicitation'
 import { AcpResumeUnavailable } from '../src/providers/acp'
 import { configureProviderBinaries } from '../src/providers/providerBinaries'
@@ -3662,7 +3663,7 @@ it.each(['codex', 'opencode', 'antigravity', 'cursor'] as const)(
   },
 )
 
-it('uses Antigravity Auto read rules, requires destructive-command approval, and preserves rule removal', async () => {
+it('keeps Antigravity Auto rules internal and preserves them when saved approvals are cleared', async () => {
   let command = 'git diff --stat'
   const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
     const request = async () => {
@@ -3701,8 +3702,7 @@ it('uses Antigravity Auto read rules, requires destructive-command approval, and
     expect(svc.events(first.id)).toContainEqual(
       expect.objectContaining({
         kind: 'request-resolved',
-        outcome: 'allowed-user',
-        savedApprovalId: expect.stringContaining('builtin:git-read'),
+        outcome: 'allowed-auto',
       }),
     )
     command = 'git reset --hard'
@@ -3716,11 +3716,18 @@ it('uses Antigravity Auto read rules, requires destructive-command approval, and
     expect(() => svc.replyPermission(first.id, 'reused', true, undefined, 'user', 'git *')).toThrow('once')
     svc.replyPermission(first.id, 'reused', true)
     await until(() => svc.get(first.id).state === 'idle')
-    const rule = svc.listPermissionApprovals().find((rule) => rule.builtin === 'git-read')!
-    svc.removePermissionApproval(rule.id)
+    const approvals = new PermissionApprovals(db)
+    const rule = approvals.list().find((rule) => rule.builtin === 'git-read')!
+    expect(svc.listPermissionApprovals()).toEqual([])
+    expect(() => svc.removePermissionApproval(rule.id)).toThrow('managed by Ramu')
+    approvals.remember('antigravity', 'custom-request', 'user', undefined, { label: 'Custom approval' })
+    expect(svc.listPermissionApprovals()).toHaveLength(1)
+    svc.clearPermissionApprovals({ scope: 'all' })
+    expect(svc.listPermissionApprovals()).toEqual([])
+    expect(approvals.list().some((rule) => rule.builtin === 'git-read')).toBe(true)
     command = 'git diff --stat'
     await svc.send(first.id, 'Review again')
-    await until(() => svc.get(first.id).state === 'needs-input')
+    await until(() => svc.get(first.id).state === 'idle')
   } finally {
     svc.stopAll()
   }

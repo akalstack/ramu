@@ -182,8 +182,7 @@ export class UserRequests {
           this.host.record(id, {
             kind: 'request-resolved',
             requestId: request.requestId,
-            outcome: `allowed-${rule.scope}`,
-            savedApprovalId: rule.id,
+            outcome: 'allowed-auto',
           })
         } else this.replyPermission(id, request.requestId, true, undefined, rule.scope, rule.pattern)
       } catch {

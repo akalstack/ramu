@@ -51,9 +51,10 @@ export class PermissionApprovals {
       throw error
     }
   }
-  clear(removal: PermissionRemoval = { scope: 'all' }): void {
+  clear(removal: PermissionRemoval = { scope: 'all' }, { includeBuiltins = true } = {}): void {
     if (removal.scope === 'project' && !removal.projectId) throw new Error('Choose a project.')
     for (const rule of this.list()) {
+      if (!includeBuiltins && rule.builtin) continue
       if (
         removal.scope === 'all' ||
         (rule.scope === removal.scope && (removal.scope !== 'project' || rule.projectId === removal.projectId)) ||
@@ -91,6 +92,14 @@ export class PermissionApprovals {
         return []
       }
     })
+  }
+  listSaved(): SavedPermissionRule[] {
+    return this.list().filter((rule) => !rule.builtin)
+  }
+  removeSaved(id: string): void {
+    if (this.list().some((rule) => rule.id === id && rule.builtin))
+      throw new Error('Predefined Auto rules are managed by Ramu.')
+    this.remove(id)
   }
   remove(id: string): void {
     if (!id.startsWith('permission-approval:v1:')) throw new Error('Invalid approval rule.')

@@ -641,19 +641,15 @@ export class AgentService {
   }
 
   listPermissionApprovals() {
-    const approvals = new PermissionApprovals(this.db)
-    approvals.ensureAntigravityDefaults()
-    return approvals.list()
+    return new PermissionApprovals(this.db).listSaved()
   }
 
   removePermissionApproval(id: string): void {
-    new PermissionApprovals(this.db).remove(id)
+    new PermissionApprovals(this.db).removeSaved(id)
   }
 
   clearPermissionApprovals(removal?: import('@ramu/shared/types').PermissionRemoval): void {
-    const approvals = new PermissionApprovals(this.db)
-    approvals.ensureAntigravityDefaults()
-    approvals.clear(removal)
+    new PermissionApprovals(this.db).clear(removal, { includeBuiltins: false })
   }
 
   forgetPermission(...args: Parameters<UserRequests['forgetPermission']>) {

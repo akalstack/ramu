@@ -157,7 +157,7 @@ it('replaces older predefined rules once when the defaults change, keeping rules
   expect(rules.some((rule) => rule.label === 'Mine')).toBe(true)
 })
 
-it('initializes visible Antigravity Auto defaults once and never restores removed rules implicitly', () => {
+it('initializes internal Antigravity Auto defaults once and never restores removed rules implicitly', () => {
   const approvals = new PermissionApprovals(db)
   approvals.ensureAntigravityDefaults()
   const defaults = approvals.list()
@@ -204,3 +204,18 @@ it('limits default read approvals to Auto and gives review rules precedence over
   expect(find('rm -rf tmp')).toMatchObject({ behavior: 'ask' })
   expect(approvals.find('codex', 'new-input', 'p', 'git diff', 'auto')).toBeUndefined()
 })
+
+it.each(['user', 'project', 'projects', 'all'] as const)(
+  'preserves hidden defaults when Settings clears %s approvals',
+  (scope) => {
+    const approvals = new PermissionApprovals(db)
+    approvals.ensureAntigravityDefaults()
+    const defaults = approvals.list()
+    approvals.remember('antigravity', 'custom-user', 'user')
+    approvals.remember('antigravity', 'custom-project', 'project', 'p')
+    expect(approvals.listSaved()).toHaveLength(2)
+    approvals.clear({ scope, projectId: scope === 'project' ? 'p' : undefined }, { includeBuiltins: false })
+    expect(approvals.list().filter((rule) => rule.builtin)).toEqual(defaults)
+    expect(approvals.listSaved()).toHaveLength(scope === 'all' ? 0 : 1)
+  },
+)

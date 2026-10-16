@@ -277,6 +277,8 @@ class CodexSession implements CodexRunner {
       ...this.policies(),
       ...(this.settings.model ? { model: this.settings.model } : {}),
       ...(this.settings.effort ? { effort: this.settings.effort } : {}),
+      // Without this Codex sends no reasoning summaries for models whose config defaults to none.
+      summary: 'auto',
       serviceTier: this.settings.serviceTier === 'fast' ? 'fast' : 'default',
     })
     this.turnId = this.completedTurns.has(result.turn.id) ? '' : result.turn.id

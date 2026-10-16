@@ -24,6 +24,9 @@ export function PermissionRequestCard({
   outcome: string | undefined
 }) {
   useLanguage()
+  if (outcome && (outcome.startsWith('allowed') || outcome === 'approved' || outcome === 'allow')) {
+    return null
+  }
   const [pattern, setPattern] = useState(e.approvalPatterns?.[0] ?? 'exact')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

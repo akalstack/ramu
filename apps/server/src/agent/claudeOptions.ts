@@ -56,8 +56,10 @@ export function claudeLaunchOptions({
       : {}),
     settingSources: ['user', 'project', 'local'],
     ...(plugins.length ? { plugins: plugins.map((path) => ({ type: 'local' as const, path })) } : {}),
-    // Overrides the user's settings: Claude Code's own advisor on the configured model, or off while Ramu's runs.
-    ...(advisorModel !== undefined ? { settings: { advisorModel } } : {}),
+    // Overrides the user's settings. Newer Claude models omit thinking text unless summaries are requested, which
+    // would leave the chat's thinking rows empty. `advisorModel` is Claude Code's own advisor on the configured model,
+    // or off while Ramu's runs.
+    settings: { showThinkingSummaries: true, ...(advisorModel !== undefined ? { advisorModel } : {}) },
     ...(s.additionalDirs.length ? { additionalDirectories: s.additionalDirs } : {}),
     abortController: abort,
     canUseTool,

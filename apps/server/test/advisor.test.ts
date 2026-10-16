@@ -179,14 +179,14 @@ describe('advisor', () => {
     svc.preferences = () => DEFAULT_APP_PREFERENCES
     const off = svc.start('t', scope(), 'one', { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
     await until(() => svc.get(off.id).state === 'idle')
-    expect(calls[0]!.settings).toBeUndefined()
+    expect(calls[0]!.settings).toEqual({ showThinkingSummaries: true })
     expect(appended(calls[0]!)).not.toContain(ADVISOR_PREAMBLE)
     expect(svc.advisorStep(off.id)).toBeNull()
 
     svc.preferences = () => advisorOn()
     const on = svc.start('t', scope(), 'two', { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
     await until(() => calls.length === 2)
-    expect(calls[1]!.settings).toEqual({ advisorModel: '' })
+    expect(calls[1]!.settings).toEqual({ showThinkingSummaries: true, advisorModel: '' })
     expect(appended(calls[1]!)).toContain(ADVISOR_PREAMBLE)
     expect(svc.advisorStep(on.id)).toEqual(codexStep)
     // Consulting the advisor never needs an approval, even with edit-only access.

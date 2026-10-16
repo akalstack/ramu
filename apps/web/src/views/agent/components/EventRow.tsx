@@ -29,7 +29,6 @@ export function EventRow({
   generating = false,
   outcomes,
   questionStates,
-  actions = false,
   latest = false,
   editor,
   onEdit,
@@ -43,7 +42,6 @@ export function EventRow({
   generating?: boolean
   outcomes: Map<string, string>
   questionStates: Map<string, QuestionState>
-  actions?: boolean
   latest?: boolean
   editor?: React.ReactNode
   onEdit?: (text: string, attachments: Attachment[]) => void
@@ -143,7 +141,7 @@ export function EventRow({
         />
       )
     case 'text':
-      return <AssistantText event={e} generating={generating} actions={actions} taskId={taskId} sessionId={sessionId} />
+      return <AssistantText event={e} generating={generating} latest={latest} taskId={taskId} sessionId={sessionId} />
     case 'turn-diff':
       return <TurnDiff diff={e.diff} />
     case 'thinking':
@@ -161,15 +159,18 @@ export function EventRow({
           pending={live && !outcomes.has(e.requestId)}
         />
       )
-    case 'permission-request':
+    case 'permission-request': {
+      const outcome = outcomes.get(e.requestId)
+      if (outcome && (outcome.startsWith('allowed') || outcome === 'approved' || outcome === 'allow')) return null
       return (
         <PermissionRequestCard
           event={e}
           sessionId={sessionId}
           pending={live && !outcomes.has(e.requestId)}
-          outcome={outcomes.get(e.requestId)}
+          outcome={outcome}
         />
       )
+    }
     case 'question':
       return (
         <QuestionRow

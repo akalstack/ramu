@@ -22,7 +22,6 @@ function TranscriptBlock({
   ctx,
   turn,
   finished,
-  actions = false,
   latest = false,
 }: {
   block: Block
@@ -30,7 +29,6 @@ function TranscriptBlock({
   turn: Turn
   /** The turn is done, so its tool rows no longer show live activity. */
   finished: boolean
-  actions?: boolean
   latest?: boolean
 }) {
   const index = blockIndex(b, ctx.blocks)
@@ -76,7 +74,6 @@ function TranscriptBlock({
           }
           outcomes={ctx.outcomes}
           questionStates={ctx.questionStates}
-          actions={actions}
           latest={latest}
           onEdit={
             ctx.eventSequences.has(b.event)
@@ -120,16 +117,8 @@ export function TranscriptTurn({
   const { folded, kept, answer } = finished
     ? foldTurn(turn.items, ctx.outcomes, ctx.results)
     : { folded: [] as Block[], kept: turn.items, answer: [] as Block[] }
-  const renderBlock = (b: Block, actions = false, latest = false) => (
-    <TranscriptBlock
-      key={blockIndex(b, blocks)}
-      block={b}
-      ctx={ctx}
-      turn={turn}
-      finished={finished}
-      actions={actions}
-      latest={latest}
-    />
+  const renderBlock = (b: Block, latest = false) => (
+    <TranscriptBlock key={blockIndex(b, blocks)} block={b} ctx={ctx} turn={turn} finished={finished} latest={latest} />
   )
   // Several sub-agents in a row read as one line with a summary, expanding to their cards.
   const renderList = (list: Block[]) =>
@@ -158,7 +147,7 @@ export function TranscriptTurn({
           {formatChatDate(dateSeparator, dateNow, currentLanguage())}
         </time>
       )}
-      {turn.user && renderBlock(turn.user, false, isLast && !answer.length && !kept.length && !folded.length)}
+      {turn.user && renderBlock(turn.user, isLast && !answer.length && !kept.length && !folded.length)}
       {((!finished && isLast && (working || needsInput)) ||
         (finished && (!turn.ended || turn.interrupted) && !folded.length)) && (
         <div className="turn-working text-muted-foreground tabular-nums" role="status">
@@ -185,7 +174,7 @@ export function TranscriptTurn({
         </TurnSummary>
       )}
       {renderList(kept)}
-      {answer.map((b) => renderBlock(b, finished && b === ctx.latestAssistant, b === ctx.latestAssistant))}
+      {answer.map((b) => renderBlock(b, b === ctx.latestAssistant))}
       {reviews?.map((review) => (
         <TurnChanges key={review.id} review={review} />
       ))}
