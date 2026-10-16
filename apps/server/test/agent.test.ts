@@ -3702,7 +3702,7 @@ it('uses Antigravity Auto read rules, requires destructive-command approval, and
       expect.objectContaining({
         kind: 'request-resolved',
         outcome: 'allowed-user',
-        savedApprovalId: expect.stringContaining('builtin:git-read:diff'),
+        savedApprovalId: expect.stringContaining('builtin:git-read'),
       }),
     )
     command = 'git reset --hard'
@@ -3711,12 +3711,12 @@ it('uses Antigravity Auto read rules, requires destructive-command approval, and
     const request = svc.events(first.id).findLast((event) => event.kind === 'permission-request')!
     expect(request).toMatchObject({
       approvalOnceOnly: true,
-      approvalReviewRule: expect.stringContaining('Git destructive'),
+      approvalReviewRule: expect.stringContaining('discard work'),
     })
     expect(() => svc.replyPermission(first.id, 'reused', true, undefined, 'user', 'git *')).toThrow('once')
     svc.replyPermission(first.id, 'reused', true)
     await until(() => svc.get(first.id).state === 'idle')
-    const rule = svc.listPermissionApprovals().find((rule) => rule.builtin === 'git-read:diff')!
+    const rule = svc.listPermissionApprovals().find((rule) => rule.builtin === 'git-read')!
     svc.removePermissionApproval(rule.id)
     command = 'git diff --stat'
     await svc.send(first.id, 'Review again')

@@ -1511,6 +1511,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Allowed for this user": "Diizinkan untuk pengguna ini",
   "Allowed · project approval forgotten": "Diizinkan · izin proyek dilupakan",
   "Allowed · user approval forgotten": "Diizinkan · izin pengguna dilupakan",
+  "Commands and edits run without asking, including anything your OpenCode rules would block.": "Perintah dan edit berjalan tanpa bertanya, termasuk yang diblokir aturan OpenCode-mu.",
   "Approves permission requests automatically. OpenCode deny rules still apply.": "Menyetujui permintaan izin secara otomatis. Aturan penolakan OpenCode tetap berlaku.",
   "Auto (rules)": "Auto (aturan)",
   "Auto only": "Hanya Auto",

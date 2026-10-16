@@ -58,7 +58,12 @@ export function openCodeServerEnv(
   return Object.keys(config).length ? { OPENCODE_CONFIG_CONTENT: JSON.stringify(config) } : {}
 }
 
-/** Allow edits is an explicit native policy, independent of permissive user defaults. */
+/**
+ * Session rules for the chosen access. Allow edits is an explicit native policy, independent of permissive user
+ * defaults. Full access is OpenCode's own `"*": "allow"`: rules are evaluated last match first, and session rules come
+ * after the user's config, so it also overrides their ask and deny rules. Auto (and anything else) adds nothing:
+ * `permission.asked` approves what is emitted and explicit deny rules never reach it, like `opencode --auto`.
+ */
 export function openCodePermissions(connection: McpConnection | undefined, access?: AgentSettings['access']) {
   const rules: { action: string; resource: string; effect: 'allow' | 'deny' | 'ask' }[] =
     access === 'edits'
@@ -76,7 +81,9 @@ export function openCodePermissions(connection: McpConnection | undefined, acces
           { action: 'bash', resource: '*', effect: 'ask' },
           { action: 'edit', resource: '*', effect: 'allow' },
         ]
-      : []
+      : access === 'full'
+        ? [{ action: '*', resource: '*', effect: 'allow' }]
+        : []
   if (connection?.nativeSubagents === false) rules.push({ action: 'task', resource: '*', effect: 'deny' })
   return rules
 }

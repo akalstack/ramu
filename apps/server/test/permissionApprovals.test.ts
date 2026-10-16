@@ -141,13 +141,29 @@ it('routes manager removals with explicit user, project, all-project and all sco
   expect(agents.removePermissionApproval).toHaveBeenCalledWith('permission-approval:v1:rule')
 })
 
+it('replaces older predefined rules once when the defaults change, keeping rules the user saved', () => {
+  const approvals = new PermissionApprovals(db)
+  approvals.remember('antigravity', 'builtin:git-read:diff', 'user', undefined, {
+    label: 'old',
+    builtin: 'git-read:diff',
+    autoOnly: true,
+    behavior: 'allow',
+  })
+  approvals.remember('antigravity', 'mine', 'user', undefined, { label: 'Mine', pattern: 'make *', behavior: 'allow' })
+  approvals.ensureAntigravityDefaults()
+  const rules = approvals.list()
+  expect(rules.some((rule) => rule.builtin === 'git-read:diff')).toBe(false)
+  expect(rules.some((rule) => rule.builtin === 'project-checks')).toBe(true)
+  expect(rules.some((rule) => rule.label === 'Mine')).toBe(true)
+})
+
 it('initializes visible Antigravity Auto defaults once and never restores removed rules implicitly', () => {
   const approvals = new PermissionApprovals(db)
   approvals.ensureAntigravityDefaults()
   const defaults = approvals.list()
   expect(defaults.length).toBeGreaterThan(10)
   expect(defaults.every((rule) => rule.provider === 'antigravity' && rule.scope === 'user' && rule.autoOnly)).toBe(true)
-  const diff = defaults.find((rule) => rule.builtin === 'git-read:diff')!
+  const diff = defaults.find((rule) => rule.builtin === 'git-read')!
   approvals.remove(diff.id)
   approvals.ensureAntigravityDefaults()
   expect(approvals.list().some((rule) => rule.id === diff.id)).toBe(false)
@@ -161,11 +177,16 @@ it('limits default read approvals to Auto and gives review rules precedence over
   approvals.ensureAntigravityDefaults()
   const find = (command: string, access: 'auto' | 'edits' = 'auto') =>
     approvals.find('antigravity', 'new-input', 'p', command, access)
-  expect(find('git diff --stat')).toMatchObject({ behavior: 'allow', builtin: 'git-read:diff' })
+  expect(find('git diff --stat')).toMatchObject({ behavior: 'allow', builtin: 'git-read' })
   expect(find('git status --short')).toMatchObject({ behavior: 'allow' })
   expect(find('pwd')).toMatchObject({ behavior: 'allow' })
   expect(find('git diff --stat', 'edits')).toBeUndefined()
-  expect(find('npm test')).toBeUndefined()
+  expect(find('npm test')).toMatchObject({ behavior: 'allow', builtin: 'project-checks' })
+  expect(find('npm test', 'edits')).toBeUndefined()
+  expect(find('npm --version')).toMatchObject({ behavior: 'allow', builtin: 'version' })
+  expect(find('npm --version', 'edits')).toBeUndefined()
+  expect(find('npm install left-pad')).toBeUndefined()
+  expect(find('curl https://example.com')).toBeUndefined()
   approvals.remember('antigravity', 'git', 'project', 'p', { label: 'git *', pattern: 'git *' })
   for (const command of [
     'git reset --hard',
@@ -174,6 +195,9 @@ it('limits default read approvals to Auto and gives review rules precedence over
     'git diff --output=result',
     'git -c alias.wipe=reset wipe',
     'git diff && rm -rf tmp',
+    'git log --output=x',
+    'cat .env',
+    'pnpm test && git push',
   ])
     expect(find(command)?.behavior).toBe('ask')
   approvals.remember('antigravity', 'rm', 'user', undefined, { label: 'rm *', pattern: 'rm *' })

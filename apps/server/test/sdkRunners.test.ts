@@ -160,6 +160,16 @@ describe('OpenCode 2 helpers', () => {
     expect(openCodeServerEnv(undefined, undefined)).toEqual({})
   })
 
+  it('maps Full access to OpenCode allow-all, and leaves Auto to approving what OpenCode asks', () => {
+    expect(openCodePermissions(undefined, 'full')).toEqual([{ action: '*', resource: '*', effect: 'allow' }])
+    expect(openCodePermissions(undefined, 'auto')).toEqual([])
+    // The sub-agent switch comes last, so it still wins over allow-all.
+    expect(openCodePermissions({ url: '', token: '', nativeSubagents: false }, 'full')).toEqual([
+      { action: '*', resource: '*', effect: 'allow' },
+      { action: 'task', resource: '*', effect: 'deny' },
+    ])
+  })
+
   it('splits provider/model and passes effort as the variant', () => {
     expect(openCodeModel('openrouter/meta/llama', 'high')).toEqual({
       providerID: 'openrouter',

@@ -1,6 +1,6 @@
 import { matchesCommand } from './permissionCommands'
 export { commandPatterns, matchesCommand } from './permissionCommands'
-import { ANTIGRAVITY_AUTO_DEFAULTS, matchesAntigravityDefault } from './antigravityAutoRules'
+import { AUTO_COMMAND_DEFAULTS, matchesAutoCommandRule } from './autoCommandRules'
 import { createHash } from 'node:crypto'
 import {
   NO_PROJECT,
@@ -32,11 +32,13 @@ export function permissionKey(tool: string, input: unknown): string {
 export class PermissionApprovals {
   constructor(private db: Db) {}
   ensureAntigravityDefaults(): void {
-    const marker = 'permission-defaults:v1:antigravity-auto'
+    // Bump the version when the predefined rules change: the old ones are replaced once, user-saved rules are kept.
+    const marker = 'permission-defaults:v2:antigravity-auto'
     if (this.db.prepare('SELECT 1 FROM app_state WHERE key = ?').get(marker)) return
     this.db.exec('SAVEPOINT permission_defaults')
     try {
-      for (const rule of ANTIGRAVITY_AUTO_DEFAULTS)
+      for (const rule of this.list()) if (rule.builtin) this.remove(rule.id)
+      for (const rule of AUTO_COMMAND_DEFAULTS)
         this.remember('antigravity', `builtin:${rule.id}`, 'user', undefined, {
           ...rule,
           builtin: rule.id,
@@ -109,7 +111,7 @@ export class PermissionApprovals {
     )
     const matches = (rule: SavedPermissionRule) =>
       rule.builtin
-        ? !!command && matchesAntigravityDefault(rule.builtin, command)
+        ? !!command && matchesAutoCommandRule(rule.builtin, command)
         : rule.id === this.key(provider, action, rule.scope, project) ||
           (!!rule.pattern && matchesCommand(rule.pattern, command))
     return (
