@@ -53,7 +53,7 @@ ramu.test('Indonesian updates the UI and native menu without losing the draft', 
     await page.locator('[data-composer-input]').first().getAttribute('data-draft'),
     'Draft stays exactly as written: {project} $repo',
   )
-  await page.getByRole('button', { name: 'Mulai obrolan', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Mulai thread', exact: true }).waitFor()
   assert.equal(await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items.at(-1).label), 'Jendela')
   const roles = await app.evaluate(({ Menu }) =>
     Menu.getApplicationMenu()
