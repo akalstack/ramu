@@ -2,7 +2,7 @@ import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { compactionLabel, compactionCounts } from '@ramu/shared/chat/compaction'
 import { Button } from '@/components/desktop-button'
-import { CircleAlert, Minimize2 } from 'lucide-react'
+import { ArrowRightLeft, CircleAlert, Minimize2, RotateCcw, Settings2, Undo2 } from 'lucide-react'
 import type { Attachment, AgentEvent } from '@ramu/shared/types'
 import { ScheduleChatCard } from '../../../Automation'
 import { invoke } from '../../../ipc'
@@ -55,7 +55,10 @@ export function EventRow({
     case 'recovery':
       return (
         <div className={CONVERSATION_SEPARATOR_CLASS} role="status">
-          <span>{translate('Continued after restart')}</span>
+          <span className="inline-flex items-center gap-2">
+            <RotateCcw size={14} aria-hidden="true" />
+            {translate('Resumed after restart')}
+          </span>
         </div>
       )
     case 'compaction': {
@@ -67,27 +70,21 @@ export function EventRow({
           role="status"
         >
           <span className="h-px min-w-4 flex-1 bg-border" aria-hidden="true" />
-          <div className="flex min-w-0 flex-col items-center gap-1 text-center">
-            <span className="inline-flex items-center gap-2">
-              <Minimize2 size={14} aria-hidden="true" />
-              {compactionLabel(e)}
-            </span>
+          <span className="inline-flex min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
+            <Minimize2 size={14} className="flex-none" aria-hidden="true" />
+            {e.state === 'completed' ? translate('Context compacted') : compactionLabel(e)}
             {e.state === 'completed' && (
-              <span className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-caption tabular-nums">
-                <span>
-                  {counts.before === 'Not reported'
-                    ? translate('Before: Not reported')
-                    : translate('Before: {0} tokens', { '0': counts.before })}
-                </span>
-                <span>
-                  {counts.after === 'Not reported'
-                    ? translate('After: Not reported')
-                    : translate('After: {0} tokens', { '0': counts.after })}
-                </span>
-                {counts.window && <span>{translate('Context window: {0} tokens', { '0': counts.window })}</span>}
+              <span
+                className="text-caption tabular-nums"
+                title={counts.window ? translate('Context window: {0} tokens', { '0': counts.window }) : undefined}
+              >
+                {translate('{0} → {1} tokens', {
+                  '0': counts.before === 'Not reported' ? translate('Not reported') : counts.before,
+                  '1': counts.after === 'Not reported' ? translate('Not reported') : counts.after,
+                })}
               </span>
             )}
-          </div>
+          </span>
           <span className="h-px min-w-4 flex-1 bg-border" aria-hidden="true" />
         </div>
       )
@@ -97,17 +94,19 @@ export function EventRow({
     case 'settings':
       return (
         <div className={CONVERSATION_SEPARATOR_CLASS}>
-          <span>
+          <span className="inline-flex min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1" title={e.reason}>
+            {e.handoff ? (
+              <ArrowRightLeft size={14} className="flex-none" aria-hidden="true" />
+            ) : (
+              <Settings2 size={14} className="flex-none" aria-hidden="true" />
+            )}
+            {translate(e.handoff ? 'Context handoff' : 'Settings changed')}
             <SettingsChange next={e.settings} previous={e.previous} />
-            <small>
-              {e.reason}
-              {e.handoff ? ' · Conversation context handed over' : ''}
-            </small>
             {e.previous && live && (
               <Button
                 variant="ghost"
-                size="sm"
-                className={`${GHOST_TEXT_BUTTON_CLASS} separator-action ml-2 h-[22px] min-h-[22px] p-[0_8px] text-soft`}
+                size="icon-xs"
+                className={`${GHOST_TEXT_BUTTON_CLASS} separator-action size-[22px] min-h-[22px] p-0 text-soft`}
                 title={translate('Go back to the previous model and settings')}
                 onClick={() =>
                   void invoke('agent.configure', sessionId, e.previous!).catch((error) =>
@@ -115,7 +114,10 @@ export function EventRow({
                   )
                 }
               >
-                <SwitchBackLabel previous={e.previous} />
+                <RotateCcw size={13} aria-hidden="true" />
+                <span className="sr-only">
+                  <SwitchBackLabel previous={e.previous} />
+                </span>
               </Button>
             )}
           </span>
@@ -133,15 +135,7 @@ export function EventRow({
         />
       )
     case 'text':
-      return (
-        <AssistantText
-          event={e}
-          generating={generating}
-          actions={actions}
-          taskId={taskId}
-          sessionId={sessionId}
-        />
-      )
+      return <AssistantText event={e} generating={generating} actions={actions} taskId={taskId} sessionId={sessionId} />
     case 'turn-diff':
       return <TurnDiff diff={e.diff} />
     case 'thinking':
@@ -182,13 +176,14 @@ export function EventRow({
       return e.isError ? (
         <div className={`${TURN_END_CLASS} error text-bad`}>
           <CircleAlert size={13} />
-          {translate('The agent reported a failure.')}
+          {translate('Agent failed')}
         </div>
       ) : null
     case 'file-restore':
       return (
         <div className={TURN_END_CLASS} role="status">
-          {translate('Restored {0} files from message {1} and later captured runs.', {
+          <Undo2 size={14} aria-hidden="true" />
+          {translate('Restored {0} files · message {1} onward', {
             '0': e.fileCount,
             '1': e.userSeq,
           })}
