@@ -19,6 +19,8 @@ export interface CommitPlan {
   action: CommitAction
   branch: CommitBranchOptions
   message: string
+  /** Open the pull request dialog once the commit is pushed. */
+  pullRequest: boolean
 }
 
 type Request = {
@@ -28,6 +30,8 @@ type Request = {
   status: GitStatus
   action: CommitAction
   message: string
+  /** Start with "Then create a pull request" ticked. */
+  pullRequest?: boolean
   resolve: (plan: CommitPlan | null) => void
 }
 let active: Request | null = null
@@ -138,8 +142,10 @@ function CommitForm({
   const [action, setAction] = useState<CommitAction>(
     request.action !== 'commit' ? request.action : canPublish ? defaultAction : 'commit',
   )
-  const publishing = action !== 'commit' && canPublish
-  const chosenAction: CommitAction = publishing ? action : 'commit'
+  const [openPr, setOpenPr] = useState(!!request.pullRequest && canPublish)
+  // A pull request needs the commit on the remote, so it always pushes.
+  const publishing = (openPr || action !== 'commit') && canPublish
+  const chosenAction: CommitAction = openPr && canPublish ? 'push' : publishing ? action : 'commit'
   const [branchInfo, setBranchInfo] = useState<{ branch: string | null; defaultBranch: string | null } | null>(null)
   const [newBranch, setNewBranch] = useState(false)
   // A new branch is named by AI from the commit (empty), or written here.
@@ -163,7 +169,8 @@ function CommitForm({
   }, [request.taskId, request.repoId, defaultNewBranch])
   const onDefault = !!branchInfo?.branch && branchInfo.branch === branchInfo.defaultBranch
   // A plain commit on the default branch hides the new-branch choice, so it never applies there.
-  const wantsBranch = newBranch && (publishing || !onDefault)
+  // A pull request cannot come from the default branch, so the commit moves to a new one.
+  const wantsBranch = (newBranch || (openPr && onDefault)) && (publishing || !onDefault)
 
   const toggle = (path: string) =>
     setUnticked((current) => {
@@ -173,8 +180,9 @@ function CommitForm({
     })
   const submit = () => {
     if (!selected.length || (wantsBranch && ownName && !branchName.trim())) return
-    if (publishing) onRememberAction(action)
+    if (publishing && !openPr) onRememberAction(action)
     onDone({
+      pullRequest: openPr && canPublish,
       paths: selected.map((entry) => entry.path),
       action: chosenAction,
       branch: !wantsBranch
@@ -185,14 +193,18 @@ function CommitForm({
       message,
     })
   }
-  const submitLabel = commitActionLabel(chosenAction)
+  const submitLabel = openPr && canPublish ? t('Commit & Create PR') : commitActionLabel(chosenAction)
 
   const SEGMENTS =
     'inline-flex flex-none gap-0.5 p-0.5 rounded-(--radius-s) bg-fill [&_button]:h-6 [&_button]:px-2.5 [&_button]:text-caption [&_button]:rounded-(--radius-xs) [&_button]:bg-transparent [&_button]:text-muted-foreground [&_button:hover:not(:disabled)]:text-foreground [&_[aria-pressed=true]]:bg-hover [&_[aria-pressed=true]]:text-foreground [&_button:disabled]:opacity-40'
   const LABEL = 'text-caption font-medium text-muted-foreground'
   const branchToggle = (
     <label className="flex cursor-pointer items-center gap-2 text-control text-soft">
-      <Checkbox checked={newBranch} onCheckedChange={(value) => setNewBranch(!!value)} />
+      <Checkbox
+        checked={newBranch || (openPr && onDefault)}
+        disabled={openPr && onDefault}
+        onCheckedChange={(value) => setNewBranch(!!value)}
+      />
       {onDefault ? t('New branch (you are on {0})', { '0': branchInfo!.branch }) : t('Commit on a new branch')}
     </label>
   )
@@ -292,12 +304,21 @@ function CommitForm({
                 title={
                   value !== 'commit' && !canPublish ? t('This repository has no branch with a remote.') : undefined
                 }
-                onClick={() => setAction(value)}
+                onClick={() => {
+                  setAction(value)
+                  setOpenPr(false)
+                }}
               >
                 {commitActionLabel(value)}
               </Button>
             ))}
           </div>
+          {canPublish && (
+            <label className="flex cursor-pointer items-center gap-2 text-control text-soft">
+              <Checkbox checked={openPr} onCheckedChange={(value) => setOpenPr(!!value)} />
+              {t('Then create a pull request')}
+            </label>
+          )}
           {(onDefault ? publishing : true) && branchToggle}
           {wantsBranch && (
             <div className="flex flex-col gap-1.5 pl-6">

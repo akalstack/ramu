@@ -9,6 +9,7 @@ import type {
   PullRequestInfo,
   RepositoryBinding,
 } from '@ramu/shared/types'
+import { cn } from 'cn'
 import { Button } from '@/components/desktop-button'
 import { t } from '../../i18n'
 import { invoke, ramu } from '../../ipc'
@@ -125,11 +126,23 @@ export function PullRequestSection({
   }
 
   const failing = !!pr?.checks.some((check) => check.state === 'failure')
-  // Work on the default branch has nothing to propose; a merged pull request is finished.
-  const canCreate = (!pr || pr.state === 'closed') && status.branch !== branchInfo.data?.defaultBranch
-  if (!pr && !canCreate) return null
+  // On the default branch only commits the remote lacks can be proposed; they move to a new branch.
+  // A merged pull request is finished.
+  const onBase = !!branchInfo.data && status.branch === branchInfo.data.defaultBranch
+  const canCreate = !!branchInfo.data && (!pr || pr.state === 'closed') && (!onBase || status.ahead > 0)
+  if (!pr && !canCreate)
+    return onBase && status.entries.length > 0 ? (
+      <p className="muted text-muted-foreground small text-caption m-[0_2px_8px]">
+        {t('Use Commit & Create PR from the commit menu to open a pull request from these changes.')}
+      </p>
+    ) : null
   return (
-    <div className="scm-pull-request flex flex-col gap-1.5 mb-2 p-2 rounded-(--radius-s) bg-fill text-control leading-[18px]">
+    <div
+      className={cn(
+        'scm-pull-request flex flex-col gap-1.5 mb-2 text-control leading-[18px]',
+        pr && 'p-2 rounded-(--radius-s) bg-fill',
+      )}
+    >
       {creating && (
         <CreatePullRequestDialog
           taskId={taskId}
@@ -158,9 +171,9 @@ export function PullRequestSection({
           )}
           {canCreate && (
             <Button
-              variant="secondary"
+              variant="outline"
               size="sm"
-              className="bg-raised hover:bg-hover small text-caption justify-center"
+              className="w-full justify-center gap-2 rounded-(--radius-s) border border-line bg-transparent! text-control text-foreground hover:bg-hover! disabled:opacity-50"
               disabled={busy || !!status.operation}
               onClick={() => setCreating(true)}
             >

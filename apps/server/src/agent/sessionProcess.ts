@@ -1,7 +1,6 @@
-import { responseInstructions } from '../intelligence'
 import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from './agentRunner'
-import type { AppPreferences, AgentSessionInfo, AgentProvider, Attachment } from '@ramu/shared/types'
+import type { AppPreferences, AgentProvider, Attachment } from '@ramu/shared/types'
 import { goalInstructions } from './goals'
 import type { QueryFn, PendingRequest } from './types'
 import { InputQueue } from './inputQueue'
@@ -107,19 +106,6 @@ export class SessionProcess {
     }
   }
 
-  responseStyleInstructions(session: AgentSessionInfo): string {
-    const instructions = responseInstructions(session.settings, this.host.preferences()?.intelligence, session)
-    const row = this.db
-      .prepare('SELECT response_style_applied AS styled FROM agent_sessions WHERE id=?')
-      .get(session.id) as { styled: number }
-    if (instructions && !row.styled)
-      this.db.prepare('UPDATE agent_sessions SET response_style_applied=1 WHERE id=?').run(session.id)
-    if (instructions) return instructions
-    return row.styled
-      ? '<ramu-response-style>Use the default clear, direct response style, replacing earlier Ramu style preferences. Explicit user instructions still take precedence. Preserve exact code, commands, paths and structured output.</ramu-response-style>'
-      : ''
-  }
-
   launch(id: string, prompt: string, resume: string | null, recordUser = true, attachments: Attachment[] = []): void {
     const s = this.host.get(id)
     const explicitGoal = !s.parentId && /^\/goal\s+(\S[\s\S]*)$/.exec(prompt.split('\n\n<ramu-context>')[0]!.trim())
@@ -150,11 +136,9 @@ export class SessionProcess {
     if ((isAcpProvider(s.provider) || s.provider === 'claude-code') && connection && !s.parentId)
       this.nativeOffAtLaunch.set(id, connection.nativeSubagents === false)
     const request = explicitGoal ? prompt.replace(/^\s*\/goal\s+/, 'Work toward this Ramu goal: ') : prompt
-    const style = this.responseStyleInstructions(s)
-    const styledRequest = style ? `${request}\n\n${style}` : request
     const actualPrompt = handoff
-      ? `${conversationHandoff(this.host.events(id), this.host.sessionCheckpoint()?.(id))}\n\nNext request: ${styledRequest}`
-      : styledRequest
+      ? `${conversationHandoff(this.host.events(id), this.host.sessionCheckpoint()?.(id))}\n\nNext request: ${request}`
+      : request
     if (this.host.usesRunner(s.provider)) {
       let runner: AgentRunner
       try {

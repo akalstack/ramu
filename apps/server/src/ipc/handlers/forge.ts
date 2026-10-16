@@ -18,6 +18,7 @@ const pullRequestInput = z.object({
   body: z.string().max(100_000),
   base: z.string().min(1).max(200),
   draft: z.boolean(),
+  branch: z.string().min(1).max(200).optional(),
 })
 
 const issueKey = (taskId: string) => `issue:${taskId}`
@@ -64,6 +65,12 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id, pullRequestInput]),
       run: (taskId: string, repoId: string, input: PullRequestInput) =>
         gitExclusive(ctx, taskId, repoId, async (cwd) => {
+          // On the base branch the commits move to a new branch first; the base branch itself is left alone.
+          if (input.branch) {
+            if ((await git.currentBranch(cwd)) !== input.base)
+              throw new Error(`Switch to ${input.base} to open a pull request from its commits.`)
+            await git.branchFromHere(cwd, input.branch)
+          }
           // The branch must be on the remote first; push publishes it when it has no upstream yet.
           await git.push(cwd)
           return forge.createPullRequest(cwd, input)

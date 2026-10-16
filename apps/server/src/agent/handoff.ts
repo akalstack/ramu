@@ -19,7 +19,7 @@ export function transcriptOf(events: AgentEvent[]): string {
     if (e.kind === 'question') return [`QUESTION ${e.requestId}: ${JSON.stringify(e.questions)}`]
     if (e.kind === 'question-state' && e.answers) return [`USER ANSWERS ${e.requestId}: ${JSON.stringify(e.answers)}`]
     if (e.kind === 'settings')
-      return [`SETTINGS: ${e.settings.provider} ${e.settings.model} style=${e.settings.responseStyle ?? 'inherit'}`]
+      return [`SETTINGS: ${e.settings.provider} ${e.settings.model}`]
     if (e.kind === 'request-resolved') return [`APPROVAL: ${e.outcome}`]
     return []
   })

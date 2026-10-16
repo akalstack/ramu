@@ -1,5 +1,6 @@
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
-import { EfficiencySettings, ResponseSettings } from './IntelligenceSettings'
+import { Advanced } from './advanced'
+import { EfficiencySettings } from './IntelligenceSettings'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
 import { SETTINGS_FORM_CLASS } from './constants'
@@ -10,7 +11,6 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
   const setIntelligence = (intelligence: typeof draft.intelligence) => onChange({ ...draft, intelligence })
   return (
     <div className={SETTINGS_FORM_CLASS}>
-      <ResponseSettings value={draft.intelligence} onChange={setIntelligence} />
       <SettingsGroupTitle>{t('Sending messages')}</SettingsGroupTitle>
       <SettingsRow setting="busyMessageAction">
         <SettingsLabel
@@ -60,25 +60,6 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         title="Keep working while asking questions"
         description="Let the agent continue independent work while it waits for your answer."
       />
-      <SettingsRow setting="autoBackgroundSeconds">
-        <SettingsLabel
-          title={t('Move slow commands to background')}
-          help={t('Let the agent keep working when a command runs longer than this.')}
-        />
-        <Dropdown
-          label={t('Move slow commands to background')}
-          value={String(draft.autoBackgroundSeconds)}
-          options={[
-            { value: '0', label: t('Never') },
-            { value: '30', label: t('After 30 seconds') },
-            { value: '60', label: t('After 1 minute') },
-            { value: '120', label: t('After 2 minutes') },
-            { value: '300', label: t('After 5 minutes') },
-          ]}
-          onChange={(value) => onChange({ ...draft, autoBackgroundSeconds: Number(value) })}
-        />
-      </SettingsRow>
-      <EfficiencySettings value={draft.intelligence} onChange={setIntelligence} />
       <SettingsGroupTitle>{t('Thread history')}</SettingsGroupTitle>
       <SettingsRow setting="recentChats">
         <SettingsLabel
@@ -110,6 +91,27 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
           onChange={(value) => onChange({ ...draft, cleanupArchivedDays: Number(value) || 0 })}
         />
       </SettingsRow>
+      <Advanced>
+        <SettingsRow setting="autoBackgroundSeconds">
+          <SettingsLabel
+            title={t('Move slow commands to background')}
+            help={t('Let the agent keep working when a command runs longer than this.')}
+          />
+          <Dropdown
+            label={t('Move slow commands to background')}
+            value={String(draft.autoBackgroundSeconds)}
+            options={[
+              { value: '0', label: t('Never') },
+              { value: '30', label: t('After 30 seconds') },
+              { value: '60', label: t('After 1 minute') },
+              { value: '120', label: t('After 2 minutes') },
+              { value: '300', label: t('After 5 minutes') },
+            ]}
+            onChange={(value) => onChange({ ...draft, autoBackgroundSeconds: Number(value) })}
+          />
+        </SettingsRow>
+        <EfficiencySettings value={draft.intelligence} onChange={setIntelligence} />
+      </Advanced>
     </div>
   )
 }

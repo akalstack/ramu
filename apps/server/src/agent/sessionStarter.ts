@@ -38,7 +38,7 @@ export interface SessionStarterHost
       | 'workspaceReservations'
     >,
     Pick<GoalManager, 'controlGoal' | 'getGoal' | 'goalPreferences'>,
-    Pick<SessionProcess, 'fail' | 'launch' | 'refreshProviderTools' | 'responseStyleInstructions'>,
+    Pick<SessionProcess, 'fail' | 'launch' | 'refreshProviderTools'>,
     Pick<ProviderWaits, 'providerWait' | 'scheduleProvider'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
     Pick<
@@ -211,9 +211,7 @@ export class SessionStarter {
       !s.parentId && (this.host.toolConnection() || this.host.getGoal(id))
         ? goalInstructions(this.host.goalPreferences(), this.host.getGoal(id))
         : ''
-    const style = this.host.responseStyleInstructions(s)
-    const styledText = style ? `${text}\n\n${style}` : text
-    const actualText = instructions ? `${styledText}\n\n<ramu-goals>\n${instructions}\n</ramu-goals>` : styledText
+    const actualText = instructions ? `${text}\n\n<ramu-goals>\n${instructions}\n</ramu-goals>` : text
     this.host.attempted.set(id, new Set([stepKey(s.settings)]))
     this.host.attemptedAccounts.delete(id)
     const codex = this.host.runners.get(id)

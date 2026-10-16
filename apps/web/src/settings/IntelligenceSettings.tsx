@@ -2,8 +2,6 @@ import { useSettingsInvoke } from './SettingsScope'
 import { useCallback, useEffect, useState } from 'react'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Dropdown } from '../Menu'
 import { t } from '../i18n'
@@ -12,62 +10,10 @@ import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
 import { useModelSets, modelStepName } from '../models/ModelSets'
 import { takeLibraryFocus } from '../summaries/libraryFocus'
-import {
-  RESPONSE_STYLES,
-  RESPONSE_STYLE_LABELS,
-  type IntelligencePreferences,
-  type LearningSnapshot,
-  type ManagedSkill,
-} from '@ramu/shared/types'
+import { type IntelligencePreferences, type LearningSnapshot, type ManagedSkill } from '@ramu/shared/types'
 
 type Props = { value: IntelligencePreferences; onChange: (value: IntelligencePreferences) => void }
 const withCurrent = (values: number[], current: number) => [...new Set([...values, current])].sort((a, b) => a - b)
-
-export function ResponseSettings({ value, onChange }: Props) {
-  return (
-    <>
-      <SettingsGroupTitle>{t('Responses')}</SettingsGroupTitle>
-      <SettingsRow setting="intelligence.responseStyle">
-        <SettingsLabel
-          title={t('Response style')}
-          help={t('How the agent words its replies. Applies from the next message.')}
-        />
-        <Dropdown
-          label={t('Response style')}
-          value={value.responseStyle}
-          options={RESPONSE_STYLES.map((style) => ({ value: style, label: t(RESPONSE_STYLE_LABELS[style]) }))}
-          onChange={(style) => onChange({ ...value, responseStyle: style as IntelligencePreferences['responseStyle'] })}
-        />
-      </SettingsRow>
-      {value.responseStyle === 'custom' && (
-        <>
-          <SettingsRow setting="intelligence.responseInstructions" className="settings-stack">
-            <SettingsLabel title={t('Custom style instructions')} help={t('Describe the tone and format you want.')} />
-            <Textarea
-              aria-label={t('Custom style instructions')}
-              value={value.responseInstructions}
-              maxLength={4000}
-              rows={4}
-              onChange={(e) => onChange({ ...value, responseInstructions: e.target.value })}
-            />
-          </SettingsRow>
-          <SettingsRow setting="intelligence.responseSkill">
-            <SettingsLabel
-              title={t('Style skill name')}
-              help={t('Optional. Name of an installed skill to follow as well.')}
-            />
-            <Input
-              aria-label={t('Style skill name')}
-              value={value.responseSkill}
-              maxLength={200}
-              onChange={(e) => onChange({ ...value, responseSkill: e.target.value })}
-            />
-          </SettingsRow>
-        </>
-      )}
-    </>
-  )
-}
 
 export function EfficiencySettings({ value, onChange }: Props) {
   return (
@@ -102,19 +48,6 @@ export function EfficiencySettings({ value, onChange }: Props) {
           aria-label={t('Load tools on demand')}
           checked={value.toolSearch}
           onCheckedChange={(toolSearch) => onChange({ ...value, toolSearch })}
-        />
-      </SettingsRow>
-      <SettingsRow setting="intelligence.rtk">
-        <SettingsLabel
-          title={t('RTK command tool')}
-          help={t(
-            'Advanced. Lets full-access threads run commands through an installed RTK binary. Normal shell commands are unchanged.',
-          )}
-        />
-        <Switch
-          aria-label={t('RTK command tool')}
-          checked={value.rtk}
-          onCheckedChange={(rtk) => onChange({ ...value, rtk })}
         />
       </SettingsRow>
     </>
@@ -158,6 +91,42 @@ export function MaintenanceModelSettings({ value, onChange, cleanup }: Props & {
         />
       </SettingsRow>
     </div>
+  )
+}
+
+/** Limits on background learning; shown inside the Memory page's Advanced group. */
+export function LearningLimitsSettings({ value, onChange }: Props) {
+  if (value.learning === 'off') return null
+  return (
+    <>
+      <SettingsRow setting="intelligence.dailyReviews">
+        <SettingsLabel title={t('Reviews per day')} help={t('Upper limit on background reviews, to cap token use.')} />
+        <Dropdown
+          label={t('Reviews per day')}
+          value={String(value.dailyReviews)}
+          options={withCurrent([1, 3, 5, 10, 20], value.dailyReviews).map((n) => ({
+            value: String(n),
+            label: String(n),
+          }))}
+          onChange={(n) => onChange({ ...value, dailyReviews: Number(n) })}
+        />
+      </SettingsRow>
+      <SettingsRow setting="intelligence.archiveSkillDays">
+        <SettingsLabel
+          title={t('Archive unused skills after')}
+          help={t('Only skills Ramu created are archived. Pinned skills are kept.')}
+        />
+        <Dropdown
+          label={t('Archive unused skills after')}
+          value={String(value.archiveSkillDays)}
+          options={withCurrent([30, 60, 90, 180, 365], value.archiveSkillDays).map((days) => ({
+            value: String(days),
+            label: t('{0} days', { 0: days }),
+          }))}
+          onChange={(days) => onChange({ ...value, archiveSkillDays: Number(days) })}
+        />
+      </SettingsRow>
+    </>
   )
 }
 
@@ -225,40 +194,6 @@ export function LearningSettings({ value, onChange }: Props) {
           onChange={(learning) => onChange({ ...value, learning: learning as IntelligencePreferences['learning'] })}
         />
       </SettingsRow>
-      {value.learning !== 'off' && (
-        <>
-          <SettingsRow setting="intelligence.dailyReviews">
-            <SettingsLabel
-              title={t('Reviews per day')}
-              help={t('Upper limit on background reviews, to cap token use.')}
-            />
-            <Dropdown
-              label={t('Reviews per day')}
-              value={String(value.dailyReviews)}
-              options={withCurrent([1, 3, 5, 10, 20], value.dailyReviews).map((n) => ({
-                value: String(n),
-                label: String(n),
-              }))}
-              onChange={(n) => onChange({ ...value, dailyReviews: Number(n) })}
-            />
-          </SettingsRow>
-          <SettingsRow setting="intelligence.archiveSkillDays">
-            <SettingsLabel
-              title={t('Archive unused skills after')}
-              help={t('Only skills Ramu created are archived. Pinned skills are kept.')}
-            />
-            <Dropdown
-              label={t('Archive unused skills after')}
-              value={String(value.archiveSkillDays)}
-              options={withCurrent([30, 60, 90, 180, 365], value.archiveSkillDays).map((days) => ({
-                value: String(days),
-                label: t('{0} days', { 0: days }),
-              }))}
-              onChange={(days) => onChange({ ...value, archiveSkillDays: Number(days) })}
-            />
-          </SettingsRow>
-        </>
-      )}
       <Button
         disabled={busy || snapshot?.running || value.learning === 'off'}
         variant="secondary"
@@ -444,7 +379,7 @@ function LearningProposal({
               {t('Memory')}: {note.title}
             </strong>
             <p className="whitespace-pre-wrap text-caption">{note.content}</p>
-            <p className="muted text-caption">{note.reason}</p>
+            <p className="muted text-muted-foreground text-caption">{note.reason}</p>
           </section>
         ))}
         {change.skills.map((skill, index) => (
@@ -464,7 +399,7 @@ function LearningProposal({
                 <pre className="whitespace-pre-wrap">{skill.content}</pre>
               </div>
             </div>
-            <p className="muted text-caption">{skill.reason}</p>
+            <p className="muted text-muted-foreground text-caption">{skill.reason}</p>
           </section>
         ))}
         {change.archive.map((item) => (

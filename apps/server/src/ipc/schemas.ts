@@ -22,7 +22,6 @@ export const agentSettings = z.object({
   serviceTier: z.enum(['standard', 'fast']).default('standard'),
   access: z.enum(['edits', 'auto', 'full']),
   autoFallback: z.boolean(),
-  responseStyle: z.enum(['inherit', 'default', 'concise', 'detailed', 'adhd', 'caveman', 'custom']).optional(),
 })
 
 /** Files and selections the composer attaches to a prompt. */

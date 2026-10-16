@@ -11,7 +11,7 @@ const changed = (): AppPreferences => ({
   keepAwake: !DEFAULT_APP_PREFERENCES.keepAwake,
   intelligence: {
     ...DEFAULT_APP_PREFERENCES.intelligence,
-    responseInstructions: 'terse',
+    compression: 'aggressive' as const,
     learning: other(DEFAULT_APP_PREFERENCES.intelligence.learning),
   },
 })
@@ -24,11 +24,11 @@ it('resets only the preferences a section owns', () => {
 
 it('splits the intelligence preferences between Threads and Memory', () => {
   const chats = resetSection(changed(), 'chats')
-  expect(chats.intelligence.responseInstructions).toBe(DEFAULT_APP_PREFERENCES.intelligence.responseInstructions)
+  expect(chats.intelligence.compression).toBe(DEFAULT_APP_PREFERENCES.intelligence.compression)
   expect(chats.intelligence.learning).toBe(other(DEFAULT_APP_PREFERENCES.intelligence.learning))
   const memory = resetSection(changed(), 'memory')
   expect(memory.intelligence.learning).toBe(DEFAULT_APP_PREFERENCES.intelligence.learning)
-  expect(memory.intelligence.responseInstructions).toBe('terse')
+  expect(memory.intelligence.compression).toBe('aggressive')
 })
 
 it('leaves intelligence untouched for other sections', () => {
@@ -49,7 +49,7 @@ it('restores each provider binding to its defaults, keeping its other fields', (
 
 it('matches setting paths to the section that resets them', () => {
   expect(inResetSection('chats', 'warnModelChange')).toBe(true)
-  expect(inResetSection('chats', 'intelligence.responseStyle')).toBe(true)
+  expect(inResetSection('chats', 'intelligence.compression')).toBe(true)
   expect(inResetSection('chats', 'intelligence.learning')).toBe(false)
   expect(inResetSection('memory', 'memory.enabled')).toBe(true)
   expect(inResetSection('memory', 'memoryExtra')).toBe(false)

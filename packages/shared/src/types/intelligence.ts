@@ -1,11 +1,7 @@
-import type { AgentProvider, ReasoningEffort, ResponseStyle } from './agent'
+import type { AgentProvider, ReasoningEffort } from './agent'
 
 export interface IntelligencePreferences {
-  responseStyle: ResponseStyle
-  responseInstructions: string
-  responseSkill: string
   toolSearch: boolean
-  rtk: boolean
   compression: 'off' | 'balanced' | 'aggressive'
   learning: 'off' | 'review' | 'auto'
   maintenanceModel: { provider: AgentProvider; model: string; effort: ReasoningEffort | null } | null
@@ -18,11 +14,7 @@ export interface IntelligencePreferences {
   summaryOnHome: boolean
 }
 export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
-  responseStyle: 'default',
-  responseInstructions: '',
-  responseSkill: '',
   toolSearch: true,
-  rtk: false,
   compression: 'balanced',
   learning: 'auto',
   maintenanceModel: null,

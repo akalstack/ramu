@@ -1,4 +1,3 @@
-import { RESPONSE_STYLE_LABELS } from '@ramu/shared/types'
 import { t as translate } from '../../../i18n'
 import type { AgentSettings } from '@ramu/shared/types'
 import { accessName } from '../../../chat/AgentControls'
@@ -19,17 +18,12 @@ export function SettingsChange({ next, previous }: { next: AgentSettings; previo
     return effort ? `${model} ${effort}` : model
   }
   const tier = (s: AgentSettings) => (s.provider === 'codex' ? (s.serviceTier === 'fast' ? 'Fast' : 'Standard') : null)
-  const style = (s: AgentSettings) =>
-    translate(
-      s.responseStyle && s.responseStyle !== 'inherit' ? RESPONSE_STYLE_LABELS[s.responseStyle] : 'Use global style',
-    )
   if (!previous)
-    return <>{[label(next), accessName(next.access), tier(next), style(next)].filter(Boolean).join(' · ')}</>
+    return <>{[label(next), accessName(next.access), tier(next)].filter(Boolean).join(' · ')}</>
   const changed = [
     [label(previous), label(next)],
     [accessName(previous.access), accessName(next.access)],
     [tier(previous), tier(next)],
-    [style(previous), style(next)],
   ]
     .filter(([before, now]) => before && now && before !== now)
     .map(([before, now]) => `${before} → ${now}`)

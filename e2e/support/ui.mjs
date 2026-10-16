@@ -57,6 +57,14 @@ export const showChat = (ramu, { task, session }, workspaceState) => {
   )
 }
 
+/** Turns on "Show advanced settings" for this window, so power-user controls (such as the worktree chip) appear. */
+export async function showAdvanced(ramu) {
+  await ramu.page.evaluate(() => {
+    localStorage.setItem('ramu.settings.showAdvanced', '1')
+    window.dispatchEvent(new Event('storage'))
+  })
+}
+
 /** Opens Settings, optionally on a tab ("Goals & delegation", "Providers & models", "Background & updates", ...). */
 export async function openSettings(ramu, tab) {
   await ramu.page.evaluate(() => window.dispatchEvent(new Event('ramu:settings')))

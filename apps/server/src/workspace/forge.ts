@@ -16,7 +16,7 @@ import type {
   PullRequestReviewDecision,
 } from '@ramu/shared/types'
 import { findExecutable } from '../providers/providerBinaries'
-import { commitBranchInfo, currentBranch, git } from './git'
+import { branchExists, commitBranchInfo, currentBranch, git } from './git'
 
 export class ForgeError extends Error {
   constructor(
@@ -216,7 +216,7 @@ export async function pullRequestDraft(cwd: string, issue: IssueLink | null): Pr
   const { branch, defaultBranch } = await commitBranchInfo(cwd)
   if (!branch) throw new Error('Switch to a branch before opening a pull request.')
   const base = defaultBranch ?? 'main'
-  if (branch === base) throw new Error(`Create a branch for this work first; ${base} is the base branch.`)
+  const onBase = branch === base
   const raw = await git(cwd, ['log', '--reverse', '--format=%s%x1f%b%x1e', `${await baseRef(cwd, base)}..HEAD`, '--'])
   const commits = raw
     .split('\x1e')
@@ -226,8 +226,41 @@ export async function pullRequestDraft(cwd: string, issue: IssueLink | null): Pr
       const [subject = '', body = ''] = entry.split('\x1f')
       return { subject: subject.trim(), body: body.trim() }
     })
-  if (!commits.length) throw new Error(`${branch} has no commits that are not on ${base}. Commit your work first.`)
-  return { title: draftTitle(branch, commits), body: draftBody(commits, issue), base, issue }
+  if (!commits.length)
+    throw new Error(
+      onBase
+        ? `${base} has no commits that are not on the remote. Commit your work first.`
+        : `${branch} has no commits that are not on ${base}. Commit your work first.`,
+    )
+  const title = draftTitle(onBase ? '' : branch, commits)
+  return {
+    title,
+    body: draftBody(commits, issue),
+    base,
+    branch: onBase ? await freeBranchName(cwd, suggestBranch(title)) : null,
+    issue,
+  }
+}
+
+/** "fix(web): Retry the queue" becomes "fix/retry-the-queue"; anything else gets a "feature/" prefix. */
+export function suggestBranch(title: string): string {
+  const typed = /^(\w+)(?:\([^)]*\))?!?:\s*(.*)$/.exec(title)
+  const kind = typed ? typed[1]!.toLowerCase() : 'feature'
+  const slug = (typed ? typed[2]! : title)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/, '')
+  return `${kind}/${slug || 'changes'}`
+}
+
+async function freeBranchName(cwd: string, name: string): Promise<string> {
+  for (let n = 1; n < 50; n++) {
+    const candidate = n === 1 ? name : `${name}-${n}`
+    if (!(await branchExists(cwd, candidate))) return candidate
+  }
+  return name
 }
 
 export function draftTitle(branch: string, commits: { subject: string }[]): string {

@@ -46,12 +46,8 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
 
 // Chats and Memory each own part of `intelligence`; reset only their own fields.
 export const CHATS_INTELLIGENCE_KEYS = [
-  'responseStyle',
-  'responseInstructions',
-  'responseSkill',
   'compression',
   'toolSearch',
-  'rtk',
 ] as const
 export const MEMORY_INTELLIGENCE_KEYS = ['learning', 'maintenanceModel', 'dailyReviews', 'archiveSkillDays'] as const
 

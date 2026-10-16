@@ -36,6 +36,8 @@ export interface PullRequestDraft {
   title: string
   body: string
   base: string
+  /** Set when the checkout is on the base branch: the name suggested for the new branch that will carry its commits. */
+  branch: string | null
   /** The issue this checkout's chats were started from, which the body closes. */
   issue: IssueLink | null
 }
@@ -45,6 +47,8 @@ export interface PullRequestInput {
   body: string
   base: string
   draft: boolean
+  /** Required on the base branch: the branch created at HEAD to hold the commits. */
+  branch?: string
 }
 
 /** What to hand back to an agent from a pull request. */

@@ -461,6 +461,11 @@ export async function createBranch(cwd: string, name: string): Promise<void> {
   await git(cwd, ['check-ref-format', '--branch', name])
   await git(cwd, ['switch', '-c', name])
 }
+/** Starts a branch at HEAD and switches to it, keeping uncommitted changes. The branch we leave is not touched. */
+export async function branchFromHere(cwd: string, name: string): Promise<void> {
+  await git(cwd, ['check-ref-format', '--branch', name])
+  await git(cwd, ['switch', '-c', name])
+}
 export async function deleteBranch(cwd: string, name: string): Promise<void> {
   await git(cwd, ['check-ref-format', '--branch', name])
   await git(cwd, ['branch', '-d', '--', name])

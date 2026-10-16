@@ -1,6 +1,8 @@
 # Learning, response styles, tool discovery, and memory
 
-Research and implementation plan, 2026-10-14. The implementation now includes response styles, shared provider guidance, Ramu-only tool discovery/invocation, persistent learning reviews and managed Markdown skills, protected memory/history restoration, session checkpoints, exact tool-result recovery, and optional RTK execution. See [Learning and context efficiency](LEARNING.md) for shipped behavior and controls.
+> Response styles and the RTK tool described below were removed on 2026-10-16 in favour of adaptive learning. Kept as research history.
+
+Research and implementation plan, 2026-10-14. The implementation now includes response styles, shared provider guidance, Ramu-only tool discovery/invocation, persistent learning reviews and managed Markdown skills, protected memory/history restoration, session checkpoints, exact tool-result recovery. See [Learning and context efficiency](LEARNING.md) for shipped behavior and controls.
 
 Confirmed design constraints: tool search covers only tools exposed by Ramu, including future additions. Use lexical matching and agent-directed inspection without embeddings or a vector database. For repository context, inspect the live filesystem with tools such as `rg`, glob, and find. Extra search calls and file reads are an accepted trade-off. Tool discovery searches a capability catalog; repository search inspects files. They serve separate purposes.
 
@@ -96,5 +98,5 @@ Additional useful features inferred from this research: session recall, source-l
 - Use the portable search/schema/invocation gateway for every provider. Native deferred-reference optimizations can be added later without changing the registry.
 - Maintain only generated, self-contained Markdown skills. Installed skill packages and support files are never rewritten or consolidated by this service.
 - Bound learning with input/output sizes, a timeout, an idle delay, and a rolling daily review count. This is a review budget, not a billing-token cap.
-- Use an explicit, opt-in RTK tool in full-access threads. Native shell hooks and provider-wide interception are not installed.
+- RTK was tried as an opt-in tool and removed; native shell hooks and provider-wide interception are not installed.
 - Preserve SQLite memory and source histories. Validate retrieval/continuation behavior with fixtures; published quality or savings claims require opt-in live-provider evaluation.

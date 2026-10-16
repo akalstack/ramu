@@ -751,31 +751,6 @@ export class ReviewService {
     this.update(review)
     return review
   }
-  agentNote(
-    id: string,
-    input: Pick<ReviewComment, 'fileId' | 'scope' | 'side' | 'line' | 'endLine' | 'text'> & {
-      kind: 'note' | 'question'
-    },
-  ): ChangeReview {
-    const review = this.get(id),
-      file = review.files.find((f) => f.id === input.fileId)
-    if (!file || !input.text.trim() || input.text.length > 10000)
-      throw new Error('Choose a file and write a valid note')
-    const count = (input.side === 'old' ? file.oldContent : file.newContent).split('\n').length
-    if (input.scope !== 'file' && (input.line < 1 || input.endLine < input.line || input.endLine > count))
-      throw new Error('Choose valid snapshot lines')
-    review.comments.push({
-      ...input,
-      id: randomUUID(),
-      author: 'ai',
-      replies: [],
-      state: 'draft',
-      readyToSend: true,
-      createdAt: Date.now(),
-    })
-    this.update(review)
-    return review
-  }
   select(id: string, commentIds: string[], selected: boolean): ChangeReview {
     const review = this.get(id)
     review.comments = review.comments.map((c) =>

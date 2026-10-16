@@ -6,7 +6,7 @@ Browse, search, add, edit, archive, or restore notes in Settings → Memory & sk
 
 Use **History** to compare earlier text and restore a revision. User-confirmed and essential notes cannot be rewritten or archived by an agent or automatic cleanup. Conflicting evidence stays separate until you edit the original.
 
-**Learning & skills** can review completed work for durable memories, reusable procedures, and session checkpoints. See [learning and context efficiency](LEARNING.md) for modes, budgets, response styles, tool discovery, and compression.
+**Learning & skills** can review completed work for durable memories, reusable procedures, and session checkpoints. See [learning and context efficiency](LEARNING.md) for modes, budgets, tool discovery, and compression.
 
 ## Cleanup
 

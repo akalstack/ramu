@@ -1,5 +1,6 @@
 import { applyCommitScope, chooseCommit } from './CommitDialog'
 import { withGitBusy } from './gitBusy'
+import { openCreatePullRequest } from './CreatePullRequestHost'
 import { t } from '../i18n'
 import { notify } from '@/components/app-toaster'
 import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
@@ -16,7 +17,7 @@ export interface CommitTarget {
   /** Every change, staged or not. */
   changes: () => number
   focused: () => boolean
-  commitAndPush: () => Promise<void>
+  commitAndPush: (pullRequest?: boolean) => Promise<void>
 }
 
 const SEVERAL = () =>
@@ -48,7 +49,7 @@ export function registerCommitTarget(target: CommitTarget) {
  * there is one (using any message typed there), otherwise directly with an AI-drafted message.
  * When several repositories qualify and none is focused, it opens Source Control instead of guessing.
  */
-export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
+export async function commitAndPush(ws: WorkspaceApi, ctx: string, pullRequest = false) {
   const showScm = (message: string) => {
     ws.setSidebar('scm')
     notifyError(message, t('Commit & Push'))
@@ -61,7 +62,7 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
       (entry) => entry.changes() > 0,
       (entry) => entry.focused(),
     )
-    if (target && target !== 'several') return target.commitAndPush()
+    if (target && target !== 'several') return target.commitAndPush(pullRequest)
     return showScm(target ? SEVERAL() : NOTHING())
   }
   const bindings = (ws.bindings[ctx] ?? []).filter((binding) => binding.setupState === 'ready' && !binding.folderOnly)
@@ -91,6 +92,7 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
     status,
     action: 'push',
     message: '',
+    pullRequest,
   })
   if (!plan) return
   const branchOptions = plan.branch
@@ -127,5 +129,15 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string) {
       error: (reason) => ({ title: errorText(reason), description: t('Commit & Push'), type: 'error', timeout: 0 }),
     })
     .catch(() => {})
+  if (
+    plan.pullRequest &&
+    (await work.then(
+      () => true,
+      () => false,
+    ))
+  ) {
+    await openCreatePullRequest(ctx, binding.repoId)
+    return
+  }
   await work.catch(() => {})
 }

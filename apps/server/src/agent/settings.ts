@@ -24,7 +24,6 @@ export function sameSettings(a: AgentSettings, b: AgentSettings): boolean {
       s.serviceTier ?? 'standard',
       s.access,
       s.autoFallback,
-      s.responseStyle ?? 'inherit',
     ])
   return norm(a) === norm(b)
 }

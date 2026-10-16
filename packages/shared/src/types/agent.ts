@@ -4,16 +4,6 @@ import type { UsageReading } from './usage'
 
 export type AgentProvider = 'claude-code' | 'codex' | 'opencode' | 'cursor' | 'antigravity'
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
-export const RESPONSE_STYLES = ['default', 'concise', 'detailed', 'adhd', 'caveman', 'custom'] as const
-export type ResponseStyle = (typeof RESPONSE_STYLES)[number]
-export const RESPONSE_STYLE_LABELS: Record<ResponseStyle, string> = {
-  default: 'Default',
-  concise: 'Concise',
-  detailed: 'Detailed',
-  adhd: 'ADHD-friendly',
-  caveman: 'Caveman',
-  custom: 'Custom',
-}
 
 export interface AgentSettings {
   provider: AgentProvider
@@ -25,7 +15,6 @@ export interface AgentSettings {
   serviceTier?: 'standard' | 'fast'
   access: 'edits' | 'auto' | 'full'
   autoFallback: boolean
-  responseStyle?: ResponseStyle | 'inherit'
 }
 export interface AgentModel {
   provider: AgentProvider

@@ -14,13 +14,15 @@
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-Ramu is an **Agent Development Environment (ADE)** that brings agent threads, an editor, terminals, Git, and code review into one workspace. Use Claude Code, Codex, OpenCode, Cursor, or Antigravity with your existing provider accounts.
+Ramu is an **Agent Development Environment (ADE)**: work with a coding agent next to your editor, terminals, Git, and code review, all in one window. Use Claude Code, Codex, OpenCode, Cursor, or Antigravity with your existing provider accounts.
 
-Built-in orchestration coordinates agents across providers with automatic fallback, advisors, helpers, and persistent goals. Work across repositories on your computer and continue from your phone.
+Open a project, describe what you want, and review the result. Everything else is optional: the defaults work out of the box, and **Settings → Show advanced settings** reveals the controls for power users.
 
 Inspired by **T3 Code**, **Codex**, and **VS Code**.
 
 ## Why Ramu
+
+On top of the workspace, Ramu adds orchestration that works without setup:
 
 - **Keep working through usage limits.** Rank providers and models for automatic fallback, carrying visible conversation context into the same thread. When all are limited, Ramu waits and resumes when capacity returns, even after a restart.
 - **Follow goals across turns.** Persistent goals keep agents working toward an objective across provider changes, with pause, resume, and continuation limits. Schedule recurring work and leave threads and terminals running after closing the window.

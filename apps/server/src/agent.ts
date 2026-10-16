@@ -179,7 +179,6 @@ export class AgentService {
       refreshAccountUsage: () => this.refreshAccountUsage,
       refreshContext: (...a) => parts.contexts.refreshContext(...a),
       refreshProviderTools: (...a) => parts.process.refreshProviderTools(...a),
-      responseStyleInstructions: (...a) => parts.process.responseStyleInstructions(...a),
       reviewHooks: () => this.reviewHooks,
       get revisions() {
         return parts.registry.revisions

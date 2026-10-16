@@ -68,7 +68,6 @@ export interface AppPreferences {
   /** Dragged width of the sidebar, in px. */
   sidebarWidth: number
   messageBehaviorVersion: 4
-  defaultChatDockOpen: boolean
   /** Starred models, as `provider:model-id`; they get their own tab and ⌘1–⌘9 shortcuts in the model picker. */
   favoriteModels: string[]
   /** Tell me when an agent finishes, needs input or fails: a system notification when Ramu is in the background, a toast when it is open. */
@@ -128,7 +127,6 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   defaultTerminalDock: 'bottom',
   defaultAccess: 'auto',
   defaultAutoFallback: true,
-  defaultChatDockOpen: true,
   favoriteModels: [],
   notifyAgentDone: true,
   resumeChatsOnRestart: true,

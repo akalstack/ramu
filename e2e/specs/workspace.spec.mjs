@@ -4,7 +4,7 @@
 // Source Control, editing and the worktree basics live in projects.spec.mjs.
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
-import { git, modifier, palette, startRamu, useFakeModel } from '../support/index.mjs'
+import { git, modifier, palette, showAdvanced, startRamu, useFakeModel } from '../support/index.mjs'
 
 const ramu = await startRamu('workspace', {
   env: ({ dir }) => ({ RAMU_TEST_PICK_DIRECTORY: join(dir, 'shop') }),
@@ -51,6 +51,7 @@ async function startChat(prompt, { worktree = false } = {}) {
   if ((await home.getAttribute('aria-pressed')) !== 'true') await home.click()
   await page.getByRole('button', { name: 'New thread in shop', exact: true }).click()
   if (worktree) {
+    await showAdvanced(ramu)
     await page.getByRole('button', { name: 'Where the work happens' }).click()
     await page.getByRole('menuitem', { name: /New isolated worktrees/i }).click()
   }

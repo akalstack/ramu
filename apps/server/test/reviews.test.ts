@@ -443,25 +443,12 @@ describe('agent changes and batched feedback', () => {
     writeFileSync(join(cwd, 'changed.txt'), 'Follow-up changes\n')
     insert.run('session', 5, JSON.stringify({ kind: 'result', text: 'Second result', isError: false, costUsd: null }))
     await service.complete('session')
-    const first = service.get(firstId),
-      file = first.files[0]!
-    const noted = service.agentNote(firstId, {
-      fileId: file.id,
-      side: 'new',
-      line: 1,
-      endLine: 1,
-      scope: 'line',
-      kind: 'note',
-      text: 'Explains first result',
-    })
-    expect(noted.files[0]?.newContent).toBe('First run changes\n')
-    expect(noted.comments[0]).toMatchObject({ text: 'Explains first result', readyToSend: true })
-    expect(service.select(firstId, [noted.comments[0]!.id], false).comments[0]?.readyToSend).toBe(false)
+    const first = service.get(firstId)
     const next = service.get(nextId)
     expect(first).toMatchObject({ startSeq: 1, endSeq: 3 })
     expect(next).toMatchObject({ startSeq: 3, endSeq: 5, comments: [] })
     expect(next.files[0]?.newContent).toBe('Follow-up changes\n')
-    const byTurn = reviewsByTurn([noted, next], 'session', [
+    const byTurn = reviewsByTurn([first, next], 'session', [
       { key: 2, sequences: [2, 3] },
       { key: 4, sequences: [4, 5] },
     ])

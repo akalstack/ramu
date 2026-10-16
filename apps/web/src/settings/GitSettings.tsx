@@ -118,10 +118,6 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
           }
         />
       </SettingsRow>
-      <SettingsGroupTitle>{t('Source control')}</SettingsGroupTitle>
-      <p className="muted text-muted-foreground small text-caption">
-        {t('Discard and delete actions show their affected files before running. Explorer deletion is permanent.')}
-      </p>
     </div>
   )
 }

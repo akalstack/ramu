@@ -1,4 +1,4 @@
-// Learning: response style and compression settings, review-first learning, managed skills, memory history and session checkpoints.
+// Learning: advanced compression setting, review-first learning, managed skills, memory history and session checkpoints.
 import assert from 'node:assert/strict'
 import { fakeAgent, openSettings, saveSettings, select, showChat, startChat, startRamu } from '../support/index.mjs'
 
@@ -22,14 +22,14 @@ let chat
 let proposal
 let note
 
-ramu.test('response style and tool output compression persist independently', async () => {
+ramu.test('advanced settings stay hidden until shown, and tool output compression persists', async () => {
   await openSettings(ramu, 'Threads')
-  await select(ramu, 'Response style', 'ADHD-friendly')
+  assert.equal(await ramu.page.getByRole('combobox', { name: 'Tool output compression', exact: true }).count(), 0)
+  await ramu.page.getByRole('switch', { name: 'Show advanced settings', exact: true }).click()
   await select(ramu, 'Tool output compression', 'Aggressive')
-  await ramu.shot('response-styles')
+  await ramu.shot('advanced-settings')
   await saveSettings(ramu)
   const { intelligence } = await ramu.api('settings.app.get')
-  assert.equal(intelligence.responseStyle, 'adhd')
   assert.equal(intelligence.compression, 'aggressive')
 })
 
@@ -44,7 +44,7 @@ ramu.test('review-first learning stages a proposal without applying it', async (
     projectId: project.id,
     title: 'Learning smoke',
     prompt: '[learn-fixture] Verify the retry procedure',
-    settings: { ...fakeAgent.claude, responseStyle: 'concise' },
+    settings: fakeAgent.claude,
   })
   await ramu.api('learning.run')
   proposal = await ramu.until(
@@ -115,11 +115,11 @@ ramu.test('memory history restores an earlier revision', async () => {
 ramu.test('the saved checkpoint opens from its thread', async () => {
   const { page } = ramu
   await showChat(ramu, chat)
-  await page.getByRole('button', { name: 'Session checkpoint', exact: true }).click()
+  await page.getByRole('button', { name: 'Checkpoint', exact: true }).click()
   const dialog = page
-    .getByRole('alertdialog')
+    .getByRole('dialog')
     .filter({ has: page.getByRole('heading', { name: 'Session checkpoint', exact: true }) })
-  await dialog.getByText('Progress for this thread only.', { exact: false }).waitFor()
+  await dialog.getByText('This thread only.', { exact: false }).waitFor()
   await dialog.getByText('no deployment', { exact: false }).waitFor()
   await ramu.shot('chat-checkpoint')
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()
@@ -127,7 +127,7 @@ ramu.test('the saved checkpoint opens from its thread', async () => {
 
 ramu.test('settings, applied learning and pinned skills survive a restart', async () => {
   await ramu.relaunch()
-  assert.equal((await ramu.api('settings.app.get')).intelligence.responseStyle, 'adhd')
+  assert.equal((await ramu.api('settings.app.get')).intelligence.compression, 'aggressive')
   assert.equal(
     (await ramu.api('learning.get')).jobs.find((job) => job.id === proposal.id).status,
     'applied',

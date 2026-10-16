@@ -1,3 +1,4 @@
+import { useShowAdvanced } from './settings/advanced'
 import { t, useLanguage } from './i18n'
 import { clipText } from '@ramu/shared/text'
 import { useModelSets } from './models/ModelSets'
@@ -122,6 +123,7 @@ export function NewTask({
   )
   const [workspaceId, setWorkspaceId] = useState<string | null>(ws.composingWorkspace)
   const [mode, setMode] = useState<CheckoutMode>('current')
+  const showAdvanced = useShowAdvanced()
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [prompt, setPrompt] = useState(() => loadDraft(draftKey.newChat(projectId)))
   useDraftPersistence(draftKey.newChat(projectId), prompt)
@@ -340,7 +342,7 @@ export function NewTask({
               }
               items={projectItems}
             />
-            {!general && (
+            {!general && (showAdvanced || mode !== 'current' || !!existingWorkspace) && (
               <Menu
                 label={t('Where the work happens')}
                 className={CHIP}

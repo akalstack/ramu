@@ -43,7 +43,6 @@ export const providerBinaries = z
               .regex(/^[a-zA-Z0-9_-]{1,80}$/)
               .optional(),
             autoUpdate: z.boolean().optional(),
-            rotateAccounts: z.boolean().optional(),
             enabled: z.boolean().optional(),
             usageKeychain: z.boolean().optional(),
             harness: z
@@ -158,7 +157,6 @@ export const appPreferences = z.object({
   warnModelChange: z.boolean().default(true),
   sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH),
   messageBehaviorVersion: z.literal(4).default(4),
-  defaultChatDockOpen: z.boolean(),
   favoriteModels: z.array(z.string().max(200)).max(100).default([]),
   notifyAgentDone: z.boolean().default(true),
   resumeChatsOnRestart: z.boolean().default(true),

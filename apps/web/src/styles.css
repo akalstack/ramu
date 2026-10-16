@@ -360,12 +360,10 @@ button.scm-commit.primary:disabled {
 
 /* Model and effort share one title, followed directly by the stepped track. */
 .settings-intro h4 {
-  @apply m-[0_0_4px];
-  @apply text-[length:var(--ui-font-size)];
+  @apply m-[4px_0_10px] text-caption font-medium text-muted-foreground;
 }
 .settings-intro p {
-  @apply m-0;
-  @apply text-control;
+  @apply m-[0_0_10px] text-caption text-muted-foreground;
 }
 .settings-set-name input {
   @apply w-full;

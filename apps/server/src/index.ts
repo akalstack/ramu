@@ -1,6 +1,5 @@
 import { MobileLiveActivities } from './remote/mobileLiveActivity'
 import { MobilePush } from './remote/mobilePush'
-import { registerRtkTool } from './rtk'
 import type { AppPreferences } from '@ramu/shared/types'
 import { ToolRegistry } from './agent/toolRegistry'
 import { CompressionService } from './compression'
@@ -513,7 +512,6 @@ const mcpHttp = createServer(async (req, res) => {
     )
   const server = review ? withoutTools(registry.server) : registry.server
   learning.register(server, source.id)
-  if (preferences.rtk) registerRtkTool(server, agents.get(source.id))
   compression.register(server, source.id)
   // With async questions off, Claude and Codex ask through their own blocking question tools instead.
   if (usesRamuQuestions(agents.preferences?.(), source)) registerQuestionTools(server, agents, source.id)
@@ -561,27 +559,6 @@ const mcpHttp = createServer(async (req, res) => {
     async ({ reviewId, threadId, text, suggestResolved }) => {
       checkReview(reviewId)
       return result(reviews!.agentReply(reviewId, threadId, text, suggestResolved))
-    },
-  )
-  server.registerTool(
-    'review_add_note',
-    {
-      description:
-        'Add an explanation or genuine question to a file or line in this session’s review. Prefer replying to an existing thread. New AI notes remain unselected until the human responds or selects them.',
-      inputSchema: {
-        reviewId: z.string(),
-        fileId: z.string(),
-        scope: z.enum(['file', 'line']),
-        side: z.enum(['old', 'new']).default('new'),
-        line: z.number().int().positive().default(1),
-        endLine: z.number().int().positive().default(1),
-        kind: z.enum(['note', 'question']),
-        text: z.string().min(1).max(10000),
-      },
-    },
-    async ({ reviewId, ...input }) => {
-      checkReview(reviewId)
-      return result(reviews!.agentNote(reviewId, input))
     },
   )
   server.registerTool(

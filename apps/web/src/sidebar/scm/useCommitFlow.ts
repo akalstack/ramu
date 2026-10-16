@@ -5,6 +5,7 @@ import { errorText } from '../../workspace/TaskPane'
 import { chooseCommitBranch } from '../../git/CommitBranchDialog'
 import { applyCommitScope, chooseCommit, type CommitPlan } from '../../git/CommitDialog'
 import { withGitBusy } from '../../git/gitBusy'
+import { openCreatePullRequest } from '../../git/CreatePullRequestHost'
 import { notify } from '@/components/app-toaster'
 import { t } from '../../i18n'
 import { commitActionLabel } from './helpers'
@@ -66,17 +67,24 @@ export function useCommitFlow({
     stagePaths?: string[],
     /** Open the commit popup even when files are staged (the shortcut and the header button do). */
     ask = false,
+    /** Open the popup with "Then create a pull request" ticked. */
+    pullRequest = false,
   ) => {
     if (loading || busy || generating || conflictCount) return
     // The popup picks files, message, action and branch; with files staged, Source Control's own button skips it.
-    if (status && (action === 'commit' || action === 'push' || action === 'sync') && (ask || !hasStaged)) {
+    if (
+      status &&
+      (action === 'commit' || action === 'push' || action === 'sync') &&
+      (ask || pullRequest || !hasStaged)
+    ) {
       const plan = await chooseCommit({
         taskId,
         repoId: binding.repoId,
         repoName: binding.repoName,
         status,
-        action,
+        action: pullRequest ? 'push' : action,
         message,
+        pullRequest,
       })
       if (!plan) return
       return commitPlan(plan)
@@ -180,6 +188,17 @@ export function useCommitFlow({
         }),
       })
       .catch(() => {})
+    // A failed commit or push leaves nothing to propose; otherwise the pull request dialog opens on the pushed branch.
+    if (
+      plan.pullRequest &&
+      (await work.then(
+        () => true,
+        () => false,
+      ))
+    ) {
+      await openCreatePullRequest(taskId, binding.repoId)
+      return
+    }
     await work.catch(() => {})
   }
   return { message, setMessage, draft, setDraft, generating, generate, commit }

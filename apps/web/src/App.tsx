@@ -42,6 +42,7 @@ import { BranchPicker, SyncButton, useAutoFetch } from './git/GitControls'
 import { isGitBusy, useGitBusy, withGitBackground, withGitBusy } from './git/gitBusy'
 import { CommitBranchDialog } from './git/CommitBranchDialog'
 import { CommitDialog } from './git/CommitDialog'
+import { CreatePullRequestHost } from './git/CreatePullRequestHost'
 import { Notifications, notifyError } from './chat/Notifications'
 import { SummaryHost } from './summaries/SummaryHost'
 import { TitleTooltips } from './TitleTooltips'
@@ -592,6 +593,7 @@ function Shell() {
       <SummaryHost />
       <CommitBranchDialog />
       <CommitDialog />
+      <CreatePullRequestHost />
       <TitleTooltips />
       <CreateEntryDialog />
       <AddProjectDialog />

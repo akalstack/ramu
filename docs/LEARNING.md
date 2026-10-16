@@ -2,12 +2,6 @@
 
 Ramu shares durable memories and reusable procedures across providers. Memory stays in the existing local SQLite store; generated procedures are managed separately from installed skills.
 
-## Response styles
-
-Choose a global style in **Settings → Threads → Response style**, or override it from a thread's composer: Default, Concise, Detailed, ADHD-friendly, Caveman, or Custom. Custom accepts presentation instructions and an optional installed skill name, resolved in the thread's scope. A missing skill is skipped; custom text still applies.
-
-ADHD-friendly leads with the action or answer, keeps steps short, and avoids tangents. Caveman uses telegraphic prose. Exact code, commands, paths, structured output, material failures, and uncertainty must remain intact. Explicit user requests take precedence. Styles guide generation rather than shortening the answer after tokens have already been spent. Changes take effect on the next turn.
-
 ## Automatic learning
 
 **Settings → Memory & skills → Learning & skills** offers Off, Review first, and Automatic (default). Save changes before running maintenance. Review-first still uses model tokens to prepare proposals; it waits for you to apply them.
@@ -52,7 +46,6 @@ The composer shows a character-based estimate of tokens avoided for compacted Ra
 
 Memory supports concise search followed by `memory_read` for full text and sources. Approved session checkpoints can reduce older tool output in same-thread provider handoffs while retaining original user requirements and recent events. `session_recall` retrieves original events by sequence number when a checkpoint omits necessary evidence. Files should still be inspected live with the provider's ordinary tools.
 
-The optional **RTK command tool** requires RTK installed on the server's PATH. It exposes `rtk_run` only to full-access threads, runs argument arrays without a shell in the thread working directory, and reports exit status/errors. RTK itself filters the underlying command output. Ramu does not install global hooks or alter native provider shell tools. Native provider history compaction also remains controlled by the provider.
 
 ## Validation
 

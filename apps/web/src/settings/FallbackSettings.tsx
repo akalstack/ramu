@@ -317,7 +317,7 @@ function OrderEditor({
       <Button
         variant="ghost"
         size="sm"
-        className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption fallback-add self-start gap-1.5 text-soft"
+        className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption fallback-add mt-1 mb-6 -ml-2 self-start gap-1.5 text-soft"
         disabled={disabled || chain.length >= 10}
         onClick={add}
       >
@@ -578,6 +578,11 @@ export function SubagentSettings({
           {t('Override routing for matching task types, such as Explore or Plan.')}
         </p>
       </div>
+      {!sub.byType.length && (
+        <p className="muted m-0 mb-1 rounded-(--radius-m) bg-fill px-4 py-3 text-control text-muted-foreground">
+          {t('No type rules yet. Every sub-agent uses the routing above.')}
+        </p>
+      )}
       {sub.byType.map((rule) => (
         <SettingsRow
           setting="subagents.byType"
@@ -624,7 +629,7 @@ export function SubagentSettings({
       <Button
         variant="ghost"
         size="sm"
-        className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption fallback-add self-start gap-1.5 text-soft"
+        className="fallback-add mb-6 mt-2 h-10 w-full justify-center gap-1.5 rounded-(--radius-m) border border-dashed border-line bg-transparent text-control text-muted-foreground hover:border-solid hover:bg-hover hover:text-foreground"
         disabled={busy || sub.byType.length >= 20}
         onClick={() => set({ byType: [...sub.byType, { id: newId(), type: '', step: firstStep() }] })}
       >

@@ -35,14 +35,14 @@ export function useCommitShortcut({
         changes: () => shortcut.current.staged + shortcut.current.unstaged.length,
         focused: () => !!root.current?.contains(document.activeElement),
         // Smart commit: with nothing staged, every change is staged first.
-        commitAndPush: async () => {
+        commitAndPush: async (pullRequest = false) => {
           const { publishable } = shortcut.current
           if (!publishable)
             return reportError(
               t('This repository has no branch with a remote to push to, or a conflict is unresolved.'),
             )
           try {
-            await shortcut.current.commit('push', undefined, true)
+            await shortcut.current.commit('push', undefined, true, pullRequest)
           } catch (reason) {
             reportError(errorText(reason))
           }

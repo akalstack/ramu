@@ -855,26 +855,14 @@ describe('AgentService', () => {
       vi.spyOn(service, 'catalog').mockResolvedValue([])
       service.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 'test' })
       service.memoryInstructions = () => 'Shared memory instructions fixture'
-      let style: 'adhd' | 'detailed' | 'default' = 'adhd'
-      service.preferences = () => ({
-        ...DEFAULT_APP_PREFERENCES,
-        intelligence: { ...DEFAULT_APP_PREFERENCES.intelligence, responseStyle: style },
-      })
       const chat = service.start('t', scopeOf(cwd), 'Do the work', {
         ...DEFAULT_AGENT_SETTINGS,
         access: 'full' as const,
         provider,
       })
       await until(() => service.get(chat.id).state === 'idle')
-      expect(prompts[0]).toContain('numbered steps')
       expect(connections[0]?.instructions).toContain('tool_search')
       if (provider !== 'codex') expect(prompts[0]).toContain('Shared memory instructions fixture')
-      style = 'detailed'
-      await service.send(chat.id, 'Explain the result')
-      expect(prompts[1]).toContain('Explain the reasoning')
-      style = 'default'
-      await service.send(chat.id, 'Use the normal style again')
-      expect(prompts[2]).toContain('replacing earlier Ramu style preferences')
       service.stopAll()
     },
   )

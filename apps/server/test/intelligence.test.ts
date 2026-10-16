@@ -1,22 +1,9 @@
 import { createDispatcher, type Services } from '../src/ipc'
 import { configureProviderBinaries } from '../src/providers/providerBinaries'
 import { expect, it } from 'vitest'
-import { DEFAULT_AGENT_SETTINGS, DEFAULT_INTELLIGENCE_PREFERENCES } from '@ramu/shared/types'
-import { intelligenceSchema, responseInstructions } from '../src/intelligence'
+import { intelligenceSchema } from '../src/intelligence'
 
-it('uses per-thread style over the global default and keeps exact artifacts outside prose shortening', () => {
-  const saved = { ...DEFAULT_INTELLIGENCE_PREFERENCES, responseStyle: 'detailed' as const }
-  expect(responseInstructions({ ...DEFAULT_AGENT_SETTINGS, responseStyle: 'adhd' }, saved)).toContain('numbered steps')
-  expect(responseInstructions({ ...DEFAULT_AGENT_SETTINGS, responseStyle: 'adhd' }, saved)).not.toContain(
-    'Explain the reasoning',
-  )
-  expect(responseInstructions({ ...DEFAULT_AGENT_SETTINGS, responseStyle: 'inherit' }, saved)).toContain(
-    'Explain the reasoning',
-  )
-  expect(responseInstructions({ ...DEFAULT_AGENT_SETTINGS, responseStyle: 'caveman' }, saved)).toContain(
-    'Preserve exact code',
-  )
-  expect(responseInstructions({ ...DEFAULT_AGENT_SETTINGS, responseStyle: 'default' }, saved)).toBe('')
+it('rejects out-of-range intelligence values', () => {
   expect(() => intelligenceSchema.parse({ dailyReviews: 0 })).toThrow()
 })
 

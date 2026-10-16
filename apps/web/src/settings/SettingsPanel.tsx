@@ -1,6 +1,6 @@
 import { SettingsScopeContext, useSettingsScope } from './SettingsScope'
 import { sameValue, settingValue } from '@ramu/shared/settingsCompatibility'
-import { LearningSettings, MaintenanceModelSettings } from './IntelligenceSettings'
+import { LearningLimitsSettings, LearningSettings, MaintenanceModelSettings } from './IntelligenceSettings'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { t, useLanguage } from '../i18n'
 import { ProviderSettings } from './ProviderSettings'
@@ -19,6 +19,7 @@ import { useAppSettings, AppSettingsOverride } from './AppSettings'
 import { SettingsPage, type SettingsSection } from './SettingsPage'
 import { errorText } from '../workspace/TaskPane'
 import { useWorkspace } from '../workspace/workspace'
+import { Advanced } from './advanced'
 import { AccessSettings } from './AccessSettings'
 import { AppearanceSettings } from './AppearanceSettings'
 import { ChatsSettings } from './ChatsSettings'
@@ -176,11 +177,6 @@ export function SettingsPanel({
             {page === 'memory' && (
               <>
                 <MemorySettings value={appDraft.memory} onChange={(memory) => setAppDraft({ ...appDraft, memory })} />
-                <MaintenanceModelSettings
-                  value={appDraft.intelligence}
-                  cleanup={appDraft.memory.enabled && appDraft.memory.dream}
-                  onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
-                />
                 <LearningSettings
                   value={appDraft.intelligence}
                   onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
@@ -190,6 +186,17 @@ export function SettingsPanel({
                   onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
                   hasChanges={hasChanges}
                 />
+                <Advanced>
+                  <MaintenanceModelSettings
+                    value={appDraft.intelligence}
+                    cleanup={appDraft.memory.enabled && appDraft.memory.dream}
+                    onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
+                  />
+                  <LearningLimitsSettings
+                    value={appDraft.intelligence}
+                    onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
+                  />
+                </Advanced>
                 {appDraft.memory.enabled && <MemoryBrowser />}
               </>
             )}

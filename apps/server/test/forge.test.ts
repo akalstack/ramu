@@ -17,6 +17,14 @@ const pr = {
   checks: [],
 }
 
+describe('suggested branch names', () => {
+  it('uses the commit type and a short slug', () => {
+    expect(forge.suggestBranch('fix(web): Retry the queue!')).toBe('fix/retry-the-queue')
+    expect(forge.suggestBranch('Add a retry queue')).toBe('feature/add-a-retry-queue')
+    expect(forge.suggestBranch('!!!')).toBe('feature/changes')
+  })
+})
+
 describe('pull request parsing', () => {
   it('keeps the latest run of each check and maps check runs and commit statuses', () => {
     const checks = forge.parseChecks([
@@ -194,6 +202,7 @@ describe('pull request drafts', () => {
       title: 'Fix crash on save',
       body: 'Guard the empty buffer.\n\nCloses #42',
       base: 'main',
+      branch: null,
       issue,
     })
   })
@@ -207,9 +216,20 @@ describe('pull request drafts', () => {
     expect(draft.body).toBe('- Add forge wrapper\n- Show checks')
   })
 
-  it('refuses the base branch and a branch without new commits', async () => {
-    await expect(forge.pullRequestDraft(repo, null)).rejects.toThrow(/base branch/)
+  it('refuses a base branch or a branch without new commits', async () => {
+    await expect(forge.pullRequestDraft(repo, null)).rejects.toThrow(/no commits/)
     sh('checkout', '-q', '-b', 'empty')
     await expect(forge.pullRequestDraft(repo, null)).rejects.toThrow(/no commits/)
+  })
+
+  it('drafts from commits on the base branch and suggests a branch for them', async () => {
+    const remote = join(tmp, 'remote.git')
+    execFileSync('git', ['init', '-q', '--bare', '-b', 'main', remote])
+    sh('remote', 'add', 'origin', remote)
+    sh('push', '-q', '-u', 'origin', 'main')
+    commit('a.txt', 'fix(web): Retry the queue')
+    sh('branch', 'fix/retry-the-queue')
+    const draft = await forge.pullRequestDraft(repo, null)
+    expect(draft).toMatchObject({ title: 'fix(web): Retry the queue', base: 'main', branch: 'fix/retry-the-queue-2' })
   })
 })

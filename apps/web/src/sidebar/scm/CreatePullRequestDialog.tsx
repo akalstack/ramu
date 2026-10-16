@@ -33,7 +33,14 @@ export function CreatePullRequestDialog({
     let cancelled = false
     invoke('forge.pullRequestDraft', taskId, repoId).then(
       (draft) => {
-        if (!cancelled) setInput({ title: draft.title, body: draft.body, base: draft.base, draft: false })
+        if (!cancelled)
+          setInput({
+            title: draft.title,
+            body: draft.body,
+            base: draft.base,
+            draft: false,
+            ...(draft.branch ? { branch: draft.branch } : {}),
+          })
       },
       (reason) => {
         if (!cancelled) setError(errorText(reason))
@@ -63,7 +70,7 @@ export function CreatePullRequestDialog({
     <Dialog
       title={t('Create pull request')}
       confirmLabel={busy ? t('Creating…') : t('Create pull request')}
-      confirmDisabled={!input?.title.trim()}
+      confirmDisabled={!input?.title.trim() || (input.branch !== undefined && !input.branch.trim())}
       busy={busy}
       error={error}
       onCancel={() => onDone(false)}
@@ -72,8 +79,22 @@ export function CreatePullRequestDialog({
       {input ? (
         <fieldset disabled={busy} className={`${FIELDS} border-0 p-0`}>
           <p className="muted text-muted-foreground small text-caption m-0">
-            {t('Into {0}. The branch is published first if it is not on the remote yet.', { '0': input.base })}
+            {input.branch !== undefined
+              ? t('Into {0}. Your commits move to a new branch, which is published first. {0} itself is not changed.', {
+                  '0': input.base,
+                })
+              : t('Into {0}. The branch is published first if it is not on the remote yet.', { '0': input.base })}
           </p>
+          {input.branch !== undefined && (
+            <label>
+              {t('New branch')}
+              <Input
+                value={input.branch}
+                maxLength={200}
+                onChange={(event) => setInput({ ...input, branch: event.target.value })}
+              />
+            </label>
+          )}
           <label>
             {t('Title')}
             <Input
