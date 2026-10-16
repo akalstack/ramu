@@ -1,6 +1,4 @@
-import { useState, type ReactNode } from 'react'
-import { Button } from '@/components/desktop-button'
-import { t } from './i18n'
+import type { ReactNode } from 'react'
 
 /** One heading style for every block under the start box, so what needs you reads first and the rest quietly. */
 export function FeedSection({
@@ -25,23 +23,4 @@ export function FeedSection({
       {children}
     </section>
   )
-}
-
-/** Home is a glance: the first few rows, with the rest one click away. */
-export function useCapped<T>(items: T[], limit = 3) {
-  const [all, setAll] = useState(false)
-  const shown = all ? items : items.slice(0, limit)
-  const toggle =
-    items.length > limit ? (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="self-start text-muted-foreground small text-caption"
-        aria-expanded={all}
-        onClick={() => setAll(!all)}
-      >
-        {all ? t('Show less') : `${t('Show all')} · ${items.length}`}
-      </Button>
-    ) : null
-  return { shown, toggle }
 }

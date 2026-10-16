@@ -45,7 +45,7 @@ export function ProjectSwitcher() {
       }
     }
   }, [active, project?.id, workspace])
-  if (ws.ui.sidebar === 'schedules' || !project) return null
+  if (ws.ui.sidebar === 'schedules' || ws.ui.sidebar === 'inbox' || !project) return null
   const valid = (context: string | undefined, projectId: string) =>
     context && ws.projectOf(context)?.id === projectId && (!ws.task(context) || ws.task(context)?.status !== 'archived')
   const switchProject = (projectId: string) => {

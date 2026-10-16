@@ -660,7 +660,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
             ...u,
             openTaskIds: [...new Set([...u.openTaskIds, ctx])],
             activeTaskId: ctx,
-            sidebar: u.sidebar === 'schedules' ? 'projects' : u.sidebar,
+            sidebar: u.sidebar === 'schedules' || u.sidebar === 'inbox' ? 'projects' : u.sidebar,
           }))
           setComposing(target)
         }
@@ -703,7 +703,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
           ...u,
           openTaskIds: [...new Set([...u.openTaskIds, shared, taskId])],
           activeTaskId: taskId,
-          sidebar: u.sidebar === 'schedules' ? 'projects' : u.sidebar,
+          sidebar: u.sidebar === 'schedules' || u.sidebar === 'inbox' ? 'projects' : u.sidebar,
         }))
       },
       closeTask(taskId) {

@@ -2,18 +2,18 @@
 
 Review of the desktop Home (`apps/web/src/NewTask.tsx` start box and `apps/web/src/Home.tsx` feed), 2026-10-16, made from the code and from e2e screenshots of the built app at 1440×900 with a project, two running threads and two schedules. The mobile app has its own section at the end. The marketing site (`apps/site`) is out of scope.
 
-**Status (2026-10-16).** Part of step 1 is implemented; the rest and step 2 (Inbox) and the mobile plan are not.
+**Status (2026-10-16).** Step 1 and the desktop half of step 2 are implemented; the mobile plan is not.
 
 Done on desktop:
 
-- One `FeedSection` heading style (`HomeSection.tsx`) for agents, recaps, **What Ramu learned** and **Coming up**; agent cards are borderless and compact (the separate Open button is gone; the title opens the thread).
-- Order: waiting agents, then recaps that need attention, then running and usage-limited agents, then recaps since your last visit, learned and upcoming. Recaps and schedules show three rows with **Show all**.
-- Hero compacts (smaller minimum height, mark hidden) whenever the feed has content.
-- "Since your last visit" now means since you left the app, so recaps no longer disappear on the next visit to Home.
-- The background-service line shows only when the service is stopped, with a **Start** button. Recap freshness moved into the refresh button's tooltip.
+- One `FeedSection` heading style (`HomeSection.tsx`) and compact, borderless agent rows (`AgentRow` in `HomeAgents.tsx`): state, title (opens the thread), project · model · changed files, age, and Stop on hover. A row waiting on you shows its question, approval or form under it.
+- Home is a glance with the logo kept: waiting agents, recaps that need attention and running agents, three each with **View all** into Inbox, then the learned summary and **Coming up**. Completed work and recap history moved to Inbox.
+- **Inbox** page (`inbox/InboxPage.tsx`): sidebar row with badge, ⌘⇧I, tabs **Needs you · Running · Recaps · Learned · Completed** with counts and empty states; the selected tab is remembered.
+- "Since your last visit" means since you left the app (`inbox/recaps.tsx`).
+- The background-service line shows only when the service is stopped, with **Start**. Recap freshness sits next to the refresh button.
 - The heading no longer duplicates the project menu; with no projects Home offers **Open a folder**.
 
-Not done: Inbox page, remembering the last-used project, schedule deep links, recap undo and snooze choices (need server support), the mobile Inbox. The default project was left alone because many specs assume "No project".
+Not done: remembering the last-used project (many specs assume "No project"), schedule deep links, recap undo and snooze choices (need server support), the mobile Inbox.
 
 
 > **Revised after commit 1e60ad1 (2026-10-16).** That commit landed after the first draft of this review. It replaced the **Running in the background** list with `HomeAgents.tsx` (an agents overview: Waiting for your input, Running, Waiting for allowance, and a collapsed Completed group, with Open/Stop buttons and inline question, approval and form cards), shrank the hero when agents are present, hid the checkout chip behind an icon, and added a first-run `Onboarding` dialog. Findings 1, 2, 6 and 8 below are updated for it; the rest are unchanged.

@@ -13,6 +13,7 @@ import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import {
   CalendarClock,
+  Inbox,
   Settings,
   SquarePen,
   Archive,
@@ -50,6 +51,8 @@ import { AppSettingsProvider, useAppSettings } from './settings/AppSettings'
 import { ModelSetsProvider } from './models/ModelSets'
 import type { SettingsSection } from './settings/SettingsPage'
 import { ScheduleNavigation, SchedulesPage } from './Automation'
+import { InboxPage } from './inbox/InboxPage'
+import { useRecaps } from './inbox/recaps'
 import { DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
 import { SettingsPanel } from './settings/SettingsPanel'
 import { UsageFooter, UsageRings } from './settings/Usage'
@@ -251,7 +254,7 @@ function Shell() {
   }, [palette])
 
   // The start screen shows for New chat, and when nothing is open yet.
-  const globalPage = ui.sidebar === 'schedules'
+  const globalPage = ui.sidebar === 'schedules' || ui.sidebar === 'inbox'
   const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
   // Chats with nothing open is the home page: the start box, background chats and recaps. New chat without a project lands here too.
   const landing = ui.sidebar === 'projects' && !ui.activeTaskId
@@ -289,6 +292,9 @@ function Shell() {
   // Only this workspace's terminals count, and a freshly opened shell's startup output doesn't (see terminalActivity).
   const terminalUnseen = useUnseenTerminalOutput(activeWorkspace)
   useLayoutEffect(() => setShownTerminal(terminalShown ? activeWorkspace : null), [terminalShown, activeWorkspace])
+  const recaps = useRecaps()
+  // What Inbox's Needs you tab holds: threads waiting on you and recaps that need a decision.
+  const inboxCount = ws.tasks.filter((task) => task.status === 'needs-input').length + recaps.attention.length
   const attentionChats = ws.tasks.filter(
     (task) => task.status !== 'archived' && (ws.unread.has(task.id) || task.status === 'needs-input'),
   ).length
@@ -442,7 +448,7 @@ function Shell() {
         {globalPage ? (
           <header className="task-header [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_.chat-switch-btn:hover_.header-secondary]:text-soft [&_.header-center]:flex [&_.header-center]:items-center [&_.header-center]:gap-2 [&_.header-center]:flex-1 [&_.header-center]:min-w-0 [&_.header-center]:overflow-hidden [&::after]:[content:''] [&::after]:flex-1 [&_.header-title]:relative [&_.header-title]:top-[-1px] [&_.header-title]:leading-[20px] [&_.header-secondary]:relative [&_.header-secondary]:top-[-1px] [&_.header-secondary]:leading-[20px] [&_.header-meta]:relative [&_.header-meta]:top-[-1px] [&_.header-meta]:leading-[20px] [&_.header-meta]:shrink-0 [&_.header-meta]:max-w-[25%] [&_.header-meta]:overflow-hidden [&_.header-meta]:text-ellipsis [&_.chat-switch-btn]:justify-start [&_.chat-switch-btn]:w-[fit-content] [&_.chat-switch-btn]:max-w-[none] [&_.chat-switch-btn]:flex-initial [&_.chat-switch-btn_.header-title]:flex-initial [&_.chat-switch-btn_.header-title]:min-w-0 [&_.chat-switch-btn_.header-title]:max-w-[none] [&_.chat-switch-btn_.header-title]:text-left [&_.chat-switch-btn_.header-secondary]:flex-initial [&_.chat-switch-btn_.header-secondary]:min-w-0 [&_.chat-switch-btn_.header-secondary]:max-w-[none] [&_.chat-switch-btn_.header-secondary]:text-left [&:has(.workspace-tool-buttons)::after]:hidden [&_.workspace-tool-buttons]:ml-auto [&_.header-center_>_svg]:flex-none [&_.header-center_.chat-switch-btn]:max-w-full [&_.header-center_.chat-switch-btn]:min-w-0 flex-none flex items-center gap-2.5 p-[0_12px_0_16px] [-webkit-app-region:drag] min-w-0 h-[46px] [border-bottom-color:var(--line)] [border-bottom:0]">
             <span className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default">
-              {t('Schedules')}
+              {ui.sidebar === 'inbox' ? t('Inbox') : t('Schedules')}
             </span>
           </header>
         ) : (
@@ -512,6 +518,17 @@ function Shell() {
               </div>
               <Button
                 variant="secondary"
+                className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'inbox' ? ' active' : ''}`}
+                aria-pressed={ui.sidebar === 'inbox'}
+                aria-description={inboxCount ? t('{0} need you', { 0: inboxCount }) : undefined}
+                title={`${t('Inbox')} (${formatKeys('mod+shift+i')})`}
+                onClick={() => ws.setSidebar(ui.sidebar === 'inbox' ? 'projects' : 'inbox')}
+              >
+                <Inbox size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Inbox')}</span>
+                {badge(inboxCount)}
+              </Button>
+              <Button
+                variant="secondary"
                 className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'schedules' ? ' active' : ''}`}
                 aria-pressed={ui.sidebar === 'schedules'}
                 onClick={() => ws.setSidebar(ui.sidebar === 'schedules' ? 'projects' : 'schedules')}
@@ -555,6 +572,7 @@ function Shell() {
           <main className="main flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] bg-canvas rounded-(--radius-m) [box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.025),_0_8px_28px_rgba(0,_0,_0,_0.28)]">
             <div className="task-area flex-1 min-h-0 flex">
               {landing && <HomePage />}
+              {ui.sidebar === 'inbox' && <InboxPage />}
               {ui.sidebar === 'schedules' && (
                 <SchedulesPage
                   createRequested={createScheduleRequested}

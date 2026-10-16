@@ -87,7 +87,7 @@ const workspaceUiSchema = z.preprocess(
   z.object({
     openTaskIds: z.array(id).max(100),
     activeTaskId: id.nullable(),
-    sidebar: z.enum(['projects', 'explorer', 'search', 'scm', 'schedules']).catch('projects'),
+    sidebar: z.enum(['projects', 'explorer', 'search', 'scm', 'schedules', 'inbox']).catch('projects'),
     collapsed: z.array(z.string().max(200)).max(500).optional().catch(undefined),
   }),
 )

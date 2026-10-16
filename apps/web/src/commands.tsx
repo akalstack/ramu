@@ -34,7 +34,7 @@ export interface ShellControls {
   openPalette(mode: PaletteMode): void
   toggleSidebar(): void
   showSearch(): void
-  showSidebar?(tab: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules'): void
+  showSidebar?(tab: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules' | 'inbox'): void
   createSchedule(): void
   addProject?(): void
 }
@@ -434,6 +434,13 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
         shell.showSidebar?.('projects')
         ws.showHome()
       },
+    },
+    {
+      id: 'view.inbox',
+      title: t('Show inbox'),
+      category: t('View'),
+      keys: 'mod+shift+i',
+      run: () => (shell.showSidebar ? shell.showSidebar('inbox') : ws.setSidebar('inbox')),
     },
     {
       id: 'view.schedules',
