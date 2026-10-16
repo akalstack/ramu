@@ -9,7 +9,6 @@ import { ProviderSetupTerminal } from './models/ProviderSetupTerminal'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { SeparatorOverlay, usePanelRef, type Layout, type PanelSize } from 'react-resizable-panels'
 import { Button } from '@/components/desktop-button'
-import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import {
   CalendarClock,
@@ -341,7 +340,6 @@ function Shell() {
           {badge(id === 'scm' ? gitChanges : id === 'explorer' ? unsavedFiles : 0, true)}
         </Button>
       ))}
-      <Separator orientation="vertical" className="mx-0.5 self-center! h-4 bg-muted-foreground/40" />
       <Button
         variant="ghost"
         size="icon-sm"
