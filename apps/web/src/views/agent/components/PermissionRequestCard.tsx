@@ -65,6 +65,11 @@ export function PermissionRequestCard({
         <ShieldQuestion size={15} /> {e.title}
       </div>
       {e.detail && <pre>{e.detail}</pre>}
+      {e.approvalReviewRule && (
+        <p className="m-0 mt-2 text-caption text-muted-foreground">
+          {translate('Always ask')}: {e.approvalReviewRule}
+        </p>
+      )}
       {pending ? (
         <div className="mt-2 space-y-2">
           {!!e.approvalPatterns?.length && (

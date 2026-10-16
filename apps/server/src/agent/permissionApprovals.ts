@@ -1,3 +1,6 @@
+import { matchesCommand } from './permissionCommands'
+export { commandPatterns, matchesCommand } from './permissionCommands'
+import { ANTIGRAVITY_AUTO_DEFAULTS, matchesAntigravityDefault } from './antigravityAutoRules'
 import { createHash } from 'node:crypto'
 import {
   NO_PROJECT,
@@ -25,34 +28,27 @@ export function permissionKey(tool: string, input: unknown): string {
     .digest('hex')
 }
 
-/** Only offer prefixes for a single simple command, never a shell program or compound expression. */
-export function commandPatterns(command: unknown): string[] {
-  if (typeof command !== 'string' || /[\n\r;&|`$<>()[\]{}\\#]/.test(command)) return []
-  const words = command.trim().split(/\s+/)
-  const executable = words[0] ?? ''
-  if (
-    !/^[a-zA-Z][\w.-]*$/.test(executable) ||
-    /^(?:ba|z|da|fi|c|k)?sh$|^(?:env|sudo|doas|eval|exec|command|xargs)$/.test(executable)
-  )
-    return []
-  const subcommand = words[1]
-  return [
-    ...(subcommand && /^[a-zA-Z][\w-]*$/.test(subcommand) ? [`${executable} ${subcommand} *`] : []),
-    `${executable} *`,
-  ]
-}
-
-export function matchesCommand(pattern: string, command?: string): boolean {
-  if (!/^[a-zA-Z][\w.-]*(?: [a-zA-Z][\w-]*)* \*$/.test(pattern)) return false
-  if (!command || !commandPatterns(command).length) return false
-  const prefix = pattern.slice(0, -2)
-  const normalized = command.trim().replace(/\s+/g, ' ')
-  return normalized === prefix || normalized.startsWith(prefix + ' ')
-}
-
 /** Ramu-owned approvals are scoped to this installation's user, optionally one project. */
 export class PermissionApprovals {
   constructor(private db: Db) {}
+  ensureAntigravityDefaults(): void {
+    const marker = 'permission-defaults:v1:antigravity-auto'
+    if (this.db.prepare('SELECT 1 FROM app_state WHERE key = ?').get(marker)) return
+    this.db.exec('SAVEPOINT permission_defaults')
+    try {
+      for (const rule of ANTIGRAVITY_AUTO_DEFAULTS)
+        this.remember('antigravity', `builtin:${rule.id}`, 'user', undefined, {
+          ...rule,
+          builtin: rule.id,
+          autoOnly: true,
+        })
+      this.db.prepare('INSERT INTO app_state (key, value) VALUES (?, ?)').run(marker, 'initialized')
+      this.db.exec('RELEASE permission_defaults')
+    } catch (error) {
+      this.db.exec('ROLLBACK TO permission_defaults; RELEASE permission_defaults')
+      throw error
+    }
+  }
   clear(removal: PermissionRemoval = { scope: 'all' }): void {
     if (removal.scope === 'project' && !removal.projectId) throw new Error('Choose a project.')
     for (const rule of this.list()) {
@@ -83,6 +79,9 @@ export class PermissionApprovals {
             ...(projectId ? { projectId, projectName: project?.name ?? projectId } : {}),
             label: meta.label ?? 'Exact request (previous version)',
             pattern: meta.pattern,
+            behavior: meta.behavior,
+            autoOnly: meta.autoOnly,
+            builtin: meta.builtin,
             createdAt: meta.createdAt,
           },
         ]
@@ -95,22 +94,28 @@ export class PermissionApprovals {
     if (!id.startsWith('permission-approval:v1:')) throw new Error('Invalid approval rule.')
     this.db.prepare('DELETE FROM app_state WHERE key = ?').run(id)
   }
-  find(provider: AgentProvider, action: string, project?: string, command?: string): SavedPermissionRule | undefined {
+  find(
+    provider: AgentProvider,
+    action: string,
+    project?: string,
+    command?: string,
+    access?: 'edits' | 'auto' | 'full',
+  ): SavedPermissionRule | undefined {
     const rules = this.list().filter(
-      (rule) => rule.provider === provider && (rule.scope === 'user' || rule.projectId === project),
+      (rule) =>
+        rule.provider === provider &&
+        (rule.scope === 'user' || rule.projectId === project) &&
+        (!rule.autoOnly || access === 'auto'),
     )
+    const matches = (rule: SavedPermissionRule) =>
+      rule.builtin
+        ? !!command && matchesAntigravityDefault(rule.builtin, command)
+        : rule.id === this.key(provider, action, rule.scope, project) ||
+          (!!rule.pattern && matchesCommand(rule.pattern, command))
     return (
-      rules.find(
-        (rule) =>
-          rule.scope === 'project' &&
-          (rule.id === this.key(provider, action, rule.scope, project) ||
-            (rule.pattern && matchesCommand(rule.pattern, command))),
-      ) ??
-      rules.find(
-        (rule) =>
-          rule.id === this.key(provider, action, rule.scope, project) ||
-          (rule.pattern && matchesCommand(rule.pattern, command)),
-      )
+      rules.find((rule) => rule.behavior === 'ask' && matches(rule)) ??
+      rules.find((rule) => rule.scope === 'project' && matches(rule)) ??
+      rules.find(matches)
     )
   }
   project(taskId: string): string | undefined {
@@ -127,11 +132,15 @@ export class PermissionApprovals {
     action: string,
     scope: Exclude<PermissionScope, 'once'>,
     project?: string,
-    metadata?: { label: string; pattern?: string },
+    metadata?: { label: string; pattern?: string; behavior?: 'allow' | 'ask'; autoOnly?: boolean; builtin?: string },
   ): string {
     const id = this.key(
       provider,
-      metadata?.pattern ? permissionKey('command-prefix', metadata.pattern) : action,
+      metadata?.builtin
+        ? `builtin:${metadata.builtin}`
+        : metadata?.pattern
+          ? permissionKey('command-prefix', metadata.pattern)
+          : action,
       scope,
       project,
     )

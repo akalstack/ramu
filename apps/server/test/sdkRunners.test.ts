@@ -194,6 +194,7 @@ describe('OpenCode 2 helpers', () => {
 /** Native OpenCode policy decides when to emit a permission request; replay only those requests. */
 function fakeOpenCode(action: string) {
   const replies: Record<string, unknown>[] = []
+  const configurations: { method: string; input: any }[] = []
   const queue: Record<string, unknown>[] = []
   let wake: (() => void) | undefined
   const push = (event: Record<string, unknown>) => {
@@ -217,8 +218,14 @@ function fakeOpenCode(action: string) {
       },
     },
     session: {
-      create: async () => ({ id: 'session-1' }),
+      create: async (input: any) => {
+        configurations.push({ method: 'create', input })
+        return { id: 'session-1' }
+      },
       get: async () => ({ id: 'session-1' }),
+      update: async (input: any) => {
+        configurations.push({ method: 'update', input })
+      },
       prompt: async () =>
         push({ type: 'permission.asked', data: { id: 'p1', sessionID: 'session-1', action, resources: ['*'] } }),
     },
@@ -229,7 +236,7 @@ function fakeOpenCode(action: string) {
       },
     },
   }
-  return { client, replies }
+  return { client, replies, configurations }
 }
 
 describe('OpenCode Auto permissions', () => {
@@ -306,4 +313,66 @@ describe('OpenCode Auto permissions', () => {
       await runner.stop()
     }
   })
+})
+
+describe('Allow edits native policies', () => {
+  it.each([null, 'session-1'])('configures OpenCode edits and command approvals on start/resume %s', async (resume) => {
+    const { client, replies, configurations } = fakeOpenCode('bash')
+    const events: AgentEvent[] = []
+    const runner = new OpenCodeSession(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode', access: 'edits' },
+      (event) => events.push(event),
+      false,
+      async () => client as never,
+    )
+    runner.setTools({ url: 'http://localhost/mcp', token: 't', nativeSubagents: false })
+    try {
+      await runner.start('Edit the file', resume)
+      const config = configurations.find((call) => call.method === (resume ? 'update' : 'create'))!
+      const effect = (action: string, resource = '*') =>
+        config.input.permissions.findLast(
+          (rule: any) =>
+            (rule.action === '*' || rule.action === action) && (rule.resource === '*' || rule.resource === resource),
+        )?.effect
+      expect(effect('edit')).toBe('allow')
+      expect(effect('bash')).toBe('ask')
+      expect(effect('webfetch')).toBe('ask')
+      expect(effect('read')).toBe('allow')
+      expect(effect('read', '*.env')).toBe('ask')
+      expect(effect('read', '*.env.example')).toBe('allow')
+      expect(effect('task')).toBe('deny')
+      expect(replies).toEqual([])
+      expect(events).toContainEqual(expect.objectContaining({ kind: 'permission-request', toolName: 'bash' }))
+      runner.replyPermission('p1', false)
+      await settle(events)
+    } finally {
+      await runner.stop()
+    }
+  })
+
+  it.each([null, 'agent-resume'])(
+    'keeps Cursor edits sandboxed without Auto-review on start/resume %s',
+    async (resume) => {
+      const { sdk, calls } = fakeCursor([])
+      const events: AgentEvent[] = []
+      const runner = new CursorSession(
+        scope,
+        { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', access: 'edits' },
+        (event) => events.push(event),
+        false,
+        sdk,
+      )
+      try {
+        await runner.start('Edit the file', resume)
+        await settle(events)
+        expect((resume ? calls.resumeOptions : calls.create).local).toMatchObject({
+          autoReview: false,
+          sandboxOptions: { enabled: true },
+        })
+      } finally {
+        await runner.stop()
+      }
+    },
+  )
 })

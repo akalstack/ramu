@@ -271,11 +271,12 @@ export async function acpAside({
 export function openCodeConfigEnv(
   connection: McpConnection | undefined,
   existing = process.env.OPENCODE_CONFIG_CONTENT,
+  access?: AgentSettings['access'],
 ): Record<string, string> {
   const skillPaths = connection?.skillsDir
     ? (providerAdapter('opencode').skillsLaunch?.(connection.skillsDir).configPaths ?? [])
     : []
-  if (connection?.nativeSubagents !== false && !skillPaths.length) return {}
+  if (access !== 'edits' && connection?.nativeSubagents !== false && !skillPaths.length) return {}
   let config: Wire
   try {
     config = existing ? JSON.parse(existing) : {}
@@ -294,7 +295,27 @@ export function openCodeConfigEnv(
   return {
     OPENCODE_CONFIG_CONTENT: JSON.stringify({
       ...config,
-      ...(connection?.nativeSubagents === false ? { permission: { ...permission, task: 'deny' } } : {}),
+      ...(access === 'edits' || connection?.nativeSubagents === false
+        ? {
+            permission: {
+              ...(access === 'edits'
+                ? {
+                    '*': 'ask',
+                    read: { '*': 'allow', '*.env': 'ask', '*.env.*': 'ask', '*.env.example': 'allow' },
+                    glob: 'allow',
+                    grep: 'allow',
+                    lsp: 'allow',
+                    skill: 'allow',
+                    todowrite: 'allow',
+                    question: 'allow',
+                  }
+                : {}),
+              ...permission,
+              ...(access === 'edits' ? { edit: 'allow', bash: 'ask' } : {}),
+              ...(connection?.nativeSubagents === false ? { task: 'deny' } : {}),
+            },
+          }
+        : {}),
       ...(skillPaths.length ? { skills: legacy ? { ...config.skills, paths: merged } : merged } : {}),
     }),
   }
@@ -361,7 +382,13 @@ class AcpSession implements AgentRunner {
       provider,
       this.scope.cwd,
       this.settings.accountId ?? 'default',
-      provider === 'opencode' ? openCodeConfigEnv(this.connection) : {},
+      provider === 'opencode'
+        ? openCodeConfigEnv(
+            this.connection,
+            undefined,
+            !this.readOnly && !this.connection?.restricted ? this.settings.access : undefined,
+          )
+        : {},
     )
     this.rpc.onMessage = (m) => this.handle(m)
     this.rpc.onExit = (e) => {
@@ -459,20 +486,33 @@ class AcpSession implements AgentRunner {
           : { sessionId: this.sessionId, modeId: mode },
       )
     }
-    if (!this.readOnly && !this.connection?.restricted && this.settings.access === 'auto') {
-      // Runtime defaults are left intact unless it explicitly advertises native Auto.
-      const config = (this.session.configOptions ?? []).find(
-        (entry: Wire) =>
-          (entry.category === 'mode' || /^(?:mode|approval_mode|permission_mode)$/.test(entry.id ?? '')) &&
-          optionsOf(entry).some((option) => option.value === 'auto'),
-      )
-      if (config || (this.session.modes?.availableModes ?? []).some((mode: Wire) => mode.id === 'auto'))
+    if (!this.readOnly && !this.connection?.restricted) {
+      // Antigravity's native edit mode avoids permission prompts before they reach the client.
+      const preferred =
+        provider === 'antigravity'
+          ? this.settings.access === 'edits'
+            ? ['auto_edit']
+            : this.settings.access === 'full'
+              ? ['yolo']
+              : ['auto_edit', 'auto', 'default']
+          : this.settings.access === 'auto'
+            ? ['auto']
+            : []
+      for (const mode of preferred) {
+        const config = (this.session.configOptions ?? []).find(
+          (entry: Wire) =>
+            (entry.category === 'mode' || /^(?:mode|approval_mode|permission_mode)$/.test(entry.id ?? '')) &&
+            optionsOf(entry).some((option) => option.value === mode),
+        )
+        if (!config && !(this.session.modes?.availableModes ?? []).some((entry: Wire) => entry.id === mode)) continue
         await this.rpc.request(
           config ? 'session/set_config_option' : 'session/set_mode',
           config
-            ? { sessionId: this.sessionId, configId: config.id, value: 'auto' }
-            : { sessionId: this.sessionId, modeId: 'auto' },
+            ? { sessionId: this.sessionId, configId: config.id, value: mode }
+            : { sessionId: this.sessionId, modeId: mode },
         )
+        break
+      }
     }
     this.emit({
       kind: 'init',

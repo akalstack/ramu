@@ -98,7 +98,8 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
           <div className="min-w-0">
             <code className="block whitespace-pre-wrap break-all text-caption">{rule.label}</code>
             <p className="m-0 mt-1 text-caption text-muted-foreground">
-              {rule.provider} ·{' '}
+              {rule.provider} · {rule.autoOnly && `${t('Auto only')} · `}
+              {rule.behavior === 'ask' ? `${t('Always ask')} · ` : `${t('Allow')} · `}{' '}
               {rule.scope === 'user' ? t('User — all projects') : `${t('Project')}: ${rule.projectName}`}
             </p>
           </div>

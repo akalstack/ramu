@@ -140,3 +140,43 @@ it('routes manager removals with explicit user, project, all-project and all sco
   remove.run(...remove.args.parse(['permission-approval:v1:rule']))
   expect(agents.removePermissionApproval).toHaveBeenCalledWith('permission-approval:v1:rule')
 })
+
+it('initializes visible Antigravity Auto defaults once and never restores removed rules implicitly', () => {
+  const approvals = new PermissionApprovals(db)
+  approvals.ensureAntigravityDefaults()
+  const defaults = approvals.list()
+  expect(defaults.length).toBeGreaterThan(10)
+  expect(defaults.every((rule) => rule.provider === 'antigravity' && rule.scope === 'user' && rule.autoOnly)).toBe(true)
+  const diff = defaults.find((rule) => rule.builtin === 'git-read:diff')!
+  approvals.remove(diff.id)
+  approvals.ensureAntigravityDefaults()
+  expect(approvals.list().some((rule) => rule.id === diff.id)).toBe(false)
+  approvals.clear({ scope: 'user' })
+  approvals.ensureAntigravityDefaults()
+  expect(approvals.list()).toEqual([])
+})
+
+it('limits default read approvals to Auto and gives review rules precedence over broad saved approvals', () => {
+  const approvals = new PermissionApprovals(db)
+  approvals.ensureAntigravityDefaults()
+  const find = (command: string, access: 'auto' | 'edits' = 'auto') =>
+    approvals.find('antigravity', 'new-input', 'p', command, access)
+  expect(find('git diff --stat')).toMatchObject({ behavior: 'allow', builtin: 'git-read:diff' })
+  expect(find('git status --short')).toMatchObject({ behavior: 'allow' })
+  expect(find('pwd')).toMatchObject({ behavior: 'allow' })
+  expect(find('git diff --stat', 'edits')).toBeUndefined()
+  expect(find('npm test')).toBeUndefined()
+  approvals.remember('antigravity', 'git', 'project', 'p', { label: 'git *', pattern: 'git *' })
+  for (const command of [
+    'git reset --hard',
+    'git clean -fd',
+    'git push origin main',
+    'git diff --output=result',
+    'git -c alias.wipe=reset wipe',
+    'git diff && rm -rf tmp',
+  ])
+    expect(find(command)?.behavior).toBe('ask')
+  approvals.remember('antigravity', 'rm', 'user', undefined, { label: 'rm *', pattern: 'rm *' })
+  expect(find('rm -rf tmp')).toMatchObject({ behavior: 'ask' })
+  expect(approvals.find('codex', 'new-input', 'p', 'git diff', 'auto')).toBeUndefined()
+})

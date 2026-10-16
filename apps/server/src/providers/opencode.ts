@@ -58,9 +58,27 @@ export function openCodeServerEnv(
   return Object.keys(config).length ? { OPENCODE_CONFIG_CONTENT: JSON.stringify(config) } : {}
 }
 
-/** Session permission rules: OpenCode's own sub-agents are off when Ramu routes sub-agents elsewhere. */
-export function openCodePermissions(connection: McpConnection | undefined) {
-  return connection?.nativeSubagents === false ? [{ action: 'task', resource: '*', effect: 'deny' as const }] : []
+/** Allow edits is an explicit native policy, independent of permissive user defaults. */
+export function openCodePermissions(connection: McpConnection | undefined, access?: AgentSettings['access']) {
+  const rules: { action: string; resource: string; effect: 'allow' | 'deny' | 'ask' }[] =
+    access === 'edits'
+      ? [
+          { action: '*', resource: '*', effect: 'ask' },
+          { action: 'read', resource: '*', effect: 'allow' },
+          { action: 'read', resource: '*.env', effect: 'ask' },
+          { action: 'read', resource: '*.env.*', effect: 'ask' },
+          { action: 'read', resource: '*.env.example', effect: 'allow' },
+          ...['glob', 'grep', 'lsp', 'skill', 'todowrite', 'question'].map((action) => ({
+            action,
+            resource: '*',
+            effect: 'allow' as const,
+          })),
+          { action: 'bash', resource: '*', effect: 'ask' },
+          { action: 'edit', resource: '*', effect: 'allow' },
+        ]
+      : []
+  if (connection?.nativeSubagents === false) rules.push({ action: 'task', resource: '*', effect: 'deny' })
+  return rules
 }
 
 /** `provider/model` as Ramu stores it; the model part may itself contain slashes. */
@@ -236,6 +254,10 @@ export class OpenCodeSession implements AgentRunner {
     const client = await (this.connect?.() ?? this.startServer())
     this.client = client
     await this.subscribe(client)
+    const permissions = openCodePermissions(
+      this.connection,
+      !this.readOnly && !this.connection?.restricted ? this.settings.access : undefined,
+    )
     if (resume) {
       try {
         await client.session.get({ sessionID: resume })
@@ -243,6 +265,7 @@ export class OpenCodeSession implements AgentRunner {
         throw new ResumeUnavailable(`OpenCode no longer has this session: ${(e as Error).message}`)
       }
       this.sessionId = resume
+      if (permissions.length) await client.session.update({ sessionID: resume, permissions } as never)
     } else {
       const model = openCodeModel(this.settings.model, this.settings.effort)
       const session = await client.session.create({
@@ -250,7 +273,7 @@ export class OpenCodeSession implements AgentRunner {
         // OpenCode's built-in plan agent cannot edit, which is what background analysis needs.
         ...(this.readOnly ? { agent: 'plan' } : {}),
         ...(model ? { model } : {}),
-        ...(openCodePermissions(this.connection).length ? { permissions: openCodePermissions(this.connection) } : {}),
+        ...(permissions.length ? { permissions } : {}),
       } as never)
       this.sessionId = session.id
     }

@@ -10,7 +10,7 @@ export const accessName = (access: AgentSettings['access'], provider?: AgentProv
     provider === 'opencode' && access === 'full'
       ? 'Auto'
       : access === 'auto' && asksInAuto(provider)
-        ? 'Auto (asks)'
+        ? 'Auto (rules)'
         : { edits: 'Allow edits', auto: 'Auto', full: 'Full access' }[access],
   )
 const accessModes = [
@@ -83,7 +83,7 @@ export function AgentControls({
                     <span className="muted text-muted-foreground block block">
                       {t(
                         key === 'auto' && asksInAuto(settings.provider)
-                          ? 'This provider has no automatic review. Requests ask for approval; saved rules skip matching prompts.'
+                          ? 'Edits run automatically. Read-only command rules skip routine prompts; other commands ask.'
                           : key === 'auto' && settings.provider === 'opencode'
                             ? 'Approves permission requests automatically. OpenCode deny rules still apply.'
                             : description,

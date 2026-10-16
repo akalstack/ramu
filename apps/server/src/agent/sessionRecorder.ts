@@ -67,6 +67,31 @@ export class SessionRecorder {
             recorded.approvalProjectId ?? new PermissionApprovals(this.db).project(this.host.get(id).taskId),
         }
     }
+    if (
+      recorded.kind === 'permission-request' &&
+      recorded.approvalKey &&
+      recorded.approvalCommand &&
+      recorded.approvalProvider === 'antigravity' &&
+      this.host.get(id).settings.access === 'auto'
+    ) {
+      const approvals = new PermissionApprovals(this.db)
+      approvals.ensureAntigravityDefaults()
+      const rule = approvals.find(
+        'antigravity',
+        recorded.approvalKey,
+        recorded.approvalProjectId,
+        recorded.approvalCommand,
+        'auto',
+      )
+      if (rule?.behavior === 'ask')
+        recorded = {
+          ...recorded,
+          approvalReviewRule: rule.label,
+          approvalOnceOnly: true,
+          approvalKey: undefined,
+          approvalPatterns: undefined,
+        }
+    }
     const run = this.host.children.get(id)
     if (run) this.host.mirrorChild(id, run, recorded, replacesMessageId)
     if (recorded.agentId && recorded.kind !== 'agent') {

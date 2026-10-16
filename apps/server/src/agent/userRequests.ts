@@ -173,10 +173,19 @@ export class UserRequests {
       request.approvalKey,
       approvals.project(session.taskId),
       request.approvalCommand,
+      session.settings.access,
     )
-    if (rule) {
+    if (rule && rule.behavior !== 'ask') {
       try {
-        this.replyPermission(id, request.requestId, true, undefined, rule.scope, rule.pattern)
+        if (rule.builtin) {
+          this.replyPermission(id, request.requestId, true)
+          this.host.record(id, {
+            kind: 'request-resolved',
+            requestId: request.requestId,
+            outcome: `allowed-${rule.scope}`,
+            savedApprovalId: rule.id,
+          })
+        } else this.replyPermission(id, request.requestId, true, undefined, rule.scope, rule.pattern)
       } catch {
         /* A provider may withdraw the request before this microtask. */
       }

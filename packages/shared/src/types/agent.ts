@@ -58,6 +58,9 @@ export interface SavedPermissionRule {
   projectName?: string
   label: string
   pattern?: string
+  behavior?: 'allow' | 'ask'
+  autoOnly?: boolean
+  builtin?: string
   createdAt: number
 }
 export interface PermissionRemoval {
@@ -241,6 +244,7 @@ type AgentEventBody =
       toolName: string
       title: string
       detail: string
+      approvalReviewRule?: string
       approvalOnceOnly?: boolean
       approvalKey?: string
       approvalCommand?: string

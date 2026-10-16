@@ -40,7 +40,7 @@ const send=m=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',...m})+'\\n');
 let promptID; let current='';
 const finish=()=>send({id:promptID,result:{stopReason:'end_turn'}});
 const session={sessionId:'session-1',configOptions:[{id:'model',category:'model',type:'select',currentValue:'wire-model',options:[{value:'wire-model',name:'Wire model'}]},{id:'mode',category:'mode',type:'select',currentValue:'agent',options:[{value:'agent',name:'Agent'},{value:'ask',name:'Ask'},...JSON.parse(process.env.RAMU_EXTRA_MODES||'[]')]}]};
-if(process.env.RAMU_LEGACY_MODES){session.configOptions=undefined;session.models={currentModelId:'wire-model',availableModels:[{modelId:'wire-model',name:'Wire model'}]};session.modes={availableModes:[{id:'agent'},{id:'ask'},{id:'auto'}]};}
+if(process.env.RAMU_LEGACY_MODES){session.configOptions=undefined;session.models={currentModelId:'wire-model',availableModels:[{modelId:'wire-model',name:'Wire model'}]};session.modes={availableModes:[{id:'agent'},{id:'ask'},{id:'auto'},...JSON.parse(process.env.RAMU_EXTRA_MODES||'[]').map(mode=>({id:mode.value}))]};}
 rl.on('line',line=>{
  fs.appendFileSync(process.env.RAMU_ACP_LOG,line+'\\n');const m=JSON.parse(line);
  if(!m.method){if(m.id===900||m.id===901)finish();return;}
@@ -585,4 +585,72 @@ it('uses OpenCode Auto semantics for legacy ACP command requests too', async () 
   await until(() => events.some((event) => event.kind === 'result'))
   expect(events.some((event) => event.kind === 'permission-request')).toBe(false)
   expect(log().find((message) => message.id === 900).result.outcome.optionId).toBe('yes')
+})
+
+it.each([false, true])('selects native Antigravity edit mode on resume (legacy: %s)', async (legacy) => {
+  vi.stubEnv(
+    'RAMU_EXTRA_MODES',
+    JSON.stringify([
+      { value: 'auto_edit', name: 'Auto Edit' },
+      { value: 'yolo', name: 'YOLO' },
+    ]),
+  )
+  if (legacy) vi.stubEnv('RAMU_LEGACY_MODES', '1')
+  await start('hello', 'antigravity', 'edits', 'session-1')
+  await until(() => events.some((event) => event.kind === 'permission-request'))
+  expect(log()).toContainEqual(
+    expect.objectContaining({
+      method: legacy ? 'session/set_mode' : 'session/set_config_option',
+      params: legacy
+        ? { sessionId: 'session-1', modeId: 'auto_edit' }
+        : { sessionId: 'session-1', configId: 'mode', value: 'auto_edit' },
+    }),
+  )
+  expect(log().some((message) => message.params?.value === 'yolo' || message.params?.modeId === 'yolo')).toBe(false)
+  runner!.replyPermission('900', false)
+  await until(() => events.some((event) => event.kind === 'result'))
+})
+
+it('does not select native edit mode in restricted threads', async () => {
+  vi.stubEnv('RAMU_EXTRA_MODES', JSON.stringify([{ value: 'auto_edit', name: 'Auto Edit' }]))
+  await start('tool', 'antigravity', 'edits', null, false, { ...ramuConnection, restricted: true })
+  await until(() => events.some((event) => event.kind === 'result'))
+  expect(log().some((message) => message.params?.value === 'auto_edit')).toBe(false)
+  expect(log().find((message) => message.id === 900).result.outcome.optionId).toBe('no')
+})
+
+it('makes OpenCode 1.x edits explicit without dropping inline configuration', () => {
+  const config = JSON.parse(
+    openCodeConfigEnv(
+      { ...ramuConnection, nativeSubagents: false },
+      JSON.stringify({ model: 'a/b', permission: { webfetch: 'deny' } }),
+      'edits',
+    ).OPENCODE_CONFIG_CONTENT!,
+  )
+  expect(config).toMatchObject({
+    model: 'a/b',
+    permission: { '*': 'ask', edit: 'allow', bash: 'ask', read: { '*.env': 'ask' }, webfetch: 'deny', task: 'deny' },
+  })
+})
+
+it('uses auto_edit for Antigravity Auto while keeping commands in the client approval flow', async () => {
+  vi.stubEnv(
+    'RAMU_EXTRA_MODES',
+    JSON.stringify([
+      { value: 'auto_edit', name: 'Auto Edit' },
+      { value: 'yolo', name: 'YOLO' },
+    ]),
+  )
+  vi.stubEnv('RAMU_PERMISSION_CALL', JSON.stringify({ kind: 'execute', rawInput: { CommandLine: 'git diff' } }))
+  await start('tool', 'antigravity', 'auto')
+  await until(() => events.some((event) => event.kind === 'permission-request'))
+  expect(log()).toContainEqual(
+    expect.objectContaining({
+      method: 'session/set_config_option',
+      params: { sessionId: 'session-1', configId: 'mode', value: 'auto_edit' },
+    }),
+  )
+  expect(log().some((message) => message.params?.value === 'yolo')).toBe(false)
+  runner!.replyPermission('900', true)
+  await until(() => events.some((event) => event.kind === 'result'))
 })

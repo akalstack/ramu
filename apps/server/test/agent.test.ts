@@ -3632,7 +3632,7 @@ it.each(['codex', 'opencode', 'antigravity', 'cursor'] as const)(
       }
     }
     const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
-    const settings = { ...DEFAULT_AGENT_SETTINGS, provider }
+    const settings = { ...DEFAULT_AGENT_SETTINGS, provider, access: 'edits' as const }
     const first = svc.start('t', scopeOf(cwd), 'Approve', settings)
     await until(() => svc.get(first.id).state === 'needs-input')
     svc.replyPermission(first.id, 'native-1', true, undefined, 'user', 'git diff *')
@@ -3661,3 +3661,67 @@ it.each(['codex', 'opencode', 'antigravity', 'cursor'] as const)(
     svc.stopAll()
   },
 )
+
+it('uses Antigravity Auto read rules, requires destructive-command approval, and preserves rule removal', async () => {
+  let command = 'git diff --stat'
+  const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
+    const request = async () => {
+      emit({
+        kind: 'permission-request',
+        requestId: 'reused',
+        toolName: 'execute',
+        title: 'Run command?',
+        detail: command,
+        approvalCommand: command,
+        approvalKey: `key:${command}`,
+      })
+      emit({ kind: 'state', state: 'needs-input' })
+    }
+    return {
+      start: request,
+      send: request,
+      steer: async () => {},
+      interrupt: async () => {},
+      stop: async () => {},
+      replyQuestion: () => {},
+      replyPermission: (_id, allow) => {
+        emit({ kind: 'request-resolved', requestId: 'reused', outcome: allow ? 'allowed' : 'denied' })
+        emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
+      },
+    }
+  }
+  const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
+  try {
+    const first = svc.start('t', scopeOf(cwd), 'Review diff', {
+      ...DEFAULT_AGENT_SETTINGS,
+      provider: 'antigravity',
+      access: 'auto',
+    })
+    await until(() => svc.get(first.id).state === 'idle')
+    expect(svc.events(first.id)).toContainEqual(
+      expect.objectContaining({
+        kind: 'request-resolved',
+        outcome: 'allowed-user',
+        savedApprovalId: expect.stringContaining('builtin:git-read:diff'),
+      }),
+    )
+    command = 'git reset --hard'
+    await svc.send(first.id, 'Reset')
+    await until(() => svc.get(first.id).state === 'needs-input')
+    const request = svc.events(first.id).findLast((event) => event.kind === 'permission-request')!
+    expect(request).toMatchObject({
+      approvalOnceOnly: true,
+      approvalReviewRule: expect.stringContaining('Git destructive'),
+    })
+    expect(() => svc.replyPermission(first.id, 'reused', true, undefined, 'user', 'git *')).toThrow('once')
+    svc.replyPermission(first.id, 'reused', true)
+    await until(() => svc.get(first.id).state === 'idle')
+    const rule = svc.listPermissionApprovals().find((rule) => rule.builtin === 'git-read:diff')!
+    svc.removePermissionApproval(rule.id)
+    command = 'git diff --stat'
+    await svc.send(first.id, 'Review again')
+    await until(() => svc.get(first.id).state === 'needs-input')
+  } finally {
+    svc.stopAll()
+  }
+})
