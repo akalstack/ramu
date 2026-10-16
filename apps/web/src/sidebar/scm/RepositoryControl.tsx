@@ -16,6 +16,7 @@ import { ConflictList } from './ConflictList'
 import { GitInspector } from './GitInspector'
 import { OperationBanner } from './OperationBanner'
 import { PullRequestSection } from './PullRequestSection'
+import { usePullRequestSupport } from '../../git/usePullRequestSupport'
 import { ChangeGroupHeader } from './parts'
 import { RepoActionsMenu } from './RepoActionsMenu'
 import { RepoHeader } from './RepoHeader'
@@ -59,6 +60,7 @@ export function RepositoryControl({
     [binding.repoName],
   )
   const { status, loading, commits, stashes, branches, load } = useRepositoryData(taskId, binding, reportError)
+  const canCreatePr = usePullRequestSupport(taskId, binding.repoId, status?.branch ?? null, status?.remote)
   // Shared per repository, so work started from the status bar, commands or the shortcut also disables this panel.
   const busy = useGitBusy(taskId, binding.repoId)
   const [settings] = useAgentSettings(taskId)
@@ -210,6 +212,7 @@ export function RepositoryControl({
             />
           )}
           <CommitBox
+            canCreatePr={canCreatePr}
             repoName={binding.repoName}
             status={status}
             stagedCount={staged.length}

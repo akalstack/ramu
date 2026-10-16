@@ -311,6 +311,9 @@ export interface RamuMethods {
   'git.undoCommit'(taskId: string, repoId: string, expectedHead: string): string
   'git.commitBranchInfo'(taskId: string, repoId: string): { branch: string | null; defaultBranch: string | null }
   'git.createBranch'(taskId: string, repoId: string, name: string): void
+  'git.createBranchFrom'(taskId: string, repoId: string, name: string, from: string): void
+  'git.renameBranch'(taskId: string, repoId: string, name: string): void
+  'git.mergeBranch'(taskId: string, repoId: string, name: string): void
   'git.deleteBranch'(taskId: string, repoId: string, name: string): void
   'git.stashes'(taskId: string, repoId: string): GitStash[]
   'git.stashFiles'(taskId: string, repoId: string, oid: string): GitCommitFile[]

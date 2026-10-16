@@ -134,6 +134,26 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id, branchName]),
       run: (t: string, r: string, name: string) => gitExclusive(ctx, t, r, (cwd) => git.createBranch(cwd, name)),
     },
+    'git.createBranchFrom': {
+      args: z.tuple([id, id, branchName, branchName]),
+      run: (t: string, r: string, name: string, from: string) =>
+        gitExclusive(ctx, t, r, async (cwd) => {
+          assertNoActiveWriter(ctx, cwd, 'Stop the agent in this checkout before switching branches.')
+          return git.createBranchFrom(cwd, name, from)
+        }),
+    },
+    'git.renameBranch': {
+      args: z.tuple([id, id, branchName]),
+      run: (t: string, r: string, name: string) => gitExclusive(ctx, t, r, (cwd) => git.renameBranch(cwd, name)),
+    },
+    'git.mergeBranch': {
+      args: z.tuple([id, id, branchName]),
+      run: (t: string, r: string, name: string) =>
+        gitExclusive(ctx, t, r, async (cwd) => {
+          assertNoActiveWriter(ctx, cwd, 'Stop the agent in this checkout before merging.')
+          return git.mergeBranch(cwd, name)
+        }),
+    },
     'git.deleteBranch': {
       args: z.tuple([id, id, branchName]),
       run: (t: string, r: string, name: string) => lockRepo(ctx, r, () => git.deleteBranch(gitCwdOf(t, r), name)),

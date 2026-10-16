@@ -8,6 +8,7 @@ import { GHOST_TEXT_BUTTON_CLASS } from '../views/agent/styles'
 import { commitAndPush } from './commitShortcut'
 import { useAnyGitBusy } from './gitBusy'
 import { useGitChangeCount } from './useGitChangeCount'
+import { useAnyPullRequestSupport } from './usePullRequestSupport'
 
 /** Source Control's Commit & push for a chat's or project's checkout: shown only while it has changes, same smart commit as the shortcut. */
 export function CommitPushButton({ taskId }: { taskId: string }) {
@@ -16,6 +17,10 @@ export function CommitPushButton({ taskId }: { taskId: string }) {
   const changes = useGitChangeCount(taskId, ws.bindings[taskId] ?? [])
   // Spinning only while git is really working; choosing in the popup, or cancelling it, leaves the button alone.
   const busy = useAnyGitBusy(
+    taskId,
+    (ws.bindings[taskId] ?? []).map((binding) => binding.repoId),
+  )
+  const canCreatePr = useAnyPullRequestSupport(
     taskId,
     (ws.bindings[taskId] ?? []).map((binding) => binding.repoId),
   )
@@ -54,16 +59,20 @@ export function CommitPushButton({ taskId }: { taskId: string }) {
             ),
             onSelect: () => void commitAndPush(ws, taskId).catch(() => {}),
           },
-          {
-            key: 'pull-request',
-            label: (
-              <>
-                <GitPullRequest size={14} />
-                {t('Commit & Create PR')}
-              </>
-            ),
-            onSelect: () => void commitAndPush(ws, taskId, true).catch(() => {}),
-          },
+          ...(canCreatePr
+            ? [
+                {
+                  key: 'pull-request',
+                  label: (
+                    <>
+                      <GitPullRequest size={14} />
+                      {t('Commit, Push & PR')}
+                    </>
+                  ),
+                  onSelect: () => void commitAndPush(ws, taskId, true).catch(() => {}),
+                },
+              ]
+            : []),
         ]}
       />
     </span>

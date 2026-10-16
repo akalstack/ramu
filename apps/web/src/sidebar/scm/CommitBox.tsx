@@ -16,6 +16,7 @@ import type { CommitFn } from './useCommitFlow'
 
 /** Commit message field, AI drafting and the Commit / Sync button. */
 export function CommitBox({
+  canCreatePr,
   repoName,
   status,
   stagedCount,
@@ -33,6 +34,8 @@ export function CommitBox({
   onSync,
   reportError,
 }: {
+  /** GitHub with a signed-in `gh`: the only host that can open pull requests today. */
+  canCreatePr: boolean
   repoName: string
   status: GitStatus | null
   stagedCount: number
@@ -172,16 +175,20 @@ export function CommitBox({
                 disabled: !canCommit || !!status?.operation,
                 onSelect: () => void commit('new-branch').catch((reason) => reportError(errorText(reason))),
               },
-              {
-                key: 'pull-request',
-                label: t('Commit & Create PR'),
-                title: t(
-                  'Commit, push, then open a pull request. On the default branch the commit moves to a new branch.',
-                ),
-                disabled: !canPickRemoteAction || !canCommit,
-                onSelect: () =>
-                  void commit('push', undefined, true, true).catch((reason) => reportError(errorText(reason))),
-              },
+              ...(canCreatePr
+                ? [
+                    {
+                      key: 'pull-request',
+                      label: t('Commit, Push & PR'),
+                      title: t(
+                        'Commit, push, then open a pull request. On the default branch the commit moves to a new branch.',
+                      ),
+                      disabled: !canPickRemoteAction || !canCommit,
+                      onSelect: () =>
+                        void commit('push', undefined, true, true).catch((reason) => reportError(errorText(reason))),
+                    },
+                  ]
+                : []),
               {
                 key: 'amend',
                 label: t('Commit (Amend)'),

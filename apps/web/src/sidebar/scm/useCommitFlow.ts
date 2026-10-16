@@ -67,7 +67,7 @@ export function useCommitFlow({
     stagePaths?: string[],
     /** Open the commit popup even when files are staged (the shortcut and the header button do). */
     ask = false,
-    /** Open the popup with "Then create a pull request" ticked. */
+    /** Open the popup with "Create a pull request after pushing" ticked. */
     pullRequest = false,
   ) => {
     if (loading || busy || generating || conflictCount) return

@@ -11,6 +11,7 @@ import { invoke } from '../ipc'
 import { useAppSettings } from '../settings/AppSettings'
 import { LETTER } from '../sidebar/scm/constants'
 import { commitActionLabel } from '../sidebar/scm/helpers'
+import { usePullRequestSupport } from './usePullRequestSupport'
 
 /** What the popup hands back: the files to commit, how far to take them, the branch, and an optional message. */
 export interface CommitPlan {
@@ -30,7 +31,7 @@ type Request = {
   status: GitStatus
   action: CommitAction
   message: string
-  /** Start with "Then create a pull request" ticked. */
+  /** Start with "Create a pull request after pushing" ticked. */
   pullRequest?: boolean
   resolve: (plan: CommitPlan | null) => void
 }
@@ -139,13 +140,15 @@ function CommitForm({
   const selected = entries.filter((entry) => inScope(entry) && !unticked.has(entry.path))
   const [message, setMessage] = useState(request.message)
   const canPublish = !!status.branch && !!status.remote && !status.operation
+  const prSupported = usePullRequestSupport(request.taskId, request.repoId, status.branch, status.remote)
+  const canPr = canPublish && prSupported
   const [action, setAction] = useState<CommitAction>(
     request.action !== 'commit' ? request.action : canPublish ? defaultAction : 'commit',
   )
-  const [openPr, setOpenPr] = useState(!!request.pullRequest && canPublish)
+  const [openPr, setOpenPr] = useState(!!request.pullRequest && canPr)
   // A pull request needs the commit on the remote, so it always pushes.
   const publishing = (openPr || action !== 'commit') && canPublish
-  const chosenAction: CommitAction = openPr && canPublish ? 'push' : publishing ? action : 'commit'
+  const chosenAction: CommitAction = openPr && canPr ? 'push' : publishing ? action : 'commit'
   const [branchInfo, setBranchInfo] = useState<{ branch: string | null; defaultBranch: string | null } | null>(null)
   const [newBranch, setNewBranch] = useState(false)
   // A new branch is named by AI from the commit (empty), or written here.
@@ -182,7 +185,7 @@ function CommitForm({
     if (!selected.length || (wantsBranch && ownName && !branchName.trim())) return
     if (publishing && !openPr) onRememberAction(action)
     onDone({
-      pullRequest: openPr && canPublish,
+      pullRequest: openPr && canPr,
       paths: selected.map((entry) => entry.path),
       action: chosenAction,
       branch: !wantsBranch
@@ -193,7 +196,7 @@ function CommitForm({
       message,
     })
   }
-  const submitLabel = openPr && canPublish ? t('Commit & Create PR') : commitActionLabel(chosenAction)
+  const submitLabel = openPr && canPr ? t('Commit, Push & PR') : commitActionLabel(chosenAction)
 
   const SEGMENTS =
     'inline-flex flex-none gap-0.5 p-0.5 rounded-(--radius-s) bg-fill [&_button]:h-6 [&_button]:px-2.5 [&_button]:text-caption [&_button]:rounded-(--radius-xs) [&_button]:bg-transparent [&_button]:text-muted-foreground [&_button:hover:not(:disabled)]:text-foreground [&_[aria-pressed=true]]:bg-hover [&_[aria-pressed=true]]:text-foreground [&_button:disabled]:opacity-40'
@@ -313,12 +316,6 @@ function CommitForm({
               </Button>
             ))}
           </div>
-          {canPublish && (
-            <label className="flex cursor-pointer items-center gap-2 text-control text-soft">
-              <Checkbox checked={openPr} onCheckedChange={(value) => setOpenPr(!!value)} />
-              {t('Then create a pull request')}
-            </label>
-          )}
           {(onDefault ? publishing : true) && branchToggle}
           {wantsBranch && (
             <div className="flex flex-col gap-1.5 pl-6">
@@ -353,6 +350,12 @@ function CommitForm({
                 </p>
               )}
             </div>
+          )}
+          {canPr && (
+            <label className="flex cursor-pointer items-center gap-2 text-control text-soft">
+              <Checkbox checked={openPr} onCheckedChange={(value) => setOpenPr(!!value)} />
+              {t('Create a pull request after pushing')}
+            </label>
           )}
         </div>
 

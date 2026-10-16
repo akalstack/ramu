@@ -22,8 +22,8 @@ export function useConfirmation({
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
   const [operationName, setOperationName] = useState('')
   /** Opens a confirmation that asks for a name (branch or stash message). */
-  const ask = (next: Confirmation) => {
-    setOperationName('')
+  const ask = (next: Confirmation, initial = '') => {
+    setOperationName(initial)
     setConfirmation(next)
   }
   const cancel = () => {
@@ -36,6 +36,11 @@ export function useConfirmation({
       if (confirmation.kind === 'discard') await invoke('git.discard', taskId, repoId, confirmation.paths)
       else if (confirmation.kind === 'undo') onUndone(await invoke('git.undoCommit', taskId, repoId, confirmation.oid))
       else if (confirmation.kind === 'branch') await invoke('git.createBranch', taskId, repoId, operationName.trim())
+      else if (confirmation.kind === 'branch-from')
+        await invoke('git.createBranchFrom', taskId, repoId, operationName.trim(), confirmation.from)
+      else if (confirmation.kind === 'rename-branch')
+        await invoke('git.renameBranch', taskId, repoId, operationName.trim())
+      else if (confirmation.kind === 'merge') await invoke('git.mergeBranch', taskId, repoId, confirmation.name)
       else if (confirmation.kind === 'stash')
         await invoke('git.stash', taskId, repoId, operationName.trim(), confirmation.staged)
       else if (confirmation.kind === 'delete-branch')

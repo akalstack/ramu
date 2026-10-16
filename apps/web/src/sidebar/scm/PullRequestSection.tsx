@@ -129,13 +129,8 @@ export function PullRequestSection({
   // On the default branch only commits the remote lacks can be proposed; they move to a new branch.
   // A merged pull request is finished.
   const onBase = !!branchInfo.data && status.branch === branchInfo.data.defaultBranch
-  const canCreate = !!branchInfo.data && (!pr || pr.state === 'closed') && (!onBase || status.ahead > 0)
-  if (!pr && !canCreate)
-    return onBase && status.entries.length > 0 ? (
-      <p className="muted text-muted-foreground small text-caption m-[0_2px_8px]">
-        {t('Use Commit & Create PR from the commit menu to open a pull request from these changes.')}
-      </p>
-    ) : null
+  const canCreate = !!branchInfo.data && (!pr || pr.state === 'closed') && !onBase
+  if (!pr && !canCreate) return null
   return (
     <div
       className={cn(
@@ -173,7 +168,7 @@ export function PullRequestSection({
             <Button
               variant="outline"
               size="sm"
-              className="w-full justify-center gap-2 rounded-(--radius-s) border border-line bg-transparent! text-control text-foreground hover:bg-hover! disabled:opacity-50"
+              className="h-(--action-size) min-h-(--action-size) w-full justify-center gap-2 rounded-(--radius-s) border border-line bg-transparent! text-control text-foreground hover:bg-hover! disabled:opacity-50"
               disabled={busy || !!status.operation}
               onClick={() => setCreating(true)}
             >

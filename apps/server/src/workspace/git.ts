@@ -461,6 +461,37 @@ export async function createBranch(cwd: string, name: string): Promise<void> {
   await git(cwd, ['check-ref-format', '--branch', name])
   await git(cwd, ['switch', '-c', name])
 }
+/** Creates a branch at another branch's tip and switches to it. The checkout must be clean. */
+export async function createBranchFrom(cwd: string, name: string, from: string): Promise<void> {
+  await requireClean(cwd)
+  await git(cwd, ['check-ref-format', '--branch', name])
+  if (!(await branchExists(cwd, from))) throw new Error('Select an existing local branch to start from')
+  await git(cwd, ['switch', '-c', name, from])
+}
+/** Renames the checked-out branch. Its remote branch is not touched. */
+export async function renameBranch(cwd: string, name: string): Promise<void> {
+  const current = await currentBranch(cwd)
+  if (!current) throw new Error('Switch to a branch before renaming it')
+  await git(cwd, ['check-ref-format', '--branch', name])
+  if (await branchExists(cwd, name)) throw new Error(`A branch named ${name} already exists`)
+  await git(cwd, ['branch', '-m', '--', current, name])
+}
+/** Merges a local branch into the checked-out one. A conflict leaves the merge in progress to resolve in Source Control. */
+export async function mergeBranch(cwd: string, name: string): Promise<void> {
+  await requireClean(cwd)
+  await git(cwd, ['check-ref-format', '--branch', name])
+  if (!(await branchExists(cwd, name))) throw new Error('Select an existing local branch')
+  if ((await currentBranch(cwd)) === name) throw new Error('Choose a different branch to merge into this one')
+  try {
+    await git(cwd, ['merge', '--no-edit', '--no-autostash', '--', name])
+  } catch (error) {
+    if (!(await operation(cwd))) throw error
+    throw new Error(
+      'Merge stopped on conflicts. Resolve and stage them in Source Control, then Continue, or Abort the merge.',
+      { cause: error },
+    )
+  }
+}
 /** Starts a branch at HEAD and switches to it, keeping uncommitted changes. The branch we leave is not touched. */
 export async function branchFromHere(cwd: string, name: string): Promise<void> {
   await git(cwd, ['check-ref-format', '--branch', name])
