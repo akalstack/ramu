@@ -46,6 +46,13 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
           }
         />
       </SettingsRow>
+      <SettingsGroupTitle>{t('Pull requests')}</SettingsGroupTitle>
+      <ToggleRow
+        {...toggleProps}
+        setting="autoWatchPullRequests"
+        title="Automatically watch pull requests"
+        description="Watch pull requests you create from a thread. New failures and requested changes return to that thread. You review and push. Existing watches are controlled in Source Control."
+      />
       <SettingsGroupTitle>{t('Commits')}</SettingsGroupTitle>
       <SettingsRow setting="commitStyle">
         <SettingsLabel title={t('Commit messages')} help={t('Style for generated commit messages.')} />

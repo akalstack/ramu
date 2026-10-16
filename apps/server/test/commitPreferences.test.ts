@@ -22,6 +22,7 @@ it('persists reusable commit actions and the primary branch choice', () => {
     expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({
       defaultCommitAction: 'commit',
       defaultCommitBranch: 'new-branch',
+      autoWatchPullRequests: false,
     })
     for (const defaultCommitAction of ['commit', 'push', 'sync'] as const) {
       for (const defaultCommitBranch of ['current', 'new-branch'] as const) {
@@ -35,6 +36,10 @@ it('persists reusable commit actions and the primary branch choice', () => {
       expect(() =>
         dispatcher.invoke('settings.app.set', [{ ...DEFAULT_APP_PREFERENCES, defaultCommitAction }]),
       ).toThrow()
+    }
+    for (const autoWatchPullRequests of [true, false]) {
+      dispatcher.invoke('settings.app.set', [{ ...DEFAULT_APP_PREFERENCES, autoWatchPullRequests }])
+      expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ autoWatchPullRequests })
     }
   } finally {
     dispatcher.close()

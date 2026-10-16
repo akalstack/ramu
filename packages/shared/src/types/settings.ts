@@ -42,6 +42,9 @@ export interface AppPreferences {
   /** How Pull and Sync integrate incoming commits. */
   pullMode: PullMode
   autoPull: boolean
+  /** Watch newly created PRs in their originating thread. Existing watches are controlled per PR. */
+  autoWatchPullRequests: boolean
+  localCrashReports: boolean
   /** Wording rules for AI-drafted commit messages. */
   commitStyle: CommitStyle
   /** Used when commitStyle is custom. */
@@ -116,6 +119,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   previewTabs: true,
   pullMode: 'rebase',
   autoPull: true,
+  autoWatchPullRequests: false,
+  localCrashReports: false,
   commitStyle: 'conventional',
   commitInstructions: '',
   defaultCommitAction: 'commit',

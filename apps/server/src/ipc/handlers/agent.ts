@@ -10,6 +10,7 @@ import type { RegisterHandlers } from '../types'
 export const registerAgentHandlers: RegisterHandlers = (ctx) => {
   const { host, workspace, agents, attachmentStore, withContext } = ctx
   return {
+    'agent.all': { args: z.tuple([]), run: () => agents.all() },
     'agent.list': { args: z.tuple([id]), run: (taskId: string) => agents.list(taskId) },
     'agent.counts': { args: z.tuple([]), run: () => agents.counts() },
     'agent.get': { args: z.tuple([id]), run: (sessionId: string) => agents.get(sessionId) },
@@ -103,8 +104,20 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       run: (s: string, messageId: string) => lockSession(ctx, s, () => agents.sendQueuedNow(s, messageId)),
     },
     'agent.continuationPrompt': { args: z.tuple([id]), run: (s: string) => agents.continuationPrompt(s) },
-    'agent.interrupt': { args: z.tuple([id]), run: (s: string) => agents.interrupt(s) },
-    'agent.stop': { args: z.tuple([id]), run: (s: string) => agents.stopAndWait(s) },
+    'agent.interrupt': {
+      args: z.tuple([id]),
+      run: (s: string) => {
+        ctx.pullRequestWatches?.stopForSession(s)
+        return agents.interrupt(s)
+      },
+    },
+    'agent.stop': {
+      args: z.tuple([id]),
+      run: (s: string) => {
+        ctx.pullRequestWatches?.stopForSession(s)
+        return agents.stopAndWait(s)
+      },
+    },
     'agent.rewind': {
       args: z.tuple([id, z.number().int().positive()]),
       run: (s: string, userSeq: number) => lockSession(ctx, s, () => agents.rewind(s, userSeq)),

@@ -45,3 +45,7 @@ Select thread text to quote it or ask a read-only Aside. Aside replies stay sepa
 The optional advisor sends thread context to a second model for advice. See [providers and advisor](PROVIDERS.md#advisor).
 
 Provider features depend on the installed runtime. See [provider setup](PROVIDERS.md) and [background recovery](AUTOMATION.md).
+
+## Agents overview
+
+Home shows threads and helpers across projects. Pending input comes first, followed by running agents and usage waits. Completed work stays hidden until you choose **Show completed**. Answer questions, connector requests and tool approvals in place, or open and stop an agent. Native helpers open their existing helper panel; their changed-file count is labeled as the parent thread’s changes because the provider owns their checkout capture. Ramu-managed helper threads have a **Back to parent thread** breadcrumb.

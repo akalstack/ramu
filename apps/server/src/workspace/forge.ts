@@ -79,7 +79,7 @@ export function gh(cwd: string, args: string[]): Promise<string> {
 
 // ---- Pull requests ----
 
-const PR_FIELDS = 'number,title,url,state,isDraft,baseRefName,headRefName,reviewDecision,statusCheckRollup'
+const PR_FIELDS = 'number,title,url,state,isDraft,baseRefName,headRefName,headRefOid,reviewDecision,statusCheckRollup'
 
 interface RawCheck {
   __typename?: string
@@ -102,6 +102,7 @@ interface RawPullRequest {
   isDraft: boolean
   baseRefName: string
   headRefName: string
+  headRefOid?: string
   reviewDecision?: string | null
   statusCheckRollup?: RawCheck[] | null
 }
@@ -164,6 +165,7 @@ export function parsePullRequest(raw: RawPullRequest): PullRequestInfo {
     draft: raw.isDraft,
     baseBranch: raw.baseRefName,
     headBranch: raw.headRefName,
+    headCommit: raw.headRefOid,
     reviewDecision: REVIEW_DECISION[raw.reviewDecision ?? ''] ?? null,
     checks: parseChecks(raw.statusCheckRollup ?? []),
   }
@@ -180,13 +182,13 @@ async function remoteBranchName(cwd: string, branch: string): Promise<string> {
 }
 
 /** The pull request for the checked-out branch, and whether forge features work here at all. */
-export async function pullRequestStatus(cwd: string): Promise<ForgeStatus> {
+export async function pullRequestStatus(cwd: string, url?: string): Promise<ForgeStatus> {
   if (!(await hasRemote(cwd))) return { availability: 'no-remote', pullRequest: null }
   if (!ghExecutable()) return { availability: 'no-cli', pullRequest: null }
   const branch = await currentBranch(cwd)
   if (!branch) return { availability: 'ready', pullRequest: null }
   try {
-    const head = await remoteBranchName(cwd, branch)
+    const head = url ?? (await remoteBranchName(cwd, branch))
     const raw = JSON.parse(await gh(cwd, ['pr', 'view', head, '--json', PR_FIELDS])) as RawPullRequest
     return { availability: 'ready', pullRequest: parsePullRequest(raw) }
   } catch (error) {
@@ -408,8 +410,8 @@ export function reviewFeedbackPrompt(pr: PullRequestInfo, raw: RawReviewData): s
 }
 
 /** A prompt that hands the pull request's failing checks or open review comments to an agent. */
-export async function pullRequestFeedback(cwd: string, kind: PullRequestFeedbackKind): Promise<string> {
-  const { pullRequest: pr } = await pullRequestStatus(cwd)
+export async function pullRequestFeedback(cwd: string, kind: PullRequestFeedbackKind, url?: string): Promise<string> {
+  const { pullRequest: pr } = await pullRequestStatus(cwd, url)
   if (!pr) throw new Error('This branch has no pull request.')
   if (kind === 'checks') return failedChecksFeedback(cwd, pr)
   const raw = JSON.parse(

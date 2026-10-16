@@ -21,9 +21,16 @@ export interface PullRequestInfo {
   draft: boolean
   baseBranch: string
   headBranch: string
+  headCommit?: string
   reviewDecision: PullRequestReviewDecision
   /** The latest run of each check; re-runs replace earlier results. */
   checks: ForgeCheck[]
+}
+
+export interface PullRequestWatchStatus {
+  sessionId: string | null
+  /** Threads in this checkout that can receive feedback. */
+  threads: { id: string; title: string }[]
 }
 
 export interface ForgeStatus {

@@ -100,6 +100,27 @@ export function useTranscriptScroll({
   }, [])
 
   // Follow new output only while the reader is already at the bottom.
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    let frame = 0
+    const follow = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        if (stick.current) el.scrollTop = el.scrollHeight
+        measureEdges()
+      })
+    }
+    const observer = new ResizeObserver(follow)
+    const content = el.querySelector('.transcript-col')
+    if (content) observer.observe(content)
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [])
+
   useEffect(() => {
     const el = scroller.current
     if (el && stick.current) el.scrollTop = el.scrollHeight

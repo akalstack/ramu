@@ -50,6 +50,10 @@ export type AgentSessionState =
   | 'restored'
 
 export interface AgentSessionInfo {
+  /** Overview-only fields; native helpers remain owned by their parent provider session. */
+  pendingInput?: boolean
+  waitingUntil?: number | null
+  nativeTask?: AgentTask
   id: string
   taskId: string
   /** Set only for legacy single-repository sessions. */
@@ -109,6 +113,8 @@ export interface QueuedMessage {
   mode?: 'queue' | 'steer'
   attachments?: Attachment[]
   reviewId?: string
+  /** Background feedback must still belong to the checked-out branch when it is sent. */
+  checkout?: { cwd: string; branch: string }
 }
 
 /** When the event was recorded (ms). Absent on events stored before timestamps existed.

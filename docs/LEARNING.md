@@ -50,3 +50,15 @@ Memory supports concise search followed by `memory_read` for full text and sourc
 ## Validation
 
 `pnpm check` covers shared contracts, queue persistence, review budgets, stale revisions, protected memory, exact output recovery, tool invocation validation, and provider guidance. `pnpm test:learning` runs an isolated Electron journey with simulated providers, screenshots, settings persistence, approval, pinned skills, memory revision restoration, and restart checks. `pnpm test:e2e` covers the wider desktop journey. Real-provider quality and token savings need opt-in live evaluations; simulated tests establish application behavior.
+
+## Installing external skills
+
+Ask the agent to find a skill or install one from a repository, URL, git address or local folder. `skill_find` wraps the skills.sh search CLI; `skill_install` asks whether the skill belongs to this project or all projects when you have not specified a scope. It stages one skill using pinned `skills@1.7.2` with telemetry disabled, then shows its source, description, scope and file list for your approval. Scripts require a second approval and are skipped by default. Ramu copies approved files and never executes skill scripts during installation.
+
+Staging runs in a temporary directory, never your project or a provider’s home folder. Symlinks, unsafe paths and special files are rejected. The import limits are 10 MiB per file, 25 MiB total and 1000 entries. Local sources are checked for symlinks before the CLI copies them. A preview expires after 30 minutes or a service restart; an update also refuses to overwrite a skill changed while approval was pending.
+
+**Settings → Memory & skills → Installed skills** accepts a source link or absolute local path and optional skill name. Preview, inspect the instructions/files, and approve installation. Each card shows its source and scope, with Update, Disable/Enable, Move and Remove controls. Source updates show added, changed and removed files before approval. Installed skills are excluded from automatic learning edits and automatic archiving.
+
+Chat tools include `skill_list`, `skill_inspect`, `skill_update_from_source`, `skill_disable`, `skill_move` and `skill_remove`. Updates, scope moves and removal ask for confirmation. User-scoped skills are available in every project; project skills stay in that project. Both use Ramu’s existing managed export for Claude Code, Codex, OpenCode, Cursor and Antigravity, including approved reference files. Disabling/removing a skill updates the catalog and exports; the next provider session sees the new list.
+
+Node.js and `npx` are required only for finding, staging and source updates. If they are missing, the tool and Settings link to [Node.js installation](https://nodejs.org/en/download). Existing skills and the rest of Ramu continue working.

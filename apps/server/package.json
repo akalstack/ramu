@@ -30,6 +30,7 @@
     "editorconfig": "^3.0.2",
     "luxon": "catalog:",
     "node-pty": "catalog:",
+    "yaml": "2.9.1",
     "zod": "catalog:"
   },
   "devDependencies": {

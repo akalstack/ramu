@@ -48,6 +48,8 @@ it('restores each provider binding to its defaults, keeping its other fields', (
 })
 
 it('matches setting paths to the section that resets them', () => {
+  expect(resetSection({ ...changed(), autoWatchPullRequests: true }, 'git').autoWatchPullRequests).toBe(false)
+  expect(inResetSection('git', 'autoWatchPullRequests')).toBe(true)
   expect(inResetSection('chats', 'warnModelChange')).toBe(true)
   expect(inResetSection('chats', 'intelligence.compression')).toBe(true)
   expect(inResetSection('chats', 'intelligence.learning')).toBe(false)

@@ -54,6 +54,23 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id]),
       run: (taskId: string, repoId: string) => forge.pullRequestStatus(gitCwdOf(taskId, repoId)),
     },
+    'forge.watchStatus': {
+      args: z.tuple([id, id, z.string().url().max(2000)]),
+      run: (taskId: string, repoId: string, url: string) =>
+        ctx.pullRequestWatches?.status(gitCwdOf(taskId, repoId), url) ?? { sessionId: null, threads: [] },
+    },
+    'forge.watch': {
+      args: z.tuple([id, id, z.string().url().max(2000), id.nullable()]),
+      run: (taskId: string, repoId: string, url: string, sessionId: string | null) => {
+        if (!ctx.pullRequestWatches) throw new Error('Pull request watches are unavailable.')
+        return ctx.pullRequestWatches.watch(gitCwdOf(taskId, repoId), repoId, url, sessionId)
+      },
+    },
+    'forge.sendFeedback': {
+      args: z.tuple([id, id, z.enum(['checks', 'reviews'])]),
+      run: (taskId: string, repoId: string, kind: PullRequestFeedbackKind) =>
+        ctx.pullRequestWatches?.sendFeedback(gitCwdOf(taskId, repoId), kind) ?? null,
+    },
     'forge.pullRequestDraft': {
       args: z.tuple([id, id]),
       run: (taskId: string, repoId: string) => {
@@ -73,7 +90,12 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
           }
           // The branch must be on the remote first; push publishes it when it has no upstream yet.
           await git.push(cwd)
-          return forge.createPullRequest(cwd, input)
+          const status = await forge.createPullRequest(cwd, input)
+          // PR creation succeeded even if watch setup fails; never encourage retrying the create action.
+          await ctx.pullRequestWatches?.watchCreated(taskId, cwd, repoId, status.pullRequest).catch((error) => {
+            console.error('Could not start pull request watch:', error)
+          })
+          return status
         }),
     },
     'forge.pullRequestFeedback': {

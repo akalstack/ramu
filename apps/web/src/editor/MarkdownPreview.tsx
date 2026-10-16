@@ -1,3 +1,5 @@
+import { lazy, Suspense } from 'react'
+const MermaidBlock = lazy(() => import('../chat/MermaidBlock').then((m) => ({ default: m.MermaidBlock })))
 import { useEffect, useMemo, useState, type ComponentProps } from 'react'
 import Markdown from 'react-markdown'
 import { invoke } from '../ipc'
@@ -77,6 +79,27 @@ export function MarkdownPreview({
   const components = useMemo<ComponentProps<typeof Markdown>['components']>(() => {
     const context = { taskId, repoId, path }
     return {
+      pre: ({ node, children }) => {
+        const code = node?.children.find((child) => child.type === 'element' && child.tagName === 'code')
+        if (
+          code?.type !== 'element' ||
+          !Array.isArray(code.properties.className) ||
+          !code.properties.className.includes('language-mermaid')
+        )
+          return <pre>{children}</pre>
+        const source = code.children.map((child) => (child.type === 'text' ? child.value : '')).join('')
+        return (
+          <Suspense
+            fallback={
+              <pre>
+                <code>{source}</code>
+              </pre>
+            }
+          >
+            <MermaidBlock source={source} />
+          </Suspense>
+        )
+      },
       img: ({ node: _node, ...props }) => <PreviewImage {...props} context={context} />,
       source: ({ node: _node, ...props }) => <PreviewSource {...props} context={context} />,
       a: ({ href, children }) => (

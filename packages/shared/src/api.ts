@@ -57,6 +57,7 @@ import type {
   GitBranchInfo,
   CommitDraft,
   ForgeStatus,
+  PullRequestWatchStatus,
   IssueLink,
   IssueSummary,
   PullRequestDraft,
@@ -100,6 +101,25 @@ export interface MobileLiveActivityRegistration {
 }
 
 export interface RamuMethods {
+  'onboarding.get'(): { needed: boolean }
+  'onboarding.complete'(): void
+  'diagnostics.export'(): string
+  'diagnostics.clear'(): void
+  'diagnostics.nativeEvent'(kind: 'renderer-crash' | 'desktop-crash'): void
+  'skills.availability'(): { available: boolean; installUrl: string }
+  'skills.find'(query: string): string
+  'skills.stage'(input: {
+    source: string
+    skill?: string
+    projectId: string | null
+    updatingId?: string
+  }): import('./types').SkillInstallPreview
+  'skills.confirm'(stageId: string, includeScripts: boolean): import('./types').ManagedSkill
+  'skills.cancel'(stageId: string): void
+  'skills.updateSource'(id: string): import('./types').SkillInstallPreview
+  'skills.move'(id: string, projectId: string | null): void
+  'skills.remove'(id: string): void
+  'agent.all'(): AgentSessionInfo[]
   'learning.get'(): import('./types').LearningSnapshot
   'learning.apply'(id: string): void
   'learning.retry'(id: string): void
@@ -348,6 +368,10 @@ export interface RamuMethods {
   'git.generateCommit'(taskId: string, repoId: string, settings: AgentSettings, includeBranch?: boolean): CommitDraft
   /** The pull request for the checked-out branch, through the GitHub CLI. */
   'forge.pullRequest'(taskId: string, repoId: string): ForgeStatus
+  'forge.watchStatus'(taskId: string, repoId: string, url: string): PullRequestWatchStatus
+  'forge.watch'(taskId: string, repoId: string, url: string, sessionId: string | null): void
+  /** Delivers feedback to the watched thread, or returns null when no thread is watching. */
+  'forge.sendFeedback'(taskId: string, repoId: string, kind: PullRequestFeedbackKind): string | null
   'forge.pullRequestDraft'(taskId: string, repoId: string): PullRequestDraft
   /** Publishes the branch when needed, then opens the pull request. */
   'forge.createPullRequest'(taskId: string, repoId: string, input: PullRequestInput): ForgeStatus

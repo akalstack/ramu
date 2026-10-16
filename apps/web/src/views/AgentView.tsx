@@ -1,3 +1,5 @@
+import { useDeferredRequests } from './agent/hooks/useDeferredRequests'
+import { HelperBreadcrumb } from '../HomeAgents'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { focusComposer } from '../composer/ComposerInput'
 import { Spinner } from '@/components/ui/spinner'
@@ -87,10 +89,21 @@ export const AgentView = memo(function AgentView({
   useLanguage()
   const { preferences, save } = useAppSettings()
   const { reviews } = useReviews()
-  const { session, setSession, events, eventSequences, liveText, queued, queuePaused, hydrating, error, setError } =
-    useAgentStream(view.sessionId)
+  const {
+    session,
+    setSession,
+    events: sourceEvents,
+    eventSequences,
+    liveText,
+    queued,
+    queuePaused,
+    hydrating,
+    error,
+    setError,
+  } = useAgentStream(view.sessionId)
   const [attachments, setAttachments] = useState<Attachment[]>(() => savedChat(view.sessionId)?.attachments ?? [])
   const [draft, setDraft] = useState(() => savedChat(view.sessionId)?.draft ?? loadDraft(draftKey.chat(view.sessionId)))
+  const events = useDeferredRequests(sourceEvents, draft)
   useDraftPersistence(draftKey.chat(view.sessionId), draft)
   /** The sent message being edited in place. The composer and its draft are left alone. */
   const [editing, setEditing] = useState<MessageEdit | null>(null)
@@ -144,6 +157,22 @@ export const AgentView = memo(function AgentView({
     root,
     tasks,
   })
+  useEffect(() => {
+    const openHelper = () => {
+      try {
+        const value = JSON.parse(sessionStorage.getItem('ramu.open-helper') ?? 'null')
+        if (value?.parentId === view.sessionId && typeof value.agentId === 'string') {
+          setOpenAgent(value.agentId)
+          sessionStorage.removeItem('ramu.open-helper')
+        }
+      } catch {
+        /* Ignore stale navigation. */
+      }
+    }
+    openHelper()
+    window.addEventListener('ramu:open-helper', openHelper)
+    return () => window.removeEventListener('ramu:open-helper', openHelper)
+  }, [view.sessionId, setOpenAgent])
   const goalEvent = events.findLast((event) => event.kind === 'goal')
   const goal = goalEvent?.kind === 'goal' ? goalEvent.goal : null
   const liveGoal = goal && goal.status !== 'completed' ? goal : null
@@ -428,6 +457,7 @@ export const AgentView = memo(function AgentView({
         )
       }}
     >
+      {session?.parentId && <HelperBreadcrumb parentId={session.parentId} />}
       <AgentHeader
         history={history}
         sessionId={view.sessionId}

@@ -11,7 +11,8 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 async function fakeTools(text: string, connection?: McpConnection): Promise<void> {
   if (
     !connection ||
-    (!text.includes('[schedule tool]') &&
+    (!text.includes('[skill install]') &&
+      !text.includes('[schedule tool]') &&
       !text.includes('<review-comments>') &&
       !text.includes('[ramu-agent') &&
       !text.includes('[questions') &&
@@ -37,6 +38,12 @@ async function fakeTools(text: string, connection?: McpConnection): Promise<void
         name: 'tool_invoke',
         arguments: { name: request.name, arguments: request.arguments ?? {} },
       })
+    }
+    if (text.includes('[skill install]')) {
+      const source = /<skill-source>(.*?)<\/skill-source>/.exec(text)?.[1]
+      if (!source) throw new Error('Skill fixture needs a source')
+      const reply = await call({ name: 'skill_install', arguments: { source, scope: 'project' } })
+      if (reply.isError) throw new Error(JSON.stringify(reply.content))
     }
     if (text.includes('[goal tool]')) {
       const continuation = text.startsWith('Ramu goal continuation:')

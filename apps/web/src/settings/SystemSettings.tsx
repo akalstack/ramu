@@ -7,6 +7,11 @@ import { t } from '../i18n'
 import { Dropdown } from '../Menu'
 import { SETTINGS_FORM_CLASS, type DraftSetter } from './constants'
 import { ToggleRow } from './ToggleRow'
+import { copyText } from '../ipc'
+import { useSettingsInvoke } from './SettingsScope'
+import { Button } from '@/components/desktop-button'
+import { notifyError } from '../chat/Notifications'
+import { errorText } from '../lib/errors'
 
 export function SystemSettings({
   draft,
@@ -17,10 +22,37 @@ export function SystemSettings({
   onChange: DraftSetter
   busy: boolean
 }) {
+  const invoke = useSettingsInvoke()
   const toggleProps = { draft, onChange, busy }
   return (
     <div className={SETTINGS_FORM_CLASS}>
       <SettingsGroupTitle>{t('Background service')}</SettingsGroupTitle>
+      <ToggleRow
+        {...toggleProps}
+        setting="localCrashReports"
+        title="Keep local crash reports"
+        description="Off by default. Keep sanitized service errors and local Electron crash dumps. Nothing is uploaded. Restart Ramu after changing this setting. Native dumps may contain process memory and are never included in copied diagnostics."
+      />
+      <div className="flex gap-2 mb-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            void invoke('diagnostics.export')
+              .then(copyText)
+              .catch((e) => notifyError(errorText(e)))
+          }
+        >
+          {t('Copy sanitized diagnostics')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void invoke('diagnostics.clear').catch((e) => notifyError(errorText(e)))}
+        >
+          {t('Clear diagnostics')}
+        </Button>
+      </div>
       <BackgroundControls onInstalled={() => onChange((current) => ({ ...current, keepAwake: true }))} />
       <ToggleRow
         {...toggleProps}

@@ -16,6 +16,7 @@ import type { AgentService } from '../agent'
 import type { TerminalService } from '../workspace/pty'
 import type { Workspace } from '../workspace/workspace'
 import type { ScheduleService } from '../background/schedules'
+import type { PullRequestWatchService } from '../background/pullRequestWatches'
 import type { ReviewService } from '../review/reviews'
 import type { RecapService } from '../memory/recaps'
 import type { MemoryService } from '../memory/memory'
@@ -24,10 +25,13 @@ import type { KeyedLock } from './keyedLock'
 import type { FileWatchers } from './watchers'
 
 export interface Services {
+  diagnostics?: import('../background/diagnostics').LocalDiagnostics
+  externalSkills?: import('../memory/externalSkills').ExternalSkills
   workspace: Workspace
   terminals: TerminalService
   agents: AgentService
   schedules: ScheduleService
+  pullRequestWatches?: PullRequestWatchService
   recaps: RecapService
   learning?: LearningService
   compression?: CompressionService

@@ -19,6 +19,7 @@ export const registerSettingsHandlers: RegisterHandlers = ({
   agents,
   loadPreferences,
   savePreferences,
+  diagnostics,
 }) => {
   const sharedSettingsSchema = z.toJSONSchema(appPreferences, { unrepresentable: 'any' }) as SettingSchema
   const modelSettingsSchema = z.toJSONSchema(modelPreferences.nullable(), { unrepresentable: 'any' }) as SettingSchema
@@ -39,6 +40,22 @@ export const registerSettingsHandlers: RegisterHandlers = ({
   }
 
   return {
+    'onboarding.get': {
+      args: z.tuple([]),
+      run: () => ({
+        needed:
+          !workspace.getAppState('onboarding-completed', false) &&
+          workspace.listProjects().length === 0 &&
+          (process.env.RAMU_FAKE_AGENT !== '1' || process.env.RAMU_E2E_ONBOARDING === '1'),
+      }),
+    },
+    'onboarding.complete': { args: z.tuple([]), run: () => workspace.setAppState('onboarding-completed', true) },
+    'diagnostics.export': { args: z.tuple([]), run: () => diagnostics?.export() ?? '{}' },
+    'diagnostics.clear': { args: z.tuple([]), run: () => diagnostics?.clear() },
+    'diagnostics.nativeEvent': {
+      args: z.tuple([z.enum(['renderer-crash', 'desktop-crash'])]),
+      run: (kind: 'renderer-crash' | 'desktop-crash') => diagnostics?.record(kind),
+    },
     'settings.app.get': { args: z.tuple([]), run: loadPreferences },
     'settings.app.snapshot': { args: z.tuple([]), run: settingsSnapshot },
     'settings.app.patch': {

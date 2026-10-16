@@ -1,3 +1,4 @@
+import { Onboarding } from './Onboarding'
 import { offerPairLink } from './pairLink'
 import { BackgroundActivity } from './chat/BackgroundActivity'
 import { AppUpdateNotice } from './settings/AppUpdates'
@@ -88,7 +89,12 @@ function ReadyShell({ onReady }: { onReady?: () => void }) {
   useEffect(() => {
     onReady?.()
   }, [onReady])
-  return <Shell />
+  return (
+    <>
+      <Shell />
+      <Onboarding />
+    </>
+  )
 }
 
 function Shell() {
@@ -506,9 +512,9 @@ function Shell() {
               </div>
               <Button
                 variant="secondary"
-                className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${globalPage ? ' active' : ''}`}
-                aria-pressed={globalPage}
-                onClick={() => ws.setSidebar(globalPage ? 'projects' : 'schedules')}
+                className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'schedules' ? ' active' : ''}`}
+                aria-pressed={ui.sidebar === 'schedules'}
+                onClick={() => ws.setSidebar(ui.sidebar === 'schedules' ? 'projects' : 'schedules')}
               >
                 <CalendarClock size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Schedules')}</span>
               </Button>

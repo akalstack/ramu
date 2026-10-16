@@ -6,6 +6,8 @@ import { t } from '../i18n'
 export type ToggleKey =
   | 'previewTabs'
   | 'autoPull'
+  | 'localCrashReports'
+  | 'autoWatchPullRequests'
   | 'defaultAutoFallback'
   | 'includeTabContext'
   | 'warnModelChange'

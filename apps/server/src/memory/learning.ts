@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { z } from 'zod'
+import { writeInstalledSkill } from './skillFiles'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   DEFAULT_AGENT_SETTINGS,
@@ -156,11 +157,22 @@ export class LearningService {
     this.persist(skill)
     this.materialize(skill)
   }
+  remove(id: string) {
+    if (!this.skills().some((skill) => skill.id === id)) throw new Error('Unknown skill')
+    this.db.prepare('DELETE FROM managed_skills WHERE id=?').run(id)
+    rmSync(join(this.root, id), { recursive: true, force: true })
+    this.refreshExports()
+    this.changed()
+  }
   private materialize(skill: ManagedSkill) {
     // UUID-owned directories; content can never select a filesystem path.
     this.writeSkill(join(this.root, skill.id), skill.name, skill)
   }
   private writeSkill(dir: string, name: string, skill: ManagedSkill) {
+    if (skill.installation) {
+      writeInstalledSkill(dir, name, skill)
+      return
+    }
     mkdirSync(dir, { recursive: true })
     const path = join(dir, 'SKILL.md'),
       text = `---\nname: ${name}\ndescription: ${JSON.stringify(skill.description)}\n---\n${skill.content}\n`
@@ -206,7 +218,7 @@ export class LearningService {
     )
     const skillsDir = join(dir, 'skills'),
       manifest = join(dir, '.claude-plugin', 'plugin.json'),
-      info = `${JSON.stringify({ name: 'ramu-managed', description: 'Skills Ramu learned from your work', version: '1.0.0' })}\n`
+      info = `${JSON.stringify({ name: 'ramu-managed', description: 'Skills managed by Ramu', version: '1.0.0' })}\n`
     mkdirSync(skillsDir, { recursive: true })
     mkdirSync(join(dir, '.claude-plugin'), { recursive: true })
     try {
@@ -478,7 +490,10 @@ ${JSON.stringify({ previousCheckpoint: this.checkpoint(job.sessionId), trace: bo
         if (input.id && !existing) throw new Error('Unknown skill')
         if (
           existing &&
-          (existing.pinned || existing.projectId !== job.projectId || input.expectedRevision !== existing.revision)
+          (existing.pinned ||
+            existing.installation ||
+            existing.projectId !== job.projectId ||
+            input.expectedRevision !== existing.revision)
         )
           throw new Error('Skill changed, is pinned, or belongs to another scope; dismiss and review again')
         const now = Date.now()
@@ -510,6 +525,7 @@ ${JSON.stringify({ previousCheckpoint: this.checkpoint(job.sessionId), trace: bo
           !target ||
           skill.id === target.id ||
           skill.pinned ||
+          skill.installation ||
           skill.projectId !== job.projectId ||
           target.projectId !== job.projectId ||
           target.status !== 'active' ||
@@ -621,6 +637,7 @@ ${JSON.stringify({ previousCheckpoint: this.checkpoint(job.sessionId), trace: bo
     for (const skill of this.skills())
       if (
         skill.status === 'active' &&
+        !skill.installation &&
         !skill.pinned &&
         now - Math.max(skill.updatedAt, skill.lastUsedAt ?? 0) > this.preferences().archiveSkillDays * DAY
       )

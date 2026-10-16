@@ -1,14 +1,13 @@
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
-import { toolKind, KIND_LABEL, KIND_VERB } from '@ramu/shared/chat/agentTools'
+import { toolKind, KIND_VERB } from '@ramu/shared/chat/agentTools'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/desktop-button'
 import { ChevronRight } from 'lucide-react'
 import { describeRamuTool, ramuTool } from '@ramu/shared/chat/ramuTools'
-import { toolNeedsAttention } from '@ramu/shared/chat/chatFolding'
 import { toolIsRunning, toolVerb } from '@ramu/shared/chat/toolStatus'
 import { type ToolResult, type ToolUse } from '../types'
-import { describeTools, toolLabel } from '../lib/toolSummary'
+import { describeTools } from '../lib/toolSummary'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { ShadowPre } from './ShadowPre'
 import { WorkingText } from './WorkingText'
@@ -59,12 +58,7 @@ export function ToolGroup({
   const running = tools.some((t) => toolIsRunning(results.get(t.toolUseId), active))
   const primaryTool = tools.find((t) => toolIsRunning(results.get(t.toolUseId), active)) ?? tools[0]!
   return (
-    <Collapsible
-      defaultOpen={
-        running || tools.length === 1 || tools.some((tool) => toolNeedsAttention(results.get(tool.toolUseId)))
-      }
-      className="tool-group text-sm text-muted-foreground"
-    >
+    <Collapsible defaultOpen={tools.length === 1} className="tool-group text-sm text-muted-foreground">
       {tools.length > 1 && (
         <CollapsibleTrigger
           render={
@@ -119,7 +113,6 @@ export function ToolGroup({
                 key={t.toolUseId}
                 data-tool-use-id={t.toolUseId}
                 className="tool [&_[data-slot='collapsible-trigger']]:flex [&_[data-slot='collapsible-trigger']]:items-center [&_[data-slot='collapsible-trigger']]:cursor-pointer [&_[data-slot='collapsible-trigger']]:[list-style:none] [&_[data-slot='collapsible-trigger']]:min-w-0 [&_[data-slot='collapsible-trigger']]:m-0 [&_[data-slot='collapsible-trigger']]:p-[4px_6px] [&_[data-slot='collapsible-trigger']]:rounded-(--radius-s) [&_[data-slot='collapsible-trigger']]:gap-2 [&_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_[data-slot='collapsible-trigger']:hover]:bg-hover [&_.caret]:text-muted-foreground [&_.caret]:flex-none [&_.caret]:[transition:transform_0.15s_var(--ease)] [&[data-open]_.caret]:[transform:rotate(90deg)] [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:m-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:text-soft text-control text-soft rounded-(--radius-s)"
-                defaultOpen={movable}
               >
                 <CollapsibleTrigger render={<Button variant="ghost" />}>
                   <ToolIcon
@@ -142,28 +135,17 @@ export function ToolGroup({
                 </CollapsibleTrigger>
                 <CollapsibleContent className={TOOL_DISCLOSURE_PANEL_CLASS}>
                   <div className={TOOL_CARD_CLASS}>
-                    {!row && (
-                      <div
-                        className={
-                          movable
-                            ? 'tool-card-title [&.with-action]:flex [&.with-action]:items-center [&.with-action]:justify-between [&.with-action]:gap-2 [&.with-action]:pr-2 p-[8px_12px_0] text-control text-soft with-action'
-                            : 'tool-card-title [&.with-action]:flex [&.with-action]:items-center [&.with-action]:justify-between [&.with-action]:gap-2 [&.with-action]:pr-2 p-[8px_12px_0] text-control text-soft'
-                        }
-                      >
-                        <span>
-                          {humanTitle ?? (category === 'other' ? toolLabel(t.name) : translate(KIND_LABEL[category]))}
-                        </span>
-                        {movable && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={GHOST_TEXT_BUTTON_CLASS}
-                            title={translate('Let the agent carry on while this keeps running')}
-                            onClick={() => onBackground(t.toolUseId)}
-                          >
-                            {translate('Run in background')}
-                          </Button>
-                        )}
+                    {!row && movable && (
+                      <div className="flex justify-end px-3 pt-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={GHOST_TEXT_BUTTON_CLASS}
+                          title={translate('Let the agent carry on while this keeps running')}
+                          onClick={() => onBackground(t.toolUseId)}
+                        >
+                          {translate('Run in background')}
+                        </Button>
                       </div>
                     )}
                     {row ? (

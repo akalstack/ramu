@@ -45,7 +45,13 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string; advanced?: true }[] = [
+  { section: 'system', title: 'Keep local crash reports', words: 'diagnostics privacy errors crash local export' },
   { section: 'git', title: 'Automatic pull', words: 'git auto fetch remote fast-forward background sync' },
+  {
+    section: 'git',
+    title: 'Automatically watch pull requests',
+    words: 'pr auto checks reviews feedback thread background',
+  },
   ...(APP_AUTO_UPDATE
     ? [
         {

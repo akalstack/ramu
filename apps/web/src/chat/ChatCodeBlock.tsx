@@ -1,3 +1,5 @@
+import { lazy, Suspense } from 'react'
+const MermaidBlock = lazy(() => import('./MermaidBlock').then((m) => ({ default: m.MermaidBlock })))
 import { useEffect, useState } from 'react'
 import type { Components } from 'react-markdown'
 import { Check, Copy } from 'lucide-react'
@@ -92,6 +94,18 @@ export const chatCodeComponents: Components = {
       .map(String)
       .find((name) => name.startsWith('language-'))
       ?.slice(9)
-    return <ChatCodeBlock source={source} hint={hint} />
+    return hint?.toLowerCase() === 'mermaid' ? (
+      <Suspense
+        fallback={
+          <pre>
+            <code>{source}</code>
+          </pre>
+        }
+      >
+        <MermaidBlock source={source} />
+      </Suspense>
+    ) : (
+      <ChatCodeBlock source={source} hint={hint} />
+    )
   },
 }

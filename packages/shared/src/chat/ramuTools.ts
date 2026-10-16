@@ -35,6 +35,15 @@ const KNOWN = new Set([
   'memory_restore',
   'memory_merge',
   'skill_inspect',
+  'skill_find',
+  'skill_install',
+  'skill_list',
+  'skill_update_from_source',
+  'skill_remove',
+  'skill_disable',
+  'skill_move',
+  'watch_pull_request',
+  'unwatch_pull_request',
   'skill_update',
   'skill_archive',
   'skill_restore',
@@ -192,6 +201,38 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
     }
     case 'skill_inspect':
       return reply('Read skill', 'Reading skill', 'sparkles', quote(text(data.name)))
+    case 'skill_find':
+      return reply('Searched skills', 'Searching skills', 'search', quote(text(args.query)))
+    case 'watch_pull_request':
+      return reply('Watching pull request', 'Starting pull request watch', 'review', text(data.url) ?? text(args.url))
+    case 'unwatch_pull_request':
+      return reply('Stopped pull request watches', 'Stopping pull request watches', 'review')
+    case 'skill_install':
+      return reply(
+        data.cancelled ? 'Cancelled skill installation' : 'Installed skill',
+        'Preparing skill installation',
+        'sparkles',
+        quote(text(data.name) ?? text(args.source)),
+      )
+    case 'skill_list':
+      return reply('Listed installed skills', 'Listing installed skills', 'sparkles')
+    case 'skill_update_from_source':
+      return reply(
+        data.cancelled ? 'Cancelled skill update' : 'Updated skill from source',
+        'Checking skill source',
+        'sparkles',
+        quote(text(data.name)),
+      )
+    case 'skill_remove':
+      return reply(data.removed ? 'Removed skill' : 'Kept skill', 'Removing skill', 'sparkles')
+    case 'skill_disable':
+      return reply(
+        args.disabled ? 'Disabled skill' : 'Enabled skill',
+        args.disabled ? 'Disabling skill' : 'Enabling skill',
+        'sparkles',
+      )
+    case 'skill_move':
+      return reply(data.moved ? 'Moved skill' : 'Kept skill scope', 'Moving skill', 'sparkles')
     case 'skill_update':
       return reply('Updated skill', 'Updating skill', 'sparkles', quote(text(data.name) ?? text(args.name)), [
         { label: 'Why', value: text(args.reason) ?? '' },

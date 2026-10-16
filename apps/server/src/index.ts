@@ -1,8 +1,10 @@
+import { LocalDiagnostics } from './background/diagnostics'
 import { MobileLiveActivities } from './remote/mobileLiveActivity'
 import { MobilePush } from './remote/mobilePush'
 import type { AppPreferences } from '@ramu/shared/types'
 import { ToolRegistry } from './agent/toolRegistry'
 import { CompressionService } from './compression'
+import { ExternalSkills } from './memory/externalSkills'
 import { LearningService } from './memory/learning'
 import { DEFAULT_INTELLIGENCE_PREFERENCES } from '@ramu/shared/types'
 // Independent Node process. Electron windows are clients, never owners of agent lifetimes.
@@ -49,6 +51,7 @@ import { AgentService } from './agent'
 import { TerminalService } from './workspace/pty'
 import { createDispatcher } from './ipc'
 import { ScheduleService, scheduleSchema } from './background/schedules'
+import { PullRequestWatchService } from './background/pullRequestWatches'
 import { runtimeBuild, runtimeVersion } from './build'
 import { ReviewService } from './review/reviews'
 import { RecapService } from './memory/recaps'
@@ -200,7 +203,10 @@ const inbox = new NoticeInbox(
     }
   },
 )
+const diagnostics = new LocalDiagnostics(workspace)
+process.on('uncaughtExceptionMonitor', (error) => diagnostics.record('service-crash', error))
 const schedules = new ScheduleService(db, workspace, agents, changed)
+const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
 schedules.recover()
 // eslint-disable-next-line prefer-const -- declared earlier because closures built before this point reference it
 reviews = new ReviewService(db, workspace, agents, join(userData, 'reviews'), changed)
@@ -220,6 +226,7 @@ const compression = new CompressionService(db)
 const learning = new LearningService(db, workspace, agents, memory, join(userData, 'skills'), () =>
   send('memory:changed', {}),
 )
+const externalSkills = new ExternalSkills(learning, workspace)
 const summaries = new SummaryService(db, workspace, agents, memory, learning, (created) =>
   send('summaries:changed', { created }),
 )
@@ -271,10 +278,13 @@ const dispatcher = createDispatcher(
     terminals,
     agents,
     schedules,
+    pullRequestWatches,
     recaps,
     reviews,
     memory,
     learning,
+    externalSkills,
+    diagnostics,
     summaries,
     compression,
     notices: inbox,
@@ -288,6 +298,7 @@ async function stop(intentional = false) {
   stopping = true
   clearInterval(tick)
   await schedules.stop()
+  await pullRequestWatches.stop()
   // Capture after the scheduler drains, so a chat that finished during that wait is not resumed.
   if (!intentional) agents.prepareForRestart()
   reviews.stop()
@@ -511,6 +522,8 @@ const mcpHttp = createServer(async (req, res) => {
       source,
     )
   const server = review ? withoutTools(registry.server) : registry.server
+  if (!review) externalSkills.register(server, agents, source.id)
+  if (!review) pullRequestWatches.register(server, source.id)
   learning.register(server, source.id)
   compression.register(server, source.id)
   // With async questions off, Claude and Codex ask through their own blocking question tools instead.
@@ -881,6 +894,7 @@ const heartbeat = setInterval(() => {
 const tick = setInterval(() => {
   void agents.resumeInterruptedChats().catch(console.error)
   void schedules.tick().catch(console.error)
+  void pullRequestWatches.tick().catch(console.error)
   void recaps.tick().catch(console.error)
   void memory.tick().catch(console.error)
   void learning.tick().catch(console.error)

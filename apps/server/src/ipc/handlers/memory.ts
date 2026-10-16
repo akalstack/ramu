@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { skillInstallInput } from '../../memory/externalSkills'
 import type { MemoryInput } from '@ramu/shared/types'
 import { discoverSkills } from '../../context'
 import { memoryInputSchema } from '../../memory/memory'
@@ -13,7 +14,35 @@ export const registerMemoryHandlers: RegisterHandlers = ({
   learning,
   compression,
   managedSkills,
+  externalSkills,
 }) => ({
+  'skills.availability': { args: z.tuple([]), run: () => need(externalSkills).availability() },
+  'skills.find': {
+    args: z.tuple([
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(300)
+        .refine((s) => !s.startsWith('-')),
+    ]),
+    run: (query: string) => need(externalSkills).find(query),
+  },
+  'skills.stage': {
+    args: z.tuple([skillInstallInput]),
+    run: (input: z.infer<typeof skillInstallInput>) => need(externalSkills).stage(input),
+  },
+  'skills.confirm': {
+    args: z.tuple([id, z.boolean()]),
+    run: (stageId: string, scripts: boolean) => need(externalSkills).confirm(stageId, scripts),
+  },
+  'skills.cancel': { args: z.tuple([id]), run: (stageId: string) => need(externalSkills).cancel(stageId) },
+  'skills.updateSource': { args: z.tuple([id]), run: (skillId: string) => need(externalSkills).update(skillId) },
+  'skills.remove': { args: z.tuple([id]), run: (skillId: string) => need(externalSkills).remove(skillId) },
+  'skills.move': {
+    args: z.tuple([id, id.nullable()]),
+    run: (skillId: string, projectId: string | null) => need(externalSkills).move(skillId, projectId),
+  },
   'skills.list': {
     args: z.tuple([id]),
     run: (ctx: string) => [

@@ -27,7 +27,20 @@ export function createDispatcher(host: RuntimeHost, services: Services) {
       const parsed = m.args.safeParse(args)
       // People see this message, so it must read as a sentence rather than as a list of schema issues.
       if (!parsed.success) throw new Error(describeValidationError(parsed.error))
-      const run = () => m.run(...parsed.data)
+      const run = () => {
+        try {
+          const value = m.run(...parsed.data)
+          return value instanceof Promise
+            ? value.catch((error) => {
+                services.diagnostics?.record('service-error', error)
+                throw error
+              })
+            : value
+        } catch (error) {
+          services.diagnostics?.record('service-error', error)
+          throw error
+        }
+      }
       const label = operationLabels[method]
       let detail: string | undefined
       if (label && method.startsWith('git.') && typeof parsed.data[1] === 'string') {

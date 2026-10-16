@@ -124,6 +124,7 @@ export function NewTask({
   const [workspaceId, setWorkspaceId] = useState<string | null>(ws.composingWorkspace)
   const [mode, setMode] = useState<CheckoutMode>('current')
   const showAdvanced = useShowAdvanced()
+  const [showCheckout, setShowCheckout] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [prompt, setPrompt] = useState(() => loadDraft(draftKey.newChat(projectId)))
   useDraftPersistence(draftKey.newChat(projectId), prompt)
@@ -342,7 +343,18 @@ export function NewTask({
               }
               items={projectItems}
             />
-            {!general && (showAdvanced || mode !== 'current' || !!existingWorkspace) && (
+            {!general && !showCheckout && !showAdvanced && mode === 'current' && !existingWorkspace && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('Choose checkout')}
+                title={t('Choose checkout')}
+                onClick={() => setShowCheckout(true)}
+              >
+                <GitBranch data-icon="inline-start" />
+              </Button>
+            )}
+            {!general && (showCheckout || showAdvanced || mode !== 'current' || !!existingWorkspace) && (
               <Menu
                 label={t('Where the work happens')}
                 className={CHIP}
@@ -468,7 +480,7 @@ export function NewTask({
       }}
       className={`home-page${folderOver ? ' outline-dashed outline-1 -outline-offset-4 outline-(--line-strong)' : ''} [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer-bar_.dropdown-trigger.control-btn]:h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:min-h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:p-[4px_8px] [&_.composer-bar_.dropdown-trigger.control-btn]:bg-transparent [&_.composer-bar_.dropdown-trigger.control-btn]:text-control [&_.composer-bar_.dropdown-trigger.control-btn]:leading-[normal] w-full h-full overflow-auto flex flex-col items-stretch p-[0_24px_24px]`}
     >
-      <div className="home-start [&_.start-view]:min-h-[min(560px,_72vh)] [&_.start-view]:pt-2 [&_.start-hero]:mb-[22px] [&_.start-hero_h1]:text-hero [&_.start-mark]:block [&_.start-dock]:pl-0 [&_.start-dock]:pr-0 [&_.start-dock]:max-w-[none] w-full max-w-[760px] m-[0_auto] [border:0]">
+      <div className="home-start [&_.start-view]:min-h-[min(560px,_72vh)] [.home-page:has(.home-agents)_&_.start-view]:min-h-[min(320px,_42vh)] [&_.start-view]:pt-2 [&_.start-hero]:mb-[22px] [&_.start-hero_h1]:text-hero [&_.start-mark]:block [&_.start-dock]:pl-0 [&_.start-dock]:pr-0 [&_.start-dock]:max-w-[none] w-full max-w-[760px] m-[0_auto] [border:0]">
         {start}
       </div>
       <HomeFeed />

@@ -15,7 +15,15 @@ export const SECONDARY_BUTTON_CLASS = 'bg-fill hover:bg-fill-hover'
 
 // Preferences each section's "Reset to defaults" restores.
 export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[]>> = {
-  system: ['appUpdateChecks', 'appAutoUpdate', 'keepAwake', 'keepAwakeWhen', 'recapsEnabled', 'recapTime'],
+  system: [
+    'appUpdateChecks',
+    'appAutoUpdate',
+    'keepAwake',
+    'keepAwakeWhen',
+    'recapsEnabled',
+    'recapTime',
+    'localCrashReports',
+  ],
   providers: ['providerBinaries', 'providerUpdateChecks', 'showUsageLimits'],
   appearance: ['language', 'accent', 'fontFamily', 'fontSize', 'fontSmoothing', 'reduceMotion', 'sidebarWidth'],
   editor: ['previewTabs', 'editorFontSize', 'terminalFontSize', 'defaultTerminalDock'],
@@ -36,6 +44,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
   git: [
     'pullMode',
     'autoPull',
+    'autoWatchPullRequests',
     'commitStyle',
     'commitInstructions',
     'defaultCommitAction',
@@ -45,10 +54,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
 }
 
 // Chats and Memory each own part of `intelligence`; reset only their own fields.
-export const CHATS_INTELLIGENCE_KEYS = [
-  'compression',
-  'toolSearch',
-] as const
+export const CHATS_INTELLIGENCE_KEYS = ['compression', 'toolSearch'] as const
 export const MEMORY_INTELLIGENCE_KEYS = ['learning', 'maintenanceModel', 'dailyReviews', 'archiveSkillDays'] as const
 
 export const MAX_MODEL_SETS = 20

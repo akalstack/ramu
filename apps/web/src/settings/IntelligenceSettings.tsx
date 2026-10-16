@@ -1,3 +1,4 @@
+import { InstalledSkills } from './InstalledSkills'
 import { useSettingsInvoke } from './SettingsScope'
 import { useCallback, useEffect, useState } from 'react'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
@@ -256,89 +257,94 @@ export function LearningSettings({ value, onChange }: Props) {
           </div>
         </article>
       ))}
+      <InstalledSkills />
       <SettingsGroupTitle className="mt-5!">{t('Managed skills')}</SettingsGroupTitle>
       {!snapshot?.skills.length && (
         <p className="muted text-muted-foreground small text-caption py-6 text-center">
           {t('No skills yet. Ramu adds them here when it learns a repeatable procedure.')}
         </p>
       )}
-      {snapshot?.skills.map((skill) => (
-        <article
-          key={skill.id}
-          id={`skill-${skill.id}`}
-          className="[&.flash]:[animation:settings-flash_1.4s_ease-out] bg-card rounded-(--radius-m) p-3 mb-2 flex flex-col gap-2"
-        >
-          <strong className="font-medium">
-            {skill.name} · {t(skill.status)}
-            {skill.pinned ? ` · ${t('Pinned')}` : ''}
-          </strong>
-          <p className="muted text-muted-foreground small text-caption m-0!">
-            {skill.description} · {t('Read {0} times', { 0: skill.useCount })}
-          </p>
-          <details className="text-caption">
-            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">{t('Procedure')}</summary>
-            <pre className="whitespace-pre-wrap text-caption text-muted-foreground m-0 mt-2">{skill.content}</pre>
-          </details>
-          <div className="flex gap-2 flex-wrap">
-            {(['pin', 'unpin', 'disable', 'archive', 'restore'] as const)
-              .filter((action) =>
-                action === 'pin'
-                  ? !skill.pinned
-                  : action === 'unpin'
-                    ? skill.pinned
-                    : action === 'restore'
-                      ? skill.status !== 'active'
-                      : skill.status === 'active',
-              )
-              .map((action) => (
-                <Button
-                  key={action}
-                  disabled={busy}
-                  variant="secondary"
-                  className="bg-fill hover:bg-fill-hover"
-                  onClick={() => void act(() => invoke('learning.control', skill.id, action))}
-                >
-                  {t(
-                    { pin: 'Pin', unpin: 'Unpin', disable: 'Disable', archive: 'Archive', restore: 'Restore' }[action],
-                  )}
-                </Button>
+      {snapshot?.skills
+        .filter((skill) => !skill.installation)
+        .map((skill) => (
+          <article
+            key={skill.id}
+            id={`skill-${skill.id}`}
+            className="[&.flash]:[animation:settings-flash_1.4s_ease-out] bg-card rounded-(--radius-m) p-3 mb-2 flex flex-col gap-2"
+          >
+            <strong className="font-medium">
+              {skill.name} · {t(skill.status)}
+              {skill.pinned ? ` · ${t('Pinned')}` : ''}
+            </strong>
+            <p className="muted text-muted-foreground small text-caption m-0!">
+              {skill.description} · {t('Read {0} times', { 0: skill.useCount })}
+            </p>
+            <details className="text-caption">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">{t('Procedure')}</summary>
+              <pre className="whitespace-pre-wrap text-caption text-muted-foreground m-0 mt-2">{skill.content}</pre>
+            </details>
+            <div className="flex gap-2 flex-wrap">
+              {(['pin', 'unpin', 'disable', 'archive', 'restore'] as const)
+                .filter((action) =>
+                  action === 'pin'
+                    ? !skill.pinned
+                    : action === 'unpin'
+                      ? skill.pinned
+                      : action === 'restore'
+                        ? skill.status !== 'active'
+                        : skill.status === 'active',
+                )
+                .map((action) => (
+                  <Button
+                    key={action}
+                    disabled={busy}
+                    variant="secondary"
+                    className="bg-fill hover:bg-fill-hover"
+                    onClick={() => void act(() => invoke('learning.control', skill.id, action))}
+                  >
+                    {t(
+                      { pin: 'Pin', unpin: 'Unpin', disable: 'Disable', archive: 'Archive', restore: 'Restore' }[
+                        action
+                      ],
+                    )}
+                  </Button>
+                ))}
+              <Button
+                disabled={busy}
+                variant="secondary"
+                className="bg-fill hover:bg-fill-hover"
+                onClick={() =>
+                  void act(async () => {
+                    setSelected(skill.id)
+                    setHistory(await invoke('learning.history', skill.id))
+                  })
+                }
+              >
+                {t('History')}
+              </Button>
+            </div>
+            {selected === skill.id &&
+              history.map((revision) => (
+                <details key={revision.revision}>
+                  <summary>{t('Revision {0}', { 0: revision.revision })}</summary>
+                  <pre className="whitespace-pre-wrap text-caption">{revision.content}</pre>
+                  <Button
+                    disabled={busy || revision.revision === skill.revision}
+                    variant="secondary"
+                    className="bg-fill hover:bg-fill-hover"
+                    onClick={() =>
+                      void act(async () => {
+                        await invoke('learning.revert', skill.id, revision.revision)
+                        setHistory(await invoke('learning.history', skill.id))
+                      })
+                    }
+                  >
+                    {t('Restore revision')}
+                  </Button>
+                </details>
               ))}
-            <Button
-              disabled={busy}
-              variant="secondary"
-              className="bg-fill hover:bg-fill-hover"
-              onClick={() =>
-                void act(async () => {
-                  setSelected(skill.id)
-                  setHistory(await invoke('learning.history', skill.id))
-                })
-              }
-            >
-              {t('History')}
-            </Button>
-          </div>
-          {selected === skill.id &&
-            history.map((revision) => (
-              <details key={revision.revision}>
-                <summary>{t('Revision {0}', { 0: revision.revision })}</summary>
-                <pre className="whitespace-pre-wrap text-caption">{revision.content}</pre>
-                <Button
-                  disabled={busy || revision.revision === skill.revision}
-                  variant="secondary"
-                  className="bg-fill hover:bg-fill-hover"
-                  onClick={() =>
-                    void act(async () => {
-                      await invoke('learning.revert', skill.id, revision.revision)
-                      setHistory(await invoke('learning.history', skill.id))
-                    })
-                  }
-                >
-                  {t('Restore revision')}
-                </Button>
-              </details>
-            ))}
-        </article>
-      ))}
+          </article>
+        ))}
     </div>
   )
 }

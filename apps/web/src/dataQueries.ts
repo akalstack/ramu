@@ -37,6 +37,8 @@ const extraDataQueries = new Set<string>([
   'git.commitDetails',
   'git.compareUpstream',
   'forge.pullRequest',
+  'forge.watchStatus',
+  'skills.availability',
   'forge.issues',
   'forge.issueLink',
   'agent.goal',

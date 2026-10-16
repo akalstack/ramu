@@ -11,6 +11,7 @@ import type {
 } from '@ramu/shared/types'
 import { cn } from 'cn'
 import { Button } from '@/components/desktop-button'
+import { Dropdown } from '../../Menu'
 import { t } from '../../i18n'
 import { invoke, ramu } from '../../ipc'
 import { ipcQueryKey } from '../../dataQueries'
@@ -63,6 +64,7 @@ export function PullRequestSection({
   const { initialSettings } = useModelSets()
   const [creating, setCreating] = useState(false)
   const [starting, setStarting] = useState<PullRequestFeedbackKind | null>(null)
+  const [watching, setWatching] = useState(false)
   const query = useQuery({
     queryKey: ipcQueryKey('forge.pullRequest', taskId, binding.repoId, status?.branch ?? null),
     queryFn: () => ramu.invoke('forge.pullRequest', taskId, binding.repoId),
@@ -74,23 +76,35 @@ export function PullRequestSection({
     enabled: !!status?.remote,
   })
   const pr = query.data?.pullRequest ?? null
-  const pending = !!pr?.checks.some((check) => check.state === 'pending')
+  const watchQuery = useQuery({
+    queryKey: ipcQueryKey('forge.watchStatus', taskId, binding.repoId, pr?.url ?? ''),
+    queryFn: () => ramu.invoke('forge.watchStatus', taskId, binding.repoId, pr!.url),
+    enabled: pr?.state === 'open',
+  })
+  const { refetch: refreshWatch } = watchQuery
+  useEffect(() => {
+    if (pr?.state !== 'open') return
+    return ramu.on('workspace:changed', () => {
+      void refreshWatch()
+    })
+  }, [refreshWatch, pr?.state])
   const { refetch } = query
 
-  // Follow running checks while the window is in front, and refresh after pushes and commits.
+  // Keep visible PR details fresh; opted-in feedback delivery belongs to the background service.
   useEffect(() => {
     const refresh = () => void refetch()
     window.addEventListener('ramu:git-updated', refresh)
-    const timer = pending
-      ? setInterval(() => {
-          if (document.hasFocus()) refresh()
-        }, 30_000)
-      : undefined
+    const timer =
+      pr?.state === 'open'
+        ? setInterval(() => {
+            if (document.hasFocus()) refresh()
+          }, 30_000)
+        : undefined
     return () => {
       window.removeEventListener('ramu:git-updated', refresh)
       clearInterval(timer)
     }
-  }, [refetch, pending])
+  }, [refetch, pr?.state])
 
   if (!status?.remote || !status.branch || !query.data) return null
   const { availability } = query.data
@@ -108,6 +122,14 @@ export function PullRequestSection({
     if (!pr) return
     setStarting(kind)
     try {
+      const sessionId = await invoke('forge.sendFeedback', taskId, binding.repoId, kind)
+      if (sessionId) {
+        const session = await invoke('agent.get', sessionId)
+        await ws.refresh()
+        ws.openTask(session.taskId)
+        ws.openView(session.taskId, { kind: 'agent', sessionId })
+        return
+      }
       const prompt = await invoke('forge.pullRequestFeedback', taskId, binding.repoId, kind)
       await startCheckoutChat(
         ws,
@@ -122,6 +144,19 @@ export function PullRequestSection({
       reportError(errorText(error))
     } finally {
       setStarting(null)
+    }
+  }
+
+  const setWatch = async (sessionId: string) => {
+    if (!pr) return
+    setWatching(true)
+    try {
+      await invoke('forge.watch', taskId, binding.repoId, pr.url, sessionId || null)
+      await refreshWatch()
+    } catch (error) {
+      reportError(errorText(error))
+    } finally {
+      setWatching(false)
     }
   }
 
@@ -233,6 +268,28 @@ export function PullRequestSection({
               {starting === 'reviews' ? t('Starting…') : t('Address review comments')}
             </Button>
           </div>
+          {watchQuery.data && (
+            <div className="flex flex-col gap-1.5">
+              <Dropdown
+                label={t('Watch in thread')}
+                placeholder={t('Watch in thread')}
+                value={watchQuery.data.sessionId ?? ''}
+                options={[
+                  { value: '', label: t('Watch off') },
+                  ...watchQuery.data.threads.map((thread) => ({ value: thread.id, label: thread.title })),
+                ]}
+                onChange={(value) => void setWatch(value)}
+                disabled={watching || (!watchQuery.data.threads.length && !watchQuery.data.sessionId)}
+              />
+              <p className="text-caption text-muted-foreground">
+                {watchQuery.data.sessionId
+                  ? t(
+                      'New failures and requested changes return to this thread, even with the window closed. You review and push.',
+                    )
+                  : t('Choose a thread to handle new failures and requested changes automatically.')}
+              </p>
+            </div>
+          )}
         </>
       )}
     </div>

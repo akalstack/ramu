@@ -26,6 +26,8 @@ export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
   summaryOnHome: true,
 }
 export interface ManagedSkill {
+  /** Present only for approved external installs. Supporting files are base64, never executed by Ramu. */
+  installation?: { source: string; skill: string; cliVersion: string; markdown: string; files: Record<string, string> }
   id: string
   projectId: string | null
   name: string
@@ -44,6 +46,18 @@ export interface ManagedSkill {
   changedBy?: 'learning' | 'cleanup' | 'user' | 'review'
   /** Why a review chat made this revision. */
   changeNote?: string
+}
+
+export interface SkillInstallPreview {
+  id: string
+  source: string
+  projectId: string | null
+  name: string
+  description: string
+  markdown: string
+  files: { path: string; bytes: number; script: boolean }[]
+  updatingId?: string
+  changes: { added: string[]; changed: string[]; removed: string[] }
 }
 export interface LearningJob {
   sessionTitle?: string

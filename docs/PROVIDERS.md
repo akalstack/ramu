@@ -56,3 +56,7 @@ Ramu's advisor replaces Claude Code's configured advisor for threads it starts, 
 ## Checks
 
 Simulated fixtures check adapters and transcripts; they do not verify every live runtime. For advisor UI checks, build and run `pnpm test:e2e advisor`. Provider authentication and real model calls need separate validation.
+
+## First run
+
+A new profile with no projects opens a short setup flow. It detects installed provider CLIs, offers their existing sign-in flows, lets you choose a default provider, and opens a repository picker. **Check again** refreshes sign-in status after using the setup terminal. **Set up later** keeps the normal workspace available; established profiles keep their projects and do not repeat onboarding. Authentication stays with the provider runtime.

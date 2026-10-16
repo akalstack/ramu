@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { AgentSessionInfo, QueuedMessage, Attachment } from '@ramu/shared/types'
 import { combineQueued } from './inputQueue'
 import { WRITING_STATES } from './constants'
+import { currentBranch } from '../workspace/git'
 import type { GoalManager } from './goalManager'
 import type { ProviderWaits } from './providerWait'
 import type { SessionRecorder } from './sessionRecorder'
@@ -87,6 +88,18 @@ export class MessageDispatcher {
     if (this.sendingMessages.has(messageId)) throw new Error('This message is already being sent.')
     const message = this.host.queued(id).find((entry) => entry.id === messageId)
     if (!message) throw new Error('That message has already been sent or removed.')
+    if (message.checkout) {
+      this.sendingMessages.add(messageId)
+      try {
+        await this.validateCheckout(message)
+      } finally {
+        this.sendingMessages.delete(messageId)
+      }
+      if (this.host.providerWait(id)) {
+        this.host.scheduleProvider(id)
+        return
+      }
+    }
     if (WRITING_STATES.includes(session.state)) {
       if (!this.canSteer(session, true))
         throw new Error(
@@ -123,6 +136,27 @@ export class MessageDispatcher {
 
   updateQueue(id: string, messages: QueuedMessage[], paused = this.host.queuePaused(id)): void {
     this.host.record(id, { kind: 'queue', messages, paused })
+  }
+
+  /** Durable background input; preserve a user's paused queue and never steer a running turn. */
+  enqueueBackground(id: string, text: string, checkout: NonNullable<QueuedMessage['checkout']>): void {
+    this.host.get(id)
+    this.updateQueue(id, [...this.host.queued(id), { id: randomUUID(), text, mode: 'queue', checkout }])
+    this.workspaceQueue.add(id)
+    this.wakeWorkspaceQueue()
+  }
+
+  /** Re-register durable background messages after a service restart without unpausing user input. */
+  wakeBackground(id: string): void {
+    if (this.host.queuePaused(id) || !this.host.queued(id).some((message) => message.checkout)) return
+    if (['needs-input', 'stopped', 'failed'].includes(this.host.get(id).state)) return
+    this.workspaceQueue.add(id)
+    this.wakeWorkspaceQueue()
+  }
+
+  private async validateCheckout(message: QueuedMessage): Promise<void> {
+    if (message.checkout && (await currentBranch(message.checkout.cwd)) !== message.checkout.branch)
+      throw new Error(`Pull request feedback is waiting for branch ${message.checkout.branch}. Switch back to send it.`)
   }
 
   /** Stop holds queued messages so they do not fire at a stopped chat. An empty queue has nothing to hold, and a hidden pause would block later resumes. */
@@ -282,9 +316,10 @@ export class MessageDispatcher {
       return
     const messages = this.host.queued(id),
       first = messages[0]
-    if (!first) return
-    // A review follow-up carries its own validation, so it is never merged with other messages.
-    const batch = first.reviewId ? [first] : messages.filter((entry) => !entry.reviewId)
+    if (!first || this.sendingMessages.has(first.id)) return
+    // Checkout-specific feedback and review follow-ups carry their own validation and stay separate.
+    const batch =
+      first.reviewId || first.checkout ? [first] : messages.filter((entry) => !entry.reviewId && !entry.checkout)
     if (this.workspaceBusy(this.host.get(id).covers, id)) {
       this.workspaceQueue.add(id)
       return
@@ -297,9 +332,14 @@ export class MessageDispatcher {
     )
     const combined = combineQueued(batch)
     try {
+      if (first.checkout) await this.validateCheckout(first)
       await this.host.send(id, combined.text, combined.attachments, combined.reviewId)
     } catch (error) {
-      this.updateQueue(id, [...batch, ...this.host.queued(id)], first.reviewId ? true : this.host.queuePaused(id))
+      this.updateQueue(
+        id,
+        [...batch, ...this.host.queued(id)],
+        first.reviewId || first.checkout ? true : this.host.queuePaused(id),
+      )
       this.host.record(id, { kind: 'error', message: `Queued message was not sent: ${String(error)}` })
     }
   }

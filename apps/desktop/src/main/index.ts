@@ -11,6 +11,7 @@ import { type AppPreferences } from '@ramu/shared/types'
 import { join } from 'node:path'
 import {
   app,
+  crashReporter,
   BrowserWindow,
   Menu,
   session,
@@ -95,6 +96,16 @@ async function main() {
   const daemonPath = join(import.meta.dirname, 'daemon.js')
   // This computer's server always runs. Paired computers connect alongside it, each with its own window (see openComputer).
   const runtime = await ensureRuntime(userData, daemonPath)
+  const diagnosticPreferences = await runtimeInvoke(runtime, 'settings.app.get')
+  if (diagnosticPreferences.localCrashReports) {
+    crashReporter.start({ productName: 'Ramu', uploadToServer: false, extra: {}, globalExtra: {} })
+    app.on('render-process-gone', () => {
+      void runtimeInvoke(runtime, 'diagnostics.nativeEvent', ['renderer-crash']).catch(() => {})
+    })
+    process.on('uncaughtExceptionMonitor', () => {
+      void runtimeInvoke(runtime, 'diagnostics.nativeEvent', ['desktop-crash']).catch(() => {})
+    })
+  }
   const servers = new RemoteServers(join(userData, 'remote-servers.json'), {
     get available() {
       return safeStorage.isEncryptionAvailable()
@@ -619,7 +630,7 @@ async function main() {
         throw new Error('That computer is not connected')
       if (
         typeof operation !== 'string' ||
-        !/^(providers\.|updates\.|background\.|network\.|memory\.|learning\.|summaries\.|codex\.hook\.|advisor\.claude$)/.test(
+        !/^(providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|summaries\.|codex\.hook\.|advisor\.claude$|projects\.list$|diagnostics\.(export|clear)$)/.test(
           operation,
         ) ||
         !Array.isArray(parameters)

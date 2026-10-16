@@ -8,6 +8,7 @@ import type {
   ContextUsage,
   AppPreferences,
   AgentEvent,
+  AgentTask,
   AgentScope,
   AgentSessionInfo,
   AgentProvider,
@@ -390,6 +391,36 @@ export class AgentService {
     return this.parts.store.list(...args)
   }
 
+  all() {
+    const sessions = this.parts.store.all()
+    const ids = new Set(sessions.map((session) => session.id))
+    const native = this.db
+      .prepare("SELECT session_id, event FROM agent_events WHERE json_extract(event,'$.kind')='agent'")
+      .all() as { session_id: string; event: string }[]
+    const rows = new Map<string, AgentSessionInfo>()
+    for (const row of native) {
+      const task = JSON.parse(row.event) as AgentTask
+      const parent = sessions.find((s) => s.id === row.session_id && !s.parentId)
+      if (!parent || ids.has(task.agentId) || task.taskType === 'local_bash') continue
+      const running =
+        task.status === 'running' &&
+        (['running', 'starting', 'needs-input'].includes(parent.state) || (parent.state === 'idle' && task.background))
+      rows.set(`${parent.id}:${task.agentId}`, {
+        ...parent,
+        id: `native:${parent.id}:${task.agentId}`,
+        parentId: parent.id,
+        title: task.name,
+        provider: task.provider ?? parent.provider,
+        settings: { ...parent.settings, model: task.model ?? parent.settings.model },
+        state: running ? 'running' : task.status === 'failed' ? 'failed' : 'idle',
+        pendingInput: false,
+        waitingUntil: null,
+        nativeTask: task,
+      })
+    }
+    return [...sessions, ...rows.values()]
+  }
+
   get(...args: Parameters<SessionStore['get']>) {
     return this.parts.store.get(...args)
   }
@@ -426,6 +457,10 @@ export class AgentService {
     return this.parts.store.queued(...args)
   }
 
+  queuePaused(...args: Parameters<SessionStore['queuePaused']>) {
+    return this.parts.store.queuePaused(...args)
+  }
+
   removeQueued(...args: Parameters<MessageDispatcher['removeQueued']>) {
     return this.parts.dispatcher.removeQueued(...args)
   }
@@ -444,6 +479,14 @@ export class AgentService {
 
   submit(...args: Parameters<MessageDispatcher['submit']>) {
     return this.parts.dispatcher.submit(...args)
+  }
+
+  enqueueBackground(...args: Parameters<MessageDispatcher['enqueueBackground']>) {
+    return this.parts.dispatcher.enqueueBackground(...args)
+  }
+
+  wakeBackground(...args: Parameters<MessageDispatcher['wakeBackground']>) {
+    return this.parts.dispatcher.wakeBackground(...args)
   }
 
   validateSettings(...args: Parameters<CatalogService['validateSettings']>) {
