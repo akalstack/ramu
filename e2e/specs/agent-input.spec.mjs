@@ -64,7 +64,7 @@ ramu.test('connector forms keep drafts, validate, and return typed values', asyn
   })
   await until(() => has(chat.session, (e) => e.kind === 'elicitation'), 'connector form')
   await showChat(ramu, chat)
-  let form = page.locator('.elicitation-card:visible')
+  let form = page.locator('.agent-view:visible .elicitation-card')
   await form.getByLabel('Answer: Worker count', { exact: true }).fill('2')
   await form.getByLabel('No', { exact: true }).check()
   await form.getByLabel('Jakarta', { exact: true }).check()
@@ -82,7 +82,7 @@ ramu.test('connector forms keep drafts, validate, and return typed values', asyn
     .locator('.task-row')
     .filter({ has: page.getByText(chat.task.title, { exact: true }) })
     .click()
-  form = page.locator('.elicitation-card:visible')
+  form = page.locator('.agent-view:visible .elicitation-card')
   await form.waitFor()
   check(
     (await form.getByLabel('Answer: Worker count', { exact: true }).inputValue()) === '2' &&
@@ -240,6 +240,8 @@ ramu.test('obsolete questions keep their reason visible', async () => {
   )
 })
 
+// Claude Code and Codex answer blocking questions natively when async questions are off, so Ramu's own
+// blocking flow is exercised with a provider that has no native tool.
 ramu.test('with async questions off, the run blocks until the group is answered', async () => {
   const preferences = await api('settings.app.get')
   await api('settings.app.set', { ...preferences, asyncQuestions: false })
@@ -247,6 +249,7 @@ ramu.test('with async questions off, the run blocks until the group is answered'
     const chat = await startChat(ramu, {
       title: 'Questions wait when disabled',
       prompt: '[questions together]',
+      settings: { provider: 'opencode', model: 'fake-opencode', effort: null, access: 'full', autoFallback: false },
       state: 'needs-input',
     })
     await openQuestions(chat)

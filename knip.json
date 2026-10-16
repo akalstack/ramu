@@ -3,10 +3,9 @@
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
-      "entry": ["scripts/**/*.mjs", "e2e/run.mjs", "e2e/specs/*.spec.mjs", "e2e/perf/*.spec.mjs"],
+      "entry": ["scripts/**/*.mjs", "e2e/specs/*.spec.mjs", "e2e/perf/*.spec.mjs"],
       "ignoreBinaries": ["swift"],
-      "ignoreDependencies": ["node-pty"],
-      "ignoreUnresolved": ["\\.\\./apps/mobile/src/runtime/transport\\.ts"]
+      "ignoreDependencies": ["node-pty"]
     },
     "apps/desktop": {
       "entry": ["forge.config.cjs", "src/preload/*.ts"],
@@ -28,9 +27,6 @@
     "apps/mobile": {
       "ignoreDependencies": ["expo-updates"],
       "entry": ["plugins/*.cjs"]
-    },
-    "apps/server": {
-      "ignoreBinaries": ["rtk"]
     }
   }
 }

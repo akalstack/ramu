@@ -11,10 +11,6 @@ import { useWorkspace } from '../workspace/workspace'
 import { ReviewDiff } from '../git/ReviewDiff'
 import { errorText } from '../workspace/TaskPane'
 
-export function UndoRun(props: { sessionId: string; userSeq: number; onRestored: () => void }) {
-  return <UndoFiles {...props} />
-}
-
 export function UndoReview({ reviewId, disabled = false }: { reviewId: string; disabled?: boolean }) {
   return <UndoFiles reviewId={reviewId} disabled={disabled} onRestored={() => {}} />
 }

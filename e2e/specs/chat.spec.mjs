@@ -118,6 +118,9 @@ ramu.test(
       page.locator('.tool-group').filter({ has: page.locator('.tool-group-label', { hasText: label }) })
     const running = group('Running 3 commands')
     await running.waitFor()
+    // Groups start collapsed, so open this one to read its commands.
+    if ((await running.getAttribute('data-open')) === null)
+      await running.locator('[data-slot=collapsible-trigger]').first().click()
     await ramu.until(
       async () =>
         (await running.locator('.tool-summary').allTextContents()).filter((t) => t.startsWith('Ran ')).length === 2,
