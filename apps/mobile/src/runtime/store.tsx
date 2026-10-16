@@ -146,7 +146,7 @@ const settingsFor = (provider: AgentProvider, model: string, effort: string): Ag
   provider,
   model,
   effort: (effort || null) as AgentSettings['effort'],
-  access: 'auto',
+  access: 'full',
   autoFallback: true,
 })
 

@@ -13,9 +13,21 @@
   flex-direction: column;
   gap: 12px;
   max-height: min(52vh, 460px);
-  overflow: auto;
+  overflow: hidden;
   padding: 8px 16px 12px;
   outline: none;
+}
+/* The options scroll; the header and the answer buttons stay in view. */
+.question-dock-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+}
+.question-dock-card > .question-dock-actions {
+  flex: none;
 }
 .question-dock-card fieldset {
   display: flex;

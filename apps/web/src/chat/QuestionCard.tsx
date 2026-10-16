@@ -279,71 +279,73 @@ function QuestionForm({
           <ChevronDown size={14} />
         </Button>
       </header>
-      {request.dependsOn && (
-        <p className="small text-caption question-dock-needed m-0">
-          <span className="muted text-muted-foreground">{t('Answer needed for: ')}</span>
-          {request.dependsOn}
-        </p>
-      )}
-      {questions.length > 1 && (
-        <p className="muted text-muted-foreground small text-caption question-dock-note m-0">
-          {together
-            ? t('These questions are related; send their answers together.')
-            : t('Each answer can be sent separately.')}
-        </p>
-      )}
-      <fieldset key={key} disabled={busy || !!answered}>
-        <legend>{q.question}</legend>
-        {q.options.length > 0 && (
-          <div className="question-options grid gap-2">
-            {q.options.map((option, index) => (
-              <label
-                key={option.label}
-                className={`option [.question-card_&]:items-center [.question-card_&_input]:w-4 [.question-card_&_input]:h-4 [.question-card_&_input]:flex-none [.question-card_&_input]:p-0 [.question-card_&_input]:m-0 [.question-card_&_>_span]:min-w-0 [.elicitation-card_&]:flex [.elicitation-card_&]:items-center [.elicitation-card_&]:gap-2 [.elicitation-card_&]:m-[8px_0] p-[4px_0] ${selected.has(option.label) ? ' selected' : ''}`}
-              >
-                <input
-                  type={q.multiSelect ? 'checkbox' : 'radio'}
-                  name={`${request.requestId}:${key}`}
-                  checked={selected.has(option.label)}
-                  onChange={() => choose(option.label)}
-                />
-                {index < 9 && (
-                  <Kbd
-                    className="question-option-key flex-none min-w-5 h-5 inline-grid place-items-center [border:1px_solid_transparent] rounded-(--radius-xs) [font:500_11px_var(--mono)] text-muted-foreground bg-fill"
-                    aria-hidden="true"
-                  >
-                    {index + 1}
-                  </Kbd>
-                )}
-                <span>
-                  {option.label}
-                  {option.description && (
-                    <span className="muted text-muted-foreground block small text-caption">{option.description}</span>
-                  )}
-                </span>
-              </label>
-            ))}
-          </div>
-        )}
-        <Input
-          className="question-answer"
-          aria-label={t('Answer: {0}', { '0': q.question })}
-          placeholder={q.options.length ? t('Or type your own answer') : t('Type your answer')}
-          value={typed}
-          maxLength={10000}
-          onChange={(event) => setDrafts((old) => ({ ...old, [key]: event.target.value }))}
-        />
-        {answered && (
-          <p className="outcome text-caption text-muted-foreground mt-1.5">
-            {t('Answer submitted: {0}', { '0': answered })}
+      <div className="question-dock-body">
+        {request.dependsOn && (
+          <p className="small text-caption question-dock-needed m-0">
+            <span className="muted text-muted-foreground">{t('Answer needed for: ')}</span>
+            {request.dependsOn}
           </p>
         )}
-      </fieldset>
-      {error && (
-        <p className="error text-bad" role="alert">
-          {error}
-        </p>
-      )}
+        {questions.length > 1 && (
+          <p className="muted text-muted-foreground small text-caption question-dock-note m-0">
+            {together
+              ? t('These questions are related; send their answers together.')
+              : t('Each answer can be sent separately.')}
+          </p>
+        )}
+        <fieldset key={key} disabled={busy || !!answered}>
+          <legend>{q.question}</legend>
+          {q.options.length > 0 && (
+            <div className="question-options grid gap-2">
+              {q.options.map((option, index) => (
+                <label
+                  key={option.label}
+                  className={`option [.question-card_&]:items-center [.question-card_&_input]:w-4 [.question-card_&_input]:h-4 [.question-card_&_input]:flex-none [.question-card_&_input]:p-0 [.question-card_&_input]:m-0 [.question-card_&_>_span]:min-w-0 [.elicitation-card_&]:flex [.elicitation-card_&]:items-center [.elicitation-card_&]:gap-2 [.elicitation-card_&]:m-[8px_0] p-[4px_0] ${selected.has(option.label) ? ' selected' : ''}`}
+                >
+                  <input
+                    type={q.multiSelect ? 'checkbox' : 'radio'}
+                    name={`${request.requestId}:${key}`}
+                    checked={selected.has(option.label)}
+                    onChange={() => choose(option.label)}
+                  />
+                  {index < 9 && (
+                    <Kbd
+                      className="question-option-key flex-none min-w-5 h-5 inline-grid place-items-center [border:1px_solid_transparent] rounded-(--radius-xs) [font:500_11px_var(--mono)] text-muted-foreground bg-fill"
+                      aria-hidden="true"
+                    >
+                      {index + 1}
+                    </Kbd>
+                  )}
+                  <span>
+                    {option.label}
+                    {option.description && (
+                      <span className="muted text-muted-foreground block small text-caption">{option.description}</span>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+          <Input
+            className="question-answer"
+            aria-label={t('Answer: {0}', { '0': q.question })}
+            placeholder={q.options.length ? t('Or type your own answer') : t('Type your answer')}
+            value={typed}
+            maxLength={10000}
+            onChange={(event) => setDrafts((old) => ({ ...old, [key]: event.target.value }))}
+          />
+          {answered && (
+            <p className="outcome text-caption text-muted-foreground mt-1.5">
+              {t('Answer submitted: {0}', { '0': answered })}
+            </p>
+          )}
+        </fieldset>
+        {error && (
+          <p className="error text-bad" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
       <div className="question-dock-actions flex flex-wrap items-center gap-2 pt-1">
         {async && (
           <Button

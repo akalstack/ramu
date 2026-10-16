@@ -73,7 +73,7 @@ describe('Cursor SDK runner', () => {
     const events: AgentEvent[] = []
     const runner = new CursorSession(
       scope,
-      { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor' },
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', access: 'auto' },
       (e) => events.push(e),
       false,
       sdk,

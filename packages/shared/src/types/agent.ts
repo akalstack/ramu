@@ -34,7 +34,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   provider: 'claude-code',
   model: '',
   effort: null,
-  access: 'auto',
+  access: 'full',
   autoFallback: true,
   serviceTier: 'standard',
 }

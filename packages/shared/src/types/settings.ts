@@ -130,7 +130,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   cleanupArchivedDays: 90,
   terminalTabPosition: 'top',
   defaultTerminalDock: 'bottom',
-  defaultAccess: 'auto',
+  defaultAccess: 'full',
   defaultAutoFallback: true,
   favoriteModels: [],
   notifyAgentDone: true,
