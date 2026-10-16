@@ -2,7 +2,19 @@
 
 Review of the desktop Home (`apps/web/src/NewTask.tsx` start box and `apps/web/src/Home.tsx` feed), 2026-10-16, made from the code and from e2e screenshots of the built app at 1440×900 with a project, two running threads and two schedules. The mobile app has its own section at the end. The marketing site (`apps/site`) is out of scope.
 
-This is a plan only. Nothing here is implemented.
+**Status (2026-10-16).** Part of step 1 is implemented; the rest and step 2 (Inbox) and the mobile plan are not.
+
+Done on desktop:
+
+- One `FeedSection` heading style (`HomeSection.tsx`) for agents, recaps, **What Ramu learned** and **Coming up**; agent cards are borderless and compact (the separate Open button is gone; the title opens the thread).
+- Order: waiting agents, then recaps that need attention, then running and usage-limited agents, then recaps since your last visit, learned and upcoming. Recaps and schedules show three rows with **Show all**.
+- Hero compacts (smaller minimum height, mark hidden) whenever the feed has content.
+- "Since your last visit" now means since you left the app, so recaps no longer disappear on the next visit to Home.
+- The background-service line shows only when the service is stopped, with a **Start** button. Recap freshness moved into the refresh button's tooltip.
+- The heading no longer duplicates the project menu; with no projects Home offers **Open a folder**.
+
+Not done: Inbox page, remembering the last-used project, schedule deep links, recap undo and snooze choices (need server support), the mobile Inbox. The default project was left alone because many specs assume "No project".
+
 
 > **Revised after commit 1e60ad1 (2026-10-16).** That commit landed after the first draft of this review. It replaced the **Running in the background** list with `HomeAgents.tsx` (an agents overview: Waiting for your input, Running, Waiting for allowance, and a collapsed Completed group, with Open/Stop buttons and inline question, approval and form cards), shrank the hero when agents are present, hid the checkout chip behind an icon, and added a first-run `Onboarding` dialog. Findings 1, 2, 6 and 8 below are updated for it; the rest are unchanged.
 
@@ -69,14 +81,14 @@ Check these before and after any change:
 
 - `HomeFeed` (which now renders `HomeAgents`) is shared by Home and by New thread via `NewTask feed` (`NewTask.tsx`); a change to the feed changes both. `HomeAgents` has its own server test (`apps/server/test/agentsOverview.test.ts`, `agent.all`) and documentation in `docs/AGENTS.md` ("Agents overview"). `feed={false}` is used when the box is docked beside a file.
 - `e2e/specs/summaries.spec.mjs` depends on the `Home` button and `.learned-card`; `e2e/specs/settings.spec.mjs` depends on the **Refresh recap** button being visible, and hidden when daily recaps are off.
-- `chat`, `layout`, `panels` and `workspace` specs also click the **Home** button; run them too.
+- `chat`, `layout`, `panels`, `workspace` and `i18n` specs also click the **Home** button, and `comparison-plan.spec.mjs` pins the `HomeAgents` structure (`.home-agents`, section labels, headings, `article` rows, Show completed); run them too.
 - Docs that describe Home: `docs/AGENTS.md` ("Home lists it under **Running in the background**"), `docs/AUTOMATION.md` (Home recaps), `docs/LEARNING.md` (Home summary card). Update them with the change.
 - Every new label needs an Indonesian entry in `packages/shared/src/locales/id.ts`; remove strings for removed copy (`docs/LOCALIZATION.md`). `pnpm test:e2e i18n` covers switching.
 - Shell layout changes (a new nav row, a new global page) touch `App.tsx` page switching, saved workspace state (`sidebar` values) and the command palette; add a palette command and a shortcut for Inbox that does not clash with existing ones.
 
 ## Verification
 
-Build, then run `pnpm test:e2e summaries settings chat layout panels workspace i18n`. Attach before/after screenshots at 1440×900 and 1280×720 with: no content, a running thread, a needs-input thread, a recap, and a stopped background service. Follow the repo's rule to report which checks ran (`CONTRIBUTING.md`). Run `pnpm check` before pushing.
+Build, then run `pnpm test:e2e summaries settings chat layout panels workspace i18n comparison-plan`. Attach before/after screenshots at 1440×900 and 1280×720 with: no content, a running thread, a needs-input thread, a recap, and a stopped background service. Follow the repo's rule to report which checks ran (`CONTRIBUTING.md`). Run `pnpm check` before pushing.
 
 ## Suggested order of work
 

@@ -281,17 +281,25 @@ export function NewTask({
             t('What should we work on?')
           ) : (
             <>
-              {t('What should we work on in')}{' '}
-              <Menu
-                label={t('Project')}
-                icon={<span className="start-project">{project?.name ?? t('a project')}</span>}
-                className="start-project-btn [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:[text-decoration-color:var(--text)] inline bg-transparent [border:none] p-0 [font:inherit] text-foreground [text-decoration:underline] [text-decoration-color:rgba(255,_255,_255,_0.35)] [text-underline-offset:5px] [text-decoration-thickness:1px] cursor-pointer"
-                items={projectItems}
-              />
-              ?
+              {t('What should we work on in')} <span className="start-project">{project?.name ?? t('a project')}</span>?
             </>
           )}
         </h1>
+        {ws.projects.length === 0 && (
+          <div className="flex flex-col items-center gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="bg-fill hover:bg-fill-hover"
+              disabled={addProject.busy}
+              onClick={() => void addProject.add()}
+            >
+              <FolderClosed size={14} />
+              {t('Open a folder')}
+            </Button>
+            <p className="muted text-muted-foreground small text-caption m-0">{t('or drop a folder here')}</p>
+          </div>
+        )}
         {repos.length > 0 && (
           <p className="muted text-muted-foreground start-repos m-0 text-control">
             {repos.map((r) => r.name).join(' · ')}
@@ -480,7 +488,7 @@ export function NewTask({
       }}
       className={`home-page${folderOver ? ' outline-dashed outline-1 -outline-offset-4 outline-(--line-strong)' : ''} [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer-bar_.dropdown-trigger.control-btn]:h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:min-h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:p-[4px_8px] [&_.composer-bar_.dropdown-trigger.control-btn]:bg-transparent [&_.composer-bar_.dropdown-trigger.control-btn]:text-control [&_.composer-bar_.dropdown-trigger.control-btn]:leading-[normal] w-full h-full overflow-auto flex flex-col items-stretch p-[0_24px_24px]`}
     >
-      <div className="home-start [&_.start-view]:min-h-[min(560px,_72vh)] [.home-page:has(.home-agents)_&_.start-view]:min-h-[min(320px,_42vh)] [&_.start-view]:pt-2 [&_.start-hero]:mb-[22px] [&_.start-hero_h1]:text-hero [&_.start-mark]:block [&_.start-dock]:pl-0 [&_.start-dock]:pr-0 [&_.start-dock]:max-w-[none] w-full max-w-[760px] m-[0_auto] [border:0]">
+      <div className="home-start [&_.start-view]:min-h-[min(440px,_56vh)] [.home-page:has(.home-section,_.home-agents)_&_.start-view]:min-h-[min(240px,_32vh)] [.home-page:has(.home-section,_.home-agents)_&_.start-mark]:hidden! [&_.start-view]:pt-2 [&_.start-hero]:mb-[22px] [&_.start-hero_h1]:text-hero [&_.start-mark]:block [&_.start-dock]:pl-0 [&_.start-dock]:pr-0 [&_.start-dock]:max-w-[none] w-full max-w-[760px] m-[0_auto] [border:0]">
         {start}
       </div>
       <HomeFeed />

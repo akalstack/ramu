@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
@@ -15,6 +15,7 @@ import { PermissionRequestCard } from './views/agent/components/PermissionReques
 import { ElicitationCard } from './chat/ElicitationCard'
 import { notifyError } from './chat/Notifications'
 import { errorText } from './lib/errors'
+import { FeedSection } from './HomeSection'
 
 function PendingInput({ sessionId }: { sessionId: string }) {
   const { events } = useAgentStream(sessionId)
@@ -67,7 +68,8 @@ function PendingInput({ sessionId }: { sessionId: string }) {
   )
 }
 
-export function HomeAgents() {
+/** `attention` (recaps that need you) sits right under the agents waiting for input, so everything that needs you reads together. */
+export function HomeAgents({ attention }: { attention?: ReactNode }) {
   useLanguage()
   const ws = useWorkspace()
   const sessions = useQuery({
@@ -113,10 +115,11 @@ export function HomeAgents() {
     const members = rows.filter((session) => group(session) === status)
     if (!members.length) return null
     return (
-      <section className="flex flex-col gap-2" aria-label={t(status)}>
-        <h2 className="font-medium">
-          {t(status === 'Running' ? 'Running in the background' : status)} · {members.length}
-        </h2>
+      <FeedSection
+        title={t(status === 'Running' ? 'Running in the background' : status)}
+        count={members.length}
+        label={t(status)}
+      >
         {members.map((session) => {
           const task = ws.tasks.find((task) => task.id === session.taskId)!
           const project = ws.projects.find((project) => project.id === task.projectId)
@@ -126,19 +129,21 @@ export function HomeAgents() {
               .flatMap((review) => review.files.map((file) => `${file.repoId}:${file.path}`)),
           ).size
           return (
-            <article key={session.id} className="rounded-lg border border-border p-3 flex flex-col gap-2">
+            <article key={session.id} className="flex flex-col gap-1 rounded-(--radius-m) bg-card p-3">
               <div className="flex items-center gap-2">
-                <Button variant="ghost" className="min-w-0 flex-1 justify-start" onClick={() => open(session)}>
+                <Button
+                  variant="ghost"
+                  className="min-w-0 flex-1 justify-start! text-left"
+                  onClick={() => open(session)}
+                >
                   {session.parentId ? session.title || t('Helper') : task.title}
                 </Button>
                 {session.parentId && <Badge variant="secondary">{t('Helper')}</Badge>}
-                <Button size="sm" variant="outline" onClick={() => open(session)}>
-                  {t('Open')}
-                </Button>
                 {status !== 'Done' && (
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="ghost"
+                    className="text-muted-foreground"
                     disabled={!!session.nativeTask && !session.nativeTask.canStop}
                     onClick={() => {
                       setError('')
@@ -177,13 +182,13 @@ export function HomeAgents() {
             </article>
           )
         })}
-      </section>
+      </FeedSection>
     )
   }
   const completed = rows.filter((session) => group(session) === 'Done').length
-  if (!rows.length && !error && !sessions.error) return null
+  if (!rows.length && !error && !sessions.error && !attention) return null
   return (
-    <div className="home-agents mt-5 flex flex-col gap-4">
+    <div className="home-agents mt-3 flex flex-col gap-4">
       {(error || sessions.error) && (
         <p role="alert" className="text-bad">
           {error || errorText(sessions.error)}
@@ -192,6 +197,7 @@ export function HomeAgents() {
       {['Waiting for your input', 'Running', 'Waiting for allowance'].map((status) => (
         <div key={status} className="contents">
           {renderGroup(status)}
+          {status === 'Waiting for your input' && attention}
         </div>
       ))}
       {completed > 0 && (

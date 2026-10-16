@@ -1579,6 +1579,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Hide Ramu": "Sembunyikan Ramu",
   "Hide others": "Sembunyikan lainnya",
   "Show all": "Tampilkan semua",
+  "Open a folder": "Buka folder",
+  "or drop a folder here": "atau seret folder ke sini",
   "Quit Ramu": "Keluar dari Ramu",
   "Today": "Hari ini",
   "Yesterday": "Kemarin",

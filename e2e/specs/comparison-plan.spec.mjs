@@ -89,7 +89,7 @@ ramu.test('helper rows open their transcript with a parent breadcrumb', async ()
   const row = page
     .locator('.home-agents article')
     .filter({ has: page.getByRole('button', { name: helper.title, exact: true }) })
-  await row.getByRole('button', { name: 'Open', exact: true }).click()
+  await row.getByRole('button', { name: helper.title, exact: true }).click()
   if (helper.nativeTask) await page.locator('.agent-panel').waitFor()
   else {
     await page.getByRole('button', { name: 'Back to parent thread', exact: true }).click()

@@ -655,11 +655,21 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
       setBusy(false)
     }
   }
+  // Running is the normal state and the status bar already shows when it is not; only a stopped service needs a prompt here.
   if (compact)
-    return (
-      <span className="inline-flex items-center gap-[7px] text-[11px] text-muted-foreground">
-        <span className={`size-1.5 rounded-full ${connected ? 'bg-(--ok)' : 'bg-[#8b8b91]'}`} />
-        {connected ? t('Background service running') : t('Background service stopped')}
+    return connected ? null : (
+      <span className="inline-flex items-center gap-2 text-control text-muted-foreground" role="status">
+        <span className="size-1.5 rounded-full bg-(--warn)" />
+        {t('Background service stopped')}
+        <Button
+          variant="secondary"
+          size="sm"
+          className="bg-fill hover:bg-fill-hover"
+          disabled={busy}
+          onClick={() => void act(() => invoke('background.start'))}
+        >
+          {t('Start')}
+        </Button>
       </span>
     )
   return (

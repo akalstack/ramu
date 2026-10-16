@@ -6,6 +6,7 @@ import { openSummary } from './openSummary'
 import { homeSummary, unreadCount } from './summaryLogic'
 import { useSummaries } from './useSummaries'
 import { useAppSettings } from '../settings/AppSettings'
+import { FeedSection } from '../HomeSection'
 
 /** The latest "What Ramu learned" on Home: a short summary with an unread dot. Hidden when there is nothing to show. */
 export function LearnedCard() {
@@ -16,8 +17,7 @@ export function LearnedCard() {
   if (!summary || !snapshot) return null
   const unread = unreadCount([summary]) > 0
   return (
-    <section className="recap-group learned-card m-[20px_0]">
-      <h2 className="m-[0_0_12px] text-[length:15px] font-semibold">{t('What Ramu learned')}</h2>
+    <FeedSection title={t('What Ramu learned')} className="learned-card">
       <Button
         variant="secondary"
         className="bg-card hover:bg-card-hover h-auto w-full flex-col items-start gap-1 rounded-(--radius-m) p-4 text-left font-normal whitespace-normal"
@@ -41,6 +41,6 @@ export function LearnedCard() {
           {summary.chatIds.length > 0 ? ` · ${t('Discussed in thread')}` : ''}
         </span>
       </Button>
-    </section>
+    </FeedSection>
   )
 }
