@@ -108,28 +108,39 @@ export function Arrive({ animate, children }: { animate: boolean; children: Reac
   return <Animated.View style={{ opacity: progress, transform: [{ translateY }] }}>{children}</Animated.View>
 }
 
-/**
- * The reply being written: each growth of the text dips the block slightly and lets it settle, so new words
- * read dimmer for a moment, like the desktop's per-word fade.
- */
-export function StreamIn({ text, active, children }: { text: string; active: boolean; children: ReactNode }) {
+/** A soft breathing pulse while `active` (a tool still running), settling back to full opacity when it stops. */
+export function Breathe({ active, children }: { active: boolean; children: ReactNode }) {
   const reduced = useReducedMotion()
   const opacity = useRef(new Animated.Value(1)).current
-  const previous = useRef(text)
   useEffect(() => {
-    if (!active || reduced || text === previous.current) {
-      previous.current = text
+    if (!active || reduced) {
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: reduced ? 0 : 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start()
       return
     }
-    previous.current = text
-    opacity.setValue(0.72)
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: 380,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start()
-  }, [text, active, reduced, opacity])
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.4,
+          duration: 700,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [active, reduced, opacity])
   return <Animated.View style={{ opacity }}>{children}</Animated.View>
 }
 

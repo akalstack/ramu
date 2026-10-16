@@ -80,7 +80,7 @@ import 'monaco-editor/languages/definitions/vb/register.js'
 import 'monaco-editor/languages/definitions/wgsl/register.js'
 import 'monaco-editor/languages/definitions/xml/register.js'
 import 'monaco-editor/languages/definitions/yaml/register.js'
-import { languages } from 'monaco-editor/editor/editor.api.js'
+import { editor, languages } from 'monaco-editor/editor/editor.api.js'
 
 // JSON has no basic-language registration in Monaco; keep its highlighting local.
 languages.register({
@@ -119,3 +119,44 @@ languages.setMonarchTokensProvider('json', {
     ],
   },
 })
+
+// Monaco files .tsx and .jsx under typescript and javascript, whose TextMate grammars read `<button>` as a type
+// assertion. Separate React languages take those extensions (the later registration wins) and share the Monarch
+// configuration and fallback tokenizer, so only Shiki's tsx and jsx grammars color them.
+const REACT = {
+  typescriptreact: [
+    '.tsx',
+    ['TypeScript React', 'tsx'],
+    () => import('monaco-editor/languages/definitions/typescript/typescript.js'),
+  ],
+  javascriptreact: [
+    '.jsx',
+    ['JavaScript React', 'jsx'],
+    () => import('monaco-editor/languages/definitions/javascript/javascript.js'),
+  ],
+} as const
+const reactReady = new Map<string, Promise<void>>()
+const loadReact = (id: keyof typeof REACT) => {
+  let ready = reactReady.get(id)
+  if (!ready) {
+    ready = REACT[id][2]().then(({ conf, language }) => {
+      languages.setLanguageConfiguration(id, conf)
+      languages.setMonarchTokensProvider(id, language)
+    })
+    reactReady.set(id, ready)
+  }
+  return ready
+}
+for (const id of Object.keys(REACT) as (keyof typeof REACT)[]) {
+  languages.register({ id, extensions: [REACT[id][0]], aliases: [...REACT[id][1]] })
+  languages.onLanguage(id, () => void loadReact(id))
+}
+
+/**
+ * Resolves once Monaco has installed the language's own tokenizer. Monaco registers it lazily, after anything set
+ * before then, so a replacement tokenizer has to wait for it.
+ */
+export async function monarchReady(id: string) {
+  if (id in REACT) await loadReact(id as keyof typeof REACT)
+  else await editor.colorize('', id, {})
+}

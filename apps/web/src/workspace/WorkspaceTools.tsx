@@ -92,11 +92,19 @@ export function WorkspaceRail({ tool }: { tool: WorkspaceTool }) {
     document.documentElement.dataset.railDragging = ''
     handle.dataset.sashActive = ''
     let next = start
+    // One style write per frame, however many pointer events arrive in it.
+    let frame = 0
     const move = (e: PointerEvent) => {
       next = Math.round(Math.min(RAIL_WIDTH.max, Math.max(RAIL_WIDTH.min, start + startX - e.clientX)))
-      rail.current!.style.width = `${next}px`
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        if (rail.current) rail.current.style.width = `${next}px`
+      })
     }
     const end = () => {
+      cancelAnimationFrame(frame)
+      if (rail.current) rail.current.style.width = `${next}px`
       handle.removeEventListener('pointermove', move)
       handle.removeEventListener('pointerup', end)
       handle.removeEventListener('pointercancel', end)

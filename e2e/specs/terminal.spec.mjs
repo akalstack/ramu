@@ -111,9 +111,11 @@ ramu.test('terminal accepts keyboard input', async () => {
 })
 
 ramu.test('terminal stays interactive after switching groups', async () => {
+  // Focus stays on the tab so arrow keys keep switching groups; clicking the terminal moves it in.
   await page.getByRole('tab', { name: 'Workspace 2', exact: true }).click()
+  await page.locator(screen).click()
   await page.waitForFunction(() => document.activeElement?.matches('.terminal-pane.focused .xterm-helper-textarea'))
-  ramu.check(await isFocused(), 'switching groups focuses the new terminal')
+  ramu.check(await isFocused(), 'switching groups and clicking the terminal focuses its input')
   await typeMarker('ramu-second-input')
   await settled()
   ramu.check(true, 'terminal geometry is stable in the bottom dock')

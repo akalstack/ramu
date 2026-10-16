@@ -27,7 +27,7 @@ import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
 import { Button, Card, Divider, Sheet, T, tap, type Icon } from './ui'
 import { formatDuration } from '../runtime/turns'
-import { Disclosure, animateLayout } from './Motion'
+import { Breathe, Disclosure, animateLayout } from './Motion'
 
 const toolIcons: Record<ToolKind, Icon> = {
   read: FileCode2,
@@ -204,8 +204,10 @@ export interface ItemMeta {
   date?: string
   /** The last answer of its turn: shows its time and a copy button underneath. */
   footer?: boolean
-  /** The reply is still arriving, so its cut-off last line is completed for display. */
+  /** The reply is still arriving, so its cut-off last line is completed for display and its new words fade in. */
   streaming?: boolean
+  /** The reply began while this chat was open, so its first words fade in too. */
+  fresh?: boolean
 }
 
 export function TranscriptItemView({ item, chat, meta }: { item: TranscriptItem; chat: Chat; meta?: ItemMeta }) {
@@ -277,7 +279,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
     case 'text':
       return (
         <MessageActions text={item.text} from="assistant">
-          <Markdown text={item.text} streaming={meta?.streaming} />
+          <Markdown text={item.text} streaming={meta?.streaming} fresh={meta?.fresh} />
           {meta?.footer && !meta.streaming ? <AnswerFooter at={item.at} text={item.text} /> : null}
         </MessageActions>
       )
@@ -542,7 +544,9 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: 3 }}
       >
-        <I size={14} color={failed ? c.bad : running ? c.accent : c.muted} strokeWidth={1.8} />
+        <Breathe active={running}>
+          <I size={14} color={failed ? c.bad : running ? c.accent : c.muted} strokeWidth={1.8} />
+        </Breathe>
         <T size={font.control} tone={running ? 'soft' : 'muted'} weight="500">
           {item.verb}
         </T>

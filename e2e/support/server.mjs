@@ -7,6 +7,10 @@ import { after } from 'node:test'
 import { socketInvoke } from './app.mjs'
 import { until } from './util.mjs'
 
+// One hook for the whole file: a hook registered inside a test would run when that test ends, before a later restart.
+const servers = new Set()
+after(() => Promise.all([...servers].map((server) => server.stop())))
+
 const cli = join(resolve(import.meta.dirname, '..', '..'), 'apps', 'server', 'dist', 'cli.js')
 
 /** A free loopback port. */
@@ -86,6 +90,6 @@ export async function startServer({ name, dir, listen, env = {} }) {
       return response.json()
     },
   }
-  after(() => server.stop())
+  servers.add(server)
   return server.start()
 }

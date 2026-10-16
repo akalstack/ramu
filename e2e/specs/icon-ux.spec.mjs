@@ -89,7 +89,7 @@ ramu.test('the terminal panel closes and docks while staying in sync with the to
   await pressed('Terminal', false)
   await button('Terminal').click()
   await pressed('Terminal', true)
-  await pane.getByRole('button', { name: 'Dock terminal on right', exact: true }).click()
+  await pane.getByRole('button', { name: 'Move terminal to workspace tabs', exact: true }).click()
   await button('Hide workspace').click()
   await pressed('Terminal', false)
   await button('Show workspace').click()

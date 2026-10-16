@@ -68,8 +68,17 @@ export async function openSettings(ramu, tab) {
 export async function saveSettings(ramu) {
   await ramu.page.getByRole('button', { name: 'Save changes', exact: true }).click()
   await ramu.page.getByText(/Settings saved on/).waitFor()
-  await ramu.page.keyboard.press('Escape')
-  await ramu.page.locator('.settings-page').waitFor({ state: 'detached' })
+  // Escape is dropped while the save is still settling, so press it again until the dialog is gone.
+  await ramu.until(
+    async () => {
+      if ((await ramu.page.locator('.settings-page').count()) === 0) return true
+      await ramu.page.keyboard.press('Escape')
+      await ramu.sleep(300)
+      return false
+    },
+    'the Settings dialog never closed',
+    { attempts: 50, interval: 200 },
+  )
 }
 
 /** Opens the command palette; prefix the query with `>` to search commands instead of files. */

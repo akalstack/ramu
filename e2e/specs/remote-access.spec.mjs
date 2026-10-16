@@ -169,9 +169,19 @@ ramu.test('opening a computer shows its own window while this computer keeps its
   assert.notEqual(hostPid, localPid)
   await page.getByRole('menuitemradio', { name: /Studio/ }).click()
   await ramu.until(() => openWindows() === 2, 'remote window never opened')
-  remote = ramu.app.windows().find((w) => w !== page)
+  // `page` is a live proxy of the main window, so it cannot be compared with Playwright's pages; the paired computer's
+  // window is the one that is not showing this computer.
+  await ramu.until(async () => {
+    for (const w of ramu.app.windows()) {
+      if ((await call(w, 'computers.list')).value?.current !== 'local') return (remote = w)
+    }
+    return false
+  }, 'remote window never appeared')
   await remote.waitForSelector('.shell', { timeout: 30_000 })
-  assert.equal((await call(remote, 'background.status')).value.pid, hostPid)
+  await ramu.until(
+    async () => (await call(remote, 'background.status')).value?.pid === hostPid,
+    'the remote window never reached the paired computer',
+  )
   assert.equal((await call(page, 'background.status')).value.pid, localPid)
   const switcher = remote.locator('.computer-switcher')
   await switcher.getByText('Studio', { exact: true }).waitFor()
@@ -200,19 +210,41 @@ ramu.test('a host-revoked computer shows Pair again, stops retrying and can be p
   await invoke('computers.open', studioId)
   await host.invoke('network.revoke', (await host.invoke('network.status')).devices[0].id)
   await ramu.until(async () => (await statuses())[1] === 'rejected', 'computer never rejected', { attempts: 200 })
-  await remote.locator('.computer-switcher').getByText('Pair again', { exact: false }).first().waitFor()
-  assert.equal(await remote.locator('.status-activity').count(), 0, 'rejected retries show no activity spinner')
+  // The switcher's trigger shows only a status dot; the menu row says what to do.
+  await remote.locator('.computer-switcher').click()
+  await remote.getByRole('menuitemradio').filter({ hasText: 'Pair again' }).first().waitFor()
+  await remote.keyboard.press('Escape')
+  // The background-activity bell stays; it just must not claim to be reconnecting to a computer that rejected us.
+  assert.notEqual(
+    await remote.locator('.status-activity').getAttribute('aria-description'),
+    'Reconnecting…',
+    'rejected retries show no reconnecting state',
+  )
   const error = await invoke('computers.open', studioId).then(
     () => '',
     (e) => e.message,
   )
   assert.match(error, /no longer accepts/)
   const offer = await host.invoke('network.pair')
-  const repaired = await fetch(`${host.url}/pair`, {
-    method: 'POST',
-    body: JSON.stringify({ code: offer.code, name: 'again' }),
-  })
-  assert.equal(repaired.status, 200, 'a revoked device that stopped retrying can pair again')
+  // The host briefly locks out a peer after repeated failed auth, and the revoked device's own retries count toward
+  // that. A 429 is that lockout lifting, not a refusal; the code is only spent by a request that gets through.
+  let repaired
+  await ramu.until(
+    async () => {
+      repaired = await fetch(`${host.url}/pair`, {
+        method: 'POST',
+        body: JSON.stringify({ code: offer.code, name: 'again' }),
+      })
+      return repaired.status !== 429
+    },
+    'pairing stayed locked out',
+    { attempts: 150, interval: 500 },
+  )
+  assert.equal(
+    repaired.status,
+    200,
+    `a revoked device that stopped retrying can pair again (got ${repaired.status}: ${await repaired.text()})`,
+  )
 })
 
 ramu.test('forgetting a computer closes its window and removes the switcher', async () => {

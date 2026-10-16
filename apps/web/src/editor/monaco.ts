@@ -3,6 +3,8 @@ import { nativeMonacoMenu } from './monacoMenu'
 import * as monaco from 'monaco-editor/editor/editor.api.js'
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker'
 import './monacoLanguages'
+import { RAMU_EDITOR_COLORS } from './editorTheme'
+import { setupShiki } from './shiki'
 import 'monaco-editor/editor/browser/coreCommands.js'
 import 'monaco-editor/editor/contrib/bracketMatching/browser/bracketMatching.js'
 import 'monaco-editor/editor/contrib/caretOperations/browser/caretOperations.js'
@@ -29,27 +31,13 @@ monaco.editor.defineTheme('ramu', {
   base: 'vs-dark',
   inherit: true,
   rules: [],
-  colors: {
-    'scrollbarSlider.background': '#ffffff1a',
-    'scrollbarSlider.hoverBackground': '#ffffff30',
-    'scrollbarSlider.activeBackground': '#ffffff40',
-    'editorOverviewRuler.border': '#00000000',
-    'editor.background': '#1c1c1e',
-    'editorGutter.background': '#1c1c1e',
-    'editor.lineHighlightBackground': '#ffffff08',
-    'editorWidget.background': '#2c2c2e',
-    'diffEditor.insertedTextBackground': '#5fbd9128',
-    'diffEditor.insertedLineBackground': '#5fbd9110',
-    'diffEditor.removedTextBackground': '#e5808728',
-    'diffEditor.removedLineBackground': '#e5808710',
-    'editorGutter.addedBackground': '#5fbd91',
-    'editorGutter.modifiedBackground': '#d9a462',
-    'editorGutter.deletedBackground': '#e58087',
-  },
+  colors: RAMU_EDITOR_COLORS,
 })
 
-// Static chat code blocks share the editor's token colors even before an editor opens.
+// Static chat code blocks share the editor's token colors even before an editor opens. Monaco's own dark
+// tokens show until Shiki finishes loading; it then redefines this theme with TextMate colors.
 monaco.editor.setTheme('ramu')
+setupShiki()
 
 // Slim scrollbars everywhere, to match the rest of the app.
 const SLIM = {

@@ -3,9 +3,8 @@
 // isolated worktrees, switching chats with the sidebar hidden, and a restart that restores tabs and layout.
 // Source Control, editing and the worktree basics live in projects.spec.mjs.
 import assert from 'node:assert/strict'
-import { existsSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
-import { git, modifier, palette, startRamu } from '../support/index.mjs'
+import { git, modifier, palette, startRamu, useFakeModel } from '../support/index.mjs'
 
 const ramu = await startRamu('workspace', {
   env: ({ dir }) => ({ RAMU_TEST_PICK_DIRECTORY: join(dir, 'shop') }),
@@ -17,20 +16,20 @@ const ramu = await startRamu('workspace', {
 const { page } = ramu
 const api = ramu.repos['shop/api']
 const pane = page.locator('.task-pane:visible')
-const alert = () => page.locator('[role=alertdialog]:not([data-slot=toast])')
 const toolbar = page.locator('.workspace-tool-buttons')
 const terminalTabs = () => pane.locator('.terminal-tab')
 /** The visible terminal's text; xterm wraps long paths across rows, so the accessibility tree is read instead. */
 const terminalText = () =>
   page.evaluate(
     () =>
-      document.querySelector('.task-pane:not([style*="display: none"]) .terminal-panel .xterm-accessibility-tree')
-        ?.textContent ?? '',
+      document.querySelector(
+        '.task-pane:not([style*="display: none"]) .terminal-panel .terminal-pane.focused .xterm-accessibility-tree',
+      )?.textContent ?? '',
   )
 const terminalHas = (text, message) =>
   ramu.until(async () => (await terminalText()).replace(/\s+/g, '').includes(text.replace(/\s+/g, '')), message)
 const runInTerminal = async (command) => {
-  await pane.locator('.terminal-panel .xterm-helper-textarea').first().focus()
+  await pane.locator('.terminal-panel .terminal-pane.focused .xterm-helper-textarea').focus()
   await page.keyboard.type(`${command}\n`)
 }
 const apiHead = () => git(api, 'rev-parse', 'HEAD')
@@ -66,13 +65,15 @@ async function startChat(prompt, { worktree = false } = {}) {
 }
 
 ramu.test('terminals start per repository and at the workspace root', async () => {
+  await useFakeModel(ramu)
   await page.getByRole('button', { name: 'Add project', exact: true }).click()
   await page.getByRole('button', { name: 'Add 2 of 2', exact: true }).click()
   await page.locator('.repo-tree').first().waitFor()
   await toolbar.getByRole('button', { name: 'Terminal', exact: true }).click()
   await pane.getByRole('button', { name: 'New terminal', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Terminal in api', exact: true }).click()
-  await pane.locator('.terminal-panel .xterm-helper-textarea').first().waitFor()
+  // xterm's input textarea is zero-sized, so it is attached but never "visible".
+  await pane.locator('.terminal-panel .terminal-pane.focused .xterm-helper-textarea').waitFor({ state: 'attached' })
   await runInTerminal('pwd')
   await terminalHas(api, 'the repository terminal never started in the api checkout')
 
@@ -109,24 +110,30 @@ ramu.test('a current-checkout chat inherits project terminals and unsaved editor
   assert.equal(await terminalTabs().count(), before, 'the chat shares the project terminals')
   await runInTerminal('echo shell-$RAMU_SMOKE_TOKEN')
   await terminalHas('shell-connected', 'the chat lost the original shell environment')
-  await pane.locator('.view-tab', { hasText: 'App.tsx' }).click()
+  // A new chat starts with the editor closed; reopening the file brings back the shared unsaved buffer.
+  const reopen = await palette(ramu, 'App.tsx')
+  await reopen.getByRole('option').filter({ hasText: 'src/App.tsx' }).first().waitFor()
+  await page.keyboard.press('Enter')
   await pane.locator('.view-tab.active .dirty').waitFor()
   await pane.locator('.monaco-editor .view-lines', { hasText: 'shared unsaved buffer' }).waitFor()
 })
 
 ramu.test('model, effort and access switch inside one chat', async () => {
   const chat = pane.locator('.agent-view:visible')
-  const modelButton = () => chat.getByRole('button', { name: /^Select model/ })
-  await modelButton().click()
-  await page.getByRole('textbox', { name: 'Search models' }).fill('Codex')
-  await page.getByRole('menuitem', { name: /Codex \(test\)/ }).click()
-  await chat.locator('.conversation-separator', { hasText: 'Codex' }).waitFor()
-  await chat.getByRole('button', { name: 'Reasoning and service tier' }).click()
-  await page.getByRole('menuitem', { name: 'High', exact: true }).click()
+  await chat.getByRole('button', { name: 'Model and effort controls', exact: true }).click()
+  await page.getByRole('button', { name: /^Select model ·/ }).click()
+  await page.getByRole('textbox', { name: 'Search models' }).fill('fake-codex')
+  await page.getByRole('menuitemradio').filter({ hasText: /codex/i }).first().click()
+  await page.getByRole('button', { name: 'Change model', exact: true }).click()
+  await chat.getByRole('button', { name: 'Model and effort controls', exact: true }).click()
+  await page.getByRole('button', { name: 'Reasoning and service tier' }).click()
+  await page.getByRole('menuitemradio', { name: /^High/ }).click()
+  await page.keyboard.press('Escape')
   await chat.getByRole('button', { name: 'Access mode' }).click()
-  await page.getByRole('menuitem', { name: /Full access/ }).click()
+  await page.getByRole('menuitemradio', { name: /Full access/ }).click()
   await startComposer().fill('Continue with Codex')
   await chat.getByRole('button', { name: 'Send', exact: true }).click()
+  await chat.locator('.conversation-separator', { hasText: 'Codex' }).waitFor()
   await finishTurn()
   assert.equal((await ramu.api('tasks.list')).find((t) => t.title === 'Add password reset') !== undefined, true)
 })

@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Image, Linking, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native'
 import { CodeBlock } from './Code'
+import { useReducedMotion } from './Motion'
 import { parseBlocks, type Block } from '../runtime/markdown'
 import { chatReferences } from '@ramu/shared/chat/chatReferences'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
@@ -52,26 +53,91 @@ export function ReferenceBadge({
   )
 }
 
+// The reply being written fades in word by word, like the desktop's `stream-in`: a new word starts clear and settles over
+// FADE_MS, and words that arrive together are staggered so they flow in instead of landing as one block.
+const FADE_MS = 900
+const STAGGER_MS = 30
+const STAGGER_CAP_MS = 420
+// A burst (a reopened chat, a big chunk) fades only its last words, so a frame never repaints hundreds of spans.
+const MAX_FADING = 24
+
+/** How a block of a streaming reply fades: `settled` words are already on screen when the block first mounts (a reopened chat). */
+export interface StreamFade {
+  settled: boolean
+}
+
+/** One render's view of a block's word births: `births[i]` is when word i starts fading in. */
+interface WordFade {
+  births: number[]
+  now: number
+  index: number
+  /** Words in the block, so a burst can settle all but its last MAX_FADING. */
+  total: number
+  settled: boolean
+}
+
+/** `#rrggbb` with an alpha channel, which both platforms read. */
+const withAlpha = (hex: string, alpha: number) =>
+  `${hex}${Math.round(Math.min(1, Math.max(0, alpha)) * 255)
+    .toString(16)
+    .padStart(2, '0')}`
+
+/** Words of a text run, with the ones still fading in wrapped in a tinted span and the settled ones left as plain text. */
+function fadeWords(text: string, key: string, fade: WordFade, tint: string): ReactNode[] {
+  const out: ReactNode[] = []
+  let plain = ''
+  text.split(/(\s+)/).forEach((part, i) => {
+    if (!part || /^\s+$/.test(part)) {
+      plain += part
+      return
+    }
+    const at = fade.index++
+    let born = fade.births[at]
+    if (born === undefined) {
+      const last = fade.births.at(-1) ?? 0
+      // Never before an earlier word, never later than the cap, so the tail of a big chunk still arrives promptly.
+      born =
+        fade.settled || at < fade.total - MAX_FADING
+          ? 0
+          : Math.max(last, fade.now, Math.min(last + STAGGER_MS, fade.now + STAGGER_CAP_MS))
+      fade.births[at] = born
+    }
+    const progress = Math.min(1, Math.max(0, (fade.now - born) / FADE_MS))
+    if (progress >= 1) {
+      plain += part
+      return
+    }
+    if (plain) out.push(plain)
+    plain = ''
+    out.push(
+      <Text key={`${key}-${i}`} style={{ color: withAlpha(tint, 1 - (1 - progress) ** 2) }}>
+        {part}
+      </Text>,
+    )
+  })
+  if (plain) out.push(plain)
+  return out
+}
+
 /** Plain prose with explicit references (`@file`, `$skill`) turned into badges. */
-function Prose({ text }: { text: string }) {
-  const actions = useContext(ReferenceContext)
-  return (
-    <>
-      {chatReferences(text).map((part, index) =>
-        part.kind === 'text' ? (
-          part.text
-        ) : part.kind === 'skill' ? (
-          <ReferenceBadge key={index} kind="skill" label={part.target} />
-        ) : (
-          <ReferenceBadge
-            key={index}
-            kind="file"
-            label={part.target.split('/').at(-1) ?? part.target}
-            onPress={() => actions.openFile(part.target)}
-          />
-        ),
-      )}
-    </>
+function prose(text: string, key: string, actions: ReferenceActions, fade: WordFade | undefined, tint: string) {
+  return chatReferences(text).map((part, index) =>
+    part.kind === 'text' ? (
+      fade ? (
+        fadeWords(part.text, `${key}-${index}`, fade, tint)
+      ) : (
+        part.text
+      )
+    ) : part.kind === 'skill' ? (
+      <ReferenceBadge key={index} kind="skill" label={part.target} />
+    ) : (
+      <ReferenceBadge
+        key={index}
+        kind="file"
+        label={part.target.split('/').at(-1) ?? part.target}
+        onPress={() => actions.openFile(part.target)}
+      />
+    ),
   )
 }
 
@@ -88,6 +154,8 @@ function inline(
   key: string,
   c: ReturnType<typeof useTheme>['c'],
   actions: ReferenceActions,
+  tint: string,
+  fade?: WordFade,
 ): ReactNode[] {
   return text
     .split(INLINE)
@@ -106,19 +174,19 @@ function inline(
       if (((p.startsWith('**') && p.endsWith('**')) || (p.startsWith('__') && p.endsWith('__'))) && p.length > 4)
         return (
           <Text key={k} style={{ fontWeight: '600', color: c.text }}>
-            {inline(p.slice(2, -2), k, c, actions)}
+            {inline(p.slice(2, -2), k, c, actions, c.text, fade)}
           </Text>
         )
       if (p.startsWith('~~') && p.endsWith('~~') && p.length > 4)
         return (
           <Text key={k} style={{ textDecorationLine: 'line-through', color: c.muted }}>
-            {inline(p.slice(2, -2), k, c, actions)}
+            {inline(p.slice(2, -2), k, c, actions, c.muted, fade)}
           </Text>
         )
       if (((/^\*[^*]/.test(p) && p.endsWith('*')) || (/^_[^_]/.test(p) && p.endsWith('_'))) && p.length > 2)
         return (
           <Text key={k} style={{ fontStyle: 'italic' }}>
-            {inline(p.slice(1, -1), k, c, actions)}
+            {inline(p.slice(1, -1), k, c, actions, tint, fade)}
           </Text>
         )
       const link = p.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/)
@@ -140,16 +208,39 @@ function inline(
           )
         return label
       }
-      return <Prose key={k} text={p} />
+      return prose(p, k, actions, fade, tint)
     })
 }
 
-function Inline({ text, style }: { text: string; style?: TextStyle }) {
+function Inline({ text, style, stream }: { text: string; style?: TextStyle; stream?: StreamFade }) {
   const { c } = useTheme()
   const actions = useContext(ReferenceContext)
-  return (
-    <Text style={[{ color: c.body, fontSize: font.body, lineHeight: 22 }, style]}>{inline(text, 'i', c, actions)}</Text>
-  )
+  const births = useRef<number[]>([])
+  const primed = useRef(false)
+  const [, tick] = useState(0)
+  const tint = typeof style?.color === 'string' ? style.color : c.body
+  const now = Date.now()
+  // Fading continues for a moment after the reply is done, so its last words settle instead of snapping.
+  const fading = Boolean(stream) || (births.current.length > 0 && now < (births.current.at(-1) ?? 0) + FADE_MS)
+  const fade: WordFade | undefined = fading
+    ? {
+        births: births.current,
+        now,
+        index: 0,
+        total: text.match(/\S+/g)?.length ?? 0,
+        settled: Boolean(stream?.settled) && !primed.current,
+      }
+    : undefined
+  const nodes = inline(text, 'i', c, actions, tint, fade)
+  if (fade?.index) primed.current = true
+  const settling = fade ? (fade.births.at(-1) ?? 0) + FADE_MS > now : false
+  useEffect(() => {
+    if (!settling) return
+    // One repaint per display frame (60 Hz), only while this block still has a word fading in.
+    const frame = requestAnimationFrame(() => tick((n) => n + 1))
+    return () => cancelAnimationFrame(frame)
+  })
+  return <Text style={[{ color: c.body, fontSize: font.body, lineHeight: 22 }, style]}>{nodes}</Text>
 }
 
 function MarkdownImage({ src, alt }: { src: string; alt: string }) {
@@ -194,7 +285,7 @@ function MarkdownImage({ src, alt }: { src: string; alt: string }) {
 
 const HEADING = [0, 22, 19, 17, 16, 15, 15]
 
-function BlockView({ block }: { block: Block }) {
+function BlockView({ block, stream }: { block: Block; stream?: StreamFade }) {
   const { c } = useTheme()
   switch (block.kind) {
     case 'code':
@@ -203,6 +294,7 @@ function BlockView({ block }: { block: Block }) {
       return (
         <Inline
           text={block.text}
+          stream={stream}
           style={{
             fontSize: HEADING[block.level],
             lineHeight: HEADING[block.level]! + 6,
@@ -225,7 +317,7 @@ function BlockView({ block }: { block: Block }) {
         </View>
       )
     case 'paragraph':
-      return <Inline text={block.text} />
+      return <Inline text={block.text} stream={stream} />
     case 'list': {
       let counter = 0
       return (
@@ -261,6 +353,7 @@ function BlockView({ block }: { block: Block }) {
                 <View style={{ flex: 1 }}>
                   <Inline
                     text={item.text}
+                    stream={stream}
                     style={item.task && item.done ? { color: c.muted, textDecorationLine: 'line-through' } : undefined}
                   />
                 </View>
@@ -367,16 +460,25 @@ export function Markdown({
   text,
   muted,
   streaming,
+  fresh,
 }: {
   text: string
   muted?: boolean
-  /** The reply is still arriving: complete its cut-off last line for display. */ streaming?: boolean
+  /** The reply is still arriving: complete its cut-off last line for display, and fade its new words in. */ streaming?: boolean
+  /** The reply started while the chat was open, so even its first words fade in (a reopened chat shows them settled). */ fresh?: boolean
 }) {
+  const reduced = useReducedMotion()
   const blocks = useMemo(() => parseBlocks(streaming ? closePartial(text) : text), [text, streaming])
+  // Blocks mounted with the reply (a chat opened mid-stream) start settled; blocks that appear later fade in whole.
+  const [settledCount] = useState(() => (fresh ? 0 : blocks.length))
   return (
     <View style={{ gap: space.m, opacity: muted ? 0.8 : 1 }}>
       {blocks.map((block, index) => (
-        <BlockView key={index} block={block} />
+        <BlockView
+          key={index}
+          block={block}
+          stream={streaming && !reduced ? { settled: index < settledCount } : undefined}
+        />
       ))}
     </View>
   )

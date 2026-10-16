@@ -944,7 +944,7 @@ button.scm-sync:hover:not(:disabled) {
 /* Working state: a live "Working for 4s" rule above the steps, streamed words fading in, and a quiet "Thinking" below. */
 @keyframes stream-in {
   from {
-    opacity: 0.2;
+    opacity: 0;
   }
   to {
     opacity: 1;

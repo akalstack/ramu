@@ -11,6 +11,7 @@ import { invoke, ramu } from '../ipc'
 import { t, useLanguage } from '../i18n'
 import { workspaceVisible, onWorkspaceVisibility } from '../workspace/workspaceLifetime'
 import { errorText } from '../lib/errors'
+import { useComputers } from '../workspace/computers'
 
 /** Global activity remains visible on Home and in every checkout. */
 export function BackgroundActivity() {
@@ -117,10 +118,14 @@ export function BackgroundActivityIndicator({
     }
   }
   const missed = useNotices()
+  // A computer that rejected this device never comes back by itself, so it is not "reconnecting".
+  const computers = useComputers()
+  const rejected = computers?.computers.find((computer) => computer.id === computers.current)?.status === 'rejected'
+  const disconnected = rejected ? t('Pair again') : t('Reconnecting…')
   const active = connected ? items : []
   const total = active.length + missed.length
   const summary = !connected
-    ? t('Reconnecting…')
+    ? disconnected
     : active.length
       ? t('{0} running', { 0: active.length })
       : t('No background activity')
@@ -260,7 +265,7 @@ export function BackgroundActivityIndicator({
                   {connected ? <CircleCheck aria-hidden /> : <WifiOff aria-hidden />}
                 </EmptyMedia>
                 <EmptyTitle className="text-control font-medium">
-                  {connected ? t('No background activity') : t('Reconnecting…')}
+                  {connected ? t('No background activity') : disconnected}
                 </EmptyTitle>
                 <EmptyDescription className="text-caption">
                   {connected

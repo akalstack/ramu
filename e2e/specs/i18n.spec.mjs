@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { modifier, startRamu } from '../support/index.mjs'
 
-const ramu = await startRamu('i18n', { repos: { 'Language Smoke': { 'notes.md': 'Original file content\n' } } })
+const ramu = await startRamu('i18n', { repos: { 'Language Smoke': { 'notes.txt': 'Original file content\n' } } })
 const language = () => ramu.page.locator('html').getAttribute('lang')
 const open = async () => {
   await ramu.page.evaluate(() => window.dispatchEvent(new Event('ramu:settings')))
@@ -107,7 +107,7 @@ ramu.test('switching language preserves unsaved editor buffers and project names
   await page.getByRole('button', { name: 'Explorer', exact: true }).click()
   await page
     .locator('.explorer-panel')
-    .getByRole('button', { name: /notes.md/ })
+    .getByRole('button', { name: /notes.txt/ })
     .click()
   const editor = page.locator('.monaco-editor .view-lines').first()
   await editor.getByText('Original file content', { exact: true }).waitFor()
@@ -120,7 +120,7 @@ ramu.test('switching language preserves unsaved editor buffers and project names
   await save('en')
   await page.getByRole('button', { name: 'Explorer', exact: true }).waitFor()
   await editor.getByText('Unsaved editor buffer stays intact', { exact: true }).waitFor()
-  assert.equal(readFileSync(join(repo, 'notes.md'), 'utf8'), 'Original file content\n')
+  assert.equal(readFileSync(join(repo, 'notes.txt'), 'utf8'), 'Original file content\n')
   assert.equal(await language(), 'en')
 })
 

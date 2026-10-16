@@ -2,14 +2,16 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { reducedMotion } from './panelMotion'
 
 /**
- * The one way panes open and close, taken from the Codex app: the pane's own size grows or shrinks over 0.3 s with a plain
+ * The one way panes open and close, taken from the Codex app: the pane's own size grows or shrinks over 0.2 s with a quint
  * ease while its neighbour reflows with it. No snapshots, no slide. Off while dragging, and with reduced motion.
  *   - A cheap pane laid out in tracks (the workspace pane, the editor dock): `paneTransition` on the toggle.
  *   - A pane that is costly to resize or heavy to draw (terminal, aside, sub-agent panel, tool rail, sidebar): `paneFadeIn`, one
  *     step plus a 150 ms fade; `<SlidePane>` does that for a pane that is mounted only while open.
  */
-export const PANE_MOTION = '0.3s ease'
-const SETTLE_MS = 340
+// Snappy: a quick, decisive ease-out (quint) over 0.2 s, so a pane is mostly open within the first frames and settles softly.
+export const PANE_MOTION = '0.2s cubic-bezier(0.22, 1, 0.36, 1)'
+export const PANE_MS = 200
+const SETTLE_MS = PANE_MS + 40
 
 /** Animates the given properties of these elements for the toggle that happens next; clears itself afterwards. Returns a canceller. */
 export function paneTransition(elements: (HTMLElement | null | undefined)[], properties: string[]): () => void {
@@ -28,11 +30,11 @@ export function paneTransition(elements: (HTMLElement | null | undefined)[], pro
 
 /**
  * For panes whose content is costly to resize (a terminal re-fits its shell on every size change; the aside and sub-agent panel
- * hold whole transcripts): the pane lands in one step and fades in over 150 ms, which runs on the compositor. Returns a canceller.
+ * hold whole transcripts): the pane lands in one step and fades in over 120 ms, which runs on the compositor. Returns a canceller.
  */
 export function paneFadeIn(element: HTMLElement | null | undefined): () => void {
   if (!element || reducedMotion() || document.hidden) return () => {}
-  const fade = element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' })
+  const fade = element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: 'ease-out' })
   return () => fade.cancel()
 }
 

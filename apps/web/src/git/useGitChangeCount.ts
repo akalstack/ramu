@@ -18,7 +18,8 @@ export function useGitChangeCount(taskId: string | null, bindings: RepositoryBin
     const load = async () => {
       const request = ++sequence
       const results = await Promise.allSettled(repositories.map((repo) => invoke('git.status', taskId, repo.repoId)))
-      if (!disposed && request === sequence)
+      // A failed read says nothing about the changes; keep showing the last count.
+      if (!disposed && request === sequence && results.every((result) => result.status === 'fulfilled'))
         setResult({
           context,
           count: results.reduce(

@@ -1,7 +1,7 @@
 import { cn } from 'cn'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { readSize, useLayoutEpoch } from './panelLayout'
-import { paneFadeIn, paneTransition } from './paneMotion'
+import { PANE_MS, paneFadeIn, paneTransition } from './paneMotion'
 
 /** A stable two-track split. Content never participates in track sizing or panel registration. */
 export function WorkspaceSplit({
@@ -46,6 +46,8 @@ export function WorkspaceSplit({
   const surface = useRef<HTMLDivElement>(null)
   const settled = useRef(open && !primaryCollapsed)
   const drag = useRef<{ rect: DOMRect; length: number; share: number } | null>(null)
+  // Pointer events can arrive several times per frame; the layout is updated once per frame with the latest position.
+  const frame = useRef(0)
   const currentShare = useRef(share)
   // Window resizes keep the secondary pane's pixel size; only user drags and resets change it.
   const pixels = useRef<number | null>(null)
@@ -71,10 +73,10 @@ export function WorkspaceSplit({
     // Only an open/close animates, not window resizes or drag releases.
     const cancel = paneTransition([element], ['grid-template-columns', 'grid-template-rows'])
     // A closing pane stays drawn until its track has shrunk, then hides.
-    if (!open) pane.style.transition = 'visibility 0s linear 0.3s'
+    if (!open) pane.style.transition = `visibility 0s linear ${PANE_MS / 1000}s`
     const done = window.setTimeout(() => {
       pane.style.transition = ''
-    }, 340)
+    }, PANE_MS + 40)
     return () => {
       cancel()
       window.clearTimeout(done)
@@ -138,6 +140,8 @@ export function WorkspaceSplit({
       : `translateY(${Math.round(size * (1 - value / 100))}px)`
   }
   const endDrag = () => {
+    cancelAnimationFrame(frame.current)
+    frame.current = 0
     drag.current = null
     if (preview.current) preview.current.style.visibility = 'hidden'
     setDragging(false)
@@ -205,8 +209,13 @@ export function WorkspaceSplit({
               state.length) *
               100,
           )
-          if (resizePreview) movePreview(state.share, state.length)
-          else update(state.share)
+          if (frame.current) return
+          frame.current = requestAnimationFrame(() => {
+            frame.current = 0
+            if (!drag.current) return
+            if (resizePreview) movePreview(drag.current.share, drag.current.length)
+            else update(drag.current.share)
+          })
         }}
         onPointerUp={(event) => {
           if (!event.currentTarget.hasPointerCapture(event.pointerId)) return

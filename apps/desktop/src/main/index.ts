@@ -61,7 +61,8 @@ if (e2eHeadless) app.dock?.hide()
 
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  // WebAssembly for the editor's TextMate grammars (Shiki's Oniguruma engine); no string-to-code evaluation.
+  "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "media-src 'self' data:",

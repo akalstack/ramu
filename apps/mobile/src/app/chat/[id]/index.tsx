@@ -36,7 +36,7 @@ import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/
 import { KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { OfflineBanner, PendingBubble } from '../../../components/Outbox'
 import { ContextMeter } from '../../../components/ContextMeter'
-import { Arrive, Presence, Shimmer, StreamIn } from '../../../components/Motion'
+import { Arrive, Presence, Shimmer } from '../../../components/Motion'
 import { ChatActionsSheet, useChatCommands } from '../../../components/ChatActions'
 import { openActivity, useActivitySummary } from '../../../components/ActivityTray'
 
@@ -660,16 +660,13 @@ export default function ChatScreen() {
               const fresh = !seen.current.has(item.id) && Date.now() - openedAt.current > 800
               seen.current.add(item.id)
               const streaming = running && item.kind === 'text' && index === pageRows.length - 1
-              const view = <TranscriptItemView item={item} chat={chat} meta={{ ...itemMeta.get(item.id), streaming }} />
               return (
                 <Arrive animate={fresh && running}>
-                  {streaming ? (
-                    <StreamIn text={item.text} active>
-                      {view}
-                    </StreamIn>
-                  ) : (
-                    view
-                  )}
+                  <TranscriptItemView
+                    item={item}
+                    chat={chat}
+                    meta={{ ...itemMeta.get(item.id), streaming, fresh: fresh && running }}
+                  />
                 </Arrive>
               )
             }}

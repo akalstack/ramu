@@ -141,8 +141,14 @@ export async function startRamu(name, { launch = true, env = {}, repos = {} } = 
     },
     /** Closes the window; the background server keeps running, as it does when a user quits the app. */
     async closeApp() {
-      await live.app?.close().catch(() => {})
+      const app = live.app
       live.app = live.page = null
+      if (!app) return
+      // Quitting can stall (for example with the local service stopped under a connected paired computer); don't let
+      // that keep the test process alive forever.
+      const forced = setTimeout(() => app.process().kill('SIGKILL'), 15_000)
+      await app.close().catch(() => {})
+      clearTimeout(forced)
     },
     /** Quits and reopens the app against the same profile, optionally after `between()` ran with the app closed. */
     async relaunch(between) {

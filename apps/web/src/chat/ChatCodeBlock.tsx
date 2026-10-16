@@ -8,6 +8,7 @@ import { errorText } from '../lib/errors'
 import { notifyError } from './Notifications'
 import { t, useLanguage } from '../i18n'
 import { monaco } from '../editor/monaco'
+import { loadShikiLanguage } from '../editor/shiki'
 
 export function ChatCodeBlock({ source, hint }: { source: string; hint?: string }) {
   useLanguage()
@@ -22,19 +23,24 @@ export function ChatCodeBlock({ source, hint }: { source: string; hint?: string 
   const [highlighted, setHighlighted] = useState<{ source: string; language: string; html: string } | null>(null)
   useEffect(() => {
     let cancelled = false
-    const grammar = monaco.languages
-      .getLanguages()
-      .find((entry) => entry.id === language || entry.extensions?.includes(`.${language}`))
+    // The last registration wins an extension, so .tsx and .jsx reach the React languages.
+    const languages = monaco.languages.getLanguages()
+    const grammar =
+      languages.find((entry) => entry.id === language) ??
+      languages.findLast((entry) => entry.extensions?.includes(`.${language}`))
     // Large logs stay responsive and readable as plain text.
     if (grammar && source.length <= 100_000) {
-      void monaco.editor.colorize(source, grammar.id, { tabSize: 4 }).then(
-        (html) => {
-          if (!cancelled) setHighlighted({ source, language, html: html.replace(/<br\/>$/, '') })
-        },
-        () => {
-          /* Keep the original source when a grammar cannot load. */
-        },
-      )
+      // Wait for Shiki's grammar so the block is colored once, not first by Monarch.
+      void loadShikiLanguage(grammar.id)
+        .then(() => monaco.editor.colorize(source, grammar.id, { tabSize: 4 }))
+        .then(
+          (html) => {
+            if (!cancelled) setHighlighted({ source, language, html: html.replace(/<br\/>$/, '') })
+          },
+          () => {
+            /* Keep the original source when a grammar cannot load. */
+          },
+        )
     }
     return () => {
       cancelled = true

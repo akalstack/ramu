@@ -298,6 +298,16 @@ function Shell() {
     <nav
       className="workspace-tool-buttons [&_button[aria-pressed=true]]:text-brand [&_button[aria-pressed=true]]:bg-brand-wash [&_.icon]:[transition:background-color_140ms_ease,_color_140ms_ease] [&_>_button]:relative [&_>_button]:overflow-visible flex flex-none items-center ml-auto [-webkit-app-region:no-drag] gap-1"
       aria-label={t('Workspace controls')}
+      onKeyDown={(event) => {
+        const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+        const target = event.target as HTMLElement
+        if (!step || target.getAttribute('aria-haspopup') || target.closest('[role=menu]')) return
+        const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
+        const next = buttons[buttons.indexOf(target as HTMLButtonElement) + step]
+        if (!next) return
+        event.preventDefault()
+        next.focus()
+      }}
     >
       <ProjectSwitcher />
       {(

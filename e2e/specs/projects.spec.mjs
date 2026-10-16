@@ -73,6 +73,8 @@ ramu.test('an external change to a dirty file raises a conflict instead of overw
 })
 
 ramu.test('stages, drafts and commits in one repository without touching the other', async () => {
+  // Combined changes (the default) list each file once without per-file staging; this journey stages files.
+  await ramu.api('settings.app.set', { ...(await ramu.api('settings.app.get')), combineGitChanges: false })
   await page.getByRole('button', { name: 'Source Control', exact: true }).click()
   const repoSection = async (name) => {
     const section = page

@@ -172,6 +172,7 @@ ramu.test('conversation history switches the main chat without closing the edito
   await ramu.api('agent.start', task.id, 'A second conversation for history.', fakeSettings)
   await pane.getByRole('button', { name: 'Earlier conversations', exact: true }).click()
   const conversations = page.getByRole('menuitemradio')
+  await conversations.first().waitFor()
   assert.equal(await conversations.count(), 2)
   await conversations.first().click()
   await pane.locator('.agent-view:visible').filter({ hasText: 'A second conversation for history.' }).waitFor()
@@ -255,10 +256,7 @@ ramu.test('Source Control scrolls to the outer edge and opens diffs beside the c
   await ramu.shot('scm-scroll')
   for (let i = 0; i < 60; i++) edit(`docs/document-${String(i).padStart(2, '0')}.md`, '# Layout fixture\n')
   await page.waitForFunction(() => document.querySelectorAll('.workspace-tools .change-row').length === 1)
-  await ramu.until(
-    async () => (await badge.textContent().catch(() => null)) === '1',
-    `badge is ${await badge.allTextContents()}`,
-  )
+  await badge.filter({ hasText: /^1$/ }).waitFor()
 
   await page.locator('.workspace-tools .change-name').first().click()
   await pane.locator('.editor-area:visible .monaco-diff-editor').waitFor()
@@ -381,7 +379,8 @@ ramu.test(
     assert.ok(terminalViewId, 'terminal is selected in the workspace tab strip')
     assert.equal(await pane.locator('.editor-area:visible').count(), 0, 'terminal replaces the file content')
     assert.equal(await pane.locator('.terminal-panel .terminal-tabs').count(), 0, 'no second terminal tab strip')
-    await workspaceTabs.getByRole('tab').filter({ hasText: 'review.ts' }).click()
+    // The earlier Source Control step left a "review.ts changes" diff tab open beside the file.
+    await workspaceTabs.getByRole('tab').filter({ hasText: 'review.ts' }).filter({ hasNotText: 'changes' }).click()
     await pane.locator('.editor-area:visible').waitFor()
     assert.equal(await pane.locator('.terminal-panel:visible').count(), 0, 'selecting a file hides the terminal')
     await workspaceTabs.locator(`[data-view-id="${terminalViewId}"]`).click()
