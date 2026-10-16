@@ -16,7 +16,7 @@ Choose a version, then review the generated notes:
 pnpm release:prepare 0.1.0 --dry-run
 pnpm release:prepare 0.1.0
 pnpm check
-pnpm test:e2e # macOS, simulated providers
+pnpm test:desktop-smoke # macOS, simulated providers
 ```
 
 Preparation updates the version in the root and every workspace `package.json` (the desktop app reads its own) and writes `releases/v0.1.0.md`. It does not commit, tag, push, or publish. Replace the generated scaffold with user-facing changes and installation limitations. A version-only change does not require a lockfile update.
@@ -45,7 +45,7 @@ Test signed installers on another machine. Simulated checks do not verify live p
 
 `pnpm make` writes installers to `dist/make`. On the matching build machine, `pnpm release:assets darwin arm64` (or `darwin x64` / `linux x64`) collects installers and checksums in `dist/release`. Clear old collected artifacts before rebuilding.
 
-For packaged macOS checks, run `RAMU_PACKAGED_EXECUTABLE=/path/to/Ramu pnpm test:e2e chat settings background`. The [release skill](../.agents/skills/ramu-release/SKILL.md) documents the repository's optional agent-assisted workflow.
+For packaged macOS checks, run `RAMU_PACKAGED_EXECUTABLE=/path/to/Ramu pnpm test:desktop-smoke`. The [release skill](../.agents/skills/ramu-release/SKILL.md) documents the repository's optional agent-assisted workflow.
 
 ## Updates and the background service
 

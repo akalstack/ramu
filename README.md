@@ -28,6 +28,7 @@ On top of the workspace, Ramu adds orchestration that works without setup:
 - **Follow goals across turns.** Persistent goals keep agents working toward an objective across provider changes, with pause, resume, and continuation limits. Schedule recurring work and leave threads and terminals running after closing the window.
 - **Bring models together.** Ask a second model for advice or review, and delegate tasks to helpers across providers, with optional isolated checkouts.
 - **Carry knowledge forward.** Share project memory and preferences across providers. Turn completed work into reusable skills and lessons, with editable notes and revision history. A periodic "What Ramu learned" summary says what was saved, merged or archived, and a review thread can fix it.
+- **Recall past work.** Ask agents to find decisions and fixes in earlier threads across providers, with links to the original messages. Skills can declare required tools and fallback procedures so agents can select instructions that fit their current tools.
 - **Continue from your phone.** Pair the iOS or Android app with your computer to chat, review changes, manage Git, use terminals, and respond to agent requests.
 
 ## Features
@@ -68,7 +69,7 @@ Built with Electron, React, React Native, and TypeScript. See the [architecture]
 | --- | --- |
 | `pnpm dev` | Start with hot reload |
 | `pnpm check` | Type-check, test, and build |
-| `pnpm test:e2e` | macOS Electron checks with simulated providers |
+| `pnpm test:desktop-smoke` | One macOS desktop startup check with simulated providers |
 | `pnpm make` | Build installers for the current platform |
 | `pnpm server serve` | Run the workspace server without the desktop app (after `pnpm build`) |
 

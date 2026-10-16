@@ -1,3 +1,4 @@
+import { permissionKey, PermissionApprovals } from './permissionApprovals'
 import type { AppPreferences, AgentEvent, AgentSessionState } from '@ramu/shared/types'
 import type { MessageDispatcher } from './messageDispatcher'
 import type { GoalManager } from './goalManager'
@@ -15,7 +16,7 @@ export interface SessionRecorderHost
     Pick<MessageDispatcher, 'dispatchQueued' | 'dispatchSteering' | 'wakeWorkspaceQueue' | 'workspaceQueue'>,
     Pick<GoalManager, 'getGoal' | 'saveGoal' | 'scheduleGoal'>,
     Pick<SessionRegistry, 'draining' | 'finalizing' | 'live' | 'pendingBackground' | 'runners'>,
-    Pick<UserRequests, 'notifyWaiters'>,
+    Pick<UserRequests, 'notifyWaiters' | 'applySavedPermission'>,
     Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'list'>,
     Pick<SubagentRunner, 'children' | 'mirrorChild' | 'settleChild'>,
     Pick<AgentTasks, 'updateTask'> {
@@ -36,12 +37,28 @@ export class SessionRecorder {
   private readonly autoBackground = new Map<string, Map<string, NodeJS.Timeout>>()
 
   record(id: string, recorded: AgentEvent, replacesMessageId?: string): void {
+    const questionRequestId = recorded.kind === 'question' ? recorded.requestId : undefined
     if (
       recorded.kind === 'question' &&
       recorded.responseMode === 'message' &&
-      this.host.events(id).some((e) => e.kind === 'question' && e.requestId === recorded.requestId)
+      this.host.events(id).some((e) => e.kind === 'question' && e.requestId === questionRequestId)
     )
       return
+    if (recorded.kind === 'permission-request') {
+      const pending = this.host.live.get(id)?.pending.get(recorded.requestId)
+      const key =
+        recorded.approvalKey ??
+        (pending?.kind === 'permission' ? permissionKey(recorded.toolName, pending.input) : undefined)
+      if (key)
+        recorded = {
+          ...recorded,
+          approvalKey: key,
+          approvalSessionId: recorded.approvalSessionId ?? id,
+          approvalProvider: recorded.approvalProvider ?? this.host.get(id).provider,
+          approvalProjectId:
+            recorded.approvalProjectId ?? new PermissionApprovals(this.db).project(this.host.get(id).taskId),
+        }
+    }
     const run = this.host.children.get(id)
     if (run) this.host.mirrorChild(id, run, recorded, replacesMessageId)
     if (recorded.agentId && recorded.kind !== 'agent') {
@@ -158,6 +175,11 @@ export class SessionRecorder {
     }
     this.host.emit(id, event, seq)
     if (event.kind === 'request-resolved') this.host.notifyWaiters(id, event.requestId)
+    if (event.kind === 'permission-request' && event.approvalKey) {
+      const request = event
+      // Providers set needs-input immediately after emitting the request; answer after that transition.
+      queueMicrotask(() => this.host.applySavedPermission(id, request))
+    }
   }
 
   /** With a threshold set, a Claude command still running in the foreground after that long moves to the background on its own. */

@@ -53,6 +53,9 @@ it('migrates legacy worktree conversations without losing bindings, transcripts,
       JSON.parse((db.prepare('SELECT settings FROM agent_sessions').get() as { settings: string }).settings).access,
     ).toBe('edits')
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+    expect(
+      db.prepare("SELECT session_id, seq FROM session_search_fts WHERE session_search_fts MATCH 'conversation'").all(),
+    ).toEqual([{ session_id: 'session', seq: 1 }])
   } finally {
     db.close()
     rmSync(dir, { recursive: true, force: true })

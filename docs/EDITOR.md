@@ -24,4 +24,4 @@ Drop Explorer files or folders onto the thread input or conversation to add file
 
 ## Checks
 
-Run `pnpm check`. On macOS, build and run `RAMU_E2E_EDITOR_ONLY=1 pnpm test:e2e` for editor, save-conflict, and font-smoothing checks. Run `RAMU_E2E_DROP_ONLY=1 pnpm test:e2e` for native Explorer imports and thread drops.
+Run `pnpm check`. Add focused unit or integration tests for editor and save-conflict behavior. On macOS, build and run `pnpm test:desktop-smoke` for startup validation; manually verify font smoothing, native Explorer imports and thread drops when changing them.

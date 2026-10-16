@@ -13,6 +13,8 @@ const changed = (): AppPreferences => ({
     ...DEFAULT_APP_PREFERENCES.intelligence,
     compression: 'aggressive' as const,
     learning: other(DEFAULT_APP_PREFERENCES.intelligence.learning),
+    crossThreadRecall: false,
+    toolAwareSkills: false,
   },
 })
 
@@ -26,9 +28,13 @@ it('splits the intelligence preferences between Threads and Memory', () => {
   const chats = resetSection(changed(), 'chats')
   expect(chats.intelligence.compression).toBe(DEFAULT_APP_PREFERENCES.intelligence.compression)
   expect(chats.intelligence.learning).toBe(other(DEFAULT_APP_PREFERENCES.intelligence.learning))
+  expect(chats.intelligence.crossThreadRecall).toBe(false)
+  expect(chats.intelligence.toolAwareSkills).toBe(false)
   const memory = resetSection(changed(), 'memory')
   expect(memory.intelligence.learning).toBe(DEFAULT_APP_PREFERENCES.intelligence.learning)
   expect(memory.intelligence.compression).toBe('aggressive')
+  expect(memory.intelligence.crossThreadRecall).toBe(true)
+  expect(memory.intelligence.toolAwareSkills).toBe(true)
 })
 
 it('leaves intelligence untouched for other sections', () => {
@@ -54,6 +60,8 @@ it('matches setting paths to the section that resets them', () => {
   expect(inResetSection('chats', 'intelligence.compression')).toBe(true)
   expect(inResetSection('chats', 'intelligence.learning')).toBe(false)
   expect(inResetSection('memory', 'memory.enabled')).toBe(true)
+  expect(inResetSection('memory', 'intelligence.crossThreadRecall')).toBe(true)
+  expect(inResetSection('memory', 'intelligence.toolAwareSkills')).toBe(true)
   expect(inResetSection('memory', 'memoryExtra')).toBe(false)
   expect(inResetSection('shortcuts', 'warnModelChange')).toBe(false)
 })

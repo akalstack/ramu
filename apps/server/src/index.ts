@@ -233,7 +233,9 @@ const summaries = new SummaryService(db, workspace, agents, memory, learning, (c
 agents.sessionCheckpoint = (id) => learning.checkpoint(id)
 agents.onRewound = (sessionId, seq) => send('agent:rewound', { sessionId, seq })
 agents.learningInstructions = (session) =>
-  [learning.instructions(session.id), summaries.instructions(session)].filter(Boolean).join('\n\n')
+  [summaries.isReviewChat(session.taskId) ? '' : learning.instructions(session.id), summaries.instructions(session)]
+    .filter(Boolean)
+    .join('\n\n')
 const projectOf = (session: AgentSessionInfo) => {
   try {
     return workspace.getTask(session.taskId).projectId

@@ -6,11 +6,19 @@ export function Outcome({ outcome }: { outcome: string | undefined }) {
   if (!outcome) return null
   const text =
     outcome === 'allowed'
-      ? 'Allowed'
-      : outcome === 'denied'
-        ? 'Denied'
-        : outcome === 'answered'
-          ? 'Answered'
-          : 'Cancelled'
+      ? 'Allowed once'
+      : outcome === 'allowed-project'
+        ? 'Allowed for this project'
+        : outcome === 'allowed-user'
+          ? 'Allowed for this user'
+          : outcome === 'allowed-project-forgotten'
+            ? 'Allowed · project approval forgotten'
+            : outcome === 'allowed-user-forgotten'
+              ? 'Allowed · user approval forgotten'
+              : outcome === 'denied'
+                ? 'Denied'
+                : outcome === 'answered'
+                  ? 'Answered'
+                  : 'Cancelled'
   return <div className="outcome text-caption text-muted-foreground mt-1.5">{translate(text)}</div>
 }

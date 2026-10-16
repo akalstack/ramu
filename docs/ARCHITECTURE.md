@@ -23,7 +23,7 @@ Call an ongoing conversation and its work a **thread** in product copy. A **task
 | `packages/shared` | Domain types, the API method table, and pure helpers used by every app, grouped into `chat/`, `review/`, `search/`, `workspace/` and `providers/` (import as `@ramu/shared/<folder>/<module>`). |
 | `packages/contracts` | Wire protocol: versions, capabilities, request encoding. |
 | `packages/client-runtime` | Node client for a server: local socket or authenticated HTTP, reconnects, limits. |
-| `e2e/` | End-to-end specs (`specs/`), on-demand performance checks (`perf/`) and their shared launcher (`support/`). |
+| `scripts/smoke/` | One desktop startup smoke test. |
 | `scripts/` | `release/` packaging and release tooling. |
 
 ## Calling the server
@@ -72,14 +72,14 @@ Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockChe
 
 ## Providers
 
-Threads run through provider adapters selected per thread (`AgentSettings.provider`). Provider-specific setup behavior (executable and `RAMU_*_BIN` variable, account profiles, sign-in detection, login and update) is a `ProviderAdapter` in `apps/server/src/providers/adapters/`; `providers.ts` and `providerBinaries.ts` keep the shared spawning, caching and parsing. To add a provider, add an adapter, register it in `adapters/index.ts`, and add its id to `AgentProvider` in `packages/shared`. How it chats is an `AgentRunner` (`agent/agentRunner.ts`) listed in `providers/runners.ts`; use the provider's own SDK where it has one, or `createAcpRunner` for an ACP runtime. Features the provider has natively (`NativeFeatures` on the adapter) replace Ramu's own where they can serve Ramu's flow. An adapter may also define `skillsLaunch`, which points the provider at Ramu's per-scope managed-skill export for one thread (a Claude plugin, a Codex skill root, an OpenCode `skills` entry, or `linkDirs` for Cursor and Antigravity, which scan a fixed folder in the thread's working directory and get git-excluded symlinks from `memory/skillLinks.ts`; see [learning](LEARNING.md)). `providers/fakeAgent.ts` implements the same events, permission requests and transcript paths without model usage; the end-to-end specs depend on it.
+Threads run through provider adapters selected per thread (`AgentSettings.provider`). Provider-specific setup behavior (executable and `RAMU_*_BIN` variable, account profiles, sign-in detection, login and update) is a `ProviderAdapter` in `apps/server/src/providers/adapters/`; `providers.ts` and `providerBinaries.ts` keep the shared spawning, caching and parsing. To add a provider, add an adapter, register it in `adapters/index.ts`, and add its id to `AgentProvider` in `packages/shared`. How it chats is an `AgentRunner` (`agent/agentRunner.ts`) listed in `providers/runners.ts`; use the provider's own SDK where it has one, or `createAcpRunner` for an ACP runtime. Features the provider has natively (`NativeFeatures` on the adapter) replace Ramu's own where they can serve Ramu's flow. An adapter may also define `skillsLaunch`, which points the provider at Ramu's per-scope managed-skill export for one thread (a Claude plugin, a Codex skill root, an OpenCode `skills` entry, or `linkDirs` for Cursor and Antigravity, which scan a fixed folder in the thread's working directory and get git-excluded symlinks from `memory/skillLinks.ts`; see [learning](LEARNING.md)). `providers/fakeAgent.ts` implements the same events, permission requests and transcript paths without model usage; the desktop smoke test uses it.
 
 Accounts: every enabled account of a provider is tried in order (selected account, the default login, then the others) when a thread reaches a usage limit, before Ramu falls back to another model. Turn an account off in Settings to remove it from the rotation.
 
 ## Testing
 
 - `pnpm check`: format, typecheck, unit tests, release-script tests, build. CI runs it on macOS and Linux.
-- `pnpm test:e2e`: the headless end-to-end specs in `e2e/specs/` (thread, review and undo, settings, source control, layout, remote access and more) with simulated providers and an isolated profile (macOS); `pnpm test:e2e:perf` runs the on-demand performance checks. See [e2e/README.md](../e2e/README.md).
+- `pnpm test:desktop-smoke`: one desktop startup check with simulated providers and an isolated profile (macOS). Run after `pnpm build`; release checks also run it against the packaged macOS app.
 - Server tests are in `apps/server/test`, mirroring `src` by file name.
 
 ## Code quality

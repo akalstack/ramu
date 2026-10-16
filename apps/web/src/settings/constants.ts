@@ -55,7 +55,14 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
 
 // Chats and Memory each own part of `intelligence`; reset only their own fields.
 export const CHATS_INTELLIGENCE_KEYS = ['compression', 'toolSearch'] as const
-export const MEMORY_INTELLIGENCE_KEYS = ['learning', 'maintenanceModel', 'dailyReviews', 'archiveSkillDays'] as const
+export const MEMORY_INTELLIGENCE_KEYS = [
+  'crossThreadRecall',
+  'toolAwareSkills',
+  'learning',
+  'maintenanceModel',
+  'dailyReviews',
+  'archiveSkillDays',
+] as const
 
 export const MAX_MODEL_SETS = 20
 export const MAX_SET_STEPS = 20

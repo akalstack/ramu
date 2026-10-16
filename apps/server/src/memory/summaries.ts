@@ -31,6 +31,7 @@ import type { AgentService } from '../agent'
 import { confirmed, ESSENTIAL, rank, type Actor, type MemoryService } from './memory'
 import type { LearningService } from './learning'
 import { fingerprint, InputGate } from '../background/inputGate'
+import { activationOf, skillActivationSchema } from './skillActivation'
 
 const DAY = 86_400_000
 export const SUMMARY_INTERVALS = { daily: DAY, weekly: 7 * DAY } as const
@@ -855,6 +856,7 @@ export function registerLibraryTools(server: McpServer, host: LibraryToolHost, s
     return next
   }
   const skillBrief = (skill: ManagedSkill) => ({
+    activation: activationOf(skill),
     id: skill.id,
     name: skill.name,
     description: skill.description,
@@ -914,7 +916,7 @@ export function registerLibraryTools(server: McpServer, host: LibraryToolHost, s
     'skill_update',
     {
       description:
-        'Edit a skill by ID. Ramu-managed skills: change name, description or content. Pinned and installed skills are protected: refused unless the user explicitly asked for this change (see userRequested). For an installed skill, content replaces the whole SKILL.md file; the previous file is kept as a revision.',
+        'Edit a skill by ID. Ramu-managed skills: change name, description, content or activation requirements (null clears them). Pinned and installed skills are protected: refused unless the user explicitly asked for this change (see userRequested). For an installed skill, content replaces the whole SKILL.md file; the previous file is kept as a revision.',
       inputSchema: {
         id: field.id,
         expectedRevision: z.number().int().positive().optional(),
@@ -924,6 +926,7 @@ export function registerLibraryTools(server: McpServer, host: LibraryToolHost, s
           .optional(),
         description: z.string().trim().min(1).max(500).optional(),
         content: z.string().trim().min(1).max(16000).optional(),
+        activation: skillActivationSchema.nullable().optional(),
         reason: field.reason,
         ...consent,
       },
@@ -956,7 +959,12 @@ export function registerLibraryTools(server: McpServer, host: LibraryToolHost, s
           throw new Error('A skill with this name already exists in this scope')
         const next = revise(
           skill,
-          { name, description: change.description ?? skill.description, content: change.content ?? skill.content },
+          {
+            name,
+            description: change.description ?? skill.description,
+            content: change.content ?? skill.content,
+            ...(change.activation !== undefined ? { activation: change.activation ?? undefined } : {}),
+          },
           because(reason, skill.pinned ? request : undefined),
         )
         return { ...skillBrief(next), ...marked(skill.pinned, request) }

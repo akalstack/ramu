@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from 'node:fs'
 import { z } from 'zod'
-import type { AgentSettings, FileContext } from '@ramu/shared/types'
+import type { AgentSettings, FileContext, PermissionScope } from '@ramu/shared/types'
 import { MAX_ATTACHMENT_BYTES } from '../../attachments'
 import { lockCheckouts, lockSession } from '../helpers'
 import { agentSettings, attachmentIds, fileContext, id, text } from '../schemas'
@@ -142,8 +142,19 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         lockSession(ctx, s, () => agents.messageTask(s, agentId, text)),
     },
     'agent.replyPermission': {
-      args: z.tuple([id, id, z.boolean(), z.string().max(10_000).optional()]),
-      run: (s: string, r: string, allow: boolean, message?: string) => agents.replyPermission(s, r, allow, message),
+      args: z.tuple([
+        id,
+        id,
+        z.boolean(),
+        z.string().max(10_000).optional(),
+        z.enum(['once', 'project', 'user']).optional(),
+      ]),
+      run: (s: string, r: string, allow: boolean, message?: string, scope?: PermissionScope) =>
+        agents.replyPermission(s, r, allow, message, scope),
+    },
+    'agent.forgetPermission': {
+      args: z.tuple([id, id, z.enum(['project', 'user'])]),
+      run: (s: string, r: string, scope: 'project' | 'user') => agents.forgetPermission(s, r, scope),
     },
     'agent.replyQuestion': {
       args: z.tuple([id, z.string().min(1).max(300), z.record(z.string().max(10_000), z.string().max(10_000))]),

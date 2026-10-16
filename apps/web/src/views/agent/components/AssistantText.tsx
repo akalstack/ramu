@@ -1,6 +1,6 @@
 import { chatCodeComponents } from '../../../chat/ChatCodeBlock'
 import { ChatLink } from '../../../chat/ChatReferences'
-import { remarkChatReferences, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
+import { parseThreadReference, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
 import { useLanguage } from '../../../i18n'
 import { Children, memo, useEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
@@ -110,7 +110,9 @@ export const AssistantText = memo(function AssistantText({
       <Markdown
         remarkPlugins={[remarkGfm, remarkChatReferences]}
         urlTransform={(url) =>
-          url.startsWith(SKILL_REFERENCE_PREFIX) || localFileLink(url) ? url : defaultUrlTransform(url)
+          url.startsWith(SKILL_REFERENCE_PREFIX) || parseThreadReference(url) || localFileLink(url)
+            ? url
+            : defaultUrlTransform(url)
         }
         components={components}
       >

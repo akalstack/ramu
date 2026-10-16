@@ -3,7 +3,7 @@
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
-      "entry": ["scripts/**/*.mjs", "e2e/specs/*.spec.mjs", "e2e/perf/*.spec.mjs"],
+      "entry": ["scripts/**/*.mjs"],
       "ignoreBinaries": ["swift"],
       "ignoreDependencies": ["node-pty"]
     },

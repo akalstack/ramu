@@ -49,6 +49,8 @@ export type AgentSessionState =
   /** Transcript restored from disk; no live process. */
   | 'restored'
 
+export type PermissionScope = 'once' | 'project' | 'user'
+
 export interface AgentSessionInfo {
   /** Overview-only fields; native helpers remain owned by their parent provider session. */
   pendingInput?: boolean
@@ -219,7 +221,17 @@ type AgentEventBody =
       running?: boolean
     } & AgentToolDetails)
   | { kind: 'turn-diff'; turnId: string; diff: string }
-  | { kind: 'permission-request'; requestId: string; toolName: string; title: string; detail: string }
+  | {
+      kind: 'permission-request'
+      requestId: string
+      toolName: string
+      title: string
+      detail: string
+      approvalKey?: string
+      approvalProjectId?: string
+      approvalSessionId?: string
+      approvalProvider?: AgentProvider
+    }
   /** Plan usage a provider reported. Handed to the usage store and never recorded in the chat. */
   | { kind: 'usage'; readings: UsageReading[] }
   /** How full the model's context window is. Pushed to the chat's view and never recorded. */

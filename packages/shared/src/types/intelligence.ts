@@ -2,6 +2,8 @@ import type { AgentProvider, ReasoningEffort } from './agent'
 
 export interface IntelligencePreferences {
   toolSearch: boolean
+  crossThreadRecall: boolean
+  toolAwareSkills: boolean
   compression: 'off' | 'balanced' | 'aggressive'
   learning: 'off' | 'review' | 'auto'
   maintenanceModel: { provider: AgentProvider; model: string; effort: ReasoningEffort | null } | null
@@ -15,6 +17,8 @@ export interface IntelligencePreferences {
 }
 export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
   toolSearch: true,
+  crossThreadRecall: true,
+  toolAwareSkills: true,
   compression: 'balanced',
   learning: 'auto',
   maintenanceModel: null,
@@ -26,6 +30,13 @@ export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
   summaryOnHome: true,
 }
 export interface ManagedSkill {
+  /** Optional runtime requirements. Missing-tool fallbacks need a complete current tool inventory. */
+  activation?: {
+    requires_tools?: string[]
+    fallback_for_tools?: string[]
+    requires_toolsets?: string[]
+    fallback_for_toolsets?: string[]
+  }
   /** Present only for approved external installs. Supporting files are base64, never executed by Ramu. */
   installation?: { source: string; skill: string; cliVersion: string; markdown: string; files: Record<string, string> }
   id: string

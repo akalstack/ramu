@@ -3553,3 +3553,95 @@ it('preserves original user constraints and recent results when using a checkpoi
   expect(handoff).toContain('session_recall')
   expect(handoff).not.toContain('old output')
 })
+
+it('remembers exact Claude approvals for a project and forgets them from the transcript', async () => {
+  const svc = new AgentService(db, () => {}, fakeQuery([]))
+  const first = svc.start('t', scopeOf(cwd), 'First approval', DEFAULT_AGENT_SETTINGS)
+  await until(() => svc.get(first.id).state === 'needs-input')
+  const request = svc.events(first.id).find((event) => event.kind === 'permission-request')!
+  expect(request).toMatchObject({
+    approvalProjectId: 'p',
+    approvalSessionId: first.id,
+    approvalKey: expect.any(String),
+  })
+  if (request.kind !== 'permission-request') throw new Error('No permission request')
+  svc.replyPermission(first.id, request.requestId, true, undefined, 'project')
+  await until(() => svc.get(first.id).state === 'idle')
+  expect(svc.events(first.id)).toContainEqual(
+    expect.objectContaining({ kind: 'request-resolved', outcome: 'allowed-project' }),
+  )
+  const second = svc.start('t2', scopeOf(cwd), 'Remembered approval', DEFAULT_AGENT_SETTINGS)
+  await until(() => svc.get(second.id).state === 'idle')
+  expect(svc.events(second.id)).toContainEqual(
+    expect.objectContaining({ kind: 'request-resolved', outcome: 'allowed-project' }),
+  )
+  db.prepare("UPDATE agent_sessions SET provider = 'codex' WHERE id = ?").run(first.id)
+  svc.forgetPermission(first.id, request.requestId, 'project')
+  const third = svc.start('t', scopeOf(cwd), 'Ask again', DEFAULT_AGENT_SETTINGS)
+  await until(() => svc.get(third.id).state === 'needs-input')
+  svc.stopAll()
+})
+
+it('one-time approval is not remembered, and stale permission replies cannot save a rule', async () => {
+  const svc = new AgentService(db, () => {}, fakeQuery([]))
+  const first = svc.start('t', scopeOf(cwd), 'Once', DEFAULT_AGENT_SETTINGS)
+  await until(() => svc.get(first.id).state === 'needs-input')
+  const request = svc.events(first.id).find((event) => event.kind === 'permission-request')!
+  if (request.kind !== 'permission-request') throw new Error('No permission request')
+  svc.replyPermission(first.id, request.requestId, true)
+  await until(() => svc.get(first.id).state === 'idle')
+  expect(() => svc.replyPermission(first.id, request.requestId, true, undefined, 'user')).toThrow('closed')
+  const second = svc.start('t2', scopeOf(cwd), 'Ask again', DEFAULT_AGENT_SETTINGS)
+  await until(() => svc.get(second.id).state === 'needs-input')
+  svc.stopAll()
+})
+
+it.each(['codex', 'opencode', 'antigravity', 'cursor'] as const)(
+  'applies saved user approvals through the %s runner boundary',
+  async (provider) => {
+    let next = 0
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
+      const requestId = `native-${++next}`
+      return {
+        start: async () => {
+          emit({
+            kind: 'permission-request',
+            requestId,
+            toolName: 'Bash',
+            title: 'Allow command?',
+            detail: 'pwd',
+            approvalKey: 'exact-native-action',
+          })
+          emit({ kind: 'state', state: 'needs-input' })
+        },
+        send: async () => {},
+        interrupt: async () => {},
+        stop: async () => {},
+        replyQuestion: () => {},
+        replyPermission: (_id, allow) => {
+          emit({ kind: 'request-resolved', requestId, outcome: allow ? 'allowed' : 'denied' })
+          emit({ kind: 'state', state: 'running' })
+          emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
+        },
+      }
+    }
+    const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
+    const settings = { ...DEFAULT_AGENT_SETTINGS, provider }
+    const first = svc.start('t', scopeOf(cwd), 'Approve', settings)
+    await until(() => svc.get(first.id).state === 'needs-input')
+    svc.replyPermission(first.id, 'native-1', true, undefined, 'user')
+    await until(() => svc.get(first.id).state === 'idle')
+    db.exec(
+      "INSERT INTO projects (id, name, created_at) VALUES ('other', 'Other', 0); INSERT INTO tasks (id, project_id, title, mode, status, created_at) VALUES ('other-task', 'other', 'Other', 'current', 'idle', 0)",
+    )
+    const second = svc.start('other-task', scopeOf(cwd), 'Remember across projects', settings)
+    await until(() => svc.get(second.id).state === 'idle')
+    expect(svc.events(second.id)).toContainEqual(
+      expect.objectContaining({ kind: 'request-resolved', outcome: 'allowed-user' }),
+    )
+    svc.forgetPermission(first.id, 'native-1', 'user')
+    const third = svc.start('t2', scopeOf(cwd), 'Ask again', settings)
+    await until(() => svc.get(third.id).state === 'needs-input')
+    svc.stopAll()
+  },
+)

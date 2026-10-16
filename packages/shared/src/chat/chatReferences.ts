@@ -1,5 +1,24 @@
 export type ChatReference = { kind: 'text'; text: string } | { kind: 'skill' | 'file'; text: string; target: string }
 export const SKILL_REFERENCE_PREFIX = 'ramu-skill:'
+const THREAD_REFERENCE_PREFIX = 'ramu-thread:'
+
+export function threadReference(taskId: string, sessionId: string, seq: number): string {
+  return `${THREAD_REFERENCE_PREFIX}${encodeURIComponent(taskId)}/${encodeURIComponent(sessionId)}/${seq}`
+}
+
+export function parseThreadReference(url: string) {
+  if (!url.startsWith(THREAD_REFERENCE_PREFIX)) return null
+  const parts = url.slice(THREAD_REFERENCE_PREFIX.length).split('/')
+  if (parts.length !== 3 || !/^[1-9]\d*$/.test(parts[2]!)) return null
+  try {
+    const taskId = decodeURIComponent(parts[0]!),
+      sessionId = decodeURIComponent(parts[1]!),
+      seq = Number(parts[2])
+    return taskId && sessionId && Number.isSafeInteger(seq) ? { taskId, sessionId, seq } : null
+  } catch {
+    return null
+  }
+}
 
 /** Explicit mentions become chips; code, prices, shell variables, and email addresses stay text. */
 export function chatReferences(text: string): ChatReference[] {

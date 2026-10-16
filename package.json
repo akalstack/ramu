@@ -2,7 +2,7 @@
   "name": "ramu-monorepo",
   "version": "0.1.0-alpha.1",
   "private": true,
-  "description": "Ramu — your project, every repo, one workspace.",
+  "description": "Ramu \u2014 your project, every repo, one workspace.",
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @ramu/desktop dev",
@@ -20,9 +20,6 @@
     "make": "node scripts/release/desktop-package.mjs make",
     "ui:add": "pnpm --filter @ramu/web ui:add",
     "server": "node apps/server/dist/cli.js",
-    "test:e2e": "node e2e/run.mjs",
-    "test:e2e:perf": "node e2e/run.mjs --perf",
-    "test:e2e:changed": "node e2e/run.mjs --changed",
     "check": "pnpm format:check && pnpm lint && pnpm knip && pnpm typecheck && pnpm test && pnpm test:scripts && pnpm build",
     "test:scripts": "node --test scripts/release/release.test.mjs",
     "release:prepare": "node scripts/release/release.mjs prepare",
@@ -32,7 +29,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "knip": "knip"
+    "knip": "knip",
+    "test:desktop-smoke": "node --test --test-timeout=60000 scripts/smoke/desktop-smoke.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -40,8 +40,8 @@ export default tseslint.config(
     rules: { 'react-hooks/rules-of-hooks': 'error', 'react-hooks/exhaustive-deps': 'warn' },
   },
   {
-    // E2E specs and mobile webview scripts run snippets inside a browser page.
-    files: ['e2e/**/*.mjs', 'apps/mobile/scripts/**/*.{js,mjs}'],
+    // Mobile webview scripts run snippets inside a browser page.
+    files: ['apps/mobile/scripts/**/*.{js,mjs}'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {

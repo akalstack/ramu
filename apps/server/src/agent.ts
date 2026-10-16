@@ -106,6 +106,7 @@ export class AgentService {
         return parts.pump.agentCalls
       },
       analyze: (...a) => this.analyze(...a),
+      applySavedPermission: (...a) => parts.requests.applySavedPermission(...a),
       get attempted() {
         return parts.router.attempted
       },
@@ -636,6 +637,10 @@ export class AgentService {
 
   stopAndWait(...args: Parameters<SessionProcess['stopAndWait']>) {
     return this.parts.process.stopAndWait(...args)
+  }
+
+  forgetPermission(...args: Parameters<UserRequests['forgetPermission']>) {
+    return this.parts.requests.forgetPermission(...args)
   }
 
   replyPermission(...args: Parameters<UserRequests['replyPermission']>) {

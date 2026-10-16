@@ -2,7 +2,13 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import { describe, expect, it } from 'vitest'
-import { chatReferences, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '../src/chat/chatReferences'
+import {
+  chatReferences,
+  parseThreadReference,
+  threadReference,
+  remarkChatReferences,
+  SKILL_REFERENCE_PREFIX,
+} from '../src/chat/chatReferences'
 import { localFileLink } from '../src/workspace/fileLinks'
 
 const render = (text: string) =>
@@ -10,12 +16,27 @@ const render = (text: string) =>
     createElement(Markdown, {
       remarkPlugins: [remarkChatReferences],
       urlTransform: (url) =>
-        url.startsWith(SKILL_REFERENCE_PREFIX) || localFileLink(url) ? url : defaultUrlTransform(url),
+        url.startsWith(SKILL_REFERENCE_PREFIX) || parseThreadReference(url) || localFileLink(url)
+          ? url
+          : defaultUrlTransform(url),
       children: text,
     }),
   )
 
 describe('inline thread references', () => {
+  it('preserves source links and safely parses encoded IDs and message numbers', () => {
+    const link = threadReference('task / test', 'session', 12)
+    expect(parseThreadReference(link)).toEqual({ taskId: 'task / test', sessionId: 'session', seq: 12 })
+    expect(render(`[Original decision](${link})`)).toContain(`href="${link}"`)
+    for (const invalid of [
+      'ramu-thread:t/s/0',
+      'ramu-thread:t/s/NaN',
+      'ramu-thread:t/s/999999999999999999999',
+      'ramu-thread:%ZZ/s/1',
+      'https://example.com',
+    ])
+      expect(parseThreadReference(invalid)).toBeNull()
+  })
   it('recognizes skill calls and repository-qualified file mentions without changing the message', () => {
     const text = 'Use $artifact-template-operating-review with @"ramu/src/App.tsx".'
     const parts = chatReferences(text)

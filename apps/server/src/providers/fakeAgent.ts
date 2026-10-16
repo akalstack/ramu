@@ -1,3 +1,4 @@
+import { permissionKey } from '../agent/permissionApprovals'
 // Test-only stand-in for the Claude Agent SDK, enabled with RAMU_FAKE_AGENT=1. It exercises the
 // same event, permission and transcript paths as the real adapter without spending model usage.
 import { randomUUID } from 'node:crypto'
@@ -794,6 +795,7 @@ export const fakeCodex: import('../agent/agentRunner').AgentRunnerFactory = (sco
           toolName: 'Bash',
           title: 'Allow command?',
           detail: 'pwd',
+          approvalKey: permissionKey('Bash', { command: 'pwd' }),
         })
         emit({ kind: 'state', state: 'needs-input' })
       })

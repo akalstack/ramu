@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Folder, Quote, SquareTerminal, WandSparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { FileIcon } from '../editor/FileIcon'
-import { SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
+import { parseThreadReference, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { t, useLanguage } from '../i18n'
@@ -24,6 +24,29 @@ function SkillReference({ name }: { name: string }) {
 export function ChatLink({ href, children, taskId }: { href?: string; children: ReactNode; taskId?: string }) {
   useLanguage()
   const ws = useWorkspace()
+  const thread = href && parseThreadReference(href)
+  if (thread)
+    return (
+      <a
+        href={href}
+        onClick={(event) => {
+          event.preventDefault()
+          if (!ws.task(thread.taskId)) {
+            notifyError('This thread is no longer available.', 'Open thread')
+            return
+          }
+          ws.openTask(thread.taskId)
+          ws.openView(thread.taskId, {
+            kind: 'agent',
+            sessionId: thread.sessionId,
+            sourceSeq: thread.seq,
+            sourceRequestId: crypto.randomUUID(),
+          })
+        }}
+      >
+        {children}
+      </a>
+    )
   if (href?.startsWith(SKILL_REFERENCE_PREFIX)) {
     let name: string
     try {

@@ -1,3 +1,4 @@
+import { permissionKey } from '../agent/permissionApprovals'
 import { elicitationRequest, elicitationContent } from '../agent/elicitation'
 import { attachmentPrompt } from '../attachments'
 import { agentContent } from '@ramu/shared/chat/agentContent'
@@ -576,6 +577,16 @@ class CodexSession implements CodexRunner {
           toolName: m.method.includes('commandExecution') ? 'Bash' : 'Edit',
           title: m.method.includes('commandExecution') ? 'Allow command?' : 'Allow file changes?',
           detail: [p.command, p.reason].filter(Boolean).join('\n'),
+          ...(p.command
+            ? {
+                approvalKey: permissionKey(
+                  'Bash',
+                  Object.fromEntries(
+                    Object.entries(p).filter(([key]) => !['threadId', 'turnId', 'itemId', 'reason'].includes(key)),
+                  ),
+                ),
+              }
+            : {}),
         })
         this.emit({ kind: 'state', state: 'needs-input' })
       } else if (m.method === 'item/permissions/requestApproval') {

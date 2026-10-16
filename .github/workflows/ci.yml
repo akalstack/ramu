@@ -28,13 +28,13 @@ jobs:
         run: if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y ripgrep; else brew install ripgrep; fi
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      # Headless Electron specs use macOS keyboard shortcuts, an isolated profile and simulated providers.
+      # One desktop startup smoke test uses an isolated profile and simulated providers.
       - if: runner.os == 'macOS'
-        run: pnpm test:e2e
+        run: pnpm test:desktop-smoke
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: failure-${{ matrix.os }}
-          path: e2e/output/
+          path: output/desktop-smoke/
           if-no-files-found: ignore
           retention-days: 7

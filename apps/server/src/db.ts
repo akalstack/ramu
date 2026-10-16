@@ -156,6 +156,26 @@ const MIGRATIONS: string[] = [
   // Backups of installed SKILL.md files a review chat changed at the user's request, so each edit can be restored.
   `CREATE TABLE installed_skill_revisions (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL, name TEXT NOT NULL, content TEXT NOT NULL, reason TEXT, session_id TEXT, at INTEGER NOT NULL);
   CREATE INDEX installed_skill_revisions_by_path ON installed_skill_revisions(path, id);`,
+  // Full-text recall indexes visible prose only; original events remain authoritative.
+  `CREATE VIEW session_search_messages AS
+    SELECT rowid AS id, session_id, seq,
+      CASE json_extract(event, '$.kind')
+        WHEN 'content' THEN (SELECT group_concat(json_extract(value, '$.text'), char(10)) FROM json_each(event, '$.content') WHERE json_extract(value, '$.type') = 'text')
+        ELSE json_extract(event, '$.text') END AS text
+    FROM agent_events
+    WHERE json_extract(event, '$.kind') IN ('user', 'text', 'content') AND json_extract(event, '$.agentId') IS NULL;
+  CREATE VIRTUAL TABLE session_search_fts USING fts5(session_id UNINDEXED, seq UNINDEXED, text, tokenize='unicode61');
+  INSERT INTO session_search_fts(rowid, session_id, seq, text) SELECT id, session_id, seq, text FROM session_search_messages WHERE text IS NOT NULL;
+  CREATE TRIGGER session_search_insert AFTER INSERT ON agent_events BEGIN
+    INSERT INTO session_search_fts(rowid, session_id, seq, text) SELECT id, session_id, seq, text FROM session_search_messages WHERE id=new.rowid AND text IS NOT NULL;
+  END;
+  CREATE TRIGGER session_search_delete AFTER DELETE ON agent_events BEGIN
+    DELETE FROM session_search_fts WHERE rowid=old.rowid;
+  END;
+  CREATE TRIGGER session_search_update AFTER UPDATE ON agent_events BEGIN
+    DELETE FROM session_search_fts WHERE rowid=old.rowid;
+    INSERT INTO session_search_fts(rowid, session_id, seq, text) SELECT id, session_id, seq, text FROM session_search_messages WHERE id=new.rowid AND text IS NOT NULL;
+  END;`,
 ]
 
 export type Db = DatabaseSync

@@ -179,6 +179,32 @@ export function LearningSettings({ value, onChange }: Props) {
   return (
     <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 mt-6">
       <SettingsGroupTitle>{t('Learning & skills')}</SettingsGroupTitle>
+      <SettingsRow setting="intelligence.crossThreadRecall">
+        <SettingsLabel
+          title={t('Recall past conversations')}
+          help={t(
+            'Let agents search earlier threads across providers. Turning this off keeps your history and same-thread recall.',
+          )}
+        />
+        <Switch
+          aria-label={t('Recall past conversations')}
+          checked={value.crossThreadRecall}
+          onCheckedChange={(crossThreadRecall) => onChange({ ...value, crossThreadRecall })}
+        />
+      </SettingsRow>
+      <SettingsRow setting="intelligence.toolAwareSkills">
+        <SettingsLabel
+          title={t('Tool-aware skills')}
+          help={t(
+            'Select skills that match the agent’s current tools. When off, skills with tool requirements are withheld; ordinary skills stay available.',
+          )}
+        />
+        <Switch
+          aria-label={t('Tool-aware skills')}
+          checked={value.toolAwareSkills}
+          onCheckedChange={(toolAwareSkills) => onChange({ ...value, toolAwareSkills })}
+        />
+      </SettingsRow>
       <SettingsRow setting="intelligence.learning">
         <SettingsLabel
           title={t('Automatic learning')}

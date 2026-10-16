@@ -51,6 +51,8 @@ const KNOWN = new Set([
   'skill_search',
   'skill_read',
   'session_recall',
+  'session_search',
+  'skill_resolve',
   'review_reply',
   'review_add_note',
   'schedule_create',
@@ -249,6 +251,10 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Searched skills', 'Searching skills', 'sparkles', quote(query))
     case 'skill_read':
       return reply('Read skill', 'Reading skill', 'sparkles', quote(text(data.name)))
+    case 'session_search':
+      return reply('Searched previous threads', 'Searching previous threads', 'search', quote(text(args.query)))
+    case 'skill_resolve':
+      return reply('Selected compatible skills', 'Selecting compatible skills', 'sparkles')
     case 'session_recall':
       return reply('Recalled earlier messages', 'Recalling earlier messages', 'book')
     case 'review_reply':

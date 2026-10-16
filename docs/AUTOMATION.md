@@ -48,4 +48,4 @@ Provider text and command output update existing rows while running. Completed r
 
 ## Checks
 
-Run `pnpm check`, then `pnpm test:e2e` on macOS. The Electron journey uses an isolated profile and simulated providers. Live provider behavior and installed login startup need separate validation.
+Run `pnpm check`, then `pnpm test:desktop-smoke` on macOS after building. The single startup check uses an isolated profile and simulated providers. Cover automation behavior with focused unit or integration tests. Live provider behavior and installed login startup need separate validation.

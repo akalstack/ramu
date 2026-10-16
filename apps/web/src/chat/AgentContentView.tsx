@@ -1,6 +1,6 @@
 import { chatCodeComponents } from './ChatCodeBlock'
 import { ChatLink } from './ChatReferences'
-import { remarkChatReferences, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
+import { parseThreadReference, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
@@ -142,7 +142,9 @@ export function AgentContentView({
                 <Markdown
                   remarkPlugins={[remarkGfm, remarkChatReferences]}
                   urlTransform={(url) =>
-                    url.startsWith(SKILL_REFERENCE_PREFIX) || localFileLink(url) ? url : defaultUrlTransform(url)
+                    url.startsWith(SKILL_REFERENCE_PREFIX) || parseThreadReference(url) || localFileLink(url)
+                      ? url
+                      : defaultUrlTransform(url)
                   }
                   components={{
                     ...chatCodeComponents,

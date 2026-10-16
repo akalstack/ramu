@@ -702,9 +702,21 @@ describe('review thread tools', () => {
       learning.write(skillOf('sk1'))
       learning.control('sk1', 'pin')
       expect(call('skill_update', { id: 'sk1', content: 'New', reason: 'r' }).error).toBe(true)
-      const updated = call('skill_update', { id: 'sk1', content: 'New', reason: 'r', ...consent })
+      const updated = call('skill_update', {
+        id: 'sk1',
+        content: 'New',
+        activation: { requires_tools: ['browser_open'] },
+        reason: 'r',
+        ...consent,
+      })
       expect(JSON.parse(updated.text)).toMatchObject({ protectedChange: true, pinned: true })
       expect(learning.skills()[0]).toMatchObject({ content: 'New', pinned: true, revision: 3 })
+      expect(JSON.parse(call('skill_inspect', { id: 'sk1' }).text).activation).toEqual({
+        requires_tools: ['browser_open'],
+      })
+      const cleared = call('skill_update', { id: 'sk1', activation: null, reason: 'Clear requirements', ...consent })
+      expect(cleared.error).toBe(false)
+      expect(learning.skills()[0]!.activation).toBeUndefined()
       learning.revert('sk1', 2)
       expect(learning.skills()[0]!.content).toBe('Do sk1 carefully.')
     })

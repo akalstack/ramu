@@ -14,6 +14,10 @@ import { MemoryService } from '../src/memory/memory'
 import type { AgentService } from '../src/agent'
 import { LearningService } from '../src/memory/learning'
 import { CompressionService } from '../src/compression'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { ToolRegistry } from '../src/agent/toolRegistry'
 
 let db: Db, root: string, workspace: Workspace, memory: MemoryService, service: LearningService
 let trace: AgentEvent[], analyze: ReturnType<typeof vi.fn<AgentService['analyze']>>
@@ -245,6 +249,61 @@ it('recalls original visible evidence by sequence without transferring provider 
   expect(JSON.stringify(result)).toContain('Fix retries')
   expect(JSON.stringify(result)).toContain('Provider reasoning is not included')
   expect(JSON.stringify(result)).not.toContain('Hidden provider reasoning')
+})
+
+it('discovers cross-thread recall and skill selection through real deferred MCP with validated defaults', async () => {
+  db.prepare('INSERT INTO agent_events VALUES (?, ?, ?)').run(
+    'other',
+    1,
+    JSON.stringify({ kind: 'text', text: 'Authentication uses refresh rotation.' }),
+  )
+  service.write({
+    id: 'browser',
+    projectId: 'p',
+    name: 'browser-tests',
+    description: 'Test with a browser',
+    content: 'Run browser checks.',
+    activation: { requires_tools: ['browser_open'] },
+    status: 'active',
+    pinned: false,
+    revision: 1,
+    createdAt: 1,
+    updatedAt: 1,
+    lastUsedAt: null,
+    useCount: 0,
+    sourceSessionId: 's',
+    sourceSeq: 1,
+  })
+  const server = new McpServer({ name: 'ramu', version: 'test' })
+  const registry = new ToolRegistry(server, true)
+  service.register(registry.server, 's')
+  registry.expose()
+  const client = new Client({ name: 'test', version: '1' })
+  const [left, right] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(left), client.connect(right)])
+  const call = async (name: string, args: Record<string, unknown>) => {
+    const result = await client.callTool({ name: 'tool_invoke', arguments: { name, arguments: args } })
+    if (result.isError) throw new Error(JSON.stringify(result.content))
+    return JSON.parse((result.content as { text: string }[])[0]!.text)
+  }
+  try {
+    expect(registry.search('previous threads').map((entry) => entry.name)).toContain('session_search')
+    const result = await call('session_search', { query: 'authentication' })
+    expect(result.matches[0]).toMatchObject({ sessionId: 'other', seq: 1 })
+    expect((await call('session_recall', { sessionId: 'other' })).events[0].event.text).toContain('refresh rotation')
+    expect(await call('skill_resolve', { availableTools: [] })).toEqual([])
+    expect((await call('skill_resolve', { id: 'browser', availableTools: ['browser_open'] })).content).toBe(
+      'Run browser checks.',
+    )
+    const invalid = await client.callTool({
+      name: 'tool_invoke',
+      arguments: { name: 'session_recall', arguments: { startSeq: 0 } },
+    })
+    expect(invalid.isError).toBe(true)
+  } finally {
+    await client.close()
+    await server.close()
+  }
 })
 
 it('cancels skill learning without applying a late proposal or retrying the dismissed job', async () => {

@@ -57,7 +57,7 @@ Ramu's advisor replaces Claude Code's configured advisor for threads it starts, 
 
 ## Checks
 
-Simulated fixtures check adapters and transcripts; they do not verify every live runtime. For advisor UI checks, build and run `pnpm test:e2e advisor`. Provider authentication and real model calls need separate validation.
+Simulated fixtures check adapters and transcripts; they do not verify every live runtime. Add focused unit or integration tests for advisor behavior changes, manually verify affected advisor UI, and run `pnpm test:desktop-smoke` after building for startup validation. Provider authentication and real model calls need separate validation.
 
 ## First run
 

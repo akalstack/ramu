@@ -482,7 +482,14 @@ export interface RamuMethods {
   'agent.stopTask'(sessionId: string, agentId: string): void
   /** Sends a message to a sub-agent through the main agent (Claude SendMessage, Codex send_input). */
   'agent.messageTask'(sessionId: string, agentId: string, text: string): void
-  'agent.replyPermission'(sessionId: string, requestId: string, allow: boolean, message?: string): void
+  'agent.replyPermission'(
+    sessionId: string,
+    requestId: string,
+    allow: boolean,
+    message?: string,
+    scope?: 'once' | 'project' | 'user',
+  ): void
+  'agent.forgetPermission'(sessionId: string, requestId: string, scope: 'project' | 'user'): void
   'agent.replyQuestion'(sessionId: string, requestId: string, answers: Record<string, string>): void
   'agent.replyElicitation'(
     sessionId: string,

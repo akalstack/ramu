@@ -1,3 +1,4 @@
+import { permissionKey } from '../agent/permissionApprovals'
 // OpenCode 2 chats through its HTTP API (`@opencode/client`). Each chat runs its own `opencode serve`, so the
 // account's config directories and the per-chat config (Ramu's tool server, skills, sub-agent switch) stay separate.
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -508,6 +509,9 @@ export class OpenCodeSession implements AgentRunner {
           toolName: d.action,
           title: d.message || `Allow ${d.action}?`,
           detail: (d.resources ?? []).join('\n'),
+          ...(d.resources?.length && !d.resources.includes('*')
+            ? { approvalKey: permissionKey(d.action, d.resources) }
+            : {}),
         })
         return this.emit({ kind: 'state', state: 'needs-input' })
       }

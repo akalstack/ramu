@@ -3,6 +3,7 @@ import { lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, wr
 import { dirname, join } from 'node:path'
 import { parse, stringify } from 'yaml'
 import type { ManagedSkill } from '@ramu/shared/types'
+import { metadataActivation } from './skillActivation'
 
 export function safeSkillPath(path: string): boolean {
   return (
@@ -69,6 +70,7 @@ export function skillMetadata(markdown: string) {
     metadata.description.length > 4000
   )
     throw new Error('Skill needs a short kebab-case name and a description.')
+  metadataActivation(metadata)
   return { name: metadata.name, description: metadata.description.trim(), content: match[2]!, metadata }
 }
 

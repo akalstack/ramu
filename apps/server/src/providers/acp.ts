@@ -16,6 +16,7 @@ import type {
   ElicitationAction,
   McpConnection,
 } from '@ramu/shared/types'
+import { permissionKey } from '../agent/permissionApprovals'
 import { ramuTool } from '@ramu/shared/chat/ramuTools'
 import { providerName } from '@ramu/shared/providers/providers'
 import { attachmentPrompt } from '../attachments'
@@ -770,6 +771,16 @@ class AcpSession implements AgentRunner {
           requestId: id,
           toolName: p.toolCall?._meta?.claudeCode?.toolName || p.toolCall?.kind || 'Plan',
           title: p.toolCall?.title || p.name || 'Approve plan?',
+          ...(m.method === 'session/request_permission' &&
+          p.toolCall?.rawInput &&
+          Object.keys(p.toolCall.rawInput).length
+            ? {
+                approvalKey: permissionKey(
+                  p.toolCall?._meta?.claudeCode?.toolName || p.toolCall?.kind || 'Tool',
+                  p.toolCall.rawInput,
+                ),
+              }
+            : {}),
           detail: p.plan || JSON.stringify(p.toolCall?.rawInput ?? {}),
         })
       this.emit({ kind: 'state', state: 'needs-input' })
