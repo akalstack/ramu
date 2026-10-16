@@ -84,6 +84,11 @@ export function EventRow({
                 })}
               </span>
             )}
+            {e.state === 'completed' && counts.window && (
+              <span className="text-caption tabular-nums">
+                · {translate('Context window: {0} tokens', { '0': counts.window })}
+              </span>
+            )}
           </span>
           <span className="h-px min-w-4 flex-1 bg-border" aria-hidden="true" />
         </div>
@@ -94,32 +99,35 @@ export function EventRow({
     case 'settings':
       return (
         <div className={CONVERSATION_SEPARATOR_CLASS}>
-          <span className="inline-flex min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1" title={e.reason}>
-            {e.handoff ? (
-              <ArrowRightLeft size={14} className="flex-none" aria-hidden="true" />
-            ) : (
-              <Settings2 size={14} className="flex-none" aria-hidden="true" />
-            )}
-            {translate(e.handoff ? 'Context handoff' : 'Settings changed')}
-            <SettingsChange next={e.settings} previous={e.previous} />
-            {e.previous && live && (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className={`${GHOST_TEXT_BUTTON_CLASS} separator-action size-[22px] min-h-[22px] p-0 text-soft`}
-                title={translate('Go back to the previous model and settings')}
-                onClick={() =>
-                  void invoke('agent.configure', sessionId, e.previous!).catch((error) =>
-                    notifyError(errorText(error), 'Model'),
-                  )
-                }
-              >
-                <RotateCcw size={13} aria-hidden="true" />
-                <span className="sr-only">
-                  <SwitchBackLabel previous={e.previous} />
-                </span>
-              </Button>
-            )}
+          <span className="min-w-0">
+            <span className="inline-flex min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1">
+              {e.handoff ? (
+                <ArrowRightLeft size={14} className="flex-none" aria-hidden="true" />
+              ) : (
+                <Settings2 size={14} className="flex-none" aria-hidden="true" />
+              )}
+              {translate(e.handoff ? 'Context handoff' : 'Settings changed')}
+              <SettingsChange next={e.settings} previous={e.previous} />
+              {e.previous && live && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className={`${GHOST_TEXT_BUTTON_CLASS} separator-action size-[22px] min-h-[22px] p-0 text-soft`}
+                  title={translate('Go back to the previous model and settings')}
+                  onClick={() =>
+                    void invoke('agent.configure', sessionId, e.previous!).catch((error) =>
+                      notifyError(errorText(error), 'Model'),
+                    )
+                  }
+                >
+                  <RotateCcw size={13} aria-hidden="true" />
+                  <span className="sr-only">
+                    <SwitchBackLabel previous={e.previous} />
+                  </span>
+                </Button>
+              )}
+            </span>
+            {e.reason && e.reason !== 'Changed conversation settings' && <small>{e.reason}</small>}
           </span>
         </div>
       )

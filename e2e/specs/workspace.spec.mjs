@@ -4,7 +4,7 @@
 // Source Control, editing and the worktree basics live in projects.spec.mjs.
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
-import { git, modifier, palette, showAdvanced, startRamu, useFakeModel } from '../support/index.mjs'
+import { git, modifier, palette, startRamu, useFakeModel } from '../support/index.mjs'
 
 const ramu = await startRamu('workspace', {
   env: ({ dir }) => ({ RAMU_TEST_PICK_DIRECTORY: join(dir, 'shop') }),
@@ -50,11 +50,13 @@ async function startChat(prompt, { worktree = false } = {}) {
   const home = page.getByRole('button', { name: 'Home', exact: true })
   if ((await home.getAttribute('aria-pressed')) !== 'true') await home.click()
   await page.getByRole('button', { name: 'New thread in shop', exact: true }).click()
-  if (worktree) {
-    await showAdvanced(ramu)
-    await page.getByRole('button', { name: 'Where the work happens' }).click()
-    await page.getByRole('menuitem', { name: /New isolated worktrees/i }).click()
-  }
+  const checkout = page.getByRole('button', { name: 'Where the work happens' })
+  await checkout.waitFor()
+  assert.match(await checkout.innerText(), /Current checkout/, 'checkout is visible by default')
+  await checkout.click()
+  await page.getByRole('menuitem', { name: /New isolated worktrees/i }).waitFor()
+  await page.getByRole('menuitem', { name: worktree ? /New isolated worktrees/i : /Current checkout/i }).click()
+  await ramu.shot('checkout-selector')
   await startComposer().fill(prompt)
   await page.keyboard.press('Enter')
   if (worktree) {
@@ -137,7 +139,11 @@ ramu.test('model, effort and access switch inside one thread', async () => {
   const handoff = chat.locator('.conversation-separator', { hasText: 'Context handoff' }).first()
   await handoff.waitFor()
   assert.equal(await handoff.locator('.provider-icon').count(), 2, 'handoff identifies both providers')
-  assert.equal(await handoff.locator('small').count(), 0, 'handoff copy fits into the centered separator')
+  assert.equal(
+    await handoff.getByText('Changed conversation settings', { exact: true }).count(),
+    0,
+    'generic settings copy is omitted',
+  )
   await ramu.shot('inline-settings')
   await finishTurn()
   assert.equal((await ramu.api('tasks.list')).find((t) => t.title === 'Add password reset') !== undefined, true)

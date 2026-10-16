@@ -21,8 +21,8 @@ ramu.test('shows live compaction beside tool activity and preserves exact contex
   check((await marker.count()) === 1, 'Delayed usage updates the same compaction marker')
   check((await marker.innerText()).includes('Context compacted'), 'Compaction has a short label')
   check(
-    (await marker.getByTitle('Context window: 258,400 tokens', { exact: true }).count()) === 1,
-    'Context window capacity is available on hover',
+    (await marker.innerText()).includes('Context window: 258,400 tokens'),
+    'Context window capacity is visible with the token counts',
   )
   check((await live.count()) === 0, 'Live compaction status clears on completion')
   await ramu.shot('compacted')

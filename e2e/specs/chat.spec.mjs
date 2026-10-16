@@ -159,7 +159,7 @@ ramu.test(
     await find.fill('command-')
     await page.locator('.chat-find-count', { hasText: '1 of 3' }).waitFor()
     const findBox = await page.locator('.chat-find-bar').boundingBox()
-    const chatBox = await page.locator('.main-chat').boundingBox()
+    const chatBox = await page.locator('.main-chat:visible').boundingBox()
     assert.ok(findBox.width <= 420 && findBox.width < chatBox.width / 2, 'the find panel stays compact')
     await find.press('Enter')
     await page.locator('.chat-find-count', { hasText: '2 of 3' }).waitFor()
