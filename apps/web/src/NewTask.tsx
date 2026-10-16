@@ -124,7 +124,6 @@ export function NewTask({
   const [workspaceId, setWorkspaceId] = useState<string | null>(ws.composingWorkspace)
   const [mode, setMode] = useState<CheckoutMode>('current')
   const showAdvanced = useShowAdvanced()
-  const [showCheckout, setShowCheckout] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [prompt, setPrompt] = useState(() => loadDraft(draftKey.newChat(projectId)))
   useDraftPersistence(draftKey.newChat(projectId), prompt)
@@ -351,18 +350,7 @@ export function NewTask({
               }
               items={projectItems}
             />
-            {!general && !showCheckout && !showAdvanced && mode === 'current' && !existingWorkspace && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('Choose checkout')}
-                title={t('Choose checkout')}
-                onClick={() => setShowCheckout(true)}
-              >
-                <GitBranch data-icon="inline-start" />
-              </Button>
-            )}
-            {!general && (showCheckout || showAdvanced || mode !== 'current' || !!existingWorkspace) && (
+            {!general && (showAdvanced || mode !== 'current' || !!existingWorkspace) && (
               <Menu
                 label={t('Where the work happens')}
                 className={CHIP}

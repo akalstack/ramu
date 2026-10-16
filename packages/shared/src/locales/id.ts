@@ -25,7 +25,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Choose the repository you want to work on. Your files stay where they are.": "Pilih repositori yang ingin kamu kerjakan. File tetap di tempatnya.",
   "Choose repository": "Pilih repositori",
   "Set up later": "Atur nanti",
-  "Choose checkout": "Pilih checkout",
   "Copy diagram source": "Salin sumber diagram",
   "Mermaid diagram": "Diagram Mermaid",
   "Diagram preview unavailable. The source is shown below.": "Pratinjau diagram tidak tersedia. Sumbernya ditampilkan di bawah.",
