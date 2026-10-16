@@ -4,7 +4,12 @@ import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { resolveInRoot } from './files'
 import type { Workspace } from './workspace'
 
-export async function resolveFileLink(workspace: Workspace, taskId: string, href: string) {
+export async function resolveFileLink(
+  workspace: Workspace,
+  taskId: string,
+  href: string,
+  options: { folders?: boolean } = {},
+) {
   const target = localFileLink(href)
   if (!target) return null
   const bindings = workspace.fileBindings(taskId),
@@ -12,14 +17,20 @@ export async function resolveFileLink(workspace: Workspace, taskId: string, href
   const candidates = isAbsolute(target.path)
     ? [target.path]
     : [...new Set([scope.cwd, ...bindings.map((binding) => binding.cwd)])].map((cwd) => resolve(cwd, target.path))
-  const matches = new Map<string, { repoId: string; path: string; line?: number; column?: number }>()
+  const matches = new Map<
+    string,
+    { repoId: string; path: string; line?: number; column?: number; kind?: 'file' | 'folder' }
+  >()
   for (const candidate of candidates)
     for (const binding of bindings) {
       if (binding.setupState !== 'ready') continue
       const path = relative(binding.cwd, candidate)
       try {
         const absolute = await resolveInRoot(binding.cwd, path)
-        if (!(await stat(absolute)).isFile()) continue
+        const info = await stat(absolute)
+        if (info.isDirectory() && options.folders)
+          matches.set(absolute, { repoId: binding.repoId, path: path.replace(/\\/g, '/'), kind: 'folder' })
+        if (!info.isFile()) continue
         matches.set(absolute, {
           repoId: binding.repoId,
           path: path.replace(/\\/g, '/'),

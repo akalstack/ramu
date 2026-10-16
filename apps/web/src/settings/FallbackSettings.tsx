@@ -442,7 +442,7 @@ function CodexHookRow({
       <span>
         <strong>{t('Decide before Codex starts its own sub-agents')}</strong>
         <span className="muted text-muted-foreground block block small text-caption">
-          {t('Route Codex helpers before they start. Enabling adds a trusted hook to ')}
+          {t('Route Codex sub-agents before they start. Enabling adds a trusted hook to ')}
           <code>~/.codex/config.toml</code>
           {t('. Disabling leaves the inactive entry in place.')}
         </span>
@@ -506,13 +506,13 @@ export function SubagentSettings({
     <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 subagent-settings mt-8">
       <SettingsGroupTitle>{t('Sub-agents')}</SettingsGroupTitle>
       <p className="muted text-muted-foreground small text-caption">
-        {t('Choose where helper agents run and how they handle usage limits.')}
+        {t('Choose where sub-agents run and how they handle usage limits.')}
       </p>
       <SettingsRow setting="subagents.mode" className="">
         <span>
           <strong>{t('Where sub-agents run')}</strong>
           <span className="muted text-muted-foreground block block small text-caption">
-            {t('Use native helpers or route tasks to a selected model.')}
+            {t('Use native sub-agents or route tasks to a selected model.')}
           </span>
         </span>
         <Dropdown
@@ -644,7 +644,7 @@ export function SubagentSettings({
         <span>
           <strong>{t('Fallback order')}</strong>
           <span className="muted text-muted-foreground block block small text-caption">
-            {t('Use the main order or a separate one for helpers. Helpers only move down when they run out.')}
+            {t('Use the main order or a separate one for sub-agents. Sub-agents only move down when they run out.')}
           </span>
         </span>
         <Dropdown
@@ -662,7 +662,7 @@ export function SubagentSettings({
         <span>
           <strong>{t('Switch sub-agents')}</strong>
           <span className="muted text-muted-foreground block block small text-caption">
-            {t('Choose when helpers switch to their fallback model.')}
+            {t('Choose when sub-agents switch to their fallback model.')}
           </span>
         </span>
         <Dropdown
@@ -697,7 +697,7 @@ export function SubagentSettings({
       {toggle(
         'isolate',
         'Isolate sub-agents',
-        'Run each helper in a separate checkout. Apply its changes back when finished; keep conflicts for review.',
+        'Run each sub-agent in a separate checkout. Apply its changes back when finished; keep conflicts for review.',
       )}
       {toggle(
         'shareContext',
@@ -708,7 +708,7 @@ export function SubagentSettings({
         <span>
           <strong>{t('At once per thread')}</strong>
           <span className="muted text-muted-foreground block block small text-caption">
-            {t('Additional helpers wait for an available slot.')}
+            {t('Additional sub-agents wait for an available slot.')}
           </span>
         </span>
         <Dropdown

@@ -7,9 +7,14 @@ const { page, check } = ramu
 const switchNamed = (name) => page.getByRole('switch', { name, exact: true })
 
 ramu.test('providers and account profiles', async () => {
+  await page.getByRole('button', { name: 'Inbox', exact: true }).click()
+  await page
+    .locator('.inbox-page')
+    .getByRole('tab', { name: /Recaps/ })
+    .click()
   check(
     await page.getByRole('button', { name: 'Refresh recap', exact: true }).isVisible(),
-    'Recaps are enabled by default on Home',
+    'Recaps are enabled by default',
   )
   await openSettings(ramu, 'Providers & models')
   await page.locator('.provider-settings-card').first().waitFor()
@@ -67,10 +72,14 @@ ramu.test('thread defaults and the recap toggle', async () => {
   await page.getByRole('button', { name: 'Background & updates', exact: true }).click()
   await page.getByRole('switch', { name: /Daily recaps/ }).uncheck()
   await saveSettings(ramu)
-  await page.getByRole('button', { name: 'Home', exact: true }).click()
+  await page.getByRole('button', { name: 'Inbox', exact: true }).click()
+  await page
+    .locator('.inbox-page')
+    .getByRole('tab', { name: /Recaps/ })
+    .click()
   check(
     (await page.getByRole('button', { name: 'Refresh recap', exact: true }).count()) === 0,
-    'Recap toggle hides Home recaps',
+    'Recap toggle hides recaps',
   )
   await openSettings(ramu, 'Threads')
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()

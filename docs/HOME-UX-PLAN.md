@@ -7,11 +7,13 @@ Review of the desktop Home (`apps/web/src/NewTask.tsx` start box and `apps/web/s
 Done on desktop:
 
 - One `FeedSection` heading style (`HomeSection.tsx`) and compact, borderless agent rows (`AgentRow` in `HomeAgents.tsx`): state, title (opens the thread), project · model · changed files, age, and Stop on hover. A row waiting on you shows its question, approval or form under it.
-- Home is a glance with the logo kept: waiting agents, recaps that need attention and running agents, three each with **View all** into Inbox, then the learned summary and **Coming up**. Completed work and recap history moved to Inbox.
-- **Inbox** page (`inbox/InboxPage.tsx`): sidebar row with badge, ⌘⇧I, tabs **Needs you · Running · Recaps · Learned · Completed** with counts and empty states; the selected tab is remembered.
+- Home is a centred start screen with the logo: under the box, one line ("1 running · 6 completed") that opens Inbox, then only what is blocked on you (waiting agents, recaps that need a decision, an unread learned summary). Running, completed, recap history and schedules moved off Home.
+- **Inbox** page (`inbox/InboxPage.tsx`): sidebar row with badge, ⌘⇧I. Opens on **All**, every section capped with **See all · N** into its tab; then **Needs you · Running · Recaps · Learned · Completed** with counts and empty states. The selected tab is remembered.
 - "Since your last visit" means since you left the app (`inbox/recaps.tsx`).
 - The background-service line shows only when the service is stopped, with **Start**. Recap freshness sits next to the refresh button.
 - The heading no longer duplicates the project menu; with no projects Home offers **Open a folder**.
+
+**Inbox lifecycle (decided 2026-10-16).** Inbox is not a to-do list to clear. Only **Needs you** is actionable, and it empties by itself (answer, dismiss, recap Done/Snooze/Dismiss); the sidebar badge counts only that, so it reaches zero without a "clear all". **Completed** shows threads finished in the last 7 days, at most 50, grouped Today / Yesterday / Earlier, with the sidebar's unread dot and **Archive** on hover (the existing thread archive). Older threads stay in the sidebar and Search, so the list never grows without bound. **Learned** shows the latest 20 summaries. No bulk "archive all": with a 7-day window it isn't needed, and it is easy to trigger by mistake.
 
 Not done: remembering the last-used project (many specs assume "No project"), schedule deep links, recap undo and snooze choices (need server support), the mobile Inbox.
 

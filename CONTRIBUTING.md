@@ -17,7 +17,7 @@ Native dependencies may need Python 3 and a C/C++ toolchain. Keep the hoisted de
 ## Checks
 
 - Run `pnpm check` before submitting; it runs formatting (`pnpm format` fixes it), ESLint (`pnpm lint`), knip (`pnpm knip`, unused code and dependencies), typechecks, tests and builds. To work on one package, use `pnpm --filter @ramu/server test` (or `typecheck`).
-- For desktop behavior, build and run `pnpm test:e2e` on macOS (headless; `pnpm test:e2e settings` runs one spec, `RAMU_E2E_HEADED=1` shows windows). It uses disposable repositories, an isolated profile, and simulated providers; see [e2e/README.md](e2e/README.md).
+- For desktop behavior, build and run the affected e2e specs on macOS: `pnpm test:e2e:changed` picks them from your diff (`--list` to preview). `pnpm test:e2e settings` runs one spec, `pnpm test:e2e` runs all of them (headless; `RAMU_E2E_HEADED=1` shows windows). It uses disposable repositories, an isolated profile, and simulated providers; see [e2e/README.md](e2e/README.md).
 - For large lists, reviews, or editor lifecycle changes, run `pnpm test:e2e:perf rendering` after building.
 - For packaging changes, build and test the installer with `pnpm make`.
 

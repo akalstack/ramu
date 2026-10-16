@@ -522,7 +522,7 @@ function Shell() {
                 aria-pressed={ui.sidebar === 'inbox'}
                 aria-description={inboxCount ? t('{0} need you', { 0: inboxCount }) : undefined}
                 title={`${t('Inbox')} (${formatKeys('mod+shift+i')})`}
-                onClick={() => ws.setSidebar(ui.sidebar === 'inbox' ? 'projects' : 'inbox')}
+                onClick={() => ws.setSidebar('inbox')}
               >
                 <Inbox size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Inbox')}</span>
                 {badge(inboxCount)}

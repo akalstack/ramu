@@ -89,6 +89,26 @@ export function useRepoListing(
     }
   }, [open, load])
 
+  // A folder link in chat opens that folder here, with its parents, and scrolls it into view.
+  useEffect(() => {
+    const reveal = (event: Event) => {
+      const { repoId, path } = (event as CustomEvent<{ repoId: string; path: string }>).detail
+      if (repoId !== binding.repoId) return
+      const parts = path ? path.split('/') : []
+      const folders = ['', ...parts.map((_, index) => parts.slice(0, index + 1).join('/'))]
+      setOpen((current) => new Set([...current, ...folders]))
+      void Promise.all(folders.map(load)).then(() =>
+        requestAnimationFrame(() =>
+          document
+            .querySelector(`[data-path="${CSS.escape(`${repoId}:${path}`)}"]`)
+            ?.scrollIntoView({ block: 'center', inline: 'nearest' }),
+        ),
+      )
+    }
+    window.addEventListener('ramu:explorer-reveal', reveal)
+    return () => window.removeEventListener('ramu:explorer-reveal', reveal)
+  }, [binding.repoId, load])
+
   const reloadAll = async () => {
     await Promise.all([...open].map(load))
   }

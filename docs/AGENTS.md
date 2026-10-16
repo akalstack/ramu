@@ -4,15 +4,15 @@
 
 Selecting a model from the dropdown during a running turn starts a five-second countdown. **Apply now** switches immediately; **Cancel** restores the currently applied model and reasoning effort. Adjusting reasoning while a model change is pending keeps the original deadline and applies the latest effort with that model. Selecting a model through the slider still commits on release. Idle threads keep their existing selection behavior, and a pending countdown is cancelled if the turn stops running.
 
-## Helpers
+## Sub-agents
 
-Helper cards show task progress and transcripts. Open a card to inspect its work, send a message, or stop it. Stopping the main thread stops its helpers.
+Sub-agent cards show task progress and transcripts. Open a card to inspect its work, send a message, or stop it. Stopping the main thread stops its sub-agents.
 
-Ramu can route helpers to another provider or model. **Native** uses the provider's own helpers. Type rules override general routing. Codex's optional hook routes helpers before they start; enabling it adds a trust entry to `~/.codex/config.toml`.
+Ramu can route sub-agents to another provider or model. **Native** uses the provider's own sub-agents. Type rules override general routing. Codex's optional hook routes sub-agents before they start; enabling it adds a trust entry to `~/.codex/config.toml`.
 
-An isolated helper uses a separate checkout and applies its changes back when finished. Conflicting patches remain in the checkout for review. The tracked-change snapshot excludes untracked files; isolated helpers do not support follow-up messages.
+An isolated sub-agent uses a separate checkout and applies its changes back when finished. Conflicting patches remain in the checkout for review. The tracked-change snapshot excludes untracked files; isolated sub-agents do not support follow-up messages.
 
-Already-running native helpers keep their provider. After a service restart, Ramu reads saved helper transcripts so the main agent can reconcile unfinished work; it does not reattach every helper process.
+Already-running native sub-agents keep their provider. After a service restart, Ramu reads saved sub-agent transcripts so the main agent can reconcile unfinished work; it does not reattach every sub-agent process.
 
 ## Usage limits and fallback
 
@@ -27,7 +27,7 @@ Background work such as titles, recaps, and commit messages keeps its model unti
 
 Fallback requires installed, authenticated providers. It carries visible conversation context into the same thread; private provider reasoning is not transferred. Usage readings can be delayed or unavailable. Authentication errors and tool failures do not trigger usage fallback.
 
-Helpers can use the main list or their own list and threshold. Helpers only move down the list when they reach a limit, so task-type routing is kept.
+Sub-agents can use the main list or their own list and threshold. Sub-agents only move down the list when they reach a limit, so task-type routing is kept.
 
 ### When every provider is limited
 
@@ -48,4 +48,6 @@ Provider features depend on the installed runtime. See [provider setup](PROVIDER
 
 ## Agents overview
 
-Home shows a glance across projects: up to three agents waiting for your input, recaps that need your attention, and running agents or usage waits, each with **View all**. **Inbox** in the sidebar (⌘⇧I) holds the full lists in tabs: **Needs you**, **Running**, **Recaps**, **Learned** (every "What Ramu learned" summary) and **Completed**. Its badge counts threads waiting on you and recaps that need a decision. Answer questions, connector requests and tool approvals in place, click an agent's title to open it, or stop it from its row. Native helpers open their existing helper panel; their changed-file count is labeled as the parent thread’s changes because the provider owns their checkout capture. Ramu-managed helper threads have a **Back to parent thread** breadcrumb.
+Home stays a centred start screen. Under the box it shows one line with what is running, new recaps and completed work, which opens Inbox, and only what is blocked on you: agents waiting for your input and recaps that need a decision. **Inbox** in the sidebar (⌘⇧I) opens on **All**, an overview of every section with **See all** links, and has a tab for each: **Needs you**, **Running**, **Recaps**, **Learned** (every "What Ramu learned" summary) and **Completed**. Its badge counts threads waiting on you and recaps that need a decision. Rows are threads, drawn like the sidebar's: click one to open it, or stop it from its row. A thread shows how many sub-agents it started; the sub-agents themselves live in the thread, and only one waiting for your answer gets its own row. Answer questions, connector requests and tool approvals in place.
+
+Nothing in Inbox needs clearing. **Needs you** empties as you answer or dismiss; running threads leave when they finish. **Completed** is recent history: threads finished in the last 7 days (at most 50), grouped by day, with an unread dot until you open one and **Archive** on hover. Older threads stay in the sidebar and Search. **Learned** shows the latest 20 summaries; the full history is in Settings → Memory & skills. Ramu-managed sub-agent threads have a **Back to parent thread** breadcrumb.

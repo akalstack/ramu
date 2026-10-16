@@ -89,8 +89,9 @@ export const registerFileHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'files.resolveLink': {
-      args: z.tuple([id, z.string().min(1).max(8192)]),
-      run: (taskId: string, href: string) => resolveFileLink(workspace, taskId, href),
+      args: z.tuple([id, z.string().min(1).max(8192), z.object({ folders: z.boolean().optional() }).optional()]),
+      run: (taskId: string, href: string, options?: { folders?: boolean }) =>
+        resolveFileLink(workspace, taskId, href, options),
     },
     'files.all': {
       args: z.tuple([id]),

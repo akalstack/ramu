@@ -57,6 +57,17 @@ describe('local file links', () => {
     ])
       expect(localFileLink(href)).toBeNull()
   })
+  it('resolves folders only when asked, so chat folder links can open the Explorer', async () => {
+    expect(await resolveFileLink(ws, taskId, 'src')).toBeNull()
+    expect(await resolveFileLink(ws, taskId, 'src/', { folders: true })).toEqual({
+      repoId: 'general',
+      path: 'src',
+      kind: 'folder',
+    })
+    expect(await resolveFileLink(ws, taskId, 'src/example%20file.ts', { folders: true })).toMatchObject({
+      path: 'src/example file.ts',
+    })
+  })
   it('rejects missing files, folders, traversal, and links into another thread', async () => {
     const cwd = ws.agentScope(taskId).cwd
     const other = await ws.createTask({ projectId: NO_PROJECT, title: 'Other', mode: 'current' })

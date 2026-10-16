@@ -283,7 +283,7 @@ export function AgentTaskPanel({
               {task.taskType === 'advisor'
                 ? translate("The advisor answers the thread's agent and does not take messages.")
                 : task.recovered
-                  ? translate('This helper’s previous process ended. Continue through the main thread.')
+                  ? translate('This sub-agent’s previous process ended. Continue through the main thread.')
                   : task.canMessage
                     ? translate('Resume the thread to message this agent.')
                     : translate('Background commands do not take messages.')}

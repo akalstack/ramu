@@ -302,7 +302,8 @@
   color: var(--bad);
 }
 
-/* Inline references share the same quiet material in user and assistant messages. */
+/* Inline references share the same quiet material in user and assistant messages: a small filled chip that sits in the
+   line without making it taller. Code inside a reference (`[`path`](path)`) drops its own bubble. */
 [data-slot='badge'].chat-reference {
   display: inline-flex;
   vertical-align: baseline;
@@ -310,15 +311,15 @@
   height: auto;
   min-height: 0;
   align-items: baseline;
-  padding: 2px 8px;
-  gap: 5px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--line-strong);
+  padding: 0 6px;
+  gap: 4px;
+  border-radius: var(--radius-s);
+  border: 0;
   background: var(--fill);
   color: var(--soft);
-  font-size: inherit;
+  font-size: 0.94em;
   font-weight: 500;
-  line-height: 1.25;
+  line-height: 1.45;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -327,9 +328,18 @@ a[data-slot='badge'].chat-reference:hover {
   color: var(--text);
   text-decoration: none;
 }
+.chat-reference code {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 0.95em;
+}
 .chat-reference > svg {
   flex: none;
   align-self: center;
+  width: 0.95em;
+  height: 0.95em;
 }
 .chat-reference > span {
   min-width: 0;
@@ -418,11 +428,11 @@ a[data-slot='badge'].chat-reference:hover {
   align-self: flex-start;
   width: fit-content;
   max-width: 100%;
-  min-height: 28px;
+  min-height: 24px;
   height: auto;
   gap: 8px;
-  margin: 4px 0;
-  padding: 3px 0;
+  margin: 0;
+  padding: 2px 0;
   border: 0;
   border-radius: var(--radius-row);
   background: transparent;
@@ -447,6 +457,12 @@ button.chat-activity-row:hover {
   color: var(--muted);
   font-size: var(--font-caption);
   min-width: 0;
+}
+/* One-line rows (goals, advisor, questions, tools) stack tightly instead of taking a full block gap each. */
+.turn
+  > [data-block-index]:has(:is(.chat-activity-row, .tool-group)):not(:has(.msg, .question-card, .agent-group, pre))
+  + [data-block-index]:has(:is(.chat-activity-row, .tool-group)):not(:has(.msg, .question-card, .agent-group, pre)) {
+  margin-top: -8px;
 }
 .chat-activity-row .caret {
   color: var(--muted);

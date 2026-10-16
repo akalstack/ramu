@@ -16,7 +16,7 @@ Async questions and drafts survive reopening and service restarts. A dead proces
 
 **Continue threads after restart** is on by default. Unfinished threads resume their native provider session where available, otherwise use the stored transcript. Finished, failed, and manually stopped threads stay stopped.
 
-Threads sharing a checkout wait for the active writer. Queued messages and pause state persist. Explicitly stopping the service cancels pending recovery. Saved helper transcripts help the main agent reconcile work; helper processes are not all reattached.
+Threads sharing a checkout wait for the active writer. Queued messages and pause state persist. Explicitly stopping the service cancels pending recovery. Saved sub-agent transcripts help the main agent reconcile work; sub-agent processes are not all reattached.
 
 ## Schedules and recaps
 
@@ -24,7 +24,7 @@ Schedules support Once, Daily, Weekly, Monthly, and intervals of at least five m
 
 **Run now** does not change the recurrence. Pause cancels queued runs, not work already running. Missed runs either execute the latest occurrence once or skip it. Busy checkouts wait and scheduled runs do not overlap.
 
-Recaps summarize recent threads and unfinished work. Home shows the ones that need your attention; **Inbox → Recaps** lists everything since your last visit and earlier. Items link to their source conversation and can be marked done, dismissed, or snoozed. Recaps use model tokens, but only when a thread's recent activity or the recap model changed since the last successful recap; otherwise the daily run just shows up to date. **Refresh** always asks the model unless there is no activity to summarize. Their daily time follows the current system timezone.
+Recaps summarize recent threads and unfinished work. Home shows the ones that need your attention; **Inbox → Recaps** lists everything since your last visit and earlier, with **Refresh**. Items link to their source conversation and can be marked done, dismissed, or snoozed. Recaps use model tokens, but only when a thread's recent activity or the recap model changed since the last successful recap; otherwise the daily run just shows up to date. **Refresh** always asks the model unless there is no activity to summarize. Their daily time follows the current system timezone.
 
 ## File context
 

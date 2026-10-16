@@ -74,7 +74,7 @@ ramu.test('Home puts pending input first and keeps completed agents collapsed', 
   assert.deepEqual(restored.openTaskIds, saved.openTaskIds)
 })
 
-ramu.test('helper rows open their transcript with a parent breadcrumb', async () => {
+ramu.test('Inbox counts sub-agents on their thread, and a sub-agent keeps its parent breadcrumb', async () => {
   const parent = await startChat(ramu, {
     projectId: project.id,
     title: 'Helper parent',
@@ -82,26 +82,24 @@ ramu.test('helper rows open their transcript with a parent breadcrumb', async ()
     settings: fakeAgent.claude,
   })
   await until(async () => (await api('agent.all')).some((s) => s.parentId === parent.session.id), 'helper overview row')
-  await page.getByRole('button', { name: 'Home', exact: true }).click()
   const helper = (await api('agent.all')).find((s) => s.parentId === parent.session.id)
   await page.getByRole('button', { name: 'Inbox', exact: true }).click()
-  await page
-    .locator('.inbox-page')
-    .getByRole('tab', { name: /Completed/ })
-    .click()
-  const row = page
-    .locator('.inbox-page article')
-    .filter({ has: page.getByRole('button', { name: helper.title, exact: true }) })
-  await row.getByRole('button', { name: helper.title, exact: true }).click()
-  if (helper.nativeTask) await page.locator('.agent-panel').waitFor()
-  else {
-    await page.getByRole('button', { name: 'Back to parent thread', exact: true }).click()
-    await until(
-      async () =>
-        (await api('ui.get')).tasks[parent.task.id]?.views.some((view) => view.sessionId === parent.session.id),
-      'parent navigation',
-    )
-  }
+  const inbox = page.locator('.inbox-page')
+  await inbox.getByRole('tab', { name: /Completed/ }).click()
+  const row = inbox.locator('article').filter({ has: page.getByRole('button', { name: 'Helper parent', exact: true }) })
+  await row.getByText(/1 sub-agent/).waitFor()
+  assert.equal(
+    await inbox.getByRole('button', { name: helper.title, exact: true }).count(),
+    0,
+    'sub-agents have no rows',
+  )
+  if (helper.nativeTask) return
+  await showChat(ramu, { task: parent.task, session: helper })
+  await page.getByRole('button', { name: 'Back to parent thread', exact: true }).click()
+  await until(
+    async () => (await api('ui.get')).tasks[parent.task.id]?.views.some((view) => view.sessionId === parent.session.id),
+    'parent navigation',
+  )
 })
 
 ramu.test('chat skill installation waits for approval and imports references while excluding scripts', async () => {

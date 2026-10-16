@@ -428,7 +428,9 @@ export interface RamuMethods {
   'files.resolveLink'(
     taskId: string,
     href: string,
-  ): { repoId: string; path: string; line?: number; column?: number } | null
+    /** `folders` also resolves directories (`kind: 'folder'`); without it only files match. */
+    options?: { folders?: boolean },
+  ): { repoId: string; path: string; line?: number; column?: number; kind?: 'file' | 'folder' } | null
   'agent.send'(sessionId: string, text: string): void
   'agent.submit'(
     sessionId: string,

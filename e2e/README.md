@@ -3,11 +3,15 @@
 Specs drive the built desktop app (`apps/desktop/out`) and standalone servers (`apps/server/dist`) with simulated providers (`RAMU_FAKE_AGENT`), disposable Git repositories and an isolated profile. Run `pnpm build` first.
 
 ```sh
+pnpm test:e2e:changed --list # which specs your changes affect, and why (see e2e/impact.mjs)
+pnpm test:e2e:changed        # run only those
 pnpm test:e2e                # every gating spec in e2e/specs
 pnpm test:e2e settings goals # specs whose file name contains one of the words
 pnpm test:e2e:perf           # on-demand performance and chaos checks in e2e/perf (not part of CI)
 pnpm test:e2e:perf fps
 ```
+
+Prefer `--changed` while working: it maps changed paths to specs through `e2e/impact.mjs`, skips docs, unit tests, mobile and site, and falls back to a `layout` + `chat` smoke run for areas without a rule. Changes to `e2e/support/` or the lockfile run everything.
 
 Specs are plain `node:test` files run by `e2e/run.mjs`, one process per file, one app launch per file.
 
