@@ -394,7 +394,7 @@ export function TerminalScreen({
             return (
               <View key={kind}>
                 <SectionLabel>
-                  {kind === 'project' ? 'Projects' : kind === 'worktree' ? 'Worktrees' : 'Chats'}
+                  {kind === 'project' ? 'Projects' : kind === 'worktree' ? 'Worktrees' : 'Threads'}
                 </SectionLabel>
                 {group.map((target) => {
                   const current = target.ctx === ctx
@@ -498,7 +498,7 @@ export function terminalTargets(store: ReturnType<typeof useStore>, computerId: 
     // A worktree is named by its project and told apart by its branch, which is what says which checkout you are in.
     targets.push(
       chat.projectId === STANDALONE
-        ? { computerId, ctx, kind: 'chat', title: chat.title, subtitle: 'Chat without a project', project: false }
+        ? { computerId, ctx, kind: 'chat', title: chat.title, subtitle: 'Thread without a project', project: false }
         : {
             computerId,
             ctx,

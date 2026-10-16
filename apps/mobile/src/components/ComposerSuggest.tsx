@@ -92,7 +92,7 @@ export function useComposerSuggest({
     if (!mode) return []
     const go = (to: Parameters<typeof router.push>[0]) => () => router.push(to)
     const commands: Choice[] = [
-      { id: 'new', label: '/new', description: 'Start a new chat', kind: 'Command', run: go('/new') },
+      { id: 'new', label: '/new', description: 'Start a new thread', kind: 'Command', run: go('/new') },
       {
         id: 'goal',
         label: '/goal',
@@ -119,14 +119,14 @@ export function useComposerSuggest({
             {
               id: 'aside',
               label: '/aside',
-              description: 'Ask a side question without interrupting the chat',
+              description: 'Ask a side question without interrupting the thread',
               kind: 'Command' as const,
               insertion: '/aside ',
             },
             {
               id: 'changes',
               label: '/changes',
-              description: 'Open the chat’s changed files',
+              description: 'Open the thread’s changed files',
               kind: 'Command' as const,
               run: go({ pathname: '/chat/[id]/changes', params: { id: chatId } }),
             },
@@ -143,11 +143,11 @@ export function useComposerSuggest({
       {
         id: 'learn',
         label: '/learn',
-        description: 'Review recent chats for lessons and skills now',
+        description: 'Review recent threads for lessons and skills now',
         kind: 'Command',
         run: () => {
           store.invoke(computerId, 'learning.run').then(
-            () => Alert.alert('Learning started', 'Ramu is reviewing recent chats on the computer.'),
+            () => Alert.alert('Learning started', 'Ramu is reviewing recent threads on the computer.'),
             (e) => Alert.alert('Could not start learning', e instanceof Error ? e.message : String(e)),
           )
         },

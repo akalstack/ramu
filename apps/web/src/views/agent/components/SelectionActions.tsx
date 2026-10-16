@@ -135,18 +135,18 @@ export function SelectionActions({
         variant="secondary"
         type="button"
         className={SELECTION_ACTION_CLASS}
-        title={translate('Start a new chat with this quoted')}
+        title={translate('Start a new thread with this quoted')}
         onClick={quoteNew}
       >
         <SquarePen size={13} />
-        {translate('Quote in new chat')}
+        {translate('Quote in new thread')}
       </Button>
       <span className="selection-divider w-px h-4 [background:var(--line-strong)] flex-none" aria-hidden="true" />
       <Button
         variant="secondary"
         type="button"
         className={SELECTION_ACTION_CLASS}
-        title={translate('Ask a side question about this, without interrupting the chat ({0})', {
+        title={translate('Ask a side question about this, without interrupting the thread ({0})', {
           '0': formatKeys('mod+shift+a'),
         })}
         onClick={aside}

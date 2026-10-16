@@ -79,7 +79,7 @@ export function AppearanceSettings({
         <SettingsLabel
           title={t('Layout sizes')}
           help={t(
-            'Return the sidebar, editor/chat split and terminal height to their default sizes in every workspace.',
+            'Return the sidebar, editor/thread split and terminal height to their default sizes in every workspace.',
           )}
         />
         <Button variant="secondary" className={SECONDARY_BUTTON_CLASS} onClick={onResetSizes}>

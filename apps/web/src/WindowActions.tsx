@@ -317,7 +317,7 @@ function ActionDialog({
               }}
             />
             <FieldDescription className="text-caption">
-              {t("Runs in a new terminal at the chat's workspace.")}
+              {t("Runs in a new terminal at the thread's workspace.")}
             </FieldDescription>
           </Field>
           <Field>

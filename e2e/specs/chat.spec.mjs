@@ -28,7 +28,7 @@ ramu.test('Home is the startup page and honors reduced motion', async () => {
   await ramu.reload()
   check(
     await page.getByRole('heading', { name: 'What should we work on?' }).isVisible(),
-    'The Chats home page is the startup page',
+    'The Threads home page is the startup page',
   )
   const dialog = await palette(ramu)
   await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -64,23 +64,23 @@ ramu.test('composer menus select on click and open on slash', async () => {
   await composer.press('Escape')
 })
 
-ramu.test('a chat starts without any project', async () => {
+ramu.test('a thread starts without any project', async () => {
   await page.locator('[data-composer-input]:visible').first().fill('Hello without a project')
-  await page.getByRole('button', { name: 'Start chat', exact: true }).click()
+  await page.getByRole('button', { name: 'Start thread', exact: true }).click()
   await page.locator('.agent-view:visible[data-state="idle"] .msg.assistant').last().waitFor({ timeout: 10_000 })
   const general = (await api('tasks.list')).find((task) => task.projectId === 'no-project')
-  check(general, 'Project-free chat starts without any repository')
+  check(general, 'Project-free thread starts without any repository')
   check(
     (await page.locator('.agent-view:visible .msg.assistant').count()) === 1,
     'Live and stored transcript events do not duplicate',
   )
   check(
     (await api('agent.scope', general.id)).cwd.includes('chats'),
-    'Project-free chat has a dedicated working directory',
+    'Project-free thread has a dedicated working directory',
   )
 })
 
-ramu.test('a project chat offers skills and file mentions', async () => {
+ramu.test('a project thread offers skills and file mentions', async () => {
   const { project } = await api('projects.addFolder', ramu.repos.demo)
   await ramu.reload()
   const home = page.getByRole('button', { name: 'Home', exact: true })
@@ -100,69 +100,72 @@ ramu.test('a project chat offers skills and file mentions', async () => {
     'File mention selection inserts a file reference',
   )
   await prompt.fill('Summarize the project')
-  await page.getByRole('button', { name: 'Start chat', exact: true }).click()
+  await page.getByRole('button', { name: 'Start thread', exact: true }).click()
   await page.locator('.agent-view:visible[data-state="idle"] .msg.assistant').last().waitFor()
   check(
     (await api('tasks.list')).some((task) => task.projectId === project.id),
-    'The chat belongs to the project',
+    'The thread belongs to the project',
   )
   ramu.noErrors()
 })
 
-ramu.test('mixed command progress settles from Running to Ran, and chat search steps through the matches', async () => {
-  const chat = await startChat(ramu, { title: 'Tool progress', prompt: '[tool progress]', state: null })
-  await showChat(ramu, chat)
-  const group = (label) =>
-    page.locator('.tool-group').filter({ has: page.locator('.tool-group-label', { hasText: label }) })
-  const running = group('Running 3 commands')
-  await running.waitFor()
-  await ramu.until(
-    async () =>
-      (await running.locator('.tool-summary').allTextContents()).filter((t) => t.startsWith('Ran ')).length === 2,
-    'two of the three commands never completed',
-  )
-  assert.deepEqual(await running.locator('.tool-summary').allTextContents(), [
-    'Ran echo command-1',
-    'Ran echo command-2',
-    'Running echo command-3',
-  ])
-  await ramu.shot('tool-progress-running')
-  await ramu.until(
-    async () => (await api('agent.events', chat.session.id)).some((event) => event.kind === 'result'),
-    'the turn never finished',
-  )
-  await page.getByRole('button', { name: /Worked for/ }).click()
-  const completed = group('Ran 3 commands')
-  await completed.waitFor()
-  if ((await completed.getAttribute('data-open')) === null)
-    await completed.locator('[data-slot=collapsible-trigger]').first().click()
-  assert.deepEqual(await completed.locator('.tool-summary').allTextContents(), [
-    'Ran echo command-1',
-    'Ran echo command-2',
-    'Ran echo command-3',
-  ])
+ramu.test(
+  'mixed command progress settles from Running to Ran, and thread search steps through the matches',
+  async () => {
+    const chat = await startChat(ramu, { title: 'Tool progress', prompt: '[tool progress]', state: null })
+    await showChat(ramu, chat)
+    const group = (label) =>
+      page.locator('.tool-group').filter({ has: page.locator('.tool-group-label', { hasText: label }) })
+    const running = group('Running 3 commands')
+    await running.waitFor()
+    await ramu.until(
+      async () =>
+        (await running.locator('.tool-summary').allTextContents()).filter((t) => t.startsWith('Ran ')).length === 2,
+      'two of the three commands never completed',
+    )
+    assert.deepEqual(await running.locator('.tool-summary').allTextContents(), [
+      'Ran echo command-1',
+      'Ran echo command-2',
+      'Running echo command-3',
+    ])
+    await ramu.shot('tool-progress-running')
+    await ramu.until(
+      async () => (await api('agent.events', chat.session.id)).some((event) => event.kind === 'result'),
+      'the turn never finished',
+    )
+    await page.getByRole('button', { name: /Worked for/ }).click()
+    const completed = group('Ran 3 commands')
+    await completed.waitFor()
+    if ((await completed.getAttribute('data-open')) === null)
+      await completed.locator('[data-slot=collapsible-trigger]').first().click()
+    assert.deepEqual(await completed.locator('.tool-summary').allTextContents(), [
+      'Ran echo command-1',
+      'Ran echo command-2',
+      'Ran echo command-3',
+    ])
 
-  const open = page.locator('.agent-header').getByRole('button', { name: 'Find in conversation', exact: true })
-  assert.ok(await open.isVisible(), 'the chat header offers search')
-  assert.equal(
-    await page.locator('.task-header').getByRole('button', { name: 'Find in conversation', exact: true }).count(),
-    0,
-    'the task header does not',
-  )
-  await open.click()
-  const find = page.getByRole('textbox', { name: 'Find in conversation', exact: true })
-  await find.fill('command-')
-  await page.locator('.chat-find-count', { hasText: '1 of 3' }).waitFor()
-  const findBox = await page.locator('.chat-find-bar').boundingBox()
-  const chatBox = await page.locator('.main-chat').boundingBox()
-  assert.ok(findBox.width <= 420 && findBox.width < chatBox.width / 2, 'the find panel stays compact')
-  await find.press('Enter')
-  await page.locator('.chat-find-count', { hasText: '2 of 3' }).waitFor()
-  await find.press('Escape')
-  await page.locator('.chat-find-bar').waitFor({ state: 'detached' })
-  assert.ok(
-    await page.locator('[data-composer-input]:visible').evaluate((el) => el === document.activeElement),
-    'closing the find panel returns focus to the composer',
-  )
-  ramu.noErrors()
-})
+    const open = page.locator('.agent-header').getByRole('button', { name: 'Find in conversation', exact: true })
+    assert.ok(await open.isVisible(), 'the thread header offers search')
+    assert.equal(
+      await page.locator('.task-header').getByRole('button', { name: 'Find in conversation', exact: true }).count(),
+      0,
+      'the task header does not',
+    )
+    await open.click()
+    const find = page.getByRole('textbox', { name: 'Find in conversation', exact: true })
+    await find.fill('command-')
+    await page.locator('.chat-find-count', { hasText: '1 of 3' }).waitFor()
+    const findBox = await page.locator('.chat-find-bar').boundingBox()
+    const chatBox = await page.locator('.main-chat').boundingBox()
+    assert.ok(findBox.width <= 420 && findBox.width < chatBox.width / 2, 'the find panel stays compact')
+    await find.press('Enter')
+    await page.locator('.chat-find-count', { hasText: '2 of 3' }).waitFor()
+    await find.press('Escape')
+    await page.locator('.chat-find-bar').waitFor({ state: 'detached' })
+    assert.ok(
+      await page.locator('[data-composer-input]:visible').evaluate((el) => el === document.activeElement),
+      'closing the find panel returns focus to the composer',
+    )
+    ramu.noErrors()
+  },
+)

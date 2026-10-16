@@ -3,7 +3,7 @@ import { startRamu, useFakeModel } from '../support/index.mjs'
 const ramu = await startRamu('model-bar')
 const { page, api, check } = ramu
 
-ramu.test('a manually selected model keeps effort mode after starting a chat', async () => {
+ramu.test('a manually selected model keeps effort mode after starting a thread', async () => {
   await useFakeModel(ramu)
   await ramu.reload()
   const openControls = () => page.getByRole('button', { name: 'Model and effort controls', exact: true }).click()
@@ -19,10 +19,10 @@ ramu.test('a manually selected model keeps effort mode after starting a chat', a
   await page.keyboard.press('Escape')
 
   await page.locator('[data-composer-input]:visible').first().fill('Keep my manually selected model')
-  await page.getByRole('button', { name: 'Start chat', exact: true }).click()
+  await page.getByRole('button', { name: 'Start thread', exact: true }).click()
   await page.locator('.agent-view:visible[data-state="idle"] .msg.assistant').last().waitFor()
   await openControls()
-  check((await effort().getAttribute('aria-pressed')) === 'true', 'Effort mode survives starting the chat')
+  check((await effort().getAttribute('aria-pressed')) === 'true', 'Effort mode survives starting the thread')
   check(await page.getByRole('slider', { name: 'Reasoning effort level' }).isVisible(), 'Slider controls effort')
   await page.keyboard.press('Escape')
 

@@ -128,10 +128,10 @@ function UndoFiles({
             <p className="undo-description m-[0_0_12px] text-muted-foreground">
               {reviewId
                 ? t(
-                    'Undo selected changes from this turn. Later edits are preserved when possible. Chat history stays available.',
+                    'Undo selected changes from this turn. Later edits are preserved when possible. Thread history stays available.',
                   )
                 : t(
-                    'Restore selected file changes from this message and later runs, then send your revised message. Chat history stays available.',
+                    'Restore selected file changes from this message and later runs, then send your revised message. Thread history stays available.',
                   )}
             </p>
             <div className="undo-toolbar flex items-center justify-between gap-3 mb-2.5">

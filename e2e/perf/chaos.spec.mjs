@@ -15,7 +15,10 @@ const ramu = await startRamu('chaos', {
   env: ({ dir }) => ({ RAMU_TEST_PICK_DIRECTORY: join(dir, 'chaos work') }),
   repos: {
     'chaos work/web app': { 'README.md': '# web\n', 'src/App.tsx': 'export const App = 1\n' },
-    'chaos work/api': [{ 'README.md': '# api\n', 'src/server.ts': 'export const port = 3000\n' }, { branch: 'develop' }],
+    'chaos work/api': [
+      { 'README.md': '# api\n', 'src/server.ts': 'export const port = 3000\n' },
+      { branch: 'develop' },
+    ],
   },
 })
 const { page, sleep } = ramu
@@ -55,12 +58,15 @@ const label = (text) => text.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
 const shot = (name) => ramu.shot(name).catch(() => {})
 const pane = () => page.locator('.task-pane:visible')
 const startComposer = () => page.locator('[data-composer-input]:visible')
-const newChat = () => page.getByRole('button', { name: 'New chat in chaos work', exact: true })
+const newChat = () => page.getByRole('button', { name: 'New thread in chaos work', exact: true })
 
 /** Everything that must hold after any single hostile interaction. */
 async function health(payload = '', where = '') {
   if (mainErrors.length) report('main-process-error', mainErrors.splice(0).join(' | '), payload)
-  const renderer = [...ramu.errors.splice(0).map((e) => `pageerror: ${e}`), ...ramu.consoleErrors.splice(0).map((e) => `console: ${e}`)]
+  const renderer = [
+    ...ramu.errors.splice(0).map((e) => `pageerror: ${e}`),
+    ...ramu.consoleErrors.splice(0).map((e) => `console: ${e}`),
+  ]
   for (const error of renderer) {
     // Failed IPC calls that the UI reports to the user are expected rejections, not defects.
     if (/Failed to load resource|net::ERR|DevTools|ResizeObserver loop/i.test(error)) continue
@@ -160,7 +166,10 @@ function surface(name, fn) {
 async function fresh() {
   await page.keyboard.press('Escape').catch(() => {})
   await ramu.reload()
-  await page.getByRole('button', { name: 'Home', exact: true }).click().catch(() => {})
+  await page
+    .getByRole('button', { name: 'Home', exact: true })
+    .click()
+    .catch(() => {})
 }
 
 /** Puts the app on the project's file view (the explorer and editor), whatever state a previous surface left it in. */
@@ -173,9 +182,20 @@ async function openProject() {
 /** The Explorer, Search and Source Control panels share one rail; makes sure the requested one is showing. */
 async function showPanel(name, probe) {
   const shortcut = { explorer: 'Shift+e', search: 'Shift+f', scm: 'Shift+g' }[name]
-  if (!(await probe().isVisible().catch(() => false))) {
+  if (
+    !(await probe()
+      .isVisible()
+      .catch(() => false))
+  ) {
     await page.keyboard.press(`${modifier}+${shortcut}`)
-    await ramu.until(() => probe().isVisible().catch(() => false), `the ${name} panel never showed`, { attempts: 10 })
+    await ramu.until(
+      () =>
+        probe()
+          .isVisible()
+          .catch(() => false),
+      `the ${name} panel never showed`,
+      { attempts: 10 },
+    )
   }
 }
 
@@ -199,7 +219,11 @@ async function settle(name, timeout = 20_000) {
   const start = Date.now()
   while (Date.now() - start < timeout) {
     const allow = pane().locator('.card.pending').getByRole('button', { name: 'Allow' })
-    if (await allow.count()) await allow.first().click().catch(() => {})
+    if (await allow.count())
+      await allow
+        .first()
+        .click()
+        .catch(() => {})
     if (await pane().locator('.agent-view:visible[data-state="idle"]').count()) return true
     await sleep(200)
   }
@@ -232,7 +256,10 @@ surface('setup', async () => {
 })
 
 surface('composer', async () => {
-  await page.getByRole('button', { name: 'Home', exact: true }).click().catch(() => {})
+  await page
+    .getByRole('button', { name: 'Home', exact: true })
+    .click()
+    .catch(() => {})
   // Typing alone first: every payload, no send.
   await newChat().click()
   await startComposer().first().waitFor()
@@ -254,7 +281,8 @@ surface('composer', async () => {
     await put(startComposer().first(), PAYLOADS[name])
     await page.keyboard.press('Enter')
     await sleep(400)
-    if (await pane().locator('.agent-view:visible').count()) report('empty-send', 'a blank message started a chat', name)
+    if (await pane().locator('.agent-view:visible').count())
+      report('empty-send', 'a blank message started a thread', name)
   }
 })
 
@@ -444,9 +472,16 @@ surface('editor', async () => {
   for (const [name, content] of Object.entries(files)) writeFileSync(join(web, name), content)
   const tree = page.locator('.repo-tree', { hasText: 'web app' })
   const rowFor = (name) => tree.locator('button', { hasText: name.slice(0, 14).split(/[‪-‮]/)[0] }).first()
-  await ramu.until(() => rowFor('empty.txt').isVisible().catch(() => false), 'the new files never appeared', {
-    attempts: 100,
-  })
+  await ramu.until(
+    () =>
+      rowFor('empty.txt')
+        .isVisible()
+        .catch(() => false),
+    'the new files never appeared',
+    {
+      attempts: 100,
+    },
+  )
   await each(Object.fromEntries(Object.keys(files).map((n) => [n, n])), async (name) => {
     await rowFor(name).click({ timeout: 5000 })
     await sleep(1800)
@@ -464,17 +499,27 @@ surface('editor', async () => {
     if (/ENAMETOOLONG|EINVAL|\[\s*\{|ZodError/.test(state.text + state.banner))
       report('leaked-internal-error', (state.text + state.banner).slice(0, 160), name)
   })
-  const rtlRow = await tree.locator('button', { hasText: 'rtl-' }).first().innerText().catch(() => '')
+  const rtlRow = await tree
+    .locator('button', { hasText: 'rtl-' })
+    .first()
+    .innerText()
+    .catch(() => '')
   if (rtlRow && !/U\+202E/.test(rtlRow))
     report('bidi-filename-spoof', `explorer shows "${rtlRow.trim()}" for a name with a right-to-left override`, 'rtl')
   // Save a file larger than the 1,000,000 character IPC cap.
   await rowFor('big-1_5mb.txt').click({ timeout: 5000 })
-  await pane().locator('.view:visible .monaco-editor .view-lines').first().click().catch(() => {})
+  await pane()
+    .locator('.view:visible .monaco-editor .view-lines')
+    .first()
+    .click()
+    .catch(() => {})
   await page.keyboard.type('// edit\n')
   await page.keyboard.press(`${modifier}+s`)
   await sleep(1500)
   await shot('04-editor-save-large')
-  const dirty = await pane().locator('.view-tab.active .dirty, [role=tab][aria-selected=true] [aria-label="Unsaved changes"]').count()
+  const dirty = await pane()
+    .locator('.view-tab.active .dirty, [role=tab][aria-selected=true] [aria-label="Unsaved changes"]')
+    .count()
   const banner = await pane().locator('.banner').allInnerTexts()
   const toasts = await page
     .locator('[data-sonner-toast], [data-slot="toast"], [role="status"], [role="alert"]')
@@ -549,10 +594,22 @@ surface('rename', async () => {
   await settle('rename target')
   const title = page.locator('.task-header .header-title').first()
   await each(
-    pick(['empty', 'spaces', 'long2k', 'unbroken', 'rtl', 'zalgo', 'emoji', 'nul', 'html', 'loneSurrogate', 'newlines']),
+    pick([
+      'empty',
+      'spaces',
+      'long2k',
+      'unbroken',
+      'rtl',
+      'zalgo',
+      'emoji',
+      'nul',
+      'html',
+      'loneSurrogate',
+      'newlines',
+    ]),
     async (name, value) => {
       await title.dblclick()
-      const input = page.getByLabel('Chat title')
+      const input = page.getByLabel('Thread title')
       await input.waitFor({ timeout: 3000 })
       await input.fill(value)
       await page.keyboard.press('Enter')
@@ -562,7 +619,7 @@ surface('rename', async () => {
       if (await input.isVisible().catch(() => false)) await page.keyboard.press('Escape')
       const shown = (await title.innerText().catch(() => '')).trim()
       if (/[‪-‮⁦-⁩]/.test(shown))
-        report('bidi-title-spoof', 'a text-direction override survived in the chat title', name)
+        report('bidi-title-spoof', 'a text-direction override survived in the thread title', name)
     },
   )
 })
@@ -580,7 +637,10 @@ surface('schedules', async () => {
     }
     await name.fill(v.slice(0, 200))
     await prompt.fill(v)
-    await page.getByRole('button', { name: 'Save schedule' }).click({ timeout: 2500 }).catch(() => {})
+    await page
+      .getByRole('button', { name: 'Save schedule' })
+      .click({ timeout: 2500 })
+      .catch(() => {})
     await sleep(700)
     checkMessages(await messages(), `schedule:${n}`)
     await shot(`07-schedule-${n}`)
@@ -708,8 +768,8 @@ surface('search', async () => {
   await fresh()
   await openProject()
   // Chat/title search (sidebar).
-  await page.getByRole('button', { name: 'Search chats', exact: true }).click()
-  const chats = page.locator('input[aria-label="Search chats"]')
+  await page.getByRole('button', { name: 'Search threads', exact: true }).click()
+  const chats = page.locator('input[aria-label="Search threads"]')
   await chats.waitFor({ timeout: 5000 })
   await each(TEXT_SET, async (n, v) => {
     await chats.fill(v)
@@ -770,7 +830,10 @@ surface('actions', async () => {
       }
       await name.fill(v)
       await command.fill(v)
-      await page.getByRole('button', { name: 'Save', exact: true }).click({ timeout: 2500 }).catch(() => {})
+      await page
+        .getByRole('button', { name: 'Save', exact: true })
+        .click({ timeout: 2500 })
+        .catch(() => {})
       await sleep(500)
       checkMessages(await messages(), `action:${n}`)
       await shot(`11-action-${n}`)
@@ -789,7 +852,19 @@ surface('scm', async () => {
   if ((await repoToggle.getAttribute('aria-expanded')) !== 'true') await repoToggle.click()
   const message = page.getByLabel('Commit message for web app', { exact: true })
   await each(
-    pick(['long2k', 'long100k', 'unbroken', 'rtl', 'emoji', 'loneSurrogate', 'nul', 'shell', 'dashName', 'html', 'markdown']),
+    pick([
+      'long2k',
+      'long100k',
+      'unbroken',
+      'rtl',
+      'emoji',
+      'loneSurrogate',
+      'nul',
+      'shell',
+      'dashName',
+      'html',
+      'markdown',
+    ]),
     async (n, v) => {
       writeFileSync(join(web, `scm-chaos-${n}.txt`), `${n}\n`)
       // Row actions only appear on hover.
@@ -819,7 +894,14 @@ surface('viewport', async () => {
     for (const [where, open] of [
       ['project', () => openProject()],
       ['schedules', () => page.getByRole('button', { name: 'Schedules', exact: true }).click()],
-      ['settings', () => page.getByRole('button', { name: /^Settings/ }).first().click()],
+      [
+        'settings',
+        () =>
+          page
+            .getByRole('button', { name: /^Settings/ })
+            .first()
+            .click(),
+      ],
     ]) {
       try {
         await open()

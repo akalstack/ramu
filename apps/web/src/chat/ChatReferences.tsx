@@ -55,7 +55,7 @@ export function ChatLink({ href, children, taskId }: { href?: string; children: 
             .then((file) => {
               if (!file)
                 throw new Error(
-                  'This file was not found in this chat’s folders, or the path matches more than one file.',
+                  'This file was not found in this thread’s folders, or the path matches more than one file.',
                 )
               ws.openView(taskId, {
                 kind: 'file',

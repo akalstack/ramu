@@ -114,7 +114,7 @@ export class SubagentRunner {
     const parent = this.host.get(parentId)
     if (parent.parentId) throw new Error('A sub-agent cannot start sub-agents through Ramu. Use your own tools.')
     if (this.host.shutdown() || !['running', 'starting', 'idle', 'needs-input'].includes(parent.state))
-      throw new Error('This chat is not running.')
+      throw new Error('This thread is not running.')
     const cap = this.host.preferences()?.subagents.maxConcurrent ?? 3
     if ([...this.children.values()].filter((run) => run.parentId === parentId && !run.settled).length >= cap)
       throw new Error(`${cap} sub-agents are already running. Wait for one to finish, then try again.`)

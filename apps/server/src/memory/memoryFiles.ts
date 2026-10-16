@@ -17,7 +17,7 @@ const HEADERS: Record<string, string> = {
   [ARCHIVE_FILE]: 'Retired notes. Move a block into USER.md or MEMORY.md to restore it.',
 }
 const header = (path: string) =>
-  `<!-- Managed by Ramu. ${HEADERS[path] ?? 'Durable notes shared by every provider and chat.'}\nEdit titles and text freely; keep each "ramu:note" line. Delete a block to archive the note. -->\n`
+  `<!-- Managed by Ramu. ${HEADERS[path] ?? 'Durable notes shared by every provider and thread.'}\nEdit titles and text freely; keep each "ramu:note" line. Delete a block to archive the note. -->\n`
 
 export interface FileNote {
   meta: Partial<Memory>

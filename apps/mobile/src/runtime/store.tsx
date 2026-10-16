@@ -521,7 +521,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
   const deliver = async (item: OutboxItem) => {
     const chat = ref.current.chats.find((c) => c.id === item.chatId)
-    if (!chat) throw new Error('Chat not found')
+    if (!chat) throw new Error('Thread not found')
     let sessionId = chat.sessionId
     if (item.kind === 'chat') {
       let taskId = chat.taskId
@@ -897,7 +897,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     isOnline: (id) => ref.current.computers.find((c) => c.id === id)?.status === 'online',
     send: async (id, text, mode, attachments, context) => {
       const chat = ref.current.chats.find((c) => c.id === id)
-      if (!chat) throw new Error('Chat not found')
+      if (!chat) throw new Error('Thread not found')
       if (ref.current.computers.find((c) => c.id === chat.computerId)?.status === 'revoked')
         throw new Error('Pair this computer again before sending.')
       const item: OutboxItem = {

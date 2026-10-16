@@ -46,7 +46,7 @@ export const operationLabels: Record<string, string> = {
   'git.continueOperation': 'Continuing Git operation',
   'git.abortOperation': 'Aborting Git operation',
   'tasks.setup': 'Setting up checkout',
-  'tasks.delete': 'Removing chat',
+  'tasks.delete': 'Removing thread',
   'usage.refresh': 'Refreshing usage limits',
   'files.replaceApply': 'Replacing files',
 }

@@ -132,7 +132,7 @@ export default function Settings() {
           )}
         </Card>
 
-        <SectionLabel>Chat</SectionLabel>
+        <SectionLabel>Thread</SectionLabel>
         <Card style={{ marginHorizontal: space.l }}>
           <Row
             style={{ paddingVertical: space.l }}

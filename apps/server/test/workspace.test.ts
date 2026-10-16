@@ -71,7 +71,7 @@ beforeEach(() => {
 
 afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
-describe('project-free chat files', () => {
+describe('project-free thread files', () => {
   it('deletes files and folders directly, unlinks selected symlinks, and protects the root', async () => {
     const task = await ws.createTask({ projectId: NO_PROJECT, title: 'Delete files', mode: 'current' })
     const binding = ws.fileBindings(task.id)[0]!
@@ -108,7 +108,7 @@ describe('project-free chat files', () => {
     }
   })
 
-  it('exposes the agent folder for editing and context, with a separate persistent folder per chat', async () => {
+  it('exposes the agent folder for editing and context, with a separate persistent folder per thread', async () => {
     const first = await ws.createTask({ projectId: NO_PROJECT, title: 'Notes', mode: 'current' })
     const second = await ws.createTask({ projectId: NO_PROJECT, title: 'Other notes', mode: 'current' })
     const [binding] = ws.fileBindings(first.id)
@@ -153,12 +153,12 @@ describe('project-free chat files', () => {
     await expect(readText(binding!.cwd, '../private.md')).rejects.toThrow(PathEscapeError)
   })
 
-  it('does not list linked files from another chat', async () => {
+  it('does not list linked files from another thread', async () => {
     const first = await ws.createTask({ projectId: NO_PROJECT, title: 'First', mode: 'current' })
     const second = await ws.createTask({ projectId: NO_PROJECT, title: 'Second', mode: 'current' })
     const cwd = ws.agentScope(first.id).cwd,
       other = ws.agentScope(second.id).cwd
-    writeFileSync(join(other, 'private.txt'), 'Another chat')
+    writeFileSync(join(other, 'private.txt'), 'Another thread')
     symlinkSync(other, join(cwd, 'linked-folder'))
     symlinkSync(join(other, 'private.txt'), join(cwd, 'linked-file'))
     expect(await listFolderFiles(cwd)).toEqual([])
@@ -434,7 +434,7 @@ describe('task lifecycle', () => {
     const project = ws.createProject('Shop')
     const repo = await ws.addRepository(project.id, web)
     await ws.createTask({ projectId: project.id, title: 'Keep', mode: 'current' })
-    expect(() => ws.removeProject(project.id)).toThrow(/Delete this project's 1 chat first/)
+    expect(() => ws.removeProject(project.id)).toThrow(/Delete this project's 1 thread first/)
     // Current-checkout tasks follow the project, so they don't pin a repository; worktree tasks do.
     const iso = await ws.createTask({ projectId: project.id, title: 'Iso', mode: 'worktree' })
     await ws.setupTask(iso.id)
@@ -478,7 +478,7 @@ describe('multiple independent conversations in an isolated workspace', () => {
     expect(ws.getBinding(second.id, binding!.repoId).cwd).toBe(binding!.cwd)
     expect(ws.agentScope(second.id)).toEqual(ws.agentScope(first.id))
     expect(fingerprint(web)).toEqual(before)
-    await expect(ws.deleteTask(first.id, true)).rejects.toThrow(/other chats/)
+    await expect(ws.deleteTask(first.id, true)).rejects.toThrow(/other threads/)
     await ws.deleteTask(first.id, false)
     expect(existsSync(binding!.cwd)).toBe(true)
     expect(ws.getBinding(second.id, binding!.repoId).cwd).toBe(binding!.cwd)
@@ -512,7 +512,7 @@ describe('multiple independent conversations in an isolated workspace', () => {
   })
 })
 
-describe('chat titles', () => {
+describe('thread titles', () => {
   it('an AI title replaces the prompt title but never one the user typed', async () => {
     const project = ws.createProject('Shop')
     await ws.addRepository(project.id, web)
@@ -528,7 +528,7 @@ describe('chat titles', () => {
   })
 })
 
-describe('chat activity timestamps', () => {
+describe('thread activity timestamps', () => {
   it('follows user messages across sessions, ignoring assistant and helper activity', async () => {
     const db = openDb(':memory:')
     try {
@@ -566,7 +566,7 @@ describe('chat activity timestamps', () => {
 })
 
 describe('pinning', () => {
-  it('pins and unpins a chat', async () => {
+  it('pins and unpins a thread', async () => {
     const project = ws.createProject('Shop')
     await ws.addRepository(project.id, web)
     const task = await ws.createTask({ projectId: project.id, title: 'Hello', mode: 'current' })

@@ -29,6 +29,6 @@ ramu.test('shows live compaction beside tool activity and preserves exact contex
     .filter({ has: page.getByText(chat.task.title, { exact: true }) })
     .click()
   await page.locator('.compaction-separator:visible').getByText('After: 33,700 tokens', { exact: true }).waitFor()
-  check(true, 'Compaction counts survive reloading the chat')
+  check(true, 'Compaction counts survive reloading the thread')
   ramu.noErrors()
 })

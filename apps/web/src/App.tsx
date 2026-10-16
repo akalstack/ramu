@@ -207,8 +207,8 @@ function Shell() {
       // ⌘K is left to the editor's own chords while a file has focus.
       {
         id: 'chat.search',
-        title: t('Search chats'),
-        category: t('Chat'),
+        title: t('Search threads'),
+        category: t('Thread'),
         keys: 'mod+k',
         run: () => setSearchingChats(true),
         when: () => !document.activeElement?.closest('.monaco-editor'),
@@ -396,7 +396,7 @@ function Shell() {
       aria-expanded={!sidebarHidden}
       aria-controls="workspace-sidebar"
       aria-label={sidebarHidden ? t('Show sidebar') : t('Hide sidebar')}
-      aria-description={sidebarHidden && attentionChats ? `${attentionChats} ${t('Chats')}` : undefined}
+      aria-description={sidebarHidden && attentionChats ? `${attentionChats} ${t('Threads')}` : undefined}
       title={t('{0} sidebar ({1})', { '0': sidebarHidden ? t('Show') : t('Hide'), '1': formatKeys('mod+b') })}
       onClick={toggleSidebar}
     >
@@ -477,7 +477,7 @@ function Shell() {
                   onClick={() => ws.newTask()}
                 >
                   <SquarePen data-icon="inline-start" />{' '}
-                  <span className="grow flex-1 min-w-0 truncate text-left">{t('New chat')}</span>{' '}
+                  <span className="grow flex-1 min-w-0 truncate text-left">{t('New thread')}</span>{' '}
                   <Kbd className="hidden @min-[230px]:inline-flex">{formatKeys('mod+n')}</Kbd>
                 </Button>
                 <Button
@@ -485,9 +485,11 @@ function Shell() {
                   className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-mode${preferences.recentChatMode ? ' active' : ''}`}
                   aria-pressed={preferences.recentChatMode}
                   aria-label={
-                    preferences.recentChatMode ? t('Group chats by project') : t('Show chats by recent activity')
+                    preferences.recentChatMode ? t('Group threads by project') : t('Show threads by recent activity')
                   }
-                  title={preferences.recentChatMode ? t('Group chats by project') : t('Show chats by recent activity')}
+                  title={
+                    preferences.recentChatMode ? t('Group threads by project') : t('Show threads by recent activity')
+                  }
                   onClick={() => void save({ ...preferences, recentChatMode: !preferences.recentChatMode })}
                 >
                   {preferences.recentChatMode ? <Folders size={16} /> : <History size={16} />}
@@ -496,8 +498,8 @@ function Shell() {
                   variant="ghost"
                   size="icon-sm"
                   className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-search"
-                  aria-label={t('Search chats')}
-                  title={`${t('Search chats')} (${formatKeys('mod+k')})`}
+                  aria-label={t('Search threads')}
+                  title={`${t('Search threads')} (${formatKeys('mod+k')})`}
                   onClick={() => setSearchingChats(true)}
                 >
                   <Search size={16} />
@@ -624,12 +626,12 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
   }
 
   const contextMenu = useContextMenu(
-    'Chat actions',
+    'Thread actions',
     task
       ? [
           {
             key: 'copy-id',
-            label: t('Copy chat ID'),
+            label: t('Copy thread ID'),
             onSelect: () => void copyText(task.id).catch((reason) => setError(errorText(reason))),
           },
           {
@@ -671,7 +673,7 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
         )}
         {starting && (
           <span className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default">
-            {t('New chat')}
+            {t('New thread')}
           </span>
         )}
         {!starting && isProject && project && ctx && (
@@ -687,7 +689,7 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
             <Input
               ref={input}
               className="inline-edit flex-1 min-w-0 p-[2px_6px] text-body font-medium text-soft bg-canvas [border-color:var(--line-strong)] header-edit max-w-[420px] no-drag [-webkit-app-region:no-drag]"
-              aria-label={t('Chat title')}
+              aria-label={t('Thread title')}
               maxLength={200}
               defaultValue={task.title}
               onBlur={(e) => void rename(e.target.value)}

@@ -2,9 +2,9 @@
 
 Ramu works with GitHub through the [GitHub CLI](https://cli.github.com) (`gh`), so it uses your existing sign-in and never stores a token. Install `gh` and run `gh auth login` once. Repositories that are not on GitHub simply don't show these controls.
 
-## Start a chat from an issue
+## Start a thread from an issue
 
-On the new chat screen of a project with a GitHub repository, pick an open issue from the issue chip beside the project (it reads **No issue** until you pick one). Its title, description, labels and comments become the opening message, which you can edit before sending. The chat remembers the issue, and a pull request opened from the same checkout closes it.
+On the new thread screen of a project with a GitHub repository, pick an open issue from the issue chip beside the project (it reads **No issue** until you pick one). Its title, description, labels and comments become the opening message, which you can edit before sending. The thread remembers the issue, and a pull request opened from the same checkout closes it.
 
 ## Open a pull request
 
@@ -14,7 +14,7 @@ In **Source Control**, a branch other than the default branch shows **Create pul
 
 Once a pull request exists, Source Control shows it with its checks (the latest run of each), draft state and review decision. Running checks refresh every 30 seconds while the window is in front, and after every commit or push.
 
-- **Fix failing checks** starts a chat in the same checkout with each failing check and the part of its GitHub Actions log around the first error.
-- **Address review comments** starts a chat with the open (unresolved) review threads and review summaries.
+- **Fix failing checks** starts a thread in the same checkout with each failing check and the part of its GitHub Actions log around the first error.
+- **Address review comments** starts a thread with the open (unresolved) review threads and review summaries.
 
-Both chats commit their fixes on the branch but never push or reply on GitHub; review the result and push from Source Control.
+Both threads commit their fixes on the branch but never push or reply on GitHub; review the result and push from Source Control.

@@ -115,11 +115,11 @@ describe('saved reviews and live workspaces', () => {
     expect(service.get(review.id).files.find((f) => f.id === file.id)?.path).toBe('changed.txt')
     await expect(service.locate(review.id, file.id, '../escape.txt')).rejects.toThrow()
   })
-  it('links matching later changes in another chat only in the same working folder', async () => {
+  it('links matching later changes in another thread only in the same working folder', async () => {
     const file = review.files.find((f) => f.path === 'changed.txt')!
     const next = await service.begin(review.taskId, { cwd, covers: [cwd], additionalDirs: [] })
     service.bind(next, 'other-session')
-    writeFileSync(join(cwd, file.path), 'Other chat change\n')
+    writeFileSync(join(cwd, file.path), 'Other thread change\n')
     await service.complete('other-session')
     const newer = service.get(next)
     db.prepare('UPDATE change_reviews SET task_id=?, data=? WHERE id=?').run(
@@ -190,7 +190,7 @@ describe('saved reviews and live workspaces', () => {
     expect(await service.branches(id)).toEqual([
       {
         repoId: 'general',
-        repoName: 'Chat files',
+        repoName: 'Thread files',
         currentBranch: 'other',
         targetBranch: 'main',
         recordedBranch: 'feature',
@@ -231,7 +231,7 @@ describe('saved reviews and live workspaces', () => {
   })
   it('supports snapshots without a Git branch or target', async () => {
     expect(await service.branches(review.id)).toEqual([
-      { repoId: 'general', repoName: 'Chat files', currentBranch: null, targetBranch: null, recordedBranch: null },
+      { repoId: 'general', repoName: 'Thread files', currentBranch: null, targetBranch: null, recordedBranch: null },
     ])
   })
   it('sends current-file context and outdated state without resolving the comment', async () => {

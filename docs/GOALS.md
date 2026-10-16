@@ -1,6 +1,6 @@
 # Goals
 
-Goals keep a chat working toward an objective across turns. They persist with the chat and follow provider changes.
+Goals keep a thread working toward an objective across turns. They persist with the thread and follow provider changes.
 
 ## Settings
 
@@ -28,7 +28,7 @@ Use Pause, Resume, or Clear in the goal bar. Pause prevents further turns; Stop 
 
 The working agent reports progress and completion. Active goals continue after a turn ends. User messages, required answers, approvals, and workspace writers take priority. Completed goals stop; blocked goals need user input or an explicit resume.
 
-Usage failures try the chat's fallback list first. If no provider is available, the goal waits for a reset and retries. Unknown reset times retry with increasing delays, up to 15 minutes. Authentication errors require intervention.
+Usage failures try the thread's fallback list first. If no provider is available, the goal waits for a reset and retries. Unknown reset times retry with increasing delays, up to 15 minutes. Authentication errors require intervention.
 
 Goal detection depends on the model following its instructions. Creating a goal does not grant permission for additional work.
 

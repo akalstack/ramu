@@ -117,7 +117,7 @@ it.each([
   ['antigravity', '.gemini'],
   ['codex', '.agents'],
 ] as const)(
-  'links the export into the folder %s scans in the chat directory and keeps it current',
+  'links the export into the folder %s scans in the thread directory and keeps it current',
   async (name, hidden) => {
     insert(skill('g', 'global-tip', null))
     insert(skill('a', 'alpha', 'p'))
@@ -149,7 +149,7 @@ it('does not link for providers that load the export themselves', () => {
   expect(readdirSync(cwd)).toEqual([])
 })
 
-it('loads the export as a Claude plugin only when the chat has one', () => {
+it('loads the export as a Claude plugin only when the thread has one', () => {
   const launch = (skillsDir?: string) =>
     claudeLaunchOptions({
       session: { ...session(), cwd: '/tmp', additionalDirs: [] } as AgentSessionInfo,

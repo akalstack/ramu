@@ -25,7 +25,7 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'ramu-recap-'))
   db = openDb(':memory:')
   ws = new Workspace(db, join(dir, 'worktrees'))
-  taskId = (await ws.createTask({ projectId: NO_PROJECT, title: 'Chat', mode: 'current' })).id
+  taskId = (await ws.createTask({ projectId: NO_PROJECT, title: 'Thread', mode: 'current' })).id
   db.prepare(
     "INSERT INTO agent_sessions (id,task_id,provider,cwd,state,created_at,settings) VALUES ('session',?,'claude-code',?,'idle',?, '{}')",
   ).run(taskId, dir, Date.now())
@@ -132,7 +132,7 @@ it('cancels recap generation, ignores a late result and permits manual retry', a
   await service.refresh()
   expect(service.snapshot().items).toHaveLength(1)
 })
-it('does not call the model again until the chat or the model changes, and always retries a failure', async () => {
+it('does not call the model again until the thread or the model changes, and always retries a failure', async () => {
   ws.setAppState('app-preferences', { recapsEnabled: true, recapTime: '08:00' })
   analyze.mockRejectedValueOnce(new Error('offline'))
   await service.refresh(false)

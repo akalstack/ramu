@@ -258,7 +258,7 @@ function OrderEditor({
       </header>
       {chain.length < 2 && (
         <p className="muted text-muted-foreground small text-caption fallback-empty m-0">
-          {t('Add at least two models. With one, the chat waits at the limit.')}
+          {t('Add at least two models. With one, the thread waits at the limit.')}
         </p>
       )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={drop}>
@@ -388,7 +388,7 @@ export function FallbackSettings({
         <h4>{t('Fallback order')}</h4>
         <p className="muted text-muted-foreground small text-caption">
           {t(
-            'Put your best model first. Chats use the highest model with room, move down when it runs out, and move back up once a higher one has room again.',
+            'Put your best model first. Threads use the highest model with room, move down when it runs out, and move back up once a higher one has room again.',
           )}
         </p>
       </div>
@@ -694,16 +694,20 @@ export function SubagentSettings({
         'Isolate sub-agents',
         'Run each helper in a separate checkout. Apply its changes back when finished; keep conflicts for review.',
       )}
-      {toggle('shareContext', 'Share chat context', "Attach the chat's recent transcript to each sub-agent's task.")}
+      {toggle(
+        'shareContext',
+        'Share thread context',
+        "Attach the thread's recent transcript to each sub-agent's task.",
+      )}
       <SettingsRow setting="subagents.maxConcurrent" className="">
         <span>
-          <strong>{t('At once per chat')}</strong>
+          <strong>{t('At once per thread')}</strong>
           <span className="muted text-muted-foreground block block small text-caption">
             {t('Additional helpers wait for an available slot.')}
           </span>
         </span>
         <Dropdown
-          label={t('Sub-agents at once per chat')}
+          label={t('Sub-agents at once per thread')}
           value={String(sub.maxConcurrent)}
           disabled={busy}
           options={Array.from({ length: 8 }, (_, index) => ({ value: String(index + 1), label: String(index + 1) }))}
@@ -765,7 +769,7 @@ export function AdvisorSettings({
           <strong>{t('Advisor')}</strong>
           <span className="muted text-muted-foreground block block small text-caption">
             {t(
-              'Send the chat transcript to the advisor model. Uses model tokens. Applies when a chat starts or restarts.',
+              'Send the thread transcript to the advisor model. Uses model tokens. Applies when a thread starts or restarts.',
             )}
           </span>
         </span>
@@ -806,10 +810,10 @@ export function AdvisorSettings({
         <p className="muted text-muted-foreground small text-caption advisor-claude-note">
           {advisor.enabled
             ? t(
-                'Ramu’s advisor replaces Claude’s advisor ({0}) for these chats. Your Claude settings stay unchanged.',
+                'Ramu’s advisor replaces Claude’s advisor ({0}) for these threads. Your Claude settings stay unchanged.',
                 { '0': claude },
               )
-            : t('Claude chats use your configured advisor ({0}) while Ramu’s advisor is off.', { '0': claude })}
+            : t('Claude threads use your configured advisor ({0}) while Ramu’s advisor is off.', { '0': claude })}
         </p>
       )}
     </div>

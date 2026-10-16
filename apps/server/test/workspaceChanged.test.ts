@@ -4,7 +4,7 @@ import { createDispatcher, type Services } from '../src/ipc'
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
-it('tells every client once when chats or projects change, and stays quiet for reads', async () => {
+it('tells every client once when threads or projects change, and stays quiet for reads', async () => {
   const sent: string[] = []
   const dispatcher = createDispatcher(
     {

@@ -105,7 +105,7 @@ export function TerminalDock({
   return (
     <Glass radius={24} style={{ padding: 6, borderWidth: 0.5, borderColor: c.lineStrong }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        {button(ChevronLeft, 'Back to chat', onBack)}
+        {button(ChevronLeft, 'Back to thread', onBack)}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${workspace} on ${computer}. ${directory ?? 'No shell open'}. Switch workspace`}
@@ -149,7 +149,7 @@ export function TerminalDock({
                         ? 'Project'
                         : kind === 'worktree'
                           ? 'Worktree'
-                          : 'Chat'}
+                          : 'Thread'}
                   </T>
                 </View>
               ) : null}

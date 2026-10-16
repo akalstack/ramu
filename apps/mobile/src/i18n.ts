@@ -1,13 +1,13 @@
 import { useStore } from './runtime/store'
 
 const en = {
-  newChat: 'New chat',
+  newChat: 'New thread',
   workspaces: 'Workspaces',
-  search: 'Search chats',
+  search: 'Search threads',
   needsYou: 'Needs you',
   projects: 'Projects',
-  chats: 'Chats',
-  standalone: 'Standalone chats',
+  chats: 'Threads',
+  standalone: 'Standalone threads',
   computers: 'Computers',
   pair: 'Pair a computer',
   settings: 'Settings',
@@ -30,19 +30,19 @@ const en = {
   usage: 'Usage',
   about: 'About',
   offlineHint:
-    'This computer is not reachable. You can still send messages and start chats; they wait in the outbox until it is back.',
-  empty: 'No chats yet',
+    'This computer is not reachable. You can still send messages and start threads; they wait in the outbox until it is back.',
+  empty: 'No threads yet',
   outbox: 'Outbox',
 }
 
 const id: typeof en = {
-  newChat: 'Obrolan baru',
+  newChat: 'Thread baru',
   workspaces: 'Ruang kerja',
-  search: 'Cari obrolan',
+  search: 'Cari thread',
   needsYou: 'Butuh kamu',
   projects: 'Proyek',
-  chats: 'Obrolan',
-  standalone: 'Obrolan mandiri',
+  chats: 'Thread',
+  standalone: 'Thread mandiri',
   computers: 'Komputer',
   pair: 'Pasangkan komputer',
   settings: 'Pengaturan',
@@ -65,8 +65,8 @@ const id: typeof en = {
   usage: 'Pemakaian',
   about: 'Tentang',
   offlineHint:
-    'Komputer ini tidak terjangkau. Kamu tetap bisa mengirim pesan dan memulai obrolan; semuanya menunggu di kotak keluar sampai komputer kembali.',
-  empty: 'Belum ada obrolan',
+    'Komputer ini tidak terjangkau. Kamu tetap bisa mengirim pesan dan memulai thread; semuanya menunggu di kotak keluar sampai komputer kembali.',
+  empty: 'Belum ada thread',
   outbox: 'Kotak keluar',
 }
 

@@ -108,7 +108,7 @@ export function EfficiencySettings({ value, onChange }: Props) {
         <SettingsLabel
           title={t('RTK command tool')}
           help={t(
-            'Advanced. Lets full-access chats run commands through an installed RTK binary. Normal shell commands are unchanged.',
+            'Advanced. Lets full-access threads run commands through an installed RTK binary. Normal shell commands are unchanged.',
           )}
         />
         <Switch
@@ -145,7 +145,7 @@ export function MaintenanceModelSettings({ value, onChange, cleanup }: Props & {
           label={t('Model for background maintenance')}
           value={modelId}
           options={[
-            { value: '', label: t('Same as chat') },
+            { value: '', label: t('Same as thread') },
             ...steps.map((step) => ({ value: step.id, label: modelStepName(step, models.catalogs) })),
           ]}
           onChange={(id) => {
@@ -212,7 +212,7 @@ export function LearningSettings({ value, onChange }: Props) {
       <SettingsRow setting="intelligence.learning">
         <SettingsLabel
           title={t('Automatic learning')}
-          help={t('After a chat, look for lasting notes and reusable skills. Uses model tokens when idle.')}
+          help={t('After a thread, look for lasting notes and reusable skills. Uses model tokens when idle.')}
         />
         <Dropdown
           label={t('Automatic learning')}
@@ -273,7 +273,7 @@ export function LearningSettings({ value, onChange }: Props) {
             {t('Learning review')} · {t(job.status)}
           </strong>
           <p className="muted text-muted-foreground small text-caption m-0!">
-            {new Date(job.createdAt).toLocaleString()} · {job.sessionTitle ?? t('Chat')}
+            {new Date(job.createdAt).toLocaleString()} · {job.sessionTitle ?? t('Thread')}
           </p>
           {job.error && (
             <p role="alert" className="text-bad small text-caption m-0!">
@@ -436,7 +436,7 @@ function LearningProposal({
           </section>
         )}
         {!showCheckpoint && change.checkpoint && (
-          <p className="text-muted-foreground">{t('Saved checkpoints are available in their chat.')}</p>
+          <p className="text-muted-foreground">{t('Saved checkpoints are available in their thread.')}</p>
         )}
         {change.memories.map((note, index) => (
           <section key={`memory-${index}`}>

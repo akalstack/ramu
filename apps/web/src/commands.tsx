@@ -117,16 +117,16 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       : []),
     {
       id: 'task.new',
-      title: t('New chat'),
-      category: t('Chat'),
+      title: t('New thread'),
+      category: t('Thread'),
       keys: 'mod+n',
       run: () => ws.newTask(),
       when: () => true,
     },
     {
       id: 'chat.new',
-      title: t('New chat in this project'),
-      category: t('Chat'),
+      title: t('New thread in this project'),
+      category: t('Thread'),
       keys: 'ctrl+mod+i',
       run: () => taskId && ws.newTask(ws.projectOf(taskId)?.id),
       when: () => !!taskId,
@@ -134,20 +134,20 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     // ⌘F finds in the visible chat, unless the editor or a terminal has focus and wants its own find.
     {
       id: 'chat.find',
-      title: t('Find in chat'),
-      category: t('Chat'),
+      title: t('Find in thread'),
+      category: t('Thread'),
       keys: 'mod+f',
       run: () => window.dispatchEvent(new Event('ramu:find-in-chat')),
       when: () =>
         !document.activeElement?.closest('.monaco-editor, .xterm, .md-preview-pane') &&
         [...document.querySelectorAll('.agent-view')].some((el) => el.checkVisibility()),
     },
-    { id: 'task.next', title: t('Next chat'), category: t('Chat'), run: () => cycleTask(1) },
-    { id: 'task.prev', title: t('Previous chat'), category: t('Chat'), run: () => cycleTask(-1) },
+    { id: 'task.next', title: t('Next thread'), category: t('Thread'), run: () => cycleTask(1) },
+    { id: 'task.prev', title: t('Previous thread'), category: t('Thread'), run: () => cycleTask(-1) },
     {
       id: 'agent.interrupt',
       title: t('Interrupt agent'),
-      category: t('Chat'),
+      category: t('Thread'),
       run: async () => {
         if (chat?.kind === 'agent') await invoke('agent.interrupt', chat.sessionId)
       },
@@ -156,7 +156,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     {
       id: 'chat.aside',
       title: t('Toggle aside'),
-      category: t('Chat'),
+      category: t('Thread'),
       keys: 'mod+shift+a',
       run: () => window.dispatchEvent(new CustomEvent('ramu:chat-panel', { detail: { panel: 'aside' } })),
       when: () => hasVisibleChat() && !window.getSelection()?.toString().trim(),
@@ -164,7 +164,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     {
       id: 'chat.agents',
       title: t('Show agents'),
-      category: t('Chat'),
+      category: t('Thread'),
       run: () => window.dispatchEvent(new CustomEvent('ramu:chat-panel', { detail: { panel: 'agents' } })),
       when: () =>
         [...document.querySelectorAll('.agent-view[data-chat-visible] .agents-chip[aria-pressed]')].some((el) =>
@@ -412,7 +412,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     },
     {
       id: 'view.chat',
-      title: t('Toggle chat pane'),
+      title: t('Toggle thread pane'),
       category: t('View'),
       keys: 'mod+alt+c',
       run: () => taskId && taskAction(taskId, 'toggle-chat'),
@@ -443,7 +443,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
     },
     {
       id: 'view.chats',
-      title: t('Show chats'),
+      title: t('Show threads'),
       category: t('View'),
       run: () => (shell.showSidebar ? shell.showSidebar('projects') : ws.setSidebar('projects')),
     },

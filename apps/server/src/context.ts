@@ -98,7 +98,7 @@ export async function withContext(
   }[] = []
   for (const file of context) {
     const binding = workspace.getBinding(taskId, file.repoId)
-    if (binding.folderOnly && file.diff) throw new Error('Chat files do not have Git diffs')
+    if (binding.folderOnly && file.diff) throw new Error('Thread files do not have Git diffs')
     // Resolve every path even for a supplied unsaved buffer, so it cannot name an out-of-scope file.
     await resolveEntryInRoot(binding.cwd, file.path)
     if (file.referenceOnly && file.source === 'tab') {

@@ -64,7 +64,7 @@ export function SessionChangesButton({ sessionId, taskId }: { sessionId?: string
       items={[
         {
           key: 'review',
-          label: t('Review this chat’s changes ({0})', { '0': review.files.length }),
+          label: t('Review this thread’s changes ({0})', { '0': review.files.length }),
           onSelect: () => openReview(ws, { id: review.id, taskId: review.taskId }),
         },
         {

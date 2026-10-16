@@ -150,7 +150,7 @@ describe('durable dispatch', () => {
     expect(service.runs(s.id)[0]?.status).toBe('interrupted')
     expect(start).toHaveBeenCalledTimes(1)
   })
-  it('continues the existing scheduled chat after restart without creating another occurrence', async () => {
+  it('continues the existing scheduled thread after restart without creating another occurrence', async () => {
     const original = new AgentService(db, () => {}, fakeQuery)
     vi.spyOn(original, 'validateSettings').mockResolvedValue()
     const originalSchedules = new ScheduleService(db, ws, original, () => {})

@@ -51,8 +51,8 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
       <ToggleRow
         {...toggleProps}
         setting="resumeChatsOnRestart"
-        title="Continue chats after restart"
-        description="Resume unfinished chats when the service restarts. Stopped and completed chats stay stopped."
+        title="Continue threads after restart"
+        description="Resume unfinished threads when the service restarts. Stopped and completed threads stay stopped."
       />
       <ToggleRow
         {...toggleProps}
@@ -79,11 +79,14 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         />
       </SettingsRow>
       <EfficiencySettings value={draft.intelligence} onChange={setIntelligence} />
-      <SettingsGroupTitle>{t('Chat history')}</SettingsGroupTitle>
+      <SettingsGroupTitle>{t('Thread history')}</SettingsGroupTitle>
       <SettingsRow setting="recentChats">
-        <SettingsLabel title={t('Recent chats per project')} help={t('Older chats stay available under Show more.')} />
+        <SettingsLabel
+          title={t('Recent threads per project')}
+          help={t('Older threads stay available under Show more.')}
+        />
         <Dropdown
-          label={t('Recent chats per project')}
+          label={t('Recent threads per project')}
           value={String(draft.recentChats)}
           options={Array.from({ length: 18 }, (_, index) => ({
             value: String(index + 3),
@@ -93,9 +96,9 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         />
       </SettingsRow>
       <SettingsRow setting="cleanupArchivedDays">
-        <SettingsLabel title={t('Delete archived chats after')} help={t('Worktrees and branches are kept.')} />
+        <SettingsLabel title={t('Delete archived threads after')} help={t('Worktrees and branches are kept.')} />
         <Dropdown
-          label={t('Delete archived chats after')}
+          label={t('Delete archived threads after')}
           value={String(draft.cleanupArchivedDays)}
           options={[
             { value: '0', label: t('Never') },

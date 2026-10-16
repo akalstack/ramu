@@ -19,12 +19,12 @@ const AUTO_GOAL_POLICY = `A goal schedules automatic follow-up agent turns after
 Reassess at the start or later when the scope grows or substantial work remains. A goal does not replace doing the work now or justify ending a turn early. Do all useful authorized work available in this turn; do not finish with only a progress report when that work is still possible. Keep a goal active for work requiring a later turn, completed only with verification evidence, or blocked when required input or an external obstacle leaves no useful independent work.`
 
 export function goalInstructions(preferences: GoalPreferences, goal: ChatGoal | null): string {
-  return `Ramu owns goals and continuation for this chat. Do not start the provider's native /goal or another continuation loop.
+  return `Ramu owns goals and continuation for this thread. Do not start the provider's native /goal or another continuation loop.
 Use Ramu's MCP tools set_goal, get_goal and update_goal. When a goal is warranted, use set_goal rather than merely describing a goal in your response. If your runtime defers tool discovery, discover the Ramu goal tools before concluding they are unavailable.
 ${preferences.mode === 'auto' ? AUTO_GOAL_POLICY : 'Only create a goal when the user explicitly requests one.'}
 Keep the goal within the user-authorized scope. Later instructions refine that scope; questions do not cancel unfinished work. If the user changes the task, update the objective accordingly.
 Before ending each turn with an active goal, audit ALL requirements against files, tests, tool results or produced artifacts. Call update_goal with active and the remaining work, completed and concrete evidence only when everything requested is done, or blocked and the missing input or obstacle when no useful independent work remains. A finished turn, a proposed plan, or an exhausted budget does not establish completion. Pending required approvals/answers prevent completion.
-The user controls pause, resume, clear and turn limits. Ramu starts follow-up turns only while the chat is idle. Do not keep working on a paused goal unless the user requests it.
+The user controls pause, resume, clear and turn limits. Ramu starts follow-up turns only while the thread is idle. Do not keep working on a paused goal unless the user requests it.
 Current goal: ${goal ? JSON.stringify(goal) : 'none'}`
 }
 
@@ -47,7 +47,7 @@ export function registerGoalTools(server: McpServer, agents: AgentService, sessi
   server.registerTool(
     'set_goal',
     {
-      description: `Set or refine this chat’s Ramu goal from the user’s requested outcome. The chat's goal mode takes precedence: Off prohibits goals; Manual requires an explicit user goal request; Auto uses the following decision rule. ${AUTO_GOAL_POLICY} Never expand scope or resume a paused goal.`,
+      description: `Set or refine this thread’s Ramu goal from the user’s requested outcome. The thread's goal mode takes precedence: Off prohibits goals; Manual requires an explicit user goal request; Auto uses the following decision rule. ${AUTO_GOAL_POLICY} Never expand scope or resume a paused goal.`,
       inputSchema: {
         objective: z.string().trim().min(1).max(8000),
         continuationReason: z
@@ -71,7 +71,7 @@ export function registerGoalTools(server: McpServer, agents: AgentService, sessi
   )
   server.registerTool(
     'get_goal',
-    { description: 'Read this chat’s goal and continuation count.', inputSchema: {} },
+    { description: 'Read this thread’s goal and continuation count.', inputSchema: {} },
     () => result(() => agents.getGoal(sessionId)),
   )
   server.registerTool(

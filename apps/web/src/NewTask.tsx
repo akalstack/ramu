@@ -416,8 +416,8 @@ export function NewTask({
             variant="ghost"
             size="icon-sm"
             className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center tray-settings"
-            aria-label={t('Chat settings')}
-            title={t('Chat settings')}
+            aria-label={t('Thread settings')}
+            title={t('Thread settings')}
             onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git' } }))}
           >
             <Settings size={14} />
@@ -438,7 +438,7 @@ export function NewTask({
           onSubmit={send}
           disabled={busy || (!general && !repos.length)}
           placeholder={general || repos.length ? t('Message the agent') : t('Add a repository to this project first')}
-          submitLabel={plan ? t('Create worktrees and start') : t('Start chat')}
+          submitLabel={plan ? t('Create worktrees and start') : t('Start thread')}
         />
         {error && <div className="error text-bad start-error p-[6px_8px_0] text-control">{error}</div>}
       </div>

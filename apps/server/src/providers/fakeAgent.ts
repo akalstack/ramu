@@ -94,8 +94,8 @@ async function fakeTools(text: string, connection?: McpConnection): Promise<void
       const result = await call({
         name: 'schedule_create',
         arguments: {
-          name: 'Created through chat tools',
-          prompt: 'Summarize this chat',
+          name: 'Created through thread tools',
+          prompt: 'Summarize this thread',
           timezone: data.timezone ?? 'UTC',
           rule: { kind: 'once', at: new Date(Date.now() + 86400000).toISOString() },
           missedPolicy: 'latest',
@@ -166,7 +166,7 @@ export function fakeAnalysis(prompt: string): string {
     return `Side answer: ${prompt.match(/<question>\n([\s\S]*?)\n<\/question>/)?.[1] ?? ''}`.trim()
   if (prompt.startsWith('advisor:'))
     return `Advisor review: ${prompt.match(/<agent-focus>\n([\s\S]*?)\n<\/agent-focus>/)?.[1] ?? 'general check'}. Verify the tests before declaring done.`
-  if (prompt.startsWith('chat-title:')) return prompt.match(/<first-message>\n([^\n]*)/)?.[1]?.slice(0, 60) ?? 'Chat'
+  if (prompt.startsWith('chat-title:')) return prompt.match(/<first-message>\n([^\n]*)/)?.[1]?.slice(0, 60) ?? 'Thread'
   const data = prompt.match(/<change-data>\s*([\s\S]*?)\s*<\/change-data>/)?.[1]
   if (data) {
     const files = JSON.parse(data)

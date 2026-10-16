@@ -16,7 +16,7 @@ Cmd/Ctrl+S saves. Undo, unsaved agent context, and disk conflict handling share 
 
 Drop desktop files or folders onto an Explorer folder, repository header, or the empty space below its tree to copy them there. Existing entries keep their contents; imported duplicates get a new name. Within a repository, dragging moves entries; hold Option/Alt to copy. Drops between repository trees copy entries.
 
-Drop Explorer files or folders onto the chat input or conversation to add file context (up to 20 files). Desktop files become attachments; desktop folders insert their quoted absolute paths so the agent can inspect them. Mixed file/folder drops work in the same gesture.
+Drop Explorer files or folders onto the thread input or conversation to add file context (up to 20 files). Desktop files become attachments; desktop folders insert their quoted absolute paths so the agent can inspect them. Mixed file/folder drops work in the same gesture.
 
 ## Text rendering
 
@@ -24,4 +24,4 @@ Drop Explorer files or folders onto the chat input or conversation to add file c
 
 ## Checks
 
-Run `pnpm check`. On macOS, build and run `RAMU_E2E_EDITOR_ONLY=1 pnpm test:e2e` for editor, save-conflict, and font-smoothing checks. Run `RAMU_E2E_DROP_ONLY=1 pnpm test:e2e` for native Explorer imports and chat drops.
+Run `pnpm check`. On macOS, build and run `RAMU_E2E_EDITOR_ONLY=1 pnpm test:e2e` for editor, save-conflict, and font-smoothing checks. Run `RAMU_E2E_DROP_ONLY=1 pnpm test:e2e` for native Explorer imports and thread drops.

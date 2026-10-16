@@ -14,15 +14,15 @@ export function ContinueChatDialog({
   useLanguage()
   return (
     <Dialog
-      title={translate('Continue in a new chat?')}
-      confirmLabel={translate('Continue in new chat')}
+      title={translate('Continue in a new thread?')}
+      confirmLabel={translate('Continue in new thread')}
       busy={busy}
       onCancel={() => {
         if (!busy) onCancel()
       }}
       onConfirm={onConfirm}
     >
-      <p>{translate('Start a new chat in this checkout using the current conversation as context.')}</p>
+      <p>{translate('Start a new thread in this checkout using the current conversation as context.')}</p>
     </Dialog>
   )
 }

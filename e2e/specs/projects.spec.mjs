@@ -142,7 +142,7 @@ ramu.test('an isolated worktree task works on its own branch and a dirty one can
   await row.click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Delete…' }).click()
   await page.getByRole('checkbox').click()
-  await page.getByRole('button', { name: 'Delete chat', exact: true }).click()
+  await page.getByRole('button', { name: 'Delete thread', exact: true }).click()
   await alert()
     .getByText(/uncommitted changes/)
     .waitFor()

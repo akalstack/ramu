@@ -90,7 +90,7 @@ function MessageActions({
       ...(menu
         ? ([
             ['Quote in reply', () => menu.quote(text)],
-            ['Quote in new chat', () => menu.quoteNew(text)],
+            ['Quote in new thread', () => menu.quoteNew(text)],
             ...(from === 'user' && seq !== undefined
               ? ([
                   ['Edit and resend', () => menu.edit(seq, text, files ?? [])],
@@ -635,7 +635,7 @@ function AgentsGroup({ item, chat }: { item: Extract<TranscriptItem, { kind: 'ag
   const shown = item.agents.find((a) => a.id === shownId)
   const stop = (agentId: string) =>
     chat.sessionId &&
-    Alert.alert('Stop this sub-agent?', 'The main chat keeps going.', [
+    Alert.alert('Stop this sub-agent?', 'The main thread keeps going.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Stop',

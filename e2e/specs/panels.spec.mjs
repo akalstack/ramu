@@ -17,7 +17,7 @@ const toolButton = (name) => page.locator('.workspace-tool-buttons').getByRole('
 const toolsClose = tools.getByRole('button', { name: /^Hide / })
 const hideWorkspace = () => page.getByRole('button', { name: 'Hide workspace', exact: true }).click()
 const showWorkspace = () => page.getByRole('button', { name: 'Show workspace', exact: true }).click()
-const handle = () => pane.getByRole('separator', { name: 'Resize chat pane' })
+const handle = () => pane.getByRole('separator', { name: 'Resize thread pane' })
 /** Marks the live element so a later `same()` proves it was never remounted. */
 const mark = (selector, key) =>
   page.evaluate(([selector, key]) => (window[key] = document.querySelector(selector)), [selector, key])
@@ -64,12 +64,12 @@ async function inside({ editor }) {
 
 let task, session
 
-ramu.test('opening a file and reopening the workspace keeps the chat and editor mounted', async () => {
+ramu.test('opening a file and reopening the workspace keeps the thread and editor mounted', async () => {
   const { project } = await ramu.api('projects.addFolder', repo)
   task = await ramu.api('tasks.create', { projectId: project.id, title: 'Panels', mode: 'current' })
   await ramu.api('tasks.setup', task.id)
   session = await ramu.api('agent.start', task.id, 'Reply with a short greeting.', fakeAgent.claude)
-  await ramu.until(async () => (await ramu.api('agent.get', session.id)).state === 'idle', 'chat never became idle')
+  await ramu.until(async () => (await ramu.api('agent.get', session.id)).state === 'idle', 'thread never became idle')
   await showChat(ramu, { task, session })
   await pane.locator('.agent-view:visible').waitFor()
 
@@ -89,13 +89,13 @@ ramu.test('opening a file and reopening the workspace keeps the chat and editor 
   await page.mouse.move(divider.x + divider.width / 2 + 40, divider.y + divider.height / 2, { steps: 4 })
   assert.ok(
     Math.abs((await pane.locator('.main-chat').boundingBox()).width - beforeDrag.chat.width - 40) < 1,
-    'chat resizes in real time while dragging',
+    'thread resizes in real time while dragging',
   )
   await page.mouse.up()
   const saved = await inside({ editor: true })
   assert.ok(
     Math.abs(saved.chat.width - beforeDrag.chat.width - 40) < 1,
-    'the drag moved the chat by the pointer distance',
+    'the drag moved the thread by the pointer distance',
   )
   assert.equal(
     await pane
@@ -130,13 +130,13 @@ ramu.test('opening a file and reopening the workspace keeps the chat and editor 
     await ramu.until(async () => {
       const now = await rects()
       return Math.abs(now.chat.width - now.body.width) < 1
-    }, 'hiding the workspace did not restore the full chat')
+    }, 'hiding the workspace did not restore the full thread')
     assert.equal(await pane.locator('.editor-area').evaluate((el) => getComputedStyle(el).visibility), 'hidden')
     await showWorkspace()
     const restored = await inside({ editor: true })
-    assert.ok(Math.abs(restored.chat.width - wide.chat.width) < 1, 'the editor split restores the resized chat')
+    assert.ok(Math.abs(restored.chat.width - wide.chat.width) < 1, 'the editor split restores the resized thread')
   }
-  assert.ok(await same('.task-pane .agent-view', '__reopenChat'), 'the chat was never remounted')
+  assert.ok(await same('.task-pane .agent-view', '__reopenChat'), 'the thread was never remounted')
   assert.ok(await same('.task-pane .monaco-editor', '__reopenEditor'), 'the editor was never remounted')
   ramu.noErrors()
 })
@@ -235,7 +235,7 @@ ramu.test(
   },
 )
 
-ramu.test('oversized chat content and compact windows cannot push panels out of the grid', async () => {
+ramu.test('oversized thread content and compact windows cannot push panels out of the grid', async () => {
   await page.evaluate(() => {
     const probe = document.createElement('div')
     probe.style.cssText = 'width:4000px;height:1px'
@@ -264,7 +264,7 @@ ramu.test('oversized chat content and compact windows cannot push panels out of 
   await page.locator('.task-row').first().click()
   await pane.locator('.changes-tab:visible .pair-review-bar').waitFor()
   const after = await inside({ editor: true })
-  assert.ok(Math.abs(after.chat.width - before.chat.width) < 1, 'the chat width was not restored after reload')
+  assert.ok(Math.abs(after.chat.width - before.chat.width) < 1, 'the thread width was not restored after reload')
 })
 
 ramu.test(
@@ -364,7 +364,7 @@ ramu.test(
     await tools.locator('.explorer-panel').waitFor()
     await toolsClose.click()
     await tools.waitFor({ state: 'hidden' })
-    assert.ok(await same('.task-pane .agent-view', '__reopenChat'), 'the chat was remounted')
+    assert.ok(await same('.task-pane .agent-view', '__reopenChat'), 'the thread was remounted')
     ramu.noErrors()
   },
 )
@@ -383,7 +383,7 @@ ramu.test('rapid workspace shortcuts settle on the final state', async () => {
   await inside({ editor: false })
   await showWorkspace()
   await inside({ editor: true })
-  assert.ok(await same('.task-pane .agent-view', '__reopenChat'), 'the chat was remounted')
+  assert.ok(await same('.task-pane .agent-view', '__reopenChat'), 'the thread was remounted')
   assert.ok(await same('.task-pane .monaco-editor', '__reopenEditor'), 'the editor was remounted')
   assert.equal(await page.evaluate(() => document.documentElement.dataset.panelMotion), undefined)
 })
@@ -464,14 +464,14 @@ ramu.test(
   },
 )
 
-ramu.test('a recent chat returns from cache without a loading frame and keeps its unsent draft', async () => {
-  await pane.locator('.agent-view:visible [data-composer-input]').fill('Draft survives switching chats')
+ramu.test('a recent thread returns from cache without a loading frame and keeps its unsent draft', async () => {
+  await pane.locator('.agent-view:visible [data-composer-input]').fill('Draft survives switching threads')
   await startChat(ramu, {
     projectId: task.projectId,
-    title: 'Other cached chat',
+    title: 'Other cached thread',
     prompt: 'Reply with a short greeting.',
   })
-  await page.locator('.task-row').filter({ hasText: 'Other cached chat' }).click()
+  await page.locator('.task-row').filter({ hasText: 'Other cached thread' }).click()
   await pane.locator('.agent-view:visible .msg').first().waitFor()
   await page.evaluate(() => {
     window.__chatLoadingFrames = 0
@@ -489,11 +489,11 @@ ramu.test('a recent chat returns from cache without a loading frame and keeps it
       return window.__chatLoadingFrames
     }),
     0,
-    'recent chat messages come back with a loading placeholder',
+    'recent thread messages come back with a loading placeholder',
   )
   assert.equal(
     await pane.locator('.agent-view:visible [data-composer-input]').getAttribute('data-draft'),
-    'Draft survives switching chats',
+    'Draft survives switching threads',
   )
 })
 

@@ -138,7 +138,7 @@ describe('planRoute', () => {
       }),
     ).toBeNull()
   })
-  it('stays put when fallback is off for the chat', () => {
+  it('stays put when fallback is off for the thread', () => {
     expect(
       planRoute({ ...claude, autoFallback: false }, chain, {
         usage: [reading({ usedPercent: 99, resetsAt: NOW + 1 })],

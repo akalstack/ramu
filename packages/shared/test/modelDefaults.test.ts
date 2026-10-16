@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { migrateModelDefaults, recommendedSets } from '../src/providers/modelDefaults'
 
-describe('new-chat model defaults', () => {
+describe('new-thread model defaults', () => {
   it('defaults to GPT-6.1 Sol with Light reasoning even before the catalog loads', () => {
     const prefs = recommendedSets([])
     const selected = prefs.sets[0]!.steps.find((step) => step.id === prefs.defaultStepId)

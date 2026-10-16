@@ -59,7 +59,7 @@ it('keeps explicit content when automatic tab context is disabled', () => {
     }),
   ).toEqual([{ repoId: 'repo', path: 'other.ts', source: 'mention', content: 'unsaved full content' }])
 })
-it('sends only references when a chat or terminal is active', () => {
+it('sends only references when a thread or terminal is active', () => {
   const args = options()
   expect(buildComposerContext({ ...args, activeViewId: 'chat' }).every((entry) => entry.referenceOnly)).toBe(true)
   expect(args.readBuffer).not.toHaveBeenCalled()

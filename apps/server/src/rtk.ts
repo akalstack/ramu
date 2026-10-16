@@ -10,7 +10,7 @@ export function registerRtkTool(server: McpServer, session: AgentSessionInfo) {
     'rtk_run',
     {
       description:
-        'Run an installed RTK command in this chat working directory for compact command output. Full-access chats only. Arguments go directly to rtk, without a shell. Native provider shell tools are unchanged. RTK output is filtered by RTK; it is not the original underlying command output.',
+        'Run an installed RTK command in this thread working directory for compact command output. Full-access threads only. Arguments go directly to rtk, without a shell. Native provider shell tools are unchanged. RTK output is filtered by RTK; it is not the original underlying command output.',
       inputSchema: {
         arguments: z
           .array(

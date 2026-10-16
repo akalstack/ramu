@@ -28,7 +28,7 @@ export function ProjectHoverCard({
       </div>
       <div className="phc-line [&_svg]:flex-none [&_svg]:text-muted-foreground flex items-center gap-[9px] min-h-[26px] p-[0_8px] muted text-muted-foreground">
         <MessageCircle size={14} />
-        {chats} {chats === 1 ? t('chat') : t('chats')}
+        {chats} {chats === 1 ? t('thread') : t('threads')}
       </div>
       <div className="phc-sep h-px m-[5px_2px] [background:var(--line)]" />
       {(folders.length

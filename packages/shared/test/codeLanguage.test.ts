@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { codeLanguage } from '../src/workspace/codeLanguage'
 
-describe('chat code language', () => {
+describe('thread code language', () => {
   it('uses explicit language aliases and file extensions before inference', () => {
     expect(codeLanguage('const a = 1', 'python')).toBe('py')
     expect(codeLanguage('', 'src/Button.tsx')).toBe('tsx')

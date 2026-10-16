@@ -49,7 +49,7 @@ const finishTurn = () =>
 async function startChat(prompt, { worktree = false } = {}) {
   const home = page.getByRole('button', { name: 'Home', exact: true })
   if ((await home.getAttribute('aria-pressed')) !== 'true') await home.click()
-  await page.getByRole('button', { name: 'New chat in shop', exact: true }).click()
+  await page.getByRole('button', { name: 'New thread in shop', exact: true }).click()
   if (worktree) {
     await page.getByRole('button', { name: 'Where the work happens' }).click()
     await page.getByRole('menuitem', { name: /New isolated worktrees/i }).click()
@@ -96,7 +96,7 @@ ramu.test('quick open finds files in either repository and Cmd+W closes the tab,
   assert.equal(ramu.app.windows().length, 1, 'the window survived')
 })
 
-ramu.test('a current-checkout chat inherits project terminals and unsaved editor buffers', async () => {
+ramu.test('a current-checkout thread inherits project terminals and unsaved editor buffers', async () => {
   const dialog = await palette(ramu, 'App.tsx')
   await dialog.getByRole('option').filter({ hasText: 'src/App.tsx' }).first().waitFor()
   await page.keyboard.press('Enter')
@@ -105,11 +105,11 @@ ramu.test('a current-checkout chat inherits project terminals and unsaved editor
   await pane.locator('.view-tab.active .dirty').waitFor()
   const before = await terminalTabs().count()
   await startChat('Add password reset')
-  assert.equal(apiHead(), apiHeadBefore, 'starting a chat does not touch Git')
+  assert.equal(apiHead(), apiHeadBefore, 'starting a thread does not touch Git')
   assert.equal(await pane.locator('.view-tabs [role="tab"]', { hasText: 'Add password reset' }).count(), 0)
-  assert.equal(await terminalTabs().count(), before, 'the chat shares the project terminals')
+  assert.equal(await terminalTabs().count(), before, 'the thread shares the project terminals')
   await runInTerminal('echo shell-$RAMU_SMOKE_TOKEN')
-  await terminalHas('shell-connected', 'the chat lost the original shell environment')
+  await terminalHas('shell-connected', 'the thread lost the original shell environment')
   // A new chat starts with the editor closed; reopening the file brings back the shared unsaved buffer.
   const reopen = await palette(ramu, 'App.tsx')
   await reopen.getByRole('option').filter({ hasText: 'src/App.tsx' }).first().waitFor()
@@ -118,7 +118,7 @@ ramu.test('a current-checkout chat inherits project terminals and unsaved editor
   await pane.locator('.monaco-editor .view-lines', { hasText: 'shared unsaved buffer' }).waitFor()
 })
 
-ramu.test('model, effort and access switch inside one chat', async () => {
+ramu.test('model, effort and access switch inside one thread', async () => {
   const chat = pane.locator('.agent-view:visible')
   await chat.getByRole('button', { name: 'Model and effort controls', exact: true }).click()
   await page.getByRole('button', { name: /^Select model ·/ }).click()

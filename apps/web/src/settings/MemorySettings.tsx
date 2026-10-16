@@ -49,7 +49,7 @@ export function MemorySettings({
         <SettingsLabel
           title={t('Shared memory')}
           help={t(
-            'Agents on every provider read and save the same notes, including during chats. Learning also saves lasting lessons after chats. Applies to new chats.',
+            'Agents on every provider read and save the same notes, including during threads. Learning also saves lasting lessons after threads. Applies to new threads.',
           )}
         />
         <Switch

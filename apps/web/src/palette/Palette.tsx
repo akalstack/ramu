@@ -302,7 +302,9 @@ export function Palette({
             aria-controls="palette-options"
             aria-activedescendant={selectedIndex >= 0 ? `palette-option-${selectedIndex}` : undefined}
             value={query}
-            placeholder={taskId ? t('Search files, chats, or projects. Type > for commands') : t('Type > for commands')}
+            placeholder={
+              taskId ? t('Search files, threads, or projects. Type > for commands') : t('Type > for commands')
+            }
             onValueChange={(value) => {
               setQuery(value)
               setChosen(null)

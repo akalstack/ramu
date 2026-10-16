@@ -3,7 +3,7 @@ import { answerMessage, parseAnswerMessage } from '../src/chat/questions'
 import { parseTaskStop, taskStopPrompt } from '../src/chat/agentTasks'
 
 // Messages Ramu sends on the user's behalf: the agent reads the full text, the chat shows only what the user did.
-describe('chat messages Ramu writes for the user', () => {
+describe('thread messages Ramu writes for the user', () => {
   it('shows late answers without the delivery note', () => {
     const text = answerMessage('req-1', [
       { question: 'Which database?', answer: 'SQLite' },

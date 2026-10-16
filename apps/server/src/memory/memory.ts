@@ -556,7 +556,7 @@ export class MemoryService {
     }
     if (SECRET.test(`${input.title}\n${input.content}`))
       throw new Error(
-        'This looks like a credential. Memory is shared with every provider and chat; never store secrets in it.',
+        'This looks like a credential. Memory is shared with every provider and thread; never store secrets in it.',
       )
     const projectId = input.projectId === NO_PROJECT ? null : input.projectId
     const text = `${input.title}\n${input.content}`
@@ -1056,7 +1056,7 @@ ${JSON.stringify(data)}
   /** The protocol plus an index of the strongest memories in scope, appended to every provider's instructions. */
   instructions(session: AgentSessionInfo, projectId: string | null): string {
     if (!this.enabled()) return ''
-    const protocol = `Ramu keeps a long-term memory shared by every provider and chat (Claude, Codex, OpenCode and others). Use Ramu's MCP tools memory_search, memory_save, memory_update and memory_forget for it, not a provider-specific memory file, so the next agent benefits from what you learn. If your runtime defers tool discovery, discover them before concluding they are unavailable.
+    const protocol = `Ramu keeps a long-term memory shared by every provider and thread (Claude, Codex, OpenCode and others). Use Ramu's MCP tools memory_search, memory_save, memory_update and memory_forget for it, not a provider-specific memory file, so the next agent benefits from what you learn. If your runtime defers tool discovery, discover them before concluding they are unavailable.
 - Before substantial work, check the index below and memory_search for the task's topic.
 - Save what will matter in a future conversation and cannot be derived from the code, git history or AGENTS.md/CLAUDE.md: the user's role and preferences (user), corrections and confirmed approaches with the reason why (feedback), ongoing work, decisions and deadlines (project), and where to find outside resources (reference). Use scope project for this project, global for what applies everywhere. Write absolute dates, never relative ones. Do not save secrets, one-off task details or anything already saved.
 - For concise recall, use memory_search with format concise, then memory_read for full details and source metadata. Use session_recall for original conversation evidence when needed.
@@ -1124,7 +1124,7 @@ export function registerMemoryTools(
     if (m.projectId && m.projectId !== project) throw new Error('That memory belongs to another project')
     return m
   }
-  const scope = z.enum(['project', 'global']).describe('project: only this project. global: every project and chat.')
+  const scope = z.enum(['project', 'global']).describe('project: only this project. global: every project and thread.')
   // Models ignore bare JSON Schema bounds, so every limit is also stated in words.
   const field = {
     id: z.string().min(1).max(100).describe('Memory ID from memory_search or the memory index.'),
@@ -1157,7 +1157,7 @@ export function registerMemoryTools(
     'memory_search',
     {
       description:
-        'Search the long-term memory shared by every provider and chat, for this project plus global memories. Results are ranked by relevance, importance and recent use. Use it before substantial work and when the user refers to earlier decisions or preferences.',
+        'Search the long-term memory shared by every provider and thread, for this project plus global memories. Results are ranked by relevance, importance and recent use. Use it before substantial work and when the user refers to earlier decisions or preferences.',
       inputSchema: {
         query: z
           .string()

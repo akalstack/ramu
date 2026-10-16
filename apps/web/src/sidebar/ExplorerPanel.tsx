@@ -37,7 +37,7 @@ export function NoTask() {
   return (
     <div className="panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] p-[2px_8px_16px]">
       <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">
-        {t('Open a project or chat to see its files here.')}
+        {t('Open a project or thread to see its files here.')}
       </p>
     </div>
   )

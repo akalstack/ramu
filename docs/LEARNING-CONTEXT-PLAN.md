@@ -11,7 +11,7 @@ Confirmed design constraints: tool search covers only tools exposed by Ramu, inc
 | Shared memory | `apps/server/src/memory/memory.ts`: scoped SQLite notes, lexical BM25-style ranking, duplicate detection, usage/recency ranking, expiry, archival, and audit history | Limited evidence links and automatic extraction from completed turns; flat storage is adequate until evaluations show otherwise |
 | Memory maintenance | Hourly hygiene; daily model-assisted cleanup after five changes; scope-separated operations and concurrent-edit checks | No shared maintenance queue or explicit model/token budget; cleanup inputs cap at 300 notes per scope |
 | Skill discovery | `apps/server/src/context.ts`: bounded discovery of project and user skills, nearest project wins by name; explicit `$skill` references become file pointers | No Ramu-owned skill lifecycle, usage tracking, versioning, consolidation, or task-based selection |
-| Tool exposure | `apps/server/src/index.ts`: authenticated, per-chat MCP tools for questions, goals, memory, schedules, reviews, advisor, and helpers | Full registration per HTTP request; no Ramu tool-search registry |
+| Tool exposure | `apps/server/src/index.ts`: authenticated, per-thread MCP tools for questions, goals, memory, schedules, reviews, advisor, and helpers | Full registration per HTTP request; no Ramu tool-search registry |
 | Provider instructions | `agent.ts` builds shared instructions; Claude receives appended system instructions and Codex receives developer instructions | OpenCode and generic ACP adapters do not visibly consume `connection.instructions`; establish parity before relying on new styles or learning prompts |
 | Context limits | `withContext` caps individual/total file characters; provider handoff keeps the beginning and end of a long transcript | Character limits and truncation do not preserve a structured account of decisions, open work, and evidence |
 | Settings | Shared types, validated IPC preferences, React settings, English/Indonesian localization | New features need all these layers and capability-aware UI |
@@ -44,7 +44,7 @@ Offer automatic and review-first modes plus pause and manual run. Use cheap dete
 
 ### Response styles
 
-Add Default, Concise, Detailed, ADHD-friendly, Caveman, and Custom presets, with a global default and per-chat override. Style is separate from input compression: readable ADHD-friendly answers can still use compact tool results.
+Add Default, Concise, Detailed, ADHD-friendly, Caveman, and Custom presets, with a global default and per-thread override. Style is separate from input compression: readable ADHD-friendly answers can still use compact tool results.
 
 Compile a small provider-neutral presentation instruction. A custom style may reference a discovered skill; load its applicable instructions without granting it extra authority. Preserve code, commands, paths, structured results, and requested exact quotations. Explicit user requests override the preset. Foreground prose uses the chosen style; internal maintenance JSON uses its required schema. Surface when a provider cannot apply or refresh instructions reliably.
 
@@ -54,7 +54,7 @@ Move Ramu tool definitions and handlers into a registry with names, descriptions
 
 Use native deferred discovery where supported. For other providers, expose a stable search tool that returns matching schemas and an invocation tool that validates the chosen tool's arguments with the original schema. Authorization and scope checks run again at invocation time. Do not imply this searches every tool owned by a provider or every MCP server configured outside Ramu.
 
-The MCP server is currently rebuilt for each POST. Any selected-tool state must live outside that request object and be keyed to the authenticated chat. Validate actual discovery and invocation behavior with each provider before claiming parity.
+The MCP server is currently rebuilt for each POST. Any selected-tool state must live outside that request object and be keyed to the authenticated thread. Validate actual discovery and invocation behavior with each provider before claiming parity.
 
 ### Input and output token efficiency
 
@@ -62,7 +62,7 @@ Start with Ramu-controlled payloads: memory packs, context attachments, tool res
 
 Add optional RTK integration through supported provider hooks or an explicit Ramu command tool. Formatting a tool event after the provider has already consumed it saves no input tokens. Unknown or unsupported provider tool paths must pass through unchanged and report their coverage accurately.
 
-Output savings come from generation instructions, not shortening the displayed answer after generation. Keep style and compression controls independent. Expose off/balanced/aggressive input modes and per-chat statistics. Label tokenizer estimates; provider-reported usage is the billing observation. Evaluate cache effects, compression overhead, retrieval retries, latency, and task success alongside token reduction.
+Output savings come from generation instructions, not shortening the displayed answer after generation. Keep style and compression controls independent. Expose off/balanced/aggressive input modes and per-thread statistics. Label tokenizer estimates; provider-reported usage is the billing observation. Evaluate cache effects, compression overhead, retrieval retries, latency, and task success alongside token reduction.
 
 ### Keep current shared memory; improve recall and continuity
 
@@ -96,5 +96,5 @@ Additional useful features inferred from this research: session recall, source-l
 - Use the portable search/schema/invocation gateway for every provider. Native deferred-reference optimizations can be added later without changing the registry.
 - Maintain only generated, self-contained Markdown skills. Installed skill packages and support files are never rewritten or consolidated by this service.
 - Bound learning with input/output sizes, a timeout, an idle delay, and a rolling daily review count. This is a review budget, not a billing-token cap.
-- Use an explicit, opt-in RTK tool in full-access chats. Native shell hooks and provider-wide interception are not installed.
+- Use an explicit, opt-in RTK tool in full-access threads. Native shell hooks and provider-wide interception are not installed.
 - Preserve SQLite memory and source histories. Validate retrieval/continuation behavior with fixtures; published quality or savings claims require opt-in live-provider evaluation.

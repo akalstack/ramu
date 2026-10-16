@@ -62,7 +62,7 @@ export function createAgentNotifier(options: {
         sessionId: session.parentId ?? sessionId,
         taskId: session.taskId,
         kind,
-        title: [options.label?.(), task?.title || session.title || t('Chat')].filter(Boolean).join(' · '),
+        title: [options.label?.(), task?.title || session.title || t('Thread')].filter(Boolean).join(' · '),
         body: t(body ?? COPY[kind]),
       }
       const win = options.window

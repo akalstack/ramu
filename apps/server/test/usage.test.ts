@@ -156,8 +156,8 @@ it('keeps account windows separate and only exposes the selected account', async
   }
 })
 
-describe('sub-agent notes to their chat', () => {
-  it('round-trips a note and a question, hiding the reply hint from the chat', () => {
+describe('sub-agent notes to their thread', () => {
+  it('round-trips a note and a question, hiding the reply hint from the thread', () => {
     expect(parseTaskReport(subagentNotePrompt('Map "auth"', 'says', 'c1', 'Found two call sites'))).toEqual({
       name: "Map 'auth'",
       verb: 'says',

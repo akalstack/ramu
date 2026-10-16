@@ -43,7 +43,7 @@ ramu.test('every settings section has a palette command', async () => {
     'Editor & Terminal',
     'Git',
     'Keyboard shortcuts',
-    'Chats',
+    'Threads',
     'Providers & models',
     'Access & Fallback',
     'Goals & delegation',
@@ -72,12 +72,12 @@ ramu.test('commands only appear when they apply', async () => {
   assert.equal(
     await aside.getByRole('option').filter({ hasText: 'Toggle aside' }).count(),
     0,
-    'chat commands need a visible chat',
+    'thread commands need a visible thread',
   )
   await page.keyboard.press('Escape')
 })
 
-ramu.test('chat panel commands open Agents and Aside, and Aside keeps its shortcut', async () => {
+ramu.test('thread panel commands open Agents and Aside, and Aside keeps its shortcut', async () => {
   const { page } = ramu
   const prefs = await ramu.api('settings.app.get')
   await ramu.api('settings.app.set', {
@@ -89,7 +89,7 @@ ramu.test('chat panel commands open Agents and Aside, and Aside keeps its shortc
     },
   })
   const chat = await startChat(ramu, {
-    title: 'Palette chat',
+    title: 'Palette thread',
     prompt: '[advisor] Say hello',
     settings: fakeAgent.claude,
     state: null,

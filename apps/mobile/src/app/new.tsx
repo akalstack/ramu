@@ -103,7 +103,7 @@ export default function NewChat() {
             </T>
             <T tone="muted" style={{ textAlign: 'center' }}>
               {offline
-                ? `${pc?.name} is offline. The chat waits in the outbox and starts when it reconnects.`
+                ? `${pc?.name} is offline. The thread waits in the outbox and starts when it reconnects.`
                 : `Runs on ${pc?.name} with your host's providers.`}
             </T>
           </View>

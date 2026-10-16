@@ -24,7 +24,7 @@ export async function startChat(
   if (state)
     await ramu.until(
       async () => (await ramu.api('agent.get', session.id)).state === state,
-      `chat "${title}" never became ${state}`,
+      `thread "${title}" never became ${state}`,
     )
   return { task, session }
 }

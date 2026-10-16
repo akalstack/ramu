@@ -47,7 +47,7 @@ export function SystemSettings({
         {...toggleProps}
         setting="recapsEnabled"
         title="Daily recaps"
-        description="Show recent chats and unfinished work on Home. Uses model tokens to write the summary."
+        description="Show recent threads and unfinished work on Home. Uses model tokens to write the summary."
       />
       {draft.recapsEnabled && (
         <SettingsRow setting="recapTime">

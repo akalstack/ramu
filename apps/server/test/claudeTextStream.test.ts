@@ -39,7 +39,7 @@ describe('Claude streaming blocks', () => {
     start(stream, null)
     expect(block(stream, null, 0, 'New turn').text).toBe('New turn')
   })
-  it('ignores private thinking and incomplete tool JSON instead of turning either into chat text', () => {
+  it('ignores private thinking and incomplete tool JSON instead of turning either into thread text', () => {
     const stream = new ClaudeTextStream()
     start(stream, null)
     for (const [type, delta] of [

@@ -9,6 +9,8 @@ apps/web (React UI) ──► apps/desktop (Electron main + preload) ──► @
 
 The UI never touches the filesystem, Git, or providers directly. It calls named methods; the server executes them.
 
+Call an ongoing conversation and its work a **thread** in product copy. A **task** is a specific agent job, including delegated or scheduled work; **chat** is the act of messaging an agent. Internal `Task` types, `tasks.*` methods, `chat` routes and storage keys retain their existing names for compatibility.
+
 ## Packages
 
 | Package | Role |
@@ -34,13 +36,13 @@ Every call is a method in the table in `packages/shared/src/api.ts`, for example
 4. **Dispatch** is `ipc/dispatcher.ts`: it validates input, runs the handler, and notifies the workspace of changes.
 5. **Call it** from the UI through `apps/web/src/ipc.ts`.
 
-Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockCheckouts`) when a handler must not interleave with another on the same chat or repository.
+Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockCheckouts`) when a handler must not interleave with another on the same thread or repository.
 
 ## Server layout (`apps/server/src`)
 
 | Folder | Contents |
 | --- | --- |
-| `agent/` | Chat lifecycle, one collaborator per concern: session store and registry, recorder, message dispatcher, goals, provider wait, user requests (questions, permissions, elicitation), fallback router, advisor, sub-agents, stream pump, restart recovery. Each owns its state and sees the rest through a narrow `*Host` interface. `agent.ts` is the thin `AgentService` façade that wires them together. |
+| `agent/` | Thread lifecycle, one collaborator per concern: session store and registry, recorder, message dispatcher, goals, provider wait, user requests (questions, permissions, elicitation), fallback router, advisor, sub-agents, stream pump, restart recovery. Each owns its state and sees the rest through a narrow `*Host` interface. `agent.ts` is the thin `AgentService` façade that wires them together. |
 | `providers/` | Provider plumbing and the `ProviderAdapter` interface (`adapter.ts`) with one adapter per provider in `adapters/`: binary lookup, account environment, sign-in checks, login arguments and update plans. Also usage and usage-limit detection and `fakeAgent.ts` for simulated runs. |
 | `workspace/` | Repositories, files, Git, isolation checkouts, terminals (PTY), editorconfig, discard previews. |
 | `review/` | Recorded diffs, review state and stats, undo and restore with conflict checks. |
@@ -55,13 +57,13 @@ Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockChe
 
 | Folder | Contents |
 | --- | --- |
-| `views/` and `views/agent/` | Editor, diff, file, terminal and chat views. `views/agent/` holds the chat transcript split into `components/`, `hooks/` and `lib/`. |
-| `chat/` | Chat chrome shared across views: activity, find, goal bar, questions, notifications. |
+| `views/` and `views/agent/` | Editor, diff, file, terminal and thread views. `views/agent/` holds the thread transcript split into `components/`, `hooks/` and `lib/`. |
+| `chat/` | Thread chrome shared across views: activity, find, goal bar, questions, notifications. |
 | `composer/` | Message composer, suggestions, attachments, drafts, the offline outbox. |
 | `models/` | Model and reasoning pickers, provider icons and setup. |
 | `settings/` | Settings dialog and its sections; provider cards, login and account rows. |
 | `git/` | Git controls, review chips and diffs, commit dialogs. |
-| `changes/` | The review tab for a chat's recorded changes. |
+| `changes/` | The review tab for a thread's recorded changes. |
 | `workspace/` | Layout, panes, terminals, project switching, paired computers. |
 | `sidebar/` | Projects, Explorer, Source Control and Search panels, each in its own subfolder. |
 | `editor/` | Monaco setup and editor buffers. |
@@ -70,14 +72,14 @@ Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockChe
 
 ## Providers
 
-Chats run through provider adapters selected per chat (`AgentSettings.provider`). Provider-specific setup behavior (executable and `RAMU_*_BIN` variable, account profiles, sign-in detection, login and update) is a `ProviderAdapter` in `apps/server/src/providers/adapters/`; `providers.ts` and `providerBinaries.ts` keep the shared spawning, caching and parsing. To add a provider, add an adapter, register it in `adapters/index.ts`, and add its id to `AgentProvider` in `packages/shared`. How it chats is an `AgentRunner` (`agent/agentRunner.ts`) listed in `providers/runners.ts`; use the provider's own SDK where it has one, or `createAcpRunner` for an ACP runtime. Features the provider has natively (`NativeFeatures` on the adapter) replace Ramu's own where they can serve Ramu's flow. An adapter may also define `skillsLaunch`, which points the provider at Ramu's per-scope managed-skill export for one chat (a Claude plugin, a Codex skill root, an OpenCode `skills` entry, or `linkDirs` for Cursor and Antigravity, which scan a fixed folder in the chat's working directory and get git-excluded symlinks from `memory/skillLinks.ts`; see [learning](LEARNING.md)). `providers/fakeAgent.ts` implements the same events, permission requests and transcript paths without model usage; the end-to-end specs depend on it.
+Threads run through provider adapters selected per thread (`AgentSettings.provider`). Provider-specific setup behavior (executable and `RAMU_*_BIN` variable, account profiles, sign-in detection, login and update) is a `ProviderAdapter` in `apps/server/src/providers/adapters/`; `providers.ts` and `providerBinaries.ts` keep the shared spawning, caching and parsing. To add a provider, add an adapter, register it in `adapters/index.ts`, and add its id to `AgentProvider` in `packages/shared`. How it chats is an `AgentRunner` (`agent/agentRunner.ts`) listed in `providers/runners.ts`; use the provider's own SDK where it has one, or `createAcpRunner` for an ACP runtime. Features the provider has natively (`NativeFeatures` on the adapter) replace Ramu's own where they can serve Ramu's flow. An adapter may also define `skillsLaunch`, which points the provider at Ramu's per-scope managed-skill export for one thread (a Claude plugin, a Codex skill root, an OpenCode `skills` entry, or `linkDirs` for Cursor and Antigravity, which scan a fixed folder in the thread's working directory and get git-excluded symlinks from `memory/skillLinks.ts`; see [learning](LEARNING.md)). `providers/fakeAgent.ts` implements the same events, permission requests and transcript paths without model usage; the end-to-end specs depend on it.
 
-Accounts: every enabled account of a provider is tried in order (selected account, the default login, then the others) when a chat reaches a usage limit, before Ramu falls back to another model. Turn an account off in Settings to remove it from the rotation.
+Accounts: every enabled account of a provider is tried in order (selected account, the default login, then the others) when a thread reaches a usage limit, before Ramu falls back to another model. Turn an account off in Settings to remove it from the rotation.
 
 ## Testing
 
 - `pnpm check`: format, typecheck, unit tests, release-script tests, build. CI runs it on macOS and Linux.
-- `pnpm test:e2e`: the headless end-to-end specs in `e2e/specs/` (chat, review and undo, settings, source control, layout, remote access and more) with simulated providers and an isolated profile (macOS); `pnpm test:e2e:perf` runs the on-demand performance checks. See [e2e/README.md](../e2e/README.md).
+- `pnpm test:e2e`: the headless end-to-end specs in `e2e/specs/` (thread, review and undo, settings, source control, layout, remote access and more) with simulated providers and an isolated profile (macOS); `pnpm test:e2e:perf` runs the on-demand performance checks. See [e2e/README.md](../e2e/README.md).
 - Server tests are in `apps/server/test`, mirroring `src` by file name.
 
 ## Code quality

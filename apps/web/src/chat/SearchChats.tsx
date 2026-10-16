@@ -158,15 +158,15 @@ export function SearchChats({ onClose }: { onClose: () => void }) {
         showCloseButton={false}
         aria-describedby={undefined}
       >
-        <DialogTitle className="sr-only">{t('Search chats')}</DialogTitle>
+        <DialogTitle className="sr-only">{t('Search threads')}</DialogTitle>
         <div className="chat-search-field p-[10px_10px_6px] flex-none">
           <SearchInput
             autoFocus
             maxLength={200}
-            aria-label={t('Search chats')}
+            aria-label={t('Search threads')}
             aria-controls="chat-search-results"
             aria-activedescendant={results.length ? `chat-search-${selected}` : undefined}
-            placeholder={t('Search chat titles and messages…')}
+            placeholder={t('Search thread titles and messages…')}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onClear={() => setQuery('')}
@@ -193,7 +193,7 @@ export function SearchChats({ onClose }: { onClose: () => void }) {
         >
           {chats.length > 0 && (
             <div className="chat-search-heading p-[10px_10px_4px] text-muted-foreground text-caption font-medium">
-              {needle ? t('Chats') : t('Recent chats')}
+              {needle ? t('Threads') : t('Recent threads')}
             </div>
           )}
           {chats.map((result, index) => row(result, index))}
@@ -205,7 +205,7 @@ export function SearchChats({ onClose }: { onClose: () => void }) {
           {messages.map((result, index) => row(result, chats.length + index))}
           {!results.length && (
             <p className="chat-search-empty m-0 p-[18px_10px] text-center text-control muted text-muted-foreground">
-              {loading ? t('Searching…') : needle ? t('No chats or messages match.') : t('No chats yet')}
+              {loading ? t('Searching…') : needle ? t('No threads or messages match.') : t('No threads yet')}
             </p>
           )}
         </div>

@@ -123,7 +123,7 @@ export function SummaryView({ id, call }: { id: string; call: SummaryCall }) {
               ))}
               {summary.chatIds.length > 0 && (
                 <section className="mt-4">
-                  <h4 className="mb-1 text-caption font-medium text-muted-foreground">{t('Discussed in chat')}</h4>
+                  <h4 className="mb-1 text-caption font-medium text-muted-foreground">{t('Discussed in thread')}</h4>
                   {summary.chatIds.map((chatId) => {
                     const task = ws.tasks.find((entry) => entry.id === chatId)
                     return task ? (
@@ -159,7 +159,7 @@ export function SummaryView({ id, call }: { id: string; call: SummaryCall }) {
               onSubmit={() => send()}
               disabled={busy}
               placeholder={t('Ask about these changes, or tell Ramu what to fix')}
-              submitLabel="Start review chat"
+              submitLabel="Start review thread"
               actions={
                 <Button variant="outline" size="sm" disabled={busy} onClick={() => void dismiss()}>
                   {t(DISMISS_LABEL)}
@@ -168,7 +168,7 @@ export function SummaryView({ id, call }: { id: string; call: SummaryCall }) {
             />
             <p className="muted text-muted-foreground small text-caption mt-1.5 px-1">
               {t(
-                '{0} when nothing needs changing. A review chat can edit memories and skills; everything stays restorable.',
+                '{0} when nothing needs changing. A review thread can edit memories and skills; everything stays restorable.',
                 { 0: t(DISMISS_LABEL) },
               )}
             </p>

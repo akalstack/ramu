@@ -13,7 +13,7 @@ providers (no paid model calls).
 - `pnpm test:e2e remote-access`: desktop network enablement, pairing,
   revocation, hidden hosts, workspace switching, token protection and forget passed.
 - Collaborative browser at phone size: manual pairing to a real disposable host,
-  new Standalone chat, permission approval and multi-question submission passed.
+  new Standalone thread, permission approval and multi-question submission passed.
   Host messages persisted after refresh. Loopback HTTP warning is absent.
 - Expo Go SDK 57 on the booted iOS 27 simulator: Home, Pair and Settings render
   native navigation headers and system SF Symbol/Liquid Glass buttons correctly.

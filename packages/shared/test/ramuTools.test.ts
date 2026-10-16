@@ -28,7 +28,7 @@ describe('Ramu tool calls', () => {
     expect(ramuTool(use('mcp__ramu__tool_invoke', { name: 'tool_invoke', arguments: {} }))?.name).toBe('tool_invoke')
   })
 
-  it('hides only calls that already have a place in the chat', () => {
+  it('hides only calls that already have a place in the thread', () => {
     for (const name of [
       'ask_user',
       'wait_for_answer',
@@ -71,7 +71,7 @@ describe('Ramu tool calls', () => {
   })
 })
 
-describe('review chat library tools', () => {
+describe('review thread library tools', () => {
   it('reads each edit as a sentence with its subject and reason', () => {
     const merged = describeRamuTool(
       { name: 'memory_merge', args: { ids: ['a', 'b'], title: 'Tabs', reason: 'Same preference' } },
@@ -99,7 +99,7 @@ describe('review chat library tools', () => {
   })
 })
 
-describe('protected edits in review chats', () => {
+describe('protected edits in review threads', () => {
   it('marks a protected item changed at the user’s request, and only then', () => {
     const marked = describeRamuTool(
       { name: 'memory_update', args: { id: 'm', reason: 'Asked', userRequested: true, userRequest: 'reword it' } },

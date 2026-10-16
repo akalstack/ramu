@@ -68,7 +68,7 @@ export function GoalBar({
     <Collapsible
       className="goal-bar [&[data-status='paused']_.goal-icon]:text-muted-foreground [&:is([data-status='blocked'],_[data-status='turn-limit'],_[data-status='waiting-provider'])_.goal-icon]:text-warn [&[data-open]_.goal-summary_.caret]:opacity-100 [&[data-open]_.goal-summary_.caret]:[transform:rotate(90deg)] text-control"
       data-status={goal.status}
-      aria-label={t('Chat goal')}
+      aria-label={t('Thread goal')}
     >
       <div className="goal-bar-header flex items-center gap-0.5 min-h-8">
         <CollapsibleTrigger
@@ -136,7 +136,7 @@ export function GoalDone({ goal }: { goal: ChatGoal }) {
   return (
     <Collapsible
       className="goal-done chat-activity-disclosure [&_.goal-details]:pl-[22px] [&_.goal-details]:text-chat"
-      aria-label={t('Chat goal')}
+      aria-label={t('Thread goal')}
     >
       <CollapsibleTrigger render={<ChatActivityButton />}>
         <CircleCheck size={14} className="goal-icon text-ok" />
@@ -176,7 +176,7 @@ export function GoalNote({ change }: { change: GoalChange }) {
   return (
     <Collapsible
       className="goal-note chat-activity-disclosure [&_.goal-details]:pl-[22px] [&_.goal-details]:text-chat"
-      aria-label={t('Chat goal')}
+      aria-label={t('Thread goal')}
     >
       <CollapsibleTrigger render={<ChatActivityButton />}>
         <Icon size={14} className={`goal-icon ${tone}`} />

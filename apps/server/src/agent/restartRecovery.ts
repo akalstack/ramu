@@ -276,7 +276,7 @@ export class RestartRecovery {
             const { drafts: _drafts, ...state } = this.host.questionStatus(id, e.requestId)
             return [state]
           })
-          const instruction = `Ramu restarted while this chat was in progress. Continue the unfinished user request from the conversation. Inspect the current files and tool results before acting; do not repeat completed work or replay commands blindly. Previous processes and blocking input requests are gone. Ask again if an approval or blocking answer is still needed. Async questions below are still pending: reuse their IDs with question_status or wait_for_answer; do not ask duplicates. Reconcile unfinished helpers before starting replacements.\nPending questions: ${JSON.stringify(pendingQuestions).slice(-20000)}\nUnfinished helpers: ${JSON.stringify(helpers).slice(-20000)}`
+          const instruction = `Ramu restarted while this thread was in progress. Continue the unfinished user request from the conversation. Inspect the current files and tool results before acting; do not repeat completed work or replay commands blindly. Previous processes and blocking input requests are gone. Ask again if an approval or blocking answer is still needed. Async questions below are still pending: reuse their IDs with question_status or wait_for_answer; do not ask duplicates. Reconcile unfinished helpers before starting replacements.\nPending questions: ${JSON.stringify(pendingQuestions).slice(-20000)}\nUnfinished helpers: ${JSON.stringify(helpers).slice(-20000)}`
           const prompt = session.providerSessionId
             ? instruction
             : `${conversationHandoff(events, this.host.sessionCheckpoint()?.(id))}\n\n${instruction}`
@@ -295,7 +295,7 @@ export class RestartRecovery {
           this.db.prepare('DELETE FROM agent_recovery WHERE session_id = ?').run(id)
           this.host.record(id, {
             kind: 'error',
-            message: `Could not continue after restart: ${errorMessage(error)}. Continue this chat manually.`,
+            message: `Could not continue after restart: ${errorMessage(error)}. Continue this thread manually.`,
           })
           this.host.setState(id, 'failed')
         }

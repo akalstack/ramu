@@ -165,7 +165,7 @@ export function HomeFeed() {
                       )
                     }}
                   >
-                    {t('Open chat')}
+                    {t('Open thread')}
                   </Button>
                   {group === 'attention' && (
                     <>

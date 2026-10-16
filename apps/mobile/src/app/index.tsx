@@ -278,7 +278,9 @@ export default function Home() {
               <Clock size={16} color={c.muted} />
               <View style={{ flex: 1, gap: 2 }}>
                 <T size={font.body} weight="500" numberOfLines={1}>
-                  {row.o.kind === 'chat' ? `New chat · ${nameOf(chat?.projectId ?? '') ?? 'Standalone'}` : chat?.title}
+                  {row.o.kind === 'chat'
+                    ? `New thread · ${nameOf(chat?.projectId ?? '') ?? 'Standalone'}`
+                    : chat?.title}
                 </T>
                 <T size={font.control} tone="muted" numberOfLines={1}>
                   {row.o.text}
@@ -342,7 +344,7 @@ export default function Home() {
           />
           <IconButton
             icon={SquarePen}
-            label={`New chat in ${row.p.name}`}
+            label={`New thread in ${row.p.name}`}
             size={30}
             tone="muted"
             onPress={() => newChat(row.p.id)}
@@ -547,7 +549,7 @@ export default function Home() {
             {filtering && !mine.length ? (
               <View style={{ alignItems: 'center', padding: space.xl * 2, gap: space.m }}>
                 <Search size={26} color={c.placeholder} />
-                <T tone="muted">No chats match.</T>
+                <T tone="muted">No threads match.</T>
                 <Pressable
                   onPress={() => {
                     tap()

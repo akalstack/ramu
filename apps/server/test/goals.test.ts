@@ -173,7 +173,7 @@ describe('Ramu goals', () => {
     expect(service.getGoal(id)).toMatchObject({ status: 'active', turns: 2 })
   })
 
-  it('preserves file context when /goal is set on an existing chat', async () => {
+  it('preserves file context when /goal is set on an existing thread', async () => {
     done()
     await service.submit(id, '/goal Login\n\n<ramu-context>\nUnsaved auth.ts buffer\n</ramu-context>', 'queue')
     await tick()

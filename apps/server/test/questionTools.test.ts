@@ -92,7 +92,7 @@ it('exposes grouped questions through MCP without leaking unsent drafts or parti
   })
 })
 
-it('rejects a request from another chat and waits for the complete related group over MCP', async () => {
+it('rejects a request from another thread and waits for the complete related group over MCP', async () => {
   const missing = await client.callTool({ name: 'question_status', arguments: { requestId: 'another-chats-request' } })
   expect(missing.isError).toBe(true)
   const asked = dataOf(

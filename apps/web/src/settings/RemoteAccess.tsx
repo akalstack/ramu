@@ -157,7 +157,9 @@ function ThisComputer() {
           help={
             managed
               ? t('Set when Ramu was started with --listen. Change it there.')
-              : t('Phones and other computers can use this computer’s chats, files and terminals after you pair them.')
+              : t(
+                  'Phones and other computers can use this computer’s threads, files and terminals after you pair them.',
+                )
           }
         />
         <Switch
@@ -591,7 +593,7 @@ function Computers({ state }: { state: ComputerList }) {
         )}
       </div>
       <p className="m-[0_0_12px] text-caption text-muted-foreground">
-        {t('Each computer keeps its own projects, chats and settings. Switching only changes the workspace you see.')}
+        {t('Each computer keeps its own projects, threads and settings. Switching only changes the workspace you see.')}
       </p>
       <div className="flex flex-col gap-2">
         {state.computers.map((computer) => (

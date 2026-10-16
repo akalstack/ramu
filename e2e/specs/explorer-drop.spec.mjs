@@ -56,7 +56,7 @@ ramu.test('Explorer imports desktop files and folders', async () => {
   await until(() => existsSync(inRepo('blank-space.txt')), 'empty Explorer space to receive the drop')
 })
 
-ramu.test('chat accepts desktop drops as paths and attachments', async () => {
+ramu.test('thread accepts desktop drops as paths and attachments', async () => {
   const view = page.locator('.agent-view:visible')
   composer = view.locator('.composer')
   input = composer.locator('[data-composer-input]')
@@ -71,7 +71,7 @@ ramu.test('chat accepts desktop drops as paths and attachments', async () => {
   check((await composer.getByRole('alert').count()) === 0, 'Empty desktop folders are accepted as path references')
   await folderRow.dragTo(composer)
   await composer.getByRole('button', { name: 'Remove Dropped folder/Nested/context.txt', exact: true }).waitFor()
-  check(!(await view.getAttribute('class')).includes(' dropping'), 'The chat drop highlight clears after drops')
+  check(!(await view.getAttribute('class')).includes(' dropping'), 'The thread drop highlight clears after drops')
   await cdp.detach()
   ramu.noErrors()
 })

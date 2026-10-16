@@ -159,7 +159,7 @@ ramu.test('docking and the tools rail keep geometry stable and the PTY size cons
     'Terminal rendering resumes on release',
   )
   // Workspace tabs share the editor split. At the chat minimum, the terminal yields space to the tools rail.
-  assert.ok((await bound('.main-chat')).width <= chatBeforeRail.width + 1, 'Chat does not grow with the tools rail')
+  assert.ok((await bound('.main-chat')).width <= chatBeforeRail.width + 1, 'Thread does not grow with the tools rail')
   assert.ok(
     (await bound(pane)).width <= terminalBeforeRail.width + 1,
     'Terminal stays within the available workspace width',

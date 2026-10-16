@@ -807,7 +807,7 @@ async function main() {
       const choice = await dialog.showMessageBox(win, {
         type: 'question',
         message: t('Restart Ramu and the background service?'),
-        detail: t('Stops running agents. Unfinished chats resume if restart recovery is enabled.'),
+        detail: t('Stops running agents. Unfinished threads resume if restart recovery is enabled.'),
         buttons: [t('Restart now'), t('Later')],
         defaultId: 1,
         cancelId: 1,
@@ -844,7 +844,7 @@ async function main() {
       const choice = await dialog.showMessageBox(win, {
         type: 'question',
         message: t('Restart Ramu to finish updating?'),
-        detail: t('Running chats continue. The background service can be updated separately.'),
+        detail: t('Running threads continue. The background service can be updated separately.'),
         buttons: [t('Restart now'), t('Later')],
         defaultId: 1,
         cancelId: 1,

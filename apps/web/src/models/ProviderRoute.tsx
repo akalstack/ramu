@@ -132,7 +132,7 @@ export function ProviderRouteChip({ sessionId, settings }: { sessionId: string; 
         },
         {
           key: 'chat',
-          label: t('Keep {0} for this chat', { '0': providerName(settings.provider) }),
+          label: t('Keep {0} for this thread', { '0': providerName(settings.provider) }),
           ...(moveUp ? {} : { title: t('Until its limit resets') }),
           onSelect: () => keep('chat'),
         },

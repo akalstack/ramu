@@ -13,8 +13,8 @@ const HELP = `ramu — Ramu workspace server (agents, files, Git, terminals, sch
 Usage:
   ramu [serve] [options]         Run the server in the foreground (default; "start" also works)
   ramu status                    Show whether a server is running for this data directory
-  ramu stop                      Stop the running server (unfinished chats are not resumed on next start)
-  ramu restart                   Restart the running server (unfinished chats resume)
+  ramu stop                      Stop the running server (unfinished threads are not resumed on next start)
+  ramu restart                   Restart the running server (unfinished threads resume)
   ramu pair [--url <address>] [--json]
                                  Create a one-time code and link to pair another device (valid 10 minutes, works once).
                                  --json prints { code, expiresAt, links, urls, listening } for scripts and SSH pairing.
@@ -23,7 +23,7 @@ Usage:
   ramu token [--rotate]          Print the shared access token; --rotate revokes it and every paired device
 
 Options:
-  --data-dir <dir>               Profile directory (default: the desktop app's, so both share chats and settings)
+  --data-dir <dir>               Profile directory (default: the desktop app's, so both share threads and settings)
   --listen <[host:]port>         Also accept authenticated network clients (a bare port binds 127.0.0.1)
   --private-network              Permit a non-loopback --listen address without TLS when every device that can reach it is
                                  on a network you trust, such as a VPN (Tailscale, NetBird, ZeroTier, WireGuard) or a LAN.

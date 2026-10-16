@@ -22,7 +22,7 @@ it('resets only the preferences a section owns', () => {
   expect(next.keepAwake).toBe(!DEFAULT_APP_PREFERENCES.keepAwake)
 })
 
-it('splits the intelligence preferences between Chats and Memory', () => {
+it('splits the intelligence preferences between Threads and Memory', () => {
   const chats = resetSection(changed(), 'chats')
   expect(chats.intelligence.responseInstructions).toBe(DEFAULT_APP_PREFERENCES.intelligence.responseInstructions)
   expect(chats.intelligence.learning).toBe(other(DEFAULT_APP_PREFERENCES.intelligence.learning))

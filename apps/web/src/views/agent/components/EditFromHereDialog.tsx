@@ -92,9 +92,9 @@ export function EditFromHereDialog({
           <DialogDescription className="text-control leading-[1.5] text-muted-foreground">
             {live
               ? t(
-                  'Stops the agent and rewinds the chat to before this message. Your prompt and attachments return to the message box.',
+                  'Stops the agent and rewinds the thread to before this message. Your prompt and attachments return to the message box.',
                 )
-              : t('Rewinds the chat to before this message. Your prompt and attachments return to the message box.')}
+              : t('Rewinds the thread to before this message. Your prompt and attachments return to the message box.')}
           </DialogDescription>
         </DialogHeader>
         <blockquote className="mx-5 mb-4 line-clamp-3 rounded-(--radius-m) bg-(--bubble) px-3.5 py-2.5 text-control leading-[1.5] whitespace-pre-wrap text-(--text-body)">

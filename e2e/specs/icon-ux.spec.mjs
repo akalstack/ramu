@@ -20,7 +20,7 @@ const pressed = (name, value) =>
     [name, String(value)],
   )
 
-ramu.test('opens a chat in a project', async () => {
+ramu.test('opens a thread in a project', async () => {
   const { project } = await ramu.api('projects.addFolder', ramu.repos.project)
   const chat = await startChat(ramu, {
     projectId: project.id,
@@ -44,7 +44,7 @@ ramu.test('opening the workspace shows Explorer, and closing a tool keeps the op
   assert.ok(await pane.locator('.monaco-editor[role=code]').first().isVisible(), 'the editor stays open')
   assert.equal(await pane.getByRole('button', { name: 'Hide workspace', exact: true }).count(), 0, 'one global toggle')
   await pane.getByRole('button', { name: 'Maximize workspace', exact: true }).click()
-  await pane.getByRole('button', { name: 'Show chat', exact: true }).click()
+  await pane.getByRole('button', { name: 'Show thread', exact: true }).click()
   await pane.locator('.agent-view:visible').waitFor()
 })
 

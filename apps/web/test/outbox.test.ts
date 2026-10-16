@@ -44,16 +44,16 @@ function setup(
 it('holds messages while offline and sends them oldest first on reconnect', async () => {
   const { box, sent, goOnline } = setup()
   box.add('a', 'first')
-  box.add('b', 'other chat')
+  box.add('b', 'other thread')
   box.add('a', 'second')
   await box.flush()
   expect(sent).toEqual([])
   await goOnline()
-  expect(sent).toEqual(['a:first', 'b:other chat', 'a:second'])
+  expect(sent).toEqual(['a:first', 'b:other thread', 'a:second'])
   expect(box.snapshot()).toEqual([])
 })
 
-it('keeps a failed message and everything after it in that chat, without blocking other chats', async () => {
+it('keeps a failed message and everything after it in that thread, without blocking other threads', async () => {
   const { box, sent, goOnline } = setup({ fail: (item) => item.text === 'bad' })
   box.add('a', 'bad')
   box.add('a', 'after')
@@ -93,11 +93,11 @@ it('retries a failed message on request', async () => {
   expect(sent).toEqual(['a:hello'])
 })
 
-it('refuses beyond the per-chat limit and returns removed messages for editing', () => {
+it('refuses beyond the per-thread limit and returns removed messages for editing', () => {
   const { box } = setup()
   for (let index = 0; index < OUTBOX_LIMIT; index++) expect(box.add('a', `m${index}`)).toBe(true)
   expect(box.add('a', 'one too many')).toBe(false)
-  expect(box.add('b', 'another chat')).toBe(true)
+  expect(box.add('b', 'another thread')).toBe(true)
   const taken = box.remove(box.list('a')[0]!.id)
   expect(taken?.text).toBe('m0')
   expect(box.list('a')).toHaveLength(OUTBOX_LIMIT - 1)

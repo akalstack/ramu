@@ -57,11 +57,11 @@ describe('local file links', () => {
     ])
       expect(localFileLink(href)).toBeNull()
   })
-  it('rejects missing files, folders, traversal, and links into another chat', async () => {
+  it('rejects missing files, folders, traversal, and links into another thread', async () => {
     const cwd = ws.agentScope(taskId).cwd
     const other = await ws.createTask({ projectId: NO_PROJECT, title: 'Other', mode: 'current' })
     const privatePath = join(ws.agentScope(other.id).cwd, 'private.txt')
-    writeFileSync(privatePath, 'Another chat')
+    writeFileSync(privatePath, 'Another thread')
     symlinkSync(privatePath, join(cwd, 'linked.txt'))
     for (const href of ['missing.txt', 'src', privatePath, 'linked.txt', '../outside.txt'])
       expect(await resolveFileLink(ws, taskId, href)).toBeNull()

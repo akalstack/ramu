@@ -154,7 +154,7 @@ export function projectsSource(ws: WorkspaceApi): PaletteSource {
 export function chatsSource(ws: WorkspaceApi): PaletteSource {
   return {
     id: 'chats',
-    label: t('Chats'),
+    label: t('Threads'),
     priority: 30,
     modes: ['all'],
     debounceMs: 0,
@@ -214,7 +214,7 @@ export function agentSource(ws: WorkspaceApi, taskId: string, initialSettings: A
             key: 'ask',
             icon: <Sparkles size={14} />,
             label: text,
-            detail: chat ? t('Send to the agent') : t('Start a chat with the agent'),
+            detail: chat ? t('Send to the agent') : t('Start a thread with the agent'),
             run: async () => {
               if (chat?.kind === 'agent') {
                 await invoke('agent.send', chat.sessionId, text)

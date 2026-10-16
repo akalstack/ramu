@@ -44,7 +44,7 @@ export class UserRequests {
   questionStatus(id: string, requestId: string): QuestionState & { request: QuestionRequest } {
     const events = this.host.events(id)
     const request = events.find((e): e is QuestionRequest => e.kind === 'question' && e.requestId === requestId)
-    if (!request) throw new Error('This question does not belong to this chat.')
+    if (!request) throw new Error('This question does not belong to this thread.')
     return { request, ...questionState(events, requestId) }
   }
 
@@ -55,7 +55,7 @@ export class UserRequests {
   ): Promise<QuestionState & { request: QuestionRequest }> {
     if (signal?.aborted) throw new Error('Question request was cancelled.')
     if (this.host.shutdown() || !WRITING_STATES.includes(this.host.get(id).state))
-      throw new Error('This chat is no longer working.')
+      throw new Error('This thread is no longer working.')
     const questions = input.questions.map((q, i) => ({ ...q, id: q.id ?? String(i) }))
     if (!questions.length || new Set(questions.map(questionKey)).size !== questions.length)
       throw new Error('Questions need unique IDs.')
@@ -141,7 +141,7 @@ export class UserRequests {
     const state = this.questionStatus(id, requestId)
     if (state.outcome) throw new Error('This question is already closed.')
     if (state.request.responseMode !== 'message')
-      throw new Error('This question needs an answer. Answer it or stop the chat.')
+      throw new Error('This question needs an answer. Answer it or stop the thread.')
     if (outcome === 'obsolete' && !reason?.trim()) throw new Error('Explain why this question is no longer needed.')
     this.host.record(id, { kind: 'question-state', requestId, reason })
     this.host.record(id, { kind: 'request-resolved', requestId, outcome })
@@ -164,7 +164,8 @@ export class UserRequests {
   private pendingElicitation(id: string, requestId: string) {
     const events = this.host.events(id)
     const request = events.find((event) => event.kind === 'elicitation' && event.requestId === requestId)
-    if (!request || request.kind !== 'elicitation') throw new Error('This input request does not belong to this chat.')
+    if (!request || request.kind !== 'elicitation')
+      throw new Error('This input request does not belong to this thread.')
     if (questionState(events, requestId).outcome) throw new Error('This input request is already closed.')
     return request
   }

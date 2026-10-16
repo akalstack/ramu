@@ -336,9 +336,7 @@ class AcpSession implements AgentRunner {
     private emit: (event: AgentEvent, limit?: boolean) => void,
     private readOnly = false,
   ) {
-    this.events = new AcpEvents(
-      settings.provider === 'antigravity' ? ['invoke_subagent'] : ['task', 'subagent'],
-    )
+    this.events = new AcpEvents(settings.provider === 'antigravity' ? ['invoke_subagent'] : ['task', 'subagent'])
   }
   setTools(connection: McpConnection): void {
     this.connection = connection
@@ -372,7 +370,7 @@ class AcpSession implements AgentRunner {
           : null
     if (!method)
       throw new AcpResumeUnavailable(
-        `${providerName(provider)} does not support resuming this session. Start a new chat.`,
+        `${providerName(provider)} does not support resuming this session. Start a new thread.`,
       )
     // HTTP MCP is optional in ACP. A runtime that lists its MCP support without HTTP cannot reach Ramu's tools, so say so instead of losing them silently.
     const mcp = capabilities.mcpCapabilities
@@ -380,7 +378,7 @@ class AcpSession implements AgentRunner {
     if (this.connection && !tools)
       this.emit({
         kind: 'error',
-        message: `${providerName(provider)} cannot connect to Ramu's tools over HTTP, so questions, helpers and advice are unavailable in this chat.`,
+        message: `${providerName(provider)} cannot connect to Ramu's tools over HTTP, so questions, helpers and advice are unavailable in this thread.`,
       })
     this.sessionId = resume ?? ''
     this.loading = true
@@ -389,17 +387,16 @@ class AcpSession implements AgentRunner {
         ...(resume ? { sessionId: resume } : {}),
         cwd: this.scope.cwd,
         additionalDirectories: this.scope.additionalDirs,
-        mcpServers:
-          tools
-            ? [
-                {
-                  type: 'http',
-                  name: 'ramu',
-                  url: tools.url,
-                  headers: [{ name: 'Authorization', value: `Bearer ${tools.token}` }],
-                },
-              ]
-            : [],
+        mcpServers: tools
+          ? [
+              {
+                type: 'http',
+                name: 'ramu',
+                url: tools.url,
+                headers: [{ name: 'Authorization', value: `Bearer ${tools.token}` }],
+              },
+            ]
+          : [],
       })
     } catch (e) {
       // The runtime answered but no longer has the session; a crash or timeout is a different failure and stays one.
@@ -679,7 +676,7 @@ class AcpSession implements AgentRunner {
           ? this.events.updateAgent(p.toolCall.toolCallId, {
               status: 'stopped',
               canStop: false,
-              error: 'Sub-agents run through Ramu in this chat',
+              error: 'Sub-agents run through Ramu in this thread',
               endedAt: Date.now(),
             })
           : undefined

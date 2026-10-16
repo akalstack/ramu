@@ -42,7 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <strong className="text-heading font-semibold">{t('Something went wrong')}</strong>
         <p className="max-w-[420px] text-control text-muted-foreground [overflow-wrap:anywhere]">
           {app
-            ? t('Ramu hit an unexpected error. Your chats and files are safe.')
+            ? t('Ramu hit an unexpected error. Your threads and files are safe.')
             : t('This view hit an unexpected error. The rest of Ramu still works.')}
         </p>
         <p className="max-w-[420px] max-h-24 overflow-hidden text-caption text-muted-foreground [overflow-wrap:anywhere]">

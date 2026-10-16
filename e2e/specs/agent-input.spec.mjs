@@ -204,7 +204,7 @@ ramu.test('related questions are answered together after the run finished', asyn
         (await state(chat.session)) === 'idle'
       )
     }, 'late answers to finish a new turn')
-    check(true, `${provider} receives the related answers together in the original chat`)
+    check(true, `${provider} receives the related answers together in the original thread`)
   }
 })
 

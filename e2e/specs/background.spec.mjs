@@ -29,7 +29,7 @@ ramu.test('the Schedules page creates a one-time schedule', async () => {
   check((await api('schedules.list'))[0].rule.kind === 'once', 'Schedules UI creates a one-time schedule')
 })
 
-ramu.test('chats and schedules complete while the app is closed', async () => {
+ramu.test('threads and schedules complete while the app is closed', async () => {
   const { session } = await startChat(ramu, {
     title: 'Survives app close',
     prompt: 'Continue in background',
@@ -49,7 +49,7 @@ ramu.test('chats and schedules complete while the app is closed', async () => {
   const { pid } = await api('background.status')
   await ramu.closeApp()
   await api('agent.replyPermission', session.id, request.requestId, true)
-  await until(async () => (await state(session)) === 'idle', 'chat to finish with the app closed')
+  await until(async () => (await state(session)) === 'idle', 'thread to finish with the app closed')
   // The scheduler ticks every 5 s, so a run can take two ticks to start and complete.
   await until(
     async () => (await api('schedules.runs', schedule.id)).some((r) => r.status === 'completed'),
@@ -68,7 +68,7 @@ ramu.test('chats and schedules complete while the app is closed', async () => {
   )
 })
 
-ramu.test('a crashed service continues the interrupted chat with a fresh approval', async () => {
+ramu.test('a crashed service continues the interrupted thread with a fresh approval', async () => {
   const { session } = await startChat(ramu, {
     title: 'Restart recovery',
     prompt: 'Continue the interrupted work',
@@ -79,18 +79,18 @@ ramu.test('a crashed service continues the interrupted chat with a fresh approva
   await until(
     async () =>
       (await eventsOf(session)).some((e) => e.kind === 'recovery') && (await state(session)) === 'needs-input',
-    'interrupted chat to continue',
+    'interrupted thread to continue',
   )
   const events = await eventsOf(session)
   check(
     events.filter((e) => e.kind === 'user').length === 1 && events.filter((e) => e.kind === 'recovery').length === 1,
-    'Service restart continues the chat without duplicating its user message',
+    'Service restart continues the thread without duplicating its user message',
   )
   check(events.filter((e) => e.kind === 'permission-request').length === 2, 'Recovery asks for a fresh approval')
   ramu.session = session
 })
 
-ramu.test('a clean service restart preserves unfinished chats', async () => {
+ramu.test('a clean service restart preserves unfinished threads', async () => {
   const session = ramu.session
   await ramu.closeApp()
   await api('background.restart')
@@ -107,16 +107,16 @@ ramu.test('a clean service restart preserves unfinished chats', async () => {
     async () =>
       (await eventsOf(session)).filter((e) => e.kind === 'recovery').length === 2 &&
       (await state(session)) === 'needs-input',
-    'chat to continue after clean restart',
+    'thread to continue after clean restart',
   )
   check(
     (await eventsOf(session)).filter((e) => e.kind === 'user').length === 1,
-    'Clean restart keeps unfinished chats for app updates',
+    'Clean restart keeps unfinished threads for app updates',
   )
   await api('agent.stop', session.id)
 })
 
-ramu.test('with continuation off, interrupted chats wait for manual recovery', async () => {
+ramu.test('with continuation off, interrupted threads wait for manual recovery', async () => {
   const preferences = await api('settings.app.get')
   await api('settings.app.set', { ...preferences, resumeChatsOnRestart: false })
   const { session } = await startChat(ramu, {
@@ -128,7 +128,7 @@ ramu.test('with continuation off, interrupted chats wait for manual recovery', a
   await crashAndReopen()
   check(
     (await state(session)) === 'restored' && !(await eventsOf(session)).some((e) => e.kind === 'recovery'),
-    'Interrupted chats stay available for manual recovery',
+    'Interrupted threads stay available for manual recovery',
   )
   await api('settings.app.set', preferences)
   ramu.noErrors()

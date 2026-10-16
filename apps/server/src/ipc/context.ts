@@ -111,7 +111,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     const cutoff = Date.now() - days * 86_400_000
     const tasks = workspace.listTasks().filter((task) => task.status === 'archived' && task.lastActiveAt < cutoff)
     if (!tasks.length) return
-    await activity.run('Cleaning up archived chats', undefined, async () => {
+    await activity.run('Cleaning up archived threads', undefined, async () => {
       for (const task of tasks) {
         try {
           await workspace.deleteTask(task.id, false)
@@ -158,7 +158,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     cwdOf: (taskId, repoId) => workspace.getBinding(taskId, repoId).cwd,
     gitCwdOf: (taskId, repoId) => {
       const binding = workspace.getBinding(taskId, repoId)
-      if (binding.folderOnly) throw new Error('Chat files are not a Git repository')
+      if (binding.folderOnly) throw new Error('Thread files are not a Git repository')
       return binding.cwd
     },
   }

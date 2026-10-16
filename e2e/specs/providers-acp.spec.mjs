@@ -59,7 +59,7 @@ chmodSync(binary, 0o755)
 await ramu.launch()
 let session
 
-ramu.test('ACP tool calls render live in chat', async () => {
+ramu.test('ACP tool calls render live in thread', async () => {
   const { page } = ramu
   const preferences = await ramu.api('settings.app.get')
   await ramu.api('settings.app.set', { ...preferences, providerUpdateChecks: false, appUpdateChecks: false })

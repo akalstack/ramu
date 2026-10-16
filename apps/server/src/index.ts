@@ -197,7 +197,7 @@ const inbox = new NoticeInbox(
     try {
       return workspace.getTask(taskId).title
     } catch {
-      return 'Chat'
+      return 'Thread'
     }
   },
 )
@@ -538,7 +538,7 @@ const mcpHttp = createServer(async (req, res) => {
   })
   const descriptions = {
     schedule_create:
-      'Create a one-time or repeating agent schedule when the user requests it. Interpret dates using the current time and requested timezone. Ask about ambiguous timing. Defaults to the current chat scope. Return the saved schedule and next run.',
+      'Create a one-time or repeating agent schedule when the user requests it. Interpret dates using the current time and requested timezone. Ask about ambiguous timing. Defaults to the current thread scope. Return the saved schedule and next run.',
     schedule_update: 'Edit an existing schedule using its ID and full replacement configuration.',
   }
   const checkReview = (reviewId: string) => {
@@ -731,7 +731,7 @@ const mcpHttp = createServer(async (req, res) => {
   server.registerTool(
     'schedule_delete',
     {
-      description: 'Delete a schedule when requested. Existing run chats remain available.',
+      description: 'Delete a schedule when requested. Existing run threads remain available.',
       inputSchema: { id: z.string() },
     },
     async ({ id }) => {

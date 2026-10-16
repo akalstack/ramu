@@ -15,7 +15,7 @@ const render = (text: string) =>
     }),
   )
 
-describe('inline chat references', () => {
+describe('inline thread references', () => {
   it('recognizes skill calls and repository-qualified file mentions without changing the message', () => {
     const text = 'Use $artifact-template-operating-review with @"ramu/src/App.tsx".'
     const parts = chatReferences(text)

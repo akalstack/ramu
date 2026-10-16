@@ -508,7 +508,7 @@ export default function SourceControl() {
           keyboardDismissMode="on-drag"
         >
           {!binding ? (
-            <T tone="muted">No repository is attached to this chat.</T>
+            <T tone="muted">No repository is attached to this thread.</T>
           ) : binding.notGit ? (
             <Row
               onPress={() =>

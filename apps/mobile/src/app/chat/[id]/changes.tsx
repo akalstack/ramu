@@ -267,7 +267,7 @@ export default function Changes() {
         contentContainerStyle={{ padding: space.l, gap: space.s, paddingBottom: insets.bottom + 90 }}
       >
         {error ? <T tone="bad">{error}</T> : null}
-        {!reviews.length ? <T tone="muted">No recorded changes for this chat yet.</T> : null}
+        {!reviews.length ? <T tone="muted">No recorded changes for this thread yet.</T> : null}
         {reviews.map((r, index) => (
           <Pressable key={r.id} onPress={() => setReviewId(r.id)}>
             <T tone={r.id === reviewId ? 'accent' : 'muted'}>

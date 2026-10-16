@@ -11,7 +11,7 @@ const make = () => {
   return { inbox, seen }
 }
 
-it('keeps one notice per chat until it is acted on or the chat moves on', () => {
+it('keeps one notice per thread until it is acted on or the thread moves on', () => {
   const { inbox, seen } = make()
   inbox.observe(session, { kind: 'state', state: 'idle' })
   expect(inbox.list()).toHaveLength(0)
@@ -29,7 +29,7 @@ it('keeps one notice per chat until it is acted on or the chat moves on', () => 
   expect(seen.at(-1)).toBe(0)
 })
 
-it('ignores helpers, and clears a deleted chat', () => {
+it('ignores helpers, and clears a deleted thread', () => {
   const { inbox } = make()
   inbox.observe({ ...session, parentId: 'root' }, { kind: 'state', state: 'failed' })
   expect(inbox.list()).toHaveLength(0)

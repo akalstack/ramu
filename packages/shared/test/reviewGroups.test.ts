@@ -17,7 +17,7 @@ const revision = (id: string, taskId: string, createdAt: number, changed = true)
         {
           id: 'file',
           repoId: 'general',
-          repoName: 'Chat files',
+          repoName: 'Thread files',
           path: 'example.txt',
           status: 'modified',
           binary: false,
@@ -27,7 +27,7 @@ const revision = (id: string, taskId: string, createdAt: number, changed = true)
       ]
     : [],
 })
-it('places change summaries on the final turn covered by each run without leaking to later or other chats', () => {
+it('places change summaries on the final turn covered by each run without leaking to later or other threads', () => {
   const first = { ...revision('first', 'chat', 1), sessionId: 'session', startSeq: 0, endSeq: 5 }
   const second = { ...revision('second', 'chat', 2), sessionId: 'session', startSeq: 5, endSeq: 9 }
   const empty = { ...revision('empty', 'chat', 3, false), sessionId: 'session', startSeq: 9, endSeq: 12 }
@@ -42,7 +42,7 @@ it('places change summaries on the final turn covered by each run without leakin
     [3, [second]],
   ])
 })
-it('groups revisions across sessions by chat, keeps latest first, and excludes no-change runs', () => {
+it('groups revisions across sessions by thread, keeps latest first, and excludes no-change runs', () => {
   const old = revision('old', 'chat', 1),
     other = revision('other', 'another-chat', 2),
     latest = revision('latest', 'chat', 3)

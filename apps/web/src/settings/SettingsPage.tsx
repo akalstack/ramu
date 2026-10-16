@@ -31,7 +31,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'editor', label: 'Editor & Terminal', Icon: Code, group: 'Workspace' },
   { id: 'git', label: 'Git', Icon: GitBranch, group: 'Workspace' },
   { id: 'shortcuts', label: 'Keyboard shortcuts', Icon: Keyboard, group: 'Workspace' },
-  { id: 'chats', label: 'Chats', Icon: MessageSquare, group: 'Agents' },
+  { id: 'chats', label: 'Threads', Icon: MessageSquare, group: 'Agents' },
   { id: 'providers', label: 'Providers & models', Icon: Cpu, group: 'Agents' },
   { id: 'access', label: 'Access & Fallback', Icon: ShieldCheck, group: 'Agents' },
   { id: 'workflows', label: 'Goals & delegation', Icon: Target, group: 'Agents' },
@@ -90,7 +90,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'chats', title: 'Agent notifications', words: 'notify notification alert done finished system toast' },
   {
     section: 'chats',
-    title: 'Continue chats after restart',
+    title: 'Continue threads after restart',
     words: 'resume recover recovery interrupted progress startup crash',
   },
   {
@@ -159,7 +159,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'providers', title: 'Show usage limits', words: 'usage gauge 5-hour weekly plan quota' },
   { section: 'chats', title: 'Messages while working', words: 'queue steer steering enter busy' },
   { section: 'chats', title: 'Include open tabs as context', words: 'files mention' },
-  { section: 'chats', title: 'Delete archived chats after', words: 'cleanup retention history delete days' },
+  { section: 'chats', title: 'Delete archived threads after', words: 'cleanup retention history delete days' },
   { section: 'git', title: 'Commit messages', words: 'style conventional repository custom instructions generated' },
   { section: 'git', title: 'Commit message model', words: 'ai draft default model effort' },
   { section: 'git', title: 'Commit instructions', words: 'custom message ticket language subject' },
@@ -169,7 +169,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'system', title: 'Check app updates', words: 'release version check' },
   { section: 'providers', title: 'Default bar mode', words: 'model effort selection' },
   { section: 'git', title: 'Pull behavior', words: 'rebase merge fast-forward sync' },
-  { section: 'chats', title: 'Recent chats per project', words: 'sidebar count project' },
+  { section: 'chats', title: 'Recent threads per project', words: 'sidebar count project' },
   { section: 'shortcuts', title: 'Keyboard shortcuts', words: 'keys commands bindings' },
   {
     section: 'remote',

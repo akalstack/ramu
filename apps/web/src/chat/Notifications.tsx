@@ -134,7 +134,7 @@ export function Notifications() {
           type: entry.kind === 'failed' ? 'error' : entry.kind === 'done' ? 'success' : 'info',
           icon: entry.kind === 'input' ? <MessageCircleQuestion size={16} /> : undefined,
           at: entry.at,
-          actionLabel: t('Open chat'),
+          actionLabel: t('Open thread'),
           onAction: open,
           onDismiss: () => dismissHost(entry.id),
           taskId: entry.taskId,
@@ -199,7 +199,7 @@ export function Notifications() {
         type,
         priority: notice.kind === 'done' ? 'low' : 'high',
         data: { icon, onDismiss: () => dismissHost(id) },
-        actionProps: { children: t('Open chat'), onClick: open },
+        actionProps: { children: t('Open thread'), onClick: open },
       })
     })
     const offOpen = ramu.on('notify:open', ({ taskId, sessionId }) => openChat(taskId, sessionId))

@@ -389,7 +389,7 @@ function UsagePopover({
         ))}
         <Separator className="h-px bg-line" />
         <p className="m-0 text-caption leading-normal whitespace-normal text-muted-foreground">
-          {t('Fallback continues the chat when a usage limit is reached.')}
+          {t('Fallback continues the thread when a usage limit is reached.')}
         </p>
       </PopoverContent>
     </Popover>

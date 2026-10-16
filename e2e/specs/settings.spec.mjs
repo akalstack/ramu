@@ -57,11 +57,11 @@ ramu.test('background, update and keep-awake options', async () => {
   await awake.uncheck()
 })
 
-ramu.test('chat defaults and the recap toggle', async () => {
-  await page.getByRole('button', { name: 'Chats', exact: true }).click()
+ramu.test('thread defaults and the recap toggle', async () => {
+  await page.getByRole('button', { name: 'Threads', exact: true }).click()
   check(
-    await switchNamed('Continue chats after restart').isChecked(),
-    'Chat continuation after restart is on by default',
+    await switchNamed('Continue threads after restart').isChecked(),
+    'Thread continuation after restart is on by default',
   )
   check(await switchNamed('Keep working while asking questions').isChecked(), 'Async questions are on by default')
   await page.getByRole('button', { name: 'Background & updates', exact: true }).click()
@@ -72,7 +72,7 @@ ramu.test('chat defaults and the recap toggle', async () => {
     (await page.getByRole('button', { name: 'Refresh recap', exact: true }).count()) === 0,
     'Recap toggle hides Home recaps',
   )
-  await openSettings(ramu, 'Chats')
+  await openSettings(ramu, 'Threads')
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.locator('.settings-page').waitFor({ state: 'detached' })
   ramu.noErrors()

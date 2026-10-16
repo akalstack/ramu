@@ -23,7 +23,7 @@ export function createCanUseTool({ settings, pending, record, setState, restrict
         return resolve(
           /^mcp__ramu__/.test(toolName)
             ? { behavior: 'allow', updatedInput: toolInput }
-            : { behavior: 'deny', message: 'This review chat can only use Ramu memory and skill tools.' },
+            : { behavior: 'deny', message: 'This review thread can only use Ramu memory and skill tools.' },
         )
       // These scoped tools only manage questions; they never authorize file or command access.
       if (

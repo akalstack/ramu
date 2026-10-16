@@ -11,12 +11,12 @@ export function confirmCancel(
   cancel?: (id: string) => string | undefined,
 ) {
   const first = item.kind === 'chat'
-  const title = first ? 'Cancel this new chat?' : 'Cancel this message?'
+  const title = first ? 'Cancel this new thread?' : 'Cancel this message?'
   const message =
     item.state === 'uncertain'
       ? 'Delivery is uncertain. Check the host conversation before sending again. Removing this entry does not undo an action the host already received.'
       : first
-        ? "It hasn't reached the computer yet, so the chat is discarded."
+        ? "It hasn't reached the computer yet, so the thread is discarded."
         : "It hasn't been sent yet."
   const remove = () => cancel?.(item.id)
   const edit = () => {

@@ -44,17 +44,17 @@ async function stable(selector, scope = pane) {
 const edit = (name, content) => writeFileSync(join(ramu.repos.project, name), content)
 let task, repoId
 
-ramu.test('full-width chat uses the window title bar and keeps its scroll shadows', async () => {
+ramu.test('full-width thread uses the window title bar and keeps its scroll shadows', async () => {
   const { project, repositories } = await ramu.api('projects.addFolder', ramu.repos.project)
   repoId = repositories[0].id
   task = await ramu.api('tasks.create', { projectId: project.id, title: 'Layout review', mode: 'current' })
   await ramu.api('tasks.setup', task.id)
   const session = await ramu.api('agent.start', task.id, 'Reply with a short greeting.', fakeSettings)
-  await ramu.until(async () => (await ramu.api('agent.get', session.id)).state === 'idle', 'chat never became idle')
+  await ramu.until(async () => (await ramu.api('agent.get', session.id)).state === 'idle', 'thread never became idle')
   await showChat(ramu, { task, session })
   await pane.locator('.agent-view:visible').waitFor()
 
-  ramu.check(Math.abs((await width('.main-chat')) - (await width('.task-body'))) < 1, 'chat fills the task body')
+  ramu.check(Math.abs((await width('.main-chat')) - (await width('.task-body'))) < 1, 'thread fills the task body')
   ramu.check(
     (await page.locator('#workspace-sidebar .workspace-scope').count()) === 0,
     'project switcher is not in the sidebar',
@@ -142,15 +142,15 @@ ramu.test('Explorer opens at the default rail width with a draggable overlay scr
   assert.equal(folder, panel, `sticky folder rows match the surface behind them: ${folder} vs ${panel}`)
 })
 
-ramu.test('opening a file narrows the chat on the left and the picker keeps the conversation visible', async () => {
+ramu.test('opening a file narrows the thread on the left and the picker keeps the conversation visible', async () => {
   const full = await width('.main-chat')
   await tools.getByRole('button', { name: 'review.ts', exact: true }).click()
   await pane.locator('.editor-area .view:visible .monaco-editor[role=code]').first().waitFor()
   const narrowed = await stable('.main-chat')
-  ramu.check(narrowed < full - 1, 'chat narrows when a file opens')
+  ramu.check(narrowed < full - 1, 'thread narrows when a file opens')
   const chat = await bounds('.main-chat')
   const editor = await bounds('.editor-area')
-  ramu.check(chat.x + chat.width <= editor.x + 1, 'the editor sits to the right of the chat')
+  ramu.check(chat.x + chat.width <= editor.x + 1, 'the editor sits to the right of the thread')
   assert.equal(await pane.locator('.agent-view:visible').count(), 1)
   assert.equal(await pane.getByRole('button', { name: 'New tab', exact: true }).count(), 1)
 
@@ -168,7 +168,7 @@ ramu.test('opening a file narrows the chat on the left and the picker keeps the 
   ramu.check(true, 'Open file launches the picker and keeps the main conversation visible')
 })
 
-ramu.test('conversation history switches the main chat without closing the editor', async () => {
+ramu.test('conversation history switches the main thread without closing the editor', async () => {
   await ramu.api('agent.start', task.id, 'A second conversation for history.', fakeSettings)
   await pane.getByRole('button', { name: 'Earlier conversations', exact: true }).click()
   const conversations = page.getByRole('menuitemradio')
@@ -183,30 +183,30 @@ ramu.test('conversation history switches the main chat without closing the edito
   assert.equal(await pane.locator('.agent-view:visible').count(), 1)
   ramu.check(
     await pane.getByRole('tab', { name: /review.ts/ }).isVisible(),
-    'history switches chats and keeps the editor',
+    'history switches threads and keeps the editor',
   )
 })
 
-ramu.test('chat divider resizes by keyboard and pointer; hiding the workspace restores the full chat', async () => {
+ramu.test('thread divider resizes by keyboard and pointer; hiding the workspace restores the full thread', async () => {
   await toolsClose.click()
-  const handle = pane.getByRole('separator', { name: 'Resize chat pane' })
+  const handle = pane.getByRole('separator', { name: 'Resize thread pane' })
   await handle.focus()
   await page.keyboard.press('Home')
   const narrow = await stable('.main-chat')
   await page.keyboard.press('ArrowRight')
-  ramu.check(Math.abs((await stable('.main-chat')) - narrow - 20) < 1, 'ArrowRight widens the chat by 20px')
+  ramu.check(Math.abs((await stable('.main-chat')) - narrow - 20) < 1, 'ArrowRight widens the thread by 20px')
   const box = await handle.boundingBox()
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()
   await page.mouse.move(box.x + 60, box.y + box.height / 2, { steps: 8 })
   await page.mouse.up()
-  assert.ok((await stable('.main-chat')) > narrow + 20, 'dragging widens the chat further')
+  assert.ok((await stable('.main-chat')) > narrow + 20, 'dragging widens the thread further')
   await page.getByRole('button', { name: 'Hide workspace', exact: true }).click()
   await ramu.until(
     async () => Math.abs((await width('.main-chat')) - (await width('.task-body'))) < 1,
-    'chat did not return to full width',
+    'thread did not return to full width',
   )
-  ramu.check(true, 'hiding the workspace gives the chat the whole body')
+  ramu.check(true, 'hiding the workspace gives the thread the whole body')
 })
 
 ramu.test('the Git badge follows working-tree changes while Source Control is closed', async () => {
@@ -264,14 +264,14 @@ ramu.test('Source Control scrolls to the outer edge and opens diffs beside the c
   ramu.check(true, 'Git changes open as diffs beside the conversation')
 })
 
-ramu.test('a compact window clamps the chat; Search is a tool and Schedules keep their own list', async () => {
+ramu.test('a compact window clamps the thread; Search is a tool and Schedules keep their own list', async () => {
   await page.setViewportSize({ width: 1000, height: 720 })
   await ramu.until(
     async () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     'page overflows horizontally',
   )
   const body = await bounds('.task-body')
-  assert.ok((await stable('.main-chat')) <= body.width * 0.7 + 1, 'compact chat is clamped to 70% of the body')
+  assert.ok((await stable('.main-chat')) <= body.width * 0.7 + 1, 'compact thread is clamped to 70% of the body')
   await page.setViewportSize({ width: 1440, height: 900 })
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
@@ -288,7 +288,7 @@ ramu.test('a compact window clamps the chat; Search is a tool and Schedules keep
   await toolsClose.click()
   assert.ok(await pane.locator('.main-chat').isVisible())
   assert.equal(await pane.getByRole('button', { name: 'Hide conversation', exact: true }).count(), 0)
-  ramu.check(true, 'compact window clamps the chat and Search lives in the tools rail')
+  ramu.check(true, 'compact window clamps the thread and Search lives in the tools rail')
 })
 
 ramu.test('the split and selected file restore after a reload', async () => {
@@ -296,7 +296,7 @@ ramu.test('the split and selected file restore after a reload', async () => {
   await ramu.reload()
   await page.locator('.task-row').first().click()
   await pane.locator('.editor-area:visible').waitFor()
-  await ramu.until(async () => Math.abs((await width('.main-chat')) - before) < 1, 'chat width was not restored')
+  await ramu.until(async () => Math.abs((await width('.main-chat')) - before) < 1, 'thread width was not restored')
   ramu.check(true, 'split restores after reload')
 })
 
@@ -320,7 +320,7 @@ ramu.test('the sidebar collapses independently of the workspace tools', async ()
 })
 
 ramu.test(
-  'terminal docks right or bottom beside chat and files, keeps its shell, and restores after reload',
+  'terminal docks right or bottom beside thread and files, keeps its shell, and restores after reload',
   async () => {
     await page.getByRole('button', { name: 'Hide workspace', exact: true }).click()
     await page.locator('.workspace-tool-buttons').getByRole('button', { name: 'Terminal', exact: true }).click()
@@ -340,16 +340,16 @@ ramu.test(
     const fullChat = await stable('.main-chat')
     await pane.getByRole('button', { name: 'Move terminal to workspace tabs', exact: true }).click()
     await pane.locator('.terminal-panel.dock-right').waitFor()
-    assert.ok((await stable('.main-chat')) < fullChat - 1, 'a right dock narrows the chat')
+    assert.ok((await stable('.main-chat')) < fullChat - 1, 'a right dock narrows the thread')
     await pane.getByRole('button', { name: 'Dock terminal at bottom', exact: true }).click()
     await pane.locator('.terminal-panel.dock-bottom').waitFor()
     await ramu.until(
       async () => Math.abs((await stable('.main-chat')) - (await width('.task-body'))) < 1,
-      'bottom dock narrowed the chat',
+      'bottom dock narrowed the thread',
     )
     let bottom = await bounds('.terminal-panel')
     const chat = await bounds('.main-chat')
-    assert.ok(bottom.y >= chat.y + chat.height - 1, 'bottom dock sits under the chat')
+    assert.ok(bottom.y >= chat.y + chat.height - 1, 'bottom dock sits under the thread')
     const resize = pane.getByRole('separator', { name: 'Resize terminal panel' })
     await resize.focus()
     await page.keyboard.press('ArrowUp')
@@ -415,7 +415,7 @@ ramu.test(
     await page.getByRole('button', { name: 'Hide workspace', exact: true }).click()
     await ramu.until(
       async () => Math.abs((await width('.main-chat')) - (await width('.task-body'))) < 1,
-      'chat did not return to full width',
+      'thread did not return to full width',
     )
     ramu.check(true, 'Workspace tabs and bottom docking preserve the shell, resize and restore after reload')
   },

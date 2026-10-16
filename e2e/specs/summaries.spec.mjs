@@ -58,14 +58,14 @@ ramu.test('Home shows the summary with an unread dot and opens it', async () => 
   await ramu.shot('summary-view')
 })
 
-ramu.test('sending from the summary starts a labelled review chat linked back', async () => {
+ramu.test('sending from the summary starts a labelled review thread linked back', async () => {
   const { page } = ramu
   const dialog = page.getByRole('dialog').filter({ has: page.getByText('What Ramu learned', { exact: true }) })
   await dialog.locator('[data-composer-input]').fill('Why did you save the retry note?')
-  await dialog.getByRole('button', { name: 'Start review chat', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Start review thread', exact: true }).click()
   const chat = await ramu.until(
     async () => (await ramu.api('tasks.list')).find((task) => task.kind === 'library-review'),
-    'no review chat was started',
+    'no review thread was started',
   )
   assert.equal(chat.projectId, 'no-project')
   assert.deepEqual((await ramu.api('summaries.get')).summaries[0].chatIds, [chat.id])
@@ -82,7 +82,7 @@ ramu.test('settings control the interval, list the history, and Dismiss hides th
   await openSettings(ramu, 'Memory & skills')
   await page.getByText('What Ramu learned', { exact: true }).first().waitFor()
   await page
-    .getByText(/Discussed in chat/)
+    .getByText(/Discussed in thread/)
     .first()
     .waitFor()
   await page

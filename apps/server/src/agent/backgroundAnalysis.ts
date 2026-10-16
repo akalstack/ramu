@@ -77,7 +77,7 @@ export class BackgroundAnalysis {
   continuationPrompt(sessionId: string): string {
     const session = this.host.get(sessionId)
     const transcript = transcriptOf(this.host.events(sessionId))
-    if (!transcript.trim()) throw new Error('This chat has nothing to continue from yet.')
+    if (!transcript.trim()) throw new Error('This thread has nothing to continue from yet.')
     return continuationRequest(session.title, transcript)
   }
 

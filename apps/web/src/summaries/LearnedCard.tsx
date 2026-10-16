@@ -38,7 +38,7 @@ export function LearnedCard() {
         <span className="text-body leading-[1.5] text-foreground">{summary.headline}</span>
         <span className="text-caption text-muted-foreground">
           {t('{0} changes', { 0: summary.items.length })}
-          {summary.chatIds.length > 0 ? ` · ${t('Discussed in chat')}` : ''}
+          {summary.chatIds.length > 0 ? ` · ${t('Discussed in thread')}` : ''}
         </span>
       </Button>
     </section>

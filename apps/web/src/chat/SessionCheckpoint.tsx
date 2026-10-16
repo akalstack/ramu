@@ -54,7 +54,7 @@ export function SessionCheckpointButton({ sessionId }: { sessionId: string }) {
         size="sm"
         className={`${GHOST_TEXT_BUTTON_CLASS} checkpoint-chip gap-1.5 text-soft`}
         aria-haspopup="dialog"
-        title={t('Saved progress for this chat · {0}', { '0': saved })}
+        title={t('Saved progress for this thread · {0}', { '0': saved })}
         onClick={() => setOpen(true)}
       >
         <BookmarkCheck size={13} />
@@ -70,14 +70,14 @@ export function SessionCheckpointButton({ sessionId }: { sessionId: string }) {
             <DialogDescription className="text-caption text-muted-foreground">
               <span title={saved}>{t('Saved {0}', { '0': savedAgo(checkpoint.updatedAt) })}</span>
               {' · '}
-              {t('This chat only. Newer messages and the current files win over this summary.')}
+              {t('This thread only. Newer messages and the current files win over this summary.')}
             </DialogDescription>
           </DialogHeader>
           <div className={`${MSG_CLASS} assistant min-h-0 flex-1 overflow-auto px-5 py-4 text-control`}>
             <Markdown remarkPlugins={[remarkGfm]}>{checkpoint.summary}</Markdown>
           </div>
           <div className="flex flex-none items-center gap-2 px-4 py-2.5 [border-top:1px_solid_var(--line)]">
-            <span className="flex-1 text-caption text-muted-foreground">{t('Copy to reuse it in another chat')}</span>
+            <span className="flex-1 text-caption text-muted-foreground">{t('Copy to reuse it in another thread')}</span>
             <CopyButton text={checkpoint.summary} />
             <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>
               {t('Done')}

@@ -92,7 +92,7 @@ export default function AsideScreen() {
   }
   const remove = () => {
     if (!current) return
-    Alert.alert('Delete this side question?', 'The chat itself is not affected.', [
+    Alert.alert('Delete this side question?', 'The thread itself is not affected.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -128,7 +128,7 @@ export default function AsideScreen() {
           contentContainerStyle={{ padding: space.l, gap: space.m, paddingBottom: space.xl }}
         >
           <T size={font.control} tone="muted">
-            Ask about this chat without interrupting it. The agent never sees these.
+            Ask about this thread without interrupting it. The agent never sees these.
           </T>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
             {asides.map((a) => (

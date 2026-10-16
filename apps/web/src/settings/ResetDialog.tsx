@@ -45,7 +45,7 @@ export function ResetDialog({
           <AlertDialogDescription>
             {reset === 'sizes'
               ? t(
-                  'The sidebar width, editor/chat split and terminal height will return to their default sizes in every workspace. This applies immediately.',
+                  'The sidebar width, editor/thread split and terminal height will return to their default sizes in every workspace. This applies immediately.',
                 )
               : t(
                   'This replaces your changes in this section with the default settings. Choose Save changes to apply them.',

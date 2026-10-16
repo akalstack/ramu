@@ -251,7 +251,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                 open={editorOpen}
                 flip={editorSide === 'left'}
                 primaryCollapsed={chatHidden}
-                label={t(rightTerminal ? 'Resize terminal panel' : 'Resize chat pane')}
+                label={t(rightTerminal ? 'Resize terminal panel' : 'Resize thread pane')}
                 defaultShare={55}
                 primary={<PaneSlot host={chatHost} />}
                 secondary={<PaneSlot host={editorHost} />}
@@ -452,20 +452,20 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                     variant="ghost"
                     size={chatHidden ? 'sm' : 'icon-sm'}
                     className="ghost relative transition-colors bg-transparent border-transparent text-muted-foreground hover:bg-transparent hover:text-foreground aria-pressed:bg-transparent aria-expanded:bg-transparent gap-1.5 px-2 min-h-(--action-size) flex-none justify-center"
-                    aria-label={chatHidden ? t('Show chat') : t('Maximize workspace')}
+                    aria-label={chatHidden ? t('Show thread') : t('Maximize workspace')}
                     aria-pressed={chatHidden}
-                    title={`${chatHidden ? t('Show chat') : t('Maximize workspace')} (${formatKeys('mod+alt+c')})`}
+                    title={`${chatHidden ? t('Show thread') : t('Maximize workspace')} (${formatKeys('mod+alt+c')})`}
                     onClick={() => setChatHidden(!chatHidden)}
                   >
                     {chatHidden ? <Minimize2 data-icon="inline-start" /> : <Maximize2 data-icon="inline-start" />}
-                    {chatHidden && <span>{t('Show chat')}</span>}
+                    {chatHidden && <span>{t('Show thread')}</span>}
                     {chatHidden && (ws.task(taskId)?.status === 'needs-input' || ws.unread.has(taskId)) && (
                       <span
                         role="status"
                         aria-label={
                           ws.task(taskId)?.status === 'needs-input'
                             ? t('Waiting for your input')
-                            : t('New activity in chat')
+                            : t('New activity in thread')
                         }
                         className={`absolute top-1 right-1 size-1.5 rounded-full ${ws.task(taskId)?.status === 'needs-input' ? 'bg-warn' : 'bg-brand'}`}
                       />
@@ -858,13 +858,13 @@ function ViewLabel({
 }) {
   useLanguage()
   const ws = useWorkspace()
-  if (v.kind === 'agent') return <>{t('Chat')}</>
+  if (v.kind === 'agent') return <>{t('Thread')}</>
   if (v.kind === 'terminal') return <>{v.title ?? repoName(v.repoId)}</>
   if (v.kind === 'review')
     return (
       <>
         {t('Changes')}
-        <span className="tab-repo text-muted-foreground text-caption">{ws.task(v.taskId)?.title ?? t('Chat')}</span>
+        <span className="tab-repo text-muted-foreground text-caption">{ws.task(v.taskId)?.title ?? t('Thread')}</span>
       </>
     )
   if (v.kind === 'git')

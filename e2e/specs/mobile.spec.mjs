@@ -40,7 +40,7 @@ async function startHost(name) {
   const { project } = await phone.invoke('folders.addProject', repo)
   const task = await phone.invoke('tasks.create', {
     projectId: project.id,
-    title: `${name} phone chat`,
+    title: `${name} phone thread`,
     mode: 'current',
   })
   await phone.invoke('tasks.setup', task.id)

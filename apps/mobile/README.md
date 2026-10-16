@@ -28,9 +28,9 @@ Use a development build for the native adaptive header and background push. `pnp
 ## Connected features
 
 - Multiple saved computers connect concurrently while the app is active, with
-  independent status, revocation, catalog, usage and chat state. Selecting one
+  independent status, revocation, catalog, usage and thread state. Selecting one
   does not reconnect the others. In-app alerts open their originating computer.
-- Live chat/tool/helper transcripts, host models, reasoning/access/fallback settings, host file context and skills, queue/
+- Live thread/tool/helper transcripts, host models, reasoning/access/fallback settings, host file context and skills, queue/
   steer, stop, permissions, ID-based questions, elicitation forms and goal controls.
 - Persistent computer metadata, drafts, question drafts and offline outbox. Native
   bearer tokens use SecureStore; the web preview uses browser local storage.

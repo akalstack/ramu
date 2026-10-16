@@ -160,7 +160,7 @@ function Demo() {
                 <li key={i} className="seam">
                   <span className="seam-dot" aria-hidden="true" />
                   <span>
-                    {first.name} reached its usage limit. Continuing on {second.name} with the same chat.
+                    {first.name} reached its usage limit. Continuing on {second.name} with the same thread.
                   </span>
                 </li>
               )
@@ -305,7 +305,7 @@ function Providers() {
 const WORK = [
   {
     title: 'Keep going through usage limits',
-    body: 'Set your preferred provider order. Ramu switches with visible chat context when a limit is reached. If all are limited, it waits and resumes when capacity returns, even after a restart.',
+    body: 'Set your preferred provider order. Ramu switches with visible thread context when a limit is reached. If all are limited, it waits and resumes when capacity returns, even after a restart.',
   },
   {
     title: 'Get another model’s perspective',
@@ -325,7 +325,7 @@ const WORK = [
   },
   {
     title: 'Leave work running',
-    body: 'Chats and terminals keep running when you close the window. Schedule recurring tasks, recover unfinished chats after a restart, and catch up with recaps.',
+    body: 'Threads and terminals keep running when you close the window. Schedule recurring tasks, recover unfinished threads after a restart, and catch up with recaps.',
   },
 ]
 
@@ -361,9 +361,9 @@ function Review() {
           conflict checks to protect later edits.
         </p>
         <ul className="checks">
-          <li>Monaco editor and split terminals beside the chat</li>
+          <li>Monaco editor and split terminals beside the thread</li>
           <li>Branches, staging, stashes, and sync</li>
-          <li>Unsent drafts kept per chat across restarts</li>
+          <li>Unsent drafts kept per thread across restarts</li>
         </ul>
       </div>
       <figure className="diff" aria-label="Example diff with a review comment">

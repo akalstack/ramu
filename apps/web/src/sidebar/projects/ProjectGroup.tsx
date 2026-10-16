@@ -85,7 +85,7 @@ export function ProjectGroup({ project }: { project: Project }) {
       key: 'new',
       label: (
         <>
-          <SquarePen size={14} /> {t(' New chat')}
+          <SquarePen size={14} /> {t(' New thread')}
         </>
       ),
       onSelect: () => ws.newTask(project.id),
@@ -147,7 +147,7 @@ export function ProjectGroup({ project }: { project: Project }) {
       key: 'archive',
       label: (
         <>
-          <Archive size={14} /> {t(' Archive chats')}
+          <Archive size={14} /> {t(' Archive threads')}
         </>
       ),
       disabled: tasks.length === 0,
@@ -254,8 +254,8 @@ export function ProjectGroup({ project }: { project: Project }) {
               variant="ghost"
               size="icon-xs"
               className={ICON_BUTTON_CLASS}
-              aria-label={t('New chat in {0}', { '0': project.name })}
-              title={t('New chat')}
+              aria-label={t('New thread in {0}', { '0': project.name })}
+              title={t('New thread')}
               onClick={(e) => {
                 e.stopPropagation()
                 ws.newTask(project.id)
@@ -276,7 +276,7 @@ export function ProjectGroup({ project }: { project: Project }) {
         <div ref={list} className="task-list flex flex-col gap-0.5 pt-0.5">
           {tasks.length === 0 && (
             <div className="muted text-muted-foreground small text-caption empty-tasks p-[2px_10px]">
-              {t('No chats yet')}
+              {t('No threads yet')}
             </div>
           )}
           {tasks.map((t) => (

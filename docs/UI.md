@@ -8,7 +8,7 @@ Add components with `pnpm ui:add <component>`. Review generated changes before r
 
 ## Workspace and terminals
 
-Chat and workspace panes share a resizable split. Bottom terminals span both panes. Terminals in the workspace share the file tab strip; selecting a terminal group shows its shells in place of the file. Resize handles support dragging and arrow keys, Home, and End.
+Thread and workspace panes share a resizable split. Bottom terminals span both panes. Terminals in the workspace share the file tab strip; selecting a terminal group shows its shells in place of the file. Resize handles support dragging and arrow keys, Home, and End.
 
 Terminal tabs contain groups of panes. Splitting keeps the shell in its group; moving a pane to a tab preserves it. Hidden groups keep running. Layout and grouping persist with workspace state.
 
@@ -16,7 +16,7 @@ Editors, terminals, and attachments use native context menus. Keep clipboard and
 
 ## Command palette
 
-The palette (`apps/web/src/palette/`) is a set of sources, each drawn as its own group. No prefix searches files, projects, chats and text inside project files; `>` runs commands only; `#` searches file contents only. Results stay in their group (never one flat ranking), show the first few with **Show more**, and render through `VirtualList`.
+The palette (`apps/web/src/palette/`) is a set of sources, each drawn as its own group. No prefix searches files, projects, threads and text inside project files; `>` runs commands only; `#` searches file contents only. Results stay in their group (never one flat ranking), show the first few with **Show more**, and render through `VirtualList`.
 
 To add a source, write a `PaletteSource` (`palette/sources.ts`) and add it to the list in `Palette.tsx`:
 

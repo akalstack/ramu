@@ -56,7 +56,7 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-describe('chat restore across captured runs', () => {
+describe('thread restore across captured runs', () => {
   it('restores Claude and Codex runs together, retains later user edits, and marks every original revision', async () => {
     const first = await capture('Claude request', () => {
       writeFileSync(join(cwd, 'behavior.txt'), base.replace('Original behavior', 'Claude behavior'))
@@ -106,7 +106,7 @@ describe('chat restore across captured runs', () => {
     await expect(reviews.chatUndoApply(preview.token, [preview.files[0]!.fileId])).rejects.toThrow('ready')
     expect(readFileSync(join(cwd, 'behavior.txt'), 'utf8')).toBe('Codex change\n')
   })
-  it('rejects stale chat and file previews before writing', async () => {
+  it('rejects stale thread and file previews before writing', async () => {
     await capture('Request', () => {
       writeFileSync(join(cwd, 'behavior.txt'), 'Agent change\n')
       writeFileSync(join(cwd, 'added.txt'), 'Added\n')
@@ -118,7 +118,7 @@ describe('chat restore across captured runs', () => {
         staleChat.token,
         staleChat.files.map((file) => file.fileId),
       ),
-    ).rejects.toThrow('chat changed')
+    ).rejects.toThrow('thread changed')
     const staleFiles = await reviews.chatUndoPreview('session', 1)
     writeFileSync(join(cwd, 'added.txt'), 'Later user edit\n')
     await expect(

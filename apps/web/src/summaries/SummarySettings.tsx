@@ -122,7 +122,7 @@ export function SummarySettings({ value, onChange, hasChanges }: Props) {
               {formatDate(summary.periodStart)} – {formatDate(summary.periodEnd)}
             </span>
             {summary.status === 'dismissed' && <span>· {t('Dismissed')}</span>}
-            {summary.chatIds.length > 0 && <span>· {t('Discussed in chat')}</span>}
+            {summary.chatIds.length > 0 && <span>· {t('Discussed in thread')}</span>}
             <span className="grow" />
             {summary.status === 'unread' && (
               <span

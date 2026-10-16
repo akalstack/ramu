@@ -100,7 +100,7 @@ it('retrying an offline computer keeps the other computer connected and deliveri
   expect(delivered.at(-1)).toEqual([b.id, 'fs:changed'])
 })
 
-it('counts working and waiting chats per computer when their state changes', async () => {
+it('counts working and waiting threads per computer when their state changes', async () => {
   const { servers, streams, counts, registry } = setup()
   const a = servers.add('10.0.0.2:7788', 'Studio', 'a')
   registry.start()

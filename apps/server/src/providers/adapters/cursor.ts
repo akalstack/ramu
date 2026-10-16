@@ -22,7 +22,7 @@ export const cursorAdapter = defineAdapter({
     updateCommand: 'agent update',
     setupCommand: 'agent login',
     setupNote:
-      'Ramu runs Cursor chats through the Cursor SDK. Sign in with Login (opens your browser) or set CURSOR_API_KEY. The CLI is used for updates and as a fallback model list.',
+      'Ramu runs Cursor threads through the Cursor SDK. Sign in with Login (opens your browser) or set CURSOR_API_KEY. The CLI is used for updates and as a fallback model list.',
   }),
   async latestRelease(_current, fetchText) {
     const script = await fetchText(`https://cursor.com/install${process.platform === 'win32' ? '?win32=true' : ''}`)

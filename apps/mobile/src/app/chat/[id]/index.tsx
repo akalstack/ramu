@@ -252,7 +252,7 @@ export default function ChatScreen() {
   if (!chat)
     return (
       <Screen>
-        <Header title="Chat not found" />
+        <Header title="Thread not found" />
       </Screen>
     )
   const live = git?.chatId === chat.id ? git : undefined
@@ -452,7 +452,7 @@ export default function ChatScreen() {
       ? [
           {
             title: 'Side questions',
-            subtitle: 'Ask without interrupting the chat',
+            subtitle: 'Ask without interrupting the thread',
             systemIcon: 'questionmark.bubble' as const,
             onPress: () => router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } }),
           },
@@ -524,7 +524,7 @@ export default function ChatScreen() {
               )}
               <HeaderMenu
                 icon={Ellipsis}
-                label="Chat actions"
+                label="Thread actions"
                 systemIcon="ellipsis"
                 items={chatItems}
                 onPress={() => setActions('menu')}

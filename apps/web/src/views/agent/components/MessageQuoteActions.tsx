@@ -28,7 +28,7 @@ export function MessageQuoteActions({ text, from = 'assistant' }: { text: string
   const items = [
     { action: 'quote', icon: Quote, label: translate('Quote in your message'), keys: 'mod+shift+q' },
     { action: 'aside', icon: MessageCircle, label: translate('Ask aside about this message'), keys: 'mod+shift+a' },
-    { action: 'quote-new', icon: SquarePen, label: translate('Quote in new chat') },
+    { action: 'quote-new', icon: SquarePen, label: translate('Quote in new thread') },
   ] as const
   return (
     <>

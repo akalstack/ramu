@@ -76,7 +76,7 @@ export class GoalManager {
     const session = this.host.get(id),
       current = this.getGoal(id),
       prefs = this.goalPreferences()
-    if (session.parentId) throw new Error('Goals belong to main chats.')
+    if (session.parentId) throw new Error('Goals belong to main threads.')
     if (!fromUser && prefs.mode === 'manual' && !current)
       throw new Error('Manual mode requires the user to start a goal with /goal.')
     if (!fromUser && current && ['paused', 'turn-limit', 'waiting-provider'].includes(current.status))
@@ -111,7 +111,7 @@ export class GoalManager {
   controlGoal(id: string, action: 'pause' | 'resume' | 'clear'): ChatGoal | null {
     const goal = this.getGoal(id)
     if (action === 'clear') return this.saveGoal(id, null)
-    if (!goal) throw new Error('This chat has no goal.')
+    if (!goal) throw new Error('This thread has no goal.')
     if (action === 'resume' && goal.status === 'completed')
       throw new Error('This goal is already complete. Start a new goal.')
     if (action === 'resume') this.host.updateQueue(id, this.host.queued(id), false)

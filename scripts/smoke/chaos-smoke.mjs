@@ -286,14 +286,14 @@ surface('composer', async () => {
     .click()
     .catch(() => {})
   // Typing alone first: every payload, no send.
-  await page.getByRole('button', { name: 'New chat in chaos work', exact: true }).click()
+  await page.getByRole('button', { name: 'New thread in chaos work', exact: true }).click()
   await startComposer().first().waitFor()
   await each(PAYLOADS, async (name, value) => {
     await put(startComposer().first(), value)
   })
   // Then actually send: title derivation, transcript rendering, sidebar rows, header.
   await each(pick(CORE.filter((k) => k !== 'empty' && k !== 'spaces')), async (name, value) => {
-    await page.getByRole('button', { name: 'New chat in chaos work', exact: true }).click()
+    await page.getByRole('button', { name: 'New thread in chaos work', exact: true }).click()
     await put(startComposer().first(), value)
     await page.keyboard.press('Enter')
     await sleep(600)
@@ -302,7 +302,7 @@ surface('composer', async () => {
   })
   // Whitespace-only must not send.
   for (const name of ['empty', 'spaces']) {
-    await page.getByRole('button', { name: 'New chat in chaos work', exact: true }).click()
+    await page.getByRole('button', { name: 'New thread in chaos work', exact: true }).click()
     await put(startComposer().first(), PAYLOADS[name])
     await page.keyboard.press('Enter')
     await sleep(400)
@@ -651,7 +651,7 @@ surface('dialogs', async () => {
 surface('rename', async () => {
   await openProject()
   // Header chat title, via a real chat.
-  await page.getByRole('button', { name: 'New chat in chaos work', exact: true }).click()
+  await page.getByRole('button', { name: 'New thread in chaos work', exact: true }).click()
   await put(startComposer().first(), 'rename target')
   await page.keyboard.press('Enter')
   await settle('rename target')
@@ -672,7 +672,7 @@ surface('rename', async () => {
     ]),
     async (name, value) => {
       await title.dblclick()
-      const input = page.getByLabel('Chat title')
+      const input = page.getByLabel('Thread title')
       await input.waitFor({ timeout: 3000 })
       await input.fill(value)
       await page.keyboard.press('Enter')
@@ -771,7 +771,7 @@ async function paste(text) {
 }
 
 surface('paste', async () => {
-  await page.getByRole('button', { name: 'New chat in chaos work', exact: true }).click()
+  await page.getByRole('button', { name: 'New thread in chaos work', exact: true }).click()
   await startComposer().first().waitFor()
   const sizes = {
     small: 'short paste ',
@@ -797,7 +797,7 @@ surface('paste', async () => {
 })
 
 surface('huge-composer', async () => {
-  await page.getByRole('button', { name: 'New chat in chaos work', exact: true }).click()
+  await page.getByRole('button', { name: 'New thread in chaos work', exact: true }).click()
   await startComposer().first().waitFor()
   await each({ chars1_2m: 'm'.repeat(1_200_000) }, async (name, value) => {
     const started = Date.now()
@@ -839,8 +839,8 @@ const TEXT_SET = pick([
 surface('search', async () => {
   await openProject()
   // Chat/title search (sidebar).
-  await page.getByRole('button', { name: 'Search chats', exact: true }).click()
-  const chats = page.locator('input[aria-label="Search chats"]')
+  await page.getByRole('button', { name: 'Search threads', exact: true }).click()
+  const chats = page.locator('input[aria-label="Search threads"]')
   await chats.waitFor({ timeout: 5000 })
   await each(TEXT_SET, async (n, v) => {
     await chats.fill(v)

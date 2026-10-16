@@ -30,7 +30,7 @@ export function useChatCommands(chat: Chat) {
       await fn()
       await store.refresh(chat.computerId)
     } catch (error) {
-      Alert.alert('Could not update chat', error instanceof Error ? error.message : String(error))
+      Alert.alert('Could not update thread', error instanceof Error ? error.message : String(error))
     }
   }
   return {
@@ -47,8 +47,8 @@ export function useChatCommands(chat: Chat) {
           done?.()
         })
       Alert.alert(
-        'Delete chat?',
-        `${chat.title}\n\nThis removes the chat from the computer. Files in the checkout stay.`,
+        'Delete thread?',
+        `${chat.title}\n\nThis removes the thread from the computer. Files in the checkout stay.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Delete', style: 'destructive', onPress: () => remove(false) },
@@ -91,7 +91,7 @@ export function ChatActionsSheet({
       await fn()
       await store.refresh(chat.computerId)
     } catch (error) {
-      Alert.alert('Could not update chat', error instanceof Error ? error.message : String(error))
+      Alert.alert('Could not update thread', error instanceof Error ? error.message : String(error))
     }
   }
   const remove = (removeWorktrees: boolean) =>
@@ -100,8 +100,8 @@ export function ChatActionsSheet({
     onClose()
     const worktree = chat.mode === 'worktree'
     Alert.alert(
-      'Delete chat?',
-      `${chat.title}\n\nThis removes the chat from the computer. Files in the checkout stay.`,
+      'Delete thread?',
+      `${chat.title}\n\nThis removes the thread from the computer. Files in the checkout stay.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => remove(false) },
@@ -119,7 +119,7 @@ export function ChatActionsSheet({
     },
     {
       icon: Copy,
-      label: 'Copy chat ID',
+      label: 'Copy thread ID',
       onPress: () => {
         onClose()
         void Clipboard.setStringAsync(chat.taskId)
@@ -144,14 +144,14 @@ export function ChatActionsSheet({
     { icon: Trash2, label: 'Delete…', danger: true, onPress: confirmDelete },
   ]
   return (
-    <Sheet open={open} onClose={onClose} title={renaming ? 'Rename chat' : chat.title}>
+    <Sheet open={open} onClose={onClose} title={renaming ? 'Rename thread' : chat.title}>
       {renaming ? (
         <View style={{ padding: space.l, gap: space.m }}>
           <TextInput
             autoFocus
             value={title}
             onChangeText={setTitle}
-            placeholder="Chat title"
+            placeholder="Thread title"
             placeholderTextColor={c.placeholder}
             returnKeyType="done"
             onSubmitEditing={() =>
@@ -224,7 +224,7 @@ export function ProjectActionsSheet({
   const items = [
     {
       icon: SquarePen,
-      label: 'New chat',
+      label: 'New thread',
       onPress: () => later(() => router.push({ pathname: '/new', params: { project: project.id } })),
     },
     { icon: Pencil, label: 'Rename', onPress: () => setRenaming(true) },
@@ -250,7 +250,7 @@ export function ProjectActionsSheet({
       danger: true,
       onPress: () => {
         onClose()
-        Alert.alert('Remove project?', `${project.name}\n\nIts chats and folders on the computer are not deleted.`, [
+        Alert.alert('Remove project?', `${project.name}\n\nIts threads and folders on the computer are not deleted.`, [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Remove',

@@ -85,7 +85,7 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
           <span>
             <strong>{t('Auto-update Ramu')}</strong>
             <span className="muted text-muted-foreground block block small text-caption">
-              {t('Download updates automatically. Restart when ready; chats keep running.')}
+              {t('Download updates automatically. Restart when ready; threads keep running.')}
             </span>
           </span>
           <Switch
@@ -160,8 +160,10 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
           </span>
           <span className="muted text-muted-foreground block block small text-caption">
             {service?.updateAvailable
-              ? t('Service update available. Restart app & service to apply it. Agents stop; unfinished chats recover.')
-              : t('Matches the installed app. App-only restarts keep chats running.')}
+              ? t(
+                  'Service update available. Restart app & service to apply it. Agents stop; unfinished threads recover.',
+                )
+              : t('Matches the installed app. App-only restarts keep threads running.')}
           </span>
         </span>
         {service?.updateAvailable && (
@@ -201,7 +203,7 @@ export function AppUpdateNotice() {
       role="status"
     >
       <span>
-        {t('Ramu {0} is ready. Restart when you’re ready; chats stay running.', { '0': state.release.version })}
+        {t('Ramu {0} is ready. Restart when you’re ready; threads stay running.', { '0': state.release.version })}
       </span>
       <Button
         variant="secondary"

@@ -18,12 +18,12 @@ function memory() {
   }
 }
 
-it('restores text saved for a chat and keeps chats and projects apart', () => {
+it('restores text saved for a thread and keeps threads and projects apart', () => {
   const store = memory()
   saveDraft(draftKey.chat('a'), 'half-written message', store)
-  saveDraft(draftKey.newChat('a'), 'new chat idea', store)
+  saveDraft(draftKey.newChat('a'), 'new thread idea', store)
   expect(loadDraft(draftKey.chat('a'), store)).toBe('half-written message')
-  expect(loadDraft(draftKey.newChat('a'), store)).toBe('new chat idea')
+  expect(loadDraft(draftKey.newChat('a'), store)).toBe('new thread idea')
   expect(loadDraft(draftKey.chat('b'), store)).toBe('')
 })
 

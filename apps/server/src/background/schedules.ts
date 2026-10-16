@@ -213,7 +213,7 @@ export class ScheduleService {
   recover(): void {
     this.db
       .prepare(
-        "UPDATE schedule_runs SET status='interrupted', error='Background service restarted. Open the chat to inspect and continue; actions were not replayed.' WHERE status IN ('running','needs-input') AND NOT EXISTS (SELECT 1 FROM agent_recovery WHERE agent_recovery.session_id = schedule_runs.session_id)",
+        "UPDATE schedule_runs SET status='interrupted', error='Background service restarted. Open the thread to inspect and continue; actions were not replayed.' WHERE status IN ('running','needs-input') AND NOT EXISTS (SELECT 1 FROM agent_recovery WHERE agent_recovery.session_id = schedule_runs.session_id)",
       )
       .run()
   }

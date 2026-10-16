@@ -14,7 +14,7 @@
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-Ramu is an **Agent Development Environment (ADE)** that brings agent chats, an editor, terminals, Git, and code review into one workspace. Use Claude Code, Codex, OpenCode, Cursor, or Antigravity with your existing provider accounts.
+Ramu is an **Agent Development Environment (ADE)** that brings agent threads, an editor, terminals, Git, and code review into one workspace. Use Claude Code, Codex, OpenCode, Cursor, or Antigravity with your existing provider accounts.
 
 Built-in orchestration coordinates agents across providers with automatic fallback, advisors, helpers, and persistent goals. Work across repositories on your computer and continue from your phone.
 
@@ -22,17 +22,17 @@ Inspired by **T3 Code**, **Codex**, and **VS Code**.
 
 ## Why Ramu
 
-- **Keep working through usage limits.** Rank providers and models for automatic fallback, carrying visible conversation context into the same chat. When all are limited, Ramu waits and resumes when capacity returns, even after a restart.
-- **Follow goals across turns.** Persistent goals keep agents working toward an objective across provider changes, with pause, resume, and continuation limits. Schedule recurring work and leave chats and terminals running after closing the window.
+- **Keep working through usage limits.** Rank providers and models for automatic fallback, carrying visible conversation context into the same thread. When all are limited, Ramu waits and resumes when capacity returns, even after a restart.
+- **Follow goals across turns.** Persistent goals keep agents working toward an objective across provider changes, with pause, resume, and continuation limits. Schedule recurring work and leave threads and terminals running after closing the window.
 - **Bring models together.** Ask a second model for advice or review, and delegate tasks to helpers across providers, with optional isolated checkouts.
-- **Carry knowledge forward.** Share project memory and preferences across providers. Turn completed work into reusable skills and lessons, with editable notes and revision history. A periodic "What Ramu learned" summary says what was saved, merged or archived, and a review chat can fix it.
+- **Carry knowledge forward.** Share project memory and preferences across providers. Turn completed work into reusable skills and lessons, with editable notes and revision history. A periodic "What Ramu learned" summary says what was saved, merged or archived, and a review thread can fix it.
 - **Continue from your phone.** Pair the iOS or Android app with your computer to chat, review changes, manage Git, use terminals, and respond to agent requests.
 
 ## Features
 
 - Monaco editor, split terminals, and Git branches, staging, stashes, and sync.
 - Recorded diffs, inline review comments, and selective undo with conflict checks.
-- GitHub pull requests and issues: start a chat from an issue, open a pull request that closes it, and hand failing checks or review comments back to an agent.
+- GitHub pull requests and issues: start a thread from an issue, open a pull request that closes it, and hand failing checks or review comments back to an agent.
 - File attachments, saved drafts, configurable fonts and colors, and English/Bahasa Indonesia.
 - A standalone workspace server for [headless use](docs/HEADLESS-SERVER.md) and mobile access.
 
@@ -44,7 +44,7 @@ Download installers and SHA-256 checksums from [GitHub Releases](https://github.
 
 Ramu is in alpha. Release targets are **macOS arm64/x64** and **Linux x64**; Linux packaged GUI validation is pending. Windows is experimental, with no release downloads. CI macOS builds are unsigned and not notarized. Install alpha updates manually; automatic installation requires a signed macOS app and excludes prereleases.
 
-Install and sign in to an agent provider, select it in **Settings → Providers**, then add a repository or start a chat. See [provider setup](docs/PROVIDERS.md). For iOS and Android setup and pairing, see the [mobile guide](apps/mobile/README.md).
+Install and sign in to an agent provider, select it in **Settings → Providers**, then add a repository or start a thread. See [provider setup](docs/PROVIDERS.md). For iOS and Android setup and pairing, see the [mobile guide](apps/mobile/README.md).
 
 ### Run from source
 

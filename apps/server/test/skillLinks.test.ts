@@ -158,7 +158,7 @@ it('excludes the links through .git/info/exclude in a repository, once, without 
   expect(execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf8' })).toBe('')
 })
 
-it('anchors the exclude entry at the repository root when the chat runs in a subfolder', () => {
+it('anchors the exclude entry at the repository root when the thread runs in a subfolder', () => {
   git('init', '-q')
   cwd = join(cwd, 'packages', 'app')
   mkdirSync(cwd, { recursive: true })

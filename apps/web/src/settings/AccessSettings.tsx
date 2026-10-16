@@ -22,7 +22,7 @@ export function AccessSettings({
       <SettingsRow setting="defaultAccess">
         <SettingsLabel
           title={t('Default access')}
-          help={t('Starting access for new chats. Existing chats keep theirs.')}
+          help={t('Starting access for new threads. Existing threads keep theirs.')}
         />
         <Dropdown
           label={t('Default access')}
@@ -38,7 +38,7 @@ export function AccessSettings({
         busy={busy}
         setting="defaultAutoFallback"
         title="Automatic provider fallback"
-        description="Switch to another provider when a usage limit is reached. When off, a chat waits and resumes on the same provider once the limit resets. Applies to new chats."
+        description="Switch to another provider when a usage limit is reached. When off, a thread waits and resumes on the same provider once the limit resets. Applies to new threads."
       />
       <FallbackSettings value={draft} onChange={onChange} busy={busy} />
     </div>

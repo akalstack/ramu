@@ -27,9 +27,9 @@ describe('app languages', () => {
     expect(translate('id', 'constructor')).toBe('constructor')
   })
   it('interpolates user values once and leaves missing placeholders intact', () => {
-    expect(translate('id', 'New chat in {0}', { 0: 'My {project} $repo' })).toBe('Obrolan baru di My {project} $repo')
-    expect(translate('en', 'New chat in {0}', { 0: 'Project' })).toBe('New chat in Project')
-    expect(translate('id', 'New chat in {0}')).toBe('Obrolan baru di {0}')
+    expect(translate('id', 'New thread in {0}', { 0: 'My {project} $repo' })).toBe('Thread baru di My {project} $repo')
+    expect(translate('en', 'New thread in {0}', { 0: 'Project' })).toBe('New thread in Project')
+    expect(translate('id', 'New thread in {0}')).toBe('Thread baru di {0}')
     expect(translate('id', 'Context {0}% full', { 0: 0 })).toBe('Konteks terisi 0%')
   })
   it('keeps every catalog placeholder and never has an empty translation', () => {

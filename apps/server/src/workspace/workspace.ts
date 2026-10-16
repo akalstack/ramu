@@ -259,7 +259,7 @@ export class Workspace {
 
   getTask(id: string): Task {
     const t = this.db.prepare(`SELECT ${TASK_COLUMNS} FROM tasks t WHERE id = ?`).get(id) as unknown as Task | undefined
-    if (!t) throw new Error(`Unknown chat ${id}`)
+    if (!t) throw new Error(`Unknown thread ${id}`)
     return t
   }
 
@@ -269,7 +269,7 @@ export class Workspace {
 
   renameTask(id: string, title: string): Task {
     const t = cleanLabel(title)
-    if (!t) throw new Error('Chat title is required')
+    if (!t) throw new Error('Thread title is required')
     this.getTask(id)
     this.db.prepare("UPDATE tasks SET title = ?, title_source = 'manual' WHERE id = ?").run(t, id)
     return this.getTask(id)
@@ -280,7 +280,7 @@ export class Workspace {
     this.getTask(id)
     this.db
       .prepare("UPDATE tasks SET title = ?, title_source = 'ai' WHERE id = ? AND (title_source != 'manual' OR ?)")
-      .run(cleanLabel(title) || 'New chat', id, force ? 1 : 0)
+      .run(cleanLabel(title) || 'New thread', id, force ? 1 : 0)
     return this.getTask(id)
   }
 
@@ -322,7 +322,7 @@ export class Workspace {
       : 0
     if (removeWorktrees && shared)
       throw new Error(
-        'This isolated workspace is used by other chats. Delete only this chat or remove the other chats first.',
+        'This isolated workspace is used by other threads. Delete only this thread or remove the other threads first.',
       )
     if (removeWorktrees) {
       const owned = this.listBindings(id).filter(
@@ -368,7 +368,8 @@ export class Workspace {
   removeProject(id: string): void {
     this.getProject(id)
     const tasks = this.listTasks(id)
-    if (tasks.length) throw new Error(`Delete this project's ${tasks.length} chat${tasks.length > 1 ? 's' : ''} first.`)
+    if (tasks.length)
+      throw new Error(`Delete this project's ${tasks.length} thread${tasks.length > 1 ? 's' : ''} first.`)
     this.db.exec('BEGIN')
     try {
       this.db.prepare('DELETE FROM bindings WHERE task_id IN (SELECT id FROM workspaces WHERE project_id = ?)').run(id)
@@ -428,12 +429,12 @@ export class Workspace {
    */
   async createTask(input: CreateTaskInput, plan?: WorktreePlanEntry[]): Promise<Task> {
     const title = cleanLabel(input.title)
-    if (!title) throw new Error('Chat title is required')
+    if (!title) throw new Error('Thread title is required')
     // Repositories belong to the project: a task always covers all of them.
     const repos = this.listRepositories(input.projectId)
     if (!repos.length && input.projectId !== NO_PROJECT) throw new Error('This project has no repositories')
     if (input.projectId === NO_PROJECT && (input.mode !== 'current' || input.workspaceId))
-      throw new Error('Project-free chats cannot use worktrees')
+      throw new Error('Project-free threads cannot use worktrees')
 
     if (input.workspaceId) {
       const existing = this.getWorktreeWorkspace(input.workspaceId)
@@ -580,7 +581,7 @@ export class Workspace {
       {
         taskId: ctx,
         repoId: 'general',
-        repoName: 'Chat files',
+        repoName: 'Thread files',
         folderOnly: true,
         cwd: this.agentScope(ctx).cwd,
         mode: 'current',
@@ -608,7 +609,7 @@ export class Workspace {
       return this.getAppState<TaskUiState>(`ui:${ctx}`, { views: [], activeViewId: null })
     const row = this.db.prepare('SELECT ui_state FROM tasks WHERE id = ?').get(ctx) as
       { ui_state: string | null } | undefined
-    if (!row) throw new Error(`Unknown chat ${ctx}`)
+    if (!row) throw new Error(`Unknown thread ${ctx}`)
     return row.ui_state ? (JSON.parse(row.ui_state) as TaskUiState) : { views: [], activeViewId: null }
   }
 

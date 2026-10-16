@@ -154,7 +154,7 @@ export class AgentTasks {
   /** Moves a running command to the background, as Ctrl+B does in Claude Code. The turn goes on and the result arrives as a task notification. */
   async backgroundTool(id: string, toolUseId: string): Promise<boolean> {
     const live = this.host.live.get(id)
-    if (!live) throw new Error('Only a running Claude chat can move a command to the background.')
+    if (!live) throw new Error('Only a running Claude thread can move a command to the background.')
     return live.query.backgroundTasks(toolUseId)
   }
 }

@@ -53,8 +53,8 @@ export function TaskRow({
   const items: MenuEntry[] = [
     {
       key: 'copy-id',
-      label: t('Copy chat ID'),
-      onSelect: () => void copyText(task.id).catch((reason) => notifyError(errorText(reason), 'Copy chat ID')),
+      label: t('Copy thread ID'),
+      onSelect: () => void copyText(task.id).catch((reason) => notifyError(errorText(reason), 'Copy thread ID')),
     },
     {
       key: 'rename',
@@ -119,7 +119,7 @@ export function TaskRow({
                 <X size={14} /> {t(' Close workspace')}
               </>
             ),
-            title: t('Closes the tab. Chats keep running and nothing is deleted.'),
+            title: t('Closes the tab. Threads keep running and nothing is deleted.'),
             onSelect: () => ws.closeTask(task.id),
           },
         ]
@@ -190,7 +190,7 @@ export function TaskRow({
           <Sparkles
             size={12}
             className="muted text-muted-foreground mode-icon flex-none"
-            aria-label={t('Naming chat')}
+            aria-label={t('Naming thread')}
           />
         )}
         {task.mode === 'worktree' && (
@@ -208,7 +208,7 @@ export function TaskRow({
               variant="ghost"
               size="icon-xs"
               className={ICON_BUTTON_CLASS}
-              aria-label={task.pinnedAt ? t('Unpin chat') : t('Pin chat')}
+              aria-label={task.pinnedAt ? t('Unpin thread') : t('Pin thread')}
               title={task.pinnedAt ? t('Unpin') : t('Pin')}
               onClick={(e) => {
                 e.stopPropagation()
@@ -222,7 +222,7 @@ export function TaskRow({
             variant="ghost"
             size="icon-xs"
             className={ICON_BUTTON_CLASS}
-            aria-label={archived ? t('Unarchive chat') : t('Archive chat')}
+            aria-label={archived ? t('Unarchive thread') : t('Archive thread')}
             title={archived ? t('Unarchive') : t('Archive')}
             onClick={(e) => {
               e.stopPropagation()
@@ -242,7 +242,7 @@ export function TaskRow({
       {deleting && (
         <Dialog
           title={t('Delete “{0}”?', { '0': task.title })}
-          confirmLabel={t('Delete chat')}
+          confirmLabel={t('Delete thread')}
           danger
           busy={busy}
           error={error}
@@ -265,7 +265,7 @@ export function TaskRow({
             }
           }}
         >
-          <p>{t('This removes the chat and its agent transcripts. Its running agents are stopped.')}</p>
+          <p>{t('This removes the thread and its agent transcripts. Its running agents are stopped.')}</p>
           {task.mode === 'worktree' && !sharedWorktree ? (
             <label>
               <Checkbox checked={removeWorktrees} onCheckedChange={(checked) => setRemoveWorktrees(checked === true)} />
@@ -278,7 +278,7 @@ export function TaskRow({
             </label>
           ) : (
             <p className="muted text-muted-foreground">
-              {t('Shared files, terminals, worktrees, and other chats stay open.')}
+              {t('Shared files, terminals, worktrees, and other threads stay open.')}
             </p>
           )}
         </Dialog>

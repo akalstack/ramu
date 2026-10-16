@@ -126,7 +126,7 @@ const appended = (options: Options) =>
     : ''
 
 describe('advisor', () => {
-  it('opens delivered advice from old chats that have no advisor task or transcript', () => {
+  it('opens delivered advice from old threads that have no advisor task or transcript', () => {
     const text = adviceMessage({
       requestId: 'old-request',
       status: 'ready',
@@ -318,7 +318,7 @@ describe('advisor', () => {
     svc.stopAll()
   })
 
-  it('does not restart a limited advisor as a sub-agent or name the chat after its question', async () => {
+  it('does not restart a limited advisor as a sub-agent or name the thread after its question', async () => {
     vi.stubEnv('RAMU_FAKE_AGENT', '1')
     const svc = service()
     svc.preferences = () => advisorOn()
@@ -341,7 +341,7 @@ describe('advisor', () => {
     svc.stopAll()
   })
 
-  it('recognises delivered advice so the chat can show it as a link to the card', () => {
+  it('recognises delivered advice so the thread can show it as a link to the card', () => {
     const ready = adviceMessage({
       requestId: 'r-1',
       status: 'ready',

@@ -102,7 +102,7 @@ it('does not reuse earlier tool calls to review a later acknowledgement', async 
   expect(analyze).not.toHaveBeenCalled()
 })
 
-it('allows a real testing workflow with a short request and leaves checkpoints chat-local', async () => {
+it('allows a real testing workflow with a short request and leaves checkpoints thread-local', async () => {
   trace[0] = { kind: 'user', text: 'test' }
   trace.splice(1, 0, { kind: 'tool-use', toolUseId: 'inspect', name: 'shell', summary: 'Inspect retry implementation' })
   await service.tick(true)
@@ -194,7 +194,7 @@ it('rejects stale skill revisions atomically and protects pinned procedures from
   expect(service.skills()[0]).toMatchObject({ content: skill.content, pinned: true })
 })
 
-it('preserves exact compacted data, isolates retrieval by chat and leaves failures intact', () => {
+it('preserves exact compacted data, isolates retrieval by thread and leaves failures intact', () => {
   const compression = new CompressionService(db)
   const text = 'header\n' + 'repeat line\n'.repeat(3000) + 'tail: 42'
   const full = { content: [{ type: 'text' as const, text }] }
@@ -203,7 +203,7 @@ it('preserves exact compacted data, isolates retrieval by chat and leaves failur
   if (block.type !== 'text') throw new Error('Expected text')
   const id = JSON.parse(block.text).resultId
   expect(compression.read('s', id, 8, 100).content).toBe(text.slice(8, 108))
-  expect(() => compression.read('other', id, 0, 10)).toThrow(/this chat/)
+  expect(() => compression.read('other', id, 0, 10)).toThrow(/this thread/)
   expect(compression.compact('s', 'aggressive', { ...full, isError: true })).toEqual({ ...full, isError: true })
   expect(compression.stats('s').estimatedTokensAvoided).toBeGreaterThan(0)
 })

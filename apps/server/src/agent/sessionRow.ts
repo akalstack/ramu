@@ -51,5 +51,5 @@ function titleOf(firstEvent: string | null): string {
   const e = firstEvent ? (JSON.parse(firstEvent) as AgentEvent) : null
   const prompt = e?.kind === 'user' ? e.text : e?.kind === 'queue' ? e.messages[0]?.text : ''
   const text = prompt?.split('\n\n<ramu-context>')[0]!.replace(/\s+/g, ' ').trim() ?? ''
-  return text ? truncate(text, 60) : 'New chat'
+  return text ? truncate(text, 60) : 'New thread'
 }

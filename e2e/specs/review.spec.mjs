@@ -64,7 +64,7 @@ ramu.test('file and line comments save without sending', async () => {
 
 ramu.test('comments alone can be sent with pinned file context', async () => {
   await api('agent.configure', session.id, { ...settings, access: 'full' })
-  await page.getByRole('button', { name: 'Open chat', exact: true }).click()
+  await page.getByRole('button', { name: 'Open thread', exact: true }).click()
   const chat = page.locator('.agent-view:visible')
   await chat.getByLabel('1 review comment attached', { exact: true }).waitFor()
   check(await chat.getByRole('button', { name: 'Send', exact: true }).isEnabled(), 'Review comments enable Send')
@@ -73,7 +73,7 @@ ramu.test('comments alone can be sent with pinned file context', async () => {
     'Additional context for the review: preserve compatibility.\n',
   )
   const file = (await api('files.all', session.taskId)).find((f) => f.path === 'feedback-context.txt')
-  check(!!file, 'Review context file is available in the chat workspace')
+  check(!!file, 'Review context file is available in the thread workspace')
   await chat.locator('.composer').evaluate((element, file) => {
     const transfer = new DataTransfer()
     transfer.setData('application/x-ramu-file', JSON.stringify(file))
@@ -95,13 +95,13 @@ ramu.test('comments alone can be sent with pinned file context', async () => {
   await until(async () => (await api('agent.get', session.id)).state === 'idle', 'feedback run to finish')
 })
 
-ramu.test('editing a message rewinds the chat to before it and can revert its files', async () => {
+ramu.test('editing a message rewinds the thread to before it and can revert its files', async () => {
   await openReview()
   check(
     (await page.getByRole('button', { name: /^Revert .* too$/ }).count()) === 0,
     'Reverting is not offered on the Changes page',
   )
-  await page.getByRole('button', { name: 'Open chat', exact: true }).click()
+  await page.getByRole('button', { name: 'Open thread', exact: true }).click()
   const before = (await userEvents()).length
   await page.locator('.agent-view:visible').getByRole('button', { name: 'Edit message', exact: true }).first().click()
   const dialog = page.getByRole('dialog', { name: 'Edit from here?' })
@@ -110,7 +110,10 @@ ramu.test('editing a message rewinds the chat to before it and can revert its fi
   await ramu.shot('edit-from-here')
   await revert.click()
   await until(() => !existsSync(join(session.cwd, 'review.txt')), 'revert to remove the added file')
-  await until(async () => (await userEvents()).length < before, 'the edited message and later turns to leave the chat')
+  await until(
+    async () => (await userEvents()).length < before,
+    'the edited message and later turns to leave the thread',
+  )
   const box = page.locator('.agent-view:visible [data-composer-input]')
   await until(async () => (await box.textContent())?.trim().length > 0, 'the message to return to the message box')
   await box.fill('Revised request after rewinding')

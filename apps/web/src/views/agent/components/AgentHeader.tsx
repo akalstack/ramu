@@ -88,7 +88,7 @@ export function AgentHeader({
         size="sm"
         className={`${GHOST_TEXT_BUTTON_CLASS} asides-chip gap-1.5 text-soft`}
         aria-pressed={asideOpen}
-        title={`${translate('Side questions about this chat')} (${formatKeys('mod+shift+a')})`}
+        title={`${translate('Side questions about this thread')} (${formatKeys('mod+shift+a')})`}
         onClick={onToggleAside}
       >
         <MessageCircle size={13} />
@@ -127,7 +127,7 @@ export function AgentHeader({
           title={
             runningTasks.length
               ? translate('Sub-agents still working; they can keep going after the turn ends')
-              : translate('Sub-agents in this chat')
+              : translate('Sub-agents in this thread')
           }
           onClick={onToggleAgents}
         >
@@ -171,7 +171,7 @@ export function AgentHeader({
               key: 'continue',
               label: (
                 <>
-                  <GitFork size={13} /> {translate('Continue in new chat')}
+                  <GitFork size={13} /> {translate('Continue in new thread')}
                 </>
               ),
               onSelect: onContinue,

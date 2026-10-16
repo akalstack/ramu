@@ -1,7 +1,7 @@
 # Ramu mobile implementation plan
 
 Status: live companion implementation, replacing the UI scaffold. Pairing/QR, independent
-connections, persisted drafts/outbox, live chat and input controls, host folders,
+connections, persisted drafts/outbox, live thread and input controls, host folders,
 attachments, host usage, Git/reviews/undo, terminal recovery and opt-in Expo push
 registration/delivery are implemented. See README.md for setup and validation.
 
@@ -25,10 +25,10 @@ First release:
 - Pair with a server address and the existing one-time code, or scan a QR offer.
 - Save multiple computers and connect to all of them concurrently while the app
   is active. Show one computer's workspace at a time, with a switcher displaying
-  each computer's connection status and running/waiting chat counts.
+  each computer's connection status and running/waiting thread counts.
 - Receive in-app notifications from every connected computer; opening one selects
-  its computer and chat.
-- Browse existing projects, tasks and chats, including standalone chats.
+  its computer and thread.
+- Browse existing projects, tasks and threads, including standalone threads.
 - Browse host folders, create projects/repositories, initialize or clone Git
   repositories and attach them to the selected computer's workspace.
 - Use interactive host terminals with a customizable extra-key toolbar and
@@ -39,7 +39,7 @@ First release:
 - Include all supported desktop input interactions: commands, skills, prompts,
   context selection, attachments, provider/model/settings selection, queued and
   steering messages, editable drafts and pending-input forms.
-- Start chats in existing projects or standalone scope using host providers.
+- Start threads in existing projects or standalone scope using host providers.
 - Show provider availability, usage windows, reset times and fallback/wait state
   separately for every computer, including explicit unavailable/stale readings.
 - Administer host network access and paired devices, and create/edit/control
@@ -48,10 +48,10 @@ First release:
 - Read recorded reviews and diffs; send review comments back to the agent.
 - Perform Git actions and recorded undo, including destructive operations, with
   previews, host/repository identification and existing conflict checks.
-- Upload photos, camera captures and files to the selected host's chat.
+- Upload photos, camera captures and files to the selected host's thread.
 - Receive background push notifications for every paired computer; tapping opens
-  the correct workspace/chat and refreshes its current state.
-- Keep composer drafts on the phone, scoped by computer and chat/project.
+  the correct workspace/thread and refreshes its current state.
+- Keep composer drafts on the phone, scoped by computer and thread/project.
 - Support English and Bahasa Indonesia, light/dark mode and accessibility.
 
 Deferred: relay connections, a full native editor and dedicated mobile provider
@@ -194,7 +194,7 @@ automatically after an ambiguous response.
 
 Use native photo/camera/document pickers and copy temporary picker assets before
 their grants expire. Upload to the originating host, preserve draft association,
-show progress/cancellation and retry failed transfers without resubmitting a chat.
+show progress/cancellation and retry failed transfers without resubmitting a thread.
 Enforce size/MIME limits on the server; current base64 `attachments.add` is bounded
 by the 16 MB invoke limit, so add chunked/streaming upload capabilities for larger
 files. Keep unsent attachments on the phone until upload is confirmed; define
@@ -264,7 +264,7 @@ keep background SSE streams running.
 7. On reconnect or foreground entry, refetch session, transcript, pending inputs,
    goals and workspace lists for that computer. Discard callbacks from older
    connection generations. Track running/waiting counts and in-app notifications
-   for every computer; hydrate full transcripts when their chats are opened.
+   for every computer; hydrate full transcripts when their threads are opened.
    Refresh lists after mutations; add a bounded foreground refresh for changes
    without a corresponding push event.
 8. Retry transient connection failures with capped backoff and jitter. A rejected
@@ -290,15 +290,15 @@ remote privileges; UI feature limits are not server-enforced authorization scope
 | Phase | Work | Completion gate |
 | --- | --- | --- |
 | 0. Bootstrap and transport spike | Create `@ramu/mobile`, native navigation/theme, mobile scripts and development build configuration. Audit shared imports. Test pairing, invoke and authenticated SSE against a simulated provider. | Physical iOS and Android devices pair and stream output; desktop build still works with the hoisted workspace. |
-| 1. Computers and workspace | Secure token storage, concurrent per-computer connections, workspace switching, compatibility checks, status/count indicators, notifications, project/task/chat lists and settings. | All saved computers connect independently; switching preserves connections without mixing state; notifications open the correct host/chat; revoked devices stop retrying. |
-| 2. Chat companion | Virtualized transcript, tool cards, composer, local drafts, provider/model selection, chat creation, queue/steer, interrupt/stop and pending-input forms. | A complete agent interaction works on both platforms, including approval, question, disconnect and recovery. |
+| 1. Computers and workspace | Secure token storage, concurrent per-computer connections, workspace switching, compatibility checks, status/count indicators, notifications, project/task/thread lists and settings. | All saved computers connect independently; switching preserves connections without mixing state; notifications open the correct host/thread; revoked devices stop retrying. |
+| 2. Thread companion | Virtualized transcript, tool cards, composer, local drafts, provider/model selection, thread creation, queue/steer, interrupt/stop and pending-input forms. | A complete agent interaction works on both platforms, including approval, question, disconnect and recovery. |
 | 3. Host workspace and inputs | Remote folder APIs, repository creation/init/clone, per-computer provider usage, attachments, QR pairing and complete desktop input parity. | Both platforms create a repo, upload an attachment and exercise the input checklist against the correct host. |
 | 4. Terminals, Git and automation | PTY attach/recovery, toolbar/gestures, goals, reviews, Git/undo, authorized network commands and schedule workflows. | TUI/input tests pass; destructive actions reject stale previews; network/schedule changes execute and report host state. |
 | 5. Background push | Push service, per-host registration/revocation and notification routing, independent of relay infrastructure. | Suspended-phone alerts from all paired hosts route correctly; revoked registrations are removed; foreground alerts are deduplicated. |
-| 6. Beta hardening | Accessibility, localization, long-chat/terminal performance, lifecycle tests, sanitized diagnostics, CI and preview builds. | TestFlight and Android internal builds pass the expanded acceptance checklist below. |
+| 6. Beta hardening | Accessibility, localization, long-thread/terminal performance, lifecycle tests, sanitized diagnostics, CI and preview builds. | TestFlight and Android internal builds pass the expanded acceptance checklist below. |
 
 Phase 0 is the first implementation task. If native SSE is unreliable, resolve the
-transport before building chat screens. Any protocol extension must remain
+transport before building thread screens. Any protocol extension must remain
 compatible with existing desktop clients and advertise new capabilities.
 
 Add `dev:mobile`, `mobile:ios` and `mobile:android` scripts without changing the
@@ -321,7 +321,7 @@ platforms, including physical devices for network and lifecycle behavior.
 - Switch computers during hydration and message streaming without cross-host data.
 - Connect at least two hosts concurrently. Keep receiving events, status/count
   updates and notifications from the hidden host while viewing the other; opening
-  a notification selects its host/chat without reconnecting either host.
+  a notification selects its host/thread without reconnecting either host.
 - Disconnect or revoke one host while another streams; only the affected host
   changes connection state. Forget one host without disrupting the others.
 - Lose connectivity during a response; recover the persisted transcript without

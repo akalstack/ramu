@@ -88,7 +88,7 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
       .find((r) => r.id === repoId)?.name ?? repoId
   const choices = useMemo(() => {
     const commands: Choice[] = [
-      { id: 'new', label: '/new', description: t('Start a new chat'), kind: 'Command', action: () => ws.newTask() },
+      { id: 'new', label: '/new', description: t('Start a new thread'), kind: 'Command', action: () => ws.newTask() },
       {
         id: 'goal',
         label: '/goal',
@@ -138,13 +138,13 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
       {
         id: 'changes',
         label: '/changes',
-        description: t("Open the chat's changed files"),
+        description: t("Open the thread's changed files"),
         kind: 'Command',
         action: () => {
           void invoke('reviews.list').then((reviews) => {
             const review = reviews.find((r) => r.taskId === scope)
             if (review) openReview(ws, { id: review.id, taskId: review.taskId })
-            else notifyError('This chat has no recorded file changes yet.', 'Changes')
+            else notifyError('This thread has no recorded file changes yet.', 'Changes')
           })
         },
       },
@@ -169,7 +169,7 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
               label: '/remember',
               description: t('Save something to shared memory'),
               kind: 'Command' as const,
-              insertion: 'Remember this for future chats: ',
+              insertion: 'Remember this for future threads: ',
             },
             {
               id: 'forget',
@@ -195,7 +195,7 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
             {
               id: 'learn',
               label: '/learn',
-              description: t('Review recent chats for lessons and skills now'),
+              description: t('Review recent threads for lessons and skills now'),
               kind: 'Command' as const,
               action: () => {
                 void invoke('learning.run').catch((e) => notifyError(errorText(e), 'Learning'))
@@ -210,7 +210,7 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
             {
               id: 'aside',
               label: '/aside',
-              description: t('Ask a side question without interrupting the chat'),
+              description: t('Ask a side question without interrupting the thread'),
               kind: 'Command' as const,
               insertion: '/aside ',
             },

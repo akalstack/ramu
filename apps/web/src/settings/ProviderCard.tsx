@@ -155,7 +155,7 @@ export function ProviderCard({
           {accounts && (
             <p className="muted text-muted-foreground small text-caption">
               {t(
-                'New chats use the selected account after saving; existing chats keep theirs. When the account a chat is using reaches its limit, it continues on the next enabled account before switching models.',
+                'New threads use the selected account after saving; existing threads keep theirs. When the account a thread is using reaches its limit, it continues on the next enabled account before switching models.',
               )}
             </p>
           )}
@@ -210,7 +210,7 @@ export function ProviderCard({
               <span className="small text-caption">
                 {t(provider === 'antigravity' ? 'Auto-update runtime' : 'Auto-update CLI')}
                 <span className="muted text-muted-foreground block block small text-caption">
-                  {t('Updates apply to new provider processes. Running chats stay connected.')}
+                  {t('Updates apply to new provider processes. Running threads stay connected.')}
                 </span>
               </span>
               <Switch

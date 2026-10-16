@@ -272,7 +272,7 @@ export class AgentService {
 
   private runnerFactory(provider: AgentProvider): AgentRunnerFactory {
     const factory = this.runners[provider]
-    if (!factory) throw new Error(`${provider} has no chat runner`)
+    if (!factory) throw new Error(`${provider} has no thread runner`)
     return factory
   }
 
@@ -563,11 +563,11 @@ export class AgentService {
    */
   async rewind(id: string, userSeq: number): Promise<void> {
     const s = this.get(id)
-    if (s.parentId) throw new Error('Helper chats cannot be rewound. Edit a message in the main chat.')
+    if (s.parentId) throw new Error('Helper threads cannot be rewound. Edit a message in the main thread.')
     const row = this.db.prepare('SELECT event FROM agent_events WHERE session_id = ? AND seq = ?').get(id, userSeq) as
       { event: string } | undefined
     const event = row ? (JSON.parse(row.event) as AgentEvent) : null
-    if (event?.kind !== 'user' || event.agentId) throw new Error('That message is no longer in this chat.')
+    if (event?.kind !== 'user' || event.agentId) throw new Error('That message is no longer in this thread.')
     await this.stopAndWait(id)
     this.db.exec('BEGIN')
     try {

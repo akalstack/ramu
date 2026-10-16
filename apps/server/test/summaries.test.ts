@@ -158,7 +158,7 @@ describe('change log', () => {
     )
   })
 
-  it('separates review chat edits from learning and tells cleanup from consolidation', () => {
+  it('separates review thread edits from learning and tells cleanup from consolidation', () => {
     const a = memory.save(note('Reviewed note'), agent).memory
     memory.save(note('Reviewed note', 'Rewritten after discussion'), agent, a.id, `Clearer${REVIEW_SUFFIX}`)
     learning.write(skillOf('rev'))
@@ -303,7 +303,7 @@ describe('running', () => {
     expect(service.snapshot()).toMatchObject({ error: 'provider down', summaries: [], lastRunAt: start })
   })
 
-  it('manual runs wait for foreground chats', async () => {
+  it('manual runs wait for foreground threads', async () => {
     workspace.setAppState('summaries-last-run-at', start)
     memory.save(note('Prefer tabs'), agent)
     db.exec(
@@ -388,7 +388,7 @@ describe('scheduling', () => {
     expect(analyze).toHaveBeenCalledTimes(1)
   })
 
-  it('stays quiet while chats are running or learning is busy', async () => {
+  it('stays quiet while threads are running or learning is busy', async () => {
     workspace.setAppState('summaries-last-run-at', Date.now() - 8 * DAY)
     memory.save(note('Prefer tabs'), agent)
     db.exec(
@@ -412,7 +412,7 @@ describe('scheduling', () => {
 })
 
 describe('discussing a summary', () => {
-  it('starts a regular no-project chat in the most restrictive access mode, seeded and linked back', async () => {
+  it('starts a regular no-project thread in the most restrictive access mode, seeded and linked back', async () => {
     workspace.setAppState('summaries-last-run-at', start)
     memory.save(note('Prefer tabs'), agent)
     const { id } = (await service.run(true)) as { id: string }
@@ -441,7 +441,7 @@ describe('discussing a summary', () => {
     expect(workspace.listTasks().filter((entry) => entry.kind === 'library-review')).toHaveLength(2)
   })
 
-  it('removes the chat again when it cannot start, and refuses an empty message', async () => {
+  it('removes the thread again when it cannot start, and refuses an empty message', async () => {
     workspace.setAppState('summaries-last-run-at', start)
     memory.save(note('Prefer tabs'), agent)
     const { id } = (await service.run(true)) as { id: string }
@@ -475,7 +475,7 @@ describe('discussing a summary', () => {
   })
 })
 
-describe('review chat tools', () => {
+describe('review thread tools', () => {
   type Handler = (args: Record<string, unknown>) => { isError?: boolean; content: { text: string }[] }
   let tools: Map<string, Handler>
   let installedPath: string

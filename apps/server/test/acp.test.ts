@@ -372,7 +372,7 @@ it('resumes with session/resume when the runtime offers it, so no history is rep
   expect(log().map((m) => m.method)).toContain('session/resume')
   expect(log().map((m) => m.method)).not.toContain('session/load')
 })
-it('reports a resume the runtime cannot do as recoverable, so the chat can continue from its transcript', async () => {
+it('reports a resume the runtime cannot do as recoverable, so the thread can continue from its transcript', async () => {
   vi.stubEnv('RAMU_NO_RESUME', '1')
   await expect(start('hello', 'cursor', 'full', 'old')).rejects.toBeInstanceOf(AcpResumeUnavailable)
   await runner?.stop()

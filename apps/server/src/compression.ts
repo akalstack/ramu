@@ -36,7 +36,7 @@ export class CompressionService {
     const row = this.db
       .prepare('SELECT content FROM tool_payloads WHERE id = ? AND session_id = ?')
       .get(id, sessionId) as { content: string } | undefined
-    if (!row) throw new Error('Unknown tool output for this chat')
+    if (!row) throw new Error('Unknown tool output for this thread')
     return {
       content: row.content.slice(offset, offset + limit),
       offset,
@@ -61,7 +61,7 @@ export class CompressionService {
       'tool_result_read',
       {
         description:
-          'Read an exact slice of a previously compacted Ramu tool result in this chat. Offsets and limits are characters.',
+          'Read an exact slice of a previously compacted Ramu tool result in this thread. Offsets and limits are characters.',
         inputSchema: {
           resultId: z.string().max(100),
           offset: z.number().int().min(0).default(0),

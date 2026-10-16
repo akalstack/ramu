@@ -67,7 +67,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         context?: FileContext[],
       ) => {
         if (taskId.startsWith('project:') || taskId.startsWith('worktree:'))
-          throw new Error('Start a chat to run the agent.')
+          throw new Error('Start a thread to run the agent.')
         if (settings) await agents.validateSettings(settings)
         prompt = await withContext(workspace, taskId, prompt, context)
         const scope = workspace.agentScope(taskId)

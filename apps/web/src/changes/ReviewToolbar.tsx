@@ -96,8 +96,8 @@ export function ReviewToolbar({
           variant="ghost"
           size="icon-xs"
           className={ICON_BUTTON_CLASS}
-          aria-label={t('Open chat')}
-          title={t('Open chat')}
+          aria-label={t('Open thread')}
+          title={t('Open thread')}
           onClick={onOpenChat}
         >
           <MessageSquare size={14} />

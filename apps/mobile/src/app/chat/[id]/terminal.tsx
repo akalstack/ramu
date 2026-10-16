@@ -11,7 +11,7 @@ export default function ChatTerminal() {
   if (!chat?.taskId)
     return (
       <Screen>
-        <Header title="Chat not found" />
+        <Header title="Thread not found" />
       </Screen>
     )
   return (

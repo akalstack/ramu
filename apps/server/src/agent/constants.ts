@@ -9,4 +9,4 @@ export const ASK_WAIT_MS = 10 * 60_000
 export const WRITING_STATES: AgentSessionState[] = ['starting', 'running', 'needs-input']
 
 /** Cursor and Antigravity cannot have their own sub-agent tool switched off, so the model is told not to use it. */
-export const NATIVE_SUBAGENT_PREAMBLE = `Sub-agents run through Ramu in this chat. Do not use your built-in sub-agent, Task or delegation tools. To delegate work, call the ramu_agent tool with a description and prompt instead; it can run the helper on a different provider or model and tracks it for the user.`
+export const NATIVE_SUBAGENT_PREAMBLE = `Sub-agents run through Ramu in this thread. Do not use your built-in sub-agent, Task or delegation tools. To delegate work, call the ramu_agent tool with a description and prompt instead; it can run the helper on a different provider or model and tracks it for the user.`

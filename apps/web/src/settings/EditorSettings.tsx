@@ -51,7 +51,7 @@ export function EditorSettings({ draft, onChange, busy }: DraftProps) {
         />
       </SettingsRow>
       <p className="muted text-muted-foreground small text-caption">
-        {t('Files and terminals are shared by chats in the same checkout. Isolated worktrees keep separate state.')}
+        {t('Files and terminals are shared by threads in the same checkout. Isolated worktrees keep separate state.')}
       </p>
     </div>
   )

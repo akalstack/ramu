@@ -23,7 +23,7 @@ let proposal
 let note
 
 ramu.test('response style and tool output compression persist independently', async () => {
-  await openSettings(ramu, 'Chats')
+  await openSettings(ramu, 'Threads')
   await select(ramu, 'Response style', 'ADHD-friendly')
   await select(ramu, 'Tool output compression', 'Aggressive')
   await ramu.shot('response-styles')
@@ -76,7 +76,7 @@ ramu.test('a proposal can be reviewed, applied and pinned as a managed skill', a
   )
   assert.ok(
     (await ramu.api('skills.list', chat.task.id)).some((entry) => entry.name === skill.name),
-    'managed skills reach the chat skill catalog',
+    'managed skills reach the thread skill catalog',
   )
 })
 
@@ -112,14 +112,14 @@ ramu.test('memory history restores an earlier revision', async () => {
   await page.keyboard.press('Escape')
 })
 
-ramu.test('the saved checkpoint opens from its chat', async () => {
+ramu.test('the saved checkpoint opens from its thread', async () => {
   const { page } = ramu
   await showChat(ramu, chat)
   await page.getByRole('button', { name: 'Session checkpoint', exact: true }).click()
   const dialog = page
     .getByRole('alertdialog')
     .filter({ has: page.getByRole('heading', { name: 'Session checkpoint', exact: true }) })
-  await dialog.getByText('Progress for this chat only.', { exact: false }).waitFor()
+  await dialog.getByText('Progress for this thread only.', { exact: false }).waitFor()
   await dialog.getByText('no deployment', { exact: false }).waitFor()
   await ramu.shot('chat-checkpoint')
   await dialog.getByRole('button', { name: 'Done', exact: true }).click()

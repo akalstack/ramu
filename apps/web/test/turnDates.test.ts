@@ -11,7 +11,7 @@ it('marks a turn that starts a new day and none that follow closely', () => {
   expect(turnDatesOf(turns)).toEqual([start, undefined, start + DAY])
 })
 
-it('reads the date of the drawn turn, not of the turn at the same position in the whole chat', () => {
+it('reads the date of the drawn turn, not of the turn at the same position in the whole thread', () => {
   const start = new Date(2026, 0, 10, 9, 0).getTime()
   const turns = [turn(0, start), turn(1, start + DAY), turn(2, start + DAY + 60_000), turn(3, start + 2 * DAY)]
   const dates = turnDatesOf(turns)

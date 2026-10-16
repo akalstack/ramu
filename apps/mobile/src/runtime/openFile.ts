@@ -39,7 +39,7 @@ export function useOpenFile(chat: Pick<Chat, 'id' | 'computerId' | 'taskId'> | u
         : href
       const file = await store.invoke(chat.computerId, 'files.resolveLink', chat.taskId, target)
       if (!file)
-        throw new Error('This file was not found in this chat’s folders, or the path matches more than one file.')
+        throw new Error('This file was not found in this thread’s folders, or the path matches more than one file.')
       open(file.repoId, file.path, { line: file.line })
     } catch (error) {
       Alert.alert('Could not open file', error instanceof Error ? error.message : String(error))

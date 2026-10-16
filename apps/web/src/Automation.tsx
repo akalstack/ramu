@@ -252,7 +252,7 @@ export function SchedulesPage({
                   aria-label={t('Delete {0}', { '0': s.name })}
                   disabled={busy}
                   onClick={() => {
-                    if (confirm(t('Delete “{name}”? Its run chats will remain.', { name: s.name })))
+                    if (confirm(t('Delete “{name}”? Its run threads will remain.', { name: s.name })))
                       void act(() => invoke('schedules.delete', s.id))
                   }}
                 >
@@ -279,7 +279,7 @@ export function SchedulesPage({
                   className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption"
                   onClick={() => ws.openTask(s.sourceTaskId!)}
                 >
-                  {t('Open originating chat')}
+                  {t('Open originating thread')}
                 </Button>
               )}
               {runs.some((r) => r.scheduleId === s.id) && (
@@ -315,7 +315,7 @@ export function SchedulesPage({
                             className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption"
                             onClick={() => void openRun(r)}
                           >
-                            {t('Open chat')}
+                            {t('Open thread')}
                           </Button>
                         )}
                       </div>
@@ -668,7 +668,7 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
         <span>
           <strong>{t('Background service')}</strong>
           <span className="muted text-muted-foreground block block small text-caption">
-            {t('Chats and schedules keep running when Ramu closes. The computer must stay awake.')}
+            {t('Threads and schedules keep running when Ramu closes. The computer must stay awake.')}
           </span>
           <span className="muted text-muted-foreground block block small text-caption">
             {connected ? t('Running · PID {0}', { '0': status?.pid ?? '…' }) : t('Stopped')}

@@ -67,7 +67,7 @@ export function runMessage(
     case 'skipped':
       return translate('Nothing new since {0}', { 0: formatDate(result.since) })
     case 'busy':
-      return translate('Ramu is busy right now. Try again when your chats have finished.')
+      return translate('Ramu is busy right now. Try again when your threads have finished.')
     case 'off':
       return translate('Turn summaries on first.')
     case 'created':

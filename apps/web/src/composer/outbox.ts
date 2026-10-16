@@ -48,7 +48,7 @@ export function createOutbox({
         )
         .map((item) =>
           item.state === 'sending'
-            ? { ...item, state: 'failed', error: 'The app closed while sending. Check the chat before retrying.' }
+            ? { ...item, state: 'failed', error: 'The app closed while sending. Check the thread before retrying.' }
             : item,
         )
     } catch {

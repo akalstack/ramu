@@ -34,7 +34,7 @@ On-demand, never part of CI or `pnpm test:e2e`. They use the same launcher and r
 
 | Name | What it does |
 | --- | --- |
-| `fps` | Frame times for pane drags, tool, sidebar and terminal toggles and window resizes on a long chat. Set `RAMU_FPS_BUDGET_MS` to fail when a p95 exceeds it. Run headed (`RAMU_E2E_HEADED=1`) for representative numbers. |
+| `fps` | Frame times for pane drags, tool, sidebar and terminal toggles and window resizes on a long thread. Set `RAMU_FPS_BUDGET_MS` to fail when a p95 exceeds it. Run headed (`RAMU_E2E_HEADED=1`) for representative numbers. |
 | `rendering` | A 5,000-file review, its file tree and a 500-match search mount a bounded number of rows and diff editors. |
 | `remote-scale` | Six paired computers behind loopback proxies: only four clean workspace views stay warm; dirty editors, terminals and open settings are pinned. |
 | `chaos` | Hostile input (`chaos-payloads.mjs`) against every text surface and the IPC layer. Each surface records findings instead of stopping; `findings.json` is written to `e2e/output/chaos`. |

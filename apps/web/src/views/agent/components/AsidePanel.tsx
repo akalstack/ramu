@@ -171,7 +171,7 @@ export function AsidePanel({
               {translate('New aside')}
             </span>
             <span className="muted text-muted-foreground small text-caption">
-              {translate('Ask about the whole chat without interrupting it.')}
+              {translate('Ask about the whole thread without interrupting it.')}
             </span>
           </Button>
           {asides.map((entry) => (
@@ -182,7 +182,7 @@ export function AsidePanel({
               className="bg-fill hover:bg-fill-hover aside-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border-color:var(--line)] flex flex-col items-start justify-start gap-0.5 h-auto p-[8px_10px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised text-left whitespace-normal"
               onClick={() => onOpen({ id: entry.id, quote: entry.quote, from: entry.quoteFrom })}
             >
-              <span className={ASIDE_ROW_QUOTE_CLASS}>{firstLine(entry.quote) || translate('Whole chat')}</span>
+              <span className={ASIDE_ROW_QUOTE_CLASS}>{firstLine(entry.quote) || translate('Whole thread')}</span>
               <span className="muted text-muted-foreground small text-caption">
                 {firstLine(entry.messages[0]?.text ?? '')}
               </span>
@@ -195,7 +195,7 @@ export function AsidePanel({
             {quote && (
               <blockquote className="aside-quote m-0 p-[8px_12px] [border-left:2px_solid_var(--line-strong)] text-soft text-control leading-[1.5] whitespace-pre-wrap [overflow-wrap:anywhere] max-h-[160px] overflow-auto">
                 <span className={PANEL_LABEL_CLASS}>
-                  {from === 'user' ? translate('You wrote') : translate('From the chat')}
+                  {from === 'user' ? translate('You wrote') : translate('From the thread')}
                 </span>
                 {quote}
               </blockquote>
@@ -256,7 +256,7 @@ export function AsidePanel({
             )}
             {!aside && (
               <p className="muted text-muted-foreground small text-caption">
-                {translate('Ask without interrupting the chat. Replies stay in this aside.')}
+                {translate('Ask without interrupting the thread. Replies stay in this aside.')}
               </p>
             )}
           </div>

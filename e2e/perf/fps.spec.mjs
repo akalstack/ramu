@@ -86,15 +86,14 @@ async function toggle(button, times = 2) {
 const separator = (name, scope = page) => scope.getByRole('separator', { name, exact: true })
 const sidebarButton = (name) => page.getByRole('button', { name, exact: true })
 
-ramu.test('a long chat renders and the window is a reproducible size', async () => {
+ramu.test('a long thread renders and the window is a reproducible size', async () => {
   await ramu.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1440, 900))
   const { project } = await ramu.api('projects.addFolder', ramu.repos.project)
   const task = await ramu.api('tasks.create', { projectId: project.id, title: 'Frame probe', mode: 'current' })
   await ramu.api('tasks.setup', task.id)
   const session = await ramu.api('agent.start', task.id, 'Reply with a short greeting.', fakeAgent.claude)
-  const idle = (message) =>
-    ramu.until(async () => (await ramu.api('agent.get', session.id)).state === 'idle', message)
-  await idle('the chat never became idle')
+  const idle = (message) => ramu.until(async () => (await ramu.api('agent.get', session.id)).state === 'idle', message)
+  await idle('the thread never became idle')
   for (let i = 0; i < 24; i++) {
     await ramu.api(
       'agent.send',
@@ -126,7 +125,7 @@ ramu.test('editor splitter and window resize', async () => {
   await tools.getByRole('button', { name: 'review.ts', exact: true }).click()
   await page.locator('.editor-area .view:visible .monaco-editor').first().waitFor()
   await ramu.sleep(500)
-  await sample('chat/editor splitter drag', () => dragAndBack(separator('Resize chat pane', pane), 150, 0))
+  await sample('thread/editor splitter drag', () => dragAndBack(separator('Resize thread pane', pane), 150, 0))
   const resize = (width) =>
     ramu.app.evaluate(({ BrowserWindow }, width) => BrowserWindow.getAllWindows()[0].setSize(width, 900), width)
   await sample('window resize (editor open)', async () => {
@@ -148,13 +147,19 @@ ramu.test('terminal open, resize and close keep the tools width', async () => {
     await terminal.click()
     await ramu.sleep(700)
   })
-  assert.ok(Math.abs((await tools.boundingBox()).width - toolsWidth) < 1, 'opening the terminal changed the tools width')
+  assert.ok(
+    Math.abs((await tools.boundingBox()).width - toolsWidth) < 1,
+    'opening the terminal changed the tools width',
+  )
   await sample('terminal resize drag', () => dragAndBack(separator('Resize terminal panel', pane), 0, -120))
   await sample('terminal close', async () => {
     await terminal.click()
     await ramu.sleep(700)
   })
-  assert.ok(Math.abs((await tools.boundingBox()).width - toolsWidth) < 1, 'closing the terminal changed the tools width')
+  assert.ok(
+    Math.abs((await tools.boundingBox()).width - toolsWidth) < 1,
+    'closing the terminal changed the tools width',
+  )
 })
 
 ramu.test('the outer tools divider with a right-docked terminal', async () => {

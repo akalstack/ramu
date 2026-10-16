@@ -14,7 +14,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-describe('chat attachments', () => {
+describe('thread attachments', () => {
   it('persists copies with safe names and resolves them after restarting', () => {
     const { store, root } = setup()
     const file = store.add('../../metadata.json', Buffer.from('original file contents'))

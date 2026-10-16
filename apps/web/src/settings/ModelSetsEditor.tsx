@@ -73,7 +73,7 @@ export function ModelSetsEditor({
         <div className="settings-intro">
           <h4>{t('Model sets')}</h4>
           <p className="muted text-muted-foreground">
-            {t('Create model and effort presets for the chat selection bar.')}
+            {t('Create model and effort presets for the thread selection bar.')}
           </p>
         </div>
         <label>

@@ -52,7 +52,7 @@ ramu.test('Explorer opens previews and the palette keeps them open', async () =>
   check(true, 'Command palette file selection promotes a preview to a kept-open tab')
 })
 
-ramu.test('unsaved editor buffers are sent with the chat without saving', async () => {
+ramu.test('unsaved editor buffers are sent with the thread without saving', async () => {
   await page
     .locator('.explorer-panel')
     .getByRole('button', { name: /notes.md/ })
@@ -64,7 +64,7 @@ ramu.test('unsaved editor buffers are sent with the chat without saving', async 
   await page.keyboard.insertText('Unsaved buffer context')
   await editorLines.getByText('Unsaved buffer context', { exact: true }).waitFor()
   await page.locator('[data-composer-input]:visible').first().fill('Summarize the open file')
-  await page.getByRole('button', { name: 'Start chat', exact: true }).click()
+  await page.getByRole('button', { name: 'Start thread', exact: true }).click()
   await page.locator('.agent-view:visible[data-state="idle"] .msg.assistant').last().waitFor()
   const [chat] = (await api('tasks.list')).filter((task) => task.projectId !== 'no-project')
   const [session] = await api('agent.list', chat.id)

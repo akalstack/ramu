@@ -4,7 +4,7 @@ import { expect, it } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS, DEFAULT_INTELLIGENCE_PREFERENCES } from '@ramu/shared/types'
 import { intelligenceSchema, responseInstructions } from '../src/intelligence'
 
-it('uses per-chat style over the global default and keeps exact artifacts outside prose shortening', () => {
+it('uses per-thread style over the global default and keeps exact artifacts outside prose shortening', () => {
   const saved = { ...DEFAULT_INTELLIGENCE_PREFERENCES, responseStyle: 'detailed' as const }
   expect(responseInstructions({ ...DEFAULT_AGENT_SETTINGS, responseStyle: 'adhd' }, saved)).toContain('numbered steps')
   expect(responseInstructions({ ...DEFAULT_AGENT_SETTINGS, responseStyle: 'adhd' }, saved)).not.toContain(
@@ -20,7 +20,7 @@ it('uses per-chat style over the global default and keeps exact artifacts outsid
   expect(() => intelligenceSchema.parse({ dailyReviews: 0 })).toThrow()
 })
 
-it('lists managed skills for a new-chat project context before a task exists', () => {
+it('lists managed skills for a new-thread project context before a task exists', () => {
   const dispatcher = createDispatcher({ userData: '/tmp/ramu-style-test', send: () => {}, native: async () => null }, {
     workspace: {
       getAppState: (_key: string, fallback: unknown) => fallback,

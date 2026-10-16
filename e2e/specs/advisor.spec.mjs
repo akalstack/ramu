@@ -59,7 +59,7 @@ ramu.test('the advisor is off until it is enabled in Settings', async () => {
 })
 
 for (const provider of ['claude-code', 'codex']) {
-  ramu.test(`${provider} chats consult a Codex advisor, waiting or in the background`, async () => {
+  ramu.test(`${provider} threads consult a Codex advisor, waiting or in the background`, async () => {
     await ramu.api('settings.app.set', { ...saved, advisor: codexAdvisor })
     const settings = provider === 'codex' ? fakeAgent.codex : fakeAgent.claude
     const waited = await startChat(ramu, {
@@ -101,7 +101,7 @@ for (const provider of ['claude-code', 'codex']) {
   })
 }
 
-ramu.test('chat shows the consultation as one compact row that follows its progress', async () => {
+ramu.test('thread shows the consultation as one compact row that follows its progress', async () => {
   const { page } = ramu
   const { card } = chat
   await showChat(ramu, chat)
@@ -149,7 +149,7 @@ ramu.test('opening the consultation shows its question and answer, and Agents li
   await ramu.shot('panel')
   await page.keyboard.press('Escape')
   await panel.waitFor({ state: 'detached' })
-  ramu.check(true, 'the advisor panel reads like a chat')
+  ramu.check(true, 'the advisor panel reads like a thread')
 })
 
 ramu.test('advisor, delivered advice and goal rows share one compact style', async () => {
@@ -226,12 +226,12 @@ ramu.test(
   },
 )
 
-ramu.test('with the advisor off, chats do not get the tool', async () => {
+ramu.test('with the advisor off, threads do not get the tool', async () => {
   await ramu.api('settings.app.set', { ...saved, advisor: { ...saved.advisor, enabled: false } })
   const { session } = await startChat(ramu, { title: 'Advisor off', prompt: '[advisor] plan the change', state: null })
   await ramu.until(
     async () => ['idle', 'failed'].includes((await ramu.api('agent.get', session.id)).state),
-    'the chat never settled',
+    'the thread never settled',
   )
   assert.ok((await ramu.api('agent.events', session.id)).some((e) => e.kind === 'error' && /advisor/i.test(e.message)))
   ramu.noErrors()

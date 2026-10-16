@@ -86,7 +86,7 @@ export function ProjectsPanel() {
         </>
       )}
       <SectionHead
-        title={recentMode ? t('Recent chats') : t('Projects')}
+        title={recentMode ? t('Recent threads') : t('Projects')}
         open={showProjects}
         onToggle={() => ws.setExpanded('section:projects', !showProjects)}
         controls="projects-list"
@@ -143,7 +143,7 @@ export function ProjectsPanel() {
       {!recentMode && (
         <>
           <SectionHead
-            title={t('Chats')}
+            title={t('Threads')}
             open={showChats}
             onToggle={() => ws.setExpanded('section:chats', !showChats)}
             controls="loose-chats"
@@ -152,7 +152,7 @@ export function ProjectsPanel() {
               variant="ghost"
               size="icon-xs"
               className={ICON_BUTTON_CLASS}
-              aria-label={t('New chat without a project')}
+              aria-label={t('New thread without a project')}
               onClick={() => ws.newTask(NO_PROJECT)}
             >
               <Plus size={14} />
@@ -177,8 +177,8 @@ export function ProjectsPanel() {
               variant="ghost"
               size="icon-xs"
               className={`${ICON_BUTTON_CLASS} opacity-0 [transition:opacity_0.12s] group-hover/head:opacity-100 group-focus-within/head:opacity-100`}
-              aria-label={t('Delete all archived chats')}
-              title={t('Delete all archived chats')}
+              aria-label={t('Delete all archived threads')}
+              title={t('Delete all archived threads')}
               onClick={() => {
                 setClearError(null)
                 setClearingArchived(true)
@@ -189,7 +189,7 @@ export function ProjectsPanel() {
           </SectionHead>
           {showArchived && (
             <div id="archived-chats" className="task-list flex flex-col gap-0.5">
-              {archivedChats.length === 0 && <p className="muted small empty-tasks">{t('No archived chats')}</p>}
+              {archivedChats.length === 0 && <p className="muted small empty-tasks">{t('No archived threads')}</p>}
               {archivedChats.map((task) => (
                 <TaskRow
                   key={task.id}
@@ -203,7 +203,7 @@ export function ProjectsPanel() {
       )}
       {clearingArchived && (
         <Dialog
-          title={t('Delete {0} archived chats?', { '0': archivedChats.length })}
+          title={t('Delete {0} archived threads?', { '0': archivedChats.length })}
           confirmLabel={t('Delete all')}
           danger
           busy={clearBusy}
@@ -230,7 +230,7 @@ export function ProjectsPanel() {
             }
           }}
         >
-          <p>{t("This removes every archived chat and its agent transcripts. This can't be undone.")}</p>
+          <p>{t("This removes every archived thread and its agent transcripts. This can't be undone.")}</p>
           <p className="muted text-muted-foreground">{t('Worktrees and branches are kept.')}</p>
         </Dialog>
       )}

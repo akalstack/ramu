@@ -170,12 +170,12 @@ describe('AgentService', () => {
     expect(steered).toEqual(['change course'])
     svc.stopAll()
   })
-  it('continues an ACP chat from its transcript when the runtime cannot resume the saved session', async () => {
+  it('continues an ACP thread from its transcript when the runtime cannot resume the saved session', async () => {
     const starts: { prompt: string; resume: string | null }[] = []
     const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => ({
       start: async (prompt, resume) => {
         starts.push({ prompt, resume })
-        if (resume) throw new AcpResumeUnavailable('Cursor does not support resuming this session. Start a new chat.')
+        if (resume) throw new AcpResumeUnavailable('Cursor does not support resuming this session. Start a new thread.')
         emit({ kind: 'init', providerSessionId: `native-${starts.length}`, model: 'fake', cwd })
         emit({ kind: 'state', state: 'running' })
         emit({ kind: 'text', text: 'first answer', messageId: 'm1' })
@@ -251,7 +251,7 @@ describe('AgentService', () => {
     expect(starts[2]!.prompt).toContain('remember the word plum')
     expect(starts[2]!.prompt).not.toContain('now say banana')
     expect(starts[2]!.prompt).toContain('say cherry instead')
-    await expect(svc.rewind(chat.id, 999)).rejects.toThrow('no longer in this chat')
+    await expect(svc.rewind(chat.id, 999)).rejects.toThrow('no longer in this thread')
     svc.stopAll()
   })
   it('updates tool descriptions in one durable row and keeps rich results after restart', async () => {
@@ -718,7 +718,7 @@ describe('AgentService', () => {
     }
   })
 
-  it('moves a running Claude command to the background, and refuses when no Claude chat is live', async () => {
+  it('moves a running Claude command to the background, and refuses when no Claude thread is live', async () => {
     const backgroundTasks = vi.fn(async () => true)
     const svc = new AgentService(db, () => {}, ((args: Parameters<QueryFn>[0]) =>
       Object.assign(demoQuery(args), { backgroundTasks })) as QueryFn)
@@ -727,7 +727,7 @@ describe('AgentService', () => {
     expect(backgroundTasks).toHaveBeenCalledWith('toolu_1')
     await until(() => svc.get(s.id).state === 'idle')
     svc.stop(s.id)
-    await expect(svc.backgroundTool(s.id, 'toolu_1')).rejects.toThrow('Only a running Claude chat')
+    await expect(svc.backgroundTool(s.id, 'toolu_1')).rejects.toThrow('Only a running Claude thread')
   })
 
   it('moves a slow foreground command to the background after the threshold, unless it is off or the command has finished', async () => {
@@ -879,7 +879,7 @@ describe('AgentService', () => {
     },
   )
 
-  it('keeps the checkout while a background agent works, without holding back the chat itself', async () => {
+  it('keeps the checkout while a background agent works, without holding back the thread itself', async () => {
     vi.stubEnv('RAMU_FAKE_AGENT_DELAY', '500')
     try {
       const svc = new AgentService(db, () => {}, demoQuery)
@@ -921,7 +921,7 @@ describe('AgentService', () => {
     }
   })
 
-  it('marks sub-agents stopped when their chat is stopped', async () => {
+  it('marks sub-agents stopped when their thread is stopped', async () => {
     vi.stubEnv('RAMU_FAKE_AGENT_DELAY', '5000')
     try {
       const svc = new AgentService(db, () => {}, demoQuery)
@@ -1071,7 +1071,7 @@ describe('Conversation provider settings and handoffs', () => {
     svc.stopAll()
   })
 
-  it('switches providers in the same chat with visible context, scope and access preserved', async () => {
+  it('switches providers in the same thread with visible context, scope and access preserved', async () => {
     const svc = service()
     const s = svc.start('t', scopeOf(cwd, ['/other/repo']), 'Remember the password reset task', full)
     await until(() => svc.get(s.id).state === 'idle')
@@ -1158,7 +1158,7 @@ describe('Conversation provider settings and handoffs', () => {
       svc.stopAll()
     })
 
-    it('does not leave the chat stuck on needs-input after the pending request is cancelled', async () => {
+    it('does not leave the thread stuck on needs-input after the pending request is cancelled', async () => {
       const svc = service()
       const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'auto' })
       await until(() => svc.get(s.id).state === 'needs-input')
@@ -1209,7 +1209,7 @@ describe('Conversation provider settings and handoffs', () => {
       svc.stopAll()
     })
 
-    it('moves a Codex chat from Auto with a pending request to Full access', async () => {
+    it('moves a Codex thread from Auto with a pending request to Full access', async () => {
       const svc = service()
       const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'auto' })
       await until(() => svc.get(s.id).state === 'needs-input')
@@ -1379,7 +1379,7 @@ describe('Conversation provider settings and handoffs', () => {
     restarted.stopAll()
   })
 
-  it('marks the chat as waiting in the chat list until the wait ends', async () => {
+  it('marks the thread as waiting in the thread list until the wait ends', async () => {
     const svc = service()
     const workspace = new Workspace(db, join(tmp, 'worktrees'))
     expect(workspace.getTask('t').waitingUntil).toBeNull()
@@ -1395,7 +1395,7 @@ describe('Conversation provider settings and handoffs', () => {
     svc.stopAll()
   })
 
-  it('stopping a waiting chat cancels the automatic retry', async () => {
+  it('stopping a waiting thread cancels the automatic retry', async () => {
     const svc = service()
     const s = svc.start('t', scopeOf(cwd), 'task [limit claude] [limit codex]', full)
     await until(() => waiting(svc, s.id))
@@ -1462,7 +1462,7 @@ describe('Conversation provider settings and handoffs', () => {
 })
 
 describe('AI commit message drafts', () => {
-  it('uses no Claude tools, denies any attempted tool, and never creates an agent chat', async () => {
+  it('uses no Claude tools, denies any attempted tool, and never creates an agent thread', async () => {
     const calls: Options[] = []
     const svc = service(calls)
     const result = await svc.draftCommit('diff --git a/login.ts b/login.ts\n+fixLogin()', {
@@ -1569,7 +1569,7 @@ describe('busy agent messages', () => {
     }
   }
 
-  it('queues another chat until the previous run snapshot is complete', async () => {
+  it('queues another thread until the previous run snapshot is complete', async () => {
     const { service, session, complete } = setup()
     let release!: () => void
     const capture = new Promise<void>((resolve) => {
@@ -1586,13 +1586,13 @@ describe('busy agent messages', () => {
         if (id === session.id) await capture
       },
     }
-    const second = await service.startReviewed('t2', scopeOf(cwd), 'second chat', {
+    const second = await service.startReviewed('t2', scopeOf(cwd), 'second thread', {
       ...DEFAULT_AGENT_SETTINGS,
       access: 'full' as const,
       provider: 'codex',
     })
     expect(second.state).toBe('idle')
-    expect(service.queued(second.id)[0]?.text).toBe('second chat')
+    expect(service.queued(second.id)[0]?.text).toBe('second thread')
     expect(begin).not.toHaveBeenCalled()
     expect(followup).not.toHaveBeenCalled()
     complete()
@@ -2061,7 +2061,7 @@ describe('switching before a limit', () => {
     svc.stopAll()
   })
 
-  it('does nothing below the threshold or when fallback is off for the chat', async () => {
+  it('does nothing below the threshold or when fallback is off for the thread', async () => {
     const { svc } = withRouting([reading({ usedPercent: 89 })])
     const s = svc.start('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(s.id).state === 'idle')
@@ -2076,7 +2076,7 @@ describe('switching before a limit', () => {
     svc.stopAll()
   })
 
-  it('starts a new chat on the fallback when its provider is nearly out', async () => {
+  it('starts a new thread on the fallback when its provider is nearly out', async () => {
     const { svc } = withRouting([reading({ usedPercent: 96 })])
     const s = await svc.startReviewed('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(s.id).provider === 'codex' && svc.get(s.id).state === 'idle')
@@ -2106,7 +2106,7 @@ describe('switching before a limit', () => {
     svc.stopAll()
   })
 
-  it('honours a hold from the composer: once for a message, or for the chat until it recovers', async () => {
+  it('honours a hold from the composer: once for a message, or for the thread until it recovers', async () => {
     const { svc } = withRouting([reading({ usedPercent: 40 })])
     const s = svc.start('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(s.id).state === 'idle')
@@ -2156,14 +2156,14 @@ describe('switching before a limit', () => {
     svc.stopAll()
   })
 
-  it('starts a new chat on the highest-ranked model with room', async () => {
+  it('starts a new thread on the highest-ranked model with room', async () => {
     const { svc } = withRouting([])
     const s = await svc.startReviewed('t', scopeOf(cwd), 'hello', { ...full, provider: 'codex', model: 'codex-test' })
     await until(() => svc.get(s.id).provider === 'claude-code' && svc.get(s.id).state === 'idle')
     svc.stopAll()
   })
 
-  it('records Codex usage from its runner without putting it in the chat', async () => {
+  it('records Codex usage from its runner without putting it in the thread', async () => {
     const { svc, store } = withRouting([])
     const s = svc.start('t', scopeOf(cwd), 'hello [codex-usage 64]', {
       ...full,
@@ -2233,7 +2233,7 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
-  it('reports a background sub-agent to its chat as a message when it finishes', async () => {
+  it('reports a background sub-agent to its thread as a message when it finishes', async () => {
     const svc = routed()
     const parent = await parentOf(svc)
     const started = await svc.spawnSubagent(parent.id, { description: 'Survey', prompt: 'List', background: true })
@@ -2245,7 +2245,7 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
-  it('lets a running sub-agent note or ask its chat, and the chat or you answer it', async () => {
+  it('lets a running sub-agent note or ask its thread, and the thread or you answer it', async () => {
     const svc = routed()
     const parent = await parentOf(svc, 'edits')
     const started = await svc.spawnSubagent(
@@ -2291,7 +2291,7 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
-  it("hands a foreground sub-agent's question back as its call result so the blocked chat can answer", async () => {
+  it("hands a foreground sub-agent's question back as its call result so the blocked thread can answer", async () => {
     const svc = routed()
     const parent = await parentOf(svc, 'edits')
     const call = svc.spawnSubagent(parent.id, { description: 'Edit', prompt: 'Change it' }, undefined, {
@@ -2309,7 +2309,7 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
-  it("shows a sub-agent's approvals in the chat and sends the answer to it; messages and Stop go straight to it", async () => {
+  it("shows a sub-agent's approvals in the thread and sends the answer to it; messages and Stop go straight to it", async () => {
     const svc = routed()
     const parent = await parentOf(svc, 'edits')
     const started = await svc.spawnSubagent(
@@ -2339,7 +2339,7 @@ describe('sub-agents Ramu runs', () => {
     svc.stopAll()
   })
 
-  it('stops its sub-agents with the chat, and caps how many run at once', async () => {
+  it('stops its sub-agents with the thread, and caps how many run at once', async () => {
     const svc = routed({ maxConcurrent: 1 })
     const parent = await parentOf(svc, 'edits')
     const first = await svc.spawnSubagent(parent.id, { description: 'One', prompt: 'a', background: true })
@@ -2501,7 +2501,7 @@ describe('context window', () => {
     svc.stopAll()
   })
 
-  it("reports how full Claude's and Codex's context is, without recording it in the chat", async () => {
+  it("reports how full Claude's and Codex's context is, without recording it in the thread", async () => {
     const svc = service()
     const seen: [string, number][] = []
     svc.onContext = (id, context) => seen.push([id, context.percent])
@@ -2522,7 +2522,7 @@ describe('context window', () => {
 })
 
 describe('side questions on a fork', () => {
-  it("asks a throwaway fork of the chat's own session, with no tools, and leaves the chat alone", async () => {
+  it("asks a throwaway fork of the thread's own session, with no tools, and leaves the thread alone", async () => {
     const calls: Options[] = []
     const svc = service(calls)
     const s = svc.start('t', scopeOf(cwd), 'hello', { ...full, model: 'sonnet' })
@@ -2544,7 +2544,7 @@ describe('side questions on a fork', () => {
     expect(svc.get(s.id).state).toBe('idle')
     svc.stopAll()
   })
-  it('has nothing to fork before the chat has a provider session, or for providers that cannot', async () => {
+  it('has nothing to fork before the thread has a provider session, or for providers that cannot', async () => {
     const svc = service()
     const idle = svc.start('t', scopeOf(cwd), 'hello', { ...full, provider: 'opencode', model: 'x' } as never)
     expect(await svc.forkAnswer(idle.id, 'q')).toBeNull()
@@ -2619,7 +2619,7 @@ describe('isolated sub-agents', () => {
   })
 })
 
-describe('chat continuation after restart', () => {
+describe('thread continuation after restart', () => {
   const persist = (id: string, event: AgentEvent) =>
     db
       .prepare(
@@ -2844,7 +2844,7 @@ describe('chat continuation after restart', () => {
     expect(restored.helperHistory).toHaveBeenCalledOnce()
   })
 
-  it('discards an outdated history read when the user resumes the chat during recovery', async () => {
+  it('discards an outdated history read when the user resumes the thread during recovery', async () => {
     const original = new AgentService(db, () => {}, fakeQuery([]))
     const chat = original.start('t', scopeOf(cwd), 'Survey tests', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
     await until(() => original.get(chat.id).state === 'idle')
@@ -2871,7 +2871,7 @@ describe('chat continuation after restart', () => {
     )
     restored.stopAll()
   })
-  it('defaults on and resumes an unfinished Claude chat without duplicating its user message or approvals', async () => {
+  it('defaults on and resumes an unfinished Claude thread without duplicating its user message or approvals', async () => {
     expect(DEFAULT_APP_PREFERENCES.resumeChatsOnRestart).toBe(true)
     const original = service()
     const chat = original.start('t', scopeOf(cwd), 'Finish the original work', {
@@ -2899,7 +2899,7 @@ describe('chat continuation after restart', () => {
     restored.stopAll()
   })
 
-  it('honours the off setting and never starts completed, failed or manually stopped chats', async () => {
+  it('honours the off setting and never starts completed, failed or manually stopped threads', async () => {
     const original = service()
     const chat = original.start('t', scopeOf(cwd), 'pending', { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
     await until(() => original.get(chat.id).state === 'needs-input')
@@ -3011,7 +3011,7 @@ describe('chat continuation after restart', () => {
     restored.stopAll()
   })
 
-  it('starts the next recovering chat only after the shared checkout writer finishes', async () => {
+  it('starts the next recovering thread only after the shared checkout writer finishes', async () => {
     const outputs: ((event: AgentEvent) => void)[] = []
     const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, output) => ({
       start: async () => {
@@ -3344,7 +3344,7 @@ describe('questions while work continues', () => {
     svc.stopAll()
   })
 
-  it('delivers late answers in the same chat after completion', async () => {
+  it('delivers late answers in the same thread after completion', async () => {
     const { svc, start, outputs, starts } = fixture(),
       chat = start()
     const asked = await svc.askQuestion(chat.id, { questions })
@@ -3358,7 +3358,7 @@ describe('questions while work continues', () => {
     svc.stopAll()
   })
 
-  it('delivers late answers after the chat failed or was stopped', async () => {
+  it('delivers late answers after the thread failed or was stopped', async () => {
     const failed = fixture(),
       failedChat = failed.start()
     const failedAsk = await failed.svc.askQuestion(failedChat.id, { questions })
@@ -3437,7 +3437,7 @@ describe('questions while work continues', () => {
     expect(svc.get(chat.id).state).toBe('stopped')
   })
 
-  it('keeps a late answer queued while another chat owns the shared checkout', async () => {
+  it('keeps a late answer queued while another thread owns the shared checkout', async () => {
     const { svc, start, outputs, starts } = fixture(),
       chat = start()
     const asked = await svc.askQuestion(chat.id, { questions })
@@ -3491,7 +3491,7 @@ it('allows scoped Claude question tools without extra approval while preserving 
 })
 
 describe('AgentService.searchMessages', () => {
-  it('finds your messages and the agent replies across chats, newest first, as plain one-line excerpts', async () => {
+  it('finds your messages and the agent replies across threads, newest first, as plain one-line excerpts', async () => {
     const svc = new AgentService(db, () => {}, fakeQuery([]))
     const first = svc.start('t', scopeOf(cwd), 'Add a **Password** reset\n- with `tokens`', {
       ...DEFAULT_AGENT_SETTINGS,
@@ -3520,7 +3520,7 @@ describe('AgentService.searchMessages', () => {
   })
 })
 
-it('pins provider accounts for existing chats when the default account changes', async () => {
+it('pins provider accounts for existing threads when the default account changes', async () => {
   const accounts = [
     { id: 'work', name: 'Work' },
     { id: 'personal', name: 'Personal' },
