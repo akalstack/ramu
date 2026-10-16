@@ -630,7 +630,7 @@ async function main() {
         throw new Error('That computer is not connected')
       if (
         typeof operation !== 'string' ||
-        !/^(providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|summaries\.|codex\.hook\.|advisor\.claude$|projects\.list$|diagnostics\.(export|clear)$)/.test(
+        !/^(providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.list$|diagnostics\.(export|clear)$)/.test(
           operation,
         ) ||
         !Array.isArray(parameters)

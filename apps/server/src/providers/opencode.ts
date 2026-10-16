@@ -5,7 +5,6 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { createInterface } from 'node:readline'
 import { pathToFileURL } from 'node:url'
-import { ramuTool } from '@ramu/shared/chat/ramuTools'
 import { OpenCode } from '@opencode/client'
 import type {
   AgentEvent,
@@ -487,17 +486,19 @@ export class OpenCodeSession implements AgentRunner {
       case 'session.execution.interrupted':
         return this.turn?.done({ interrupted: true })
       case 'permission.asked': {
-        // Keep native policy for other tools; Auto trusts only Ramu's configured MCP namespace.
+        // OpenCode --auto approves asks once; explicit denies never reach this event.
+        // Forms/questions remain interactive. Full is a compatibility alias for this provider.
         if (
           this.settings.access === 'full' ||
+          this.settings.access === 'auto' ||
           this.readOnly ||
-          (this.settings.access === 'auto' && !!this.connection && !!ramuTool({ name: d.action ?? '', summary: '' }))
+          this.connection?.restricted
         ) {
           void this.client?.permission
             .reply({
               sessionID: this.sessionId,
               requestID: d.id,
-              decision: this.readOnly ? 'reject' : 'once',
+              decision: this.readOnly || this.connection?.restricted ? 'reject' : 'once',
             } as never)
             .catch(() => {})
           return
@@ -510,7 +511,13 @@ export class OpenCodeSession implements AgentRunner {
           title: d.message || `Allow ${d.action}?`,
           detail: (d.resources ?? []).join('\n'),
           ...(d.resources?.length && !d.resources.includes('*')
-            ? { approvalKey: permissionKey(d.action, d.resources) }
+            ? {
+                approvalKey: permissionKey(d.action, d.resources),
+                approvalCommand:
+                  ['bash', 'Bash', 'shell', 'command'].includes(d.action) && d.resources.length === 1
+                    ? d.resources[0]
+                    : undefined,
+              }
             : {}),
         })
         return this.emit({ kind: 'state', state: 'needs-input' })

@@ -1,4 +1,4 @@
-import { permissionKey, PermissionApprovals } from './permissionApprovals'
+import { permissionKey, PermissionApprovals, commandPatterns } from './permissionApprovals'
 import type { AppPreferences, AgentEvent, AgentSessionState } from '@ramu/shared/types'
 import type { MessageDispatcher } from './messageDispatcher'
 import type { GoalManager } from './goalManager'
@@ -46,13 +46,21 @@ export class SessionRecorder {
       return
     if (recorded.kind === 'permission-request') {
       const pending = this.host.live.get(id)?.pending.get(recorded.requestId)
-      const key =
-        recorded.approvalKey ??
-        (pending?.kind === 'permission' ? permissionKey(recorded.toolName, pending.input) : undefined)
+      const key = recorded.approvalOnceOnly
+        ? undefined
+        : (recorded.approvalKey ??
+          (pending?.kind === 'permission' ? permissionKey(recorded.toolName, pending.input) : undefined))
+      const command =
+        recorded.approvalCommand ??
+        (pending?.kind === 'permission' && recorded.toolName === 'Bash' && typeof pending.input.command === 'string'
+          ? pending.input.command
+          : undefined)
       if (key)
         recorded = {
           ...recorded,
           approvalKey: key,
+          approvalCommand: command,
+          approvalPatterns: [...new Set([...(recorded.approvalPatterns ?? []), ...commandPatterns(command)])],
           approvalSessionId: recorded.approvalSessionId ?? id,
           approvalProvider: recorded.approvalProvider ?? this.host.get(id).provider,
           approvalProjectId:

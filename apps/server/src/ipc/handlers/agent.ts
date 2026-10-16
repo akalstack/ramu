@@ -146,11 +146,12 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         id,
         id,
         z.boolean(),
-        z.string().max(10_000).optional(),
+        z.string().max(10_000).nullish(),
         z.enum(['once', 'project', 'user']).optional(),
+        z.string().max(300).optional(),
       ]),
-      run: (s: string, r: string, allow: boolean, message?: string, scope?: PermissionScope) =>
-        agents.replyPermission(s, r, allow, message, scope),
+      run: (s: string, r: string, allow: boolean, message?: string | null, scope?: PermissionScope, pattern?: string) =>
+        agents.replyPermission(s, r, allow, message ?? undefined, scope, pattern),
     },
     'agent.forgetPermission': {
       args: z.tuple([id, id, z.enum(['project', 'user'])]),

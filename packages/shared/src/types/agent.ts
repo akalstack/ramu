@@ -50,6 +50,20 @@ export type AgentSessionState =
   | 'restored'
 
 export type PermissionScope = 'once' | 'project' | 'user'
+export interface SavedPermissionRule {
+  id: string
+  provider: AgentProvider
+  scope: 'project' | 'user'
+  projectId?: string
+  projectName?: string
+  label: string
+  pattern?: string
+  createdAt: number
+}
+export interface PermissionRemoval {
+  scope: 'user' | 'project' | 'projects' | 'all'
+  projectId?: string
+}
 
 export interface AgentSessionInfo {
   /** Overview-only fields; native helpers remain owned by their parent provider session. */
@@ -227,7 +241,10 @@ type AgentEventBody =
       toolName: string
       title: string
       detail: string
+      approvalOnceOnly?: boolean
       approvalKey?: string
+      approvalCommand?: string
+      approvalPatterns?: string[]
       approvalProjectId?: string
       approvalSessionId?: string
       approvalProvider?: AgentProvider
@@ -256,7 +273,7 @@ type AgentEventBody =
       reason?: string
     }
   | { kind: 'recovery'; state: 'resumed' }
-  | { kind: 'request-resolved'; requestId: string; outcome: string }
+  | { kind: 'request-resolved'; requestId: string; outcome: string; savedApprovalId?: string }
   | { kind: 'result'; isError: boolean; text: string; costUsd: number | null }
   | {
       kind: 'compaction'

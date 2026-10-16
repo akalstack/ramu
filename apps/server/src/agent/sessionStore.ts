@@ -53,7 +53,7 @@ export class SessionStore {
     const rows = this.db
       .prepare(
         `SELECT s.*, ${TITLE_SQL},
-      EXISTS(SELECT 1 FROM agent_events e WHERE e.session_id=s.id AND json_extract(e.event,'$.kind') IN ('question','permission-request','elicitation') AND NOT EXISTS(SELECT 1 FROM agent_events r WHERE r.session_id=s.id AND json_extract(r.event,'$.kind')='request-resolved' AND json_extract(r.event,'$.requestId')=json_extract(e.event,'$.requestId'))) AS pending_input,
+      EXISTS(SELECT 1 FROM agent_events e WHERE e.session_id=s.id AND json_extract(e.event,'$.kind') IN ('question','permission-request','elicitation') AND NOT EXISTS(SELECT 1 FROM agent_events r WHERE r.session_id=s.id AND r.seq > e.seq AND json_extract(r.event,'$.kind')='request-resolved' AND json_extract(r.event,'$.requestId')=json_extract(e.event,'$.requestId'))) AS pending_input,
       (SELECT json_extract(w.event,'$.retryAt') FROM agent_events w WHERE w.session_id=s.id AND json_extract(w.event,'$.kind')='provider-wait' ORDER BY seq DESC LIMIT 1) AS waiting_until
       FROM agent_sessions s ORDER BY created_at DESC`,
       )

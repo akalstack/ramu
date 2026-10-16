@@ -40,6 +40,19 @@ export const registerSettingsHandlers: RegisterHandlers = ({
   }
 
   return {
+    'settings.permissions.clear': {
+      args: z.tuple([
+        z
+          .object({ scope: z.enum(['user', 'project', 'projects', 'all']), projectId: z.string().optional() })
+          .optional(),
+      ]),
+      run: (removal) => agents.clearPermissionApprovals(removal),
+    },
+    'settings.permissions.list': { args: z.tuple([]), run: () => agents.listPermissionApprovals() },
+    'settings.permissions.remove': {
+      args: z.tuple([z.string().max(2000)]),
+      run: (id) => agents.removePermissionApproval(id),
+    },
     'onboarding.get': {
       args: z.tuple([]),
       run: () => ({

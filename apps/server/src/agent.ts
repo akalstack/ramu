@@ -1,5 +1,6 @@
 // Structured agent service: the façade over the collaborators in ./agent/. Each owns one slice of the state (sessions,
 // queue, goals, routing, sub-agents, ...); this class builds them, wires their hosts and exposes the public API.
+import { PermissionApprovals } from './agent/permissionApprovals'
 import { providerBinary } from './providers/providerBinaries'
 import { DEFAULT_RUNNERS, sameRunnerForAll } from './providers/runners'
 import type { AgentRunnerFactory, ProviderRunners } from './agent/agentRunner'
@@ -637,6 +638,18 @@ export class AgentService {
 
   stopAndWait(...args: Parameters<SessionProcess['stopAndWait']>) {
     return this.parts.process.stopAndWait(...args)
+  }
+
+  listPermissionApprovals() {
+    return new PermissionApprovals(this.db).list()
+  }
+
+  removePermissionApproval(id: string): void {
+    new PermissionApprovals(this.db).remove(id)
+  }
+
+  clearPermissionApprovals(removal?: import('@ramu/shared/types').PermissionRemoval): void {
+    new PermissionApprovals(this.db).clear(removal)
   }
 
   forgetPermission(...args: Parameters<UserRequests['forgetPermission']>) {

@@ -3565,7 +3565,8 @@ it('remembers exact Claude approvals for a project and forgets them from the tra
     approvalKey: expect.any(String),
   })
   if (request.kind !== 'permission-request') throw new Error('No permission request')
-  svc.replyPermission(first.id, request.requestId, true, undefined, 'project')
+  expect(() => svc.replyPermission(first.id, request.requestId, true, undefined, 'project', 'git *')).toThrow('offered')
+  svc.replyPermission(first.id, request.requestId, true, undefined, 'project', 'touch *')
   await until(() => svc.get(first.id).state === 'idle')
   expect(svc.events(first.id)).toContainEqual(
     expect.objectContaining({ kind: 'request-resolved', outcome: 'allowed-project' }),
@@ -3602,19 +3603,24 @@ it.each(['codex', 'opencode', 'antigravity', 'cursor'] as const)(
     let next = 0
     const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
       const requestId = `native-${++next}`
+      let invocation = 0
+      const request = async () => {
+        invocation++
+        emit({
+          kind: 'permission-request',
+          requestId,
+          toolName: 'Bash',
+          title: 'Allow command?',
+          detail: `git diff -- file${invocation}`,
+          approvalCommand: `git diff -- file${invocation}`,
+          approvalKey: `native-input-${invocation}`,
+        })
+        emit({ kind: 'state', state: 'needs-input' })
+      }
       return {
-        start: async () => {
-          emit({
-            kind: 'permission-request',
-            requestId,
-            toolName: 'Bash',
-            title: 'Allow command?',
-            detail: 'pwd',
-            approvalKey: 'exact-native-action',
-          })
-          emit({ kind: 'state', state: 'needs-input' })
-        },
-        send: async () => {},
+        start: request,
+        send: request,
+        steer: async () => {},
         interrupt: async () => {},
         stop: async () => {},
         replyQuestion: () => {},
@@ -3629,8 +3635,13 @@ it.each(['codex', 'opencode', 'antigravity', 'cursor'] as const)(
     const settings = { ...DEFAULT_AGENT_SETTINGS, provider }
     const first = svc.start('t', scopeOf(cwd), 'Approve', settings)
     await until(() => svc.get(first.id).state === 'needs-input')
-    svc.replyPermission(first.id, 'native-1', true, undefined, 'user')
+    svc.replyPermission(first.id, 'native-1', true, undefined, 'user', 'git diff *')
     await until(() => svc.get(first.id).state === 'idle')
+    await svc.send(first.id, 'Repeat the same request id')
+    await until(() => svc.get(first.id).state === 'idle')
+    expect(
+      svc.events(first.id).filter((event) => event.kind === 'request-resolved' && event.outcome === 'allowed-user'),
+    ).toHaveLength(2)
     db.exec(
       "INSERT INTO projects (id, name, created_at) VALUES ('other', 'Other', 0); INSERT INTO tasks (id, project_id, title, mode, status, created_at) VALUES ('other-task', 'other', 'Other', 'current', 'idle', 0)",
     )
@@ -3640,6 +3651,11 @@ it.each(['codex', 'opencode', 'antigravity', 'cursor'] as const)(
       expect.objectContaining({ kind: 'request-resolved', outcome: 'allowed-user' }),
     )
     svc.forgetPermission(first.id, 'native-1', 'user')
+    await svc.send(first.id, 'Ask again with the reused request id')
+    await until(() => svc.get(first.id).state === 'needs-input')
+    expect(svc.all().find((session) => session.id === first.id)?.pendingInput).toBe(true)
+    svc.replyPermission(first.id, 'native-1', true)
+    await until(() => svc.get(first.id).state === 'idle')
     const third = svc.start('t2', scopeOf(cwd), 'Ask again', settings)
     await until(() => svc.get(third.id).state === 'needs-input')
     svc.stopAll()

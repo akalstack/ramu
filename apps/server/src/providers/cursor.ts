@@ -122,6 +122,7 @@ export class CursorSession implements AgentRunner {
       model: cursorModel(this.settings.model),
       local: {
         cwd: this.scope.cwd,
+        autoReview: this.settings.access === 'auto' && !this.readOnly && !this.connection?.restricted,
         ...(this.scope.additionalDirs.length ? { dirs: this.scope.additionalDirs } : {}),
         settingSources: ['project', 'user'],
         // Without approvals, only full access may write outside the workspace or use the network.

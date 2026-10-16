@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { PermissionApprovals } from './permissionApprovals'
+import { matchesCommand, PermissionApprovals } from './permissionApprovals'
 import type { AgentEvent, PermissionScope, AppPreferences } from '@ramu/shared/types'
 import {
   answerMessage,
   questionKey,
   questionAnswer,
   questionState,
+  requestOutcomes,
   type QuestionInput,
   type QuestionRequest,
   type QuestionState,
@@ -113,13 +114,12 @@ export class UserRequests {
 
   hasBlockingQuestions(id: string): boolean {
     const events = this.host.events(id)
+    const outcomes = requestOutcomes(events)
     return events.some((e) => {
       if (e.kind !== 'question' && e.kind !== 'permission-request' && e.kind !== 'elicitation') return false
+      if (e.kind === 'permission-request') return !outcomes.has(e.requestId)
       const state = questionState(events, e.requestId)
-      return (
-        !state.outcome &&
-        (e.kind === 'permission-request' || e.kind === 'elicitation' || e.responseMode !== 'message' || state.waiting)
-      )
+      return !state.outcome && (e.kind === 'elicitation' || e.responseMode !== 'message' || state.waiting)
     })
   }
 
@@ -162,20 +162,21 @@ export class UserRequests {
       (request.approvalSessionId && request.approvalSessionId !== id) ||
       this.host.shutdown() ||
       !request.approvalKey ||
-      questionState(this.host.events(id), request.requestId).outcome
+      requestOutcomes(this.host.events(id)).get(request.requestId)
     )
       return
     const session = this.host.get(id)
     if (!['running', 'starting', 'needs-input'].includes(session.state)) return
     const approvals = new PermissionApprovals(this.db)
-    const scope = approvals.match(
+    const rule = approvals.find(
       request.approvalProvider ?? session.provider,
       request.approvalKey,
       approvals.project(session.taskId),
+      request.approvalCommand,
     )
-    if (scope) {
+    if (rule) {
       try {
-        this.replyPermission(id, request.requestId, true, undefined, scope)
+        this.replyPermission(id, request.requestId, true, undefined, rule.scope, rule.pattern)
       } catch {
         /* A provider may withdraw the request before this microtask. */
       }
@@ -188,20 +189,24 @@ export class UserRequests {
     allow: boolean,
     message?: string,
     scope: PermissionScope = 'once',
+    pattern?: string,
   ): void {
     const child = this.childRequests.get(requestId)
-    if (child && child !== id) return this.replyPermission(child, requestId, allow, message, scope)
+    if (child && child !== id) return this.replyPermission(child, requestId, allow, message, scope, pattern)
     const request = this.permissionRequest(id, requestId)
     if (request.approvalSessionId && request.approvalSessionId !== id)
-      return this.replyPermission(request.approvalSessionId, requestId, allow, message, scope)
-    if (questionState(this.host.events(id), requestId).outcome)
+      return this.replyPermission(request.approvalSessionId, requestId, allow, message, scope, pattern)
+    if (requestOutcomes(this.host.events(id)).get(requestId))
       throw new Error('This permission request is already closed.')
     if (scope !== 'once' && (!allow || !request.approvalKey)) throw new Error('This request can only be approved once.')
+    if (pattern && (scope === 'once' || !matchesCommand(pattern, request.approvalCommand)))
+      throw new Error('Choose an offered command pattern.')
     const session = this.host.get(id)
     const approvals = new PermissionApprovals(this.db)
     const project = approvals.project(session.taskId)
     if (scope === 'project' && !project) throw new Error('This thread has no project.')
-    if (this.host.runners.has(id)) this.host.runners.get(id)!.replyPermission(requestId, allow)
+    const runner = this.host.runners.get(id)
+    if (runner) runner.replyPermission(requestId, allow)
     else {
       const pending = this.takePending(id, requestId, 'permission')
       pending.resolve(
@@ -209,15 +214,19 @@ export class UserRequests {
           ? { behavior: 'allow', updatedInput: pending.input }
           : { behavior: 'deny', message: message || 'Denied by the user' },
       )
+      this.host.record(id, { kind: 'request-resolved', requestId, outcome: allow ? 'allowed' : 'denied' })
+      this.afterRequest(id)
     }
-    if (allow && scope !== 'once')
-      approvals.remember(request.approvalProvider ?? session.provider, request.approvalKey!, scope, project)
-    this.host.record(id, {
-      kind: 'request-resolved',
-      requestId,
-      outcome: !allow ? 'denied' : scope === 'once' ? 'allowed' : `allowed-${scope}`,
-    })
-    this.afterRequest(id)
+    if (allow && scope !== 'once') {
+      const savedApprovalId = approvals.remember(
+        request.approvalProvider ?? session.provider,
+        request.approvalKey!,
+        scope,
+        project,
+        { label: pattern ?? `${request.toolName}: ${request.detail.slice(0, 300)}`, pattern },
+      )
+      this.host.record(id, { kind: 'request-resolved', requestId, outcome: `allowed-${scope}`, savedApprovalId })
+    }
   }
 
   forgetPermission(id: string, requestId: string, scope: 'project' | 'user'): void {
@@ -226,17 +235,23 @@ export class UserRequests {
     const request = this.permissionRequest(id, requestId)
     if (request.approvalSessionId && request.approvalSessionId !== id)
       return this.forgetPermission(request.approvalSessionId, requestId, scope)
-    const outcome = questionState(this.host.events(id), requestId).outcome
+    const outcome = requestOutcomes(this.host.events(id)).get(requestId)
     if (!request.approvalKey || outcome !== `allowed-${scope}`)
       throw new Error('This request has no saved approval in that scope.')
     const session = this.host.get(id)
     const approvals = new PermissionApprovals(this.db)
-    approvals.forget(
-      request.approvalProvider ?? session.provider,
-      request.approvalKey,
-      scope,
-      approvals.project(session.taskId),
-    )
+    const resolution = this.host
+      .events(id)
+      .findLast((event) => event.kind === 'request-resolved' && event.requestId === requestId)
+    if (resolution?.kind === 'request-resolved' && resolution.savedApprovalId)
+      approvals.remove(resolution.savedApprovalId)
+    else
+      approvals.forget(
+        request.approvalProvider ?? session.provider,
+        request.approvalKey,
+        scope,
+        approvals.project(session.taskId),
+      )
     this.host.record(id, { kind: 'request-resolved', requestId, outcome: `allowed-${scope}-forgotten` })
   }
 

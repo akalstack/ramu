@@ -5,6 +5,7 @@ import { FallbackSettings } from './FallbackSettings'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
 import { SETTINGS_FORM_CLASS, type DraftSetter } from './constants'
+import { PermissionRules } from './PermissionRules'
 import { ToggleRow } from './ToggleRow'
 
 export function AccessSettings({
@@ -31,6 +32,7 @@ export function AccessSettings({
           onChange={(value) => onChange({ ...draft, defaultAccess: value as AppPreferences['defaultAccess'] })}
         />
       </SettingsRow>
+      <PermissionRules disabled={busy} />
       <SettingsGroupTitle>{t('Provider fallback')}</SettingsGroupTitle>
       <ToggleRow
         draft={draft}

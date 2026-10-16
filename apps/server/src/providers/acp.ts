@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { providerAdapter } from './adapters'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { createInterface } from 'node:readline'
-import { AcpEvents } from './acpEvents'
+import { AcpEvents, nativeShell } from './acpEvents'
 import type {
   AgentEvent,
   AgentModel,
@@ -759,8 +759,8 @@ class AcpSession implements AgentRunner {
         m.method !== 'cursor/create_plan' &&
         (this.settings.access === 'full' ||
           (this.settings.access === 'auto' &&
-            !!this.connection &&
-            isRamuCall(p.toolCall, this.settings.provider as AcpProvider)) ||
+            (this.settings.provider === 'opencode' ||
+              (!!this.connection && isRamuCall(p.toolCall, this.settings.provider as AcpProvider)))) ||
           (this.settings.access === 'edits' && p.toolCall?.kind === 'edit'))
       ) {
         this.replyPermission(id, true)
@@ -775,6 +775,11 @@ class AcpSession implements AgentRunner {
           p.toolCall?.rawInput &&
           Object.keys(p.toolCall.rawInput).length
             ? {
+                approvalCommand: ['execute', 'command', 'Bash', 'bash', 'run_command'].includes(
+                  p.toolCall?._meta?.claudeCode?.toolName || p.toolCall.rawInput?._toolName || p.toolCall?.kind || '',
+                )
+                  ? nativeShell(p.toolCall.rawInput, undefined)?.command
+                  : undefined,
                 approvalKey: permissionKey(
                   p.toolCall?._meta?.claudeCode?.toolName || p.toolCall?.kind || 'Tool',
                   p.toolCall.rawInput,

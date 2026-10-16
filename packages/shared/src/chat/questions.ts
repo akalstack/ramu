@@ -18,6 +18,16 @@ export const questionKey = (question: AgentQuestion): string => question.id ?? q
 export const questionAnswer = (answers: Record<string, string>, key: string): string | undefined =>
   Object.hasOwn(answers, key) ? answers[key] : undefined
 
+/** Native providers may reuse a permission id after restarting their process. */
+export function requestOutcomes(events: AgentEvent[]): Map<string, string> {
+  const outcomes = new Map<string, string>()
+  for (const event of events) {
+    if (event.kind === 'permission-request') outcomes.delete(event.requestId)
+    else if (event.kind === 'request-resolved') outcomes.set(event.requestId, event.outcome)
+  }
+  return outcomes
+}
+
 export function questionState(events: AgentEvent[], requestId: string): QuestionState {
   const state: QuestionState = { answers: Object.create(null), drafts: Object.create(null), waiting: false }
   for (const event of events) {

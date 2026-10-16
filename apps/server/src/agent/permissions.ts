@@ -1,3 +1,4 @@
+import { matchesCommand } from './permissionApprovals'
 import { randomUUID } from 'node:crypto'
 import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentEvent, AgentQuestion, AgentSessionState, AgentSettings } from '@ramu/shared/types'
@@ -17,7 +18,7 @@ export interface PermissionHost {
 
 /** Claude's `canUseTool` hook: auto-allows Ramu's own tools and full access, otherwise asks the user. */
 export function createCanUseTool({ settings, pending, record, setState, restricted }: PermissionHost): CanUseTool {
-  return (toolName, toolInput, { signal, title, decisionReason }) =>
+  return (toolName, toolInput, { signal, title, decisionReason, suggestions, suppressAlwaysAllowRule, blockedPath }) =>
     new Promise<PermissionResult>((resolve) => {
       if (restricted)
         return resolve(
@@ -54,6 +55,25 @@ export function createCanUseTool({ settings, pending, record, setState, restrict
           toolName,
           title: title ?? `Allow ${toolName}?`,
           detail: [decisionReason, summarizeInput(toolInput)].filter(Boolean).join('\n'),
+          approvalOnceOnly: suppressAlwaysAllowRule,
+          approvalPatterns:
+            toolName === 'Bash' && !blockedPath && typeof toolInput.command === 'string'
+              ? [
+                  ...new Set(
+                    (suggestions ?? []).flatMap((update) =>
+                      update.type === 'addRules' && update.behavior === 'allow'
+                        ? update.rules.flatMap((rule) =>
+                            rule.toolName === 'Bash' &&
+                            rule.ruleContent &&
+                            matchesCommand(rule.ruleContent, toolInput.command as string)
+                              ? [rule.ruleContent]
+                              : [],
+                          )
+                        : [],
+                    ),
+                  ),
+                ]
+              : undefined,
         })
       }
       setState('needs-input')

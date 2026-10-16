@@ -16,7 +16,7 @@ function fixture(access: AgentSettings['access'], restricted = false) {
   })
   const call = (name: string, input: Record<string, unknown> = {}) =>
     canUseTool(name, input, { signal: new AbortController().signal, toolUseID: name, requestId: name })
-  return { pending, events, states, call }
+  return { pending, events, states, call, canUseTool }
 }
 
 it('Auto permits direct and discovered Ramu tools without interrupting the turn', async () => {
@@ -70,4 +70,32 @@ it('restricted reviews continue to deny non-Ramu tools even in Auto', async () =
   expect(await call('mcp__external__tool_invoke')).toMatchObject({ behavior: 'deny' })
   expect(await call('mcp__ramu__memory_read')).toMatchObject({ behavior: 'allow' })
   expect(events).toEqual([])
+})
+
+it('uses Claude SDK command suggestions and preserves the native once-only restriction', async () => {
+  const { canUseTool, events, pending } = fixture('edits')
+  const result = canUseTool(
+    'Bash',
+    { command: 'npm run test --watch' },
+    {
+      signal: new AbortController().signal,
+      toolUseID: 'x',
+      requestId: 'x',
+      suppressAlwaysAllowRule: true,
+      suggestions: [
+        {
+          type: 'addRules',
+          behavior: 'allow',
+          destination: 'localSettings',
+          rules: [
+            { toolName: 'Bash', ruleContent: 'npm run test *' },
+            { toolName: 'Bash', ruleContent: 'rm *' },
+          ],
+        },
+      ],
+    },
+  )
+  expect(events[0]).toMatchObject({ approvalOnceOnly: true, approvalPatterns: ['npm run test *'] })
+  ;[...pending.values()][0]!.resolve({ behavior: 'deny', message: 'Declined' })
+  await result
 })

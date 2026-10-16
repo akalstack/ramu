@@ -579,6 +579,7 @@ class CodexSession implements CodexRunner {
           detail: [p.command, p.reason].filter(Boolean).join('\n'),
           ...(p.command
             ? {
+                approvalCommand: typeof p.command === 'string' ? p.command : undefined,
                 approvalKey: permissionKey(
                   'Bash',
                   Object.fromEntries(

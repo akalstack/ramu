@@ -289,6 +289,9 @@ export interface RamuMethods {
   'providers.pickBinary'(): string | null
   'settings.app.snapshot'(): SettingsSnapshot
   'settings.app.patch'(edits: SettingEdit[]): SettingsSnapshot
+  'settings.permissions.clear'(removal?: import('./types').PermissionRemoval): void
+  'settings.permissions.list'(): import('./types').SavedPermissionRule[]
+  'settings.permissions.remove'(id: string): void
   'settings.app.get'(): AppPreferences
   'settings.app.set'(preferences: AppPreferences): void
   'settings.models.set'(preferences: ModelPreferences): void
@@ -488,6 +491,7 @@ export interface RamuMethods {
     allow: boolean,
     message?: string,
     scope?: 'once' | 'project' | 'user',
+    pattern?: string,
   ): void
   'agent.forgetPermission'(sessionId: string, requestId: string, scope: 'project' | 'user'): void
   'agent.replyQuestion'(sessionId: string, requestId: string, answers: Record<string, string>): void

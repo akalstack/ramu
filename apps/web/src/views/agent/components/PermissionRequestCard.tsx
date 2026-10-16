@@ -5,6 +5,7 @@ import { useState } from 'react'
 import type { AgentEvent, PermissionScope } from '@ramu/shared/types'
 import { errorText } from '../../../lib/errors'
 import { invoke } from '../../../ipc'
+import { Dropdown } from '../../../Menu'
 import { Outcome } from './Outcome'
 
 const CARD_CLASS =
@@ -23,13 +24,22 @@ export function PermissionRequestCard({
   outcome: string | undefined
 }) {
   useLanguage()
+  const [pattern, setPattern] = useState(e.approvalPatterns?.[0] ?? 'exact')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const act = async (allow: boolean, scope: PermissionScope = 'once') => {
     setBusy(true)
     setError(null)
     try {
-      await invoke('agent.replyPermission', sessionId, e.requestId, allow, undefined, scope)
+      await invoke(
+        'agent.replyPermission',
+        sessionId,
+        e.requestId,
+        allow,
+        undefined,
+        scope,
+        scope !== 'once' && pattern !== 'exact' ? pattern : undefined,
+      )
     } catch (error) {
       setError(errorText(error))
     } finally {
@@ -57,6 +67,20 @@ export function PermissionRequestCard({
       {e.detail && <pre>{e.detail}</pre>}
       {pending ? (
         <div className="mt-2 space-y-2">
+          {!!e.approvalPatterns?.length && (
+            <div className="flex flex-wrap items-center gap-2 text-caption">
+              <span>{translate('Don’t ask again for')}</span>
+              <Dropdown
+                label={translate('Approval rule')}
+                value={pattern}
+                onChange={setPattern}
+                options={[
+                  { value: 'exact', label: translate('This exact request') },
+                  ...e.approvalPatterns.map((value) => ({ value, label: value })),
+                ]}
+              />
+            </div>
+          )}
           <div className="row flex flex-wrap gap-1.5">
             <Button
               variant="default"
@@ -88,7 +112,7 @@ export function PermissionRequestCard({
           <p className="m-0 text-caption text-muted-foreground">
             {translate(
               e.approvalKey
-                ? 'Project and user approvals remember this exact request.'
+                ? 'Saved approvals apply to the selected rule. Allow once applies only to this request.'
                 : 'Applies to this request only.',
             )}
           </p>
@@ -97,9 +121,20 @@ export function PermissionRequestCard({
         <div className="flex flex-wrap items-center gap-2">
           <Outcome outcome={outcome} />
           {savedScope && (
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => void forget()}>
-              {translate('Forget approval')}
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" disabled={busy} onClick={() => void forget()}>
+                {translate('Forget approval')}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'access' } }))
+                }
+              >
+                {translate('Manage approvals')}
+              </Button>
+            </>
           )}
         </div>
       )}

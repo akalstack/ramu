@@ -566,3 +566,23 @@ it('does not trust a Ramu-looking call without the app-owned server connection',
   runner!.replyPermission('900', false)
   await until(() => events.some((event) => event.kind === 'result'))
 })
+
+it.each(['command', 'CommandLine'])('exposes the actual %s command for reusable approvals', async (field) => {
+  vi.stubEnv('RAMU_PERMISSION_CALL', JSON.stringify({ kind: 'execute', rawInput: { [field]: 'git diff --stat' } }))
+  await start('tool', 'antigravity', 'auto')
+  await until(() => events.some((event) => event.kind === 'permission-request'))
+  expect(events.find((event) => event.kind === 'permission-request')).toMatchObject({
+    approvalCommand: 'git diff --stat',
+    approvalKey: expect.any(String),
+  })
+  runner!.replyPermission('900', false)
+  await until(() => events.some((event) => event.kind === 'result'))
+})
+
+it('uses OpenCode Auto semantics for legacy ACP command requests too', async () => {
+  vi.stubEnv('RAMU_PERMISSION_CALL', JSON.stringify({ kind: 'execute', rawInput: { command: 'git diff' } }))
+  await start('tool', 'opencode', 'auto')
+  await until(() => events.some((event) => event.kind === 'result'))
+  expect(events.some((event) => event.kind === 'permission-request')).toBe(false)
+  expect(log().find((message) => message.id === 900).result.outcome.optionId).toBe('yes')
+})

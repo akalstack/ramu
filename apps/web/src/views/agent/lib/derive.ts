@@ -1,12 +1,11 @@
 import { needsChatDate } from '@ramu/shared/chat/chatDates'
-import { questionState, type QuestionState } from '@ramu/shared/chat/questions'
+import { questionState, requestOutcomes, type QuestionState } from '@ramu/shared/chat/questions'
 import type { AgentEvent, ChatGoal } from '@ramu/shared/types'
 import type { Turn } from '../types'
 import { blockAt } from './blocks'
 
 /** How each permission, question or elicitation request was settled, by request id. */
-export const outcomesOf = (events: AgentEvent[]) =>
-  new Map(events.flatMap((e) => (e.kind === 'request-resolved' ? [[e.requestId, e.outcome] as const] : [])))
+export const outcomesOf = requestOutcomes
 
 /** The answer state of every question and elicitation, by request id. */
 export const questionStatesOf = (events: AgentEvent[]): Map<string, QuestionState> =>

@@ -15,7 +15,9 @@ const scope = { cwd: '/work', additionalDirs: [], covers: ['/work'] } as unknown
 
 /** A stand-in for `@cursor/sdk`: each send replays `messages` and records what the runner passed. */
 function fakeCursor(messages: unknown[], result: Record<string, unknown> = { status: 'finished' }) {
-  const calls: { create?: any; resume?: string; sends: { text: string; options: any }[] } = { sends: [] }
+  const calls: { create?: any; resume?: string; resumeOptions?: any; sends: { text: string; options: any }[] } = {
+    sends: [],
+  }
   const agent = {
     agentId: 'agent-1',
     send: async (text: string, options: any) => {
@@ -35,8 +37,10 @@ function fakeCursor(messages: unknown[], result: Record<string, unknown> = { sta
   const sdk = {
     Agent: {
       create: async (options: any) => ((calls.create = options), agent),
-      resume: async (id: string) => {
+      resume: async (id: string, options: any) => {
         calls.resume = id
+        calls.resumeOptions = options
+        if (id === 'agent-resume') return agent
         throw new Error('not found')
       },
     },
@@ -77,7 +81,7 @@ describe('Cursor SDK runner', () => {
     runner.setTools({ url: 'http://127.0.0.1:1/mcp', token: 't', nativeSubagents: false })
     await runner.start('hi', null)
     await settle(events)
-    expect(calls.create.local).toMatchObject({ cwd: '/work', sandboxOptions: { enabled: true } })
+    expect(calls.create.local).toMatchObject({ cwd: '/work', sandboxOptions: { enabled: true }, autoReview: true })
     expect(calls.create.model).toEqual(cursorModel(''))
     expect(calls.create.disallowedTools).toEqual(['task'])
     expect(calls.sends[0]!.options.mcpServers.ramu).toMatchObject({
@@ -91,6 +95,27 @@ describe('Cursor SDK runner', () => {
     expect(events.find((e) => e.kind === 'tool-result')).toMatchObject({ isError: false, summary: 'a.txt' })
     expect(events.find((e) => e.kind === 'result')).toMatchObject({ isError: false, text: 'end_turn' })
     expect(events.some((event) => event.kind === 'permission-request')).toBe(false)
+  })
+
+  it('enables native Auto-review for Auto on both create and resume', async () => {
+    for (const resume of [null, 'agent-resume']) {
+      const { sdk, calls } = fakeCursor([])
+      const events: AgentEvent[] = []
+      const runner = new CursorSession(
+        scope,
+        { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', access: 'auto' },
+        (event) => events.push(event),
+        false,
+        sdk,
+      )
+      await runner.start('git diff', resume)
+      await settle(events)
+      expect((resume ? calls.resumeOptions : calls.create).local).toMatchObject({
+        autoReview: true,
+        sandboxOptions: { enabled: true },
+      })
+      await runner.stop()
+    }
   })
 
   it('runs unsandboxed with full access, and reports limits as usage', async () => {
@@ -208,8 +233,13 @@ function fakeOpenCode(action: string) {
 }
 
 describe('OpenCode Auto permissions', () => {
-  it.each([null, 'session-1'])('auto-approves Ramu requests in new and resumed sessions (%s)', async (resume) => {
-    const { client, replies } = fakeOpenCode('ramu_tool_invoke')
+  it.each([
+    ['bash', null],
+    ['bash', 'session-1'],
+    ['ramu_tool_invoke', null],
+    ['ramu_tool_invoke', 'session-1'],
+  ] as const)('auto-approves %s asks in session %s', async (action, resume) => {
+    const { client, replies } = fakeOpenCode(action)
     const events: AgentEvent[] = []
     const runner = new OpenCodeSession(
       scope,
@@ -231,13 +261,13 @@ describe('OpenCode Auto permissions', () => {
   })
 
   it.each(['bash', 'external_tool_invoke', 'mcp__external__ramu_tool_invoke', 'ramu_other_tool'])(
-    'keeps native approval requests for %s interactive',
+    'keeps manual approval requests for %s interactive',
     async (action) => {
       const { client, replies } = fakeOpenCode(action)
       const events: AgentEvent[] = []
       const runner = new OpenCodeSession(
         scope,
-        { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode', access: 'auto' },
+        { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode', access: 'edits' },
         (event) => events.push(event),
         false,
         async () => client as never,
