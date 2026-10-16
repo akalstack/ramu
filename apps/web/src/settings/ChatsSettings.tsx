@@ -1,5 +1,4 @@
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
-import { Advanced } from './advanced'
 import { EfficiencySettings } from './IntelligenceSettings'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
@@ -91,27 +90,25 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
           onChange={(value) => onChange({ ...draft, cleanupArchivedDays: Number(value) || 0 })}
         />
       </SettingsRow>
-      <Advanced>
-        <SettingsRow setting="autoBackgroundSeconds">
-          <SettingsLabel
-            title={t('Move slow commands to background')}
-            help={t('Let the agent keep working when a command runs longer than this.')}
-          />
-          <Dropdown
-            label={t('Move slow commands to background')}
-            value={String(draft.autoBackgroundSeconds)}
-            options={[
-              { value: '0', label: t('Never') },
-              { value: '30', label: t('After 30 seconds') },
-              { value: '60', label: t('After 1 minute') },
-              { value: '120', label: t('After 2 minutes') },
-              { value: '300', label: t('After 5 minutes') },
-            ]}
-            onChange={(value) => onChange({ ...draft, autoBackgroundSeconds: Number(value) })}
-          />
-        </SettingsRow>
-        <EfficiencySettings value={draft.intelligence} onChange={setIntelligence} />
-      </Advanced>
+      <SettingsRow setting="autoBackgroundSeconds">
+        <SettingsLabel
+          title={t('Move slow commands to background')}
+          help={t('Let the agent keep working when a command runs longer than this.')}
+        />
+        <Dropdown
+          label={t('Move slow commands to background')}
+          value={String(draft.autoBackgroundSeconds)}
+          options={[
+            { value: '0', label: t('Never') },
+            { value: '30', label: t('After 30 seconds') },
+            { value: '60', label: t('After 1 minute') },
+            { value: '120', label: t('After 2 minutes') },
+            { value: '300', label: t('After 5 minutes') },
+          ]}
+          onChange={(value) => onChange({ ...draft, autoBackgroundSeconds: Number(value) })}
+        />
+      </SettingsRow>
+      <EfficiencySettings value={draft.intelligence} onChange={setIntelligence} />
     </div>
   )
 }

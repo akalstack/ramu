@@ -16,7 +16,7 @@
 
 Ramu is an **Agent Development Environment (ADE)**: work with a coding agent next to your editor, terminals, Git, and code review, all in one window. Use Claude Code, Codex, OpenCode, Cursor, or Antigravity with your existing provider accounts.
 
-Open a project, describe what you want, and review the result. Everything else is optional: the defaults work out of the box, and **Settings → Show advanced settings** reveals the controls for power users.
+Open a project, describe what you want, and review the result. Everything else is optional: the defaults work out of the box, and **Settings** has the controls for power users.
 
 Inspired by **T3 Code**, **Codex**, and **VS Code**.
 

@@ -78,7 +78,7 @@ export function MaintenanceModelSettings({ value, onChange, cleanup }: Props & {
   )
 }
 
-/** Limits on background learning; shown inside the Memory page's Advanced group. */
+/** Limits on background learning. */
 export function LearningLimitsSettings({ value, onChange }: Props) {
   if (value.learning === 'off') return null
   return (

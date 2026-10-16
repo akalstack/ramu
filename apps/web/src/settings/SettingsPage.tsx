@@ -23,8 +23,6 @@ import { fuzzy } from '../lib/fuzzy'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { APP_AUTO_UPDATE } from '@ramu/shared/updates'
 import { useComputers } from '../workspace/computers'
-import { Switch } from '@/components/ui/switch'
-import { setShowAdvanced, useShowAdvanced } from './advanced'
 
 export const SETTINGS_GROUPS = ['Workspace', 'Agents', 'System'] as const
 
@@ -44,7 +42,7 @@ export const SETTINGS_SECTIONS = [
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
-const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string; advanced?: true }[] = [
+const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
   { section: 'system', title: 'Keep local crash reports', words: 'diagnostics privacy errors crash local export' },
   { section: 'git', title: 'Automatic pull', words: 'git auto fetch remote fast-forward background sync' },
   {
@@ -75,7 +73,6 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string;
   {
     section: 'chats',
     title: 'Load tools on demand',
-    advanced: true,
     words: 'tool search tokens deferred optional ramu',
   },
   {
@@ -86,11 +83,10 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string;
   {
     section: 'memory',
     title: 'Model for background maintenance',
-    advanced: true,
     words: 'maintenance model cheaper background',
   },
-  { section: 'memory', title: 'Reviews per day', advanced: true, words: 'maximum daily limit tokens learning' },
-  { section: 'memory', title: 'Archive unused skills after', advanced: true, words: 'skill stale expire days' },
+  { section: 'memory', title: 'Reviews per day', words: 'maximum daily limit tokens learning' },
+  { section: 'memory', title: 'Archive unused skills after', words: 'skill stale expire days' },
   {
     section: 'memory',
     title: 'Shared memory',
@@ -111,7 +107,6 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string;
   {
     section: 'chats',
     title: 'Move slow commands to background',
-    advanced: true,
     words:
       'background long running slow dev server watcher build test shell command async auto automatic timeout seconds',
   },
@@ -233,20 +228,18 @@ export function SettingsPage({
     host.current?.querySelector('.settings-page-content')?.scrollTo({ top: 0 })
   }, [section])
   const q = query.trim()
-  const showAdvanced = useShowAdvanced()
   const results = q
-    ? SETTINGS_INDEX.filter((source) => showAdvanced || !source.advanced)
-        .map((source) => {
-          const entry = { ...source, title: t(source.title) }
-          const title = fuzzy(q, entry.title),
-            words = fuzzy(
-              q,
-              `${entry.title} ${source.title} ${entry.words ?? ''} ${t(SETTINGS_SECTIONS.find((item) => item.id === entry.section)!.label)}`,
-            )
-          return title || words
-            ? { entry, hits: title?.hits ?? [], score: (title?.score ?? 0) * 2 + (words?.score ?? 0) }
-            : null
-        })
+    ? SETTINGS_INDEX.map((source) => {
+        const entry = { ...source, title: t(source.title) }
+        const title = fuzzy(q, entry.title),
+          words = fuzzy(
+            q,
+            `${entry.title} ${source.title} ${entry.words ?? ''} ${t(SETTINGS_SECTIONS.find((item) => item.id === entry.section)!.label)}`,
+          )
+        return title || words
+          ? { entry, hits: title?.hits ?? [], score: (title?.score ?? 0) * 2 + (words?.score ?? 0) }
+          : null
+      })
         .filter((item): item is NonNullable<typeof item> => !!item)
         .sort((a, b) => b.score - a.score)
         .slice(0, 12)
@@ -423,14 +416,6 @@ export function SettingsPage({
                 </div>
               ))
             )}
-            <label className="settings-advanced-toggle mt-auto flex items-center justify-between gap-3 px-3 pt-4 text-control text-soft">
-              {t('Show advanced settings')}
-              <Switch
-                aria-label={t('Show advanced settings')}
-                checked={showAdvanced}
-                onCheckedChange={setShowAdvanced}
-              />
-            </label>
           </nav>
           <div className="settings-page-content [&_>_h3]:text-heading [&_>_h3]:font-semibold [&_>_h3]:m-[0_0_20px] [&_.flash:not(.settings-row)]:[animation:settings-flash_1.4s_ease-out] [&_.flash:not(.settings-row)]:rounded-(--radius-s) [&_.settings-form_>_div_>_h4]:m-[18px_0_10px] [&_.settings-form_>_div_>_p]:m-[8px_0_12px] [&_.settings-form_>_div_>_p]:leading-[1.55] flex-1 min-w-0 overflow-y-auto p-[24px_28px]">
             <h3>{t(SETTINGS_SECTIONS.find((entry) => entry.id === section)!.label)}</h3>

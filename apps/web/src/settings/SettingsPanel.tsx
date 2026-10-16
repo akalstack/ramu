@@ -19,7 +19,6 @@ import { useAppSettings, AppSettingsOverride } from './AppSettings'
 import { SettingsPage, type SettingsSection } from './SettingsPage'
 import { errorText } from '../workspace/TaskPane'
 import { useWorkspace } from '../workspace/workspace'
-import { Advanced } from './advanced'
 import { AccessSettings } from './AccessSettings'
 import { AppearanceSettings } from './AppearanceSettings'
 import { ChatsSettings } from './ChatsSettings'
@@ -186,17 +185,15 @@ export function SettingsPanel({
                   onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
                   hasChanges={hasChanges}
                 />
-                <Advanced>
-                  <MaintenanceModelSettings
-                    value={appDraft.intelligence}
-                    cleanup={appDraft.memory.enabled && appDraft.memory.dream}
-                    onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
-                  />
-                  <LearningLimitsSettings
-                    value={appDraft.intelligence}
-                    onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
-                  />
-                </Advanced>
+                <MaintenanceModelSettings
+                  value={appDraft.intelligence}
+                  cleanup={appDraft.memory.enabled && appDraft.memory.dream}
+                  onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
+                />
+                <LearningLimitsSettings
+                  value={appDraft.intelligence}
+                  onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
+                />
                 {appDraft.memory.enabled && <MemoryBrowser />}
               </>
             )}
