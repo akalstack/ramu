@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { createInterface } from 'node:readline'
 import { pathToFileURL } from 'node:url'
+import { ramuTool } from '@ramu/shared/chat/ramuTools'
 import { OpenCode } from '@opencode/client'
 import type {
   AgentEvent,
@@ -485,8 +486,12 @@ export class OpenCodeSession implements AgentRunner {
       case 'session.execution.interrupted':
         return this.turn?.done({ interrupted: true })
       case 'permission.asked': {
-        // Full access, or background analysis that must never write: answer without asking the user.
-        if (this.settings.access === 'full' || this.readOnly) {
+        // Keep native policy for other tools; Auto trusts only Ramu's configured MCP namespace.
+        if (
+          this.settings.access === 'full' ||
+          this.readOnly ||
+          (this.settings.access === 'auto' && !!this.connection && !!ramuTool({ name: d.action ?? '', summary: '' }))
+        ) {
           void this.client?.permission
             .reply({
               sessionID: this.sessionId,

@@ -26,6 +26,8 @@ Version checks run in the background service. CLI auto-update is opt-in and affe
 
 Each provider runs through its own SDK or app protocol where one exists: Claude on the Claude Agent SDK, Codex on its app-server, OpenCode 2 on its HTTP API, and Cursor on its SDK. Antigravity and OpenCode 1.x use ACP. Each provider's thread runner is listed in `apps/server/src/providers/runners.ts`.
 
+**Auto access:** Ramu's own MCP tools run without an extra permission prompt. Other tools follow the provider's native policy; a permission request that reaches Ramu still asks for your decision. ACP runtimes select native Auto only when they advertise it, and keep their default policy otherwise. Questions, explicit plan approvals, and read-only analysis keep their existing restrictions.
+
 Ramu uses a provider's own features first, such as Claude Code's advisor and Claude's and Codex's blocking question tools, and adds its own only where the native one cannot follow Ramu's flow: another provider or model, async answers, or goals that survive fallback. See `NativeFeatures` in `providers/adapter.ts`.
 
 - **OpenCode 2:** Ramu's tools travel in the thread process's inline config (`mcp.servers.ramu`), so nothing is written to your OpenCode config or database. Permission prompts and forms (questions) appear in Ramu, and full access answers permission prompts automatically. Steering adds your message to the running turn. Reasoning effort is passed as the model variant.

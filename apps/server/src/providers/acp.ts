@@ -16,6 +16,7 @@ import type {
   ElicitationAction,
   McpConnection,
 } from '@ramu/shared/types'
+import { ramuTool } from '@ramu/shared/chat/ramuTools'
 import { providerName } from '@ramu/shared/providers/providers'
 import { attachmentPrompt } from '../attachments'
 import { elicitationContent, elicitationRequest } from '../agent/elicitation'
@@ -24,6 +25,18 @@ import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 
 type Wire = Record<string, any>
 type AcpProvider = 'cursor' | 'antigravity' | 'opencode'
+/** Trust qualified tool identities, never arguments or a command's descriptive title. */
+function isRamuCall(call: Wire | undefined, provider: AcpProvider): boolean {
+  if (!call) return false
+  const structured = call._meta?.claudeCode?.toolName ?? call.rawInput?._toolName ?? call.name
+  const name =
+    structured ??
+    (provider === 'antigravity' && (!call.kind || call.kind === 'other')
+      ? /^(?:Run )?([\w]+)\??$/.exec(call.title ?? '')?.[1]
+      : undefined)
+  return typeof name === 'string' && !!ramuTool({ name: name.replace(/^mcp_ramu_/, 'mcp__ramu__'), summary: '' })
+}
+
 export function acpCommand(provider: AcpProvider): { command: string; args: string[] } {
   return {
     command: providerBinary(provider),
@@ -445,6 +458,21 @@ class AcpSession implements AgentRunner {
           : { sessionId: this.sessionId, modeId: mode },
       )
     }
+    if (!this.readOnly && !this.connection?.restricted && this.settings.access === 'auto') {
+      // Runtime defaults are left intact unless it explicitly advertises native Auto.
+      const config = (this.session.configOptions ?? []).find(
+        (entry: Wire) =>
+          (entry.category === 'mode' || /^(?:mode|approval_mode|permission_mode)$/.test(entry.id ?? '')) &&
+          optionsOf(entry).some((option) => option.value === 'auto'),
+      )
+      if (config || (this.session.modes?.availableModes ?? []).some((mode: Wire) => mode.id === 'auto'))
+        await this.rpc.request(
+          config ? 'session/set_config_option' : 'session/set_mode',
+          config
+            ? { sessionId: this.sessionId, configId: config.id, value: 'auto' }
+            : { sessionId: this.sessionId, modeId: 'auto' },
+        )
+    }
     this.emit({
       kind: 'init',
       cwd: this.scope.cwd,
@@ -728,7 +756,11 @@ class AcpSession implements AgentRunner {
         return
       } else if (
         m.method !== 'cursor/create_plan' &&
-        (this.settings.access === 'full' || (this.settings.access === 'edits' && p.toolCall?.kind === 'edit'))
+        (this.settings.access === 'full' ||
+          (this.settings.access === 'auto' &&
+            !!this.connection &&
+            isRamuCall(p.toolCall, this.settings.provider as AcpProvider)) ||
+          (this.settings.access === 'edits' && p.toolCall?.kind === 'edit'))
       ) {
         this.replyPermission(id, true)
         return

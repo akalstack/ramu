@@ -7,6 +7,7 @@ import {
   openCodeModel,
   openCodePermissions,
   openCodeServerEnv,
+  OpenCodeSession,
 } from '../src/providers/opencode'
 import { ResumeUnavailable } from '../src/agent/agentRunner'
 
@@ -44,8 +45,8 @@ function fakeCursor(messages: unknown[], result: Record<string, unknown> = { sta
   return { sdk: sdk as any, calls }
 }
 
-const settle = async (events: AgentEvent[]) => {
-  for (let i = 0; i < 100 && !events.some((e) => e.kind === 'result'); i++) await new Promise((r) => setTimeout(r, 5))
+const settle = async (events: AgentEvent[], kind: AgentEvent['kind'] = 'result') => {
+  for (let i = 0; i < 100 && !events.some((e) => e.kind === kind); i++) await new Promise((r) => setTimeout(r, 5))
 }
 
 describe('Cursor SDK runner', () => {
@@ -55,6 +56,14 @@ describe('Cursor SDK runner', () => {
       { type: 'assistant', message: { content: [{ type: 'text', text: 'ing' }] } },
       { type: 'tool_call', call_id: 'c1', name: 'shell', status: 'running', args: { command: 'ls' } },
       { type: 'tool_call', call_id: 'c1', name: 'shell', status: 'completed', result: 'a.txt' },
+      {
+        type: 'tool_call',
+        call_id: 'mcp1',
+        name: 'mcp',
+        status: 'running',
+        args: { server: 'ramu', tool: 'tool_invoke' },
+      },
+      { type: 'tool_call', call_id: 'mcp1', name: 'mcp', status: 'completed', result: 'done' },
       { type: 'assistant', message: { content: [{ type: 'text', text: 'Done' }] } },
     ])
     const events: AgentEvent[] = []
@@ -81,6 +90,7 @@ describe('Cursor SDK runner', () => {
     expect(events.find((e) => e.kind === 'tool-use')).toMatchObject({ toolKind: 'execute', summary: 'ls' })
     expect(events.find((e) => e.kind === 'tool-result')).toMatchObject({ isError: false, summary: 'a.txt' })
     expect(events.find((e) => e.kind === 'result')).toMatchObject({ isError: false, text: 'end_turn' })
+    expect(events.some((event) => event.kind === 'permission-request')).toBe(false)
   })
 
   it('runs unsandboxed with full access, and reports limits as usage', async () => {
@@ -153,5 +163,117 @@ describe('OpenCode 2 helpers', () => {
       tests: true,
       tags: ['a', 'b'],
     })
+  })
+})
+
+/** Native OpenCode policy decides when to emit a permission request; replay only those requests. */
+function fakeOpenCode(action: string) {
+  const replies: Record<string, unknown>[] = []
+  const queue: Record<string, unknown>[] = []
+  let wake: (() => void) | undefined
+  const push = (event: Record<string, unknown>) => {
+    queue.push(event)
+    wake?.()
+  }
+  const client = {
+    event: {
+      async *subscribe({ signal }: { signal: AbortSignal }) {
+        yield { type: 'server.connected' }
+        while (!signal.aborted) {
+          if (!queue.length)
+            await new Promise<void>((resolve) => {
+              wake = resolve
+              signal.addEventListener('abort', () => resolve(), { once: true })
+            })
+          if (signal.aborted) return
+          const event = queue.shift()
+          if (event) yield event
+        }
+      },
+    },
+    session: {
+      create: async () => ({ id: 'session-1' }),
+      get: async () => ({ id: 'session-1' }),
+      prompt: async () =>
+        push({ type: 'permission.asked', data: { id: 'p1', sessionID: 'session-1', action, resources: ['*'] } }),
+    },
+    permission: {
+      reply: async (reply: Record<string, unknown>) => {
+        replies.push(reply)
+        push({ type: 'session.execution.succeeded', data: { sessionID: 'session-1' } })
+      },
+    },
+  }
+  return { client, replies }
+}
+
+describe('OpenCode Auto permissions', () => {
+  it.each([null, 'session-1'])('auto-approves Ramu requests in new and resumed sessions (%s)', async (resume) => {
+    const { client, replies } = fakeOpenCode('ramu_tool_invoke')
+    const events: AgentEvent[] = []
+    const runner = new OpenCodeSession(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode', access: 'auto' },
+      (event) => events.push(event),
+      false,
+      async () => client as never,
+    )
+    runner.setTools({ url: 'http://127.0.0.1:1/mcp', token: 'test' })
+    try {
+      await runner.start('Use a Ramu tool', resume)
+      await settle(events)
+      expect(replies).toEqual([{ sessionID: 'session-1', requestID: 'p1', decision: 'once' }])
+      expect(events.some((event) => event.kind === 'permission-request')).toBe(false)
+      expect(events.some((event) => event.kind === 'result')).toBe(true)
+    } finally {
+      await runner.stop()
+    }
+  })
+
+  it.each(['bash', 'external_tool_invoke', 'mcp__external__ramu_tool_invoke', 'ramu_other_tool'])(
+    'keeps native approval requests for %s interactive',
+    async (action) => {
+      const { client, replies } = fakeOpenCode(action)
+      const events: AgentEvent[] = []
+      const runner = new OpenCodeSession(
+        scope,
+        { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode', access: 'auto' },
+        (event) => events.push(event),
+        false,
+        async () => client as never,
+      )
+      runner.setTools({ url: 'http://127.0.0.1:1/mcp', token: 'test' })
+      try {
+        await runner.start('Do work', null)
+        expect(events).toContainEqual(expect.objectContaining({ kind: 'permission-request', toolName: action }))
+        expect(replies).toEqual([])
+        runner.replyPermission('p1', false)
+        await settle(events)
+        expect(replies[0]).toMatchObject({ decision: 'reject' })
+      } finally {
+        await runner.stop()
+      }
+    },
+  )
+
+  it('keeps read-only analysis restricted even for a Ramu tool', async () => {
+    const { client, replies } = fakeOpenCode('ramu_tool_invoke')
+    const events: AgentEvent[] = []
+    const runner = new OpenCodeSession(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode', access: 'auto' },
+      (event) => events.push(event),
+      true,
+      async () => client as never,
+    )
+    runner.setTools({ url: 'http://127.0.0.1:1/mcp', token: 'test' })
+    try {
+      await runner.start('Read only', null)
+      await settle(events)
+      expect(replies[0]).toMatchObject({ decision: 'reject' })
+      expect(events.some((event) => event.kind === 'permission-request')).toBe(false)
+    } finally {
+      await runner.stop()
+    }
   })
 })

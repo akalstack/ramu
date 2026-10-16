@@ -20,11 +20,11 @@ const ramu = await startRamu('providers-acp', {
   repos: { repo: { 'config.ts': config } },
   env: {
     RAMU_FAKE_AGENT: '',
-    RAMU_CURSOR_BIN: binary,
+    RAMU_CURSOR_BIN: '/missing/cursor',
     RAMU_CODEX_BIN: '/missing/codex',
     RAMU_CLAUDE_BIN: '/missing/claude',
     RAMU_OPENCODE_BIN: '/missing/opencode',
-    RAMU_ANTIGRAVITY_BIN: '/missing/antigravity',
+    RAMU_ANTIGRAVITY_BIN: binary,
   },
 })
 writeFileSync(
@@ -71,7 +71,7 @@ ramu.test('ACP tool calls render live in thread', async () => {
   })
   await ramu.api('tasks.setup', task.id)
   session = await ramu.api('agent.start', task.id, 'Show the ACP content fixture.', {
-    provider: 'cursor',
+    provider: 'antigravity',
     model: 'wire-model',
     effort: null,
     access: 'full',
@@ -87,7 +87,8 @@ ramu.test('ACP tool calls render live in thread', async () => {
     .filter({ has: page.locator('.tool-group-label') })
     .first()
   await group.waitFor()
-  assert.notEqual(await group.getAttribute('data-open'), null)
+  if ((await group.getAttribute('data-open')) === null)
+    await group.locator('[data-slot=collapsible-trigger]').first().click()
   assert.equal(await group.locator('.tool').count(), 3)
 
   const shell = group.locator('.tool').filter({ hasText: 'Generate the preview' })

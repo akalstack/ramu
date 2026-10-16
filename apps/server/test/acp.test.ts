@@ -40,6 +40,7 @@ const send=m=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',...m})+'\\n');
 let promptID; let current='';
 const finish=()=>send({id:promptID,result:{stopReason:'end_turn'}});
 const session={sessionId:'session-1',configOptions:[{id:'model',category:'model',type:'select',currentValue:'wire-model',options:[{value:'wire-model',name:'Wire model'}]},{id:'mode',category:'mode',type:'select',currentValue:'agent',options:[{value:'agent',name:'Agent'},{value:'ask',name:'Ask'},...JSON.parse(process.env.RAMU_EXTRA_MODES||'[]')]}]};
+if(process.env.RAMU_LEGACY_MODES){session.configOptions=undefined;session.models={currentModelId:'wire-model',availableModels:[{modelId:'wire-model',name:'Wire model'}]};session.modes={availableModes:[{id:'agent'},{id:'ask'},{id:'auto'}]};}
 rl.on('line',line=>{
  fs.appendFileSync(process.env.RAMU_ACP_LOG,line+'\\n');const m=JSON.parse(line);
  if(!m.method){if(m.id===900||m.id===901)finish();return;}
@@ -58,7 +59,7 @@ rl.on('line',line=>{
   if(m.method==='session/load')send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'historical'}}}});
   send({id:m.id,result:session});
  }
- if(m.method==='session/set_config_option')send({id:m.id,result:{}});
+ if(['session/set_config_option','session/set_model','session/set_mode'].includes(m.method))send({id:m.id,result:{}});
  if(m.method==='session/cancel')send({id:promptID,result:{stopReason:'cancelled'}});
  if(m.method==='session/prompt'){
   promptID=m.id;current=m.params.prompt[0].text;
@@ -75,6 +76,7 @@ rl.on('line',line=>{
     update({sessionUpdate:'usage_update',used:33700,size:258400});
     finish();return;
   }
+  if(current==='tool'){send({id:900,method:'session/request_permission',params:{toolCall:{toolCallId:'t1',kind:'other',...JSON.parse(process.env.RAMU_PERMISSION_CALL||'{}')},options:[{optionId:'yes',kind:'allow_once',name:'Allow'},{optionId:'no',kind:'reject_once',name:'Deny'}]}});return;}
   if(current==='todos'){send({method:'cursor/update_todos',params:{toolCallId:'t9',todos:[{id:'a',content:'Wire todo',status:'in_progress'}],merge:false}});send({id:m.id,result:{stopReason:'end_turn'}});return;}
   for(const text of ['Hello ','world'])send({method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text}}}});
   if(current==='question')send({id:900,method:'cursor/ask_question',params:{title:'Choice',questions:[{id:'q1',prompt:'Which?',options:[{id:'one',label:'First'}]}]}});
@@ -100,9 +102,10 @@ afterEach(async () => {
 const start = async (
   prompt: string,
   provider: 'cursor' | 'antigravity' | 'opencode' = 'cursor',
-  access: 'edits' | 'full' = 'edits',
+  access: 'edits' | 'auto' | 'full' = 'edits',
   resume: string | null = null,
   readOnly = false,
+  connection?: McpConnection,
 ) => {
   runner = createAcpRunner(
     { cwd: dir, additionalDirs: [], covers: [dir] },
@@ -110,6 +113,7 @@ const start = async (
     (e) => events.push(e),
     readOnly,
   )
+  if (connection) runner.setTools!(connection)
   await runner.start(prompt, resume)
 }
 it('discovers advertised models and authenticates Cursor without prompting', async () => {
@@ -162,15 +166,18 @@ it('streams accumulated text, exposes permission requests and returns provider o
   await until(() => events.some((e) => e.kind === 'result'))
   expect(log().find((m) => m.id === 900).result).toEqual({ outcome: { outcome: 'selected', optionId: 'no' } })
 })
-it('keeps Antigravity interaction questions interactive even with full access', async () => {
-  await start('interaction', 'antigravity', 'full')
-  await until(() => events.some((e) => e.kind === 'question'))
-  expect(events.some((e) => e.kind === 'result')).toBe(false)
-  expect(log().some((m) => m.method === 'authenticate')).toBe(false)
-  runner!.replyQuestion('900', { 'Which?': 'First' })
-  await until(() => events.some((e) => e.kind === 'result'))
-  expect(log().find((m) => m.id === 900).result.outcome.optionId).toBe('one')
-})
+it.each(['auto', 'full'] as const)(
+  'keeps Antigravity interaction questions interactive with %s access',
+  async (access) => {
+    await start('interaction', 'antigravity', access)
+    await until(() => events.some((e) => e.kind === 'question'))
+    expect(events.some((e) => e.kind === 'result')).toBe(false)
+    expect(log().some((m) => m.method === 'authenticate')).toBe(false)
+    runner!.replyQuestion('900', { 'Which?': 'First' })
+    await until(() => events.some((e) => e.kind === 'result'))
+    expect(log().find((m) => m.id === 900).result.outcome.optionId).toBe('one')
+  },
+)
 it('maps Cursor question answers to their IDs', async () => {
   await start('question')
   await until(() => events.some((e) => e.kind === 'question'))
@@ -482,4 +489,80 @@ it('cancels and restarts the turn to steer a runtime without _session/steering',
   await startWith('long', {})
   await until(() => events.some((e) => e.kind === 'state' && e.state === 'running'))
   expect(runner!.steerInterrupts).toBe(true)
+})
+
+const ramuConnection = { url: 'http://127.0.0.1:1/mcp', token: 'test' }
+it.each([
+  ['cursor', { rawInput: { _toolName: 'mcp__ramu__tool_invoke' } }],
+  ['opencode', { name: 'ramu_memory_search' }],
+  ['antigravity', { _meta: { claudeCode: { toolName: 'mcp__ramu__schedule_create' } } }],
+  ['antigravity', { title: 'Run mcp_ramu_tool_invoke?' }],
+] as const)('Auto approves qualified Ramu calls from %s', async (provider, call) => {
+  vi.stubEnv('RAMU_PERMISSION_CALL', JSON.stringify(call))
+  await start('tool', provider, 'auto', null, false, ramuConnection)
+  await until(() => events.some((event) => event.kind === 'result'))
+  expect(
+    events.some(
+      (event) => event.kind === 'permission-request' || (event.kind === 'state' && event.state === 'needs-input'),
+    ),
+  ).toBe(false)
+  expect(log().find((message) => message.id === 900).result.outcome.optionId).toBe('yes')
+})
+
+it.each([
+  { name: 'mcp__external__tool_invoke' },
+  { name: 'mcp__ramu_other__tool_invoke' },
+  { name: 'ramu_other_tool' },
+  { name: 'Bash', title: 'Run mcp_ramu_tool_invoke?' },
+  { kind: 'execute', title: 'Run mcp_ramu_tool_invoke?', rawInput: { command: 'echo hello' } },
+  { title: 'Read a file with mcp_ramu_tool_invoke' },
+])('Auto leaves non-Ramu permission requests interactive: %j', async (call) => {
+  vi.stubEnv('RAMU_PERMISSION_CALL', JSON.stringify(call))
+  await start('tool', 'antigravity', 'auto', null, false, ramuConnection)
+  await until(() => events.some((event) => event.kind === 'permission-request'))
+  expect(log().some((message) => message.id === 900)).toBe(false)
+  runner!.replyPermission('900', false)
+  await until(() => events.some((event) => event.kind === 'result'))
+})
+
+it.each([false, true])('selects advertised native Auto in Antigravity (legacy modes: %s)', async (legacy) => {
+  vi.stubEnv('RAMU_EXTRA_MODES', JSON.stringify([{ value: 'auto', name: 'Auto' }]))
+  if (legacy) vi.stubEnv('RAMU_LEGACY_MODES', '1')
+  await start('hello', 'antigravity', 'auto')
+  await until(() => events.some((event) => event.kind === 'permission-request'))
+  expect(log()).toContainEqual(
+    expect.objectContaining({
+      method: legacy ? 'session/set_mode' : 'session/set_config_option',
+      params: legacy
+        ? { sessionId: 'session-1', modeId: 'auto' }
+        : { sessionId: 'session-1', configId: 'mode', value: 'auto' },
+    }),
+  )
+  // Native Auto can still request a decision; Ramu does not turn that into Full access.
+  expect(log().some((message) => message.id === 900)).toBe(false)
+  runner!.replyPermission('900', true)
+  await until(() => events.some((event) => event.kind === 'result'))
+})
+
+it('does not invent Auto support or select it in read-only analysis', async () => {
+  await start('hello', 'antigravity', 'auto')
+  await until(() => events.some((event) => event.kind === 'permission-request'))
+  expect(log().some((message) => message.params?.value === 'auto' || message.params?.modeId === 'auto')).toBe(false)
+  runner!.replyPermission('900', false)
+  await until(() => events.some((event) => event.kind === 'result'))
+  await runner!.stop()
+  vi.stubEnv('RAMU_EXTRA_MODES', JSON.stringify([{ value: 'auto', name: 'Auto' }]))
+  events = []
+  await start('hello', 'antigravity', 'auto', null, true)
+  await until(() => events.some((event) => event.kind === 'result'))
+  expect(log().some((message) => message.params?.value === 'auto')).toBe(false)
+  expect(log().findLast((message) => message.id === 900).result.outcome.optionId).toBe('no')
+})
+
+it('does not trust a Ramu-looking call without the app-owned server connection', async () => {
+  vi.stubEnv('RAMU_PERMISSION_CALL', JSON.stringify({ name: 'ramu_tool_invoke' }))
+  await start('tool', 'antigravity', 'auto')
+  await until(() => events.some((event) => event.kind === 'permission-request'))
+  runner!.replyPermission('900', false)
+  await until(() => events.some((event) => event.kind === 'result'))
 })
