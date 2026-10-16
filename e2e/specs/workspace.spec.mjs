@@ -45,7 +45,7 @@ const finishTurn = () =>
     'the agent turn never finished',
     { attempts: 300 },
   )
-/** Starts a chat from the project's New chat screen with the Current checkout (or a worktree plan). */
+/** Starts a chat from the project's New chat screen with the Current checkout (or new isolated worktrees). */
 async function startChat(prompt, { worktree = false } = {}) {
   const home = page.getByRole('button', { name: 'Home', exact: true })
   if ((await home.getAttribute('aria-pressed')) !== 'true') await home.click()
@@ -58,11 +58,20 @@ async function startChat(prompt, { worktree = false } = {}) {
   await page.getByRole('menuitem', { name: worktree ? /New isolated worktrees/i : /Current checkout/i }).click()
   await ramu.shot('checkout-selector')
   await startComposer().fill(prompt)
-  await page.keyboard.press('Enter')
   if (worktree) {
-    await page.locator('.plan').waitFor()
-    await page.keyboard.press('Enter')
+    const preview = page.locator('.worktree-preview')
+    await preview.waitFor()
+    assert.equal(await preview.locator('.worktree-preview-details').isVisible(), false, 'details start collapsed')
+    await preview.getByText('Details', { exact: true }).click()
+    await preview.locator('code').first().waitFor()
+    assert.equal(await preview.locator('code').count(), 2, 'both repositories have branch previews')
+    assert.match(await preview.innerText(), /from main/)
+    assert.match(await preview.innerText(), /from develop/)
+    await ramu.shot('worktree-details')
+    await preview.getByText('Details', { exact: true }).click()
+    await ramu.shot('worktree-summary')
   }
+  await page.getByRole('button', { name: 'Start thread', exact: true }).click()
   await page.locator('.task-header .header-title', { hasText: prompt.split('\n')[0] }).waitFor()
   await finishTurn()
 }
@@ -147,4 +156,24 @@ ramu.test('model, effort and access switch inside one thread', async () => {
   await ramu.shot('inline-settings')
   await finishTurn()
   assert.equal((await ramu.api('tasks.list')).find((t) => t.title === 'Add password reset') !== undefined, true)
+})
+
+ramu.test('one Send creates isolated worktrees for every repository and starts the agent', async () => {
+  const before = await ramu.api('tasks.list')
+  await startChat('Isolate work', { worktree: true })
+  const tasks = await ramu.api('tasks.list')
+  assert.equal(tasks.length, before.length + 1, 'one submission creates exactly one thread')
+  const task = tasks.find((entry) => entry.title === 'Isolate work')
+  assert.ok(task)
+  assert.equal(task.mode, 'worktree')
+  const bindings = await ramu.api('tasks.bindings', task.id)
+  assert.equal(bindings.length, 2)
+  for (const binding of bindings) {
+    assert.equal(binding.setupState, 'ready')
+    assert.equal(git(binding.cwd, 'symbolic-ref', '--short', 'HEAD'), binding.taskBranch)
+    assert.match(binding.taskBranch, /^ramu\/isolate-work/)
+  }
+  assert.equal(git(api, 'symbolic-ref', '--short', 'HEAD'), 'develop', 'the original checkout stays on its branch')
+  await ramu.shot('worktree-started')
+  ramu.noErrors()
 })

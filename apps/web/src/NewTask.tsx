@@ -1,8 +1,9 @@
 import { t, useLanguage } from './i18n'
 import { clipText } from '@ramu/shared/text'
 import { useModelSets } from './models/ModelSets'
-import { CircleDot, FolderClosed, GitBranch, Laptop, Monitor, Network, Settings } from 'lucide-react'
+import { ChevronRight, CircleDot, FolderClosed, GitBranch, Laptop, Monitor, Network, Settings } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
+import { Spinner } from '@/components/ui/spinner'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -13,7 +14,6 @@ import {
   type CheckoutMode,
   type IssueLink,
   type Repository,
-  type WorktreePlanEntry,
 } from '@ramu/shared/types'
 import { AgentControls } from './chat/AgentControls'
 import { Composer } from './composer/Composer'
@@ -81,6 +81,75 @@ const MODES: { id: CheckoutMode; label: string; hint: string; Icon: typeof Lapto
   },
 ]
 
+/** Optional worktree details; sending always asks the server to plan against the current repository state. */
+function NewWorktreeSummary({
+  projectId,
+  repos,
+  title,
+  creating,
+}: {
+  projectId: string
+  repos: Repository[]
+  title: string
+  creating: boolean
+}) {
+  const [previewTitle, setPreviewTitle] = useState(title)
+  useEffect(() => {
+    const timer = setTimeout(() => setPreviewTitle(title), 250)
+    return () => clearTimeout(timer)
+  }, [title])
+  const preview = useQuery({
+    queryKey: ['worktree-plan', projectId, previewTitle, ...repos.map((repo) => repo.id)],
+    enabled: !!previewTitle && repos.length > 0,
+    retry: false,
+    queryFn: () =>
+      invoke(
+        'tasks.plan',
+        projectId,
+        previewTitle,
+        repos.map((repo) => repo.id),
+      ),
+  })
+  const plan = previewTitle === title ? preview.data : undefined
+  const bases = [...new Set(plan?.map((entry) => entry.baseRef))]
+  return (
+    <details className="worktree-preview group mb-2 px-2 text-caption text-muted-foreground">
+      <summary
+        className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 py-1 [&::-webkit-details-marker]:hidden"
+        title={t('Worktrees separate files and the Git index. They do not sandbox processes, ports or credentials.')}
+      >
+        {creating ? <Spinner className="size-3.5" aria-hidden="true" /> : <GitBranch size={13} aria-hidden="true" />}
+        <span role={creating ? 'status' : undefined}>
+          {t(creating ? 'Creating worktrees…' : 'New isolated worktree')}
+        </span>
+        {bases.length === 1 && <span>· {t('from {0}', { '0': bases[0]! })}</span>}
+        {repos.length > 1 && <span>· {t('{0} repositories', { '0': repos.length })}</span>}
+        <span className="ml-auto inline-flex items-center gap-1">
+          {t('Details')}
+          <ChevronRight size={12} className="group-open:rotate-90" aria-hidden="true" />
+        </span>
+      </summary>
+      <div className="worktree-preview-details space-y-2 py-2 pl-5">
+        {!title ? (
+          t('Enter a message to preview branch names and paths.')
+        ) : previewTitle === title && preview.error ? (
+          <p className="m-0 text-bad">{errorText(preview.error)}</p>
+        ) : !plan ? (
+          t('Loading…')
+        ) : (
+          plan.map((entry) => (
+            <div key={entry.repoId}>
+              <span className="font-medium text-soft">{entry.repoName}</span>: <code>{entry.taskBranch}</code> ·{' '}
+              {t('from {0}', { '0': entry.baseRef })}
+              <div className="break-all">{entry.path}</div>
+            </div>
+          ))
+        )}
+      </div>
+    </details>
+  )
+}
+
 /** Home and New chat are one screen: the start box, with what's running and coming up below it. */
 export function HomePage() {
   const ws = useWorkspace()
@@ -125,7 +194,6 @@ export function NewTask({
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [prompt, setPrompt] = useState(() => loadDraft(draftKey.newChat(projectId)))
   useDraftPersistence(draftKey.newChat(projectId), prompt)
-  const [plan, setPlan] = useState<WorktreePlanEntry[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [issue, setIssue] = useState<IssueLink | null>(null)
@@ -139,20 +207,17 @@ export function NewTask({
       const details = await invoke('forge.issue', picked.repoId, picked.number)
       setIssue(details.link)
       setPrompt(details.prompt)
-      setPlan(null)
     } catch (e) {
       setError(errorText(e))
     }
   }
 
-  useEffect(() => setPlan(null), [projectId, repos.length])
   useEffect(() => {
     const selected = ws.workspaces.find((w) => w.id === ws.composingWorkspace && w.projectId === projectId)?.id ?? null
     setWorkspaceId(selected)
     setMode(selected ? 'worktree' : 'current')
     setPrompt(loadDraft(draftKey.newChat(projectId)))
     setAttachments([])
-    setPlan(null)
     setError(null)
     setIssue(null)
   }, [projectId, ws.composing, ws.composingWorkspace])
@@ -169,23 +234,7 @@ export function NewTask({
     setBusy(true)
     let created: string | null = null
     try {
-      if (mode === 'worktree' && !workspaceId && !plan) {
-        // Show branch names and paths before anything is created.
-        setPlan(
-          await invoke(
-            'tasks.plan',
-            projectId,
-            title,
-            repos.map((r) => r.id),
-          ),
-        )
-        return
-      }
-      const task = await invoke(
-        'tasks.create',
-        { projectId, title, mode, workspaceId: workspaceId ?? undefined },
-        plan ?? undefined,
-      )
+      const task = await invoke('tasks.create', { projectId, title, mode, workspaceId: workspaceId ?? undefined })
       created = task.id
       const bindings = mode === 'worktree' ? await invoke('tasks.setup', task.id) : []
       await ws.refresh()
@@ -303,25 +352,9 @@ export function NewTask({
           </p>
         )}
       </div>
-      <div className="start-dock [&_.plan]:m-[0_6px_8px] [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
-        {plan && (
-          <div className="plan bg-brand-wash rounded-(--radius-s) p-[8px_10px] m-[8px_0] text-control">
-            <div className="muted text-muted-foreground">
-              {t('Ramu will create a branch and worktree for each repository:')}
-            </div>
-            {plan.map((p) => (
-              <div key={p.repoId} className="plan-row m-[6px_0]">
-                <span className="strong font-semibold">{p.repoName}</span>: <code>{p.taskBranch}</code> {t(' from ')}
-                <code>{p.baseRef}</code>
-                <div className="path text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
-                  {p.path}
-                </div>
-              </div>
-            ))}
-            <div className="muted text-muted-foreground small text-caption">
-              {t('Worktrees separate files and the Git index. They do not sandbox processes, ports or credentials.')}
-            </div>
-          </div>
+      <div className="start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
+        {!general && mode === 'worktree' && !workspaceId && (
+          <NewWorktreeSummary projectId={projectId} repos={repos} title={title} creating={busy} />
         )}
         <ComposerTray className="start-chips items-start gap-0.5 px-1.5">
           <div className="start-context flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
@@ -373,7 +406,6 @@ export function NewTask({
                     onSelect: () => {
                       setWorkspaceId(null)
                       setMode(m.id)
-                      setPlan(null)
                     },
                   })),
                   ...ws.workspaces
@@ -394,7 +426,6 @@ export function NewTask({
                       onSelect: () => {
                         setWorkspaceId(w.id)
                         setMode('worktree')
-                        setPlan(null)
                       },
                     })),
                 ]}
@@ -441,12 +472,11 @@ export function NewTask({
           value={prompt}
           onChange={(v) => {
             setPrompt(v)
-            setPlan(null)
           }}
           onSubmit={send}
           disabled={busy || (!general && !repos.length)}
           placeholder={general || repos.length ? t('Message the agent') : t('Add a repository to this project first')}
-          submitLabel={plan ? t('Create worktrees and start') : t('Start thread')}
+          submitLabel={t('Start thread')}
         />
         {error && <div className="error text-bad start-error p-[6px_8px_0] text-control">{error}</div>}
       </div>
