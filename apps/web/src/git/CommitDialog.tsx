@@ -91,10 +91,10 @@ export function CommitDialog() {
     }
   }, [])
   const finish = (plan: CommitPlan | null) => {
-    const current = active
+    // Resolve before clearing: the React Compiler folds a `const current = active` alias into a read after `active = null`.
+    active?.resolve(plan)
     active = null
     setRequest(null)
-    current?.resolve(plan)
   }
   if (!request) return null
   return (
@@ -162,6 +162,8 @@ function CommitForm({
     }
   }, [request.taskId, request.repoId, defaultNewBranch])
   const onDefault = !!branchInfo?.branch && branchInfo.branch === branchInfo.defaultBranch
+  // A plain commit on the default branch hides the new-branch choice, so it never applies there.
+  const wantsBranch = newBranch && (publishing || !onDefault)
 
   const toggle = (path: string) =>
     setUnticked((current) => {
@@ -170,12 +172,12 @@ function CommitForm({
       return next
     })
   const submit = () => {
-    if (!selected.length || (newBranch && ownName && !branchName.trim())) return
+    if (!selected.length || (wantsBranch && ownName && !branchName.trim())) return
     if (publishing) onRememberAction(action)
     onDone({
       paths: selected.map((entry) => entry.path),
       action: chosenAction,
-      branch: !newBranch
+      branch: !wantsBranch
         ? { expectedBranch: branchInfo?.branch ?? status.branch }
         : ownName && branchName.trim()
           ? { expectedBranch: branchInfo?.branch ?? status.branch, newBranch: branchName.trim() }
@@ -185,7 +187,6 @@ function CommitForm({
   }
   const submitLabel = commitActionLabel(chosenAction)
 
-  const wantsBranch = newBranch && (publishing || !onDefault)
   const SEGMENTS =
     'inline-flex flex-none gap-0.5 p-0.5 rounded-(--radius-s) bg-fill [&_button]:h-6 [&_button]:px-2.5 [&_button]:text-caption [&_button]:rounded-(--radius-xs) [&_button]:bg-transparent [&_button]:text-muted-foreground [&_button:hover:not(:disabled)]:text-foreground [&_[aria-pressed=true]]:bg-hover [&_[aria-pressed=true]]:text-foreground [&_button:disabled]:opacity-40'
   const LABEL = 'text-caption font-medium text-muted-foreground'
@@ -346,7 +347,7 @@ function CommitForm({
           <Button
             variant="default"
             className="primary whitespace-nowrap bg-primary font-semibold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
-            disabled={!selected.length || !branchInfo || (newBranch && ownName && !branchName.trim())}
+            disabled={!selected.length || !branchInfo || (wantsBranch && ownName && !branchName.trim())}
             autoFocus
             onClick={submit}
           >

@@ -159,43 +159,60 @@ ramu.test(
   },
 )
 
-ramu.test('the shortcut pushes an existing feature branch with the typed message and no prompt', async () => {
-  const { repoId } = (await ramu.api('tasks.bindings', task.id))[0]
-  await ramu.api('git.stage', task.id, repoId, ['file.txt'])
-  await refresh()
-  await message().fill('Second feature commit')
-  await message().blur()
-  await page.keyboard.press(`${modifier}+Alt+p`)
-  await ramu.until(() => git(repo, 'log', '-1', '--format=%s') === 'Second feature commit', 'shortcut never committed')
-  await ramu.until(() => head() === git(repo, 'rev-parse', `origin/${ramu.feature}`), 'shortcut never pushed')
-  assert.equal(await page.getByRole('alertdialog').count(), 0, 'no branch prompt on a feature branch')
-})
+ramu.test(
+  'the shortcut opens the commit dialog with the typed message and pushes an existing feature branch',
+  async () => {
+    const { repoId } = (await ramu.api('tasks.bindings', task.id))[0]
+    await ramu.api('git.stage', task.id, repoId, ['file.txt'])
+    await refresh()
+    await message().fill('Second feature commit')
+    await message().blur()
+    await page.keyboard.press(`${modifier}+Alt+p`)
+    const dialog = page.getByRole('dialog', { name: /^Commit / })
+    await dialog.waitFor()
+    assert.equal(await dialog.getByRole('textbox', { name: 'Commit message' }).inputValue(), 'Second feature commit')
+    await dialog.getByRole('button', { name: /^Commit & Push \d+$/ }).click()
+    await ramu.until(
+      () => git(repo, 'log', '-1', '--format=%s') === 'Second feature commit',
+      'shortcut never committed',
+    )
+    await ramu.until(() => head() === git(repo, 'rev-parse', `origin/${ramu.feature}`), 'shortcut never pushed')
+    assert.equal(await page.getByRole('alertdialog').count(), 0, 'no separate branch prompt on a feature branch')
+  },
+)
 
-ramu.test('the shortcut with Source Control closed offers the branch choice, stages, commits and pushes', async () => {
-  const main = git(repo, 'rev-parse', 'main')
-  await write('switch', '-q', 'main')
-  await page.getByRole('button', { name: 'Explorer', exact: true }).click()
-  writeFileSync(join(repo, 'file.txt'), 'shortcut feature\n')
-  // The app notices the edit through its file watcher; until it does, the shortcut reports "nothing to commit".
-  await ramu.until(
-    async () => {
-      await page.keyboard.press(`${modifier}+Alt+p`)
-      return branchDialog()
-        .waitFor({ timeout: 1000 })
-        .then(
-          () => true,
-          () => false,
-        )
-    },
-    'the shortcut never offered the branch choice',
-    { attempts: 20, interval: 500 },
-  )
-  await branchDialog().getByRole('button', { name: 'Create feature branch', exact: true }).click()
-  await ramu.until(() => git(repo, 'branch', '--show-current') !== 'main', 'no feature branch was created')
-  await ramu.until(() => git(repo, 'status', '-sb').includes('origin/'), 'not published')
-  assert.equal(git(repo, 'show', 'HEAD:file.txt'), 'shortcut feature')
-  assert.equal(git(repo, 'rev-parse', 'main'), main)
-})
+ramu.test(
+  'the shortcut with Source Control closed opens the commit dialog, which can commit on a new branch and push',
+  async () => {
+    const main = git(repo, 'rev-parse', 'main')
+    await write('switch', '-q', 'main')
+    await page.getByRole('button', { name: 'Explorer', exact: true }).click()
+    writeFileSync(join(repo, 'file.txt'), 'shortcut feature\n')
+    // The app notices the edit through its file watcher; until it does, the shortcut reports "nothing to commit".
+    await ramu.until(
+      async () => {
+        await page.keyboard.press(`${modifier}+Alt+p`)
+        return page
+          .getByRole('dialog', { name: /^Commit / })
+          .waitFor({ timeout: 1000 })
+          .then(
+            () => true,
+            () => false,
+          )
+      },
+      'the shortcut never opened the commit dialog',
+      { attempts: 20, interval: 500 },
+    )
+    const dialog = page.getByRole('dialog', { name: /^Commit / })
+    const newBranch = dialog.getByRole('checkbox', { name: /^New branch/ })
+    if (!(await newBranch.isChecked())) await newBranch.check()
+    await dialog.getByRole('button', { name: /^Commit & Push \d+$/ }).click()
+    await ramu.until(() => git(repo, 'branch', '--show-current') !== 'main', 'no feature branch was created')
+    await ramu.until(() => git(repo, 'status', '-sb').includes('origin/'), 'not published')
+    assert.equal(git(repo, 'show', 'HEAD:file.txt'), 'shortcut feature')
+    assert.equal(git(repo, 'rev-parse', 'main'), main)
+  },
+)
 
 ramu.test('Commit stays local and Commit & Sync publishes, from the commit menu', async () => {
   // The previous step left a published feature branch checked out, so neither action asks for a branch.

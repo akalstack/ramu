@@ -5,6 +5,9 @@ import { errorText } from '../../workspace/TaskPane'
 import { chooseCommitBranch } from '../../git/CommitBranchDialog'
 import { applyCommitScope, chooseCommit, type CommitPlan } from '../../git/CommitDialog'
 import { withGitBusy } from '../../git/gitBusy'
+import { notify } from '@/components/app-toaster'
+import { t } from '../../i18n'
+import { commitActionLabel } from './helpers'
 import type { GitRun } from './types'
 
 /** Commit message, AI draft and the commit action (with optional push, sync, amend or new branch). */
@@ -66,9 +69,8 @@ export function useCommitFlow({
   ) => {
     if (loading || busy || generating || conflictCount) return
     // The popup picks files, message, action and branch; with files staged, Source Control's own button skips it.
-    let plan: CommitPlan | null = null
     if (status && (action === 'commit' || action === 'push' || action === 'sync') && (ask || !hasStaged)) {
-      plan = await chooseCommit({
+      const plan = await chooseCommit({
         taskId,
         repoId: binding.repoId,
         repoName: binding.repoName,
@@ -77,22 +79,18 @@ export function useCommitFlow({
         message,
       })
       if (!plan) return
-      action = plan.action
-      setMessage(plan.message)
+      return commitPlan(plan)
     }
-    const branchOptions = plan
-      ? plan.branch
-      : action === 'push' || action === 'sync' || action === 'new-branch'
+    const branchOptions =
+      action === 'push' || action === 'sync' || action === 'new-branch'
         ? await chooseCommitBranch(taskId, binding.repoId, action === 'new-branch', action === 'sync' ? 'sync' : 'push')
         : undefined
     if (branchOptions === null) return
     if (branchOptions?.newBranch || branchOptions?.autoBranch) requireSaved()
-    if (plan && status) await applyCommitScope(taskId, binding.repoId, status, plan.paths)
-    else {
-      stagePaths = allPaths ?? stagePaths
-      if (stagePaths?.length) await invoke('git.stage', taskId, binding.repoId, stagePaths)
-    }
-    let text = plan ? plan.message : message,
+    // An amend rewrites the last commit with what is staged; it never takes unstaged edits.
+    if (action !== 'amend') stagePaths = allPaths ?? stagePaths
+    if (stagePaths?.length) await invoke('git.stage', taskId, binding.repoId, stagePaths)
+    let text = message,
       fingerprint = draft?.fingerprint,
       suggested = draft?.branch
     const amendHead = action === 'amend' ? (status?.oid ?? undefined) : undefined
@@ -124,6 +122,65 @@ export function useCommitFlow({
       if (action === 'push') await invoke('git.push', taskId, binding.repoId, target ?? undefined)
       if (action === 'sync') await invoke('git.sync', taskId, binding.repoId)
     })
+  }
+  /**
+   * Runs what the commit popup chose as one git job, with a progress toast: scope the index, draft a message if none was
+   * written, commit, then push or sync. Every failure ends in an error toast instead of returning silently.
+   */
+  const commitPlan = async (plan: CommitPlan) => {
+    const { branch } = plan
+    let pushedTo: string | null = branch.newBranch ?? branch.expectedBranch
+    const work = withGitBusy(taskId, binding.repoId, async () => {
+      if (branch.newBranch || branch.autoBranch || plan.action === 'sync') requireSaved()
+      await applyCommitScope(taskId, binding.repoId, status!, plan.paths)
+      // A typed message has no draft fingerprint: the index was just rescoped, so an older draft's no longer matches.
+      const drafted = plan.message.trim()
+        ? null
+        : await invoke('git.generateCommit', taskId, binding.repoId, settings, !!branch.autoBranch)
+      const text = drafted?.message ?? plan.message
+      if (!text.trim()) throw new Error(t('Could not draft a commit message.'))
+      await invoke(
+        'git.commit',
+        taskId,
+        binding.repoId,
+        text,
+        drafted?.fingerprint,
+        undefined,
+        branch.autoBranch && drafted?.branch ? { ...branch, newBranch: drafted.branch } : branch,
+      )
+      setMessage('')
+      setDraft(null)
+      if (branch.autoBranch) pushedTo = (await invoke('git.commitBranchInfo', taskId, binding.repoId)).branch
+      if (plan.action === 'push') await invoke('git.push', taskId, binding.repoId, pushedTo ?? undefined)
+      if (plan.action === 'sync') await invoke('git.sync', taskId, binding.repoId)
+      return text.split('\n')[0]!
+    }).finally(() => window.dispatchEvent(new Event('ramu:git-updated')))
+    void notify
+      .promise(work, {
+        loading: {
+          title: t('{0} {1}…', { '0': commitActionLabel(plan.action), '1': binding.repoName }),
+          type: 'loading',
+        },
+        success: (subject) => ({
+          title:
+            plan.action === 'commit'
+              ? t('Committed “{0}”', { '0': subject })
+              : t('Committed “{0}” and {1} {2}', {
+                  '0': subject,
+                  '1': plan.action === 'sync' ? t('synced') : t('pushed to'),
+                  '2': plan.action === 'sync' ? '' : (pushedTo ?? ''),
+                }),
+          type: 'success',
+        }),
+        error: (reason) => ({
+          title: errorText(reason),
+          description: commitActionLabel(plan.action),
+          type: 'error',
+          timeout: 0,
+        }),
+      })
+      .catch(() => {})
+    await work.catch(() => {})
   }
   return { message, setMessage, draft, setDraft, generating, generate, commit }
 }
