@@ -29,6 +29,7 @@ On top of the workspace, Ramu adds orchestration that works without setup:
 - **Bring models together.** Ask a second model for advice or review, and delegate tasks to helpers across providers, with optional isolated checkouts.
 - **Carry knowledge forward.** Share project memory and preferences across providers. Turn completed work into reusable skills and lessons, with editable notes and revision history. A periodic "What Ramu learned" summary says what was saved, merged or archived, and a review thread can fix it.
 - **Recall past work.** Ask agents to find decisions and fixes in earlier threads across providers, with links to the original messages. Skills can declare required tools and fallback procedures so agents can select instructions that fit their current tools.
+- **Work across repositories.** Add a parent folder and Ramu detects the child Git repositories and groups them into one workspace, with no multi-root file to write. Each repository gets its own branches, staging, stashes, sync, and diffs, and agents see the whole workspace.
 - **Continue from your phone.** Pair the iOS or Android app with your host to chat, review changes, manage Git, use terminals, and respond to agent requests.
 
 ## Features
