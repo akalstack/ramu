@@ -20,12 +20,14 @@ import { ThinkingRow } from './ThinkingRow'
 import {
   GHOST_TEXT_BUTTON_CLASS,
   ICON_BUTTON_CLASS,
-  MSG_CLASS,
   PANEL_BODY_CLASS,
   PANEL_HEADER_CLASS,
   PANEL_LABEL_CLASS,
   PANEL_TITLE_CLASS,
 } from '../styles'
+import { Message, MessageContent } from '@/components/ui/message'
+import { ErrorNote } from './ErrorNote'
+import { UserBubble } from './UserMessage'
 
 /** One sub-agent's own conversation beside the chat, or the list of all of them. */
 export function AgentTaskPanel({
@@ -208,13 +210,15 @@ export function AgentTaskPanel({
                 ) : block.event.kind === 'turn-diff' ? (
                   <TurnDiff diff={block.event.diff} />
                 ) : block.event.kind === 'user' ? (
-                  <div className="msg-wrap user">
-                    <div className={`${MSG_CLASS} user`}>{block.event.text}</div>
-                  </div>
+                  <Message align="end">
+                    <MessageContent className="items-end">
+                      <UserBubble>{block.event.text}</UserBubble>
+                    </MessageContent>
+                  </Message>
                 ) : block.event.kind === 'thinking' ? (
                   <ThinkingRow text={block.event.text} active={status === 'running' && live && block === own.at(-1)} />
                 ) : block.event.kind === 'error' ? (
-                  <div className={`${MSG_CLASS} error text-bad`}>{block.event.message}</div>
+                  <ErrorNote>{block.event.message}</ErrorNote>
                 ) : null}
               </div>
             ))}

@@ -77,6 +77,8 @@ export interface Computer {
   pairedAt: number | null
 }
 export interface Computers {
+  /** Shared browsing filter. Null means all hosts; it never changes command routing. */
+  scope?: string | null
   computers: Computer[]
   /** The computer the asking window belongs to. */
   current: string

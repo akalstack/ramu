@@ -14,7 +14,7 @@ export default function Computers() {
   const { computers, chats, selected, select, forget, retry } = useStore()
   return (
     <Screen bg="canvas">
-      <Header modal title={t.computers} subtitle="Every paired computer stays connected" />
+      <Header modal title={t.computers} subtitle="Every paired host stays connected" />
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: space.l, gap: space.l }}>
         <Card>
           {computers.map((pc, i) => {
@@ -83,8 +83,8 @@ export default function Computers() {
                   <Pressable
                     onPress={() =>
                       Alert.alert(
-                        'Forget computer?',
-                        `${pc.name}: removes phone credentials, drafts and outbox. Agents keep running. Revoke the old device on this computer to invalidate its token.`,
+                        'Forget host?',
+                        `${pc.name}: removes phone credentials, drafts and outbox. Agents keep running. Revoke the old device on this host to invalidate its token.`,
                         [
                           { text: 'Cancel', style: 'cancel' },
                           { text: 'Forget', style: 'destructive', onPress: () => void forget(pc.id) },

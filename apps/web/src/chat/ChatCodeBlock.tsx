@@ -3,7 +3,14 @@ const MermaidBlock = lazy(() => import('./MermaidBlock').then((m) => ({ default:
 import { useEffect, useState } from 'react'
 import type { Components } from 'react-markdown'
 import { Check, Copy } from 'lucide-react'
-import { Button } from '@/components/desktop-button'
+import { Button } from '@/components/ui/button'
+import {
+  CodeBlock,
+  CodeBlockActions,
+  CodeBlockContent,
+  CodeBlockHeader,
+  CodeBlockTitle,
+} from '@/components/ui/code-block'
 import { codeLanguage } from '@ramu/shared/workspace/codeLanguage'
 import { copyText } from '../ipc'
 import { errorText } from '../lib/errors'
@@ -58,28 +65,32 @@ export function ChatCodeBlock({ source, hint }: { source: string; hint?: string 
     }
   }
   return (
-    <div className="chat-code-block">
-      <div className="chat-code-header">
-        <span className="chat-code-language">{language.includes('.') ? language : `.${language}`}</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="chat-code-copy"
-          aria-label={copied ? t('Copied') : t('Copy code')}
-          title={copied ? t('Copied') : t('Copy code')}
-          onClick={() => void copy()}
-        >
-          {copied ? <Check size={14} /> : <Copy size={14} />}
-        </Button>
-      </div>
-      <pre>
+    <CodeBlock className="mt-1 mb-3 border-transparent bg-(--code-bg) dark:bg-(--code-bg)">
+      <CodeBlockHeader className="border-b border-line px-3.5 py-1.5 pt-1.5">
+        <CodeBlockTitle className="font-normal text-caption text-muted-foreground">
+          {language.includes('.') ? language : `.${language}`}
+        </CodeBlockTitle>
+        <CodeBlockActions>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground hover:bg-transparent hover:text-foreground"
+            aria-label={copied ? t('Copied') : t('Copy code')}
+            title={copied ? t('Copied') : t('Copy code')}
+            onClick={() => void copy()}
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+          </Button>
+        </CodeBlockActions>
+      </CodeBlockHeader>
+      <CodeBlockContent className="px-3.5 py-3 text-[length:0.88em] leading-[1.6] text-[#dcdce2]">
         {colored === null ? (
-          <code>{source}</code>
+          source
         ) : (
-          <code className="monaco-colorized" dangerouslySetInnerHTML={{ __html: colored }} />
+          <span className="monaco-colorized" dangerouslySetInnerHTML={{ __html: colored }} />
         )}
-      </pre>
-    </div>
+      </CodeBlockContent>
+    </CodeBlock>
   )
 }
 

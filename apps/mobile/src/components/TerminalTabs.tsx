@@ -56,7 +56,7 @@ export function TerminalTabs({
               alignItems: 'center',
               height: 34,
               borderRadius: radius.full,
-              backgroundColor: selected ? c.accentWash : c.fill,
+              backgroundColor: selected ? c.accentSoft : c.fill,
             }}
           >
             <Pressable
@@ -77,7 +77,7 @@ export function TerminalTabs({
               <T
                 size={font.control}
                 weight={selected ? '600' : '500'}
-                tone={selected ? 'text' : 'soft'}
+                tone={selected ? 'accent' : 'soft'}
                 numberOfLines={1}
               >
                 {tab.exited ? `Shell ${index + 1} · ended` : `Shell ${index + 1}`}

@@ -74,7 +74,7 @@ export function validateNetworkSetting(input: unknown, tls: boolean, addresses =
     throw new Error('Invalid network settings')
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Choose a port between 1024 and 65535')
   const known = isWildcard(host) || isLoopback(host) || addresses.some((entry) => entry.address === host)
-  if (!isIP(host) || !known) throw new Error('Choose one of this computer’s addresses, or all networks')
+  if (!isIP(host) || !known) throw new Error('Choose one of this host’s addresses, or all networks')
   if (enabled && !isLoopback(host) && !tls && !acceptUnencrypted)
     throw new Error('Confirm that you trust the network: Ramu does not encrypt this connection')
   return { enabled, host, port, acceptUnencrypted }

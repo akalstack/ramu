@@ -1362,20 +1362,6 @@ button.scm-sync:hover:not(:disabled) {
     opacity: 1;
   }
 }
-.jump-bottom {
-  border: 1px solid var(--edge);
-  color: var(--soft);
-  background: color-mix(in srgb, var(--canvas) 88%, transparent);
-  transition: background-color 120ms var(--ease);
-}
-.jump-bottom:hover:not(:disabled) {
-  border-color: var(--edge);
-  color: var(--soft);
-  background: var(--raised);
-}
-.jump-bottom:active {
-  translate: none;
-}
 /* The chat title is left-aligned inside its switcher, with the chevron right after the text. */
 
 .provider-binary-input {
@@ -1516,12 +1502,6 @@ button.ghost.danger-text {
 }
 
 /* Scroll fades remain inside the full-width conversation viewport. */
-@media (prefers-reduced-motion: reduce) {
-  .transcript-frame::before,
-  .transcript-frame::after {
-    @apply [transition:none];
-  }
-}
 /* The window title follows the conversation edge while navigation controls stay fixed. */
 @media (prefers-reduced-motion: reduce) {
   .app-titlebar > .task-header {

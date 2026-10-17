@@ -92,6 +92,10 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     args: z.tuple([id, z.boolean()]),
     run: (t: string, pinned: boolean) => workspace.setPinned(t, pinned),
   },
+  'tasks.done': {
+    args: z.tuple([id, z.boolean()]),
+    run: (t: string, done: boolean) => workspace.setDone(t, done),
+  },
   'tasks.archive': {
     args: z.tuple([id, z.boolean()]),
     run: (t: string, archived: boolean) => workspace.setArchived(t, archived),

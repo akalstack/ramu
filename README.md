@@ -29,7 +29,7 @@ On top of the workspace, Ramu adds orchestration that works without setup:
 - **Bring models together.** Ask a second model for advice or review, and delegate tasks to helpers across providers, with optional isolated checkouts.
 - **Carry knowledge forward.** Share project memory and preferences across providers. Turn completed work into reusable skills and lessons, with editable notes and revision history. A periodic "What Ramu learned" summary says what was saved, merged or archived, and a review thread can fix it.
 - **Recall past work.** Ask agents to find decisions and fixes in earlier threads across providers, with links to the original messages. Skills can declare required tools and fallback procedures so agents can select instructions that fit their current tools.
-- **Continue from your phone.** Pair the iOS or Android app with your computer to chat, review changes, manage Git, use terminals, and respond to agent requests.
+- **Continue from your phone.** Pair the iOS or Android app with your host to chat, review changes, manage Git, use terminals, and respond to agent requests.
 
 ## Features
 
@@ -39,7 +39,7 @@ On top of the workspace, Ramu adds orchestration that works without setup:
 - File attachments, saved drafts, configurable fonts and colors, and English/Bahasa Indonesia.
 - A standalone workspace server for [headless use](docs/HEADLESS-SERVER.md) and mobile access.
 
-Provider capabilities vary. Agents run on your computer, which must stay awake; mobile access also requires a reachable connection.
+Provider capabilities vary. Agents run on your host, which must stay awake; mobile access also requires a reachable connection.
 
 ## Get started
 

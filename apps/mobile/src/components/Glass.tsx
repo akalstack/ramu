@@ -1,38 +1,14 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Animated, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
-import { BlurView, BlurTargetView } from 'expo-blur'
-import { GlassContainer, GlassView, isLiquidGlassAvailable, isGlassEffectAPIAvailable } from 'expo-glass-effect'
+import { BlurView } from 'expo-blur'
+import { GlassView, isLiquidGlassAvailable, isGlassEffectAPIAvailable } from 'expo-glass-effect'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme'
 
-/** iOS 26+ draws real Liquid Glass; older iOS and web get a blurred material; Android 12+ uses native RenderNode blur with tonal fallbacks. */
+/** iOS 26+ draws real Liquid Glass; older iOS and web get a blurred material; Android uses an opaque Material surface. */
 export const liquidGlass = Platform.OS === 'ios' && isGlassEffectAPIAvailable() && isLiquidGlassAvailable()
 /** All platforms share the floating layout; each platform supplies its native material. */
 export const floatingChrome = true
-
-const BlurSurfaceContext = createContext<{ target: RefObject<View | null>; ready: boolean; markReady(): void } | null>(
-  null,
-)
-
-/** One Android RenderNode target per screen, shared by floating controls. */
-export function GlassSurfaceProvider({ children }: { children: ReactNode }) {
-  const target = useRef<View>(null)
-  const [ready, setReady] = useState(false)
-  return (
-    <BlurSurfaceContext.Provider value={{ target, ready, markReady: () => setReady(true) }}>
-      {children}
-    </BlurSurfaceContext.Provider>
-  )
-}
-export function BlurSurface({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  const surface = useContext(BlurSurfaceContext)
-  if (Platform.OS !== 'android' || !surface) return children
-  return (
-    <BlurTargetView ref={surface.target} onLayout={surface.markReady} style={style}>
-      <BlurSurfaceContext.Provider value={null}>{children}</BlurSurfaceContext.Provider>
-    </BlurTargetView>
-  )
-}
 
 export function Glass({
   children,
@@ -40,17 +16,14 @@ export function Glass({
   radius,
   tint,
   interactive,
-  blur = true,
 }: {
   children?: ReactNode
   style?: StyleProp<ViewStyle>
   radius: number
   tint?: string
   interactive?: boolean
-  blur?: boolean
 }) {
   const { c, scheme } = useTheme()
-  const surface = useContext(BlurSurfaceContext)
   if (liquidGlass) {
     return (
       <GlassView
@@ -65,36 +38,19 @@ export function Glass({
     )
   }
   if (Platform.OS === 'android') {
-    if (!blur || !surface?.ready || Number(Platform.Version) < 31)
-      return (
-        <View
-          style={[{ borderRadius: radius, overflow: 'hidden', backgroundColor: tint ?? c.raised, elevation: 3 }, style]}
-        >
-          {children}
-        </View>
-      )
+    // Flat, opaque Material surfaces. Elevation belongs to individual controls, not every surface.
     return (
       <View
         style={[
-          { borderRadius: radius, overflow: 'hidden', borderWidth: 0.5, borderColor: c.lineStrong, elevation: 3 },
+          {
+            borderRadius: radius,
+            overflow: 'hidden',
+            backgroundColor: tint ?? c.raised2,
+            elevation: 0,
+          },
           style,
         ]}
       >
-        <BlurView
-          pointerEvents="none"
-          blurTarget={surface.target}
-          blurMethod="dimezisBlurViewSdk31Plus"
-          intensity={60}
-          tint={scheme === 'dark' ? 'dark' : 'light'}
-          style={StyleSheet.absoluteFill}
-        />
-        <View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: tint ?? (scheme === 'dark' ? 'rgba(44,44,49,0.55)' : 'rgba(255,255,255,0.55)') },
-          ]}
-        />
         {children}
       </View>
     )
@@ -175,16 +131,5 @@ export function TopFade({ visible, color }: { visible: boolean; color?: string }
         />
       ))}
     </Animated.View>
-  )
-}
-
-/** One native glass container coordinates neighboring floating controls on iOS. */
-export function GlassGroup({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  return liquidGlass ? (
-    <GlassContainer spacing={12} style={style}>
-      {children}
-    </GlassContainer>
-  ) : (
-    <View style={style}>{children}</View>
   )
 }

@@ -13,7 +13,6 @@ import { terminalKeyGroups } from '../runtime/terminalKeys'
 import { STANDALONE, type Chat } from '../runtime/types'
 import { TerminalDock } from './TerminalDock'
 import { TerminalTabs } from './TerminalTabs'
-import { GlassSurfaceProvider } from './Glass'
 import { Row, SectionLabel, Sheet, T, tap } from './ui'
 
 /** Where a shell runs: a chat's checkout, or a whole project's folders (`project:<id>` on the host). */
@@ -264,205 +263,203 @@ export function TerminalScreen({
   const targets = terminalTargets(store, computerId)
   const directory = terminal?.cwd.replace(/\\/g, '/').split('/').filter(Boolean).pop() || (terminal ? '/' : undefined)
   return (
-    <GlassSurfaceProvider>
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: c.terminal,
-          paddingTop: insets.top,
-          paddingLeft: insets.left,
-          paddingRight: insets.right,
-        }}
-      >
-        <Stack.Screen options={{ headerShown: false }} />
-        <StatusBar style="light" />
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-          {error ? (
-            <T tone="bad" style={{ padding: space.m }}>
-              {error}
-            </T>
-          ) : null}
-          <View style={{ flex: 1, paddingHorizontal: 6, paddingTop: 4 }}>
-            {!terminal ? (
-              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 }}>
-                <TerminalSquare size={32} color="#a1a1a8" strokeWidth={1.5} />
-                <T size={17} weight="600" style={{ color: '#f5f5f7' }}>
-                  Your computer’s shell
-                </T>
-                <T size={13} style={{ color: '#a1a1a8', textAlign: 'center', lineHeight: 20 }}>
-                  Open a session to run commands in this workspace.
-                </T>
-              </View>
-            ) : (
-              <TerminalView
-                enabled={!terminal.exited && connected}
-                keyboardAction={keyboardAction}
-                keyAction={keyAction}
-                session={terminal.id}
-                output={outputOwner === terminal.id ? output : ''}
-                onInput={(data) => {
-                  if (latch === 'ctrl' && data.length === 1)
-                    data = String.fromCharCode(data.toUpperCase().charCodeAt(0) & 31)
-                  else if (latch === 'alt') data = '\x1b' + data
-                  setLatch(null)
-                  void write(data)
-                }}
-                onResize={(cols, rows) => {
-                  if (cols >= 2 && rows >= 2) size.current = { cols, rows }
-                  if (chat && connected && cols >= 2 && rows >= 2)
-                    void store
-                      .invoke(chat.computerId, 'term.resize', terminal.id, cols, rows)
-                      .catch((e) => setError(e.message))
-                }}
-              />
-            )}
-          </View>
-          {tabs.length ? (
-            <TerminalTabs
-              tabs={tabs}
-              active={active}
-              busy={opening || !connected}
-              onNew={() => void open()}
-              onSelect={(index) => {
-                tap()
-                keepKeyboard()
-                setActive(index)
-                setKeyAction(undefined)
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: c.terminal,
+        paddingTop: insets.top,
+        paddingLeft: insets.left,
+        paddingRight: insets.right,
+      }}
+    >
+      <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar style="light" />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        {error ? (
+          <T tone="bad" style={{ padding: space.m }}>
+            {error}
+          </T>
+        ) : null}
+        <View style={{ flex: 1, paddingHorizontal: 6, paddingTop: 4 }}>
+          {!terminal ? (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 }}>
+              <TerminalSquare size={32} color="#a1a1a8" strokeWidth={1.5} />
+              <T size={17} weight="600" style={{ color: '#f5f5f7' }}>
+                Your host’s shell
+              </T>
+              <T size={13} style={{ color: '#a1a1a8', textAlign: 'center', lineHeight: 20 }}>
+                Open a session to run commands in this workspace.
+              </T>
+            </View>
+          ) : (
+            <TerminalView
+              enabled={!terminal.exited && connected}
+              keyboardAction={keyboardAction}
+              keyAction={keyAction}
+              session={terminal.id}
+              output={outputOwner === terminal.id ? output : ''}
+              onInput={(data) => {
+                if (latch === 'ctrl' && data.length === 1)
+                  data = String.fromCharCode(data.toUpperCase().charCodeAt(0) & 31)
+                else if (latch === 'alt') data = '\x1b' + data
                 setLatch(null)
+                void write(data)
               }}
-              onClose={(value) => void close(value)}
+              onResize={(cols, rows) => {
+                if (cols >= 2 && rows >= 2) size.current = { cols, rows }
+                if (chat && connected && cols >= 2 && rows >= 2)
+                  void store
+                    .invoke(chat.computerId, 'term.resize', terminal.id, cols, rows)
+                    .catch((e) => setError(e.message))
+              }}
             />
-          ) : null}
-          <View
-            style={{
-              paddingHorizontal: 10,
-              paddingTop: 8,
-              paddingBottom: keyboardVisible ? 6 : Math.max(insets.bottom, 10),
+          )}
+        </View>
+        {tabs.length ? (
+          <TerminalTabs
+            tabs={tabs}
+            active={active}
+            busy={opening || !connected}
+            onNew={() => void open()}
+            onSelect={(index) => {
+              tap()
+              keepKeyboard()
+              setActive(index)
+              setKeyAction(undefined)
+              setLatch(null)
             }}
-          >
-            <TerminalDock
-              workspace={targets.find((target) => target.ctx === ctx)?.title ?? 'Terminal'}
-              kind={targets.find((target) => target.ctx === ctx)?.kind}
-              detail={
-                targets.find((target) => target.ctx === ctx)?.kind === 'worktree'
-                  ? targets.find((target) => target.ctx === ctx)?.subtitle
-                  : undefined
-              }
-              computer={computer?.name ?? 'Terminal'}
-              directory={directory}
-              hasShell={tabs.length > 0}
-              exited={terminal?.exited}
-              connected={connected}
-              keyboardVisible={keyboardVisible}
-              latch={latch}
-              onBack={onBack}
-              onWorkspace={() => {
-                keyboardBeforeSheet.current = keyboardVisible
-                setKeyboardVisible(false)
-                NativeKeyboard.dismiss()
-                setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
-                setSessionsOpen(true)
-              }}
-              onMoreKeys={() => {
-                NativeKeyboard.dismiss()
-                setKeyboardVisible(false)
-                setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
-                setKeysOpen(true)
-              }}
-              onKeyboard={toggleKeyboard}
-              onKey={(label) => {
-                void press(label)
-                setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: true }))
-              }}
-            />
-          </View>
-        </KeyboardAvoidingView>
-        <Sheet
-          open={sessionsOpen}
-          title="Workspace"
-          onClose={() => {
-            setSessionsOpen(false)
-            keepKeyboard(keyboardBeforeSheet.current)
+            onClose={(value) => void close(value)}
+          />
+        ) : null}
+        <View
+          style={{
+            paddingHorizontal: 10,
+            paddingTop: 8,
+            paddingBottom: keyboardVisible ? 6 : Math.max(insets.bottom, 10),
           }}
         >
-          <T size={12} tone="muted" style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
-            Shells keep running in their own workspace while you look at another.
-          </T>
-          {(['project', 'worktree', 'chat'] as const).map((kind) => {
-            const group = targets.filter((target) => target.kind === kind)
-            if (!group.length) return null
-            return (
-              <View key={kind}>
-                <SectionLabel>
-                  {kind === 'project' ? 'Projects' : kind === 'worktree' ? 'Worktrees' : 'Threads'}
-                </SectionLabel>
-                {group.map((target) => {
-                  const current = target.ctx === ctx
-                  return (
-                    <Row
-                      key={target.ctx}
-                      onPress={() => {
-                        setSessionsOpen(false)
-                        if (!current) switchTo(target)
-                        keepKeyboard(keyboardBeforeSheet.current)
-                      }}
-                      style={current ? { backgroundColor: c.accentWash } : undefined}
-                    >
-                      {kind === 'worktree' ? (
-                        <GitBranch size={18} color={c.accent} />
-                      ) : kind === 'chat' ? (
-                        <MessageCircle size={18} color={c.accent} />
-                      ) : (
-                        <FolderGit2 size={18} color={c.accent} />
-                      )}
-                      <View style={{ flex: 1, gap: 3 }}>
-                        <T numberOfLines={1} weight={current ? '600' : '500'}>
-                          {target.title}
-                        </T>
-                        <T size={12} tone="muted" numberOfLines={1} mono={kind === 'worktree'}>
-                          {target.subtitle}
-                        </T>
-                      </View>
-                      {current ? <Check size={18} color={c.accent} /> : null}
-                    </Row>
-                  )
-                })}
-              </View>
-            )
-          })}
-        </Sheet>
-        <Sheet open={keysOpen} title="Terminal keys" onClose={() => setKeysOpen(false)}>
-          {terminalKeyGroups.map((group) => (
-            <View key={group.title}>
-              <SectionLabel>{group.title}</SectionLabel>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 16 }}>
-                {group.keys.map((label) => (
-                  <Pressable
-                    key={label}
-                    accessibilityRole="button"
-                    accessibilityLabel={label}
-                    onPress={() => void press(label)}
-                    style={({ pressed }) => ({
-                      minWidth: 52,
-                      height: 44,
-                      paddingHorizontal: 12,
-                      borderRadius: 12,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: pressed ? c.pressed : c.fill,
-                    })}
+          <TerminalDock
+            workspace={targets.find((target) => target.ctx === ctx)?.title ?? 'Terminal'}
+            kind={targets.find((target) => target.ctx === ctx)?.kind}
+            detail={
+              targets.find((target) => target.ctx === ctx)?.kind === 'worktree'
+                ? targets.find((target) => target.ctx === ctx)?.subtitle
+                : undefined
+            }
+            computer={computer?.name ?? 'Terminal'}
+            directory={directory}
+            hasShell={tabs.length > 0}
+            exited={terminal?.exited}
+            connected={connected}
+            keyboardVisible={keyboardVisible}
+            latch={latch}
+            onBack={onBack}
+            onWorkspace={() => {
+              keyboardBeforeSheet.current = keyboardVisible
+              setKeyboardVisible(false)
+              NativeKeyboard.dismiss()
+              setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
+              setSessionsOpen(true)
+            }}
+            onMoreKeys={() => {
+              NativeKeyboard.dismiss()
+              setKeyboardVisible(false)
+              setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
+              setKeysOpen(true)
+            }}
+            onKeyboard={toggleKeyboard}
+            onKey={(label) => {
+              void press(label)
+              setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: true }))
+            }}
+          />
+        </View>
+      </KeyboardAvoidingView>
+      <Sheet
+        open={sessionsOpen}
+        title="Workspace"
+        onClose={() => {
+          setSessionsOpen(false)
+          keepKeyboard(keyboardBeforeSheet.current)
+        }}
+      >
+        <T size={12} tone="muted" style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+          Shells keep running in their own workspace while you look at another.
+        </T>
+        {(['project', 'worktree', 'chat'] as const).map((kind) => {
+          const group = targets.filter((target) => target.kind === kind)
+          if (!group.length) return null
+          return (
+            <View key={kind}>
+              <SectionLabel>
+                {kind === 'project' ? 'Projects' : kind === 'worktree' ? 'Worktrees' : 'Threads'}
+              </SectionLabel>
+              {group.map((target) => {
+                const current = target.ctx === ctx
+                return (
+                  <Row
+                    key={target.ctx}
+                    onPress={() => {
+                      setSessionsOpen(false)
+                      if (!current) switchTo(target)
+                      keepKeyboard(keyboardBeforeSheet.current)
+                    }}
+                    style={current ? { backgroundColor: c.accentWash } : undefined}
                   >
-                    <T mono size={13}>
-                      {label}
-                    </T>
-                  </Pressable>
-                ))}
-              </View>
+                    {kind === 'worktree' ? (
+                      <GitBranch size={18} color={c.accent} />
+                    ) : kind === 'chat' ? (
+                      <MessageCircle size={18} color={c.accent} />
+                    ) : (
+                      <FolderGit2 size={18} color={c.accent} />
+                    )}
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <T numberOfLines={1} weight={current ? '600' : '500'}>
+                        {target.title}
+                      </T>
+                      <T size={12} tone="muted" numberOfLines={1} mono={kind === 'worktree'}>
+                        {target.subtitle}
+                      </T>
+                    </View>
+                    {current ? <Check size={18} color={c.accent} /> : null}
+                  </Row>
+                )
+              })}
             </View>
-          ))}
-        </Sheet>
-      </View>
-    </GlassSurfaceProvider>
+          )
+        })}
+      </Sheet>
+      <Sheet open={keysOpen} title="Terminal keys" onClose={() => setKeysOpen(false)}>
+        {terminalKeyGroups.map((group) => (
+          <View key={group.title}>
+            <SectionLabel>{group.title}</SectionLabel>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 16 }}>
+              {group.keys.map((label) => (
+                <Pressable
+                  key={label}
+                  accessibilityRole="button"
+                  accessibilityLabel={label}
+                  onPress={() => void press(label)}
+                  style={({ pressed }) => ({
+                    minWidth: 52,
+                    height: 44,
+                    paddingHorizontal: 12,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: pressed ? c.pressed : c.fill,
+                  })}
+                >
+                  <T mono size={13}>
+                    {label}
+                  </T>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ))}
+      </Sheet>
+    </View>
   )
 }
 

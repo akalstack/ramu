@@ -1,0 +1,603 @@
+import type { SettingEdit, SettingSchema, SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
+
+// The phone's settings menu. It follows the desktop's sections and labels, and differs where a phone is different:
+// no editor, terminal or shortcut pages, no heavy list editors, plus a group for things that live on this phone.
+
+export type Language = 'en' | 'id'
+export type SettingsGroup = 'workspace' | 'agents' | 'system' | 'phone'
+export type SettingsSection =
+  | 'appearance'
+  | 'git'
+  | 'chats'
+  | 'providers'
+  | 'access'
+  | 'workflows'
+  | 'memory'
+  | 'system'
+  | 'computers'
+  | 'notifications'
+  | 'about'
+
+type Text = Record<Language, string>
+
+export const SETTINGS_GROUPS: { id: SettingsGroup; label: Text }[] = [
+  { id: 'workspace', label: { en: 'Workspace', id: 'Ruang kerja' } },
+  { id: 'agents', label: { en: 'Agents', id: 'Agen' } },
+  { id: 'system', label: { en: 'System', id: 'Sistem' } },
+  { id: 'phone', label: { en: 'This phone', id: 'Ponsel ini' } },
+]
+
+/** `host` pages edit the selected computer's shared preferences; `phone` pages only touch this device. */
+export const SETTINGS_SECTIONS: { id: SettingsSection; group: SettingsGroup; scope: 'host' | 'phone'; label: Text }[] =
+  [
+    { id: 'appearance', group: 'workspace', scope: 'phone', label: { en: 'Appearance', id: 'Tampilan' } },
+    { id: 'git', group: 'workspace', scope: 'host', label: { en: 'Git', id: 'Git' } },
+    { id: 'chats', group: 'agents', scope: 'host', label: { en: 'Threads', id: 'Thread' } },
+    { id: 'providers', group: 'agents', scope: 'host', label: { en: 'Providers & models', id: 'Penyedia & model' } },
+    { id: 'access', group: 'agents', scope: 'host', label: { en: 'Access & Fallback', id: 'Akses & Cadangan' } },
+    { id: 'workflows', group: 'agents', scope: 'host', label: { en: 'Goals & delegation', id: 'Tujuan & delegasi' } },
+    { id: 'memory', group: 'agents', scope: 'host', label: { en: 'Memory & skills', id: 'Memori & skill' } },
+    {
+      id: 'system',
+      group: 'system',
+      scope: 'host',
+      label: { en: 'Background & updates', id: 'Latar belakang & pembaruan' },
+    },
+    { id: 'computers', group: 'system', scope: 'phone', label: { en: 'Hosts', id: 'Host' } },
+    { id: 'notifications', group: 'phone', scope: 'phone', label: { en: 'Notifications', id: 'Notifikasi' } },
+    { id: 'about', group: 'phone', scope: 'phone', label: { en: 'About', id: 'Tentang' } },
+  ]
+
+export const sectionById = (id: string) => SETTINGS_SECTIONS.find((section) => section.id === id)
+export const sectionLabel = (id: SettingsSection, language: Language) => sectionById(id)!.label[language]
+
+type Value = string | number | boolean | null
+export interface Option {
+  value: Value
+  label: string
+}
+
+interface RowBase {
+  /** The key in the computer's shared preferences, dotted for nested ones (`goals.mode`). */
+  path: string
+  title: string
+  help?: string
+  /** Extra search terms. */
+  words?: string
+  /** Shown only while another setting has this value, like the desktop's "When to keep awake". */
+  when?: { path: string; equals: Value }
+}
+export type SettingRow =
+  | (RowBase & { kind: 'toggle' })
+  | (RowBase & { kind: 'choice'; options: Option[] })
+  | (RowBase & { kind: 'text'; placeholder?: string; maxLength?: number })
+export interface RowGroup {
+  title?: string
+  rows: SettingRow[]
+}
+
+const choice = (values: Value[], label: (value: Value) => string): Option[] =>
+  values.map((value) => ({ value, label: label(value) }))
+const count = (n: number) => String(n)
+const days = (n: Value) => (n === 0 ? 'Never' : n === 365 ? '1 year' : `${n} days`)
+const afterSeconds = (n: Value) =>
+  n === 0
+    ? 'Never'
+    : n === 60
+      ? 'After 1 minute'
+      : Number(n) > 60
+        ? `After ${Number(n) / 60} minutes`
+        : `After ${n} seconds`
+const hours = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, '0')}:00`)
+
+/** The desktop's rows that make sense on a phone, in the desktop's order and wording. Heavy editors stay on the desktop. */
+export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
+  git: [
+    {
+      title: 'Sync',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'autoPull',
+          title: 'Automatic pull',
+          help: 'Pull when the checkout is clean and can fast-forward. Skipped while an agent is working, files are unsaved, or Git is busy.',
+          words: 'auto fetch remote fast-forward background sync',
+        },
+        {
+          kind: 'choice',
+          path: 'pullMode',
+          title: 'Pull behavior',
+          help: 'How Pull and Sync combine local and remote commits. Tracked edits are stashed and restored for you.',
+          words: 'rebase merge fast-forward sync',
+          options: [
+            { value: 'rebase', label: 'Rebase' },
+            { value: 'merge', label: 'Merge' },
+            { value: 'ff-only', label: 'Fast-forward only' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Pull requests',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'autoWatchPullRequests',
+          title: 'Automatically watch pull requests',
+          help: 'Watch pull requests you create from a thread. New failures and requested changes return to that thread. You review and push.',
+          words: 'pr auto checks reviews feedback thread background',
+        },
+      ],
+    },
+    {
+      title: 'Commits',
+      rows: [
+        {
+          kind: 'choice',
+          path: 'commitStyle',
+          title: 'Commit messages',
+          help: 'Style for generated commit messages.',
+          words: 'style conventional repository custom instructions generated',
+          options: [
+            { value: 'conventional', label: 'Conventional commits' },
+            { value: 'repository', label: 'Repository convention' },
+            { value: 'custom', label: 'Custom instructions' },
+          ],
+        },
+        {
+          kind: 'text',
+          path: 'commitInstructions',
+          title: 'Commit instructions',
+          help: 'For example: start with a ticket key like ABC-123, write in English, keep the subject under 50 characters.',
+          words: 'custom message ticket language subject',
+          placeholder: 'Describe how commit messages should be written',
+          maxLength: 2000,
+          when: { path: 'commitStyle', equals: 'custom' },
+        },
+        {
+          kind: 'choice',
+          path: 'defaultCommitBranch',
+          title: 'Commit from default branch',
+          help: 'What to do when you commit and push while on the default branch.',
+          words: 'feature branch current main push',
+          options: [
+            { value: 'new-branch', label: 'Create feature branch' },
+            { value: 'current', label: 'Continue on current branch' },
+          ],
+        },
+      ],
+    },
+  ],
+  chats: [
+    {
+      title: 'Sending messages',
+      rows: [
+        {
+          kind: 'choice',
+          path: 'busyMessageAction',
+          title: 'Messages while working',
+          help: 'Steer adds your message after the current tools finish. Queue waits for the whole turn.',
+          words: 'queue steer steering enter busy',
+          options: [
+            { value: 'steer', label: 'Steer' },
+            { value: 'queue', label: 'Queue' },
+          ],
+        },
+        {
+          kind: 'toggle',
+          path: 'warnModelChange',
+          title: 'Warn before changing model',
+          help: "A new model can't reuse the cache of a conversation in progress, so the first message after switching uses more of your usage.",
+          words: 'model switch cache usage',
+        },
+      ],
+    },
+    {
+      title: 'While agents work',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'resumeChatsOnRestart',
+          title: 'Continue threads after restart',
+          help: 'Resume unfinished threads when the service restarts. Stopped and completed threads stay stopped.',
+          words: 'resume recover recovery interrupted progress startup crash',
+        },
+        {
+          kind: 'toggle',
+          path: 'asyncQuestions',
+          title: 'Keep working while asking questions',
+          help: 'Let the agent continue independent work while it waits for your answer.',
+          words: 'async asynchronous optional blocking related grouped answers pending input',
+        },
+        {
+          kind: 'choice',
+          path: 'autoBackgroundSeconds',
+          title: 'Move slow commands to background',
+          help: 'Let the agent keep working when a command runs longer than this.',
+          words: 'background long running slow dev server watcher build test shell command async timeout seconds',
+          options: choice([0, 30, 60, 120, 300], afterSeconds),
+        },
+        {
+          kind: 'toggle',
+          path: 'intelligence.toolSearch',
+          title: 'Load tools on demand',
+          help: 'Keep optional Ramu tools out of the prompt until the agent needs them. Saves tokens.',
+          words: 'tool search tokens deferred optional ramu',
+        },
+      ],
+    },
+    {
+      title: 'Thread history',
+      rows: [
+        {
+          kind: 'choice',
+          path: 'recentChats',
+          title: 'Recent threads per project',
+          help: 'Older threads stay available under Show more.',
+          words: 'sidebar count project',
+          options: choice(
+            Array.from({ length: 18 }, (_, index) => index + 3),
+            (n) => count(Number(n)),
+          ),
+        },
+        {
+          kind: 'choice',
+          path: 'cleanupArchivedDays',
+          title: 'Delete archived threads after',
+          help: 'Worktrees and branches are kept.',
+          words: 'cleanup retention history delete days',
+          options: choice([0, 7, 30, 90, 365], days),
+        },
+      ],
+    },
+  ],
+  providers: [
+    {
+      title: 'Usage',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'showUsageLimits',
+          title: 'Show usage limits',
+          help: 'Show the 5-hour and weekly plan usage gauges.',
+          words: 'usage gauge 5-hour weekly plan quota',
+        },
+        {
+          kind: 'toggle',
+          path: 'providerUpdateChecks',
+          title: 'Provider update notifications',
+          help: 'Tell this host to check for newer provider CLIs.',
+          words: 'latest version check updates automatic',
+        },
+      ],
+    },
+  ],
+  access: [
+    {
+      title: 'Permissions',
+      rows: [
+        {
+          kind: 'choice',
+          path: 'defaultAccess',
+          title: 'Default access',
+          help: 'Starting access for new threads. Existing threads keep theirs.',
+          words: 'permissions edits auto full',
+          options: [
+            { value: 'edits', label: 'Allow edits' },
+            { value: 'auto', label: 'Auto' },
+            { value: 'full', label: 'Full access' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Provider fallback',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'defaultAutoFallback',
+          title: 'Automatic provider fallback',
+          help: 'Switch to another provider when a usage limit is reached. When off, a thread waits and resumes on the same provider once the limit resets. Applies to new threads.',
+          words: 'provider fallback limit switch',
+        },
+      ],
+    },
+  ],
+  workflows: [
+    {
+      title: 'Goals',
+      rows: [
+        {
+          kind: 'choice',
+          path: 'goals.mode',
+          title: 'Automatic goals',
+          help: 'Let the agent set a goal for longer tasks. When off, start one with /goal.',
+          words: 'goal auto manual off automatic completion continue unfinished',
+          options: [
+            { value: 'auto', label: 'On' },
+            { value: 'manual', label: 'Off' },
+          ],
+        },
+        {
+          kind: 'choice',
+          path: 'goals.maxTurns',
+          title: 'Maximum continuation turns',
+          help: "How many follow-up turns a goal may take on its own. Your messages and the first turn don't count.",
+          words: 'goal max limit budget unlimited retry available quota reset custom turn limit',
+          options: [...choice([3, 5, 10, 25, 50, 100], (n) => count(Number(n))), { value: null, label: 'Unlimited' }],
+        },
+      ],
+    },
+  ],
+  memory: [
+    {
+      title: 'Memory',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'memory.enabled',
+          title: 'Shared memory',
+          help: "Agents of every provider read and write Ramu's shared memory.",
+          words: 'memory remember recall learn preferences claude codex opencode providers',
+        },
+        {
+          kind: 'toggle',
+          path: 'memory.dream',
+          title: 'Memory cleanup',
+          help: 'Periodically merge duplicates, resolve contradictions and retire stale notes. Uses model tokens.',
+          words: 'memory consolidate merge duplicates stale contradictions cleanup self improve tokens',
+          when: { path: 'memory.enabled', equals: true },
+        },
+        {
+          kind: 'choice',
+          path: 'memory.staleAfterDays',
+          title: 'Archive unused memories after',
+          help: 'Unused, low-importance memories are archived after this long.',
+          words: 'memory stale decay archive expire days',
+          options: choice([30, 60, 90, 180, 365], days),
+          when: { path: 'memory.enabled', equals: true },
+        },
+      ],
+    },
+    {
+      title: 'Skills',
+      rows: [
+        {
+          kind: 'choice',
+          path: 'intelligence.learning',
+          title: 'Automatic learning',
+          help: 'Let Ramu turn finished threads into skills and memories.',
+          words: 'self improve skills consolidate review maintenance ask first',
+          options: [
+            { value: 'auto', label: 'Automatic' },
+            { value: 'review', label: 'Ask first' },
+            { value: 'off', label: 'Off' },
+          ],
+        },
+        {
+          kind: 'choice',
+          path: 'intelligence.dailyReviews',
+          title: 'Reviews per day',
+          help: 'Maximum daily learning reviews. Each one uses model tokens.',
+          words: 'maximum daily limit tokens learning',
+          options: choice([1, 3, 5, 10, 20], (n) => count(Number(n))),
+        },
+        {
+          kind: 'choice',
+          path: 'intelligence.archiveSkillDays',
+          title: 'Archive unused skills after',
+          help: 'Skills that no thread has used are archived after this long.',
+          words: 'skill stale expire days',
+          options: choice([30, 60, 90, 180, 365], days),
+        },
+      ],
+    },
+  ],
+  notifications: [
+    {
+      title: 'Host alerts',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'notifyAgentDone',
+          title: 'Agent notifications',
+          help: 'Have this host notify you when an agent finishes, needs input, or fails.',
+          words: 'notify notification alert done finished system toast',
+        },
+      ],
+    },
+  ],
+  system: [
+    {
+      title: 'Background service',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'localCrashReports',
+          title: 'Keep local crash reports',
+          help: 'Off by default. Keep sanitized service errors and local crash dumps on the host. Nothing is uploaded.',
+          words: 'diagnostics privacy errors crash local export',
+        },
+        {
+          kind: 'toggle',
+          path: 'keepAwake',
+          title: 'Keep host awake',
+          help: 'Stop the host sleeping from idle while the service runs. Display sleep and manual sleep still work.',
+          words: 'sleep awake caffeinate power battery background installed login',
+        },
+        {
+          kind: 'choice',
+          path: 'keepAwakeWhen',
+          title: 'When to keep awake',
+          help: 'Choose whether to keep awake on battery power.',
+          words: 'battery power plugged in',
+          options: [
+            { value: 'plugged-in', label: 'Plugged in only' },
+            { value: 'always', label: 'Plugged in and on battery' },
+          ],
+          when: { path: 'keepAwake', equals: true },
+        },
+      ],
+    },
+    {
+      title: 'Daily recaps',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'recapsEnabled',
+          title: 'Daily recaps',
+          help: 'Show recent threads and unfinished work on Home. Uses model tokens to write the summary.',
+          words: 'recap summary home tokens',
+        },
+        {
+          kind: 'choice',
+          path: 'recapTime',
+          title: 'Generate daily at',
+          help: 'Create the recap at this time in the host’s timezone.',
+          words: 'recap time schedule timezone',
+          options: hours.map((value) => ({ value, label: value })),
+          when: { path: 'recapsEnabled', equals: true },
+        },
+      ],
+    },
+    {
+      title: 'Updates',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'appUpdateChecks',
+          title: 'Check app updates',
+          help: 'Look for new Ramu releases on the host.',
+          words: 'release version check',
+        },
+      ],
+    },
+  ],
+}
+
+/** Settings that live on this phone, for search. Their pages draw them directly. */
+const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[] = [
+  { section: 'appearance', title: 'Theme', words: 'light dark system appearance mode' },
+  { section: 'appearance', title: 'Language', words: 'bahasa indonesia english' },
+  { section: 'appearance', title: 'Haptic feedback', words: 'vibration taps feel' },
+  { section: 'notifications', title: 'Background alerts', words: 'push notifications needs attention' },
+  { section: 'notifications', title: 'Live Activities', words: 'lock screen dynamic island ongoing work ios' },
+  { section: 'computers', title: 'Paired hosts', words: 'pair connect switch host reconnect revoke forget' },
+]
+
+/** One computer-side row for a section, hiding rows its server doesn't offer or whose condition isn't met. */
+export function visibleGroups(
+  section: SettingsSection,
+  settings: SharedSetting[],
+  /** Reads a setting's current value, including optimistic edits. */
+  read: (path: string) => unknown = (path) => settings.find((setting) => setting.path === path)?.value,
+): RowGroup[] {
+  const known = new Set(settings.map((setting) => setting.path))
+  return (SETTINGS_ROWS[section] ?? [])
+    .map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) => known.has(row.path) && (!row.when || read(row.when.path) === row.when.equals)),
+    }))
+    .filter((group) => group.rows.length)
+}
+
+/** The choices a row offers on this computer: the server's own enum and numeric range win over the phone's list. */
+export function allowedOptions(options: Option[], schema: SettingSchema | undefined, current: unknown): Option[] {
+  const enumValues = schema?.enum
+  const minimum = typeof schema?.minimum === 'number' ? schema.minimum : -Infinity
+  const maximum = typeof schema?.maximum === 'number' ? schema.maximum : Infinity
+  const allowed = options.filter(
+    (option) =>
+      (!enumValues || enumValues.includes(option.value)) &&
+      (typeof option.value !== 'number' || (option.value >= minimum && option.value <= maximum)),
+  )
+  // Never hide the value in force, e.g. a custom turn limit set on the desktop.
+  return allowed.some((option) => option.value === current) || current === undefined
+    ? allowed
+    : [{ value: current as Value, label: String(current) }, ...allowed]
+}
+
+/** The edit that `settings.app.patch` expects: path, the server's schema, and the value before and after. */
+export function buildEdit(setting: SharedSetting, value: unknown): SettingEdit {
+  return { path: setting.path, schema: setting.schema, before: setting.value, value }
+}
+
+export function applyValue(snapshot: SettingsSnapshot, path: string, value: unknown): SettingsSnapshot {
+  return {
+    ...snapshot,
+    settings: snapshot.settings.map((setting) => (setting.path === path ? { ...setting, value } : setting)),
+  }
+}
+
+export interface SearchHit {
+  section: SettingsSection
+  title: string
+}
+
+const norm = (text: string) => text.toLowerCase()
+/** Every word of the query must appear in the title, the section name or the row's search terms. */
+export function searchSettings(
+  query: string,
+  settings: SharedSetting[] | null,
+  language: Language = 'en',
+): SearchHit[] {
+  const words = norm(query).split(/\s+/).filter(Boolean)
+  if (!words.length) return []
+  const known = settings ? new Set(settings.map((setting) => setting.path)) : null
+  const candidates: (SearchHit & { words: string })[] = [
+    ...Object.entries(SETTINGS_ROWS).flatMap(([section, groups]) =>
+      (groups ?? []).flatMap((group) =>
+        group.rows
+          // Before a computer has answered, offer every row; after, only the ones it has.
+          .filter((row) => !known || known.has(row.path))
+          .map((row) => ({
+            section: section as SettingsSection,
+            title: row.title,
+            words: `${group.title ?? ''} ${row.words ?? ''}`,
+          })),
+      ),
+    ),
+    ...PHONE_ENTRIES,
+  ]
+  return candidates
+    .map((entry) => {
+      const title = norm(entry.title)
+      const haystack = `${title} ${norm(sectionLabel(entry.section, language))} ${norm(entry.words)}`
+      if (!words.every((word) => haystack.includes(word))) return null
+      return {
+        entry,
+        score: words.filter((word) => title.includes(word)).length * 2 + (title.startsWith(words[0]!) ? 1 : 0),
+      }
+    })
+    .filter((hit): hit is NonNullable<typeof hit> => !!hit)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12)
+    .map(({ entry }) => ({ section: entry.section, title: entry.title }))
+}
+
+/** The store's typed `invoke`, seen as the plain call these helpers make with method names they have checked themselves. */
+export type LooseInvoke = (computerId: string, method: string, ...args: unknown[]) => Promise<unknown>
+export const looseInvoke = (invoke: unknown) => invoke as LooseInvoke
+
+/** The two host methods settings need; the store's `invoke` satisfies it. */
+export interface SettingsHost {
+  (method: 'settings.app.snapshot'): Promise<SettingsSnapshot>
+  (method: 'settings.app.patch', edits: SettingEdit[]): Promise<SettingsSnapshot>
+}
+
+/** The computer is too old to offer the portable settings API. */
+export const isOutdated = (error: unknown) =>
+  /unknown method/i.test(error instanceof Error ? error.message : String(error))
+
+/** Saves one setting against what the computer last confirmed, so a change made on the desktop meanwhile is not overwritten blindly. */
+export async function patchSetting(host: SettingsHost, confirmed: SettingsSnapshot, path: string, value: unknown) {
+  const setting = confirmed.settings.find((entry) => entry.path === path)
+  if (!setting) throw new Error(`This host has no “${path}” setting.`)
+  return host('settings.app.patch', [buildEdit(setting, value)])
+}
+
+/** Changes one setting without a page of settings open, e.g. "don't warn again" from a thread. */
+export async function setHostSetting(invoke: LooseInvoke, computerId: string, path: string, value: unknown) {
+  const host = ((method: string, ...args: unknown[]) => invoke(computerId, method, ...args)) as SettingsHost
+  return patchSetting(host, await host('settings.app.snapshot'), path, value)
+}

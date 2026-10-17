@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { DateTime } from 'luxon'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
-import { Archive, Square } from 'lucide-react'
+import { Check, RotateCcw, Square } from 'lucide-react'
 import { FadeText } from './FadeText'
 import { StateDot } from './sidebar/projects/TaskStateIcon'
 import { ICON_BUTTON_CLASS } from './sidebar/projects/constants'
@@ -222,19 +222,16 @@ export function AgentRow({
               variant="ghost"
               size="icon-xs"
               className={ICON_BUTTON_CLASS}
-              aria-label={t('Archive thread')}
-              title={t('Archive')}
+              aria-label={task?.doneAt ? t('Reopen thread') : t('Mark thread done')}
+              title={task?.doneAt ? t('Reopen') : t('Mark done')}
               onClick={(e) => {
                 e.stopPropagation()
-                void invoke('tasks.archive', session.taskId, true)
-                  .then(() => {
-                    ws.forgetTask(session.taskId)
-                    return ws.refresh()
-                  })
+                void invoke('tasks.done', session.taskId, !task?.doneAt)
+                  .then(() => ws.refresh())
                   .catch((error) => notifyError(errorText(error)))
               }}
             >
-              <Archive size={12} />
+              {task?.doneAt ? <RotateCcw size={14} /> : <Check size={14} />}
             </Button>
           </span>
         )}
@@ -295,14 +292,17 @@ export function AgentList({ items }: { items: Item[] }) {
 export const COMPLETED_DAYS = 7
 export function recentlyCompleted(
   groups: Record<AgentGroup, AgentSessionInfo[]>,
-  tasks: { id: string; lastActiveAt: number }[],
+  tasks: { id: string; lastActiveAt: number; doneAt?: number | null }[],
 ) {
   const since = DateTime.now()
     .startOf('day')
     .minus({ days: COMPLETED_DAYS - 1 })
     .toMillis()
   return rowsOf(groups, 'Done')
-    .filter((item) => (tasks.find((task) => task.id === item.session.taskId)?.lastActiveAt ?? 0) >= since)
+    .filter((item) => {
+      const task = tasks.find((entry) => entry.id === item.session.taskId)
+      return !task?.doneAt && (task?.lastActiveAt ?? 0) >= since
+    })
     .slice(0, 50)
 }
 

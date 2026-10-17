@@ -64,7 +64,7 @@ Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockChe
 | `settings/` | Settings dialog and its sections; provider cards, login and account rows. |
 | `git/` | Git controls, review chips and diffs, commit dialogs. |
 | `changes/` | The review tab for a thread's recorded changes. |
-| `workspace/` | Layout, panes, terminals, project switching, paired computers. |
+| `workspace/` | Layout, panes, terminals, project switching, paired hosts. |
 | `sidebar/` | Projects, Explorer, Source Control and Search panels, each in its own subfolder. |
 | `editor/` | Monaco setup and editor buffers. |
 | `lib/` | Small framework-free helpers and hooks. |

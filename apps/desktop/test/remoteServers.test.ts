@@ -30,7 +30,7 @@ const store = (sealer = reversible) => {
   return { path, servers: new RemoteServers(path, sealer) }
 }
 
-it('saves a computer and hands its token only to the main process', () => {
+it('saves a host and hands its token only to the main process', () => {
   const { servers } = store()
   const saved = servers.add('100.64.0.7:7788', ' Studio ', 'secret-token')
   expect(saved).toMatchObject({ name: 'Studio', url: 'http://100.64.0.7:7788' })
@@ -53,7 +53,7 @@ it('still works when the system has no keychain, using the private file', () => 
   expect(servers.endpoint(id)?.token).toBe('plain-token')
 })
 
-it('replaces a computer paired again at the same address, and keeps several others', () => {
+it('replaces a host paired again at the same address, and keeps several others', () => {
   const { servers } = store()
   servers.add('192.168.1.5:7788', 'Old', 'one')
   servers.add('10.0.0.2:7788', 'Other', 'three')
@@ -66,7 +66,7 @@ it('replaces a computer paired again at the same address, and keeps several othe
   ).toEqual(['New', 'Other'])
 })
 
-it('forgets one computer without touching the rest', () => {
+it('forgets one host without touching the rest', () => {
   const { servers } = store()
   const a = servers.add('10.0.0.2:7788', 'A', 'a'),
     b = servers.add('10.0.0.3:7788', 'B', 'b')

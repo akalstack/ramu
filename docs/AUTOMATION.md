@@ -2,7 +2,7 @@
 
 The desktop app connects to a local service that owns threads, terminals, and schedules. Closing the window leaves them running. Reopening reconnects to stored state.
 
-The computer must stay awake. **Settings → Background & Recaps** controls the service and macOS login startup. Packaged macOS builds enable login startup unless disabled; development builds opt in. Logs are in the profile's `background.log`.
+The host must stay awake. **Settings → Background & Recaps** controls the service and macOS login startup. Packaged macOS builds enable login startup unless disabled; development builds opt in. Logs are in the profile's `background.log`.
 
 ## Messages and questions
 

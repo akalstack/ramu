@@ -92,7 +92,7 @@ export function RemoteAccessSettings() {
         <>
           <SettingsGroupTitle>{t('Let other devices connect')}</SettingsGroupTitle>
           <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">
-            {t('You are looking at {0}. Who can connect to a computer is set on that computer.', { 0: here.name })}
+            {t('You are looking at {0}. Who can connect to a host is set on that host.', { 0: here.name })}
           </p>
         </>
       ) : (
@@ -158,7 +158,7 @@ function ThisComputer() {
             managed
               ? t('Set when Ramu was started with --listen. Change it there.')
               : t(
-                  'Phones and other computers can use this computer’s threads, files and terminals after you pair them.',
+                  'Phones and other hosts can use this host’s threads, files and terminals after you pair them.',
                 )
           }
         />
@@ -222,13 +222,13 @@ function ThisComputer() {
         </p>
       )}
 
-      <SettingsGroupTitle className="mt-5">{t('Devices that can use this computer')}</SettingsGroupTitle>
+      <SettingsGroupTitle className="mt-5">{t('Devices that can use this host')}</SettingsGroupTitle>
       <SettingsRow>
         <SettingsLabel
           title={t('Pair a device')}
           help={
             status.listening
-              ? t('Creates a one-time code for a phone or another computer. Enter it on that device.')
+              ? t('Creates a one-time code for a phone or another host. Enter it on that device.')
               : t('Turn on access above first.')
           }
         />
@@ -367,7 +367,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
           {!joined && (
             <DialogDescription>
               {t(
-                'On the other device open Ramu, go to Settings → Remote access → Connect to a computer, then enter one of these addresses and the code.',
+                'On the other device open Ramu, go to Settings → Remote access → Connect to a host, then enter one of these addresses and the code.',
               )}
             </DialogDescription>
           )}
@@ -379,7 +379,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
         )}
         {joined ? (
           <p className="muted text-muted-foreground">
-            {t('It can now use this computer. You can revoke it any time from Devices that can use this computer.')}
+            {t('It can now use this host. You can revoke it any time from Devices that can use this host.')}
           </p>
         ) : (
           offer && (
@@ -434,7 +434,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
               )}
               <div className="flex flex-col gap-1">
                 <span className="muted text-muted-foreground small text-caption">
-                  {t('Addresses this computer has')}
+                  {t('Addresses this host has')}
                 </span>
                 {urls.length ? (
                   urls.map((entry) => (
@@ -451,7 +451,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
                   ))
                 ) : (
                   <p className="muted text-muted-foreground small text-caption">
-                    {t('No network address found. Connect this computer to a network or VPN.')}
+                    {t('No network address found. Connect this host to a network or VPN.')}
                   </p>
                 )}
                 {hidden > 0 && (
@@ -498,7 +498,7 @@ function Computers({ state }: { state: ComputerList }) {
     try {
       await fn()
     } catch (error) {
-      notifyError(errorText(error), t('Computers'))
+      notifyError(errorText(error), t('Hosts'))
     } finally {
       setBusy(false)
     }
@@ -567,10 +567,10 @@ function Computers({ state }: { state: ComputerList }) {
       setAdding(false)
     })
   return (
-    <section className="computer-management mb-7" aria-label={t('Computers')}>
+    <section className="computer-management mb-7" aria-label={t('Hosts')}>
       <div className="flex items-center justify-between gap-3 mb-3">
         <div>
-          <SettingsGroupTitle className="mb-1">{t('Connect to a computer')}</SettingsGroupTitle>
+          <SettingsGroupTitle className="mb-1">{t('Connect to a host')}</SettingsGroupTitle>
           <p className="m-0 text-caption text-muted-foreground">
             {t('{0} connected · {1} saved', {
               0: state.computers.filter((computer) => computer.status === 'connected').length,
@@ -588,12 +588,12 @@ function Computers({ state }: { state: ComputerList }) {
             }}
           >
             <Plus size={14} />
-            {t('Add a computer')}
+            {t('Add a host')}
           </Button>
         )}
       </div>
       <p className="m-[0_0_12px] text-caption text-muted-foreground">
-        {t('Each computer keeps its own projects, threads and settings. Switching only changes the workspace you see.')}
+        {t('Each host keeps its own projects, threads and settings. Switching only changes the workspace you see.')}
       </p>
       <div className="flex flex-col gap-2">
         {state.computers.map((computer) => (
@@ -694,7 +694,7 @@ function Computers({ state }: { state: ComputerList }) {
       {(adding || !others.length) && (
         <div className="mt-3 rounded-(--radius-m) bg-fill p-4">
           <div className="flex items-center justify-between gap-2 mb-2">
-            <strong className="text-body font-medium">{t('Add a computer')}</strong>
+            <strong className="text-body font-medium">{t('Add a host')}</strong>
             {others.length > 0 && (
               <Button variant="ghost" disabled={busy} onClick={() => setAdding(false)}>
                 {t('Cancel')}
@@ -733,7 +733,7 @@ function Computers({ state }: { state: ComputerList }) {
             <>
               <p className="m-[0_0_12px] text-caption text-muted-foreground">
                 {t(
-                  'Open Remote access on that computer, choose Pair a device, then paste its link or enter what it shows. Projects live on that computer, so add them there.',
+                  'Open Remote access on that host, choose Pair a device, then paste its link or enter what it shows. Projects live on that host, so add them there.',
                 )}
               </p>
               <form
@@ -797,7 +797,7 @@ function Computers({ state }: { state: ComputerList }) {
             <>
               <p className="m-[0_0_12px] text-caption text-muted-foreground">
                 {t(
-                  'Connects through SSH with your keys and ~/.ssh/config. Ramu must already be installed on that computer; it is started there if it is not running, and no port is opened to the network.',
+                  'Connects through SSH with your keys and ~/.ssh/config. Ramu must already be installed on that host; it is started there if it is not running, and no port is opened to the network.',
                 )}
               </p>
               <form
@@ -861,8 +861,8 @@ function Computers({ state }: { state: ComputerList }) {
         >
           <p>
             {forgetting === state.current
-              ? t('You are looking at it now, so Ramu goes back to this computer. You can pair again later.')
-              : t('You can pair again later. The other computer still lists this device until you revoke it there.')}
+              ? t('You are looking at it now, so Ramu goes back to this host. You can pair again later.')
+              : t('You can pair again later. The other host still lists this device until you revoke it there.')}
           </p>
         </ConfirmDialog>
       )}
@@ -898,14 +898,14 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
         <DialogHeader>
           <DialogTitle>{t('Connection settings')}</DialogTitle>
           <DialogDescription>
-            {t('Saved on this device. The other computer’s projects and settings stay as they are.')}
+            {t('Saved on this device. The other host’s projects and settings stay as they are.')}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <label className="flex flex-col gap-1.5 text-caption text-muted-foreground">
             {t('Name')}
             <Input
-              aria-label={t('Computer name')}
+              aria-label={t('Host name')}
               maxLength={60}
               value={name}
               disabled={busy}

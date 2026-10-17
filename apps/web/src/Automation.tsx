@@ -585,7 +585,7 @@ function ScheduleEditor({
           </label>
         )}
         <label className="schedule-wide col-span-full">
-          {t('If the computer is asleep or the service is stopped')}
+          {t('If the host is asleep or the service is stopped')}
           <Dropdown
             label={t('Missed runs')}
             value={input.missedPolicy}
@@ -698,7 +698,7 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
         <span>
           <strong>{t('Background service')}</strong>
           <span className="muted text-muted-foreground block block small text-caption">
-            {t('Threads and schedules keep running when Ramu closes. The computer must stay awake.')}
+            {t('Threads and schedules keep running when Ramu closes. The host must stay awake.')}
           </span>
           <span className="muted text-muted-foreground block block small text-caption">
             {connected ? t('Running · PID {0}', { '0': status?.pid ?? '…' }) : t('Stopped')}

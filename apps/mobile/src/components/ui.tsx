@@ -4,9 +4,11 @@ import {
   Dimensions,
   Easing,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
   type PressableProps,
@@ -14,19 +16,33 @@ import {
   type TextProps,
   type ViewStyle,
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import * as Clipboard from 'expo-clipboard'
-import { CircleAlert, CircleCheck, CircleDot, CircleHelp, Loader, type LucideProps } from 'lucide-react-native'
+import {
+  ChevronDown,
+  CircleAlert,
+  CircleCheck,
+  CircleDot,
+  CircleHelp,
+  Loader,
+  type LucideProps,
+} from 'lucide-react-native'
 import type { TaskStatus } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import type { ComputerStatus } from '../runtime/types'
-import { Glass, floatingChrome } from './Glass'
+import { Glass } from './Glass'
+import { MaterialSheet } from './MaterialSheet'
 
 export type Icon = ComponentType<LucideProps>
 
+let hapticsEnabled = true
+/** The phone's "Haptic feedback" setting; every tap in the app goes through `tap`, so it is the one switch. */
+export function setHapticsEnabled(on: boolean) {
+  hapticsEnabled = on
+}
 export function tap() {
-  Haptics.selectionAsync().catch(() => {})
+  if (hapticsEnabled) Haptics.selectionAsync().catch(() => {})
 }
 
 type Tone = 'text' | 'body' | 'soft' | 'muted' | 'placeholder' | 'accent' | 'ok' | 'warn' | 'bad'
@@ -60,7 +76,9 @@ export function T({
       : (event: Parameters<NonNullable<TextProps['onLongPress']>>[0]) => {
           onLongPress?.(event)
           void Clipboard.setStringAsync(value)
-            .then(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))
+            .then(() =>
+              hapticsEnabled ? Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success) : undefined,
+            )
             .catch(() => {})
         }
   // `color: undefined` in a passed style would otherwise replace the tone with the platform default (black); drop it.
@@ -143,6 +161,8 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      android_ripple={{ color: kind === 'primary' ? 'rgba(255,255,255,0.16)' : c.pressed }}
       disabled={disabled}
       onPress={() => {
         tap()
@@ -150,12 +170,107 @@ export function Button({
       }}
       style={({ pressed }) => [
         styles.button,
+        Platform.OS === 'android' && { minHeight: 48, borderRadius: radius.full, overflow: 'hidden' },
         { backgroundColor: bg, opacity: disabled ? 0.45 : pressed ? 0.8 : 1 },
         style,
       ]}
     >
       {I ? <I size={16} color={fg} strokeWidth={2} /> : null}
       <Text style={{ color: fg, fontSize: font.control + 1, fontWeight: '600' }}>{title}</Text>
+    </Pressable>
+  )
+}
+
+/** The app's one switch: violet track and a white thumb on every platform (Android's default thumb is teal). */
+export function Toggle({
+  value,
+  onValueChange,
+  disabled,
+  accessibilityLabel,
+}: {
+  value: boolean
+  onValueChange: (value: boolean) => void
+  disabled?: boolean
+  accessibilityLabel?: string
+}) {
+  const { c } = useTheme()
+  return (
+    <Switch
+      accessibilityLabel={accessibilityLabel}
+      disabled={disabled}
+      value={value}
+      onValueChange={onValueChange}
+      trackColor={{ false: c.lineStrong, true: c.primary }}
+      thumbColor={Platform.OS === 'android' ? (value ? c.primaryInk : c.muted) : undefined}
+    />
+  )
+}
+
+/**
+ * The app's one chip: filters, scopes, set pickers. Unselected it is a neutral pill; selected it is a quiet tonal violet
+ * with violet text (never the loud filled primary). `fill` is for chips that sit on a card or sheet instead of the page.
+ */
+export function Chip({
+  label,
+  count,
+  selected,
+  onPress,
+  icon: I,
+  chevron,
+  fill,
+  small,
+  maxLabelWidth,
+  accessibilityLabel,
+}: {
+  label: string
+  count?: number
+  selected?: boolean
+  onPress: () => void
+  icon?: Icon
+  chevron?: boolean
+  fill?: boolean
+  small?: boolean
+  maxLabelWidth?: number
+  accessibilityLabel?: string
+}) {
+  const { c } = useTheme()
+  const tone = selected ? 'accent' : 'text'
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ selected: Boolean(selected) }}
+      onPress={() => {
+        tap()
+        onPress()
+      }}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        height: small ? 28 : 34,
+        paddingHorizontal: space.m,
+        borderRadius: radius.full,
+        backgroundColor: selected ? c.accentSoft : fill ? c.fill : c.raised2,
+        opacity: pressed ? 0.8 : 1,
+      })}
+    >
+      {I ? <I size={14} color={selected ? c.accent : c.soft} strokeWidth={1.9} /> : null}
+      <T
+        size={small ? font.caption : font.control}
+        weight={selected ? '600' : '500'}
+        tone={tone}
+        numberOfLines={1}
+        style={maxLabelWidth ? { maxWidth: maxLabelWidth } : undefined}
+      >
+        {label}
+      </T>
+      {count ? (
+        <T size={font.caption} tone={tone} style={{ opacity: 0.7 }}>
+          {count}
+        </T>
+      ) : null}
+      {chevron ? <ChevronDown size={13} color={c.muted} /> : null}
     </Pressable>
   )
 }
@@ -246,28 +361,30 @@ export function ConnectionDot({ status, size = 8 }: { status: ComputerStatus; si
   return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />
 }
 
-/** Bottom sheet built on Modal so it runs in Expo Go. On iOS it floats inset from the edges on glass, like iOS 26 sheets. */
-/** `scroll={false}`: the content scrolls itself (a FlatList), so the sheet must not wrap it in a ScrollView. */
-export function Sheet({
-  open,
-  onClose,
-  title,
-  children,
-  scroll = true,
-}: {
+type SheetProps = {
   open: boolean
   onClose: () => void
   title?: string
   children: ReactNode
+  /** `false`: the content scrolls itself (a FlatList), so the sheet must not wrap it in a ScrollView. */
   scroll?: boolean
-}) {
+}
+
+/** What every sheet shows: an optional drag handle (iOS draws its own; Android's Material sheet has one), the title, the content. */
+function SheetBody({
+  title,
+  children,
+  scroll = true,
+  handle,
+}: Omit<SheetProps, 'open' | 'onClose'> & { handle: boolean }) {
   const { c } = useTheme()
-  const insets = useSafeAreaInsets()
-  const body = (
+  return (
     <>
-      <View style={{ alignItems: 'center', paddingTop: space.s }}>
-        <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: c.lineStrong }} />
-      </View>
+      {handle ? (
+        <View style={{ alignItems: 'center', paddingTop: space.s }}>
+          <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: c.lineStrong }} />
+        </View>
+      ) : null}
       {title ? (
         <T
           size={font.heading}
@@ -278,13 +395,45 @@ export function Sheet({
         </T>
       ) : null}
       {scroll ? (
-        <ScrollView bounces={false} contentContainerStyle={{ paddingBottom: space.m }}>
+        <ScrollView bounces={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: space.m }}>
           {children}
         </ScrollView>
       ) : (
         <View style={{ paddingBottom: space.m, flexShrink: 1 }}>{children}</View>
       )}
     </>
+  )
+}
+
+/**
+ * The app's one bottom sheet. Android shows the official Material 3 modal bottom sheet (opaque, with its own handle, scrim
+ * and swipe-to-dismiss). Elsewhere it is built on Modal so it runs in Expo Go; on iOS it floats inset from the edges on glass.
+ */
+export function Sheet(props: SheetProps) {
+  if (Platform.OS === 'android')
+    return (
+      <MaterialSheet open={props.open} onClose={props.onClose}>
+        <SheetBody {...props} handle={false} />
+      </MaterialSheet>
+    )
+  return <FloatingSheet {...props} />
+}
+
+/** The floating glass panel, sitting just above the home indicator. */
+function SheetPanel({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets()
+  return (
+    <Glass radius={34} style={{ marginHorizontal: 8, marginBottom: Math.max(insets.bottom - 18, 8), maxHeight: '80%' }}>
+      {children}
+    </Glass>
+  )
+}
+
+function FloatingSheet({ open, onClose, title, children, scroll }: SheetProps) {
+  const body = (
+    <SheetBody title={title} scroll={scroll} handle>
+      {children}
+    </SheetBody>
   )
   const [mounted, setMounted] = useState(open)
   const progress = useRef(new Animated.Value(0)).current
@@ -319,52 +468,37 @@ export function Sheet({
       onShow={rise}
       onRequestClose={onClose}
     >
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          bottom: 0,
-          left: 0,
-          backgroundColor: 'rgba(0,0,0,0.35)',
-          opacity: progress,
-        }}
-      >
-        <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
-      </Animated.View>
-      <Animated.View
-        pointerEvents="box-none"
-        style={{
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          bottom: 0,
-          left: 0,
-          justifyContent: 'flex-end',
-          transform: [{ translateY }],
-        }}
-      >
-        {floatingChrome ? (
-          <Glass
-            radius={34}
-            style={{ marginHorizontal: 8, marginBottom: Math.max(insets.bottom - 18, 8), maxHeight: '80%' }}
-          >
-            {body}
-          </Glass>
-        ) : (
-          <View
-            style={{
-              backgroundColor: c.canvas,
-              borderTopLeftRadius: radius.l + 8,
-              borderTopRightRadius: radius.l + 8,
-              paddingBottom: insets.bottom + space.s,
-              maxHeight: '80%',
-            }}
-          >
-            {body}
-          </View>
-        )}
-      </Animated.View>
+      {/* A Modal is its own window: it measures the device's insets itself, instead of inheriting a tab screen's
+          (which include the tab bar and would lift the sheet off the bottom edge). */}
+      <SafeAreaProvider>
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            backgroundColor: 'rgba(0,0,0,0.35)',
+            opacity: progress,
+          }}
+        >
+          <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
+        </Animated.View>
+        <Animated.View
+          pointerEvents="box-none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            justifyContent: 'flex-end',
+            transform: [{ translateY }],
+          }}
+        >
+          <SheetPanel>{body}</SheetPanel>
+        </Animated.View>
+      </SafeAreaProvider>
     </Modal>
   )
 }
@@ -385,11 +519,14 @@ export function Segmented<K extends string>({
   options: readonly { key: K; label: string; count?: number }[]
   style?: StyleProp<ViewStyle>
 }) {
-  const { c } = useTheme()
+  const { c, scheme } = useTheme()
+  // iOS look: a gray track with a lifted segment (white in light, a lighter gray in dark).
+  const track = scheme === 'light' ? c.fill : c.raised2
+  const thumb = scheme === 'light' ? c.raised2 : c.raised
   return (
     <View
       accessibilityRole="tablist"
-      style={[{ flexDirection: 'row', backgroundColor: c.raised2, borderRadius: radius.m, padding: 3 }, style]}
+      style={[{ flexDirection: 'row', backgroundColor: track, borderRadius: radius.m, padding: 3 }, style]}
     >
       {options.map((option) => {
         const selected = option.key === value
@@ -413,7 +550,7 @@ export function Segmented<K extends string>({
               justifyContent: 'center',
               flexDirection: 'row',
               gap: 5,
-              backgroundColor: selected ? c.raised : 'transparent',
+              backgroundColor: selected ? thumb : 'transparent',
             }}
           >
             <T

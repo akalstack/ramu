@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import type { AgentEvent, AgentSessionInfo, Attachment } from '@ramu/shared/types'
 import { ipcQueryKey, queryClient } from '../../../dataQueries'
 import { registerWorkspaceCheckpoint } from '../../../workspace/workspaceCheckpoint'
+import { releaseFollow } from './useTranscriptScroll'
 
 // Per-chat presentation state belongs to the UI, separate from the data query cache.
 const chatPresentation = new Map<string, { draft: string; attachments: Attachment[]; top: number; stick: boolean }>()
@@ -35,7 +36,11 @@ export function useChatPresentation({
   useEffect(() => registerWorkspaceCheckpoint(async () => latestChat.current.attachments.length === 0), [])
   useLayoutEffect(() => {
     const saved = chatPresentation.get(sessionId)
-    if (saved && scroller.current) scroller.current.scrollTop = saved.top
+    // A chat left at the bottom reopens at the bottom (the scroller does that); one left higher up goes back to where it was.
+    if (saved && !saved.stick && scroller.current) {
+      scroller.current.scrollTop = saved.top
+      releaseFollow(scroller.current)
+    }
     return () => {
       const current = latestChat.current
       chatPresentation.set(sessionId, {

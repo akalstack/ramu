@@ -1,8 +1,8 @@
-import { ExpandRow } from '@/components/expand-row'
 import { Button } from '@/components/desktop-button'
 import {
   Archive,
   ChevronRight,
+  ChevronDown,
   FolderClosed,
   FolderOpen,
   FolderSearch,
@@ -23,28 +23,24 @@ import { errorText } from '../../workspace/TaskPane'
 import { projectCtx, useWorkspace } from '../../workspace/workspace'
 import { useAppSettings } from '../../settings/AppSettings'
 import { FadeText } from '../../FadeText'
-import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS, pinnedFirst } from './constants'
+import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS } from './constants'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { InlineEdit } from './InlineEdit'
 import { ProjectHoverCard } from './ProjectHoverCard'
 import { TaskRow } from './TaskRow'
+import { projectThreadPreview } from './threadLists'
 import { useSlideMount } from './useSlideMount'
 
-export function ProjectGroup({ project }: { project: Project }) {
+export function ProjectGroup({ project, previewLimit }: { project: Project; previewLimit?: number }) {
   useLanguage()
   const ws = useWorkspace()
   const repos = ws.repos[project.id] ?? []
   const { preferences } = useAppSettings()
-  const recent = preferences.recentChats
+  const recent = Math.min(preferences.recentChats, previewLimit ?? Infinity)
   const all = ws.tasks.filter((t) => t.projectId === project.id)
-  const sorted = all.filter((t) => t.status !== 'archived' && !t.pinnedAt).sort(pinnedFirst)
-  const others = sorted.filter((t) => !t.pinnedAt)
   const [showAll, setShowAll] = useState(false)
-  // Like Codex: the latest few chats, with the rest behind "Show more"; the open chat always shows.
-  const tasks = showAll
-    ? sorted
-    : sorted.filter((t) => t.pinnedAt || others.indexOf(t) < recent || t.id === ws.ui.activeTaskId)
+  const { tasks, hasMore } = projectThreadPreview(ws.tasks, project.id, recent, showAll, ws.ui.activeTaskId)
   const open = ws.isExpanded(`project:${project.id}`)
   const setOpen = (next: boolean | ((current: boolean) => boolean)) =>
     ws.setExpanded(`project:${project.id}`, typeof next === 'function' ? next(open) : next)
@@ -282,14 +278,16 @@ export function ProjectGroup({ project }: { project: Project }) {
           {tasks.map((t) => (
             <TaskRow key={t.id} task={t} nested />
           ))}
-          {others.length > recent && (
-            <ExpandRow
-              expanded={showAll}
-              onToggle={() => setShowAll((s) => !s)}
-              className="h-[30px] min-h-[30px] px-2 text-body leading-5"
+          {hasMore && (
+            <Button
+              variant="tree"
+              aria-expanded={showAll}
+              onClick={() => setShowAll((s) => !s)}
+              className="h-[30px] min-h-[30px] gap-2 pl-[31px] pr-2 text-body leading-5 hover:bg-accent"
             >
               {showAll ? t('Show less') : t('Show more')}
-            </ExpandRow>
+              <ChevronDown className={`size-3.5 flex-none transition-transform${showAll ? ' rotate-180' : ''}`} />
+            </Button>
           )}
         </div>
       )}

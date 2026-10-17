@@ -4,6 +4,7 @@ import { CodeBlock } from './Code'
 import { useReducedMotion } from './Motion'
 import { parseBlocks, type Block } from '../runtime/markdown'
 import { chatReferences } from '@ramu/shared/chat/chatReferences'
+import { draftChip, skillChip, type ReferenceChip } from '@ramu/shared/chat/referenceChip'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { font, radius, space, useTheme } from '../theme'
 
@@ -23,32 +24,33 @@ export const ReferenceContext = createContext<ReferenceActions>({
   openUrl: (url) => void Linking.openURL(url).catch(() => {}),
 })
 
-/** A badge inside running text: a tinted, tappable span (nested Text is the one inline element both platforms lay out). */
-export function ReferenceBadge({
-  kind,
-  label,
-  onPress,
-}: {
-  kind: 'file' | 'skill' | 'command' | 'quote'
-  label: string
-  onPress?: () => void
-}) {
+const CHIP_GLYPH: Record<ReferenceChip['kind'], string> = {
+  file: '',
+  folder: '▸ ',
+  skill: '✦ ',
+  command: '/',
+  quote: '❝ ',
+}
+
+/** A reference chip inside running text: a tinted, tappable span (nested Text is the one inline element both platforms lay out). What it says comes from the chip model shared with the desktop. */
+export function ReferenceBadge({ chip, onPress }: { chip: ReferenceChip; onPress?: () => void }) {
   const { c } = useTheme()
-  const glyph = kind === 'skill' ? '✦ ' : kind === 'command' ? '/' : kind === 'quote' ? '❝ ' : ''
+  const mono = chip.kind === 'file' || chip.kind === 'folder' || chip.kind === 'command'
   return (
     <Text
       onPress={onPress}
       accessibilityRole={onPress ? 'link' : undefined}
+      accessibilityLabel={chip.title}
       suppressHighlighting
       style={{
         backgroundColor: c.fill,
-        color: kind === 'file' ? c.accent : kind === 'skill' ? c.accent : c.soft,
+        color: chip.kind === 'command' || chip.kind === 'quote' ? c.soft : c.accent,
         fontSize: font.control + 0.5,
         fontWeight: '500',
-        fontFamily: kind === 'file' || kind === 'command' ? font.mono : undefined,
+        fontFamily: mono ? font.mono : undefined,
       }}
     >
-      {`\u00A0${glyph}${label.replace(/ /g, '\u00A0')}\u00A0`}
+      {`\u00A0${CHIP_GLYPH[chip.kind]}${chip.label.replace(/ /g, '\u00A0')}\u00A0`}
     </Text>
   )
 }
@@ -129,12 +131,11 @@ function prose(text: string, key: string, actions: ReferenceActions, fade: WordF
         part.text
       )
     ) : part.kind === 'skill' ? (
-      <ReferenceBadge key={index} kind="skill" label={part.target} />
+      <ReferenceBadge key={index} chip={skillChip(part.target)} />
     ) : (
       <ReferenceBadge
         key={index}
-        kind="file"
-        label={part.target.split('/').at(-1) ?? part.target}
+        chip={draftChip({ kind: 'file', label: part.target, target: part.target })}
         onPress={() => actions.openFile(part.target)}
       />
     ),
@@ -194,7 +195,13 @@ function inline(
       if (url) {
         const label = link ? link[1]! : url
         if (localFileLink(url) && !/^https?:/i.test(url))
-          return <ReferenceBadge key={k} kind="file" label={label} onPress={() => actions.openFile(url)} />
+          return (
+            <ReferenceBadge
+              key={k}
+              chip={{ ...draftChip({ kind: 'file', label, target: url }), label }}
+              onPress={() => actions.openFile(url)}
+            />
+          )
         if (/^https?:\/\//i.test(url))
           return (
             <Text

@@ -1,6 +1,6 @@
 import { readAppearance, saveAppearance } from '../storage'
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
-import { Platform, useColorScheme } from 'react-native'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Appearance, Platform, useColorScheme } from 'react-native'
 
 // Ported from apps/web/src/styles.css: neutral gray surfaces separated by shade,
 // violet only for primary actions and highlights.
@@ -26,6 +26,8 @@ const dark = {
   primaryInk: '#ffffff',
   accent: '#b7a6f3',
   accentWash: 'rgba(183,166,243,0.10)',
+  // Selected chips and toggles: a quiet tonal violet, not the loud filled primary.
+  accentSoft: 'rgba(183,166,243,0.18)',
   ok: '#30d158',
   okWash: 'rgba(48,209,88,0.08)',
   warn: '#ffb340',
@@ -37,17 +39,18 @@ const dark = {
 
 export type Palette = typeof dark
 
+// iOS grouped look: cards are white on a cool gray page, so groups separate by shade like the dark theme does.
 const light: Palette = {
-  window: '#f2f2f4',
-  canvas: '#ffffff',
-  raised: '#ececef',
-  raised2: '#f5f5f7',
-  bubble: '#ececf0',
+  window: '#f2f2f7',
+  canvas: '#f2f2f7',
+  raised: '#e5e5ea',
+  raised2: '#ffffff',
+  bubble: '#e9e9ee',
   code: '#f4f4f6',
-  fill: 'rgba(0,0,0,0.04)',
-  pressed: 'rgba(0,0,0,0.08)',
-  line: 'rgba(0,0,0,0.07)',
-  lineStrong: 'rgba(0,0,0,0.12)',
+  fill: 'rgba(60,60,67,0.08)',
+  pressed: 'rgba(60,60,67,0.12)',
+  line: 'rgba(60,60,67,0.10)',
+  lineStrong: 'rgba(60,60,67,0.18)',
   text: '#111113',
   body: '#27272a',
   soft: '#3f3f46',
@@ -56,13 +59,14 @@ const light: Palette = {
   primary: '#5b40ad',
   primaryInk: '#ffffff',
   accent: '#6a46c8',
-  accentWash: 'rgba(118,82,212,0.08)',
+  accentWash: 'rgba(118,82,212,0.10)',
+  accentSoft: 'rgba(106,70,200,0.13)',
   ok: '#1f9d45',
-  okWash: 'rgba(31,157,69,0.08)',
+  okWash: 'rgba(31,157,69,0.10)',
   warn: '#b26b00',
-  warnWash: 'rgba(178,107,0,0.08)',
+  warnWash: 'rgba(178,107,0,0.10)',
   bad: '#d93a32',
-  badWash: 'rgba(217,58,50,0.08)',
+  badWash: 'rgba(217,58,50,0.10)',
   terminal: '#0e0e10',
 }
 
@@ -96,6 +100,10 @@ const ThemeContext = createContext<ThemeValue | null>(null)
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const system = useColorScheme()
   const [appearance, updateAppearance] = useState<Appearance>(readAppearance)
+  // Native search, toolbars, tabs and dialogs must follow the app's override too.
+  useEffect(() => {
+    Appearance.setColorScheme(appearance === 'system' ? 'unspecified' : appearance)
+  }, [appearance])
   const setAppearance = (value: Appearance) => {
     saveAppearance(value)
     updateAppearance(value)

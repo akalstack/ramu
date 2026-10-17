@@ -1,3 +1,5 @@
+import { useComputers } from '../workspace/computers'
+import { HostsInbox } from './HostsInbox'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useWorkspace } from '../workspace/workspace'
 import { DateTime } from 'luxon'
@@ -90,6 +92,11 @@ const Count = ({ n }: { n: number }) =>
  * recaps, what Ramu learned and finished work, one tab each.
  */
 export function InboxPage() {
+  const computers = useComputers()
+  return computers && computers.computers.length > 1 ? <HostsInbox /> : <CurrentHostInbox />
+}
+
+function CurrentHostInbox() {
   useLanguage()
   const { groups, error } = useAgentOverview()
   const recaps = useRecaps()

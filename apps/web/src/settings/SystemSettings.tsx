@@ -57,7 +57,7 @@ export function SystemSettings({
       <ToggleRow
         {...toggleProps}
         setting="keepAwake"
-        title="Keep computer awake"
+        title="Keep host awake"
         description="Stop your Mac sleeping from idle while the service runs. Display sleep and manual sleep still work."
       />
       {draft.keepAwake && (

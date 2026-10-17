@@ -10,6 +10,7 @@ import {
 } from 'react'
 import {
   Platform,
+  UIManager,
   Pressable,
   ScrollView,
   type NativeScrollEvent,
@@ -24,10 +25,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Stack, useRouter } from 'expo-router'
 import { ScrollViewMarker } from 'react-native-screens/experimental'
-import { unstable_hasComponent } from 'react-native/Libraries/NativeComponent/NativeComponentRegistryUnstable'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
-import { Glass, floatingChrome, GlassSurfaceProvider, BlurSurface } from './Glass'
+import { Glass, floatingChrome } from './Glass'
 import { Button, IconButton, T, tap, type Icon } from './ui'
 
 const BAR = 44
@@ -36,7 +36,7 @@ const BAR = 44
 // view throws in Fabric's createNode, so ask the native registry first and fall back to the JS edge below.
 function hasNativeMarker() {
   try {
-    return Platform.OS === 'ios' && unstable_hasComponent('RNSScrollViewMarker')
+    return Platform.OS === 'ios' && UIManager.hasViewManagerConfig('RNSScrollViewMarker')
   } catch {
     return false
   }
@@ -54,7 +54,7 @@ function PrimaryScroll({ children }: { children: NonNullable<ReactNode> }) {
     ) : (
       children
     )
-  return <BlurSurface style={{ flex: 1 }}>{children}</BlurSurface>
+  return children
 }
 export function PageScrollView({
   ref,
@@ -99,29 +99,6 @@ export function HeaderButton({ icon: I, label, onPress }: HeaderButtonProps) {
   )
 }
 
-export type HeaderMenuItem = {
-  title: string
-  subtitle?: string
-  systemIcon: ComponentProps<typeof Stack.Toolbar.MenuAction>['icon']
-  disabled?: boolean
-  onPress: () => void
-}
-type HeaderMenuProps = {
-  icon: Icon
-  label: string
-  systemIcon: ComponentProps<typeof Stack.Toolbar.Menu>['icon']
-  items: HeaderMenuItem[]
-  onPress?: () => void
-}
-
-/**
- * A bar button that opens a native iOS menu with `items`. Elsewhere it is a plain HeaderButton
- * calling `onPress`, so the screen supplies one sheet for Android and web.
- */
-export function HeaderMenu({ icon, label, onPress }: HeaderMenuProps) {
-  return <HeaderButton icon={icon} label={label} onPress={onPress} />
-}
-
 /** Groups bar buttons into one glass capsule, like the trailing items of an iOS 26 navigation bar. */
 function ButtonGroup({ children }: { children: ReactNode }) {
   if (!floatingChrome) return <View style={{ flexDirection: 'row', alignItems: 'center' }}>{children}</View>
@@ -129,7 +106,6 @@ function ButtonGroup({ children }: { children: ReactNode }) {
     <Glass
       radius={radius.full}
       interactive
-      blur={Platform.OS !== 'android'}
       style={{ flexDirection: 'row', alignItems: 'center', height: BAR, minWidth: BAR, justifyContent: 'center' }}
     >
       {children}
@@ -151,6 +127,7 @@ export function Header({
   modal,
   large,
   collapsed = true,
+  align = Platform.OS === 'android' ? 'left' : 'center',
 }: {
   title?: ReactNode
   subtitle?: ReactNode
@@ -160,6 +137,8 @@ export function Header({
   modal?: boolean
   large?: boolean
   collapsed?: boolean
+  /** Android uses the standard left-aligned app bar by default. */
+  align?: 'left' | 'center'
 }) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -179,7 +158,12 @@ export function Header({
           headerShadowVisible: false,
           headerTitle: subtitle
             ? () => (
-                <View style={{ alignItems: 'center', maxWidth: 220 }}>
+                <View
+                  style={{
+                    alignItems: align === 'left' ? 'flex-start' : 'center',
+                    maxWidth: align === 'left' ? 260 : 220,
+                  }}
+                >
                   <T size={17} weight="600" numberOfLines={1}>
                     {title}
                   </T>
@@ -196,7 +180,7 @@ export function Header({
               ? title
               : '',
           headerTitleStyle: { fontSize: 17, fontWeight: '600' },
-          headerTitleAlign: 'center',
+          headerTitleAlign: align,
           headerBackVisible: back && !modal,
           headerLeft: modal
             ? () => <HeaderButton icon={X} label="Close" onPress={close} />
@@ -215,32 +199,6 @@ export function Header({
       Children.toArray(children).flatMap<ReactNode>((child, index) => {
         if (!isValidElement(child)) return []
         if (child.type === Fragment) return nativeItems((child.props as { children?: ReactNode }).children)
-        if (child.type === HeaderMenu) {
-          const props = child.props as HeaderMenuProps
-          return [
-            <Stack.Toolbar.Menu
-              key={props.label}
-              icon={props.systemIcon}
-              accessibilityLabel={props.label}
-              tintColor={c.text}
-            >
-              {props.items.map((item) => (
-                <Stack.Toolbar.MenuAction
-                  key={item.title}
-                  icon={item.systemIcon}
-                  subtitle={item.subtitle}
-                  disabled={item.disabled}
-                  onPress={() => {
-                    tap()
-                    item.onPress()
-                  }}
-                >
-                  {item.title}
-                </Stack.Toolbar.MenuAction>
-              ))}
-            </Stack.Toolbar.Menu>,
-          ]
-        }
         if (child.type !== HeaderButton)
           return [
             <Stack.Toolbar.View key={index} hidesSharedBackground>
@@ -385,17 +343,15 @@ export function Screen({
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   return (
-    <GlassSurfaceProvider>
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: c[bg ?? 'window'],
-          paddingTop: Platform.OS === 'ios' && !scrollable ? insets.top + BAR : 0,
-        }}
-      >
-        {children}
-      </View>
-    </GlassSurfaceProvider>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: c[bg ?? 'window'],
+        paddingTop: Platform.OS === 'ios' && !scrollable ? insets.top + BAR : 0,
+      }}
+    >
+      {children}
+    </View>
   )
 }
 
@@ -446,7 +402,7 @@ export function GlassButton({
   style?: StyleProp<ViewStyle>
 }) {
   const { c } = useTheme()
-  if (!floatingChrome)
+  if (Platform.OS === 'android' || !floatingChrome)
     return (
       <Button
         title={title}

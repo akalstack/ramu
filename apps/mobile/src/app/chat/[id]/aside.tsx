@@ -9,7 +9,7 @@ import { useChat, useStore } from '../../../runtime/store'
 import { Header, HeaderButton, PageScrollView as ScrollView, Screen } from '../../../components/Screen'
 import { Markdown } from '../../../components/Markdown'
 import { Glass } from '../../../components/Glass'
-import { T, tap } from '../../../components/ui'
+import { Chip, T, tap } from '../../../components/ui'
 
 /** Side questions about a chat, as on the desktop: the agent keeps working and never sees them. */
 export default function AsideScreen() {
@@ -132,61 +132,20 @@ export default function AsideScreen() {
           </T>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
             {asides.map((a) => (
-              <Pressable
+              <Chip
                 key={a.id}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: a.id === selected }}
-                onPress={() => {
-                  tap()
-                  setSelected(a.id)
-                }}
-                style={{
-                  maxWidth: '100%',
-                  height: 32,
-                  paddingHorizontal: space.m,
-                  borderRadius: radius.full,
-                  justifyContent: 'center',
-                  backgroundColor: a.id === selected ? c.primary : c.raised2,
-                }}
-              >
-                <T
-                  size={font.control}
-                  weight="500"
-                  numberOfLines={1}
-                  style={{ color: a.id === selected ? c.primaryInk : undefined }}
-                  tone={a.id === selected ? undefined : 'soft'}
-                >
-                  {(a.quote || a.messages[0]?.text || 'Side question').replace(/\s+/g, ' ').slice(0, 28)}
-                </T>
-              </Pressable>
+                label={(a.quote || a.messages[0]?.text || 'Side question').replace(/\s+/g, ' ').slice(0, 28)}
+                selected={a.id === selected}
+                onPress={() => setSelected(a.id)}
+              />
             ))}
-            <Pressable
-              accessibilityRole="button"
+            <Chip
+              label="New"
               accessibilityLabel="New side question"
-              onPress={() => {
-                tap()
-                setSelected(null)
-              }}
-              style={{
-                height: 32,
-                paddingHorizontal: space.m,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 4,
-                borderRadius: radius.full,
-                backgroundColor: selected === null ? c.primary : c.raised2,
-              }}
-            >
-              <Plus size={14} color={selected === null ? c.primaryInk : c.soft} />
-              <T
-                size={font.control}
-                weight="500"
-                style={{ color: selected === null ? c.primaryInk : undefined }}
-                tone={selected === null ? undefined : 'soft'}
-              >
-                New
-              </T>
-            </Pressable>
+              icon={Plus}
+              selected={selected === null}
+              onPress={() => setSelected(null)}
+            />
           </View>
           {!current && pendingQuote ? (
             <View style={{ borderLeftWidth: 2, borderLeftColor: c.lineStrong, paddingLeft: space.m }}>

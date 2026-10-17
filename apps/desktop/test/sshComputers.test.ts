@@ -71,7 +71,7 @@ function ssh(reply: { stdout: string; stderr?: string; code?: number }) {
   return { tunnels, calls }
 }
 
-it('asks the other computer to start ramu and reports why it cannot', async () => {
+it('asks the other host to start ramu and reports why it cannot', async () => {
   const ok = ssh({
     stdout: '{"state":"ready","listening":"127.0.0.1:7788","code":"K7QM2-X9RTD","urls":["http://127.0.0.1:7788"]}',
   })

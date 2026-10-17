@@ -51,8 +51,8 @@ interface Target {
 
 /** These pages configure one machine (binaries, login, service, network), so "all environments" has no meaning. */
 const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = ['providers', 'system', 'remote']
-/** Remote access always describes the environment being used; it is not selectable. */
-const CURRENT_ENVIRONMENT_SECTIONS: readonly string[] = ['remote']
+/** Remote access and archived history describe the current environment; it is not selectable. */
+const CURRENT_ENVIRONMENT_SECTIONS: readonly string[] = ['remote', 'archived']
 export const isSingleEnvironmentSection = (section: string) => SINGLE_ENVIRONMENT_SECTIONS.includes(section)
 export const isCurrentEnvironmentSection = (section: string) => CURRENT_ENVIRONMENT_SECTIONS.includes(section)
 
@@ -76,7 +76,7 @@ export function useSettingsScope(section: string) {
   const dirty = useRef(false)
   const connections = JSON.stringify(computers?.computers.map(({ id, name, status }) => ({ id, name, status })) ?? [])
   const available = computers?.computers ?? [
-    { id: '', name: t('This computer'), local: true, status: 'connected' as const },
+    { id: '', name: t('This host'), local: true, status: 'connected' as const },
   ]
   const selected = available.filter((computer) =>
     target === 'all' ? computer.status === 'connected' : computer.id === target,
@@ -96,7 +96,7 @@ export function useSettingsScope(section: string) {
     void Promise.all(
       selected.map(async ({ id, name }): Promise<Target> => {
         if (available.find((computer) => computer.id === id)?.status !== 'connected')
-          return { id, name, error: t('This computer is offline.') }
+          return { id, name, error: t('This host is offline.') }
         try {
           const snapshot = await readSettingsSnapshot(() => read(id))
           return { id, name, snapshot }
@@ -110,7 +110,7 @@ export function useSettingsScope(section: string) {
             error: updateRequired
               ? local
                 ? t('The background service is from an older version. Restart it to load settings.')
-                : t('Update Ramu and restart the background service on this computer, then reload settings.')
+                : t('Update Ramu and restart the background service on this host, then reload settings.')
               : errorText(reason),
           }
         }
@@ -230,7 +230,7 @@ export function useSettingsScope(section: string) {
               : await invoke('settings.app.patch', edits)
             : entry.snapshot!
           if (edits.some((edit) => !sameValue(currentValue(snapshot, edit.path), edit.value)))
-            throw new Error(t('This computer did not save every setting. Reload and check its supported options.'))
+            throw new Error(t('This host did not save every setting. Reload and check its supported options.'))
           return { ...entry, snapshot, error: undefined }
         } catch (reason) {
           return { ...entry, error: errorText(reason) }
@@ -239,7 +239,7 @@ export function useSettingsScope(section: string) {
     )
     setTargets(results)
     const failed = results.filter((entry) => entry.error)
-    setMessage(t('Settings saved on {0} computers.', { 0: results.length - failed.length }))
+    setMessage(t('Settings saved on {0} hosts.', { 0: results.length - failed.length }))
     setError(failed.length ? failed.map((entry) => `${entry.name}: ${entry.error}`).join('\n') : null)
     if (!failed.length) {
       setEdited(new Set())
@@ -308,7 +308,7 @@ export function SettingsField({
         </span>
       )}
       {!compact && state.disabled && (
-        <span className="text-caption text-muted-foreground">{t('Not supported by every selected computer.')}</span>
+        <span className="text-caption text-muted-foreground">{t('Not supported by every selected host.')}</span>
       )}
       {compact ? (
         children
@@ -327,7 +327,7 @@ export function SettingsFieldNotice({ path }: { path: string }) {
   const state = scope.field(path)
   return state.disabled ? (
     <span className="block mt-1 text-caption text-muted-foreground">
-      {t('Not supported by every selected computer.')}
+      {t('Not supported by every selected host.')}
     </span>
   ) : state.mixed ? (
     <span className="flex flex-wrap items-center gap-2 mt-1 text-caption text-muted-foreground" role="status">
@@ -346,10 +346,10 @@ export function useSettingsInvoke(): typeof invoke {
     if (!scope) return invoke
     return (async (method: string, ...args: unknown[]) => {
       if (method.startsWith('computers.')) return (invoke as any)(method, ...args)
-      if (!scope.ready || scope.stale) throw new Error(t('Select a connected computer.'))
+      if (!scope.ready || scope.stale) throw new Error(t('Select a connected host.'))
       const readOnly = /\.(get|list|status|history|catalog)$/.test(method) || method === 'advisor.claude'
       if (scope.target === 'all' && scope.targets.length > 1 && !readOnly)
-        throw new Error(t('Choose one computer in the settings header for this action.'))
+        throw new Error(t('Choose one host in the settings header for this action.'))
       const id = scope.primaryId
       return id ? invoke('computers.settings.invoke', id, method, args) : (invoke as any)(method, ...args)
     }) as typeof invoke

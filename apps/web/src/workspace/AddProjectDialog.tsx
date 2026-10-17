@@ -2,12 +2,24 @@ import { t, useLanguage } from '../i18n'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useEffect, useState } from 'react'
 import { Dialog } from '../Menu'
-import { onRepoChoice, type RepoChoice } from './addProject'
+import { Folder, ChevronLeft } from 'lucide-react'
+import { invoke } from '../ipc'
+import { errorText } from './TaskPane'
+import { onFolderPick, onRepoChoice, type FolderPick, type RepoChoice } from './addProject'
 
 const name = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
 
 /** Shown when a folder holds several repositories: every one starts ticked, and the user unticks any to leave out. */
 export function AddProjectDialog() {
+  return (
+    <>
+      <RepoChoiceDialog />
+      <HostFolderDialog />
+    </>
+  )
+}
+
+function RepoChoiceDialog() {
   useLanguage()
   const [request, setRequest] = useState<RepoChoice | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -70,6 +82,83 @@ export function AddProjectDialog() {
             <span className="font-semibold overflow-hidden text-ellipsis whitespace-nowrap">{name(repo)}</span>
           </label>
         ))}
+      </div>
+    </Dialog>
+  )
+}
+
+type Listing = { path: string; parent: string | null; folders: { name: string; path: string }[] }
+
+/** Browses folders on the host this window is connected to, since a native picker would open on that machine instead. */
+function HostFolderDialog() {
+  useLanguage()
+  const [request, setRequest] = useState<FolderPick | null>(null)
+  const [roots, setRoots] = useState<string[]>([])
+  const [listing, setListing] = useState<Listing | null>(null)
+  const [error, setError] = useState('')
+  const browse = (path: string) =>
+    invoke('folders.list', path)
+      .then((next) => {
+        setListing(next)
+        setError('')
+      })
+      .catch((e) => setError(errorText(e)))
+  useEffect(
+    () =>
+      onFolderPick((next) => {
+        setRequest(next)
+        setListing(null)
+        setError('')
+        invoke('folders.roots')
+          .then((found) => {
+            setRoots(found)
+            if (found.length === 1) void browse(found[0]!)
+          })
+          .catch((e) => setError(errorText(e)))
+      }),
+    [],
+  )
+  if (!request) return null
+  const close = (dir: string | null) => {
+    const { resolve } = request
+    setRequest(null)
+    resolve(dir)
+  }
+  const rows = listing ? listing.folders : roots.map((path) => ({ name: path, path }))
+  const rowClass =
+    '[&:hover]:bg-hover flex w-full items-center justify-start gap-2.5 min-h-[32px] p-[2px_6px] rounded-(--radius-s) cursor-default border-0 bg-transparent text-left text-body'
+  return (
+    <Dialog
+      title={t('Choose a folder on the host')}
+      confirmLabel={t('Add this folder')}
+      confirmDisabled={!listing}
+      onCancel={() => close(null)}
+      onConfirm={() => listing && close(listing.path)}
+    >
+      <p className="muted text-muted-foreground small text-caption m-[0_0_8px] truncate" title={listing?.path}>
+        {listing?.path ?? t('Choose where to start browsing')}
+      </p>
+      {error && <p className="m-[0_0_8px] text-caption text-bad">{error}</p>}
+      <div className="flex flex-col gap-0.5 max-h-[min(50vh,420px)] overflow-y-auto overscroll-contain">
+        {listing && (
+          <button
+            type="button"
+            className={rowClass}
+            onClick={() => (listing.parent ? void browse(listing.parent) : setListing(null))}
+          >
+            <ChevronLeft size={15} className="flex-none text-muted-foreground" />
+            <span>{t('Parent folder')}</span>
+          </button>
+        )}
+        {rows.map((folder) => (
+          <button key={folder.path} type="button" className={rowClass} onClick={() => void browse(folder.path)}>
+            <Folder size={15} className="flex-none text-muted-foreground" />
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap">{folder.name}</span>
+          </button>
+        ))}
+        {listing && !rows.length && (
+          <p className="muted text-muted-foreground small text-caption m-0 p-[2px_6px]">{t('No folders here')}</p>
+        )}
       </div>
     </Dialog>
   )

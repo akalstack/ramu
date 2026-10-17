@@ -26,7 +26,7 @@ it('keeps 100 remote connections independent and measures full-list broadcast ov
     JSON.stringify({
       servers: Array.from({ length: count }, (_, i) => ({
         id: String(i),
-        name: `Computer ${i}`,
+        name: `Host ${i}`,
         url: `http://10.0.0.${i + 1}:7788`,
         pairedAt: 1,
         token: 'token',
@@ -41,7 +41,7 @@ it('keeps 100 remote connections independent and measures full-list broadcast ov
   const deps: ComputerDeps = {
     servers,
     deviceName: 'local',
-    localName: () => 'This computer',
+    localName: () => 'This host',
     local: '/tmp/unused.sock',
     subscribe: (target, receive) => {
       const url = target.kind === 'http' ? target.url : target.path

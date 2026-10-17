@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Easing, Pressable, View } from 'react-native'
 import Svg, { Circle, Path } from 'react-native-svg'
+import { useTheme } from '../theme'
 import { useReducedMotion } from './Motion'
 import { tap as haptic } from './ui'
 
@@ -14,6 +15,7 @@ const AnimatedPath = Animated.createAnimatedComponent(Path)
 let revealed = false
 
 export function AnimatedMark({ size = 56 }: { size?: number }) {
+  const { c } = useTheme()
   const reduced = useReducedMotion()
   const k = size / VIEW
   const [first] = useState(() => !revealed)
@@ -84,7 +86,7 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
           <Svg width={size} height={size} viewBox={viewBox}>
             <AnimatedPath
               d={STEM}
-              stroke="#dedee3"
+              stroke={c.text}
               strokeWidth={120}
               strokeLinecap="round"
               fill="none"

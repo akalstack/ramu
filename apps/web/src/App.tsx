@@ -66,9 +66,11 @@ import { AddProjectDialog } from './workspace/AddProjectDialog'
 import { HomePage, NewTask } from './NewTask'
 import { BootScreen, Wordmark } from './Brand'
 import { paneFadeIn } from './workspace/paneMotion'
-import { ComputerSwitcher } from './workspace/computers'
+import { ComputerSwitcher, useComputers } from './workspace/computers'
 import { useAddProject } from './workspace/addProject'
-import { ProjectsPanel } from './sidebar/ProjectsPanel'
+import { HostProjects } from './sidebar/HostProjects'
+import { navigateHost } from './workspace/hostOverview'
+import { HostNavigation } from './workspace/HostNavigation'
 import { TaskPane } from './workspace/TaskPane'
 import { isWorkspaceCtx, worktreeCtx, projectCtx, useWorkspace, WorkspaceProvider } from './workspace/workspace'
 
@@ -94,6 +96,7 @@ function ReadyShell({ onReady }: { onReady?: () => void }) {
   }, [onReady])
   return (
     <>
+      <HostNavigation />
       <Shell />
       <Onboarding />
     </>
@@ -104,6 +107,7 @@ function Shell() {
   const language = useLanguage()
 
   const ws = useWorkspace()
+  const computers = useComputers()
   const { ui } = ws
   const addProject = useAddProject()
   const [createScheduleRequested, setCreateScheduleRequested] = useState(false)
@@ -194,25 +198,34 @@ function Shell() {
   const projectActions = useProjectActions(actionContext ? ws.projectOf(actionContext)?.id : undefined)
   const commands = useMemo(
     () => [
-      ...buildCommands(ws, {
-        defaultTerminalDock: preferences.defaultTerminalDock,
-        openPalette: setPalette,
-        toggleSidebar,
-        addProject: () => void addProject.add(),
-        createSchedule: () => {
-          setSidebarHidden(false)
-          setCreateScheduleRequested(true)
-          ws.setSidebar('schedules')
+      ...buildCommands(
+        {
+          ...ws,
+          newTask: (projectId) => {
+            if (projectId === undefined && computers?.scope) navigateHost(computers.scope, { kind: 'new' })
+            else ws.newTask(projectId)
+          },
         },
-        showSidebar: (tab) => {
-          if (tab === 'projects' || tab === 'schedules') setSidebarHidden(false)
-          ws.setSidebar(tab)
+        {
+          defaultTerminalDock: preferences.defaultTerminalDock,
+          openPalette: setPalette,
+          toggleSidebar,
+          addProject: () => void addProject.add(),
+          createSchedule: () => {
+            setSidebarHidden(false)
+            setCreateScheduleRequested(true)
+            ws.setSidebar('schedules')
+          },
+          showSidebar: (tab) => {
+            if (tab === 'projects' || tab === 'schedules') setSidebarHidden(false)
+            ws.setSidebar(tab)
+          },
+          showSearch: () => {
+            ws.setSidebar('search')
+            window.dispatchEvent(new Event('ramu:focus-search'))
+          },
         },
-        showSearch: () => {
-          ws.setSidebar('search')
-          window.dispatchEvent(new Event('ramu:focus-search'))
-        },
-      }),
+      ),
       // ⌘K is left to the editor's own chords while a file has focus.
       {
         id: 'chat.search',
@@ -232,7 +245,7 @@ function Shell() {
           }))
         : []),
     ],
-    [ws, language, actionContext, projectActions, addProject.busy, preferences.defaultTerminalDock],
+    [ws, computers?.scope, language, actionContext, projectActions, addProject.busy, preferences.defaultTerminalDock],
   )
   useKeybindings(commands, palette === null && !settingsOpen && !searchingChats)
   useEffect(() => {
@@ -294,7 +307,10 @@ function Shell() {
   useLayoutEffect(() => setShownTerminal(terminalShown ? activeWorkspace : null), [terminalShown, activeWorkspace])
   const recaps = useRecaps()
   // What Inbox's Needs you tab holds: threads waiting on you and recaps that need a decision.
-  const inboxCount = ws.tasks.filter((task) => task.status === 'needs-input').length + recaps.attention.length
+  const inboxCount =
+    ws.tasks.filter((task) => task.status === 'needs-input').length +
+    recaps.attention.length +
+    (computers?.computers.filter((c) => c.id !== computers.current).reduce((sum, c) => sum + c.needsInput, 0) ?? 0)
   const attentionChats = ws.tasks.filter(
     (task) => task.status !== 'archived' && (ws.unread.has(task.id) || task.status === 'needs-input'),
   ).length
@@ -485,7 +501,7 @@ function Shell() {
                 <Button
                   variant="secondary"
                   className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] flex-1 min-w-0 bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start"
-                  onClick={() => ws.newTask()}
+                  onClick={() => (computers?.scope ? navigateHost(computers.scope, { kind: 'new' }) : ws.newTask())}
                 >
                   <SquarePen data-icon="inline-start" />{' '}
                   <span className="grow flex-1 min-w-0 truncate text-left">{t('New thread')}</span>{' '}
@@ -537,7 +553,7 @@ function Shell() {
               </Button>
             </nav>
             <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden flex-1 overflow-auto min-h-0">
-              <ProjectsPanel />
+              <HostProjects />
             </div>
             <div className="sidebar-footer flex flex-col gap-1.5 p-[6px_8px_8px] flex-none">
               {!sidebarHidden && <UsageFooter />}
@@ -624,6 +640,8 @@ function Shell() {
 
 function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode }) {
   useLanguage()
+  const computers = useComputers()
+  const host = computers?.computers.find((c) => c.id === computers.current)
 
   const ws = useWorkspace()
   const ctx = ws.ui.activeTaskId
@@ -736,6 +754,11 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
             title={t('Active isolated worktree')}
           >
             {ws.workspaces.find((workspace) => workspace.id === task.workspaceId)?.name ?? t('Isolated worktree')}
+          </span>
+        )}
+        {computers && computers.computers.length > 1 && host && (
+          <span className="max-w-40 truncate text-caption text-muted-foreground" title={host.name}>
+            {host.name}
           </span>
         )}
         {error && <span className="error text-bad small text-caption">{error}</span>}

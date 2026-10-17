@@ -95,10 +95,10 @@ export function probeAntigravity(executable: string, harness: string, timeoutMs 
       error ? reject(error) : resolve()
     }
     const timer = setTimeout(
-      () => finish(new Error('The downloaded runtime did not answer. It may not match this computer.')),
+      () => finish(new Error('The downloaded runtime did not answer. It may not match this host.')),
       timeoutMs,
     )
-    child.once('error', () => finish(new Error('The downloaded runtime cannot start on this computer.')))
+    child.once('error', () => finish(new Error('The downloaded runtime cannot start on this host.')))
     child.once('exit', () => finish(new Error('The downloaded runtime stopped before answering.')))
     lines.on('line', (line) => {
       try {
@@ -134,7 +134,7 @@ export async function installAntigravity(
     if (!response.ok) throw new Error(`Release source returned HTTP ${response.status}`)
     asset = resolveAntigravityAsset(await response.json()) ?? undefined
   }
-  if (!asset) throw new Error('Google does not publish the Antigravity runtime for this computer.')
+  if (!asset) throw new Error('Google does not publish the Antigravity runtime for this host.')
   const active = managedAntigravity()
   if (active?.version === asset.version) return { version: asset.version, installed: false }
   const home = providerRuntimeHome('antigravity'),

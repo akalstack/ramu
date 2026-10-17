@@ -1,3 +1,6 @@
+import { HostNavigation } from './hostNavigation'
+import { readHostOverview, HostOverviewQueue } from './hostOverview'
+import { isHostDestination, isHostTaskCommand } from '@ramu/shared/hostOverview'
 import { newerVersion } from '@ramu/shared/version'
 import { DesktopUpdater } from './desktopUpdater'
 import { runtimeBuild } from '@ramu/server/build'
@@ -288,6 +291,10 @@ async function main() {
       })
   }
   const wire = (contents: WebContents) => {
+    contents.on('did-start-loading', () => {
+      const id = owners.get(contents.id)
+      if (id) hostNavigation.suspend(id)
+    })
     contents.on('context-menu', (_event, params) => {
       const items = editMenuItems(params)
       if (items.length)
@@ -334,6 +341,22 @@ async function main() {
     const contents = contentsOf(id)
     if (contents && !contents.isDestroyed()) contents.send(channel, payload)
   }
+  const activityHosts = new Set<string>()
+  let activityTimer: NodeJS.Timeout | undefined
+  const observeHostActivity = (id: string, channel: string, payload: any) => {
+    if (
+      !['workspace:changed', 'automation:changed', 'summaries:changed', 'background:connection'].includes(channel) &&
+      !(channel === 'agent:event' && payload?.event?.kind === 'state')
+    )
+      return
+    activityHosts.add(id)
+    if (activityTimer) return
+    activityTimer = setTimeout(() => {
+      activityTimer = undefined
+      sendTo(visible, 'computers:activity', { ids: [...activityHosts] })
+      activityHosts.clear()
+    }, 250)
+  }
   const hiddenEvents = new Map<string, HiddenEvents>()
   const deliverTo = (id: string, channel: string, payload: unknown) => {
     if (id === visible) sendTo(id, channel, payload)
@@ -362,6 +385,7 @@ async function main() {
     win.contentView.removeChildView(view)
     owners.delete(view.webContents.id)
     views.delete(id)
+    hostNavigation.suspend(id)
     hiddenEvents.delete(id)
     view.webContents.close()
   }
@@ -415,6 +439,7 @@ async function main() {
   win.on('resize', layout)
 
   const notifiers = new Map<string, ReturnType<typeof createAgentNotifier>>()
+  const hostNavigation = new HostNavigation((id, destination) => sendTo(id, 'computers:navigate', destination))
   const pendingOpen = new Map<string, { taskId: string; sessionId: string }>()
   const notifierFor = (id: string) => {
     let notifier = notifiers.get(id)
@@ -452,7 +477,7 @@ async function main() {
     servers,
     ssh,
     deviceName: hostname(),
-    localName: () => t('This computer'),
+    localName: () => t('This host'),
     local: runtime,
     subscribe: (target, receive, options) =>
       subscribeRuntime(target, receive, runtimeNetwork, {
@@ -463,10 +488,16 @@ async function main() {
     invoke: runtimeInvoke,
     pair: runtimePair,
     deliver: (id, channel, payload) => {
+      observeHostActivity(id, channel, payload)
       deliverTo(id, channel, payload)
       notifierFor(id).observe(channel, payload)
     },
     changed: announce,
+  })
+  const overviewReads = new HostOverviewQueue(async (id) => {
+    if (!computers.exists(id) || computers.status(id) !== 'connected') throw new Error('That host is not connected')
+    const endpoint = computers.endpoint(id)
+    return readHostOverview((operation) => runtimeInvoke(endpoint, operation, [], { timeoutMs: 10000 }))
   })
   const rendererUrl = () => process.env.ELECTRON_RENDERER_URL
   const ensureView = (id: string) => {
@@ -497,10 +528,10 @@ async function main() {
   let settleTimer: NodeJS.Timeout | undefined
   /** Brings a computer's window to the front. Every other window keeps running behind it. */
   const openComputer = (id: string) => {
-    if (!computers.exists(id)) throw new Error(t('That computer is no longer saved'))
+    if (!computers.exists(id)) throw new Error(t('That host is no longer saved'))
     const info = computers.list(LOCAL).computers.find((computer) => computer.id === id)!
     if (id !== LOCAL && info.status === 'rejected')
-      throw new Error(t('{name} no longer accepts this computer. Forget it, then pair again.', { name: info.name }))
+      throw new Error(t('{name} no longer accepts this host. Forget it, then pair again.', { name: info.name }))
     if (id !== LOCAL && info.status !== 'connected')
       throw new Error(t('{name} is not reachable right now.', { name: info.name }))
     const previousId = visible
@@ -562,11 +593,13 @@ async function main() {
     }
     viewCache.forget(id)
     hiddenEvents.delete(id)
+    hostNavigation.forget(id)
     notifiers.delete(id)
     pendingOpen.delete(id)
     for (const request of checkpointRequests.values()) if (request.id === id) request.finish(false)
   }
   const unsubscribe = subscribeRuntime(runtime, (channel, payload) => {
+    observeHostActivity(LOCAL, channel, payload)
     if (channel === 'background:connection') computers.setLocalStatus(payload.connected)
     computers.observe(LOCAL, channel, payload)
     if (channel === 'updates:changed') {
@@ -627,7 +660,7 @@ async function main() {
     if (method === 'computers.settings.invoke') {
       const [id, operation, parameters] = args
       if (typeof id !== 'string' || !computers.exists(id) || computers.status(id) !== 'connected')
-        throw new Error('That computer is not connected')
+        throw new Error('That host is not connected')
       if (
         typeof operation !== 'string' ||
         !/^(providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.list$|diagnostics\.(export|clear)$)/.test(
@@ -637,7 +670,7 @@ async function main() {
       )
         throw new Error('Invalid settings action')
       if (id !== self && operation === 'providers.pickBinary')
-        throw new Error('Enter the binary path on the selected computer')
+        throw new Error('Enter the binary path on the selected host')
       settingsComputer = id
       method = operation
       args = parameters
@@ -698,7 +731,7 @@ async function main() {
       return terminalMenu(win, args[0], { x: point.x, y: point.y })
     }
     if (['attachments.menu', 'attachments.save', 'attachments.copy', 'attachments.reveal'].includes(method)) {
-      if (remote) throw new Error(t('Not available while connected to another computer'))
+      if (remote) throw new Error(t('Not available while connected to another host'))
       if (typeof args[0] !== 'string') throw new Error('Invalid attachment')
       if (method === 'attachments.save') return attachment.save(args[0])
       if (method === 'attachments.copy') return attachment.copy(args[0])
@@ -723,6 +756,47 @@ async function main() {
       request.finish(safe)
       return safe
     }
+    if (method === 'computers.tasks.invoke') {
+      const [id, operation, parameters] = args
+      if (typeof id !== 'string' || !computers.exists(id) || computers.status(id) !== 'connected')
+        throw new Error('That host is not connected')
+      if (!isHostTaskCommand(operation, parameters)) throw new Error('Invalid host thread action')
+      const result = await runtimeInvoke(computers.endpoint(id), operation, parameters as unknown[])
+      observeHostActivity(id, 'workspace:changed', {})
+      return result
+    }
+    if (method === 'computers.recapAct') {
+      const [id, recapId, action] = args
+      if (typeof id !== 'string' || !computers.exists(id) || computers.status(id) !== 'connected')
+        throw new Error('That host is not connected')
+      if (typeof recapId !== 'string' || !['done', 'dismissed', 'snoozed'].includes(action as string))
+        throw new Error('Invalid recap action')
+      await runtimeInvoke(computers.endpoint(id), 'recaps.act', [recapId, action])
+      observeHostActivity(id, 'automation:changed', {})
+      return
+    }
+    if (method === 'computers.overview') {
+      const id = args[0]
+      if (typeof id !== 'string' || !computers.exists(id) || computers.status(id) !== 'connected')
+        throw new Error('That host is not connected')
+      return overviewReads.read(id)
+    }
+    if (method === 'computers.navigate') {
+      const [id, destination] = args
+      if (typeof id !== 'string' || !isHostDestination(destination)) throw new Error('Invalid host destination')
+      openComputer(id)
+      hostNavigation.request(id, destination)
+      return
+    }
+    if (method === 'computers.navigation.ready') {
+      hostNavigation.ready(self)
+      return
+    }
+    if (method === 'computers.scope') {
+      if (args[0] !== null && typeof args[0] !== 'string') throw new Error('Invalid host filter')
+      computers.setScope(args[0])
+      return computers.list(self)
+    }
     if (method === 'computers.list') {
       // A window that opened from a notification asks for its chat once it has loaded.
       const waiting = pendingOpen.get(self)
@@ -734,8 +808,8 @@ async function main() {
     }
     if (method === 'computers.settings.get' || method === 'computers.settings.patch') {
       const id = args[0]
-      if (typeof id !== 'string' || !computers.exists(id)) throw new Error('That computer is no longer saved')
-      if (computers.status(id) !== 'connected') throw new Error('That computer is not connected')
+      if (typeof id !== 'string' || !computers.exists(id)) throw new Error('That host is no longer saved')
+      if (computers.status(id) !== 'connected') throw new Error('That host is not connected')
       // An explicit target never falls back to this window's computer.
       const result = await runtimeInvoke(
         computers.endpoint(id),
@@ -750,7 +824,7 @@ async function main() {
       return result
     }
     if (method === 'computers.open') {
-      if (typeof args[0] !== 'string') throw new Error('Invalid computer')
+      if (typeof args[0] !== 'string') throw new Error('Invalid host')
       return openComputer(args[0])
     }
     if (method === 'computers.pair') {
@@ -778,24 +852,24 @@ async function main() {
       return computers.list(self)
     }
     if (method === 'computers.forget') {
-      if (typeof args[0] !== 'string') throw new Error('Invalid computer')
+      if (typeof args[0] !== 'string') throw new Error('Invalid host')
       computers.forget(args[0])
       await closeComputer(args[0])
       return computers.list(self === args[0] ? LOCAL : self)
     }
     if (method === 'computers.retry') {
-      if (typeof args[0] !== 'string') throw new Error('Invalid computer')
+      if (typeof args[0] !== 'string') throw new Error('Invalid host')
       computers.retry(args[0])
       return computers.list(self)
     }
     if (method === 'computers.update') {
       if (typeof args[0] !== 'string' || !args[1] || typeof args[1] !== 'object' || Array.isArray(args[1]))
-        throw new Error('Invalid computer settings')
+        throw new Error('Invalid host settings')
       computers.update(args[0], args[1] as Parameters<typeof computers.update>[1])
       return computers.list(self)
     }
     if (remote && ['background.start', 'background.login', 'background.restart'].includes(method))
-      throw new Error(t('Not available while connected to another computer'))
+      throw new Error(t('Not available while connected to another host'))
     if (method === 'background.start') {
       await ensureRuntime(userData, daemonPath)
       return
@@ -846,7 +920,7 @@ async function main() {
       return
     }
     if (method === 'app.relaunch') {
-      if (remote) throw new Error(t('Not available while connected to another computer'))
+      if (remote) throw new Error(t('Not available while connected to another host'))
       app.relaunch()
       app.quit()
       return
@@ -882,6 +956,7 @@ async function main() {
     desktopUpdater.close()
     computers.stop()
     broadcaster.close()
+    clearTimeout(activityTimer)
     viewCache.close()
     clearInterval(sweepViews)
     for (const request of checkpointRequests.values()) request.finish(false)

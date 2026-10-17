@@ -18,7 +18,8 @@ import { ThinkingRow } from './ThinkingRow'
 import { UserMessage } from './UserMessage'
 import { PlanCard } from './PlanCard'
 import { PermissionRequestCard } from './PermissionRequestCard'
-import { CONVERSATION_SEPARATOR_CLASS, GHOST_TEXT_BUTTON_CLASS, MSG_CLASS, TURN_END_CLASS } from '../styles'
+import { CONVERSATION_SEPARATOR_CLASS, GHOST_TEXT_BUTTON_CLASS, TURN_END_CLASS } from '../styles'
+import { ErrorNote } from './ErrorNote'
 
 /** Renders one transcript event by kind: messages, separators, plans, permission and question cards, results and errors. */
 export function EventRow({
@@ -199,7 +200,7 @@ export function EventRow({
         </div>
       )
     case 'error':
-      return <div className={`${MSG_CLASS} error text-bad`}>{e.message}</div>
+      return <ErrorNote>{e.message}</ErrorNote>
     default:
       return null
   }

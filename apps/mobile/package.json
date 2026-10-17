@@ -4,7 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "expo start --dev-client",
+    "dev": "node scripts/start.mjs --go",
     "ios": "expo run:ios",
     "android": "expo run:android",
     "web": "expo start --web",
@@ -16,14 +16,15 @@
     "export:android": "expo export --platform android --output-dir dist/android",
     "build:ios": "expo run:ios",
     "build:android": "expo run:android",
-    "dev:build": "expo start --dev-client",
-    "dev:go": "expo start --go",
+    "dev:build": "node scripts/start.mjs --dev-client",
+    "dev:go": "node scripts/start.mjs --go",
     "gen:icons": "swift scripts/gen-icons.swift"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",
     "@expo/ui": "~57.0.24",
     "@ramu/contracts": "workspace:*",
+    "@ramu/shared": "workspace:*",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "diff": "8.0.2",
@@ -60,7 +61,6 @@
     "react-native-webview": "13.16.1"
   },
   "devDependencies": {
-    "@ramu/shared": "workspace:*",
     "@types/react": "catalog:",
     "typescript": "catalog:"
   }

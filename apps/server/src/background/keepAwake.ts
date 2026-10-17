@@ -30,7 +30,7 @@ export class KeepAwakeService {
     child.once('error', () => {
       if (this.child === child) {
         this.child = undefined
-        this.error = 'Could not keep the computer awake.'
+        this.error = 'Could not keep the host awake.'
       }
     })
     child.once('exit', (code) => {

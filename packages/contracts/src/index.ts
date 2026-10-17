@@ -106,7 +106,7 @@ export function decodePairQr(text: string, now = Date.now()): PairQrOffer {
     url.hash
   )
     throw new Error('Invalid host address in QR code')
-  if (offer.expiresAt <= now) throw new Error('This pairing code has expired. Create a new one on the computer.')
+  if (offer.expiresAt <= now) throw new Error('This pairing code has expired. Create a new one on the host.')
   return { ...offer, url: url.origin }
 }
 
@@ -151,7 +151,7 @@ export function parsePairInput(input: string, now = Date.now()): PairInput {
     if (code && !PAIR_CODE.test(code)) throw new Error('This pairing link has an invalid code')
     const expiresAt = Number(link.searchParams.get('exp')) || undefined
     if (expiresAt && expiresAt <= now)
-      throw new Error('This pairing link has expired. Create a new one on the computer.')
+      throw new Error('This pairing link has expired. Create a new one on the host.')
     return {
       url: parseRemoteUrl(url),
       ...(code ? { code } : {}),

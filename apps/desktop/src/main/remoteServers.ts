@@ -202,9 +202,9 @@ export class RemoteServers {
   update(id: string, changes: ComputerUpdate): SavedServer {
     const file = this.read(),
       server = file.servers.find((entry) => entry.id === id)
-    if (!server) throw new Error('That computer is no longer saved')
+    if (!server) throw new Error('That host is no longer saved')
     if (changes.name !== undefined) {
-      if (typeof changes.name !== 'string' || !clean(changes.name, '')) throw new Error('Enter a computer name')
+      if (typeof changes.name !== 'string' || !clean(changes.name, '')) throw new Error('Enter a host name')
       server.name = clean(changes.name, server.name)
     }
     if (changes.enabled !== undefined) {

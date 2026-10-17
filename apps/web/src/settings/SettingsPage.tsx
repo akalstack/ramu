@@ -4,6 +4,7 @@ import { t, useLanguage } from '../i18n'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
 import {
+  Archive,
   MessageSquare,
   Brain,
   CalendarClock,
@@ -31,6 +32,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'editor', label: 'Editor & Terminal', Icon: Code, group: 'Workspace' },
   { id: 'git', label: 'Git', Icon: GitBranch, group: 'Workspace' },
   { id: 'shortcuts', label: 'Keyboard shortcuts', Icon: Keyboard, group: 'Workspace' },
+  { id: 'archived', label: 'Archived threads', Icon: Archive, group: 'Workspace' },
   { id: 'chats', label: 'Threads', Icon: MessageSquare, group: 'Agents' },
   { id: 'providers', label: 'Providers & models', Icon: Cpu, group: 'Agents' },
   { id: 'access', label: 'Access & Fallback', Icon: ShieldCheck, group: 'Agents' },
@@ -43,6 +45,7 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
+  { section: 'archived', title: 'Archived threads', words: 'history restore unarchive delete' },
   { section: 'system', title: 'Keep local crash reports', words: 'diagnostics privacy errors crash local export' },
   { section: 'git', title: 'Automatic pull', words: 'git auto fetch remote fast-forward background sync' },
   {
@@ -119,7 +122,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'system', title: 'Generate daily at', words: 'recap time schedule timezone' },
   {
     section: 'system',
-    title: 'Keep computer awake',
+    title: 'Keep host awake',
     words: 'sleep awake caffeinate power battery background installed login',
   },
   { section: 'system', title: 'Background service', words: 'daemon login startup' },
@@ -187,12 +190,12 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
     title: 'Allow other devices',
     words: 'remote access network listen phone tablet vpn tailscale netbird zerotier wireguard lan server',
   },
-  { section: 'remote', title: 'Pair a device', words: 'pairing code link phone another computer connect add' },
+  { section: 'remote', title: 'Pair a device', words: 'pairing code link phone another host connect add' },
   { section: 'remote', title: 'Paired devices', words: 'revoke remove devices access token' },
   {
     section: 'remote',
-    title: 'Connect to a computer',
-    words: 'remote server use another computer switch host pair address link ssh alias tunnel',
+    title: 'Connect to a host',
+    words: 'remote server use another host switch host pair address link ssh alias tunnel',
   },
 ]
 
@@ -317,10 +320,10 @@ export function SettingsPage({
                       .join(' · ')
                   : (scope.message ??
                     (scope.target === 'all'
-                      ? t('Changes apply to {0} connected computers. Offline computers keep their settings.', {
+                      ? t('Changes apply to {0} connected hosts. Offline hosts keep their settings.', {
                           0: scope.targets.length,
                         })
-                      : t('Changes apply to the selected computer.')))}
+                      : t('Changes apply to the selected host.')))}
             </span>
             {scope.restartTarget && (
               <Button

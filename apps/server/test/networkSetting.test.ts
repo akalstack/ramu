@@ -26,7 +26,7 @@ const addresses = [
 ]
 const on = { enabled: true, host: '100.64.0.7', port: 7788, acceptUnencrypted: true }
 
-it('accepts every network or one of this computer’s addresses', () => {
+it('accepts every network or one of this host’s addresses', () => {
   expect(validateNetworkSetting(on, false, addresses)).toEqual(on)
   expect(validateNetworkSetting({ ...on, host: '0.0.0.0' }, false, addresses).host).toBe('0.0.0.0')
   expect(validateNetworkSetting({ ...on, host: '127.0.0.1', acceptUnencrypted: false }, false, addresses).host).toBe(
@@ -43,7 +43,7 @@ it('rejects bad ports and shapes', () => {
   expect(() => validateNetworkSetting({ ...on, enabled: 'yes' }, false, addresses)).toThrow(/Invalid/)
 })
 
-it('needs confirmation to listen beyond this computer without TLS', () => {
+it('needs confirmation to listen beyond this host without TLS', () => {
   expect(() => validateNetworkSetting({ ...on, acceptUnencrypted: false }, false, addresses)).toThrow(
     /trust the network/,
   )
@@ -66,7 +66,7 @@ it('saves privately and survives a missing or broken file', () => {
   expect(readNetworkSetting(path, false)).toEqual(DEFAULT_NETWORK_SETTING)
 })
 
-it('lists this computer’s addresses without loopback or link-local', () => {
+it('lists this host’s addresses without loopback or link-local', () => {
   for (const entry of localAddresses()) {
     expect(entry.address).not.toMatch(/^127\.|^fe80:|^169\.254\./i)
   }

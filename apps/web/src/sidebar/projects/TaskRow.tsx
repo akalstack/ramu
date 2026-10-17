@@ -1,10 +1,26 @@
+import type { RamuMethods } from '@ramu/shared/api'
+import type { HostTaskMethod } from '@ramu/shared/hostOverview'
+import { useComputers } from '../../workspace/computers'
+import { navigateHost } from '../../workspace/hostOverview'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Archive, ArchiveRestore, GitBranch, Pencil, Pin, PinOff, Sparkles, Trash2, X } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  Check,
+  GitBranch,
+  Pencil,
+  Pin,
+  PinOff,
+  RotateCcw,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useState } from 'react'
 import type { Task } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
-import { copyText, invoke } from '../../ipc'
+import { copyText, invoke, ramu } from '../../ipc'
 import { Dialog, useContextMenu, type MenuEntry } from '../../Menu'
 import { errorText } from '../../workspace/TaskPane'
 import { notifyError } from '../../chat/Notifications'
@@ -20,23 +36,46 @@ export function TaskRow({
   projectName,
   hidePin,
   nested,
+  remote,
+  merged,
 }: {
   task: Task
   projectName?: string
   hidePin?: boolean
   nested?: boolean
+  /** Rows from several hosts share one list, so each says where it lives. */
+  merged?: boolean
+  remote?: { id: string; tasks: Task[]; available: boolean; refresh(): Promise<unknown> }
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const computers = useComputers()
+  const hostName =
+    (projectName || merged) && computers && computers.computers.length > 1
+      ? computers.computers.find((c) => c.id === (remote?.id ?? computers.current))?.name
+      : undefined
+  const callTask = <M extends HostTaskMethod>(method: M, ...args: Parameters<RamuMethods[M]>) =>
+    remote ? ramu.invoke('computers.tasks.invoke', remote.id, method, args) : invoke(method, ...args)
+  const refresh = () => (remote ? remote.refresh() : ws.refresh())
+  const forget = () => {
+    if (!remote) ws.forgetTask(task.id)
+  }
+  const open = () => {
+    if (remote) {
+      if (remote.available) navigateHost(remote.id, { kind: 'task', taskId: task.id })
+    } else ws.openTask(task.id)
+  }
   const [renaming, setRenaming] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const sharedWorktree =
-    !!task.workspaceId && ws.tasks.some((t) => t.id !== task.id && t.workspaceId === task.workspaceId)
+    !!task.workspaceId &&
+    (remote?.tasks ?? ws.tasks).some((t) => t.id !== task.id && t.workspaceId === task.workspaceId)
   const [removeWorktrees, setRemoveWorktrees] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const active = ws.ui.activeTaskId === task.id && !ws.composing
+  const active = !remote && ws.ui.activeTaskId === task.id && !ws.composing
   const archived = task.status === 'archived'
+  const done = !!task.doneAt
   const { initialSettings } = useModelSets()
   const [naming, setNaming] = useState(false)
 
@@ -44,7 +83,7 @@ export function TaskRow({
     setError(null)
     try {
       await fn()
-      await ws.refresh()
+      await refresh()
     } catch (e) {
       setError(errorText(e))
     }
@@ -72,7 +111,7 @@ export function TaskRow({
           {task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />} {task.pinnedAt ? t('Unpin') : t('Pin')}
         </>
       ),
-      onSelect: () => void run(() => invoke('tasks.pin', task.id, !task.pinnedAt)),
+      onSelect: () => void run(() => callTask('tasks.pin', task.id, !task.pinnedAt)),
     },
     {
       key: 'rename-ai',
@@ -81,12 +120,27 @@ export function TaskRow({
           <Sparkles size={14} /> {t(' Rename with AI')}
         </>
       ),
-      disabled: naming,
+      disabled: naming || !!remote,
       onSelect: () => {
+        if (remote) return
         setNaming(true)
         void run(() => invoke('tasks.generateTitle', task.id, initialSettings, true)).finally(() => setNaming(false))
       },
     },
+    ...(!archived
+      ? [
+          {
+            key: 'done',
+            label: (
+              <>
+                <Check size={14} /> {done ? t('Reopen') : t('Mark done')}
+              </>
+            ),
+            disabled: !done && (task.status === 'running' || task.status === 'needs-input'),
+            onSelect: () => void run(() => callTask('tasks.done', task.id, !done)),
+          },
+        ]
+      : []),
     archived
       ? {
           key: 'unarchive',
@@ -95,7 +149,7 @@ export function TaskRow({
               <ArchiveRestore size={14} /> {t(' Unarchive')}
             </>
           ),
-          onSelect: () => void run(() => invoke('tasks.archive', task.id, false)),
+          onSelect: () => void run(() => callTask('tasks.archive', task.id, false)),
         }
       : {
           key: 'archive',
@@ -106,11 +160,11 @@ export function TaskRow({
           ),
           onSelect: () =>
             void run(async () => {
-              await invoke('tasks.archive', task.id, true)
-              ws.forgetTask(task.id)
+              await callTask('tasks.archive', task.id, true)
+              forget()
             }),
         },
-    ...(ws.ui.openTaskIds.includes(task.id)
+    ...(!remote && ws.ui.openTaskIds.includes(task.id)
       ? [
           {
             key: 'close',
@@ -142,15 +196,19 @@ export function TaskRow({
   return (
     <>
       <div
-        onContextMenu={contextMenu.onContextMenu}
-        className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 min-h-[30px] rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${archived ? ' archived' : ''}${nested ? ' pl-[31px]' : ''}`}
+        onContextMenu={remote && !remote.available ? undefined : contextMenu.onContextMenu}
+        className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 ${projectName || hostName ? 'min-h-11' : 'min-h-[30px]'} rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${archived ? ' archived' : ''}${nested ? ' pl-[31px]' : ''}`}
         role="button"
         tabIndex={0}
-        onClick={() => !renaming && ws.openTask(task.id)}
-        onDoubleClick={() => setRenaming(true)}
+        aria-disabled={(remote && !remote.available) || undefined}
+        onClick={() => !renaming && open()}
+        onDoubleClick={() => {
+          if (!remote || remote.available) setRenaming(true)
+        }}
         onKeyDown={(e) => {
+          if (remote && !remote.available) return
           contextMenu.onKeyDown(e)
-          if (e.key === 'Enter' && !renaming) ws.openTask(task.id)
+          if (e.key === 'Enter' && !renaming) open()
         }}
       >
         {renaming ? (
@@ -158,20 +216,24 @@ export function TaskRow({
             value={task.title}
             onDone={(v) => {
               setRenaming(false)
-              if (v && v !== task.title) void run(() => invoke('tasks.rename', task.id, v))
+              if (v && v !== task.title) void run(() => callTask('tasks.rename', task.id, v))
             }}
           />
         ) : (
           <>
-            {projectName && (
-              <span className="task-project [&::after]:[content:'·'] [&::after]:ml-1 flex-none max-w-[40%] overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground font-medium">
-                {projectName}
+            {projectName || hostName ? (
+              <span className="grow flex-1 min-w-0 flex flex-col py-1 text-left">
+                <FadeText className="task-title overflow-hidden whitespace-nowrap" text={task.title} />
+                <span className="task-project truncate text-caption text-muted-foreground">
+                  {[projectName, hostName].filter(Boolean).join(' · ')}
+                </span>
               </span>
+            ) : (
+              <FadeText
+                className="grow flex-1 min-w-0 text-left task-title overflow-hidden whitespace-nowrap"
+                text={task.title}
+              />
             )}
-            <FadeText
-              className="grow flex-1 min-w-0 text-left task-title overflow-hidden whitespace-nowrap"
-              text={task.title}
-            />
             {task.kind === 'library-review' && (
               <span className="task-kind flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
                 {t('Review')}
@@ -194,7 +256,12 @@ export function TaskRow({
           />
         )}
         {task.mode === 'worktree' && (
-          <span title={ws.workspaces.find((w) => w.id === task.workspaceId)?.name ?? t('Isolated worktrees')}>
+          <span
+            title={
+              (!remote ? ws.workspaces.find((w) => w.id === task.workspaceId)?.name : undefined) ??
+              t('Isolated worktrees')
+            }
+          >
             <GitBranch
               size={12}
               className="muted text-muted-foreground mode-icon flex-none"
@@ -208,11 +275,12 @@ export function TaskRow({
               variant="ghost"
               size="icon-xs"
               className={ICON_BUTTON_CLASS}
+              disabled={remote && !remote.available}
               aria-label={task.pinnedAt ? t('Unpin thread') : t('Pin thread')}
               title={task.pinnedAt ? t('Unpin') : t('Pin')}
               onClick={(e) => {
                 e.stopPropagation()
-                void run(() => invoke('tasks.pin', task.id, !task.pinnedAt))
+                void run(() => callTask('tasks.pin', task.id, !task.pinnedAt))
               }}
             >
               {task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}
@@ -222,20 +290,24 @@ export function TaskRow({
             variant="ghost"
             size="icon-xs"
             className={ICON_BUTTON_CLASS}
-            aria-label={archived ? t('Unarchive thread') : t('Archive thread')}
-            title={archived ? t('Unarchive') : t('Archive')}
+            disabled={remote && !remote.available}
+            aria-label={archived ? t('Unarchive thread') : done ? t('Reopen thread') : t('Mark thread done')}
+            title={archived ? t('Unarchive') : done ? t('Reopen') : t('Mark done')}
             onClick={(e) => {
               e.stopPropagation()
               void run(async () => {
-                await invoke('tasks.archive', task.id, !archived)
-                if (!archived) ws.forgetTask(task.id)
+                if (archived) {
+                  await callTask('tasks.archive', task.id, false)
+                } else {
+                  await callTask('tasks.done', task.id, !done)
+                }
               })
             }}
           >
-            {archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+            {archived ? <ArchiveRestore size={14} /> : done ? <RotateCcw size={14} /> : <Check size={14} />}
           </Button>
         </span>
-        <TaskStateIcon task={task} unread={ws.unread.has(task.id)} />
+        <TaskStateIcon task={task} unread={!remote && ws.unread.has(task.id)} />
       </div>
       {contextMenu.menu}
       {error && !deleting && <div className={ROW_ERROR_CLASS}>{error}</div>}
@@ -254,9 +326,9 @@ export function TaskRow({
             setBusy(true)
             setError(null)
             try {
-              await invoke('tasks.delete', task.id, task.mode === 'worktree' && !sharedWorktree && removeWorktrees)
-              ws.forgetTask(task.id)
-              await ws.refresh()
+              await callTask('tasks.delete', task.id, task.mode === 'worktree' && !sharedWorktree && removeWorktrees)
+              forget()
+              await refresh()
               setDeleting(false)
             } catch (e) {
               setError(errorText(e))

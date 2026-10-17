@@ -11,7 +11,7 @@
       "bundleIdentifier": "dev.ramu.mobile",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Connect to the Ramu workspace on your paired computer.",
+        "NSLocalNetworkUsageDescription": "Connect to the Ramu workspace on your paired host.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true,
           "NSAllowsArbitraryLoads": true
@@ -43,7 +43,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Attach photos to a chat on your paired computer.",
+          "photosPermission": "Attach photos to a chat on your paired host.",
           "cameraPermission": "Take a photo to attach to a Ramu chat."
         }
       ],

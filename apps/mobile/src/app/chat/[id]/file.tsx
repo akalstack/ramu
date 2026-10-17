@@ -89,7 +89,7 @@ export default function FileScreen() {
           uri: (await store.invoke(computerId, 'files.media', taskId, repoId, path)).url,
         }
       if (OTHER_MEDIA.test(path))
-        return { kind: 'unsupported' as const, note: 'This kind of file can only be previewed on the computer.' }
+        return { kind: 'unsupported' as const, note: 'This kind of file can only be previewed on the host.' }
       const { content } = await store.invoke(computerId, 'files.read', taskId, repoId, path)
       return { kind: 'text' as const, raw: content, lines: content.split('\n') }
     }

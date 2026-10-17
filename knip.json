@@ -28,5 +28,8 @@
       "ignoreDependencies": ["expo-updates"],
       "entry": ["plugins/*.cjs"]
     }
+  },
+  "ignoreIssues": {
+    "apps/web/src/components/ui/**": ["exports", "types"]
   }
 }

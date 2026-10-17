@@ -9,7 +9,7 @@ export class WorkspaceViewCache {
     private readonly safe: (id: string) => Promise<boolean>,
     private readonly release: (id: string) => void,
     private readonly limit = 4,
-    private readonly idleMs = 10 * 60_000,
+    private readonly idleMs = 60 * 60_000,
     private readonly now = Date.now,
   ) {}
   show(id: string) {

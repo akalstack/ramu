@@ -1,13 +1,10 @@
 import { Button } from '@/components/desktop-button'
-import { FolderPlus, Plus, Trash2 } from 'lucide-react'
+import { FolderPlus, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { t, useLanguage } from '../i18n'
-import { invoke } from '../ipc'
-import { Dialog } from '../Menu'
-import { errorText } from '../workspace/TaskPane'
 import { useWorkspace } from '../workspace/workspace'
 import { useAppSettings } from '../settings/AppSettings'
 import { useAddProject } from '../workspace/addProject'
@@ -17,26 +14,20 @@ import { useProjectsDragDrop } from './projects/dnd'
 import { ProjectGroup } from './projects/ProjectGroup'
 import { SectionHead } from './projects/SectionHead'
 import { TaskRow } from './projects/TaskRow'
+import { sidebarThreads } from './projects/threadLists'
 
-export function ProjectsPanel() {
+export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
   useLanguage()
   const ws = useWorkspace()
   const addProject = useAddProject()
-  const [showArchived, setShowArchived] = useState(false)
-  const [clearingArchived, setClearingArchived] = useState(false)
-  const [clearBusy, setClearBusy] = useState(false)
-  const [clearError, setClearError] = useState<string | null>(null)
-  const archivedChats = ws.tasks
-    .filter((task) => task.status === 'archived')
-    .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  const { active, done } = sidebarThreads(ws.tasks)
+  const showDone = ws.isExpanded('section:done')
   // Pinned chats from every project gather in one section above the projects.
   const showPinned = ws.isExpanded('section:pinned'),
-    showProjects = ws.isExpanded('section:projects'),
+    showProjects = embedded || ws.isExpanded('section:projects'),
     showChats = ws.isExpanded('section:chats')
-  const pinned = ws.tasks.filter((t) => t.pinnedAt && t.status !== 'archived').sort(pinnedFirst)
-  const looseChats = ws.tasks
-    .filter((t) => t.projectId === NO_PROJECT && t.status !== 'archived' && !t.pinnedAt)
-    .sort(pinnedFirst)
+  const pinned = active.filter((t) => t.pinnedAt).sort(pinnedFirst)
+  const looseChats = active.filter((t) => t.projectId === NO_PROJECT && !t.pinnedAt).sort(pinnedFirst)
   const { preferences } = useAppSettings()
   // Relative labels keep aging even when no provider event re-renders the list.
   const [, setTimeTick] = useState(0)
@@ -46,9 +37,7 @@ export function ProjectsPanel() {
   }, [])
   // Recent mode: every chat in one list by activity, each led by its project's name.
   const recentMode = preferences.recentChatMode
-  const latest = recentMode
-    ? ws.tasks.filter((t) => t.status !== 'archived' && !t.pinnedAt).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
-    : []
+  const latest = recentMode ? active.filter((t) => !t.pinnedAt).sort((a, b) => b.lastActiveAt - a.lastActiveAt) : []
   const { reorder, folderOver, onDragOver, onDragLeave, onDrop } = useProjectsDragDrop()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const projectIds = ws.projects.map((project) => project.id)
@@ -60,7 +49,7 @@ export function ProjectsPanel() {
 
   return (
     <div
-      className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] p-[2px_8px_16px] tasks-panel${folderOver ? ' folder-drop' : ''}`}
+      className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] ${embedded ? 'p-0' : 'p-[2px_8px_16px]'} tasks-panel${folderOver ? ' folder-drop' : ''}`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -85,24 +74,26 @@ export function ProjectsPanel() {
           </Collapse>
         </>
       )}
-      <SectionHead
-        title={recentMode ? t('Recent threads') : t('Projects')}
-        open={showProjects}
-        onToggle={() => ws.setExpanded('section:projects', !showProjects)}
-        controls="projects-list"
-      >
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className={ICON_BUTTON_CLASS}
-          aria-label={t('Add project')}
-          title={t('Add project…')}
-          disabled={addProject.busy}
-          onClick={() => void addProject.add()}
+      {!embedded && (
+        <SectionHead
+          title={recentMode ? t('Recent threads') : t('Projects')}
+          open={showProjects}
+          onToggle={() => ws.setExpanded('section:projects', !showProjects)}
+          controls="projects-list"
         >
-          <FolderPlus size={14} />
-        </Button>
-      </SectionHead>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={ICON_BUTTON_CLASS}
+            aria-label={t('Add project')}
+            title={t('Add project…')}
+            disabled={addProject.busy}
+            onClick={() => void addProject.add()}
+          >
+            <FolderPlus size={14} />
+          </Button>
+        </SectionHead>
+      )}
       <Collapse open={showProjects} id="projects-list">
         {recentMode && (
           <div className="flex flex-col gap-0.5">
@@ -134,13 +125,13 @@ export function ProjectsPanel() {
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropProject}>
             <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
               {ws.projects.map((p) => (
-                <ProjectGroup key={p.id} project={p} />
+                <ProjectGroup key={p.id} project={p} previewLimit={embedded ? 5 : undefined} />
               ))}
             </SortableContext>
           </DndContext>
         )}
       </Collapse>
-      {!recentMode && (
+      {!recentMode && (!embedded || looseChats.length > 0) && (
         <>
           <SectionHead
             title={t('Threads')}
@@ -165,74 +156,24 @@ export function ProjectsPanel() {
           </Collapse>
         </>
       )}
-      {archivedChats.length > 0 && (
+      {done.length > 0 && (
         <>
           <SectionHead
-            title={`${t('Archived')} · ${archivedChats.length}`}
-            open={showArchived}
-            onToggle={() => setShowArchived((shown) => !shown)}
-            controls="archived-chats"
-          >
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={`${ICON_BUTTON_CLASS} opacity-0 [transition:opacity_0.12s] group-hover/head:opacity-100 group-focus-within/head:opacity-100`}
-              aria-label={t('Delete all archived threads')}
-              title={t('Delete all archived threads')}
-              onClick={() => {
-                setClearError(null)
-                setClearingArchived(true)
-              }}
-            >
-              <Trash2 size={14} />
-            </Button>
-          </SectionHead>
-          {showArchived && (
-            <div id="archived-chats" className="task-list flex flex-col gap-0.5">
-              {archivedChats.length === 0 && <p className="muted small empty-tasks">{t('No archived threads')}</p>}
-              {archivedChats.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
-                />
-              ))}
-            </div>
-          )}
+            title={`${t('Done')} · ${done.length}`}
+            open={showDone}
+            onToggle={() => ws.setExpanded('section:done', !showDone)}
+            controls="done-chats"
+          />
+          <Collapse open={showDone} id="done-chats" className="task-list flex flex-col gap-0.5">
+            {done.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
+              />
+            ))}
+          </Collapse>
         </>
-      )}
-      {clearingArchived && (
-        <Dialog
-          title={t('Delete {0} archived threads?', { '0': archivedChats.length })}
-          confirmLabel={t('Delete all')}
-          danger
-          busy={clearBusy}
-          error={clearError}
-          onCancel={() => {
-            setClearingArchived(false)
-            setClearError(null)
-          }}
-          onConfirm={async () => {
-            setClearBusy(true)
-            setClearError(null)
-            try {
-              for (const task of archivedChats) {
-                await invoke('tasks.delete', task.id, false)
-                ws.forgetTask(task.id)
-              }
-              await ws.refresh()
-              setClearingArchived(false)
-            } catch (e) {
-              setClearError(errorText(e))
-              await ws.refresh()
-            } finally {
-              setClearBusy(false)
-            }
-          }}
-        >
-          <p>{t("This removes every archived thread and its agent transcripts. This can't be undone.")}</p>
-          <p className="muted text-muted-foreground">{t('Worktrees and branches are kept.')}</p>
-        </Dialog>
       )}
     </div>
   )

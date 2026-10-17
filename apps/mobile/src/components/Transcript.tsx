@@ -23,6 +23,7 @@ import { font, radius, space, useTheme } from '../theme'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { Markdown, ReferenceBadge, ReferenceContext } from './Markdown'
+import { draftChip } from '@ramu/shared/chat/referenceChip'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
 import { Button, Card, Divider, Sheet, T, tap, type Icon } from './ui'
@@ -463,16 +464,9 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
         quotes.length && index === 0 ? '' : '$&',
       )
     ) : part.kind === 'file' ? (
-      <ReferenceBadge
-        key={index}
-        kind="file"
-        label={part.label}
-        onPress={() => actions.openFile(part.target ?? part.label)}
-      />
-    ) : part.kind === 'skill' ? (
-      <ReferenceBadge key={index} kind="skill" label={part.target ?? part.label} />
+      <ReferenceBadge key={index} chip={draftChip(part)} onPress={() => actions.openFile(part.target ?? part.label)} />
     ) : (
-      <ReferenceBadge key={index} kind={part.kind} label={part.label} />
+      <ReferenceBadge key={index} chip={draftChip(part)} />
     ),
   )
   const hasText = rest.some((part) => part.kind !== 'text' || part.source.trim())

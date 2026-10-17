@@ -137,7 +137,7 @@ if (command === 'start') {
   } else {
     const status = await runtimeInvoke(config.socketPath, 'background.status').catch(() => null)
     if (!status)
-      fail('ramu is not running. Start it with --listen, or pass --url <address> if it is on another computer.')
+      fail('ramu is not running. Start it with --listen, or pass --url <address> if it is on another host.')
     if (!status.listening)
       fail(
         'ramu is not accepting network clients. Restart it with --listen <host:port> (see --help), or pass --url <address>.',
@@ -147,7 +147,7 @@ if (command === 'start') {
       Number(status.listening.slice(status.listening.lastIndexOf(':') + 1)),
     ]
     urls = candidateUrls(host, port, Boolean(status.tls)).map((c) => ({ url: c.url, note: `  (${c.interface})` }))
-    if (!urls.length) fail('No network address found for this computer. Pass --url <address>.')
+    if (!urls.length) fail('No network address found for this host. Pass --url <address>.')
   }
   const { code } = new DeviceStore(config.devicesPath).createCode()
   const expiresAt = Date.now() + PAIRING_TTL_MS
@@ -166,7 +166,7 @@ if (command === 'start') {
     process.exit(0)
   }
   console.log(`Pairing code  ${code}   (works once, expires in ${Math.round(PAIRING_TTL_MS / 60000)} minutes)\n`)
-  console.log(`The other device must reach this computer at${urls.length > 1 ? ' one of' : ''}:`)
+  console.log(`The other device must reach this host at${urls.length > 1 ? ' one of' : ''}:`)
   for (const { url, note } of urls) console.log(`  ${url}${note}`)
   console.log(`\nOr open this link on a device that has Ramu:\n  ${links[0]}`)
   console.log(

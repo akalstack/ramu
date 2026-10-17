@@ -247,26 +247,6 @@
   background: transparent;
   color: var(--soft);
 }
-.turn-summary-toggle {
-  width: 100%;
-  justify-content: flex-start;
-  gap: 6px;
-  height: auto;
-  min-height: 0;
-  padding: 6px 0 8px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: var(--font-chat);
-  font-weight: 400;
-}
-.turn-summary-toggle:hover {
-  background: transparent;
-  color: var(--soft);
-  border-bottom-color: var(--line-strong);
-}
 .tool-group-label {
   min-width: 0;
   white-space: normal;
@@ -314,53 +294,6 @@
   color: var(--bad);
 }
 
-/* Inline references share the same quiet material in user and assistant messages: a small filled chip that sits in the
-   line without making it taller. Code inside a reference (`[`path`](path)`) drops its own bubble. */
-[data-slot='badge'].chat-reference {
-  display: inline-flex;
-  vertical-align: baseline;
-  max-width: 100%;
-  height: auto;
-  min-height: 0;
-  align-items: baseline;
-  padding: 0 6px;
-  gap: 4px;
-  border-radius: var(--radius-s);
-  border: 0;
-  background: var(--fill);
-  color: var(--soft);
-  font-size: 0.94em;
-  font-weight: 500;
-  line-height: 1.45;
-  text-decoration: none;
-  white-space: nowrap;
-}
-a[data-slot='badge'].chat-reference:hover {
-  background: var(--fill-hover);
-  color: var(--text);
-  text-decoration: none;
-}
-.chat-reference code {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font-size: 0.95em;
-}
-.chat-reference > svg {
-  flex: none;
-  align-self: center;
-  width: 0.95em;
-  height: 0.95em;
-}
-.chat-reference > span {
-  min-width: 0;
-}
-
-.composer-reference {
-  max-width: min(100%, 360px);
-}
-
 .composer [data-composer-input] {
   width: 100%;
   white-space: pre-wrap;
@@ -372,64 +305,6 @@ a[data-slot='badge'].chat-reference:hover {
 .composer-inline-atom {
   display: inline;
   white-space: nowrap;
-}
-.composer-inline-atom .chat-reference {
-  vertical-align: baseline;
-  max-width: min(100%, 360px);
-}
-
-.chat-code-block {
-  margin: 4px 0 12px;
-  overflow: hidden;
-  border-radius: var(--radius-m);
-  background: var(--code-bg);
-}
-.chat-code-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 7px 14px;
-  border-bottom: 1px solid var(--line);
-  color: var(--muted);
-  font: var(--font-caption)/1.5 var(--sans);
-}
-.chat-code-language {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.chat-code-header .chat-code-copy {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  min-height: 26px;
-  justify-content: center;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  color: var(--muted);
-  font-size: var(--font-caption);
-}
-.chat-code-header .chat-code-copy:hover {
-  background: transparent;
-  color: var(--text);
-}
-/* Override transcript and tool-content pre styling inside the shared code frame. */
-.chat-code-block > pre {
-  margin: 0 !important;
-  padding: 12px 14px !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  overflow-x: auto;
-  white-space: pre;
-}
-.chat-code-block > pre > code {
-  padding: 0 !important;
-  background: transparent !important;
-  font-family: var(--mono);
-  white-space: pre;
 }
 
 /* Compact transcript notices share the tool-row treatment, not filled pills. */

@@ -3,6 +3,7 @@ import { invoke, ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from './TaskPane'
 import { useWorkspace } from './workspace'
+import { useComputers } from './computers'
 
 export type RepoChoice = { name: string; repos: string[]; resolve: (repos: string[] | null) => void }
 const choiceListeners = new Set<(choice: RepoChoice) => void>()
@@ -19,9 +20,26 @@ const chooseRepos = (name: string, repos: string[]) =>
     choiceListeners.forEach((listener) => listener({ name, repos, resolve }))
   })
 
-/** Every "Add project" entry point: the native folder browser, then the new project opens on its files. */
+export type FolderPick = { resolve: (dir: string | null) => void }
+const pickListeners = new Set<(pick: FolderPick) => void>()
+/** The host folder browser subscribes here; it answers with the chosen folder on the host, or null when cancelled. */
+export function onFolderPick(listener: (pick: FolderPick) => void) {
+  pickListeners.add(listener)
+  return () => {
+    pickListeners.delete(listener)
+  }
+}
+const pickHostFolder = () =>
+  new Promise<string | null>((resolve) => {
+    if (!pickListeners.size) return resolve(null)
+    pickListeners.forEach((listener) => listener({ resolve }))
+  })
+
+/** Every "Add project" entry point: the native folder browser (or an in-app browser for a remote host), then the new project opens on its files. */
 export function useAddProject() {
   const ws = useWorkspace()
+  const computers = useComputers()
+  const remote = computers?.computers.find((c) => c.id === computers.current)?.local === false
   const [busy, setBusy] = useState(false)
   const open = async (dirs: string[]) => {
     let last: string | null = null
@@ -61,7 +79,8 @@ export function useAddProject() {
   }
   const add = () =>
     guarded(async () => {
-      const dir = await invoke('repos.pick', 'project')
+      // A native dialog would open on the host machine, so a remote host is browsed in-app instead.
+      const dir = remote ? await pickHostFolder() : await invoke('repos.pick', 'project')
       if (dir) await open([dir])
     })
   /** Folders dropped onto the project list; each becomes a project (a plain file reports that it holds no repository). */

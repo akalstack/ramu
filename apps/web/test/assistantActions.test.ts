@@ -25,6 +25,8 @@ vi.mock('../src/views/agent/components/CopyButton', () => ({
 }))
 
 const event = { kind: 'text' as const, text: 'An earlier agent reply.', at: 1_800_000_000_000 }
+/** Classes of the shadcn message footer that holds the actions. */
+const footerClasses = (html: string) => html.match(/<div data-slot="message-footer" class="([^"]*)"/)?.[1]?.split(' ')
 const render = (props: Partial<ComponentProps<typeof AssistantText>> = {}) =>
   renderToStaticMarkup(createElement(AssistantText, { event, generating: false, ...props }))
 
@@ -33,18 +35,18 @@ it('gives completed replies all four actions without needing latest-message stat
   for (const label of ['Copy', 'Quote in your message', 'Ask aside about this message', 'Quote in new thread']) {
     expect(html).toContain(`aria-label="${label}"`)
   }
-  const toolbarClass = html.match(/class="(msg-actions[^"]*)"/)?.[1]
-  expect(toolbarClass).toBeDefined()
-  expect(toolbarClass?.split(' ')).toContain('opacity-0')
-  expect(toolbarClass?.split(' ')).not.toContain('always')
-  expect(toolbarClass).toContain('[&amp;:focus-within]:opacity-100')
-  expect(html).toContain('[&amp;.assistant:hover_.msg-actions]:opacity-100')
+  const classes = footerClasses(html)
+  expect(classes).toBeDefined()
+  expect(classes).toContain('opacity-0')
+  expect(classes).toContain('group-hover/message:opacity-100')
+  expect(classes).toContain('focus-within:opacity-100')
 })
 
 it('keeps only the latest completed reply’s actions always visible', () => {
   const html = render({ latest: true })
-  const toolbarClass = html.match(/class="(msg-actions[^"]*)"/)?.[1]
-  expect(toolbarClass?.split(' ')).toContain('always')
+  const classes = footerClasses(html)
+  expect(classes).toContain('opacity-100')
+  expect(classes).not.toContain('opacity-0')
   expect(html).toContain('aria-label="Copy"')
 })
 

@@ -89,7 +89,7 @@ APNs host variables and signing/app-group requirements are documented in README.
 ## Terminal console redesign
 
 - Removed the terminal title bar, top tabs, separate command field and always-visible
-  close row. Added a shared bottom console with computer/folder/status, session
+  close row. Added a shared bottom console with host/folder/status, session
   picker, Back, New and direct terminal keyboard focus. Close remains confirmed
   in the session sheet. The extra-key rail shows while the keyboard is open;
   Paste stays pinned and modifiers expose their pressed state to accessibility.

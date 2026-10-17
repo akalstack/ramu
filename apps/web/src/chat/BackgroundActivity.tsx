@@ -270,7 +270,7 @@ export function BackgroundActivityIndicator({
                 <EmptyDescription className="text-caption">
                   {connected
                     ? t('Background tasks will appear here.')
-                    : t('Activity will appear when this computer reconnects.')}
+                    : t('Activity will appear when this host reconnects.')}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>

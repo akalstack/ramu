@@ -21,6 +21,8 @@ const PUSH_EVENTS = new Set<string>([
   'notify:open',
   'background:connection',
   'computers:changed',
+  'computers:navigate',
+  'computers:activity',
   'agent:event',
   'agent:rewound',
   'term:data',

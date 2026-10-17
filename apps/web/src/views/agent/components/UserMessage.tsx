@@ -19,7 +19,11 @@ import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { visibleText } from '../lib/messages'
 import { MessageTime } from './MessageTime'
 import { CopyButton } from './CopyButton'
-import { CARET_CLASS, ICON_BUTTON_CLASS, MSG_ACTIONS_CLASS, MSG_CLASS, MSG_TO_CLASS } from '../styles'
+import { Bubble, BubbleContent } from '@/components/ui/bubble'
+import { Message, MessageContent, MessageHeader } from '@/components/ui/message'
+import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
+import { MessageActions } from './MessageActions'
+import { CARET_CLASS, ICON_BUTTON_CLASS, MSG_CLASS, USER_BUBBLE_CLASS } from '../styles'
 
 /** Review comments that went out with a message, as small cards under it. */
 function SentComments({ comments }: { comments: ReturnType<typeof sentComments> }) {
@@ -61,7 +65,7 @@ function UserMessageActions({
   onEdit?: (text: string, attachments: Attachment[]) => void
 }) {
   return (
-    <div className={`${MSG_ACTIONS_CLASS}${latest ? ' always' : ''}`}>
+    <MessageActions latest={latest} className="mt-0.5 mr-1">
       <MessageTime at={e.at} />
       <CopyButton text={text} />
       {onEdit && (
@@ -76,7 +80,34 @@ function UserMessageActions({
           <Pencil size={14} />
         </Button>
       )}
-    </div>
+    </MessageActions>
+  )
+}
+
+/** The user's side of the conversation: a right-aligned shadcn message with an optional caption and attachments above its bubble. */
+function UserShell({
+  header,
+  attachments,
+  children,
+  ...props
+}: React.ComponentProps<typeof Message> & { header?: React.ReactNode; attachments?: Attachment[] }) {
+  return (
+    <Message align="end" className="mt-3.5" {...props}>
+      <MessageContent className="max-w-[82%] items-end gap-1.5">
+        {header && <MessageHeader className="gap-1 px-0">{header}</MessageHeader>}
+        {attachments?.length ? <Attachments files={attachments} names className="justify-end" /> : null}
+        {children}
+      </MessageContent>
+    </Message>
+  )
+}
+
+/** The user's bubble, tinted by the shadcn `secondary` variant. */
+export function UserBubble({ children }: { children: React.ReactNode }) {
+  return (
+    <Bubble variant="secondary" align="end">
+      <BubbleContent className={USER_BUBBLE_CLASS}>{children}</BubbleContent>
+    </Bubble>
   )
 }
 
@@ -133,7 +164,9 @@ export function UserMessage({
           {report.name} <span className="muted text-muted-foreground">{report.verb}</span>
         </div>
         <div className={`${MSG_CLASS} assistant`}>
-          <Markdown remarkPlugins={[remarkGfm]}>{report.body}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
+            {report.body}
+          </Markdown>
         </div>
       </div>
     )
@@ -150,48 +183,53 @@ export function UserMessage({
   const answers = parseAnswerMessage(e.text)
   if (answers)
     return (
-      <div className="msg-wrap user">
-        <span className={MSG_TO_CLASS}>
-          <ShieldQuestion size={12} />
-          {translate("Answers to the agent's questions")}
-        </span>
-        <div className={`${MSG_CLASS} user`}>{answers.body}</div>
-        <div className={`${MSG_ACTIONS_CLASS}${latest ? ' always' : ''}`}>
+      <UserShell
+        header={
+          <>
+            <ShieldQuestion size={12} />
+            {translate("Answers to the agent's questions")}
+          </>
+        }
+      >
+        <UserBubble>{answers.body}</UserBubble>
+        <MessageActions latest={latest} className="mt-0.5 mr-1">
           <MessageTime at={e.at} />
           <CopyButton text={answers.body} />
-        </div>
-      </div>
+        </MessageActions>
+      </UserShell>
     )
   // A message relayed to a sub-agent shows who it is for, not the relay instructions.
   const relay = parseTaskMessage(e.text)
   if (editor)
     return (
-      <div className="msg-wrap user" aria-current>
-        {e.attachments?.length ? <Attachments files={e.attachments} /> : null}
+      <UserShell aria-current attachments={e.attachments}>
         {editor}
-      </div>
+      </UserShell>
     )
   return (
-    <div className="msg-wrap user">
-      {relay && (
-        <span className={MSG_TO_CLASS}>
-          <Bot size={12} />
-          {translate('To ')}
-          {relay.name}
-        </span>
-      )}
-      {e.attachments?.length ? <Attachments files={e.attachments} /> : null}
+    <UserShell
+      attachments={e.attachments}
+      header={
+        relay ? (
+          <>
+            <Bot size={12} />
+            {translate('To ')}
+            {relay.name}
+          </>
+        ) : undefined
+      }
+    >
       {relay ? (
-        <div className={`${MSG_CLASS} user`}>
+        <UserBubble>
           <ReferenceText text={relay.body} taskId={taskId} />
-        </div>
+        </UserBubble>
       ) : text ? (
-        <div className={`${MSG_CLASS} user`}>
+        <UserBubble>
           <ReferenceText text={text} taskId={taskId} />
-        </div>
+        </UserBubble>
       ) : null}
       {comments.length > 0 && <SentComments comments={comments} />}
       <UserMessageActions event={e} text={text} latest={latest} onEdit={onEdit} />
-    </div>
+    </UserShell>
   )
 }

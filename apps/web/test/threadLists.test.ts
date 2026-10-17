@@ -1,0 +1,62 @@
+import { expect, it } from 'vitest'
+import { NO_PROJECT, type Task } from '@ramu/shared/types'
+import { sidebarThreads } from '../src/sidebar/projects/threadLists'
+
+const task = (id: string, extra: Partial<Task> = {}): Task => ({
+  id,
+  title: id,
+  projectId: 'project',
+  status: 'idle',
+  mode: 'current',
+  workspaceId: null,
+  createdAt: 1,
+  lastActiveAt: 1,
+  pinnedAt: null,
+  ...extra,
+})
+
+it('gathers done threads from all projects, pinned threads and projectless threads in completion order', () => {
+  const tasks = [
+    task('active'),
+    task('pinned', { pinnedAt: 10 }),
+    task('done-project', { doneAt: 10 }),
+    task('done-loose', { projectId: NO_PROJECT, doneAt: 30 }),
+    task('done-pinned', { projectId: 'other', pinnedAt: 5, doneAt: 20 }),
+    task('archived', { status: 'archived' }),
+    task('archived-done', { status: 'archived', doneAt: 40 }),
+  ]
+  const result = sidebarThreads(tasks)
+  expect(result.active.map((entry) => entry.id)).toEqual(['active', 'pinned'])
+  expect(result.done.map((entry) => entry.id)).toEqual(['done-loose', 'done-pinned', 'done-project'])
+  expect(tasks.map((entry) => entry.id)).toEqual([
+    'active',
+    'pinned',
+    'done-project',
+    'done-loose',
+    'done-pinned',
+    'archived',
+    'archived-done',
+  ])
+})
+
+it('returns reopened threads to active lists and supports old threads without doneAt', () => {
+  const result = sidebarThreads([task('reopened', { doneAt: null }), task('legacy')])
+  expect(result.active.map((entry) => entry.id)).toEqual(['reopened', 'legacy'])
+  expect(result.done).toEqual([])
+})
+
+it('bounds local and remote project previews, keeps an older active thread, and expands without including done or pinned threads', async () => {
+  const { projectThreadPreview } = await import('../src/sidebar/projects/threadLists')
+  const tasks = [
+    ...Array.from({ length: 15 }, (_, i) => task(`thread-${i}`, { lastActiveAt: 100 - i })),
+    task('pinned', { pinnedAt: 5 }),
+    task('done', { doneAt: 5 }),
+    task('archived', { status: 'archived' }),
+    task('elsewhere', { projectId: 'other' }),
+  ]
+  const preview = projectThreadPreview(tasks, 'project', 3, false, 'thread-12')
+  expect(preview.tasks.map((entry) => entry.id)).toEqual(['thread-0', 'thread-1', 'thread-2', 'thread-12'])
+  expect(preview.hasMore).toBe(true)
+  expect(projectThreadPreview(tasks, 'project', 3, true).tasks).toHaveLength(15)
+  expect(projectThreadPreview(tasks, 'empty', 3, false)).toEqual({ tasks: [], hasMore: false })
+})

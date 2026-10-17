@@ -218,8 +218,40 @@ export async function confirmReset(token: string, password: string) {
 
 The auth tests pass. Want me to add the email template next?`
 
+const RICH_REPLY = `## Password reset: what changed
+
+The reset flow now lives in \`src/auth/reset.ts\` and follows the [OWASP cheat sheet](https://cheatsheetseries.owasp.org/). Start in @src/auth/reset.ts:42, see [the tests](src/auth/reset.test.ts), the folder @apps/web/src and the $review skill. Here is how the endpoints compare:
+
+| Endpoint | Method | Auth | Rate limit |
+| --- | :---: | --- | ---: |
+| \`/auth/reset\` | POST | none | 5 / hour |
+| \`/auth/reset/confirm\` | POST | token | 10 / hour |
+| \`/auth/sessions\` | DELETE | session | 60 / min |
+
+> Tokens are stored hashed, so a database leak can't be replayed.
+
+1. Request a token with the account email.
+2. Confirm it within **30 minutes**.
+3. Every other session is signed out.
+
+- [x] Single-use tokens
+- [x] Hashed at rest
+- [ ] Email template
+
+\`\`\`ts
+export async function confirmReset(token: string, password: string) {
+  const record = await tokens.consume(hash(token))
+  if (!record || record.expiresAt < Date.now()) throw new ResetExpired()
+  await users.setPassword(record.userId, password)
+}
+\`\`\`
+
+---
+
+Want me to add the email template next?`
+
 /** A representative turn for UI screenshots: several tools, then a formatted reply. */
-async function* demoTurn(): AsyncGenerator<SDKMessage, void> {
+async function* demoTurn(reply = DEMO_REPLY): AsyncGenerator<SDKMessage, void> {
   for (const [i, [name, input, output]] of DEMO_TOOLS.entries()) {
     const id = `demo-tool-${Date.now()}-${i}`
     yield {
@@ -236,7 +268,7 @@ async function* demoTurn(): AsyncGenerator<SDKMessage, void> {
   yield {
     type: 'assistant',
     parent_tool_use_id: null,
-    message: { content: [{ type: 'text', text: DEMO_REPLY }] },
+    message: { content: [{ type: 'text', text: reply }] },
   } as unknown as SDKMessage
   yield {
     type: 'result',
@@ -468,7 +500,11 @@ export const fakeQuery: QueryFn = ({ prompt, options }) => {
       cwd: options.cwd,
     } as unknown as SDKMessage
     for await (const m of prompt as AsyncIterable<SDKUserMessage>) {
-      const text = typeof m.message.content === 'string' ? m.message.content : ''
+      // Messages with attachments arrive as content blocks; their text blocks are the prompt.
+      const text =
+        typeof m.message.content === 'string'
+          ? m.message.content
+          : m.message.content.map((block) => (block.type === 'text' ? block.text : '')).join('\n')
       if (options.forkSession) {
         yield msg({
           type: 'assistant',
@@ -601,6 +637,10 @@ export const fakeQuery: QueryFn = ({ prompt, options }) => {
           message: { content: [{ type: 'text', text: 'All commands finished.' }] },
         })
         yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
+        continue
+      }
+      if (text.includes('[rich]')) {
+        yield* demoTurn(RICH_REPLY)
         continue
       }
       if (text.includes('[demo]') || process.env.RAMU_FAKE_DEMO === '1') {

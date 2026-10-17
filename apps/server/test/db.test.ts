@@ -61,3 +61,35 @@ it('migrates legacy worktree conversations without losing bindings, transcripts,
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+it.each([
+  { version: 18, hasDoneAt: false },
+  { version: 19, hasDoneAt: false },
+  { version: 19, hasDoneAt: true },
+])('repairs task completion for schema v$version (done_at: $hasDoneAt)', async ({ version, hasDoneAt }) => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-done-migration-'))
+  const path = join(dir, 'profile.sqlite')
+  let db = openDb(path)
+  try {
+    const workspace = new Workspace(db, join(dir, 'worktrees'))
+    const task = await workspace.createTask({ projectId: 'no-project', title: 'Keep this chat', mode: 'current' })
+    if (hasDoneAt) db.prepare('UPDATE tasks SET done_at = ? WHERE id = ?').run(123, task.id)
+    else db.exec('ALTER TABLE tasks DROP COLUMN done_at;')
+    db.exec(`PRAGMA user_version = ${version}`)
+    db.close()
+
+    db = openDb(path)
+    const migrated = new Workspace(db, join(dir, 'worktrees'))
+    expect(migrated.getTask(task.id)).toMatchObject({ title: 'Keep this chat', doneAt: hasDoneAt ? 123 : null })
+    expect(migrated.setDone(task.id, true).doneAt).toEqual(expect.any(Number))
+    expect(migrated.setDone(task.id, false).doneAt).toBeNull()
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+    db.close()
+
+    db = openDb(path)
+    expect(new Workspace(db, join(dir, 'worktrees')).getTask(task.id).doneAt).toBeNull()
+  } finally {
+    db.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

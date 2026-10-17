@@ -1,3 +1,4 @@
+import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
 import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './chat/activity'
 import type { AppUpdateStatus } from './updates'
@@ -197,6 +198,16 @@ export interface RamuMethods {
   'computers.settings.get'(id: string): SettingsSnapshot
   'computers.settings.patch'(id: string, edits: SettingEdit[]): SettingsSnapshot
   'computers.list'(): Computers
+  'computers.scope'(id: string | null): Computers
+  'computers.tasks.invoke'<M extends HostTaskMethod>(
+    id: string,
+    method: M,
+    args: Parameters<RamuMethods[M]>,
+  ): ReturnType<RamuMethods[M]>
+  'computers.overview'(id: string): HostOverview
+  'computers.navigate'(id: string, destination: HostDestination): void
+  'computers.navigation.ready'(): void
+  'computers.recapAct'(id: string, recapId: string, action: 'done' | 'dismissed' | 'snoozed'): void
   /** Brings a computer's window to the front. Rejects when it cannot be reached. */
   'computers.open'(id: string): void
   'computers.pair'(url: string, code: string, name?: string): Computers
@@ -259,6 +270,7 @@ export interface RamuMethods {
   'tasks.generateTitle'(taskId: string, settings: AgentSettings, force?: boolean): Task
   'tasks.archive'(taskId: string, archived: boolean): Task
   'tasks.pin'(taskId: string, pinned: boolean): Task
+  'tasks.done'(taskId: string, done: boolean): Task
   'tasks.delete'(taskId: string, removeWorktrees: boolean): void
   'projects.rename'(projectId: string, name: string): Project
   'projects.reorder'(projectIds: string[]): Project[]
@@ -515,6 +527,8 @@ export type PushEvents = {
   /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */
   'background:connection': { connected: boolean; rejected?: boolean }
   'computers:changed': Computers
+  'computers:navigate': HostDestination
+  'computers:activity': { ids: string[] }
   'workspace:visibility': { visible: boolean }
   'workspace:checkpoint': { requestId: string }
   'updates:changed': AppUpdateStatus

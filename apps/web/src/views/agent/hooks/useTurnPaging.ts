@@ -1,14 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { highlightSource } from '@ramu/shared/workspace/sourceNavigation'
 import type { AgentEvent } from '@ramu/shared/types'
 import type { ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { useWorkspaceActions } from '../../../workspace/workspace'
 import { TURN_PAGE } from '../constants'
+import { turnsToKeep } from '../lib/paging'
 import type { AgentViewDesc, Turn } from '../types'
 
 /**
- * A long chat draws its latest turns first; "Earlier turns" brings back the previous page, keeping the reader
- * where they were. A request to open a message from elsewhere (view.sourceSeq) scrolls to it, drawing every turn if needed.
+ * A long chat draws its latest turns first; "Earlier turns" brings back the previous page (the scroller keeps the reader
+ * where they were). A request to open a message from elsewhere (view.sourceSeq) scrolls to it, drawing every turn if needed.
  */
 export function useTurnPaging({
   view,
@@ -19,7 +20,6 @@ export function useTurnPaging({
   turns,
   scroller,
   stick,
-  measureEdges,
 }: {
   view: AgentViewDesc
   visible: boolean
@@ -29,7 +29,6 @@ export function useTurnPaging({
   turns: Turn[]
   scroller: RefObject<HTMLDivElement | null>
   stick: RefObject<boolean>
-  measureEdges: () => void
 }) {
   const ws = useWorkspaceActions()
   // A long chat draws its latest turns first; see "Earlier turns" below.
@@ -63,24 +62,19 @@ export function useTurnPaging({
   // A long chat draws its latest turns first; "Earlier turns" brings back the previous page, keeping the reader where they were.
   const hiddenTurns = Math.max(0, turns.length - shownTurns)
   const pageTurns = hiddenTurns ? turns.slice(hiddenTurns) : turns
-  const pageAnchor = useRef<{ height: number; top: number } | null>(null)
   useEffect(() => {
     setShownTurns(TURN_PAGE)
   }, [view.sessionId])
-  useLayoutEffect(() => {
-    const anchor = pageAnchor.current,
-      el = scroller.current
-    if (!anchor || !el) return
-    pageAnchor.current = null
-    el.scrollTop = anchor.top + (el.scrollHeight - anchor.height)
-    measureEdges()
-  }, [shownTurns])
+  // Newer turns push the oldest drawn one out of the page; a reader who scrolled up keeps it, so the text does not move away.
+  const counted = useRef({ sessionId: view.sessionId, count: turns.length })
+  useEffect(() => {
+    const keep = turnsToKeep(counted.current, { sessionId: view.sessionId, count: turns.length }, stick.current)
+    counted.current = { sessionId: view.sessionId, count: turns.length }
+    if (keep > 0) setShownTurns((count) => count + keep)
+  }, [turns.length, view.sessionId])
+  // The scroller keeps the reader where they were while earlier turns are added above.
   const showEarlierTurns = () => {
-    const el = scroller.current
-    if (el) {
-      pageAnchor.current = { height: el.scrollHeight, top: el.scrollTop }
-      stick.current = false
-    }
+    stick.current = false
     setShownTurns((count) => count + TURN_PAGE)
   }
   return { hiddenTurns, pageTurns, showEarlierTurns }

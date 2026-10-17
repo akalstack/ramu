@@ -278,20 +278,9 @@ export function NewTask({
     }
   }
 
-  const projectItems = [
-    { key: NO_PROJECT, label: t('No project'), onSelect: () => onProjectChange(NO_PROJECT) },
-    ...ws.projects.map((p) => ({
-      key: p.id,
-      label: (
-        <>
-          <FolderClosed size={14} />{' '}
-          <span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis">
-            {p.name}
-          </span>
-        </>
-      ),
-      onSelect: () => onProjectChange(p.id),
-    })),
+  const projectOptions = [
+    { value: NO_PROJECT, label: t('No project') },
+    ...ws.projects.map((p) => ({ value: p.id, label: p.name })),
   ]
   const computers = useComputers()
   const currentComputer = computers?.computers.find((c) => c.id === computers.current)
@@ -308,7 +297,9 @@ export function NewTask({
     ),
     onSelect: () => {
       if (c.id !== computers?.current)
-        void invoke('computers.open', c.id).catch((error) => notifyError(errorText(error), t('Computers')))
+        void invoke('computers.navigate', c.id, { kind: 'new' }).catch((error) =>
+          notifyError(errorText(error), t('Hosts')),
+        )
     },
   }))
   const current = existingWorkspace
@@ -360,7 +351,7 @@ export function NewTask({
           <div className="start-context flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
             {computerItems.length > 1 && (
               <Menu
-                label={t('Computer')}
+                label={t('Host')}
                 className={CHIP}
                 icon={
                   <>
@@ -371,15 +362,15 @@ export function NewTask({
                 items={computerItems}
               />
             )}
-            <Menu
+            <Combobox
               label={t('Project')}
-              className={CHIP}
-              icon={
-                <>
-                  <FolderClosed size={13} /> <span className="chip-label">{project?.name ?? t('No project')}</span>
-                </>
-              }
-              items={projectItems}
+              searchPlaceholder={t('Search projects…')}
+              value={project?.id ?? NO_PROJECT}
+              icon={<FolderClosed size={13} />}
+              bare
+              className={`${CHIP} max-w-[220px]`}
+              options={projectOptions}
+              onChange={onProjectChange}
             />
             {!general && (
               <Menu

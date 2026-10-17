@@ -67,7 +67,7 @@ it('advertises provider configuration and complex lists while excluding migratio
   ).toEqual(['accent', 'memory.enabled', 'providerBinaries.binary', 'favoriteModels', 'steps'])
 })
 
-it('intersects model catalogs and reasoning efforts across independently updated computers', () => {
+it('intersects model catalogs and reasoning efforts across independently updated hosts', () => {
   const model = (id: string, efforts: import('../src/types').ReasoningEffort[]): import('../src/types').AgentModel => ({
     provider: 'codex',
     id,

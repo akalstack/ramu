@@ -12,25 +12,28 @@ administration. Relay remains deferred. This is not a claim that every beta gate
 below has been met.
 Platforms: iOS and Android.
 
+Navigation (current): a native four-tab bar (Threads, Inbox, Schedules, Search) mirroring the desktop's
+Inbox and Schedules pages; see README.md › Navigation.
+
 ## Product scope
 
 Build a phone companion for an existing Ramu workspace server. Users can pair a
-computer, follow agent work, send instructions, answer questions and permissions,
+host, follow agent work, send instructions, answer questions and permissions,
 and inspect changes. Agents, providers, repositories, terminals, schedules and
-the database continue running on the host computer. The host must be awake and
+the database continue running on the host host. The host must be awake and
 reachable directly over HTTPS or a trusted private network (LAN/VPN).
 
 First release:
 
 - Pair with a server address and the existing one-time code, or scan a QR offer.
-- Save multiple computers and connect to all of them concurrently while the app
-  is active. Show one computer's workspace at a time, with a switcher displaying
-  each computer's connection status and running/waiting thread counts.
-- Receive in-app notifications from every connected computer; opening one selects
-  its computer and thread.
+- Save multiple hosts and connect to all of them concurrently while the app
+  is active. Show one host's workspace at a time, with a switcher displaying
+  each host's connection status and running/waiting thread counts.
+- Receive in-app notifications from every connected host; opening one selects
+  its host and thread.
 - Browse existing projects, tasks and threads, including standalone threads.
 - Browse host folders, create projects/repositories, initialize or clone Git
-  repositories and attach them to the selected computer's workspace.
+  repositories and attach them to the selected host's workspace.
 - Use interactive host terminals with a customizable extra-key toolbar and
   useful touch gestures inspired by Termius.
 - Read live conversations, expandable tool activity and agent status.
@@ -41,7 +44,7 @@ First release:
   steering messages, editable drafts and pending-input forms.
 - Start threads in existing projects or standalone scope using host providers.
 - Show provider availability, usage windows, reset times and fallback/wait state
-  separately for every computer, including explicit unavailable/stale readings.
+  separately for every host, including explicit unavailable/stale readings.
 - Administer host network access and paired devices, and create/edit/control
   schedules through commands, skills or prompts with real host-backed execution.
 - View goals and pause/resume them.
@@ -49,9 +52,9 @@ First release:
 - Perform Git actions and recorded undo, including destructive operations, with
   previews, host/repository identification and existing conflict checks.
 - Upload photos, camera captures and files to the selected host's thread.
-- Receive background push notifications for every paired computer; tapping opens
+- Receive background push notifications for every paired host; tapping opens
   the correct workspace/thread and refreshes its current state.
-- Keep composer drafts on the phone, scoped by computer and thread/project.
+- Keep composer drafts on the phone, scoped by host and thread/project.
 - Support English and Bahasa Indonesia, light/dark mode and accessibility.
 
 Deferred: relay connections, a full native editor and dedicated mobile provider
@@ -93,12 +96,12 @@ before changing dependencies. Keep SDK-specific React dependencies in mobile
 if they differ from the desktop catalog, and verify Metro resolves one React copy.
 
 Use TanStack Query for server snapshots, a small typed event subscription layer,
-SecureStore for device tokens, and local persistent storage for computer metadata,
+SecureStore for device tokens, and local persistent storage for host metadata,
 preferences and drafts. A connection manager owns one independent connection
-per saved computer; selecting a computer only changes the visible workspace.
-Cache keys, event routing, drafts and pending requests must include computer ID.
-Switching keeps every computer's connection and subscriptions alive, and results
-must update only their originating computer's state. Forgetting a computer cancels
+per saved host; selecting a host only changes the visible workspace.
+Cache keys, event routing, drafts and pending requests must include host ID.
+Switching keeps every host's connection and subscriptions alive, and results
+must update only their originating host's state. Forgetting a host cancels
 its requests and subscriptions and removes its state.
 
 Initial layout:
@@ -132,7 +135,7 @@ bridge, no credentials and no arbitrary navigation or remote script loading.
 ### Terminal controls and gestures
 
 Use the Ramu host PTY through typed terminal APIs, not a second SSH session. Provide
-terminal tabs per computer/task, open/attach, resize, copy/select/paste, scrollback,
+terminal tabs per host/task, open/attach, resize, copy/select/paste, scrollback,
 exit state, reconnect and explicit close. Switching workspaces must preserve PTYs.
 Add host APIs for listing/reattaching terminals and bounded output recovery where
 missing; `term:data` alone cannot recover output missed during suspension.
@@ -159,7 +162,7 @@ host; never treat phone picker paths as host paths. Enforce configured browse ro
 symlink/path checks and OS permissions, and report inaccessible folders. Clone
 reports progress/cancellation and uses host credentials without returning secrets.
 
-Use `usage.get`, `usage.refresh`, `usage:changed` and provider status per computer.
+Use `usage.get`, `usage.refresh`, `usage:changed` and provider status per host.
 Display source/freshness and reset windows; unsupported readings must not look
 like zero usage. Keep provider/model catalogs and fallback state isolated by host.
 
@@ -187,7 +190,7 @@ must not silently gain administrative rights.
 Expose status, stage/unstage, commit, branches, checkout, fetch/pull/push and stashes,
 plus discard, branch/stash deletion, undo commit and recorded selective undo.
 Use existing review undo previews/tokens, expected HEAD/fingerprints and conflict
-checks. Before destructive actions, show the computer, repository, affected paths
+checks. Before destructive actions, show the host, repository, affected paths
 and consequence; distinguish tracked-file restore from permanent untracked-file
 deletion. A changed repository invalidates the preview; never retry a mutation
 automatically after an ambiguous response.
@@ -234,9 +237,9 @@ without duplicate mutations or readable workspace content at the relay.
 Use a host-triggered notification service delivering through APNs/FCM (Expo push
 is an implementation option). Register each phone installation with every paired
 host; keep push credentials on the service, not in the app. Send completion,
-needs-input and failure alerts even when that computer's workspace is hidden or
+needs-input and failure alerts even when that host's workspace is hidden or
 the phone is suspended. Minimize payloads by default: opaque routing IDs and
-generic text, with detailed previews opt-in. Route taps to computer/session and
+generic text, with detailed previews opt-in. Route taps to host/session and
 refetch before allowing responses. Deduplicate foreground SSE/push alerts, remove
 registrations on revoke/forget, handle denied permissions and expired tokens, and
 document best-effort delivery. The relay does not replace push, and push does not
@@ -255,21 +258,21 @@ keep background SSE streams running.
 5. Validate an SSE implementation on both native platforms that supports request
    headers and incremental delivery; do not assume browser EventSource or Node
    streams are available. Keep exactly one active stream per saved, compatible,
-   authorized computer while the app is active, including computers not visible
-   in the UI. Reconnect and authentication state are independent per computer;
+   authorized host while the app is active, including hosts not visible
+   in the UI. Reconnect and authentication state are independent per host;
    one unavailable host must not block the others.
 6. Subscribe before loading snapshots; buffer/merge live updates during hydration.
    Reuse the desktop's sequence/revision behavior after checking server persistence
    guarantees. Handle transient unsequenced text separately from persisted events.
 7. On reconnect or foreground entry, refetch session, transcript, pending inputs,
-   goals and workspace lists for that computer. Discard callbacks from older
+   goals and workspace lists for that host. Discard callbacks from older
    connection generations. Track running/waiting counts and in-app notifications
-   for every computer; hydrate full transcripts when their threads are opened.
+   for every host; hydrate full transcripts when their threads are opened.
    Refresh lists after mutations; add a bounded foreground refresh for changes
    without a corresponding push event.
 8. Retry transient connection failures with capped backoff and jitter. A rejected
    token stops reconnecting and shows Pair again; rate limits respect server delay.
-9. Suspend all streams in the background and reconnect all saved computers on
+9. Suspend all streams in the background and reconnect all saved hosts on
    return, independently of the selected workspace. Host agents keep working,
    but the phone cannot promise continuous background delivery.
 10. Do not automatically retry message submission or approvals after an ambiguous
@@ -290,7 +293,7 @@ remote privileges; UI feature limits are not server-enforced authorization scope
 | Phase | Work | Completion gate |
 | --- | --- | --- |
 | 0. Bootstrap and transport spike | Create `@ramu/mobile`, native navigation/theme, mobile scripts and development build configuration. Audit shared imports. Test pairing, invoke and authenticated SSE against a simulated provider. | Physical iOS and Android devices pair and stream output; desktop build still works with the hoisted workspace. |
-| 1. Computers and workspace | Secure token storage, concurrent per-computer connections, workspace switching, compatibility checks, status/count indicators, notifications, project/task/thread lists and settings. | All saved computers connect independently; switching preserves connections without mixing state; notifications open the correct host/thread; revoked devices stop retrying. |
+| 1. Hosts and workspace | Secure token storage, concurrent per-computer connections, workspace switching, compatibility checks, status/count indicators, notifications, project/task/thread lists and settings. | All saved hosts connect independently; switching preserves connections without mixing state; notifications open the correct host/thread; revoked devices stop retrying. |
 | 2. Thread companion | Virtualized transcript, tool cards, composer, local drafts, provider/model selection, thread creation, queue/steer, interrupt/stop and pending-input forms. | A complete agent interaction works on both platforms, including approval, question, disconnect and recovery. |
 | 3. Host workspace and inputs | Remote folder APIs, repository creation/init/clone, per-computer provider usage, attachments, QR pairing and complete desktop input parity. | Both platforms create a repo, upload an attachment and exercise the input checklist against the correct host. |
 | 4. Terminals, Git and automation | PTY attach/recovery, toolbar/gestures, goals, reviews, Git/undo, authorized network commands and schedule workflows. | TUI/input tests pass; destructive actions reject stale previews; network/schedule changes execute and report host state. |
@@ -317,8 +320,8 @@ platforms, including physical devices for network and lifecycle behavior.
 - Pair successfully; reject expired/used codes; handle rate limiting and protocol
   mismatch; restart the phone app without exposing or losing credentials.
 - Revoke the device on the host during a live stream; show Pair again and stop
-  retries. Forget locally clears all state for that computer.
-- Switch computers during hydration and message streaming without cross-host data.
+  retries. Forget locally clears all state for that host.
+- Switch hosts during hydration and message streaming without cross-host data.
 - Connect at least two hosts concurrently. Keep receiving events, status/count
   updates and notifications from the hidden host while viewing the other; opening
   a notification selects its host/thread without reconnecting either host.
@@ -336,7 +339,7 @@ platforms, including physical devices for network and lifecycle behavior.
 - Verify safe areas, keyboard avoidance, large text, screen-reader labels,
   contrast and both languages on iOS and Android.
 - Exercise terminal keys/gestures and external keyboard input with shell, vim,
-  less and tmux; preserve PTYs across computer switches and recover bounded output.
+  less and tmux; preserve PTYs across host switches and recover bounded output.
 - Browse allowed host folders and reject path/symlink escapes; init/clone and
   cancellation report the correct host/repository state.
 - Verify per-host usage freshness, all input forms, commands/skills, attachments,

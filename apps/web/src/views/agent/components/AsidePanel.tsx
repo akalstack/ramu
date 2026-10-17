@@ -14,13 +14,14 @@ import {
   ASIDE_ROW_QUOTE_CLASS,
   GHOST_TEXT_BUTTON_CLASS,
   ICON_BUTTON_CLASS,
-  MSG_CLASS,
   PANEL_BODY_CLASS,
   PANEL_HEADER_CLASS,
   PANEL_LABEL_CLASS,
   PANEL_TITLE_CLASS,
   WORKING_CLASS,
 } from '../styles'
+import { Message, MessageContent } from '@/components/ui/message'
+import { UserBubble } from './UserMessage'
 
 /** Side questions about the chat. Answers come from the chat's model, read-only, and never join the conversation. */
 export function AsidePanel({
@@ -202,9 +203,11 @@ export function AsidePanel({
             )}
             {aside?.messages.map((message) =>
               message.role === 'user' ? (
-                <div key={message.id} className="msg-wrap user">
-                  <div className={`${MSG_CLASS} user`}>{message.text}</div>
-                </div>
+                <Message key={message.id} align="end">
+                  <MessageContent className="items-end">
+                    <UserBubble>{message.text}</UserBubble>
+                  </MessageContent>
+                </Message>
               ) : (
                 <div
                   key={message.id}

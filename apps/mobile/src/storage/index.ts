@@ -46,3 +46,21 @@ export async function deleteToken(id: string) {
   if (Platform.OS === 'web') localStorage.removeItem(tokenKey(id))
   else await SecureStore.deleteItemAsync(tokenKey(id))
 }
+const visitKey = 'ramu.mobile.last-visit'
+/** When the app was last left, for "since your last visit" in Inbox. */
+export function readLastVisit(): number {
+  try {
+    const value = Platform.OS === 'web' ? localStorage.getItem(visitKey) : new File(Paths.document, visitKey).textSync()
+    return Number(value) || 0
+  } catch {
+    return 0
+  }
+}
+export function saveLastVisit(at: number) {
+  try {
+    if (Platform.OS === 'web') localStorage.setItem(visitKey, String(at))
+    else new File(Paths.document, visitKey).write(String(at))
+  } catch {
+    // Losing the marker only means Inbox shows a few more recaps as new.
+  }
+}

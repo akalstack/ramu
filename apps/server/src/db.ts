@@ -2,7 +2,7 @@
 // Source files stay on disk; only projects, tasks, bindings, sessions and UI state live here.
 import { DatabaseSync } from 'node:sqlite'
 
-const MIGRATIONS: string[] = [
+const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   `
   CREATE TABLE projects (
     id TEXT PRIMARY KEY,
@@ -179,6 +179,17 @@ const MIGRATIONS: string[] = [
   // Tool output compression was removed; its saved payloads are no longer read.
   `DROP INDEX IF EXISTS payloads_by_session;
   DROP TABLE IF EXISTS tool_payloads;`,
+  // Reserve v19: a development build inserted done_at at v9 and shifted v9–v18.
+  // Its databases may already report v19, with or without the column.
+  `SELECT 1;`,
+  // User acknowledgment is independent from the agent's running/idle status.
+  // Check the schema so both released databases and affected development profiles upgrade safely.
+  (db) => {
+    const columns = db.prepare('PRAGMA table_info(tasks)').all() as { name: string }[]
+    if (!columns.some((column) => column.name === 'done_at')) {
+      db.exec('ALTER TABLE tasks ADD COLUMN done_at INTEGER;')
+    }
+  },
 ]
 
 export type Db = DatabaseSync
@@ -191,7 +202,9 @@ export function openDb(path: string): Db {
   for (let v = version; v < MIGRATIONS.length; v++) {
     db.exec('BEGIN')
     try {
-      db.exec(MIGRATIONS[v]!)
+      const migration = MIGRATIONS[v]!
+      if (typeof migration === 'string') db.exec(migration)
+      else migration(db)
       db.exec(`PRAGMA user_version = ${v + 1}`)
       db.exec('COMMIT')
     } catch (err) {

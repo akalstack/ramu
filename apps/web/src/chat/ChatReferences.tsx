@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
-import { Folder, Quote, SquareTerminal, WandSparkles } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { FileIcon } from '../editor/FileIcon'
+import { ReferenceChipView } from './ReferenceChipView'
+import { draftChip, fileChip, skillChip } from '@ramu/shared/chat/referenceChip'
 import { parseThreadReference, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
@@ -13,12 +12,8 @@ import { notifyError } from './Notifications'
 
 function SkillReference({ name }: { name: string }) {
   useLanguage()
-  return (
-    <Badge variant="secondary" className="chat-reference" title={`${t('Skill')}: ${name}`}>
-      <WandSparkles data-icon="inline-start" className="text-brand" aria-hidden="true" />
-      <span className="truncate">{name}</span>
-    </Badge>
-  )
+  const chip = skillChip(name)
+  return <ReferenceChipView chip={chip} title={`${t('Skill')}: ${name}`} />
 }
 
 export function ChatLink({ href, children, taskId }: { href?: string; children: ReactNode; taskId?: string }) {
@@ -57,17 +52,18 @@ export function ChatLink({ href, children, taskId }: { href?: string; children: 
     return <SkillReference name={name} />
   }
   const local = href && localFileLink(href)
-  // A path whose last part has no extension (`apps/web`, `src/`) is most likely a folder; the server decides.
-  const folderLike =
-    !!local && (/\/$/.test(local.path) || !/\.[^/]+$|(?:^|\/)(?:README|LICENSE|Makefile|Dockerfile)$/i.test(local.path))
-  if (local)
+  const chip = href ? fileChip(href) : null
+  if (local && chip)
     return (
-      <Badge
-        variant="secondary"
-        className="chat-reference"
-        render={<a href={href} />}
-        title={folderLike ? t('Show {0} in Explorer', { '0': href }) : t('Open {0} in editor', { '0': href })}
-        onClick={(event) => {
+      <ReferenceChipView
+        chip={chip}
+        // A reference written as `@path` shows the file's name; a Markdown link keeps the words its author chose.
+        label={typeof children === 'string' && !children.startsWith('@') ? children : undefined}
+        href={href}
+        title={
+          chip.kind === 'folder' ? t('Show {0} in Explorer', { '0': href }) : t('Open {0} in editor', { '0': href })
+        }
+        onOpen={(event) => {
           event.preventDefault()
           if (!taskId || !href) return
           // Composer mentions carry a repository name; resolve that prefix to the checkout first.
@@ -110,10 +106,7 @@ export function ChatLink({ href, children, taskId }: { href?: string; children: 
             })
             .catch((error) => notifyError(errorText(error), 'Open file'))
         }}
-      >
-        {folderLike ? <Folder aria-hidden="true" /> : <FileIcon path={local.path} />}
-        <span className="truncate">{children}</span>
-      </Badge>
+      />
     )
   const external = href && /^https?:\/\//i.test(href)
   return (
@@ -142,14 +135,7 @@ export function ReferenceText({ text, taskId }: { text: string; taskId?: string 
             {part.label}
           </ChatLink>
         ) : (
-          <Badge key={index} variant="secondary" className="chat-reference" title={part.label}>
-            {part.kind === 'quote' ? (
-              <Quote data-icon="inline-start" aria-hidden="true" />
-            ) : (
-              <SquareTerminal data-icon="inline-start" aria-hidden="true" />
-            )}
-            <span className="truncate">{part.label.replace(/\n/g, ' ')}</span>
-          </Badge>
+          <ReferenceChipView key={index} chip={draftChip(part)} />
         ),
       )}
     </>

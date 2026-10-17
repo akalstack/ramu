@@ -57,14 +57,15 @@ export default function NewChat() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const store = useStore()
-  const { projects, selected, computers, createChat, isOnline } = store
+  const { projects, computers, createChat, isOnline } = store
+  const params = useLocalSearchParams<{ project?: string; quote?: string; computer?: string }>()
+  const [selected, setHost] = useState(params.computer ?? store.selected)
   const offline = !isOnline(selected)
   const list = projects.filter((p) => p.computerId === selected)
   // A chat runs in a project's folders, so the project is chosen first rather than defaulted.
-  const params = useLocalSearchParams<{ project?: string; quote?: string }>()
   const [projectId, setProjectId] = useState<string | null>(params.project ?? null)
   const [mode, setMode] = useState<'current' | 'worktree'>('current')
-  const [picker, setPicker] = useState<'project' | 'mode' | null>(null)
+  const [picker, setPicker] = useState<'project' | 'mode' | 'host' | null>(null)
   // Starts on the computer's default model step (Settings › Models), like the desktop; a pick here overrides it.
   const [picked, setModel] = useState<ModelChoice | null>(null)
   const preset = store.defaults[selected]
@@ -85,7 +86,7 @@ export default function NewChat() {
     if (params.project) return
     const timer = setTimeout(() => setPicker('project'), 450)
     return () => clearTimeout(timer)
-  }, [])
+  }, [params.project])
 
   return (
     <Screen bg="canvas" scrollable={false}>
@@ -110,7 +111,7 @@ export default function NewChat() {
         </View>
         <View style={{ paddingBottom: Math.max(insets.bottom, space.s) }}>
           <Composer
-            key={projectId ?? 'none'}
+            key={`${selected}:${projectId ?? 'none'}`}
             running={false}
             restore={
               params.quote
@@ -127,6 +128,9 @@ export default function NewChat() {
             autoFocus={projectId !== null}
             header={
               <>
+                {computers.length > 1 && (
+                  <TrayButton icon={Monitor} label={pc?.name ?? t.computers} onPress={() => setPicker('host')} />
+                )}
                 <TrayButton
                   prompt={projectId === null}
                   icon={
@@ -168,13 +172,47 @@ export default function NewChat() {
                 setPicker('project')
                 throw new Error('Choose a project first.')
               }
-              const id = await createChat({ projectId, text, mode, attachments, context, ...model })
+              const id = await createChat({
+                computerId: selected,
+                projectId,
+                text,
+                mode,
+                attachments,
+                context,
+                ...model,
+              })
               router.replace({ pathname: '/chat/[id]', params: { id } })
             }}
           />
         </View>
       </View>
 
+      <Sheet open={picker === 'host'} onClose={() => setPicker(null)} title={t.computers}>
+        {computers.map((computer) => (
+          <Row
+            key={computer.id}
+            onPress={() => {
+              if (computer.status === 'revoked') return
+              if (computer.id !== selected) {
+                setHost(computer.id)
+                setProjectId(null)
+                setModel(null)
+                setMode('current')
+              }
+              setPicker('project')
+            }}
+          >
+            <Monitor size={17} color={c.soft} />
+            <View style={{ flex: 1 }}>
+              <T weight="500">{computer.name}</T>
+              <T size={font.caption} tone="muted">
+                {t[computer.status]}
+              </T>
+            </View>
+            {computer.id === selected ? <Check size={16} color={c.accent} /> : null}
+          </Row>
+        ))}
+      </Sheet>
       <Sheet open={picker === 'project'} onClose={() => setPicker(null)} title="Project">
         {list.map((p) => (
           <Row
@@ -212,6 +250,7 @@ export default function NewChat() {
         <Row
           onPress={() => {
             setPicker(null)
+            store.select(selected)
             router.push('/folders')
           }}
         >

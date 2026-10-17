@@ -102,7 +102,7 @@ export class HostClient {
         throw new HostError(
           result.error ||
             (response.status === 401
-              ? 'Pairing was revoked. Pair this computer again.'
+              ? 'Pairing was revoked. Pair this host again.'
               : `Host request failed (${response.status})`),
           response.status,
         )

@@ -106,10 +106,10 @@ Read from `apps/mobile/src/app/index.tsx`, `components/ActivityTray.tsx`, `app/_
 
 ### What mobile has today
 
-- **Home ("Workspaces")** is one list: Outbox, **Needs you**, Pinned, one collapsible section per project, then Standalone threads. Above it: computer switcher, a workspace filter, status chips (All, Running, Needs you, Failed, Archived) and search. The header has a bell, a terminal button and settings.
+- **Home ("Workspaces")** is one list: Outbox, **Needs you**, Pinned, one collapsible section per project, then Standalone threads. Above it: host switcher, a workspace filter, status chips (All, Running, Needs you, Failed, Archived) and search. The header has a bell, a terminal button and settings.
 - **Bottom of the screen is taken.** On iOS 26 a glass capsule holds search and a compose button; on Android an extended FAB holds New thread.
-- **The bell opens the Activity sheet** (`ActivityTray`): threads waiting, threads working, the computer's background tasks and missed notices. `app/activity.tsx` is only a deep-link redirect into a thread.
-- **Notifications:** push for a thread done, needing input or failed, with generic text only (no prompts, paths or computer names), plus Live Activities and in-app banners.
+- **The bell opens the Activity sheet** (`ActivityTray`): threads waiting, threads working, the host's background tasks and missed notices. `app/activity.tsx` is only a deep-link redirect into a thread.
+- **Notifications:** push for a thread done, needing input or failed, with generic text only (no prompts, paths or host names), plus Live Activities and in-app banners.
 - **Not on mobile at all:** recaps, **What Ramu learned**, and a schedules view. The plan has schedules created through prompts and commands. The shared host dispatcher forwards every non-`network.*` method from a paired phone (`apps/server/src/index.ts`), so `recaps.get`, `recaps.act`, `summaries.get` and `schedules.*` should already be reachable; confirm there is no per-method gating before building.
 
 ### Findings
@@ -130,14 +130,14 @@ None of the three alone. Recommendation: **keep Home as the thread list, add one
 ### The Inbox page
 
 - A full-screen route (`/inbox`) opened from the bell, replacing the Activity sheet. Same name as the desktop Inbox in step 2 above, so the product has one concept.
-- **Segmented tabs at the top (not a bottom bar):** **Needs you · Recaps · Scheduled · Learned**, with counts. Scoped to the selected computer, like Home.
+- **Segmented tabs at the top (not a bottom bar):** **Needs you · Recaps · Scheduled · Learned**, with counts. Scoped to the selected host, like Home.
   - **Needs you:** threads waiting on you plus attention recaps. Rows open the thread; recap rows use the existing `SwipeRow` for Done, Snooze and Dismiss. Answering in place can come later; opening the thread already works.
   - **Recaps:** items since your last visit, with the same last-visit fix as desktop.
   - **Scheduled:** next runs, last result, Pause/Resume and Run now (`schedules.pause`, `schedules.runNow`).
   - **Learned:** the latest summaries with an unread dot, read-only, with **Looks good**.
 - **Bell badge** counts only things that need action: waiting threads, unread recaps or summaries, failed scheduled runs. Running threads no longer count; they already show in the list and in Live Activities.
 - Home stays a thread list. Remove the duplicate **Needs you** chip (keep the group), and rename the title to match desktop.
-- The computer switcher shows "N need you" per computer so another computer's work is visible without switching.
+- The host switcher shows "N need you" per host so another host's work is visible without switching.
 
 ### Notification rules
 

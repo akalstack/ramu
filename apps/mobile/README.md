@@ -1,38 +1,59 @@
 # Ramu mobile
 
-A live iOS/Android companion for a Ramu workspace server. Computers run agents,
+A live iOS/Android companion for a Ramu workspace server. Hosts run agents,
 providers, Git and terminals; the phone connects directly over HTTPS or a trusted
-LAN/VPN. The production app has no seeded computers or simulated conversations.
+LAN/VPN. The production app has no seeded hosts or simulated conversations.
 
 ## Connect a phone
 
-1. Build this checkout's desktop/server (`pnpm build`) and start Ramu on the computer.
+1. Build this checkout's desktop/server (`pnpm build`) and start Ramu on the host.
 2. Open desktop **Settings → Remote access**, enable network access, then **Pair a
    device**. Choose the reachable address in the QR selector. For a headless host,
    use `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`.
-3. Build once with `pnpm --filter @ramu/mobile build:ios` (or `build:android`), then run `pnpm dev:mobile` and open **Computers → Pair**.
+3. Build once with `pnpm --filter @ramu/mobile build:ios` (or `build:android`), then run `pnpm dev:mobile` (Expo Go; use `pnpm --filter @ramu/mobile dev:build` for a development build) and open **Hosts → Pair**.
    Scan the desktop's QR offer, or enter its address and ten-character pairing code.
    Review the address and explicitly allow HTTP only on a trusted network.
 4. Select a project or Standalone, then send an instruction. Provider installation
    and sign-in belong to the host; the model picker reads that host's catalog.
 
-Use the computer's reachable LAN/VPN address on a physical phone, not `localhost`.
+Use the host's reachable LAN/VPN address on a physical phone, not `localhost`.
 The Expo development tunnel exposes the app bundle, **not** your workspace server.
 The host must remain awake and reachable. Old hosts without the `mobile-companion`
 capability show an update error; rebuild/restart the host rather than reusing mocks.
 
 The React Native/React pins are isolated from desktop React through Metro. Install
 SDK-compatible native modules with `pnpm --filter @ramu/mobile exec expo install …`.
-Use a development build for the native adaptive header and background push. `pnpm --filter @ramu/mobile dev:go` remains available for basic Expo Go testing; its bundled navigation library does not include our native scroll-view bridge.
+`pnpm dev:mobile` starts Metro for Expo Go on the Mac's LAN address (`scripts/start.mjs`; an iPhone often cannot resolve the `.local` name). Use a development build (`dev:build`) for the native adaptive header and background push; Expo Go's bundled navigation library does not include our native scroll-view bridge.
+
+## Navigation
+
+A native tab bar (Liquid Glass on iOS 26) with four places, each with its own stack:
+
+- **Threads**: projects and threads for the selected host (the old Home list).
+- **Inbox**: what needs you (threads waiting, recaps that need a decision) across every connected
+  host, plus Running, Recaps, Learned (what Ramu learned) and Completed. The tab badge and the app
+  icon count what needs you. Opening a summary shows its changes and starts a thread about it.
+- **Schedules**: the selected host's schedules with their next and last runs; swipe to
+  pause, run now or delete; tap for runs; the editor covers daily, weekly, monthly, interval and one-time rules.
+- **Search**: the native search tab; finds threads on every host.
+
+Every tab carries a primary action (start a thread; new schedule on Schedules) and a Settings button in the
+navigation bar. With no host paired, or a revoked/offline one, the primary action opens a sheet that
+says why and offers Pair or Reconnect. Switch hosts from the host row at the top of Threads and
+Schedules. Pair opens the camera immediately; manual address entry sits behind "Enter details manually".
+All pop-ups are our one `Sheet`: on Android it is the official Material 3 modal bottom sheet (Jetpack Compose via
+`@expo/ui`, opaque, with its own handle, scrim and swipe-to-dismiss; `MaterialSheet.android.tsx`), elsewhere a glass sheet.
+Android uses the native stack header (left-aligned titles), the Material 3 bottom bar, opaque Material surfaces
+instead of blur, and one shared `Toggle`. Android builds need JDK 21 (JDK 25 breaks the CMake step). A thread opened from any tab pushes above the tab bar.
 
 ## Connected features
 
-- Multiple saved computers connect concurrently while the app is active, with
+- Multiple saved hosts connect concurrently while the app is active, with
   independent status, revocation, catalog, usage and thread state. Selecting one
-  does not reconnect the others. In-app alerts open their originating computer.
+  does not reconnect the others. In-app alerts open their originating host.
 - Live thread/tool/helper transcripts, host models, reasoning/access/fallback settings, host file context and skills, queue/
   steer, stop, permissions, ID-based questions, elicitation forms and goal controls.
-- Persistent computer metadata, drafts, question drafts and offline outbox. Native
+- Persistent host metadata, drafts, question drafts and offline outbox. Native
   bearer tokens use SecureStore; the web preview uses browser local storage.
 - Explicitly offline messages deliver in order after reconnect. Delivery interrupted
   after a request starts is marked **uncertain** and is never automatically retried.
@@ -44,7 +65,7 @@ Use a development build for the native adaptive header and background push. `pnp
   Symlinks outside allowed roots are rejected. Clone uses host Git credentials;
   failed/slow clones leave the destination available for inspection.
 - Document, photo-library and camera uploads (up to 10 MB per file), bounded by the existing server limits.
-  Queued attachment IDs belong to their originating computer.
+  Queued attachment IDs belong to their originating host.
 - Source Control: actual status, staging, unstaging, commits/AI drafts, branches,
   fetch/pull/push/sync, stashes and expected-HEAD undo. Discard previews identify
   permanent untracked-file deletion and reject changed contents before applying.
@@ -57,7 +78,7 @@ Use a development build for the native adaptive header and background push. `pnp
 - English/Bahasa Indonesia, persistent System/Light/Dark appearance and native
   safe-area/keyboard handling. Transcript rows are virtualized.
 
-The app suspends streams when backgrounded and rehydrates all saved computers on
+The app suspends streams when backgrounded and rehydrates all saved hosts on
 return. Agents continue on their hosts. It never promises background SSE delivery.
 Paired devices retain the host's existing broad remote privileges, including shell
 access. Network/device administration stays on the host desktop/CLI.
@@ -66,7 +87,7 @@ access. Network/device administration stays on the host desktop/CLI.
 
 The implementation is opt-in under Settings. Each paired device registers its Expo
 push token independently with every host. Hosts send generic completion/input/failure
-alerts through Expo's gateway, with opaque computer/task/session routing IDs instead
+alerts through Expo's gateway, with opaque host/task/session routing IDs instead
 of prompt or transcript content. Revocation and invalid-token receipts remove registrations.
 Foreground push banners are suppressed so SSE supplies the in-app notification.
 
@@ -134,11 +155,11 @@ SS3 sequences. No terminal credential is exposed to the renderer.
 
 ## Live Activities and Dynamic Island
 
-On iOS, Settings → Live Activity controls one activity for the selected computer's
+On iOS, Settings → Live Activity controls one activity for the selected host's
 ongoing agent work. Native SwiftUI layouts cover the Lock Screen, small banner,
 compact/minimal Dynamic Island, and its expanded view. They show running/waiting
 counts, attention state and elapsed time, with a deep link to the relevant task.
-Prompts, transcripts, project paths and computer names are never shown or pushed.
+Prompts, transcripts, project paths and host names are never shown or pushed.
 There is no invented percentage of completion. Completed work remains on the
 Lock Screen for at most 15 minutes; disabling, forgetting or revoking dismisses it.
 
@@ -175,7 +196,7 @@ using [Expo's native SwiftUI/ActivityKit integration](https://docs.expo.dev/vers
 ## Terminal console layout
 
 The terminal uses the full canvas with a compact bottom dock instead of a title
-bar, top tabs and command composer. The dock shows the computer, current folder,
+bar, top tabs and command composer. The dock shows the host, current folder,
 connection state and session count; tap it to switch or close sessions. Back,
 New and the keyboard toggle remain within thumb reach. Opening is guarded while
 a shell is being created. Closing a shell still requires confirmation.

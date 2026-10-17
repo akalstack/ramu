@@ -7,7 +7,15 @@ import { t as translate, useLanguage } from '../i18n'
 import { LoadingDots } from '@/components/loading-dots'
 import { isCompacting } from '@ramu/shared/chat/compaction'
 import { Button } from '@/components/desktop-button'
-import { OverlayScrollArea } from '@/components/overlay-scroll-area'
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from '@/components/ui/message-scroller'
+import { TranscriptScrollApi } from './agent/components/TranscriptScrollApi'
 import type { FileContext } from '@ramu/shared/types'
 import { ArrowDown } from 'lucide-react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
@@ -110,11 +118,8 @@ export const AgentView = memo(function AgentView({
   const [configuring, setConfiguring] = useState(false)
   const [dropping, setDropping] = useState(false)
   const root = useRef<HTMLDivElement>(null)
-  const { scroller, stick, edges, measureEdges, scrollToLatest, onScroll } = useTranscriptScroll({
-    root,
-    savedStick: savedChat(view.sessionId)?.stick,
-    followOn: { events, state: session?.state, reviews },
-  })
+  const { scroller, stick, onScroll } = useTranscriptScroll({ root, savedStick: savedChat(view.sessionId)?.stick })
+  const scrollToEnd = useRef<(() => void) | null>(null)
   useChatPresentation({ sessionId: view.sessionId, session, events, draft, attachments, scroller, stick })
   const { finding, findRequest, findQuery, openFind, closeFind } = useChatFind(root)
 
@@ -202,7 +207,6 @@ export const AgentView = memo(function AgentView({
     turns,
     scroller,
     stick,
-    measureEdges,
   })
   const statusGroup =
     working && !turns.at(-1)?.ended ? turns.at(-1)?.items.findLast((block) => block.kind === 'tools') : undefined
@@ -396,6 +400,7 @@ export const AgentView = memo(function AgentView({
         setDraft((current) => (current === submitted ? '' : current))
         setAttachments((current) => current.filter((file) => !submittedFiles.some((sent) => sent.id === file.id)))
         stick.current = true
+        scrollToEnd.current?.()
       } finally {
         setConfiguring(false)
       }
@@ -528,78 +533,86 @@ export const AgentView = memo(function AgentView({
               onOpenQuestion={openQuestion}
             />
           )}
-          <div
-            className={`transcript-frame [&_>_.transcript]:min-h-0 [&_>_.transcript]:[flex:1_1_0] [&_>_.transcript]:min-w-0 [&::before]:[content:''] [&::before]:absolute [&::before]:left-0 [&::before]:right-0 [&::before]:h-[36px] [&::before]:pointer-events-none [&::before]:z-1 [&::before]:opacity-0 [&::before]:[transition:opacity_150ms_var(--motion-curve)] [&::before]:top-0 [&::before]:[background:linear-gradient(to_bottom,_var(--canvas)_15%,_transparent)] [&::after]:[content:''] [&::after]:absolute [&::after]:left-0 [&::after]:right-0 [&::after]:h-[36px] [&::after]:pointer-events-none [&::after]:z-1 [&::after]:opacity-0 [&::after]:[transition:opacity_150ms_var(--motion-curve)] [&::after]:bottom-0 [&::after]:[background:linear-gradient(to_top,_var(--canvas)_15%,_transparent)] [&.shadow-top::before]:opacity-100 [&.shadow-bottom::after]:opacity-100 [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col${edges.top ? ' shadow-top' : ''}${edges.bottom ? ' shadow-bottom' : ''}`}
-          >
-            <OverlayScrollArea
-              className={`transcript flex-1 ${hydrating && !turns.length ? 'chat-loading' : ''}`}
-              contentClassName={hydrating && !turns.length ? 'h-full' : undefined}
-              viewportClassName="p-[12px_24px_28px] pt-3"
-              viewportRef={scroller}
-              viewportProps={{ onScroll }}
-            >
-              <div
-                className={`${hydrating && !turns.length ? 'h-full justify-center' : ''} transcript-col [&_>_[data-block-index]:has(>_.msg.user)]:flex [&_>_[data-block-index]:has(>_.msg.user)]:justify-end max-w-[var(--chat-column-width)] m-[0_auto] flex flex-col gap-3.5`}
+          <MessageScrollerProvider autoScroll defaultScrollPosition="end">
+            <TranscriptScrollApi apiRef={scrollToEnd} />
+            <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
+              <MessageScroller
+                className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length ? 'chat-loading' : ''}`}
               >
-                {hydrating && !turns.length && (
-                  <div className="flex items-center justify-center">
-                    <Spinner className="size-5 text-muted-foreground" aria-label={translate('Loading conversation')} />
-                  </div>
-                )}
-                {hiddenTurns > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="mx-auto mb-2 text-muted-foreground"
-                    onClick={showEarlierTurns}
+                <MessageScrollerViewport
+                  ref={scroller}
+                  onScroll={onScroll}
+                  aria-label={translate('Conversation')}
+                  className="scroll-fade-y px-6 pt-3 pb-7"
+                >
+                  {hiddenTurns > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mx-auto mb-2 flex text-muted-foreground"
+                      onClick={showEarlierTurns}
+                    >
+                      {translate('Earlier turns ({0} more)', { '0': hiddenTurns })}
+                    </Button>
+                  )}
+                  <MessageScrollerContent
+                    className={`${hydrating && !turns.length ? 'justify-center' : ''} transcript-col mx-auto max-w-[var(--chat-column-width)] gap-3.5`}
                   >
-                    {translate('Earlier turns ({0} more)', { '0': hiddenTurns })}
-                  </Button>
-                )}
-                {pageTurns.map((turn, ti) => (
-                  <TranscriptTurn
-                    key={turn.key}
-                    turn={turn}
-                    isLast={ti === pageTurns.length - 1}
-                    dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
-                    dateNow={dateNow}
-                    reviews={turnReviews.get(turn.key)}
-                    completedGoals={completedGoals.get(turn.user?.kind === 'event' ? turn.user.event : null)}
-                    ctx={transcript}
-                  />
-                ))}
-                {activityLabel && (compacting || !statusGroup) && (
-                  <div
-                    className={WORKING_CLASS}
-                    role="status"
-                    aria-live="polite"
-                    data-compacting={compacting || undefined}
-                  >
-                    <WorkingText>{translate(activityLabel)}</WorkingText>
-                  </div>
-                )}
-              </div>
-            </OverlayScrollArea>
-            {edges.bottom && (
-              <Button
-                variant="outline"
-                size="icon-sm"
-                type="button"
-                className={`jump-bottom absolute left-1/2 z-4 [transform:translateX(-50%)] grid place-items-center p-0 rounded-full backdrop-blur-sm bottom-2.5 shadow-sm motion-safe:[animation:fade-only_0.14s_ease-out] ${working ? 'working' : ''}`}
-                aria-label={working ? translate('Agent is working. Scroll to latest') : translate('Scroll to latest')}
-                title={translate('Scroll to latest')}
-                onClick={scrollToLatest}
-              >
-                {working ? <LoadingDots /> : <ArrowDown size={14} />}
-              </Button>
-            )}
-            <SelectionActions
-              scroller={scroller}
-              onQuote={quoteIntoDraft}
-              onQuoteNew={quoteIntoNewChat}
-              onAside={(quote, from) => setOpenAside({ id: null, quote, from })}
-            />
-          </div>
+                    {hydrating && !turns.length && (
+                      <div className="flex items-center justify-center">
+                        <Spinner
+                          className="size-5 text-muted-foreground"
+                          aria-label={translate('Loading conversation')}
+                        />
+                      </div>
+                    )}
+                    {pageTurns.map((turn, ti) => (
+                      <MessageScrollerItem
+                        key={turn.key}
+                        messageId={String(turn.key)}
+                        className="[content-visibility:visible]"
+                      >
+                        <TranscriptTurn
+                          turn={turn}
+                          isLast={ti === pageTurns.length - 1}
+                          dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
+                          dateNow={dateNow}
+                          reviews={turnReviews.get(turn.key)}
+                          completedGoals={completedGoals.get(turn.user?.kind === 'event' ? turn.user.event : null)}
+                          ctx={transcript}
+                        />
+                      </MessageScrollerItem>
+                    ))}
+                    {activityLabel && (compacting || !statusGroup) && (
+                      <div
+                        className={WORKING_CLASS}
+                        role="status"
+                        aria-live="polite"
+                        data-compacting={compacting || undefined}
+                      >
+                        <WorkingText>{translate(activityLabel)}</WorkingText>
+                      </div>
+                    )}
+                  </MessageScrollerContent>
+                </MessageScrollerViewport>
+                <MessageScrollerButton
+                  variant="outline"
+                  behavior="auto"
+                  className="rounded-full shadow-sm backdrop-blur-sm"
+                  aria-label={working ? translate('Agent is working. Scroll to latest') : translate('Scroll to latest')}
+                  title={translate('Scroll to latest')}
+                >
+                  {working ? <LoadingDots /> : <ArrowDown size={14} />}
+                </MessageScrollerButton>
+              </MessageScroller>
+              <SelectionActions
+                scroller={scroller}
+                onQuote={quoteIntoDraft}
+                onQuoteNew={quoteIntoNewChat}
+                onAside={(quote, from) => setOpenAside({ id: null, quote, from })}
+              />
+            </div>
+          </MessageScrollerProvider>
           <div className="composer-dock [&_>_*]:w-full [&_>_*]:max-w-[var(--chat-column-width)] [&_>_*]:ml-auto [&_>_*]:mr-auto [&_.error]:mb-1.5 [&_.error]:text-control [&_.composer]:relative [&_.composer]:z-1 flex-none p-[0_calc(24px_+_var(--chat-scrollbar-width,_0px))_14px_24px]">
             {error && <div className="error text-bad">{error}</div>}
             {(hostOffline ||

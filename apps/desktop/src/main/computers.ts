@@ -44,6 +44,7 @@ export interface ComputerDeps {
 }
 
 export class ComputerRegistry {
+  private scope: string | null = null
   private readonly live = new Map<string, Live>()
   private readonly local: { status: ComputerStatus; running: number; needsInput: number } = {
     status: 'connected',
@@ -232,7 +233,7 @@ export class ComputerRegistry {
   endpoint(id: string): string | RuntimeEndpoint {
     if (id === LOCAL) return this.deps.local
     const endpoint = this.deps.servers.endpoint(id)
-    if (!endpoint) throw new Error('That computer is no longer saved')
+    if (!endpoint) throw new Error('That host is no longer saved')
     return endpoint
   }
 
@@ -243,6 +244,12 @@ export class ComputerRegistry {
 
   exists(id: string) {
     return id === LOCAL || !!this.deps.servers.get(id)
+  }
+
+  setScope(id: string | null) {
+    if (id !== null && !this.exists(id)) throw new Error('That host is no longer saved')
+    this.scope = id
+    this.deps.changed()
   }
 
   list(current: string): Computers {
@@ -267,7 +274,12 @@ export class ComputerRegistry {
         }
       }),
     ]
-    return { computers, current, deviceName: this.deps.deviceName }
+    return {
+      computers,
+      current,
+      scope: this.scope && this.exists(this.scope) ? this.scope : null,
+      deviceName: this.deps.deviceName,
+    }
   }
 
   /** Pairs with a code, proves the new token works, then connects. */
@@ -325,7 +337,7 @@ export class ComputerRegistry {
   }
 
   forget(id: string) {
-    if (id === LOCAL) throw new Error('This computer cannot be removed')
+    if (id === LOCAL) throw new Error('This host cannot be removed')
     this.deps.ssh.close(id)
     clearTimeout(this.timers.get(`ssh:${id}`))
     this.timers.delete(`ssh:${id}`)
@@ -344,7 +356,7 @@ export class ComputerRegistry {
   }
 
   update(id: string, changes: ComputerUpdate) {
-    if (id === LOCAL) throw new Error('Manage this computer on its own settings screen')
+    if (id === LOCAL) throw new Error('Manage this host on its own settings screen')
     const before = this.deps.servers.get(id)
     const saved = this.deps.servers.update(id, changes)
     if (saved.enabled !== before?.enabled || saved.retryMode !== before?.retryMode) this.connect(id)

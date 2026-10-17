@@ -70,7 +70,7 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
       <SettingsGroupTitle>{t('Saved approvals')}</SettingsGroupTitle>
       <p className="m-0 text-caption text-muted-foreground">
         {t(
-          'Rules apply to the selected provider on this computer. User rules cover all projects; project rules cover one project.',
+          'Rules apply to the selected provider on this host. User rules cover all projects; project rules cover one project.',
         )}
       </p>
       <div className="flex flex-wrap items-center gap-2">

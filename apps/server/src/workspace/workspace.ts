@@ -36,7 +36,7 @@ interface BindingRow {
   setup_error: string | null
 }
 
-const TASK_COLUMNS = `t.id, t.project_id AS projectId, t.title, t.mode, t.workspace_id AS workspaceId, t.status, t.created_at AS createdAt, t.pinned_at AS pinnedAt,
+const TASK_COLUMNS = `t.id, t.project_id AS projectId, t.title, t.mode, t.workspace_id AS workspaceId, t.status, t.created_at AS createdAt, t.pinned_at AS pinnedAt, t.done_at AS doneAt,
   COALESCE((SELECT MAX(COALESCE(json_extract(e.event, '$.at'), s.created_at))
     FROM agent_sessions s JOIN agent_events e ON e.session_id = s.id
     WHERE s.task_id = t.id AND s.parent_session_id IS NULL
@@ -296,6 +296,12 @@ export class Workspace {
   setPinned(id: string, pinned: boolean): Task {
     this.getTask(id)
     this.db.prepare('UPDATE tasks SET pinned_at = ? WHERE id = ?').run(pinned ? Date.now() : null, id)
+    return this.getTask(id)
+  }
+
+  setDone(id: string, done: boolean): Task {
+    this.getTask(id)
+    this.db.prepare('UPDATE tasks SET done_at = ? WHERE id = ?').run(done ? Date.now() : null, id)
     return this.getTask(id)
   }
 

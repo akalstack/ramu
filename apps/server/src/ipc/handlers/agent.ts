@@ -80,7 +80,9 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'agent.submit': {
       args: z.tuple([id, z.string().max(1_000_000), z.enum(['queue', 'steer']), attachmentIds, fileContext]),
       run: async (s: string, t: string, mode: 'queue' | 'steer', attachmentIds?: string[], context?: FileContext[]) => {
-        t = await withContext(workspace, agents.get(s).taskId, t, context)
+        const taskId = agents.get(s).taskId
+        workspace.setDone(taskId, false)
+        t = await withContext(workspace, taskId, t, context)
         return lockSession(ctx, s, () =>
           agents.submit(s, t, mode, attachmentStore.resolve(attachmentIds), undefined, true),
         )
@@ -96,12 +98,18 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     },
     'agent.send': {
       args: z.tuple([id, text]),
-      run: (s: string, t: string) => lockSession(ctx, s, () => agents.send(s, t)),
+      run: (s: string, t: string) => {
+        workspace.setDone(agents.get(s).taskId, false)
+        return lockSession(ctx, s, () => agents.send(s, t))
+      },
     },
     'agent.resumeQueue': { args: z.tuple([id]), run: (s: string) => agents.resumeQueue(s) },
     'agent.sendQueuedNow': {
       args: z.tuple([id, id]),
-      run: (s: string, messageId: string) => lockSession(ctx, s, () => agents.sendQueuedNow(s, messageId)),
+      run: (s: string, messageId: string) => {
+        workspace.setDone(agents.get(s).taskId, false)
+        return lockSession(ctx, s, () => agents.sendQueuedNow(s, messageId))
+      },
     },
     'agent.continuationPrompt': { args: z.tuple([id]), run: (s: string) => agents.continuationPrompt(s) },
     'agent.interrupt': {

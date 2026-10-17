@@ -20,7 +20,7 @@ const urlOf = (target: string | RuntimeEndpoint) =>
   typeof target === 'string' ? target : target.kind === 'http' ? target.url : target.path
 
 function setup() {
-  const dir = mkdtempSync(join(tmpdir(), 'ramu computers '))
+  const dir = mkdtempSync(join(tmpdir(), 'ramu hosts '))
   dirs.push(dir)
   const servers = new RemoteServers(join(dir, 'remote-servers.json'), {
     available: false,
@@ -35,7 +35,7 @@ function setup() {
   const deps: ComputerDeps = {
     servers,
     deviceName: 'My Mac',
-    localName: () => 'This computer',
+    localName: () => 'This host',
     local: '/tmp/local.sock',
     subscribe: (target: RuntimeEndpoint, receive) => {
       streams.set(urlOf(target), receive)
@@ -56,21 +56,21 @@ function setup() {
   return { servers, streams, stops, delivered, counts, deps, ssh, registry: new ComputerRegistry(deps) }
 }
 
-it('lists this computer first and connects every saved computer at once', () => {
+it('lists this host first and connects every saved host at once', () => {
   const { servers, streams, registry } = setup()
   const a = servers.add('10.0.0.2:7788', 'Studio', 'a'),
     b = servers.add('10.0.0.3:7788', 'Server', 'b')
   registry.start()
   expect([...streams.keys()].sort()).toEqual(['http://10.0.0.2:7788', 'http://10.0.0.3:7788'])
   const list = registry.list(LOCAL)
-  expect(list.computers.map((c) => c.name)).toEqual(['This computer', 'Studio', 'Server'])
+  expect(list.computers.map((c) => c.name)).toEqual(['This host', 'Studio', 'Server'])
   expect(list.computers.slice(1).map((c) => c.status)).toEqual(['connecting', 'connecting'])
   expect(list.current).toBe(LOCAL)
   expect(JSON.stringify(list)).not.toContain('"token"')
   expect([a.id, b.id]).toEqual(list.computers.slice(1).map((c) => c.id))
 })
 
-it('tracks each computer’s connection independently, including a rejected token', () => {
+it('tracks each host’s connection independently, including a rejected token', () => {
   const { servers, streams, registry, deps } = setup()
   const a = servers.add('10.0.0.2:7788', 'Studio', 'a'),
     b = servers.add('10.0.0.3:7788', 'Server', 'b')
@@ -84,7 +84,7 @@ it('tracks each computer’s connection independently, including a rejected toke
   expect(deps.changed).toHaveBeenCalled()
 })
 
-it('retrying an offline computer keeps the other computer connected and delivering events', () => {
+it('retrying an offline host keeps the other host connected and delivering events', () => {
   const { servers, streams, stops, delivered, registry } = setup()
   const a = servers.add('10.0.0.2:7788', 'Studio', 'a'),
     b = servers.add('10.0.0.3:7788', 'Server', 'b')
@@ -100,7 +100,7 @@ it('retrying an offline computer keeps the other computer connected and deliveri
   expect(delivered.at(-1)).toEqual([b.id, 'fs:changed'])
 })
 
-it('counts working and waiting threads per computer when their state changes', async () => {
+it('counts working and waiting threads per host when their state changes', async () => {
   const { servers, streams, counts, registry } = setup()
   const a = servers.add('10.0.0.2:7788', 'Studio', 'a')
   registry.start()
@@ -119,7 +119,7 @@ it('counts working and waiting threads per computer when their state changes', a
   expect(registry.list(a.id).current).toBe(a.id)
 })
 
-it('delivers each computer’s events to that computer only', () => {
+it('delivers each host’s events to that host only', () => {
   const { servers, streams, delivered, registry } = setup()
   const a = servers.add('10.0.0.2:7788', 'Studio', 'a')
   registry.start()
@@ -127,7 +127,7 @@ it('delivers each computer’s events to that computer only', () => {
   expect(delivered).toEqual([[a.id, 'fs:changed']])
 })
 
-it('pairs, proves the token works, connects, and replaces a computer paired again', async () => {
+it('pairs, proves the token works, connects, and replaces a host paired again', async () => {
   const { servers, streams, stops, deps, registry } = setup()
   const first = await registry.pair('10.0.0.2:7788', ' ABCDE-FGHJK ', 'Studio')
   expect(deps.pair).toHaveBeenCalledWith('http://10.0.0.2:7788', 'ABCDE-FGHJK', 'My Mac')
@@ -140,14 +140,14 @@ it('pairs, proves the token works, connects, and replaces a computer paired agai
   expect(streams.has('http://10.0.0.2:7788')).toBe(true)
 })
 
-it('does not save a computer whose token fails the check', async () => {
+it('does not save a host whose token fails the check', async () => {
   const { servers, deps, registry } = setup()
   vi.mocked(deps.invoke).mockRejectedValueOnce(new Error('The server rejected the access token'))
   await expect(registry.pair('10.0.0.2:7788', 'ABCDE-FGHJK', 'Studio')).rejects.toThrow(/rejected/)
   expect(servers.list()).toEqual([])
 })
 
-it('forgets a computer and stops its connection, but never this computer', () => {
+it('forgets a host and stops its connection, but never this host', () => {
   const { servers, stops, registry } = setup()
   const a = servers.add('10.0.0.2:7788', 'Studio', 'a')
   registry.start()
@@ -159,7 +159,7 @@ it('forgets a computer and stops its connection, but never this computer', () =>
   expect(() => registry.endpoint(a.id)).toThrow(/no longer saved/)
 })
 
-it('pauses one computer persistently and resumes without disturbing another connection', () => {
+it('pauses one host persistently and resumes without disturbing another connection', () => {
   const { servers, streams, stops, deps, registry } = setup()
   const a = servers.add('10.0.0.2:7788', 'Studio', 'a'),
     b = servers.add('10.0.0.3:7788', 'Server', 'b')
@@ -178,7 +178,7 @@ it('pauses one computer persistently and resumes without disturbing another conn
   expect(subscribe).not.toHaveBeenCalled()
 })
 
-it('does not connect a saved paused computer at startup', () => {
+it('does not connect a saved paused host at startup', () => {
   const { servers, streams, registry } = setup()
   const saved = servers.add('10.0.0.2:7788', 'Studio', 'a')
   servers.update(saved.id, { enabled: false })
@@ -187,7 +187,7 @@ it('does not connect a saved paused computer at startup', () => {
   expect(registry.list(LOCAL).computers[1]).toMatchObject({ status: 'paused', enabled: false, retryMode: 'events' })
 })
 
-it('cancels a pending activity refresh when a computer is forgotten', async () => {
+it('cancels a pending activity refresh when a host is forgotten', async () => {
   const { servers, streams, deps, registry } = setup()
   const saved = servers.add('10.0.0.2:7788', 'Studio', 'a')
   registry.start()
@@ -280,7 +280,7 @@ it('reciprocal A↔B connections stay direct and never echo events or counts bac
   b.registry.stop()
 })
 
-it('brings up the tunnel before subscribing to an SSH computer, and tears it down when forgotten', async () => {
+it('brings up the tunnel before subscribing to an SSH host, and tears it down when forgotten', async () => {
   const { servers, streams, registry, ssh } = setup()
   const saved = servers.add('http://127.0.0.1:49200', 'Build box', 'tok', 1, {
     target: 'build',
@@ -299,7 +299,7 @@ it('brings up the tunnel before subscribing to an SSH computer, and tears it dow
   expect(ssh.close).toHaveBeenCalledWith(saved.id)
 })
 
-it('shows an SSH computer as offline and retries when its tunnel cannot open', async () => {
+it('shows an SSH host as offline and retries when its tunnel cannot open', async () => {
   const { servers, streams, registry, ssh } = setup()
   ssh.ensure.mockRejectedValueOnce(new Error('build is not a trusted host yet'))
   const saved = servers.add('http://127.0.0.1:49200', 'Build box', 'tok', 1, {
@@ -313,4 +313,20 @@ it('shows an SSH computer as offline and retries when its tunnel cannot open', a
   await vi.advanceTimersByTimeAsync(20_000)
   expect(ssh.ensure).toHaveBeenCalledTimes(2)
   expect([...streams.keys()]).toEqual(['http://127.0.0.1:49200'])
+})
+
+it('defaults browsing to all hosts and shares the filter without changing workspace ownership', () => {
+  const { registry, servers } = setup()
+  const remote = servers.add('10.0.0.9:7788', 'Studio', 'token')
+  expect(registry.list(LOCAL).scope).toBeNull()
+  expect(registry.list(remote.id).scope).toBeNull()
+  registry.setScope(remote.id)
+  expect(registry.list(LOCAL)).toMatchObject({ current: LOCAL, scope: remote.id })
+  expect(registry.list(remote.id)).toMatchObject({ current: remote.id, scope: remote.id })
+  registry.setScope(null)
+  expect(registry.list(remote.id)).toMatchObject({ current: remote.id, scope: null })
+  expect(() => registry.setScope('missing')).toThrow('no longer saved')
+  registry.setScope(remote.id)
+  registry.forget(remote.id)
+  expect(registry.list(LOCAL).scope).toBeNull()
 })

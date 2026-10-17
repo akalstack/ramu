@@ -20,7 +20,7 @@ import type { MobileProject } from '../runtime/types'
 import { font, radius, space, useTheme } from '../theme'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
-import { Button, Row, Sheet, T } from './ui'
+import { Button, Row, Sheet, T, type Icon } from './ui'
 
 /** One-shot pin/archive commands shared by the row's swipe actions. */
 export function useChatCommands(chat: Chat) {
@@ -48,7 +48,7 @@ export function useChatCommands(chat: Chat) {
         })
       Alert.alert(
         'Delete thread?',
-        `${chat.title}\n\nThis removes the thread from the computer. Files in the checkout stay.`,
+        `${chat.title}\n\nThis removes the thread from the host. Files in the checkout stay.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Delete', style: 'destructive', onPress: () => remove(false) },
@@ -67,11 +67,17 @@ export function ChatActionsSheet({
   open,
   onClose,
   rename = false,
+  extras = [],
+  onGone,
 }: {
   chat: Chat
   open: boolean
   onClose: () => void
   rename?: boolean
+  /** Screen-specific actions listed above the shared ones; each runs once the sheet has closed. */
+  extras?: { icon: Icon; label: string; onPress?: () => void }[]
+  /** Runs once the thread is deleted or archived, so a thread screen can leave itself. */
+  onGone?: () => void
 }) {
   const { c } = useTheme()
   const store = useStore()
@@ -95,13 +101,16 @@ export function ChatActionsSheet({
     }
   }
   const remove = (removeWorktrees: boolean) =>
-    void run(() => store.invoke(chat.computerId, 'tasks.delete', chat.taskId, removeWorktrees))
+    void run(async () => {
+      await store.invoke(chat.computerId, 'tasks.delete', chat.taskId, removeWorktrees)
+      onGone?.()
+    })
   const confirmDelete = () => {
     onClose()
     const worktree = chat.mode === 'worktree'
     Alert.alert(
       'Delete thread?',
-      `${chat.title}\n\nThis removes the thread from the computer. Files in the checkout stay.`,
+      `${chat.title}\n\nThis removes the thread from the host. Files in the checkout stay.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => remove(false) },
@@ -111,7 +120,16 @@ export function ChatActionsSheet({
       ],
     )
   }
-  const items = [
+  const items: { icon: Icon; label: string; danger?: boolean; onPress?: () => void }[] = [
+    ...extras.map((extra) => ({
+      ...extra,
+      onPress: extra.onPress
+        ? () => {
+            onClose()
+            setTimeout(extra.onPress!, 300)
+          }
+        : undefined,
+    })),
     {
       icon: pinned ? PinOff : Pin,
       label: pinned ? 'Unpin' : 'Pin to top',
@@ -139,7 +157,11 @@ export function ChatActionsSheet({
     {
       icon: archived ? ArchiveRestore : Archive,
       label: archived ? 'Unarchive' : 'Archive',
-      onPress: () => void run(() => store.invoke(chat.computerId, 'tasks.archive', chat.taskId, !archived)),
+      onPress: () =>
+        void run(async () => {
+          await store.invoke(chat.computerId, 'tasks.archive', chat.taskId, !archived)
+          if (!archived) onGone?.()
+        }),
     },
     { icon: Trash2, label: 'Delete…', danger: true, onPress: confirmDelete },
   ]
@@ -250,7 +272,7 @@ export function ProjectActionsSheet({
       danger: true,
       onPress: () => {
         onClose()
-        Alert.alert('Remove project?', `${project.name}\n\nIts threads and folders on the computer are not deleted.`, [
+        Alert.alert('Remove project?', `${project.name}\n\nIts threads and folders on the host are not deleted.`, [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Remove',

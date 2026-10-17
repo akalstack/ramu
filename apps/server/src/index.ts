@@ -251,10 +251,10 @@ const dispatcher = createDispatcher(
       if (origin.getStore()?.network)
         return Promise.reject(
           new Error(
-            'This opens a window on the computer that runs Ramu, so it is not available from another computer yet. Do it on that computer.',
+            'This opens a window on the host that runs Ramu, so it is not available from another host yet. Do it on that host.',
           ),
         )
-      if (!hostClients.size) return Promise.reject(new Error('Open Ramu on this computer to use this desktop action'))
+      if (!hostClients.size) return Promise.reject(new Error('Open Ramu on this host to use this desktop action'))
       const requestId = randomUUID()
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -431,7 +431,7 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
     const { method, args } = await body(req)
     let value: unknown
     if (method === 'host.reply') {
-      if (remote) throw new Error('Desktop actions are only available on this computer')
+      if (remote) throw new Error('Desktop actions are only available on this host')
       const request = nativeRequests.get(args?.[0])
       if (request) {
         clearTimeout(request.timer)
@@ -468,7 +468,7 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
         ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}),
       }
     else if (method.startsWith('network.')) {
-      if (remote) throw new Error('Network access is managed from the computer running Ramu')
+      if (remote) throw new Error('Network access is managed from the host running Ramu')
       value = await networkMethod(method, args)
     } else if (method === 'background.stop') {
       res.writeHead(200, json).end('{}')

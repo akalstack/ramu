@@ -1,4 +1,4 @@
-import { ChevronsUpDown, Monitor, Network, Settings2 } from 'lucide-react'
+import { ChevronsUpDown, Network, Settings2 } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import type { Computer, ComputerStatus, Computers } from '@ramu/shared/types'
 import { Menu, type MenuEntry } from '../Menu'
@@ -44,7 +44,7 @@ export function useHostConnection(): { offline: boolean; name: string } {
   const host = state?.computers.find((computer) => computer.id === state.current)
   return {
     offline: !!host && host.status !== 'connected' && host.status !== 'rejected',
-    name: host?.name ?? t('this computer'),
+    name: host?.name ?? t('this host'),
   }
 }
 
@@ -81,34 +81,38 @@ export function activityText(computer: Pick<Computer, 'status' | 'running' | 'ne
   return parts.filter(Boolean).join(' · ')
 }
 
-/**
- * Sidebar row that names the computer this window shows and switches to another one. It appears only once a second
- * computer is paired, so people who use one computer see no change. Every computer stays connected behind it.
- */
+/** The shared browsing filter is independent of the computer running the active chat. */
 export function ComputerSwitcher() {
   useLanguage()
   const state = useComputers()
   if (!state || state.computers.length < 2) return null
-  const current = state.computers.find((computer) => computer.id === state.current) ?? state.computers[0]!
-  const others = state.computers.filter((computer) => computer.id !== current.id)
-  const waiting = others.reduce((sum, computer) => sum + computer.needsInput, 0),
-    working = others.reduce((sum, computer) => sum + computer.running, 0)
-  const open = (id: string) =>
-    void invoke('computers.open', id).catch((error) => notifyError(errorText(error), t('Computers')))
+  const selected = state.computers.find((computer) => computer.id === state.scope)
+  const select = (id: string | null) =>
+    void invoke('computers.scope', id)
+      .then(publishComputers)
+      .catch((error) => notifyError(errorText(error), t('Hosts')))
   const items: MenuEntry[] = [
-    { key: 'heading', heading: t('Computers') },
+    {
+      key: 'all',
+      selected: !selected,
+      label: (
+        <>
+          <Network size={15} />
+          <span className="grow">{t('All hosts')}</span>
+        </>
+      ),
+      onSelect: () => select(null),
+    },
+    { key: 'hosts-separator', separator: true },
     ...state.computers.map((computer): MenuEntry => ({
       key: computer.id,
-      selected: computer.id === current.id,
-      disabled: !computer.local && computer.id !== current.id && computer.status !== 'connected',
+      selected: computer.id === selected?.id,
       title: computer.url ?? undefined,
-      onSelect: () => {
-        if (computer.id !== current.id) open(computer.id)
-      },
+      onSelect: () => select(computer.id),
       label: (
         <span className="flex min-w-0 grow items-center gap-2">
           <StatusDot status={computer.status} />
-          <span className="truncate">{computer.name}</span>
+          <span className="min-w-0 grow truncate">{computer.name}</span>
           <span className="ml-auto flex-none pl-3 text-caption text-muted-foreground tabular-nums">
             {activityText(computer)}
           </span>
@@ -121,7 +125,7 @@ export function ComputerSwitcher() {
       label: (
         <>
           <Settings2 />
-          {t('Manage computers…')}
+          {t('Manage hosts…')}
         </>
       ),
       onSelect: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'remote' } })),
@@ -130,38 +134,16 @@ export function ComputerSwitcher() {
   return (
     <Menu
       standard
-      label={t('Switch computer')}
+      label={t('Filter hosts')}
       align="start"
       items={items}
       menuClassName="min-w-[260px]"
       className="computer-switcher flex w-full min-w-0 items-center justify-start gap-[9px] rounded-(--radius-row) border-0 bg-transparent p-[5px_8px] min-h-8 text-body leading-5 text-soft hover:bg-accent hover:text-foreground aria-expanded:bg-accent [-webkit-app-region:no-drag]"
       icon={
         <>
-          {current.local ? (
-            <Monitor size={15} className="flex-none" />
-          ) : (
-            <Network size={15} className="flex-none text-(--accent)" />
-          )}
-          <span className="min-w-0 grow truncate text-left">{current.name}</span>
-          {!current.local && (
-            <span className="flex-none rounded-full bg-primary/10 px-1.5 text-[10px] font-medium leading-[16px] text-(--accent)">
-              {current.ssh ? t('SSH') : t('Remote')}
-            </span>
-          )}
-          <StatusDot status={current.status} />
-          {(waiting > 0 || working > 0) && (
-            <span
-              className="flex-none rounded-full bg-fill px-1.5 text-[10px] leading-[16px] tabular-nums text-muted-foreground"
-              title={[
-                waiting ? t('{0} waiting on other computers', { 0: waiting }) : '',
-                working ? t('{0} working on other computers', { 0: working }) : '',
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            >
-              {waiting || working}
-            </span>
-          )}
+          <Network size={15} className="flex-none" />
+          <span className="min-w-0 grow truncate text-left">{selected?.name ?? t('All hosts')}</span>
+          {selected && <StatusDot status={selected.status} />}
           <ChevronsUpDown size={13} className="flex-none text-muted-foreground" />
         </>
       }

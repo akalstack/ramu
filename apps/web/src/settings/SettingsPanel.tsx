@@ -21,6 +21,7 @@ import { errorText } from '../workspace/TaskPane'
 import { useWorkspace } from '../workspace/workspace'
 import { AccessSettings } from './AccessSettings'
 import { AppearanceSettings } from './AppearanceSettings'
+import { ArchivedThreads } from './ArchivedThreads'
 import { ChatsSettings } from './ChatsSettings'
 import { GHOST_BUTTON_CLASS, RESET_KEYS, SETTINGS_FORM_CLASS } from './constants'
 import { EditorSettings } from './EditorSettings'
@@ -204,6 +205,7 @@ export function SettingsPanel({
                 <AdvisorSettings value={appDraft} onChange={setAppDraft} busy={busy} />
               </>
             )}
+            {page === 'archived' && <ArchivedThreads />}
             {page === 'chats' && <ChatsSettings {...draftProps} />}
             {page === 'git' && <GitSettings {...draftProps} />}
             {page === 'shortcuts' && <ShortcutsSettings shortcuts={shortcuts} />}

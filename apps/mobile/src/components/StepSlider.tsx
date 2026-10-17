@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Animated, PanResponder, View } from 'react-native'
-import * as Haptics from 'expo-haptics'
 import { radius, useTheme } from '../theme'
+import { tap } from './ui'
 
 const THUMB = 26
 const TRACK = 6
@@ -47,7 +47,7 @@ export function StepSlider({
           state.current.last = i
           setDrag(i)
           onPreview?.(i)
-          Haptics.selectionAsync().catch(() => {})
+          tap()
         },
         onPanResponderMove: (event) => {
           // locationX is relative to the touched child; pageX minus the track's left edge is stable.
@@ -56,7 +56,7 @@ export function StepSlider({
             state.current.last = i
             setDrag(i)
             onPreview?.(i)
-            Haptics.selectionAsync().catch(() => {})
+            tap()
           }
         },
         onPanResponderRelease: () => {

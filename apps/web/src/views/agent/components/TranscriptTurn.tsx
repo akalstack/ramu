@@ -12,6 +12,7 @@ import { AgentGroup } from './AgentGroup'
 import { AgentTaskCard } from './AgentTaskCard'
 import { EventRow } from './EventRow'
 import { ToolGroup } from './ToolGroup'
+import { Marker, MarkerContent } from '@/components/ui/marker'
 import { TurnSummary } from './TurnSummary'
 
 type TurnReview = React.ComponentProps<typeof TurnChanges>['review']
@@ -139,13 +140,16 @@ export function TranscriptTurn({
   return (
     <div className="turn [&_>_[data-block-index]:has(.msg.user)]:flex [&_>_[data-block-index]:has(.msg.user)]:justify-end flex flex-col gap-3.5 min-w-0">
       {dateSeparator !== undefined && (
-        <time
-          className="chat-date [.turn:first-child_&]:mt-1 block self-center w-full m-[18px_0_24px] text-center text-muted-foreground text-control font-normal leading-[1.5]"
-          dateTime={new Date(dateSeparator).toISOString()}
-          title={new Date(dateSeparator).toLocaleString(formatLocale())}
-        >
-          {formatChatDate(dateSeparator, dateNow, currentLanguage())}
-        </time>
+        <Marker variant="separator" className="mt-5 mb-6 text-control [.turn:first-child_&]:mt-1">
+          <MarkerContent>
+            <time
+              dateTime={new Date(dateSeparator).toISOString()}
+              title={new Date(dateSeparator).toLocaleString(formatLocale())}
+            >
+              {formatChatDate(dateSeparator, dateNow, currentLanguage())}
+            </time>
+          </MarkerContent>
+        </Marker>
       )}
       {turn.user && renderBlock(turn.user, isLast && !answer.length && !kept.length && !folded.length)}
       {((!finished && isLast && (working || needsInput)) ||

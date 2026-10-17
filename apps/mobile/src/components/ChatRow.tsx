@@ -21,6 +21,8 @@ export function ChatRow({ chat, project, divider }: { chat: Chat; project?: stri
   const unread =
     Boolean(chat.sessionId) &&
     (store.inbox[chat.computerId] ?? []).some((n) => n.sessionId === chat.sessionId && n.kind === 'done')
+  // A thread with no project and nothing to preview is one line; its row is centered instead of leaving a blank line.
+  const hasDetail = Boolean(project || chat.mode === 'worktree' || chat.preview)
   const actions = chat.pending
     ? []
     : [
@@ -51,14 +53,14 @@ export function ChatRow({ chat, project, divider }: { chat: Chat; project?: stri
           }
           onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })}
           style={{
-            alignItems: 'flex-start',
+            alignItems: hasDetail ? 'flex-start' : 'center',
             paddingVertical: 10,
             borderTopWidth: divider ? StyleSheet.hairlineWidth : 0,
             borderTopColor: c.lineStrong,
           }}
           accessibilityLabel={chat.title}
         >
-          <View style={{ paddingTop: 2 }}>
+          <View style={{ paddingTop: hasDetail ? 2 : 0 }}>
             {chat.pending ? (
               <Clock size={16} color={c.muted} />
             ) : unread && (chat.status === 'idle' || chat.status === 'ready-for-review') ? (
@@ -82,22 +84,24 @@ export function ChatRow({ chat, project, divider }: { chat: Chat; project?: stri
                 {ago(chat.lastActiveAt)}
               </T>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              {project ? (
-                <T size={font.control} tone="soft" numberOfLines={1}>
-                  {project}
+            {hasDetail ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {project ? (
+                  <T size={font.control} tone="soft" numberOfLines={1}>
+                    {project}
+                  </T>
+                ) : null}
+                {chat.mode === 'worktree' ? <GitBranch size={12} color={c.muted} /> : null}
+                <T
+                  size={font.control}
+                  tone={chat.status === 'needs-input' ? 'warn' : chat.status === 'failed' ? 'bad' : 'muted'}
+                  numberOfLines={1}
+                  style={{ flex: 1 }}
+                >
+                  {chat.preview}
                 </T>
-              ) : null}
-              {chat.mode === 'worktree' ? <GitBranch size={12} color={c.muted} /> : null}
-              <T
-                size={font.control}
-                tone={chat.status === 'needs-input' ? 'warn' : chat.status === 'failed' ? 'bad' : 'muted'}
-                numberOfLines={1}
-                style={{ flex: 1 }}
-              >
-                {chat.preview}
-              </T>
-            </View>
+              </View>
+            ) : null}
           </View>
         </Row>
       </SwipeRow>

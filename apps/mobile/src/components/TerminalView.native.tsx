@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppState, View } from 'react-native'
-import { BlurSurface } from './Glass'
 import { tap } from './ui'
 import { TerminalGestureOverlay, readGesture, type GestureDisplay } from './TerminalGestureOverlay'
 import { WebView } from 'react-native-webview'
@@ -73,35 +72,33 @@ export default function TerminalView({
   }, [ready, keyboardAction])
   return (
     <View style={{ flex: 1 }} onLayout={(event) => setSize(event.nativeEvent.layout)}>
-      <BlurSurface style={{ flex: 1 }}>
-        <WebView
-          accessibilityLabel="Host terminal"
-          accessibilityHint="Hold, then drag to move the cursor. Drag farther to repeat faster."
-          ref={view}
-          source={{ html: terminalHtml }}
-          style={{ flex: 1, backgroundColor: '#0e0e10' }}
-          originWhitelist={['about:blank']}
-          onShouldStartLoadWithRequest={(request) => request.url === 'about:blank'}
-          javaScriptEnabled
-          scrollEnabled={false}
-          keyboardDisplayRequiresUserAction={false}
-          onMessage={(event) => {
-            try {
-              const value = JSON.parse(event.nativeEvent.data)
-              if (value.kind === 'gesture' && enabled && appActive) {
-                const state = readGesture(value)
-                if (state && !gestureActive.current) tap()
-                gestureActive.current = !!state
-                setGesture(state)
-              }
-              if (value.kind === 'ready') setReady(true)
-              if (enabled && appActive && value.kind === 'input' && typeof value.data === 'string') onInput(value.data)
-              if (value.kind === 'resize' && Number.isInteger(value.cols) && Number.isInteger(value.rows))
-                onResize(value.cols, value.rows)
-            } catch {}
-          }}
-        />
-      </BlurSurface>
+      <WebView
+        accessibilityLabel="Host terminal"
+        accessibilityHint="Hold, then drag to move the cursor. Drag farther to repeat faster."
+        ref={view}
+        source={{ html: terminalHtml }}
+        style={{ flex: 1, backgroundColor: '#0e0e10' }}
+        originWhitelist={['about:blank']}
+        onShouldStartLoadWithRequest={(request) => request.url === 'about:blank'}
+        javaScriptEnabled
+        scrollEnabled={false}
+        keyboardDisplayRequiresUserAction={false}
+        onMessage={(event) => {
+          try {
+            const value = JSON.parse(event.nativeEvent.data)
+            if (value.kind === 'gesture' && enabled && appActive) {
+              const state = readGesture(value)
+              if (state && !gestureActive.current) tap()
+              gestureActive.current = !!state
+              setGesture(state)
+            }
+            if (value.kind === 'ready') setReady(true)
+            if (enabled && appActive && value.kind === 'input' && typeof value.data === 'string') onInput(value.data)
+            if (value.kind === 'resize' && Number.isInteger(value.cols) && Number.isInteger(value.rows))
+              onResize(value.cols, value.rows)
+          } catch {}
+        }}
+      />
       <TerminalGestureOverlay state={gesture} {...size} />
     </View>
   )

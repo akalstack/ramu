@@ -15,6 +15,7 @@
     "@dnd-kit/utilities": "3.2.2",
     "@ramu/contracts": "workspace:*",
     "@ramu/shared": "workspace:*",
+    "@shadcn/react": "^0.3.1",
     "@shikijs/monaco": "^4.5.0",
     "mermaid": "11.16.0",
     "qrcode": "1.5.4",

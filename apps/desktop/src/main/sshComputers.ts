@@ -70,7 +70,7 @@ export function parseRemoteReport(output: string): RemoteReport {
     .map((entry) => entry.trim())
     .filter((entry) => entry.startsWith('{'))
     .pop()
-  if (!line) throw new Error('The other computer did not answer as expected')
+  if (!line) throw new Error('The other host did not answer as expected')
   const report = JSON.parse(line) as RemoteReport & { urls?: string[] }
   return { ...report, state: report.state ?? 'ready' }
 }
@@ -81,7 +81,7 @@ export function remoteForward(listening: string): string {
     port = Number(listening.slice(index + 1))
   let host = listening.slice(0, index).replace(/^\[|\]$/g, '')
   if (!Number.isInteger(port) || port < 1 || port > 65535)
-    throw new Error('The other computer reported an unusable address')
+    throw new Error('The other host reported an unusable address')
   if (host === '0.0.0.0' || host === '::' || host === '') host = '127.0.0.1'
   return host.includes(':') ? `[${host}]:${port}` : `${host}:${port}`
 }

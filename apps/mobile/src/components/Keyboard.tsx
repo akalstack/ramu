@@ -105,7 +105,10 @@ export function KeyboardLift({
   style?: StyleProp<ViewStyle>
 }) {
   const insets = useSafeAreaInsets()
-  const slack = Math.max(0, insets.bottom - space.s)
+  // iOS: the home-indicator padding the children carry hides behind the keys, so lift a little less than the keyboard.
+  // Android reports the keyboard height without the navigation-bar inset (edge to edge), so the children's own bottom
+  // padding would sit under the keys: lift a little more instead, leaving them `space.s` above the keyboard.
+  const slack = Platform.OS === 'android' ? -space.s : Math.max(0, insets.bottom - space.s)
   const translateY = useMemo(
     () => keyboard.value.interpolate({ inputRange: [0, 1, 2000], outputRange: [0, slack - 1, slack - 2000] }),
     [keyboard.value, slack],

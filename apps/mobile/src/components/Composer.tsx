@@ -28,7 +28,7 @@ import { font, radius, space, useTheme } from '../theme'
 import { providerNames } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { useT } from '../i18n'
-import { IconButton, Row, Segmented, Sheet, T, tap } from './ui'
+import { Chip, IconButton, Row, Segmented, Sheet, T, tap } from './ui'
 import { ProviderIcon } from './Logos'
 import { Glass } from './Glass'
 
@@ -330,7 +330,7 @@ export function ModelChip({
             ))}
             {!providers.length ? (
               <T tone="muted" style={{ padding: space.l }}>
-                {offline ? 'Reconnect this computer to choose a model.' : 'No models reported by this computer yet.'}
+                {offline ? 'Reconnect this host to choose a model.' : 'No models reported by this host yet.'}
               </T>
             ) : null}
           </View>
@@ -718,7 +718,7 @@ export function Composer({
           style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: space.m, paddingTop: space.s }}
         >
           {split.quotes.map((quote, index) => (
-            <Chip
+            <ContextChip
               key={`quote-${index}`}
               icon={Quote}
               label={quote.label.replace(/\s+/g, ' ')}
@@ -727,7 +727,7 @@ export function Composer({
             />
           ))}
           {attachments.map((a) => (
-            <Chip
+            <ContextChip
               key={a.id}
               icon={Paperclip}
               label={a.name}
@@ -735,7 +735,7 @@ export function Composer({
             />
           ))}
           {context.map((file) => (
-            <Chip
+            <ContextChip
               key={`${file.repoId}:${file.path}`}
               icon={FileText}
               label={file.path.split('/').at(-1) ?? file.path}
@@ -747,7 +747,7 @@ export function Composer({
       ) : null}
       {uploading ? (
         <T size={font.caption} tone="muted" style={{ padding: space.s }}>
-          Uploading to this computer…
+          Uploading to this host…
         </T>
       ) : null}
       {editing ? (
@@ -1062,7 +1062,7 @@ async function pickAttachment(
   kind: 'document' | 'camera' | 'photos' = 'document',
 ) {
   try {
-    if (!store.isOnline(computerId)) throw new Error('Reconnect this computer to upload an attachment.')
+    if (!store.isOnline(computerId)) throw new Error('Reconnect this host to upload an attachment.')
     let asset: { uri: string; name: string; size?: number; file?: File }
     if (kind === 'document') {
       const { getDocumentAsync } = await import('expo-document-picker')
@@ -1114,7 +1114,7 @@ function splitQuotes(text: string) {
 }
 const joinQuotes = (quotes: string[], body: string) => quotes.map((quote) => `${quote}\n\n`).join('') + body
 
-function Chip({
+function ContextChip({
   icon: I,
   label,
   detail,
@@ -1176,7 +1176,6 @@ function QuickSteps({
   prefs?: import('@ramu/shared/types').ModelPreferences | null
   onChange: (m: ModelChoice) => void
 }) {
-  const { c } = useTheme()
   const [mode, setMode] = useState<'model' | 'effort'>(prefs?.defaultBarMode ?? 'model')
   const [setId, setSetId] = useState(prefs?.defaultSetId ?? '')
   const [preview, setPreview] = useState<number | null>(null)
@@ -1244,25 +1243,7 @@ function QuickSteps({
       {mode === 'model' && (prefs?.sets.length ?? 0) > 1 ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
           {prefs!.sets.map((s) => (
-            <Pressable
-              key={s.id}
-              accessibilityRole="button"
-              onPress={() => {
-                tap()
-                setSetId(s.id)
-              }}
-              style={{
-                height: 28,
-                paddingHorizontal: space.m,
-                borderRadius: radius.full,
-                justifyContent: 'center',
-                backgroundColor: s.id === set?.id ? c.raised : c.fill,
-              }}
-            >
-              <T size={font.caption} weight="500">
-                {s.name}
-              </T>
-            </Pressable>
+            <Chip key={s.id} label={s.name} small fill selected={s.id === set?.id} onPress={() => setSetId(s.id)} />
           ))}
         </View>
       ) : null}

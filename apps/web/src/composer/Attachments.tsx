@@ -2,6 +2,18 @@ import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
+import { cn } from 'cn'
+import {
+  Attachment as AttachmentCard,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentGroup,
+  AttachmentMedia,
+  AttachmentTitle,
+  AttachmentTrigger,
+} from '@/components/ui/attachment'
 import {
   ChevronLeft,
   ChevronRight,
@@ -371,11 +383,14 @@ function AttachmentItem({
   file,
   onRemove,
   size,
+  names,
   onPreview,
 }: {
   file: Attachment
   onRemove?: () => void
   size: 'normal' | 'small'
+  /** Show the file name under an image (files always show it). */
+  names: boolean
   onPreview: (opener: HTMLElement) => void
 }) {
   useLanguage()
@@ -394,7 +409,8 @@ function AttachmentItem({
     }
   }, [file.id, file.mimeType])
   const menu = (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
-    const opener = event.currentTarget.querySelector<HTMLElement>('.attachment-open') ?? event.currentTarget
+    const opener =
+      event.currentTarget.querySelector<HTMLElement>('[data-slot=attachment-trigger]') ?? event.currentTarget
     void attachmentMenu(file, event, !!onRemove).then(
       (action) => {
         if (action === 'preview') onPreview(opener)
@@ -403,60 +419,51 @@ function AttachmentItem({
       (error) => notifyError(errorText(error), 'Attachment'),
     )
   }
-  const remove = onRemove && (
-    <Button
-      variant="secondary"
-      type="button"
-      className={`bg-fill hover:bg-fill-hover attachment-remove [&:focus-visible]:opacity-100 [&:hover]:[background:linear-gradient(var(--hover),_var(--hover)),_linear-gradient(var(--pressed),_var(--pressed)),_var(--canvas)] absolute grid place-items-center min-h-0 p-0 [border:0] rounded-full cursor-pointer w-[22px] h-[22px] opacity-0 [transition:opacity_0.12s_var(--ease)] [box-shadow:inset_0_0_0_1px_var(--line-strong),_0_1px_4px_rgba(0,_0,_0,_0.4)] text-foreground [background:linear-gradient(var(--pressed),_var(--pressed)),_var(--canvas)] top-1 right-1`}
-      aria-label={t('Remove attachment {0}', { '0': file.name })}
-      title={t('Remove')}
-      onClick={(event) => {
-        event.stopPropagation()
-        onRemove()
-      }}
-    >
-      <X size={13} />
-    </Button>
-  )
+  const image = isImage(file)
+  const tile = image && size === 'normal'
   return (
-    <span
-      className={
-        isImage(file)
-          ? `attachment-tile [&.small]:w-10 [&.small]:h-10 [&_.attachment-open]:w-full [&_.attachment-open]:h-full [&_.attachment-open]:p-0 [&_.attachment-open]:overflow-hidden [&_.attachment-open]:[border:1px_solid_var(--edge)] [&_.attachment-open]:rounded-(--radius-m) [&_.attachment-open]:bg-canvas [&_.attachment-open]:justify-center [&_.attachment-open]:[cursor:zoom-in] [&.small_.attachment-open]:rounded-(--radius-s) [&_.attachment-open:hover:not(:disabled)]:[border-color:rgba(255,_255,_255,_0.3)] [&_.attachment-open:hover:not(:disabled)]:bg-canvas [&_img]:w-full [&_img]:h-full [&_img]:object-cover [&_img]:[border-radius:0] [&.small_.attachment-remove]:w-[18px] [&.small_.attachment-remove]:h-[18px] [.msg-wrap.user_&]:w-[112px] [.msg-wrap.user_&]:h-[112px] [&_.attachment-remove]:[transition:none] [&:hover_.attachment-remove]:opacity-100 [&:hover_.attachment-remove]:[transition:opacity_0.12s_var(--ease)] relative inline-flex w-[96px] h-[96px] flex-none ${size}`
-          : 'attachment-chip [&_img]:w-[36px] [&_img]:h-[36px] [&_img]:object-cover [&_img]:rounded-(--radius-xs) [&_button]:flex-none [&_svg]:flex-none [&_.attachment-open.file]:inline-flex [&_.attachment-open.file]:items-center [&_.attachment-open.file]:gap-[7px] [&_.attachment-open.file]:p-[5px_9px] [&_.attachment-open.file]:max-w-[240px] [&_.attachment-open.file]:bg-transparent [&_.attachment-open.file]:[border:0] [&_.attachment-open.file]:text-left [&_.attachment-open.file]:justify-start [&_.attachment-open.file]:cursor-pointer [&:not(.comments-chip)_.attachment-remove]:[transition:none] [&:hover_.attachment-remove]:opacity-100 [&:hover_.attachment-remove]:[transition:opacity_0.12s_var(--ease)] [&_button.comments-chip-x]:absolute [&_button.comments-chip-x]:top-[50%] [&_button.comments-chip-x]:right-1 [&_button.comments-chip-x]:bottom-auto [&_button.comments-chip-x]:left-auto [&_button.comments-chip-x]:w-5 [&_button.comments-chip-x]:h-5 [&_button.comments-chip-x]:min-w-0 [&_button.comments-chip-x]:min-h-0 [&_button.comments-chip-x]:m-0 [&_button.comments-chip-x]:p-0 [&_button.comments-chip-x]:grid [&_button.comments-chip-x]:place-items-center [&_button.comments-chip-x]:[border:0] [&_button.comments-chip-x]:rounded-full [&_button.comments-chip-x]:[transform:translateY(-50%)] [&_button.comments-chip-x]:opacity-0 [&_button.comments-chip-x]:[transition:none] [&:hover_button.comments-chip-x]:opacity-100 [&:hover_button.comments-chip-x]:[transition:opacity_0.12s_var(--ease)] [&_button.comments-chip-x:focus-visible]:opacity-100 [&_button.comments-chip-x:focus-visible]:[transition:opacity_0.12s_var(--ease)] inline-flex items-center gap-[7px] max-w-[240px] min-w-0 [border:1px_solid_transparent] rounded-(--radius-s) text-control whitespace-normal relative p-0 bg-hover'
-      }
+    <AttachmentCard
+      size={size === 'small' ? 'xs' : 'default'}
+      orientation={tile ? 'vertical' : 'horizontal'}
+      className={tile ? 'w-24 p-1.5 has-data-[slot=attachment-content]:w-30' : 'max-w-60'}
       onContextMenu={menu}
       onKeyDown={(event) => {
         if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) menu(event)
       }}
     >
-      <Button
-        variant="secondary"
-        type="button"
-        className={`attachment-open${isImage(file) ? '' : ' file'}`}
+      <AttachmentMedia variant={image ? 'image' : 'icon'} className={tile ? 'rounded-md' : undefined}>
+        {image && thumb ? <img src={thumb} alt="" /> : <File />}
+      </AttachmentMedia>
+      {(!image || size === 'small' || names) && (
+        <AttachmentContent>
+          <AttachmentTitle>{file.name}</AttachmentTitle>
+          {size === 'normal' && <AttachmentDescription>{kb(file)}</AttachmentDescription>}
+        </AttachmentContent>
+      )}
+      <AttachmentTrigger
         aria-label={t('Preview {0}', { '0': file.name })}
         title={`${file.name} · ${kb(file)}`}
         aria-haspopup="dialog"
+        className="rounded-[inherit] focus-visible:ring-2 focus-visible:ring-ring/50"
         onClick={(event) => onPreview(event.currentTarget)}
-      >
-        {isImage(file) ? (
-          thumb ? (
-            <img src={thumb} alt="" />
-          ) : (
-            <File size={20} />
-          )
-        ) : (
-          <>
-            <File size={16} />
-            <span className="attachment-name [&_small]:block [&_small]:text-caption min-w-0 [overflow-wrap:anywhere]">
-              {file.name}
-              <small className="muted text-muted-foreground">{kb(file)}</small>
-            </span>
-          </>
-        )}
-      </Button>
-      {remove}
-    </span>
+      />
+      {onRemove && (
+        <AttachmentActions>
+          <AttachmentAction
+            variant="secondary"
+            aria-label={t('Remove attachment {0}', { '0': file.name })}
+            title={t('Remove')}
+            className="opacity-0 transition-opacity group-focus-within/attachment:opacity-100 group-hover/attachment:opacity-100"
+            onClick={(event) => {
+              event.stopPropagation()
+              onRemove()
+            }}
+          >
+            <X />
+          </AttachmentAction>
+        </AttachmentActions>
+      )}
+    </AttachmentCard>
   )
 }
 
@@ -464,18 +471,22 @@ export function Attachments({
   files,
   onRemove,
   size = 'normal',
+  names = false,
+  className,
 }: {
   files: Attachment[]
   onRemove?: (id: string) => void
   size?: 'normal' | 'small'
+  names?: boolean
+  className?: string
 }) {
   useLanguage()
   const [previewId, setPreviewId] = useState<string | null>(null)
   const opener = useRef<HTMLElement | null>(null)
   const index = files.findIndex((file) => file.id === previewId)
   return (
-    <div
-      className="attachment-list [.msg-wrap.user_&]:justify-end [.msg-wrap.user_&]:m-[18px_0_2px] [.msg-wrap.user_&_+_.msg.user]:mt-2 flex flex-wrap gap-2.5 mb-2.5 pt-1.5"
+    <AttachmentGroup
+      className={cn('flex-wrap items-start gap-2 overflow-visible py-0 pt-1 [mask-image:none]', className)}
       role="group"
       aria-label={t('Attachments')}
     >
@@ -484,6 +495,7 @@ export function Attachments({
           key={file.id}
           file={file}
           size={size}
+          names={names}
           onRemove={onRemove ? () => onRemove(file.id) : undefined}
           onPreview={(element) => {
             opener.current = element
@@ -500,6 +512,6 @@ export function Attachments({
           opener={opener.current}
         />
       )}
-    </div>
+    </AttachmentGroup>
   )
 }

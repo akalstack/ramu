@@ -1,3 +1,4 @@
+import { newChatHost } from './newChatHost'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
 import { fetch as expoFetch } from 'expo/fetch'
@@ -17,9 +18,11 @@ import type {
 import { deleteToken, readLocal, readToken, saveToken, writeLocal } from '../storage'
 import { HostClient, HostError, normalizeAddress } from './transport'
 import { transcript, visibleText } from './transcript'
+import type { Language } from './settingsModel'
 import { STANDALONE, type Chat, type Computer, type MobileProject } from './types'
 
-export type Language = 'en' | 'id'
+export type { Language }
+
 export interface OutboxItem {
   id: string
   computerId: string
@@ -72,6 +75,7 @@ interface Store extends State {
     context?: FileContext[],
   ): Promise<void>
   createChat(input: {
+    computerId: string
     projectId: string
     text: string
     provider: AgentProvider
@@ -229,7 +233,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   ): Promise<Awaited<ReturnType<RamuMethods[M]>>> {
     const connection = connections.current.get(id)
     if (!connection || connection.controller.signal.aborted)
-      throw new HostError('This computer is offline. Reconnect before taking this action.')
+      throw new HostError('This host is offline. Reconnect before taking this action.')
     try {
       return await connection.client.invoke(method, ...args)
     } catch (error) {
@@ -661,7 +665,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ),
           }))
         if (info.protocol !== 1 || !info.capabilities?.includes('mobile-companion'))
-          throw new HostError('Update Ramu on this computer: its protocol is incompatible.', 426)
+          throw new HostError('Update Ramu on this host: its protocol is incompatible.', 426)
         await connection.client.stream(
           (channel, payload) => {
             if (connections.current.get(computer.id) === connection) receive(computer.id, channel, payload)
@@ -685,7 +689,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           status(computer.id, 'revoked', error.message)
           break
         }
-        status(computer.id, 'offline', error instanceof Error ? error.message : 'Computer unreachable')
+        status(computer.id, 'offline', error instanceof Error ? error.message : 'Host unreachable')
         await new Promise<void>((resolve) => {
           const done = () => {
             clearTimeout(timer)
@@ -810,7 +814,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     disablePush: async () => {
       if (ref.current.computers.some((c) => c.status !== 'online'))
-        throw new Error('Reconnect every computer before disabling push so each registration can be removed.')
+        throw new Error('Reconnect every host before disabling push so each registration can be removed.')
       await Promise.all(ref.current.computers.map((c) => invoke(c.id, 'notifications.unregister')))
       pushToken.current = null
       change((s) => ({ ...s, drafts: { ...s.drafts, 'push-enabled': '' } }))
@@ -899,7 +903,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const chat = ref.current.chats.find((c) => c.id === id)
       if (!chat) throw new Error('Thread not found')
       if (ref.current.computers.find((c) => c.id === chat.computerId)?.status === 'revoked')
-        throw new Error('Pair this computer again before sending.')
+        throw new Error('Pair this host again before sending.')
       const item: OutboxItem = {
         id: uid(),
         chatId: id,
@@ -916,9 +920,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void flush(chat.computerId)
     },
     createChat: async (input) => {
-      const computerId = ref.current.selected
-      if (!computerId || ref.current.computers.find((c) => c.id === computerId)?.status === 'revoked')
-        throw new Error('Pair a computer first.')
+      const computerId = newChatHost(
+        input.computerId,
+        input.projectId,
+        ref.current.computers,
+        ref.current.projects,
+        STANDALONE,
+      )
       const id = scoped(computerId, `pending-${uid()}`)
       const chat: Chat = {
         id,

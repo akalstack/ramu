@@ -4,31 +4,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   ArrowDown,
-  Bell,
+  Inbox,
   Check,
   Ellipsis,
   CircleArrowUp,
   CircleCheck,
   GitBranch,
   GitCompareArrows,
+  MessageCircleQuestion,
   Monitor,
   SquareTerminal,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { foldTurns } from '../../../runtime/turns'
+import { looseInvoke, setHostSetting } from '../../../runtime/settingsModel'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
-import {
-  Header,
-  HeaderButton,
-  HeaderMenu,
-  Screen,
-  PageFlatList,
-  nativeScrollEdge,
-  type HeaderMenuItem,
-} from '../../../components/Screen'
+import { Header, HeaderButton, Screen, PageFlatList, nativeScrollEdge } from '../../../components/Screen'
 import { Composer } from '../../../components/Composer'
 import { MessageMenu, RowToggle, TranscriptItemView, type ItemMeta } from '../../../components/Transcript'
 import { ConnectionDot, Row, Sheet, T, tap } from '../../../components/ui'
@@ -37,8 +31,8 @@ import { KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { OfflineBanner, PendingBubble } from '../../../components/Outbox'
 import { ContextMeter } from '../../../components/ContextMeter'
 import { Arrive, Presence, Shimmer } from '../../../components/Motion'
-import { ChatActionsSheet, useChatCommands } from '../../../components/ChatActions'
-import { openActivity, useActivitySummary } from '../../../components/ActivityTray'
+import { ChatActionsSheet } from '../../../components/ChatActions'
+import { useAutomation } from '../../../runtime/automation'
 
 /** Turns drawn at a time; a chat can have hundreds. */
 const TURN_PAGE = 15
@@ -182,7 +176,7 @@ export default function ChatScreen() {
       }
     }, [chat?.id, chat?.taskId, chat?.computerId, chat?.projectId, chat?.status, computer?.status, refresh]),
   )
-  const activity = useActivitySummary()
+  const { inbox } = useAutomation()
   // Looking at a chat clears its notice on every device.
   const [focused, setFocused] = useState(true)
   useFocusEffect(
@@ -202,17 +196,6 @@ export default function ChatScreen() {
     chatId: string
     model: import('../../../components/Composer').ModelChoice
   } | null>(null)
-  const commands = useChatCommands(
-    chat ??
-      ({
-        computerId: '',
-        taskId: '',
-        pinnedAt: null,
-        status: 'idle',
-        title: '',
-        mode: 'current',
-      } as unknown as import('../../../runtime/types').Chat),
-  )
   // Entries that appear while the screen is open and the agent is working animate in; the first load and recycled rows do not.
   const openedAt = useRef(Date.now())
   const seen = useRef(new Set<string>())
@@ -288,7 +271,7 @@ export default function ChatScreen() {
     const switching =
       (m.provider !== chat.provider || m.model !== chat.model) && !(m.provider === chat.provider && !chat.model)
     const started = chat.sessionId && rows.some((item) => item.kind === 'user' || item.kind === 'summary')
-    if (!switching || !started || store.drafts['pref:model-warning'] === 'off') return applyModel(m)
+    if (!switching || !started || store.appPreferences[chat.computerId]?.warnModelChange === false) return applyModel(m)
     Alert.alert(
       'Change model mid-conversation?',
       'The new model cannot reuse the cache built for this conversation, so the first message after the change uses more of your usage than usual.',
@@ -298,7 +281,7 @@ export default function ChatScreen() {
         {
           text: "Change, don't warn again",
           onPress: () => {
-            store.setDraft('pref:model-warning', 'off')
+            void setHostSetting(looseInvoke(store.invoke), chat.computerId, 'warnModelChange', false).catch(() => {})
             applyModel(m)
           },
         },
@@ -387,7 +370,7 @@ export default function ChatScreen() {
     if (!live || live.repos > 1) return openScm()
     Alert.alert(
       `Commit & push ${changed} change${changed === 1 ? '' : 's'}?`,
-      `${computer?.name ?? 'This computer'} · ${live.branch}\n\nRamu drafts the message with AI, commits every change, and pushes to origin.`,
+      `${computer?.name ?? 'This host'} · ${live.branch}\n\nRamu drafts the message with AI, commits every change, and pushes to origin.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -413,90 +396,62 @@ export default function ChatScreen() {
       await pushBranch(store.invoke, chat, live.repoId)
       return `Pushed ${live.branch}`
     })
-  const gitItems: HeaderMenuItem[] = [
-    {
-      title: branch || 'Source control',
-      subtitle: live
-        ? `${changed ? `${changed} changed` : 'No changes'}${live.ahead ? ` · ${live.ahead}↑` : ''}`
-        : undefined,
-      systemIcon: 'arrow.triangle.branch',
-      onPress: openScm,
-    },
-    {
-      title: live?.repos && live.repos > 1 ? 'Commit…' : changed ? 'Commit & push' : 'Push',
-      subtitle: changed || !canPush ? undefined : pushReason,
-      systemIcon: 'arrow.up.circle',
-      disabled: busy || (changed ? false : !canPush),
-      onPress: changed ? quickCommit : push,
-    },
-    {
-      title: 'Review changes',
-      subtitle: 'Turn diffs and worktree changes',
-      systemIcon: 'text.bubble',
-      onPress: openChanges,
-    },
-    { title: 'More', subtitle: 'Commit, files, branches', systemIcon: 'ellipsis', onPress: () => setSheet(true) },
-  ]
-
   const openTerminal = () => router.push({ pathname: '/chat/[id]/terminal', params: { id: chat.id } })
-  const chatItems: HeaderMenuItem[] = [
-    {
-      title: computer?.name ?? 'Computer unavailable',
-      subtitle: [project, branch].filter(Boolean).join(' · ') || undefined,
-      systemIcon: 'desktopcomputer',
-      disabled: true,
-      onPress: () => {},
-    },
-    { title: 'Terminal', systemIcon: 'terminal', onPress: openTerminal },
+  // Thread actions that belong to this screen sit above the shared ones (pin, rename, archive…) in the same sheet.
+  const chatExtras = [
+    // Which computer runs the thread: information only, so it has no action.
+    { icon: Monitor, label: `${computer?.name ?? 'Host unavailable'} · ${computer?.status ?? 'offline'}` },
+    { icon: SquareTerminal, label: 'Terminal', onPress: openTerminal },
     ...(chat.sessionId
       ? [
           {
-            title: 'Side questions',
-            subtitle: 'Ask without interrupting the thread',
-            systemIcon: 'questionmark.bubble' as const,
+            icon: MessageCircleQuestion,
+            label: 'Side questions',
             onPress: () => router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } }),
           },
         ]
       : []),
     {
-      title: 'Activity',
-      subtitle: activity.count
-        ? `${activity.count} ${activity.missed.length ? 'with missed notifications' : 'running or waiting'}`
-        : undefined,
-      systemIcon: activity.missed.length ? 'bell.badge' : 'bell',
-      onPress: openActivity,
+      icon: Inbox,
+      label: inbox.needsYou ? `Inbox · ${inbox.needsYou} need you` : 'Inbox',
+      onPress: () => router.navigate('/inbox'),
     },
-    {
-      title: commands.pinned ? 'Unpin' : 'Pin to top',
-      systemIcon: commands.pinned ? 'pin.slash' : 'pin',
-      onPress: () => void commands.togglePin(),
-    },
-    { title: 'Rename', systemIcon: 'pencil', onPress: () => setActions('rename') },
-    {
-      title: commands.archived ? 'Unarchive' : 'Archive',
-      systemIcon: commands.archived ? 'tray.and.arrow.up' : 'archivebox',
-      onPress: () => {
-        void commands.toggleArchive()
-        if (!commands.archived) router.back()
-      },
-    },
-    { title: 'Delete…', systemIcon: 'trash', onPress: () => commands.confirmDelete(() => router.back()) },
   ]
 
   return (
     <Screen>
       <Header
+        align="left"
         title={chat.title}
         subtitle={
-          ios ? undefined : (
+          chat.projectId !== STANDALONE ? (
+            // Where the thread works: its project and branch, under the title instead of inside the conversation.
             <View
               accessible
-              accessibilityLabel={`Computer: ${computer?.name ?? 'Unavailable'}, ${computer?.status ?? 'offline'}`}
+              accessibilityLabel={`Project ${project}${branch ? `, branch ${branch}` : ''}`}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}
+            >
+              <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                {project}
+              </T>
+              {branch ? (
+                <>
+                  <GitBranch size={11} color={c.muted} />
+                  <T size={12} mono tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                    {branch}
+                  </T>
+                </>
+              ) : null}
+            </View>
+          ) : (
+            <View
+              accessible
+              accessibilityLabel={`Host: ${computer?.name ?? 'Unavailable'}, ${computer?.status ?? 'offline'}`}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}
             >
               <Monitor size={11} color={c.muted} />
               <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
-                {computer?.name ?? 'Computer unavailable'}
+                {computer?.name ?? 'Host unavailable'}
               </T>
               <ConnectionDot status={computer?.status ?? 'offline'} size={5} />
             </View>
@@ -506,27 +461,17 @@ export default function ChatScreen() {
           !chat.pending ? (
             <>
               {chat.projectId !== STANDALONE ? (
-                <HeaderMenu
+                <HeaderButton
                   icon={GitBranch}
                   label="Source Control"
                   systemIcon="arrow.triangle.branch"
-                  items={gitItems}
                   onPress={() => setSheet(true)}
                 />
               ) : null}
-              {ios ? null : <HeaderButton icon={SquareTerminal} label="Terminal" onPress={openTerminal} />}
-              {ios ? null : (
-                <HeaderButton
-                  icon={Bell}
-                  label={activity.count ? `Activity, ${activity.count}` : 'Activity'}
-                  onPress={openActivity}
-                />
-              )}
-              <HeaderMenu
+              <HeaderButton
                 icon={Ellipsis}
                 label="Thread actions"
                 systemIcon="ellipsis"
-                items={chatItems}
                 onPress={() => setActions('menu')}
               />
             </>
@@ -635,21 +580,8 @@ export default function ChatScreen() {
                     <T size={font.control} weight="500" tone="soft">{`Earlier turns · ${hiddenTurns} more`}</T>
                   </Pressable>
                 ) : null}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1, maxWidth: '50%' }}>
-                    {project}
-                  </T>
-                  {branch ? (
-                    <>
-                      <GitBranch size={12} color={c.muted} />
-                      <T size={12} mono tone="muted" numberOfLines={1} style={{ flex: 1 }}>
-                        {branch}
-                      </T>
-                    </>
-                  ) : null}
-                </View>
                 {offline ? (
-                  <OfflineBanner computer={computer?.name ?? 'Computer unavailable'} pending={pending.length} />
+                  <OfflineBanner computer={computer?.name ?? 'Host unavailable'} pending={pending.length} />
                 ) : null}
               </View>
             }
@@ -714,7 +646,7 @@ export default function ChatScreen() {
             ListFooterComponent={
               <View style={{ gap: space.m, paddingTop: space.m }}>
                 {pending.map((o) => (
-                  <PendingBubble key={o.id} item={o} computer={computer?.name ?? 'the computer'} onEdit={editPending} />
+                  <PendingBubble key={o.id} item={o} computer={computer?.name ?? 'the host'} onEdit={editPending} />
                 ))}
                 {running && !offline ? (
                   <Arrive animate>
@@ -724,7 +656,7 @@ export default function ChatScreen() {
               </View>
             }
           />
-          {/* iOS: shown only when the computer isn't reachable; project and branch live in the list header and the ⋯ menu. */}
+          {/* iOS: shown only when the host isn't reachable; project and branch are the header subtitle; the host is in the ⋯ menu. */}
           {ios ? (
             <Presence
               visible={computer?.status !== 'online'}
@@ -743,12 +675,12 @@ export default function ChatScreen() {
               >
                 <View
                   accessible
-                  accessibilityLabel={`Computer: ${computer?.name ?? 'Unavailable'}, ${computer?.status ?? 'offline'}`}
+                  accessibilityLabel={`Host: ${computer?.name ?? 'Unavailable'}, ${computer?.status ?? 'offline'}`}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}
                 >
                   <Monitor size={11} color={c.muted} />
                   <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
-                    {computer?.name ?? 'Computer unavailable'}
+                    {computer?.name ?? 'Host unavailable'}
                   </T>
                   <ConnectionDot status={computer?.status ?? 'offline'} size={5} />
                   <T size={12} tone="muted">
@@ -906,6 +838,8 @@ export default function ChatScreen() {
       {!chat.pending ? (
         <ChatActionsSheet
           chat={chat}
+          extras={chatExtras}
+          onGone={() => router.back()}
           open={actions !== 'closed'}
           rename={actions === 'rename'}
           onClose={() => setActions('closed')}

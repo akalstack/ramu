@@ -59,7 +59,7 @@ export function useComposerSuggest({
   useEffect(() => {
     if (!visible || !scope || loaded?.scope === scope) return
     if (!online) {
-      setError('Reconnect this computer to browse its files and skills.')
+      setError('Reconnect this host to browse its files and skills.')
       return
     }
     let alive = true
@@ -147,7 +147,7 @@ export function useComposerSuggest({
         kind: 'Command',
         run: () => {
           store.invoke(computerId, 'learning.run').then(
-            () => Alert.alert('Learning started', 'Ramu is reviewing recent threads on the computer.'),
+            () => Alert.alert('Learning started', 'Ramu is reviewing recent threads on the host.'),
             (e) => Alert.alert('Could not start learning', e instanceof Error ? e.message : String(e)),
           )
         },

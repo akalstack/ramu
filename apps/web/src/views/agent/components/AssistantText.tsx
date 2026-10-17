@@ -1,4 +1,4 @@
-import { chatCodeComponents } from '../../../chat/ChatCodeBlock'
+import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
 import { ChatLink } from '../../../chat/ChatReferences'
 import { parseThreadReference, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
 import { useLanguage } from '../../../i18n'
@@ -10,7 +10,10 @@ import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { MessageTime } from './MessageTime'
 import { CopyButton } from './CopyButton'
 import { MessageQuoteActions } from './MessageQuoteActions'
-import { MSG_ACTIONS_CLASS, MSG_CLASS } from '../styles'
+import { Bubble, BubbleContent } from '@/components/ui/bubble'
+import { Message, MessageContent } from '@/components/ui/message'
+import { MessageActions } from './MessageActions'
+import { MSG_CLASS } from '../styles'
 
 // Streamed words fade in on the compositor: each is a CSS animation, so nothing runs in JavaScript per frame. Words that arrive
 // together are staggered with an animation-delay so they flow in rather than landing as one block; the cap keeps a big chunk prompt.
@@ -97,7 +100,7 @@ export const AssistantText = memo(function AssistantText({
   // Stable component identities: a fresh `a` function every tick would remount every link (and replay its fade) on each typewriter step.
   const components = useMemo<Components>(
     () => ({
-      ...chatCodeComponents,
+      ...chatMarkdownComponents,
       ...(fading ? streaming(words.current) : {}),
       a: ({ href, children }) => (
         <ChatLink href={href} taskId={taskId}>
@@ -108,25 +111,31 @@ export const AssistantText = memo(function AssistantText({
     [fading, taskId],
   )
   return (
-    <div className={`${MSG_CLASS} assistant${generating ? ' generating' : ''}`}>
-      <Markdown
-        remarkPlugins={[remarkGfm, remarkChatReferences]}
-        urlTransform={(url) =>
-          url.startsWith(SKILL_REFERENCE_PREFIX) || parseThreadReference(url) || localFileLink(url)
-            ? url
-            : defaultUrlTransform(url)
-        }
-        components={components}
-      >
-        {e.text}
-      </Markdown>
-      {actions && !generating && (
-        <div className={`${MSG_ACTIONS_CLASS}${latest ? ' always' : ''}`}>
-          <MessageTime at={e.at} />
-          <CopyButton text={e.text} />
-          <MessageQuoteActions text={e.text} />
-        </div>
-      )}
-    </div>
+    <Message>
+      <MessageContent className="gap-0">
+        <Bubble variant="ghost" className="w-full">
+          <BubbleContent className={`${MSG_CLASS} assistant${generating ? ' generating' : ''} w-full overflow-visible`}>
+            <Markdown
+              remarkPlugins={[remarkGfm, remarkChatReferences]}
+              urlTransform={(url) =>
+                url.startsWith(SKILL_REFERENCE_PREFIX) || parseThreadReference(url) || localFileLink(url)
+                  ? url
+                  : defaultUrlTransform(url)
+              }
+              components={components}
+            >
+              {e.text}
+            </Markdown>
+          </BubbleContent>
+        </Bubble>
+        {actions && !generating && (
+          <MessageActions latest={latest} className="mt-2">
+            <MessageTime at={e.at} />
+            <CopyButton text={e.text} />
+            <MessageQuoteActions text={e.text} />
+          </MessageActions>
+        )}
+      </MessageContent>
+    </Message>
   )
 })

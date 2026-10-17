@@ -69,6 +69,8 @@ export interface Task {
   createdAt: number
   /** When the chat was pinned to the top of the sidebar, or null. */
   pinnedAt: number | null
+  /** When the user marked this thread done, or null while it is active. */
+  doneAt?: number | null
   /** Latest of creation and the newest agent session start. */
   lastActiveAt: number
   /** Set while every provider is at its usage limit: when Ramu next tries to continue the chat on its own. */
