@@ -236,7 +236,7 @@ export function runTone(status: ScheduleRun['status']): RunTone {
 export const RUN_LABELS: Record<ScheduleRun['status'], Record<Lang, string>> = {
   queued: { en: 'Queued', id: 'Antre' },
   running: { en: 'Running', id: 'Berjalan' },
-  'needs-input': { en: 'Needs you', id: 'Butuh kamu' },
+  'needs-input': { en: 'Waiting', id: 'Menunggu' },
   completed: { en: 'Completed', id: 'Selesai' },
   failed: { en: 'Failed', id: 'Gagal' },
   missed: { en: 'Missed', id: 'Terlewat' },

@@ -134,7 +134,7 @@ function CurrentHostInbox() {
   const earlier = recaps.recent.filter((item) => !recaps.sinceVisit.includes(item))
   const tabs: { id: InboxTab; label: string; count: number }[] = [
     { id: 'all', label: t('All'), count: 0 },
-    { id: 'needs-you', label: t('Needs you'), count: waiting.length + recaps.attention.length },
+    { id: 'needs-you', label: t('Waiting'), count: waiting.length + recaps.attention.length },
     { id: 'running', label: t('Running'), count: running.length },
     { id: 'recaps', label: t('Recaps'), count: recaps.sinceVisit.length },
     { id: 'learned', label: t('Learned'), count: unread },

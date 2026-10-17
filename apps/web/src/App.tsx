@@ -306,7 +306,7 @@ function Shell() {
   const terminalUnseen = useUnseenTerminalOutput(activeWorkspace)
   useLayoutEffect(() => setShownTerminal(terminalShown ? activeWorkspace : null), [terminalShown, activeWorkspace])
   const recaps = useRecaps()
-  // What Inbox's Needs you tab holds: threads waiting on you and recaps that need a decision.
+  // What Inbox's Waiting tab holds: threads waiting on you and recaps that need a decision.
   const inboxCount =
     ws.tasks.filter((task) => task.status === 'needs-input').length +
     recaps.attention.length +
@@ -536,7 +536,7 @@ function Shell() {
                 variant="secondary"
                 className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'inbox' ? ' active' : ''}`}
                 aria-pressed={ui.sidebar === 'inbox'}
-                aria-description={inboxCount ? t('{0} need you', { 0: inboxCount }) : undefined}
+                aria-description={inboxCount ? t('{0} waiting', { 0: inboxCount }) : undefined}
                 title={`${t('Inbox')} (${formatKeys('mod+shift+i')})`}
                 onClick={() => ws.setSidebar('inbox')}
               >

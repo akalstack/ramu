@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Folder,
   FolderGit2,
+  Network,
   MessageCircleQuestion,
   MessagesSquare,
   Search,
@@ -51,12 +52,17 @@ export default function Threads() {
   const t = useT()
   const router = useRouter()
   const edge = useScrolledUnderBar(40)
-  const { chats, projects, selected, computers, outbox: allOutbox, cancelOutbox } = useStore()
+  const { chats, projects, selected, computers, outbox: allOutbox, cancelOutbox, select } = useStore()
+  // With several hosts the list merges all of them by default; picking one host shows just that host.
+  const multi = computers.length > 1
+  const [allHosts, setAllHosts] = useState(true)
+  const merged = multi && allHosts
+  const [hostSheet, setHostSheet] = useState(false)
   // A message being delivered to a connected computer is in the outbox for a moment; only stuck ones (offline or uncertain) belong here.
   const outbox = allOutbox.filter(
     (o) =>
-      o.computerId === selected &&
-      (o.state === 'uncertain' || computers.find((x) => x.id === selected)?.status !== 'online'),
+      (merged || o.computerId === selected) &&
+      (o.state === 'uncertain' || computers.find((x) => x.id === o.computerId)?.status !== 'online'),
   )
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const pc = computers.find((x) => x.id === selected)
@@ -64,14 +70,26 @@ export default function Threads() {
 
   type StatusFilter = 'all' | 'running' | 'needs-input' | 'failed' | 'archived'
   const [filter, setFilter] = useState<StatusFilter>('all')
-  const [scope, setScope] = useState<string | null>(null)
+  const [scopeState, setScope] = useState<string | null>(null)
+  // A workspace belongs to one host, so the filter only applies when a single host is shown.
+  const scope = merged ? null : scopeState
   const [scopeSheet, setScopeSheet] = useState(false)
   const [projectMenu, setProjectMenu] = useState<MobileProject | null>(null)
   const projectList = projects.filter((p) => p.computerId === selected)
   const nameOf = (id: string) => projectList.find((p) => p.id === id)?.name
+  // `project · host`, the same label every list uses; the host only appears once there is more than one.
+  const labelOf = (chat: Chat) =>
+    [
+      chat.projectId === STANDALONE
+        ? undefined
+        : projects.find((p) => p.computerId === chat.computerId && p.id === chat.projectId)?.name,
+      multi ? computers.find((x) => x.id === chat.computerId)?.name : undefined,
+    ]
+      .filter(Boolean)
+      .join(' · ') || undefined
   const scoped = useMemo(
-    () => chats.filter((x) => x.computerId === selected && (!scope || x.projectId === scope)),
-    [chats, selected, scope],
+    () => chats.filter((x) => (merged || x.computerId === selected) && (!scope || x.projectId === scope)),
+    [chats, selected, scope, merged],
   )
   const mine = useMemo(() => {
     return scoped
@@ -94,7 +112,7 @@ export default function Threads() {
   const chips: { key: StatusFilter; label: string; count: number }[] = [
     { key: 'all', label: 'All', count: live.length },
     { key: 'running', label: 'Running', count: live.filter((x) => x.status === 'running').length },
-    { key: 'needs-input', label: 'Needs you', count: live.filter((x) => x.status === 'needs-input').length },
+    { key: 'needs-input', label: 'Waiting', count: live.filter((x) => x.status === 'needs-input').length },
     { key: 'failed', label: 'Failed', count: live.filter((x) => x.status === 'failed').length },
     { key: 'archived', label: 'Archived', count: scoped.filter((x) => x.status === 'archived').length },
   ]
@@ -124,9 +142,27 @@ export default function Threads() {
       group(
         'pinned',
         pinned.map(
-          (x, i) => ({ key: x.id, kind: 'chat', chat: x, project: nameOf(x.projectId), divider: i > 0 }) as HomeRow,
+          (x, i) =>
+            ({
+              key: x.id,
+              kind: 'chat',
+              chat: x,
+              project: merged ? labelOf(x) : nameOf(x.projectId),
+              divider: i > 0,
+            }) as HomeRow,
         ),
       )
+    }
+    if (merged) {
+      const recent = unpinned
+      if (recent.length) {
+        out.push({ key: 'label:recent', kind: 'label', text: filter === 'archived' ? 'Archived' : 'Recent' })
+        group(
+          'recent',
+          recent.map((x, i) => ({ key: x.id, kind: 'chat', chat: x, project: labelOf(x), divider: i > 0 }) as HomeRow),
+        )
+      }
+      return out
     }
     // The Projects heading only appears above at least one project (none yet: no empty section).
     const projectsLabel = out.length
@@ -157,7 +193,22 @@ export default function Threads() {
       )
     }
     return out
-  }, [outbox, waiting, pinned, unpinned, standalone, projectList, collapsed, filtering, filter, scope, t])
+  }, [
+    outbox,
+    waiting,
+    pinned,
+    unpinned,
+    standalone,
+    projectList,
+    collapsed,
+    filtering,
+    filter,
+    scope,
+    merged,
+    projects,
+    computers,
+    t,
+  ])
   const newChat = (projectId: string) => router.push({ pathname: '/new', params: { project: projectId } })
   const openTerminal = (projectId: string) =>
     router.push({
@@ -306,7 +357,7 @@ export default function Threads() {
         ListHeaderComponent={
           <>
             <LargeTitle>{t.chats}</LargeTitle>
-            <ComputerSwitcher />
+            {merged ? null : <ComputerSwitcher />}
             {waiting.length && !filtering ? (
               <Pressable
                 accessibilityRole="button"
@@ -332,7 +383,7 @@ export default function Threads() {
                 <ChevronRight size={16} color={c.muted} />
               </Pressable>
             ) : null}
-            {pc?.status === 'offline' ? (
+            {!merged && pc?.status === 'offline' ? (
               <View
                 style={{
                   margin: space.l,
@@ -358,15 +409,28 @@ export default function Threads() {
               style={{ flexGrow: 0 }}
               contentContainerStyle={{ paddingHorizontal: space.l, paddingTop: space.m, gap: space.s }}
             >
-              <Chip
-                label={scopeName}
-                accessibilityLabel="Filter by workspace"
-                icon={Folder}
-                chevron
-                selected={scope !== null}
-                maxLabelWidth={150}
-                onPress={() => setScopeSheet(true)}
-              />
+              {multi ? (
+                <Chip
+                  label={merged ? t.allHosts : (pc?.name ?? t.allHosts)}
+                  accessibilityLabel="Filter by host"
+                  icon={Network}
+                  chevron
+                  selected={!merged}
+                  maxLabelWidth={150}
+                  onPress={() => setHostSheet(true)}
+                />
+              ) : null}
+              {merged ? null : (
+                <Chip
+                  label={scopeName}
+                  accessibilityLabel="Filter by workspace"
+                  icon={Folder}
+                  chevron
+                  selected={scope !== null}
+                  maxLabelWidth={150}
+                  onPress={() => setScopeSheet(true)}
+                />
+              )}
               {chips
                 .filter((chip) => chip.key === 'all' || chip.key === filter || chip.count > 0)
                 .map((chip) => (
@@ -400,7 +464,7 @@ export default function Threads() {
                 </Pressable>
               </View>
             ) : null}
-            {!filtering && !mine.length && !projectList.length ? (
+            {!filtering && !mine.length && (merged || !projectList.length) ? (
               <View style={{ alignItems: 'center', padding: space.xl * 2, gap: space.m }}>
                 <MessagesSquare size={28} color={c.placeholder} />
                 <T tone="muted">{t.empty}</T>
@@ -412,6 +476,48 @@ export default function Threads() {
 
       {nativeScrollEdge ? null : <TopFade visible={edge.scrolled} />}
       {projectMenu ? <ProjectActionsSheet project={projectMenu} open onClose={() => setProjectMenu(null)} /> : null}
+      <Sheet open={hostSheet} onClose={() => setHostSheet(false)} title="Host">
+        {[
+          { id: null as string | null, name: t.allHosts },
+          ...computers.map((x) => ({ id: x.id as string | null, name: x.name })),
+        ].map((o) => (
+          <Row
+            key={o.id ?? 'all'}
+            onPress={() => {
+              tap()
+              if (o.id) {
+                select(o.id)
+                setScope(null)
+              }
+              setAllHosts(o.id === null)
+              setHostSheet(false)
+            }}
+          >
+            <Network size={17} color={c.soft} />
+            <T
+              style={{ flex: 1 }}
+              weight={(o.id === null ? merged : !merged && o.id === selected) ? '600' : '400'}
+              numberOfLines={1}
+            >
+              {o.name}
+            </T>
+            {(o.id === null ? merged : !merged && o.id === selected) ? (
+              <Check size={16} color={c.accent} />
+            ) : (
+              <View style={{ width: 16 }} />
+            )}
+          </Row>
+        ))}
+        <Row
+          onPress={() => {
+            setHostSheet(false)
+            router.push('/pair')
+          }}
+        >
+          <SquarePen size={17} color={c.soft} />
+          <T style={{ flex: 1 }}>{t.pair}</T>
+        </Row>
+      </Sheet>
       <Sheet open={scopeSheet} onClose={() => setScopeSheet(false)} title="Workspace">
         {[
           {

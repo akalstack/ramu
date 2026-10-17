@@ -59,7 +59,7 @@ Up to four remote workspace views stay warm. Clean hidden views are released und
 
 Verification includes 100 simultaneous loopback event streams delivering 10,000 events, a simulated 100-computer status burst, and a real six-environment Electron flow covering eviction, draft restoration, hidden polling and unsaved-editor protection. These are local checks, not a guarantee for a particular VPN or machine's available memory.
 
-The mobile companion in `apps/mobile` is not part of the alpha release; pairing is available from the desktop client and a programmatic API.
+The mobile companion in `apps/mobile` pairs with a host by QR code, deep link or manual address and code; see the [mobile guide](../apps/mobile/README.md). It is built from source and is not yet distributed through the app stores.
 
 ### Host availability announcements
 
@@ -122,7 +122,9 @@ WantedBy=default.target
 
 ## Not built yet
 
-There is no QR code or deep link for pairing, no remote folder browser for adding projects to a server from another host, no TLS setup screen (use `--tls-cert` and `--tls-key`), no end-to-end encryption independent of the network, and no relay for reaching a host that is on no shared network. Those would build on this server and protocol.
+There is no TLS setup screen (use `--tls-cert` and `--tls-key`), no end-to-end encryption independent of the network, no relay for reaching a host that is on no shared network, no expiry or rotation for device tokens (revoke them by hand), and no read-only or scoped device role. Those would build on this server and protocol.
+
+`ramu pair` prints a pairing link that the mobile app and desktop client can open, and the mobile app can browse the host's folders to add projects. Browse roots default to the host home and existing project roots; set `RAMU_BROWSE_ROOTS` to restrict them.
 
 ## Editing settings on multiple hosts
 

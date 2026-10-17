@@ -151,7 +151,7 @@ export function HostsInbox() {
   }
   const labels: Record<InboxTab, string> = {
     all: t('All'),
-    'needs-you': t('Needs you'),
+    'needs-you': t('Waiting'),
     running: t('Running'),
     recaps: t('Recaps'),
     learned: t('Learned'),

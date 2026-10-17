@@ -41,7 +41,7 @@ export function HomeFeed() {
         >
           <Inbox size={13} />
           {summary.length ? summary.join(' · ') : t('Open inbox')}
-          {needsYou > GLANCE && <span> · {t('{0} need you', { 0: needsYou })}</span>}
+          {needsYou > GLANCE && <span> · {t('{0} waiting', { 0: needsYou })}</span>}
           <ChevronRight size={12} />
         </Button>
       </nav>

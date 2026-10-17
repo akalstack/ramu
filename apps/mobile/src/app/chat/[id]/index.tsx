@@ -413,7 +413,7 @@ export default function ChatScreen() {
       : []),
     {
       icon: Inbox,
-      label: inbox.needsYou ? `Inbox · ${inbox.needsYou} need you` : 'Inbox',
+      label: inbox.needsYou ? `Inbox · ${inbox.needsYou} waiting` : 'Inbox',
       onPress: () => router.navigate('/inbox'),
     },
   ]
