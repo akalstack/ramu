@@ -16,7 +16,7 @@ Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend the existing Expl
 - Add stable scroll restoration beyond retained screen state and bounded persistence of navigation metadata. Verify selected-file/ancestor reveal, new-thread Browse files and Collapse folders on physical devices, including virtualized large folders and missing paths.
 - Extend cancellation and request-generation component coverage to directory/search races, reconnect and live file deletion/rename. Preview tests cover late host responses and missing standalone bindings; device-level stale/deleted file handling still needs acceptance. Validate continuation, changed-directory refresh and selected-path reveal beyond the first page on physical devices; search still uses the existing bounded quick-open index.
 - Add capability-aware native copy/reveal and confirmed file management through the existing surfaces. Verify the preview Add to message/New thread with file actions against native persistence, server permissions and actual outbox delivery. Keep previews read-only until each mutation boundary has coverage.
-- Implement scoped watcher disposal/leases beyond the server's existing shared checkout watchers, and measure directory/search/preview payloads on devices.
+- Measure directory/search/preview payloads on devices. Server checkout watchers are now leased per task (see [UI](UI.md#mobile-explorer)); verify on devices that archiving or deleting a task stops its live updates.
 - Finish localization, accessible scope details and physical iOS/Android acceptance, including large text, multiple repositories/worktrees, offline/reconnect and keyboard navigation. Existing Markdown/code/image/diff preview is reused; PDF/video adapters remain unsupported.
 
 ## Acceptance and checks

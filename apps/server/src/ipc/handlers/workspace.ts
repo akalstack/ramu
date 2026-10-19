@@ -299,7 +299,11 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     },
     'tasks.archive': {
       args: z.tuple([id, z.boolean()]),
-      run: (t: string, archived: boolean) => workspace.setArchived(t, archived),
+      run: (t: string, archived: boolean) => {
+        workspace.setArchived(t, archived)
+        // Archived tasks stop watching; opening them again leases their checkouts anew.
+        if (archived) watchers.release(t)
+      },
     },
     'tasks.delete': {
       args: z.tuple([id, z.boolean()]),
@@ -309,6 +313,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         const workspaceId = workspace.getTask(taskId).workspaceId
         await workspace.deleteTask(taskId, removeWorktrees)
         notices?.forgetTask(taskId)
+        watchers.release(taskId)
         if (removeWorktrees && workspaceId) terminals.closeTask(`worktree:${workspaceId}`)
       },
     },
@@ -381,7 +386,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       args: z.tuple([id]),
       run: (taskId: string) => {
         const bindings = workspace.fileBindings(taskId)
-        for (const b of bindings) if (b.setupState === 'ready') watchers.ensure(b.cwd)
+        for (const b of bindings) if (b.setupState === 'ready') watchers.ensure(b.cwd, taskId)
         return bindings
       },
     },
