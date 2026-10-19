@@ -1,5 +1,6 @@
 // Cursor chats through the official TypeScript SDK (`@cursor/sdk`), running the agent loop locally in this process.
 // The SDK has no approval callback: full access runs unsandboxed, other access levels run in Cursor's sandbox.
+import { cursorMcpServers, repoMcpServers } from './discoveredMcp'
 import type { AgentOptions, ModelSelection, Run, RunResult, SDKAgent, SDKMessage } from '@cursor/sdk'
 import type {
   AgentEvent,
@@ -107,6 +108,7 @@ export class CursorSession implements AgentRunner {
   private mcpServers(): AgentOptions['mcpServers'] {
     return this.connection
       ? {
+          ...(cursorMcpServers(repoMcpServers(this.scope)) as NonNullable<AgentOptions['mcpServers']>),
           ramu: {
             type: 'http',
             url: this.connection.url,

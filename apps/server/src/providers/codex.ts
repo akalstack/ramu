@@ -1,4 +1,5 @@
 import { permissionKey } from '../agent/permissionApprovals'
+import { codexMcpConfig, repoMcpServers } from './discoveredMcp'
 import { classifyLimit } from './limitClassifier'
 import { elicitationRequest, elicitationContent } from '../agent/elicitation'
 import { attachmentPrompt } from '../attachments'
@@ -226,7 +227,10 @@ class CodexSession implements CodexRunner {
   async start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void> {
     this.rpc = new CodexRpc(
       this.connection,
-      this.connection?.interceptSubagents ? [CODEX_HOOK_CONFIG] : [],
+      [
+        ...(this.connection?.interceptSubagents ? [CODEX_HOOK_CONFIG] : []),
+        ...(this.connection ? codexMcpConfig(repoMcpServers(this.scope)) : []),
+      ],
       this.settings.accountId ?? 'default',
     )
     this.rpc.onMessage = (m) => this.handle(m)

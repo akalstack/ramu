@@ -1,4 +1,5 @@
 // Native OpenCode, Cursor and Google Antigravity ACP runtimes; JSON-RPC 2.0, newline framing.
+import { acpMcpServers, repoMcpServers } from './discoveredMcp'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -431,6 +432,7 @@ class AcpSession implements AgentRunner {
         additionalDirectories: this.scope.additionalDirs,
         mcpServers: tools
           ? [
+              ...acpMcpServers(repoMcpServers(this.scope), mcp?.http === true || !mcp),
               {
                 type: 'http',
                 name: 'ramu',
