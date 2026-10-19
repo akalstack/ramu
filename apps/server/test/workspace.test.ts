@@ -608,9 +608,14 @@ describe('authoritative worktree creation', () => {
     const repo = await ws.addRepository(project.id, web)
     const plan = await ws.planWorktrees(project.id, 'Changed', [repo.id])
     sh(web, 'commit', '-q', '-m', 'moved base')
-    await expect(ws.createTask({ projectId: project.id, title: 'Changed', mode: 'worktree' }, plan)).rejects.toThrow(
-      /HEAD changed/,
-    )
+    const input = { projectId: project.id, title: 'Changed', mode: 'worktree' as const, requestId: 'review-base' }
+    await expect(ws.createTask(input, plan)).rejects.toThrow(/HEAD changed/)
+    expect(ws.listTasks()).toEqual([])
+    const reviewed = await ws.planWorktrees(project.id, 'Changed', [repo.id])
+    const task = await ws.createTask(input, reviewed)
+    // A lost acknowledgement still resolves the original receipt, even with the obsolete plan.
+    expect((await ws.createTask(input, plan)).id).toBe(task.id)
+    expect(ws.listTasks()).toHaveLength(1)
   })
   it('reserves pending allocations, serializes concurrent creates and deduplicates retries', async () => {
     const project = ws.createProject('Shop')

@@ -351,6 +351,7 @@ test('a new-thread form keeps its chosen host when the global selection changes'
   }
   const { default: NewChat } = load('app/new.tsx', 'android', {
     react: {
+      useRef: (current) => ({ current }),
       useState(initial) {
         const index = cursor++
         if (!(index in values)) values[index] = typeof initial === 'function' ? initial() : initial
@@ -500,6 +501,7 @@ for (const os of ['ios', 'android']) {
     }
     const { default: NewChat } = load('app/new.tsx', os, {
       react: {
+        useRef: (current) => ({ current }),
         useState(initial) {
           const index = cursor++
           if (!(index in values)) values[index] = typeof initial === 'function' ? initial() : initial
@@ -1966,5 +1968,711 @@ for (const os of ['ios', 'android']) {
     storage.writeLocal({ computers: [], drafts: {} }, { replaceBackups: true })
     assert.deepEqual(JSON.parse(JSON.stringify(storage.readLocal({}))), { computers: [], drafts: {} })
     for (const raw of files.values()) assert.ok(!raw.includes('Original draft') && !raw.includes('Saved library'))
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} new-thread repository defaults refresh without replacing explicit choices or accepting stale responses`, async () => {
+    const hooks = hookHarness()
+    const requests = []
+    const listeners = new Map()
+    let submitted
+    const store = {
+      selected: 'a',
+      computers: [{ id: 'a', name: 'Laptop', status: 'online' }],
+      projects: ['p', 'q'].map((id) => ({ id: `a:${id}`, computerId: 'a', name: id, kind: 'repo' })),
+      drafts: { 'a:new:a:p': 'Keep my request' },
+      defaults: {},
+      appPreferences: { a: { defaultCheckoutMode: 'current' } },
+      isOnline: () => true,
+      setDraft: (key, value) => {
+        store.drafts[key] = value
+      },
+      invoke: (host, method, project) => {
+        const request = deferred()
+        requests.push({ host, method, project, ...request })
+        return request.promise
+      },
+      subscribe: (host, listener) => {
+        listeners.set(host, listener)
+        return () => {
+          listeners.delete(host)
+        }
+      },
+      createChat: async (input) => {
+        submitted = input
+        return 'a:new'
+      },
+    }
+    const { default: NewChat } = load('app/new.tsx', os, {
+      react: hooks.react,
+      'expo-router': {
+        useRouter: () => ({ replace() {} }),
+        useLocalSearchParams: () => ({ project: 'a:p' }),
+      },
+      '@ramu/shared/workspaceDefaults': workspaceDefaults,
+      '@ramu/shared/workspace/explorer': explorerScopes,
+      '../runtime/workspaces': workspaceChoices,
+      '../runtime/useWorkspaces': { useWorkspaces: () => ({ rows: [] }) },
+      '../runtime/store': { useStore: () => store },
+      '../runtime/types': { STANDALONE: 'no-project' },
+      '../i18n': { useT: () => ({ newChat: 'New thread' }) },
+      '../components/Keyboard': { useKeyboardInset: () => 0 },
+    })
+    const render = () => hooks.render(() => NewChat())
+    let tree = render()
+    assert.equal(requests.length, 1)
+    listeners.get('a')('workspace:changed', {})
+    listeners.get('a')('settings:changed', {})
+    const latest = {
+      defaultCheckoutMode: 'worktree',
+      branchPrefix: 'latest/',
+      branchNaming: 'fixed',
+      branchInstructions: '',
+      worktreeUnavailable: null,
+      configSource: 'ramu.json',
+    }
+    requests[2].resolve(latest)
+    await settle()
+    tree = render()
+    nodes(tree)
+      .find((node) => node.key === 'current')
+      .props.onPress()
+    tree = render()
+    requests[0].resolve({ ...latest, branchPrefix: 'stale/' })
+    requests[1].resolve({ ...latest, branchPrefix: 'also-stale/' })
+    await settle()
+    tree = render()
+    await find(tree, 'Composer').props.onSend('Keep my request', 'send', [], [])
+    assert.equal(submitted.mode, 'current')
+    assert.equal(submitted.branchPrefix, 'latest/')
+    assert.equal(store.drafts['a:new:a:p'], 'Keep my request')
+    listeners.get('a')('workspace:changed', {})
+    const oldRequest = requests.at(-1)
+    nodes(tree)
+      .find((node) => node.key === 'a:q')
+      .props.onPress()
+    render()
+    const nextRequest = requests.at(-1)
+    assert.equal(nextRequest.project, 'q')
+    nextRequest.resolve({ ...latest, defaultCheckoutMode: 'current', branchPrefix: 'project-q/' })
+    oldRequest.resolve({ ...latest, branchPrefix: 'late-project-p/' })
+    await settle()
+    tree = render()
+    await find(tree, 'Composer').props.onSend('Project Q request', 'send', [], [])
+    assert.equal(submitted.projectId, 'a:q')
+    assert.equal(submitted.branchPrefix, 'project-q/')
+    hooks.dispose()
+    assert.equal(listeners.size, 0)
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} workspace name editing preserves its original concurrency check and does not repeat a pending save`, async () => {
+    const hooks = hookHarness()
+    const requests = []
+    let closed = 0
+    const labels = {
+      renameWorkspace: 'Rename workspace',
+      workspaceName: 'Workspace name',
+      workspaceNameHint: 'Shared label',
+      workspaceRenameOutdated: 'Update host',
+      workspaceRenameOffline: 'Connect host',
+      workspaceRenameConflict: 'Name changed elsewhere',
+      save: 'Save',
+      cancel: 'Cancel',
+    }
+    const { WorkspaceNameSheet } = load('components/WorkspaceNameSheet.tsx', os, {
+      react: hooks.react,
+      '../i18n': { useT: () => labels },
+      '../runtime/goalVerify': { isMethodMissing: (error) => /unknown method/i.test(String(error)) },
+    })
+    let online = true
+    let workspace = { id: 'w', name: 'Original' }
+    const onSave = (name, before) => {
+      const request = deferred()
+      requests.push({ name, before, ...request })
+      return request.promise
+    }
+    const render = () =>
+      hooks.render(() =>
+        WorkspaceNameSheet({
+          workspace,
+          online,
+          onSave,
+          onClose: () => {
+            closed++
+          },
+        }),
+      )
+    let tree = render()
+    find(tree, 'TextInput').props.onChangeText('  Shared login  ')
+    workspace = { id: 'w', name: 'Someone else changed it' }
+    tree = render()
+    const save = nodes(tree).find((node) => node.type === 'Button' && node.props.title === 'Save')
+    save.props.onPress()
+    save.props.onPress()
+    assert.equal(requests.length, 1)
+    assert.equal(requests[0].name, 'Shared login')
+    assert.equal(requests[0].before, 'Original')
+    find(render(), 'Sheet').props.onClose()
+    assert.equal(closed, 0)
+    requests[0].reject(new Error('Workspace name changed elsewhere. Reopen the name editor to review it.'))
+    await settle()
+    tree = render()
+    assert.equal(find(tree, 'TextInput').props.value, '  Shared login  ')
+    assert.ok(nodes(tree).some((node) => node.type === 'T' && node.props.children === 'Name changed elsewhere'))
+    online = false
+    tree = render()
+    find(tree, 'TextInput').props.onSubmitEditing()
+    assert.equal(requests.length, 1)
+    assert.equal(find(tree, 'TextInput').props.editable, false)
+    online = true
+    tree = render()
+    nodes(tree)
+      .find((node) => node.type === 'Button' && node.props.title === 'Save')
+      .props.onPress()
+    requests[1].reject(new Error('Unknown method workspaces.rename'))
+    await settle()
+    tree = render()
+    assert.ok(nodes(tree).some((node) => node.type === 'T' && node.props.children === 'Update host'))
+    nodes(tree)
+      .find((node) => node.type === 'Button' && node.props.title === 'Save')
+      .props.onPress()
+    hooks.dispose()
+    requests[2].resolve()
+    await settle()
+    assert.equal(closed, 0, 'a late response cannot close a new scope’s editor')
+  })
+
+  test(`${os} workspace rename uses its owning host and preserves the new-thread draft through a host switch`, async () => {
+    const hooks = hookHarness()
+    const calls = []
+    const rename = deferred()
+    let refreshed = 0
+    const store = {
+      selected: 'a',
+      computers: ['a', 'b'].map((id) => ({ id, name: id, status: 'online' })),
+      projects: [{ id: 'a:p', computerId: 'a', name: 'Project', kind: 'repo' }],
+      drafts: {
+        'a:new:a:p': 'Keep my message',
+        'a:new:a:p:workspace': JSON.stringify({ version: 1, mode: 'worktree', workspaceId: 'w', name: 'Original' }),
+      },
+      defaults: {},
+      appPreferences: { a: { defaultCheckoutMode: 'current' } },
+      isOnline: () => true,
+      setDraft: (key, value) => {
+        store.drafts[key] = value
+      },
+      subscribe: () => () => {},
+      invoke: (host, method, ...args) => {
+        calls.push({ host, method, args })
+        return method === 'workspaces.rename'
+          ? rename.promise
+          : Promise.resolve({ defaultCheckoutMode: 'current', branchPrefix: 'ramu/', branchNaming: 'fixed' })
+      },
+      createChat: async () => {
+        throw new Error('Rename must not create a thread')
+      },
+    }
+    const catalog = {
+      rows: [{ id: 'w', projectId: 'p', name: 'Original' }],
+      refresh: () => {
+        refreshed++
+      },
+    }
+    const { default: NewChat } = load('app/new.tsx', os, {
+      react: hooks.react,
+      'expo-router': { useRouter: () => ({ replace() {} }), useLocalSearchParams: () => ({ project: 'a:p' }) },
+      '@ramu/shared/workspaceDefaults': workspaceDefaults,
+      '@ramu/shared/workspace/explorer': explorerScopes,
+      '../runtime/workspaces': workspaceChoices,
+      '../runtime/useWorkspaces': { useWorkspaces: () => catalog },
+      '../runtime/store': { useStore: () => store },
+      '../runtime/types': { STANDALONE: 'no-project' },
+      '../i18n': { useT: () => ({ renameWorkspace: 'Rename workspace' }) },
+      '../components/Keyboard': { useKeyboardInset: () => 0 },
+    })
+    const render = () => hooks.render(() => NewChat())
+    let tree = render()
+    nodes(tree)
+      .find(
+        (node) =>
+          node.type === 'Row' &&
+          nodes(node).some((child) => child.type === 'T' && child.props.children === 'Rename workspace'),
+      )
+      .props.onPress()
+    tree = render()
+    const sheet = find(tree, 'WorkspaceNameSheet')
+    assert.equal(sheet.props.workspace.id, 'w')
+    const saving = sheet.props.onSave('New label', 'Original')
+    nodes(tree)
+      .find((node) => node.key === 'b')
+      .props.onPress()
+    tree = render()
+    assert.equal(find(tree, 'WorkspaceNameSheet'), undefined)
+    rename.resolve({ id: 'w', name: 'New label' })
+    await saving
+    sheet.props.onClose()
+    tree = render()
+    assert.deepEqual(
+      calls.filter((call) => call.method === 'workspaces.rename'),
+      [{ host: 'a', method: 'workspaces.rename', args: ['w', 'New label', 'Original'] }],
+    )
+    assert.equal(refreshed, 0, 'a late old-host response does not refresh a new-host catalog')
+    assert.equal(store.drafts['a:new:a:p'], 'Keep my message')
+    assert.equal(JSON.parse(store.drafts['a:new:a:p:workspace']).workspaceId, 'w')
+    assert.ok(!calls.some((call) => /tasks\.(create|setup)|agent\.start/.test(call.method)))
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} branch naming cancels abandoned requests and manual edits win late generation`, async () => {
+    const hooks = hookHarness()
+    const requests = []
+    const store = {
+      invoke(host, method, ...args) {
+        const request = deferred()
+        requests.push({ host, method, args, ...request })
+        return method === 'tasks.cancelBranch' ? Promise.resolve() : request.promise
+      },
+    }
+    const { BranchNameControls } = load('components/BranchNameControls.tsx', os, {
+      react: hooks.react,
+      '@ramu/shared/workspaceDefaults': workspaceDefaults,
+      '../runtime/store': { useStore: () => store },
+      '../runtime/goalVerify': { isMethodMissing: (error) => /unknown method/i.test(String(error)) },
+      '../i18n': { useT: () => components },
+    })
+    let props = {
+      host: 'a',
+      projectId: 'p',
+      title: 'Fix login',
+      online: true,
+      branchPrefix: 'team/',
+      intent: { strategy: 'semantic', instructions: '', prompt: 'Fix login' },
+      onChange: (choice) => {
+        props = { ...props, choice }
+      },
+    }
+    const render = () => hooks.render(() => BranchNameControls(props))
+    const button = (tree, title) => nodes(tree).find((node) => node.type === 'Button' && node.props.title === title)
+    let tree = render()
+    button(tree, 'branchNameGenerate').props.onPress()
+    button(tree, 'branchNameGenerate').props.onPress()
+    assert.equal(requests.length, 1, 'two taps before rerender start one model operation')
+    const original = requests[0]
+    assert.match(original.args[3], /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    tree = render()
+    find(tree, 'TextInput').props.onChangeText('mine/login')
+    tree = render()
+    original.resolve({ name: 'late/login', source: 'generated' })
+    await settle()
+    assert.equal(props.choice.name, 'mine/login')
+    assert.equal(requests[1].method, 'tasks.cancelBranch')
+    assert.equal(requests[1].host, 'a')
+    assert.equal(requests[1].args[0], original.args[3])
+    button(tree, 'branchNameGenerate').props.onPress()
+    const abandoned = requests.at(-1)
+    props = { ...props, host: 'b', projectId: 'q' }
+    render()
+    abandoned.resolve({ name: 'wrong/host', source: 'generated' })
+    await settle()
+    assert.equal(props.choice.name, 'mine/login')
+    assert.equal(requests.at(-1).method, 'tasks.cancelBranch')
+    assert.equal(requests.at(-1).host, 'a')
+    tree = render()
+    button(tree, 'branchNameGenerate').props.onPress()
+    const dismissed = requests.at(-1)
+    hooks.dispose()
+    dismissed.resolve({ name: 'dismissed/name', source: 'generated' })
+    await settle()
+    assert.equal(props.choice.name, 'mine/login')
+  })
+
+  test(`${os} branch previews use frozen naming inputs, reject invalid edits and surface old-host failures`, async () => {
+    const hooks = hookHarness()
+    const requests = []
+    const { BranchNameControls } = load('components/BranchNameControls.tsx', os, {
+      react: hooks.react,
+      '@ramu/shared/workspaceDefaults': workspaceDefaults,
+      '../runtime/store': {
+        useStore: () => ({
+          invoke(host, method, ...args) {
+            const request = deferred()
+            requests.push({ host, method, args, ...request })
+            return request.promise
+          },
+        }),
+      },
+      '../runtime/goalVerify': { isMethodMissing: (error) => /unknown method/i.test(String(error)) },
+      '../i18n': { useT: () => components },
+    })
+    let props = {
+      host: 'a',
+      projectId: 'p',
+      title: 'Fix login',
+      online: true,
+      branchPrefix: 'team/',
+      intent: { strategy: 'fixed', instructions: '', prompt: 'Fix login' },
+      onChange: (choice) => {
+        props = { ...props, choice }
+      },
+    }
+    const render = () => hooks.render(() => BranchNameControls(props))
+    const button = (tree, title) => nodes(tree).find((node) => node.type === 'Button' && node.props.title === title)
+    let tree = render()
+    assert.equal(button(tree, 'branchNameGenerate'), undefined)
+    find(tree, 'TextInput').props.onChangeText('bad..name')
+    tree = render()
+    assert.equal(button(tree, 'branchNamePreview').props.disabled, true)
+    button(tree, 'branchNamePreview').props.onPress()
+    assert.equal(requests.length, 0)
+    find(tree, 'TextInput').props.onChangeText('manual/login')
+    tree = render()
+    button(tree, 'branchNamePreview').props.onPress()
+    requests[0].resolve([{ id: 'repo' }])
+    await settle()
+    const preview = requests[1]
+    assert.equal(preview.method, 'tasks.plan')
+    assert.deepEqual(Array.from(preview.args[2]), ['repo'])
+    assert.equal(preview.args[3].name, 'manual/login')
+    assert.equal(preview.args[4].branchPrefix, 'team/')
+    assert.equal(preview.args[4].strategy, 'fixed')
+    preview.resolve([
+      {
+        repoId: 'repo',
+        repoName: 'Repo',
+        baseRef: 'main',
+        baseOid: 'abcd1234',
+        taskBranch: 'manual/login',
+        path: '/work/login',
+      },
+    ])
+    await settle()
+    tree = render()
+    assert.ok(nodes(tree).some((node) => node.props?.children === 'branchNameProvisional'))
+    find(tree, 'TextInput').props.onChangeText('manual/changed')
+    tree = render()
+    tree = render()
+    assert.ok(!nodes(tree).some((node) => node.props?.children === 'branchNameProvisional'))
+    button(tree, 'branchNamePreview').props.onPress()
+    requests.at(-1).reject(new Error('Unknown method tasks.plan'))
+    await settle()
+    tree = render()
+    assert.ok(nodes(tree).some((node) => node.props?.children === 'branchNameOutdated'))
+    props = { ...props, online: false }
+    tree = render()
+    assert.equal(button(tree, 'branchNamePreview').props.disabled, true)
+    const count = requests.length
+    button(tree, 'branchNamePreview').props.onPress()
+    assert.equal(requests.length, count)
+    hooks.dispose()
+  })
+}
+
+for (const ambiguous of [false, true]) {
+  test(`queued reviewed bases ${ambiguous ? 'keep unknown outcomes uncertain' : 'pause on confirmed rejection and require durable approval'}`, async () => {
+    const { newChatHost } = await import('../src/runtime/newChatHost.ts')
+    const hooks = hookHarness()
+    const refs = []
+    const calls = [],
+      writes = []
+    let failWrite = false
+    class HostError extends Error {
+      constructor(message, status = 0, ambiguous = false) {
+        super(message)
+        this.status = status
+        this.ambiguous = ambiguous
+      }
+    }
+    const initial = {
+      computers: [{ id: 'a', name: 'Host', status: 'offline' }],
+      projects: [{ id: 'a:p', computerId: 'a' }],
+      chats: [],
+      drafts: {},
+      outbox: [],
+    }
+    const { StoreProvider } = load('runtime/store.tsx', 'ios', {
+      react: {
+        ...hooks.react,
+        createContext: () => ({ Provider: 'Store' }),
+        useEffect() {},
+        useRef(value) {
+          const ref = hooks.react.useRef(value)
+          refs.push(ref)
+          return ref
+        },
+      },
+      'react-native': { AppState: { currentState: 'active' } },
+      '../storage': {
+        readLocal: (defaults) => ({ ...defaults, ...initial }),
+        writeLocal: (value) => {
+          if (failWrite) throw new Error('Storage full')
+          writes.push(JSON.parse(JSON.stringify(value)))
+        },
+      },
+      './newChatHost': { newChatHost },
+      './workspaces': workspaceChoices,
+      './transport': { HostError },
+      './threadActivity': { normalizeHelperGroups: (rows) => rows },
+    })
+    const render = () => hooks.render(() => StoreProvider({ children: null })).props.value
+    let store = render()
+    const stateRef = refs[0]
+    const connectionRef = refs[1]
+    connectionRef.current.set('a', {
+      controller: new AbortController(),
+      client: {
+        invoke: async (method, ...args) => {
+          calls.push({ method, args })
+          if (method === 'tasks.workspaceOptions') return { branchNameControls: true }
+          if (method === 'repos.list') return [{ id: 'repo' }]
+          if (method === 'tasks.plan')
+            return [
+              {
+                repoId: 'repo',
+                repoName: 'Repo',
+                baseRef: 'main',
+                baseOid: 'new-base',
+                taskBranch: 'mine/login',
+                path: '/work/login',
+              },
+            ]
+          if (method === 'tasks.create')
+            throw new HostError(
+              'Repository HEAD changed since preview. Review the worktree plan and try again.',
+              400,
+              ambiguous,
+            )
+          throw new Error(`Unexpected ${method}`)
+        },
+      },
+    })
+    stateRef.current.computers[0].status = 'online'
+    const reviewed = [
+      {
+        repoId: 'repo',
+        repoName: 'Repo',
+        baseRef: 'main',
+        baseOid: 'old-base',
+        taskBranch: 'mine/login',
+        path: '/work/login',
+      },
+    ]
+    const candidate = { name: 'mine/login', source: 'manual' }
+    await store.createChat({
+      computerId: 'a',
+      projectId: 'a:p',
+      text: 'Fix login',
+      provider: 'codex',
+      model: '',
+      effort: '',
+      mode: 'worktree',
+      branchPrefix: 'team/',
+      branchChoice: candidate,
+      reviewedPlan: reviewed,
+      branchNaming: { strategy: 'fixed', instructions: '', prompt: 'Fix login' },
+    })
+    reviewed[0].baseOid = 'caller-mutated'
+    candidate.name = 'caller-mutated'
+    await settle()
+    store = render()
+    const item = store.outbox[0]
+    assert.equal(item.state, ambiguous ? 'uncertain' : 'review')
+    const first = calls.find((call) => call.method === 'tasks.create')
+    assert.equal(first.args[1][0].baseOid, 'old-base')
+    assert.equal(first.args[0].branchChoice.name, 'mine/login')
+    assert.ok(!calls.some((call) => call.method === 'tasks.plan'))
+    if (ambiguous) {
+      await assert.rejects(store.previewOutbox(item.id), /not awaiting/)
+      await assert.rejects(store.resumeOutbox(item.id, reviewed), /not awaiting/)
+    } else {
+      const updated = await store.previewOutbox(item.id)
+      failWrite = true
+      await assert.rejects(store.resumeOutbox(item.id, updated), /Storage full/)
+      assert.equal(render().outbox[0].state, 'review')
+      assert.equal(calls.filter((call) => call.method === 'tasks.create').length, 1)
+      failWrite = false
+      await store.resumeOutbox(item.id, updated)
+      updated[0].baseOid = 'caller-mutated'
+      await settle()
+      store = render()
+      assert.equal(store.outbox[0].state, 'review', 'a second base movement pauses again')
+      const second = calls.filter((call) => call.method === 'tasks.create')[1]
+      assert.equal(second.args[0].requestId, first.args[0].requestId)
+      assert.equal(second.args[1][0].baseOid, 'new-base')
+      assert.ok(
+        writes.some(
+          (value) => value.outbox[0]?.state === 'waiting' && value.outbox[0]?.reviewedPlan[0].baseOid === 'new-base',
+        ),
+      )
+      assert.equal(store.chats.length, 1)
+    }
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} new-thread naming keeps reviewed bases through offline enqueue and drops a mismatched review`, async () => {
+    const hooks = hookHarness()
+    const submitted = []
+    let online = true
+    const store = {
+      selected: 'a',
+      computers: [{ id: 'a', name: 'Host' }],
+      projects: [{ id: 'a:p', computerId: 'a', name: 'Project' }],
+      drafts: { 'a:new:a:p': 'Fix login', 'a:new:a:p:workspace': '{"version":1,"mode":"worktree"}' },
+      defaults: {},
+      appPreferences: { a: { defaultCheckoutMode: 'current' } },
+      isOnline: () => online,
+      setDraft: (key, value) => {
+        store.drafts[key] = value
+      },
+      subscribe: () => () => {},
+      invoke: async () => ({
+        defaultCheckoutMode: 'current',
+        branchPrefix: 'team/',
+        branchNaming: 'semantic',
+        branchInstructions: '',
+        branchNameControls: true,
+        worktreeUnavailable: null,
+      }),
+      createChat: async (input) => {
+        submitted.push(input)
+        return 'pending'
+      },
+    }
+    const { default: NewChat } = load('app/new.tsx', os, {
+      react: hooks.react,
+      'expo-router': { useLocalSearchParams: () => ({ project: 'a:p' }), useRouter: () => ({ replace() {} }) },
+      '@ramu/shared/workspaceDefaults': workspaceDefaults,
+      '@ramu/shared/workspace/explorer': explorerScopes,
+      '../runtime/workspaces': workspaceChoices,
+      '../runtime/useWorkspaces': { useWorkspaces: () => ({ rows: [] }) },
+      '../runtime/store': { useStore: () => store },
+      '../runtime/types': { STANDALONE: 'no-project' },
+      '../i18n': { useT: () => components },
+      '../components/Keyboard': { useKeyboardInset: () => 0 },
+    })
+    const render = () => hooks.render(() => NewChat())
+    render()
+    await settle()
+    let tree = render()
+    nodes(find(tree, 'Composer').props.header)
+      .find((node) => node.props?.icon === 'GitBranch')
+      .props.onPress()
+    tree = render()
+    let controls = find(tree, 'BranchNameControls')
+    assert.equal(controls.props.host, 'a')
+    controls.props.onChange({ name: 'mine/login', source: 'manual' })
+    tree = render()
+    controls = find(tree, 'BranchNameControls')
+    assert.equal(controls.props.choice.name, 'mine/login')
+    const reviewed = [{ repoId: 'repo', baseOid: 'reviewed-base' }]
+    controls.props.onReview(reviewed)
+    tree = render()
+    online = false
+    render()
+    tree = render()
+    await find(tree, 'Composer').props.onSend('Fix login', 'send', [], [])
+    assert.equal(submitted[0].reviewedPlan[0].baseOid, 'reviewed-base')
+    assert.equal(submitted[0].branchChoice.name, 'mine/login')
+    store.drafts['a:new:a:p'] = 'Fix another issue'
+    tree = render()
+    await find(tree, 'Composer').props.onSend('Fix another issue', 'send', [], [])
+    assert.equal(submitted[1].reviewedPlan, undefined)
+    assert.equal(submitted[1].branchChoice.name, 'mine/login', 'manual edits survive a changed prompt')
+    find(tree, 'BranchNameControls').props.onChange({ name: 'bad..name', source: 'manual' })
+    tree = render()
+    await assert.rejects(find(tree, 'Composer').props.onSend('Fix another issue', 'send', [], []), /branchNameInvalid/)
+    assert.equal(submitted.length, 2)
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} changed-base review shows commits and requires a successful explicit approval before closing`, async () => {
+    const hooks = hookHarness()
+    const preview = deferred(),
+      approval = deferred()
+    const calls = []
+    let online = true,
+      closed = 0
+    const { WorktreeBaseReview } = load('components/WorktreeBaseReview.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': {
+        useStore: () => ({
+          isOnline: (host) => {
+            assert.equal(host, 'a')
+            return online
+          },
+          previewOutbox: (id) => {
+            calls.push(['preview', id])
+            return preview.promise
+          },
+          resumeOutbox: (id, plan) => {
+            calls.push(['resume', id, plan])
+            return approval.promise
+          },
+        }),
+      },
+      '../i18n': { useT: () => components },
+    })
+    const item = {
+      id: 'pending',
+      computerId: 'a',
+      state: 'review',
+      reviewedPlan: [{ repoId: 'r', baseOid: 'oldbase' }],
+    }
+    const render = () =>
+      hooks.render(() =>
+        WorktreeBaseReview({
+          item,
+          onClose: () => {
+            closed++
+          },
+        }),
+      )
+    const button = (tree) =>
+      nodes(tree).find((node) => node.type === 'Button' && node.props.title === 'branchRetryBases')
+    let tree = render()
+    assert.equal(button(tree).props.disabled, true)
+    const plan = [
+      {
+        repoId: 'r',
+        repoName: 'Repo',
+        baseRef: 'main',
+        baseOid: 'newbase',
+        taskBranch: 'mine/login',
+        path: '/work/login',
+      },
+    ]
+    preview.resolve(plan)
+    await settle()
+    tree = render()
+    assert.equal(button(tree).props.disabled, false)
+    assert.ok(JSON.stringify(tree).includes('oldbase'))
+    assert.ok(JSON.stringify(tree).includes('newbase'))
+    button(tree).props.onPress()
+    button(tree).props.onPress()
+    assert.equal(calls.filter(([method]) => method === 'resume').length, 1)
+    assert.equal(calls[1][1], 'pending')
+    assert.equal(calls[1][2], plan)
+    assert.equal(closed, 0)
+    approval.reject(new Error('Storage full'))
+    await settle()
+    tree = render()
+    assert.ok(
+      nodes(tree).some(
+        (node) => typeof node.props?.children === 'string' && node.props.children.includes('Storage full'),
+      ),
+    )
+    assert.equal(closed, 0)
+    online = false
+    tree = render()
+    assert.equal(button(tree).props.disabled, true)
+    hooks.dispose()
   })
 }

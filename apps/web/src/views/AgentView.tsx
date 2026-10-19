@@ -126,7 +126,7 @@ export const AgentView = memo(function AgentView({
     () => savedChat(view.sessionId, host.id)?.draft ?? loadDraft(draftKey.chat(view.sessionId), draftStore(host.id)),
   )
   const events = useDeferredRequests(sourceEvents, draft)
-  useDraftPersistence(draftKey.chat(view.sessionId), draft, host.id)
+  const consumeDraft = useDraftPersistence(draftKey.chat(view.sessionId), draft, host.id)
   /** The sent message being edited in place. The composer and its draft are left alone. */
   const [editing, setEditing] = useState<MessageEdit | null>(null)
   const [configuring, setConfiguring] = useState(false)
@@ -204,11 +204,12 @@ export const AgentView = memo(function AgentView({
   const autoResume = useAutoResume(view.sessionId, session?.settings ?? {}, setSession, reportError)
   const limitRetry = useLimitRetry(view.sessionId, providerWait, reportError)
   const runningTasks = helperSelection.selected.filter(helperActive)
-  const act = async (fn: () => Promise<unknown>) => {
+  const act = async (fn: () => Promise<unknown>, propagate = false) => {
     setError(null)
     try {
       await fn()
     } catch (e) {
+      if (propagate) throw e
       setError(errorText(e))
     }
   }
@@ -454,9 +455,12 @@ export const AgentView = memo(function AgentView({
     act(async () => {
       const submitted = draft
       const aside = await invoke('aside.ask', view.sessionId, null, '', 'assistant', question)
-      setDraft((current) => (current === submitted ? '' : current))
+      const consumed = consumeDraft()
+      if (!consumed.persisted)
+        notifyError(translate('Message sent, but the local draft could not be cleared.'), 'Draft')
+      if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
       setOpenAside({ id: aside.id, quote: aside.quote, from: aside.quoteFrom, keepFocus: true })
-    })
+    }, true)
   const send = (mode: 'queue' | 'steer' = action, context: FileContext[] = []) => {
     const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(draft.trim())
     return side && !attachments.length && !attached.length ? askAside(side[1]!.trim()) : sendToAgent(mode, context)
@@ -470,7 +474,10 @@ export const AgentView = memo(function AgentView({
         throw new Error(translate('Review comments send once {0} is back. Your message is kept.', { 0: hostName }))
       if (hostOffline) {
         if (!outbox(host.id).add(view.sessionId, submitted, submittedFiles, context)) throw outboxFullError(hostName)
-        setDraft((current) => (current === submitted ? '' : current))
+        const consumed = consumeDraft()
+        if (!consumed.persisted)
+          notifyError(translate('Message queued, but the local draft could not be cleared.'), 'Draft')
+        if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
         setAttachments((current) => current.filter((file) => !submittedFiles.some((sent) => sent.id === file.id)))
         stick.current = true
         return
@@ -499,14 +506,17 @@ export const AgentView = memo(function AgentView({
             submittedFiles.map((file) => file.id),
             context,
           )
-        setDraft((current) => (current === submitted ? '' : current))
+        const consumed = consumeDraft()
+        if (!consumed.persisted)
+          notifyError(translate('Message sent, but the local draft could not be cleared.'), 'Draft')
+        if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
         setAttachments((current) => current.filter((file) => !submittedFiles.some((sent) => sent.id === file.id)))
         stick.current = true
         scrollToEnd.current?.()
       } finally {
         setConfiguring(false)
       }
-    })
+    }, true)
 
   const transcript: TranscriptContext = {
     sessionId: view.sessionId,

@@ -8,6 +8,8 @@ import { existsSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { mkdir, readdir, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative } from 'node:path'
 import type { Db } from '../db'
+import type { SettingsStore } from '../settings/settingsStore'
+import { loadProjectConfig } from './projectConfig'
 import * as gitCli from './git'
 import { NO_PROJECT } from '@ramu/shared/types'
 import type {
@@ -73,6 +75,7 @@ export function slugify(s: string): string {
 }
 
 export class Workspace {
+  settingsStore?: SettingsStore
   private readonly allocation = new KeyedLock()
   constructor(
     private readonly db: Db,
@@ -81,6 +84,10 @@ export class Workspace {
   ) {}
 
   // ---- Projects & repositories ----
+
+  projectConfiguration(projectId: string) {
+    return loadProjectConfig(this.getProject(projectId).root)
+  }
 
   listProjects(): Project[] {
     return this.db
@@ -243,6 +250,17 @@ export class Workspace {
     const workspace = this.listWorkspaces().find((w) => w.id === id)
     if (!workspace) throw new Error('Unknown isolated workspace')
     return workspace
+  }
+
+  /** A shared display label only; thread titles, refs, bindings and paths retain their identities. */
+  renameWorktreeWorkspace(id: string, name: string, before: string): WorktreeWorkspace {
+    const label = cleanLabel(name)
+    if (!label || label.length > 200) throw new Error('Workspace name must be between 1 and 200 characters')
+    const workspace = this.getWorktreeWorkspace(id)
+    if (workspace.name === label) return workspace
+    const updated = this.db.prepare('UPDATE workspaces SET name = ? WHERE id = ? AND name = ?').run(label, id, before)
+    if (!updated.changes) throw new Error('Workspace name changed elsewhere. Reopen the name editor to review it.')
+    return { ...workspace, name: label }
   }
 
   workspaceIdOf(ctx: string): string | null {
@@ -803,11 +821,15 @@ export class Workspace {
   }
 
   getAppState<T>(key: string, fallback: T): T {
+    if (this.settingsStore && key === 'app-preferences') return this.settingsStore.preferences() as T
+    if (this.settingsStore && key === 'model-preferences') return (this.settingsStore.models() ?? fallback) as T
     const row = this.db.prepare('SELECT value FROM app_state WHERE key = ?').get(key) as { value: string } | undefined
     return row ? (JSON.parse(row.value) as T) : fallback
   }
 
   setAppState(key: string, value: unknown): void {
+    if (this.settingsStore && key === 'app-preferences') return this.settingsStore.set(value)
+    if (this.settingsStore && key === 'model-preferences') return this.settingsStore.set(undefined, value)
     this.db
       .prepare('INSERT INTO app_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
       .run(key, JSON.stringify(value))

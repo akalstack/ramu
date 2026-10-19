@@ -16,6 +16,8 @@ export interface ProjectAction {
   command: string
   /** Optional shortcut in Ramu's key format, e.g. `mod+shift+r`. */
   keys?: string
+  /** Repository-defined action; absent for a locally saved override. */
+  source?: 'ramu.json' | '.ramu/config.json'
 }
 
 /** A message in some chat that contains the searched text, with a short excerpt around the first match. */

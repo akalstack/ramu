@@ -119,11 +119,7 @@ export const registerSettingsHandlers: RegisterHandlers = ({
             throw new Error('Provider account options changed. Reload before saving.')
         }
         if (catalogs) validateSettingModels(edits, catalogs)
-        if (models) {
-          workspace.setAppState('model-preferences', models)
-          host.send('settings:models', models)
-        }
-        savePreferences(preferences)
+        savePreferences(preferences, models)
         return settingsSnapshot()
       },
     },

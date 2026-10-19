@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { FileContext, SkillInfo, AppPreferences } from '@ramu/shared/types'
+import type { FileContext, SkillInfo, AppPreferences, ModelPreferences } from '@ramu/shared/types'
 import type { NoticeInbox } from '../background/notices'
 import type { ActivityService } from '../background/activity'
 import type { LearningService } from '../memory/learning'
@@ -70,7 +70,7 @@ export interface HandlerContext extends Services {
   extraUsage: ExtraUsageReader
   accountUsage: AccountUsage
   loadPreferences(): AppPreferences
-  savePreferences(preferences: AppPreferences): void
+  savePreferences(preferences: AppPreferences, models?: ModelPreferences): void
   /** The stored preferences as written, without defaults or validation. */
   storedPreferences(): Partial<AppPreferences>
   managedSkills(taskId: string): SkillInfo[]

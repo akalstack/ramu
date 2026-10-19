@@ -276,15 +276,25 @@ export interface RamuMethods {
   'repos.add'(projectId: string, dir: string): Repository
   'repos.pick'(purpose?: 'project' | 'repository'): string | null
   'workspaces.list'(): WorktreeWorkspace[]
+  'workspaces.rename'(workspaceId: string, name: string, before: string): WorktreeWorkspace
   'tasks.list'(): Task[]
   'tasks.workspaceOptions'(projectId: string): {
     defaultCheckoutMode: 'current' | 'worktree'
     branchPrefix: string
     branchNaming: BranchNamingStrategy
     branchInstructions: string
+    branchNameControls?: boolean
+    configSource?: 'ramu.json' | '.ramu/config.json'
+    configError?: string
     worktreeUnavailable: string | null
   }
-  'tasks.plan'(projectId: string, title: string, repoIds: string[], choice?: BranchChoice): WorktreePlanEntry[]
+  'tasks.plan'(
+    projectId: string,
+    title: string,
+    repoIds: string[],
+    choice?: BranchChoice,
+    naming?: { branchPrefix: string; strategy: BranchNamingStrategy },
+  ): WorktreePlanEntry[]
   'tasks.generateBranch'(projectId: string, title: string, intent: BranchNamingIntent, requestId?: string): BranchChoice
   'tasks.cancelBranch'(requestId: string): void
   'tasks.create'(input: CreateTaskInput, plan?: WorktreePlanEntry[]): Task

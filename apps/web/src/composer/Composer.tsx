@@ -101,6 +101,12 @@ export function Composer({
   pinnedCount.current = suggestions.pinned.length
   // Attachments upload to the host the composer sends to; the native picker runs on this window's own host.
   const { id: checkpointHost, isLocal, invoke } = useHost()
+  const scopeKey = JSON.stringify([checkpointHost, suggestions.scope])
+  const [submissionFailure, setSubmissionFailure] = useState<{ scope: string; message: string } | null>(null)
+  const currentScope = useRef({ host: checkpointHost, scope: suggestions.scope })
+  currentScope.current = { host: checkpointHost, scope: suggestions.scope }
+  const currentPinned = useRef(suggestions.pinned)
+  currentPinned.current = suggestions.pinned
   useEffect(
     () =>
       registerWorkspaceCheckpoint(
@@ -201,11 +207,20 @@ export function Composer({
     submissionPending.current = true
     setSubmitting(true)
     setAttachmentError(null)
+    setSubmissionFailure(null)
+    const origin = currentScope.current
+    const submittedPinned = suggestions.pinned
     try {
       await handler(suggestions.hydrate())
-      suggestions.clearPinned()
+      if (
+        currentScope.current.host === origin.host &&
+        currentScope.current.scope === origin.scope &&
+        currentPinned.current === submittedPinned
+      )
+        suggestions.clearPinned()
     } catch (error) {
-      setAttachmentError(errorText(error))
+      if (currentScope.current.host === origin.host && currentScope.current.scope === origin.scope)
+        setSubmissionFailure({ scope: scopeKey, message: errorText(error) })
     } finally {
       submissionPending.current = false
       setSubmitting(false)
@@ -389,6 +404,11 @@ export function Composer({
         {attachmentError && (
           <div className="error text-bad small text-caption" role="alert">
             {attachmentError}
+          </div>
+        )}
+        {submissionFailure?.scope === scopeKey && (
+          <div className="error text-bad small text-caption" role="alert">
+            {submissionFailure.message}
           </div>
         )}
         <ComposerInput

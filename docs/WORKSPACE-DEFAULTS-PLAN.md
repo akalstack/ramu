@@ -14,10 +14,10 @@ Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend Settings → Git,
 
 ## Remaining implementation
 
-- Add explicit Generate name, editable candidates and provisional previews on mobile. Verify real-provider cancellation, quota errors, generated-name UX and reconnect/device behavior. Desktop controls and server generation have focused fake-provider/Git coverage.
-- Persist explicit desktop draft provenance and restore manual/default/reused choices. Mobile stores these choices with the active project draft; extend restoration coverage to all entry points and storage-failure recovery. Freeze preview bases in the outbox alongside the naming inputs already captured at enqueue. Review changed bases after a queued preview.
-- Add a shared workspace label edit independent of thread titles and Git branch names. Extend mobile existing-workspace selection acceptance to lost acknowledgements, reconnect, removed worktrees and physical devices; the server revalidates readiness at delivery.
-- Extend capability/missing-method handling beyond mobile workspace catalog/default discovery, including naming controls. Improve unavailable-mode reasons in mobile pickers and verify offline default behavior and every issue/PR/keyboard entry point.
+- Verify real-provider cancellation, quota errors, generated-name UX and reconnect/device behavior. Desktop/mobile controls and server generation have focused fake-provider/Git coverage; mobile provisional previews and explicit base review are implemented.
+- Finish all-entry-point, concurrent-window, storage-recovery and native acceptance for desktop/mobile active snapshots, including optional branch candidates and naming intent. Finish restart, lost-acknowledgement and physical-device acceptance for frozen outbox bases and changed-base review.
+- Extend mobile existing-workspace selection acceptance to lost acknowledgements, reconnect, removed worktrees and physical devices; the server revalidates readiness at delivery. Verify shared label editing across real paired clients, including native keyboard/accessibility, permission-denied states and independently upgraded hosts.
+- Extend capability/missing-method handling beyond mobile workspace catalog/default discovery and advertised naming controls. Improve unavailable-mode reasons in mobile pickers and verify offline default behavior and every issue/PR/keyboard entry point.
 - Extend case-insensitive filesystem allocation checks, namespace collisions and restart recovery evidence. Pending database reservations and per-repository Git locks exist; cross-process allocation beyond this host service still needs analysis.
 - Complete English/Indonesian wording, native visual/keyboard/accessibility acceptance, and generated/manual-name edge cases.
 

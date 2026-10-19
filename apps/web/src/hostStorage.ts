@@ -15,7 +15,13 @@ const PER_HOST_EXACT = new Set([
   'ramu.navigation-locations',
   'ramu.last-project',
 ])
-const PER_HOST_PREFIXES = ['ramu.draft.', 'ramu.last-action:', 'ramu.review-viewed:', 'ramu.layout.']
+const PER_HOST_PREFIXES = [
+  'ramu.draft.',
+  'ramu.new-thread-workspace:',
+  'ramu.last-action:',
+  'ramu.review-viewed:',
+  'ramu.layout.',
+]
 /** `ramu.layout.*` keys that are device-wide even though they share the prefix. */
 const DEVICE_LAYOUT = ['ramu.layout.tools-rail', 'ramu.layout.react-resizable-panels:']
 

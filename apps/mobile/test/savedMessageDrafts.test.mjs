@@ -109,3 +109,33 @@ test('an offline-created thread keeps its saved source when it receives a host t
   assert.equal(restored.drafts[newKey], before[oldKey])
   assert.equal(JSON.parse(restored.drafts[savedMessagesKey('host')]).items.length, 0)
 })
+
+test('explicit saved drafts retain partial branch edits and their bounded naming intent across restart', () => {
+  const before = drafts()
+  const branch = {
+    title: 'Login',
+    intent: { strategy: 'custom', instructions: 'Use team/', prompt: 'Fix login' },
+    choice: { name: 'team/', source: 'manual' },
+  }
+  before[`${key}:workspace`] = JSON.stringify({ version: 1, mode: 'worktree', branch })
+  const saved = save(before)
+  const restarted = JSON.parse(JSON.stringify(saved.drafts))
+  const restored = moveMobileMessageDraft({
+    drafts: restarted,
+    knownHosts: ['host'],
+    hostId: 'host',
+    key,
+    scope,
+    expectedRevision: 1,
+    expectedActive: mobileMessageDraft(restarted, key),
+    command: { kind: 'restore', id: 'saved', itemRevision: 1, at: 2 },
+  })
+  assert.deepEqual(mobileMessageDraft(restored.drafts, key).workspace.branch, branch)
+  const corrupt = drafts()
+  corrupt[`${key}:workspace`] = JSON.stringify({
+    version: 1,
+    mode: 'worktree',
+    branch: { ...branch, intent: { ...branch.intent, prompt: 'x'.repeat(6001) } },
+  })
+  assert.throws(() => save(corrupt), /invalid/)
+})

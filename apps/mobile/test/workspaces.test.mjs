@@ -101,3 +101,39 @@ test('workspace draft sidecars preserve default, manual and reused provenance wi
   ])
     assert.deepEqual(readWorkspaceChoice(text), { mode: null })
 })
+
+test('a queued reviewed base is delivered unchanged without asking for a replacement plan', async () => {
+  const reviewed = [
+    {
+      repoId: 'repo',
+      repoName: 'Repo',
+      baseRef: 'main',
+      baseOid: 'old-base',
+      taskBranch: 'mine/login',
+      path: '/work/login',
+    },
+  ]
+  const input = workspaceCreation({
+    ...pending,
+    workspaceId: undefined,
+    branchChoice: { name: 'mine/login', source: 'manual' },
+  })
+  const persisted = JSON.parse(JSON.stringify({ input, reviewed }))
+  await assert.rejects(
+    createWorkspaceTask(
+      persisted.input,
+      async () => {
+        throw new Error('must not replace reviewed commits')
+      },
+      async (input, plan) => {
+        assert.equal(input.branchChoice.name, 'mine/login')
+        assert.equal(plan[0].baseOid, 'old-base')
+        throw new Error('Repository HEAD changed since preview')
+      },
+      persisted.reviewed,
+    ),
+    /HEAD changed/,
+  )
+  const reuse = workspaceCreation({ ...pending, branchChoice: { name: 'ignored', source: 'manual' } })
+  assert.equal(reuse.branchChoice, undefined)
+})

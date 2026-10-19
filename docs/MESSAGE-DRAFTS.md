@@ -4,11 +4,17 @@ Mobile **Add to message → Save draft** puts the current unsent message aside a
 
 These actions do not send, queue, steer, create a thread or workspace, or resume an agent. They work with an offline host. They do not change the selected provider or model. Active automatic drafts remain separate from explicit saves.
 
-Quotes and inline references keep their original text. File context keeps repository identity, captured content, selections and diff metadata; mobile short mentions keep their expansion sidecars. A context preview shows up to 4000 characters per file, while restoring retains the full captured content. New-thread saves retain default/manual checkout choice or the selected existing workspace. Restoring changes the displayed choice, and normal creation revalidates the workspace on its host.
+Quotes and inline references keep their original text. File context keeps repository identity, captured content, selections and diff metadata; mobile short mentions keep their expansion sidecars. A context preview shows up to 4000 characters per file, while restoring retains the full captured content. New-thread saves retain default/manual checkout choice or the selected existing workspace, plus optional branch candidates and their bounded naming request. Restoring changes the displayed choice, and normal creation revalidates the workspace on its host.
 
 From the host-wide list, **Open original composer** opens the source thread or new-thread composer. If the original project/thread no longer exists, the saved text and captured context remain readable. Moving a save into another scope, hardware-keyboard shortcuts, desktop saved-draft controls and physical-device acceptance remain in [the active plan](MESSAGE-DRAFTS-PLAN.md).
 
 ## Storage and recovery
+
+Desktop active text drafts retain a writer identity and edit revision with each autosave. A successful Send, Queue or Aside acknowledgement consumes its exact text snapshot. Timers, page-close flushes and workspace checkpoints cannot write that snapshot back afterward. New edits, edits returned to identical text, another host/scope and a newer autosave from another window remain intact. Failed local cleanup produces a notice without retrying delivery.
+
+Desktop active new-thread workspace metadata also retains optional branch candidates and their naming request by host/project. Manual edits stay editable after prompt changes; generated candidates require the original prompt/title/settings. Storage retry keeps the complete choice in memory, and send cleanup preserves a newer naming edit.
+
+Rejected submissions retain pinned file context. A late acknowledgement clears pins only when their host, scope and list are unchanged; a failure from an old host does not replace the new composer's error state. A file-only new-thread message uses the file's name for its initial title. Desktop explicit saved-draft controls and complete attachment/context snapshots remain in the active plan.
 
 The saved library is device-local and keyed by stable host identity. A host's IDs never identify another host's saved work. Offline-created threads retain their stable device identity when a host task ID arrives, so their saved messages stay associated with the same composer. Each library is versioned and uses optimistic revisions; a delayed confirmation cannot overwrite a newer composer or consume a different save. Saving and restoring persist the complete library and active message before the visible composer changes. Failed writes keep the current message and saved source available. Pending uploads block moves, and late upload callbacks remain bound to their original host/composer and draft move revision.
 

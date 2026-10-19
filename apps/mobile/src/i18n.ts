@@ -1,6 +1,32 @@
 import { useStore } from './runtime/store'
 
 const en = {
+  branchKeepBases: 'Keep these base commits',
+  branchBasesKept: 'Reviewed base commits will be checked before creation.',
+  branchClearBases: 'Clear',
+  branchReviewBases: 'Review changed base commits',
+  branchReviewHint:
+    'The host rejected creation because a reviewed base changed. Review the new commits before retrying. Your message and naming choices stay the same.',
+  branchRetryBases: 'Use these commits and retry',
+  branchReviewLoading: 'Loading current base commits…',
+
+  branchName: 'Branch name',
+  branchNameAutomatic: 'Automatic branch name',
+  branchNameInvalid: 'Enter a valid Git branch name.',
+  branchNameGenerate: 'Generate name',
+  branchNamePreview: 'Preview worktrees',
+  branchNameOutdated: 'Update this host to use branch naming controls.',
+  branchNameFallback: 'Generation used a fallback name. You can edit it.',
+  branchNameOffline: 'Connect to generate a name or preview worktrees. Manual edits stay on this device.',
+  branchNameProvisional:
+    'Provisional preview. Keep these base commits to require them at creation. Names and paths may change to avoid collisions.',
+
+  renameWorkspace: 'Rename workspace',
+  workspaceName: 'Workspace name',
+  workspaceNameHint: 'Used by every thread sharing this workspace.',
+  workspaceRenameOutdated: 'Update this host to rename workspace labels.',
+  workspaceRenameOffline: 'Connect to this host to rename the workspace.',
+  workspaceRenameConflict: 'Workspace name changed elsewhere. Reopen the name editor to review it.',
   savedContextPreviewTruncated: 'Preview shows the first 4000 characters. Restore keeps the full captured context.',
   forgetHostDraftHint:
     'Removes phone credentials, active and saved drafts, and the outbox. Uploaded attachments and agents remain on this host. Revoke the old device there to invalidate its token.',
@@ -283,6 +309,33 @@ const en = {
 }
 
 const id: typeof en = {
+  branchKeepBases: 'Pertahankan commit dasar ini',
+  branchBasesKept: 'Commit dasar yang ditinjau akan diperiksa sebelum pembuatan.',
+  branchClearBases: 'Hapus',
+  branchReviewBases: 'Tinjau commit dasar yang berubah',
+  branchReviewHint:
+    'Host menolak pembuatan karena commit dasar yang ditinjau berubah. Tinjau commit baru sebelum mencoba lagi. Pesan dan pilihan nama Anda tetap sama.',
+  branchRetryBases: 'Pakai commit ini dan coba lagi',
+  branchReviewLoading: 'Memuat commit dasar saat ini…',
+
+  branchName: 'Nama branch',
+  branchNameAutomatic: 'Nama branch otomatis',
+  branchNameInvalid: 'Masukkan nama branch Git yang valid.',
+  branchNameGenerate: 'Buat nama',
+  branchNamePreview: 'Pratinjau worktree',
+  branchNameOutdated: 'Perbarui host ini untuk memakai kontrol penamaan branch.',
+  branchNameFallback: 'Pembuatan nama memakai nama cadangan. Anda dapat mengeditnya.',
+  branchNameOffline:
+    'Hubungkan untuk membuat nama atau melihat pratinjau worktree. Edit manual tetap di perangkat ini.',
+  branchNameProvisional:
+    'Pratinjau sementara. Pertahankan commit dasar ini agar diwajibkan saat pembuatan. Nama dan jalur dapat berubah untuk menghindari benturan.',
+
+  renameWorkspace: 'Ubah nama workspace',
+  workspaceName: 'Nama workspace',
+  workspaceNameHint: 'Dipakai oleh setiap thread yang berbagi workspace ini.',
+  workspaceRenameOutdated: 'Perbarui host ini untuk mengubah label workspace.',
+  workspaceRenameOffline: 'Hubungkan ke host ini untuk mengubah nama workspace.',
+  workspaceRenameConflict: 'Nama workspace diubah dari tempat lain. Buka kembali editor nama untuk meninjaunya.',
   savedContextPreviewTruncated:
     'Pratinjau menampilkan 4000 karakter pertama. Pemulihan mempertahankan seluruh konteks yang direkam.',
   forgetHostDraftHint:

@@ -211,7 +211,8 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
           files: await git.stagedSummary(cwd),
         }))
         const prefs = storedPreferences()
-        const style = prefs.commitStyle ?? DEFAULT_APP_PREFERENCES.commitStyle
+        const config = workspace.projectConfiguration(workspace.projectIdOf(t)).config.commit
+        const style = config?.commitStyle ?? prefs.commitStyle ?? DEFAULT_APP_PREFERENCES.commitStyle
         const recentSubjects =
           style === 'repository'
             ? (await git.history(cwd).catch(() => [])).slice(0, 20).map((commit) => commit.subject)
@@ -234,7 +235,7 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
                 serviceTier: undefined,
               }
             : settings,
-          { style, instructions: prefs.commitInstructions ?? '', recentSubjects },
+          { style, instructions: config?.commitInstructions ?? prefs.commitInstructions ?? '', recentSubjects },
           files,
           includeBranch,
         )

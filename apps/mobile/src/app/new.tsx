@@ -1,15 +1,26 @@
+import type { WorktreePlanEntry } from '@ramu/shared/types'
 import type { RamuMethods } from '@ramu/shared/api'
-import { resolveCheckoutMode } from '@ramu/shared/workspaceDefaults'
+import { currentBranchChoice, validBranchName, resolveCheckoutMode } from '@ramu/shared/workspaceDefaults'
 import { projectWorkspaces } from '@ramu/shared/workspace/explorer'
 import { readWorkspaceChoice, type WorkspaceChoice } from '../runtime/workspaces'
 import { useWorkspaces } from '../runtime/useWorkspaces'
 import { isMethodMissing } from '../runtime/goalVerify'
 import { newComposerKey } from '../runtime/composerDrafts'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, ChevronDown, Folder, FolderGit2, GitBranch, MessageCircle, Monitor, Files } from 'lucide-react-native'
+import {
+  Check,
+  ChevronDown,
+  Folder,
+  FolderGit2,
+  GitBranch,
+  MessageCircle,
+  Monitor,
+  Files,
+  Pencil,
+} from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { STANDALONE } from '../runtime/types'
@@ -19,6 +30,8 @@ import { useKeyboardInset } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
 import { Composer, type ModelChoice } from '../components/Composer'
 import { Row, Sheet, T, tap } from '../components/ui'
+import { BranchNameControls } from '../components/BranchNameControls'
+import { WorkspaceNameSheet } from '../components/WorkspaceNameSheet'
 
 function TrayButton({
   icon: I,
@@ -64,6 +77,8 @@ export default function NewChat() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const store = useStore()
+  const storeRef = useRef(store)
+  storeRef.current = store
   const { projects, computers, createChat, isOnline } = store
   const params = useLocalSearchParams<{ project?: string; quote?: string; computer?: string; draftContext?: string }>()
   const [selected, setHost] = useState(params.computer ?? store.selected)
@@ -71,6 +86,8 @@ export default function NewChat() {
   const list = projects.filter((p) => p.computerId === selected)
   // A chat runs in a project's folders, so the project is chosen first rather than defaulted.
   const [projectId, setProjectId] = useState<string | null>(params.project ?? null)
+  const activeScope = useRef({ host: selected, project: projectId })
+  activeScope.current = { host: selected, project: projectId }
   const draftContext = params.computer === selected && params.project === projectId ? params.draftContext : undefined
   const composerKey = newComposerKey(selected, projectId, draftContext)
   const choiceKey = `${composerKey}:workspace`
@@ -83,6 +100,16 @@ export default function NewChat() {
   const catalog = useWorkspaces(selected, !!projectId && projectId !== STANDALONE)
   const workspaces = projectId && projectId !== STANDALONE ? projectWorkspaces(selected, projectId, catalog.rows) : []
   const existingWorkspace = workspaces.find((workspace) => workspace.id === workspaceId)
+  const [renamingWorkspace, setRenamingWorkspace] = useState<{
+    host: string
+    project: string | null
+    workspace: { id: string; name: string }
+  } | null>(null)
+  useEffect(() => {
+    setRenamingWorkspace((current) =>
+      current && (current.host !== selected || current.project !== projectId) ? null : current,
+    )
+  }, [selected, projectId])
   const optionsKey = JSON.stringify([selected, projectId])
   const [optionsState, setOptionsState] = useState<{
     key: string
@@ -95,28 +122,40 @@ export default function NewChat() {
   const workspaceDefaults = store.appPreferences[selected]
   useEffect(() => {
     let current = true
-    setOptionsState({ key: optionsKey, value: null, error: '' })
-    if (projectId && projectId !== STANDALONE && !offline)
-      void store.invoke(selected, 'tasks.workspaceOptions', projectId.slice(projectId.indexOf(':') + 1)).then(
-        (value) => {
-          if (current) setOptionsState({ key: optionsKey, value, error: '' })
-        },
-        (error) => {
-          if (current)
-            setOptionsState({
-              key: optionsKey,
-              value: null,
-              error: String(error instanceof Error ? error.message : error),
-              unsupported: isMethodMissing(error),
-            })
-        },
-      )
+    let generation = 0
+    setOptionsState((current) => (current.key === optionsKey ? current : { key: optionsKey, value: null, error: '' }))
+    if (!projectId || projectId === STANDALONE || offline) return
+    const read = () => {
+      const request = ++generation
+      void storeRef.current
+        .invoke(selected, 'tasks.workspaceOptions', projectId.slice(projectId.indexOf(':') + 1))
+        .then(
+          (value) => {
+            if (current && request === generation) setOptionsState({ key: optionsKey, value, error: '' })
+          },
+          (error) => {
+            if (current && request === generation)
+              setOptionsState({
+                key: optionsKey,
+                value: null,
+                error: String(error instanceof Error ? error.message : error),
+                unsupported: isMethodMissing(error),
+              })
+          },
+        )
+    }
+    read()
+    const off = storeRef.current.subscribe(selected, (channel) => {
+      if (channel === 'workspace:changed' || channel === 'settings:changed') read()
+    })
     return () => {
       current = false
+      off()
     }
   }, [
     selected,
     projectId,
+    optionsKey,
     offline,
     workspaceDefaults?.defaultCheckoutMode,
     workspaceDefaults?.worktreeBranchNaming,
@@ -132,6 +171,17 @@ export default function NewChat() {
     worktreeUnavailable: workspaceOptions?.worktreeUnavailable,
   })
   const mode = resolution.mode
+  const draftText = store.drafts[composerKey] ?? ''
+  const branchTitle = draftText.split('\n')[0]!.slice(0, 60) || 'Discuss attachments'
+  const namingIntent = {
+    strategy: workspaceOptions?.branchNaming ?? workspaceDefaults?.worktreeBranchNaming ?? 'fixed',
+    instructions: workspaceOptions?.branchInstructions ?? workspaceDefaults?.worktreeBranchInstructions ?? '',
+    prompt: draftText.slice(0, 6000),
+  }
+  const branchPrefix = workspaceOptions?.branchPrefix ?? workspaceDefaults?.worktreeBranchPrefix ?? 'ramu/'
+  const branchChoice = currentBranchChoice(choice.branch, branchTitle, namingIntent)
+  const reviewKey = JSON.stringify([selected, projectId, branchTitle, namingIntent, branchPrefix, branchChoice])
+  const [reviewed, setReviewed] = useState<{ key: string; plan: WorktreePlanEntry[] } | null>(null)
   const [picker, setPicker] = useState<'project' | 'mode' | 'host' | null>(null)
   // Starts on the computer's default model step (Settings › Models), like the desktop; a pick here overrides it.
   const [picked, setModel] = useState<ModelChoice | null>(null)
@@ -282,22 +332,39 @@ export default function NewChat() {
               if (resolution.blocked) throw new Error(resolution.reason ?? 'Worktree unavailable')
               if (!offline && !workspaceId && projectId !== STANDALONE && !workspaceOptions && manualMode !== 'current')
                 throw new Error(optionsError ? t.workspaceSettingsFailed : t.loadingWorkspaces)
+              const sendIntent = { ...namingIntent, prompt: text.slice(0, 6000) }
+              const sendChoice = currentBranchChoice(
+                choice.branch,
+                text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments',
+                sendIntent,
+              )
+              if (mode === 'worktree' && !workspaceId && sendChoice && !validBranchName(sendChoice.name)) {
+                setPicker('mode')
+                throw new Error(t.branchNameInvalid)
+              }
+              if (mode === 'worktree' && !workspaceId && sendChoice && !workspaceOptions?.branchNameControls)
+                throw new Error(t.branchNameOutdated)
               const id = await createChat({
                 computerId: selected,
                 projectId,
                 text,
                 mode,
                 workspaceId,
-                branchNaming: {
-                  strategy:
-                    workspaceOptions?.branchNaming ?? store.appPreferences[selected]?.worktreeBranchNaming ?? 'fixed',
-                  instructions:
-                    workspaceOptions?.branchInstructions ??
-                    store.appPreferences[selected]?.worktreeBranchInstructions ??
-                    '',
-                  prompt: text.slice(0, 6000),
-                },
-                branchPrefix: workspaceOptions?.branchPrefix ?? store.appPreferences[selected]?.worktreeBranchPrefix,
+                branchNaming: sendIntent,
+                branchChoice: sendChoice,
+                reviewedPlan:
+                  reviewed?.key ===
+                  JSON.stringify([
+                    selected,
+                    projectId,
+                    text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments',
+                    sendIntent,
+                    branchPrefix,
+                    sendChoice,
+                  ])
+                    ? reviewed.plan
+                    : undefined,
+                branchPrefix,
                 attachments,
                 context,
                 ...model,
@@ -380,9 +447,11 @@ export default function NewChat() {
       </Sheet>
 
       <Sheet open={picker === 'mode'} onClose={() => setPicker(null)} title="Workspace">
+        {workspaceOptions?.configSource ? <T tone="muted">{workspaceOptions.configSource}</T> : null}
+        {workspaceOptions?.configError ? <T tone="bad">{workspaceOptions.configError}</T> : null}
         <Row
           onPress={() => {
-            chooseWorkspace({ mode: null })
+            chooseWorkspace({ mode: null, branch: choice.branch })
             setPicker(null)
           }}
         >
@@ -404,7 +473,7 @@ export default function NewChat() {
           <Row
             key={value}
             onPress={() => {
-              chooseWorkspace({ mode: value })
+              chooseWorkspace({ mode: value, branch: choice.branch })
               setPicker(null)
             }}
           >
@@ -419,6 +488,41 @@ export default function NewChat() {
         ))}
         {optionsError ? (
           <T tone="muted">{optionsState.unsupported ? t.workspaceSettingsUnsupported : t.workspaceSettingsFailed}</T>
+        ) : null}
+        {mode === 'worktree' && !workspaceId && choice.branch && !workspaceOptions?.branchNameControls ? (
+          <Row onPress={() => chooseWorkspace({ ...choice, branch: undefined })}>
+            <T>{t.branchNameOutdated}</T>
+            <T tone="accent">{t.branchNameAutomatic}</T>
+          </Row>
+        ) : null}
+        {mode === 'worktree' && !workspaceId && reviewed?.key === reviewKey ? (
+          <Row onPress={() => setReviewed(null)}>
+            <T>{t.branchBasesKept}</T>
+            <T tone="accent">{t.branchClearBases}</T>
+          </Row>
+        ) : null}
+        {mode === 'worktree' &&
+        !workspaceId &&
+        workspaceOptions?.branchNameControls &&
+        picker === 'mode' &&
+        projectId ? (
+          <BranchNameControls
+            key={choiceKey}
+            host={selected}
+            projectId={projectId.slice(projectId.indexOf(':') + 1)}
+            title={branchTitle}
+            intent={namingIntent}
+            branchPrefix={branchPrefix}
+            choice={branchChoice}
+            online={!offline}
+            onReview={(plan) => setReviewed({ key: reviewKey, plan })}
+            onChange={(candidate) =>
+              chooseWorkspace({
+                ...choice,
+                branch: candidate ? { title: branchTitle, intent: namingIntent, choice: candidate } : undefined,
+              })
+            }
+          />
         ) : null}
         {catalog.loading ? <T tone="muted">{t.loadingWorkspaces}</T> : null}
         {catalog.error ? (
@@ -442,10 +546,53 @@ export default function NewChat() {
             {workspaceId === workspace.id ? <Check size={16} color={c.accent} /> : null}
           </Row>
         ))}
+        {existingWorkspace ? (
+          <Row
+            disabled={offline}
+            accessibilityState={{ disabled: offline }}
+            onPress={() => {
+              if (offline) return
+              setPicker(null)
+              setRenamingWorkspace({ host: selected, project: projectId, workspace: existingWorkspace })
+            }}
+          >
+            <Pencil size={17} color={c.soft} />
+            <T>{t.renameWorkspace}</T>
+          </Row>
+        ) : null}
         {workspaceId && !offline && !catalog.loading && !existingWorkspace ? (
           <T tone="bad">{t.workspaceUnavailable}</T>
         ) : null}
       </Sheet>
+      {renamingWorkspace?.host === selected && renamingWorkspace.project === projectId ? (
+        <WorkspaceNameSheet
+          key={`${selected}:${renamingWorkspace.workspace.id}`}
+          workspace={renamingWorkspace.workspace}
+          online={!offline}
+          onSave={async (name, before) => {
+            await store.invoke(
+              renamingWorkspace.host,
+              'workspaces.rename',
+              renamingWorkspace.workspace.id,
+              name,
+              before,
+            )
+            if (
+              activeScope.current.host === renamingWorkspace.host &&
+              activeScope.current.project === renamingWorkspace.project
+            )
+              catalog.refresh()
+          }}
+          onClose={() => {
+            setRenamingWorkspace((current) => (current === renamingWorkspace ? null : current))
+            if (
+              activeScope.current.host === renamingWorkspace.host &&
+              activeScope.current.project === renamingWorkspace.project
+            )
+              setPicker('mode')
+          }}
+        />
+      ) : null}
     </Screen>
   )
 }

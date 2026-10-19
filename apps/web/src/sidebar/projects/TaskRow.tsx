@@ -16,7 +16,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Task } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
 import { copyText } from '../../ipc'
@@ -26,6 +26,7 @@ import { notifyError } from '../../chat/Notifications'
 import { useRowStore } from '../../workspace/workspace'
 import { FadeText } from '../../FadeText'
 import { useModelSets } from '../../models/ModelSets'
+import { WorkspaceNameDialog } from '../../workspace/WorkspaceNameDialog'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS } from './constants'
 import { InlineEdit } from './InlineEdit'
 import { TaskStateIcon } from './TaskStateIcon'
@@ -68,6 +69,17 @@ export function TaskRow({
     else if (!unavailable) select(host.id, { kind: 'task', taskId: task.id })
   }
   const [renaming, setRenaming] = useState(false)
+  const [renamingWorkspace, setRenamingWorkspace] = useState<{
+    host: string
+    openedOn: string
+    workspace: { id: string; name: string }
+  } | null>(null)
+  useEffect(() => {
+    setRenamingWorkspace((current) =>
+      current && (current.host !== host.id || current.openedOn !== activeHost) ? null : current,
+    )
+  }, [host.id, activeHost])
+  const workspace = task.workspaceId ? ws?.workspaces?.find((entry) => entry.id === task.workspaceId) : undefined
   const [deleting, setDeleting] = useState(false)
   const sharedWorktree =
     !!task.workspaceId && (ws?.tasks ?? []).some((t) => t.id !== task.id && t.workspaceId === task.workspaceId)
@@ -115,6 +127,16 @@ export function TaskRow({
       ),
       onSelect: () => void run(() => host.invoke('tasks.pin', task.id, !task.pinnedAt)),
     },
+    ...(workspace
+      ? [
+          {
+            key: 'rename-workspace',
+            label: t('Rename workspace…'),
+            disabled: unavailable || host.status !== 'connected',
+            onSelect: () => setRenamingWorkspace({ host: host.id, openedOn: activeHost, workspace }),
+          },
+        ]
+      : []),
     {
       key: 'rename-ai',
       label: (
@@ -319,6 +341,18 @@ export function TaskRow({
         <TaskStateIcon task={task} unread={onScreen && !!ws?.unread.has(task.id)} />
       </div>
       {contextMenu.menu}
+      {renamingWorkspace?.host === host.id && renamingWorkspace.openedOn === activeHost && (
+        <WorkspaceNameDialog
+          key={`${host.id}:${renamingWorkspace.workspace.id}`}
+          workspace={renamingWorkspace.workspace}
+          online={host.status === 'connected'}
+          onSave={async (name, before) => {
+            await host.invoke('workspaces.rename', renamingWorkspace.workspace.id, name, before)
+            await refresh()
+          }}
+          onClose={() => setRenamingWorkspace((current) => (current === renamingWorkspace ? null : current))}
+        />
+      )}
       {error && !deleting && <div className={ROW_ERROR_CLASS}>{error}</div>}
       {deleting && (
         <Dialog

@@ -1,4 +1,4 @@
-import type { BranchNamingIntent } from '@ramu/shared/workspaceDefaults'
+import type { BranchNamingIntent, BranchChoice } from '@ramu/shared/workspaceDefaults'
 import { normalizeHelperGroups } from './threadActivity'
 import { isCompacting } from '@ramu/shared/chat/compaction'
 import { newChatHost } from './newChatHost'
@@ -32,6 +32,7 @@ import type {
   AgentSettings,
   AppPreferences,
   FileContext,
+  WorktreePlanEntry,
   ProviderCatalog,
   UsageReading,
 } from '@ramu/shared/types'
@@ -53,13 +54,15 @@ export interface OutboxItem {
   text: string
   mode: 'send' | 'queue' | 'steer'
   createdAt: number
-  state?: 'waiting' | 'sending' | 'uncertain'
+  state?: 'waiting' | 'sending' | 'uncertain' | 'review'
   error?: string
   settings?: AgentSettings
   projectId?: string
   checkout?: 'current' | 'worktree'
   workspaceId?: string
   branchNaming?: BranchNamingIntent
+  branchChoice?: BranchChoice
+  reviewedPlan?: WorktreePlanEntry[]
   branchPrefix?: string
   attachments?: string[]
   context?: FileContext[]
@@ -109,11 +112,15 @@ interface Store extends State {
     mode: 'current' | 'worktree'
     workspaceId?: string
     branchNaming?: BranchNamingIntent
+    branchChoice?: BranchChoice
+    reviewedPlan?: WorktreePlanEntry[]
     branchPrefix?: string
     attachments?: string[]
     settings?: Pick<AgentSettings, 'access' | 'autoFallback' | 'serviceTier'>
     context?: FileContext[]
   }): Promise<string>
+  previewOutbox(id: string): Promise<WorktreePlanEntry[]>
+  resumeOutbox(id: string, plan: WorktreePlanEntry[]): Promise<void>
   cancelOutbox(id: string): string | undefined
   stop(id: string): void
   answer(id: string, request: string, answers: Record<string, string>): void
@@ -613,6 +620,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             workspaceId: item.workspaceId,
             branchPrefix: item.branchPrefix,
             branchNaming: item.branchNaming,
+            branchChoice: item.branchChoice,
             requestId: item.id,
           }),
           () =>
@@ -624,6 +632,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               repos.map((r) => r.id),
             ),
           (input, plan) => invoke(item.computerId, 'tasks.create', input, plan),
+          item.reviewedPlan,
         )
         taskId = task.id
         // Persist the host task immediately; if agent.start fails, it remains reviewable.
@@ -687,17 +696,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       while (ref.current.computers.find((c) => c.id === id)?.status === 'online') {
         const item = ref.current.outbox.find((o) => o.computerId === id)
-        if (!item || item.state === 'uncertain' || item.state === 'sending') break
+        if (!item || item.state === 'uncertain' || item.state === 'sending' || item.state === 'review') break
         change((s) => ({ ...s, outbox: s.outbox.map((o) => (o.id === item.id ? { ...o, state: 'sending' } : o)) }))
         try {
           writeLocal({ ...ref.current, ready: undefined, error: undefined, usage: undefined, catalogs: undefined })
           await deliver(item)
         } catch (error) {
+          // Only a confirmed pre-allocation rejection can approve new bases. An unknown outcome
+          // keeps its original request and plan until delivery is reconciled.
+          const review =
+            item.kind === 'chat' &&
+            !!item.reviewedPlan &&
+            error instanceof HostError &&
+            !error.ambiguous &&
+            error.message === 'Repository HEAD changed since preview. Review the worktree plan and try again.'
           change((s) => ({
             ...s,
             outbox: s.outbox.map((o) =>
               o.id === item.id
-                ? { ...o, state: 'uncertain', error: error instanceof Error ? error.message : String(error) }
+                ? {
+                    ...o,
+                    state: review ? 'review' : 'uncertain',
+                    error: error instanceof Error ? error.message : String(error),
+                  }
                 : o,
             ),
           }))
@@ -1069,6 +1090,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 }),
               }
             : undefined,
+        branchChoice:
+          input.mode === 'worktree' && !input.workspaceId && input.branchChoice ? { ...input.branchChoice } : undefined,
+        reviewedPlan:
+          input.mode === 'worktree' && !input.workspaceId
+            ? input.reviewedPlan?.map((entry) => ({ ...entry }))
+            : undefined,
         branchPrefix:
           input.mode === 'worktree' && !input.workspaceId
             ? (input.branchPrefix ?? appPreferences[computerId]?.worktreeBranchPrefix ?? 'ramu/')
@@ -1081,6 +1108,54 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       change((s) => ({ ...s, chats: [chat, ...s.chats], outbox: [...s.outbox, item] }))
       void flush(computerId)
       return id
+    },
+    previewOutbox: async (id) => {
+      const item = ref.current.outbox.find((o) => o.id === id)
+      if (
+        !item ||
+        item.state !== 'review' ||
+        !item.projectId ||
+        item.workspaceId ||
+        item.checkout !== 'worktree' ||
+        ref.current.chats.find((c) => c.id === item.chatId)?.taskId
+      )
+        throw new Error('This item is not awaiting base review')
+      const projectId = raw(item.projectId)
+      const options = await invoke(item.computerId, 'tasks.workspaceOptions', projectId)
+      if (!options.branchNameControls) throw new Error('Update this host to review worktree base commits.')
+      const repos = await invoke(item.computerId, 'repos.list', projectId)
+      return invoke(
+        item.computerId,
+        'tasks.plan',
+        projectId,
+        item.text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments',
+        repos.map((r) => r.id),
+        item.branchChoice,
+        { branchPrefix: item.branchPrefix ?? 'ramu/', strategy: item.branchNaming?.strategy ?? 'fixed' },
+      )
+    },
+    resumeOutbox: async (id, plan) => {
+      const item = ref.current.outbox.find((o) => o.id === id)
+      if (
+        !item ||
+        item.state !== 'review' ||
+        ref.current.chats.find((c) => c.id === item.chatId)?.taskId ||
+        !plan.length ||
+        plan.some((entry) => !entry.baseOid)
+      )
+        throw new Error('This item is not awaiting base review')
+      const next: State = {
+        ...ref.current,
+        outbox: ref.current.outbox.map((o) =>
+          o.id === id
+            ? { ...o, reviewedPlan: plan.map((entry) => ({ ...entry })), state: 'waiting', error: undefined }
+            : o,
+        ),
+      }
+      // Commit approval before changing visible state or retrying. Storage failure leaves review intact.
+      writeLocal({ ...next, ready: undefined, error: undefined, usage: undefined, catalogs: undefined })
+      change(() => next)
+      void flush(item.computerId)
     },
     cancelOutbox: (id) => {
       const item = ref.current.outbox.find((o) => o.id === id)

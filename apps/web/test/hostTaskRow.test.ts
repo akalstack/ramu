@@ -13,24 +13,32 @@ const state = vi.hoisted(() => ({
   select: vi.fn(),
   host: { id: 'remote', status: 'connected' as string },
   store: null as Record<string, unknown> | null,
+  menu: [] as { key?: string; disabled?: boolean }[],
 }))
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
   useState: (initial: unknown) => [initial, vi.fn()],
   useRef: (initial: unknown) => ({ current: initial }),
+  useEffect() {},
 }))
 vi.mock('../src/i18n', () => ({ useLanguage() {}, t: (text: string) => text }))
 vi.mock('../src/ipc', () => ({ invoke: state.ownInvoke, copyText: vi.fn() }))
 vi.mock('../src/workspace/computers', () => ({ useComputers: () => null }))
 vi.mock('../src/workspace/HostProvider', () => ({
-  useHost: () => ({ ...state.host, isLocal: false, invoke: state.hostInvoke }),
+  useHost: () => ({ ...state.host, isLocal: state.host.id === 'local', invoke: state.hostInvoke }),
 }))
 vi.mock('../src/workspace/HostSelection', () => ({
   useHostSelection: () => ({ activeHost: 'local', select: state.select }),
 }))
 vi.mock('../src/workspace/workspace', () => ({ useRowStore: () => state.store }))
 vi.mock('../src/models/ModelSets', () => ({ useModelSets: () => ({ initialSettings: DEFAULT_AGENT_SETTINGS }) }))
-vi.mock('../src/Menu', () => ({ useContextMenu: () => ({}), Dialog: () => null }))
+vi.mock('../src/Menu', () => ({
+  useContextMenu: (_name: string, items: typeof state.menu) => {
+    state.menu = items
+    return {}
+  },
+  Dialog: () => null,
+}))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: String }))
 vi.mock('../src/chat/Notifications', () => ({ notifyError: vi.fn() }))
 vi.mock('../src/sidebar/projects/TaskStateIcon', () => ({ TaskStateIcon: () => null }))
@@ -111,6 +119,22 @@ it('keeps offline rows visible and makes their actions unavailable', () => {
   expect(row.props['aria-disabled']).toBe(true)
   expect(elements(tree).find((node) => node.props['aria-label'] === 'Pin thread')!.props.disabled).toBe(true)
   expect(renderToStaticMarkup(tree)).toContain('Remote thread')
+})
+
+it('offers a shared-workspace rename only for a known workspace on its connected host', () => {
+  const isolated = { ...task, mode: 'worktree' as const, workspaceId: 'w' }
+  state.store = { ...remoteStore(), workspaces: [{ id: 'w', projectId: 'p', name: 'Shared checkout' }] }
+  TaskRow({ task: isolated })
+  expect(state.menu.find((entry) => entry.key === 'rename-workspace')?.disabled).toBe(false)
+  state.host.status = 'offline'
+  TaskRow({ task: isolated })
+  expect(state.menu.find((entry) => entry.key === 'rename-workspace')?.disabled).toBe(true)
+  state.host = { id: 'local', status: 'offline' }
+  TaskRow({ task: isolated })
+  expect(state.menu.find((entry) => entry.key === 'rename-workspace')?.disabled).toBe(true)
+  state.store = remoteStore()
+  TaskRow({ task: isolated })
+  expect(state.menu.find((entry) => entry.key === 'rename-workspace')).toBeUndefined()
 })
 
 it('shows last known rows of a host whose store has not loaded, without actions', () => {

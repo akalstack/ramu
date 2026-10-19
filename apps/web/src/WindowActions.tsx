@@ -18,7 +18,7 @@ import {
   SquareTerminal,
   Trash2,
 } from 'lucide-react'
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   DndContext,
   KeyboardSensor,
@@ -41,6 +41,8 @@ import { useHost } from './workspace/HostProvider'
 import { Menu, type MenuEntry } from './Menu'
 import { errorText } from './workspace/TaskPane'
 import { useWorkspace } from './workspace/workspace'
+import { PROJECT_ACTIONS_EVENT, useProjectActions } from './workspace/useProjectActions'
+export { useProjectActions } from './workspace/useProjectActions'
 import { hostStorageFor } from './hostStorage'
 
 /** Window-bar actions for the open chat, like T3 Code: saved project commands that run in a terminal. */
@@ -94,24 +96,6 @@ function SplitButton({
 }
 
 // ---- Project actions ----------------------------------------------------------------------------
-
-export const PROJECT_ACTIONS_EVENT = 'ramu:project-actions'
-
-/** The project's saved actions, refreshed whenever any window-bar control changes them. */
-export function useProjectActions(projectId?: string) {
-  const [actions, setActions] = useState<ProjectAction[]>([])
-  const { invoke } = useHost()
-  const load = useCallback(() => {
-    if (!projectId) return setActions([])
-    void invoke('projects.actions', projectId).then(setActions, () => setActions([]))
-  }, [projectId, invoke])
-  useEffect(() => {
-    load()
-    window.addEventListener(PROJECT_ACTIONS_EVENT, load)
-    return () => window.removeEventListener(PROJECT_ACTIONS_EVENT, load)
-  }, [load])
-  return actions
-}
 
 /** Opens a terminal at the chat's workspace and types the action's command into it. */
 export function runProjectAction(ws: ReturnType<typeof useWorkspace>, ctx: string, action: ProjectAction) {
@@ -183,6 +167,7 @@ function ActionsControl({ ctx, projectId }: { ctx: string; projectId: string }) 
                 <span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis grow flex-1 min-w-0 text-left">
                   {action.name}
                 </span>
+                {action.source && <span className="text-caption text-muted-foreground">{action.source}</span>}
                 {action.keys && <Kbd>{formatKeys(action.keys)}</Kbd>}
               </>
             ),
@@ -367,7 +352,7 @@ function ActionDialog({
                 variant="ghost"
                 type="button"
                 className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover danger-text"
-                disabled={busy}
+                disabled={busy || Boolean(action.source)}
                 onClick={() => void save(actions.filter((current) => current.id !== action.id))}
               >
                 {t('Delete')}
@@ -488,7 +473,10 @@ function ManageDialog({
               {actions.map((action, index) => (
                 <SortableActionRow key={action.id} id={action.id} busy={busy}>
                   <span className="flex-1 min-w-0 flex flex-col text-left">
-                    <span className="overflow-hidden text-ellipsis whitespace-nowrap">{action.name}</span>
+                    <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                      {action.name}
+                      {action.source ? ` · ${action.source}` : ''}
+                    </span>
                     <span
                       className="overflow-hidden text-ellipsis whitespace-nowrap font-mono text-caption text-muted-foreground"
                       title={action.command}
@@ -536,7 +524,7 @@ function ManageDialog({
                     type="button"
                     className="flex-none"
                     aria-label={t('Delete {0}', { '0': action.name })}
-                    disabled={busy}
+                    disabled={busy || Boolean(action.source)}
                     onClick={() => void save(actions.filter((current) => current.id !== action.id))}
                   >
                     <Trash2 size={14} />

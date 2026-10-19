@@ -1,4 +1,5 @@
 import { generateBranchName } from '../../workspace/branchNaming'
+import { projectActionSchema } from '../../workspace/projectConfig'
 import { z } from 'zod'
 import {
   DEFAULT_AGENT_SETTINGS,
@@ -24,12 +25,6 @@ const namingIntent = z.object({
 const branchChoice = z.object({
   name: z.string().min(1).max(160).refine(validBranchName),
   source: z.enum(['manual', 'generated', 'fallback']),
-})
-const projectAction = z.object({
-  id: z.string().min(1).max(64),
-  name: z.string().trim().min(1).max(60),
-  command: z.string().trim().min(1).max(4000),
-  keys: z.string().max(40).optional(),
 })
 const planSchema = z.array(
   z.object({
@@ -59,6 +54,34 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   threadTitles,
 }) => {
   const pendingNames = new Map<string, AbortController>()
+  const projectConfiguration = (projectId: string) => {
+    const result = workspace.projectConfiguration(projectId)
+    watchers.projectConfigs.ensure(
+      projectId,
+      workspace.listProjects().find((project) => project.id === projectId)?.root ?? null,
+    )
+    return result
+  }
+  const projectPreferences = (projectId: string) => {
+    const prefs = loadPreferences()
+    const { config } = projectConfiguration(projectId)
+    return {
+      ...prefs,
+      defaultCheckoutMode: config.workspace?.defaultCheckoutMode ?? prefs.defaultCheckoutMode,
+      worktreeBranchPrefix: config.workspace?.branchPrefix ?? prefs.worktreeBranchPrefix,
+      worktreeBranchNaming: config.workspace?.branchNaming ?? prefs.worktreeBranchNaming,
+      worktreeBranchInstructions: config.workspace?.branchInstructions ?? prefs.worktreeBranchInstructions,
+    }
+  }
+  const projectActions = (projectId: string): ProjectAction[] => {
+    const { config, source } = projectConfiguration(projectId)
+    const saved = workspace.getAppState<ProjectAction[]>(`project-actions:${projectId}`, [])
+    const overridden = new Set(saved.map((action) => action.id))
+    return [
+      ...(config.actions ?? []).filter((action) => !overridden.has(action.id)).map((action) => ({ ...action, source })),
+      ...saved,
+    ]
+  }
   const generate = (title: string, intent: BranchNamingIntent, signal?: AbortSignal) => {
     const prefs = loadPreferences()
     const models = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
@@ -115,26 +138,57 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       },
     },
     'workspaces.list': { args: z.tuple([]), run: () => workspace.listWorkspaces() },
+    'workspaces.rename': {
+      args: z.tuple([id, z.string().trim().min(1).max(200), z.string().max(200)]),
+      run: (workspaceId: string, name: string, before: string) =>
+        workspace.renameWorktreeWorkspace(workspaceId, name, before),
+    },
     'tasks.list': { args: z.tuple([]), run: () => workspace.listTasks() },
     'tasks.workspaceOptions': {
       args: z.tuple([id]),
-      run: async (projectId: string) => ({
-        defaultCheckoutMode: loadPreferences().defaultCheckoutMode,
-        branchPrefix: loadPreferences().worktreeBranchPrefix,
-        branchNaming: loadPreferences().worktreeBranchNaming,
-        branchInstructions: loadPreferences().worktreeBranchInstructions,
-        worktreeUnavailable: await workspace.worktreeUnavailable(projectId),
-      }),
+      run: async (projectId: string) => {
+        const prefs = projectPreferences(projectId)
+        const { source, error } = projectConfiguration(projectId)
+        return {
+          defaultCheckoutMode: prefs.defaultCheckoutMode,
+          branchPrefix: prefs.worktreeBranchPrefix,
+          branchNaming: prefs.worktreeBranchNaming,
+          branchInstructions: prefs.worktreeBranchInstructions,
+          branchNameControls: true,
+          configSource: source,
+          configError: error,
+          worktreeUnavailable: await workspace.worktreeUnavailable(projectId),
+        }
+      },
     },
     'tasks.plan': {
-      args: z.tuple([id, z.string().max(200), z.array(id).max(50), branchChoice.optional()]),
-      run: (projectId: string, title: string, repoIds: string[], choice?: BranchChoice) => {
-        const prefs = loadPreferences()
+      args: z.tuple([
+        id,
+        z.string().max(200),
+        z.array(id).max(50),
+        branchChoice.optional(),
+        z
+          .object({
+            branchPrefix: z.string().max(120).refine(validBranchPrefix),
+            strategy: z.enum(['fixed', 'semantic', 'custom']),
+          })
+          .optional(),
+      ]),
+      run: (
+        projectId: string,
+        title: string,
+        repoIds: string[],
+        choice?: BranchChoice,
+        naming?: { branchPrefix: string; strategy: BranchNamingIntent['strategy'] },
+      ) => {
+        const prefs = projectPreferences(projectId)
         return workspace.planWorktrees(
           projectId,
           title,
           repoIds,
-          prefs.worktreeBranchNaming === 'fixed' ? prefs.worktreeBranchPrefix : 'ramu/',
+          (naming?.strategy ?? prefs.worktreeBranchNaming) === 'fixed'
+            ? (naming?.branchPrefix ?? prefs.worktreeBranchPrefix)
+            : 'ramu/',
           choice,
         )
       },
@@ -177,7 +231,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         planSchema.optional(),
       ]),
       run: (input: Parameters<Workspace['createTask']>[0], plan?: Parameters<Workspace['createTask']>[1]) => {
-        const prefs = loadPreferences()
+        const prefs = projectPreferences(input.projectId)
         const intent = input.branchNaming ?? {
           strategy: prefs.worktreeBranchNaming,
           instructions: prefs.worktreeBranchInstructions,
@@ -246,14 +300,19 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     },
     'projects.actions': {
       args: z.tuple([id]),
-      run: (projectId: string) => workspace.getAppState<ProjectAction[]>(`project-actions:${projectId}`, []),
+      run: projectActions,
     },
     'projects.setActions': {
-      args: z.tuple([id, z.array(projectAction).max(30)]),
+      args: z.tuple([
+        id,
+        z.array(projectActionSchema.extend({ source: z.enum(['ramu.json', '.ramu/config.json']).optional() })).max(60),
+      ]),
       run: (projectId: string, actions: ProjectAction[]) => {
         if (!workspace.listProjects().some((p) => p.id === projectId)) throw new Error('Unknown project')
-        workspace.setAppState(`project-actions:${projectId}`, actions)
-        return actions
+        const local = actions.filter((action) => !action.source).map((action) => projectActionSchema.parse(action))
+        if (local.length > 30) throw new Error('A project can have at most 30 saved actions')
+        workspace.setAppState(`project-actions:${projectId}`, local)
+        return projectActions(projectId)
       },
     },
     'projects.reorder': {
@@ -264,7 +323,13 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       args: z.tuple([id, z.string().max(200)]),
       run: (p: string, name: string) => workspace.renameProject(p, name),
     },
-    'projects.remove': { args: z.tuple([id]), run: (p: string) => workspace.removeProject(p) },
+    'projects.remove': {
+      args: z.tuple([id]),
+      run: (p: string) => {
+        workspace.removeProject(p)
+        watchers.projectConfigs.retain(workspace.listProjects().map((project) => project.id))
+      },
+    },
     'repos.remove': { args: z.tuple([id]), run: (r: string) => workspace.removeRepository(r) },
     'tasks.setup': {
       args: z.tuple([id]),

@@ -59,6 +59,8 @@ The desktop has one shell renderer for every paired host. `HostSelectionProvider
 
 `index.ts` is the service entry point, `cli.ts` the CLI, `db.ts` the database, and `build.ts` the build fingerprint used to decide when a running service is stale.
 
+Host preferences and model sets live in `userData/settings.json` through `settings/settingsStore.ts`; SQLite retains operational state and the legacy migration archive. Existing workspace preference readers delegate to this store. `workspace/projectConfig.ts` reads bounded repository configuration without executing commands or expanding permissions. See [Configuration files](CONFIGURATION.md).
+
 ## Web layout (`apps/web/src`)
 
 | Folder | Contents |

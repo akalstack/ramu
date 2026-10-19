@@ -21,7 +21,14 @@ export function mobileMessageDraft(drafts: Record<string, string>, key: string):
       context: parse('context'),
       mentions: parse('mentions'),
       ...(workspace
-        ? { workspace: { mode: workspace.mode, workspaceId: workspace.workspaceId, name: workspace.name } }
+        ? {
+            workspace: {
+              mode: workspace.mode,
+              workspaceId: workspace.workspaceId,
+              name: workspace.name,
+              branch: workspace.branch,
+            },
+          }
         : {}),
     }
   } catch (error) {

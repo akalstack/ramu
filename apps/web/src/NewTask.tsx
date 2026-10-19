@@ -1,4 +1,5 @@
 import { BranchNameEditor } from './workspace/BranchNameEditor'
+import { WorkspaceNameDialog } from './workspace/WorkspaceNameDialog'
 import { t, useLanguage } from './i18n'
 import { clipText } from '@ramu/shared/text'
 import { useModelSets } from './models/ModelSets'
@@ -8,6 +9,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { useEffect, useRef, useState } from 'react'
 import {
   resolveCheckoutMode,
+  currentBranchChoice,
   validBranchName,
   type BranchChoice,
   type BranchNamingIntent,
@@ -21,6 +23,7 @@ import {
   type CheckoutMode,
   type IssueLink,
   type Repository,
+  type WorktreeWorkspace,
 } from '@ramu/shared/types'
 import { AgentControls } from './chat/AgentControls'
 import { Composer } from './composer/Composer'
@@ -30,10 +33,13 @@ import { ownHostId } from './hosts'
 import { Combobox, Menu } from './Menu'
 import { AnimatedMark } from './Brand'
 import { errorText } from './workspace/TaskPane'
-import { useWorkspace } from './workspace/workspace'
+import { useHostRuntime, useWorkspace } from './workspace/workspace'
 import { HomeFeed } from './Home'
 import { hostStorageFor } from './hostStorage'
-import { clearDraft, draftKey, draftStore, loadDraft, useDraftPersistence } from './composer/drafts'
+import { draftKey, draftStore, loadDraft, useDraftPersistence } from './composer/drafts'
+import { notifyError } from './chat/Notifications'
+import { useWorkspaceDraft } from './composer/useWorkspaceDraft'
+import { clearWorkspaceDraft } from './composer/workspaceDraft'
 import { useHost } from './workspace/HostProvider'
 import { useAddProject } from './workspace/addProject'
 import { useHostSelection } from './workspace/HostSelection'
@@ -216,6 +222,7 @@ export function NewTask({
   useLanguage()
   const ws = useWorkspace()
   const host = useHost()
+  const runtime = useHostRuntime()
   const addProject = useAddProject()
   const [folderOver, setFolderOver] = useState(false)
   const general = projectId === NO_PROJECT
@@ -233,8 +240,9 @@ export function NewTask({
       initialSettings.autoFallback,
     ],
   )
-  const [workspaceId, setWorkspaceId] = useState<string | null>(ws.composingWorkspace)
-  const [manualMode, setMode] = useState<CheckoutMode | null>(null)
+  const workspaceDraft = useWorkspaceDraft(host.id, projectId, general ? null : ws.composingWorkspace)
+  const workspaceId = general ? null : (workspaceDraft.choice.workspaceId ?? null)
+  const manualMode = general ? null : workspaceDraft.choice.mode
   const queryClient = useQueryClient()
   const optionsKey = ['workspace-options', host.id, projectId]
   const options = useQuery({
@@ -243,13 +251,18 @@ export function NewTask({
     retry: false,
     queryFn: () => host.invoke('tasks.workspaceOptions', projectId),
   })
-  useEffect(
-    () =>
-      ramu.on('settings:changed', () => {
-        void queryClient.invalidateQueries({ queryKey: ['workspace-options'] })
-      }),
-    [queryClient],
-  )
+  useEffect(() => {
+    const refresh = () => {
+      void queryClient.invalidateQueries({ queryKey: ['workspace-options', host.id, projectId], exact: true })
+    }
+    refresh()
+    const offSettings = runtime.on('settings:changed', refresh)
+    const offWorkspace = runtime.on('workspace:changed', refresh)
+    return () => {
+      offSettings()
+      offWorkspace()
+    }
+  }, [runtime, host.id, host.status, projectId, queryClient])
   const resolution = resolveCheckoutMode({
     defaultMode: options.data?.defaultCheckoutMode ?? 'current',
     manual: manualMode,
@@ -260,10 +273,16 @@ export function NewTask({
   const mode = resolution.mode
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [prompt, setPrompt] = useState(() => loadDraft(draftKey.newChat(projectId), draftStore(host.id)))
-  useDraftPersistence(draftKey.newChat(projectId), prompt, host.id)
+  const consumeDraft = useDraftPersistence(draftKey.newChat(projectId), prompt, host.id)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [issue, setIssue] = useState<IssueLink | null>(null)
+  const [renamingWorkspace, setRenamingWorkspace] = useState<{
+    host: string
+    project: string
+    openedOn: string
+    workspace: WorktreeWorkspace
+  } | null>(null)
   const issues = useProjectIssues(repos)
   const pickIssue = async (value: string) => {
     if (!value) return setIssue(null)
@@ -280,9 +299,6 @@ export function NewTask({
   }
 
   useEffect(() => {
-    const selected = ws.workspaces.find((w) => w.id === ws.composingWorkspace && w.projectId === projectId)?.id ?? null
-    setWorkspaceId(selected)
-    setMode(null)
     setPrompt(loadDraft(draftKey.newChat(projectId), draftStore(host.id)))
     setAttachments([])
     setError(null)
@@ -295,15 +311,9 @@ export function NewTask({
     instructions: options.data?.branchInstructions ?? '',
     prompt: prompt.slice(0, 6000),
   }
-  const branchScope = JSON.stringify([host.id, projectId])
-  const intentKey = JSON.stringify([namingIntent, title])
-  const [branchDraft, setBranchDraft] = useState<{ scope: string; intent: string; choice: BranchChoice } | null>(null)
   const branchChoice =
-    mode === 'worktree' &&
-    !workspaceId &&
-    branchDraft?.scope === branchScope &&
-    (branchDraft.choice.source === 'manual' || branchDraft.intent === intentKey)
-      ? branchDraft.choice
+    mode === 'worktree' && !workspaceId
+      ? currentBranchChoice(workspaceDraft.choice.branch, title, namingIntent)
       : undefined
   const existingWorkspace = ws.workspaces.find((w) => w.id === workspaceId && w.projectId === projectId)
 
@@ -311,18 +321,26 @@ export function NewTask({
   const sending = useRef(false)
   const creationRequest = useRef<{ fingerprint: string; id: string } | null>(null)
   const send = async (context: FileContext[] = []) => {
-    if (!title || (!general && !repos.length) || sending.current) return
+    if (sending.current) throw new Error(t('A message is already being sent.'))
+    if (!general && !repos.length) throw new Error(t('Add a repository to this project first'))
+    const messageTitle =
+      title ||
+      (context[0] ? titleFrom(t('Discuss {0}', { '0': context[0].path.split(/[\\/]/).pop() ?? context[0].path })) : '')
+    if (!messageTitle) throw new Error(t('Add a message or file before starting.'))
+    if (!general && !workspaceDraft.confirmed) {
+      throw new Error(t('Choose where to work before starting. The saved workspace choice could not be restored.'))
+    }
+    if (workspaceId && !existingWorkspace) {
+      throw new Error(t('Saved workspace is unavailable. Choose another workspace.'))
+    }
     if (!general && !options.data) {
-      setError(options.error ? errorText(options.error) : t('Loading workspace settings…'))
-      return
+      throw new Error(options.error ? errorText(options.error) : t('Loading workspace settings…'))
     }
     if (resolution.blocked) {
-      setError(resolution.reason)
-      return
+      throw new Error(resolution.reason ?? t('Workspace unavailable'))
     }
     if (branchChoice && !validBranchName(branchChoice.name)) {
-      setError(t('Invalid Git branch name'))
-      return
+      throw new Error(t('Invalid Git branch name'))
     }
     sending.current = true
     setError(null)
@@ -332,7 +350,7 @@ export function NewTask({
       const fingerprint = JSON.stringify([
         host.id,
         projectId,
-        title,
+        messageTitle,
         prompt,
         mode,
         workspaceId,
@@ -345,7 +363,7 @@ export function NewTask({
         creationRequest.current = { fingerprint, id: crypto.randomUUID() }
       const task = await host.invoke('tasks.create', {
         projectId,
-        title,
+        title: messageTitle,
         mode,
         workspaceId: workspaceId ?? undefined,
         branchPrefix: options.data?.branchPrefix,
@@ -361,7 +379,7 @@ export function NewTask({
         created = null
         creationRequest.current = null
         ws.openTask(task.id)
-        return
+        throw new Error(t('Worktree setup did not finish. Your message has not been sent.'))
       }
       const session = await host.invoke(
         'agent.start',
@@ -377,7 +395,8 @@ export function NewTask({
       // The link lets this chat's pull request close the issue; losing it only loses that line.
       if (issue) void host.invoke('forge.linkIssue', task.id, issue).catch(() => {})
       setIssue(null)
-      clearDraft(draftKey.newChat(projectId), draftStore(host.id))
+      if (!consumeDraft().persisted) notifyError(t('Message sent, but the local draft could not be cleared.'), 'Draft')
+      clearWorkspaceDraft(projectId, draftStore(host.id), workspaceDraft.choice)
       ws.openTask(task.id)
       ws.openView(task.id, { kind: 'agent', sessionId: session.id })
       void ws.refresh()
@@ -392,7 +411,7 @@ export function NewTask({
         )
         await ws.refresh().catch(() => {})
       }
-      setError(errorText(e))
+      throw e
     } finally {
       sending.current = false
       setBusy(false)
@@ -405,6 +424,13 @@ export function NewTask({
   ]
   const computers = useComputers()
   const { activeHost, select } = useHostSelection()
+  useEffect(() => {
+    setRenamingWorkspace((current) =>
+      current && (current.host !== host.id || current.project !== projectId || current.openedOn !== activeHost)
+        ? null
+        : current,
+    )
+  }, [host.id, projectId, activeHost])
   const currentComputer = computers?.computers.find((c) => c.id === activeHost)
   // Switching hosts opens New thread on that host's projects, so the chat starts there.
   const computerItems = (computers?.computers ?? []).map((c) => ({
@@ -423,7 +449,9 @@ export function NewTask({
   }))
   const current = existingWorkspace
     ? { label: existingWorkspace.name, Icon: GitBranch }
-    : MODES.find((m) => m.id === mode)!
+    : workspaceId
+      ? { label: workspaceDraft.choice.name ?? t('Workspace unavailable'), Icon: GitBranch }
+      : MODES.find((m) => m.id === mode)!
 
   const start = (
     <div className="start-view flex-1 flex flex-col min-h-0 min-w-0">
@@ -463,11 +491,30 @@ export function NewTask({
         )}
       </div>
       <div className="start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
+        {!general && workspaceDraft.problem && (
+          <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
+            {workspaceDraft.confirmed
+              ? t('Workspace choice is kept for this session but could not be saved.')
+              : t('Choose where to work before starting. The saved workspace choice could not be restored.')}
+            {workspaceDraft.confirmed && (
+              <Button variant="ghost" size="xs" onClick={workspaceDraft.retry}>
+                {t('Retry')}
+              </Button>
+            )}
+          </p>
+        )}
+        {workspaceId && !existingWorkspace && (
+          <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
+            {t('Saved workspace is unavailable. Choose another workspace.')}
+          </p>
+        )}
         {!general && !workspaceId && (
           <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
             {options.data
               ? `${t('Default')}: ${t(options.data.defaultCheckoutMode === 'worktree' ? 'New worktree' : 'Current checkout')}${resolution.reason ? ` · ${t('Using current checkout')} — ${resolution.reason}` : ''}`
               : t('Loading workspace settings…')}
+            {options.data?.configSource && ` · ${options.data.configSource}`}
+            {options.data?.configError && ` · ${t(options.data.configError)}`}
           </p>
         )}
         {!general && mode === 'worktree' && !workspaceId && (
@@ -481,13 +528,18 @@ export function NewTask({
           >
             {options.data?.branchNaming !== undefined && (
               <BranchNameEditor
-                key={branchScope}
+                key={JSON.stringify([host.id, projectId])}
                 projectId={projectId}
                 title={title}
                 intent={namingIntent}
                 choice={branchChoice}
                 busy={busy}
-                onChange={(choice) => setBranchDraft(choice ? { scope: branchScope, intent: intentKey, choice } : null)}
+                onChange={(choice) =>
+                  workspaceDraft.choose({
+                    ...workspaceDraft.choice,
+                    branch: choice ? { title, intent: namingIntent, choice } : undefined,
+                  })
+                }
               />
             )}
           </NewWorktreeSummary>
@@ -532,8 +584,7 @@ export function NewTask({
                     key: 'default',
                     label: t('Use default'),
                     onSelect: () => {
-                      setWorkspaceId(null)
-                      setMode(null)
+                      workspaceDraft.choose({ mode: null, branch: workspaceDraft.choice.branch })
                     },
                   },
                   ...MODES.map((m) => ({
@@ -549,8 +600,7 @@ export function NewTask({
                       </>
                     ),
                     onSelect: () => {
-                      setWorkspaceId(null)
-                      setMode(m.id)
+                      workspaceDraft.choose({ mode: m.id, branch: workspaceDraft.choice.branch })
                     },
                   })),
                   ...ws.workspaces
@@ -569,10 +619,25 @@ export function NewTask({
                         </>
                       ),
                       onSelect: () => {
-                        setWorkspaceId(w.id)
-                        setMode('worktree')
+                        workspaceDraft.choose({ mode: 'worktree', workspaceId: w.id, name: w.name })
                       },
                     })),
+                  ...(existingWorkspace
+                    ? [
+                        {
+                          key: 'rename-workspace',
+                          label: t('Rename workspace…'),
+                          disabled: busy || host.status !== 'connected',
+                          onSelect: () =>
+                            setRenamingWorkspace({
+                              host: host.id,
+                              project: projectId,
+                              openedOn: activeHost,
+                              workspace: existingWorkspace,
+                            }),
+                        },
+                      ]
+                    : []),
                 ]}
               />
             )}
@@ -624,6 +689,20 @@ export function NewTask({
           submitLabel={t('Start thread')}
         />
         {error && <div className="error text-bad start-error p-[6px_8px_0] text-control">{error}</div>}
+        {renamingWorkspace?.host === host.id &&
+          renamingWorkspace.project === projectId &&
+          renamingWorkspace.openedOn === activeHost && (
+            <WorkspaceNameDialog
+              key={`${host.id}:${renamingWorkspace.workspace.id}`}
+              workspace={renamingWorkspace.workspace}
+              online={host.status === 'connected'}
+              onSave={async (name, before) => {
+                await host.invoke('workspaces.rename', renamingWorkspace.workspace.id, name, before)
+                await ws.refresh()
+              }}
+              onClose={() => setRenamingWorkspace((current) => (current === renamingWorkspace ? null : current))}
+            />
+          )}
       </div>
     </div>
   )

@@ -1,5 +1,6 @@
 import type { CreateTaskInput, WorktreePlanEntry } from '@ramu/shared/types'
-import type { BranchNamingIntent } from '@ramu/shared/workspaceDefaults'
+import type { BranchNamingIntent, BranchChoice } from '@ramu/shared/workspaceDefaults'
+export { readWorkspaceChoice, type WorkspaceChoice } from '@ramu/shared/workspaceDefaults'
 
 /** Freeze the selected checkout in the outbox; delivery must never substitute a new worktree. */
 export function workspaceCreation(input: {
@@ -10,6 +11,7 @@ export function workspaceCreation(input: {
   workspaceId?: string
   branchPrefix?: string
   branchNaming?: BranchNamingIntent
+  branchChoice?: BranchChoice
 }): CreateTaskInput {
   if (input.workspaceId && input.checkout !== 'worktree')
     throw new Error('An existing workspace requires worktree mode')
@@ -21,6 +23,7 @@ export function workspaceCreation(input: {
     workspaceId: input.workspaceId,
     branchPrefix: input.workspaceId ? undefined : input.branchPrefix,
     branchNaming: input.workspaceId ? undefined : input.branchNaming,
+    branchChoice: input.workspaceId ? undefined : input.branchChoice,
   }
 }
 
@@ -29,28 +32,7 @@ export async function createWorkspaceTask<T>(
   input: CreateTaskInput,
   plan: () => Promise<WorktreePlanEntry[]>,
   create: (input: CreateTaskInput, plan?: WorktreePlanEntry[]) => Promise<T>,
+  reviewedPlan?: WorktreePlanEntry[],
 ): Promise<T> {
-  return create(input, input.mode === 'worktree' && !input.workspaceId ? await plan() : undefined)
-}
-
-export type WorkspaceChoice = { mode: 'current' | 'worktree' | null; workspaceId?: string; name?: string }
-
-/** Additive sidecar: old text/attachment/mention drafts keep their original keys. */
-export function readWorkspaceChoice(text?: string): WorkspaceChoice {
-  try {
-    const value = JSON.parse(text ?? 'null')
-    if (value?.version !== 1 || ![null, 'current', 'worktree'].includes(value.mode)) return { mode: null }
-    if (
-      value.workspaceId !== undefined &&
-      (value.mode !== 'worktree' || typeof value.workspaceId !== 'string' || !value.workspaceId)
-    )
-      return { mode: null }
-    return {
-      mode: value.mode,
-      workspaceId: value.workspaceId,
-      name: typeof value.name === 'string' ? value.name : undefined,
-    }
-  } catch {
-    return { mode: null }
-  }
+  return create(input, input.mode === 'worktree' && !input.workspaceId ? (reviewedPlan ?? (await plan())) : undefined)
 }

@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
-import type { AppPreferences, FileContext, UsageReading } from '@ramu/shared/types'
+import type { AppPreferences, FileContext, UsageReading, ModelPreferences } from '@ramu/shared/types'
 import { providerEnabled } from '@ramu/shared/providers/providers'
 import { withContext as withFileContext } from '../context'
 import { HostFolders } from '../remote/hostFolders'
@@ -90,8 +90,16 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
       ...(saved.messageBehaviorVersion === 4 ? {} : { busyMessageAction: 'steer', messageBehaviorVersion: 4 }),
     })
   }
-  const savePreferences = (preferences: AppPreferences) => {
-    workspace.setAppState('app-preferences', preferences)
+  const savePreferences = (preferences: AppPreferences, models?: ModelPreferences) => {
+    if (workspace.settingsStore) workspace.settingsStore.set(preferences, models)
+    else {
+      workspace.setAppState('app-preferences', preferences)
+      if (models) workspace.setAppState('model-preferences', models)
+    }
+    if (models) host.send('settings:models', models)
+    preferencesChanged(preferences)
+  }
+  const preferencesChanged = (preferences: AppPreferences) => {
     host.send('settings:changed', preferences)
     recaps.settingsChanged()
     providers.settingsChanged()
@@ -103,6 +111,10 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     memory?.settingsChanged()
     learning?.settingsChanged()
   }
+  workspace.settingsStore?.subscribe(() => {
+    preferencesChanged(loadPreferences())
+    host.send('settings:models', workspace.settingsStore!.models())
+  })
 
   // Archived chats unused for `cleanupArchivedDays` are deleted (worktrees and branches are kept); 0 turns it off.
   const cleanupArchived = async () => {

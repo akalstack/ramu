@@ -50,11 +50,21 @@ export function loadDraft(key: string, store: Store | null = defaultStore(), now
 }
 
 /** Whitespace-only text is not a draft. Storage failures (quota, privacy mode) are ignored: a draft is a convenience. */
-export function saveDraft(key: string, text: string, store: Store | null = defaultStore(), now = Date.now()): boolean {
+export function saveDraft(
+  key: string,
+  text: string,
+  store: Store | null = defaultStore(),
+  now = Date.now(),
+  writer?: { id: string; revision: number },
+): boolean {
   try {
     if (!store) return !text.trim()
     if (!text.trim()) store?.removeItem(PREFIX + key)
-    else store?.setItem(PREFIX + key, JSON.stringify({ text: text.slice(0, MAX_LENGTH), at: now }))
+    else
+      store?.setItem(
+        PREFIX + key,
+        JSON.stringify({ text: text.slice(0, MAX_LENGTH), at: now, ...(writer ? { writer } : {}) }),
+      )
     return text.length <= MAX_LENGTH
   } catch {
     return false
@@ -78,27 +88,67 @@ export function pruneDrafts(store: Store | null = defaultStore(), now = Date.now
   } catch {}
 }
 
-const save = (entry: { key: string; value: string; host: string }) =>
-  saveDraft(entry.key, entry.value, draftStore(entry.host))
+interface DraftEntry {
+  key: string
+  value: string
+  host: string
+  writer: { id: string; revision: number }
+  original: string | null | undefined
+  consumed: boolean
+}
+interface DraftConsumption {
+  unchanged: boolean
+  persisted: boolean
+}
+const save = (entry: DraftEntry) =>
+  entry.consumed || saveDraft(entry.key, entry.value, draftStore(entry.host), Date.now(), entry.writer)
+const sameScope = (a: DraftEntry, b: DraftEntry) => a.key === b.key && a.host === b.host
+const rawDraft = (key: string, host: string) => {
+  try {
+    return draftStore(host)?.getItem(PREFIX + key) ?? null
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * Saves `value` under `key` shortly after it stops changing, and immediately when the key changes or the page closes.
  * `host` is the host the chat or project belongs to (`useHost().id`); its storage and checkpoint are that host's.
  */
-export function useDraftPersistence(key: string, value: string, host: string = ownHostId()): void {
-  const current = useRef({ key, value, host })
-  current.current = { key, value, host }
-  useEffect(() => registerWorkspaceCheckpoint(async () => save(current.current), host), [host])
-  const pending = useRef<{ key: string; value: string; host: string } | null>(null)
+export function useDraftPersistence(key: string, value: string, host: string = ownHostId()): () => DraftConsumption {
+  const owner = useRef<string | null>(null)
+  owner.current ??= crypto.randomUUID()
+  const revision = useRef(0)
+  const current = useRef<DraftEntry | null>(null)
+  if (
+    !current.current ||
+    current.current.key !== key ||
+    current.current.host !== host ||
+    current.current.value !== value
+  ) {
+    const previous = current.current
+    current.current = {
+      key,
+      value,
+      host,
+      writer: { id: owner.current, revision: ++revision.current },
+      // Keep the scope's original baseline: typing must not adopt a newer write made by another window.
+      original: previous?.key === key && previous.host === host ? previous.original : rawDraft(key, host),
+      consumed: Boolean(previous?.consumed && previous.key === key && previous.host === host && !value.trim()),
+    }
+  }
+  const rendered = current.current
+  useEffect(() => registerWorkspaceCheckpoint(async () => save(current.current!), host), [host])
+  const pending = useRef<DraftEntry | null>(null)
   useEffect(() => {
     if (pending.current && (pending.current.key !== key || pending.current.host !== host)) save(pending.current)
-    const entry = (pending.current = { key, value, host })
+    const entry = (pending.current = rendered)
     const timer = setTimeout(() => {
       save(entry)
       if (pending.current === entry) pending.current = null
     }, SAVE_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [key, value, host])
+  }, [key, value, host, rendered])
   useEffect(() => {
     const flush = () => {
       if (pending.current) save(pending.current)
@@ -110,4 +160,27 @@ export function useDraftPersistence(key: string, value: string, host: string = o
       flush()
     }
   }, [])
+
+  // The returned function belongs to this exact render. A late acknowledgement never consumes a newer edit.
+  return () => {
+    const unchanged = current.current === rendered
+    rendered.consumed = true
+    if (pending.current === rendered) pending.current = null
+    if (!unchanged && sameScope(current.current!, rendered)) return { unchanged, persisted: true }
+    try {
+      const store = draftStore(rendered.host)
+      if (!store) return { unchanged, persisted: true }
+      const raw = store.getItem(PREFIX + rendered.key)
+      if (raw === null) return { unchanged, persisted: true }
+      const record = JSON.parse(raw) as { writer?: { id?: unknown; revision?: unknown } }
+      const ownOlderWrite =
+        record.writer?.id === rendered.writer.id &&
+        typeof record.writer.revision === 'number' &&
+        record.writer.revision <= rendered.writer.revision
+      if (raw === rendered.original || ownOlderWrite) store.removeItem(PREFIX + rendered.key)
+      return { unchanged, persisted: true }
+    } catch {
+      return { unchanged, persisted: false }
+    }
+  }
 }

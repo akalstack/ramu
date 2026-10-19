@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import { useT } from '../i18n'
+import { WorktreeBaseReview } from './WorktreeBaseReview'
 import { ActionSheetIOS, Alert, Platform, Pressable, View } from 'react-native'
 import { Clock, CloudOff, CornerDownRight, ListPlus } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
@@ -59,51 +62,69 @@ export function PendingBubble({
 }) {
   const { c } = useTheme()
   const { cancelOutbox } = useStore()
+  const t = useT()
+  const [reviewing, setReviewing] = useState(false)
   const ModeIcon = item.mode === 'steer' ? CornerDownRight : item.mode === 'queue' ? ListPlus : Clock
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Waiting to send: ${item.text}. Tap to cancel`}
-      onPress={() => {
-        tap()
-        confirmCancel(item, onEdit, cancelOutbox)
-      }}
-      style={{ alignSelf: 'flex-end', maxWidth: '86%', alignItems: 'flex-end', gap: 4 }}
-    >
-      <View
-        style={{
-          backgroundColor: c.bubble,
-          opacity: 0.6,
-          borderRadius: radius.l - 2,
-          borderBottomRightRadius: radius.xs,
-          paddingHorizontal: space.m + 2,
-          paddingVertical: space.s + 2,
-          borderWidth: 1,
-          borderStyle: 'dashed',
-          borderColor: c.lineStrong,
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Waiting to send: ${item.text}. Tap to cancel`}
+        onPress={() => {
+          tap()
+          confirmCancel(item, onEdit, cancelOutbox)
         }}
+        style={{ alignSelf: 'flex-end', maxWidth: '86%', alignItems: 'flex-end', gap: 4 }}
       >
-        <T style={{ lineHeight: 21 }}>{item.text}</T>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingRight: 4 }}>
-        <ModeIcon size={12} color={c.muted} />
-        <T size={font.caption} tone="muted">
-          {item.state === 'uncertain'
-            ? 'Check delivery on host'
-            : item.state === 'sending'
-              ? 'Sending'
-              : item.mode === 'steer'
-                ? 'Steer'
-                : item.mode === 'queue'
-                  ? 'Queued'
-                  : 'Waiting'}{' '}
-          · {item.state === 'uncertain' ? item.error : `sends when ${computer} is back`} ·{' '}
-          <T size={font.caption} tone="accent" weight="600">
-            Cancel
+        <View
+          style={{
+            backgroundColor: c.bubble,
+            opacity: 0.6,
+            borderRadius: radius.l - 2,
+            borderBottomRightRadius: radius.xs,
+            paddingHorizontal: space.m + 2,
+            paddingVertical: space.s + 2,
+            borderWidth: 1,
+            borderStyle: 'dashed',
+            borderColor: c.lineStrong,
+          }}
+        >
+          <T style={{ lineHeight: 21 }}>{item.text}</T>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingRight: 4 }}>
+          <ModeIcon size={12} color={c.muted} />
+          <T size={font.caption} tone="muted">
+            {item.state === 'review'
+              ? t.branchReviewBases
+              : item.state === 'uncertain'
+                ? 'Check delivery on host'
+                : item.state === 'sending'
+                  ? 'Sending'
+                  : item.mode === 'steer'
+                    ? 'Steer'
+                    : item.mode === 'queue'
+                      ? 'Queued'
+                      : 'Waiting'}{' '}
+            · {item.state === 'uncertain' || item.state === 'review' ? item.error : `sends when ${computer} is back`} ·{' '}
+            <T size={font.caption} tone="accent" weight="600">
+              Cancel
+            </T>
           </T>
-        </T>
-      </View>
-    </Pressable>
+        </View>
+      </Pressable>
+      {item.state === 'review' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t.branchReviewBases}
+          onPress={() => setReviewing(true)}
+        >
+          <T tone="accent">{t.branchReviewBases}</T>
+        </Pressable>
+      ) : null}
+      {reviewing && item.state === 'review' ? (
+        <WorktreeBaseReview item={item} onClose={() => setReviewing(false)} />
+      ) : null}
+    </>
   )
 }
 

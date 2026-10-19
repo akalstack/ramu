@@ -22,6 +22,9 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
   return (
     <div className={SETTINGS_FORM_CLASS}>
       <SettingsGroupTitle>{t('New threads & worktrees')}</SettingsGroupTitle>
+      <p className="m-0 text-caption text-muted-foreground">
+        {t('Repository configuration can override these defaults. Each draft can override repository settings.')}
+      </p>
       <SettingsRow setting="defaultCheckoutMode">
         <SettingsLabel
           title={t('Default workspace for new threads')}

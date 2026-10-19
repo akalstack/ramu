@@ -1,9 +1,13 @@
 import { watch, type FSWatcher } from 'node:fs'
+import { ProjectConfigWatchers } from '../workspace/projectConfigWatchers'
 
 /** One recursive watcher per canonical checkout; tasks sharing a checkout share it. */
 export class FileWatchers {
+  readonly projectConfigs: ProjectConfigWatchers
   private watchers = new Map<string, FSWatcher>()
-  constructor(private send: (channel: string, payload: unknown) => void) {}
+  constructor(private send: (channel: string, payload: unknown) => void) {
+    this.projectConfigs = new ProjectConfigWatchers(() => send('workspace:changed', {}))
+  }
 
   ensure(cwd: string) {
     if (this.watchers.has(cwd)) return
@@ -30,6 +34,7 @@ export class FileWatchers {
   }
 
   close() {
+    this.projectConfigs.close()
     for (const watcher of this.watchers.values()) watcher.close()
   }
 }

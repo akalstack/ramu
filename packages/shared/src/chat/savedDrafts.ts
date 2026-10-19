@@ -1,3 +1,4 @@
+import { parseBranchNameDraft, type WorkspaceChoice } from '@ramu/shared/workspaceDefaults'
 import type { Attachment, FileContext } from '../types'
 
 /** Explicit saves have no expiry. Limits reject a move; they never truncate or evict saved work. */
@@ -23,7 +24,7 @@ export interface MessageDraftSnapshot {
   context: FileContext[]
   mentions: DraftMention[]
   /** null follows the host default; an explicit mode or existing workspace remains explicit. */
-  workspace?: { mode: 'current' | 'worktree' | null; workspaceId?: string; name?: string }
+  workspace?: WorkspaceChoice
 }
 export interface SavedMessageDraft {
   hostId: string
@@ -161,9 +162,10 @@ function validSnapshot(value: unknown): value is MessageDraftSnapshot {
     const ws = value.workspace
     if (
       !record(ws) ||
-      !keys(ws, ['mode', 'workspaceId', 'name']) ||
+      !keys(ws, ['mode', 'workspaceId', 'name', 'branch']) ||
       ![null, 'current', 'worktree'].includes(ws.mode as string) ||
       !optionalString(ws.name) ||
+      (ws.branch !== undefined && !parseBranchNameDraft(ws.branch)) ||
       (ws.workspaceId !== undefined && (ws.mode !== 'worktree' || !id(ws.workspaceId)))
     )
       return false

@@ -8,6 +8,7 @@ import { ToolRegistry } from './agent/toolRegistry'
 import { ExternalSkills } from './memory/externalSkills'
 import { crossedSwitchAt, LearningService } from './memory/learning'
 import { migrateLearningDefault } from './memory/learningDefault'
+import { SettingsStore } from './settings/settingsStore'
 // Independent Node process. Electron windows are clients, never owners of agent lifetimes.
 import { createServer, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
@@ -158,6 +159,10 @@ const root = process.env.RAMU_WORKTREES ?? join(homedir(), '.ramu', 'worktrees')
 mkdirSync(root, { recursive: true })
 const workspace = new Workspace(db, root)
 migrateLearningDefault(workspace)
+workspace.settingsStore = new SettingsStore(userData, {
+  preferences: workspace.getAppState('app-preferences', {}),
+  models: workspace.getAppState('model-preferences', null),
+})
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./providers/fakeAgent') : null
 let reviews!: ReviewService
 const mobilePush = new MobilePush(
