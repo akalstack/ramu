@@ -9,6 +9,7 @@ import type {
   ForgeStatus,
   IssueLink,
   IssueSummary,
+  PublishRepositoryInput,
   PullRequestDraft,
   PullRequestFeedbackKind,
   PullRequestInfo,
@@ -16,7 +17,7 @@ import type {
   PullRequestReviewDecision,
 } from '@ramu/shared/types'
 import { findExecutable } from '../providers/providerBinaries'
-import { branchExists, commitBranchInfo, currentBranch, git } from './git'
+import { branchExists, commitBranchInfo, currentBranch, git, headOid } from './git'
 
 export class ForgeError extends Error {
   constructor(
@@ -287,6 +288,29 @@ export async function createPullRequest(cwd: string, input: PullRequestInput): P
   if (input.draft) args.push('--draft')
   await gh(cwd, args)
   return pullRequestStatus(cwd)
+}
+
+/**
+ * Creates the GitHub repository for a local one with no remote and pushes the current branch to it, like VS Code's
+ * Publish to GitHub. `gh` adds the `origin` remote before it pushes, so a rejected push leaves a repository that the
+ * ordinary Publish branch can finish instead of one to create again.
+ */
+export async function publishRepository(cwd: string, input: PublishRepositoryInput): Promise<void> {
+  if (await hasRemote(cwd)) throw new Error('This repository already has a remote. Publish the branch instead.')
+  if (!(await currentBranch(cwd))) throw new Error('Switch to a branch before publishing.')
+  if (!(await headOid(cwd)))
+    throw new Error('Commit your changes first. A repository with no commits cannot be published.')
+  await gh(cwd, [
+    'repo',
+    'create',
+    input.name,
+    input.visibility === 'public' ? '--public' : '--private',
+    '--source',
+    '.',
+    '--remote',
+    'origin',
+    '--push',
+  ])
 }
 
 // ---- Feedback for an agent ----

@@ -2,7 +2,7 @@ import { applyCommitScope, chooseCommit } from './CommitDialog'
 import { withGitBusy } from './gitBusy'
 import { openCreatePullRequest } from './CreatePullRequestHost'
 import { t } from '../i18n'
-import { notify } from '@/components/app-toaster'
+import { reportGitJob } from './reportGitJob'
 import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
 import { invoke } from '../ipc'
 import { notifyError } from '../chat/Notifications'
@@ -129,13 +129,12 @@ export async function commitAndPush(
     return draft.message.split('\n')[0]!
   }
   const work = withGitBusy(ctx, binding.repoId, run).finally(() => window.dispatchEvent(new Event('ramu:git-updated')))
-  void notify
-    .promise(work, {
-      loading: { title: t('Committing and pushing {0}…', { '0': binding.repoName }), type: 'loading' },
-      success: (subject) => ({ title: t('Pushed “{0}” to {1}', { '0': subject, '1': pushedTo }), type: 'success' }),
-      error: (reason) => ({ title: errorText(reason), description: t('Commit & Push'), type: 'error', timeout: 0 }),
-    })
-    .catch(() => {})
+  void reportGitJob(work, {
+    id: `git-job:${ctx}:${binding.repoId}`,
+    success: (subject) => t('Pushed “{0}” to {1}', { '0': subject, '1': pushedTo }),
+    failure: { message: errorText, description: t('Commit & Push') },
+    toastSuccess: true,
+  })
   if (
     plan.pullRequest &&
     (await work.then(

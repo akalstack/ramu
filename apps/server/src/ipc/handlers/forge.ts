@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { z } from 'zod'
-import type { IssueLink, PullRequestFeedbackKind, PullRequestInput } from '@ramu/shared/types'
+import type { IssueLink, PublishRepositoryInput, PullRequestFeedbackKind, PullRequestInput } from '@ramu/shared/types'
 import * as forge from '../../workspace/forge'
 import * as git from '../../workspace/git'
 import { gitExclusive } from '../helpers'
@@ -12,6 +14,10 @@ const issueLink = z.object({
   number: issueNumber,
   title: z.string().max(1000),
   url: z.string().url().max(2000),
+})
+const publishInput = z.object({
+  name: z.string().regex(/^([A-Za-z0-9-]{1,39}\/)?[A-Za-z0-9._-]{1,100}$/),
+  visibility: z.enum(['private', 'public']),
 })
 const pullRequestInput = z.object({
   title: z.string().trim().min(1).max(500),
@@ -78,6 +84,11 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         return forge.pullRequestDraft(cwd, linkedIssue(ctx, cwd, repoId))
       },
     },
+    'forge.publishRepository': {
+      args: z.tuple([id, id, publishInput]),
+      run: (taskId: string, repoId: string, input: PublishRepositoryInput) =>
+        gitExclusive(ctx, taskId, repoId, (cwd) => forge.publishRepository(cwd, input)),
+    },
     'forge.createPullRequest': {
       args: z.tuple([id, id, pullRequestInput]),
       run: (taskId: string, repoId: string, input: PullRequestInput) =>
@@ -105,7 +116,11 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
     },
     'forge.issues': {
       args: z.tuple([id, z.string().max(500)]),
-      run: (repoId: string, search: string) => forge.listIssues(repoRoot(repoId), search),
+      // A plain folder (not yet initialized as a repository) has no issues; `gh` would only fail.
+      run: (repoId: string, search: string) => {
+        const root = repoRoot(repoId)
+        return existsSync(join(root, '.git')) ? forge.listIssues(root, search) : []
+      },
     },
     'forge.issue': {
       args: z.tuple([id, issueNumber]),

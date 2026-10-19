@@ -15,6 +15,7 @@ import { ConflictList } from './ConflictList'
 import { GitInspector } from './GitInspector'
 import { OperationBanner } from './OperationBanner'
 import { PullRequestSection } from './PullRequestSection'
+import { openPublishRepository } from '../../git/PublishRepositoryHost'
 import { usePullRequestSupport } from '../../git/usePullRequestSupport'
 import { ChangeGroupHeader } from './parts'
 import { RepoActionsMenu } from './RepoActionsMenu'
@@ -229,6 +230,7 @@ export function RepositoryControl({
             onGenerate={flow.generate}
             commit={flow.commit}
             onSync={sync}
+            onPublishRepository={() => void openPublishRepository(taskId, binding.repoId, binding.repoName)}
             reportError={reportError}
           />
           <PullRequestSection

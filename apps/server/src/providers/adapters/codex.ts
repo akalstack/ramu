@@ -1,6 +1,18 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { defineAdapter, npmLatest, runCli } from '../adapter'
+
+/** The email in the signed-in ChatGPT token's claims. Only that claim is read; the token is never kept or sent. */
+function codexEmail(env: NodeJS.ProcessEnv): string | undefined {
+  try {
+    const file = JSON.parse(readFileSync(join(env.CODEX_HOME || join(homedir(), '.codex'), 'auth.json'), 'utf8'))
+    const claims = JSON.parse(Buffer.from(String(file?.tokens?.id_token).split('.')[1] ?? '', 'base64url').toString())
+    return typeof claims.email === 'string' && claims.email ? claims.email : undefined
+  } catch {
+    return undefined
+  }
+}
 
 export const codexAdapter = defineAdapter({
   id: 'codex',
@@ -25,6 +37,7 @@ export const codexAdapter = defineAdapter({
     return ok && /logged in/i.test(out)
       ? {
           signedIn: true,
+          ...(codexEmail(env) ? { email: codexEmail(env) } : {}),
           detail:
             out
               .trim()

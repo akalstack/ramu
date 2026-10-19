@@ -10,7 +10,13 @@ import { cn } from 'cn'
 import { Gauge } from 'lucide-react'
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { AgentProvider, ContextUsage, UsageReading } from '@ramu/shared/types'
-import { providerAccountOrder, providerEnabled, providerName } from '@ramu/shared/providers/providers'
+import {
+  accountDisplayName,
+  providerAccountOrder,
+  providerEnabled,
+  providerName,
+  type ProviderConfiguration,
+} from '@ramu/shared/providers/providers'
 import { bridge, invokerFor } from '../ipc'
 import { ownHostId } from '../hosts'
 import { useHost } from '../workspace/HostProvider'
@@ -115,16 +121,42 @@ export function useAccountUsage(enabled = true): UsageReading[] {
   return all
 }
 
-/** The default provider account, or the name given when it was added. */
+/** Sign-in emails per provider and login, loaded while `enabled`; they name accounts that were not given a label. */
+export function useAccountEmails(enabled = true): Record<string, Record<string, string>> {
+  const { invoke } = useHost()
+  const [emails, setEmails] = useState<Record<string, Record<string, string>>>({})
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    void invoke('providers.accountEmails').then(
+      (next) => {
+        if (!cancelled) setEmails(next)
+      },
+      () => {},
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [enabled, invoke])
+  return emails
+}
+
+/** The label given to an account, else its sign-in email, else "Default account" or "Account N". */
 export function accountLabel(
-  config: { accounts?: { id: string; name: string }[] } | undefined,
+  config: ProviderConfiguration | undefined,
   id: string,
   provider: AgentProvider,
+  email?: string,
 ): string {
-  return id === 'default'
+  const { name, fallback, number } = accountDisplayName(config, provider, id, email)
+  return fallback === 'default'
     ? t(provider === 'antigravity' ? 'Default account' : 'Default CLI account')
-    : (config?.accounts?.find((account) => account.id === id)?.name ?? id)
+    : fallback === 'numbered'
+      ? t('Account {0}', { '0': number })
+      : name
 }
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
 
 /** Readings older than this are shown with their age; providers only report while they run. */
 const STALE_MS = 10 * 60_000
@@ -242,14 +274,112 @@ function Ring({ percent, className }: { percent: number; className: string }) {
   )
 }
 
+type AccountRows = { id: string; name: string; readings: UsageReading[] }[]
+
+/** One window of the signed-in account: label and percent, a bar, and when it resets. */
+function WindowRow({ reading }: { reading: UsageReading }) {
+  const tone = usageTone(reading),
+    reset = resetText(reading.resetsAt)
+  return (
+    <div className="flex flex-col gap-1.5" title={usageHint(reading)}>
+      <div className="flex justify-between gap-2 text-control">
+        <span>{windowLabel(reading)}</span>
+        <span className={cn('tabular-nums', toneText[tone])}>{usageStatusText(reading)}</span>
+      </div>
+      {usagePercent(reading) !== null && <UsageBar reading={reading} tone={tone} />}
+      {reset && <span className="text-caption text-muted-foreground">{reset}</span>}
+    </div>
+  )
+}
+
+function usageStatusText(reading: UsageReading): string {
+  return reading.source === 'notice'
+    ? t('Limit reported; usage unavailable')
+    : usagePercent(reading) === null
+      ? t('Not reported')
+      : reading.status === 'limited'
+        ? t('Limit reached')
+        : t('{0}% used', { '0': usagePercent(reading)! })
+}
+
+function UsageBar({ reading, tone, thin }: { reading: UsageReading; tone: UsageTone; thin?: boolean }) {
+  return (
+    <Progress
+      value={usagePercent(reading)!}
+      aria-label={windowLabel(reading)}
+      className={cn(
+        '[&_[data-slot=progress-track]]:bg-foreground/10 [&_[data-slot=progress-indicator]]:rounded-full',
+        thin ? '[&_[data-slot=progress-track]]:h-1' : '[&_[data-slot=progress-track]]:h-1.5',
+        toneFill[tone],
+      )}
+    />
+  )
+}
+
+const VISIBLE_ACCOUNTS = 2
+
+/** Each other login on one line, at its fullest window, since that is what decides fallback. Beyond a couple, the rest fold away unless they are at their limit. */
+function OtherAccounts({ provider, others }: { provider: AgentProvider; others: AccountRows }) {
+  const [expanded, setExpanded] = useState(false)
+  const rows = others.map((account) => ({ ...account, peak: peakUsage(account.readings, provider) }))
+  const shown = expanded
+    ? rows
+    : rows.filter((row, index) => index < VISIBLE_ACCOUNTS || row.peak?.status === 'limited')
+  const hidden = rows.length - shown.length
+  return (
+    <div
+      className="flex flex-col gap-1.5 border-t border-line pt-2"
+      aria-label={t('Other {0} accounts', { '0': providerName(provider) })}
+    >
+      <span className="text-caption text-muted-foreground">
+        {t('Other accounts, used when this one is at its limit')}
+      </span>
+      {shown.map(({ id, name, peak }) => {
+        const tone = peak ? usageTone(peak) : 'ok',
+          known = !!peak && usagePercent(peak) !== null
+        return (
+          <div
+            key={id}
+            className="grid grid-cols-[minmax(0,5.5rem)_1fr_auto] items-center gap-x-2 text-caption"
+            title={peak ? [windowLabel(peak), resetText(peak.resetsAt)].filter(Boolean).join(' · ') : undefined}
+          >
+            <span className="truncate text-muted-foreground">{name}</span>
+            {known ? <UsageBar reading={peak!} tone={tone} thin /> : <span />}
+            <span className={cn('text-right tabular-nums', toneText[tone])}>
+              {!peak
+                ? t('No data yet')
+                : peak.status === 'limited'
+                  ? t('Limit reached')
+                  : known
+                    ? `${usagePercent(peak)}% ${windowLabel(peak, true)}`
+                    : t('Not reported')}
+            </span>
+          </div>
+        )
+      })}
+      {(hidden > 0 || expanded) && rows.length > VISIBLE_ACCOUNTS && (
+        <button
+          type="button"
+          className="self-start rounded-(--radius-s) text-caption text-muted-foreground hover:text-foreground"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? t('Show fewer') : t('+{0} more', { '0': hidden })}
+        </button>
+      )}
+    </div>
+  )
+}
+
 /** Everything known about one provider's limits. The age only shows once it is stale, since providers only report while they run. */
 function UsageDetail({
   provider,
   five,
   weekly,
   scoped,
+  account,
   others,
-}: ReturnType<typeof byProvider>[number] & { others: { id: string; name: string; peak: UsageReading | undefined }[] }) {
+}: ReturnType<typeof byProvider>[number] & { account?: string; others: AccountRows }) {
   useLanguage()
   const all = [five, weekly, ...scoped].filter((r): r is UsageReading => !!r)
   const newest = Math.max(...all.map((r) => r.updatedAt))
@@ -258,77 +388,23 @@ function UsageDetail({
     <section className="flex flex-col gap-2.5">
       <header className="flex items-center gap-[7px] text-control">
         <ProviderIcon provider={provider} size={15} />
-        <strong className="font-semibold">{providerName(provider)}</strong>
+        <div className="flex min-w-0 flex-col">
+          <strong className="font-semibold">{providerName(provider)}</strong>
+          {account && <span className="truncate text-caption text-muted-foreground">{account}</span>}
+        </div>
         {plan && (
           <Badge
             variant="secondary"
             className="ml-auto h-auto rounded-(--radius-s) bg-fill px-[7px] py-0.5 text-caption font-normal text-muted-foreground"
           >
-            {plan}
+            {capitalize(plan)}
           </Badge>
         )}
       </header>
-      {all.map((reading) => {
-        const tone = usageTone(reading),
-          reset = resetText(reading.resetsAt)
-        return (
-          <div
-            key={`${reading.window}:${reading.scope ?? ''}`}
-            className="flex flex-col gap-1.5"
-            title={usageHint(reading)}
-          >
-            <div className="flex justify-between gap-2 text-control">
-              <span>{windowLabel(reading)}</span>
-              <span className={cn('tabular-nums', toneText[tone])}>
-                {reading.source === 'notice'
-                  ? t('Limit reported; usage unavailable')
-                  : usagePercent(reading) === null
-                    ? t('Not reported')
-                    : reading.status === 'limited'
-                      ? t('Limit reached')
-                      : t('{0}% used', { '0': usagePercent(reading)! })}
-              </span>
-            </div>
-            {usagePercent(reading) !== null && (
-              <Progress
-                value={usagePercent(reading)!}
-                aria-label={windowLabel(reading)}
-                className={cn(
-                  '[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-track]]:bg-foreground/10 [&_[data-slot=progress-indicator]]:rounded-full',
-                  toneFill[tone],
-                )}
-              />
-            )}
-            {reset && <span className="text-caption text-muted-foreground">{reset}</span>}
-          </div>
-        )
-      })}
-      {others.length > 0 && (
-        <div
-          className="flex flex-col gap-1 border-t border-line pt-2"
-          aria-label={t('Other {0} accounts', { '0': providerName(provider) })}
-        >
-          <span className="text-caption text-muted-foreground">
-            {t('Other accounts, used when this one is at its limit')}
-          </span>
-          {others.map(({ id, name, peak }) => {
-            const tone = peak ? usageTone(peak) : 'ok',
-              reset = peak?.status === 'limited' ? resetText(peak.resetsAt) : null
-            return (
-              <div key={id} className="flex justify-between gap-2 text-control">
-                <span className="min-w-0 truncate">{name}</span>
-                <span className={cn('flex-none tabular-nums', toneText[tone])} title={reset ?? undefined}>
-                  {!peak
-                    ? t('No data yet')
-                    : peak.status === 'limited'
-                      ? t('Limit reached')
-                      : t('{0}% used', { '0': peak.usedPercent })}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      )}
+      {all.map((reading) => (
+        <WindowRow key={`${reading.window}:${reading.scope ?? ''}`} reading={reading} />
+      ))}
+      {others.length > 0 && <OtherAccounts provider={provider} others={others} />}
       {Date.now() - newest > STALE_MS && (
         <span className="text-caption text-warn">
           {t('Updated')} {ageText(newest)}
@@ -356,19 +432,23 @@ function UsagePopover({
     ({ provider }) => providerAccountOrder(preferences.providerBinaries, provider).length > 1,
   )
   const accountReadings = useAccountUsage(open && rotating)
-  const othersOf = (provider: AgentProvider) => {
+  const emails = useAccountEmails(open)
+  const accountsOf = (provider: AgentProvider) => {
     const config = preferences.providerBinaries[provider]
+    const active = config?.accountId || 'default'
     const order = providerAccountOrder(preferences.providerBinaries, provider)
-    return order
-      .filter((id) => id !== (config?.accountId || 'default'))
-      .map((id) => ({
-        id,
-        name: accountLabel(config, id, provider),
-        peak: peakUsage(
-          accountReadings.filter((reading) => (reading.accountId ?? 'default') === id),
-          provider,
-        ),
-      }))
+    return {
+      account: accountLabel(preferences.providerBinaries, active, provider, emails[provider]?.[active]),
+      others: order
+        .filter((id) => id !== active)
+        .map((id) => ({
+          id,
+          name: accountLabel(preferences.providerBinaries, id, provider, emails[provider]?.[id]),
+          readings: accountReadings.filter(
+            (reading) => reading.provider === provider && (reading.accountId ?? 'default') === id,
+          ),
+        })),
+    }
   }
   // Hover peeks; a click on the trigger while peeking pins it open instead of closing it.
   const peeking = useRef(false)
@@ -438,7 +518,7 @@ function UsagePopover({
         {groups.map((group, index) => (
           <Fragment key={group.provider}>
             {index > 0 && <Separator className="h-px bg-line" />}
-            <UsageDetail {...group} others={othersOf(group.provider)} />
+            <UsageDetail {...group} {...accountsOf(group.provider)} />
           </Fragment>
         ))}
         <Separator className="h-px bg-line" />

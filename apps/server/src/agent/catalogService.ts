@@ -46,9 +46,12 @@ export class CatalogService {
             .preferences()
             ?.providerBinaries[settings.provider]?.accounts?.find((entry) => entry.id === settings.accountId)
         : undefined
+    const prefs = this.host.preferences()?.providerBinaries[settings.provider]
+    if ((!settings.accountId || settings.accountId === 'default') && prefs?.defaultAccountEnabled === false)
+      throw new Error(`The default ${providerName(settings.provider)} login is turned off in Settings → Providers.`)
     if (account?.enabled === false)
       throw new Error(
-        `The ${providerName(settings.provider)} account "${account.name}" is turned off in Settings → Providers.`,
+        `The ${providerName(settings.provider)} account "${account.name || account.id}" is turned off in Settings → Providers.`,
       )
     let catalog = (await this.host.catalog()).find((c) => c.provider === settings.provider)
     // A retained chat may belong to a different profile than today's default.

@@ -10,12 +10,15 @@ export const isAcpProvider = (provider: AgentProvider): provider is 'cursor' | '
 
 export interface ProviderAccount {
   id: string
-  name: string
+  /** Optional label; without one the account is named by its sign-in email. */
+  name?: string
   /** Off hides the account from pickers and stops new chats from using it. Absent means on. */ enabled?: boolean
 }
 export interface ProviderSignIn {
   signedIn: boolean
   detail?: string
+  /** The login's email when the CLI reports it; names the account when it has no label. */
+  email?: string
 }
 export type ProviderConfiguration = Partial<
   Record<
@@ -25,6 +28,10 @@ export type ProviderConfiguration = Partial<
       harness?: string
       accounts?: ProviderAccount[]
       accountId?: string
+      /** Account IDs, `default` included, in the order they are tried: the first enabled one is used first. */
+      accountOrder?: string[]
+      /** Off stops the default (system) login from being used. At least one login stays on. Absent means on. */
+      defaultAccountEnabled?: boolean
       autoUpdate?: boolean
       /** Off hides the provider everywhere and stops Ramu from starting it. Absent means on. */ enabled?: boolean
       /** Cursor: allow reading its login from the macOS Keychain to show plan usage. */ usageKeychain?: boolean
@@ -61,14 +68,47 @@ export interface ProviderStatus {
 }
 
 /**
- * Accounts a chat may run on, in the order they are tried: the selected account first, then the default login,
- * then the rest in the order they were added. Disabled accounts are skipped, so when the active account reaches its
- * limit a chat continues on the next enabled one.
+ * Accounts a chat may run on, in the order they are tried. The order the person arranged (`accountOrder`) decides; logins
+ * missing from it follow in the order they were added, with the default login ahead of them. Without an arrangement the
+ * selected account goes first. Disabled accounts are skipped, so when the active account reaches its limit a chat
+ * continues on the next enabled one.
  */
 export function providerAccountOrder(config: ProviderConfiguration | undefined, provider: AgentProvider): string[] {
   const entry = config?.[provider]
   const primary = entry?.accountId || 'default'
   if (!supportsProviderAccounts(provider)) return [primary]
   const enabled = (entry?.accounts ?? []).filter((account) => account.enabled !== false).map((account) => account.id)
-  return [...new Set([primary, 'default', ...enabled])].filter((id) => id === 'default' || enabled.includes(id))
+  const arranged = entry?.accountOrder ?? []
+  const all = arranged.length ? [...arranged, 'default', ...enabled] : [primary, 'default', ...enabled]
+  const usable = [...new Set(all)].filter((id) =>
+    id === 'default' ? defaultAccountEnabled(config, provider) : enabled.includes(id),
+  )
+  return usable.length ? usable : ['default']
+}
+
+export const defaultAccountEnabled = (config: ProviderConfiguration | undefined, provider: AgentProvider): boolean =>
+  config?.[provider]?.defaultAccountEnabled !== false
+
+/** Every login in the order they are tried, disabled ones included, for the arrangement list. */
+export function providerAccountRows(config: ProviderConfiguration | undefined, provider: AgentProvider): string[] {
+  const entry = config?.[provider]
+  const known = ['default', ...(entry?.accounts ?? []).map((account) => account.id)]
+  return [...new Set([...(entry?.accountOrder ?? []), ...providerAccountOrder(config, provider), ...known])].filter(
+    (id) => known.includes(id),
+  )
+}
+
+/** The label if one was given, else the login's email, else a position-based name. */
+export function accountDisplayName(
+  config: ProviderConfiguration | undefined,
+  provider: AgentProvider,
+  id: string,
+  email?: string,
+): { name: string; fallback?: 'default' | 'numbered'; number?: number } {
+  if (id === 'default') return { name: email ?? '', ...(email ? {} : { fallback: 'default' as const }) }
+  const accounts = config?.[provider]?.accounts ?? []
+  const label = accounts.find((account) => account.id === id)?.name?.trim()
+  if (label) return { name: label }
+  if (email) return { name: email }
+  return { name: '', fallback: 'numbered', number: accounts.findIndex((account) => account.id === id) + 2 }
 }

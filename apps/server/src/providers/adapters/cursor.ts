@@ -34,7 +34,7 @@ export const cursorAdapter = defineAdapter({
     try {
       const status = await (await loadCursorSdk()).Cursor.auth.status()
       return status.status === 'logged-in'
-        ? { signedIn: true, ...(status.email ? { detail: status.email } : {}) }
+        ? { signedIn: true, ...(status.email ? { detail: status.email, email: String(status.email) } : {}) }
         : { signedIn: false }
     } catch {
       return { signedIn: false }

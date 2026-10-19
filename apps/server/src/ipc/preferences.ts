@@ -33,7 +33,7 @@ export const providerBinaries = z
                     .string()
                     .regex(/^[a-zA-Z0-9_-]{1,80}$/)
                     .refine((id) => id !== 'default'),
-                  name: z.string().trim().min(1).max(80),
+                  name: z.string().trim().max(80).optional(),
                   enabled: z.boolean().optional(),
                 }),
               )
@@ -43,9 +43,14 @@ export const providerBinaries = z
               .string()
               .regex(/^[a-zA-Z0-9_-]{1,80}$/)
               .optional(),
+            accountOrder: z
+              .array(z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/))
+              .max(21)
+              .optional(),
             autoUpdate: z.boolean().optional(),
             enabled: z.boolean().optional(),
             usageKeychain: z.boolean().optional(),
+            defaultAccountEnabled: z.boolean().optional(),
             harness: z
               .string()
               .trim()

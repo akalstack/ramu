@@ -1,5 +1,4 @@
 import { t, useLanguage } from '../i18n'
-import { Badge } from '@/components/ui/badge'
 import { Check } from 'lucide-react'
 import type { AgentModel, AgentSettings } from '@ramu/shared/types'
 import { MenuItems, type MenuEntry } from '../Menu'
@@ -19,39 +18,15 @@ export function ReasoningPicker({
   useLanguage()
   const fastSupported =
     settings.provider === 'codex' && !!model?.serviceTiers?.some((tier) => tier === 'fast' || tier === 'priority')
-  const explicitEfforts = settings.provider === 'claude-code' || settings.provider === 'codex'
-  const selectedEffort = settings.effort ?? (explicitEfforts ? (model?.defaultEffort ?? null) : null)
+  const selectedEffort = settings.effort ?? model?.defaultEffort ?? null
   const items: MenuEntry[] = [
-    { key: 'reasoning', heading: t('Reasoning') },
-    ...(!explicitEfforts
-      ? [
-          {
-            key: 'default',
-            selected: !settings.effort,
-            label: (
-              <>
-                <span className="grow flex-1 min-w-0 text-left">{t('Model default')}</span>
-                {!settings.effort && <Check size={13} />}
-              </>
-            ),
-            onSelect: () => onChange({ ...settings, effort: null }),
-          },
-        ]
-      : []),
+    ...((model?.efforts.length ?? 0) > 0 ? [{ key: 'reasoning', heading: t('Reasoning') }] : []),
     ...(model?.efforts ?? []).map((effort) => ({
       key: effort,
       selected: selectedEffort === effort,
       label: (
         <>
           <span className="grow flex-1 min-w-0 text-left">{effortDisplayName(effort, settings.provider)}</span>
-          {!explicitEfforts && effort === model?.defaultEffort && (
-            <Badge
-              variant="outline"
-              className="chip tabular-nums text-caption bg-hover rounded-full p-[1px_8px] text-soft whitespace-nowrap"
-            >
-              {t('Default')}
-            </Badge>
-          )}
           {selectedEffort === effort && <Check size={13} />}
         </>
       ),

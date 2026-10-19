@@ -125,13 +125,12 @@ function StepPicker({
           if (entry) onChange(stepFor(entry, step))
         }}
       />
-      {step && (
+      {step && !!model?.efforts.length && (
         <Dropdown
           label={t('{0} effort', { '0': label })}
-          value={step.effort ?? ''}
+          value={step.effort ?? model?.defaultEffort ?? ''}
           disabled={disabled || !model?.efforts.length}
           options={[
-            ...(model?.defaultEffort ? [] : [{ value: '', label: t('Default effort') }]),
             ...(model?.efforts ?? []).map((effort) => ({
               value: effort,
               label: effortDisplayName(effort, step.provider),

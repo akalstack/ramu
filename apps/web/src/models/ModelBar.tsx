@@ -110,9 +110,8 @@ export function ModelBar({
   const model =
     models.find((entry) => entry.provider === shown.provider && entry.id === shown.model) ??
     (!shown.model ? models.find((entry) => entry.provider === shown.provider && entry.isDefault) : undefined)
-  const explicitEfforts = shown.provider === 'claude-code' || shown.provider === 'codex'
-  const efforts: (ReasoningEffort | null)[] = [...(explicitEfforts ? [] : [null]), ...(model?.efforts ?? [])]
-  const shownEffort = shown.effort ?? (explicitEfforts ? (model?.defaultEffort ?? null) : null)
+  const efforts: ReasoningEffort[] = model?.efforts ?? []
+  const shownEffort = shown.effort ?? model?.defaultEffort ?? null
   const steps = set.steps
   const match = steps.findIndex(
     (step) =>
@@ -120,7 +119,7 @@ export function ModelBar({
       (step.model === shown.model || (!shown.model && step.model === model?.id)) &&
       step.effort === shown.effort,
   )
-  const index = mode === 'effort' ? efforts.indexOf(shownEffort) : match
+  const index = mode === 'effort' ? (shownEffort ? efforts.indexOf(shownEffort) : -1) : match
   const count = mode === 'effort' ? efforts.length : steps.length
   const effortName = effortDisplayName(shownEffort, shown.provider)
   const modelName = modelDisplayName(model?.name ?? (shown.model || `${providerName(shown.provider)} default`))
@@ -292,15 +291,17 @@ export function ModelBar({
                     <strong>{modelName}</strong>
                     <ChevronRight size={13} />
                   </Button>
-                  <Button
-                    variant="secondary"
-                    disabled={disabled}
-                    className="bg-fill hover:bg-fill-hover model-bar-effort-name [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:text-foreground min-w-0 [border:0] bg-transparent p-0 gap-1 flex-none text-muted-foreground text-control"
-                    aria-label={t('Reasoning and service tier')}
-                    onClick={() => setPicker('effort')}
-                  >
-                    {effortName}
-                  </Button>
+                  {(efforts.length > 0 || shown.provider === 'codex') && (
+                    <Button
+                      variant="secondary"
+                      disabled={disabled}
+                      className="bg-fill hover:bg-fill-hover model-bar-effort-name [&:hover:not(:disabled)]:[border:0] [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:text-foreground min-w-0 [border:0] bg-transparent p-0 gap-1 flex-none text-muted-foreground text-control"
+                      aria-label={t('Reasoning and service tier')}
+                      onClick={() => setPicker('effort')}
+                    >
+                      {effortName}
+                    </Button>
+                  )}
                 </div>
                 <div
                   className="model-bar-actions [&_.model-bar-mode]:w-6 [&_.model-bar-mode]:h-6 [&_.model-bar-mode]:min-h-6 [&_.model-bar-mode]:p-0 [&_.model-bar-mode]:rounded-(--radius-s) flex items-center gap-1"

@@ -233,3 +233,28 @@ describe('pull request drafts', () => {
     expect(draft).toMatchObject({ title: 'fix(web): Retry the queue', base: 'main', branch: 'fix/retry-the-queue-2' })
   })
 })
+
+describe('publishing a repository', () => {
+  let dir: string
+  const run = (...args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' })
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'ramu-publish-'))
+    run('init', '-b', 'main')
+    run('config', 'user.email', 't@example.com')
+    run('config', 'user.name', 'T')
+  })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+  const input = { name: 'demo', visibility: 'private' as const }
+
+  it('asks for a first commit instead of calling GitHub', async () => {
+    await expect(forge.publishRepository(dir, input)).rejects.toThrow('Commit your changes first')
+  })
+
+  it('leaves a repository that already has a remote to Publish branch', async () => {
+    writeFileSync(join(dir, 'a.txt'), 'a')
+    run('add', '.')
+    run('commit', '-m', 'first')
+    run('remote', 'add', 'origin', 'https://github.com/o/r.git')
+    await expect(forge.publishRepository(dir, input)).rejects.toThrow('already has a remote')
+  })
+})

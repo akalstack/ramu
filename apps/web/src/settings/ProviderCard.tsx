@@ -5,19 +5,30 @@ import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { FolderOpen, RefreshCw } from 'lucide-react'
-import { providerName, supportsProviderAccounts, type ProviderStatus } from '@ramu/shared/providers/providers'
+import {
+  accountDisplayName,
+  providerAccountRows,
+  providerName,
+  supportsProviderAccounts,
+  type ProviderStatus,
+} from '@ramu/shared/providers/providers'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { AgentProvider } from '@ramu/shared/types'
 import { t } from '../i18n'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { SettingsField } from './SettingsScope'
 import type { useAccountUsage } from './Usage'
 import { SECONDARY_BUTTON_CLASS } from './constants'
-import {
-  PROVIDER_ACTIONS_CLASS,
-  ProviderAccountPicker,
-  ProviderAddAccountForm,
-  type ProviderPrefs,
-} from './ProviderAccountControls'
+import { PROVIDER_ACTIONS_CLASS, ProviderAddAccount, type ProviderPrefs } from './ProviderAccountControls'
 import { ProviderLoginRow } from './ProviderLoginRow'
 
 const BROWSE_BUTTON_CLASS = `${SECONDARY_BUTTON_CLASS} icon p-0 size-(--action-size) flex-none justify-center`
@@ -31,14 +42,12 @@ export function ProviderCard({
   accountUsage,
   signingIn,
   updating,
-  adding,
-  accountName,
   onChange,
   onLogin,
   onToggleAccount,
-  onStartAdd,
-  onCancelAdd,
-  onAccountName,
+  onReorder,
+  onRename,
+  onRemove,
   onAddAccount,
   onUpdate,
   onBrowse,
@@ -53,19 +62,34 @@ export function ProviderCard({
   signingIn: boolean
   // Provider currently being updated; any update disables every update button.
   updating: AgentProvider | null
-  adding: boolean
-  accountName: string
   onChange: (patch: Partial<ProviderPrefs>) => void
   onLogin: (accountId: string) => void
   onToggleAccount: (id: string, enabled: boolean) => void
-  onStartAdd: () => void
-  onCancelAdd: () => void
-  onAccountName: (name: string) => void
+  /** Account IDs in the new priority order; the first is used first. */
+  onReorder: (ids: string[]) => void
+  onRename: (id: string, name: string) => void
+  onRemove: (id: string) => void
   onAddAccount: () => void
   onUpdate: () => void
   onBrowse: (key: 'binary' | 'harness') => void
 }) {
   const accounts = supportsProviderAccounts(provider),
+    config = { [provider]: preferences ?? { binary: '' } },
+    order = accounts ? providerAccountRows(config, provider) : ['default'],
+    sensors = useSensors(
+      useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+      useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    ),
+    drop = (event: DragEndEvent) => {
+      const from = order.indexOf(String(event.active.id)),
+        to = order.indexOf(String(event.over?.id))
+      if (from >= 0 && to >= 0 && from !== to) onReorder(arrayMove(order, from, to))
+    },
+    on = (id: string) =>
+      id === 'default'
+        ? preferences?.defaultAccountEnabled !== false
+        : preferences?.accounts?.find((a) => a.id === id)?.enabled !== false,
+    onCount = order.filter(on).length,
     canUpdate = !((provider === 'codex' || provider === 'antigravity') && preferences?.binary?.trim())
   return (
     <Card
@@ -109,53 +133,61 @@ export function ProviderCard({
       {enabled && (
         <>
           {status?.installed && (
-            <ul
-              className="grid gap-1.5 m-0 p-0 list-none"
-              aria-label={t('{0} logins', { '0': providerName(provider) })}
-            >
-              {[
-                {
-                  id: 'default',
-                  name: accounts
-                    ? t(provider === 'antigravity' ? 'Default account' : 'Default CLI account')
-                    : t('CLI login'),
-                  enabled: true,
-                },
-                ...(accounts ? (preferences?.accounts ?? []) : []),
-              ].map((row) => (
-                <ProviderLoginRow
-                  key={row.id}
-                  provider={provider}
-                  row={row}
-                  state={status.signIn?.[row.id]}
-                  accountUsage={accountUsage}
-                  signingIn={signingIn}
-                  onLogin={() => onLogin(row.id)}
-                  onToggleAccount={(on) => onToggleAccount(row.id, on)}
-                />
-              ))}
-            </ul>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={drop}>
+              <SortableContext items={order} strategy={verticalListSortingStrategy}>
+                <SettingsField path={`providerBinaries.${provider}.accountOrder`}>
+                  <ul
+                    className="grid gap-1.5 m-0 p-0 list-none"
+                    aria-label={t('{0} logins', { '0': providerName(provider) })}
+                  >
+                    {order.map((id, index) => {
+                      const email = status.signIn?.[id]?.email,
+                        shown = accountDisplayName(config, provider, id, email),
+                        account = preferences?.accounts?.find((entry) => entry.id === id)
+                      return (
+                        <ProviderLoginRow
+                          key={id}
+                          provider={provider}
+                          row={{
+                            id,
+                            name:
+                              shown.fallback === 'default'
+                                ? t(
+                                    accounts
+                                      ? provider === 'antigravity'
+                                        ? 'Default account'
+                                        : 'Default CLI account'
+                                      : 'CLI login',
+                                  )
+                                : shown.fallback === 'numbered'
+                                  ? t('Account {0}', { '0': shown.number })
+                                  : shown.name,
+                            label: account?.name,
+                            enabled: account ? account.enabled : preferences?.defaultAccountEnabled,
+                          }}
+                          position={index + 1}
+                          state={status.signIn?.[id]}
+                          accountUsage={accountUsage}
+                          signingIn={signingIn}
+                          sortable={order.length > 1}
+                          onlyOn={onCount <= 1 && on(id)}
+                          onLogin={() => onLogin(id)}
+                          onToggleAccount={(on) => onToggleAccount(id, on)}
+                          onRename={(name) => onRename(id, name)}
+                          onRemove={() => onRemove(id)}
+                        />
+                      )
+                    })}
+                  </ul>
+                </SettingsField>
+              </SortableContext>
+            </DndContext>
           )}
-          {accounts && (
-            <ProviderAccountPicker
-              provider={provider}
-              preferences={preferences}
-              onSelect={(accountId) => onChange({ accountId })}
-              onAdd={onStartAdd}
-            />
-          )}
-          {adding && (
-            <ProviderAddAccountForm
-              name={accountName}
-              onName={onAccountName}
-              onAdd={onAddAccount}
-              onCancel={onCancelAdd}
-            />
-          )}
+          {accounts && <ProviderAddAccount preferences={preferences} onAdd={onAddAccount} />}
           {accounts && (
             <p className="muted text-muted-foreground small text-caption">
               {t(
-                'New threads use the selected account after saving; existing threads keep theirs. When the account a thread is using reaches its limit, it continues on the next enabled account before switching models.',
+                'New threads use the top account; existing threads keep theirs. When the account a thread is using reaches its limit, it continues on the next enabled account below it before switching models.',
               )}
             </p>
           )}

@@ -66,6 +66,7 @@ import type {
   IssueSummary,
   PullRequestDraft,
   PullRequestFeedbackKind,
+  PublishRepositoryInput,
   PullRequestInput,
   Project,
   Repository,
@@ -325,6 +326,8 @@ export interface RamuMethods {
   'tasks.bindings'(taskId: string): RepositoryBinding[]
   'settings.models.get'(): ModelPreferences | null
   'providers.status'(configuration?: ProviderConfiguration, checkLatest?: boolean): Promise<ProviderStatus[]>
+  /** Sign-in email per provider and login ID, for the logins whose CLI reports one. */
+  'providers.accountEmails'(): Promise<Record<string, Record<string, string>>>
   'providers.loginCommand'(
     provider: ProviderStatus['provider'],
     configuration?: ProviderConfiguration,
@@ -436,6 +439,7 @@ export interface RamuMethods {
   'forge.sendFeedback'(taskId: string, repoId: string, kind: PullRequestFeedbackKind): string | null
   'forge.pullRequestDraft'(taskId: string, repoId: string): PullRequestDraft
   /** Publishes the branch when needed, then opens the pull request. */
+  'forge.publishRepository'(taskId: string, repoId: string, input: PublishRepositoryInput): void
   'forge.createPullRequest'(taskId: string, repoId: string, input: PullRequestInput): ForgeStatus
   /** An opening message that hands failing checks or open review comments to an agent. */
   'forge.pullRequestFeedback'(taskId: string, repoId: string, kind: PullRequestFeedbackKind): string

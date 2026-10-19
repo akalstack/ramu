@@ -45,6 +45,7 @@ import { isGitBusy, useGitBusy, withGitBackground, withGitBusy } from './git/git
 import { CommitBranchDialog } from './git/CommitBranchDialog'
 import { CommitDialog } from './git/CommitDialog'
 import { CreatePullRequestHost } from './git/CreatePullRequestHost'
+import { openPublishRepository, PublishRepositoryHost } from './git/PublishRepositoryHost'
 import { Notifications, notifyError } from './chat/Notifications'
 import { SummaryHost } from './summaries/SummaryHost'
 import { TitleTooltips } from './TitleTooltips'
@@ -670,6 +671,7 @@ function Shell() {
       <CommitBranchDialog />
       <CommitDialog />
       <CreatePullRequestHost />
+      <PublishRepositoryHost />
       <TitleTooltips />
       <CreateEntryDialog />
       <AddProjectDialog />
@@ -954,6 +956,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
         pullMode={preferences.pullMode}
         className="status-sync"
         onSync={() => void run(() => invoke('git.sync', taskId, binding.repoId), true)}
+        onPublishRepository={() => void openPublishRepository(taskId, binding.repoId, binding.repoName)}
       />
       {repos.length > 1 && (
         <Button

@@ -18,9 +18,9 @@ export function recommendedSets(catalogs: ProviderCatalog[]): ModelPreferences {
   ): ModelStep => ({ id, name, provider: 'codex', model: model?.id ?? fallbackId, effort })
   const steps = [
     step('luna-high', 'GPT-6 Luna High', luna, 'gpt-6-luna', 'high'),
-    step('sol-light', 'GPT-6.1 Sol Light', sol, 'gpt-6.1-sol', 'low'),
+    step('sol-light', 'GPT-6.1 Sol Low', sol, 'gpt-6.1-sol', 'low'),
     step('sol-medium', 'GPT-6.1 Sol Medium', sol, 'gpt-6.1-sol', 'medium'),
-    step('astra-light', 'GPT-6 Astra Light', astra, 'gpt-6-astra', 'low'),
+    step('astra-light', 'GPT-6 Astra Low', astra, 'gpt-6-astra', 'low'),
     step('astra-medium', 'GPT-6 Astra Medium', astra, 'gpt-6-astra', 'medium'),
   ]
   return {
@@ -45,6 +45,18 @@ export function migrateModelDefaults(value: ModelPreferences, defaults: ModelPre
   const isShort =
     old.steps.length === 5 &&
     old.steps.every((step, index) => step.id === steps[index]!.id && step.name === shortNames[index])
+  const isRenamed =
+    old.steps.length === steps.length &&
+    old.steps.every((step, index) => {
+      const expected = steps[index]!
+      return (
+        step.id === expected.id &&
+        step.name === expected.name.replace(/ Low$/, ' Light') &&
+        step.provider === expected.provider &&
+        step.model === expected.model &&
+        step.effort === expected.effort
+      )
+    })
   const isCurrent =
     old.steps.length === steps.length &&
     old.steps.every((step, index) => {
@@ -58,7 +70,8 @@ export function migrateModelDefaults(value: ModelPreferences, defaults: ModelPre
       )
     })
   const replaceDefault = value.defaultSetId === old.id && (isLegacy || value.defaultStepId === 'sol-medium')
-  if (!isLegacy && !isShort && !(isCurrent && replaceDefault)) return value
+  if (isCurrent && !replaceDefault) return value
+  if (!isLegacy && !isShort && !isRenamed && !(isCurrent && replaceDefault)) return value
   return {
     ...value,
     sets: value.sets.map((set) => (set.id === old.id ? { ...set, steps } : set)),

@@ -139,30 +139,25 @@ export function ModelStepCard({
             }}
           />
         </label>
-        <label>
-          {t('Effort')}
-          <Dropdown
-            label={t('Step {0} effort', { '0': index + 1 })}
-            value={
-              step.effort ??
-              (step.provider === 'claude-code' || step.provider === 'codex' ? model?.defaultEffort : null) ??
-              ''
-            }
-            disabled={busy || !model?.efforts.length}
-            options={[
-              ...(step.provider === 'claude-code' || step.provider === 'codex'
-                ? []
-                : [{ value: '', label: t('Default effort') }]),
-              ...(model?.efforts ?? []).map((effort) => ({
-                value: effort,
-                label: effortDisplayName(effort, step.provider),
-              })),
-            ]}
-            onChange={(effort) =>
-              onUpdate({ ...step, effort: model?.efforts.find((entry) => entry === effort) ?? null })
-            }
-          />
-        </label>
+        {!!model?.efforts.length && (
+          <label>
+            {t('Effort')}
+            <Dropdown
+              label={t('Step {0} effort', { '0': index + 1 })}
+              value={step.effort ?? model?.defaultEffort ?? ''}
+              disabled={busy || !model?.efforts.length}
+              options={[
+                ...(model?.efforts ?? []).map((effort) => ({
+                  value: effort,
+                  label: effortDisplayName(effort, step.provider),
+                })),
+              ]}
+              onChange={(effort) =>
+                onUpdate({ ...step, effort: model?.efforts.find((entry) => entry === effort) ?? null })
+              }
+            />
+          </label>
+        )}
       </div>
     </section>
   )

@@ -16,15 +16,16 @@ export function CommitPushButton({ taskId }: { taskId: string }) {
   useLanguage()
   const ws = useWorkspace()
   const { invoke } = useHost()
-  const changes = useGitChangeCount(taskId, ws.bindings[taskId] ?? [])
+  const bindings = (ws.bindings[taskId] ?? []).filter((binding) => !binding.folderOnly)
+  const changes = useGitChangeCount(taskId, bindings)
   // Spinning only while git is really working; choosing in the popup, or cancelling it, leaves the button alone.
   const busy = useAnyGitBusy(
     taskId,
-    (ws.bindings[taskId] ?? []).map((binding) => binding.repoId),
+    bindings.map((binding) => binding.repoId),
   )
   const canCreatePr = useAnyPullRequestSupport(
     taskId,
-    (ws.bindings[taskId] ?? []).map((binding) => binding.repoId),
+    bindings.map((binding) => binding.repoId),
   )
   if (!changes && !busy) return null
   return (

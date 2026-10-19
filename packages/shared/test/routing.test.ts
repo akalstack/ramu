@@ -6,7 +6,7 @@ import {
   type ProviderCatalog,
   type UsageReading,
 } from '../src/types'
-import { providerAccountOrder } from '../src/providers/providers'
+import { accountDisplayName, providerAccountOrder, providerAccountRows } from '../src/providers/providers'
 import {
   accountKey,
   defaultOrder,
@@ -278,6 +278,37 @@ describe('account rotation', () => {
     ).toEqual(['default'])
     expect(providerAccountOrder({ codex: { binary: '' } }, 'codex')).toEqual(['default'])
     expect(providerAccountOrder(config, 'claude-code')).toEqual(['default'])
+  })
+  it('follows the arranged order, top first, and ignores unknown or turned-off accounts', () => {
+    const config = {
+      codex: {
+        binary: '',
+        accountId: 'b',
+        accountOrder: ['a', 'gone', 'default', 'b'],
+        accounts: [{ id: 'a' }, { id: 'b', enabled: false }, { id: 'c' }],
+      },
+    }
+    // Arranged accounts first, the unarranged one last; `b` is off and `gone` no longer exists.
+    expect(providerAccountOrder(config, 'codex')).toEqual(['a', 'default', 'c'])
+    // The list shows turned-off logins too, so they can be turned back on in place.
+    expect(providerAccountRows(config, 'codex')).toEqual(['a', 'default', 'b', 'c'])
+  })
+  it('can turn the default login off, but never leaves a provider with no login', () => {
+    const accounts = [{ id: 'a' }]
+    expect(providerAccountOrder({ codex: { binary: '', defaultAccountEnabled: false, accounts } }, 'codex')).toEqual([
+      'a',
+    ])
+    expect(
+      providerAccountOrder({ codex: { binary: '', defaultAccountEnabled: false, accounts: [] } }, 'codex'),
+    ).toEqual(['default'])
+  })
+  it('names an account by its label, then its sign-in email, then its position', () => {
+    const config = { codex: { binary: '', accounts: [{ id: 'a', name: ' Work ' }, { id: 'b' }, { id: 'c' }] } }
+    expect(accountDisplayName(config, 'codex', 'a', 'a@x.io').name).toBe('Work')
+    expect(accountDisplayName(config, 'codex', 'b', 'b@x.io').name).toBe('b@x.io')
+    expect(accountDisplayName(config, 'codex', 'c')).toMatchObject({ fallback: 'numbered', number: 4 })
+    expect(accountDisplayName(config, 'codex', 'default', 'me@x.io').name).toBe('me@x.io')
+    expect(accountDisplayName(config, 'codex', 'default')).toMatchObject({ fallback: 'default' })
   })
   it('skips accounts that are limited or already tried', () => {
     const accounts = ['a', 'default', 'b']

@@ -103,14 +103,26 @@ export const registerSettingsHandlers: RegisterHandlers = ({
           edits.filter((edit) => edit.path !== '$models'),
         )
         for (const edit of edits) {
-          const match = /^providerBinaries\.([^.]+)\.(accountId|accounts)$/.exec(edit.path)
+          const match = /^providerBinaries\.([^.]+)\.(accountId|accounts|accountOrder|defaultAccountEnabled)$/.exec(
+            edit.path,
+          )
           if (!match) continue
           const config = (
             preferences.providerBinaries as Record<
               string,
-              { accountId?: string; accounts?: { id: string; enabled?: boolean }[] }
+              {
+                accountId?: string
+                accounts?: { id: string; enabled?: boolean }[]
+                defaultAccountEnabled?: boolean
+              }
             >
           )[match[1]!]
+          if (
+            config &&
+            config.defaultAccountEnabled === false &&
+            !config.accounts?.some((account) => account.enabled !== false)
+          )
+            throw new Error('Keep at least one login turned on.')
           if (
             config?.accountId &&
             config.accountId !== 'default' &&

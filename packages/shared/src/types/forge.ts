@@ -49,6 +49,12 @@ export interface PullRequestDraft {
   issue: IssueLink | null
 }
 
+export interface PublishRepositoryInput {
+  /** `name` for the signed-in account, or `owner/name`. */
+  name: string
+  visibility: 'private' | 'public'
+}
+
 export interface PullRequestInput {
   title: string
   body: string

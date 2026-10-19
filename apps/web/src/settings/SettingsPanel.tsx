@@ -114,7 +114,7 @@ export function SettingsPanel({
   const resetPage = (section: SettingsSection) => {
     if (!RESET_KEYS[section]) return
     for (const field of scope.targets.find((entry) => entry.id === scope.primaryId)?.snapshot?.settings ?? []) {
-      if (field.path.includes('.accounts')) continue
+      if (field.path.includes('.accounts') || field.path.includes('.accountOrder')) continue
       if (inResetSection(section, field.path) && !scope.field(field.path).disabled) scope.mark(field.path)
     }
     setAppDraft((current) => resetSection(current, section))

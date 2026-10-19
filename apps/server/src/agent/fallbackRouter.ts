@@ -216,7 +216,7 @@ export class FallbackRouter {
 
   private accountName(provider: AgentProvider, accountId: string | undefined): string {
     if (!accountId || accountId === 'default') return 'the default account'
-    return `account "${this.host.preferences()?.providerBinaries[provider]?.accounts?.find((entry) => entry.id === accountId)?.name ?? accountId}"`
+    return `account "${this.host.preferences()?.providerBinaries[provider]?.accounts?.find((entry) => entry.id === accountId)?.name?.trim() || accountId}"`
   }
 
   /** Fallback order and threshold for a session: a sub-agent may use its own order and an earlier threshold. */

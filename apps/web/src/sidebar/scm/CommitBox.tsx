@@ -32,6 +32,7 @@ export function CommitBox({
   onGenerate,
   commit,
   onSync,
+  onPublishRepository,
   reportError,
 }: {
   /** GitHub with a signed-in `gh`: the only host that can open pull requests today. */
@@ -51,6 +52,7 @@ export function CommitBox({
   onGenerate: () => void
   commit: CommitFn
   onSync: () => void
+  onPublishRepository: () => void
   reportError: (message: string) => void
 }) {
   const { preferences, save: savePreferences } = useAppSettings()
@@ -79,8 +81,7 @@ export function CommitBox({
     !status.entries.length &&
     !status.operation &&
     !!status.branch &&
-    !!status.remote &&
-    (!status.upstream || status.ahead > 0 || status.behind > 0)
+    (status.remote ? !status.upstream || status.ahead > 0 || status.behind > 0 : !!status.oid)
   return (
     <>
       <div className="commit-input-wrap relative m-[4px_0_8px]">
@@ -224,6 +225,7 @@ export function CommitBox({
           className="scm-commit primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover mb-1.5"
           showLabel
           onSync={onSync}
+          onPublishRepository={onPublishRepository}
         />
       )}
       {draft && (

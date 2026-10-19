@@ -27,6 +27,7 @@ export const operationLabels: Record<string, string> = {
   'git.pull': 'Pulling repository updates',
   'git.push': 'Pushing repository changes',
   'forge.createPullRequest': 'Opening pull request',
+  'forge.publishRepository': 'Publishing repository',
   'forge.pullRequestFeedback': 'Collecting pull request feedback',
   'git.sync': 'Syncing repositories',
   'git.checkout': 'Switching branches',

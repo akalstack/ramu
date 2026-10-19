@@ -38,7 +38,11 @@ export const claudeCodeAdapter = defineAdapter({
     try {
       const status = JSON.parse(out)
       return status.loggedIn
-        ? { signedIn: true, ...(typeof status.authMethod === 'string' ? { detail: status.authMethod } : {}) }
+        ? {
+            signedIn: true,
+            ...(typeof status.authMethod === 'string' ? { detail: status.authMethod } : {}),
+            ...(typeof status.email === 'string' && status.email ? { email: status.email } : {}),
+          }
         : { signedIn: false }
     } catch {
       return { signedIn: false }

@@ -147,6 +147,35 @@ export class ProviderService {
     return `${clean}${assignments}${process.platform === 'win32' ? '& ' : ''}${quote(providerBinary(provider, config))} ${args.join(' ')}`
   }
   /** Providers whose sign-in runs inside Ramu instead of a terminal command. */
+  private emails = new Map<string, { at: number; email?: string }>()
+  /** The sign-in email of each login that reports one, read at most every ten minutes, for naming accounts without a label. */
+  async accountEmails(): Promise<Record<string, Record<string, string>>> {
+    const config = this.preferences().providerBinaries ?? {}
+    const result: Record<string, Record<string, string>> = {}
+    await Promise.all(
+      AGENT_PROVIDERS.map(async (provider) => {
+        const binary = providerBinary(provider, config)
+        if (!providerEnabled(config, provider) || !findExecutable(binary)) return
+        const ids = ['default', ...(config[provider]?.accounts ?? []).map((account) => account.id)]
+        await Promise.all(
+          ids.map(async (id) => {
+            const key = `${provider}:${id}`
+            let hit = this.emails.get(key)
+            if (!hit || Date.now() - hit.at > 10 * 60_000) {
+              const state = await signInState(provider, binary, providerEnvironment(provider, config, id)).catch(
+                () => undefined,
+              )
+              hit = { at: Date.now(), ...(state?.email ? { email: state.email } : {}) }
+              this.emails.set(key, hit)
+            }
+            if (hit.email) (result[provider] ??= {})[id] = hit.email
+          }),
+        )
+      }),
+    )
+    return result
+  }
+
   async signIn(provider: AgentProvider, accountId = 'default'): Promise<void> {
     const adapter = providerAdapter(provider)
     if (!adapter.signIn) throw new Error('Use the Login command for this provider.')

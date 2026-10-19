@@ -5,7 +5,7 @@ import { chooseCommitBranch } from '../../git/CommitBranchDialog'
 import { applyCommitScope, chooseCommit, type CommitPlan } from '../../git/CommitDialog'
 import { withGitBusy } from '../../git/gitBusy'
 import { openCreatePullRequest } from '../../git/CreatePullRequestHost'
-import { notify } from '@/components/app-toaster'
+import { reportGitJob } from '../../git/reportGitJob'
 import { t } from '../../i18n'
 import { commitActionLabel } from './helpers'
 import type { GitRun } from './types'
@@ -139,8 +139,8 @@ export function useCommitFlow({
     })
   }
   /**
-   * Runs what the commit popup chose as one git job, with a progress toast: scope the index, draft a message if none was
-   * written, commit, then push or sync. Every failure ends in an error toast instead of returning silently.
+   * Runs what the commit popup chose as one git job, as one job reported in the notification bell: scope the index, draft a message if none was
+   * written, commit, then push or sync. Every failure ends in an error toast and a bell notice instead of returning silently.
    */
   const commitPlan = async (plan: CommitPlan) => {
     const { branch } = plan
@@ -170,31 +170,18 @@ export function useCommitFlow({
       if (plan.action === 'sync') await invoke('git.sync', taskId, binding.repoId)
       return text.split('\n')[0]!
     }).finally(() => window.dispatchEvent(new Event('ramu:git-updated')))
-    void notify
-      .promise(work, {
-        loading: {
-          title: t('{0} {1}…', { '0': commitActionLabel(plan.action), '1': binding.repoName }),
-          type: 'loading',
-        },
-        success: (subject) => ({
-          title:
-            plan.action === 'commit'
-              ? t('Committed “{0}”', { '0': subject })
-              : t('Committed “{0}” and {1} {2}', {
-                  '0': subject,
-                  '1': plan.action === 'sync' ? t('synced') : t('pushed to'),
-                  '2': plan.action === 'sync' ? '' : (pushedTo ?? ''),
-                }),
-          type: 'success',
-        }),
-        error: (reason) => ({
-          title: errorText(reason),
-          description: commitActionLabel(plan.action),
-          type: 'error',
-          timeout: 0,
-        }),
-      })
-      .catch(() => {})
+    void reportGitJob(work, {
+      id: `git-job:${taskId}:${binding.repoId}`,
+      success: (subject) =>
+        plan.action === 'commit'
+          ? t('Committed “{0}”', { '0': subject })
+          : t('Committed “{0}” and {1} {2}', {
+              '0': subject,
+              '1': plan.action === 'sync' ? t('synced') : t('pushed to'),
+              '2': plan.action === 'sync' ? '' : (pushedTo ?? ''),
+            }),
+      failure: { message: errorText, description: commitActionLabel(plan.action) },
+    })
     // A failed commit or push leaves nothing to propose; otherwise the pull request dialog opens on the pushed branch.
     if (
       plan.pullRequest &&

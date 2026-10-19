@@ -52,6 +52,7 @@ export function SyncButton({
   busy,
   pullMode,
   onSync,
+  onPublishRepository,
   className = '',
   showLabel = false,
 }: {
@@ -59,6 +60,8 @@ export function SyncButton({
   busy: boolean
   pullMode: PullMode
   onSync: () => void
+  /** Offered when the repository has no remote yet: create one on GitHub and push to it. */
+  onPublishRepository?: () => void
   className?: string
   showLabel?: boolean
 }) {
@@ -76,7 +79,21 @@ export function SyncButton({
         <span>{status.operation === 'rebase' ? t('Rebasing…') : t('Merging…')}</span>
       </Button>
     )
-  if (!status.branch || !status.remote) return null
+  if (!status.branch) return null
+  if (!status.remote)
+    return onPublishRepository && status.oid ? (
+      <Button
+        variant="secondary"
+        className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover sync-button ${className}`}
+        disabled={busy}
+        aria-label={t('Publish to GitHub')}
+        title={t('Create a GitHub repository for this folder and push {0}', { '0': status.branch })}
+        onClick={onPublishRepository}
+      >
+        <CloudUpload size={13} />
+        <span>{showLabel ? t('Publish to GitHub') : t('Publish')}</span>
+      </Button>
+    ) : null
   if (!status.upstream)
     return (
       <Button

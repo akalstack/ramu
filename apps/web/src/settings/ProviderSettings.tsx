@@ -6,7 +6,13 @@ import { useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
-import { AGENT_PROVIDERS, providerEnabled, providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
+import {
+  AGENT_PROVIDERS,
+  providerAccountRows,
+  providerEnabled,
+  providerName,
+  type ProviderStatus,
+} from '@ramu/shared/providers/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
 import { runProviderCommand } from '../models/ProviderSetupTerminal'
 import { useAccountUsage } from './Usage'
@@ -25,9 +31,8 @@ export function ProviderSettings({
   const [busy, setBusy] = useState(true),
     [updating, setUpdating] = useState<AgentProvider | null>(null)
   const [signingIn, setSigningIn] = useState<AgentProvider | null>(null)
-  const [error, setError] = useState<string | null>(null),
-    [adding, setAdding] = useState<AgentProvider | null>(null),
-    [name, setName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
   const sequence = useRef(0),
     config = value.providerBinaries
   const accountUsage = useAccountUsage()
@@ -67,12 +72,41 @@ export function ProviderSettings({
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [config])
-  const toggleAccount = (provider: AgentProvider, id: string, enabled: boolean) =>
+  /** The top enabled login is the one new threads use. */
+  const arrange = (
+    provider: AgentProvider,
+    order: string[],
+    accounts = config[provider]?.accounts ?? [],
+    defaultOn = config[provider]?.defaultAccountEnabled !== false,
+  ) =>
     change(provider, {
-      accounts: (config[provider]?.accounts ?? []).map((account) =>
-        account.id === id ? { ...account, enabled } : account,
-      ),
-      ...(!enabled && config[provider]?.accountId === id ? { accountId: 'default' } : {}),
+      accounts,
+      accountOrder: order,
+      defaultAccountEnabled: defaultOn ? undefined : false,
+      accountId:
+        order.find((id) => (id === 'default' ? defaultOn : accounts.some((a) => a.id === id && a.enabled !== false))) ??
+        'default',
+    })
+  const toggleAccount = (provider: AgentProvider, id: string, enabled: boolean) =>
+    arrange(
+      provider,
+      providerAccountRows(config, provider),
+      (config[provider]?.accounts ?? []).map((account) => (account.id === id ? { ...account, enabled } : account)),
+      id === 'default' ? enabled : undefined,
+    )
+  const remove = (provider: AgentProvider, id: string) =>
+    arrange(
+      provider,
+      providerAccountRows(config, provider).filter((item) => item !== id),
+      (config[provider]?.accounts ?? []).filter((account) => account.id !== id),
+    )
+  const rename = (provider: AgentProvider, id: string, name: string) =>
+    change(provider, {
+      accounts: (config[provider]?.accounts ?? []).map((account) => {
+        if (account.id !== id) return account
+        const { name: _old, ...rest } = account
+        return name ? { ...rest, name } : rest
+      }),
     })
   const login = async (provider: AgentProvider, accountId = config[provider]?.accountId || 'default') => {
     if (provider === 'antigravity') {
@@ -113,11 +147,8 @@ export function ProviderSettings({
     }
   }
   const add = (provider: AgentProvider) => {
-    if (!name.trim()) return
     const id = crypto.randomUUID()
-    change(provider, { accounts: [...(config[provider]?.accounts ?? []), { id, name: name.trim() }], accountId: id })
-    setAdding(null)
-    setName('')
+    arrange(provider, [...providerAccountRows(config, provider), id], [...(config[provider]?.accounts ?? []), { id }])
   }
   return (
     <div className="settings-form [&_p]:m-0 [&_p]:leading-[1.55] flex flex-col gap-3 provider-settings">
@@ -167,17 +198,12 @@ export function ProviderSettings({
             accountUsage={accountUsage}
             signingIn={signingIn === provider}
             updating={updating}
-            adding={adding === provider}
-            accountName={name}
             onChange={(patch) => change(provider, patch)}
             onLogin={(accountId) => void login(provider, accountId)}
             onToggleAccount={(id, on) => toggleAccount(provider, id, on)}
-            onStartAdd={() => {
-              setAdding(provider)
-              setName('')
-            }}
-            onCancelAdd={() => setAdding(null)}
-            onAccountName={setName}
+            onReorder={(order) => arrange(provider, order)}
+            onRename={(id, label) => rename(provider, id, label)}
+            onRemove={(id) => remove(provider, id)}
             onAddAccount={() => add(provider)}
             onUpdate={() => void update(provider)}
             onBrowse={(key) => void browse(provider, key)}

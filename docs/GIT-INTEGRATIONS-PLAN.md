@@ -52,7 +52,16 @@ Route existing GitHub watches through the adapter boundary with host/account/rep
 
 Cancellation and timeouts must distinguish failed from unknown outcomes. After a create request loses its response, reconcile against the intended repository and branch before offering retry; do not duplicate a PR or retry through another account. Preserve partial push/create/watch outcomes and existing Git locks. Enforce capabilities and authorization on the server as well as in UI.
 
-After the GitHub connection and existing flows work, add GitHub-backed repository search/clone and publish through the existing project/host-folder flow. Keep a pasted Git URL available. Clone destinations belong to the workspace host; cancelled/failed clones preserve inspectable state. Publishing previews account, destination, visibility (private by default), remote name and push scope before executing; a partial publish must be reconcilable without recreating the repository. Full review/merge dashboards, automatic merging, stacks, webhooks and cross-host credential brokering are deferred.
+**Publish branch (next increment, GitHub only).** Source Control's Publish already pushes a branch to an existing remote and sets its upstream. Close the gaps the way VS Code does:
+
+- A repository with no remote shows **Publish to GitHub** in the same places as Publish branch (Source Control header, repository menu, commit box, Commit & Push). It opens a small dialog: repository name (defaults to the folder name, or `owner/name`), **Private** by default with a Public choice, and the remote name (`origin`); showing the signed-in account waits for the connection summary above. Confirming creates the repository with `gh repo create --source` and pushes the current branch with its upstream set. A repository without commits explains that a first commit is needed instead of failing.
+- Several remotes with none named `origin` still return the upstream error; a remote picker is a later option.
+- Missing or signed-out `gh` and non-GitHub remotes use the existing `forge` availability explanations with **Open Settings → Git**. Other hosts show nothing until their adapter lands; plain Git publish to any remote keeps working.
+- A repository created but not pushed (lost response, rejected push) is reconciled: retry pushes to the existing remote rather than recreating the repository.
+
+Tests cover no-remote publish, name/visibility arguments, no-commit and signed-out errors and retry after a partial publish, using a temporary repository and a fake `gh`.
+
+Then after the GitHub connection and existing flows work, add GitHub-backed repository search/clone and publish through the existing project/host-folder flow. Keep a pasted Git URL available. Clone destinations belong to the workspace host; cancelled/failed clones preserve inspectable state. Publishing previews account, destination, visibility (private by default), remote name and push scope before executing; a partial publish must be reconcilable without recreating the repository. Full review/merge dashboards, automatic merging, stacks, webhooks and cross-host credential brokering are deferred.
 
 ## Implementation and acceptance
 

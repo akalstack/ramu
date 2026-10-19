@@ -17,17 +17,37 @@ const cli = (body: string) => {
   return bin
 }
 
+const codexHome = (auth?: object) => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-codex-'))
+  dirs.push(dir)
+  if (auth) writeFileSync(join(dir, 'auth.json'), JSON.stringify(auth))
+  return { ...process.env, CODEX_HOME: dir }
+}
 it('reads Codex login status from either output stream', async () => {
-  expect(await signInState('codex', cli('echo "Logged in using ChatGPT" >&2'), process.env)).toEqual({
+  expect(await signInState('codex', cli('echo "Logged in using ChatGPT" >&2'), codexHome())).toEqual({
     signedIn: true,
     detail: 'ChatGPT',
   })
-  expect(await signInState('codex', cli('echo "Not logged in" >&2; exit 1'), process.env)).toEqual({ signedIn: false })
+  expect(await signInState('codex', cli('echo "Not logged in" >&2; exit 1'), codexHome())).toEqual({ signedIn: false })
+})
+it('names a Codex login by the email in its ChatGPT token, and never returns the token', async () => {
+  const claims = Buffer.from(JSON.stringify({ email: 'me@example.com' })).toString('base64url')
+  const state = await signInState(
+    'codex',
+    cli('echo "Logged in using ChatGPT"'),
+    codexHome({ tokens: { id_token: `h.${claims}.s` } }),
+  )
+  expect(state).toEqual({ signedIn: true, detail: 'ChatGPT', email: 'me@example.com' })
+  expect(JSON.stringify(state)).not.toContain(claims)
 })
 it('reads Claude, Cursor and OpenCode login state', async () => {
   expect(
-    await signInState('claude-code', cli('echo \'{"loggedIn":true,"authMethod":"oauth_token"}\''), process.env),
-  ).toEqual({ signedIn: true, detail: 'oauth_token' })
+    await signInState(
+      'claude-code',
+      cli('echo \'{"loggedIn":true,"authMethod":"oauth_token","email":"me@example.com"}\''),
+      process.env,
+    ),
+  ).toEqual({ signedIn: true, detail: 'oauth_token', email: 'me@example.com' })
   expect(await signInState('claude-code', cli('echo \'{"loggedIn":false}\''), process.env)).toEqual({ signedIn: false })
   // Cursor chats run on its SDK, which takes an API key (or its own stored login), not the CLI's session.
   expect(await signInState('cursor', cli('exit 1'), { ...process.env, CURSOR_API_KEY: 'key' })).toEqual({
