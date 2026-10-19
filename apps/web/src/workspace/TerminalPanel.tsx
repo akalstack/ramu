@@ -76,7 +76,8 @@ export function TerminalPanel({
         }
       }
       for (const info of list) {
-        if (mine.has(info.id) || info.exited || adoptQueued(taskId, info.id)) continue
+        // A persistent command opens a view only when the person asks to see its output.
+        if (mine.has(info.id) || info.exited || info.background || adoptQueued(taskId, info.id)) continue
         queueAdopt(taskId, info.id)
         ws.openView(taskId, { kind: 'terminal', ...(info.repoId ? { repoId: info.repoId } : {}) })
       }

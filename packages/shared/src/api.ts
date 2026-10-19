@@ -95,6 +95,25 @@ export interface TerminalInfo {
   repoId: string | null
   cwd: string
   exited: boolean
+  /** Set for a persistent command Ramu launched for a thread. */
+  background?: true
+}
+
+export type BackgroundTerminalState = 'running' | 'stopping' | 'exited' | 'failed'
+
+/** One persistent command Ramu launched for a thread. The host owns identity, lifecycle and output. */
+export interface BackgroundTerminalInfo {
+  id: string
+  taskId: string
+  repoId: string | null
+  cwd: string
+  command: string
+  state: BackgroundTerminalState
+  startedAt: number
+  endedAt: number | null
+  exitCode: number | null
+  cursor: number
+  capabilities: { inspect: true; stop: true; forceStop: boolean; input: true }
 }
 
 /** Counts only: lock-screen content never includes prompts, paths, host names or credentials. */
@@ -497,6 +516,14 @@ export interface RamuMethods {
   /** Sequenced persisted events for race-free remote hydration. */
   'agent.snapshot'(sessionId: string): { revision: number; events: { seq: number; event: AgentEvent }[] }
   'term.list'(taskId: string): TerminalInfo[]
+  /** Starts a persistent command in the thread's folder; repeating a running one returns it instead of starting another. */
+  'term.background.launch'(taskId: string, repoId: string | null, command: string): BackgroundTerminalInfo
+  /** The thread's persistent commands, running first. Works while the thread is idle. */
+  'term.background.list'(taskId: string): BackgroundTerminalInfo[]
+  /** One command and its bounded output; rejects an id the thread does not own. */
+  'term.background.inspect'(taskId: string, termId: string): BackgroundTerminalInfo & { output: string }
+  /** Requests termination of that command's process group (`force` kills it). Safe to repeat and after it ended. */
+  'term.background.stop'(taskId: string, termId: string, force?: boolean): BackgroundTerminalInfo
   'term.snapshot'(termId: string): { output: string; cursor: number; exited: boolean }
   /** Your messages and the agent's replies that contain `query`, newest first, across every chat. */
   'agent.searchMessages'(query: string): ChatSearchHit[]

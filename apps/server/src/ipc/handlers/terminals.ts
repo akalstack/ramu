@@ -30,5 +30,24 @@ export const registerTerminalHandlers: RegisterHandlers = ({ workspace, terminal
     run: (ids: string[]) => ids.filter((t) => terminals.busy(t)).length,
   },
   'term.list': { args: z.tuple([id]), run: (taskId: string) => terminals.list(taskId) },
+  'term.background.launch': {
+    args: z.tuple([id, id.nullable(), z.string().min(1).max(4000)]),
+    run: (taskId: string, repoId: string | null, command: string) =>
+      terminals.launchBackground(
+        taskId,
+        repoId,
+        repoId ? cwdOf(taskId, repoId) : workspace.agentScope(taskId).cwd,
+        command,
+      ),
+  },
+  'term.background.list': { args: z.tuple([id]), run: (taskId: string) => terminals.listBackground(taskId) },
+  'term.background.inspect': {
+    args: z.tuple([id, id]),
+    run: (taskId: string, termId: string) => terminals.inspectBackground(taskId, termId),
+  },
+  'term.background.stop': {
+    args: z.tuple([id, id, z.boolean().optional()]),
+    run: (taskId: string, termId: string, force?: boolean) => terminals.stopBackground(taskId, termId, force ?? false),
+  },
   'term.snapshot': { args: z.tuple([id]), run: (termId: string) => terminals.snapshot(termId) },
 })

@@ -1,5 +1,6 @@
 import { McpStatusDialog } from './agent/components/McpStatusDialog'
 import { ThreadActivitySummary } from '../chat/ThreadActivity'
+import { BackgroundTerminals } from '../chat/BackgroundTerminals'
 import { helperActive, helperGroups } from '@ramu/shared/chat/helperPresentation'
 import { threadActivity, goalActivityLabel, type ActivityKind } from '@ramu/shared/chat/threadActivity'
 import { isLimitHold } from '@ramu/shared/chat/goalHold'
@@ -758,6 +759,7 @@ export const AgentView = memo(function AgentView({
           </MessageScrollerProvider>
           <div className="composer-dock [&_>_*]:w-full [&_>_*]:max-w-[var(--chat-column-width)] [&_>_*]:ml-auto [&_>_*]:mr-auto [&_.error]:mb-1.5 [&_.error]:text-control [&_.composer]:relative [&_.composer]:z-1 flex-none p-[0_calc(24px_+_var(--chat-scrollbar-width,_0px))_14px_24px]">
             {error && <div className="error text-bad">{error}</div>}
+            {session?.taskId && <BackgroundTerminals taskId={session.taskId} />}
             <ThreadActivitySummary
               workingLabel={activityLabel ? translate(activityLabel) : undefined}
               model={activity}

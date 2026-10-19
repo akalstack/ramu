@@ -20,6 +20,8 @@ Thread and workspace panes share a resizable split. Bottom terminals span both p
 
 Terminal tabs contain groups of panes. Splitting keeps the shell in its group; moving a pane to a tab preserves it. Hidden groups keep running. Layout and grouping persist with workspace state.
 
+Persistent commands Ramu launched for a thread (`term.background.*`) are owned by the host, not by a tab. The thread's activity dock shows a **Background terminals** count whenever any exist, including after the agent is idle. **Open output** attaches the existing terminal by identity without starting a shell; closing that tab leaves the command running. **Stop** asks the command's process group to end and shows *Stopping*; **Force stop** appears only then. Repeating a request, or stopping a command that already ended, is safe, and final output and exit code stay readable. Commands live in server memory: a server restart ends them and they are not listed afterward. Removing a thread ends its commands.
+
 Markdown files open in **Preview**, a rendered view without editing. The file header offers **Source** (raw Markdown), **Edit** (rendered editing), and **Preview**. Settings → Editor → Default Markdown view changes the opening mode for newly opened files; switching a mode in one open file keeps its current buffer. Links to a source line or search match open Source so the requested location remains visible.
 
 Editors, terminals, and attachments use native context menus. Keep clipboard and save-dialog operations in the main process.

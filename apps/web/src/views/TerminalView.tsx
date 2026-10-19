@@ -196,7 +196,9 @@ export function TerminalView({
       if (!known && viewId && !initialCommand) {
         const live = await invoke('term.list', taskId).catch(() => [])
         const shown = new Set(allShells())
-        known = live.find((entry) => !entry.exited && !shown.has(entry.id) && entry.repoId === repoId)?.id
+        known = live.find(
+          (entry) => !entry.exited && !entry.background && !shown.has(entry.id) && entry.repoId === repoId,
+        )?.id
       }
       if (!known || disposed) return null
       // Claimed at once, so another view (or a second pass of this effect) cannot take the same shell.
@@ -205,7 +207,8 @@ export function TerminalView({
       try {
         const snap = await invoke('term.snapshot', shell)
         const info = (await invoke('term.list', taskId)).find((entry) => entry.id === shell)
-        if (!info || snap.exited) {
+        // An ended persistent command still shows its final output instead of being replaced by a new shell.
+        if (!info || (snap.exited && !info.background)) {
           if (viewId) forgetTerminal(viewId, shell)
           return null
         }

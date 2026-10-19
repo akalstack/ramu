@@ -36,7 +36,17 @@ For consistent management across providers that can call Ramu tools, add a manag
 5. **Keep lifecycle understandable.** Hiding the list or closing its output viewer leaves the command running. Keep existing ordinary terminal-tab close semantics explicit; inspect and stop are distinct for this flow. Completing or stopping an agent turn does not itself stop a deliberately persistent command. If provider shutdown necessarily ends its commands, report that outcome. Feed human stop actions into the existing agent event/session boundary so the agent does not silently relaunch the command; restarting needs a new explicit instruction.
 6. **Recover honestly.** Navigation, window close and client disconnect leave server-owned work alone. Reconnect reads authoritative state and resumes output by cursor without duplicate rows. After server/provider restart, reconcile durable ownership records with live handles; report unknown/unavailable when survival cannot be established. Never replay saved launches automatically. Before deleting a thread or removing its workspace, surface remaining owned commands and require an explicit stop-and-remove or cancel choice before destroying their execution scope.
 
+## Delivered first slice
+
+Lasting behavior is in [UI](UI.md#workspace-and-terminals). The host now tracks Ramu-launched PTY commands per thread (`term.background.launch/list/inspect/stop` in `packages/shared/src/api.ts`, `TerminalService` in `apps/server/src/workspace/pty.ts`) with ownership checks, dedupe, idempotent graceful/force stop of the process group, and a thread-dock **Background terminals** popover that opens the existing terminal view. Remaining below excludes this.
+
 ## Remaining implementation
+
+- **Launch path:** nothing calls `term.background.launch` yet. Add the managed persistent-command tool through the agent tool registry/MCP boundary with approvals, and feed human stops into the agent event boundary so the agent does not relaunch.
+- **Durability:** records are in memory; add durable ownership records with restart reconciliation (report unknown after restart) and a stop-and-remove choice before deleting a thread or workspace (today `closeTask` kills them silently).
+- **Providers:** native Claude/Codex/ACP/OpenCode/Cursor command handles, sub-agent attribution and excerpt labelling are unstarted.
+- **Client:** sub-agent attribution, host/offline/old-host states beyond last-known rows, mobile list/output/stop, and client tests for hide-versus-stop and draft/focus preservation.
+- **Acceptance:** the manual representative task, two hosts, restart and platform-specific (Windows) termination checks.
 
 - Trace persistent execution paths for each supported provider and record actual capabilities. Deliver one supported end-to-end path first; unsupported providers show a reason. Route Ramu-managed launches through the existing terminal service and register native executions through their provider boundary. Do not claim coverage for arbitrary unregistered daemonized processes.
 - Add shared metadata: stable owner-qualified ID, thread/sub-agent and workspace association, backend, command/cwd, timestamps, state, output cursor, exit outcome and action capabilities. Keep command lifecycle separate from agent-turn/helper status. Bound output retention/history; do not persist environment variables or credentials as metadata, and preserve existing output access rules.
