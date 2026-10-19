@@ -372,3 +372,17 @@ it('does not call the model to consolidate notes that are unchanged since the la
   await memory.dream(true)
   expect(analyze).toHaveBeenCalledTimes(3)
 })
+
+it('refuses memory tool calls once shared memory is turned off, while the tools stay listed', async () => {
+  const tools = new Map<string, (input: any) => any>()
+  const server = {
+    registerTool: (name: string, _config: unknown, handler: (input: any) => any) => {
+      tools.set(name, handler)
+    },
+  }
+  registerMemoryTools(server as never, memory, session(), 'alpha')
+  ws.setAppState('app-preferences', { memory: { enabled: false, dream: true, staleAfterDays: 90 } })
+  const out = await tools.get('memory_search')!({ query: 'bun', limit: 5 })
+  expect(out.isError).toBe(true)
+  expect(out.content[0].text).toContain('turned off')
+})

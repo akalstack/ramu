@@ -262,7 +262,7 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           kind: 'toggle',
           path: 'asyncQuestions',
           title: 'Keep working while asking questions',
-          help: 'Let the agent continue independent work while it waits for your answer.',
+          help: 'Let the agent continue independent work while it waits for your answer. Applies when a thread starts or restarts.',
           words: 'async asynchronous optional blocking related grouped answers pending input',
         },
         {
@@ -368,7 +368,7 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           kind: 'choice',
           path: 'goals.mode',
           title: 'Automatic goals',
-          help: 'Let the agent set a goal for longer tasks. When off, start one with /goal.',
+          help: 'Let the agent set a goal for longer tasks. When off, start one with /goal. Applies when a thread starts or restarts.',
           words: 'goal auto manual off automatic completion continue unfinished',
           options: [
             { value: 'auto', label: 'On' },

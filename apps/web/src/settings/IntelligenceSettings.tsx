@@ -167,7 +167,7 @@ export function LearningSettings({ value, onChange }: Props) {
         <SettingsLabel
           title={t('Recall past conversations')}
           help={t(
-            'Let agents search earlier threads across providers. Turning this off keeps your history and same-thread recall.',
+            'Let agents search earlier threads across providers. Turning this off keeps your history and same-thread recall. Applies when a thread starts or restarts.',
           )}
         />
         <Switch

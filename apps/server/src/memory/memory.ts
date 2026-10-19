@@ -1112,6 +1112,8 @@ export function registerMemoryTools(
   })
   const result = (operation: () => unknown) => {
     try {
+      // The tools stay listed for a chat launched with memory on; turning it off stops reads and writes at once.
+      if (!memory.enabled()) throw new Error('Shared memory is turned off in Ramu settings.')
       return { content: [{ type: 'text' as const, text: JSON.stringify(operation()) }] }
     } catch (error) {
       return {

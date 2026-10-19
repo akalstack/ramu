@@ -57,7 +57,7 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         {...toggleProps}
         setting="asyncQuestions"
         title="Keep working while asking questions"
-        description="Let the agent continue independent work while it waits for your answer."
+        description="Let the agent continue independent work while it waits for your answer. Applies when a thread starts or restarts."
       />
       <SettingsGroupTitle>{t('Thread history')}</SettingsGroupTitle>
       <SettingsRow setting="recentChats">

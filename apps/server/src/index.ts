@@ -513,14 +513,15 @@ const mcpHttp = createServer(async (req, res) => {
   if (!review) registerInteractiveTools(server, interactive, source.id)
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
-  learning.register(server, source.id)
+  // A chat keeps the settings it launched with, so its tools match its instructions until it relaunches. Turning a
+  // setting off mid-thread keeps its tools listed, and their handlers refuse.
+  const launched = agents.launchSettings(source.id)
+  learning.register(server, source.id, launched.crossThreadRecall)
   // With async questions off, Claude and Codex ask through their own blocking question tools instead.
-  // The chat keeps the question setting it launched with, so its tools match its instructions until it relaunches.
-  if (usesRamuQuestionTools(agents.launchSettings(source.id).asyncQuestions, source))
-    registerQuestionTools(server, agents, source.id)
+  if (usesRamuQuestionTools(launched.asyncQuestions, source)) registerQuestionTools(server, agents, source.id)
   if (!source.parentId) registerGoalTools(server, agents, source.id)
-  if (agents.advisorStep(source.id)) registerAdvisorTools(server, agents, source.id)
-  if (memory.enabled()) registerMemoryTools(server, memory, source, projectOf(source))
+  if (launched.advisor) registerAdvisorTools(server, agents, source.id)
+  if (launched.memory) registerMemoryTools(server, memory, source, projectOf(source))
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
   const scope = workspace.getTask(source.taskId)
   const input = scheduleSchema

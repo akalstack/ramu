@@ -804,7 +804,8 @@ ${JSON.stringify({ previousCheckpoint: this.checkpoint(job.sessionId), trace: bo
     this.abort?.abort()
     await this.active
   }
-  register(server: McpServer, sessionId: string) {
+  /** `recall` is the cross-thread recall setting the chat launched with; search still refuses once it is turned off. */
+  register(server: McpServer, sessionId: string, recall = this.preferences().crossThreadRecall) {
     if (this.preferences().toolAwareSkills)
       server.registerTool(
         'skill_resolve',
@@ -853,7 +854,7 @@ ${JSON.stringify({ previousCheckpoint: this.checkpoint(job.sessionId), trace: bo
         },
       )
     const history = new SessionSearch(this.db, () => this.preferences().crossThreadRecall)
-    if (this.preferences().crossThreadRecall) history.register(server, sessionId)
+    if (recall) history.register(server, sessionId)
     server.registerTool(
       'session_recall',
       {

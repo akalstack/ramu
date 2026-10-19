@@ -9,6 +9,7 @@ import type {
   HandoffCause,
   HandoffInfo,
 } from '@ramu/shared/types'
+import { DEFAULT_INTELLIGENCE_PREFERENCES, DEFAULT_MEMORY_PREFERENCES } from '@ramu/shared/types'
 import { goalInstructions } from './goals'
 import type { QueryFn, PendingRequest } from './types'
 import { InputQueue } from './inputQueue'
@@ -35,6 +36,15 @@ import type { SubagentRunner } from './subagentRunner'
 import type { AgentTasks } from './agentTasks'
 import type { AgentService } from '../agent'
 import type { Db } from '../db'
+
+/** The settings a chat's tools and instructions were built from when its process launched. */
+export interface LaunchSettings {
+  asyncQuestions: boolean
+  goalMode: GoalPreferences['mode']
+  advisor: boolean
+  memory: boolean
+  crossThreadRecall: boolean
+}
 
 /** What SessionProcess needs from the rest of the service. */
 export interface SessionProcessHost
@@ -81,16 +91,22 @@ export class SessionProcess {
   readonly goalPolicySent = new Set<string>()
 
   private readonly codexHookAtLaunch = new Map<string, boolean>()
-  /** The question and goal settings a running process was launched with; a settings change applies at its next launch. */
-  private readonly launchPins = new Map<string, { asyncQuestions: boolean; goalMode: GoalPreferences['mode'] }>()
+  /** The settings that shape a running process's tools and instructions; a settings change applies at its next launch. */
+  private readonly launchPins = new Map<string, LaunchSettings>()
 
-  launchSettings(id: string): { asyncQuestions: boolean; goalMode: GoalPreferences['mode'] } {
-    return (
-      this.launchPins.get(id) ?? {
-        asyncQuestions: this.host.preferences()?.asyncQuestions !== false,
-        goalMode: this.host.goalPreferences().mode,
-      }
-    )
+  launchSettings(id: string): LaunchSettings {
+    return this.launchPins.get(id) ?? this.currentSettings(id)
+  }
+
+  private currentSettings(id: string): LaunchSettings {
+    const prefs = this.host.preferences()
+    return {
+      asyncQuestions: prefs?.asyncQuestions !== false,
+      goalMode: this.host.goalPreferences().mode,
+      advisor: !!this.host.advisorStep(id),
+      memory: prefs?.memory?.enabled ?? DEFAULT_MEMORY_PREFERENCES.enabled,
+      crossThreadRecall: prefs?.intelligence?.crossThreadRecall ?? DEFAULT_INTELLIGENCE_PREFERENCES.crossThreadRecall,
+    }
   }
 
   private get sessions(): ProviderSessions {
@@ -256,10 +272,7 @@ export class SessionProcess {
     // A delta that did not fit has no native session to resume: null means a fresh one, not "keep the old id".
     if (carried) resume = carried.resume
     // With automatic goals off and no goal yet, the policy waits until /goal starts one.
-    const pins = {
-      asyncQuestions: this.host.preferences()?.asyncQuestions !== false,
-      goalMode: this.host.goalPreferences().mode,
-    }
+    const pins = this.currentSettings(id)
     if (connection) this.launchPins.set(id, pins)
     const goalPolicy =
       !s.parentId && (pins.goalMode !== 'manual' || this.host.getGoal(id))
@@ -275,7 +288,7 @@ export class SessionProcess {
             ? 'async'
             : 'blocking',
         background: (this.host.preferences()?.autoBackgroundSeconds ?? 1) !== 0,
-        advisor: !!this.host.advisorStep(id),
+        advisor: pins.advisor,
         goal: goalPolicy,
         nativeSubagentNote:
           // Antigravity's sub-agent tool cannot be switched off; Cursor's and OpenCode's are, at launch.

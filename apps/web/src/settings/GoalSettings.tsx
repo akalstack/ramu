@@ -18,7 +18,9 @@ export function GoalSettings({
       <SettingsRow setting="goals.mode">
         <SettingsLabel
           title={t('Automatic goals')}
-          help={t('Let the agent set a goal for longer tasks. When off, start one with /goal.')}
+          help={t(
+            'Let the agent set a goal for longer tasks. When off, start one with /goal. Applies when a thread starts or restarts.',
+          )}
         />
         <Switch
           aria-label={t('Automatic goals')}
