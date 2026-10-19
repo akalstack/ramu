@@ -1,3 +1,5 @@
+import { helperActive } from '@ramu/shared/chat/helperPresentation'
+import { useHostConnection } from '../../../workspace/computers'
 import { Spinner } from '@/components/ui/spinner'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -13,7 +15,7 @@ import { TOOL_DISCLOSURE_PANEL_CLASS } from '../styles'
 
 /** Many sub-agents at once: stacked avatars and one status line that opens into each agent's card. */
 export function AgentGroup({
-  tasks,
+  tasks: allTasks,
   live,
   onOpen,
   onStop,
@@ -24,8 +26,11 @@ export function AgentGroup({
   onStop: (task: AgentTask) => void
 }) {
   useLanguage()
+  const { offline } = useHostConnection()
+  const tasks = allTasks.filter((task) => task.taskType !== 'advisor')
+  if (!tasks.length) return null
   const statuses = tasks.map((task) => effectiveStatus(task, live))
-  const running = statuses.includes('running')
+  const running = !offline && tasks.some(helperActive)
   const failed = statuses.includes('failed')
   return (
     <Collapsible className="agent-group text-sm">
@@ -59,6 +64,7 @@ export function AgentGroup({
         <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left">
           <span className="font-semibold text-foreground">{translate('{0} agents', { 0: tasks.length })}</span>
           <span className={`text-caption ${failed ? 'text-bad' : running ? 'text-brand' : 'text-muted-foreground'}`}>
+            {offline ? `${translate('Last known')} · ` : ''}
             {summarizeAgentStatuses(statuses, (status) => translate(TASK_STATUS[status]).toLowerCase())}
           </span>
         </span>

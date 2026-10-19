@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
 }))
 vi.mock('../src/i18n', () => ({ useLanguage: () => {}, t: (text: string) => text }))
 vi.mock('../src/ipc', () => ({ invoke: state.invoke }))
+vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ id: 'local', invoke: state.invoke }) }))
 vi.mock('../src/workspace/workspace', () => ({
   useWorkspace: () => ({
     tasks: [state.task],

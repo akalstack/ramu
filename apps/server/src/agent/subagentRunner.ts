@@ -1,3 +1,4 @@
+import { forwardedRequestId } from './childRequests'
 import { clipText } from '@ramu/shared/text'
 import { providerName } from '@ramu/shared/providers/providers'
 import { join } from 'node:path'
@@ -29,6 +30,7 @@ import type { UserRequests } from './userRequests'
 import type { FallbackRouter } from './fallbackRouter'
 import type { SessionStore } from './sessionStore'
 import type { AgentTasks } from './agentTasks'
+import type { ProviderWaits } from './providerWait'
 import type { AgentService } from '../agent'
 
 /** What SubagentRunner needs from the rest of the service. */
@@ -41,6 +43,7 @@ export interface SubagentRunnerHost
     Pick<SessionRegistry, 'transitioning'>,
     Pick<UserRequests, 'childRequests'>,
     Pick<FallbackRouter, 'attempted' | 'policyOf' | 'routing' | 'subagentSettings' | 'withStep'>,
+    Pick<ProviderWaits, 'autoResumeOf' | 'providerWait'>,
     Pick<SessionStore, 'createSession' | 'events' | 'get' | 'task'>,
     Pick<AgentTasks, 'updateTask'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
@@ -65,9 +68,26 @@ export class SubagentRunner {
     if (!run || run.settled || this.host.transitioning.has(id)) return
     const state = this.host.get(id).state
     if (state !== 'idle' && state !== 'failed' && state !== 'stopped') return
+    // A helper held at a usage limit is neither done nor failed: it waits with its login and the chat keeps it as running.
+    // With auto-resume off nothing will continue it, so it ends as stopped with the reason, and never as failed.
+    const held = !!this.host.providerWait(id)
+    if (held && this.host.autoResumeOf(id)) {
+      this.host.updateTask(run.parentId, id, {
+        summary: 'Limit reached · resumes automatically',
+        waitingFor: 'provider',
+      })
+      return
+    }
+    if (held) run.lastText ||= 'Stopped at a usage limit. Auto-resume is off for this thread.'
     run.settled = true
     run.asking?.('The sub-agent ended before an answer arrived.')
-    const status: AgentTaskStatus = state === 'idle' ? 'completed' : state === 'failed' ? 'failed' : 'stopped'
+    const status: AgentTaskStatus = held
+      ? 'stopped'
+      : state === 'idle'
+        ? 'completed'
+        : state === 'failed'
+          ? 'failed'
+          : 'stopped'
     const error = this.host.events(id).findLast((e) => e.kind === 'error')
     const failure = error?.kind === 'error' ? error.message : ''
     const report = run.lastText || failure || (status === 'stopped' ? 'Stopped before it finished.' : '')
@@ -167,6 +187,7 @@ export class SubagentRunner {
       name,
       agentType: input.type,
       taskType: 'ramu_agent',
+      childSessionId: child.id,
       status: 'running',
       background: !!input.background,
       prompt: input.prompt,
@@ -258,6 +279,7 @@ export class SubagentRunner {
         resolve(answer)
       }
     })
+    this.host.updateTask(run.parentId, childId, { waitingFor: 'input' })
     const text = subagentNotePrompt(run.name, 'asks', childId, question)
     if (run.waiter) {
       // The chat is blocked on this sub-agent's call, so it could not answer: hand the question back as that call's result and let the report follow as a message.
@@ -278,6 +300,7 @@ export class SubagentRunner {
       return await answered
     } finally {
       run.asking = undefined
+      this.host.updateTask(run.parentId, childId, { waitingFor: null })
     }
   }
 
@@ -390,22 +413,48 @@ export class SubagentRunner {
         this.host.record(parent, { ...e, toolUseId: `${id}:${e.toolUseId}`, agentId: id })
         break
       case 'permission-request':
-        this.host.childRequests.set(e.requestId, id)
-        this.host.record(parent, { ...e, title: `${run.name}: ${e.title}` })
+        this.host.childRequests.set(forwardedRequestId(parent, id, e.requestId), {
+          parentId: parent,
+          childId: id,
+          requestId: e.requestId,
+        })
+        this.host.record(parent, {
+          ...e,
+          title: `${run.name}: ${e.title}`,
+          requestId: forwardedRequestId(parent, id, e.requestId),
+          requestSource: { sessionId: id, agentId: id, name: run.name, requestId: e.requestId },
+        })
         break
       case 'elicitation':
-        this.host.childRequests.set(e.requestId, id)
-        this.host.record(parent, e)
+        this.host.childRequests.set(forwardedRequestId(parent, id, e.requestId), {
+          parentId: parent,
+          childId: id,
+          requestId: e.requestId,
+        })
+        this.host.record(parent, {
+          ...e,
+          requestId: forwardedRequestId(parent, id, e.requestId),
+          requestSource: { sessionId: id, agentId: id, name: run.name, requestId: e.requestId },
+        })
         break
       case 'question':
-        this.host.childRequests.set(e.requestId, id)
-        this.host.record(parent, e)
+        this.host.childRequests.set(forwardedRequestId(parent, id, e.requestId), {
+          parentId: parent,
+          childId: id,
+          requestId: e.requestId,
+        })
+        this.host.record(parent, {
+          ...e,
+          requestId: forwardedRequestId(parent, id, e.requestId),
+          requestSource: { sessionId: id, agentId: id, name: run.name, requestId: e.requestId },
+        })
         break
       case 'question-state':
-        this.host.record(parent, e)
+        this.host.record(parent, { ...e, requestId: forwardedRequestId(parent, id, e.requestId) })
         break
       case 'request-resolved':
-        if (this.host.childRequests.delete(e.requestId)) this.host.record(parent, e)
+        if (this.host.childRequests.delete(forwardedRequestId(parent, id, e.requestId)))
+          this.host.record(parent, { ...e, requestId: forwardedRequestId(parent, id, e.requestId) })
         break
       case 'settings': {
         const task = this.host.task(parent, id)

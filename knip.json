@@ -18,6 +18,7 @@
         "editorconfig",
         "luxon",
         "node-pty",
+        "playwright-core",
         "zod",
         "@electron-forge/*",
         "@ramu/web",

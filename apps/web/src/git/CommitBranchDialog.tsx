@@ -7,6 +7,7 @@ import { Dialog } from '../Menu'
 import { invoke } from '../ipc'
 import { t, useLanguage } from '../i18n'
 import { useAppSettings } from '../settings/AppSettings'
+import type { RamuBridge } from '@ramu/shared/api'
 
 type Request = {
   branch: string | null
@@ -23,8 +24,10 @@ export async function chooseCommitBranch(
   repoId: string,
   forceNew = false,
   action: 'push' | 'sync' = 'push',
+  /** The repository's host (`useHost().invoke`); the window's own host by default. */
+  hostInvoke: RamuBridge['invoke'] = invoke,
 ): Promise<CommitBranchOptions | null> {
-  const { branch, defaultBranch } = await invoke('git.commitBranchInfo', taskId, repoId)
+  const { branch, defaultBranch } = await hostInvoke('git.commitBranchInfo', taskId, repoId)
   if (!forceNew && (!branch || branch !== defaultBranch)) return { expectedBranch: branch }
   // Like T3 Code, the new branch is named from the commit (an AI suggestion or its subject), so there is nothing to ask.
   if (forceNew) return { expectedBranch: branch, autoBranch: true }

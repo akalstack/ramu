@@ -10,6 +10,8 @@ const MAX_PENDING = 5
 const MAX_NAME = 60
 // No 0/O/1/I/L, so a code read aloud or off a screen is not mistyped.
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+export const DEVICE_TTL_MS = 90 * 24 * 60 * 60_000
+export type DeviceRole = 'owner' | 'viewer'
 const LAST_SEEN_WRITE_MS = 5 * 60_000
 
 export interface DeviceInfo {
@@ -17,11 +19,14 @@ export interface DeviceInfo {
   name: string
   createdAt: number
   lastSeenAt: number | null
+  expiresAt: number | null
+  role: DeviceRole
 }
 interface DeviceRecord extends DeviceInfo {
   tokenHash: string
 }
 interface PendingCode {
+  role?: DeviceRole
   codeHash: string
   expiresAt: number
 }
@@ -42,7 +47,13 @@ const cleanName = (name: string | undefined) =>
 
 export class DeviceStore {
   private readonly seen = new Map<string, number>()
-  constructor(private readonly path: string) {}
+  constructor(
+    private readonly path: string,
+    private readonly lifetimeMs: number | null = DEVICE_TTL_MS,
+  ) {
+    if (lifetimeMs !== null && (!Number.isSafeInteger(lifetimeMs) || lifetimeMs <= 0))
+      throw new Error('Device lifetime must be positive milliseconds, or null for never')
+  }
 
   private read(): DeviceFile {
     if (!existsSync(this.path)) return { devices: [], pending: [] }
@@ -66,12 +77,13 @@ export class DeviceStore {
   }
 
   /** A one-time code for a new device. The most recent few stay valid; older ones are dropped. */
-  createCode(now = Date.now()): { code: string; expiresAt: number } {
+  createCode(now = Date.now(), role: DeviceRole = 'owner'): { code: string; expiresAt: number } {
+    if (role !== 'owner' && role !== 'viewer') throw new Error('Invalid device role')
     const file = this.read()
     const bytes = randomBytes(10)
     const raw = Array.from(bytes, (byte) => ALPHABET[byte % ALPHABET.length]).join('')
     const expiresAt = now + PAIRING_TTL_MS
-    file.pending = [...file.pending.filter((p) => p.expiresAt > now), { codeHash: sha256(raw), expiresAt }].slice(
+    file.pending = [...file.pending.filter((p) => p.expiresAt > now), { codeHash: sha256(raw), expiresAt, role }].slice(
       -MAX_PENDING,
     )
     this.write(file)
@@ -94,6 +106,8 @@ export class DeviceStore {
       name: cleanName(name),
       createdAt: now,
       lastSeenAt: now,
+      expiresAt: this.lifetimeMs === null ? null : now + this.lifetimeMs,
+      role: match.role ?? 'owner',
       tokenHash: sha256(token),
     }
     this.write({ devices: [...file.devices, record], pending: live.filter((p) => p !== match) })
@@ -107,18 +121,38 @@ export class DeviceStore {
     const file = this.read(),
       record = file.devices.find((d) => d.tokenHash === hash)
     if (!record) return null
+    // Older records get a bounded migration window based on their last use, never an immortal grant.
+    const expiry =
+      record.expiresAt === undefined
+        ? this.lifetimeMs === null
+          ? null
+          : (record.lastSeenAt ?? record.createdAt) + this.lifetimeMs
+        : record.expiresAt
+    if (expiry !== null && expiry <= now) return null
     // Remembered in memory and written rarely, so a busy client does not rewrite the file the CLI also edits.
     const lastWrite = this.seen.get(record.id) ?? 0
-    if (now - lastWrite >= LAST_SEEN_WRITE_MS) {
+    if (now - lastWrite >= LAST_SEEN_WRITE_MS || record.expiresAt === undefined) {
       this.seen.set(record.id, now)
       record.lastSeenAt = now
+      record.expiresAt = this.lifetimeMs === null ? null : now + this.lifetimeMs
+      record.role ??= 'owner'
       this.write(file)
     }
     return strip(record)
   }
 
   list(): DeviceInfo[] {
-    return this.read().devices.map(strip)
+    return this.read().devices.map((record) =>
+      strip({
+        ...record,
+        expiresAt:
+          record.expiresAt === undefined
+            ? this.lifetimeMs === null
+              ? null
+              : (record.lastSeenAt ?? record.createdAt) + this.lifetimeMs
+            : record.expiresAt,
+      }),
+    )
   }
   /** Hash-derived key for signed availability announcements. Never sent to a client. */
   presenceKey(id: string): string | null {
@@ -142,4 +176,11 @@ export class DeviceStore {
   }
 }
 
-const strip = ({ id, name, createdAt, lastSeenAt }: DeviceRecord): DeviceInfo => ({ id, name, createdAt, lastSeenAt })
+const strip = ({ id, name, createdAt, lastSeenAt, expiresAt, role }: DeviceRecord): DeviceInfo => ({
+  id,
+  name,
+  createdAt,
+  lastSeenAt,
+  expiresAt,
+  role: role ?? 'owner',
+})

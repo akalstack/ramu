@@ -8,6 +8,7 @@ import { invoke } from '../ipc'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../workspace/TaskPane'
 import type { WorkspaceApi } from '../workspace/workspace'
+import type { RamuBridge } from '@ramu/shared/api'
 
 /** A Source Control repository section that can run its own Commit & Push (with whatever message is typed there). */
 export interface CommitTarget {
@@ -49,7 +50,13 @@ export function registerCommitTarget(target: CommitTarget) {
  * there is one (using any message typed there), otherwise directly with an AI-drafted message.
  * When several repositories qualify and none is focused, it opens Source Control instead of guessing.
  */
-export async function commitAndPush(ws: WorkspaceApi, ctx: string, pullRequest = false) {
+export async function commitAndPush(
+  ws: WorkspaceApi,
+  ctx: string,
+  pullRequest = false,
+  /** The host of `ws` (`useHost().invoke`); the window's own host by default. */
+  hostInvoke: RamuBridge['invoke'] = invoke,
+) {
   const showScm = (message: string) => {
     ws.setSidebar('scm')
     notifyError(message, t('Commit & Push'))
@@ -68,7 +75,7 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string, pullRequest =
   const bindings = (ws.bindings[ctx] ?? []).filter((binding) => binding.setupState === 'ready' && !binding.folderOnly)
   const states = (
     await Promise.allSettled(
-      bindings.map(async (binding) => ({ binding, status: await invoke('git.status', ctx, binding.repoId) })),
+      bindings.map(async (binding) => ({ binding, status: await hostInvoke('git.status', ctx, binding.repoId) })),
     )
   ).flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []))
   const hasStaged = (state: (typeof states)[number]) =>
@@ -100,12 +107,12 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string, pullRequest =
     return showScm(t('Save or close unsaved editor buffers before changing files or branches.'))
   let pushedTo = status.branch!
   const run = async () => {
-    await applyCommitScope(ctx, binding.repoId, status, plan.paths)
+    await applyCommitScope(ctx, binding.repoId, status, plan.paths, hostInvoke)
     const draft = plan.message.trim()
       ? { message: plan.message, fingerprint: undefined, branch: undefined as string | undefined }
-      : await invoke('git.generateCommit', ctx, binding.repoId, DEFAULT_AGENT_SETTINGS, !!branchOptions.autoBranch)
+      : await hostInvoke('git.generateCommit', ctx, binding.repoId, DEFAULT_AGENT_SETTINGS, !!branchOptions.autoBranch)
     if (!draft.message.trim()) throw new Error(t('Could not draft a commit message.'))
-    await invoke(
+    await hostInvoke(
       'git.commit',
       ctx,
       binding.repoId,
@@ -115,10 +122,10 @@ export async function commitAndPush(ws: WorkspaceApi, ctx: string, pullRequest =
       branchOptions.autoBranch && draft.branch ? { ...branchOptions, newBranch: draft.branch } : branchOptions,
     )
     pushedTo = branchOptions.autoBranch
-      ? ((await invoke('git.commitBranchInfo', ctx, binding.repoId)).branch ?? status.branch!)
+      ? ((await hostInvoke('git.commitBranchInfo', ctx, binding.repoId)).branch ?? status.branch!)
       : (branchOptions.newBranch ?? status.branch!)
-    if (plan.action === 'sync') await invoke('git.sync', ctx, binding.repoId)
-    else if (plan.action === 'push') await invoke('git.push', ctx, binding.repoId, pushedTo)
+    if (plan.action === 'sync') await hostInvoke('git.sync', ctx, binding.repoId)
+    else if (plan.action === 'push') await hostInvoke('git.push', ctx, binding.repoId, pushedTo)
     return draft.message.split('\n')[0]!
   }
   const work = withGitBusy(ctx, binding.repoId, run).finally(() => window.dispatchEvent(new Event('ramu:git-updated')))

@@ -1,7 +1,7 @@
 import { SearchMatchPreview } from './SearchMatchPreview'
 import { Spinner } from '@/components/ui/spinner'
 import { useQuery } from '@tanstack/react-query'
-import { ipcQueryKey } from '../dataQueries'
+import { ipcQueryKeyOn } from '../dataQueries'
 import { FileIcon } from '../editor/FileIcon'
 import { t, useLanguage } from './../i18n'
 import { Badge } from '@/components/ui/badge'
@@ -12,13 +12,15 @@ import { CaseSensitive, ChevronRight, Folder, FolderTree, List, RefreshCw, Whole
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SearchMatch, SearchOptions, SearchResults, ReplaceFilePreview } from '@ramu/shared/types'
 import { Dialog, Dropdown } from '../Menu'
-import { invoke, ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../workspace/TaskPane'
-import { useWorkspace } from '../workspace/workspace'
+import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { VirtualList } from '../lib/VirtualList'
 import { useAppSettings } from '../settings/AppSettings'
 import { NoTask } from './ExplorerPanel'
+import { deviceStorage } from '../deviceStorage'
+import { useHost } from '../workspace/HostProvider'
+import { queryInvokerFor } from '../git/hostQuery'
 
 interface SearchTree {
   folders: Map<string, SearchTree>
@@ -47,6 +49,9 @@ export function SearchPanel() {
 function WorkspaceSearch({ taskId }: { taskId: string }) {
   useLanguage()
   const ws = useWorkspace()
+  const host = useHost()
+  const { invoke } = host
+  const { on } = useHostRuntime()
   const context = taskId ? ws.workspaceOf(taskId) : ''
   const bindings = useMemo(
     () => (ws.bindings[taskId] ?? []).filter((binding) => binding.setupState === 'ready'),
@@ -56,8 +61,8 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
   const [options, setOptions] = useState<SearchOptions>(() => drafts.get(context) ?? initial)
   const [searchOptions, setSearchOptions] = useState(options)
   const search = useQuery({
-    queryKey: ipcQueryKey('files.search', taskId, searchOptions),
-    queryFn: () => ramu.invoke('files.search', taskId, searchOptions),
+    queryKey: ipcQueryKeyOn(host.id, 'files.search', taskId, searchOptions),
+    queryFn: () => queryInvokerFor(host.id)('files.search', taskId, searchOptions),
     enabled: !!searchOptions.query,
   })
   const pending = options !== searchOptions
@@ -80,14 +85,14 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [viewMode, setViewMode] = useState<'tree' | 'list'>(() => {
     try {
-      return localStorage.getItem('ramu.search-view') === 'list' ? 'list' : 'tree'
+      return deviceStorage.getItem('ramu.search-view') === 'list' ? 'list' : 'tree'
     } catch {
       return 'tree'
     }
   })
   useEffect(() => {
     try {
-      localStorage.setItem('ramu.search-view', viewMode)
+      deviceStorage.setItem('ramu.search-view', viewMode)
     } catch {
       /* View choice still works for this session. */
     }
@@ -112,7 +117,7 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
   }, [search.error, project?.name])
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
-    const off = ramu.on('fs:changed', ({ cwd }) => {
+    const off = on('fs:changed', ({ cwd }) => {
       if (!searchOptions.query || !bindings.some((binding) => binding.cwd === cwd)) return
       clearTimeout(timer)
       timer = setTimeout(() => void search.refetch(), 150)
@@ -121,7 +126,7 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
       off()
       clearTimeout(timer)
     }
-  }, [bindings, searchOptions, search.refetch])
+  }, [on, bindings, searchOptions, search.refetch])
   const hasDirtyMatches = (files: { repoId: string; path: string }[]) =>
     (ws.taskUi[context]?.views ?? []).some(
       (view) =>

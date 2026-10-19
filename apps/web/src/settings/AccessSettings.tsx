@@ -6,7 +6,7 @@ import { t } from '../i18n'
 import { Dropdown } from '../Menu'
 import { SETTINGS_FORM_CLASS, type DraftSetter } from './constants'
 import { PermissionRules } from './PermissionRules'
-import { ToggleRow } from './ToggleRow'
+import { LimitChoiceRow } from './LimitChoiceRow'
 
 export function AccessSettings({
   draft,
@@ -34,14 +34,7 @@ export function AccessSettings({
       </SettingsRow>
       <PermissionRules disabled={busy} />
       <SettingsGroupTitle>{t('Provider fallback')}</SettingsGroupTitle>
-      <ToggleRow
-        draft={draft}
-        onChange={onChange}
-        busy={busy}
-        setting="defaultAutoFallback"
-        title="Automatic provider fallback"
-        description="Switch to another provider when a usage limit is reached. When off, a thread waits and resumes on the same provider once the limit resets. Applies to new threads."
-      />
+      <LimitChoiceRow draft={draft} onChange={onChange} busy={busy} />
       <FallbackSettings value={draft} onChange={onChange} busy={busy} />
     </div>
   )

@@ -5,10 +5,15 @@ import { Dropdown, Menu, type MenuEntry } from '../Menu'
 import { projectCtx, worktreeCtx, useWorkspace } from './workspace'
 import { useAddProject } from './addProject'
 import { SearchInput } from '../SearchInput'
+import { hostStorageFor, type HostStorage } from '../hostStorage'
+import { useHost } from './HostProvider'
 
-function readLocations(): { projects: Record<string, string>; workspaces: Record<string, string> } {
+function readLocations(hostStorage: HostStorage): {
+  projects: Record<string, string>
+  workspaces: Record<string, string>
+} {
   try {
-    const value = JSON.parse(localStorage.getItem('ramu.navigation-locations') ?? '{}')
+    const value = JSON.parse(hostStorage.getItem('ramu.navigation-locations') ?? '{}')
     const strings = (entries: unknown): Record<string, string> =>
       entries && typeof entries === 'object' && !Array.isArray(entries)
         ? Object.fromEntries(Object.entries(entries).filter(([, entry]) => typeof entry === 'string'))
@@ -22,11 +27,12 @@ function readLocations(): { projects: Record<string, string>; workspaces: Record
 /** Keep navigation memory mounted, while Chats uses its own project list. */
 export function ProjectSwitcher() {
   useLanguage()
+  const hostStorage = hostStorageFor(useHost().id)
   const ws = useWorkspace()
   const active = ws.ui.activeTaskId
   const project = active ? ws.projectOf(active) : ws.projects.find((entry) => entry.id === ws.composing)
   const workspace = active ? ws.workspaceOf(active) : project ? projectCtx(project.id) : null
-  const [locations] = useState(readLocations)
+  const [locations] = useState(() => readLocations(hostStorage))
   const lastProject = useRef(locations.projects)
   const lastWorkspace = useRef(locations.workspaces)
   const [query, setQuery] = useState('')
@@ -36,7 +42,7 @@ export function ProjectSwitcher() {
       lastProject.current[project.id] = active
       lastWorkspace.current[workspace] = active
       try {
-        localStorage.setItem(
+        hostStorage.setItem(
           'ramu.navigation-locations',
           JSON.stringify({ projects: lastProject.current, workspaces: lastWorkspace.current }),
         )

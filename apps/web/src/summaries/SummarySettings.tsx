@@ -2,14 +2,15 @@ import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/set
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import { DateTime } from 'luxon'
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import type { IntelligencePreferences } from '@ramu/shared/types'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
-import { useSettingsInvoke } from '../settings/SettingsScope'
-import { openSummary } from './openSummary'
+import { SettingsScopeContext, useSettingsInvoke } from '../settings/SettingsScope'
+import { ownHostId } from '../hosts'
+import { useHostSelection } from '../workspace/HostSelection'
 import { nextSummaryAt, runMessage } from './summaryLogic'
 import { useSummaries } from './useSummaries'
 
@@ -20,6 +21,8 @@ const formatDate = (at: number) => DateTime.fromMillis(at).toLocaleString(DateTi
 /** Settings → Memory & skills → What Ramu learned: how often, what to include, Run now, and the history. */
 export function SummarySettings({ value, onChange, hasChanges }: Props) {
   const invoke = useSettingsInvoke()
+  const scope = useContext(SettingsScopeContext)
+  const { select } = useHostSelection()
   const { snapshot, reload } = useSummaries(invoke)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -115,7 +118,7 @@ export function SummarySettings({ value, onChange, hasChanges }: Props) {
           key={summary.id}
           variant="secondary"
           className="bg-card hover:bg-card-hover mb-2 h-auto w-full flex-col items-start gap-0.5 rounded-(--radius-m) p-3 text-left font-normal whitespace-normal"
-          onClick={() => openSummary(summary.id, invoke)}
+          onClick={() => select(scope?.primaryId ?? ownHostId(), { kind: 'summary', summaryId: summary.id })}
         >
           <span className="flex w-full items-center gap-2 text-caption text-muted-foreground">
             <span>

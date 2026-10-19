@@ -42,6 +42,10 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
     'cleanupArchivedDays',
   ],
   git: [
+    'defaultCheckoutMode',
+    'worktreeBranchNaming',
+    'worktreeBranchPrefix',
+    'worktreeBranchInstructions',
     'pullMode',
     'autoPull',
     'autoWatchPullRequests',

@@ -1,18 +1,21 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_AGENT_SETTINGS,
   DEFAULT_INTELLIGENCE_PREFERENCES,
   type AgentEvent,
   type AgentSessionInfo,
+  type UsageReading,
 } from '@ramu/shared/types'
 import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import { MemoryService } from '../src/memory/memory'
 import type { AgentService } from '../src/agent'
-import { LearningService } from '../src/memory/learning'
+import { crossedSwitchAt, LearningService } from '../src/memory/learning'
+import { migrateLearningDefault } from '../src/memory/learningDefault'
+import { findSecret, redactSecrets } from '../src/memory/secrets'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
@@ -331,4 +334,299 @@ it('skips a repeated identical review without a model call, visibly, and retries
   db.prepare('UPDATE learning_jobs SET data=? WHERE id=?').run(JSON.stringify({ ...job, status: 'queued' }), job.id)
   await service.tick(true)
   expect(analyze).toHaveBeenCalledTimes(3)
+})
+
+it('defaults to review first for a new data directory and keeps Automatic an explicit opt-in', () => {
+  expect(DEFAULT_INTELLIGENCE_PREFERENCES.learning).toBe('review')
+  // A fresh profile: nothing saved and no earlier migration flag.
+  migrateLearningDefault(workspace)
+  workspace.setAppState('app-preferences', null)
+  expect(
+    workspace.getAppState<{ intelligence?: unknown } | null>('app-preferences', null)?.intelligence,
+  ).toBeUndefined()
+})
+
+it('leaves a user choice alone and only pins Automatic for a profile an earlier release made', () => {
+  const choice = () =>
+    workspace.getAppState<{ intelligence?: { learning?: string } } | null>('app-preferences', null)?.intelligence
+      ?.learning
+  // Made by a new release: no earlier flag, so a missing choice follows the new default.
+  const fresh = new Workspace(openDb(':memory:'), join(root, 'fresh'))
+  migrateLearningDefault(fresh)
+  expect(fresh.getAppState('app-preferences', null)).toBeNull()
+  // Made by the Automatic-by-default release: it ran with Automatic, so it keeps it.
+  workspace.setAppState('migration:learning-auto-default', true)
+  workspace.setAppState('migration:learning-review-default', false)
+  workspace.setAppState('app-preferences', { theme: 'dark' })
+  migrateLearningDefault(workspace)
+  expect(choice()).toBe('auto')
+  expect(workspace.getAppState<{ theme?: string }>('app-preferences', {}).theme).toBe('dark')
+  // An explicit Review first is never overridden, however often the migration runs.
+  workspace.setAppState('migration:learning-review-default', false)
+  workspace.setAppState('app-preferences', { intelligence: { learning: 'review' } })
+  migrateLearningDefault(workspace)
+  migrateLearningDefault(workspace)
+  expect(choice()).toBe('review')
+})
+
+it('recognises known credential formats and long random tokens, and leaves ordinary text alone', () => {
+  const secrets = [
+    'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789',
+    `ghp_${'a1B2c3D4e5'.repeat(4)}`,
+    `github_pat_${'A1b2C3d4E5f6G7h8I9j0K1l2M3'}`,
+    'xoxb-1234567890-abcdefghij',
+    'AKIAIOSFODNN7EXAMPLE',
+    'ASIAIOSFODNN7EXAMPLE',
+    `AIza${'Sy-abcdefghijklmnopqrstuvwxyz01234'.slice(0, 35)}`,
+    'sk_live_51HabcdefghijklMNOPQRSTuv',
+    'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+    '-----BEGIN OPENSSH PRIVATE KEY-----',
+    'postgres://admin:hunter2hunter2@db.internal:5432/app',
+    'Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123456789',
+    'AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY',
+    'GITHUB_TOKEN: ghs_not-matched-but-long-enough-value',
+    'password = "correct-horse-battery"',
+    // No vendor prefix: only the entropy and character mix give it away.
+    'Run it with Zx9Qm2LpV7nR4tKc8YwB3hFj6DsA1eGu5Xo0',
+  ]
+  for (const text of secrets) expect(findSecret(text), text).not.toBeNull()
+  const fine = [
+    'Run pnpm --filter @ramu/server test after every change.',
+    'Commit 4f2cc93b5a1d9e0c7a8b6d5e4f3a2b1c0d9e8f7a is the baseline.',
+    'sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    'Session 3819a109-2f7e-4bc4-bc0c-569699bfb6bf was resumed.',
+    'The task-based-implementation-of-retry-handling-is-documented here.',
+    'Call useGoalVerificationRunnerForSessionsAndSchedules to run it.',
+    'apps/server/src/agent/goalManager.ts and apps/server/src/background/schedules.ts changed.',
+    'Set API_KEY=$API_KEY_FROM_ENV before running; token: <your-token-here>.',
+    'postgres://user:${DB_PASSWORD}@localhost/app',
+    'max_tokens = 100000000',
+  ]
+  for (const text of fine) expect(findSecret(text), text).toBeNull()
+})
+
+it('redacts credentials before text reaches a model and keeps the rest', () => {
+  const text =
+    'Use token=abcdef123456 and sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789 with Zx9Qm2LpV7nR4tKc8YwB3hFj6DsA1eGu5Xo0 in /srv/app'
+  const redacted = redactSecrets(text)
+  expect(redacted).toBe('Use token=[redacted] and [redacted] with [redacted] in /srv/app')
+  expect(redactSecrets('Commit 4f2cc93b5a1d9e0c7a8b6d5e4f3a2b1c0d9e8f7a')).toContain(
+    '4f2cc93b5a1d9e0c7a8b6d5e4f3a2b1c0d9e8f7a',
+  )
+})
+
+it('refuses an automatic proposal that carries a credential in any field and applies nothing', async () => {
+  workspace.setAppState('app-preferences', { intelligence: { ...DEFAULT_INTELLIGENCE_PREFERENCES, learning: 'auto' } })
+  analyze.mockResolvedValue({
+    provider: 'codex',
+    model: 'test',
+    message: JSON.stringify({
+      ...proposal,
+      skills: [
+        {
+          ...proposal.skills[0],
+          content: 'Export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY first.',
+        },
+      ],
+    }),
+  })
+  await service.tick(true)
+  const job = service.jobs()[0]!
+  // Auto-apply threw on the credential, so the job ends failed with the reason and nothing was written.
+  expect(job).toMatchObject({ status: 'failed', error: expect.stringContaining('credential') })
+  expect(service.skills()).toEqual([])
+  expect(memory.active('p')).toEqual([])
+})
+
+it('refuses to apply a reviewed proposal that carries a credential', async () => {
+  analyze.mockResolvedValue({
+    provider: 'codex',
+    model: 'test',
+    message: JSON.stringify({
+      ...proposal,
+      memories: [{ ...proposal.memories[0], content: 'Deploy with ghp_' + 'a1B2c3D4e5'.repeat(4) }],
+    }),
+  })
+  await service.tick(true)
+  const job = service.jobs()[0]!
+  expect(job.status).toBe('pending')
+  expect(() => service.apply(job.id)).toThrow(/credential/)
+  expect(memory.active('p')).toEqual([])
+})
+
+describe('refreshing the checkpoint when a provider crosses its early-switch threshold', () => {
+  const CHECKPOINT = 'Retries fixed; run the integration suite next.'
+  let near: boolean
+  let refresh: LearningService
+  const reply = (checkpoint: string) =>
+    analyze.mockResolvedValue({ provider: 'codex', model: 'test', message: JSON.stringify({ checkpoint }) })
+  /** The service under test: like the main one, but told whether the thread's provider is near its limit. */
+  const make = () =>
+    new LearningService(
+      db,
+      workspace,
+      { get: () => session, events: () => trace, analyze },
+      memory,
+      join(root, 'skills2'),
+      () => {},
+      () => near,
+    )
+  const seed = () => {
+    trace.forEach((event, i) =>
+      db.prepare('INSERT INTO agent_events VALUES (?, ?, ?)').run('s', i + 1, JSON.stringify(event)),
+    )
+  }
+  beforeEach(() => {
+    near = true
+    refresh = make()
+    seed()
+    reply(CHECKPOINT)
+  })
+  afterEach(async () => {
+    await refresh.settle()
+  })
+
+  it('writes the checkpoint at once, without the settle wait or a review, and proposes nothing', async () => {
+    await refresh.tick()
+    expect(analyze).toHaveBeenCalledTimes(1)
+    expect(analyze.mock.calls[0]![0]).toContain('ramu-checkpoint')
+    expect(analyze.mock.calls[0]![0]).not.toContain('"skills"')
+    // Review-first mode still gets the checkpoint: it is thread-local, so no memory or skill is written by it.
+    expect(refresh.checkpoint('s')).toMatchObject({ seq: 5, summary: CHECKPOINT })
+    expect(memory.active('p')).toEqual([])
+    expect(refresh.skills()).toEqual([])
+    // The regular review of the turn is still queued behind its settle wait and untouched.
+    expect(refresh.jobs().map((job) => job.status)).toEqual(['queued'])
+  })
+
+  it('does nothing while the provider is below the threshold', async () => {
+    near = false
+    await refresh.tick()
+    expect(analyze).not.toHaveBeenCalled()
+    expect(refresh.checkpoint('s')).toBeNull()
+  })
+
+  it('does nothing without a usage hook, and while learning is off', async () => {
+    const bare = new LearningService(
+      db,
+      workspace,
+      { get: () => session, events: () => trace, analyze },
+      memory,
+      join(root, 'skills3'),
+      () => {},
+    )
+    await bare.tick()
+    workspace.setAppState('app-preferences', { intelligence: { ...DEFAULT_INTELLIGENCE_PREFERENCES, learning: 'off' } })
+    await refresh.tick()
+    expect(analyze).not.toHaveBeenCalled()
+  })
+
+  it('skips a thread that will not be switched, and one whose checkpoint is already current', async () => {
+    const stays = { ...session, settings: { ...DEFAULT_AGENT_SETTINGS, autoFallback: false } } as AgentSessionInfo
+    const waits = new LearningService(
+      db,
+      workspace,
+      { get: () => stays, events: () => trace, analyze },
+      memory,
+      join(root, 'skills4'),
+      () => {},
+      () => true,
+    )
+    await waits.tick()
+    expect(analyze).not.toHaveBeenCalled()
+    db.prepare('INSERT INTO session_checkpoints VALUES (?, ?)').run(
+      's',
+      JSON.stringify({ sessionId: 's', seq: 5, summary: 'Current', updatedAt: 1 }),
+    )
+    await refresh.tick()
+    expect(analyze).not.toHaveBeenCalled()
+    expect(refresh.checkpoint('s')?.summary).toBe('Current')
+  })
+
+  it('stays off the foreground and inside the daily review budget', async () => {
+    db.exec(
+      "INSERT INTO agent_sessions(id,task_id,provider,cwd,state,created_at) VALUES ('busy','t','codex','/tmp','running',2)",
+    )
+    await refresh.tick()
+    expect(analyze).not.toHaveBeenCalled()
+    db.exec("UPDATE agent_sessions SET state='idle' WHERE id='busy'")
+    const { dailyReviews } = DEFAULT_INTELLIGENCE_PREFERENCES
+    workspace.setAppState(
+      'learning-review-times',
+      Array.from({ length: dailyReviews }, () => Date.now()),
+    )
+    await refresh.tick()
+    expect(analyze).not.toHaveBeenCalled()
+    workspace.setAppState('learning-review-times', [])
+    await refresh.tick()
+    expect(analyze).toHaveBeenCalledTimes(1)
+    // It spent one review of the day, like any other.
+    expect(workspace.getAppState<number[]>('learning-review-times', [])).toHaveLength(1)
+  })
+
+  it('refreshes a turn once, across ticks and across a restart, even when the model call failed', async () => {
+    await refresh.tick()
+    await refresh.tick()
+    expect(analyze).toHaveBeenCalledTimes(1)
+    const restarted = make()
+    db.prepare('DELETE FROM session_checkpoints').run()
+    await restarted.tick()
+    expect(analyze).toHaveBeenCalledTimes(1)
+    await restarted.settle()
+  })
+
+  it('leaves the older checkpoint alone when the call fails, a secret comes back, or the answer is empty', async () => {
+    db.prepare('INSERT INTO session_checkpoints VALUES (?, ?)').run(
+      's',
+      JSON.stringify({ sessionId: 's', seq: 2, summary: 'Older', updatedAt: 1 }),
+    )
+    analyze.mockRejectedValueOnce(new Error('usage limit'))
+    await refresh.tick()
+    expect(refresh.checkpoint('s')?.summary).toBe('Older')
+    // A new turn is a new chance; a credential in the answer is dropped, not stored.
+    trace.push(
+      { kind: 'user', text: 'Now the suite' },
+      { kind: 'tool-use', toolUseId: 'suite', name: 'shell', summary: 'run suite' },
+      { kind: 'result', isError: false, text: 'done', costUsd: null },
+    )
+    db.prepare('INSERT INTO agent_events VALUES (?, ?, ?)').run('s', 6, JSON.stringify(trace[5]))
+    db.prepare('INSERT INTO agent_events VALUES (?, ?, ?)').run('s', 7, JSON.stringify(trace[6]))
+    db.prepare('INSERT INTO agent_events VALUES (?, ?, ?)').run('s', 8, JSON.stringify(trace[7]))
+    reply('Set AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY first')
+    await refresh.tick()
+    expect(refresh.checkpoint('s')?.summary).toBe('Older')
+    expect(analyze).toHaveBeenCalledTimes(2)
+  })
+
+  it('runs the queued review itself in Automatic mode instead of making a second call for the same turn', async () => {
+    workspace.setAppState('app-preferences', {
+      intelligence: { ...DEFAULT_INTELLIGENCE_PREFERENCES, learning: 'auto' },
+    })
+    analyze.mockResolvedValue({ provider: 'codex', model: 'test', message: JSON.stringify(proposal) })
+    await refresh.tick()
+    expect(analyze).toHaveBeenCalledTimes(1)
+    expect(analyze.mock.calls[0]![0]).toContain('ramu-learning')
+    expect(refresh.jobs()[0]).toMatchObject({ status: 'applied' })
+    expect(refresh.checkpoint('s')?.summary).toBe(proposal.checkpoint)
+  })
+
+  it('never blocks or changes the deterministic path: an unreadable checkpoint is simply absent', async () => {
+    analyze.mockRejectedValue(new Error('offline'))
+    await refresh.tick()
+    expect(refresh.checkpoint('s')).toBeNull()
+    expect(refresh.instructions('s')).not.toContain('checkpoint')
+  })
+})
+
+it('crosses the early-switch threshold only below the limit, with a threshold set', () => {
+  const reading = (usedPercent: number, status: UsageReading['status'] = 'ok'): UsageReading =>
+    ({ provider: 'codex', window: 'weekly', usedPercent, status, updatedAt: Date.now() }) as UsageReading
+  const settings = { provider: 'codex', model: 'any' } as const
+  expect(crossedSwitchAt([reading(85)], settings, 80)).toBe(true)
+  expect(crossedSwitchAt([reading(70)], settings, 80)).toBe(false)
+  // "Only at the limit" never refreshes early, and a provider already limited is held or switched, not refreshed.
+  expect(crossedSwitchAt([reading(99)], settings, null)).toBe(false)
+  expect(crossedSwitchAt([reading(100, 'limited')], settings, 80)).toBe(false)
+  expect(crossedSwitchAt([], settings, 80)).toBe(false)
+  expect(crossedSwitchAt([{ ...reading(95), provider: 'claude-code' }], settings, 80)).toBe(false)
 })

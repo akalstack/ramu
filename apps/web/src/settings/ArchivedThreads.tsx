@@ -3,7 +3,7 @@ import { Button } from '@/components/desktop-button'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { t, useLanguage } from '../i18n'
 import { Dialog } from '../Menu'
-import { invoke } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import { errorText } from '../workspace/TaskPane'
 import { useWorkspace } from '../workspace/workspace'
 import { TaskRow } from '../sidebar/projects/TaskRow'
@@ -12,6 +12,7 @@ import { SETTINGS_FORM_CLASS } from './constants'
 /** Archived history belongs to the current workspace, independently of preference targets. */
 export function ArchivedThreads() {
   useLanguage()
+  const { invoke } = useHost()
   const ws = useWorkspace()
   const [clearingArchived, setClearingArchived] = useState(false)
   const [clearBusy, setClearBusy] = useState(false)

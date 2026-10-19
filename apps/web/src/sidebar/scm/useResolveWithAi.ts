@@ -5,6 +5,7 @@ import { useModelSets } from '../../models/ModelSets'
 import { errorText } from '../../workspace/TaskPane'
 import { useWorkspace } from '../../workspace/workspace'
 import { startCheckoutChat } from './startCheckoutChat'
+import { useHost } from '../../workspace/HostProvider'
 
 /** Starts an agent chat in this checkout that resolves the conflicted files. */
 export function useResolveWithAi({
@@ -25,6 +26,7 @@ export function useResolveWithAi({
   reportError: (message: string) => void
 }) {
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const { initialSettings } = useModelSets()
   const [resolving, setResolving] = useState(false)
   // Conflicts get their own chat in this checkout, so the transcript is a record of what was decided and why.
@@ -54,6 +56,7 @@ export function useResolveWithAi({
         t('Resolve {0} conflicts in {1}', { '0': kind, '1': binding.repoName }),
         prompt,
         settings.model ? settings : initialSettings,
+        invoke,
       )
     } catch (e) {
       reportError(errorText(e))

@@ -82,14 +82,17 @@ export default function Computers() {
                   </Pressable>
                   <Pressable
                     onPress={() =>
-                      Alert.alert(
-                        'Forget host?',
-                        `${pc.name}: removes phone credentials, drafts and outbox. Agents keep running. Revoke the old device on this host to invalidate its token.`,
-                        [
-                          { text: 'Cancel', style: 'cancel' },
-                          { text: 'Forget', style: 'destructive', onPress: () => void forget(pc.id) },
-                        ],
-                      )
+                      Alert.alert('Forget host?', `${pc.name}: ${t.forgetHostDraftHint}`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Forget',
+                          style: 'destructive',
+                          onPress: () =>
+                            void forget(pc.id).catch((error) =>
+                              Alert.alert(t.forgetHostFailed, error instanceof Error ? error.message : String(error)),
+                            ),
+                        },
+                      ])
                     }
                   >
                     <T tone="bad">Forget</T>

@@ -19,6 +19,8 @@ export interface NetworkDevice {
   id: string
   name: string
   createdAt: number
+  expiresAt?: number | null
+  role?: 'owner' | 'viewer'
   lastSeenAt: number | null
 }
 /** An address this computer has, which another device may reach it on (LAN, VPN, ...). */

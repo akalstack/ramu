@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 const MermaidBlock = lazy(() => import('../chat/MermaidBlock').then((m) => ({ default: m.MermaidBlock })))
 import { useEffect, useMemo, useState, type ComponentProps } from 'react'
 import Markdown from 'react-markdown'
-import { invoke } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import {
   previewImagePath,
   previewRehypePlugins,
@@ -17,6 +17,7 @@ function useImageUrl(url: string | undefined, context: Context) {
   const path = url ? previewImagePath(context.path, url) : null
   const [loaded, setLoaded] = useState<{ key: string; url: string } | null>(null)
   const key = `${context.taskId}:${context.repoId}:${path}`
+  const { invoke } = useHost()
   useEffect(() => {
     if (!path) return
     let current = true
@@ -29,7 +30,7 @@ function useImageUrl(url: string | undefined, context: Context) {
     return () => {
       current = false
     }
-  }, [key, path, context.taskId, context.repoId])
+  }, [key, path, context.taskId, context.repoId, invoke])
   return path ? (loaded?.key === key ? loaded.url : undefined) : url
 }
 
@@ -43,6 +44,7 @@ function useImageSet(srcSet: string | undefined, context: Context) {
   // Resolve each picture candidate independently, retaining density/width descriptors.
   const [resolved, setResolved] = useState<{ input: string; value: string } | null>(null)
   const input = `${context.taskId}:${context.repoId}:${context.path}:${srcSet}`
+  const { invoke } = useHost()
   useEffect(() => {
     let current = true
     void Promise.all(
@@ -60,7 +62,7 @@ function useImageSet(srcSet: string | undefined, context: Context) {
     return () => {
       current = false
     }
-  }, [input, srcSet, context.taskId, context.repoId, context.path])
+  }, [input, srcSet, context.taskId, context.repoId, context.path, invoke])
   return resolved?.input === input ? resolved.value : undefined
 }
 

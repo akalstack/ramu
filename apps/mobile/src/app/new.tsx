@@ -1,8 +1,15 @@
+import type { RamuMethods } from '@ramu/shared/api'
+import { resolveCheckoutMode } from '@ramu/shared/workspaceDefaults'
+import { projectWorkspaces } from '@ramu/shared/workspace/explorer'
+import { readWorkspaceChoice, type WorkspaceChoice } from '../runtime/workspaces'
+import { useWorkspaces } from '../runtime/useWorkspaces'
+import { isMethodMissing } from '../runtime/goalVerify'
+import { newComposerKey } from '../runtime/composerDrafts'
 import { useEffect, useState } from 'react'
 import { Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, ChevronDown, Folder, FolderGit2, GitBranch, MessageCircle, Monitor } from 'lucide-react-native'
+import { Check, ChevronDown, Folder, FolderGit2, GitBranch, MessageCircle, Monitor, Files } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { STANDALONE } from '../runtime/types'
@@ -58,13 +65,73 @@ export default function NewChat() {
   const insets = useSafeAreaInsets()
   const store = useStore()
   const { projects, computers, createChat, isOnline } = store
-  const params = useLocalSearchParams<{ project?: string; quote?: string; computer?: string }>()
+  const params = useLocalSearchParams<{ project?: string; quote?: string; computer?: string; draftContext?: string }>()
   const [selected, setHost] = useState(params.computer ?? store.selected)
   const offline = !isOnline(selected)
   const list = projects.filter((p) => p.computerId === selected)
   // A chat runs in a project's folders, so the project is chosen first rather than defaulted.
   const [projectId, setProjectId] = useState<string | null>(params.project ?? null)
-  const [mode, setMode] = useState<'current' | 'worktree'>('current')
+  const draftContext = params.computer === selected && params.project === projectId ? params.draftContext : undefined
+  const composerKey = newComposerKey(selected, projectId, draftContext)
+  const choiceKey = `${composerKey}:workspace`
+  const choice = readWorkspaceChoice(store.drafts[choiceKey])
+  const manualMode = choice.mode
+  const workspaceId = choice.workspaceId
+  const chooseWorkspace = (choice: WorkspaceChoice) => {
+    store.setDraft(choiceKey, JSON.stringify({ version: 1, ...choice }))
+  }
+  const catalog = useWorkspaces(selected, !!projectId && projectId !== STANDALONE)
+  const workspaces = projectId && projectId !== STANDALONE ? projectWorkspaces(selected, projectId, catalog.rows) : []
+  const existingWorkspace = workspaces.find((workspace) => workspace.id === workspaceId)
+  const optionsKey = JSON.stringify([selected, projectId])
+  const [optionsState, setOptionsState] = useState<{
+    key: string
+    value: ReturnType<RamuMethods['tasks.workspaceOptions']> | null
+    error: string
+    unsupported?: boolean
+  }>({ key: optionsKey, value: null, error: '' })
+  const workspaceOptions = optionsState.key === optionsKey ? optionsState.value : null
+  const optionsError = optionsState.key === optionsKey ? optionsState.error : ''
+  const workspaceDefaults = store.appPreferences[selected]
+  useEffect(() => {
+    let current = true
+    setOptionsState({ key: optionsKey, value: null, error: '' })
+    if (projectId && projectId !== STANDALONE && !offline)
+      void store.invoke(selected, 'tasks.workspaceOptions', projectId.slice(projectId.indexOf(':') + 1)).then(
+        (value) => {
+          if (current) setOptionsState({ key: optionsKey, value, error: '' })
+        },
+        (error) => {
+          if (current)
+            setOptionsState({
+              key: optionsKey,
+              value: null,
+              error: String(error instanceof Error ? error.message : error),
+              unsupported: isMethodMissing(error),
+            })
+        },
+      )
+    return () => {
+      current = false
+    }
+  }, [
+    selected,
+    projectId,
+    offline,
+    workspaceDefaults?.defaultCheckoutMode,
+    workspaceDefaults?.worktreeBranchNaming,
+    workspaceDefaults?.worktreeBranchPrefix,
+    workspaceDefaults?.worktreeBranchInstructions,
+  ])
+  const resolution = resolveCheckoutMode({
+    defaultMode:
+      workspaceOptions?.defaultCheckoutMode ?? store.appPreferences[selected]?.defaultCheckoutMode ?? 'current',
+    manual: manualMode,
+    workspaceId,
+    projectFree: projectId === STANDALONE,
+    worktreeUnavailable: workspaceOptions?.worktreeUnavailable,
+  })
+  const mode = resolution.mode
   const [picker, setPicker] = useState<'project' | 'mode' | 'host' | null>(null)
   // Starts on the computer's default model step (Settings › Models), like the desktop; a pick here overrides it.
   const [picked, setModel] = useState<ModelChoice | null>(null)
@@ -111,7 +178,7 @@ export default function NewChat() {
         </View>
         <View style={{ paddingBottom: Math.max(insets.bottom, space.s) }}>
           <Composer
-            key={`${selected}:${projectId ?? 'none'}`}
+            key={composerKey}
             running={false}
             restore={
               params.quote
@@ -148,17 +215,52 @@ export default function NewChat() {
                 {project ? (
                   <TrayButton
                     icon={GitBranch}
-                    label={mode === 'current' ? 'Current checkout' : 'Isolated worktree'}
+                    label={
+                      workspaceId
+                        ? (existingWorkspace?.name ?? choice.name ?? t.existingWorkspace)
+                        : mode === 'current'
+                          ? t.currentCheckout
+                          : t.isolatedWorktree
+                    }
                     onPress={() => setPicker('mode')}
+                  />
+                ) : null}
+                {project ? (
+                  <TrayButton
+                    icon={Files}
+                    label={t.browseFiles}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/explorer',
+                        params: {
+                          computer: selected,
+                          composerProject: project.id,
+                          ...(draftContext ? { draftContext } : {}),
+                          ctx: workspaceId
+                            ? `worktree:${workspaceId}`
+                            : `project:${project.id.slice(project.id.indexOf(':') + 1)}`,
+                        },
+                      })
+                    }
                   />
                 ) : null}
               </>
             }
-            draftKey={`${selected}:new:${projectId ?? 'none'}`}
+            draftKey={composerKey}
+            draftScope={{
+              kind: 'new',
+              id: composerKey,
+              ...(projectId ? { projectId } : {}),
+              ...(draftContext ? { contextId: draftContext } : {}),
+              label:
+                list.find((p) => p.id === projectId)?.name ?? (projectId === STANDALONE ? t.standalone : t.newChat),
+            }}
             computerId={selected}
             scope={
               projectId && projectId !== STANDALONE
-                ? `project:${projectId.slice(projectId.indexOf(':') + 1)}`
+                ? workspaceId
+                  ? `worktree:${workspaceId}`
+                  : `project:${projectId.slice(projectId.indexOf(':') + 1)}`
                 : undefined
             }
             offline={offline}
@@ -172,11 +274,30 @@ export default function NewChat() {
                 setPicker('project')
                 throw new Error('Choose a project first.')
               }
+              if (offline && projectId !== STANDALONE && !store.appPreferences[selected] && manualMode === null)
+                throw new Error(
+                  'Connect to this host to load its workspace default, or explicitly choose Current checkout.',
+                )
+              if (workspaceId && !offline && !existingWorkspace) throw new Error(t.workspaceUnavailable)
+              if (resolution.blocked) throw new Error(resolution.reason ?? 'Worktree unavailable')
+              if (!offline && !workspaceId && projectId !== STANDALONE && !workspaceOptions && manualMode !== 'current')
+                throw new Error(optionsError ? t.workspaceSettingsFailed : t.loadingWorkspaces)
               const id = await createChat({
                 computerId: selected,
                 projectId,
                 text,
                 mode,
+                workspaceId,
+                branchNaming: {
+                  strategy:
+                    workspaceOptions?.branchNaming ?? store.appPreferences[selected]?.worktreeBranchNaming ?? 'fixed',
+                  instructions:
+                    workspaceOptions?.branchInstructions ??
+                    store.appPreferences[selected]?.worktreeBranchInstructions ??
+                    '',
+                  prompt: text.slice(0, 6000),
+                },
+                branchPrefix: workspaceOptions?.branchPrefix ?? store.appPreferences[selected]?.worktreeBranchPrefix,
                 attachments,
                 context,
                 ...model,
@@ -197,7 +318,6 @@ export default function NewChat() {
                 setHost(computer.id)
                 setProjectId(null)
                 setModel(null)
-                setMode('current')
               }
               setPicker('project')
             }}
@@ -259,7 +379,22 @@ export default function NewChat() {
         </Row>
       </Sheet>
 
-      <Sheet open={picker === 'mode'} onClose={() => setPicker(null)} title="Checkout">
+      <Sheet open={picker === 'mode'} onClose={() => setPicker(null)} title="Workspace">
+        <Row
+          onPress={() => {
+            chooseWorkspace({ mode: null })
+            setPicker(null)
+          }}
+        >
+          <T>
+            Use default:{' '}
+            {(workspaceOptions?.defaultCheckoutMode ?? store.appPreferences[selected]?.defaultCheckoutMode) ===
+            'worktree'
+              ? 'New worktree'
+              : 'Current checkout'}
+          </T>
+        </Row>
+        {resolution.reason ? <T tone={resolution.blocked ? 'bad' : 'muted'}>{resolution.reason}</T> : null}
         {(
           [
             ['current', 'Current checkout', 'Work directly in the folders on disk.'],
@@ -269,7 +404,7 @@ export default function NewChat() {
           <Row
             key={value}
             onPress={() => {
-              setMode(value)
+              chooseWorkspace({ mode: value })
               setPicker(null)
             }}
           >
@@ -279,9 +414,37 @@ export default function NewChat() {
                 {hint}
               </T>
             </View>
-            {mode === value ? <Check size={16} color={c.accent} /> : null}
+            {!workspaceId && manualMode === value ? <Check size={16} color={c.accent} /> : null}
           </Row>
         ))}
+        {optionsError ? (
+          <T tone="muted">{optionsState.unsupported ? t.workspaceSettingsUnsupported : t.workspaceSettingsFailed}</T>
+        ) : null}
+        {catalog.loading ? <T tone="muted">{t.loadingWorkspaces}</T> : null}
+        {catalog.error ? (
+          <T tone="muted">{catalog.unsupported ? t.workspacesUnsupported : t.workspacesLoadFailed}</T>
+        ) : null}
+        {workspaces.map((workspace) => (
+          <Row
+            key={workspace.id}
+            onPress={() => {
+              chooseWorkspace({ mode: 'worktree', workspaceId: workspace.id, name: workspace.name })
+              setPicker(null)
+            }}
+          >
+            <GitBranch size={17} color={c.soft} />
+            <View style={{ flex: 1 }}>
+              <T weight="500">{workspace.name}</T>
+              <T tone="muted" size={font.caption}>
+                {t.existingWorkspace}
+              </T>
+            </View>
+            {workspaceId === workspace.id ? <Check size={16} color={c.accent} /> : null}
+          </Row>
+        ))}
+        {workspaceId && !offline && !catalog.loading && !existingWorkspace ? (
+          <T tone="bad">{t.workspaceUnavailable}</T>
+        ) : null}
       </Sheet>
     </Screen>
   )

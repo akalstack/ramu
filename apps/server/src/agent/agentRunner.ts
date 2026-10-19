@@ -29,7 +29,8 @@ export interface AgentRunner {
 export type AgentRunnerFactory = (
   scope: AgentScope,
   settings: AgentSettings,
-  emit: (event: AgentEvent, usageLimit?: boolean) => void,
+  /** `usageLimit`: true when the failure is confidently a usage limit, 'low' when only a generic phrase matched. */
+  emit: (event: AgentEvent, usageLimit?: boolean | 'low') => void,
   readOnly?: boolean,
 ) => AgentRunner
 

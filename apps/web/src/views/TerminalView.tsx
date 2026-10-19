@@ -4,19 +4,14 @@ import { Terminal } from '@xterm/xterm'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAppSettings } from '../settings/AppSettings'
-import { invoke, ramu } from '../ipc'
+import { invoke as invokeHere, ramu } from '../ipc'
 import { errorText } from '../workspace/TaskPane'
-import { useWorkspace } from '../workspace/workspace'
+import { useHostRuntime, useWorkspace } from '../workspace/workspace'
+import { useHost } from '../workspace/HostProvider'
+import { unseenOutput } from '../workspace/terminalOutput'
+import { t } from '../i18n'
 import { FILE_DRAG_TYPE } from '../composer/ComposerSuggestions'
-import {
-  allShells,
-  beginOpening,
-  forgetTerminal,
-  shellOf,
-  takeAdopted,
-  trackTerminal,
-} from '../workspace/terminalRegistry'
-import { createOutputGate, markTerminalOutput } from '../workspace/terminalActivity'
+import { createOutputGate } from '../workspace/terminalActivity'
 
 const shellQuote = (path: string) => (/^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`)
 
@@ -43,6 +38,10 @@ export function TerminalView({
 }) {
   const { preferences } = useAppSettings()
   const ws = useWorkspace()
+  // This host's shells: its bound invoke, its terminal registry and output, and its Terminal-button dot.
+  const { invoke } = useHost()
+  const runtime = useHostRuntime()
+  const { allShells, beginOpening, forgetTerminal, shellOf, takeAdopted, trackTerminal } = runtime.terminals
   const terminal = useRef<Terminal | null>(null)
   const renderer = useRef<WebglAddon | null>(null)
   const rendererLoss = useRef<{ dispose(): void } | null>(null)
@@ -200,18 +199,22 @@ export function TerminalView({
         // Startup output (the prompt, rc files) doesn't earn the Terminal button's dot. Keystrokes count, not xterm's own replies to the shell.
         const gate = createOutputGate()
         offs.push(
-          ramu.on('term:data', ({ id, data, cursor }) => {
-            if (id !== termId) return
-            if (cursor !== undefined && cursor <= replayed) return
-            term.write(data)
-            if (gate.output()) markTerminalOutput(ws.workspaceOf(taskId))
+          runtime.terminals.onData(info.id, (chunk) => {
+            // Skip what the snapshot already showed; output held while the host was off screen may overlap it.
+            const unseen = unseenOutput(chunk, replayed)
+            if (!unseen) return
+            if (unseen.reset)
+              term.write(
+                `\x1bc\x1b[2m[${t('Older terminal output was truncated while this workspace was hidden.')}]\x1b[0m\r\n`,
+              )
+            term.write(unseen.data)
+            if (gate.output()) runtime.activity.markTerminalOutput(ws.workspaceOf(taskId))
           }),
         )
         const typed = term.onKey(() => gate.arm())
         offs.push(() => typed.dispose())
         offs.push(
-          ramu.on('term:exit', ({ id, code }) => {
-            if (id !== termId) return
+          runtime.terminals.onExit(info.id, (code) => {
             // Like other editors, a shell that exits closes its tab. A shell that fails right away stays open so its error is readable.
             if (code !== 0 && Date.now() - openedAt < 1500)
               term.write(`\r\n\x1b[2m[process exited with code ${code}]\x1b[0m\r\n`)
@@ -343,7 +346,8 @@ export function TerminalView({
           event.stopPropagation()
           const term = terminal.current
           if (!term) return
-          void invoke('term.menu', term.getSelection(), { x: event.clientX, y: event.clientY }).then(
+          // The menu opens on this machine, so it goes through this window's own host.
+          void invokeHere('term.menu', term.getSelection(), { x: event.clientX, y: event.clientY }).then(
             (action) => {
               if (action === 'selectAll') term.selectAll()
               else if (action === 'clear') term.clear()
@@ -363,7 +367,7 @@ export function TerminalView({
           const term = terminal.current,
             rect = event.currentTarget.getBoundingClientRect()
           if (!term) return
-          void invoke('term.menu', term.getSelection(), { x: rect.left + 12, y: rect.top + 12 }).then(
+          void invokeHere('term.menu', term.getSelection(), { x: rect.left + 12, y: rect.top + 12 }).then(
             (action) => {
               if (action === 'selectAll') term.selectAll()
               else if (action === 'clear') term.clear()

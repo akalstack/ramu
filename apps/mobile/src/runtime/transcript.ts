@@ -1,34 +1,50 @@
 import type { AgentEvent } from '@ramu/shared/types'
+import { helperGroups } from '@ramu/shared/chat/helperPresentation'
 import type { TranscriptItem } from './types'
 import {
   advisorTranscript,
-  latestTasks,
   parseAdvice,
   parseTaskMessage,
   parseTaskReport,
   parseTaskStop,
 } from '@ramu/shared/chat/agentTasks'
-import { parseAnswerMessage } from '@ramu/shared/chat/questions'
-import { goalChanges } from '@ramu/shared/chat/goalHistory'
+import { requestOutcomes, parseAnswerMessage } from '@ramu/shared/chat/questions'
+import { goalChanges, goalFactLines } from '@ramu/shared/chat/goalHistory'
+import { providerWaitState, type ProviderWaitState } from '@ramu/shared/chat/providerWait'
+
+/**
+ * The line for a thread at a provider's usage limit. It names the cause and says the thread continues; "Paused" stays
+ * for a goal the user paused themselves. A guessed time is not shown as a reset.
+ */
+export function limitNoteTitle(wait: Pick<ProviderWaitState, 'retryAt' | 'guessed'>): string {
+  if (wait.guessed) return 'Limit reached · resuming automatically'
+  const at = new Date(wait.retryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return `Limit reached · resumes around ${at}`
+}
 
 /** What the person typed: the file context Ramu appends for the agent (`<ramu-context>…`) is hidden, as on the desktop. */
 export const visibleText = (text: string) => text.split(/\n*<ramu-context>/)[0]!.trimEnd()
 
 export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptItem[] {
   const items: TranscriptItem[] = []
-  const resolved = new Map<string, string>()
+  const positions = new Map<TranscriptItem, number>()
+  const latestPermissions = new Map<string, number>()
+  events.forEach((event, index) => {
+    if (event.kind === 'permission-request') latestPermissions.set(event.requestId, index)
+  })
+  const resolved = requestOutcomes(events)
   const answers = new Map<string, Record<string, string>>()
   const results = new Map<string, Extract<AgentEvent, { kind: 'tool-result' }>>()
-  const helpers = new Map<string, Extract<AgentEvent, { kind: 'agent' }>>()
+  const helperEvents = new Map<string, AgentEvent[]>()
   const goals = goalChanges(events)
-  const logs = new Map<string, string[]>()
-  for (const e of events)
-    if (e.agentId && e.kind === 'text') logs.set(e.agentId, [...(logs.get(e.agentId) ?? []), e.text])
   for (const e of events) {
-    if (e.kind === 'request-resolved') resolved.set(e.requestId, e.outcome)
     if (e.kind === 'question-state' && e.answers) answers.set(e.requestId, e.answers)
     if (e.kind === 'tool-result') results.set(`${e.agentId ?? ''}:${e.toolUseId}`, e)
-    if (e.kind === 'agent') helpers.set(e.agentId, e)
+    if (e.agentId && e.kind !== 'agent') {
+      const own = helperEvents.get(e.agentId) ?? []
+      own.push(e)
+      helperEvents.set(e.agentId, own)
+    }
   }
   events.forEach((e, index) => {
     if (e.agentId && e.kind !== 'agent') return
@@ -79,10 +95,21 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
         paused: 'Goal paused',
         resumed: 'Goal resumed',
         blocked: 'Goal blocked',
+        stalled: 'No progress',
+        'verify-failed': 'Verification failed',
         'turn-limit': 'Goal reached its turn limit',
         cleared: 'Goal cleared',
       }[type]
-      items.push({ kind: 'note', id, title: verb, detail: goal.objective, failed: type === 'blocked' })
+      // A failed check and a stall say what happened beneath the title; the others name the goal.
+      const facts = type === 'verify-failed' ? goalFactLines(goal) : type === 'stalled' ? [goal.reason] : []
+      items.push({
+        kind: 'note',
+        id,
+        title: verb,
+        goalNote: type,
+        detail: facts.length ? facts.join('\n') : goal.objective,
+        failed: type === 'blocked' || type === 'stalled' || type === 'verify-failed',
+      })
     } else if (e.kind === 'schedule')
       items.push({
         kind: 'note',
@@ -100,6 +127,7 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
         seq: seqs?.[index],
         raw: e.text,
       })
+    else if (e.kind === 'interactive') items.push({ kind: 'interactive', id, reference: e.reference })
     else if (e.kind === 'text') items.push({ kind: 'text', id, text: e.text })
     else if (e.kind === 'error') items.push({ kind: 'text', id, text: `Error: ${e.message}` })
     else if (e.kind === 'content') {
@@ -165,7 +193,7 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
           ? (answers.get(e.requestId) ?? { _: resolved.get(e.requestId)! })
           : undefined,
       })
-    else if (e.kind === 'permission-request')
+    else if (e.kind === 'permission-request' && latestPermissions.get(e.requestId) === index)
       items.push({
         kind: 'permission',
         id: e.requestId,
@@ -180,7 +208,13 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
     else if (e.kind === 'elicitation')
       items.push({ kind: 'elicitation', id: e.requestId, request: e, outcome: resolved.get(e.requestId) })
     else if (e.kind === 'goal' && e.goal?.status === 'completed')
-      items.push({ kind: 'goal', id, objective: e.goal.objective, turns: e.goal.turns })
+      items.push({
+        kind: 'goal',
+        id,
+        objective: e.goal.objective,
+        turns: e.goal.turns,
+        ...(goalFactLines(e.goal).length ? { detail: goalFactLines(e.goal).join('\n') } : {}),
+      })
     else if (e.kind === 'settings')
       items.push({
         kind: 'note',
@@ -207,13 +241,19 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
       items.push({ kind: 'end', id, ended: true, interrupted: e.isError || /interrupt|abort/i.test(e.text) })
     else if (e.kind === 'state' && ['idle', 'failed', 'stopped'].includes(e.state))
       items.push({ kind: 'end', id, ended: false, interrupted: false })
-    // Timestamps place steps in time, so a finished turn can say how long it worked.
-    if (e.at !== undefined)
-      for (let i = before; i < items.length; i++) items[i] = { at: e.at, ...items[i]! } as TranscriptItem
+    // Keep exact event positions even for requests whose IDs are provider-owned.
+    for (let i = before; i < items.length; i++) {
+      items[i] = {
+        ...items[i]!,
+        ...(e.at !== undefined ? { at: e.at } : {}),
+        ...(e.requestSource ? { requestSource: e.requestSource } : {}),
+      } as TranscriptItem
+      positions.set(items[i]!, index)
+    }
   })
-  // Waiting on a provider's usage limit, as the desktop shows it: only while nothing has happened since.
+  // A thread held at a provider's usage limit, as the desktop shows it: only while nothing has happened since.
   const lastWait = events.findLastIndex((e) => e.kind === 'provider-wait')
-  const wait = lastWait >= 0 ? (events[lastWait] as Extract<AgentEvent, { kind: 'provider-wait' }>) : undefined
+  const wait = providerWaitState(events)
   if (
     wait &&
     !events
@@ -232,34 +272,28 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
       kind: 'note',
       id: `wait-${lastWait}`,
       wait: true,
-      title: wait.retryAt
-        ? `Waiting for the provider's usage limit · retrying at ${new Date(wait.retryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-        : "Waiting for the provider's usage limit",
+      limit: { retryAt: wait.retryAt, guessed: wait.guessed, ...(wait.provider ? { provider: wait.provider } : {}) },
+      title: limitNoteTitle(wait),
     })
-  // The desktop's own task list: sub-agents plus advisors recovered from the advice delivered to the chat.
-  const tasks = latestTasks(events)
-  if (tasks.length)
-    items.push({
+  const groups = helperGroups(events).groups
+  // Insert at the launch point, rather than append every helper from the thread's lifetime.
+  for (const group of [...groups].reverse()) {
+    const row: TranscriptItem = {
       kind: 'agents',
-      id: 'helpers',
-      agents: tasks.map((t) => {
+      id: group.id,
+      advisor: group.advisor,
+      earlier: group.anchor === null,
+      agents: group.tasks.map((task) => {
         const own =
-          t.taskType === 'advisor'
-            ? advisorTranscript(events, t.agentId)
-            : events.filter((e) => e.agentId === t.agentId)
+          task.taskType === 'advisor' ? advisorTranscript(events, task.agentId) : (helperEvents.get(task.agentId) ?? [])
         const log = own
           .flatMap((e) => (e.kind === 'text' ? [e.text] : e.kind === 'error' ? [`Error: ${e.message}`] : []))
           .join('\n\n')
-        return {
-          id: t.agentId,
-          prompt: t.prompt,
-          log,
-          name: t.name,
-          type: t.agentType ?? t.taskType ?? '',
-          status: t.status === 'stopped' ? ('failed' as const) : t.status,
-          summary: t.summary ?? t.error ?? '',
-        }
+        return { ...task, id: task.agentId, type: task.agentType ?? task.taskType ?? '', log }
       }),
-    })
+    }
+    const next = items.findIndex((item) => (positions.get(item) ?? -1) > group.launchIndex)
+    items.splice(group.anchor === null || next < 0 ? items.length : next, 0, row)
+  }
   return items
 }

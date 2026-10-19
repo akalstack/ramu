@@ -2,7 +2,8 @@ import { ContentSkeleton } from '@/components/content-skeleton'
 import { t, useLanguage } from './../i18n'
 import { useEffect, useRef, useState } from 'react'
 import type { RepositoryBinding, ViewDescriptor } from '@ramu/shared/types'
-import { invoke, ramu } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
+import { useHostRuntime } from '../workspace/workspace'
 import { monaco } from '../editor/monaco'
 import { errorText } from '../workspace/TaskPane'
 import { useAppSettings } from '../settings/AppSettings'
@@ -17,6 +18,8 @@ export function GitDetailsView({
   binding: RepositoryBinding
 }) {
   useLanguage()
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const { preferences } = useAppSettings()
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const host = useRef<HTMLDivElement>(null)
@@ -60,7 +63,7 @@ export function GitDetailsView({
     }
     void load()
     let timer: ReturnType<typeof setTimeout> | undefined
-    const off = ramu.on('fs:changed', ({ cwd }) => {
+    const off = on('fs:changed', ({ cwd }) => {
       if (!view.oid && cwd === binding.cwd) {
         clearTimeout(timer)
         timer = setTimeout(() => void load(), 150)
@@ -74,7 +77,7 @@ export function GitDetailsView({
       editor.dispose()
       model.dispose()
     }
-  }, [taskId, binding.repoId, binding.cwd, view.oid])
+  }, [taskId, binding.repoId, binding.cwd, view.oid, invoke, on])
   useEffect(() => {
     editorRef.current?.updateOptions({
       fontSize: preferences.editorFontSize,

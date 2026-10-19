@@ -47,6 +47,14 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
   { section: 'archived', title: 'Archived threads', words: 'history restore unarchive delete' },
   { section: 'system', title: 'Keep local crash reports', words: 'diagnostics privacy errors crash local export' },
+  {
+    section: 'git',
+    title: 'Default workspace for new threads',
+    words: 'checkout workspace worktree isolation default branch naming prefix',
+  },
+  { section: 'git', title: 'Worktree branch naming', words: 'semantic custom fixed naming generation' },
+  { section: 'git', title: 'Branch naming instructions', words: 'ticket team custom branch' },
+  { section: 'git', title: 'Branch prefix', words: 'worktree branch namespace naming' },
   { section: 'git', title: 'Automatic pull', words: 'git auto fetch remote fast-forward background sync' },
   {
     section: 'git',
@@ -152,7 +160,12 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'providers', title: 'Default step', words: 'model effort' },
   { section: 'access', title: 'Provider fallback', words: 'limit switch provider' },
   { section: 'access', title: 'Default access', words: 'permissions edits auto full' },
-  { section: 'access', title: 'Automatic provider fallback', words: 'provider fallback limit' },
+  {
+    section: 'access',
+    title: 'When a usage limit is reached',
+    words:
+      'automatic provider fallback limit switch another model wait this model stop decide resume auto-resume reset rate quota',
+  },
   { section: 'access', title: 'When to switch', words: 'usage threshold percent 5-hour weekly fallback' },
   { section: 'access', title: 'Fallback order', words: 'provider model effort chain list order' },
   { section: 'workflows', title: 'Where sub-agents run', words: 'subagent native provider cross delegate' },

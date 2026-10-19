@@ -1,3 +1,5 @@
+import { helperActions, helperActive, helperStatusLabel } from '@ramu/shared/chat/helperPresentation'
+import { useHostConnection } from '../../../workspace/computers'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import { Bot, Square, ChevronRight, SquareTerminal } from 'lucide-react'
@@ -24,8 +26,10 @@ export function AgentTaskCard({
   onStop: (task: AgentTask) => void
 }) {
   useLanguage()
+  const { offline } = useHostConnection()
+  const actions = helperActions(task, !offline)
   const status = effectiveStatus(task, live)
-  useElapsed(task.startedAt, status === 'running')
+  useElapsed(task.startedAt, !offline && helperActive(task))
   const final = task.error ?? task.summary
   const detail =
     status === 'running'
@@ -61,8 +65,9 @@ export function AgentTaskCard({
             <span
               className={`agent-task-state flex-none inline-flex items-center gap-1 text-muted-foreground text-caption ${status}`}
             >
-              <TaskStatusIcon status={status} />
-              {translate(TASK_STATUS[status])}
+              <TaskStatusIcon status={status} active={!offline && helperActive(task)} />
+              {offline ? `${translate('Last known')} · ` : ''}
+              {translate(helperStatusLabel(task))}
             </span>
           </span>
           {detail && (
@@ -90,7 +95,7 @@ export function AgentTaskCard({
         </span>
         <ChevronRight size={14} className={CARET_CLASS} />
       </Button>
-      {status === 'running' && live && task.canStop && (
+      {actions.canStop && (
         <Button
           variant="ghost"
           size="icon-xs"

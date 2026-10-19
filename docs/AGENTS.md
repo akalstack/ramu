@@ -4,6 +4,14 @@
 
 Selecting a model from the dropdown during a running turn starts a five-second countdown. **Apply now** switches immediately; **Cancel** restores the currently applied model and reasoning effort. Adjusting reasoning while a model change is pending keeps the original deadline and applies the latest effort with that model. Selecting a model through the slider still commits on release. Idle threads keep their existing selection behavior, and a pending countdown is cancelled if the turn stops running.
 
+## Thread titles
+
+A new thread immediately shows its opening-message title. The execution server schedules one isolated naming request after the first main-thread user message is recorded, including mobile and API starts; closing a client does not cancel it. Titles describe the durable task and intended outcome in the first message's language. User messages and relevant replies are bounded; helper/advisor output and tool results are excluded. The naming prompt forbids following links or invoking skills just to discover a subject; provider-boundary acceptance remains in the title plan.
+
+**Rename** is authoritative. **Rename with AI** explicitly generates from the conversation and previous title, including a manual name. A later manual edit or newer regeneration wins over older work. Once a useful automatic title is accepted it stays stable; a vague opening may receive one refinement after a completed reply supplies context. Thread titles never rename Git branches, working directories or workspace labels.
+
+The existing title action shows **Naming thread** while pending and **Retry title generation** after failure, synchronized across clients. A failed or limited request keeps the current usable name. Each running attempt has a 15-second deadline; title work shares a two-request concurrency limit and never waits for quota resets. Pending work receives at most one retry after a server restart; settled failures require an explicit retry. Native provider-title reuse is still unverified; see [remaining title work](THREAD-TITLES-PLAN.md).
+
 ## Sub-agents
 
 Sub-agent cards show task progress and transcripts. Open a card to inspect its work, send a message, or stop it. Stopping the main thread stops its sub-agents.
@@ -31,12 +39,35 @@ Sub-agents can use the main list or their own list and threshold. Sub-agents onl
 
 ### When every provider is limited
 
-If the thread's provider and every fallback are at their limit, the thread goes idle with a notice showing the next check time instead of failing. A clock replaces the thread's status in the sidebar, and Home lists it under **Running in the background** with the expected resume time. It keeps working in the background, so closing the window does not cancel it:
+If the thread's provider and every fallback are at their limit, the thread goes idle with a **Limit reached · resumes around …** notice instead of failing. A clock replaces the thread's status in the sidebar, and Inbox lists it under **Running** with the expected resume time. It keeps working in the background, so closing the window does not cancel it:
 
 - **Messages still go through.** Anything you send or queue while limited is kept in the thread's queue, and nothing reaches a provider yet.
 - **It resumes by itself.** Ramu rechecks when a reset is known, or backs off from one minute up to 15 minutes when it is not. Queued messages are then sent together as one request; with nothing queued, the unfinished request continues.
 - **It survives a service restart**, and a goal waiting on the same limit continues with it.
-- **You can cancel it.** Stopping or interrupting the thread ends the wait. With **Auto fallback** off and no goal, a limit still stops the thread for manual action.
+- **You can cancel it.** Stopping or interrupting the thread ends the wait.
+- **It is never a failed turn.** A limit is a pause, not an error. With **Wait on this model** (or fallback off) the thread waits on the same provider; a goal waits the same way. A 429 whose retries ran out counts as a limit. A message that only looks like a limit (a bare "rate limit" or 429) gets one quiet retry before the thread is held, and an error that is not about usage, such as "prompt is too long", stays an ordinary error.
+- **Threads on one limit wait together.** Waits are keyed by provider login. Threads on the same login share one timer and one availability check, and resume with a small random spread so they do not all trip the limit again at once.
+- **Helpers wait too.** A sub-agent that reaches a limit with nowhere to go waits with its login instead of failing; its card stays running and says it is waiting. Background work nobody is blocked on (the advisor, change reviews, learning, scheduled recaps) waits out the limit for up to 45 minutes and retries. Titles, commit messages and Aside replies report the limit at once, with the reset time when it is known.
+- **Scheduled runs** that hit a limit stay *running* in the schedule's history and continue after the reset; they are never marked failed or completed while they wait.
+
+### Auto-resume
+
+Whether a limited thread continues by itself is **auto-resume**: the thread's own choice (`agent.setAutoResume`), otherwise the global default `fallback.autoResume`, which is on. The global value is read live, so changing it reaches threads that are already waiting. Sub-agents and the advisor follow their parent's effective value; a schedule's settings may carry their own.
+
+With auto-resume off the wait is still recorded and shown, no retry timer runs, and messages typed meanwhile stay queued. When a known reset passes, the thread records that it announced it (`resetNotifiedAt`) and a push notification says the thread can be resumed; this happens once, also across restarts. A reset time that is only a guess never notifies. **Try again** (`agent.retryLimitNow`) works with auto-resume on or off: it re-reads usage and sends the continuation only if a reading shows room, or the provider has no reading of its own (a reading Ramu inferred from a limit notice never blocks it). Otherwise the thread stays in the wait with the updated reset time and no failed turn. Resuming a waiting goal clears the wait and tries at once.
+
+Reset times come from the provider's reading, else from the notice itself ("in 2 hours", "resets at 5pm", "17:00 UTC", an ISO time, with the zone the provider reports and the host's otherwise). When no reset is known the wait is marked *guessed* and the thread backs off one to 15 minutes.
+
+### Carrying the conversation to another provider
+
+A switch, a lost native session and a rewind all start a provider session that has not seen the conversation. Ramu builds the handoff from the thread's own event log, with no model call, and sends it inside a `<ramu-handoff>` block, apart from the user's request (`Next request: …`). The block holds a frame that names the cause (limit, switch, account change, a session the host could not resume, a rewind), a state block (latest request and whether the turn finished, last reply, open questions and approvals, queued messages, helpers, files changed, the last failing tool result, and the goal for providers that do not receive session guidance), the checkpoint if one is valid and labelled historical, and the transcript.
+
+- **Compaction is tiered and says what it dropped.** User messages, questions, answers and approvals are never cut, and the most recent turn is kept whole. Old tool results shorten first, then old tool calls and assistant text, then are dropped. Each dropped run becomes a line with its event range, count and a `session_recall` `startSeq` to read it.
+- **A provider the thread used before resumes its own session** and gets only the events it has not seen. If it cannot resume, the thread falls back to a full handoff. This covers Codex, OpenCode, Cursor and Antigravity, whose runners recover from a lost session; Claude Code always gets a full handoff until its own recovery path is verified against the SDK. Native session ids are kept per provider login with the last event each saw; a rewind forgets them all.
+- **The checkpoint is sent once**, in the handoff, not also in the session guidance. Near a limit it is refreshed ahead of time (see [Learning](LEARNING.md#checkpoint-refresh-near-a-limit)); the handoff only reads what is saved and never waits for a model.
+- **The budget follows the target.** It is about a quarter of the target's context window as last reported (four characters per token, between 40,000 and 400,000 characters), and 120,000 characters when the window is unknown. A conversation that still does not fit is never truncated: a model switch is refused with a message, a limit fallback skips that model (and holds the thread at its limit, with the reason, if nothing else is left), and a launch that cannot be carried fails with a clear error.
+- **The transcript records it.** The `settings` event keeps what was carried (`handoffInfo`: cause, full or delta, first and last event, size, events dropped or shortened).
+- A launch without a native session carries the conversation even if the path that lost the session forgot to say so.
 
 ## Asides and advice
 
@@ -51,3 +82,11 @@ Provider features depend on the installed runtime. See [provider setup](PROVIDER
 Home stays a centred start screen. Under the box it shows one line with what is running, new recaps and completed work, which opens Inbox, and only what is blocked on you: agents waiting for your input and recaps that need a decision. **Inbox** in the sidebar (⌘⇧I) opens on **All**, an overview of every section with **See all** links, and has a tab for each: **Waiting**, **Running**, **Recaps**, **Learned** (every "What Ramu learned" summary) and **Completed**. Its badge counts threads waiting on you and recaps that need a decision. Rows are threads, drawn like the sidebar's: click one to open it, or stop it from its row. A thread shows how many sub-agents it started; the sub-agents themselves live in the thread, and only one waiting for your answer gets its own row. Answer questions, connector requests and tool approvals in place.
 
 Nothing in Inbox needs clearing. **Waiting** empties as you answer or dismiss; running threads leave when they finish. **Completed** is recent history: threads finished in the last 7 days (at most 50), grouped by day, with an unread dot until you open one and **Archive** on hover. Older threads stay in the sidebar and Search. **Learned** shows the latest 20 summaries; the full history is in Settings → Memory & skills. Ramu-managed sub-agent threads have a **Back to parent thread** breadcrumb.
+
+## Thread activity and helper controls
+
+The compact activity row uses connection, pending input, provider holds, parent work, helpers, goals, advisor work and queue state in that priority order. Secondary actions remain reachable when a higher-priority state is shown. Mobile opens the existing controls in its sheet; desktop focuses the existing card, tray or helper panel. A goal has no invented percentage, and phone outbox uncertainty remains separate from the server queue.
+
+Helper groups retain their launch position and read each helper's latest recorded state. The current set contains helpers from the current user turn plus older helpers still active. Earlier settled work stays in History; advisors do not increase helper counts. A parent becoming idle does not stop a separately owned child. Stopped and failed are distinct outcomes, and late running progress cannot resurrect a settled helper without explicit resume metadata.
+
+Actions require the host's reported capabilities and a connection. The server rechecks Stop and Message. A Ramu-owned child can expose its real session ID; native helpers may have no separate conversation. Read-only details explain missing direct messaging instead of showing an unusable composer. Mobile currently labels its bounded output as an excerpt. Exact request IDs and child-origin labels survive forwarding, so approval/question answers continue through the existing routing boundary.

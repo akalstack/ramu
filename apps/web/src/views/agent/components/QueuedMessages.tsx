@@ -33,7 +33,7 @@ import type { Attachment, QueuedMessage } from '@ramu/shared/types'
 import { parseTaskMessage } from '@ramu/shared/chat/agentTasks'
 import { Attachments } from '../../../composer/Attachments'
 import { Menu } from '../../../Menu'
-import { invoke } from '../../../ipc'
+import { useHost } from '../../../workspace/HostProvider'
 import { outbox, type OutboxItem } from '../../../composer/outbox'
 import { visibleText } from '../lib/messages'
 import { ICON_BUTTON_CLASS, QUEUED_MESSAGE_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../styles'
@@ -108,6 +108,7 @@ function HostQueuedRow({
   act: Act
   onRecall: (attachments: Attachment[], text: string) => void
 }) {
+  const { invoke } = useHost()
   const relay = parseTaskMessage(message.text)
   const text = relay ? `To ${relay.name}: ${relay.body}` : visibleText(message.text) || 'Attachments'
   const recall = () =>
@@ -194,9 +195,10 @@ function OutboxRow({
   hostOffline: boolean
   onRecall: (attachments: Attachment[], text: string) => void
 }) {
+  const host = useHost().id
   const text = visibleText(item.text) || translate('Attachments')
   const recall = () => {
-    const taken = outbox().remove(item.id)
+    const taken = outbox(host).remove(item.id)
     if (!taken) return
     onRecall(taken.attachments, text)
   }
@@ -233,7 +235,7 @@ function OutboxRow({
             className={`${ICON_BUTTON_CLASS} queued-steer gap-[5px] text-soft disabled:pointer-events-none`}
             aria-label={translate('Retry')}
             disabled={hostOffline}
-            onClick={() => outbox().retry(item.id)}
+            onClick={() => outbox(host).retry(item.id)}
           >
             <RotateCcw size={14} />
           </Button>
@@ -241,7 +243,7 @@ function OutboxRow({
       )}
       <QueuedRowActions
         removeDisabled={sending}
-        onRemove={() => outbox().remove(item.id)}
+        onRemove={() => outbox(host).remove(item.id)}
         editDisabled={sending}
         onEdit={recall}
       />
@@ -279,6 +281,7 @@ export function QueuedMessages({
   onRecall: (attachments: Attachment[], text: string) => void
 }) {
   useLanguage()
+  const { invoke } = useHost()
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),

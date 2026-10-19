@@ -1,3 +1,5 @@
+import { usageTone, usagePercent } from '@ramu/shared/usage/presentation'
+export { usageTone } from '@ramu/shared/usage/presentation'
 import { t, useLanguage, formatLocale } from '../i18n'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
@@ -9,59 +11,88 @@ import { Gauge } from 'lucide-react'
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { AgentProvider, ContextUsage, UsageReading } from '@ramu/shared/types'
 import { providerAccountOrder, providerEnabled, providerName } from '@ramu/shared/providers/providers'
-import { invoke, ramu } from '../ipc'
+import { bridge, invokerFor } from '../ipc'
+import { ownHostId } from '../hosts'
+import { useHost } from '../workspace/HostProvider'
+import { useHostRuntime } from '../workspace/workspace'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { useAppSettings } from './AppSettings'
 import { workspaceVisible, onWorkspaceVisibility } from '../workspace/workspaceLifetime'
 
-// One shared copy of the account's plan usage; the main process pushes every change.
-let readings: UsageReading[] = []
-let started = false
-const listeners = new Set<() => void>()
-const publish = (next: UsageReading[]) => {
-  readings = next
-  listeners.forEach((listener) => listener())
-}
-function subscribe(listener: () => void) {
-  listeners.add(listener)
-  if (!started) {
-    started = true
-    void invoke('usage.get').then(publish, () => {})
-    // Claude's usage can be read without a turn, so the gauges are right on open.
-    void invoke('usage.refresh').then(publish, () => {})
-    ramu.on('usage:changed', publish)
-    // Keep the gauges current between turns: poll while the window is visible and catch up when it regains focus.
-    // The main process throttles the actual read, so extra calls are cheap.
-    let refreshing = false
-    const refresh = () => {
-      if (workspaceVisible() && document.visibilityState === 'visible' && listeners.size && !refreshing) {
-        refreshing = true
-        void invoke('usage.refresh')
-          .then(publish, () => {})
-          .finally(() => {
-            refreshing = false
-          })
-      }
-    }
-    onWorkspaceVisibility(refresh)
-    window.setInterval(refresh, 5 * 60_000 + 5_000)
-    window.addEventListener('focus', refresh)
-    document.addEventListener('visibilitychange', refresh)
-    ramu.on('background:connection', ({ connected }) => {
-      if (connected) void invoke('usage.get').then(publish, () => {})
-    })
+// One shared usage subscription per host; provider logins and reset times belong to that host.
+const usageStores = new Map<string, ReturnType<typeof createUsageStore>>()
+function createUsageStore(host: string) {
+  let readings: UsageReading[] = []
+  const listeners = new Set<() => void>()
+  let stop: (() => void) | undefined
+  const invoke = invokerFor(host)
+  const publish = (next: UsageReading[]) => {
+    readings = next
+    listeners.forEach((listener) => listener())
   }
-  return () => {
-    listeners.delete(listener)
+  return {
+    snapshot: () => readings,
+    subscribe(listener: () => void) {
+      listeners.add(listener)
+      if (listeners.size === 1) {
+        let disposed = false
+        let refreshing = false
+        const accept = (next: UsageReading[]) => {
+          if (!disposed) publish(next)
+        }
+        const refresh = () => {
+          if (!workspaceVisible() || document.visibilityState !== 'visible' || refreshing) return
+          refreshing = true
+          void invoke('usage.refresh')
+            .then(accept, () => {})
+            .finally(() => {
+              refreshing = false
+            })
+        }
+        void invoke('usage.get').then(accept, () => {})
+        refresh()
+        const offUsage = bridge.on('usage:changed', (next, from) => {
+          if ((from ?? ownHostId()) === host) accept(next)
+        })
+        const offConnection = bridge.on('background:connection', ({ connected }, from) => {
+          if (connected && (from ?? ownHostId()) === host) refresh()
+        })
+        const offVisibility = onWorkspaceVisibility(refresh)
+        const timer = window.setInterval(refresh, 5 * 60_000 + 5_000)
+        window.addEventListener('focus', refresh)
+        document.addEventListener('visibilitychange', refresh)
+        stop = () => {
+          disposed = true
+          offUsage()
+          offConnection()
+          offVisibility()
+          window.clearInterval(timer)
+          window.removeEventListener('focus', refresh)
+          document.removeEventListener('visibilitychange', refresh)
+        }
+      }
+      return () => {
+        listeners.delete(listener)
+        if (!listeners.size) stop?.()
+      }
+    },
   }
 }
 export function useUsage(): UsageReading[] {
   useLanguage()
-  return useSyncExternalStore(subscribe, () => readings)
+  const host = useHost().id
+  let store = usageStores.get(host)
+  if (!store) {
+    store = createUsageStore(host)
+    usageStores.set(host, store)
+  }
+  return useSyncExternalStore(store.subscribe, store.snapshot)
 }
 
 /** Readings for every login of every provider; the shared copy above only holds the selected one. Reloads when usage changes. */
 export function useAccountUsage(enabled = true): UsageReading[] {
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const [all, setAll] = useState<UsageReading[]>([])
   useEffect(() => {
     if (!enabled) return
@@ -75,12 +106,12 @@ export function useAccountUsage(enabled = true): UsageReading[] {
       )
     }
     load()
-    const off = ramu.on('usage:changed', load)
+    const off = on('usage:changed', load)
     return () => {
       cancelled = true
       off()
     }
-  }, [enabled])
+  }, [enabled, invoke, on])
   return all
 }
 
@@ -99,10 +130,6 @@ export function accountLabel(
 const STALE_MS = 10 * 60_000
 
 export type UsageTone = 'ok' | 'warn' | 'bad'
-export function usageTone(reading: Pick<UsageReading, 'usedPercent' | 'status'>): UsageTone {
-  return reading.status === 'limited' || reading.usedPercent >= 90 ? 'bad' : reading.usedPercent >= 70 ? 'warn' : 'ok'
-}
-
 /** Usage for providers that are turned on; a turned-off provider shows no gauge. */
 function useVisibleUsage(): UsageReading[] {
   const { preferences } = useAppSettings()
@@ -117,12 +144,14 @@ function byProvider(
   return ORDER.flatMap((provider) => {
     const own = all.filter((reading) => reading.provider === provider)
     if (!own.length) return []
+    const five = own.find((r) => r.window === 'five_hour' && !r.scope)
+    const weekly = own.find((r) => (r.window === 'weekly' || r.window === 'monthly') && !r.scope)
     return [
       {
         provider,
-        five: own.find((r) => r.window === 'five_hour' && !r.scope),
-        weekly: own.find((r) => (r.window === 'weekly' || r.window === 'monthly') && !r.scope),
-        scoped: own.filter((r) => r.scope),
+        five,
+        weekly,
+        scoped: own.filter((r) => r !== five && r !== weekly),
       },
     ]
   })
@@ -172,7 +201,7 @@ export function windowLabel(reading: UsageReading, short = false): string {
 export function resetText(at: number | undefined, now = Date.now()): string | null {
   if (!at) return null
   const ms = at - now
-  if (ms <= 0) return t('resets now')
+  if (ms <= 0) return t('Reset time passed; awaiting update')
   const minutes = Math.round(ms / 60_000)
   if (minutes < 60) return t('resets in {minutes}m', { minutes })
   const hours = Math.floor(minutes / 60)
@@ -258,17 +287,25 @@ function UsageDetail({
             <div className="flex justify-between gap-2 text-control">
               <span>{windowLabel(reading)}</span>
               <span className={cn('tabular-nums', toneText[tone])}>
-                {reading.status === 'limited' ? t('Limit reached') : t('{0}% used', { '0': reading.usedPercent })}
+                {reading.source === 'notice'
+                  ? t('Limit reported; usage unavailable')
+                  : usagePercent(reading) === null
+                    ? t('Not reported')
+                    : reading.status === 'limited'
+                      ? t('Limit reached')
+                      : t('{0}% used', { '0': usagePercent(reading)! })}
               </span>
             </div>
-            <Progress
-              value={Math.max(0, Math.min(100, reading.usedPercent))}
-              aria-label={windowLabel(reading)}
-              className={cn(
-                '[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-track]]:bg-foreground/10 [&_[data-slot=progress-indicator]]:rounded-full',
-                toneFill[tone],
-              )}
-            />
+            {usagePercent(reading) !== null && (
+              <Progress
+                value={usagePercent(reading)!}
+                aria-label={windowLabel(reading)}
+                className={cn(
+                  '[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-track]]:bg-foreground/10 [&_[data-slot=progress-indicator]]:rounded-full',
+                  toneFill[tone],
+                )}
+              />
+            )}
             {reset && <span className="text-caption text-muted-foreground">{reset}</span>}
           </div>
         )
@@ -506,6 +543,8 @@ export function UsageRings() {
 
 /** How full the chat's context window is: a small ring and percentage in the composer. Claude and Codex both report it. */
 export function ContextMeter({ sessionId }: { sessionId: string }) {
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   useLanguage()
   const [context, setContext] = useState<ContextUsage | null>(null)
   useEffect(() => {
@@ -517,14 +556,14 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
       },
       () => {},
     )
-    const off = ramu.on('context:changed', (event) => {
+    const off = on('context:changed', (event) => {
       if (event.sessionId === sessionId) setContext(event.context)
     })
     return () => {
       cancelled = true
       off()
     }
-  }, [sessionId])
+  }, [sessionId, invoke, on])
   if (!context) return null
   const tone: UsageTone = context.percent >= 95 ? 'bad' : context.percent >= 80 ? 'warn' : 'ok'
   const k = (n: number) => (n >= 1_000_000 ? `${Math.round(n / 100_000) / 10}M` : `${Math.round(n / 1000)}k`)

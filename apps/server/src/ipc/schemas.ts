@@ -22,6 +22,8 @@ export const agentSettings = z.object({
   serviceTier: z.enum(['standard', 'fast']).default('standard'),
   access: z.enum(['edits', 'auto', 'full']),
   autoFallback: z.boolean(),
+  /** Set only through `agent.setAutoResume`; accepted here so a settings object that carries it is not stripped. */
+  autoResume: z.boolean().optional(),
 })
 
 /** Files and selections the composer attaches to a prompt. */

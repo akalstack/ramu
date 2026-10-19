@@ -2,9 +2,9 @@ import { Pencil, Trash2 } from 'lucide-react'
 import type { ChangeReview, ReviewComment } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../i18n'
-import { invoke } from '../ipc'
 import { commentLabel } from '../git/ReviewChip'
 import { ICON_BUTTON_CLASS, NOTE_CLASS, WHERE_CLASS } from './styles'
+import { useHost } from '../workspace/HostProvider'
 
 export function ReviewThread({
   review,
@@ -20,6 +20,7 @@ export function ReviewThread({
   onAct: (fn: () => Promise<ChangeReview>) => Promise<ChangeReview | undefined>
 }) {
   useLanguage()
+  const { invoke } = useHost()
   const where = commentLabel(comment.side, comment.line, comment.endLine, comment.scope)
   const goTo = () =>
     window.dispatchEvent(

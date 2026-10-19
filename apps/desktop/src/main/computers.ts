@@ -1,5 +1,5 @@
 // Every computer this app talks to: the one it runs on and each one it was paired with, all connected at once.
-// Each computer keeps its own window; this module owns the connections, their health and their activity counts.
+// All computers share one shell; this module owns the connections, their health and their activity counts.
 import type { RuntimeEndpoint } from '@ramu/contracts'
 import type { Computer, ComputerStatus, Computers } from '@ramu/shared/types'
 import type { ComputerUpdate, RemoteServers, SavedServer } from './remoteServers'

@@ -4,7 +4,7 @@ import { ShieldQuestion } from 'lucide-react'
 import { useState } from 'react'
 import type { AgentEvent, PermissionScope } from '@ramu/shared/types'
 import { errorText } from '../../../lib/errors'
-import { invoke } from '../../../ipc'
+import { useHost } from '../../../workspace/HostProvider'
 import { Dropdown } from '../../../Menu'
 import { Outcome } from './Outcome'
 
@@ -24,12 +24,14 @@ export function PermissionRequestCard({
   outcome: string | undefined
 }) {
   useLanguage()
-  if (outcome && (outcome.startsWith('allowed') || outcome === 'approved' || outcome === 'allow')) {
-    return null
-  }
+  const { invoke } = useHost()
   const [pattern, setPattern] = useState(e.approvalPatterns?.[0] ?? 'exact')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Hooks first: an approval arriving while the card is shown must not change the hook count.
+  if (outcome && (outcome.startsWith('allowed') || outcome === 'approved' || outcome === 'allow')) {
+    return null
+  }
   const act = async (allow: boolean, scope: PermissionScope = 'once') => {
     setBusy(true)
     setError(null)
@@ -63,7 +65,7 @@ export function PermissionRequestCard({
     }
   }
   return (
-    <div className={pending ? `${CARD_CLASS} pending` : CARD_CLASS}>
+    <div data-activity-request={e.requestId} className={pending ? `${CARD_CLASS} pending` : CARD_CLASS}>
       <div className="card-title flex items-center gap-[7px] font-semibold">
         <ShieldQuestion size={15} /> {e.title}
       </div>

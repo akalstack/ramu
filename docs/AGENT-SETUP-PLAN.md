@@ -1,0 +1,95 @@
+# Agent setup: shared skills, rules and MCP
+
+## Smallest usable delivery
+
+A person can find an existing skill in Settings, understand where it comes from, enable it for the intended project/provider and inspect its availability in a thread. Extend the current skill manager first; shared rules and MCP remain independently deliverable. Keep source paths, precedence and delivery diagnostics in details, with only name, scope, status and the next useful action in the ordinary list. Acceptance requires completing that setup without editing provider configuration files. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
+
+## Goal and design boundary
+
+Give users one place to inspect and manage the setup available to Ramu agents across providers: **MCP servers**, **Skills** and **Rules**. Use **Agent setup** as the product grouping; retain **Shared MCP** for shared external connections. Extend Ramu's working services and settings rather than introducing a replacement configuration framework, independent dashboard or copied competitor layout.
+
+Follow [Architecture](ARCHITECTURE.md), [UI](UI.md), [Providers](PROVIDERS.md) and [Learning](LEARNING.md). Keep host-owned resolution and persistence in the server, typed shared contracts and the existing authenticated host RPC boundary. Declare domain methods/types through `packages/shared/src/api.ts` and `types/`, implement handler groups with `HandlerContext`, register/validate through the existing IPC registry/dispatcher, and use host-tagged events and host-qualified query keys. Wire-version/capability changes belong in `packages/contracts`; do not add a parallel HTTP API or import Electron into the server. Desktop/web/mobile consume host capabilities; viewing a remote host never reads configuration from the viewing device. Compose shared app controls outside `apps/web/src/components/ui/`; reuse Settings rows, groups, search, dialogs, semantic tokens and existing navigation. Preserve accessibility, refs, composition APIs and English/Indonesian localization.
+
+This is unfinished planning work, not a claim that a unified rules manager already exists. Keep implementation phases independent and remove finished items. Lasting behavior belongs in the feature guides; delete this plan when nothing remains.
+
+## Existing implementation to extend
+
+- **Skills:** Settings → Memory & skills already manages installed and learned skills. `memory/externalSkills.ts`, `skillFiles.ts`, `skillLinks.ts` and `skillActivation.ts` handle discovery/import, bounded file previews, protected installed content, managed exports and conditional activation. Installed updates require review; scripts are separately approved and never executed during installation. Learned skills have revisions, pin/disable/archive/restore and project-over-global precedence.
+- **Provider delivery:** managed skills already reach Claude, Codex and OpenCode through native roots/configuration, and Cursor/Antigravity through owned links in workspace skill directories. Preserve ownership checks, stable conditional wrappers and concurrent-provider behavior; do not reimplement these paths in a second exporter.
+- **Guidance:** `agent/guidance.ts`, `sessionProcess.ts` and provider adapters already deliver Ramu session guidance. Add user-managed instruction delivery through these boundaries, with explicit source/authority, rather than concatenating arbitrary files into privileged app instructions.
+- **Rules:** Settings → Permissions already manages command/tool approvals. These are executable access policy, separate from natural-language coding instructions. Label the proposed section **Rules** with explanatory text such as “Instructions for how agents work”; link to Permissions for actual access controls. Text rules never grant permissions or weaken restricted sessions.
+- **MCP:** use [MCP management and Shared MCP](MCP-MANAGEMENT-PLAN.md) for server clients, authentication, secrets and external-tool authorization. This umbrella adds discoverability and shared scope/inspection conventions, not another gateway or credential store.
+
+## Settings and interaction
+
+Integrate **Agent setup** into the existing Settings information architecture with MCP servers, Skills and Rules groups. Audit navigation before implementation: keep Memory/Learning controls where they belong, expose the existing skill manager through the new grouping, and preserve old Settings search/deep links with redirects or aliases. There must be one skill editor and one underlying collection, not divergent pages. MCP's section is **Agent setup → MCP servers**.
+
+Use existing list/card and detail patterns, specifically `SettingsCard`, `SettingsCardList` and `usePaged` from `settings/cards.tsx`, with compact header/actions and a quiet metadata line. Each item shows name, source/ownership, destination host, scope, enabled providers, status and any pending session refresh. Search across names and safe metadata; paginate/bound catalogs. Offer type-appropriate create/import/edit/update/disable/remove actions. Keep sensitive MCP fields in their dedicated write-only flow.
+
+**Discover existing** inventories supported provider/user/project sources without executing code or altering files. Results distinguish **Ramu-managed**, **Repository-owned**, **Provider-owned** and **Plugin-owned**. Show a source path/package and supported providers, then offer an explicit import/copy preview where safe. Discovered content is inert until selected and enabled. Preserve malformed and unsupported entries as actionable diagnostics rather than silently dropping them.
+
+A share action previews the current and proposed provider/project scope, file changes if any, name collisions and capability losses. Users may target one provider, several or all supported providers. Newly imported skills/rules default to the selected project and provider; widening scope is explicit. Preserve the scopes and cross-provider availability of existing managed skills during migration. No bulk migration may enable previously inactive content.
+
+Imported copies retain source identity, pinned revision/digest where available and an explicit update policy. External edits produce a changed-source indicator and a reviewed update, never an automatic overwrite. Remove distinguishes deleting a Ramu copy from disabling its delivery; provider/plugin/repository originals remain owned by their source. Repository edits, if offered, use the existing editor and Git diff flow, with the actual affected file shown before saving.
+
+## Identity, scope and conflict handling
+
+Extend existing skill IDs and revision storage rather than renaming/reimporting installed items. Add only the fields needed for provider selection, provenance and delivery status. New rule records have stable IDs, revisions, source metadata, scope, provider selection, enabled state and activation. Persist secrets nowhere in these records.
+
+Resolve on the workspace host using the concrete project/workspace and provider instance/account. Use one shared scope resolver and provider capability projection where that reduces duplication; keep MCP authorization, skill activation and instruction semantics in their existing domains. Project-managed versions override host-wide versions of the same managed identity, matching current skill behavior. Thread controls may narrow availability, never broaden project/host restrictions.
+
+Names are presentation, not identities. Same-name native and managed items trigger an explicit duplicate choice; do not hide or overwrite one by filesystem scan order. Preserve native loading by default until the user chooses a supported alternative. If the runtime cannot suppress a native duplicate, report the limitation instead of claiming a clean override. Rules from different sources are additive unless the same managed identity is explicitly overridden; Ramu cannot reliably infer semantic conflicts or guarantee identical native precedence across runtimes.
+
+Provider-specific variants are optional overrides of one managed item, with a visible base/override relationship. Do not silently translate unsupported syntax, strip frontmatter, execute hooks, or turn a native permission rule into a prose instruction. Show **Native only**, **Unsupported**, **Blocked by scope**, **Missing requirement** or **Needs refresh** with a reason.
+
+## Skills improvements
+
+1. Extend the current manager with provider selection, source/ownership, native-skill discovery, duplicate handling and compatibility details. Preserve approved supporting files, learned/installed distinctions, revision history and existing source-update protections.
+2. Provide **Create skill** and **Edit a copy** through the existing managed-skill storage/editor flow. Editing an installed skill creates an explicit local override/copy or a reviewed revision with defined source-update conflicts; never let automatic learning rewrite installed or user-protected content.
+3. Resolve required tools against stable Shared MCP tool identities and actual session capabilities, while preserving existing exact-name metadata. Use verified aliases only when they map unambiguously to the same connection/tool. Distinguish available tool, missing login and denied access. Incomplete deferred discovery cannot prove a fallback tool is absent; agent-reported compatibility remains guidance, not authorization.
+4. Re-resolve conditional skills on provider/account/tool-policy changes and after MCP reconnects. Compatible skills remain discoverable through native provider loading and the existing picker. Avoid inserting full skill bodies into every prompt or creating per-provider rewrites of shared workspace links.
+5. Harden existing owned-link lifecycle as part of this work: safe cleanup on scope/project removal, explicit uninstall cleanup guidance, and no deletion of real files or links owned by users/plugins. Test concurrent sessions with different provider selections so one session cannot remove another's required export. Where fixed native folders prevent session-specific filtering, report native limitations and isolate delivery where supported; do not promise an enforceable visibility restriction based only on a prompt wrapper.
+
+## Rules management
+
+Support user-authored shared instructions with a name, Markdown body, host/project scope, provider selection and activation. Initial activation modes are **Always** and **Manual**; add path-matched rules only after an adapter can implement the intended semantics. Explain which path is matched and when: repository-relative normalized paths, defined glob behavior and workspace containment. A runtime without path-aware activation shows unsupported status; never activate a path-only rule globally as a fallback.
+
+Inventory `AGENTS.md`, `CLAUDE.md` and documented provider rule locations through adapter-owned readers. Keep nested scope, includes, frontmatter and native activation semantics visible. Inspect includes only within explicit allowed roots with cycle/depth/size limits; do not fetch remote instructions or follow arbitrary links automatically. Unsupported formats remain native-only and readable; importing a portable copy requires a preview of anything not retained.
+
+Prefer an existing native mechanism that preserves user-instruction authority and activation semantics. If session injection is required, keep user-managed rules in a separately labelled user-configuration section; do not promote repository or imported text to app/system authority. Document each adapter's actual delivery and native precedence. Current user requests take priority within the normal instruction hierarchy; stored rules do not authorize actions by themselves.
+
+Bound instruction size per target runtime and show estimated context cost and any known provider limits. Do not silently truncate or summarize enabled rules. If required rules cannot be delivered, block the affected launch/switch with a useful reason; optional rules can be omitted only after an explicit choice. A first-message fallback must disclose its weaker delivery semantics and preserve source information across handoffs, without repeating full rules on every turn.
+
+Use optimistic revision checks, explicit Save/Cancel, history and restore-as-new-revision. Offer text/file diffs before importing or replacing content. Warn about exact duplicates and conflicting overrides deterministically; AI-assisted conflict analysis, if later added, is optional advice and never silently edits authoritative instructions.
+
+## Effective setup and session lifecycle
+
+Add **Agent setup** details to the existing thread settings/details surface, with links back to Settings. Build a server-produced snapshot from the same resolver used to launch the session: host/project/workspace, provider/account, configuration revisions, enabled/omitted items and reasons, rule delivery paths, skill catalog and MCP availability. A desired configuration is not proof a runtime loaded it.
+
+Distinguish **Configured**, **Delivered**, **Runtime confirmed** and **Not observable**. Existing native skill exports do not prove that a model read a skill. Never claim “loaded” or “used” based only on writing a file or sending a catalog. Include known size limits, native-only items, stale source warnings and queued refreshes. Redact secrets; bound retained snapshots and diagnostic exports.
+
+Freeze a setup revision per running turn. Edits apply at the next safe provider boundary; show when restarting/resuming a session is needed. Disable/remove and credential revocation immediately block future gateway use where enforceable, but cannot retract instructions already in model context or native skills already read. Explain when a new session is required and avoid silently interrupting work.
+
+On fallback, model/provider/account switch, resume or helper launch, re-resolve setup for the destination and include material omissions in the existing handoff/settings event. Do not widen scope or duplicate instruction injection on a resumed native session. Helpers inherit allowed scope and role restrictions. Read-only advisors, learning reviews and background jobs get only their explicitly permitted setup; managed rules/skills cannot restore forbidden tools. Session snapshots remain host/project isolated across reconnects and mobile host switching.
+
+## Competitor references and intended improvements
+
+Checked on 2026-10-18: T3 Code's [shared environment setup discussion](https://github.com/pingdotgg/t3code/discussions/14118) proposes MCP, rules and skills across providers, and contributors report a Shared MCP implementation including OAuth. This is discussion/PR evidence, not verified released behavior. Superset documents [managed cross-agent skills](https://docs.superset.sh/skills) and lists centralized MCP/OAuth management as in progress on its [roadmap](https://superset.sh/roadmap). Conductor documents [instruction files and skills](https://www.conductor.build/docs/reference/agent-behavior).
+
+Use these as design inputs. Ramu's proposed improvements are explicit source ownership, one resolver-backed session inspector, reviewed sharing/updates and truthful compatibility/delivery status. These are goals, not verified superiority or uniqueness claims. Recheck actual versions and licensing before borrowing implementation; keep Ramu's navigation, components, architecture and existing behavior.
+
+## Delivery and acceptance
+
+1. Audit current skill/rule discovery and adapter delivery, including user/project/native trust boundaries. Define shared scope/provenance/compatibility fields, rule records and an effective-setup snapshot. Preserve managed skill IDs, history, scope and old deep links in migration.
+2. Consolidate Settings entry points using current components; extend skill management with discovery/import previews, provider selection, ownership and safe updates. Preserve working exports and address fixed-folder concurrency/cleanup limitations before claiming per-provider parity.
+3. Deliver shared Always/Manual rules with revisions, native-file inspection and tested adapter delivery. Gate path matching by demonstrated adapter capability. Add effective-setup inspection, size diagnostics and provider-switch/helper behavior.
+4. Deliver Shared MCP according to its [dedicated plan](MCP-MANAGEMENT-PLAN.md), reusing scope and inspection conventions. Skill/rules work can ship without OAuth; MCP secret storage and authorization remain mandatory prerequisites for shared external access.
+5. Verify desktop/mobile/remote settings, localization, accessibility and real-provider delivery. Document remaining native limitations in feature guides and remove completed planning work.
+
+Focused shared/server tests cover existing-skill migration; managed identity and duplicate handling; project overrides and provider selections; host/no-project isolation; file/include containment and cycles; invalid/unsupported metadata; bounded catalogs; safe staged imports and script consent; stale revisions and source-update conflicts; owned-link cleanup and concurrent exports; correct instruction authority/activation; oversize refusal; truthful delivery states; provider fallback/resume and helper/background restrictions. Extend existing skill/guidance/provider suites with realistic fixtures and protocol integration tests where a runtime boundary matters.
+
+Web/mobile tests cover discovery states, source/host/scope visibility, explicit save/cancel, diffs and restore, search/deep links, unsupported/native-only explanations, pending refresh, stale host responses and meaningful keyboard/focus behavior. Manual acceptance checks light/dark and narrow layouts, screen readers/large text, restart/reconnect, multiple providers using one workspace and an offline/locked host. Live sessions verify skill discovery, manual rule use and shared guidance across at least two providers; simulated delivery cannot establish model compliance or actual skill reads.
+
+Run scoped tests and typechecks after meaningful implementation changes. Desktop-facing work requires `pnpm build` followed by the single `pnpm test:desktop-smoke`; no new desktop e2e suite. Documentation-only planning uses local link and whitespace checks.
+
+Defer arbitrary plugin/hook execution, a new marketplace, automatic provider-file synchronization, cross-host setup/secret synchronization, automatic rule translation, bundled agent roles/subagent presets and AI-generated conflict resolution. These require separate demonstrated needs and contracts. Existing native plugins and checked-in instructions continue through their established provider behavior.

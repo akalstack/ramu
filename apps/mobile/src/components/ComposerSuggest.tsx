@@ -17,6 +17,7 @@ export interface Choice {
   run?: () => void
 }
 interface Loaded {
+  computerId: string
   scope: string
   files: { repoId: string; path: string }[]
   skills: SkillInfo[]
@@ -57,7 +58,7 @@ export function useComposerSuggest({
     setDismissed(null)
   }, [mode, query])
   useEffect(() => {
-    if (!visible || !scope || loaded?.scope === scope) return
+    if (!visible || !scope || (loaded?.scope === scope && loaded.computerId === computerId)) return
     if (!online) {
       setError('Reconnect this host to browse its files and skills.')
       return
@@ -73,7 +74,13 @@ export function useComposerSuggest({
       .then(
         ([files, skills, bindings]) => {
           if (alive)
-            setLoaded({ scope, files, skills, names: Object.fromEntries(bindings.map((b) => [b.repoId, b.repoName])) })
+            setLoaded({
+              computerId,
+              scope,
+              files,
+              skills,
+              names: Object.fromEntries(bindings.map((b) => [b.repoId, b.repoName])),
+            })
         },
         (e) => {
           if (alive) setError(e instanceof Error ? e.message : String(e))
@@ -86,7 +93,7 @@ export function useComposerSuggest({
       alive = false
     }
   }, [visible, scope, online, computerId])
-  const data = loaded?.scope === scope ? loaded : undefined
+  const data = loaded && loaded.scope === scope && loaded.computerId === computerId ? loaded : undefined
 
   const choices = useMemo<Choice[]>(() => {
     if (!mode) return []

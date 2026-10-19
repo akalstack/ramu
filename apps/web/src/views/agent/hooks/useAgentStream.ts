@@ -1,42 +1,52 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { AgentEvent, AgentSessionInfo, AgentSessionState, QueuedMessage } from '@ramu/shared/types'
-import { cachedData, ipcQueryKey, queryClient } from '../../../dataQueries'
-import { invoke, ramu } from '../../../ipc'
+import { cachedDataOn, ipcQueryKeyOn, queryClient } from '../../../dataQueries'
+import { ramu } from '../../../ipc'
+import { ownHostId } from '../../../hosts'
 import { errorText } from '../../../workspace/TaskPane'
+import { useHost } from '../../../workspace/HostProvider'
+import { useHostRuntime } from '../../../workspace/workspace'
 
 /**
  * A chat's session and events: seeded from the query cache, hydrated from the host, then kept current by live
  * events. Also exposes the queued messages the host reports and the last error to show above the message box.
  */
 export function useAgentStream(sessionId: string) {
+  // The chat's host: its cache entries, its calls and its events.
+  const { id: host, invoke } = useHost()
+  const { on } = useHostRuntime()
+  // Uncached reads for the query functions below (the cached `invoke` would read through the same keys).
+  const own = host === ownHostId()
   // Keep these queries observed while the chat is mounted. Hydration and live
   // events below reconcile revisions; observers only manage cache lifetime.
   useQuery({
-    queryKey: ipcQueryKey('agent.get', sessionId),
-    queryFn: () => ramu.invoke('agent.get', sessionId),
+    queryKey: ipcQueryKeyOn(host, 'agent.get', sessionId),
+    queryFn: () => (own ? ramu.invoke('agent.get', sessionId) : ramu.invokeOn(host, 'agent.get', sessionId)),
     enabled: false,
     notifyOnChangeProps: [],
   })
   useQuery({
-    queryKey: ipcQueryKey('agent.events', sessionId),
-    queryFn: () => ramu.invoke('agent.events', sessionId),
+    queryKey: ipcQueryKeyOn(host, 'agent.events', sessionId),
+    queryFn: () => (own ? ramu.invoke('agent.events', sessionId) : ramu.invokeOn(host, 'agent.events', sessionId)),
     enabled: false,
     notifyOnChangeProps: [],
   })
   const [eventSequences, setEventSequences] = useState<Map<AgentEvent, number>>(
-    () => new Map((cachedData('agent.events', sessionId) ?? []).map((event, i) => [event, i + 1])),
+    () => new Map((cachedDataOn(host, 'agent.events', sessionId) ?? []).map((event, i) => [event, i + 1])),
   )
   const [queuePaused, setQueuePaused] = useState(false)
   const [queued, setQueued] = useState<QueuedMessage[]>([])
-  const [hydrating, setHydrating] = useState(() => !cachedData('agent.events', sessionId))
-  const [session, setSession] = useState<AgentSessionInfo | null>(() => cachedData('agent.get', sessionId) ?? null)
-  const [events, setEvents] = useState<AgentEvent[]>(() => cachedData('agent.events', sessionId) ?? [])
+  const [hydrating, setHydrating] = useState(() => !cachedDataOn(host, 'agent.events', sessionId))
+  const [session, setSession] = useState<AgentSessionInfo | null>(
+    () => cachedDataOn(host, 'agent.get', sessionId) ?? null,
+  )
+  const [events, setEvents] = useState<AgentEvent[]>(() => cachedDataOn(host, 'agent.events', sessionId) ?? [])
   const [liveText, setLiveText] = useState<AgentEvent | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const cached = cachedData('agent.events', sessionId)
+    const cached = cachedDataOn(host, 'agent.events', sessionId)
     setHydrating(!cached)
     setError(null)
     let cancelled = false,
@@ -49,7 +59,7 @@ export function useAgentStream(sessionId: string) {
       setEventSequences(new Map([...stored].map(([seq, item]) => [item.event, seq])))
       const list = [...stored].sort(([a], [b]) => a - b).map(([, item]) => item.event)
       setEvents(list)
-      queryClient.setQueryData(ipcQueryKey('agent.events', sessionId), list)
+      queryClient.setQueryData(ipcQueryKeyOn(host, 'agent.events', sessionId), list)
       const queue = list.findLast((e) => e.kind === 'queue')
       if (queue?.kind === 'queue') {
         setQueued(queue.messages)
@@ -76,18 +86,18 @@ export function useAgentStream(sessionId: string) {
         setHydrating(false)
       }
     })
-    const reconnect = ramu.on('background:connection', ({ connected }) => {
+    const reconnect = on('background:connection', ({ connected }) => {
       if (connected) void hydrate().catch(() => {})
     })
     // A rewind removes the edited message and everything after it.
-    const rewound = ramu.on('agent:rewound', ({ sessionId: eventSessionId, seq }) => {
+    const rewound = on('agent:rewound', ({ sessionId: eventSessionId, seq }) => {
       if (eventSessionId !== sessionId) return
       revision++
       for (const key of [...stored.keys()]) if (key >= seq) stored.delete(key)
       setLiveText(null)
       refreshEvents()
     })
-    const off = ramu.on('agent:event', ({ sessionId: eventSessionId, event, seq }) => {
+    const off = on('agent:event', ({ sessionId: eventSessionId, event, seq }) => {
       if (eventSessionId !== sessionId) return
       revision++
       if (event.kind === 'state') {
@@ -117,11 +127,11 @@ export function useAgentStream(sessionId: string) {
       rewound()
       reconnect()
     }
-  }, [sessionId])
+  }, [sessionId, host, invoke, on])
 
   useEffect(() => {
-    if (session) queryClient.setQueryData(ipcQueryKey('agent.get', sessionId), session)
-  }, [session, sessionId])
+    if (session) queryClient.setQueryData(ipcQueryKeyOn(host, 'agent.get', sessionId), session)
+  }, [session, sessionId, host])
 
   return { session, setSession, events, eventSequences, liveText, queued, queuePaused, hydrating, error, setError }
 }

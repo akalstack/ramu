@@ -75,6 +75,7 @@ it.each([
     const task = await workspace.createTask({ projectId: 'no-project', title: 'Keep this chat', mode: 'current' })
     if (hasDoneAt) db.prepare('UPDATE tasks SET done_at = ? WHERE id = ?').run(123, task.id)
     else db.exec('ALTER TABLE tasks DROP COLUMN done_at;')
+    db.exec('DROP TABLE interactive_previews; DROP TABLE interactive_versions;')
     db.exec(`PRAGMA user_version = ${version}`)
     db.close()
 

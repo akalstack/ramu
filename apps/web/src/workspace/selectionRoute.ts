@@ -1,0 +1,61 @@
+// What "open this on that host" does. The selection is (host, destination): the host whose store is on screen and the
+// thread, project or view inside it. Framework-free so the rules can be tested without React.
+import type { HostDestination } from '@ramu/shared/hostOverview'
+import type { ComputerStatus } from '@ramu/shared/types'
+import type { WorkspaceApi } from './workspace'
+
+/** Selection stays in the shell; unavailable hosts report an error without changing the active host. */
+export function routeSelection({
+  host,
+  active,
+  status,
+  ready = true,
+}: {
+  host: string
+  active: string
+  status: ComputerStatus | null
+  ready?: boolean
+}): 'here' | 'switch' | 'unavailable' | 'pending' {
+  if (!ready) return 'pending'
+  if (host === active) return 'here'
+  return status === 'connected' ? 'switch' : 'unavailable'
+}
+
+/** A thread or project may have been created elsewhere (a phone, another window), so the store re-reads first. */
+export const needsRefresh = (destination: HostDestination) =>
+  destination.kind === 'task' || destination.kind === 'project'
+
+export type DestinationTarget = Pick<
+  WorkspaceApi,
+  'tasks' | 'openTask' | 'openView' | 'setSidebar' | 'openProject' | 'newTask'
+>
+
+/** Applies a destination to the store that owns it. Returns false when the thread is not on that host. */
+export function applyDestination(
+  ws: DestinationTarget,
+  destination: HostDestination,
+  { openSummary }: { openSummary(summaryId: string): void },
+): boolean {
+  switch (destination.kind) {
+    case 'host':
+      return true
+    case 'task':
+      if (!ws.tasks.some((task) => task.id === destination.taskId)) return false
+      ws.openTask(destination.taskId)
+      if (destination.sessionId) ws.openView(destination.taskId, { kind: 'agent', sessionId: destination.sessionId })
+      return true
+    case 'project':
+      ws.setSidebar('projects')
+      ws.openProject(destination.projectId)
+      return true
+    case 'new':
+      ws.newTask(destination.projectId)
+      return true
+    case 'summary':
+      openSummary(destination.summaryId)
+      return true
+    case 'inbox':
+      ws.setSidebar('inbox')
+      return true
+  }
+}

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "antigravity-resource-exhausted",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts \"RESOURCE_EXHAUSTED: quota\"",
+    "provider": "antigravity",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "RESOURCE_EXHAUSTED: quota",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider"
+    }
+  },
+  {
+    "id": "antigravity-structured-status",
+    "synthetic": true,
+    "origin": "apps/server/src/providers/usageLimit.ts previous regex \"resource_exhausted\"",
+    "provider": "antigravity",
+    "channel": "error",
+    "toolCalls": 0,
+    "value": {
+      "error": {
+        "code": 429,
+        "status": "RESOURCE_EXHAUSTED"
+      }
+    },
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "structured"
+    }
+  },
+  {
+    "id": "antigravity-try-again-in",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts \"Rate limited. Try again in 2 hours.\"",
+    "provider": "antigravity",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "Rate limited. Try again in 2 hours.",
+    "expect": {
+      "limited": true,
+      "confidence": "low",
+      "source": "generic",
+      "resetsInMs": 7200000
+    }
+  }
+]

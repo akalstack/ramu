@@ -1,3 +1,11 @@
+import {
+  LIMIT_CHOICE_HELP,
+  LIMIT_CHOICE_TITLE,
+  limitChoiceOf,
+  limitChoiceOptions,
+  limitChoicePatch,
+  type LimitChoice,
+} from '@ramu/shared/chat/limitPolicy'
 import type { SettingEdit, SettingSchema, SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
 
 // The phone's settings menu. It follows the desktop's sections and labels, and differs where a phone is different:
@@ -71,6 +79,8 @@ export type SettingRow =
   | (RowBase & { kind: 'toggle' })
   | (RowBase & { kind: 'choice'; options: Option[] })
   | (RowBase & { kind: 'text'; placeholder?: string; maxLength?: number })
+  /** "When a usage limit is reached": one choice stored as two settings, `path` (fallback on or off) and `resumePath`. */
+  | (RowBase & { kind: 'limit'; resumePath: string })
 export interface RowGroup {
   title?: string
   rows: SettingRow[]
@@ -93,6 +103,52 @@ const hours = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2
 /** The desktop's rows that make sense on a phone, in the desktop's order and wording. Heavy editors stay on the desktop. */
 export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
   git: [
+    {
+      title: 'New threads & worktrees',
+      rows: [
+        {
+          kind: 'choice',
+          path: 'defaultCheckoutMode',
+          title: 'Default workspace for new threads',
+          help: 'Choose the current checkout or an isolated worktree. Each draft can override this default.',
+          words: 'checkout workspace worktree isolation default branch naming',
+          options: [
+            { value: 'current', label: 'Current checkout' },
+            { value: 'worktree', label: 'New worktree' },
+          ],
+        },
+        {
+          kind: 'choice',
+          path: 'worktreeBranchNaming',
+          title: 'Worktree branch naming',
+          help: 'Generated names use the opening message. If generation fails, Ramu uses a default name.',
+          words: 'branch semantic custom naming',
+          options: [
+            { value: 'fixed', label: 'Fixed prefix' },
+            { value: 'semantic', label: 'Semantic name' },
+            { value: 'custom', label: 'Custom instructions' },
+          ],
+        },
+        {
+          kind: 'text',
+          path: 'worktreeBranchInstructions',
+          title: 'Branch naming instructions',
+          help: 'Describe the complete branch name, including any ticket or team prefix.',
+          words: 'branch naming instructions',
+          maxLength: 2000,
+          when: { path: 'worktreeBranchNaming', equals: 'custom' },
+        },
+        {
+          kind: 'text',
+          path: 'worktreeBranchPrefix',
+          when: { path: 'worktreeBranchNaming', equals: 'fixed' },
+          title: 'Branch prefix',
+          help: 'Git namespace for new worktree branches, such as ramu/ or feature/. Empty means no prefix.',
+          words: 'branch prefix naming namespace',
+          maxLength: 120,
+        },
+      ],
+    },
     {
       title: 'Sync',
       rows: [
@@ -294,11 +350,12 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
       title: 'Provider fallback',
       rows: [
         {
-          kind: 'toggle',
+          kind: 'limit',
           path: 'defaultAutoFallback',
-          title: 'Automatic provider fallback',
-          help: 'Switch to another provider when a usage limit is reached. When off, a thread waits and resumes on the same provider once the limit resets. Applies to new threads.',
-          words: 'provider fallback limit switch',
+          resumePath: 'fallback.autoResume',
+          title: LIMIT_CHOICE_TITLE,
+          help: LIMIT_CHOICE_HELP,
+          words: 'provider fallback limit switch wait stop resume automatic model usage reset auto-resume',
         },
       ],
     },
@@ -485,6 +542,27 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
   { section: 'computers', title: 'Paired hosts', words: 'pair connect switch host reconnect revoke forget' },
 ]
 
+/**
+ * The limit choice as it was before auto-resume existed: one switch for the fallback. A host that has the fallback setting
+ * but not `fallback.autoResume` is older than the choice, and shows this instead of nothing.
+ */
+const legacyFallback = (row: Extract<SettingRow, { kind: 'limit' }>): SettingRow => ({
+  kind: 'toggle',
+  path: row.path,
+  title: LEGACY_FALLBACK_TITLE,
+  help: LEGACY_FALLBACK_HELP,
+  words: 'provider fallback limit switch',
+})
+export const LEGACY_FALLBACK_TITLE = 'Automatic provider fallback'
+export const LEGACY_FALLBACK_HELP =
+  'Switch to another provider when a usage limit is reached. When off, a thread waits and resumes on the same provider once the limit resets. Applies to new threads.'
+
+/** A host offers a row when it has every setting the row edits; the limit choice needs both of its two, else it degrades to the old switch. */
+const offered = (row: SettingRow, known: ReadonlySet<string>) => known.has(row.path)
+/** The row as this host can edit it: the limit choice becomes the old fallback switch on a host without `fallback.autoResume`. */
+const forHost = (row: SettingRow, known: ReadonlySet<string>): SettingRow =>
+  row.kind === 'limit' && !known.has(row.resumePath) ? legacyFallback(row) : row
+
 /** One computer-side row for a section, hiding rows its server doesn't offer or whose condition isn't met. */
 export function visibleGroups(
   section: SettingsSection,
@@ -496,7 +574,9 @@ export function visibleGroups(
   return (SETTINGS_ROWS[section] ?? [])
     .map((group) => ({
       ...group,
-      rows: group.rows.filter((row) => known.has(row.path) && (!row.when || read(row.when.path) === row.when.equals)),
+      rows: group.rows
+        .filter((row) => offered(row, known) && (!row.when || read(row.when.path) === row.when.equals))
+        .map((row) => forHost(row, known)),
     }))
     .filter((group) => group.rows.length)
 }
@@ -549,7 +629,8 @@ export function searchSettings(
       (groups ?? []).flatMap((group) =>
         group.rows
           // Before a computer has answered, offer every row; after, only the ones it has.
-          .filter((row) => !known || known.has(row.path))
+          .filter((row) => !known || offered(row, known))
+          .map((row) => (known ? forHost(row, known) : row))
           .map((row) => ({
             section: section as SettingsSection,
             title: row.title,
@@ -600,4 +681,27 @@ export async function patchSetting(host: SettingsHost, confirmed: SettingsSnapsh
 export async function setHostSetting(invoke: LooseInvoke, computerId: string, path: string, value: unknown) {
   const host = ((method: string, ...args: unknown[]) => invoke(computerId, method, ...args)) as SettingsHost
   return patchSetting(host, await host('settings.app.snapshot'), path, value)
+}
+
+/** The option the host's two stored values stand for, with the options to offer (the hidden fourth only while it is stored). */
+export function limitChoiceState(read: (path: string) => unknown, row: { path: string; resumePath: string }) {
+  const current = limitChoiceOf({
+    defaultAutoFallback: read(row.path) === true,
+    fallback: { autoResume: read(row.resumePath) as boolean | undefined },
+  })
+  return { current, options: limitChoiceOptions(current) as { value: LimitChoice; label: string }[] }
+}
+
+/** The settings to save for a choice: both stored values, leaving out one that is already right. */
+export function limitChoiceEdits(
+  choice: LimitChoice,
+  read: (path: string) => unknown,
+  row: { path: string; resumePath: string },
+): [path: string, value: boolean][] {
+  const patch = limitChoicePatch(choice)
+  const edits: [string, boolean][] = [
+    [row.path, patch.defaultAutoFallback],
+    [row.resumePath, patch.autoResume],
+  ]
+  return edits.filter(([path, value]) => read(path) !== value)
 }

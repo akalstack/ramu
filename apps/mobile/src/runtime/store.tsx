@@ -1,11 +1,31 @@
+import type { BranchNamingIntent } from '@ramu/shared/workspaceDefaults'
+import { normalizeHelperGroups } from './threadActivity'
+import { isCompacting } from '@ramu/shared/chat/compaction'
 import { newChatHost } from './newChatHost'
+import {
+  addExplorerFile,
+  consumeComposerDraft,
+  type ComposerSnapshot,
+  type ExplorerFileInput,
+  type ExplorerDestination,
+} from './composerDrafts'
+import { moveMobileMessageDraft } from './savedMessageDrafts'
+import type {
+  MessageDraftSnapshot,
+  SavedDraftCommand,
+  SavedDraftScope,
+  SavedMessageDraft,
+} from '@ramu/shared/chat/savedDrafts'
+import { createWorkspaceTask, workspaceCreation } from './workspaces'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
 import { fetch as expoFetch } from 'expo/fetch'
 import * as Device from 'expo-device'
 import type { PushEvents, RamuMethods } from '@ramu/shared/api'
 import type { BackgroundActivity } from '@ramu/shared/chat/activity'
+import { isUserPaused } from '@ramu/shared/chat/goalHold'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
+import type { LimitRetryResult } from '@ramu/shared/chat/providerWait'
 import type {
   AgentEvent,
   AgentProvider,
@@ -19,6 +39,8 @@ import { deleteToken, readLocal, readToken, saveToken, writeLocal } from '../sto
 import { HostClient, HostError, normalizeAddress } from './transport'
 import { transcript, visibleText } from './transcript'
 import type { Language } from './settingsModel'
+import { PUSH_MUTED_KEY, registerCategories, type PushCategory, withCategory } from './pushCategories'
+import { GOAL_VERIFY_METHOD, isMethodMissing } from './goalVerify'
 import { STANDALONE, type Chat, type Computer, type MobileProject } from './types'
 
 export type { Language }
@@ -36,6 +58,9 @@ export interface OutboxItem {
   settings?: AgentSettings
   projectId?: string
   checkout?: 'current' | 'worktree'
+  workspaceId?: string
+  branchNaming?: BranchNamingIntent
+  branchPrefix?: string
   attachments?: string[]
   context?: FileContext[]
 }
@@ -82,6 +107,9 @@ interface Store extends State {
     model: string
     effort: string
     mode: 'current' | 'worktree'
+    workspaceId?: string
+    branchNaming?: BranchNamingIntent
+    branchPrefix?: string
     attachments?: string[]
     settings?: Pick<AgentSettings, 'access' | 'autoFallback' | 'serviceTier'>
     context?: FileContext[]
@@ -98,6 +126,14 @@ interface Store extends State {
   ): void
   toggleGoal(id: string): void
   clearGoal(id: string): void
+  /** Sets, changes or (null) removes the goal's verification command; rejects with the host's reason so the editor can show it. */
+  setGoalVerify(id: string, command: string | null): Promise<void>
+  /** Methods a host has answered "Unknown method" to, per computer: it predates them, so their controls are hidden. */
+  missingMethods: Record<string, string[]>
+  /** Checks a thread held at a usage limit now instead of at the timer; resolves with whether it continued. */
+  retryLimitNow(id: string): Promise<LimitRetryResult | null>
+  /** This thread's own auto-resume choice at a limit; null clears it so the thread follows the host's default. */
+  setAutoResume(id: string, autoResume: boolean | null): void
   removeQueued(id: string, message: string): void
   /** Resolves once the computer has applied it (or refused, which restores the old values and reports why). */
   setModel(
@@ -109,9 +145,22 @@ interface Store extends State {
   ): Promise<void>
   isOnline(id: string): boolean
   setDraft(key: string, text: string): void
+  addExplorerFile(input: ExplorerFileInput): ExplorerDestination
+  clearComposerDraft(key: string, expected: ComposerSnapshot): boolean
+  moveSavedDraft(input: {
+    hostId: string
+    key: string
+    scope: SavedDraftScope
+    expectedRevision: number
+    expectedActive: MessageDraftSnapshot
+    command: SavedDraftCommand
+  }): { active: MessageDraftSnapshot; deleted?: SavedMessageDraft }
+
   dismissError(): void
   enablePush(): Promise<void>
   disablePush(): Promise<void>
+  /** Switches one kind of background alert on or off, and tells every online host. */
+  setPushCategory(category: PushCategory, on: boolean): void
   notifications: { computerId: string; chatId: string; title: string; body: string }[]
   /** Work the computer does on its own (cleanups, indexing…), per computer. */
   activity: Record<string, BackgroundActivity[]>
@@ -161,6 +210,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...defaults,
       ...saved,
       ready: false,
+      chats: saved.chats.map((chat) => ({ ...chat, items: normalizeHelperGroups(chat.items) })),
       computers: saved.computers.map((c) => ({ ...c, status: c.status === 'revoked' ? 'revoked' : 'connecting' })),
       outbox: saved.outbox.map((o) =>
         o.state === 'sending'
@@ -186,6 +236,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [inbox, setInbox] = useState<Record<string, InboxNotice[]>>({})
   const [modelPrefs, setModelPrefs] = useState<Record<string, import('@ramu/shared/types').ModelPreferences | null>>({})
   const [appPreferences, setAppPreferences] = useState<Record<string, AppPreferences>>({})
+  const [missingMethods, setMissingMethods] = useState<Record<string, string[]>>({})
   const [startSettings, setStartSettings] = useState<Record<string, AgentSettings>>({})
   const loadDefaults = (id: string) =>
     void Promise.all([invoke(id, 'settings.models.get'), invoke(id, 'settings.app.get')]).then(
@@ -245,6 +296,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       throw error
     }
   }
+  /** Registers this phone's push token with a host, along with the alert categories that are on (hosts that predate them ignore it). */
+  const registerPushOn = (id: string) =>
+    invoke(
+      id,
+      'notifications.register',
+      pushToken.current!,
+      id,
+      ...registerCategories(ref.current.drafts[PUSH_MUTED_KEY]),
+    )
   const rebuilds = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   // Tokens arrive far faster than a phone can re-fold the transcript; rebuild it at most once per frame.
   const rebuild = (computerId: string, sessionId: string) => {
@@ -264,7 +324,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         change((s) => ({
           ...s,
           chats: s.chats.map((chat) =>
-            chat.computerId === computerId && chat.sessionId === sessionId ? { ...chat, items } : chat,
+            chat.computerId === computerId && chat.sessionId === sessionId
+              ? {
+                  ...chat,
+                  items,
+                  compacting:
+                    chat.executionState !== 'stopped' &&
+                    chat.executionState !== 'failed' &&
+                    isCompacting(ordered.map((x) => x[1])),
+                }
+              : chat,
           ),
         }))
       }, 16),
@@ -282,6 +351,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (chat.computerId !== computerId || chat.sessionId !== payload.sessionId) return chat
         return {
           ...chat,
+          executionState: e.kind === 'state' ? e.state : chat.executionState,
           preview: e.kind === 'text' ? e.text.slice(-140) : chat.preview,
           status:
             e.kind === 'state'
@@ -478,6 +548,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                           : task.status === 'ready-for-review'
                             ? 'ready-for-review'
                             : 'idle',
+                executionState: sessionState,
+                compacting: sessionState !== 'stopped' && sessionState !== 'failed' && isCompacting(events),
                 items: transcript(
                   events,
                   snapshot.events.map((x) => x.seq),
@@ -533,25 +605,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const projectId = item.projectId === STANDALONE ? STANDALONE : raw(item.projectId!)
         const repos = projectId === STANDALONE ? [] : await invoke(item.computerId, 'repos.list', projectId)
         const title = item.text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments'
-        const plan =
-          item.checkout === 'worktree'
-            ? await invoke(
-                item.computerId,
-                'tasks.plan',
-                projectId,
-                title,
-                repos.map((r) => r.id),
-              )
-            : undefined
-        const task = await invoke(
-          item.computerId,
-          'tasks.create',
-          { projectId, title, mode: item.checkout ?? 'current' },
-          plan,
+        const task = await createWorkspaceTask(
+          workspaceCreation({
+            projectId,
+            title,
+            checkout: item.checkout,
+            workspaceId: item.workspaceId,
+            branchPrefix: item.branchPrefix,
+            branchNaming: item.branchNaming,
+            requestId: item.id,
+          }),
+          () =>
+            invoke(
+              item.computerId,
+              'tasks.plan',
+              projectId,
+              title,
+              repos.map((r) => r.id),
+            ),
+          (input, plan) => invoke(item.computerId, 'tasks.create', input, plan),
         )
         taskId = task.id
         // Persist the host task immediately; if agent.start fails, it remains reviewable.
-        change((s) => ({ ...s, chats: s.chats.map((c) => (c.id === chat.id ? { ...c, taskId } : c)) }))
+        change((s) => ({
+          ...s,
+          chats: s.chats.map((c) =>
+            c.id === chat.id
+              ? { ...c, taskId, workspaceId: task.workspaceId, branchNamingFallback: task.branchNamingFallback }
+              : c,
+          ),
+        }))
       }
       await invoke(item.computerId, 'tasks.setup', taskId)
       const session = await invoke(
@@ -676,8 +759,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             if (!connection.controller.signal.aborted) {
               attempt = 0
               status(computer.id, 'online')
-              if (pushToken.current)
-                void invoke(computer.id, 'notifications.register', pushToken.current, computer.id).catch(report)
+              if (pushToken.current) void registerPushOn(computer.id).catch(report)
               void flush(computer.id)
             }
           },
@@ -711,8 +793,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .then((module) => module.registerPush())
         .then((token) => {
           pushToken.current = token
-          for (const c of ref.current.computers)
-            if (c.status === 'online') void invoke(c.id, 'notifications.register', token, c.id).catch(report)
+          for (const c of ref.current.computers) if (c.status === 'online') void registerPushOn(c.id).catch(report)
         })
         .catch(report)
     const app = AppState.addEventListener('change', (next) => {
@@ -786,6 +867,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     defaults: startSettings,
     modelPrefs,
     appPreferences,
+    missingMethods,
     invoke,
     refresh,
     acknowledge: (chatId) => {
@@ -806,11 +888,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const token = await registerPush()
       pushToken.current = token
       change((s) => ({ ...s, drafts: { ...s.drafts, 'push-enabled': 'yes' } }))
-      await Promise.all(
-        ref.current.computers
-          .filter((c) => c.status === 'online')
-          .map((c) => invoke(c.id, 'notifications.register', token, c.id)),
-      )
+      await Promise.all(ref.current.computers.filter((c) => c.status === 'online').map((c) => registerPushOn(c.id)))
+    },
+    setPushCategory: (category, on) => {
+      const muted = withCategory(ref.current.drafts[PUSH_MUTED_KEY], category, on)
+      change((s) => ({ ...s, drafts: { ...s.drafts, [PUSH_MUTED_KEY]: muted } }))
+      if (pushToken.current)
+        for (const c of ref.current.computers) if (c.status === 'online') void registerPushOn(c.id).catch(report)
     },
     disablePush: async () => {
       if (ref.current.computers.some((c) => c.status !== 'online'))
@@ -860,31 +944,43 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     forget: async (id) => {
       await invoke(id, 'notifications.unregister').catch(() => {})
+      const current = ref.current
+      const computers = current.computers.filter((c) => c.id !== id)
+      const next = {
+        ...current,
+        computers,
+        selected: current.selected === id ? (computers[0]?.id ?? '') : current.selected,
+        projects: current.projects.filter((p) => p.computerId !== id),
+        chats: current.chats.filter((c) => c.computerId !== id),
+        outbox: current.outbox.filter((o) => o.computerId !== id),
+        drafts: Object.fromEntries(Object.entries(current.drafts).filter(([key]) => !key.startsWith(`${id}:`))),
+        usage: Object.fromEntries(Object.entries(current.usage).filter(([key]) => key !== id)),
+        catalogs: Object.fromEntries(Object.entries(current.catalogs).filter(([key]) => key !== id)),
+      }
+      writeLocal(
+        {
+          computers: next.computers,
+          projects: next.projects,
+          chats: next.chats,
+          selected: next.selected,
+          language: next.language,
+          outbox: next.outbox,
+          drafts: next.drafts,
+        },
+        { replaceBackups: true },
+      )
       generations.current.set(id, (generations.current.get(id) ?? 0) + 1)
       const connection = connections.current.get(id)
       connection?.controller.abort()
       connection?.client.close()
       connections.current.delete(id)
-      await deleteToken(id)
       for (const key of eventRows.current.keys()) if (key.startsWith(`${id}:`)) eventRows.current.delete(key)
       listeners.current.delete(id)
       buffers.current.delete(id)
       setNotifications((n) => n.filter((x) => x.computerId !== id))
       setActivity((a) => Object.fromEntries(Object.entries(a).filter(([key]) => key !== id)))
-      change((s) => {
-        const computers = s.computers.filter((c) => c.id !== id)
-        return {
-          ...s,
-          computers,
-          selected: s.selected === id ? (computers[0]?.id ?? '') : s.selected,
-          projects: s.projects.filter((p) => p.computerId !== id),
-          chats: s.chats.filter((c) => c.computerId !== id),
-          outbox: s.outbox.filter((o) => o.computerId !== id),
-          drafts: Object.fromEntries(Object.entries(s.drafts).filter(([key]) => !key.startsWith(`${id}:`))),
-          usage: Object.fromEntries(Object.entries(s.usage).filter(([key]) => key !== id)),
-          catalogs: Object.fromEntries(Object.entries(s.catalogs).filter(([key]) => key !== id)),
-        }
-      })
+      change(() => next)
+      await deleteToken(id)
     },
     retry: (id) => {
       const computer = ref.current.computers.find((c) => c.id === id)
@@ -936,7 +1032,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         projectId: input.projectId,
         title: input.text.slice(0, 60) || 'Discuss attachments',
         mode: input.mode,
-        workspaceId: null,
+        workspaceId: input.workspaceId ?? null,
         status: 'idle',
         createdAt: Date.now(),
         pinnedAt: null,
@@ -962,6 +1058,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         createdAt: Date.now(),
         projectId: input.projectId,
         checkout: input.mode,
+        workspaceId: input.workspaceId,
+        branchNaming:
+          input.mode === 'worktree' && !input.workspaceId
+            ? {
+                ...(input.branchNaming ?? {
+                  strategy: appPreferences[computerId]?.worktreeBranchNaming ?? 'fixed',
+                  instructions: appPreferences[computerId]?.worktreeBranchInstructions ?? '',
+                  prompt: input.text.slice(0, 6000),
+                }),
+              }
+            : undefined,
+        branchPrefix:
+          input.mode === 'worktree' && !input.workspaceId
+            ? (input.branchPrefix ?? appPreferences[computerId]?.worktreeBranchPrefix ?? 'ramu/')
+            : undefined,
         settings: { ...settingsFor(input.provider, input.model, input.effort), ...input.settings },
         attachments: input.attachments,
         context: input.context,
@@ -1003,10 +1114,53 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           pc,
           'agent.goal.control',
           session,
-          ref.current.chats.find((c) => c.id === id)?.goal?.status === 'paused' ? 'resume' : 'pause',
+          isUserPaused(ref.current.chats.find((c) => c.id === id)?.goal) ? 'resume' : 'pause',
         ),
       ),
     clearGoal: (id) => sessionAction(id, (pc, session) => invoke(pc, 'agent.goal.control', session, 'clear')),
+    setGoalVerify: async (id, command) => {
+      const chat = ref.current.chats.find((c) => c.id === id)
+      if (!chat?.sessionId) throw new Error('This thread has not started on the host yet.')
+      try {
+        await invoke(chat.computerId, GOAL_VERIFY_METHOD, chat.sessionId, command)
+      } catch (error) {
+        if (isMethodMissing(error))
+          setMissingMethods((m) => ({ ...m, [chat.computerId]: [...(m[chat.computerId] ?? []), GOAL_VERIFY_METHOD] }))
+        throw error
+      }
+      await refresh(chat.computerId)
+    },
+    retryLimitNow: async (id) => {
+      const chat = ref.current.chats.find((c) => c.id === id)
+      if (!chat?.sessionId) return null
+      try {
+        const result = (await invoke(chat.computerId, 'agent.retryLimitNow', chat.sessionId)) as LimitRetryResult
+        await refresh(chat.computerId)
+        return result
+      } catch (error) {
+        report(error)
+        return null
+      }
+    },
+    setAutoResume: (id, autoResume) => {
+      const chat = ref.current.chats.find((c) => c.id === id)
+      if (!chat?.sessionId) return
+      // Show the choice at once; the computer clears or re-arms the thread's timer, and the refresh confirms it.
+      change((s) => ({
+        ...s,
+        chats: s.chats.map((c) => {
+          if (c.id !== id || !c.settings) return c
+          const { autoResume: _previous, ...rest } = c.settings
+          return { ...c, settings: autoResume === null ? rest : { ...rest, autoResume } }
+        }),
+      }))
+      void invoke(chat.computerId, 'agent.setAutoResume', chat.sessionId, autoResume)
+        .then(() => refresh(chat.computerId))
+        .catch((error) => {
+          report(error)
+          void refresh(chat.computerId)
+        })
+    },
     setModel: (id, provider, model, effort, extra) => {
       // Only these three come from the caller; a full settings object here once carried the old model back in.
       const options = extra
@@ -1061,6 +1215,46 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           change((s) => ({ ...s, chats: s.chats.map((c) => (c.id === id ? { ...c, ...before } : c)) }))
           report(error)
         })
+    },
+    moveSavedDraft: (input) => {
+      const next = moveMobileMessageDraft({
+        ...input,
+        drafts: ref.current.drafts,
+        knownHosts: ref.current.computers.map((host) => host.id),
+      })
+      writeLocal({
+        computers: ref.current.computers,
+        projects: ref.current.projects,
+        chats: ref.current.chats,
+        selected: ref.current.selected,
+        language: ref.current.language,
+        outbox: ref.current.outbox,
+        drafts: next.drafts,
+      })
+      change((s) => ({ ...s, drafts: next.drafts }))
+      return { active: next.active, deleted: next.deleted }
+    },
+    clearComposerDraft: (key, expected) => {
+      if (!ref.current.computers.some((host) => key.startsWith(`${host.id}:`))) return false
+      const drafts = consumeComposerDraft(ref.current.drafts, key, expected)
+      if (!drafts) return false
+      change((s) => ({ ...s, drafts }))
+      return true
+    },
+    addExplorerFile: (input) => {
+      const next = addExplorerFile(ref.current, input)
+      // Persist before navigating. Storage failure leaves the original composer and navigation intact.
+      writeLocal({
+        computers: ref.current.computers,
+        projects: ref.current.projects,
+        chats: ref.current.chats,
+        selected: ref.current.selected,
+        language: ref.current.language,
+        outbox: ref.current.outbox,
+        drafts: next.drafts,
+      })
+      change((s) => ({ ...s, drafts: next.drafts }))
+      return next.destination
     },
     setDraft: (key, text) => change((s) => ({ ...s, drafts: { ...s.drafts, [key]: text } })),
     dismissError: () => change((s) => ({ ...s, error: null })),

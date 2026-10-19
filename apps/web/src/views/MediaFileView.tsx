@@ -2,7 +2,8 @@ import { ContentSkeleton } from '@/components/content-skeleton'
 import { useEffect, useState } from 'react'
 import type { RepositoryBinding, ViewDescriptor } from '@ramu/shared/types'
 import { t, useLanguage } from '../i18n'
-import { invoke, ramu } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
+import { useHostRuntime } from '../workspace/workspace'
 import { errorText } from '../workspace/TaskPane'
 
 const MEDIA = /\.(png|jpe?g|gif|webp|avif|bmp|ico|pdf|mp3|wav|ogg|m4a|flac|mp4|webm|mov)$/i
@@ -23,6 +24,8 @@ export function MediaFileView({
   binding: RepositoryBinding
 }) {
   useLanguage()
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const [media, setMedia] = useState<Media | null>(null),
     [error, setError] = useState<string | null>(null),
     [dimensions, setDimensions] = useState('')
@@ -47,14 +50,14 @@ export function MediaFileView({
     setError(null)
     setDimensions('')
     load()
-    const off = ramu.on('fs:changed', ({ cwd, path }) => {
+    const off = on('fs:changed', ({ cwd, path }) => {
       if (cwd === binding.cwd && path === view.path) load()
     })
     return () => {
       active = false
       off()
     }
-  }, [taskId, binding.repoId, binding.cwd, view.path])
+  }, [taskId, binding.repoId, binding.cwd, view.path, invoke, on])
   const name = view.path.split('/').at(-1) ?? view.path
   if (error)
     return (

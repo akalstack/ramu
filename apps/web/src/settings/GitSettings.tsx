@@ -1,4 +1,6 @@
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { Input } from '@/components/desktop-input'
+import { branchForTitle, validBranchPrefix } from '@ramu/shared/workspaceDefaults'
 import { Textarea } from '@/components/ui/textarea'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
@@ -19,6 +21,76 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
     )?.id ?? ''
   return (
     <div className={SETTINGS_FORM_CLASS}>
+      <SettingsGroupTitle>{t('New threads & worktrees')}</SettingsGroupTitle>
+      <SettingsRow setting="defaultCheckoutMode">
+        <SettingsLabel
+          title={t('Default workspace for new threads')}
+          help={t('Choose the current checkout or an isolated worktree. Each draft can override this default.')}
+        />
+        <Dropdown
+          label={t('Default workspace for new threads')}
+          value={draft.defaultCheckoutMode}
+          options={[
+            { value: 'current', label: t('Current checkout') },
+            { value: 'worktree', label: t('New worktree') },
+          ]}
+          onChange={(value) =>
+            onChange({ ...draft, defaultCheckoutMode: value === 'worktree' ? 'worktree' : 'current' })
+          }
+        />
+      </SettingsRow>
+      <SettingsRow setting="worktreeBranchNaming">
+        <SettingsLabel
+          title={t('Worktree branch naming')}
+          help={t('Generated names use the opening message. If generation fails, Ramu uses a default name.')}
+        />
+        <Dropdown
+          label={t('Worktree branch naming')}
+          value={draft.worktreeBranchNaming}
+          options={[
+            { value: 'fixed', label: t('Fixed prefix') },
+            { value: 'semantic', label: t('Semantic name') },
+            { value: 'custom', label: t('Custom instructions') },
+          ]}
+          onChange={(value) =>
+            onChange({ ...draft, worktreeBranchNaming: value === 'semantic' || value === 'custom' ? value : 'fixed' })
+          }
+        />
+      </SettingsRow>
+      {draft.worktreeBranchNaming === 'custom' && (
+        <SettingsRow setting="worktreeBranchInstructions" className="settings-stack">
+          <SettingsLabel
+            title={t('Branch naming instructions')}
+            help={t('Describe the complete branch name, including any ticket or team prefix.')}
+          />
+          <Textarea
+            rows={3}
+            maxLength={2000}
+            aria-label={t('Branch naming instructions')}
+            value={draft.worktreeBranchInstructions}
+            onChange={(event) => onChange({ ...draft, worktreeBranchInstructions: event.target.value })}
+          />
+        </SettingsRow>
+      )}
+      {draft.worktreeBranchNaming === 'fixed' && (
+        <SettingsRow setting="worktreeBranchPrefix" className="settings-stack">
+          <SettingsLabel
+            title={t('Branch prefix')}
+            help={
+              validBranchPrefix(draft.worktreeBranchPrefix)
+                ? branchForTitle('Fix login timeout', draft.worktreeBranchPrefix)
+                : t('Invalid Git branch prefix')
+            }
+          />
+          <Input
+            aria-label={t('Branch prefix')}
+            maxLength={120}
+            value={draft.worktreeBranchPrefix}
+            aria-invalid={!validBranchPrefix(draft.worktreeBranchPrefix)}
+            onChange={(event) => onChange({ ...draft, worktreeBranchPrefix: event.target.value })}
+          />
+        </SettingsRow>
+      )}
       <SettingsGroupTitle>{t('Sync')}</SettingsGroupTitle>
       <ToggleRow
         {...toggleProps}

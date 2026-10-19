@@ -1,5 +1,5 @@
 import { Spinner } from '@/components/ui/spinner'
-import { cachedData } from '../dataQueries'
+import { cachedDataOn } from '../dataQueries'
 import { errorText } from '../lib/errors'
 import { visibleName } from '@ramu/shared/text'
 import { t, useLanguage, formatLocale } from '../i18n'
@@ -33,7 +33,8 @@ import { formatKeys, type TaskAction } from '../commands'
 import { AgentControls } from '../chat/AgentControls'
 import { Composer } from '../composer/Composer'
 import { Menu, useContextMenu } from '../Menu'
-import { invoke, ramu, copyText } from '../ipc'
+import { copyText } from '../ipc'
+import { useHost } from './HostProvider'
 import { AgentView } from '../views/AgentView'
 import { ErrorBoundary } from '../ErrorBoundary'
 import { GitDetailsView } from '../views/GitDetailsView'
@@ -45,7 +46,7 @@ import { FILE_DRAG_TYPE } from '../composer/ComposerSuggestions'
 import { beginDrag, setActiveDrag, TAB_DRAG_TYPE, TERMINAL_DRAG_TYPE, useActiveDrag } from '../lib/dragState'
 import { useAppSettings } from '../settings/AppSettings'
 import { useChatHidden, useEditorSide } from './layoutPrefs'
-import { isPreviewable, isWorkspaceCtx, tabOrder, useWorkspace } from './workspace'
+import { isPreviewable, isWorkspaceCtx, tabOrder, useHostRuntime, useWorkspace } from './workspace'
 import { WorkspaceRail, workspaceToolOf } from './WorkspaceTools'
 import { SlidePane } from './paneMotion'
 import { terminalGroups } from '@ramu/shared/workspace/terminalGroups'
@@ -58,6 +59,8 @@ import { terminalGroups } from '@ramu/shared/workspace/terminalGroups'
 export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: string; visible: boolean }) {
   useLanguage()
   const ws = useWorkspace()
+  const { id: host, invoke } = useHost()
+  const { on } = useHostRuntime()
   const { preferences } = useAppSettings()
   const project = ws.projectOf(taskId)
   const composing = isWorkspaceCtx(taskId) && ws.composing === project?.id
@@ -76,10 +79,10 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
       (terminalDock === 'right' && terminalOpen && groups.some((group) => group.terminalIds[0] === v.id)),
   )
   const agentViews = tabs.filter((v) => v.kind === 'agent')
-  const [sessions, setSessions] = useState<AgentSessionInfo[]>(() => cachedData('agent.list', taskId) ?? [])
+  const [sessions, setSessions] = useState<AgentSessionInfo[]>(() => cachedDataOn(host, 'agent.list', taskId) ?? [])
   const [sessionsError, setSessionsError] = useState<string | null>(null)
   const [sessionsLoadedFor, setSessionsLoadedFor] = useState<string | null>(() =>
-    cachedData('agent.list', taskId) ? taskId : null,
+    cachedDataOn(host, 'agent.list', taskId) ? taskId : null,
   )
   const [retrying, setRetrying] = useState(false)
   const body = useRef<HTMLDivElement>(null)
@@ -112,7 +115,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
 
   useEffect(() => {
     let cancelled = false
-    const cached = cachedData('agent.list', taskId)
+    const cached = cachedDataOn(host, 'agent.list', taskId)
     setSessions(cached ?? [])
     setSessionsLoadedFor(cached ? taskId : null)
     setSessionsError(null)
@@ -133,14 +136,14 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
         },
       )
     void load()
-    const off = ramu.on('agent:event', ({ event }) => {
+    const off = on('agent:event', ({ event }) => {
       if (event.kind === 'state') void load()
     })
     return () => {
       cancelled = true
       off()
     }
-  }, [taskId])
+  }, [taskId, host, invoke, on])
 
   const activeTerminalGroup = groups.find((group) => group.terminalIds.includes(state.activeViewId ?? ''))
   const active =
@@ -217,6 +220,11 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
       data-panel-visible={visible || undefined}
       style={{ display: visible ? 'flex' : 'none' }}
     >
+      {ws.task(taskId)?.branchNamingFallback && (
+        <p role="status" className="m-0 px-3 py-1 text-caption text-muted-foreground">
+          {t('Used default branch name')}
+        </p>
+      )}
       {unfinished.length > 0 && (
         <div className="banner [&.warn]:[background:var(--warn-wash)] [&.warn]:text-warn [&_button]:text-control [&_button]:p-[2px_8px] p-[7px_12px] flex gap-2 items-center text-control warn text-warn">
           <CircleAlert size={14} />
@@ -577,6 +585,7 @@ function VisitedView({ visible, children }: { visible: boolean; children: ReactN
 function NewChat({ taskId, onStarted }: { taskId: string; onStarted: (s: AgentSessionInfo) => void }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const bindings = ws.bindings[taskId] ?? []
   const { initialSettings } = useModelSets()
   const [settings, setSettings] = useState<AgentSettings>(initialSettings)

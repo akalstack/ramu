@@ -157,9 +157,7 @@ function ThisComputer() {
           help={
             managed
               ? t('Set when Ramu was started with --listen. Change it there.')
-              : t(
-                  'Phones and other hosts can use this host’s threads, files and terminals after you pair them.',
-                )
+              : t('Phones and other hosts can use this host’s threads, files and terminals after you pair them.')
           }
         />
         <Switch
@@ -246,10 +244,13 @@ function ThisComputer() {
         <SettingsRow key={device.id}>
           <SettingsLabel
             title={device.name}
-            help={t('Paired {0} · last seen {1}', {
-              0: new Date(device.createdAt).toLocaleDateString(),
-              1: device.lastSeenAt ? timeAgo(device.lastSeenAt) : t('never'),
-            })}
+            help={`${device.role === 'viewer' ? t('Viewer') : t('Full access')} · ${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t(
+              'Paired {0} · last seen {1}',
+              {
+                0: new Date(device.createdAt).toLocaleDateString(),
+                1: device.lastSeenAt ? timeAgo(device.lastSeenAt) : t('never'),
+              },
+            )}`}
           />
           <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setRevoking(device.id)}>
             {t('Revoke')}
@@ -309,6 +310,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
   const [offer, setOffer] = useState<PairingOffer | null>(null),
     [now, setNow] = useState(Date.now()),
     [error, setError] = useState<string | null>(null)
+  const [role, setRole] = useState<'owner' | 'viewer'>('owner')
   const [qr, setQr] = useState('')
   const [qrUrl, setQrUrl] = useState('')
   useEffect(() => {
@@ -333,12 +335,27 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
   const [joined, setJoined] = useState<string | null>(null),
     [showOther, setShowOther] = useState(false)
   const [status] = useNetworkStatus(1500)
+  const offerRequest = useRef(0)
   const create = useCallback(() => {
+    const request = ++offerRequest.current
     setError(null)
     setJoined(null)
-    invoke('network.pair').then(setOffer, (e) => setError(errorText(e)))
-  }, [])
-  useEffect(create, [create])
+    setOffer(null)
+    invoke('network.pair', role).then(
+      (next) => {
+        if (request === offerRequest.current) setOffer(next)
+      },
+      (e) => {
+        if (request === offerRequest.current) setError(errorText(e))
+      },
+    )
+  }, [invoke, role])
+  useEffect(() => {
+    create()
+    return () => {
+      ++offerRequest.current
+    }
+  }, [create])
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
@@ -372,6 +389,17 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
             </DialogDescription>
           )}
         </DialogHeader>
+        {!joined && (
+          <Dropdown
+            label={t('Device access')}
+            value={role}
+            options={[
+              { value: 'owner', label: t('Full access') },
+              { value: 'viewer', label: t('View threads and answer requests') },
+            ]}
+            onChange={(value) => setRole(value as 'owner' | 'viewer')}
+          />
+        )}
         {error && (
           <p className="text-bad small text-caption" role="alert">
             {error}
@@ -433,9 +461,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
                 </div>
               )}
               <div className="flex flex-col gap-1">
-                <span className="muted text-muted-foreground small text-caption">
-                  {t('Addresses this host has')}
-                </span>
+                <span className="muted text-muted-foreground small text-caption">{t('Addresses this host has')}</span>
                 {urls.length ? (
                   urls.map((entry) => (
                     <div

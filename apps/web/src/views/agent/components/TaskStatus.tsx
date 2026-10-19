@@ -1,6 +1,6 @@
 import { Spinner } from '@/components/ui/spinner'
 import { useLanguage } from '../../../i18n'
-import { CircleCheck, CircleSlash, CircleX } from 'lucide-react'
+import { CircleCheck, CircleSlash, CircleX, Clock } from 'lucide-react'
 import { providerName } from '../../../chat/AgentControls'
 import type { AgentTask } from '@ramu/shared/types'
 import { modelDisplayName } from '../../../models/ModelSets'
@@ -15,8 +15,9 @@ export const TASK_STATUS: Record<AgentTask['status'], string> = {
 }
 
 /** The icon for a sub-agent status. */
-export function TaskStatusIcon({ status }: { status: AgentTask['status'] }) {
+export function TaskStatusIcon({ status, active = true }: { status: AgentTask['status']; active?: boolean }) {
   useLanguage()
+  if (status === 'running' && !active) return <Clock size={14} aria-hidden="true" />
   if (status === 'running') return <Spinner className="size-3.5 task-status running" aria-hidden="true" />
   if (status === 'completed') return <CircleCheck size={14} className="task-status completed" aria-hidden="true" />
   if (status === 'failed') return <CircleX size={14} className="task-status failed" aria-hidden="true" />
@@ -34,6 +35,7 @@ export function taskMeta(task: AgentTask, status: AgentTask['status']): string {
     task.provider
       ? `${providerName(task.provider)}${task.model ? ` · ${modelDisplayName(task.model)}` : ''}`
       : undefined,
+    task.effort,
     task.agentType,
     task.taskType === 'local_bash' ? 'Command' : undefined,
     task.isolated ? 'Own copy' : undefined,

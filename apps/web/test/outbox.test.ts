@@ -125,3 +125,52 @@ it('ignores corrupt storage', () => {
   store.setItem('ramu.outbox', '{not json')
   expect(setup({ store }).box.snapshot()).toEqual([])
 })
+
+it('keeps equal session IDs on separate hosts and reconnects only the host whose queue can send', async () => {
+  const { vi } = await import('vitest')
+  const { outbox } = await import('../src/composer/outbox')
+  const entries = new Map<string, string>()
+  const listeners = new Map<string, ((payload: any, host?: string) => void)[]>()
+  const invokeOn = vi.fn(async () => undefined)
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => entries.get(key) ?? null,
+    setItem: (key: string, value: string) => entries.set(key, value),
+    removeItem: (key: string) => entries.delete(key),
+    key: (index: number) => [...entries.keys()][index] ?? null,
+    get length() {
+      return entries.size
+    },
+  })
+  vi.stubGlobal('window', {
+    ramu: {
+      hostId: 'local',
+      invokeOn,
+      invoke: async () => ({
+        current: 'local',
+        computers: [
+          { id: 'studio-queue', status: 'offline' },
+          { id: 'laptop-queue', status: 'offline' },
+        ],
+      }),
+      on: (channel: string, receive: (payload: any, host?: string) => void) => {
+        listeners.set(channel, [...(listeners.get(channel) ?? []), receive])
+        return () => {}
+      },
+    },
+  })
+  try {
+    const studio = outbox('studio-queue'),
+      laptop = outbox('laptop-queue')
+    await Promise.resolve()
+    studio.add('same', 'studio message')
+    laptop.add('same', 'laptop message')
+    for (const receive of listeners.get('background:connection') ?? []) receive({ connected: true }, 'studio-queue')
+    await studio.flush()
+    expect(invokeOn).toHaveBeenCalledWith('studio-queue', 'agent.submit', 'same', 'studio message', 'queue', [], [])
+    expect(studio.list('same')).toEqual([])
+    expect(laptop.list('same')).toHaveLength(1)
+    expect([...entries.keys()]).toContain('host:laptop-queue:ramu.outbox')
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})

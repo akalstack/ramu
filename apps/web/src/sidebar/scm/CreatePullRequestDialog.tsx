@@ -5,8 +5,8 @@ import { Textarea } from '@/components/ui/textarea'
 import type { PullRequestInput } from '@ramu/shared/types'
 import { Dialog } from '../../Menu'
 import { t, useLanguage } from '../../i18n'
-import { invoke } from '../../ipc'
 import { errorText } from '../../workspace/TaskPane'
+import { useHost } from '../../workspace/HostProvider'
 
 const FIELDS =
   'grid gap-3 mt-1 [&_label]:flex [&_label]:flex-col [&_label]:gap-1.5 [&_label]:text-caption [&_textarea]:resize-y [&_textarea]:leading-[1.5]'
@@ -25,6 +25,7 @@ export function CreatePullRequestDialog({
   onDone: (created: boolean) => void
 }) {
   useLanguage()
+  const { invoke } = useHost()
   const [input, setInput] = useState<PullRequestInput | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

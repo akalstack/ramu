@@ -28,7 +28,8 @@ export const registerScheduleHandlers: RegisterHandlers = ({ schedules, recaps }
   'recaps.get': { args: z.tuple([]), run: () => recaps.snapshot() },
   'recaps.refresh': { args: z.tuple([]), run: () => recaps.refresh() },
   'recaps.act': {
-    args: z.tuple([id, z.enum(['open', 'done', 'dismissed', 'snoozed'])]),
-    run: (itemId: string, action: 'open' | 'done' | 'dismissed' | 'snoozed') => recaps.act(itemId, action),
+    args: z.tuple([id, z.enum(['open', 'done', 'dismissed', 'snoozed']), z.number().int().positive().optional()]),
+    run: (itemId: string, action: 'open' | 'done' | 'dismissed' | 'snoozed', until?: number) =>
+      recaps.act(itemId, action, until),
   },
 })

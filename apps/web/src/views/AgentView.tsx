@@ -1,3 +1,7 @@
+import { ThreadActivitySummary } from '../chat/ThreadActivity'
+import { helperActive, helperGroups } from '@ramu/shared/chat/helperPresentation'
+import { threadActivity, goalActivityLabel, type ActivityKind } from '@ramu/shared/chat/threadActivity'
+import { isLimitHold } from '@ramu/shared/chat/goalHold'
 import { useDeferredRequests } from './agent/hooks/useDeferredRequests'
 import { HelperBreadcrumb } from '../HomeAgents'
 import { NO_PROJECT } from '@ramu/shared/types'
@@ -18,7 +22,7 @@ import {
 import { TranscriptScrollApi } from './agent/components/TranscriptScrollApi'
 import type { FileContext } from '@ramu/shared/types'
 import { ArrowDown } from 'lucide-react'
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, AgentEvent } from '@ramu/shared/types'
 import { agentActivityLabel } from '@ramu/shared/chat/agentActivity'
 import { GoalBar } from '../chat/GoalBar'
@@ -32,21 +36,24 @@ import { ChatFind } from '../chat/ChatFind'
 import { effectiveStatus, latestTasks, parseTaskMessage, parseTaskStop } from '@ramu/shared/chat/agentTasks'
 import type { AgentTask } from '@ramu/shared/types'
 import { ProviderRouteChip } from '../models/ProviderRoute'
+import { limitPlaceholder, limitResume } from '../models/limitCopy'
 import { ContextMeter } from '../settings/Usage'
 import { CommentsChip, pendingComments } from '../git/ReviewChip'
 import { Composer } from '../composer/Composer'
-import { invoke } from '../ipc'
 import { errorText } from '../workspace/TaskPane'
 import { useWorkspaceActions } from '../workspace/workspace'
 import { QuestionDock } from '../chat/QuestionCard'
 import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { notifyError } from '../chat/Notifications'
-import { draftKey, loadDraft, saveDraft, useDraftPersistence } from '../composer/drafts'
+import { draftKey, draftStore, loadDraft, saveDraft, useDraftPersistence } from '../composer/drafts'
+import { useHost } from '../workspace/HostProvider'
 import { outbox, useOutbox } from '../composer/outbox'
 import { useHostConnection } from '../workspace/computers'
 import { HostWaitNote, ProviderWaitNote } from '../models/ProviderWait'
 import { ComposerTray } from '../composer/ComposerTray'
-import { providerWaitOf } from '@ramu/shared/chat/providerWait'
+import { limitTrayView, providerWaitState } from '@ramu/shared/chat/providerWait'
+import { useAutoResume } from '../models/useAutoResume'
+import { useLimitRetry } from '../models/useLimitRetry'
 
 import { LIVE, RESUME_PROMPT } from './agent/constants'
 import { savedChat, useChatPresentation } from './agent/hooks/useChatPresentation'
@@ -95,6 +102,9 @@ export const AgentView = memo(function AgentView({
   visible?: boolean
 }) {
   useLanguage()
+  const host = useHost()
+  // Every call of this chat goes to its own host.
+  const { invoke } = host
   const { preferences, save } = useAppSettings()
   const { reviews } = useReviews()
   const {
@@ -109,16 +119,23 @@ export const AgentView = memo(function AgentView({
     error,
     setError,
   } = useAgentStream(view.sessionId)
-  const [attachments, setAttachments] = useState<Attachment[]>(() => savedChat(view.sessionId)?.attachments ?? [])
-  const [draft, setDraft] = useState(() => savedChat(view.sessionId)?.draft ?? loadDraft(draftKey.chat(view.sessionId)))
+  const [attachments, setAttachments] = useState<Attachment[]>(
+    () => savedChat(view.sessionId, host.id)?.attachments ?? [],
+  )
+  const [draft, setDraft] = useState(
+    () => savedChat(view.sessionId, host.id)?.draft ?? loadDraft(draftKey.chat(view.sessionId), draftStore(host.id)),
+  )
   const events = useDeferredRequests(sourceEvents, draft)
-  useDraftPersistence(draftKey.chat(view.sessionId), draft)
+  useDraftPersistence(draftKey.chat(view.sessionId), draft, host.id)
   /** The sent message being edited in place. The composer and its draft are left alone. */
   const [editing, setEditing] = useState<MessageEdit | null>(null)
   const [configuring, setConfiguring] = useState(false)
   const [dropping, setDropping] = useState(false)
   const root = useRef<HTMLDivElement>(null)
-  const { scroller, stick, onScroll } = useTranscriptScroll({ root, savedStick: savedChat(view.sessionId)?.stick })
+  const { scroller, stick, onScroll } = useTranscriptScroll({
+    root,
+    savedStick: savedChat(view.sessionId, host.id)?.stick,
+  })
   const scrollToEnd = useRef<(() => void) | null>(null)
   useChatPresentation({ sessionId: view.sessionId, session, events, draft, attachments, scroller, stick })
   const { finding, findRequest, findQuery, openFind, closeFind } = useChatFind(root)
@@ -152,6 +169,7 @@ export const AgentView = memo(function AgentView({
     if (dockQuestions.some((e) => !seenQuestions.current.has(e.requestId))) setQuestionDockOpen(true)
     dockQuestions.forEach((e) => seenQuestions.current.add(e.requestId))
   }, [dockKey])
+  const helperSelection = useMemo(() => helperGroups(events), [events])
   const allTasks = useMemo(() => latestTasks(events), [events])
   const tasks = useMemo(() => allTasks.filter((task) => task.taskType !== 'local_bash'), [allTasks])
   const commands = allTasks.filter(
@@ -181,8 +199,11 @@ export const AgentView = memo(function AgentView({
   const goalEvent = events.findLast((event) => event.kind === 'goal')
   const goal = goalEvent?.kind === 'goal' ? goalEvent.goal : null
   const liveGoal = goal && goal.status !== 'completed' ? goal : null
-  const providerWait = useMemo(() => providerWaitOf(events), [events])
-  const runningTasks = tasks.filter((task) => effectiveStatus(task, live) === 'running')
+  const providerWait = useMemo(() => providerWaitState(events), [events])
+  const reportError = useCallback((reason: unknown) => setError(errorText(reason)), [setError])
+  const autoResume = useAutoResume(view.sessionId, session?.settings ?? {}, setSession, reportError)
+  const limitRetry = useLimitRetry(view.sessionId, providerWait, reportError)
+  const runningTasks = helperSelection.selected.filter(helperActive)
   const act = async (fn: () => Promise<unknown>) => {
     setError(null)
     try {
@@ -239,6 +260,11 @@ export const AgentView = memo(function AgentView({
   const elapsed = useElapsed(lastUserAt, working)
 
   const busyAgent = working || session?.state === 'needs-input'
+  // At a usage limit the thread is idle but not stopped: the composer queues messages and offers Try again.
+  const limitView =
+    providerWait && !busyAgent
+      ? limitTrayView(limitRetry.wait ?? providerWait, autoResume.effective.value, dateNow)
+      : null
   // A stopped turn can be picked up again: Stop in this view, or a turn the provider reports as interrupted.
   const [interrupted, setInterrupted] = useState(false)
   const lastResult = events.findLast((e) => e.kind === 'result')
@@ -253,7 +279,72 @@ export const AgentView = memo(function AgentView({
   }, [working])
   const ws = useWorkspaceActions()
   const { offline: hostOffline, name: hostName } = useHostConnection()
-  const pending = useOutbox(view.sessionId)
+  const pending = useOutbox(view.sessionId, host.id)
+  const pendingPermissions = events.filter(
+    (e): e is Extract<AgentEvent, { kind: 'permission-request' }> =>
+      e.kind === 'permission-request' && !outcomes.has(e.requestId),
+  )
+  const activity = threadActivity({
+    connected: !hostOffline,
+    working: live || busyAgent,
+    helpers: helperSelection.selected,
+    advisors: helperSelection.advisors,
+    requests: [...pendingPermissions, ...pendingQuestions].map((e) => ({
+      id: e.requestId,
+      kind: e.kind === 'permission-request' ? 'permission' : e.kind,
+    })),
+    providerWait: Boolean(providerWait),
+    queue: queued.length,
+    goal: !liveGoal
+      ? null
+      : isLimitHold(liveGoal)
+        ? 'provider'
+        : liveGoal.status === 'active'
+          ? 'active'
+          : liveGoal.status === 'paused'
+            ? 'paused'
+            : 'blocked',
+  })
+  const openActivity = (kind: ActivityKind) => {
+    if (kind === 'helpers') {
+      setOpenAgent('*')
+      return
+    }
+    if (kind === 'advisor') {
+      const advisor = helperSelection.advisors.find((task) => task.status === 'running')
+      if (advisor) setOpenAgent(advisor.agentId)
+      return
+    }
+    if (kind === 'input') {
+      const question = pendingQuestions.find((e) => e.kind === 'question')
+      if (!pendingPermissions.length && question) {
+        setQuestionDockOpen(true)
+        openQuestion(question.requestId)
+        return
+      }
+      const request = pendingPermissions[0] ?? pendingQuestions[0]
+      const node = [
+        ...(root.current?.querySelectorAll<HTMLElement>('[data-activity-request], [data-question-request]') ?? []),
+      ].find(
+        (element) =>
+          element.dataset.activityRequest === request?.requestId ||
+          element.dataset.questionRequest === request?.requestId,
+      )
+      node?.scrollIntoView({ block: 'center', behavior: preferences.reduceMotion ? 'instant' : 'smooth' })
+      node?.querySelector<HTMLElement>('button, input, textarea')?.focus({ preventScroll: true })
+      return
+    }
+    const selector = {
+      goal: '.goal-bar',
+      queue: '.message-queue',
+      provider: '.provider-wait',
+      connection: '.composer',
+      working: '.composer',
+    }[kind]
+    const node = root.current?.querySelector<HTMLElement>(selector)
+    node?.scrollIntoView({ block: 'center', behavior: 'auto' })
+  }
+
   const supportsSteering = !!session
   const action = supportsSteering ? preferences.busyMessageAction : 'queue'
   const opposite = action === 'queue' ? 'steer' : 'queue'
@@ -298,7 +389,7 @@ export const AgentView = memo(function AgentView({
   /** Opens New chat in this chat's project with the quote already in the box. Nothing is sent. */
   const quoteIntoNewChat = (text: string) => {
     const project = ws.task(session?.taskId ?? '')?.projectId ?? NO_PROJECT
-    saveDraft(draftKey.newChat(project), `${quoteLines(text)}\n\n`)
+    saveDraft(draftKey.newChat(project), `${quoteLines(text)}\n\n`, draftStore(host.id))
     ws.newTask(project)
   }
   // Quote, Ask aside and Quote in new chat from a message's action row (MessageQuoteActions).
@@ -315,6 +406,17 @@ export const AgentView = memo(function AgentView({
     return () => el?.removeEventListener(MESSAGE_ACTION_EVENT, listener)
   }, [])
   /** Moves a queued message back into the message box. */
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const detail = (event as CustomEvent<{ host: string; session: string; text: string }>).detail
+      if (detail?.host === host.id && detail.session === view.sessionId) {
+        setDraft((current) => `${current.trim() ? current + '\n\n' : ''}${detail.text}`)
+      }
+    }
+    window.addEventListener('ramu:interactive-followup', receive)
+    return () => window.removeEventListener('ramu:interactive-followup', receive)
+  }, [host.id, view.sessionId])
+
   const recallIntoComposer = (files: Attachment[], text: string) => {
     setAttachments((current) => [...current, ...files.filter((file) => !current.some((entry) => entry.id === file.id))])
     setDraft((current) => (current ? `${current}\n${text}` : text))
@@ -367,7 +469,7 @@ export const AgentView = memo(function AgentView({
       if (hostOffline && attached.length)
         throw new Error(translate('Review comments send once {0} is back. Your message is kept.', { 0: hostName }))
       if (hostOffline) {
-        if (!outbox().add(view.sessionId, submitted, submittedFiles, context)) throw outboxFullError(hostName)
+        if (!outbox(host.id).add(view.sessionId, submitted, submittedFiles, context)) throw outboxFullError(hostName)
         setDraft((current) => (current === submitted ? '' : current))
         setAttachments((current) => current.filter((file) => !submittedFiles.some((sent) => sent.id === file.id)))
         stick.current = true
@@ -475,7 +577,7 @@ export const AgentView = memo(function AgentView({
         onToggleAside={toggleAside}
         commands={commands}
         onStopTask={stopTask}
-        tasks={tasks}
+        tasks={helperSelection.selected}
         runningTasks={runningTasks}
         agentsOpen={openAgent !== null}
         onToggleAgents={() =>
@@ -615,6 +717,12 @@ export const AgentView = memo(function AgentView({
           </MessageScrollerProvider>
           <div className="composer-dock [&_>_*]:w-full [&_>_*]:max-w-[var(--chat-column-width)] [&_>_*]:ml-auto [&_>_*]:mr-auto [&_.error]:mb-1.5 [&_.error]:text-control [&_.composer]:relative [&_.composer]:z-1 flex-none p-[0_calc(24px_+_var(--chat-scrollbar-width,_0px))_14px_24px]">
             {error && <div className="error text-bad">{error}</div>}
+            <ThreadActivitySummary
+              workingLabel={activityLabel ? translate(activityLabel) : undefined}
+              model={activity}
+              goalLabel={translate(goalActivityLabel(activity.goalState))}
+              onOpen={openActivity}
+            />
             {(hostOffline ||
               providerWait ||
               liveGoal ||
@@ -633,12 +741,15 @@ export const AgentView = memo(function AgentView({
                   />
                 )}
                 {hostOffline && <HostWaitNote name={hostName} />}
-                {providerWait && <ProviderWaitNote retryAt={providerWait.retryAt} />}
+                {providerWait && <ProviderWaitNote retry={limitRetry} autoResume={autoResume} />}
                 {liveGoal && (
                   <GoalBar
                     goal={liveGoal}
                     onControl={(action) => {
                       void act(() => invoke('agent.goal.control', view.sessionId, action))
+                    }}
+                    onVerify={(command) => {
+                      void act(() => invoke('agent.goal.verify', view.sessionId, command))
                     }}
                   />
                 )}
@@ -671,8 +782,14 @@ export const AgentView = memo(function AgentView({
                 },
               }}
               resume={{
-                active: !busyAgent && !!session && stopped,
+                ...limitResume(limitView),
+                active: !busyAgent && !!session && (stopped || limitResume(limitView).active),
                 onResume: () => {
+                  if (limitResume(limitView).active) {
+                    stick.current = true
+                    limitRetry.tryNow()
+                    return
+                  }
                   setInterrupted(false)
                   stick.current = true
                   void act(() => invoke('agent.submit', view.sessionId, RESUME_PROMPT, 'steer', [], []))
@@ -683,7 +800,13 @@ export const AgentView = memo(function AgentView({
               chips={
                 <>
                   {session && (
-                    <ProviderRouteChip sessionId={view.sessionId} settings={pendingSettings ?? session.settings} />
+                    <ProviderRouteChip
+                      sessionId={view.sessionId}
+                      settings={pendingSettings ?? session.settings}
+                      limited={!!providerWait}
+                      autoResume={autoResume}
+                      onSession={setSession}
+                    />
                   )}
                   {attached.length > 0 && (
                     <CommentsChip
@@ -725,11 +848,15 @@ export const AgentView = memo(function AgentView({
               placeholder={
                 hostOffline
                   ? translate('Message · sends when {0} is back', { 0: hostName })
-                  : live || busyAgent
-                    ? translate('Reply to the agent')
-                    : translate('Message the agent')
+                  : limitView
+                    ? limitPlaceholder(limitView, autoResume.effective.value)
+                    : live || busyAgent
+                      ? translate('Reply to the agent')
+                      : translate('Message the agent')
               }
-              submitLabel={hostOffline ? 'Queue' : busyAgent ? (action === 'queue' ? 'Queue' : 'Steer') : 'Send'}
+              submitLabel={
+                hostOffline || limitView ? 'Queue' : busyAgent ? (action === 'queue' ? 'Queue' : 'Steer') : 'Send'
+              }
             />
           </div>
         </div>
@@ -753,6 +880,7 @@ export const AgentView = memo(function AgentView({
           {openAgent && (
             <AgentTaskPanel
               tasks={tasks}
+              selectedIds={helperSelection.selected.map((task) => task.agentId)}
               openId={openAgent}
               events={events}
               results={results}

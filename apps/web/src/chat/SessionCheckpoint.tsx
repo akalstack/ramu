@@ -5,8 +5,11 @@ import remarkGfm from 'remark-gfm'
 import { BookmarkCheck } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { ipcQueryKey } from '../dataQueries'
+import { ipcQueryKeyOn } from '../dataQueries'
 import { ramu } from '../ipc'
+import { ownHostId } from '../hosts'
+import { useHost } from '../workspace/HostProvider'
+import { useHostRuntime } from '../workspace/workspace'
 import { t, useLanguage, formatLocale } from '../i18n'
 import { CopyButton } from '../views/agent/components/CopyButton'
 import { GHOST_TEXT_BUTTON_CLASS, MSG_CLASS } from '../views/agent/styles'
@@ -31,16 +34,22 @@ function savedAgo(at: number): string {
 export function SessionCheckpointButton({ sessionId }: { sessionId: string }) {
   useLanguage()
   const [open, setOpen] = useState(false)
+  const host = useHost().id
+  const { on } = useHostRuntime()
+  // The raw bridge call: this query already owns the cache key `invoke` would read through.
   const { data: checkpoint, refetch } = useQuery({
-    queryKey: ipcQueryKey('agent.checkpoint', sessionId),
-    queryFn: () => ramu.invoke('agent.checkpoint', sessionId),
+    queryKey: ipcQueryKeyOn(host, 'agent.checkpoint', sessionId),
+    queryFn: () =>
+      host === ownHostId()
+        ? ramu.invoke('agent.checkpoint', sessionId)
+        : ramu.invokeOn(host, 'agent.checkpoint', sessionId),
   })
   useEffect(
     () =>
-      ramu.on('memory:changed', () => {
+      on('memory:changed', () => {
         void refetch()
       }),
-    [refetch],
+    [on, refetch],
   )
   useEffect(() => {
     setOpen(false)

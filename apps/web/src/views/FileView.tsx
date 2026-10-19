@@ -9,20 +9,21 @@ import { MarkdownPreview } from '../editor/MarkdownPreview'
 import { ChatFind } from '../chat/ChatFind'
 import type { EditorConfigProps, RepositoryBinding, ViewDescriptor } from '@ramu/shared/types'
 import { useAppSettings } from '../settings/AppSettings'
-import { invoke, ramu } from '../ipc'
 import { registerBuffer, registerSelection } from '../editor/editorBuffers'
 import { onWorkspaceVisibility, workspaceVisible } from '../workspace/workspaceLifetime'
 import { monaco } from '../editor/monaco'
 import { applyEditorConfig, normalizeForSave } from '../editor/editorConfig'
 import { errorText } from '../workspace/TaskPane'
-import { useWorkspace } from '../workspace/workspace'
+import { useHostRuntime, useWorkspace } from '../workspace/workspace'
+import { useHost } from '../workspace/HostProvider'
 import { MediaFileView, isMedia } from './MediaFileView'
+import { deviceStorage } from '../deviceStorage'
 
 /** Word wrap is one choice for every editor, kept across sessions. */
 const WRAP_KEY = 'ramu.word-wrap'
 const readWrap = () => {
   try {
-    return localStorage.getItem(WRAP_KEY) === 'on'
+    return deviceStorage.getItem(WRAP_KEY) === 'on'
   } catch {
     return false
   }
@@ -39,6 +40,8 @@ interface Conflict {
 function TextFileView({ taskId, view, binding }: { taskId: string; view: FileViewDesc; binding: RepositoryBinding }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
+  const { on: onHostEvent } = useHostRuntime()
   const { preferences } = useAppSettings()
   const changingBuffer = useRef(false)
   const host = useRef<HTMLDivElement>(null)
@@ -172,7 +175,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
     editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyZ, () => {
       const on = !readWrap()
       try {
-        localStorage.setItem(WRAP_KEY, on ? 'on' : 'off')
+        deviceStorage.setItem(WRAP_KEY, on ? 'on' : 'off')
       } catch {
         /* private mode */
       }
@@ -229,7 +232,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
         setConflict({ disk: disk?.content ?? null, diskHash })
       }
     }
-    const off = ramu.on('fs:changed', ({ cwd, path }) => {
+    const off = onHostEvent('fs:changed', ({ cwd, path }) => {
       if (cwd === binding.cwd && path === view.path) void readDisk()
     })
     const visibility = onWorkspaceVisibility(() => {
@@ -248,12 +251,12 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
       model.dispose()
       editorRef.current = null
     }
-  }, [taskId, binding.repoId, binding.cwd, view.path, view.id, setDirty])
+  }, [taskId, binding.repoId, binding.cwd, view.path, view.id, setDirty, invoke, onHostEvent])
 
   const [wrap, setWrapState] = useState(readWrap)
   const setWrap = (on: boolean) => {
     try {
-      localStorage.setItem(WRAP_KEY, on ? 'on' : 'off')
+      deviceStorage.setItem(WRAP_KEY, on ? 'on' : 'off')
     } catch {
       /* private mode */
     }

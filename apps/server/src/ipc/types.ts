@@ -24,6 +24,8 @@ import type { KeyedLock } from './keyedLock'
 import type { FileWatchers } from './watchers'
 
 export interface Services {
+  threadTitles?: import('../agent/threadTitles').ThreadTitles
+  interactive?: import('../interactive/store').InteractiveStore
   diagnostics?: import('../background/diagnostics').LocalDiagnostics
   externalSkills?: import('../memory/externalSkills').ExternalSkills
   workspace: Workspace

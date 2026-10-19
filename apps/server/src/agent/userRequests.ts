@@ -1,3 +1,4 @@
+import type { ForwardedRequest } from './childRequests'
 import { randomUUID } from 'node:crypto'
 import { matchesCommand, PermissionApprovals } from './permissionApprovals'
 import type { AgentEvent, PermissionScope, AppPreferences } from '@ramu/shared/types'
@@ -41,7 +42,26 @@ export class UserRequests {
   private questionWaiters = new Map<string, Set<(cancel?: boolean) => void>>()
 
   /** A child's pending approval or question, by request id: the parent's chat shows it and replies go to the child. */
-  readonly childRequests = new Map<string, string>()
+  readonly childRequests = new Map<string, ForwardedRequest>()
+
+  private forwarded(id: string, requestId: string): ForwardedRequest | undefined {
+    const known = this.childRequests.get(requestId)
+    if (known?.parentId === id) return known
+    // Reconstruct forwarding after reconnect/restart using the durable server-authored origin.
+    const event = this.host
+      .events(id)
+      .findLast(
+        (e) =>
+          (e.kind === 'permission-request' || e.kind === 'question' || e.kind === 'elicitation') &&
+          e.requestId === requestId,
+      )
+    if (known && !event) throw new Error('This request does not belong to this thread.')
+    const source = event?.requestSource
+    if (!source || source.sessionId === id) return undefined
+    const forwarded = { parentId: id, childId: source.sessionId, requestId: source.requestId ?? requestId }
+    if (forwarded.requestId !== requestId) this.childRequests.set(requestId, forwarded)
+    return forwarded
+  }
 
   questionStatus(id: string, requestId: string): QuestionState & { request: QuestionRequest } {
     const events = this.host.events(id)
@@ -124,8 +144,8 @@ export class UserRequests {
   }
 
   saveQuestionDraft(id: string, requestId: string, drafts: Record<string, string>): void {
-    const child = this.childRequests.get(requestId)
-    if (child && child !== id) return this.saveQuestionDraft(child, requestId, drafts)
+    const child = this.forwarded(id, requestId)
+    if (child && child.childId !== id) return this.saveQuestionDraft(child.childId, child.requestId, drafts)
     const state = this.questionStatus(id, requestId)
     if (state.outcome) return
     const keys = new Set(state.request.questions.map(questionKey))
@@ -137,8 +157,8 @@ export class UserRequests {
   }
 
   closeQuestion(id: string, requestId: string, outcome: 'dismissed' | 'obsolete', reason?: string): void {
-    const child = this.childRequests.get(requestId)
-    if (child && child !== id) return this.closeQuestion(child, requestId, outcome, reason)
+    const child = this.forwarded(id, requestId)
+    if (child && child.childId !== id) return this.closeQuestion(child.childId, child.requestId, outcome, reason)
     const state = this.questionStatus(id, requestId)
     if (state.outcome) throw new Error('This question is already closed.')
     if (state.request.responseMode !== 'message')
@@ -199,8 +219,9 @@ export class UserRequests {
     scope: PermissionScope = 'once',
     pattern?: string,
   ): void {
-    const child = this.childRequests.get(requestId)
-    if (child && child !== id) return this.replyPermission(child, requestId, allow, message, scope, pattern)
+    const child = this.forwarded(id, requestId)
+    if (child && child.childId !== id)
+      return this.replyPermission(child.childId, child.requestId, allow, message, scope, pattern)
     const request = this.permissionRequest(id, requestId)
     if (request.approvalSessionId && request.approvalSessionId !== id)
       return this.replyPermission(request.approvalSessionId, requestId, allow, message, scope, pattern)
@@ -238,8 +259,8 @@ export class UserRequests {
   }
 
   forgetPermission(id: string, requestId: string, scope: 'project' | 'user'): void {
-    const child = this.childRequests.get(requestId)
-    if (child && child !== id) return this.forgetPermission(child, requestId, scope)
+    const child = this.forwarded(id, requestId)
+    if (child && child.childId !== id) return this.forgetPermission(child.childId, child.requestId, scope)
     const request = this.permissionRequest(id, requestId)
     if (request.approvalSessionId && request.approvalSessionId !== id)
       return this.forgetPermission(request.approvalSessionId, requestId, scope)
@@ -273,8 +294,8 @@ export class UserRequests {
   }
 
   saveElicitationDraft(id: string, requestId: string, drafts: Record<string, string>): void {
-    const child = this.childRequests.get(requestId)
-    if (child && child !== id) return this.saveElicitationDraft(child, requestId, drafts)
+    const child = this.forwarded(id, requestId)
+    if (child && child.childId !== id) return this.saveElicitationDraft(child.childId, child.requestId, drafts)
     const request = this.pendingElicitation(id, requestId)
     const fields = new Set(request.fields.map((field) => field.id))
     this.host.record(id, {
@@ -290,8 +311,8 @@ export class UserRequests {
     action: import('@ramu/shared/types').ElicitationAction,
     answers: Record<string, string>,
   ): void {
-    const child = this.childRequests.get(requestId)
-    if (child && child !== id) return this.replyElicitation(child, requestId, action, answers)
+    const child = this.forwarded(id, requestId)
+    if (child && child.childId !== id) return this.replyElicitation(child.childId, child.requestId, action, answers)
     this.pendingElicitation(id, requestId)
     const runner = this.host.runners.get(id)
     if (!runner?.replyElicitation) throw new Error('That input request is no longer pending.')
@@ -300,8 +321,8 @@ export class UserRequests {
   }
 
   replyQuestion(id: string, requestId: string, answers: Record<string, string>): void {
-    const child = this.childRequests.get(requestId)
-    if (child && child !== id) return this.replyQuestion(child, requestId, answers)
+    const child = this.forwarded(id, requestId)
+    if (child && child.childId !== id) return this.replyQuestion(child.childId, child.requestId, answers)
     const status = this.questionStatus(id, requestId)
     if (status.outcome) throw new Error('This question is already closed.')
     if (status.request.responseMode) {

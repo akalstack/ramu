@@ -10,6 +10,7 @@ import type {
   UsageReading,
 } from '../types'
 import { providerName } from './providers'
+import { usageAppliesTo } from '@ramu/shared/providers/usageScope'
 
 // One place decides where a chat or sub-agent continues when a provider's plan is nearly used up.
 // The main process uses it to switch before sending; the composer chip uses it to show where the next message will go.
@@ -34,12 +35,6 @@ export function defaultOrder(catalogs: ProviderCatalog[]): FallbackStep[] {
   })
 }
 
-/** A model-specific window (Claude's Opus weekly limit) only applies to that model. */
-function appliesTo(reading: UsageReading, model: string): boolean {
-  if (!reading.scope) return true
-  return !!model && model.toLowerCase().includes(reading.scope.toLowerCase())
-}
-
 /** Usage only goes down when a window resets, so a reading stays true until then. Without a reset time it ages out. */
 export function readingCounts(reading: UsageReading, now: number): boolean {
   if (reading.resetsAt) return reading.resetsAt > now
@@ -54,7 +49,7 @@ export function peakFor(
   now = Date.now(),
 ): UsageReading | undefined {
   return usage
-    .filter((reading) => reading.provider === provider && appliesTo(reading, model) && readingCounts(reading, now))
+    .filter((reading) => reading.provider === provider && usageAppliesTo(reading, model) && readingCounts(reading, now))
     .sort(
       (a, b) => (b.status === 'limited' ? 1 : 0) - (a.status === 'limited' ? 1 : 0) || b.usedPercent - a.usedPercent,
     )[0]

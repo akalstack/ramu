@@ -1,0 +1,100 @@
+[
+  {
+    "id": "generic-429-too-many-requests",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts \"Error 429 Too Many Requests\"",
+    "provider": null,
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "Error 429 Too Many Requests",
+    "expect": {
+      "limited": true,
+      "confidence": "low",
+      "source": "generic"
+    }
+  },
+  {
+    "id": "generic-reply-short-rate-limit",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts (\"Usage limit reached...\" style short reply)",
+    "provider": null,
+    "channel": "reply",
+    "toolCalls": 0,
+    "text": "Rate limit reached, try later",
+    "expect": {
+      "limited": true,
+      "confidence": "low",
+      "source": "generic"
+    }
+  },
+  {
+    "id": "generic-reply-answer-about-rate-limiting",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts long \"Rate limiting works by counting requests...\" reply",
+    "provider": null,
+    "channel": "reply",
+    "toolCalls": 0,
+    "text": "Rate limiting works by counting requests per window; here is how to add it to your API. Rate limiting works by counting requests per window; here is how to add it to your API. Rate limiting works by counting requests per window; here is how to add it to your API. Rate limiting works by counting requests per window; here is how to add it to your API. Rate limiting works by counting requests per window; here is how to add it to your API. Rate limiting works by counting requests per window; here is how to add it to your API. Rate limiting works by counting requests per window; here is how to add it to your API. Rate limiting works by counting requests per window; here is how to add it to your API. Rate limiting works by counting requests per window; here is how to add it to your API. Rate limiting works by counting requests per window; here is how to add it to your API. ",
+    "expect": {
+      "limited": false
+    }
+  },
+  {
+    "id": "generic-reply-rate-limiter",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts \"Added a rate limiter to the API.\"",
+    "provider": null,
+    "channel": "reply",
+    "toolCalls": 0,
+    "text": "Added a rate limiter to the API.",
+    "expect": {
+      "limited": false
+    }
+  },
+  {
+    "id": "generic-retry-exhausted",
+    "synthetic": true,
+    "origin": "wording synthetic: T3 #16288 retry exhaustion on 429; not a live provider capture",
+    "provider": null,
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "Request failed with 429 Too Many Requests after 5 retries were exhausted",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "retry-exhausted"
+    }
+  },
+  {
+    "id": "generic-absolute-wall-clock-utc",
+    "synthetic": true,
+    "origin": "wording synthetic: \"at 17:00 UTC\" wall-clock reset parser case; not a live provider capture",
+    "provider": "claude-code",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "You've hit your limit. Try again at 17:00 UTC",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider",
+      "resetsAtIso": "2026-10-18T17:00:00.000Z",
+      "assumedZone": false
+    }
+  },
+  {
+    "id": "generic-iso-timestamp",
+    "synthetic": true,
+    "origin": "wording synthetic: ISO timestamp reset parser case; not a live provider capture",
+    "provider": "codex",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "usageLimitExceeded resets_at 2026-10-19T02:00:00Z",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider",
+      "resetsAtIso": "2026-10-19T02:00:00.000Z",
+      "assumedZone": false
+    }
+  }
+]

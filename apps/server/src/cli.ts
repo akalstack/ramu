@@ -15,7 +15,7 @@ Usage:
   ramu status                    Show whether a server is running for this data directory
   ramu stop                      Stop the running server (unfinished threads are not resumed on next start)
   ramu restart                   Restart the running server (unfinished threads resume)
-  ramu pair [--url <address>] [--json]
+  ramu pair [--url <address>] [--role owner|viewer] [--json]
                                  Create a one-time code and link to pair another device (valid 10 minutes, works once).
                                  --json prints { code, expiresAt, links, urls, listening } for scripts and SSH pairing.
   ramu devices                   List paired devices
@@ -35,7 +35,8 @@ Options:
   -h, --help   -v, --version
 
 Environment: RAMU_USER_DATA, RAMU_SOCKET, RAMU_LISTEN, RAMU_TOKEN_FILE, RAMU_DEVICES_FILE, RAMU_WORKTREES,
-             RAMU_ALLOW_PLAINTEXT_REMOTE, RAMU_TLS_CERT, RAMU_TLS_KEY.
+             RAMU_ALLOW_PLAINTEXT_REMOTE, RAMU_TLS_CERT, RAMU_TLS_KEY, RAMU_DEVICE_TOKEN_DAYS (90 or never),
+             RAMU_ALLOW_LEGACY_TOKEN (1 to opt in), RAMU_BROWSER_ORIGINS (comma-separated exact origins).
 A paired device has the same control as the desktop app, including shell access. Pair only devices you own.`
 
 function fail(message: string): never {
@@ -122,7 +123,7 @@ if (command === 'start') {
   const rotate = flags.has('rotate')
   console.log(loadToken(config.tokenPath, rotate))
   if (rotate) {
-    new DeviceStore(config.devicesPath).revoke('all')
+    new DeviceStore(config.devicesPath, config.deviceLifetimeMs).revoke('all')
     console.error('The previous token and every paired device no longer work.')
   }
 } else if (command === 'pair') {
@@ -136,8 +137,7 @@ if (command === 'start') {
     }
   } else {
     const status = await runtimeInvoke(config.socketPath, 'background.status').catch(() => null)
-    if (!status)
-      fail('ramu is not running. Start it with --listen, or pass --url <address> if it is on another host.')
+    if (!status) fail('ramu is not running. Start it with --listen, or pass --url <address> if it is on another host.')
     if (!status.listening)
       fail(
         'ramu is not accepting network clients. Restart it with --listen <host:port> (see --help), or pass --url <address>.',
@@ -149,7 +149,9 @@ if (command === 'start') {
     urls = candidateUrls(host, port, Boolean(status.tls)).map((c) => ({ url: c.url, note: `  (${c.interface})` }))
     if (!urls.length) fail('No network address found for this host. Pass --url <address>.')
   }
-  const { code } = new DeviceStore(config.devicesPath).createCode()
+  const role = text('role') ?? 'owner'
+  if (role !== 'owner' && role !== 'viewer') fail('Role must be owner or viewer')
+  const { code } = new DeviceStore(config.devicesPath, config.deviceLifetimeMs).createCode(Date.now(), role)
   const expiresAt = Date.now() + PAIRING_TTL_MS
   const links = urls.map(({ url }) => encodePairLink({ url, code, expiresAt }))
   if (flags.has('json')) {
@@ -173,7 +175,7 @@ if (command === 'start') {
     `\nOn that device, send the code to <address>/pair, which returns its own token:\n  curl -s -X POST <address>/pair -H 'Content-Type: application/json' -d '{"code":"${code}","name":"My laptop"}'`,
   )
 } else if (command === 'devices') {
-  const store = new DeviceStore(config.devicesPath)
+  const store = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
   if (positional[1] === 'revoke') {
     if (!positional[2]) fail('Usage: ramu devices revoke <id|all>')
     let revoked: ReturnType<DeviceStore['revoke']> = []
@@ -192,7 +194,7 @@ if (command === 'start') {
     const ago = (time: number | null) => (time ? new Date(time).toLocaleString() : 'never')
     for (const device of devices)
       console.log(
-        `${device.id}  ${device.name.padEnd(24)}  paired ${ago(device.createdAt)}  last seen ${ago(device.lastSeenAt)}`,
+        `${device.id}  ${device.name.padEnd(24)}  paired ${ago(device.createdAt)}  last seen ${ago(device.lastSeenAt)}  ${device.role}  expires ${ago(device.expiresAt)}`,
       )
   }
 } else fail(`unknown command "${command}". Run ramu --help.`)

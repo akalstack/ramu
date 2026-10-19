@@ -4,6 +4,7 @@ import { t, useLanguage } from './i18n'
 import { useEffect, useRef } from 'react'
 import { notifyError } from './chat/Notifications'
 import { errorText } from './workspace/TaskPane'
+import type { RamuBridge } from '@ramu/shared/api'
 import { invoke } from './ipc'
 import { withGitBusy } from './git/gitBusy'
 import { commitAndPush } from './git/commitShortcut'
@@ -37,9 +38,12 @@ export interface ShellControls {
   showSidebar?(tab: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules' | 'inbox'): void
   createSchedule(): void
   addProject?(): void
+  /** The bound `invoke` of the host on screen (`useHost().invoke`); thread and Git commands run there. */
+  invoke?: RamuBridge['invoke']
 }
 
 export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[] {
+  const hostInvoke = shell.invoke ?? invoke
   const taskId = ws.ui.activeTaskId
   const state = taskId ? ws.taskUi[taskId] : undefined
   const terminalDock = state?.terminalDock ?? shell.defaultTerminalDock ?? 'bottom'
@@ -149,7 +153,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       title: t('Interrupt agent'),
       category: t('Thread'),
       run: async () => {
-        if (chat?.kind === 'agent') await invoke('agent.interrupt', chat.sessionId)
+        if (chat?.kind === 'agent') await hostInvoke('agent.interrupt', chat.sessionId)
       },
       when: () => chat?.kind === 'agent' && hasVisibleChat(),
     },
@@ -318,7 +322,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
           if ((kind === 'pull' || kind === 'sync') && Object.values(ws.dirty).some(Boolean))
             throw new Error('Save or close unsaved files before pulling.')
           if (kind === 'stage' || kind === 'unstage') {
-            const status = await invoke('git.status', taskId, binding.repoId)
+            const status = await hostInvoke('git.status', taskId, binding.repoId)
             const paths = status.entries
               .filter((entry) =>
                 kind === 'stage'
@@ -326,9 +330,9 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
                   : !!entry.staged && entry.staged !== 'unmerged',
               )
               .map((entry) => entry.path)
-            await invoke(kind === 'stage' ? 'git.stage' : 'git.unstage', taskId, binding.repoId, paths)
+            await hostInvoke(kind === 'stage' ? 'git.stage' : 'git.unstage', taskId, binding.repoId, paths)
           } else
-            await invoke(
+            await hostInvoke(
               kind === 'sync' ? 'git.sync' : kind === 'fetch' ? 'git.fetch' : kind === 'pull' ? 'git.pull' : 'git.push',
               taskId,
               binding.repoId,

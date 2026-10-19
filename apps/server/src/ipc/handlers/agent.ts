@@ -19,6 +19,11 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.enum(['pause', 'resume', 'clear'])]),
       run: (s: string, action: 'pause' | 'resume' | 'clear') => agents.controlGoal(s, action),
     },
+    // Only a person sets a verification command: Ramu runs it itself, so no agent tool reaches this.
+    'agent.goal.verify': {
+      args: z.tuple([id, z.string().max(2000).nullable()]),
+      run: (s: string, command: string | null) => agents.setVerify(s, command),
+    },
     'agent.snapshot': { args: z.tuple([id]), run: (sessionId: string) => agents.snapshot(sessionId) },
     'agent.events': { args: z.tuple([id]), run: (sessionId: string) => agents.events(sessionId) },
     'agent.searchMessages': {
@@ -30,6 +35,14 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'agent.configure': {
       args: z.tuple([id, agentSettings]),
       run: (s: string, settings: AgentSettings) => lockSession(ctx, s, () => agents.configure(s, settings)),
+    },
+    'agent.retryLimitNow': {
+      args: z.tuple([id]),
+      run: (s: string) => agents.retryLimitNow(s),
+    },
+    'agent.setAutoResume': {
+      args: z.tuple([id, z.boolean().nullable()]),
+      run: (s: string, value: boolean | null) => agents.setAutoResume(s, value),
     },
     'attachments.pick': {
       args: z.tuple([]),
@@ -52,6 +65,10 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
           .regex(/^[A-Za-z0-9+/]*={0,2}$/),
       ]),
       run: (name: string, base64: string) => attachmentStore.add(name, Buffer.from(base64, 'base64')),
+    },
+    'attachments.status': {
+      args: z.tuple([z.array(id).max(10)]),
+      run: (ids: string[]) => attachmentStore.status(ids),
     },
     'attachments.text': { args: z.tuple([id]), run: (attachmentId: string) => attachmentStore.text(attachmentId) },
     'attachments.preview': {

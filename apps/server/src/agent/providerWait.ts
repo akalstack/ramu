@@ -1,4 +1,13 @@
-import type { AppPreferences, ProviderCatalog } from '@ramu/shared/types'
+import type {
+  AgentEvent,
+  AgentSessionInfo,
+  AgentProvider,
+  AgentSettings,
+  AppPreferences,
+  ProviderCatalog,
+} from '@ramu/shared/types'
+import { effectiveAutoResume, type LimitRetryResult } from '@ramu/shared/chat/providerWait'
+import { goalContinues, isLimitHold, isUserPaused } from '@ramu/shared/chat/goalHold'
 import { resolveStep, isOver, peakFor } from '@ramu/shared/providers/routing'
 import { goalContinuation } from './goals'
 import { WRITING_STATES } from './constants'
@@ -12,6 +21,7 @@ import type { FallbackRouter } from './fallbackRouter'
 import type { SessionStarter } from './sessionStarter'
 import type { SessionStore } from './sessionStore'
 import type { AgentService } from '../agent'
+import type { Db } from '../db'
 
 /** What ProviderWaits needs from the rest of the service. */
 export interface ProviderWaitsHost
@@ -24,77 +34,216 @@ export interface ProviderWaitsHost
     Pick<UserRequests, 'hasBlockingQuestions'>,
     Pick<FallbackRouter, 'orderOf' | 'policyOf' | 'routing'>,
     Pick<SessionStarter, 'send'>,
-    Pick<SessionStore, 'events' | 'get' | 'hasRunningTasks' | 'queuePaused' | 'queued'> {
+    Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'queuePaused' | 'queued'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   preferences(): AppPreferences | undefined
+  refreshAccountUsage(): AgentService['refreshAccountUsage']
   shutdown(): AgentService['shutdown']
 }
 
-/** A chat that hit a usage limit with nothing to fall back to waits durably and retries when the provider has room again. */
-export class ProviderWaits {
-  constructor(private readonly host: ProviderWaitsHost) {}
+/** The prompt that picks a chat up again after a limit when nothing was queued. */
+export const LIMIT_CONTINUATION =
+  'Continue the unfinished request. Inspect current files and tool results first to avoid repeating completed work.'
 
-  private readonly providerTimers = new Map<string, NodeJS.Timeout>()
+/** Random spread applied when several threads resume from one shared limit, so they do not all trip it at once. */
+export interface WaitSpread {
+  /** The most a thread is held back, however many share the limit. */
+  maxMs: number
+  /** How much each extra thread widens the window. */
+  perThreadMs: number
+  random: () => number
+}
+
+type ProviderWaitEvent = Extract<AgentEvent, { kind: 'provider-wait' }>
+
+/** Threads waiting on one provider login share a timer and one availability pass. */
+interface WaitGroup {
+  timer: NodeJS.Timeout
+  dueAt: number
+  ids: Set<string>
+}
+
+const MAX_TIMEOUT = 2 ** 31 - 1
+
+/**
+ * A chat that hit a usage limit with nothing to fall back to waits durably and retries when the provider has room again.
+ * Waits are keyed by provider login: threads on the same limit share one timer, check availability once and resume with a
+ * small random spread. Whether a wait resumes on its own is the thread's `autoResume`, else the global default, read each
+ * time a timer is scheduled or fires; with it off the wait is recorded for display and only a reset notice is scheduled.
+ */
+export class ProviderWaits {
+  constructor(
+    private readonly host: ProviderWaitsHost,
+    private readonly db: Db,
+  ) {}
+
+  /** Tests may tighten this; a single waiter is never delayed. */
+  spread: WaitSpread = { maxMs: 15_000, perThreadMs: 1_000, random: Math.random }
+
+  private readonly groups = new Map<string, WaitGroup>()
+
+  private readonly groupOf = new Map<string, string>()
+
+  private readonly resumeTimers = new Map<string, NodeJS.Timeout>()
+
+  private readonly noticeTimers = new Map<string, NodeJS.Timeout>()
 
   private readonly providerDispatching = new Set<string>()
 
-  providerWait(id: string) {
+  providerWait(id: string): ProviderWaitEvent | null {
     const event = this.host.events(id).findLast((event) => event.kind === 'provider-wait')
     return event?.kind === 'provider-wait' && event.retryAt !== null ? event : null
   }
 
+  /** Whether a thread at a limit continues by itself: its own choice, else its parent's, else the live global default. */
+  autoResumeOf(id: string): boolean {
+    const session = this.host.get(id)
+    const parent = session.parentId ? this.host.get(session.parentId) : undefined
+    return effectiveAutoResume(session.settings, this.host.preferences()?.fallback, parent?.settings).value
+  }
+
+  private keyOf(session: Pick<AgentSessionInfo, 'provider' | 'settings'>): string {
+    return `${session.provider}:${session.settings.accountId ?? 'default'}`
+  }
+
+  /** Queues the thread's retry on its login's shared timer. With auto-resume off nothing is retried, only the reset is announced. */
   scheduleProvider(id: string, delay = 1000): void {
-    if (this.host.shutdown() || this.providerTimers.has(id)) return
-    this.providerTimers.set(
-      id,
-      setTimeout(() => {
-        this.providerTimers.delete(id)
-        void this.retryProvider(id).catch((error) => {
-          if (!this.host.shutdown()) {
-            this.clearProviderWait(id)
-            this.host.fail(id, error)
-          }
-        })
-      }, delay).unref(),
-    )
+    if (this.host.shutdown()) return
+    if (!this.autoResumeOf(id)) {
+      this.unschedule(id)
+      this.scheduleNotice(id)
+      return
+    }
+    const key = this.keyOf(this.host.get(id))
+    const previous = this.groupOf.get(id)
+    if (previous && previous !== key) this.leave(id)
+    const due = Date.now() + delay
+    const existing = this.groups.get(key)
+    if (existing) {
+      existing.ids.add(id)
+      this.groupOf.set(id, key)
+      // A thread that is due sooner pulls the shared timer forward; later ones ride along.
+      if (due >= existing.dueAt) return
+      clearTimeout(existing.timer)
+      existing.dueAt = due
+      existing.timer = this.arm(key, delay)
+      return
+    }
+    this.groups.set(key, { timer: this.arm(key, delay), dueAt: due, ids: new Set([id]) })
+    this.groupOf.set(id, key)
+  }
+
+  private arm(key: string, delay: number): NodeJS.Timeout {
+    return setTimeout(() => void this.fireGroup(key), delay).unref()
+  }
+
+  private leave(id: string): void {
+    const key = this.groupOf.get(id)
+    this.groupOf.delete(id)
+    const group = key ? this.groups.get(key) : undefined
+    if (!group) return
+    group.ids.delete(id)
+    if (!group.ids.size) {
+      clearTimeout(group.timer)
+      this.groups.delete(key!)
+    }
+  }
+
+  /** Drops every pending retry and notice for one thread, without touching the recorded wait. */
+  private unschedule(id: string): void {
+    this.leave(id)
+    clearTimeout(this.resumeTimers.get(id))
+    this.resumeTimers.delete(id)
+    clearTimeout(this.noticeTimers.get(id))
+    this.noticeTimers.delete(id)
+  }
+
+  /** The shared timer fired: one catalog read, one availability pass per thread, then resumes with a random spread. */
+  private async fireGroup(key: string): Promise<void> {
+    const group = this.groups.get(key)
+    if (!group) return
+    this.groups.delete(key)
+    const ids = [...group.ids]
+    for (const id of ids) this.groupOf.delete(id)
+    if (this.host.shutdown()) return
+    let catalogs: ProviderCatalog[]
+    try {
+      catalogs = await this.host.catalog()
+    } catch (error) {
+      for (const id of ids) this.giveUp(id, error)
+      return
+    }
+    const ready: string[] = []
+    for (const id of ids) {
+      try {
+        const verdict = this.check(id, catalogs)
+        if (verdict === 'go') ready.push(id)
+        else if (verdict !== 'drop') this.scheduleProvider(id, verdict)
+      } catch (error) {
+        this.giveUp(id, error)
+      }
+    }
+    // The first thread goes at once; the rest are spread over a window that grows with their number.
+    const window = Math.min(this.spread.maxMs, this.spread.perThreadMs * Math.max(0, ready.length - 1))
+    ready.forEach((id, index) => {
+      const delay = index === 0 ? 0 : Math.floor(this.spread.random() * window)
+      if (delay <= 0) {
+        void this.resume(id).catch((error) => this.giveUp(id, error))
+        return
+      }
+      this.resumeTimers.set(
+        id,
+        setTimeout(() => {
+          this.resumeTimers.delete(id)
+          void this.resume(id).catch((error) => this.giveUp(id, error))
+        }, delay).unref(),
+      )
+    })
+  }
+
+  private giveUp(id: string, error: unknown): void {
+    if (this.host.shutdown()) return
+    this.clearProviderWait(id)
+    this.host.fail(id, error)
   }
 
   clearProviderWait(id: string): void {
-    const timer = this.providerTimers.get(id)
-    if (timer) clearTimeout(timer)
-    this.providerTimers.delete(id)
+    this.unschedule(id)
     if (this.providerWait(id)) this.host.record(id, { kind: 'provider-wait', retryAt: null, updatedAt: Date.now() })
   }
 
-  private async retryProvider(id: string): Promise<void> {
-    const wait = this.providerWait(id)
-    if (this.host.shutdown() || !wait || this.providerDispatching.has(id)) return
-    const session = this.host.get(id)
+  /** Reasons a held thread cannot be continued yet. */
+  private busy(id: string, session: AgentSessionInfo, manual = false): boolean {
     // A paused queue only protects messages waiting in it; an empty one must not strand the unfinished request.
-    const held = () => this.host.queuePaused(id) && this.host.queued(id).length > 0
-    if (
-      held() ||
+    const held = !manual && this.host.queuePaused(id) && this.host.queued(id).length > 0
+    return (
+      held ||
       WRITING_STATES.includes(session.state) ||
       this.host.transitioning.has(id) ||
       this.host.startingSends.has(id) ||
       this.host.workspaceBusy(session.covers, id) ||
       this.host.hasBlockingQuestions(id) ||
       this.host.hasRunningTasks(id)
-    ) {
-      this.scheduleProvider(id)
-      return
-    }
-    const readings = this.host.routing(session.settings)?.usage ?? []
-    const catalogs = await this.host.catalog()
-    if (this.host.shutdown() || (this.providerWait(id) !== wait && this.providerWait(id)?.updatedAt !== wait.updatedAt))
-      return
-    const candidates = [
+    )
+  }
+
+  /** The models a held thread could continue on: its own, and the fallback order when it may switch. */
+  private candidates(
+    session: AgentSessionInfo,
+    catalogs: ProviderCatalog[],
+  ): Pick<AgentSettings, 'provider' | 'model'>[] {
+    return [
       session.settings,
       ...(session.settings.autoFallback ? this.host.policyOf(session, catalogs, this.host.preferences()).order : []),
     ]
-    const available = candidates.some(
+  }
+
+  /** Whether, since the wait began, a reading shows room on some candidate (a reset passed or a fresh reading is under the limit). */
+  private roomSince(session: AgentSessionInfo, catalogs: ProviderCatalog[], wait: ProviderWaitEvent): boolean {
+    const readings = this.host.routing(session.settings)?.usage ?? []
+    return this.candidates(session, catalogs).some(
       (step) =>
-        resolveStep({ ...step, id: 'retry' }, catalogs) &&
+        resolveStep({ ...(step as { provider: AgentProvider; model: string }), id: 'retry', effort: null }, catalogs) &&
         readings.some(
           (r) =>
             r.provider === step.provider &&
@@ -102,44 +251,149 @@ export class ProviderWaits {
         ) &&
         !isOver(peakFor(readings, step.provider, step.model), null),
     )
-    if (!available && wait.retryAt! > Date.now()) {
-      this.scheduleProvider(id, Math.min(60_000, wait.retryAt! - Date.now()))
-      return
+  }
+
+  /** What the timer does for one thread: retry now, drop it, or look again after a delay. */
+  private check(id: string, catalogs: ProviderCatalog[]): 'go' | 'drop' | number {
+    const wait = this.providerWait(id)
+    if (this.host.shutdown() || !wait || this.providerDispatching.has(id)) return 'drop'
+    if (!this.autoResumeOf(id)) {
+      this.scheduleNotice(id)
+      return 'drop'
+    }
+    const session = this.host.get(id)
+    if (this.busy(id, session)) return 1000
+    if (!this.roomSince(session, catalogs, wait) && wait.retryAt! > Date.now())
+      return Math.min(60_000, wait.retryAt! - Date.now())
+    return 'go'
+  }
+
+  /** Continues a held thread: sends its queued messages, or the unfinished request. False when it could not go yet. */
+  private async resume(id: string, manual = false): Promise<boolean> {
+    const wait = this.providerWait(id)
+    if (this.host.shutdown() || !wait || this.providerDispatching.has(id)) return false
+    if (!manual && !this.autoResumeOf(id)) {
+      this.scheduleNotice(id)
+      return false
+    }
+    const session = this.host.get(id)
+    if (this.busy(id, session, manual)) {
+      if (!manual) this.scheduleProvider(id)
+      return false
     }
     this.providerDispatching.add(id)
     try {
       await this.host.finalizing.get(id)
-      if (this.host.shutdown() || this.providerWait(id)?.updatedAt !== wait.updatedAt || held()) return
+      if (this.host.shutdown() || this.providerWait(id)?.updatedAt !== wait.updatedAt) return false
+      if (!manual && this.host.queuePaused(id) && this.host.queued(id).length) {
+        this.scheduleProvider(id)
+        return false
+      }
       this.clearProviderWait(id)
       const goal = this.host.getGoal(id)
-      if (goal?.status === 'waiting-provider')
-        this.host.saveGoal(id, { ...goal, status: 'active', retryAt: undefined, updatedAt: Date.now() })
+      if (isLimitHold(goal))
+        this.host.saveGoal(id, {
+          ...goal!,
+          status: 'active',
+          pausedBy: undefined,
+          retryAt: undefined,
+          updatedAt: Date.now(),
+        })
+      // A goal the user paused while the thread was at the limit stays paused: only their queued messages go out.
       if (this.host.queued(id).length) await this.host.dispatchQueued(id, true)
-      else
+      else if (!isUserPaused(goal))
         await this.host.send(
           id,
-          goal
-            ? goalContinuation(goal)
-            : 'Continue the unfinished request. Inspect current files and tool results first to avoid repeating completed work.',
+          goal ? goalContinuation(goal) : LIMIT_CONTINUATION,
           [],
           undefined,
           false,
           undefined,
           true,
         )
+      return true
     } finally {
       this.providerDispatching.delete(id)
     }
   }
 
   /**
-   * A quota failure keeps the chat durable instead of failing it: with fallback off the chat resumes on the same provider
-   * once the limit resets, and a goal waits the same way. Known resets schedule a retry; unknown resets back off.
+   * "Try again" for a held thread: re-checks usage and sends the continuation only if a reading shows room or the provider
+   * has no usage reading of its own. A reading Ramu inferred from a limit notice proves a limit, never room, so it cannot
+   * block the attempt. Otherwise the thread stays in the wait with the updated reset time and no failed turn.
    */
-  waitForGoalProvider(id: string): boolean {
+  async retryLimitNow(id: string): Promise<LimitRetryResult> {
+    const wait = this.providerWait(id)
+    if (!wait || this.host.shutdown()) return { resumed: false, retryAt: null, guessed: false }
+    const still = (current: ProviderWaitEvent | null): LimitRetryResult => ({
+      resumed: false,
+      retryAt: current?.retryAt ?? null,
+      guessed: !!current?.guessed,
+    })
+    const session = this.host.get(id)
+    if (this.providerDispatching.has(id) || this.busy(id, session, true)) return still(wait)
+    await this.refreshUsage(session.provider)
+    const catalogs = await this.host.catalog()
+    if (this.host.shutdown() || this.providerWait(id)?.updatedAt !== wait.updatedAt) return still(this.providerWait(id))
+    const live = this.host.get(id)
+    const all = this.host.routing(live.settings)?.usage ?? []
+    const real = all.filter((reading) => reading.source !== 'notice')
+    const roomOrBlind = this.candidates(live, catalogs).some((step) => {
+      if (
+        !resolveStep({ ...(step as { provider: AgentProvider; model: string }), id: 'retry', effort: null }, catalogs)
+      )
+        return false
+      // No reading of its own: the only way to learn is to try.
+      if (!real.some((reading) => reading.provider === step.provider)) return true
+      return !isOver(peakFor(real, step.provider, step.model), null)
+    })
+    if (roomOrBlind) {
+      const resumed = await this.resume(id, true)
+      // Not sent (the thread was busy): it is still held, so report the wait it is in.
+      return resumed ? { resumed, retryAt: null, guessed: false } : still(this.providerWait(id))
+    }
+    // Still limited: keep the wait with the latest reset the readings give, and keep the timer going.
+    const now = Date.now()
+    const resets = this.candidates(live, catalogs)
+      .map((step) => peakFor(all, step.provider, step.model, now))
+      .filter((reading) => isOver(reading, null) && reading?.resetsAt && reading.resetsAt > now)
+      .map((reading) => reading!.resetsAt!)
+    const retryAt = resets.length ? Math.min(...resets) + 1000 : wait.retryAt!
+    const guessed = resets.length ? false : !!wait.guessed
+    this.host.record(id, {
+      kind: 'provider-wait',
+      retryAt,
+      ...(wait.retryDelay ? { retryDelay: wait.retryDelay } : {}),
+      updatedAt: now,
+      guessed,
+      provider: live.provider,
+      accountId: live.settings.accountId ?? 'default',
+    })
+    const goal = this.host.getGoal(id)
+    if (goal && isLimitHold(goal)) this.host.saveGoal(id, { ...goal, retryAt, updatedAt: now })
+    this.scheduleProvider(id, Math.min(60_000, Math.max(1000, retryAt - now)))
+    return { resumed: false, retryAt, guessed }
+  }
+
+  /** Waits briefly for a current reading of the provider's usage; a slow read never holds up the user. */
+  private async refreshUsage(provider: AgentProvider): Promise<void> {
+    const refresh = this.host.refreshAccountUsage()
+    if (!refresh) return
+    await Promise.race([
+      refresh(provider).catch(() => {}),
+      new Promise<void>((resolve) => setTimeout(resolve, 8_000).unref()),
+    ])
+  }
+
+  /**
+   * A quota failure keeps the chat durable instead of failing it: with fallback off the chat resumes on the same provider
+   * once the limit resets, and a goal waits the same way. Known resets schedule a retry; unknown resets back off. This
+   * covers sub-agents too, so a helper at a limit waits with its login instead of failing. Returns false only at shutdown.
+   */
+  waitForGoalProvider(id: string, reason?: string): boolean {
+    if (this.host.shutdown()) return false
     const goal = this.host.getGoal(id)
     const session = this.host.get(id)
-    if (session.parentId) return false
     const now = Date.now(),
       previous = this.providerWait(id)
     const readings = this.host.routing(session.settings)?.usage ?? []
@@ -156,14 +410,28 @@ export class ProviderWaits {
       .filter((reset) => reset > now)
     const retryDelay = Math.min(15 * 60_000, Math.max(60_000, (previous?.retryDelay ?? goal?.retryDelay ?? 30_000) * 2))
     const retryAt = resets.length ? Math.min(...resets) + 1000 : now + retryDelay
-    this.host.record(id, { kind: 'provider-wait', retryAt, retryDelay, updatedAt: now })
-    if (goal && ['active', 'waiting-provider'].includes(goal.status))
+    const automatic = this.autoResumeOf(id)
+    this.host.record(id, {
+      kind: 'provider-wait',
+      retryAt,
+      retryDelay,
+      updatedAt: now,
+      guessed: !resets.length,
+      provider: session.provider,
+      accountId: session.settings.accountId ?? 'default',
+      ...(reason ? { reason } : {}),
+    })
+    // Only an active goal, or one already held by a limit, becomes a limit hold: a goal the user paused stays theirs.
+    if (goal && goalContinues(goal))
       this.host.saveGoal(id, {
         ...goal,
-        status: 'waiting-provider',
+        status: 'paused',
+        pausedBy: 'provider-limit',
         retryAt,
         retryDelay,
-        reason: 'Waiting for provider availability after a usage limit. Ramu will resume automatically.',
+        reason: automatic
+          ? 'Waiting for provider availability after a usage limit. Ramu will resume automatically.'
+          : 'Usage limit reached. Auto-resume is off, so resume the goal when you are ready.',
         updatedAt: now,
       })
     this.scheduleProvider(id)
@@ -172,9 +440,69 @@ export class ProviderWaits {
     return true
   }
 
+  /** Sets or clears this thread's own auto-resume choice, then re-arms its wait and its helpers' waits at once. */
+  setAutoResume(id: string, value: boolean | null): AgentSessionInfo {
+    const session = this.host.get(id)
+    const { autoResume: _previous, ...rest } = session.settings
+    const settings: AgentSettings = value === null ? rest : { ...rest, autoResume: value }
+    this.db.prepare('UPDATE agent_sessions SET settings = ? WHERE id = ?').run(JSON.stringify(settings), id)
+    const children = this.db.prepare('SELECT id FROM agent_sessions WHERE parent_session_id = ?').all(id) as {
+      id: string
+    }[]
+    for (const target of [id, ...children.map((child) => child.id)]) this.rearm(target)
+    const updated = this.host.get(id)
+    // Other windows read the session again on a state event; the state itself does not change.
+    this.host.emit(id, { kind: 'state', state: updated.state })
+    return updated
+  }
+
+  private rearm(id: string): void {
+    if (!this.providerWait(id)) return
+    this.unschedule(id)
+    this.scheduleProvider(id)
+  }
+
+  /** Re-arms every open wait after startup or a settings change: turned on schedules, turned off drops the retry. */
+  settingsChanged(): void {
+    if (this.host.shutdown()) return
+    const rows = this.db
+      .prepare(
+        `SELECT s.id FROM agent_sessions s WHERE (SELECT json_extract(e.event, '$.retryAt') FROM agent_events e WHERE e.session_id = s.id AND json_extract(e.event, '$.kind') = 'provider-wait' ORDER BY e.seq DESC LIMIT 1) IS NOT NULL`,
+      )
+      .all() as { id: string }[]
+    for (const { id } of rows) this.rearm(id)
+  }
+
+  /** With auto-resume off, the user is told once when a known reset passes, since nothing will continue the thread. */
+  private scheduleNotice(id: string): void {
+    clearTimeout(this.noticeTimers.get(id))
+    this.noticeTimers.delete(id)
+    const wait = this.providerWait(id)
+    if (!wait || wait.guessed || wait.resetNotifiedAt !== undefined || this.host.shutdown()) return
+    const delay = Math.min(Math.max(0, wait.retryAt! - Date.now()) + 1000, MAX_TIMEOUT)
+    this.noticeTimers.set(
+      id,
+      setTimeout(() => {
+        this.noticeTimers.delete(id)
+        const current = this.providerWait(id)
+        if (this.host.shutdown() || !current || current.updatedAt !== wait.updatedAt || this.autoResumeOf(id)) return
+        if (current.retryAt! > Date.now()) {
+          this.scheduleNotice(id)
+          return
+        }
+        const { at: _at, ...fields } = current
+        this.host.record(id, { ...fields, resetNotifiedAt: Date.now() })
+      }, delay).unref(),
+    )
+  }
+
   /** Drops every pending retry timer, as on shutdown. */
   clearProviderTimers(): void {
-    for (const timer of this.providerTimers.values()) clearTimeout(timer)
-    this.providerTimers.clear()
+    for (const group of this.groups.values()) clearTimeout(group.timer)
+    this.groups.clear()
+    this.groupOf.clear()
+    for (const timer of [...this.resumeTimers.values(), ...this.noticeTimers.values()]) clearTimeout(timer)
+    this.resumeTimers.clear()
+    this.noticeTimers.clear()
   }
 }

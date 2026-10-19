@@ -3,8 +3,10 @@ import { Sparkles } from 'lucide-react'
 import { useEffect } from 'react'
 import { notices, TOAST_MS } from '../chat/notificationCenter'
 import { t } from '../i18n'
-import { invoke, ramu } from '../ipc'
-import { openSummary, useOpenSummary } from './openSummary'
+import { bridge, invokerFor } from '../ipc'
+import { ownHostId } from '../hosts'
+import { useHostSelection } from '../workspace/HostSelection'
+import { useOpenSummary } from './openSummary'
 import { SummaryView } from './SummaryView'
 
 /**
@@ -13,11 +15,14 @@ import { SummaryView } from './SummaryView'
  */
 export function SummaryHost() {
   const open = useOpenSummary()
+  const { select } = useHostSelection()
   useEffect(
     () =>
-      ramu.on('summaries:changed', ({ created }) => {
+      bridge.on('summaries:changed', ({ created }, from) => {
+        const host = from ?? ownHostId()
+        const invoke = invokerFor(host)
         if (!created) return
-        const id = `summary:${created}`
+        const id = `summary:${host}:${created}`
         void invoke('summaries.get')
           .then((snapshot) => {
             const summary = snapshot.summaries.find((entry) => entry.id === created)
@@ -25,7 +30,7 @@ export function SummaryHost() {
             const view = () => {
               notify.close(id)
               notices.remove(id)
-              openSummary(created)
+              select(host, { kind: 'summary', summaryId: created })
             }
             const icon = <Sparkles size={16} />
             notify.add<AppToastData>({
@@ -48,7 +53,7 @@ export function SummaryHost() {
           })
           .catch(() => {})
       }),
-    [],
+    [select],
   )
-  return open ? <SummaryView key={open.id} id={open.id} call={open.call} /> : null
+  return open ? <SummaryView key={`${open.host}:${open.id}`} id={open.id} call={open.call} host={open.host} /> : null
 }

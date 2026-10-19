@@ -21,7 +21,8 @@ import { ramuTool } from '@ramu/shared/chat/ramuTools'
 import { providerName } from '@ramu/shared/providers/providers'
 import { attachmentPrompt } from '../attachments'
 import { elicitationContent, elicitationRequest } from '../agent/elicitation'
-import { isLimitMessage, isLimitReply, limitedReading } from './usageLimit'
+import { classifyLimit, limitSignal } from './limitClassifier'
+import { limitedReading } from './usageLimit'
 import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 
 type Wire = Record<string, any>
@@ -368,7 +369,7 @@ class AcpSession implements AgentRunner {
   constructor(
     private scope: AgentScope,
     private settings: AgentSettings,
-    private emit: (event: AgentEvent, limit?: boolean) => void,
+    private emit: (event: AgentEvent, limit?: boolean | 'low') => void,
     private readOnly = false,
   ) {
     this.events = new AcpEvents(settings.provider === 'antigravity' ? ['invoke_subagent'] : ['task', 'subagent'])
@@ -557,24 +558,29 @@ class AcpSession implements AgentRunner {
         if (this.stopped || this.steering) return
         // A runtime may report an exhausted quota as an ordinary reply, or as a refusal.
         const reply = [...this.turnText.values()].join('\n').trim()
-        const limited = isLimitReply(reply, this.turnTools) || (r.stopReason === 'refusal' && isLimitMessage(reply))
-        if (limited) this.markLimited(reply)
+        const match =
+          classifyLimit(reply, { provider: this.settings.provider, channel: 'reply', toolCalls: this.turnTools }) ??
+          (r.stopReason === 'refusal'
+            ? classifyLimit(reply, { provider: this.settings.provider, channel: 'error' })
+            : null)
+        if (match) this.markLimited(reply, match.confidence)
         this.emit(
           {
             kind: 'result',
-            isError: limited || r.stopReason === 'refusal',
-            text: limited ? reply : r.stopReason || 'end_turn',
+            isError: !!match || r.stopReason === 'refusal',
+            text: match ? reply : r.stopReason || 'end_turn',
             costUsd: null,
           },
-          limited,
+          limitSignal(match),
         )
       },
       (e: Error) => {
         this.active = undefined
         this.cancelPending()
         if (this.stopped || this.steering) return
-        if (isLimitMessage(e.message)) this.markLimited(e.message)
-        this.emit({ kind: 'result', isError: true, text: e.message, costUsd: null }, isLimitMessage(e.message))
+        const match = classifyLimit(e.message, { provider: this.settings.provider, channel: 'error' })
+        if (match) this.markLimited(e.message, match.confidence)
+        this.emit({ kind: 'result', isError: true, text: e.message, costUsd: null }, limitSignal(match))
       },
     )
   }
@@ -615,7 +621,9 @@ class AcpSession implements AgentRunner {
     await this.rpc?.close()
   }
   /** No usage API exists for these runtimes, so a limit response is recorded as a reading and routing avoids the provider until it lifts. */
-  private markLimited(text: string): void {
+  private markLimited(text: string, confidence: 'high' | 'low'): void {
+    // A low-confidence match must not mark the provider limited: the caller retries once and decides.
+    if (confidence !== 'high') return
     this.emit({ kind: 'usage', readings: [limitedReading(this.settings, text)] })
   }
   private cancelPending(): void {

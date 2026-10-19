@@ -21,6 +21,11 @@ const inCheckout = <T>(ctx: HandlerContext, taskId: string, repoId: string, fn: 
 export const registerFileHandlers: RegisterHandlers = (ctx) => {
   const { host, workspace, cwdOf, lock } = ctx
   return {
+    'files.explorerBindings': { args: z.tuple([id]), run: (context: string) => workspace.explorerBindings(context) },
+    'files.browse': {
+      args: z.tuple([id, id, relPath]),
+      run: (context: string, repo: string, path: string) => files.browseDirectory(cwdOf(context, repo), path),
+    },
     'files.create': {
       args: z.tuple([id, id, relPath, z.enum(['file', 'dir'])]),
       run: (t: string, r: string, path: string, kind: 'file' | 'dir') =>

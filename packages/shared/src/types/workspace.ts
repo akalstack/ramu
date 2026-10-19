@@ -1,3 +1,4 @@
+import type { BranchChoice, BranchNamingIntent } from '../workspaceDefaults'
 export type CheckoutMode = 'current' | 'worktree'
 
 export interface Project {
@@ -63,6 +64,8 @@ export interface Task {
   id: string
   projectId: string
   title: string
+  /** Execution-host title work, synchronized across clients. Older hosts omit it. */
+  titleGenerationState?: 'idle' | 'pending' | 'complete' | 'failed'
   mode: CheckoutMode
   workspaceId: string | null
   status: TaskStatus
@@ -75,6 +78,8 @@ export interface Task {
   lastActiveAt: number
   /** Set while every provider is at its usage limit: when Ramu next tries to continue the chat on its own. */
   waitingUntil?: number | null
+  /** Naming failed during this thread's initial workspace creation. */
+  branchNamingFallback?: boolean | null
   /** A chat started from a "What Ramu learned" summary; it shows a Review label under Chats. */
   kind?: 'library-review' | null
 }
@@ -101,6 +106,8 @@ export interface RepositoryBinding {
 }
 
 export interface WorktreePlanEntry {
+  baseOid?: string
+
   repoId: string
   repoName: string
   baseRef: string
@@ -109,6 +116,11 @@ export interface WorktreePlanEntry {
 }
 
 export interface CreateTaskInput {
+  requestId?: string
+  branchPrefix?: string
+  branchNaming?: BranchNamingIntent
+  branchChoice?: BranchChoice
+
   /** Reuse an isolated workspace instead of creating new worktrees. */
   workspaceId?: string
   projectId: string

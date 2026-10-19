@@ -1,3 +1,4 @@
+import { BranchNameEditor } from './workspace/BranchNameEditor'
 import { t, useLanguage } from './i18n'
 import { clipText } from '@ramu/shared/text'
 import { useModelSets } from './models/ModelSets'
@@ -5,7 +6,13 @@ import { ChevronRight, CircleDot, FolderClosed, GitBranch, Laptop, Monitor, Netw
 import { Button } from '@/components/desktop-button'
 import { Spinner } from '@/components/ui/spinner'
 import { useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import {
+  resolveCheckoutMode,
+  validBranchName,
+  type BranchChoice,
+  type BranchNamingIntent,
+} from '@ramu/shared/workspaceDefaults'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   NO_PROJECT,
   type FileContext,
@@ -18,16 +25,20 @@ import {
 import { AgentControls } from './chat/AgentControls'
 import { Composer } from './composer/Composer'
 import { ComposerTray } from './composer/ComposerTray'
-import { invoke, ramu } from './ipc'
+import { ramu } from './ipc'
+import { ownHostId } from './hosts'
 import { Combobox, Menu } from './Menu'
 import { AnimatedMark } from './Brand'
 import { errorText } from './workspace/TaskPane'
 import { useWorkspace } from './workspace/workspace'
 import { HomeFeed } from './Home'
-import { clearDraft, draftKey, loadDraft, useDraftPersistence } from './composer/drafts'
+import { hostStorageFor } from './hostStorage'
+import { clearDraft, draftKey, draftStore, loadDraft, useDraftPersistence } from './composer/drafts'
+import { useHost } from './workspace/HostProvider'
 import { useAddProject } from './workspace/addProject'
+import { useHostSelection } from './workspace/HostSelection'
 import { StatusDot, useComputers } from './workspace/computers'
-import { notifyError } from './chat/Notifications'
+import { defaultStartProject, lastStartProject, rememberStartProject } from './startProject'
 
 /** A task's title is the first line of what you asked for. */
 export function titleFrom(prompt: string): string {
@@ -44,14 +55,18 @@ const issueValue = (issue: { repoId: string; number: number }) => `${issue.repoI
  * GitHub, or a missing or signed-out GitHub CLI, contribute nothing, so the picker simply stays hidden.
  */
 function useProjectIssues(repos: Repository[]) {
+  const host = useHost().id
   const query = useQuery({
-    queryKey: ['forge-issues', ...repos.map((repo) => repo.id)],
+    queryKey: ['forge-issues', host, ...repos.map((repo) => repo.id)],
     enabled: repos.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
       const lists = await Promise.all(
         repos.map((repo) =>
-          ramu.invoke('forge.issues', repo.id, '').then(
+          (host === ownHostId()
+            ? ramu.invoke('forge.issues', repo.id, '')
+            : ramu.invokeOn(host, 'forge.issues', repo.id, '')
+          ).then(
             (issues) => issues.map((issue) => ({ ...issue, repoId: repo.id, repoName: repo.name })),
             () => [],
           ),
@@ -87,28 +102,52 @@ function NewWorktreeSummary({
   repos,
   title,
   creating,
+  choice,
+  children,
+  namingKey,
 }: {
   projectId: string
   repos: Repository[]
   title: string
   creating: boolean
+  namingKey: string
+  choice?: BranchChoice
+  children?: React.ReactNode
 }) {
+  const { id: host, invoke } = useHost()
   const [previewTitle, setPreviewTitle] = useState(title)
   useEffect(() => {
     const timer = setTimeout(() => setPreviewTitle(title), 250)
     return () => clearTimeout(timer)
   }, [title])
   const preview = useQuery({
-    queryKey: ['worktree-plan', projectId, previewTitle, ...repos.map((repo) => repo.id)],
+    queryKey: [
+      'worktree-plan',
+      host,
+      projectId,
+      previewTitle,
+      namingKey,
+      choice?.name,
+      choice?.source,
+      ...repos.map((repo) => repo.id),
+    ],
     enabled: !!previewTitle && repos.length > 0,
     retry: false,
     queryFn: () =>
-      invoke(
-        'tasks.plan',
-        projectId,
-        previewTitle,
-        repos.map((repo) => repo.id),
-      ),
+      choice
+        ? invoke(
+            'tasks.plan',
+            projectId,
+            previewTitle,
+            repos.map((repo) => repo.id),
+            choice,
+          )
+        : invoke(
+            'tasks.plan',
+            projectId,
+            previewTitle,
+            repos.map((repo) => repo.id),
+          ),
   })
   const plan = previewTitle === title ? preview.data : undefined
   const bases = [...new Set(plan?.map((entry) => entry.baseRef))]
@@ -130,6 +169,7 @@ function NewWorktreeSummary({
         </span>
       </summary>
       <div className="worktree-preview-details space-y-2 py-2 pl-5">
+        {children}
         {!title ? (
           t('Enter a message to preview branch names and paths.')
         ) : previewTitle === title && preview.error ? (
@@ -153,7 +193,10 @@ function NewWorktreeSummary({
 /** Home and New chat are one screen: the start box, with what's running and coming up below it. */
 export function HomePage() {
   const ws = useWorkspace()
-  return <NewTask projectId={ws.composing ?? NO_PROJECT} onProjectChange={(id) => ws.newTask(id)} />
+  const host = useHost()
+  // With no explicit choice, the box starts in the project you last started a thread in.
+  const projectId = ws.composing ?? defaultStartProject(lastStartProject(hostStorageFor(host.id)), ws.projects)
+  return <NewTask projectId={projectId} onProjectChange={(id) => ws.newTask(id)} />
 }
 
 /**
@@ -172,6 +215,7 @@ export function NewTask({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const host = useHost()
   const addProject = useAddProject()
   const [folderOver, setFolderOver] = useState(false)
   const general = projectId === NO_PROJECT
@@ -190,10 +234,33 @@ export function NewTask({
     ],
   )
   const [workspaceId, setWorkspaceId] = useState<string | null>(ws.composingWorkspace)
-  const [mode, setMode] = useState<CheckoutMode>('current')
+  const [manualMode, setMode] = useState<CheckoutMode | null>(null)
+  const queryClient = useQueryClient()
+  const optionsKey = ['workspace-options', host.id, projectId]
+  const options = useQuery({
+    queryKey: optionsKey,
+    enabled: !general,
+    retry: false,
+    queryFn: () => host.invoke('tasks.workspaceOptions', projectId),
+  })
+  useEffect(
+    () =>
+      ramu.on('settings:changed', () => {
+        void queryClient.invalidateQueries({ queryKey: ['workspace-options'] })
+      }),
+    [queryClient],
+  )
+  const resolution = resolveCheckoutMode({
+    defaultMode: options.data?.defaultCheckoutMode ?? 'current',
+    manual: manualMode,
+    workspaceId,
+    projectFree: general,
+    worktreeUnavailable: options.data?.worktreeUnavailable,
+  })
+  const mode = resolution.mode
   const [attachments, setAttachments] = useState<Attachment[]>([])
-  const [prompt, setPrompt] = useState(() => loadDraft(draftKey.newChat(projectId)))
-  useDraftPersistence(draftKey.newChat(projectId), prompt)
+  const [prompt, setPrompt] = useState(() => loadDraft(draftKey.newChat(projectId), draftStore(host.id)))
+  useDraftPersistence(draftKey.newChat(projectId), prompt, host.id)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [issue, setIssue] = useState<IssueLink | null>(null)
@@ -204,7 +271,7 @@ export function NewTask({
     if (!picked) return
     setError(null)
     try {
-      const details = await invoke('forge.issue', picked.repoId, picked.number)
+      const details = await host.invoke('forge.issue', picked.repoId, picked.number)
       setIssue(details.link)
       setPrompt(details.prompt)
     } catch (e) {
@@ -215,36 +282,88 @@ export function NewTask({
   useEffect(() => {
     const selected = ws.workspaces.find((w) => w.id === ws.composingWorkspace && w.projectId === projectId)?.id ?? null
     setWorkspaceId(selected)
-    setMode(selected ? 'worktree' : 'current')
-    setPrompt(loadDraft(draftKey.newChat(projectId)))
+    setMode(null)
+    setPrompt(loadDraft(draftKey.newChat(projectId), draftStore(host.id)))
     setAttachments([])
     setError(null)
     setIssue(null)
-  }, [projectId, ws.composing, ws.composingWorkspace])
+  }, [host.id, projectId, ws.composing, ws.composingWorkspace])
 
   const title = titleFrom(prompt) || (attachments.length ? `Discuss ${attachments[0]!.name}` : '')
+  const namingIntent: BranchNamingIntent = {
+    strategy: options.data?.branchNaming ?? 'fixed',
+    instructions: options.data?.branchInstructions ?? '',
+    prompt: prompt.slice(0, 6000),
+  }
+  const branchScope = JSON.stringify([host.id, projectId])
+  const intentKey = JSON.stringify([namingIntent, title])
+  const [branchDraft, setBranchDraft] = useState<{ scope: string; intent: string; choice: BranchChoice } | null>(null)
+  const branchChoice =
+    mode === 'worktree' &&
+    !workspaceId &&
+    branchDraft?.scope === branchScope &&
+    (branchDraft.choice.source === 'manual' || branchDraft.intent === intentKey)
+      ? branchDraft.choice
+      : undefined
   const existingWorkspace = ws.workspaces.find((w) => w.id === workspaceId && w.projectId === projectId)
 
   // `busy` is state and lags a frame; a double Enter must not create two chats.
   const sending = useRef(false)
+  const creationRequest = useRef<{ fingerprint: string; id: string } | null>(null)
   const send = async (context: FileContext[] = []) => {
     if (!title || (!general && !repos.length) || sending.current) return
+    if (!general && !options.data) {
+      setError(options.error ? errorText(options.error) : t('Loading workspace settings…'))
+      return
+    }
+    if (resolution.blocked) {
+      setError(resolution.reason)
+      return
+    }
+    if (branchChoice && !validBranchName(branchChoice.name)) {
+      setError(t('Invalid Git branch name'))
+      return
+    }
     sending.current = true
     setError(null)
     setBusy(true)
     let created: string | null = null
     try {
-      const task = await invoke('tasks.create', { projectId, title, mode, workspaceId: workspaceId ?? undefined })
+      const fingerprint = JSON.stringify([
+        host.id,
+        projectId,
+        title,
+        prompt,
+        mode,
+        workspaceId,
+        options.data?.branchPrefix,
+        namingIntent,
+        branchChoice,
+        attachments.map((file) => file.id),
+      ])
+      if (creationRequest.current?.fingerprint !== fingerprint)
+        creationRequest.current = { fingerprint, id: crypto.randomUUID() }
+      const task = await host.invoke('tasks.create', {
+        projectId,
+        title,
+        mode,
+        workspaceId: workspaceId ?? undefined,
+        branchPrefix: options.data?.branchPrefix,
+        branchNaming: namingIntent,
+        branchChoice,
+        requestId: creationRequest.current.id,
+      })
       created = task.id
-      const bindings = mode === 'worktree' ? await invoke('tasks.setup', task.id) : []
+      const bindings = mode === 'worktree' ? await host.invoke('tasks.setup', task.id) : []
       await ws.refresh()
       // Half-built worktrees keep the chat so "Retry setup" can finish it.
       if (bindings.some((b) => b.setupState !== 'ready')) {
         created = null
+        creationRequest.current = null
         ws.openTask(task.id)
         return
       }
-      const session = await invoke(
+      const session = await host.invoke(
         'agent.start',
         task.id,
         prompt,
@@ -253,22 +372,24 @@ export function NewTask({
         context,
       )
       created = null
+      creationRequest.current = null
+      rememberStartProject(projectId, hostStorageFor(host.id))
       // The link lets this chat's pull request close the issue; losing it only loses that line.
-      if (issue) void invoke('forge.linkIssue', task.id, issue).catch(() => {})
+      if (issue) void host.invoke('forge.linkIssue', task.id, issue).catch(() => {})
       setIssue(null)
-      clearDraft(draftKey.newChat(projectId))
+      clearDraft(draftKey.newChat(projectId), draftStore(host.id))
       ws.openTask(task.id)
       ws.openView(task.id, { kind: 'agent', sessionId: session.id })
       void ws.refresh()
-      // The prompt's first line is the placeholder; the agent names the chat once it has something to go on.
-      void invoke('tasks.generateTitle', task.id, settings).then(
-        () => ws.refresh(),
-        () => {},
-      )
     } catch (e) {
       // A chat exists only with its first message: don't leave an empty one behind (and a retry a duplicate).
       if (created) {
-        await invoke('tasks.delete', created, mode === 'worktree' && !workspaceId).catch(() => {})
+        await host.invoke('tasks.delete', created, mode === 'worktree' && !workspaceId).then(
+          () => {
+            creationRequest.current = null
+          },
+          () => {},
+        )
         await ws.refresh().catch(() => {})
       }
       setError(errorText(e))
@@ -283,12 +404,13 @@ export function NewTask({
     ...ws.projects.map((p) => ({ value: p.id, label: p.name })),
   ]
   const computers = useComputers()
-  const currentComputer = computers?.computers.find((c) => c.id === computers.current)
-  // Switching computers reopens the window on that computer's projects, so the chat starts there.
+  const { activeHost, select } = useHostSelection()
+  const currentComputer = computers?.computers.find((c) => c.id === activeHost)
+  // Switching hosts opens New thread on that host's projects, so the chat starts there.
   const computerItems = (computers?.computers ?? []).map((c) => ({
     key: c.id,
-    selected: c.id === computers?.current,
-    disabled: !c.local && c.id !== computers?.current && c.status !== 'connected',
+    selected: c.id === activeHost,
+    disabled: !c.local && c.id !== activeHost && c.status !== 'connected',
     label: (
       <span className="flex min-w-0 grow items-center gap-2">
         <StatusDot status={c.status} />
@@ -296,10 +418,7 @@ export function NewTask({
       </span>
     ),
     onSelect: () => {
-      if (c.id !== computers?.current)
-        void invoke('computers.navigate', c.id, { kind: 'new' }).catch((error) =>
-          notifyError(errorText(error), t('Hosts')),
-        )
+      if (c.id !== activeHost) select(c.id, { kind: 'new' })
     },
   }))
   const current = existingWorkspace
@@ -344,8 +463,34 @@ export function NewTask({
         )}
       </div>
       <div className="start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
+        {!general && !workspaceId && (
+          <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
+            {options.data
+              ? `${t('Default')}: ${t(options.data.defaultCheckoutMode === 'worktree' ? 'New worktree' : 'Current checkout')}${resolution.reason ? ` · ${t('Using current checkout')} — ${resolution.reason}` : ''}`
+              : t('Loading workspace settings…')}
+          </p>
+        )}
         {!general && mode === 'worktree' && !workspaceId && (
-          <NewWorktreeSummary projectId={projectId} repos={repos} title={title} creating={busy} />
+          <NewWorktreeSummary
+            projectId={projectId}
+            repos={repos}
+            title={title}
+            creating={busy}
+            choice={branchChoice}
+            namingKey={JSON.stringify([options.data?.branchPrefix, namingIntent.strategy, namingIntent.instructions])}
+          >
+            {options.data?.branchNaming !== undefined && (
+              <BranchNameEditor
+                key={branchScope}
+                projectId={projectId}
+                title={title}
+                intent={namingIntent}
+                choice={branchChoice}
+                busy={busy}
+                onChange={(choice) => setBranchDraft(choice ? { scope: branchScope, intent: intentKey, choice } : null)}
+              />
+            )}
+          </NewWorktreeSummary>
         )}
         <ComposerTray className="start-chips items-start gap-0.5 px-1.5">
           <div className="start-context flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
@@ -383,8 +528,17 @@ export function NewTask({
                   </>
                 }
                 items={[
+                  {
+                    key: 'default',
+                    label: t('Use default'),
+                    onSelect: () => {
+                      setWorkspaceId(null)
+                      setMode(null)
+                    },
+                  },
                   ...MODES.map((m) => ({
                     key: m.id,
+                    disabled: m.id === 'worktree' && Boolean(options.data?.worktreeUnavailable),
                     label: (
                       <>
                         <m.Icon size={14} />

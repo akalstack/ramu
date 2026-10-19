@@ -3,7 +3,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { useEffect, useState } from 'react'
 import { Dialog } from '../Menu'
 import { Folder, ChevronLeft } from 'lucide-react'
-import { invoke } from '../ipc'
+import { invokerFor } from '../ipc'
+import { ownHostId } from '../hosts'
 import { errorText } from './TaskPane'
 import { onFolderPick, onRepoChoice, type FolderPick, type RepoChoice } from './addProject'
 
@@ -96,8 +97,8 @@ function HostFolderDialog() {
   const [roots, setRoots] = useState<string[]>([])
   const [listing, setListing] = useState<Listing | null>(null)
   const [error, setError] = useState('')
-  const browse = (path: string) =>
-    invoke('folders.list', path)
+  const browse = (path: string, host = request?.host) =>
+    invokerFor(host ?? ownHostId())('folders.list', path)
       .then((next) => {
         setListing(next)
         setError('')
@@ -109,10 +110,11 @@ function HostFolderDialog() {
         setRequest(next)
         setListing(null)
         setError('')
-        invoke('folders.roots')
+        // The folders are on the host the project is added to, which may not be the one on screen.
+        invokerFor(next.host)('folders.roots')
           .then((found) => {
             setRoots(found)
-            if (found.length === 1) void browse(found[0]!)
+            if (found.length === 1) void browse(found[0]!, next.host)
           })
           .catch((e) => setError(errorText(e)))
       }),

@@ -31,7 +31,9 @@ import {
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type KeyboardEvent } from 'react'
 import type { Attachment } from '@ramu/shared/types'
+// Menus, copy, save and reveal run on this machine's attachment store (main process); previews come from the host.
 import { invoke } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import { notifyError } from '../chat/Notifications'
 
 const isImage = (file: Attachment) => file.mimeType.startsWith('image/')
@@ -41,9 +43,11 @@ async function attachmentMenu(
   file: Attachment,
   event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>,
   removable: boolean,
+  isLocal: boolean,
 ) {
   event.preventDefault()
   event.stopPropagation()
+  if (!isLocal) return null
   const rect = event.currentTarget.getBoundingClientRect()
   const point = 'clientX' in event ? { x: event.clientX, y: event.clientY } : { x: rect.left + 12, y: rect.bottom }
   return invoke('attachments.menu', file.id, removable, point)
@@ -63,6 +67,7 @@ function AttachmentPreview({
   opener: HTMLElement | null
 }) {
   useLanguage()
+  const host = useHost()
   const file = files[index]!
   const [content, setContent] = useState<{ image?: string | null; text?: string | null } | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -83,8 +88,8 @@ function AttachmentPreview({
     setNotice('')
     setNatural({ width: 1, height: 1 })
     const load = isImage(file)
-      ? invoke('attachments.preview', file.id).then((image) => ({ image }))
-      : invoke('attachments.text', file.id).then((text) => ({ text }))
+      ? host.invoke('attachments.preview', file.id).then((image) => ({ image }))
+      : host.invoke('attachments.text', file.id).then((text) => ({ text }))
     void load.then(
       (value) => {
         if (active) setContent(value)
@@ -99,7 +104,7 @@ function AttachmentPreview({
     return () => {
       active = false
     }
-  }, [file.id])
+  }, [file.id, host.invoke])
   useEffect(() => {
     const el = viewport.current
     if (!el) return
@@ -155,7 +160,7 @@ function AttachmentPreview({
     }
   }
   const menu = (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) =>
-    void attachmentMenu(file, event, false).catch((error) => notifyError(errorText(error), 'Attachment'))
+    void attachmentMenu(file, event, false, host.isLocal).catch((error) => notifyError(errorText(error), 'Attachment'))
   const tool = (label: string, action: () => void, icon: React.ReactNode, disabled = false) => (
     <Button
       variant="ghost"
@@ -261,16 +266,19 @@ function AttachmentPreview({
             isImage(file) ? 'Copy image' : 'Copy filename',
             () => void act(() => invoke('attachments.copy', file.id), 'Copied'),
             <Copy size={15} />,
+            !host.isLocal,
           )}
           {tool(
             'Save attachment as…',
             () => void act(() => invoke('attachments.save', file.id), 'Saved'),
             <Download size={15} />,
+            !host.isLocal,
           )}
           {tool(
             'Show attachment in folder',
             () => void act(() => invoke('attachments.reveal', file.id)),
             <FolderOpen size={15} />,
+            !host.isLocal,
           )}
         </div>
         <div
@@ -394,11 +402,12 @@ function AttachmentItem({
   onPreview: (opener: HTMLElement) => void
 }) {
   useLanguage()
+  const host = useHost()
   const [thumb, setThumb] = useState<string | null>(null)
   useEffect(() => {
     let active = true
     if (isImage(file))
-      void invoke('attachments.preview', file.id).then(
+      void host.invoke('attachments.preview', file.id).then(
         (image) => {
           if (active) setThumb(image)
         },
@@ -407,11 +416,11 @@ function AttachmentItem({
     return () => {
       active = false
     }
-  }, [file.id, file.mimeType])
+  }, [file.id, file.mimeType, host.invoke])
   const menu = (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
     const opener =
       event.currentTarget.querySelector<HTMLElement>('[data-slot=attachment-trigger]') ?? event.currentTarget
-    void attachmentMenu(file, event, !!onRemove).then(
+    void attachmentMenu(file, event, !!onRemove, host.isLocal).then(
       (action) => {
         if (action === 'preview') onPreview(opener)
         if (action === 'remove') onRemove?.()

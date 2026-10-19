@@ -1,15 +1,16 @@
 import { useState } from 'react'
-import { invoke } from '../../ipc'
 import { notifyError } from '../../chat/Notifications'
 import { errorText } from '../../workspace/TaskPane'
 import { useWorkspace } from '../../workspace/workspace'
 import { useAddProject } from '../../workspace/addProject'
+import { useHost } from '../../workspace/HostProvider'
 
 const hasFiles = (event: React.DragEvent) => event.dataTransfer.types.includes('Files')
 
 /** Project reordering (the sortable list itself lives in ProjectsPanel), plus dropping folders from Finder to add them as projects. */
 export function useProjectsDragDrop() {
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const addProject = useAddProject()
   const reorder = async (ids: string[]) => {
     try {

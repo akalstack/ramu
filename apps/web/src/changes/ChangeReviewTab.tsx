@@ -7,8 +7,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Button } from '@/components/desktop-button'
 import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
-import { invoke, ramu } from '../ipc'
-import { useWorkspace } from '../workspace/workspace'
+import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { enterReviewFile } from '../git/ReviewDiff'
 import { useReviews, openReview } from '../git/reviews'
 import { DeferredReviewFile } from './DeferredReviewFile'
@@ -21,6 +20,7 @@ import { useReviewBranches } from './useReviewBranches'
 import { useReviewLayout } from './useReviewLayout'
 import { useViewedFiles } from './useViewedFiles'
 import { TEXT_BUTTON_CLASS } from './styles'
+import { useHost } from '../workspace/HostProvider'
 
 export function ChangeReviewTab({
   view,
@@ -32,6 +32,8 @@ export function ChangeReviewTab({
   useLanguage()
   const ws = useWorkspace(),
     { reviews } = useReviews()
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const id = view.reviewId
   const { viewedFiles, markViewed } = useViewedFiles(id)
   const [review, setReview] = useState<ChangeReview | null>(null)
@@ -76,14 +78,14 @@ export function ChangeReviewTab({
     const r = await invoke('reviews.get', id)
     if (currentId.current !== id) return
     setReview(r)
-  }, [id])
+  }, [invoke, id])
   useEffect(() => {
     if (!visible) return
     void reload().catch((e) => setError(errorText(e)))
-    return ramu.on('automation:changed', () => {
+    return on('automation:changed', () => {
       void reload().catch(() => {})
     })
-  }, [reload, visible])
+  }, [on, reload, visible])
   const { branches, branchError } = useReviewBranches(id, review?.id, visible)
   useEffect(() => {
     if (!threadTarget || review?.id !== id) return
@@ -218,7 +220,7 @@ export function ChangeReviewTab({
               split={split}
               narrow={narrow}
               onToggleTree={toggleTree}
-              onOpenRevision={(value) => openReview(ws, { id: value })}
+              onOpenRevision={(value) => openReview(ws, { id: value }, invoke)}
               onChangeLayout={changeLayout}
               onOpenChat={openChat}
             />
@@ -230,7 +232,7 @@ export function ChangeReviewTab({
                 variant="ghost"
                 size="sm"
                 className={TEXT_BUTTON_CLASS}
-                onClick={() => openReview(ws, { id: revisions[0]!.id })}
+                onClick={() => openReview(ws, { id: revisions[0]!.id }, invoke)}
               >
                 {t('View latest changes ')}
                 <ArrowRight size={13} />

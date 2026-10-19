@@ -260,11 +260,10 @@ describe('isolated worktrees (optional)', () => {
     const rApi = await ws.addRepository(project.id, api)
     const plan = await ws.planWorktrees(project.id, 'Partial', [rWeb.id, rApi.id])
     const apiPath = plan.find((p) => p.repoId === rApi.id)!.path
-    // Block the api worktree path with a non-empty directory.
+    const task = await ws.createTask({ projectId: project.id, title: 'Partial', mode: 'worktree' }, plan)
+    // Block the allocated path after creation; a preview no longer reserves paths.
     mkdirSync(apiPath, { recursive: true })
     writeFileSync(join(apiPath, 'in the way'), 'x')
-
-    const task = await ws.createTask({ projectId: project.id, title: 'Partial', mode: 'worktree' }, plan)
     let bindings = await ws.setupTask(task.id)
     const webB = bindings.find((b) => b.repoId === rWeb.id)!
     expect(webB.setupState).toBe('ready')
@@ -585,5 +584,141 @@ describe('project order', () => {
     expect(ws.listProjects().map((p) => p.name)).toEqual(['A', 'B', 'C'])
     expect(ws.reorderProjects([c.id, a.id]).map((p) => p.name)).toEqual(['C', 'A', 'B'])
     expect(ws.listProjects().map((p) => p.id)).toEqual([c.id, a.id, b.id])
+  })
+})
+
+describe('authoritative worktree creation', () => {
+  it('ignores client mutation paths and records the exact base commit', async () => {
+    const project = ws.createProject('Shop')
+    const repo = await ws.addRepository(project.id, web)
+    const plan = await ws.planWorktrees(project.id, 'Fixed base', [repo.id])
+    const oid = await git.headOid(web)
+    plan[0]!.path = join(tmp, 'outside-managed-root')
+    plan[0]!.taskBranch = '--bad-client-branch'
+    const task = await ws.createTask({ projectId: project.id, title: 'Fixed base', mode: 'worktree' }, plan)
+    sh(web, 'commit', '-q', '-m', 'moved base')
+    const bindings = await ws.setupTask(task.id)
+    expect(bindings[0]!.setupState).toBe('ready')
+    expect(bindings[0]!.cwd).not.toBe(plan[0]!.path)
+    expect(bindings[0]!.taskBranch).toBe('ramu/fixed-base')
+    expect(await git.headOid(bindings[0]!.cwd)).toBe(oid)
+  })
+  it('rejects a preview whose base moved before creation', async () => {
+    const project = ws.createProject('Shop')
+    const repo = await ws.addRepository(project.id, web)
+    const plan = await ws.planWorktrees(project.id, 'Changed', [repo.id])
+    sh(web, 'commit', '-q', '-m', 'moved base')
+    await expect(ws.createTask({ projectId: project.id, title: 'Changed', mode: 'worktree' }, plan)).rejects.toThrow(
+      /HEAD changed/,
+    )
+  })
+  it('reserves pending allocations, serializes concurrent creates and deduplicates retries', async () => {
+    const project = ws.createProject('Shop')
+    await ws.addRepository(project.id, web)
+    const input = { projectId: project.id, title: 'Same title', mode: 'worktree' as const, branchPrefix: 'feature/' }
+    const [a, b] = await Promise.all([
+      ws.createTask({ ...input, requestId: 'one' }),
+      ws.createTask({ ...input, requestId: 'two' }),
+    ])
+    expect(a.id).not.toBe(b.id)
+    expect(ws.listBindings(a.id)[0]!.cwd).not.toBe(ws.listBindings(b.id)[0]!.cwd)
+    expect(ws.listBindings(a.id)[0]!.taskBranch).toBe('feature/same-title')
+    expect(ws.listBindings(b.id)[0]!.taskBranch).toBe('feature/same-title-2')
+    expect((await ws.createTask({ ...input, requestId: 'one' })).id).toBe(a.id)
+    await expect(ws.createTask({ ...input, title: 'Other', requestId: 'one' })).rejects.toThrow(/different inputs/)
+  })
+  it('does not adopt an unrelated branch that appeared after allocation', async () => {
+    const project = ws.createProject('Shop')
+    await ws.addRepository(project.id, web)
+    const task = await ws.createTask({ projectId: project.id, title: 'Conflict', mode: 'worktree' })
+    sh(web, 'branch', 'ramu/conflict')
+    expect((await ws.setupTask(task.id))[0]).toMatchObject({
+      setupState: 'failed',
+      setupError: expect.stringContaining('ownership'),
+    })
+  })
+})
+
+describe('read-only Explorer scope', () => {
+  it('browses a project without creating a thread or changing its checkout', async () => {
+    const project = ws.createProject('Browse')
+    const repo = await ws.addRepository(project.id, web)
+    const before = fingerprint(web)
+    const bindings = ws.explorerBindings(`project:${project.id}`)
+    const { browseDirectory } = await import('../src/workspace/files')
+    const result = await browseDirectory(bindings[0]!.cwd, '')
+    expect(result.entries.some((entry) => entry.name === 'untracked.txt')).toBe(true)
+    expect(ws.listTasks(project.id)).toEqual([])
+    expect(ws.listWorkspaces()).toEqual([])
+    expect(bindings[0]!.repoId).toBe(repo.id)
+    expect(fingerprint(web)).toEqual(before)
+    await expect(browseDirectory(bindings[0]!.cwd, '../')).rejects.toThrow()
+  })
+  it('does not allocate a standalone working folder merely to browse it', async () => {
+    const task = await ws.createTask({ projectId: NO_PROJECT, title: 'Not started', mode: 'current' })
+    expect(ws.explorerBindings(task.id)).toEqual([])
+    expect(existsSync(join(tmp, 'chats', task.id))).toBe(false)
+  })
+  it('bounds directory responses and marks truncation explicitly', async () => {
+    const { browseDirectory } = await import('../src/workspace/files')
+    const root = join(tmp, 'many-files')
+    mkdirSync(root)
+    for (let index = 0; index < 2001; index++) writeFileSync(join(root, `${index}.txt`), '')
+    const result = await browseDirectory(realpathSync(root), '')
+    expect(result.entries).toHaveLength(2000)
+    expect(result.truncated).toBe(true)
+  })
+})
+
+describe('generated and explicit worktree branches', () => {
+  it('keeps generated names independent from paths and suffixes only generated collisions', async () => {
+    const project = ws.createProject('Naming')
+    await ws.addRepository(project.id, web)
+    const input = {
+      projectId: project.id,
+      title: 'Opening message',
+      mode: 'worktree' as const,
+      branchPrefix: 'ignored/',
+    }
+    const a = await ws.createTask({ ...input, branchChoice: { name: 'fix/login', source: 'generated' } })
+    const b = await ws.createTask({ ...input, branchChoice: { name: 'fix/login', source: 'generated' } })
+    expect(ws.listBindings(a.id)[0]).toMatchObject({
+      taskBranch: 'fix/login',
+      cwd: expect.stringContaining('opening-message'),
+    })
+    expect(ws.listBindings(b.id)[0]!.taskBranch).toBe('fix/login-2')
+    await expect(ws.createTask({ ...input, branchChoice: { name: 'FIX/login', source: 'manual' } })).rejects.toThrow(
+      /already taken/,
+    )
+    await expect(ws.createTask({ ...input, branchChoice: { name: '../unsafe', source: 'manual' } })).rejects.toThrow(
+      /Invalid/,
+    )
+    const manual = await ws.createTask({ ...input, branchChoice: { name: 'team/exact', source: 'manual' } })
+    expect(ws.listBindings(manual.id)[0]!.taskBranch).toBe('team/exact')
+    expect((await ws.setupTask(manual.id))[0]!.setupState).toBe('ready')
+  })
+  it('coalesces inference across retries, keeps other allocations moving and persists fallback reporting', async () => {
+    const project = ws.createProject('Naming')
+    await ws.addRepository(project.id, web)
+    let finish!: (value: { name: string; source: 'fallback' }) => void
+    let calls = 0
+    const prepare = () => {
+      calls++
+      return new Promise<{ name: string; source: 'fallback' }>((resolve) => {
+        finish = resolve
+      })
+    }
+    const input = { projectId: project.id, title: 'Generated', mode: 'worktree' as const, requestId: 'naming-retry' }
+    const pending = ws.createTask(input, undefined, prepare)
+    const duplicate = ws.createTask(input, undefined, prepare)
+    expect((await ws.createTask({ projectId: project.id, title: 'Current', mode: 'current' })).mode).toBe('current')
+    await expect(ws.createTask({ ...input, title: 'Other' }, undefined, prepare)).rejects.toThrow(/different inputs/)
+    finish({ name: 'ramu/generated', source: 'fallback' })
+    const task = await pending
+    expect((await duplicate).id).toBe(task.id)
+    expect((await ws.createTask(input, undefined, prepare)).id).toBe(task.id)
+    expect(calls).toBe(1)
+    expect(ws.getTask(task.id).branchNamingFallback).toBeTruthy()
+    expect(ws.listTasks(project.id).find((t) => t.id === task.id)?.branchNamingFallback).toBeTruthy()
   })
 })

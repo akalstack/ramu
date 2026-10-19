@@ -1,3 +1,4 @@
+import { useHost } from '../workspace/HostProvider'
 import { useComputers } from '../workspace/computers'
 import { HostsInbox } from './HostsInbox'
 import { useEffect, useState, type ReactNode } from 'react'
@@ -43,6 +44,7 @@ function SeeAll({ count, shown, onClick }: { count: number; shown: number; onCli
 
 /** Summaries as sidebar-style rows: headline, then age, or an unread dot. */
 function LearnedList({ summaries }: { summaries: LibrarySummary[] }) {
+  const host = useHost()
   return (
     <div className="-mx-2.5 flex flex-col gap-px">
       {summaries.map((summary) => (
@@ -50,9 +52,9 @@ function LearnedList({ summaries }: { summaries: LibrarySummary[] }) {
           key={summary.id}
           role="button"
           tabIndex={0}
-          onClick={() => openSummary(summary.id)}
+          onClick={() => openSummary(summary.id, host.invoke, host.id)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') openSummary(summary.id)
+            if (e.key === 'Enter') openSummary(summary.id, host.invoke, host.id)
           }}
           className="flex min-h-9 cursor-default items-center gap-2 rounded-(--radius-s) px-2.5 text-body leading-5 text-soft [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] hover:bg-accent hover:text-foreground"
         >
@@ -112,7 +114,7 @@ function CurrentHostInbox() {
     saveInboxTab(next)
   }
   const waiting = rowsOf(groups, 'Waiting for your input')
-  const running = rowsOf(groups, 'Running', 'Waiting for allowance')
+  const running = rowsOf(groups, 'Running', 'Limit reached')
   const ws = useWorkspace()
   const finishedAt = (taskId: string) => ws.tasks.find((task) => task.id === taskId)?.lastActiveAt ?? 0
   const completed = recentlyCompleted(groups, ws.tasks)

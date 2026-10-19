@@ -1,3 +1,4 @@
+import { DEFAULT_WORKSPACE_PREFERENCES, type WorkspaceDefaults } from '../workspaceDefaults'
 import type { ProviderConfiguration } from '../providers/providers'
 import type { AgentProvider, AgentSettings, ReasoningEffort } from './agent'
 import { DEFAULT_ADVISOR_PREFERENCES, DEFAULT_FALLBACK_PREFERENCES, DEFAULT_SUBAGENT_PREFERENCES } from './fallback'
@@ -29,7 +30,7 @@ export interface ModelPreferences {
   defaultStepId: string
 }
 
-export interface AppPreferences {
+export interface AppPreferences extends WorkspaceDefaults {
   language: 'system' | 'en' | 'id'
   recapsEnabled: boolean
   recapTime: string
@@ -105,6 +106,7 @@ export interface AppPreferences {
 export const DEFAULT_SIDEBAR_WIDTH = 268
 export const SIDEBAR_WIDTH_RANGE = [200, 520] as const
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  ...DEFAULT_WORKSPACE_PREFERENCES,
   language: 'system',
   recapsEnabled: true,
   recapTime: '08:00',

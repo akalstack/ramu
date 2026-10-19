@@ -24,6 +24,8 @@ function subscribeComputers(listener: () => void) {
     ramu.on('computers:changed', publishComputers)
     void invoke('computers.list').then(
       (value) => {
+        // The preload learns its host from a command-line argument; flag a mismatch, since keys and storage depend on it.
+        if (value.current !== ramu.hostId) console.warn(`Window host ${ramu.hostId} differs from ${value.current}`)
         if (request === revision) publishComputers(value)
       },
       () => {},

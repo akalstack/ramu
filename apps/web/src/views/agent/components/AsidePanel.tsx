@@ -4,7 +4,7 @@ import { ArrowLeft, Plus, MessageCircle, Quote, Send, X, Trash2 } from 'lucide-r
 import { useEffect, useRef, useState } from 'react'
 import type { Aside } from '@ramu/shared/types'
 import { Textarea } from '@/components/ui/textarea'
-import { invoke } from '../../../ipc'
+import { useHost } from '../../../workspace/HostProvider'
 import { errorText } from '../../../workspace/TaskPane'
 import { type AsideTarget } from '../types'
 import { WorkingText } from './WorkingText'
@@ -42,6 +42,7 @@ export function AsidePanel({
   onQuote: (text: string) => void
 }) {
   useLanguage()
+  const { invoke } = useHost()
   const aside = open === '*' ? undefined : open.id ? asides.find((entry) => entry.id === open.id) : undefined
   const quote = aside?.quote ?? (open === '*' ? '' : open.quote)
   const from = aside?.quoteFrom ?? (open === '*' ? 'assistant' : open.from)

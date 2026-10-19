@@ -15,7 +15,7 @@ import type { AgentService } from '../agent'
 /** What MessageDispatcher needs from the rest of the service. */
 export interface MessageDispatcherHost
   extends
-    Pick<GoalManager, 'controlGoal' | 'getGoal' | 'setGoal'>,
+    Pick<GoalManager, 'controlGoal' | 'getGoal' | 'setGoal' | 'setVerify'>,
     Pick<ProviderWaits, 'providerWait' | 'scheduleProvider'>,
     Pick<SessionRecorder, 'activeTools' | 'record'>,
     Pick<SessionRegistry, 'activeWriter' | 'live' | 'runners' | 'transitioning'>,
@@ -381,9 +381,14 @@ export class MessageDispatcher {
       this.host.getGoal(id)
       return true
     }
-    if (arg === 'pause' || arg === 'resume' || arg === 'clear') this.host.controlGoal(id, arg)
+    // `/goal verify: <command>` sets the command Ramu runs when the agent claims completion; `/goal verify: off` removes it.
+    const verifyOnly = /^verify:\s*([\s\S]+)$/i.exec(arg)
+    if (verifyOnly) this.host.setVerify(id, /^off$/i.test(verifyOnly[1]!.trim()) ? null : verifyOnly[1]!)
+    else if (arg === 'pause' || arg === 'resume' || arg === 'clear') this.host.controlGoal(id, arg)
     else {
-      this.host.setGoal(id, arg, true)
+      // A last line of `verify: <command>` in a new goal sets its command.
+      const line = /\n[ \t]*verify:[ \t]*(\S.*)$/i.exec(arg)
+      this.host.setGoal(id, line ? arg.slice(0, line.index).trim() : arg, true, line?.[1])
       this.updateQueue(
         id,
         [

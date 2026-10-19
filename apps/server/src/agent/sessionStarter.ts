@@ -46,7 +46,16 @@ export interface SessionStarterHost
       'activeWriter' | 'draining' | 'finalizing' | 'live' | 'revisions' | 'runners' | 'transitioning'
     >,
     Pick<UserRequests, 'hasBlockingQuestions'>,
-    Pick<FallbackRouter, 'attempted' | 'attemptedAccounts' | 'noteRoute' | 'route' | 'switchBeforeSend' | 'withStep'>,
+    Pick<
+      FallbackRouter,
+      | 'attempted'
+      | 'attemptedAccounts'
+      | 'lowConfidenceRetried'
+      | 'noteRoute'
+      | 'route'
+      | 'switchBeforeSend'
+      | 'withStep'
+    >,
     Pick<SessionStore, 'createSession' | 'get' | 'hasRunningTasks' | 'isRecoveryPending' | 'queuePaused' | 'queued'> {
   reviewHooks(): AgentService['reviewHooks']
   shutdown(): AgentService['shutdown']
@@ -137,6 +146,7 @@ export class SessionStarter {
     const session = this.host.createSession(taskId, scope, settings, 'starting')
     this.host.attempted.set(session.id, new Set([stepKey(settings)]))
     this.host.attemptedAccounts.delete(session.id)
+    this.host.lowConfidenceRetried.delete(session.id)
     this.host.launch(session.id, prompt, null, true, attachments)
     return this.host.get(session.id)
   }
@@ -214,6 +224,7 @@ export class SessionStarter {
     const actualText = instructions ? `${text}\n\n<ramu-goals>\n${instructions}\n</ramu-goals>` : text
     this.host.attempted.set(id, new Set([stepKey(s.settings)]))
     this.host.attemptedAccounts.delete(id)
+    this.host.lowConfidenceRetried.delete(id)
     const codex = this.host.runners.get(id)
     if (codex) {
       if (recordUser) this.host.record(id, { kind: 'user', text, ...(attachments.length ? { attachments } : {}) })

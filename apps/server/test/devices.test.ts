@@ -108,3 +108,33 @@ it('lists reachable addresses from any interface, VPN or not', () => {
     { url: 'http://100.64.0.7:7788', interface: 'listen address' },
   ])
 })
+
+it('expires inactive tokens and renews active devices without changing their credential', () => {
+  const { path } = store()
+  const devices = new DeviceStore(path, 600_000)
+  const paired = devices.redeem(devices.createCode(1000).code, 'phone', 1000)!
+  const header = `Bearer ${paired.token}`
+  expect(paired.device.expiresAt).toBe(601_000)
+  expect(devices.authenticate(header, 301_000)?.expiresAt).toBe(901_000)
+  expect(devices.authenticate(header, 901_000)).toBeNull()
+})
+
+it('supports never-expiring devices only through an explicit lifetime choice', () => {
+  const { path } = store()
+  const devices = new DeviceStore(path, null)
+  const paired = devices.redeem(devices.createCode(1000).code, 'phone', 1000)!
+  expect(paired.device.expiresAt).toBeNull()
+  expect(devices.authenticate(`Bearer ${paired.token}`, 1e12)).not.toBeNull()
+})
+
+it('bounds old device records by their last recorded use', () => {
+  const { path, devices } = store()
+  const paired = devices.redeem(devices.createCode(1000).code, 'old', 1000)!
+  const file = JSON.parse(readFileSync(path, 'utf8'))
+  delete file.devices[0].expiresAt
+  delete file.devices[0].role
+  writeFileSync(path, JSON.stringify(file))
+  const migrated = new DeviceStore(path, 600_000)
+  expect(migrated.list()[0]?.expiresAt).toBe(601_000)
+  expect(migrated.authenticate(`Bearer ${paired.token}`, 601_000)).toBeNull()
+})

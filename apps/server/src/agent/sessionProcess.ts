@@ -1,6 +1,13 @@
 import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from './agentRunner'
-import type { AppPreferences, AgentProvider, Attachment } from '@ramu/shared/types'
+import type {
+  AppPreferences,
+  AgentEvent,
+  AgentProvider,
+  Attachment,
+  HandoffCause,
+  HandoffInfo,
+} from '@ramu/shared/types'
 import { goalInstructions } from './goals'
 import type { QueryFn, PendingRequest } from './types'
 import { InputQueue } from './inputQueue'
@@ -9,8 +16,9 @@ import { createCanUseTool } from './permissions'
 import { claudeLaunchOptions } from './claudeOptions'
 import { sessionGuidance } from './guidance'
 import { usesRamuQuestions } from './nativeFeatures'
-import { conversationHandoff } from './handoff'
-import { isUsageLimit } from './usageLimit'
+import { buildHandoff, handoffBudgetChars, type BuiltHandoff } from './handoff'
+import { ProviderSessions, pendingHandoff, planHandoff } from './providerSessions'
+import { classifyLimit } from '../providers/limitClassifier'
 import type { AdvisorService } from './advisorService'
 import type { ContextUsageTracker } from './contextUsage'
 import type { MessageDispatcher } from './messageDispatcher'
@@ -31,7 +39,7 @@ import type { Db } from '../db'
 export interface SessionProcessHost
   extends
     Pick<AdvisorService, 'advisorStep' | 'claudeAdvisorModel'>,
-    Pick<ContextUsageTracker, 'refreshContext' | 'setContext' | 'usageReader'>,
+    Pick<ContextUsageTracker, 'context' | 'refreshContext' | 'setContext' | 'usageReader'>,
     Pick<MessageDispatcher, 'pauseQueue' | 'steering'>,
     Pick<GoalManager, 'controlGoal' | 'getGoal' | 'goalPreferences' | 'saveGoal' | 'setGoal'>,
     Pick<ProviderWaits, 'clearProviderWait' | 'waitForGoalProvider'>,
@@ -42,8 +50,8 @@ export interface SessionProcessHost
       'draining' | 'finalizing' | 'live' | 'revisions' | 'runners' | 'trackDrain' | 'transitioning'
     >,
     Pick<UserRequests, 'cancelWaiters' | 'hasBlockingQuestions' | 'questionStatus'>,
-    Pick<FallbackRouter, 'fallback' | 'subagentSettings'>,
-    Pick<SessionStore, 'events' | 'get' | 'hasRunningTasks' | 'isRecoveryPending' | 'task'>,
+    Pick<FallbackRouter, 'fallback' | 'retryQuietly' | 'subagentSettings'>,
+    Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'isRecoveryPending' | 'queued' | 'task'>,
     Pick<SubagentRunner, 'children' | 'nativeSubagentsOff' | 'subagentHooks'>,
     Pick<AgentTasks, 'settleTasks' | 'updateTask'> {
   learningInstructions(): AgentService['learningInstructions']
@@ -70,6 +78,12 @@ export class SessionProcess {
   private readonly nativeOffAtLaunch = new Map<string, boolean>()
 
   private readonly codexHookAtLaunch = new Map<string, boolean>()
+
+  private get sessions(): ProviderSessions {
+    return (this.savedSessions ??= new ProviderSessions(this.db))
+  }
+
+  private savedSessions: ProviderSessions | undefined
 
   /**
    * Codex's sub-agent tools (and ACP runtimes' sub-agent settings) are fixed when the process starts. When the setup changes between messages (a new routing
@@ -106,12 +120,127 @@ export class SessionProcess {
     }
   }
 
+  /** Saves the thread's current native session with how much of the thread it has seen, before the thread leaves it. */
+  rememberSession(id: string): void {
+    const s = this.host.get(id)
+    if (s.providerSessionId)
+      this.sessions.save(
+        id,
+        s.provider,
+        s.settings.accountId,
+        s.providerSessionId,
+        this.host.events(id).length,
+        this.host.context(id)?.max ?? null,
+      )
+  }
+
+  /**
+   * How the thread would reach another login: which native session to resume (a returning provider) and whether the handoff
+   * fits it. Nothing changes; the caller decides, then records `info` on the `settings` event.
+   */
+  planSwitch(
+    id: string,
+    target: { provider: AgentProvider; accountId?: string },
+    cause: HandoffCause,
+  ): { resume: string | null; info: HandoffInfo; fits: boolean } {
+    const s = this.host.get(id)
+    const plan = planHandoff(this.host.events(id), {
+      cause,
+      from: s.provider,
+      to: target.provider,
+      saved: this.sessions.get(id, target.provider, target.accountId),
+      checkpoint: this.host.sessionCheckpoint()?.(id) ?? null,
+      goal: !this.host.toolConnection() && !s.parentId ? (this.host.getGoal(id)?.objective ?? null) : null,
+      queued: this.host.queued(id),
+    })
+    return { resume: plan.resume, info: pendingHandoff(plan, cause, s.provider), fits: !plan.built.overBudget }
+  }
+
+  /**
+   * The handoff a launch needs, or null when the provider already has the conversation. A returning provider resumes its own
+   * session and gets only what it missed (a delta); one that does not have a session gets the whole conversation. Records what
+   * was carried on the `settings` event that asked for it, or on a new one when nothing had (a session lost without a record).
+   * 'too-large' means the conversation does not fit the target even after compaction, so nothing is sent.
+   */
+  private carry(
+    id: string,
+    resume: string | null,
+    hasGuidance: boolean,
+  ): { resume: string | null; built: BuiltHandoff } | 'too-large' | null {
+    const s = this.host.get(id)
+    const events = this.host.events(id)
+    const at = events.findLastIndex((e) => e.kind === 'settings' && e.handoff)
+    const marked = at >= 0 ? (events[at] as Extract<AgentEvent, { kind: 'settings' }>) : null
+    const info = marked?.handoffInfo
+    const undelivered = !!info && info.toSeq === undefined
+    const delta = !!resume && undelivered && info.mode === 'delta'
+    // A launch without a native session needs the conversation however the session was lost, so a path that forgot to say so
+    // cannot leave the provider without it.
+    const hasHistory = events.some((e) => !e.agentId && (e.kind === 'user' || e.kind === 'text'))
+    if (!delta && !(!resume && (marked || hasHistory))) return null
+    const cause = info?.cause ?? (marked ? 'switch' : 'resume-unavailable')
+    const saved = this.sessions.get(id, s.provider, s.settings.accountId)
+    const sameProvider = cause === 'rewind' || cause === 'resume-unavailable'
+    const contextTokens = (delta ? saved?.contextMax : null) ?? (sameProvider ? this.host.context(id)?.max : null)
+    const common = {
+      cause,
+      ...(info?.from ? { from: info.from } : {}),
+      to: s.provider,
+      // Providers that receive session guidance already get the goal there.
+      goal: !hasGuidance && !s.parentId ? (this.host.getGoal(id)?.objective ?? null) : null,
+      queued: this.host.queued(id),
+      budgetChars: handoffBudgetChars(contextTokens),
+    }
+    const checkpoint = this.host.sessionCheckpoint()?.(id) ?? null
+    let native = resume
+    let built = buildHandoff(
+      events,
+      delta ? { ...common, mode: 'delta', fromSeq: info.fromSeq } : { ...common, mode: 'full', checkpoint },
+    )
+    if (delta && built.overBudget) {
+      native = null
+      built = buildHandoff(events, { ...common, mode: 'full', checkpoint })
+    }
+    if (built.overBudget) return 'too-large'
+    if (marked && undelivered) {
+      const patched = { ...marked, handoffInfo: built.info }
+      this.db
+        .prepare('UPDATE agent_events SET event = ? WHERE session_id = ? AND seq = ?')
+        .run(JSON.stringify(patched), id, at + 1)
+      this.host.emit(id, patched, at + 1)
+    } else
+      this.host.record(id, {
+        kind: 'settings',
+        settings: s.settings,
+        reason: 'Conversation carried to a new provider session',
+        handoff: true,
+        previous: s.settings,
+        handoffInfo: built.info,
+      })
+    return { resume: native, built }
+  }
+
   launch(id: string, prompt: string, resume: string | null, recordUser = true, attachments: Attachment[] = []): void {
     const s = this.host.get(id)
     const explicitGoal = !s.parentId && /^\/goal\s+(\S[\s\S]*)$/.exec(prompt.split('\n\n<ramu-context>')[0]!.trim())
     if (explicitGoal) this.host.setGoal(id, explicitGoal[1]!, true)
-    const handoff = !resume && this.host.events(id).some((e) => e.kind === 'settings' && e.handoff)
     const connection = this.host.toolConnection()?.(s)
+    // The conversation reaches a provider session that has not seen it: a switch, a lost session, a rewind. Built first so
+    // the checkpoint goes out once, in the handoff, and not again in the session guidance.
+    const carried = this.carry(id, resume, !!connection)
+    if (carried === 'too-large') {
+      if (recordUser)
+        this.host.record(id, { kind: 'user', text: prompt, ...(attachments.length ? { attachments } : {}) })
+      this.fail(
+        id,
+        new Error(
+          `The conversation is too large to carry to ${providerName(s.provider)} in one handoff. Start a new thread from a summary, or switch to a model with a larger context window.`,
+        ),
+      )
+      return
+    }
+    // A delta that did not fit has no native session to resume: null means a fresh one, not "keep the old id".
+    if (carried) resume = carried.resume
     if (connection) {
       connection.instructions = sessionGuidance({
         questions: !usesRamuQuestions(this.host.preferences(), s)
@@ -127,7 +256,7 @@ export class SessionProcess {
           s.provider === 'antigravity' && this.host.nativeSubagentsOff(s),
         memory: this.host.memoryInstructions()?.(s),
         toolSearch: this.host.preferences()?.intelligence?.toolSearch !== false,
-        learning: this.host.learningInstructions()?.(s),
+        learning: this.host.learningInstructions()?.(s, { checkpoint: !carried?.built.includesCheckpoint }),
       })
     }
     if (connection && this.host.nativeSubagentsOff(s)) connection.nativeSubagents = false
@@ -136,9 +265,8 @@ export class SessionProcess {
     if ((isAcpProvider(s.provider) || s.provider === 'claude-code') && connection && !s.parentId)
       this.nativeOffAtLaunch.set(id, connection.nativeSubagents === false)
     const request = explicitGoal ? prompt.replace(/^\s*\/goal\s+/, 'Work toward this Ramu goal: ') : prompt
-    const actualPrompt = handoff
-      ? `${conversationHandoff(this.host.events(id), this.host.sessionCheckpoint()?.(id))}\n\nNext request: ${request}`
-      : request
+    const actualPrompt = carried ? `${carried.built.prompt}\n\nNext request: ${request}` : request
+    const deltaResume = carried?.built.info.mode === 'delta' && !!carried.resume
     if (this.host.usesRunner(s.provider)) {
       let runner: AgentRunner
       try {
@@ -167,7 +295,7 @@ export class SessionProcess {
           } else {
             this.host.record(id, event.kind === 'init' ? { ...event, provider: s.provider } : event)
             if (event.kind === 'result') {
-              if (limit && event.isError) void this.host.fallback(id)
+              if (limit && event.isError) void this.host.fallback(id, limit === 'low' ? 'low' : 'high')
               else this.host.setState(id, event.isError ? 'failed' : 'idle')
             }
           }
@@ -200,15 +328,18 @@ export class SessionProcess {
           if (this.host.runners.get(id) !== runner) return
           this.halt(id)
           // A runtime that cannot continue its saved session still gets the whole conversation, as when switching providers.
-          if (e instanceof ResumeUnavailable && resume && !this.host.shutdown()) {
+          // A returning provider's session is the one a delta resumes, so any start failure there gets the same fallback.
+          if ((e instanceof ResumeUnavailable || deltaResume) && resume && !this.host.shutdown()) {
             await this.host.draining.get(id)
             this.db.prepare('UPDATE agent_sessions SET provider_session_id = NULL WHERE id = ?').run(id)
+            this.sessions.forget(id, s.provider, s.settings.accountId)
             this.host.record(id, {
               kind: 'settings',
               settings: s.settings,
               reason: `${providerName(s.provider)} could not resume its saved session — continuing from the conversation`,
               handoff: true,
               previous: s.settings,
+              handoffInfo: { cause: 'resume-unavailable', mode: 'full', from: s.provider, fromSeq: 1 },
             })
             this.launch(id, prompt, null, false, attachments)
             return
@@ -320,7 +451,10 @@ export class SessionProcess {
 
   fail(id: string, error: unknown): void {
     this.host.record(id, { kind: 'error', message: errorMessage(error) })
-    if (isUsageLimit(error) && this.host.waitForGoalProvider(id)) return
+    // A confident limit match holds the chat at the limit; a low-confidence one gets a single quiet retry first.
+    const limit = classifyLimit(error, { channel: 'error' })
+    if (limit && limit.confidence === 'low' && this.host.retryQuietly(id)) return
+    if (limit && this.host.waitForGoalProvider(id)) return
     const goal = this.host.getGoal(id)
     if (goal?.status === 'active')
       this.host.saveGoal(id, { ...goal, status: 'blocked', reason: errorMessage(error), updatedAt: Date.now() })

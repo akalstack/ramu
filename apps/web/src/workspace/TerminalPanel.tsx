@@ -3,8 +3,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/desktop-button'
 import { ArrowDownToLine, ArrowRightToLine, Columns2, Ellipsis, Plus, Rows2, SquareTerminal, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { invoke, ramu } from '../ipc'
-import { forgetTerminal, isOpening, queueAdopt, shellOf, adoptQueued } from './terminalRegistry'
 import { useAppSettings } from '../settings/AppSettings'
 import { Menu, useContextMenu } from '../Menu'
 import { terminalGroups } from '@ramu/shared/workspace/terminalGroups'
@@ -12,7 +10,8 @@ import type { TerminalGroup } from '@ramu/shared/types'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { useTabScroll } from '../lib/useTabScroll'
 import { TerminalView } from '../views/TerminalView'
-import { useWorkspace } from './workspace'
+import { useHostRuntime, useWorkspace } from './workspace'
+import { useHost } from './HostProvider'
 import { beginDrag, setActiveDrag, TERMINAL_DRAG_TYPE } from '../lib/dragState'
 
 /** Each tab owns a group of panes. All shells stay mounted while other groups are hidden. */
@@ -29,6 +28,9 @@ export function TerminalPanel({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const runtime = useHostRuntime()
+  const { invoke } = useHost()
+  const { forgetTerminal, isOpening, queueAdopt, shellOf, adoptQueued } = runtime.terminals
   const { preferences } = useAppSettings()
   const panel = useRef<HTMLElement>(null)
   const state = ws.taskUi[taskId]
@@ -79,7 +81,7 @@ export function TerminalPanel({
         ws.openView(taskId, { kind: 'terminal', ...(info.repoId ? { repoId: info.repoId } : {}) })
       }
     }
-    const off = ramu.on('term:changed', (event) => {
+    const off = runtime.on('term:changed', (event) => {
       if (event.taskId !== taskId) return
       clearTimeout(timer)
       timer = setTimeout(reconcile, 350)
@@ -89,7 +91,7 @@ export function TerminalPanel({
       clearTimeout(timer)
       off()
     }
-  }, [taskId])
+  }, [taskId, runtime])
   const ready = (ws.bindings[taskId] ?? []).filter((b) => b.setupState === 'ready')
   const repoLabel = (repoId?: string) => (repoId ? (ws.binding(taskId, repoId)?.repoName ?? 'Terminal') : 'Workspace')
   const label = (view?: { repoId?: string; title?: string }) => view?.title ?? repoLabel(view?.repoId)

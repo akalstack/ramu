@@ -2,57 +2,17 @@ import { Alert, Platform, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import Constants from 'expo-constants'
 import { Check, Plus, RefreshCw } from 'lucide-react-native'
-import type { UsageReading } from '@ramu/shared/types'
 import { font, space, useTheme, type Appearance } from '../../theme'
 import { useStore, type Language } from '../../runtime/store'
-import { providerNames } from '../../runtime/types'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
-import { ago, until } from '../../i18n'
+import { PUSH_CATEGORIES, PUSH_MUTED_KEY, isCategoryOn, type PushCategory } from '../../runtime/pushCategories'
+import { useT } from '../../i18n'
 import { Header, Screen, PageScrollView as ScrollView } from '../../components/Screen'
-import { ProviderIcon } from '../../components/Logos'
+import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
 import { Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
 import { ComputerScope } from '../../components/SettingsChrome'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
-
-const windowName: Record<UsageReading['window'], string> = {
-  five_hour: '5-hour',
-  weekly: 'Weekly',
-  monthly: 'Monthly',
-  quota: 'Quota',
-}
-
-function UsageBar({ r }: { r: UsageReading }) {
-  const { c } = useTheme()
-  const color = r.status === 'limited' ? c.bad : r.status === 'warning' ? c.warn : c.primary
-  return (
-    <View style={{ paddingHorizontal: space.m, paddingVertical: space.m, gap: 6 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <ProviderIcon provider={r.provider} size={15} />
-        <T size={font.body - 1} weight="500">
-          {providerNames[r.provider]}
-        </T>
-        <T size={font.caption} tone="muted" style={{ flex: 1 }}>
-          {windowName[r.window]}
-          {r.plan ? ` · ${r.plan}` : ''}
-        </T>
-        <T
-          size={font.control}
-          weight="600"
-          tone={r.status === 'limited' ? 'bad' : r.status === 'warning' ? 'warn' : 'soft'}
-        >
-          {r.usedPercent}%
-        </T>
-      </View>
-      <View style={{ height: 6, borderRadius: 3, backgroundColor: c.fill, overflow: 'hidden' }}>
-        <View style={{ width: `${r.usedPercent}%`, height: '100%', borderRadius: 3, backgroundColor: color }} />
-      </View>
-      <T size={font.caption} tone="muted">
-        {r.resetsAt ? `Resets in ${until(r.resetsAt)}` : 'No reset time reported'} · updated {ago(r.updatedAt)} ago
-      </T>
-    </View>
-  )
-}
 
 function AppearancePage() {
   const { appearance, setAppearance } = useTheme()
@@ -99,8 +59,16 @@ function AppearancePage() {
 }
 
 function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings>; name?: string }) {
-  const { drafts, setDraft, enablePush, disablePush } = useStore()
+  const { drafts, setDraft, enablePush, disablePush, setPushCategory } = useStore()
+  const t = useT()
   const pushOn = drafts['push-enabled'] === 'yes'
+  const labels: Record<PushCategory, [string, string]> = {
+    input: [t.alertInput, t.alertInputHelp],
+    failed: [t.alertFailed, t.alertFailedHelp],
+    done: [t.alertDone, t.alertDoneHelp],
+    scheduled: [t.alertScheduled, t.alertScheduledHelp],
+    digest: [t.alertDigest, t.alertDigestHelp],
+  }
   return (
     <>
       <SectionLabel>This phone</SectionLabel>
@@ -125,6 +93,25 @@ function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings
           </>
         ) : null}
       </Card>
+      {pushOn ? (
+        <>
+          <SectionLabel>{t.alertsWhen}</SectionLabel>
+          <Card style={{ marginHorizontal: space.l }}>
+            {PUSH_CATEGORIES.map((category, index) => (
+              <View key={category}>
+                {index ? <Divider inset={space.l} /> : null}
+                <ToggleRow
+                  title={labels[category][0]}
+                  help={labels[category][1]}
+                  value={isCategoryOn(drafts[PUSH_MUTED_KEY], category)}
+                  onChange={(on) => setPushCategory(category, on)}
+                />
+              </View>
+            ))}
+          </Card>
+          <Hint>{t.alertsNeedHost}</Hint>
+        </>
+      ) : null}
       <HostGroups section="notifications" host={host} name={name} />
       <Hint>Alerts only reach you if “Background alerts” is on and this computer is paired.</Hint>
     </>
@@ -205,12 +192,13 @@ function Usage({ computer }: { computer: string }) {
   return (
     <>
       <SectionLabel>Plan usage</SectionLabel>
+      <PlanUsageSummary hostIds={[computer]} />
       <Card style={{ marginHorizontal: space.l }}>
         {readings.length ? (
           readings.map((r, i) => (
-            <View key={`${r.provider}-${r.window}`}>
+            <View key={`${r.provider}:${r.accountId ?? 'default'}:${r.window}:${r.scope ?? ''}`}>
               {i ? <Divider inset={space.m} /> : null}
-              <UsageBar r={r} />
+              <PlanUsageReading reading={r} />
             </View>
           ))
         ) : (

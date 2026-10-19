@@ -2,6 +2,8 @@
 // sent in order once it reconnects. They always go out as queued messages, so a late arrival never steers a running turn.
 import { useSyncExternalStore } from 'react'
 import type { Attachment, FileContext } from '@ramu/shared/types'
+import { storeForHost } from '../hostStorage'
+import { ownHostId } from '../hosts'
 
 const KEY = 'ramu.outbox'
 /** Per chat. Beyond this the composer refuses, rather than piling up prompts that would all run later. */
@@ -152,24 +154,27 @@ export function createOutbox({
 
 export type Outbox = ReturnType<typeof createOutbox>
 
-let shared: Outbox | null = null
+const shared = new Map<string, Outbox>()
 /** One outbox per window. It starts sending whenever the window's computer comes back. */
-export function outbox(): Outbox {
-  if (shared) return shared
+export function outbox(host = ownHostId()): Outbox {
+  const existing = shared.get(host)
+  if (existing) return existing
   // Read from window here, not at import, so tests of createOutbox need no preload bridge.
   const { ramu } = window
   let online = true
-  shared = createOutbox({
+  const instance = createOutbox({
     store: (() => {
       try {
-        return globalThis.localStorage ?? null
+        return storeForHost(host)
       } catch {
         return null
       }
     })(),
     connected: () => online,
     submit: (item) =>
-      ramu.invoke(
+      (host === ownHostId()
+        ? ramu.invoke
+        : (((method, ...args) => ramu.invokeOn(host, method, ...args)) as typeof ramu.invoke))(
         'agent.submit',
         item.sessionId,
         item.text,
@@ -178,20 +183,22 @@ export function outbox(): Outbox {
         item.context,
       ),
   })
-  const instance = shared
+  shared.set(host, instance)
   const set = (value: boolean) => {
     const back = value && !online
     online = value
     if (back) void instance.flush()
   }
-  ramu.on('background:connection', ({ connected }) => set(connected))
+  ramu.on('background:connection', ({ connected }, from) => {
+    if ((from ?? ownHostId()) === host) set(connected)
+  })
   ramu.on('computers:changed', (state) => {
-    const current = state.computers.find((computer) => computer.id === state.current)
+    const current = state.computers.find((computer) => computer.id === host)
     if (current) set(current.status === 'connected')
   })
   void ramu.invoke('computers.list').then(
     (state) => {
-      const current = state.computers.find((computer) => computer.id === state.current)
+      const current = state.computers.find((computer) => computer.id === host)
       set(current ? current.status === 'connected' : true)
       void instance.flush()
     },
@@ -200,8 +207,8 @@ export function outbox(): Outbox {
   return instance
 }
 
-export function useOutbox(sessionId: string): OutboxItem[] {
-  const box = outbox()
+export function useOutbox(sessionId: string, host = ownHostId()): OutboxItem[] {
+  const box = outbox(host)
   const all = useSyncExternalStore(box.subscribe, box.snapshot)
   return all.filter((item) => item.sessionId === sessionId)
 }

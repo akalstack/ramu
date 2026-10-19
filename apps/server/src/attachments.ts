@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages'
 import type { Attachment } from '@ramu/shared/types'
@@ -75,9 +75,39 @@ export class AttachmentStore {
 
   get(id: string): Attachment {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid attachment.')
-    const value = JSON.parse(readFileSync(join(this.root, id, 'metadata.json'), 'utf8')) as Attachment
-    // Derive the location from the store rather than a caller-supplied path.
-    return { ...value, path: join(this.root, id, `content${extname(basename(value.name))}`) }
+    try {
+      const value = JSON.parse(readFileSync(join(this.root, id, 'metadata.json'), 'utf8')) as Attachment
+      if (
+        value.id !== id ||
+        typeof value.name !== 'string' ||
+        !value.name ||
+        typeof value.mimeType !== 'string' ||
+        !Number.isSafeInteger(value.size) ||
+        value.size <= 0 ||
+        value.size > MAX_ATTACHMENT_BYTES
+      )
+        throw new Error('Invalid attachment metadata.')
+      // Derive the location from the store rather than a caller-supplied path.
+      const path = join(this.root, id, `content${extname(basename(value.name))}`)
+      const info = statSync(path)
+      if (!info.isFile() || info.size !== value.size) throw new Error('Attachment bytes changed.')
+      return { ...value, path }
+    } catch (error) {
+      throw new Error('This attachment is unavailable or changed. Attach it again or remove it.', { cause: error })
+    }
+  }
+
+  /** Validate references without returning file bytes or trusting a device's stored path. */
+  status(ids: string[]): { id: string; available: boolean }[] {
+    if (ids.length > MAX_ATTACHMENTS) throw new Error('Attach up to 10 files per message.')
+    return [...new Set(ids)].map((id) => {
+      try {
+        this.get(id)
+        return { id, available: true }
+      } catch {
+        return { id, available: false }
+      }
+    })
   }
 
   resolve(ids: string[] = []): Attachment[] {

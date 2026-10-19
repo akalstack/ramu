@@ -11,6 +11,7 @@ import type { SessionRecorder } from './sessionRecorder'
 import type { SessionRegistry } from './sessionRegistry'
 import type { SessionStore } from './sessionStore'
 import type { SubagentRunner } from './subagentRunner'
+import type { ProviderWaits } from './providerWait'
 import type { Db } from '../db'
 
 /** What AgentTasks needs from the rest of the service. */
@@ -23,6 +24,7 @@ export interface AgentTasksHost
     Pick<SessionRecorder, 'finalize' | 'record' | 'syncTaskStatus'>,
     Pick<SessionRegistry, 'live' | 'runners'>,
     Pick<SessionStore, 'emit' | 'get' | 'hasRunningTasks' | 'task'>,
+    Pick<ProviderWaits, 'providerWait'>,
     Pick<SubagentRunner, 'children' | 'continueNative'> {}
 
 /** The sub-agents and background commands inside a chat: recording their state and stopping or messaging them. */
@@ -38,7 +40,22 @@ export class AgentTasks {
     const defined = Object.fromEntries(
       Object.entries(patch).filter(([key, value]) => value !== undefined && !(key === 'name' && value === '')),
     ) as Partial<AgentTask>
+    if (defined.resumedAt && current?.status !== 'running' && defined.resumedAt >= (current?.endedAt ?? 0))
+      defined.resumedAt = Math.max(defined.resumedAt, (current?.endedAt ?? 0) + 1)
+    if (
+      current &&
+      current.status !== 'running' &&
+      defined.status === 'running' &&
+      !(defined.resumedAt && defined.resumedAt > (current.endedAt ?? current.resumedAt ?? 0))
+    )
+      return
     const next: AgentTask = { name: 'Agent', status: 'running', ...current, ...defined, agentId }
+    if (defined.status === 'running' && defined.resumedAt) {
+      delete next.endedAt
+      delete next.durationMs
+      next.startedAt = defined.resumedAt
+      next.recovered = false
+    }
     this.host.record(id, { ...next, kind: 'agent', ...(current?.at ? { at: current.at } : {}) })
     // The sidebar shows a chat as working while its agents run, and settles when they finish.
     if (this.host.syncTaskStatus(id)) this.host.emit(id, { kind: 'state', state: this.host.get(id).state })
@@ -71,8 +88,13 @@ export class AgentTasks {
     for (const row of rows) {
       const agentId = (JSON.parse(row.event) as AgentTask).agentId
       this.host.abortAdvice(agentId)
-      // A sub-agent Ramu runs is its own process: it outlives a provider switch of its chat.
-      if (this.host.children.has(agentId) && (this.host.live.has(agentId) || this.host.runners.has(agentId))) continue
+      // A sub-agent Ramu runs is its own process: it outlives a provider switch of its chat. One held at a usage limit has no
+      // process but is not over: it continues after the reset, so its card must not be settled as stopped with its chat's.
+      if (
+        this.host.children.has(agentId) &&
+        (this.host.live.has(agentId) || this.host.runners.has(agentId) || this.host.providerWait(agentId))
+      )
+        continue
       this.updateTask(id, agentId, { status: 'stopped', endedAt: Date.now() })
     }
     this.host.agentCalls.delete(id)
@@ -81,6 +103,7 @@ export class AgentTasks {
   async stopTask(id: string, agentId: string): Promise<void> {
     const task = this.host.task(id, agentId)
     if (!task || task.status !== 'running') throw new Error('That agent is not running.')
+    if (task.canStop !== true) throw new Error('This agent cannot be stopped directly.')
     if (task.taskType === 'advisor') {
       this.updateTask(id, agentId, { status: 'stopped', summary: '', endedAt: Date.now() })
       this.host.abortAdvice(agentId)

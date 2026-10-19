@@ -1,6 +1,12 @@
+import { INTERACTIVE_CSP } from '@ramu/shared/interactive'
+import { ContentDocuments } from './contentDocuments'
 import { HostNavigation } from './hostNavigation'
+import type { HostDestination } from '@ramu/shared/hostOverview'
 import { readHostOverview, HostOverviewQueue } from './hostOverview'
-import { isHostDestination, isHostTaskCommand } from '@ramu/shared/hostOverview'
+import { isHostDestination } from '@ramu/shared/hostOverview'
+import { isHostInvokeAllowed, routeInvoke, routeTaskCommand, activityChannel } from './hostInvoke'
+import { DeviceState } from './deviceState'
+import { partitionHostEntries } from './partitionStorage'
 import { newerVersion } from '@ramu/shared/version'
 import { DesktopUpdater } from './desktopUpdater'
 import { runtimeBuild } from '@ramu/server/build'
@@ -14,6 +20,7 @@ import { type AppPreferences } from '@ramu/shared/types'
 import { join } from 'node:path'
 import {
   app,
+  protocol,
   crashReporter,
   BrowserWindow,
   Menu,
@@ -44,11 +51,10 @@ import {
 import { SshComputers } from './sshComputers'
 import { RemoteServers } from './remoteServers'
 import { ComputerBroadcaster } from './computerBroadcast'
-import { HiddenEvents } from './hiddenEvents'
-import { WorkspaceViewCache } from './viewCache'
-import { randomUUID } from 'node:crypto'
 import { ComputerRegistry, LOCAL } from './computers'
 import { ensureRuntime, loginService, loginEnabled, loginPreferred } from './runtimeLauncher'
+
+protocol.registerSchemesAsPrivileged([{ scheme: 'ramu-content', privileges: { standard: true, secure: true } }])
 
 // Set the native runtime identity before creating menus, windows or notifications.
 app.setName('Ramu')
@@ -70,7 +76,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "media-src 'self' data:",
-  'frame-src data:',
+  'frame-src data: ramu-content:',
   "img-src 'self' data:",
   "worker-src 'self' blob:",
   "connect-src 'self'",
@@ -97,7 +103,7 @@ async function main() {
 
   const userData = app.getPath('userData')
   const daemonPath = join(import.meta.dirname, 'daemon.js')
-  // This computer's server always runs. Paired computers connect alongside it, each with its own window (see openComputer).
+  // This computer's server always runs. Paired computers connect alongside it in the same shell.
   const runtime = await ensureRuntime(userData, daemonPath)
   const diagnosticPreferences = await runtimeInvoke(runtime, 'settings.app.get')
   if (diagnosticPreferences.localCrashReports) {
@@ -139,11 +145,20 @@ async function main() {
   const secure = (ses: Session) => {
     if (!process.env.ELECTRON_RENDERER_URL) {
       ses.webRequest.onHeadersReceived((details, callback) => {
-        callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [CSP] } })
+        callback({
+          responseHeaders: {
+            ...details.responseHeaders,
+            'Content-Security-Policy': [
+              details.url.startsWith('ramu-content:') ? `${INTERACTIVE_CSP}; sandbox allow-scripts` : CSP,
+            ],
+          },
+        })
       })
     }
     ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
   }
+  const contentDocuments = new ContentDocuments()
+  session.defaultSession.protocol.handle('ramu-content', (request) => contentDocuments.response(request.url))
   secure(session.defaultSession)
 
   const languagePreferences = (await runtimeInvoke(runtime, 'settings.app.get')) as AppPreferences
@@ -241,7 +256,7 @@ async function main() {
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
-    sendTo(visible, 'menu:action', { action })
+    sendTo(LOCAL, 'menu:action', { action })
   }
   updateApplicationMenu()
   showPairLink = (link) => {
@@ -249,7 +264,7 @@ async function main() {
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
-    sendTo(visible, 'pair:link', { link })
+    sendTo(LOCAL, 'pair:link', { link })
   }
   // The window may still be loading; the renderer keeps the link until the screen asks for it.
   for (const link of queuedPairLinks.splice(0)) setTimeout(() => showPairLink?.(link), 1500)
@@ -292,8 +307,7 @@ async function main() {
   }
   const wire = (contents: WebContents) => {
     contents.on('did-start-loading', () => {
-      const id = owners.get(contents.id)
-      if (id) hostNavigation.suspend(id)
+      hostNavigation.suspend()
     })
     contents.on('context-menu', (_event, params) => {
       const items = editMenuItems(params)
@@ -302,10 +316,12 @@ async function main() {
     })
     contents.on('dom-ready', () => {
       sendChrome(contents)
-      const id = owners.get(contents.id)
-      if (id) sendTo(id, 'workspace:visibility', { visible: id === visible })
     })
     // No in-app navigation or new windows; external links open in the browser.
+    contents.on('will-frame-navigate', (event) => {
+      // Generated documents cannot navigate, including redirects, meta refresh and script-driven navigation.
+      if (!event.isMainFrame && !contentDocuments.has(event.url)) event.preventDefault()
+    })
     contents.on('will-navigate', (e, url) => {
       if (url !== contents.getURL()) e.preventDefault()
     })
@@ -314,6 +330,8 @@ async function main() {
       return { action: 'deny' }
     })
   }
+  win.webContents.on('render-process-gone', () => contentDocuments.clear())
+  win.webContents.on('did-navigate', () => contentDocuments.clear())
   wire(win.webContents)
 
   let updateStatus: AppUpdateStatus | undefined
@@ -331,16 +349,12 @@ async function main() {
       error: desktopUpdater.error ?? status.error,
     }
   }
-  // `send` reaches this computer's window. Paired computers have their own windows, created on first use.
-  const views = new Map<string, WebContentsView>()
-  const owners = new Map<number, string>([[win.webContents.id, LOCAL]])
-  let visible = LOCAL
-  const contentsOf = (id: string): WebContents | undefined =>
-    id === LOCAL ? win.webContents : views.get(id)?.webContents
+  // One shell receives tagged events from every host. Stores route and bound their own work in the renderer.
   const sendTo = (id: string, channel: string, payload: unknown) => {
-    const contents = contentsOf(id)
-    if (contents && !contents.isDestroyed()) contents.send(channel, payload)
+    if (!win.webContents.isDestroyed()) win.webContents.send(channel, payload, id)
   }
+  // Device-wide UI state is shared by every window and is never buffered: it is tiny and idempotent.
+  const deviceState = new DeviceState(join(userData, 'device-state.json'))
   const activityHosts = new Set<string>()
   let activityTimer: NodeJS.Timeout | undefined
   const observeHostActivity = (id: string, channel: string, payload: any) => {
@@ -353,117 +367,45 @@ async function main() {
     if (activityTimer) return
     activityTimer = setTimeout(() => {
       activityTimer = undefined
-      sendTo(visible, 'computers:activity', { ids: [...activityHosts] })
+      sendTo(LOCAL, 'computers:activity', { ids: [...activityHosts] })
       activityHosts.clear()
     }, 250)
   }
-  const hiddenEvents = new Map<string, HiddenEvents>()
-  const deliverTo = (id: string, channel: string, payload: unknown) => {
-    if (id === visible) sendTo(id, channel, payload)
-    else if (contentsOf(id)) {
-      let events = hiddenEvents.get(id)
-      if (!events) {
-        events = new HiddenEvents()
-        hiddenEvents.set(id, events)
-      }
-      events.add(channel, payload)
-    }
-  }
-  const send = (channel: string, payload: unknown) => deliverTo(LOCAL, channel, payload)
-  const sendAll = (channel: string, payload: unknown) => {
-    for (const id of [LOCAL, ...views.keys()]) deliverTo(id, channel, payload)
-  }
+  const send = (channel: string, payload: unknown) => sendTo(LOCAL, channel, payload)
+  const sendAll = send
   const broadcaster = new ComputerBroadcaster(
-    () => computers.list(visible),
-    (state) => sendTo(visible, 'computers:changed', state),
+    () => computers.list(LOCAL),
+    (state) => send('computers:changed', state),
   )
   const announce = () => broadcaster.changed()
-  const checkpointRequests = new Map<string, { id: string; finish: (safe: boolean) => void }>()
-  const releaseView = (id: string) => {
-    const view = views.get(id)
-    if (!view || id === visible) return
-    win.contentView.removeChildView(view)
-    owners.delete(view.webContents.id)
-    views.delete(id)
-    hostNavigation.suspend(id)
-    hiddenEvents.delete(id)
-    view.webContents.close()
-  }
-  const viewCache = new WorkspaceViewCache(
-    (id) =>
-      new Promise<boolean>((resolve) => {
-        const contents = contentsOf(id)
-        if (!contents || contents.isDestroyed() || contents.isLoading()) {
-          resolve(false)
-          return
-        }
-        const requestId = randomUUID()
-        const timer = setTimeout(() => {
-          checkpointRequests.delete(requestId)
-          resolve(false)
-        }, 15000)
-        checkpointRequests.set(requestId, {
-          id,
-          finish: (safe) => {
-            clearTimeout(timer)
-            checkpointRequests.delete(requestId)
-            resolve(safe)
-          },
-        })
-        sendTo(id, 'workspace:checkpoint', { requestId })
-      }),
-    releaseView,
-  )
-  const sweepViews = setInterval(() => {
-    void viewCache.sweep()
-  }, 60_000)
-  sweepViews.unref()
-  // Native fullscreen hides the macOS traffic lights; reclaim their space in the header, and refit the visible window.
-  const layout = () => {
-    if (win.isDestroyed()) return
-    const view = views.get(visible)
-    if (view) {
-      const { width, height } = win.getContentBounds()
-      view.setBounds({ x: 0, y: 0, width, height })
-    }
-  }
-  const chromeChanged = () => {
-    for (const id of [LOCAL, ...views.keys()]) {
-      const contents = contentsOf(id)
-      if (contents) sendChrome(contents)
-    }
-    layout()
-  }
+  const chromeChanged = () => sendChrome(win.webContents)
   win.on('enter-full-screen', chromeChanged)
   win.on('leave-full-screen', chromeChanged)
-  win.on('resize', layout)
 
   const notifiers = new Map<string, ReturnType<typeof createAgentNotifier>>()
-  const hostNavigation = new HostNavigation((id, destination) => sendTo(id, 'computers:navigate', destination))
-  const pendingOpen = new Map<string, { taskId: string; sessionId: string }>()
+  const hostNavigation = new HostNavigation((hostId, destination) =>
+    send('computers:navigate', { hostId, destination }),
+  )
   const notifierFor = (id: string) => {
     let notifier = notifiers.get(id)
     if (!notifier) {
       const local = id === LOCAL
       notifier = createAgentNotifier({
         window: win,
-        send: (channel, payload) => sendTo(id, channel, payload),
+        send: (channel, payload) =>
+          sendTo(LOCAL, channel, channel === 'notify:inapp' ? { ...(payload as object), hostId: id } : payload),
         invoke: (method, args) => runtimeInvoke(computers.endpoint(id), method, args),
         preferences: () => runtimeInvoke(runtime, 'settings.app.get'),
-        visible: () => visible === id,
+        visible: () => true,
         ...(local
           ? {}
           : { label: () => computers.list(LOCAL).computers.find((computer) => computer.id === id)?.name ?? '' }),
         reveal: (target) => {
-          const fresh = !contentsOf(id)
           try {
-            openComputer(id)
+            openComputer(id, { kind: 'task', ...target })
           } catch {
             return
           }
-          // A window that has not loaded yet asks for this when it starts (see 'computers.list').
-          if (fresh || contentsOf(id)?.isLoading()) pendingOpen.set(id, target)
-          else sendTo(id, 'notify:open', target)
         },
       })
       notifiers.set(id, notifier)
@@ -489,7 +431,7 @@ async function main() {
     pair: runtimePair,
     deliver: (id, channel, payload) => {
       observeHostActivity(id, channel, payload)
-      deliverTo(id, channel, payload)
+      sendTo(id, channel, payload)
       notifierFor(id).observe(channel, payload)
     },
     changed: announce,
@@ -500,103 +442,26 @@ async function main() {
     return readHostOverview((operation) => runtimeInvoke(endpoint, operation, [], { timeoutMs: 10000 }))
   })
   const rendererUrl = () => process.env.ELECTRON_RENDERER_URL
-  const ensureView = (id: string) => {
-    const existing = views.get(id)
-    if (existing) return existing
-    const view = new WebContentsView({
-      webPreferences: {
-        preload: join(import.meta.dirname, '../preload/index.cjs'),
-        contextIsolation: true,
-        sandbox: true,
-        nodeIntegration: false,
-        webSecurity: true,
-        backgroundThrottling: !e2eHeadless,
-        session: session.fromPartition(`persist:ramu-computer-${id}`),
-      },
-    })
-    secure(view.webContents.session)
-    wire(view.webContents)
-    owners.set(view.webContents.id, id)
-    views.set(id, view)
-    const url = rendererUrl()
-    if (url) void view.webContents.loadURL(url)
-    else void view.webContents.loadFile(join(import.meta.dirname, '../renderer/index.html'))
-    return view
-  }
-  /** How long the outgoing window stays on screen while the incoming one paints. */
-  const SWAP_SETTLE_MS = 150
-  let settleTimer: NodeJS.Timeout | undefined
-  /** Brings a computer's window to the front. Every other window keeps running behind it. */
-  const openComputer = (id: string) => {
+  /** Opens a host in the existing shell, preserving its store and tabs. */
+  const openComputer = (id: string, destination: HostDestination = { kind: 'host' }) => {
     if (!computers.exists(id)) throw new Error(t('That host is no longer saved'))
     const info = computers.list(LOCAL).computers.find((computer) => computer.id === id)!
     if (id !== LOCAL && info.status === 'rejected')
       throw new Error(t('{name} no longer accepts this host. Forget it, then pair again.', { name: info.name }))
     if (id !== LOCAL && info.status !== 'connected')
       throw new Error(t('{name} is not reachable right now.', { name: info.name }))
-    const previousId = visible
-    const previous = views.get(previousId)
-    visible = id
-    // A hidden workspace blanks its page, so the new one is told first and the old one only after it is out of sight.
-    sendTo(id, 'workspace:visibility', { visible: true })
-    if (id === LOCAL) win.webContents.focus()
-    else {
-      const view = ensureView(id)
-      // Under the old window first, so it repaints out of sight; settling raises it.
-      const below = previous && previous !== view ? win.contentView.children.indexOf(previous) : -1
-      if (below >= 0) win.contentView.addChildView(view, below)
-      else win.contentView.addChildView(view)
-      layout()
-      view.webContents.focus()
-    }
-    clearTimeout(settleTimer)
-    const settle = () => {
-      if (visible !== id || win.isDestroyed()) return
-      const shown = views.get(id)
-      if (shown) win.contentView.addChildView(shown)
-      for (const [viewId, view] of views) if (viewId !== id) win.contentView.removeChildView(view)
-      if (previousId !== id) sendTo(previousId, 'workspace:visibility', { visible: false })
-    }
-    const contents = views.get(id)?.webContents
-    if (contents?.isLoading()) {
-      contents.once('did-finish-load', () => {
-        settleTimer = setTimeout(settle, SWAP_SETTLE_MS)
-      })
-      settleTimer = setTimeout(settle, 3000)
-    } else settleTimer = setTimeout(settle, SWAP_SETTLE_MS)
-    sendTo(id, 'background:connection', {
-      connected: info.status === 'connected',
-      rejected: info.status === 'rejected',
-    })
-    hiddenEvents
-      .get(id)
-      ?.drain(
-        (channel, payload) => sendTo(id, channel, payload),
-        t('Older terminal output was truncated while this workspace was hidden.'),
-      )
-    hiddenEvents.delete(id)
-    if (updateStatus) sendTo(id, 'updates:changed', updateView(updateStatus))
-    broadcaster.flush()
-    viewCache.show(id)
+    hostNavigation.request(id, destination)
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
   }
-  /** Drops a forgotten computer's window and everything it stored. */
   const closeComputer = async (id: string) => {
-    const view = views.get(id)
-    if (view) {
-      if (visible === id) openComputer(LOCAL)
-      win.contentView.removeChildView(view)
-      owners.delete(view.webContents.id)
-      views.delete(id)
-      const ses = view.webContents.session
-      view.webContents.close()
-      await ses.clearStorageData().catch(() => {})
-    }
-    viewCache.forget(id)
-    hiddenEvents.delete(id)
     hostNavigation.forget(id)
     notifiers.delete(id)
-    pendingOpen.delete(id)
-    for (const request of checkpointRequests.values()) if (request.id === id) request.finish(false)
+    await session
+      .fromPartition(`persist:ramu-computer-${id}`)
+      .clearStorageData()
+      .catch(() => {})
   }
   const unsubscribe = subscribeRuntime(runtime, (channel, payload) => {
     observeHostActivity(LOCAL, channel, payload)
@@ -649,11 +514,27 @@ async function main() {
     })()
   })
   const attachment = attachmentActions(win, new AttachmentStore(join(userData, 'attachments')))
-  ipcMain.handle('ramu:invoke', async (event, requestMethod: unknown, requestArgs: unknown) => {
+  const routing = (self: string) => ({
+    self,
+    exists: (id: string) => computers.exists(id),
+    status: (id: string) => computers.status(id),
+    text: (message: string) => t(message),
+  })
+  /** Runs a call on another host's server and nudges overviews when it changed threads or projects. */
+  const runOnHost = async (id: string, method: string, args: unknown[]) => {
+    const result = await runtimeInvoke(computers.endpoint(id), method, args)
+    const channel = activityChannel(method)
+    if (channel) observeHostActivity(id, channel, {})
+    return result
+  }
+  ipcMain.handle('ramu:invoke', async (event, requestMethod: unknown, requestArgs: unknown, requestHost?: unknown) => {
     // Only our windows may invoke IPC. Normal calls reach their owning computer; explicit computer management validates its target below.
-    const self = owners.get(event.sender.id)
+    const self = event.sender === win.webContents ? LOCAL : undefined
     if (!self || event.senderFrame !== event.sender.mainFrame) throw new Error('Untrusted IPC sender')
     if (typeof requestMethod !== 'string' || !Array.isArray(requestArgs)) throw new Error('Invalid request')
+    // A call may name its host. Another host is reached directly, for allow-listed methods only; the window's own host (or none) takes the path below.
+    const route = routeInvoke(requestHost, requestMethod, routing(self))
+    if (route.direct) return runOnHost(route.host, requestMethod, requestArgs)
     let method: string = requestMethod,
       args: unknown[] = requestArgs
     let settingsComputer = self
@@ -679,6 +560,8 @@ async function main() {
     const target = method.startsWith('computers.') ? runtime : computers.endpoint(settingsComputer)
     if (remote && computers.status(settingsComputer) === 'paused' && !method.startsWith('computers.'))
       throw new Error(t('This connection is paused. Resume it in Remote access.'))
+    if (method === 'app.content.mount') return contentDocuments.mount(args[0])
+    if (method === 'app.content.release') return contentDocuments.release(args[0])
     if (method === 'app.systemLanguages') {
       const languages = app.getPreferredSystemLanguages(),
         before = desktopLanguage()
@@ -748,30 +631,32 @@ async function main() {
         throw new Error('Invalid menu request')
       return attachment.menu(args[0], args[1], { x: point.x, y: point.y })
     }
-    if (method === 'computers.checkpoint') {
-      if (typeof args[0] !== 'string' || typeof args[1] !== 'boolean') throw new Error('Invalid workspace checkpoint')
-      const request = checkpointRequests.get(args[0])
-      if (!request || request.id !== self) return false
-      const safe = args[1] && self !== visible
-      request.finish(safe)
-      return safe
-    }
     if (method === 'computers.tasks.invoke') {
+      const task = routeTaskCommand(args[0], args[1], args[2], routing(self))
+      return runOnHost(task.host, task.method, task.args)
+    }
+    if (method === 'computers.invoke') {
       const [id, operation, parameters] = args
-      if (typeof id !== 'string' || !computers.exists(id) || computers.status(id) !== 'connected')
-        throw new Error('That host is not connected')
-      if (!isHostTaskCommand(operation, parameters)) throw new Error('Invalid host thread action')
-      const result = await runtimeInvoke(computers.endpoint(id), operation, parameters as unknown[])
-      observeHostActivity(id, 'workspace:changed', {})
-      return result
+      if (typeof operation !== 'string' || !Array.isArray(parameters)) throw new Error('Invalid request')
+      // Same routing as invokeOn. Naming this window's own host runs the call the normal way.
+      const target = routeInvoke(id, operation, routing(self))
+      if (target.direct) return runOnHost(target.host, operation, parameters)
+      if (!isHostInvokeAllowed(operation)) throw new Error(t('That action is not available on another host'))
+      return runOnHost(self, operation, parameters)
     }
     if (method === 'computers.recapAct') {
-      const [id, recapId, action] = args
+      const [id, recapId, action, until] = args
       if (typeof id !== 'string' || !computers.exists(id) || computers.status(id) !== 'connected')
         throw new Error('That host is not connected')
-      if (typeof recapId !== 'string' || !['done', 'dismissed', 'snoozed'].includes(action as string))
+      if (typeof recapId !== 'string' || !['open', 'done', 'dismissed', 'snoozed'].includes(action as string))
         throw new Error('Invalid recap action')
-      await runtimeInvoke(computers.endpoint(id), 'recaps.act', [recapId, action])
+      if (until !== undefined && (action !== 'snoozed' || typeof until !== 'number'))
+        throw new Error('Invalid snooze time')
+      await runtimeInvoke(
+        computers.endpoint(id),
+        'recaps.act',
+        until === undefined ? [recapId, action] : [recapId, action, until],
+      )
       observeHostActivity(id, 'automation:changed', {})
       return
     }
@@ -784,12 +669,11 @@ async function main() {
     if (method === 'computers.navigate') {
       const [id, destination] = args
       if (typeof id !== 'string' || !isHostDestination(destination)) throw new Error('Invalid host destination')
-      openComputer(id)
-      hostNavigation.request(id, destination)
+      openComputer(id, destination)
       return
     }
     if (method === 'computers.navigation.ready') {
-      hostNavigation.ready(self)
+      hostNavigation.ready()
       return
     }
     if (method === 'computers.scope') {
@@ -798,12 +682,6 @@ async function main() {
       return computers.list(self)
     }
     if (method === 'computers.list') {
-      // A window that opened from a notification asks for its chat once it has loaded.
-      const waiting = pendingOpen.get(self)
-      if (waiting) {
-        pendingOpen.delete(self)
-        setTimeout(() => sendTo(self, 'notify:open', waiting), 400)
-      }
       return computers.list(self)
     }
     if (method === 'computers.settings.get' || method === 'computers.settings.patch') {
@@ -945,6 +823,69 @@ async function main() {
     return runtimeInvoke(target, method, args)
   })
 
+  // Device-wide UI state: read synchronously by each page at startup, written through and fanned out to the other windows.
+  ipcMain.on('ramu:device-state', (event) => {
+    event.returnValue = event.sender === win.webContents ? deviceState.snapshot() : {}
+  })
+  ipcMain.on('ramu:device-state:set', (event, key: unknown, value: unknown) => {
+    if (event.sender !== win.webContents || event.senderFrame !== event.sender.mainFrame) return
+    try {
+      if (!deviceState.set(key, value)) return
+    } catch {
+      return
+    }
+  })
+
+  const legacyStorage: Record<string, Record<string, string>> = {}
+  for (const saved of servers.list()) {
+    if (deviceState.snapshot()[`ramu.storage-migrated.${saved.id}`]) continue
+    const migration = new WebContentsView({
+      webPreferences: {
+        preload: join(import.meta.dirname, '../preload/index.cjs'),
+        additionalArguments: ['--ramu-storage-migration'],
+        session: session.fromPartition(`persist:ramu-computer-${saved.id}`),
+        contextIsolation: true,
+        sandbox: true,
+        nodeIntegration: false,
+      },
+    })
+    secure(migration.webContents.session)
+    try {
+      const devUrl = rendererUrl()
+      if (devUrl) {
+        const url = new URL(devUrl)
+        url.searchParams.set('ramu-storage-migration', '1')
+        await migration.webContents.loadURL(url.toString())
+      } else
+        await migration.webContents.loadFile(join(import.meta.dirname, '../renderer/index.html'), {
+          query: { 'ramu-storage-migration': '1' },
+        })
+      const entries = (await migration.webContents.executeJavaScript(
+        'Object.fromEntries(Object.keys(localStorage).map(key => [key, localStorage.getItem(key)]))',
+      )) as Record<string, string>
+      legacyStorage[saved.id] = partitionHostEntries(saved.id, entries)
+    } catch (error) {
+      console.warn(`Could not migrate storage for ${saved.id}`, error)
+    } finally {
+      migration.webContents.close()
+    }
+  }
+  ipcMain.on('ramu:legacy-storage', (event) => {
+    event.returnValue =
+      event.sender === win.webContents && event.senderFrame === event.sender.mainFrame ? legacyStorage : {}
+  })
+  ipcMain.on('ramu:legacy-storage:imported', (event, host: unknown) => {
+    if (
+      event.sender !== win.webContents ||
+      event.senderFrame !== event.sender.mainFrame ||
+      typeof host !== 'string' ||
+      !legacyStorage[host]
+    )
+      return
+    deviceState.set(`ramu.storage-migrated.${host}`, '1')
+    delete legacyStorage[host]
+  })
+
   if (process.env.ELECTRON_RENDERER_URL) await win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else await win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
 
@@ -954,17 +895,21 @@ async function main() {
   app.on('before-quit', () => {
     powerMonitor.removeListener('resume', networkWake)
     desktopUpdater.close()
+    deviceState.flush()
     computers.stop()
     broadcaster.close()
     clearTimeout(activityTimer)
-    viewCache.close()
-    clearInterval(sweepViews)
-    for (const request of checkpointRequests.values()) request.finish(false)
     presence.close()
     unsubscribe()
   })
   // Keep the bridge available until windows have closed; renderers can still invoke it during before-quit.
-  app.on('will-quit', () => ipcMain.removeHandler('ramu:invoke'))
+  app.on('will-quit', () => {
+    ipcMain.removeHandler('ramu:invoke')
+    ipcMain.removeAllListeners('ramu:legacy-storage')
+    ipcMain.removeAllListeners('ramu:legacy-storage:imported')
+    ipcMain.removeAllListeners('ramu:device-state')
+    ipcMain.removeAllListeners('ramu:device-state:set')
+  })
   app.on('window-all-closed', () => app.quit())
 }
 

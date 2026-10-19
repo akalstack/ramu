@@ -5,13 +5,15 @@ import type { Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useComputers, statusText } from '../workspace/computers'
-import { useHostOverviews, navigateHost } from '../workspace/hostOverview'
+import { useHostOverviews } from '../workspace/hostOverview'
+import { useHostSelection } from '../workspace/HostSelection'
 import { FeedSection } from '../HomeSection'
 import { t, useLanguage } from '../i18n'
 import { timeAgo } from '../Menu'
 import { StateDot } from '../sidebar/projects/TaskStateIcon'
 import { ProviderWaitIcon } from '../models/ProviderWait'
 import { savedInboxTab, saveInboxTab } from './navigation'
+import { SnoozeMenu, notifyRecapAction, type RecapAction } from './recaps'
 import { ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
@@ -20,6 +22,7 @@ import { errorText } from '../lib/errors'
 export function HostsInbox() {
   useLanguage()
   const computers = useComputers()
+  const { select } = useHostSelection()
   const host = computers?.scope ?? null
   const hosts = useHostOverviews(computers?.computers.map((c) => c.id) ?? [])
   const [tab, setTab] = useState<InboxTab>(savedInboxTab)
@@ -66,7 +69,7 @@ export function HostsInbox() {
           className={row}
           disabled={!available(chat.computerId)}
           onClick={() =>
-            navigateHost(chat.computerId, {
+            select(chat.computerId, {
               kind: 'task',
               taskId: chat.taskId,
               ...(chat.sessionId ? { sessionId: chat.sessionId } : {}),
@@ -86,10 +89,19 @@ export function HostsInbox() {
         </button>
       )
     })
-  const actRecap = async (id: string, recapId: string, action: 'done' | 'dismissed' | 'snoozed') => {
+  const actRecap = async (id: string, recapId: string, action: RecapAction, until?: number) => {
+    const send = (next: 'open' | RecapAction, at?: number) =>
+      at === undefined
+        ? ramu.invoke('computers.recapAct', id, recapId, next)
+        : ramu.invoke('computers.recapAct', id, recapId, next, at)
     try {
-      await ramu.invoke('computers.recapAct', id, recapId, action)
+      await send(action, until)
       await hosts.find((entry) => entry.id === id)?.refetch()
+      notifyRecapAction(action, () => {
+        send('open')
+          .then(() => hosts.find((entry) => entry.id === id)?.refetch())
+          .catch((error) => notifyError(errorText(error), t('Recaps')))
+      })
     } catch (error) {
       notifyError(errorText(error), t('Recaps'))
     }
@@ -104,22 +116,31 @@ export function HostsInbox() {
           variant="secondary"
           size="sm"
           disabled={!available(computerId)}
-          onClick={() => navigateHost(computerId, { kind: 'task', taskId: item.taskId, sessionId: item.sessionId })}
+          onClick={() => select(computerId, { kind: 'task', taskId: item.taskId, sessionId: item.sessionId })}
         >
           {t('Open thread')}
         </Button>
         <div className="mt-2 flex flex-wrap gap-2">
-          {(['done', 'snoozed', 'dismissed'] as const).map((action) => (
-            <Button
-              key={action}
-              variant="ghost"
-              size="sm"
-              disabled={!available(computerId)}
-              onClick={() => void actRecap(computerId, item.id, action)}
-            >
-              {action === 'done' ? t('Done') : action === 'snoozed' ? t('Snooze') : t('Dismiss')}
-            </Button>
-          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!available(computerId)}
+            onClick={() => void actRecap(computerId, item.id, 'done')}
+          >
+            {t('Done')}
+          </Button>
+          <SnoozeMenu
+            disabled={!available(computerId)}
+            onSnooze={(until) => void actRecap(computerId, item.id, 'snoozed', until)}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!available(computerId)}
+            onClick={() => void actRecap(computerId, item.id, 'dismissed')}
+          >
+            {t('Dismiss')}
+          </Button>
         </div>
       </article>
     ))
@@ -204,7 +225,7 @@ export function HostsInbox() {
                   key={JSON.stringify([computerId, summary.id])}
                   className={row}
                   disabled={!available(computerId)}
-                  onClick={() => navigateHost(computerId, { kind: 'summary', summaryId: summary.id })}
+                  onClick={() => select(computerId, { kind: 'summary', summaryId: summary.id })}
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{summary.headline}</span>

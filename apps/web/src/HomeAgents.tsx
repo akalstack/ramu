@@ -7,10 +7,12 @@ import { Check, RotateCcw, Square } from 'lucide-react'
 import { FadeText } from './FadeText'
 import { StateDot } from './sidebar/projects/TaskStateIcon'
 import { ICON_BUTTON_CLASS } from './sidebar/projects/constants'
-import { invoke, ramu } from './ipc'
+import { ramu } from './ipc'
+import { ownHostId } from './hosts'
+import { useHost } from './workspace/HostProvider'
 import { t, useLanguage } from './i18n'
-import { useWorkspace } from './workspace/workspace'
-import { ipcQueryKey } from './dataQueries'
+import { useHostRuntime, useWorkspace } from './workspace/workspace'
+import { ipcQueryKeyOn } from './dataQueries'
 import { useAgentStream } from './views/agent/hooks/useAgentStream'
 import { outcomesOf, questionStatesOf } from './views/agent/lib/derive'
 import { QuestionDock } from './chat/QuestionCard'
@@ -72,13 +74,13 @@ function PendingInput({ sessionId }: { sessionId: string }) {
   )
 }
 
-export type AgentGroup = 'Waiting for your input' | 'Running' | 'Waiting for allowance' | 'Done'
+export type AgentGroup = 'Waiting for your input' | 'Running' | 'Limit reached' | 'Done'
 
 const groupOf = (session: AgentSessionInfo): AgentGroup =>
   session.state === 'needs-input' || session.pendingInput
     ? 'Waiting for your input'
     : session.waitingUntil
-      ? 'Waiting for allowance'
+      ? 'Limit reached'
       : ['running', 'starting'].includes(session.state)
         ? 'Running'
         : 'Done'
@@ -86,24 +88,27 @@ const groupOf = (session: AgentSessionInfo): AgentGroup =>
 /** Every live thread and helper (archived threads excluded), grouped by what it needs from you. Shared by Home and Inbox. */
 export function useAgentOverview() {
   const ws = useWorkspace()
+  const host = useHost()
+  const { on } = useHostRuntime()
   const sessions = useQuery({
-    queryKey: ipcQueryKey('agent.all'),
-    queryFn: () => ramu.invoke('agent.all'),
+    queryKey: ipcQueryKeyOn(host.id, 'agent.all'),
+    // Straight to the bridge: `invoke` would read through this same query key.
+    queryFn: () => (host.id === ownHostId() ? ramu.invoke('agent.all') : ramu.invokeOn(host.id, 'agent.all')),
     refetchInterval: 5000,
   })
   const { refetch } = sessions
   useEffect(
     () =>
-      ramu.on('workspace:changed', () => {
+      on('workspace:changed', () => {
         void refetch()
       }),
-    [refetch],
+    [refetch, on],
   )
   const groups = useMemo(() => {
     const out: Record<AgentGroup, AgentSessionInfo[]> = {
       'Waiting for your input': [],
       Running: [],
-      'Waiting for allowance': [],
+      'Limit reached': [],
       Done: [],
     }
     const lastActive = (session: AgentSessionInfo) =>
@@ -129,8 +134,7 @@ function AgentState({
   at?: number
   unread?: boolean
 }) {
-  if (group === 'Waiting for allowance' && session.waitingUntil)
-    return <ProviderWaitIcon retryAt={session.waitingUntil} />
+  if (group === 'Limit reached' && session.waitingUntil) return <ProviderWaitIcon retryAt={session.waitingUntil} />
   if (group === 'Waiting for your input')
     return <StateDot kind="dot warn text-warn" label={t('Waiting for your input')} />
   if (group === 'Running') return <StateDot kind="spinner" label={t('Agent working')} />
@@ -171,6 +175,7 @@ export function AgentRow({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const task = ws.tasks.find((task) => task.id === session.taskId)
   const project = ws.projects.find((project) => project.id === task?.projectId)
   const stop = () =>
@@ -316,6 +321,7 @@ export const rowsOf = (groups: Record<AgentGroup, AgentSessionInfo[]>, ...names:
 
 export function HelperBreadcrumb({ parentId }: { parentId: string }) {
   const ws = useWorkspace()
+  const { invoke } = useHost()
   return (
     <div className="px-3 pt-2">
       <Button

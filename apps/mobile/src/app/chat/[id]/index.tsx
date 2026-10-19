@@ -1,3 +1,4 @@
+import { InteractiveVisibility } from '../../../components/InteractiveVisibility'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, FlatList, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -9,6 +10,7 @@ import {
   Ellipsis,
   CircleArrowUp,
   CircleCheck,
+  Folder,
   GitBranch,
   GitCompareArrows,
   MessageCircleQuestion,
@@ -18,11 +20,14 @@ import {
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { foldTurns } from '../../../runtime/turns'
+import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runtime/limitTray'
+import { fill, useT } from '../../../i18n'
 import { looseInvoke, setHostSetting } from '../../../runtime/settingsModel'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
 import { Header, HeaderButton, Screen, PageFlatList, nativeScrollEdge } from '../../../components/Screen'
+import { ThreadActivity } from '../../../components/ThreadActivity'
 import { Composer } from '../../../components/Composer'
 import { MessageMenu, RowToggle, TranscriptItemView, type ItemMeta } from '../../../components/Transcript'
 import { ConnectionDot, Row, Sheet, T, tap } from '../../../components/ui'
@@ -41,10 +46,26 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const chat = useChat(id)
   const { c } = useTheme()
+  const t = useT()
   const store = useStore()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const scroll = useRef<FlatList<import('../../../runtime/types').TranscriptItem>>(null)
+  const [contentScreenFocused, setContentScreenFocused] = useState(false)
+  const [visibleContentRows, setVisibleContentRows] = useState<Set<string>>(() => new Set())
+  const contentViewability = useRef({ itemVisiblePercentThreshold: 1 }).current
+  const contentViewabilityChanged = useRef(({ viewableItems }: { viewableItems: { item: { id: string } }[] }) => {
+    const ids = new Set(viewableItems.map((row) => row.item.id))
+    setVisibleContentRows((previous) =>
+      previous.size === ids.size && [...ids].every((id) => previous.has(id)) ? previous : ids,
+    )
+  }).current
+  useFocusEffect(
+    useCallback(() => {
+      setContentScreenFocused(true)
+      return () => setContentScreenFocused(false)
+    }, []),
+  )
   const following = useRef(true)
   const userScrolling = useRef(false)
   const [away, setAway] = useState(false)
@@ -248,6 +269,11 @@ export default function ChatScreen() {
   const stopped =
     !running &&
     (chat.status === 'failed' || chat.items.slice(lastUser + 1).some((item) => item.kind === 'end' && item.interrupted))
+  // Held at a usage limit: the tray, queue label and play button follow limitTrayModel, never a failed turn.
+  const limitWait = limitWaitOf(chat.items)
+  const limit = limitWait
+    ? limitTrayModel(limitWait, chat.settings, store.appPreferences[chat.computerId]?.fallback)
+    : null
   const currentModel = { provider: chat.provider, model: chat.model, effort: chat.effort, settings: chat.settings }
   const applyModel = (m: import('../../../components/Composer').ModelChoice) => {
     // As on the desktop: while the agent works the change applies now; otherwise it waits for the next message.
@@ -401,6 +427,11 @@ export default function ChatScreen() {
   const chatExtras = [
     // Which computer runs the thread: information only, so it has no action.
     { icon: Monitor, label: `${computer?.name ?? 'Host unavailable'} · ${computer?.status ?? 'offline'}` },
+    {
+      icon: Folder,
+      label: 'Browse files',
+      onPress: () => router.push({ pathname: '/explorer', params: { computer: chat.computerId, ctx: chat.taskId } }),
+    },
     { icon: SquareTerminal, label: 'Terminal', onPress: openTerminal },
     ...(chat.sessionId
       ? [
@@ -460,6 +491,14 @@ export default function ChatScreen() {
         right={
           !chat.pending ? (
             <>
+              <HeaderButton
+                icon={Folder}
+                label="Explorer"
+                systemIcon="folder"
+                onPress={() =>
+                  router.push({ pathname: '/explorer', params: { computer: chat.computerId, ctx: chat.taskId } })
+                }
+              />
               {chat.projectId !== STANDALONE ? (
                 <HeaderButton
                   icon={GitBranch}
@@ -559,6 +598,11 @@ export default function ChatScreen() {
             automaticallyAdjustsScrollIndicatorInsets
             ListHeaderComponent={
               <View style={{ gap: space.s, paddingBottom: space.m }}>
+                {chat.branchNamingFallback ? (
+                  <T size={font.caption} tone="muted">
+                    {t.branchNamingFallback}
+                  </T>
+                ) : null}
                 {hiddenTurns > 0 ? (
                   <Pressable
                     accessibilityRole="button"
@@ -586,6 +630,8 @@ export default function ChatScreen() {
               </View>
             }
             data={pageRows}
+            viewabilityConfig={contentViewability}
+            onViewableItemsChanged={contentViewabilityChanged}
             maintainVisibleContentPosition={pagedBack ? { minIndexForVisible: 0 } : undefined}
             keyExtractor={(item) => item.id}
             renderItem={({ item, index }) => {
@@ -594,11 +640,13 @@ export default function ChatScreen() {
               const streaming = running && item.kind === 'text' && index === pageRows.length - 1
               return (
                 <Arrive animate={fresh && running}>
-                  <TranscriptItemView
-                    item={item}
-                    chat={chat}
-                    meta={{ ...itemMeta.get(item.id), streaming, fresh: fresh && running }}
-                  />
+                  <InteractiveVisibility.Provider value={contentScreenFocused && visibleContentRows.has(item.id)}>
+                    <TranscriptItemView
+                      item={item}
+                      chat={chat}
+                      meta={{ ...itemMeta.get(item.id), streaming, fresh: fresh && running }}
+                    />
+                  </InteractiveVisibility.Provider>
                 </Arrive>
               )
             }}
@@ -706,6 +754,7 @@ export default function ChatScreen() {
               ]}
             >
               <Composer
+                activity={<ThreadActivity chat={chat} />}
                 running={running}
                 model={staged?.chatId === chat.id ? staged.model : currentModel}
                 currentModel={staged?.chatId === chat.id ? currentModel : undefined}
@@ -748,20 +797,28 @@ export default function ChatScreen() {
                 meter={<ContextMeter computerId={chat.computerId} sessionId={chat.sessionId} />}
                 onToggleGoal={() => store.toggleGoal(chat.id)}
                 onClearGoal={() => store.clearGoal(chat.id)}
+                onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
                 onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
                 offline={offline}
                 restore={restore}
+                limited={!!limit && !running}
+                resumeLabel={limit && !stopped ? (limit.action === 'resume' ? t.resume : t.tryAgain) : undefined}
                 onResume={
-                  stopped
+                  limit && !running && limit.primary && !stopped
                     ? () => {
                         following.current = true
-                        void store.send(
-                          chat.id,
-                          '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>',
-                          'steer',
-                        )
+                        void store.retryLimitNow(chat.id)
                       }
-                    : undefined
+                    : stopped
+                      ? () => {
+                          following.current = true
+                          void store.send(
+                            chat.id,
+                            '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>',
+                            'steer',
+                          )
+                        }
+                      : undefined
                 }
                 editing={
                   editing
@@ -772,7 +829,18 @@ export default function ChatScreen() {
                   setEditing(null)
                   setRestore((r) => ({ text: '', n: (r?.n ?? 0) + 1 }))
                 }}
-                placeholder={offline ? `Message · sends when ${computer?.name ?? 'it'} is back` : undefined}
+                placeholder={
+                  offline
+                    ? `Message · sends when ${computer?.name ?? 'it'} is back`
+                    : limit && !running
+                      ? fill(
+                          t[limitPlaceholderKey(limit)],
+                          limit.resetAt !== undefined
+                            ? new Date(limit.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : '',
+                        )
+                      : undefined
+                }
               />
             </View>
             <Presence

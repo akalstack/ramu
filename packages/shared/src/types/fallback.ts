@@ -14,6 +14,11 @@ export interface FallbackPreferences {
   switchAt: SwitchThreshold
   /** Models ranked best first: a chat uses the highest one with room. Unset uses the built-in Claude Code, then Codex. */
   order?: FallbackStep[]
+  /**
+   * Whether a thread at a usage limit continues by itself when the limit resets. A thread's own `AgentSettings.autoResume`
+   * overrides it. Saved preferences without it parse as true, so there is no migration. See `effectiveAutoResume`.
+   */
+  autoResume: boolean
 }
 export interface SubagentPreferences {
   /** native: each provider's own sub-agents. single: all run on one step. per-provider: a step (or native) per provider. */
@@ -55,7 +60,7 @@ export interface AdviceStatus {
   error?: string
   note?: string
 }
-export const DEFAULT_FALLBACK_PREFERENCES: FallbackPreferences = { switchAt: null }
+export const DEFAULT_FALLBACK_PREFERENCES: FallbackPreferences = { switchAt: null, autoResume: true }
 export const DEFAULT_SUBAGENT_PREFERENCES: SubagentPreferences = {
   mode: 'native',
   single: null,

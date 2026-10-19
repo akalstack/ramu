@@ -26,10 +26,21 @@ import {
 import { AgentControls } from './chat/AgentControls'
 import { useModelSets } from './models/ModelSets'
 import { useAppSettings } from './settings/AppSettings'
-import { useWorkspace } from './workspace/workspace'
+import { useHostRuntime, useWorkspace } from './workspace/workspace'
+import { useHost } from './workspace/HostProvider'
 import { usePaged } from './settings/cards'
-import { invoke, ramu } from './ipc'
 import { notifyError } from './chat/Notifications'
+import {
+  RULE_KINDS,
+  byNextRun,
+  canSaveSchedule,
+  defaultScheduleInput,
+  isProblemRun,
+  onceIso,
+  onceLocalValue,
+  ruleForKind,
+  setWeekday,
+} from './scheduleForm'
 
 export function formatScheduleTime(at: number | null, zone: string): string {
   return at === null
@@ -41,6 +52,8 @@ export function useSchedules() {
   const [schedules, setSchedules] = useState<Schedule[]>([]),
     [runs, setRuns] = useState<ScheduleRun[]>([])
   const [loading, setLoading] = useState(true)
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const reload = useCallback(async () => {
     try {
       const [s, r] = await Promise.all([invoke('schedules.list'), invoke('schedules.runs')])
@@ -49,14 +62,14 @@ export function useSchedules() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [invoke])
   useEffect(() => {
     void reload().catch((e) => notifyError(errorText(e), 'Schedules'))
-    const off = ramu.on('automation:changed', () => {
+    const off = on('automation:changed', () => {
       void reload().catch(() => {})
     })
     return off
-  }, [reload])
+  }, [reload, on])
   return { schedules, runs, reload, loading }
 }
 export function SchedulesPage({
@@ -160,20 +173,18 @@ export function SchedulesPage({
         )}
         {!editing && schedules.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            {[...schedules]
-              .sort((x, y) => (x.nextRunAt ?? Infinity) - (y.nextRunAt ?? Infinity))
-              .map((s) => (
-                <ScheduleCard
-                  key={s.id}
-                  schedule={s}
-                  runs={runs.filter((r) => r.scheduleId === s.id)}
-                  selected={selected === s.id}
-                  busy={busy}
-                  onEdit={() => setEditing(s)}
-                  onAct={act}
-                  onOpenRun={(run) => void openRun(run)}
-                />
-              ))}
+            {byNextRun(schedules).map((s) => (
+              <ScheduleCard
+                key={s.id}
+                schedule={s}
+                runs={runs.filter((r) => r.scheduleId === s.id)}
+                selected={selected === s.id}
+                busy={busy}
+                onEdit={() => setEditing(s)}
+                onAct={act}
+                onOpenRun={(run) => void openRun(run)}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -203,6 +214,7 @@ function ScheduleCard({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const [open, setOpen] = useState(false)
   const paged = usePaged(runs, 5)
   const project =
@@ -281,6 +293,11 @@ function ScheduleCard({
       <p className="schedule-prompt m-0 truncate text-control text-soft" title={s.prompt}>
         {s.prompt}
       </p>
+      {s.state === 'paused' && s.pausedReason && (
+        <p className="schedule-paused m-0 text-caption text-bad" role="status">
+          {s.pausedReason}
+        </p>
+      )}
       <div className="flex min-h-6 items-center gap-2 text-caption text-muted-foreground">
         <span className="min-w-0 truncate">{meta.join(' · ')}</span>
         <span className="min-w-0 flex-1" />
@@ -313,7 +330,7 @@ function ScheduleCard({
             <div key={r.id} className="schedule-run flex min-h-8 items-center gap-2 text-caption">
               <span
                 className={`flex-none rounded-full bg-hover px-2 text-caption whitespace-nowrap ${
-                  r.status === 'failed' || r.status === 'interrupted' ? 'text-bad' : 'text-soft'
+                  isProblemRun(r.status) ? 'text-bad' : 'text-soft'
                 }`}
               >
                 {t(r.status)}
@@ -359,29 +376,22 @@ function ScheduleEditor({
 }) {
   useLanguage()
   const ws = useWorkspace(),
-    { initialSettings } = useModelSets()
+    { initialSettings } = useModelSets(),
+    { invoke } = useHost()
   const [input, setInput] = useState<ScheduleInput>(
     () =>
-      schedule ?? {
-        name: '',
-        prompt: '',
-        projectId: ws.ui.activeTaskId ? (ws.projectOf(ws.ui.activeTaskId)?.id ?? NO_PROJECT) : NO_PROJECT,
-        workspaceId: null,
-        timezone: systemTimezone(),
-        rule: { kind: 'daily', time: '09:00' },
-        missedPolicy: 'latest',
-        settings: initialSettings,
-      },
+      schedule ??
+      defaultScheduleInput(
+        initialSettings,
+        systemTimezone(),
+        ws.ui.activeTaskId ? (ws.projectOf(ws.ui.activeTaskId)?.id ?? null) : null,
+      ),
   )
   const [previewLoading, setPreviewLoading] = useState(true)
   const [preview, setPreview] = useState<number[]>([]),
     [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false)
-  const [onceLocal, setOnceLocal] = useState(() =>
-    DateTime.fromISO(schedule?.rule.kind === 'once' ? schedule.rule.at : DateTime.now().plus({ hours: 1 }).toISO()!, {
-      zone: input.timezone,
-    }).toFormat("yyyy-MM-dd'T'HH:mm"),
-  )
+  const [onceLocal, setOnceLocal] = useState(() => onceLocalValue(schedule?.rule, input.timezone))
   useEffect(() => {
     let disposed = false
     setPreviewLoading(true)
@@ -410,7 +420,6 @@ function ScheduleEditor({
   }, [input.rule, input.timezone])
   const rule = input.rule
   const setRule = (rule: ScheduleRule) => setInput((i) => ({ ...i, rule }))
-  const once = (value: string, zone = input.timezone) => DateTime.fromISO(value, { zone }).toISO() ?? value
   const save = async () => {
     setBusy(true)
     setError(null)
@@ -498,20 +507,8 @@ function ScheduleEditor({
             <Dropdown
               label={t('Frequency')}
               value={rule.kind}
-              onChange={(kind) =>
-                setRule(
-                  kind === 'once'
-                    ? { kind, at: once(onceLocal) }
-                    : kind === 'weekly'
-                      ? { kind, time: '09:00', weekdays: [1, 2, 3, 4, 5] }
-                      : kind === 'monthly'
-                        ? { kind, time: '09:00', day: 1 }
-                        : kind === 'interval'
-                          ? { kind, minutes: 60, anchor: DateTime.now().plus({ hours: 1 }).toISO()! }
-                          : { kind: 'daily', time: '09:00' },
-                )
-              }
-              options={['once', 'daily', 'weekly', 'monthly', 'interval'].map((value) => ({
+              onChange={(kind) => setRule(ruleForKind(kind as ScheduleRule['kind'], onceLocal, input.timezone))}
+              options={RULE_KINDS.map((value) => ({
                 value,
                 label: value === 'interval' ? t('Every interval') : t(value[0]!.toUpperCase() + value.slice(1)),
               }))}
@@ -526,7 +523,7 @@ function ScheduleEditor({
               value={onceLocal}
               onChange={(e) => {
                 setOnceLocal(e.target.value)
-                setRule({ kind: 'once', at: once(e.target.value) })
+                setRule({ kind: 'once', at: onceIso(e.target.value, input.timezone) })
               }}
             />
           </label>
@@ -547,10 +544,7 @@ function ScheduleEditor({
                 <Checkbox
                   checked={rule.weekdays.includes(i + 1)}
                   onCheckedChange={(checked) =>
-                    setRule({
-                      ...rule,
-                      weekdays: checked === true ? [...rule.weekdays, i + 1] : rule.weekdays.filter((d) => d !== i + 1),
-                    })
+                    setRule({ ...rule, weekdays: setWeekday(rule.weekdays, i + 1, checked === true) })
                   }
                 />
                 {day}
@@ -631,7 +625,7 @@ function ScheduleEditor({
             variant="default"
             type="button"
             className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
-            disabled={busy || previewLoading || !preview.length || !input.name.trim() || !input.prompt.trim()}
+            disabled={!canSaveSchedule({ busy, previewLoading, preview, name: input.name, prompt: input.prompt })}
             onClick={() => void save()}
           >
             {busy ? t('Saving…') : t('Save schedule')}

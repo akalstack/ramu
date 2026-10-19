@@ -17,10 +17,11 @@ import { invoke } from '../../ipc'
 import type { MenuEntry } from '../../Menu'
 import type { useWorkspace } from '../../workspace/workspace'
 import { baseName, parentOf } from './paths'
-import { shared, type TreeAction } from './shared'
+import { type sharedForHost, type TreeAction } from './shared'
 
 type Ctx = {
   ws: ReturnType<typeof useWorkspace>
+  shared: ReturnType<typeof sharedForHost>
   taskId: string
   binding: RepositoryBinding
   /** The right-clicked entry, and the whole selection when it is part of a multi-selection. */
@@ -28,11 +29,12 @@ type Ctx = {
   targets: DirEntry[]
   multi: boolean
   busy: boolean
+  isLocal?: boolean
   pasteDir: string
   setClip: (paths: string[], cut: boolean) => void
   begin: (action: TreeAction) => void
   deletePicked: (clicked?: DirEntry) => void
-  pasteInto: (dir: string, source?: typeof shared.clip) => Promise<void>
+  pasteInto: (dir: string, source?: ReturnType<typeof sharedForHost>['clip']) => Promise<void>
   copy: (text: string) => Promise<void>
   fail: (reason: unknown) => void
 }
@@ -40,12 +42,14 @@ type Ctx = {
 /** Context menu of a tree row: a multi-selection gets bulk actions, a single entry the full set. */
 export function explorerMenuEntries({
   ws,
+  shared,
   taskId,
   binding,
   target,
   targets,
   multi,
   busy,
+  isLocal = true,
   pasteDir,
   setClip,
   begin,
@@ -222,6 +226,7 @@ export function explorerMenuEntries({
         { key: 'separator-paths', separator: true as const },
         {
           key: 'reveal',
+          disabled: !isLocal,
           label: (
             <>
               <FolderOpen size={14} />

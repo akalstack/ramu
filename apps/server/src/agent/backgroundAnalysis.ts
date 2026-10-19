@@ -12,17 +12,19 @@ import {
   type CommitStyle,
   type ProviderCatalog,
 } from '@ramu/shared/types'
-import { settingsKey, nextStep } from '@ramu/shared/providers/routing'
+import { settingsKey, nextStep, peakFor, isOver } from '@ramu/shared/providers/routing'
+import { effectiveAutoResume } from '@ramu/shared/chat/providerWait'
 import type { QueryFn } from './types'
 import { InputQueue } from './inputQueue'
-import { limitSection, stripRouterLine, cleanTitle, splitBranchLine } from './text'
+import { limitSection, stripRouterLine, parseTitleDraft, splitBranchLine, type TitleDraft } from './text'
 import { timeout } from './util'
 import { continuationRequest, titlePrompt } from './prompts'
 import { claudeReplyText } from './claudeReply'
 import { answerOnFork } from './aside'
 import { transcriptOf } from './handoff'
 import { LEGACY_ACCOUNT_PROVIDERS } from './settings'
-import { isUsageLimit } from './usageLimit'
+import { classifyLimit } from '../providers/limitClassifier'
+import { ProviderLimitError } from './usageLimit'
 import type { CatalogService } from './catalogService'
 import type { FallbackRouter } from './fallbackRouter'
 import type { SessionStore } from './sessionStore'
@@ -34,11 +36,24 @@ export interface BackgroundAnalysisHost
     Pick<BackgroundAnalysis, 'analyze'>,
     Pick<CatalogService, 'validateSettings'>,
     Pick<FallbackRouter, 'orderOf' | 'route' | 'routing' | 'withStep'>,
-    Pick<SessionStore, 'events' | 'get' | 'list'> {
+    Pick<SessionStore, 'events' | 'get' | 'list' | 'titleContext'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   providerQuery: QueryFn
   runnerFactory(provider: AgentProvider): AgentRunnerFactory
   shutdown(): AgentService['shutdown']
+}
+
+/** The longest a deferred analysis waits for a limit to reset before reporting it. */
+const DEFER_MAX_MS = 45 * 60_000
+
+export interface AnalyzeOptions {
+  timeoutMs?: number
+  signal?: AbortSignal
+  /**
+   * Work nobody is blocked on (the advisor, reviews, learning) waits out a limit and retries instead of failing, unless
+   * auto-resume is off. `onWait` reports when it expects to retry, and null when the wait ends.
+   */
+  defer?: boolean | { maxWaitMs?: number; onWait?: (retryAt: number | null) => void }
 }
 
 /** Isolated one-shot inference (commit drafts, titles, side questions) that never touches a chat. */
@@ -105,20 +120,28 @@ export class BackgroundAnalysis {
     return transcriptOf(this.host.events(sessionId))
   }
 
-  /** A short chat title from what was asked (and, if present, how it was answered). */
+  /** A short title from bounded main-thread messages, never helper/advisor output. */
   async draftTitle(taskId: string, settings: AgentSettings): Promise<string | null> {
-    const users: string[] = [],
-      replies: string[] = []
-    for (const session of this.host.list(taskId).slice(0, 2))
-      for (const event of this.host.events(session.id)) {
-        if (event.kind === 'user' && !event.agentId && users.length < 3 && event.text.trim())
-          users.push(event.text.trim().slice(0, 800))
-        if (event.kind === 'text' && !event.agentId && replies.length < 2 && event.text.trim())
-          replies.push(event.text.trim().slice(0, 500))
-      }
+    return (await this.draftTitleResult(taskId, settings))?.title ?? null
+  }
+
+  async draftTitleResult(
+    taskId: string,
+    settings: AgentSettings,
+    options: { signal?: AbortSignal; previousTitle?: string; timeoutMs?: number } = {},
+  ): Promise<TitleDraft | null> {
+    const { users, replies } = this.host.titleContext(taskId)
     if (!users.length) return null
-    const prompt = titlePrompt(users, replies)
-    return cleanTitle((await this.host.analyze(prompt, settings, 2000)).message)
+    const prompt = titlePrompt(users, replies, options.previousTitle)
+    return parseTitleDraft(
+      (
+        await this.host.analyze(prompt, settings, 2000, {
+          timeoutMs: options.timeoutMs ?? 15_000,
+          signal: options.signal,
+          defer: false,
+        })
+      ).message,
+    )
   }
 
   /** Isolated inference shared by commit drafts, recaps, and change reviews. */
@@ -126,7 +149,7 @@ export class BackgroundAnalysis {
     prompt: string,
     settings: AgentSettings,
     maxLength = 100000,
-    { timeoutMs = 90_000, signal }: { timeoutMs?: number; signal?: AbortSignal } = {},
+    { timeoutMs = 90_000, signal, defer }: AnalyzeOptions = {},
   ): Promise<{ message: string; provider: AgentProvider; model: string }> {
     if (this.host.shutdown()) throw new Error('Background service is stopping')
     if (
@@ -138,15 +161,20 @@ export class BackgroundAnalysis {
     if (signal?.aborted) throw new Error('Background analysis stopped')
     const cwd = mkdtempSync(join(tmpdir(), 'ramu-commit-draft-'))
     const tried = new Set<string>()
+    let waited = 0
     // Titles, recaps and commit messages follow the same rule, quietly.
-    const early = await this.host.route(settings)
-    let chosen = early ? this.host.withStep(settings, early.step) : settings
+    let chosen = settings
     try {
+      const early = await this.host.route(settings)
+      if (signal?.aborted) throw new Error('Background analysis stopped')
+      chosen = early ? this.host.withStep(settings, early.step) : settings
       for (;;) {
+        if (signal?.aborted) throw new Error('Background analysis stopped')
         tried.add(settingsKey(chosen, await this.host.catalog()))
         try {
           await this.host.validateSettings(chosen)
           if (this.host.shutdown()) throw new Error('Background service is stopping')
+          if (signal?.aborted) throw new Error('Background analysis stopped')
           if (process.env.RAMU_FAKE_AGENT === '1')
             return {
               message: (await import('../providers/fakeAgent')).fakeAnalysis(prompt),
@@ -171,8 +199,11 @@ export class BackgroundAnalysis {
                   (event, limit) => {
                     if (event.kind === 'text') text = event.text
                     if (event.kind === 'result')
-                      event.isError ? reject(new Error(limit ? 'usage_limit_reached' : event.text)) : resolve(text)
-                    if (event.kind === 'error') reject(new Error(limit ? 'usage_limit_reached' : event.message))
+                      event.isError
+                        ? reject(new Error(limit === true ? 'usage_limit_reached' : event.text))
+                        : resolve(text)
+                    if (event.kind === 'error')
+                      reject(new Error(limit === true ? 'usage_limit_reached' : event.message))
                     if (event.kind === 'state' && event.state === 'failed')
                       reject(new Error('Background analysis provider failed'))
                     if (event.kind === 'permission-request') runner?.replyPermission(event.requestId, false)
@@ -240,22 +271,67 @@ export class BackgroundAnalysis {
             throw new Error('The provider returned an empty or oversized answer')
           return { message, provider: chosen.provider, model: chosen.model }
         } catch (e) {
-          if (!settings.autoFallback || !isUsageLimit(e)) throw e
+          if (signal?.aborted) throw new Error('Background analysis stopped', { cause: e })
+          // Only a confident limit moves on or waits; a low-confidence match is an ordinary error here.
+          const limit = classifyLimit(e, { provider: chosen.provider, channel: 'error' })
+          if (limit?.confidence !== 'high') throw e
           const catalogs = await this.host.catalog()
           const routing = this.host.routing(chosen)
-          const step = nextStep(this.host.orderOf(catalogs, routing?.prefs), {
-            usage: routing?.usage ?? [],
-            catalogs,
-            switchAt: routing ? routing.prefs.fallback.switchAt : DEFAULT_FALLBACK_PREFERENCES.switchAt,
-            attempted: tried,
-          })
-          if (!step) throw e
-          chosen = this.host.withStep(settings, step)
+          const step = settings.autoFallback
+            ? nextStep(this.host.orderOf(catalogs, routing?.prefs), {
+                usage: routing?.usage ?? [],
+                catalogs,
+                switchAt: routing ? routing.prefs.fallback.switchAt : DEFAULT_FALLBACK_PREFERENCES.switchAt,
+                attempted: tried,
+              })
+            : null
+          if (step) {
+            chosen = this.host.withStep(settings, step)
+            continue
+          }
+          // Nothing left to switch to. Work nobody is blocked on waits for the reset; the rest reports when it lifts.
+          const peak = routing ? peakFor(routing.usage, chosen.provider, chosen.model) : undefined
+          const resetsAt = (isOver(peak, null) ? peak?.resetsAt : undefined) ?? limit.resetsAt
+          const now = Date.now()
+          const delay = resetsAt && resetsAt > now ? Math.min(resetsAt - now + 1000, 10 * 60_000) : 60_000
+          const automatic = effectiveAutoResume(settings, routing?.prefs.fallback).value
+          const options = typeof defer === 'object' ? defer : {}
+          if (!defer || !automatic || waited + delay > (options.maxWaitMs ?? DEFER_MAX_MS))
+            throw new ProviderLimitError(resetsAt ?? null, e)
+          options.onWait?.(now + delay)
+          try {
+            await this.sleep(delay, signal)
+          } finally {
+            options.onWait?.(null)
+          }
+          waited += delay
+          tried.clear()
         }
       }
     } finally {
       rmSync(cwd, { recursive: true, force: true })
     }
+  }
+
+  /** Sleeps until a limit may have reset; shutdown or the caller's signal ends the wait early. */
+  private sleep(ms: number, signal?: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted || this.host.shutdown()) return reject(new Error('Background analysis stopped'))
+      const cancel = () => {
+        clearTimeout(timer)
+        this.analysisStops.delete(cancel)
+        signal?.removeEventListener('abort', cancel)
+        reject(new Error('Background analysis stopped'))
+      }
+      const timer = setTimeout(() => {
+        this.analysisStops.delete(cancel)
+        signal?.removeEventListener('abort', cancel)
+        resolve()
+      }, ms)
+      timer.unref()
+      this.analysisStops.add(cancel)
+      signal?.addEventListener('abort', cancel, { once: true })
+    })
   }
 
   /** Stops every analysis still running, as on shutdown. */

@@ -9,7 +9,13 @@ import { DEFAULT_APP_PREFERENCES, NO_PROJECT } from '@ramu/shared/types'
 import type { AgentService } from '../src/agent'
 import { systemTimezone } from '@ramu/shared/workspace/timezone'
 vi.mock('@ramu/shared/workspace/timezone', () => ({ systemTimezone: vi.fn(() => 'UTC') }))
-let db: Db, dir: string, ws: Workspace, service: RecapService, taskId: string, analyze: ReturnType<typeof vi.fn>
+let db: Db,
+  dir: string,
+  ws: Workspace,
+  service: RecapService,
+  taskId: string,
+  analyze: ReturnType<typeof vi.fn>,
+  digest: ReturnType<typeof vi.fn>
 const item = (extra = {}) => ({
   key: 'unfinished',
   group: 'attention',
@@ -37,7 +43,8 @@ beforeEach(async () => {
   )
   analyze = vi.fn(async () => ({ message: JSON.stringify({ items: [item()] }) }))
   const agents = { list: () => [{ id: 'session', state: 'idle' }], analyze } as unknown as AgentService
-  service = new RecapService(db, ws, agents, () => {})
+  digest = vi.fn()
+  service = new RecapService(db, ws, agents, () => {}, digest as unknown as () => void)
 })
 it('uses the current OS timezone for daily timing instead of a legacy override', async () => {
   ws.setAppState('app-preferences', { recapsEnabled: true, recapTime: '08:00', timezone: 'UTC' })
@@ -65,6 +72,25 @@ it('deduplicates and preserves user resolution on refresh', async () => {
   expect(second.items).toHaveLength(1)
   expect(second.items[0]?.id).toBe(first.items[0]?.id)
   expect(second.items[0]?.status).toBe('done')
+})
+it('snoozes for a day by default, until a chosen time, and can be undone', async () => {
+  const [first] = (await service.refresh()).items
+  const now = Date.parse('2026-01-02T10:00:00Z')
+  service.act(first!.id, 'snoozed', undefined, now)
+  expect(service.snapshot().items[0]).toMatchObject({ status: 'snoozed', snoozedUntil: now + 86_400_000 })
+  service.act(first!.id, 'snoozed', now + 3 * 3_600_000, now)
+  expect(service.snapshot().items[0]?.snoozedUntil).toBe(now + 3 * 3_600_000)
+  service.act(first!.id, 'open')
+  expect(service.snapshot().items[0]).toMatchObject({ status: 'open', snoozedUntil: null })
+})
+it('rejects snooze times in the past or more than 30 days away, and ignores a time for other actions', async () => {
+  const [first] = (await service.refresh()).items
+  const now = Date.parse('2026-01-02T10:00:00Z')
+  expect(() => service.act(first!.id, 'snoozed', now - 1, now)).toThrow('30 days')
+  expect(() => service.act(first!.id, 'snoozed', now + 31 * 86_400_000, now)).toThrow('30 days')
+  expect(service.snapshot().items[0]?.status).toBe('open')
+  service.act(first!.id, 'done', now + 5000, now)
+  expect(service.snapshot().items[0]).toMatchObject({ status: 'done', snoozedUntil: null })
 })
 it('does not accept nonexistent source events or unsupported resolution evidence', async () => {
   analyze.mockResolvedValue({ message: JSON.stringify({ items: [item({ sourceSeq: 999 })] }) })
@@ -147,4 +173,29 @@ it('does not call the model again until the thread or the model changes, and alw
   expect(analyze).toHaveBeenCalledTimes(3)
   await service.refresh()
   expect(analyze).toHaveBeenCalledTimes(4)
+})
+
+it('announces the daily recap once a day, only for the scheduled run and only when it produced items', async () => {
+  ws.setAppState('app-preferences', { recapsEnabled: true, recapTime: '08:00', timezone: 'UTC' })
+  const addEvent = (seq: number) =>
+    db
+      .prepare("INSERT INTO agent_events VALUES ('session',?,?)")
+      .run(seq, JSON.stringify({ kind: 'text', text: `More work ${seq}` }))
+  await service.refresh() // the user pressed Refresh: they are already looking
+  expect(digest).not.toHaveBeenCalled()
+  addEvent(3)
+  await service.refresh(false)
+  expect(digest).toHaveBeenCalledTimes(1)
+  addEvent(4)
+  await service.refresh(false) // a second run the same day stays quiet
+  expect(digest).toHaveBeenCalledTimes(1)
+  ws.setAppState('recap-digest-day', '2000-01-01') // the next day
+  addEvent(5)
+  await service.refresh(false)
+  expect(digest).toHaveBeenCalledTimes(2)
+})
+it('does not announce a daily run that produced nothing', async () => {
+  analyze.mockResolvedValue({ message: JSON.stringify({ items: [], resolved: [] }) })
+  await service.refresh(false)
+  expect(digest).not.toHaveBeenCalled()
 })

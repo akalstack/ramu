@@ -6,7 +6,7 @@ import type { GitBranchInfo, GitStatus, RepositoryBinding } from '@ramu/shared/t
 import { Checkbox } from '@/components/ui/checkbox'
 import { isProtectedBranch } from '@ramu/shared/protectedBranch'
 import { BranchPicker } from './git/GitControls'
-import { invoke } from './ipc'
+import { useHost } from './workspace/HostProvider'
 import { withGitBusy } from './git/gitBusy'
 import { Dialog } from './Menu'
 import { errorText } from './workspace/TaskPane'
@@ -26,6 +26,7 @@ export function WorkspaceSyncDialog({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const [rows, setRows] = useState<Record<string, Row>>({})
   const [picked, setPicked] = useState<Set<string> | null>(null)
   const [busy, setBusy] = useState(false),
@@ -44,7 +45,7 @@ export function WorkspaceSyncDialog({
         branches: branches.status === 'fulfilled' ? branches.value : [],
       })
     },
-    [taskId],
+    [taskId, invoke],
   )
   useEffect(() => {
     void Promise.all(bindings.map(load))

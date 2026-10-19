@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { validBranchPrefix } from '@ramu/shared/workspaceDefaults'
 import { intelligenceSchema } from '../intelligence'
 import { goalPreferencesSchema } from '../agent/goals'
 import {
@@ -88,7 +89,11 @@ export function migrateChains(value: unknown): unknown {
 }
 const fallbackPreferences = z.preprocess(
   migrateChains,
-  z.object({ switchAt: threshold.default(DEFAULT_FALLBACK_PREFERENCES.switchAt), order: order.optional() }),
+  z.object({
+    switchAt: threshold.default(DEFAULT_FALLBACK_PREFERENCES.switchAt),
+    order: order.optional(),
+    autoResume: z.boolean().default(true),
+  }),
 )
 const subagentPreferences = z.preprocess(
   migrateChains,
@@ -116,6 +121,10 @@ const advisorPreferences = z.object({
   wait: z.boolean().default(false),
 })
 export const appPreferences = z.object({
+  defaultCheckoutMode: z.enum(['current', 'worktree']).default('current'),
+  worktreeBranchNaming: z.enum(['fixed', 'semantic', 'custom']).default('fixed'),
+  worktreeBranchPrefix: z.string().max(120).refine(validBranchPrefix, 'Invalid Git branch prefix').default('ramu/'),
+  worktreeBranchInstructions: z.string().max(2000).default(''),
   intelligence: intelligenceSchema.default(() => intelligenceSchema.parse({})),
   language: z.enum(['system', 'en', 'id']).default('system'),
   recapsEnabled: z.boolean().default(true),

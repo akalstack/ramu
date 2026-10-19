@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { invoke } from '../../ipc'
 import type { Confirmation, GitRun } from './types'
+import { useHost } from '../../workspace/HostProvider'
 
 /** State and execution of the repository confirmation dialog. */
 export function useConfirmation({
@@ -20,6 +20,7 @@ export function useConfirmation({
   onUndone: (message: string) => void
 }) {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
+  const { invoke } = useHost()
   const [operationName, setOperationName] = useState('')
   /** Opens a confirmation that asks for a name (branch or stash message). */
   const ask = (next: Confirmation, initial = '') => {

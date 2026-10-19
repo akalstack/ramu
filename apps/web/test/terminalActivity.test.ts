@@ -1,11 +1,5 @@
 import { expect, it } from 'vitest'
-import {
-  createOutputGate,
-  hasUnseenTerminalOutput,
-  markTerminalOutput,
-  setShownTerminal,
-  SETTLE_MS,
-} from '../src/workspace/terminalActivity'
+import { createOutputGate, createTerminalActivity, SETTLE_MS } from '../src/workspace/terminalActivity'
 
 function clock() {
   let at = 1_000
@@ -35,6 +29,7 @@ it('counts output straight away once someone types or a command runs', () => {
 })
 
 it('marks only workspaces whose terminal is not on screen, and showing one clears it', () => {
+  const { setShownTerminal, markTerminalOutput, hasUnseenTerminalOutput } = createTerminalActivity()
   setShownTerminal('a')
   markTerminalOutput('a')
   markTerminalOutput('b')
@@ -45,4 +40,17 @@ it('marks only workspaces whose terminal is not on screen, and showing one clear
   setShownTerminal(null)
   expect(hasUnseenTerminalOutput('b')).toBe(false)
   expect(hasUnseenTerminalOutput(null)).toBe(false)
+})
+
+it("keeps each host's terminal dots apart, even for the same workspace id", () => {
+  const local = createTerminalActivity(),
+    studio = createTerminalActivity()
+  let notified = 0
+  studio.subscribe(() => notified++)
+  local.markTerminalOutput('project:p')
+  expect(local.hasUnseenTerminalOutput('project:p')).toBe(true)
+  expect(studio.hasUnseenTerminalOutput('project:p')).toBe(false)
+  expect(notified).toBe(0)
+  studio.setShownTerminal('project:p')
+  expect(local.hasUnseenTerminalOutput('project:p')).toBe(true)
 })

@@ -1,10 +1,12 @@
 import { useState, type ComponentType, type ReactNode } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
-import { Check, Folder } from 'lucide-react-native'
+import { Check, Clock, Folder, X } from 'lucide-react-native'
 import type { RecapItem } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import { useT } from '../i18n'
-import { Chip, SectionLabel, T, tap } from './ui'
+import { SNOOZE_MENU, snoozeEnds } from '../runtime/recapActions'
+import { Chip, Row, SectionLabel, Sheet, T, tap } from './ui'
+import { SwipeRow, type SwipeAction } from './SwipeRow'
 
 /** A row of filter chips with counts, as at the top of Home and Inbox. */
 export function Chips<K extends string>({
@@ -114,28 +116,40 @@ export function Nothing({
   )
 }
 
-/** One recap item: the project, what happened, and what you can do about it. */
+/**
+ * One recap item: the project, what happened, and what you can do about it. Swipe left for Done, Snooze and Dismiss (an
+ * item that needs a decision) or Dismiss alone; Snooze asks how long. Each action is followed by an Undo toast.
+ */
 export function RecapCard({
   item,
   project,
   attention,
+  choices = true,
   onOpen,
   onAct,
 }: {
   item: RecapItem
   project?: string
   attention: boolean
+  /** The host takes a chosen snooze time. When it does not, Snooze is the plain one-day button and has no menu. */
+  choices?: boolean
   onOpen: () => void
-  onAct: (action: 'done' | 'dismissed' | 'snoozed') => Promise<void>
+  onAct: (action: 'done' | 'dismissed' | 'snoozed', until?: number) => Promise<void>
 }) {
   const { c } = useTheme()
   const t = useT()
   const [busy, setBusy] = useState(false)
-  const act = (action: 'done' | 'dismissed' | 'snoozed') => {
+  const [menu, setMenu] = useState(false)
+  const act = (action: 'done' | 'dismissed' | 'snoozed', until?: number) => {
     tap()
     setBusy(true)
     // The card disappears as soon as the item changes, so there is nothing to reset on success.
-    onAct(action).catch(() => setBusy(false))
+    onAct(action, until).catch(() => setBusy(false))
+  }
+  const snooze = () => {
+    tap()
+    if (choices) setMenu(true)
+    else act('snoozed')
   }
   const button = (label: string, run: () => void, primary = false, icon?: ReactNode) => (
     <Pressable
@@ -159,39 +173,66 @@ export function RecapCard({
       </T>
     </Pressable>
   )
+  const background = attention ? c.warnWash : c.raised2
+  const swipe: SwipeAction[] = busy
+    ? []
+    : [
+        ...(attention
+          ? [
+              { icon: Check, label: t.markDone, color: c.primary, onPress: () => act('done') },
+              { icon: Clock, label: t.snooze, color: c.warn, onPress: snooze },
+            ]
+          : []),
+        { icon: X, label: t.dismiss, color: c.muted, onPress: () => act('dismissed') },
+      ]
   return (
-    <View
-      style={{
-        marginHorizontal: space.l,
-        marginBottom: space.s,
-        padding: space.l,
-        gap: 6,
-        backgroundColor: attention ? c.warnWash : c.raised2,
-        borderRadius: radius.l,
-      }}
-    >
-      {project ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-          <Folder size={12} color={c.muted} />
-          <T size={font.caption} tone="muted" numberOfLines={1}>
-            {project}
-          </T>
+    <View style={{ marginHorizontal: space.l, marginBottom: space.s, borderRadius: radius.l, overflow: 'hidden' }}>
+      <SwipeRow actions={swipe} background={background}>
+        <View style={{ padding: space.l, gap: 6, backgroundColor: background }}>
+          {project ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Folder size={12} color={c.muted} />
+              <T size={font.caption} tone="muted" numberOfLines={1}>
+                {project}
+              </T>
+            </View>
+          ) : null}
+          <T weight="600">{item.title}</T>
+          {item.detail ? (
+            <T tone="soft" size={font.control} numberOfLines={4} style={{ lineHeight: 19 }}>
+              {item.detail}
+            </T>
+          ) : null}
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              marginTop: 4,
+              marginLeft: -space.s,
+            }}
+          >
+            {button(t.openThread, onOpen, true)}
+            {attention ? button(t.markDone, () => act('done'), false, <Check size={13} color={c.muted} />) : null}
+            {attention ? button(choices ? t.snooze : t.snoozeDay, snooze) : null}
+            {button(t.dismiss, () => act('dismissed'))}
+          </View>
         </View>
-      ) : null}
-      <T weight="600">{item.title}</T>
-      {item.detail ? (
-        <T tone="soft" size={font.control} numberOfLines={4} style={{ lineHeight: 19 }}>
-          {item.detail}
-        </T>
-      ) : null}
-      <View
-        style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 4, marginLeft: -space.s }}
-      >
-        {button(t.openThread, onOpen, true)}
-        {attention ? button(t.markDone, () => act('done'), false, <Check size={13} color={c.muted} />) : null}
-        {attention ? button(t.snooze, () => act('snoozed')) : null}
-        {button(t.dismiss, () => act('dismissed'))}
-      </View>
+      </SwipeRow>
+      <Sheet open={menu} onClose={() => setMenu(false)} title={t.snooze}>
+        {SNOOZE_MENU.map(({ choice, label }) => (
+          <Row
+            key={choice}
+            accessibilityRole="menuitem"
+            onPress={() => {
+              setMenu(false)
+              act('snoozed', snoozeEnds(choice))
+            }}
+          >
+            <T style={{ flex: 1 }}>{t[label]}</T>
+          </Row>
+        ))}
+      </Sheet>
     </View>
   )
 }

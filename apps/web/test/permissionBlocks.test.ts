@@ -21,8 +21,8 @@ vi.mock('@/components/desktop-button', () => ({
 vi.mock('../src/Menu', () => ({
   Dropdown: () => null,
 }))
-vi.mock('../src/ipc', () => ({
-  invoke: vi.fn(),
+vi.mock('../src/workspace/HostProvider', () => ({
+  useHost: () => ({ id: 'local', isLocal: true, status: 'connected', invoke: vi.fn() }),
 }))
 
 const permissionEvent = (id: string, command = 'git status'): Extract<AgentEvent, { kind: 'permission-request' }> => ({
@@ -59,7 +59,9 @@ describe('permission request visibility', () => {
     ]
 
     const blocks = toBlocks(events)
-    const permissions = blocks.flatMap((b) => (b.kind === 'event' && b.event.kind === 'permission-request' ? [b.event] : []))
+    const permissions = blocks.flatMap((b) =>
+      b.kind === 'event' && b.event.kind === 'permission-request' ? [b.event] : [],
+    )
     expect(permissions.map((p) => p.requestId)).toEqual(['req-pending', 'req-denied'])
   })
 

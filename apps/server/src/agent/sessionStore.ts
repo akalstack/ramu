@@ -93,6 +93,34 @@ export class SessionStore {
     }))
   }
 
+  /** Only bounded visible main-thread prose is needed to name a thread, never tools or helper transcripts. */
+  titleContext(taskId: string): { users: string[]; replies: string[] } {
+    const prose = `SELECT e.session_id AS sessionId, e.seq, substr(json_extract(e.event, '$.text'), 1, 3000) AS text
+      FROM agent_events e JOIN agent_sessions s ON s.id=e.session_id
+      WHERE s.task_id=? AND s.parent_session_id IS NULL AND json_extract(e.event, '$.agentId') IS NULL
+        AND json_extract(e.event, '$.kind')=? AND trim(COALESCE(json_extract(e.event, '$.text'),'')) != ''`
+    type Row = { sessionId: string; seq: number; text: string }
+    const first = this.db.prepare(`${prose} ORDER BY s.created_at, s.rowid, e.seq LIMIT 1`).get(taskId, 'user') as
+      Row | undefined
+    if (!first) return { users: [], replies: [] }
+    const recent = this.db
+      .prepare(`${prose} ORDER BY s.created_at DESC, s.rowid DESC, e.seq DESC LIMIT 2`)
+      .all(taskId, 'user') as Row[]
+    const replies = this.db
+      .prepare(`${prose} ORDER BY s.created_at DESC, s.rowid DESC, e.seq DESC LIMIT 2`)
+      .all(taskId, 'text') as Row[]
+    return {
+      users: [
+        first.text,
+        ...recent
+          .reverse()
+          .filter((row) => row.sessionId !== first.sessionId || row.seq !== first.seq)
+          .map((row) => row.text.slice(0, 1500)),
+      ],
+      replies: replies.reverse().map((row) => row.text.slice(0, 1000)),
+    }
+  }
+
   private eventRevision = 0
 
   emit(id: string, event: AgentEvent, seq?: number) {

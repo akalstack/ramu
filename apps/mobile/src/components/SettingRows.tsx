@@ -1,9 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { ActivityIndicator, TextInput, View } from 'react-native'
 import { Check, ChevronsUpDown } from 'lucide-react-native'
+import type { LimitChoice } from '@ramu/shared/chat/limitPolicy'
 import { font, radius, space, useTheme } from '../theme'
 import {
   allowedOptions,
+  limitChoiceEdits,
+  limitChoiceState,
   visibleGroups,
   type SettingRow,
   type SettingsSection,
@@ -179,6 +182,21 @@ function HostRow({ row, host, disabled }: { row: SettingRow; host: Host; disable
         onChange={(next) => host.set(row.path, next)}
       />
     )
+  if (row.kind === 'limit') {
+    const { current, options } = limitChoiceState(host.read, row)
+    return (
+      <ChoiceRow
+        title={row.title}
+        help={row.help}
+        value={current}
+        options={options}
+        disabled={disabled}
+        onChange={(next) => {
+          for (const [path, edit] of limitChoiceEdits(next as LimitChoice, host.read, row)) host.set(path, edit)
+        }}
+      />
+    )
+  }
   if (row.kind === 'text')
     return (
       <TextRow

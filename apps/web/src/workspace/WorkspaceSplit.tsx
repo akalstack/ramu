@@ -1,6 +1,8 @@
 import { cn } from 'cn'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { readSize, useLayoutEpoch } from './panelLayout'
+import { hostStorageFor } from '../hostStorage'
+import { useHost } from './HostProvider'
 import { PANE_MS, paneFadeIn, paneTransition } from './paneMotion'
 
 /** A stable two-track split. Content never participates in track sizing or panel registration. */
@@ -33,9 +35,11 @@ export function WorkspaceSplit({
   primary: ReactNode
   secondary: ReactNode
 }) {
+  const host = useHost().id
+  const hostStorage = hostStorageFor(host)
   const storageKey = `workspace-v2.${id}`
   const readShare = () => {
-    const saved = readSize(storageKey, defaultShare)
+    const saved = readSize(storageKey, defaultShare, host)
     return saved > 0 && saved < 100 ? saved : defaultShare
   }
   const [share, setShare] = useState(readShare)
@@ -88,7 +92,7 @@ export function WorkspaceSplit({
     currentShare.current = next
     pixels.current = null
     setShare(next)
-  }, [id, epoch])
+  }, [id, epoch, host])
   useLayoutEffect(() => {
     const element = root.current
     if (!element) return
@@ -121,7 +125,7 @@ export function WorkspaceSplit({
     pixels.current = length ? (next / 100) * length : null
     setShare(next)
   }
-  const save = () => localStorage.setItem(`ramu.layout.${storageKey}`, String(currentShare.current))
+  const save = () => hostStorage.setItem(`ramu.layout.${storageKey}`, String(currentShare.current))
   const horizontal = orientation === 'horizontal'
   const flipped = flip && horizontal
   const collapsed = open && primaryCollapsed

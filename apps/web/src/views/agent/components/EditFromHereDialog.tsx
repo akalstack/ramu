@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { notify } from '@/components/app-toaster'
 import type { Attachment, UndoPreview } from '@ramu/shared/types'
 import { t, useLanguage } from '../../../i18n'
-import { invoke } from '../../../ipc'
+import { useHost } from '../../../workspace/HostProvider'
 import { useWorkspace } from '../../../workspace/workspace'
 import { errorText } from '../../../workspace/TaskPane'
 import type { MessageEdit } from '../types'
@@ -33,6 +33,7 @@ export function EditFromHereDialog({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const [plan, setPlan] = useState<UndoPreview | null>(null)
   const [busy, setBusy] = useState<'keep' | 'revert' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -47,7 +48,7 @@ export function EditFromHereDialog({
     return () => {
       cancelled = true
     }
-  }, [sessionId, edit.seq, offlineHost])
+  }, [sessionId, edit.seq, offlineHost, invoke])
   const ready = plan?.files.filter((file) => file.status === 'ready') ?? []
   const skipped = (plan?.files.length ?? 0) - ready.length
 

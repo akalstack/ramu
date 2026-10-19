@@ -28,7 +28,7 @@ import {
   useScrolledUnderBar,
 } from '../../../components/Screen'
 import { TopFade } from '../../../components/Glass'
-import { ChatRow } from '../../../components/ChatRow'
+import { InboxThread } from '../../../components/InputRequests'
 import { Chips, Group, Nothing, RecapCard, Section } from '../../../components/InboxParts'
 import { useTabActions } from '../../../components/Overlays'
 import { Row, T, tap } from '../../../components/ui'
@@ -110,7 +110,9 @@ export default function InboxScreen() {
     <Group>
       {list.map((chat, i) => {
         const full = chat as Chat
-        return <ChatRow key={full.id} chat={full} project={where(full.computerId, full.projectId)} divider={i > 0} />
+        return (
+          <InboxThread key={full.id} chat={full} project={where(full.computerId, full.projectId)} divider={i > 0} />
+        )
       })}
     </Group>
   )
@@ -125,7 +127,8 @@ export default function InboxScreen() {
         onOpen={() => {
           if (chat) router.push({ pathname: '/chat/[id]', params: { id: chat.id } })
         }}
-        onAct={(action) => auto.actRecap(r.computerId, r.item, action)}
+        choices={auto.snoozeChoices(r.computerId)}
+        onAct={(action, until) => auto.actRecap(r.computerId, r.item, action, until)}
       />
     )
   }

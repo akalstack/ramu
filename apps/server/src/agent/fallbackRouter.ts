@@ -9,6 +9,7 @@ import {
   type AgentSessionInfo,
   type AgentSettings,
   type AgentProvider,
+  type HandoffInfo,
   type ProviderCatalog,
 } from '@ramu/shared/types'
 import {
@@ -28,6 +29,7 @@ import {
   type RouteDecision,
 } from '@ramu/shared/providers/routing'
 import { WRITING_STATES } from './constants'
+import { LIMIT_CONTINUATION } from './providerWait'
 import { sameSettings } from './settings'
 import type { CatalogService } from './catalogService'
 import type { SessionProcess } from './sessionProcess'
@@ -43,7 +45,7 @@ import type { Db } from '../db'
 export interface FallbackRouterHost
   extends
     Pick<CatalogService, 'validateSettings'>,
-    Pick<SessionProcess, 'fail' | 'halt' | 'launch'>,
+    Pick<SessionProcess, 'fail' | 'halt' | 'launch' | 'planSwitch' | 'rememberSession'>,
     Pick<ProviderWaits, 'waitForGoalProvider'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
     Pick<SessionRegistry, 'draining' | 'revisions' | 'transitioning'>,
@@ -76,9 +78,15 @@ export class FallbackRouter {
   /** Logins of the chat's provider already tried since its last message, as `provider:account`. */
   readonly attemptedAccounts = new Map<string, Set<string>>()
 
+  /** Chats that already had their one quiet retry of a low-confidence limit match since their last message. */
+  readonly lowConfidenceRetried = new Set<string>()
+
   /** The user changed model, effort or access. A new model is pinned: it doesn't move up the order until it next runs out. */
   async configure(id: string, settings: AgentSettings): Promise<AgentSessionInfo> {
     const current = this.host.get(id).settings
+    // The per-thread auto-resume choice changes only through setAutoResume, so a settings save never drops or sets it.
+    const { autoResume: _ignored, ...incoming } = settings
+    settings = current.autoResume === undefined ? incoming : { ...incoming, autoResume: current.autoResume }
     if (sameSettings(current, settings)) return this.host.get(id)
     if (stepKey(current) !== stepKey(settings)) this.pinned.add(id)
     this.holds.delete(id)
@@ -102,14 +110,28 @@ export class FallbackRouter {
       await this.host.validateSettings(settings)
       if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0))
         throw new Error('Provider switch cancelled')
+      // A login the thread used before resumes its own session and gets only what it missed; a new one gets the whole
+      // conversation, and a conversation too large for it is refused here, before anything changes.
+      let resume = sameIdentity ? s.providerSessionId : null
+      let handoffInfo: HandoffInfo | undefined
+      if (!sameIdentity) {
+        const plan = this.host.planSwitch(id, settings, settings.provider === s.provider ? 'account' : 'switch')
+        if (!plan.fits)
+          throw new Error(
+            `The conversation is too large to carry to ${providerName(settings.provider)} in one handoff. Keep this model, start a new thread from a summary, or pick a model with a larger context window.`,
+          )
+        resume = plan.resume
+        handoffInfo = plan.info
+      }
       // Terminate the old process before releasing its checkout or starting another provider.
       this.host.halt(id)
       await this.host.draining.get(id)
       if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0))
         throw new Error('Provider switch cancelled')
+      if (!sameIdentity) this.host.rememberSession(id)
       this.db
         .prepare('UPDATE agent_sessions SET provider = ?, settings = ?, provider_session_id = ? WHERE id = ?')
-        .run(settings.provider, JSON.stringify(settings), sameIdentity ? s.providerSessionId : null, id)
+        .run(settings.provider, JSON.stringify(settings), resume, id)
       this.host.record(id, {
         kind: 'settings',
         settings,
@@ -120,13 +142,14 @@ export class FallbackRouter {
             : 'Changed conversation settings'),
         handoff: !sameIdentity,
         previous: s.settings,
+        ...(handoffInfo ? { handoffInfo } : {}),
       })
       if (WRITING_STATES.includes(s.state)) {
         this.host.transitioning.delete(id)
         this.host.launch(
           id,
           'Continue the unfinished user request with the updated conversation settings. Check existing files and tool results before repeating any completed action.',
-          sameIdentity ? s.providerSessionId : null,
+          resume,
           false,
         )
       } else this.host.setState(id, 'restored')
@@ -310,9 +333,36 @@ export class FallbackRouter {
     return true
   }
 
-  async fallback(id: string): Promise<void> {
+  /**
+   * A low-confidence limit match (a bare "rate limit" or 429) gets one quiet retry on the same provider before the thread
+   * enters the limit wait, so a misread error does not park it. False once the retry was used: the caller then waits.
+   */
+  retryQuietly(id: string): boolean {
+    if (this.host.shutdown() || this.host.transitioning.has(id) || this.lowConfidenceRetried.has(id)) return false
+    this.lowConfidenceRetried.add(id)
+    const revision = this.host.revisions.get(id) ?? 0
+    this.host.transitioning.add(id)
+    void (async () => {
+      try {
+        this.host.halt(id)
+        await this.host.draining.get(id)
+        if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
+        this.host.transitioning.delete(id)
+        this.host.launch(id, LIMIT_CONTINUATION, this.host.get(id).providerSessionId, false)
+      } catch (e) {
+        if (!this.host.shutdown() && revision === (this.host.revisions.get(id) ?? 0)) this.host.fail(id, e)
+      } finally {
+        this.host.transitioning.delete(id)
+        this.host.settleChild(id)
+      }
+    })()
+    return true
+  }
+
+  async fallback(id: string, confidence: 'high' | 'low' = 'high'): Promise<void> {
     const s = this.host.get(id)
     if (this.host.shutdown() || this.host.transitioning.has(id)) return
+    if (confidence === 'low' && this.retryQuietly(id)) return
     if (!s.settings.autoFallback) {
       if (this.host.waitForGoalProvider(id)) return
       this.host.halt(id)
@@ -350,38 +400,54 @@ export class FallbackRouter {
       // The limit just hit belongs to this login, so try the provider's other logins before leaving it.
       if (routing) await this.freshAccountUsage(s.provider)
       const account = routing ? this.otherAccount(s.settings, routing, catalogs, policy.switchAt, tried) : null
-      if (account) {
+      const accountPlan = account
+        ? this.host.planSwitch(id, { provider: s.provider, accountId: account }, 'limit')
+        : null
+      if (account && accountPlan?.fits) {
         tried.add(accountKey(s.provider, account))
         const accountSettings = { ...s.settings, accountId: account }
         this.pinned.delete(id)
+        this.host.rememberSession(id)
         this.db
           .prepare('UPDATE agent_sessions SET settings = ?, provider_session_id = ? WHERE id = ?')
-          .run(JSON.stringify(accountSettings), null, id)
+          .run(JSON.stringify(accountSettings), accountPlan.resume, id)
         this.host.record(id, {
           kind: 'settings',
           settings: accountSettings,
           reason: `${providerName(s.provider)} usage limit reached on ${this.accountName(s.provider, s.settings.accountId)} — continuing on ${this.accountName(s.provider, account)}`,
           handoff: true,
           previous: s.settings,
+          handoffInfo: accountPlan.info,
         })
         this.host.transitioning.delete(id)
         this.host.launch(
           id,
           'Continue the unfinished request from the conversation handoff. First inspect the current files and tool results to avoid repeating completed changes.',
-          null,
+          accountPlan.resume,
           false,
         )
         return
       }
       this.attemptedAccounts.delete(id)
-      const step = nextStep(policy.order, {
-        usage: routing?.usage ?? [],
-        catalogs,
-        switchAt: policy.switchAt,
-        attempted,
-      })
+      const next = () =>
+        nextStep(policy.order, { usage: routing?.usage ?? [], catalogs, switchAt: policy.switchAt, attempted })
+      // A conversation that does not fit another provider's handoff budget is never sent truncated: skip that model, and
+      // if nothing else is left, hold the thread at the limit with the reason.
+      let step = next()
+      let plan: ReturnType<SessionProcess['planSwitch']> | null = null
+      let tooLarge: AgentProvider | null = null
+      while (step) {
+        plan = step.provider === s.provider ? null : this.host.planSwitch(id, this.withStep(s.settings, step), 'limit')
+        if (!plan || plan.fits) break
+        tooLarge = step.provider
+        attempted.add(stepKey(step))
+        step = next()
+      }
       if (!step) {
-        if (this.host.waitForGoalProvider(id)) return
+        const reason = tooLarge
+          ? `The conversation is too large to carry to ${providerName(tooLarge)} in one handoff, so ${providerName(s.provider)} is the only option.`
+          : undefined
+        if (this.host.waitForGoalProvider(id, reason)) return
         this.host.fail(
           id,
           configured
@@ -395,21 +461,24 @@ export class FallbackRouter {
       const same = step.provider === s.provider
       const peak = peakFor(routing?.usage ?? [], s.provider, s.settings.model)
       this.pinned.delete(id)
+      const resume = same ? s.providerSessionId : (plan?.resume ?? null)
+      if (!same) this.host.rememberSession(id)
       this.db
         .prepare('UPDATE agent_sessions SET provider = ?, settings = ?, provider_session_id = ? WHERE id = ?')
-        .run(step.provider, JSON.stringify(settings), same ? s.providerSessionId : null, id)
+        .run(step.provider, JSON.stringify(settings), resume, id)
       this.host.record(id, {
         kind: 'settings',
         settings,
         reason: `${providerName(s.provider)} usage limit reached${peak ? ` (${limitReason(s.provider, peak).replace(`${providerName(s.provider)}'s `, '')})` : ''} — continuing with ${providerName(step.provider)}${same ? ` on ${step.model}` : ''}`,
         handoff: !same,
         previous: s.settings,
+        ...(plan ? { handoffInfo: plan.info } : {}),
       })
       this.host.transitioning.delete(id)
       this.host.launch(
         id,
         'Continue the unfinished request from the conversation handoff. First inspect the current files and tool results to avoid repeating completed changes.',
-        same ? s.providerSessionId : null,
+        resume,
         false,
       )
     } catch (e) {
@@ -443,8 +512,10 @@ export class FallbackRouter {
         redirect = true
       }
     }
+    // Auto-resume is not copied: a helper follows its parent's effective value live (see ProviderWaits.autoResumeOf).
+    const { autoResume: _inherited, ...own } = settings
     return {
-      settings: { ...settings, autoFallback: parent.settings.autoFallback },
+      settings: { ...own, autoFallback: parent.settings.autoFallback },
       ...(reason ? { reason } : {}),
       redirect,
       from: parent.provider,

@@ -9,6 +9,7 @@ vi.mock('../src/i18n', () => ({ useLanguage: () => {}, t: (text: string) => text
 vi.mock('../src/workspace/workspace', () => ({
   useWorkspace: () => ({ tasks: state.tasks, projects: [{ id: 'project', name: 'My project' }] }),
 }))
+vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ invoke: vi.fn() }) }))
 vi.mock('../src/ipc', () => ({ invoke: vi.fn() }))
 vi.mock('../src/Menu', () => ({ Dialog: () => null }))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: String }))

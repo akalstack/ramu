@@ -1,3 +1,4 @@
+import { InteractiveContent } from '../../../interactive/InteractiveContent'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { compactionLabel, compactionCounts } from '@ramu/shared/chat/compaction'
@@ -5,7 +6,7 @@ import { Button } from '@/components/desktop-button'
 import { ArrowRightLeft, CircleAlert, Minimize2, RotateCcw, Settings2, Undo2 } from 'lucide-react'
 import type { Attachment, AgentEvent } from '@ramu/shared/types'
 import { ScheduleChatCard } from '../../../Automation'
-import { invoke } from '../../../ipc'
+import { useHost } from '../../../workspace/HostProvider'
 import { errorText } from '../../../workspace/TaskPane'
 import { ElicitationCard } from '../../../chat/ElicitationCard'
 import { QuestionRow } from '../../../chat/QuestionCard'
@@ -20,6 +21,7 @@ import { PlanCard } from './PlanCard'
 import { PermissionRequestCard } from './PermissionRequestCard'
 import { CONVERSATION_SEPARATOR_CLASS, GHOST_TEXT_BUTTON_CLASS, TURN_END_CLASS } from '../styles'
 import { ErrorNote } from './ErrorNote'
+import { handoffLine } from '../handoffLine'
 
 /** Renders one transcript event by kind: messages, separators, plans, permission and question cards, results and errors. */
 export function EventRow({
@@ -50,6 +52,7 @@ export function EventRow({
   onOpenQuestion?: (requestId: string) => void
 }) {
   useLanguage()
+  const { invoke } = useHost()
   switch (e.kind) {
     case 'recovery':
       return (
@@ -127,6 +130,9 @@ export function EventRow({
               )}
             </span>
             {e.reason && e.reason !== 'Changed conversation settings' && <small>{e.reason}</small>}
+            {e.handoff && handoffLine(e.handoffInfo, translate) && (
+              <small>{handoffLine(e.handoffInfo, translate)}</small>
+            )}
           </span>
         </div>
       )
@@ -147,6 +153,8 @@ export function EventRow({
       return <TurnDiff diff={e.diff} />
     case 'thinking':
       return <ThinkingRow text={e.text} active={generating} />
+    case 'interactive':
+      return <InteractiveContent key={`${e.reference.id}:${e.reference.version}`} reference={e.reference} />
     case 'content':
       return <AgentContentView content={e.content} taskId={taskId} />
     case 'plan':

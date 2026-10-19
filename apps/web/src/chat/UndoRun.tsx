@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { RotateCcw, RefreshCw, FileText } from 'lucide-react'
 import type { UndoPreview } from '@ramu/shared/types'
 import { Dialog } from '../Menu'
-import { invoke } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
 import { ReviewDiff } from '../git/ReviewDiff'
 import { errorText } from '../workspace/TaskPane'
@@ -30,6 +30,7 @@ function UndoFiles({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const [preview, setPreview] = useState<UndoPreview | null>(null),
     [selected, setSelected] = useState<Set<string>>(new Set())
   const [fileId, setFileId] = useState<string | null>(null),

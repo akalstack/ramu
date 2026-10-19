@@ -18,9 +18,14 @@ it('defaults fallback to only at the limit and preserves saved thresholds', () =
     saved = { fallback: {} as AppPreferences['fallback'] }
     expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fallback: { switchAt: null } })
     for (const switchAt of [80, 90, 95, null] as const) {
-      saved = { fallback: { switchAt } }
-      expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fallback: { switchAt } })
+      saved = { fallback: { switchAt } as AppPreferences['fallback'] }
+      expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fallback: { switchAt, autoResume: true } })
     }
+    // Auto-resume is new: saved preferences without it continue by themselves, and a saved choice is kept.
+    saved = { fallback: { switchAt: 90 } as AppPreferences['fallback'] }
+    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fallback: { autoResume: true } })
+    saved = { fallback: { switchAt: 90, autoResume: false } }
+    expect(dispatcher.invoke('settings.app.get', [])).toMatchObject({ fallback: { switchAt: 90, autoResume: false } })
   } finally {
     dispatcher.close()
     configureProviderBinaries({})

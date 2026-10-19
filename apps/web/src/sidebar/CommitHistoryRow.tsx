@@ -4,10 +4,11 @@ import { Button } from '@/components/desktop-button'
 import { ChevronRight, Copy, FileDiff, FileText, Folder, FolderOpen, MoreHorizontal, Undo2 } from 'lucide-react'
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { GitCommit, GitCommitFile, RepositoryBinding } from '@ramu/shared/types'
-import { invoke, copyText } from '../ipc'
+import { copyText } from '../ipc'
 import { Menu, timeAgo, useContextMenu, type MenuEntry } from '../Menu'
 import { errorText } from '../workspace/TaskPane'
 import { useWorkspace } from '../workspace/workspace'
+import { useHost } from '../workspace/HostProvider'
 
 /** Refs worth a badge: other branches, remotes and tags. HEAD and the checked-out branch are implied by the list itself. */
 export function commitRefs(refs: string, branch: string | null): string[] {
@@ -34,6 +35,7 @@ export function CommitHistoryRow({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const [expanded, setExpanded] = useState(false)
   const [files, setFiles] = useState<GitCommitFile[] | null>(null)
   const [closed, setClosed] = useState<Set<string>>(new Set())

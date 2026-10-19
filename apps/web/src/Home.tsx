@@ -21,7 +21,7 @@ export function HomeFeed() {
   const { groups, error } = useAgentOverview()
   const recaps = useRecaps()
   const waiting = rowsOf(groups, 'Waiting for your input')
-  const running = rowsOf(groups, 'Running', 'Waiting for allowance').length
+  const running = rowsOf(groups, 'Running', 'Limit reached').length
   const completed = recentlyCompleted(groups, ws.tasks).length
   const needsYou = waiting.length + recaps.attention.length
   const summary = [

@@ -5,8 +5,10 @@ import { AppToaster, notify, type AppToastData } from '@/components/app-toaster'
 import { MessageCircleQuestion } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useAppSettings } from '../settings/AppSettings'
-import { ramu } from '../ipc'
-import { useWorkspace } from '../workspace/workspace'
+import { ramu, invokerFor } from '../ipc'
+import { useHostRuntime, useWorkspace } from '../workspace/workspace'
+import { useHostSelection } from '../workspace/HostSelection'
+import { useHost } from '../workspace/HostProvider'
 import { TOAST_MS, notices } from './notificationCenter'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
 
@@ -26,6 +28,10 @@ export function notifyError(message: string, source = 'Ramu') {
 export function Notifications() {
   useLanguage()
   const ws = useWorkspace()
+  const { select } = useHostSelection()
+  // Inbox notices are the host's on screen; provider updates are this window's own host's (settings live there).
+  const { id: hostId, invoke } = useHost()
+  const { on } = useHostRuntime()
   const { preferences } = useAppSettings()
   const dismissedUpdates = useRef(new Set<string>())
   useEffect(() => {
@@ -116,7 +122,7 @@ export function Notifications() {
   // The computer keeps the notices, so a chat opened on the phone clears here too and the other way round.
   const dismissHost = (id: string) => {
     notices.remove(id)
-    void ramu.invoke('notices.dismiss', id).catch(() => {})
+    void invoke('notices.dismiss', id).catch(() => {})
   }
   const inbox = useRef<InboxNotice[]>([])
   const publishInbox = (list: InboxNotice[]) => {
@@ -151,10 +157,10 @@ export function Notifications() {
     const take = (list: InboxNotice[]) => {
       if (live) publishInbox(list)
     }
-    const off = ramu.on('notices:changed', take)
-    const load = () => void ramu.invoke('notices.list').then(take, () => {})
+    const off = on('notices:changed', take)
+    const load = () => void invoke('notices.list').then(take, () => {})
     load()
-    const reconnect = ramu.on('background:connection', ({ connected }) => {
+    const reconnect = on('background:connection', ({ connected }) => {
       if (connected) load()
     })
     return () => {
@@ -163,7 +169,7 @@ export function Notifications() {
       reconnect()
       notices.setHost([])
     }
-  }, [])
+  }, [invoke, on])
   // A notice about a chat that is on screen is stale.
   useEffect(() => {
     for (const entry of inbox.current)
@@ -175,17 +181,23 @@ export function Notifications() {
   useEffect(() => {
     const offToast = ramu.on('notify:inapp', (notice) => {
       // No toast for the chat you are already looking at.
-      const id = `agent:${notice.sessionId}`
-      if (watching.current(notice.taskId, notice.sessionId)) {
-        dismissHost(id)
+      const sameHost = !notice.hostId || notice.hostId === hostId
+      const id = sameHost ? `agent:${notice.sessionId}` : `agent:${notice.hostId}:${notice.sessionId}`
+      const dismiss = () => {
+        if (sameHost) dismissHost(`agent:${notice.sessionId}`)
+        else void invokerFor(notice.hostId!)('notices.dismiss', `agent:${notice.sessionId}`).catch(() => {})
+      }
+      if (sameHost && watching.current(notice.taskId, notice.sessionId)) {
+        dismiss()
         return
       }
       const type = notice.kind === 'failed' ? 'error' : notice.kind === 'done' ? 'success' : 'info'
       const icon = notice.kind === 'input' ? <MessageCircleQuestion size={16} /> : undefined
       const open = () => {
-        openChat(notice.taskId, notice.sessionId)
+        if (notice.hostId) select(notice.hostId, { kind: 'task', taskId: notice.taskId, sessionId: notice.sessionId })
+        else openChat(notice.taskId, notice.sessionId)
         notify.close(id)
-        dismissHost(id)
+        dismiss()
       }
       notify.add<AppToastData>({
         id,
@@ -199,7 +211,7 @@ export function Notifications() {
               : TOAST_MS[type === 'success' ? 'success' : 'info'],
         type,
         priority: notice.kind === 'done' ? 'low' : 'high',
-        data: { icon, onDismiss: () => dismissHost(id) },
+        data: { icon, onDismiss: () => dismiss() },
         actionProps: { children: t('Open thread'), onClick: open },
       })
     })

@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react'
+import { hostStorageFor } from '../hostStorage'
+import { useHost } from '../workspace/HostProvider'
 
-/** Files marked viewed in a review, remembered per review in localStorage. */
+/** Files marked viewed in a review, remembered per review, per host. */
 export function useViewedFiles(id: string) {
+  const hostStorage = hostStorageFor(useHost().id)
   const readViewed = (): string[] => {
     try {
-      const value = JSON.parse(localStorage.getItem(`ramu.review-viewed:${id}`) ?? '[]')
+      const value = JSON.parse(hostStorage.getItem(`ramu.review-viewed:${id}`) ?? '[]')
       return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
     } catch {
       return []
@@ -21,7 +24,7 @@ export function useViewedFiles(id: string) {
     const files = [...next]
     setViewedState({ id, files })
     try {
-      localStorage.setItem(`ramu.review-viewed:${id}`, JSON.stringify(files))
+      hostStorage.setItem(`ramu.review-viewed:${id}`, JSON.stringify(files))
     } catch {}
   }
   return { viewedFiles, markViewed }

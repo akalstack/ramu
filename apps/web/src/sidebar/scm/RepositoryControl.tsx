@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { GitCommit, GitStatusEntry, RepositoryBinding } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
-import { invoke } from '../../ipc'
 import { notifyError } from '../../chat/Notifications'
 import { useGitBusy } from '../../git/gitBusy'
 import { ChangeRow } from './ChangeRow'
@@ -29,6 +28,7 @@ import { useFileContextMenu } from './useFileContextMenu'
 import { useGitActions } from './useGitActions'
 import { useRepositoryData } from './useRepositoryData'
 import { useResolveWithAi } from './useResolveWithAi'
+import { useHost } from '../../workspace/HostProvider'
 
 /** Source Control for one repository: changes, commit box and operation state, plus its Git section. */
 export function RepositoryControl({
@@ -55,6 +55,7 @@ export function RepositoryControl({
   onGitCollapsed?: (collapsed: boolean) => void
 }) {
   useLanguage()
+  const { invoke } = useHost()
   const reportError = useCallback(
     (message: string) => notifyError(message, `Git · ${binding.repoName}`),
     [binding.repoName],

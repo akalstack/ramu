@@ -1,11 +1,15 @@
 import { t, useLanguage } from '../i18n'
 import { ArrowRight, Gauge } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { AgentSettings, FallbackStep } from '@ramu/shared/types'
+import type { AgentSessionInfo, AgentSettings, FallbackStep } from '@ramu/shared/types'
 import { providerName } from '@ramu/shared/providers/providers'
 import { useAppSettings } from '../settings/AppSettings'
-import { invoke } from '../ipc'
-import { Menu } from '../Menu'
+import { useHost } from '../workspace/HostProvider'
+import { Menu, type MenuEntry } from '../Menu'
+import { autoResumeLabel, autoResumeSection, type AutoResumeControl } from './autoResumeMenu'
+import { continueOptions, settingsOnStep } from './continueWith'
+import { notifyError } from '../chat/Notifications'
+import { errorText } from '../workspace/TaskPane'
 import { modelDisplayName, useModelSets } from './ModelSets'
 import { ProviderIcon } from './ProviderIcon'
 import { resetText, usageTone, useUsage, windowLabel } from '../settings/Usage'
@@ -18,8 +22,28 @@ const WARN_AT = 80
 const CHIP =
   'h-7 min-h-7 gap-1.5 rounded-full border-0 bg-fill px-2.5 text-caption font-normal text-soft [box-shadow:none] [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground [&.on]:bg-hover [&.on]:text-foreground [&_svg]:flex-none [&_svg]:text-muted-foreground [&.warn]:bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] [&.warn]:text-warn [&.warn:hover]:bg-[color-mix(in_srgb,var(--warn)_20%,transparent)] [&.bad]:bg-[color-mix(in_srgb,var(--bad)_12%,transparent)] [&.bad]:text-bad [&.bad:hover]:bg-[color-mix(in_srgb,var(--bad)_20%,transparent)] [&.warn_svg]:text-warn [&.bad_svg]:text-bad [&.switching]:text-foreground [&_.route-reason]:text-muted-foreground'
 
-export function ProviderRouteChip({ sessionId, settings }: { sessionId: string; settings: AgentSettings }) {
+/** The chip when there is nothing to warn about: an icon with no fill, so the composer row looks as it did. */
+const QUIET_CHIP =
+  'route-chip h-7 min-h-7 w-7 justify-center gap-0 rounded-full border-0 bg-transparent p-0 text-muted-foreground [box-shadow:none] [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground [&.on]:bg-hover [&.on]:text-foreground [&_svg]:flex-none'
+
+export function ProviderRouteChip({
+  sessionId,
+  settings,
+  limited = false,
+  autoResume,
+  onSession,
+}: {
+  sessionId: string
+  settings: AgentSettings
+  /** The thread is at a usage limit right now: the chip marks "Limit reached" and always shows. */
+  limited?: boolean
+  /** This thread's Auto-resume choice, offered in the menu so it can be set before a limit too. */
+  autoResume?: AutoResumeControl
+  /** Receives the thread after "Continue with …" moved it to another provider. */
+  onSession?: (session: AgentSessionInfo) => void
+}) {
   useLanguage()
+  const { invoke } = useHost()
   const usage = useUsage()
   const { preferences } = useAppSettings()
   const { catalogs } = useModelSets()
@@ -27,7 +51,7 @@ export function ProviderRouteChip({ sessionId, settings }: { sessionId: string; 
   // Picking a model by hand pins the chat on the server, so ask again when the model changes.
   useEffect(() => {
     void invoke('agent.providerHold', sessionId).then(setHold, () => {})
-  }, [sessionId, settings.provider, settings.model])
+  }, [sessionId, settings.provider, settings.model, invoke])
   const now = Date.now()
   // Readings count only until their window resets, exactly as the main process sees them.
   const peak = peakFor(usage, settings.provider, settings.model, now)
@@ -42,7 +66,26 @@ export function ProviderRouteChip({ sessionId, settings }: { sessionId: string; 
     promote: hold !== 'picked',
   })
   const moveUp = !!route && !route.peak
-  if (!warn && !moveUp) return null
+  const settingsItem = {
+    key: 'settings',
+    label: t('Fallback settings…'),
+    onSelect: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'access' } })),
+  }
+  const resumeItems: MenuEntry[] = autoResume
+    ? [...autoResumeSection(autoResume), { key: 'auto-resume-sep', separator: true }]
+    : []
+  // Nothing to warn about: a quiet icon, so Auto-resume can still be set (or cleared) before a limit, in the same menu.
+  if (!warn && !moveUp && !limited) {
+    if (!autoResume) return null
+    return (
+      <Menu
+        label={autoResumeLabel(autoResume)}
+        className={QUIET_CHIP}
+        icon={<Gauge size={13} />}
+        items={[...resumeItems, settingsItem]}
+      />
+    )
+  }
   const next: FallbackStep | undefined = route?.step
   const held = hold === 'message' || hold === 'chat'
   const switching = !!route && !held
@@ -59,11 +102,49 @@ export function ProviderRouteChip({ sessionId, settings }: { sessionId: string; 
     const model = catalogs.find((c) => c.provider === step.provider)?.models.find((m) => m.id === step.model)
     return model ? modelDisplayName(model.name) : providerName(step.provider)
   }
-  const settingsItem = {
-    key: 'settings',
-    label: t('Fallback settings…'),
-    onSelect: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'access' } })),
+  // Held at a limit: other providers that are not known to be limited, to continue on right now with the conversation handed over.
+  const continueItems = (): MenuEntry[] => {
+    const steps = continueOptions({ settings, order, catalogs, usage, now })
+    if (!steps.length) return []
+    return [
+      { key: 'continue-heading', heading: t('Continue on another provider') },
+      ...steps.map((step) => ({
+        key: `continue-${step.provider}`,
+        label: t('Continue with {0}', { '0': providerName(step.provider) }),
+        title: t('Hands the conversation over and sends it now'),
+        onSelect: () => continueWith(step),
+      })),
+      { key: 'continue-sep', separator: true as const },
+    ]
   }
+  const continueWith = (step: FallbackStep) => {
+    // Switching hands the conversation over; trying again then continues the held request on the new provider.
+    void invoke('agent.configure', sessionId, settingsOnStep(settings, step))
+      .then((updated) => {
+        onSession?.(updated)
+        return invoke('agent.retryLimitNow', sessionId)
+      })
+      .catch((error) => notifyError(errorText(error), 'Model'))
+  }
+  if (limited)
+    return (
+      <Menu
+        label={t('{0} · Limit reached', { '0': providerName(settings.provider) })}
+        className={`route-chip warn ${CHIP}`}
+        icon={
+          <>
+            <Gauge size={13} />
+            <span>{t('Limit reached')}</span>
+          </>
+        }
+        items={[
+          { key: 'about', heading: t('{0} · Limit reached', { '0': providerName(settings.provider) }) },
+          ...continueItems(),
+          ...resumeItems,
+          settingsItem,
+        ]}
+      />
+    )
   const release =
     held && next
       ? [
@@ -89,7 +170,7 @@ export function ProviderRouteChip({ sessionId, settings }: { sessionId: string; 
             <span>{t('Keeping {0}', { '0': providerName(settings.provider) })}</span>
           </>
         }
-        items={[...release, settingsItem]}
+        items={[...release, ...resumeItems, settingsItem]}
       />
     )
   if (!switching)
@@ -103,7 +184,12 @@ export function ProviderRouteChip({ sessionId, settings }: { sessionId: string; 
             <span>{reason}</span>
           </>
         }
-        items={[{ key: 'about', heading: resetText(peak!.resetsAt) ?? t('Plan usage') }, ...release, settingsItem]}
+        items={[
+          { key: 'about', heading: resetText(peak!.resetsAt) ?? t('Plan usage') },
+          ...release,
+          ...resumeItems,
+          settingsItem,
+        ]}
       />
     )
   return (
@@ -137,6 +223,7 @@ export function ProviderRouteChip({ sessionId, settings }: { sessionId: string; 
           onSelect: () => keep('chat'),
         },
         { key: 'sep', separator: true },
+        ...resumeItems,
         settingsItem,
       ]}
     />

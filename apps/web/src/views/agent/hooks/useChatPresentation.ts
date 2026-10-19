@@ -1,14 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import type { AgentEvent, AgentSessionInfo, Attachment } from '@ramu/shared/types'
-import { ipcQueryKey, queryClient } from '../../../dataQueries'
+import { ipcQueryKeyOn, queryClient } from '../../../dataQueries'
 import { registerWorkspaceCheckpoint } from '../../../workspace/workspaceCheckpoint'
+import { useHost } from '../../../workspace/HostProvider'
+import { ownHostId } from '../../../hosts'
 import { releaseFollow } from './useTranscriptScroll'
 
 // Per-chat presentation state belongs to the UI, separate from the data query cache.
 const chatPresentation = new Map<string, { draft: string; attachments: Attachment[]; top: number; stick: boolean }>()
 
 /** What a chat looked like when it was last left open: draft, attachments and scroll position. */
-export const savedChat = (sessionId: string) => chatPresentation.get(sessionId)
+export const savedChat = (sessionId: string, host = ownHostId()) =>
+  chatPresentation.get(JSON.stringify([host, sessionId]))
 
 /**
  * Restores the saved scroll position and, when the chat unmounts, remembers its draft, attachments and
@@ -33,9 +36,10 @@ export function useChatPresentation({
 }) {
   const latestChat = useRef({ session, events, draft, attachments })
   latestChat.current = { session, events, draft, attachments }
-  useEffect(() => registerWorkspaceCheckpoint(async () => latestChat.current.attachments.length === 0), [])
+  const host = useHost().id
+  useEffect(() => registerWorkspaceCheckpoint(async () => latestChat.current.attachments.length === 0, host), [host])
   useLayoutEffect(() => {
-    const saved = chatPresentation.get(sessionId)
+    const saved = chatPresentation.get(JSON.stringify([host, sessionId]))
     // A chat left at the bottom reopens at the bottom (the scroller does that); one left higher up goes back to where it was.
     if (saved && !saved.stick && scroller.current) {
       scroller.current.scrollTop = saved.top
@@ -43,7 +47,7 @@ export function useChatPresentation({
     }
     return () => {
       const current = latestChat.current
-      chatPresentation.set(sessionId, {
+      chatPresentation.set(JSON.stringify([host, sessionId]), {
         draft: current.draft,
         attachments: current.attachments,
         top: scroller.current?.scrollTop ?? 0,
@@ -51,8 +55,8 @@ export function useChatPresentation({
       })
       // Refresh cache lifetime on leaving an open chat, even if it was idle for
       // longer than the query's normal garbage-collection interval.
-      if (current.session) queryClient.setQueryData(ipcQueryKey('agent.get', sessionId), current.session)
-      queryClient.setQueryData(ipcQueryKey('agent.events', sessionId), current.events)
+      if (current.session) queryClient.setQueryData(ipcQueryKeyOn(host, 'agent.get', sessionId), current.session)
+      queryClient.setQueryData(ipcQueryKeyOn(host, 'agent.events', sessionId), current.events)
     }
-  }, [sessionId])
+  }, [sessionId, host])
 }

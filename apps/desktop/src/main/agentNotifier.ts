@@ -1,5 +1,6 @@
 import { t } from './localization'
 import { Notification, type BrowserWindow } from 'electron'
+import { goalContinues } from '@ramu/shared/chat/goalHold'
 import type { AgentSessionInfo, AgentSessionState, AppPreferences, ChatGoal, Task } from '@ramu/shared/types'
 
 export type AgentNotice = {
@@ -16,7 +17,7 @@ const ACTIVE: AgentSessionState[] = ['starting', 'running', 'needs-input']
 /**
  * Tells the user when an agent finishes, needs input or fails. In the foreground the app shows its own
  * toast; in the background it sends a system notification. Clicking either opens the chat.
- * One notifier serves one computer: `send` and `invoke` reach that computer's window and server.
+ * One notifier serves one computer: `send` reaches the shell and `invoke` reaches that computer's server.
  */
 export function createAgentNotifier(options: {
   window: BrowserWindow
@@ -34,6 +35,8 @@ export function createAgentNotifier(options: {
   const last = new Map<string, AgentSessionState>()
   const live = new Set<Notification>()
   const questionsSeen = new Set<string>()
+  // A reset is announced once per wait: the server stamps `resetNotifiedAt` on the wait, and a restart replays it.
+  const resetsSeen = new Set<string>()
   const open = (notice: AgentNotice) => {
     const win = options.window
     if (win.isDestroyed()) return
@@ -53,7 +56,7 @@ export function createAgentNotifier(options: {
       const session = (await options.invoke('agent.get', [sessionId])) as AgentSessionInfo
       if (kind === 'done') {
         const goal = (await options.invoke('agent.goal', [sessionId])) as ChatGoal | null
-        if (goal && ['active', 'waiting-provider', 'blocked'].includes(goal.status)) return
+        if (goal && (goalContinues(goal) || goal.status === 'blocked')) return
       }
       const task = ((await options.invoke('tasks.list')) as Task[]).find((entry) => entry.id === session.taskId)
       // A sub-agent only ever needs you when it asks for approval; finishing or failing is reported in its chat.
@@ -95,6 +98,17 @@ export function createAgentNotifier(options: {
           responseMode?: string
           requestId?: string
           goal?: ChatGoal | null
+          retryAt?: number | null
+          resetNotifiedAt?: number
+        }
+      }
+      // The limit reset while auto-resume is off, so nothing continues the thread: tell the user once to resume it.
+      if (event.kind === 'provider-wait' && event.retryAt != null && event.resetNotifiedAt !== undefined) {
+        const key = `${sessionId}:${event.resetNotifiedAt}`
+        if (!resetsSeen.has(key)) {
+          resetsSeen.add(key)
+          if (resetsSeen.size > 500) resetsSeen.delete(resetsSeen.values().next().value!)
+          void deliver(sessionId, 'input', 'Limit has reset. Nothing ran on its own: resume to continue.')
         }
       }
       if (event.kind === 'goal' && event.goal && ['blocked', 'turn-limit'].includes(event.goal.status))

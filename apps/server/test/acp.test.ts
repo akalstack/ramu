@@ -311,7 +311,7 @@ it('refuses to steer when no turn is running', async () => {
 })
 
 it('treats a limit notice sent as an ordinary reply as a usage limit so fallback can run', async () => {
-  const limits: (boolean | undefined)[] = []
+  const limits: (boolean | 'low' | undefined)[] = []
   runner = createAcpRunner(
     { cwd: dir, additionalDirs: [], covers: [dir] },
     { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', model: 'wire-model' },

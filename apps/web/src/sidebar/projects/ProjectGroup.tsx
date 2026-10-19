@@ -18,6 +18,7 @@ import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
 import type { Project } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
 import { invoke } from '../../ipc'
+import { pickHostFolder } from '../../workspace/addProject'
 import { useContextMenu, type MenuEntry } from '../../Menu'
 import { errorText } from '../../workspace/TaskPane'
 import { projectCtx, useWorkspace } from '../../workspace/workspace'
@@ -31,10 +32,12 @@ import { ProjectHoverCard } from './ProjectHoverCard'
 import { TaskRow } from './TaskRow'
 import { projectThreadPreview } from './threadLists'
 import { useSlideMount } from './useSlideMount'
+import { useHost } from '../../workspace/HostProvider'
 
 export function ProjectGroup({ project, previewLimit }: { project: Project; previewLimit?: number }) {
   useLanguage()
   const ws = useWorkspace()
+  const host = useHost()
   const repos = ws.repos[project.id] ?? []
   const { preferences } = useAppSettings()
   const recent = Math.min(preferences.recentChats, previewLimit ?? Infinity)
@@ -57,9 +60,10 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   const connect = async () => {
     setError(null)
     try {
-      const dir = await invoke('repos.pick', 'repository')
+      // The native folder picker runs on this machine (see the plan ledger for other hosts).
+      const dir = host.isLocal ? await invoke('repos.pick', 'repository') : await pickHostFolder(host.id)
       if (!dir) return
-      await invoke('repos.add', project.id, dir)
+      await host.invoke('repos.add', project.id, dir)
       await ws.refresh()
     } catch (e) {
       setError(errorText(e))
@@ -107,12 +111,13 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
     },
     {
       key: 'reveal',
+      disabled: !host.isLocal,
       label: (
         <>
           <FolderSearch size={14} /> {t(' Reveal in Finder')}
         </>
       ),
-      onSelect: () => void act(() => invoke('projects.reveal', project.id)),
+      onSelect: () => void act(() => host.invoke('projects.reveal', project.id)),
     },
     ...(repos.length > 1
       ? [
@@ -133,7 +138,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
                   <span className="muted text-muted-foreground">{t('Disconnect')}</span>
                 </>
               ),
-              onSelect: () => void act(() => invoke('repos.remove', r.id)),
+              onSelect: () => void act(() => host.invoke('repos.remove', r.id)),
             })),
           } as MenuEntry,
         ]
@@ -150,7 +155,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
       onSelect: () =>
         void act(async () => {
           for (const t of tasks) {
-            await invoke('tasks.archive', t.id, true)
+            await host.invoke('tasks.archive', t.id, true)
             ws.forgetTask(t.id)
           }
         }),
@@ -163,7 +168,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
           <X size={14} /> {t(' Remove project')}
         </>
       ),
-      onSelect: () => void act(() => invoke('projects.remove', project.id)),
+      onSelect: () => void act(() => host.invoke('projects.remove', project.id)),
     },
   ]
 
@@ -216,7 +221,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
               value={project.name}
               onDone={(v) => {
                 setRenaming(false)
-                if (v && v !== project.name) void act(() => invoke('projects.rename', project.id, v))
+                if (v && v !== project.name) void act(() => host.invoke('projects.rename', project.id, v))
               }}
             />
           ) : (

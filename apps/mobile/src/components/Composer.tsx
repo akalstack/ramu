@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useFocusEffect } from 'expo-router'
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
+import type { MessageDraftSnapshot, SavedDraftScope } from '@ramu/shared/chat/savedDrafts'
+import { useSavedMessageDrafts } from './SavedMessageDrafts'
+import { isMethodMissing } from '../runtime/goalVerify'
+import { fileContextKey } from '@ramu/shared/chat/fileContext'
+import { ThreadUsageChip } from './PlanUsage'
 import { StepSlider } from './StepSlider'
 import { SuggestionList, useComposerSuggest } from './ComposerSuggest'
 import {
@@ -20,6 +26,7 @@ import {
   Play,
   Plus,
   Quote,
+  ShieldCheck,
   Square,
   X,
 } from 'lucide-react-native'
@@ -31,12 +38,17 @@ import { useT } from '../i18n'
 import { Chip, IconButton, Row, Segmented, Sheet, T, tap } from './ui'
 import { ProviderIcon } from './Logos'
 import { Glass } from './Glass'
+import { AutoResumeRows, LimitTray } from './LimitTray'
+import { hostHasAutoResume } from '../runtime/limitTray'
+import { offersVerify } from '../runtime/goalVerify'
+import { isUserPaused } from '@ramu/shared/chat/goalHold'
+import { GoalVerifySheet } from './GoalVerifySheet'
 
 export interface ModelChoice {
   provider: AgentProvider
   model: string
   effort: string
-  settings?: Pick<AgentSettings, 'access' | 'autoFallback' | 'serviceTier'>
+  settings?: Pick<AgentSettings, 'access' | 'autoFallback' | 'serviceTier' | 'accountId'>
 }
 
 const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
@@ -63,13 +75,17 @@ export function ModelChip({
   current: running,
   onChange,
   computerId,
+  limited,
 }: {
   value: ModelChoice
+  /** The thread is held at this provider's usage limit: the chip carries a small "Limit reached" marker. */
+  limited?: boolean
   /** What the chat runs now, when `value` is a choice waiting for the next send. */ current?: ModelChoice
   onChange: (m: ModelChoice) => void
   computerId?: string
 }) {
   const store = useStore()
+  const t = useT()
   const catalog = store.catalogs[computerId ?? store.selected]
   const models = useMemo<ModelRow[]>(
     () =>
@@ -191,6 +207,11 @@ export function ModelChip({
             ) : null}
           </>
         )}
+        {limited ? (
+          <T size={font.caption} weight="600" tone="warn" numberOfLines={1}>
+            {t.limitReached}
+          </T>
+        ) : null}
         <ChevronDown size={13} color={c.muted} />
       </Pressable>
       <Sheet open={open} onClose={close} title={title} scroll={false}>
@@ -341,13 +362,15 @@ export function ModelChip({
 }
 
 /** Tray rows at the top of the composer: the live goal first, then queued and steering messages. */
-function Tray({
+export function GoalQueueTray({
   goal,
   queue,
   paused: queuePaused,
   onResumeQueue,
   onToggleGoal,
   onClearGoal,
+  onVerifyGoal,
+  verifyOffered,
   onRemove,
 }: {
   goal: ChatGoal | null
@@ -356,12 +379,18 @@ function Tray({
   onResumeQueue?: () => void
   onToggleGoal?: () => void
   onClearGoal?: () => void
+  /** Sets the goal's verification command, or removes it with null; rejects with the host's reason. */
+  onVerifyGoal?: (command: string | null) => Promise<void>
+  /** False once the host has shown it cannot do this: the button goes, an open sheet stays to say why. */
+  verifyOffered?: boolean
   onRemove?: (id: string) => void
 }) {
   const { c } = useTheme()
   const t = useT()
+  const [verifying, setVerifying] = useState(false)
   if (!goal && !queue.length) return null
-  const paused = goal?.status === 'paused'
+  // Only a goal the user paused reads as paused here; one held by a usage limit continues by itself and shows in the limit tray.
+  const paused = isUserPaused(goal)
   return (
     <View
       style={{
@@ -381,6 +410,15 @@ function Tray({
           <T size={font.caption} tone="muted">
             {paused ? 'paused' : `turn ${goal.turns}`}
           </T>
+          {onVerifyGoal && verifyOffered ? (
+            <IconButton
+              icon={ShieldCheck}
+              label={goal.verify ? t.verifyEdit : t.verifySet}
+              size={28}
+              tone={goal.verify ? 'accent' : 'muted'}
+              onPress={() => setVerifying(true)}
+            />
+          ) : null}
           <IconButton
             icon={paused ? Play : Pause}
             label={paused ? 'Resume goal' : 'Pause goal'}
@@ -390,6 +428,9 @@ function Tray({
           />
           <IconButton icon={X} label="Clear goal" size={28} tone="muted" onPress={onClearGoal} />
         </View>
+      ) : null}
+      {goal && onVerifyGoal ? (
+        <GoalVerifySheet open={verifying} goal={goal} onClose={() => setVerifying(false)} onSave={onVerifyGoal} />
       ) : null}
       {queuePaused && queue.length ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}>
@@ -457,22 +498,28 @@ export function Composer({
   queue = [],
   onToggleGoal,
   onClearGoal,
+  onVerifyGoal,
   onRemoveQueued,
   placeholder,
   autoFocus,
   header,
+  activity,
   offline,
   restore,
   editing,
   onResume,
+  resumeLabel,
+  limited,
   onCancelEdit,
   draftKey,
+  draftScope,
   computerId,
   taskId,
   scope,
   chatId,
 }: {
   draftKey?: string
+  draftScope?: SavedDraftScope
   computerId?: string
   taskId?: string
   /** Where `@` and `/` look for files and skills: the chat's task, or `project:<id>` before a chat exists. Defaults to `taskId`. */
@@ -499,19 +546,26 @@ export function Composer({
   meter?: ReactNode
   onToggleGoal?: () => void
   onClearGoal?: () => void
+  /** Sets the goal's verification command (null removes it). The shield button shows only on hosts that have it. */
+  onVerifyGoal?: (command: string | null) => Promise<void>
   onRemoveQueued?: (id: string) => void
   placeholder?: string
   autoFocus?: boolean
   /** Extra controls above the input, e.g. the project and checkout pickers. */
   header?: ReactNode
+  activity?: ReactNode
   /** The computer is unreachable: sends go to the outbox. */
   offline?: boolean
   /** Puts text back into the input (e.g. a cancelled outbox message); `n` changes on every restore. */
   restore?: { text: string; n: number }
   /** A message being revised: shown as a banner with Cancel; the screen decides what sending does. */
   editing?: { label: string }
-  /** The turn was stopped or failed: an empty message box offers to continue, as on the desktop. */
+  /** The turn was stopped or failed, or the thread is at a usage limit: an empty message box offers to continue or try again. */
   onResume?: () => void
+  /** Label for that play button; "Try again" at a limit. */
+  resumeLabel?: string
+  /** The thread is held at a usage limit: the send button reads Queue and the model chip carries a marker. */
+  limited?: boolean
   onCancelEdit?: () => void
 }) {
   const { c } = useTheme()
@@ -536,14 +590,58 @@ export function Composer({
   >(() => decodeDraft('mentions', []))
   const [caret, setCaret] = useState(0)
   const [forced, setForced] = useState<{ start: number; end: number } | undefined>()
-  const [menu, setMenu] = useState<'actions' | 'context' | 'skills' | 'settings' | null>(null)
+  const [menu, setMenu] = useState<'actions' | 'context' | 'skills' | 'settings' | 'saved-drafts' | null>(null)
   const [files, setFiles] = useState<{ repoId: string; path: string }[]>([])
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [filter, setFilter] = useState('')
   const [uploading, setUploading] = useState(false)
+  const uploadPending = useRef(false)
+  const movedDraft = useRef(0)
   const origin = useRef(draftKey)
   origin.current = draftKey
   const pc = computerId ?? store.selected
+  const attachmentOwner = useRef('')
+  attachmentOwner.current = JSON.stringify([pc, draftKey])
+  // The Auto-resume choice belongs to the thread's session, so it is offered once the thread has one.
+  const limitChat = chatId ? store.chats.find((entry) => entry.id === chatId) : undefined
+  const workspaceDraft = decodeDraft<MessageDraftSnapshot['workspace']>('workspace', undefined)
+  const draftSnapshot: MessageDraftSnapshot = {
+    text,
+    attachments,
+    context,
+    mentions,
+    ...(workspaceDraft
+      ? { workspace: { mode: workspaceDraft.mode, workspaceId: workspaceDraft.workspaceId, name: workspaceDraft.name } }
+      : {}),
+  }
+  const savedDrafts = useSavedMessageDrafts({
+    hostId: pc,
+    scope:
+      draftScope ??
+      (draftKey && !onCancelEdit
+        ? {
+            kind: chatId ? 'thread' : 'new',
+            id: draftKey,
+            ...(chatId ? { threadId: chatId } : {}),
+            label: store.chats.find((entry) => entry.id === chatId)?.title,
+          }
+        : undefined),
+    snapshot: draftSnapshot,
+    uploading,
+    busy,
+    isUploading: () => uploadPending.current,
+    isBusy: () => sending.current,
+    open: menu === 'saved-drafts',
+    onClose: () => setMenu(null),
+    onApply: (draft) => {
+      movedDraft.current++
+      setText(draft.text)
+      setAttachments(draft.attachments)
+      setContext(draft.context)
+      setMentions(draft.mentions)
+      setCaret(0)
+    },
+  })
   const split = useMemo(() => splitQuotes(text), [text])
   const suggest = useComposerSuggest({ computerId: pc, scope: scope ?? taskId, chatId, text: split.body, caret })
   // Takes the editable body (without quotes) and keeps the quotes in front of it in the draft.
@@ -603,20 +701,45 @@ export function Composer({
     setText(next)
     if (draftKey) store.setDraft(draftKey, next)
   }
+  const discoverScope = scope ?? taskId
+  const discoveryOwner = JSON.stringify([pc, discoverScope, draftKey])
+  const discovery = useRef(discoveryOwner)
+  discovery.current = discoveryOwner
+  useEffect(() => {
+    discovery.current = discoveryOwner
+    setMenu(null)
+    setFiles([])
+    setSkills([])
+    return () => {
+      if (discovery.current === discoveryOwner) discovery.current = ''
+    }
+  }, [discoveryOwner])
   const discover = async (kind: 'context' | 'skills') => {
-    if (!taskId) return
+    if (!discoverScope || !store.isOnline(pc)) return
+    const owner = discoveryOwner
     try {
-      if (kind === 'context') setFiles(await store.invoke(pc, 'files.all', taskId))
-      else setSkills(await store.invoke(pc, 'skills.list', taskId))
+      if (kind === 'context') {
+        const files = await store.invoke(pc, 'files.all', discoverScope)
+        if (discovery.current !== owner) return
+        setFiles(files)
+      } else {
+        const skills = await store.invoke(pc, 'skills.list', discoverScope)
+        if (discovery.current !== owner) return
+        setSkills(skills)
+      }
       setFilter('')
       setMenu(kind)
     } catch (e) {
+      if (discovery.current !== owner) return
       Alert.alert('Could not load host choices', e instanceof Error ? e.message : String(e))
     }
   }
   const upload = async (kind: 'document' | 'camera' | 'photos') => {
     if (attachments.length >= 10) return Alert.alert('Attachments', 'Attach up to ten files per message.')
-    const key = draftKey
+    if (uploadPending.current) return
+    uploadPending.current = true
+    const owner = attachmentOwner.current
+    const moveRevision = movedDraft.current
     setUploading(true)
     setMenu(null)
     try {
@@ -624,11 +747,13 @@ export function Composer({
         store,
         pc,
         (a) => {
-          if (origin.current === key) setAttachments((old) => [...old, a])
+          if (attachmentOwner.current === owner && movedDraft.current === moveRevision)
+            setAttachments((old) => [...old, a])
         },
         kind,
       )
     } finally {
+      uploadPending.current = false
       setUploading(false)
     }
   }
@@ -641,21 +766,39 @@ export function Composer({
   useEffect(() => {
     if (draftKey) store.setDraft(`${draftKey}:mentions`, JSON.stringify(mentions))
   }, [mentions])
+  const restoredOwner = useRef(draftKey)
   useEffect(() => {
+    if (restoredOwner.current === draftKey) return
+    restoredOwner.current = draftKey
     setText(draftKey ? (store.drafts[draftKey] ?? '') : '')
     setAttachments(decodeDraft('attachments', []))
     setContext(decodeDraft('context', []))
     setMentions(decodeDraft('mentions', []))
   }, [draftKey])
+  // Explorer can append a reference while this screen remains mounted underneath its file preview.
+  const storedContext = draftKey ? store.drafts[`${draftKey}:context`] : undefined
+  useFocusEffect(
+    useCallback(() => {
+      const next = decodeDraft<FileContext[]>('context', [])
+      setContext((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next))
+    }, [draftKey, storedContext]),
+  )
   const [mode, setMode] = useState<'queue' | 'steer'>('queue')
   useEffect(() => {
     if (restore) setText(restore.text)
   }, [restore])
-  const has = text.trim().length > 0 || attachments.length > 0
+  const has = text.trim().length > 0 || attachments.length > 0 || context.length > 0
   const submit = async () => {
     if (!has || sending.current || uploading) return
     sending.current = true
     setBusy(true)
+    const submittedOwner = origin.current
+    const submittedDraft = {
+      text,
+      attachments: JSON.stringify(attachments),
+      context: JSON.stringify(context),
+      mentions: JSON.stringify(mentions),
+    }
     try {
       const sent = text.trim()
       // A mention counts only while its badge is still in the message, as on the desktop.
@@ -665,22 +808,43 @@ export function Composer({
       let expanded = sent
       for (const m of used)
         if (m.token && m.token !== m.insertion) expanded = expanded.split(m.token.trim()).join(m.insertion.trim())
-      const merged = [
-        ...mentioned,
-        ...context.filter((file) => !mentioned.some((m) => m.repoId === file.repoId && m.path === file.path)),
-      ].slice(0, 30)
+      const mentionedKeys = new Set(mentioned.map(fileContextKey))
+      const merged = [...mentioned, ...context.filter((file) => !mentionedKeys.has(fileContextKey(file)))]
+      if (merged.length > 30) throw new Error(t.fileReferenceLimit)
+      if (draftKey && store.drafts[`${draftKey}:restored-attachments`] === 'yes' && attachments.length) {
+        if (!store.isOnline(pc)) throw new Error(t.savedAttachmentOffline)
+        let status: { id: string; available: boolean }[]
+        try {
+          status = await store.invoke(
+            pc,
+            'attachments.status',
+            attachments.map((file) => file.id),
+          )
+        } catch (error) {
+          if (isMethodMissing(error)) throw new Error(t.savedAttachmentOldHost, { cause: error })
+          throw error
+        }
+        if (attachments.some((file) => !status.some((entry) => entry.id === file.id && entry.available)))
+          throw new Error(t.savedAttachmentMissing)
+        if (origin.current !== submittedOwner) return
+      }
       await onSend(
         expanded,
         running ? mode : 'send',
         attachments.map((a) => a.id),
         merged,
       )
+      if (origin.current !== submittedOwner) return
+      if (draftKey && !store.clearComposerDraft(draftKey, submittedDraft)) return
       setText('')
       setAttachments([])
       setContext([])
       setMentions([])
       setCaret(0)
-      if (draftKey) store.setDraft(draftKey, '')
+      if (draftKey) {
+        store.setDraft(draftKey, '')
+        store.setDraft(`${draftKey}:restored-attachments`, '')
+      }
     } catch (error) {
       Alert.alert('Could not send', error instanceof Error ? error.message : String(error))
     } finally {
@@ -704,15 +868,21 @@ export function Composer({
           {header}
         </View>
       ) : null}
-      <Tray
-        goal={goal}
-        queue={queue}
-        paused={queuePaused}
-        onResumeQueue={onResumeQueue}
-        onToggleGoal={onToggleGoal}
-        onClearGoal={onClearGoal}
-        onRemove={onRemoveQueued}
-      />
+      {limited && chatId ? <LimitTray chatId={chatId} /> : null}
+      {activity}
+      {!activity && (
+        <GoalQueueTray
+          goal={goal}
+          queue={queue}
+          paused={queuePaused}
+          onResumeQueue={onResumeQueue}
+          onToggleGoal={onToggleGoal}
+          onClearGoal={onClearGoal}
+          onVerifyGoal={onVerifyGoal}
+          verifyOffered={offersVerify(goal, computerId ? store.missingMethods[computerId] : undefined)}
+          onRemove={onRemoveQueued}
+        />
+      )}
       {attachments.length || context.length || split.quotes.length ? (
         <View
           style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: space.m, paddingTop: space.s }}
@@ -731,6 +901,11 @@ export function Composer({
               key={a.id}
               icon={Paperclip}
               label={a.name}
+              detail={
+                draftKey && store.drafts[`${draftKey}:restored-attachments`] === 'yes'
+                  ? t.attachmentNeedsCheck
+                  : undefined
+              }
               remove={() => setAttachments((old) => old.filter((x) => x.id !== a.id))}
             />
           ))}
@@ -829,7 +1004,21 @@ export function Composer({
             style={{ borderRadius: radius.full }}
             onPress={() => setMenu('actions')}
           />
-          <ModelChip value={model} current={currentModel} onChange={onModel} computerId={computerId} />
+          <ModelChip
+            value={model}
+            current={currentModel}
+            onChange={onModel}
+            computerId={computerId}
+            limited={limited}
+          />
+          {computerId ? (
+            <ThreadUsageChip
+              hostId={computerId}
+              provider={model.provider}
+              model={model.model}
+              accountId={model.settings?.accountId}
+            />
+          ) : null}
           {meter}
           <View style={{ flex: 1 }} />
           {running && has ? (
@@ -877,7 +1066,7 @@ export function Composer({
           ) : onResume && !has && !running && !offline ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Continue where the agent left off"
+              accessibilityLabel={resumeLabel ?? 'Continue where the agent left off'}
               onPress={() => {
                 tap()
                 onResume()
@@ -896,7 +1085,7 @@ export function Composer({
           ) : (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={offline ? 'Add to outbox' : 'Send'}
+              accessibilityLabel={offline ? 'Add to outbox' : limited ? t.queue : 'Send'}
               disabled={!has || busy || uploading}
               onPress={() => {
                 tap()
@@ -930,13 +1119,28 @@ export function Composer({
         <Row onPress={() => void upload('camera')}>
           <T>Take a photo</T>
         </Row>
-        {taskId ? (
+        {discoverScope && !offline ? (
           <>
             <Row onPress={() => void discover('context')}>
               <T>Choose host file context</T>
             </Row>
             <Row onPress={() => void discover('skills')}>
               <T>Use a host skill</T>
+            </Row>
+          </>
+        ) : null}
+        {draftKey && !onCancelEdit ? (
+          <>
+            <Row accessibilityRole="button" disabled={!savedDrafts.canSave} onPress={savedDrafts.save}>
+              <T tone={savedDrafts.canSave ? 'text' : 'muted'}>{t.saveDraft}</T>
+            </Row>
+            {uploading ? (
+              <T size={font.caption} tone="muted" style={{ padding: space.m }}>
+                {t.savedDraftUploading}
+              </T>
+            ) : null}
+            <Row accessibilityRole="button" onPress={() => setMenu('saved-drafts')}>
+              <T>{t.savedDrafts}</T>
             </Row>
           </>
         ) : null}
@@ -1050,7 +1254,21 @@ export function Composer({
         >
           <T>Service tier: {model.settings?.serviceTier ?? 'standard'}</T>
         </Row>
+        {limitChat?.sessionId && hostHasAutoResume(store.appPreferences[limitChat.computerId]?.fallback) ? (
+          <>
+            <T
+              size={font.caption}
+              weight="600"
+              tone="muted"
+              style={{ paddingHorizontal: space.l, paddingTop: space.m }}
+            >
+              {t.autoResume}
+            </T>
+            <AutoResumeRows chatId={limitChat.id} />
+          </>
+        ) : null}
       </Sheet>
+      {savedDrafts.sheet}
     </Glass>
   )
 }

@@ -1,8 +1,9 @@
+import { useHost } from '../workspace/HostProvider'
 import { useState } from 'react'
 
 /** Keep unfinished review text across file switches without selecting or sending it. */
 export function useReviewDraft<T>(key: string, initial: T): [T, (value: T) => void] {
-  const storageKey = `ramu.review-draft:${key}`
+  const storageKey = `host:${useHost().id}:ramu.review-draft:${key}`
   const read = (): T => {
     try {
       const saved = sessionStorage.getItem(storageKey)

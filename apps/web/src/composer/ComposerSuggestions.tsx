@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { FileContext, SkillInfo } from '@ramu/shared/types'
-import { invoke } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
 import { readBuffer, readSelection } from '../editor/editorBuffers'
 import { buildComposerContext } from '@ramu/shared/chat/composerContext'
@@ -33,6 +33,7 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
   const ws = useWorkspace(),
     scope = scopeId ?? ws.ui.activeTaskId
   const { preferences } = useAppSettings()
+  const { invoke } = useHost()
   const [files, setFiles] = useState<{ repoId: string; path: string }[]>([]),
     [skills, setSkills] = useState<SkillInfo[]>([])
   const [loading, setLoading] = useState(false),
@@ -81,7 +82,7 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
     return () => {
       disposed = true
     }
-  }, [scope, mode])
+  }, [scope, mode, invoke])
   const repoName = (repoId: string) =>
     Object.values(ws.repos)
       .flat()
@@ -238,7 +239,18 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
             })),
           ]
     return options.filter((c) => `${c.label} ${c.description}`.toLowerCase().includes(query)).slice(0, 30)
-  }, [mode, query, files, skills, ws, language, chat, preferences.memory.enabled, preferences.intelligence.learning])
+  }, [
+    mode,
+    query,
+    files,
+    skills,
+    ws,
+    invoke,
+    language,
+    chat,
+    preferences.memory.enabled,
+    preferences.intelligence.learning,
+  ])
   const hydrate = (): FileContext[] => {
     const state = scope ? ws.taskUi[scope] : undefined
     return buildComposerContext({

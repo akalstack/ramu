@@ -1,18 +1,21 @@
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, FolderClosed } from 'lucide-react'
+import { Check, ChevronDown, FolderClosed } from 'lucide-react'
 import type { RecapItem } from '@ramu/shared/types'
+import { SNOOZE_CHOICES, snoozeUntil, type SnoozeChoice } from '@ramu/shared/snooze'
 import { Button } from '@/components/desktop-button'
+import { notify } from '@/components/app-toaster'
+import { Menu } from '../Menu'
+import { TOAST_MS } from '../chat/notificationCenter'
 import { t } from '../i18n'
-import { invoke, ramu } from '../ipc'
-import { ipcQueryKey } from '../dataQueries'
-import { useWorkspace } from '../workspace/workspace'
+import { ipcQueryKeyOn } from '../dataQueries'
+import { useHostRuntime, useWorkspace } from '../workspace/workspace'
+import { useHost } from '../workspace/HostProvider'
 import { useAppSettings } from '../settings/AppSettings'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
 
 const VISIT_KEY = 'ramu.last-visit'
-const QUERY_KEY = ipcQueryKey('recaps.get')
 const AWAY_MS = 5 * 60_000
 
 /**
@@ -35,19 +38,61 @@ document.addEventListener('visibilitychange', () => {
 
 export type RecapAction = 'done' | 'dismissed' | 'snoozed'
 
+const GHOST =
+  'ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption'
+
+const SNOOZE_LABEL: Record<SnoozeChoice, () => string> = {
+  'in-3-hours': () => t('In 3 hours'),
+  tomorrow: () => t('Tomorrow'),
+  'next-week': () => t('Next week'),
+}
+
+/** A toast that says what just happened to a recap item and offers to put it back, so a mis-click costs nothing. */
+export function notifyRecapAction(action: RecapAction, undo: () => void) {
+  notify.add({
+    timeout: TOAST_MS.info,
+    title: action === 'done' ? t('Marked done') : action === 'dismissed' ? t('Dismissed') : t('Snoozed'),
+    actionProps: { children: t('Undo'), onClick: undo },
+  })
+}
+
+/** Snooze with a choice of how long: later today, tomorrow morning or next week. */
+export function SnoozeMenu({ onSnooze, disabled }: { onSnooze: (until: number) => void; disabled?: boolean }) {
+  return (
+    <Menu
+      label={t('Snooze')}
+      disabled={disabled}
+      className={GHOST}
+      icon={
+        <>
+          {t('Snooze')}
+          <ChevronDown size={11} />
+        </>
+      }
+      items={SNOOZE_CHOICES.map((choice) => ({
+        key: choice,
+        label: SNOOZE_LABEL[choice](),
+        onSelect: () => onSnooze(snoozeUntil(choice)),
+      }))}
+    />
+  )
+}
+
 /** Open recap items for live threads, split into those that need you and recent ones (all, and since your last visit). */
 export function useRecaps() {
   const ws = useWorkspace()
   const { preferences } = useAppSettings()
   const client = useQueryClient()
-  const key = QUERY_KEY
+  const { id: host, invoke } = useHost()
+  const { on } = useHostRuntime()
+  const key = ipcQueryKeyOn(host, 'recaps.get')
   const query = useQuery({ queryKey: key, queryFn: () => invoke('recaps.get'), enabled: preferences.recapsEnabled })
   useEffect(
     () =>
-      ramu.on('automation:changed', () => {
-        void client.invalidateQueries({ queryKey: QUERY_KEY })
+      on('automation:changed', () => {
+        void client.invalidateQueries({ queryKey: ipcQueryKeyOn(host, 'recaps.get') })
       }),
-    [client],
+    [client, on, host],
   )
   const recap = preferences.recapsEnabled ? (query.data ?? null) : null
   const open =
@@ -59,10 +104,16 @@ export function useRecaps() {
       )
       .sort((a, b) => b.updatedAt - a.updatedAt) ?? []
   const recent = open.filter((i) => i.group === 'recent')
-  const act = async (id: string, action: RecapAction) => {
+  const act = async (id: string, action: RecapAction, until?: number) => {
     try {
-      await invoke('recaps.act', id, action)
+      await (until === undefined ? invoke('recaps.act', id, action) : invoke('recaps.act', id, action, until))
       await client.invalidateQueries({ queryKey: key })
+      notifyRecapAction(action, () => {
+        invoke('recaps.act', id, 'open').then(
+          () => client.invalidateQueries({ queryKey: key }),
+          (e) => notifyError(errorText(e), 'Recaps'),
+        )
+      })
     } catch (e) {
       notifyError(errorText(e), 'Recaps')
     }
@@ -83,9 +134,6 @@ export function useRecaps() {
   }
 }
 
-const GHOST =
-  'ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption'
-
 /** One recap item: the project, what happened, and what you can do about it. */
 export function RecapCard({
   item,
@@ -94,7 +142,7 @@ export function RecapCard({
 }: {
   item: RecapItem
   attention: boolean
-  act: (id: string, action: RecapAction) => void
+  act: (id: string, action: RecapAction, until?: number) => void
 }) {
   const ws = useWorkspace()
   const project = ws.projects.find((p) => p.id === ws.tasks.find((task) => task.id === item.taskId)?.projectId)
@@ -130,9 +178,7 @@ export function RecapCard({
               <Check size={12} />
               {t('Mark done')}
             </Button>
-            <Button variant="ghost" size="sm" className={GHOST} onClick={() => act(item.id, 'snoozed')}>
-              {t('Snooze 1 day')}
-            </Button>
+            <SnoozeMenu onSnooze={(until) => act(item.id, 'snoozed', until)} />
           </>
         )}
         <Button variant="ghost" size="sm" className={GHOST} onClick={() => act(item.id, 'dismissed')}>

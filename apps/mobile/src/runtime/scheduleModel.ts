@@ -241,6 +241,7 @@ export const RUN_LABELS: Record<ScheduleRun['status'], Record<Lang, string>> = {
   failed: { en: 'Failed', id: 'Gagal' },
   missed: { en: 'Missed', id: 'Terlewat' },
   interrupted: { en: 'Interrupted', id: 'Terhenti' },
+  cancelled: { en: 'Cancelled', id: 'Dibatalkan' },
 }
 
 /** Runs of one schedule, newest due first. */

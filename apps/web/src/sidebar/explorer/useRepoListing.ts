@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import type { DirEntry, RepositoryBinding } from '@ramu/shared/types'
-import { ipcQueryKey } from '../../dataQueries'
-import { invoke, ramu } from '../../ipc'
+import { ipcQueryKeyOn } from '../../dataQueries'
+import { useHost } from '../../workspace/HostProvider'
+import { useHostRuntime } from '../../workspace/workspace'
+import { queryInvokerFor } from '../../git/hostQuery'
 import { parentOf } from './paths'
 
 /** Expanded folders and their listings for one repository tree, kept fresh and revealing the selected file. */
@@ -12,12 +14,15 @@ export function useRepoListing(
   selectedPath: string | null,
   selectedRow: RefObject<HTMLButtonElement | null>,
 ) {
+  const host = useHost()
+  const { invoke } = host
+  const { on } = useHostRuntime()
   const [open, setOpen] = useState<Set<string>>(new Set(['']))
   const directories = [...open]
   const listings = useQueries({
     queries: directories.map((dir) => ({
-      queryKey: ipcQueryKey('files.list', taskId, binding.repoId, dir),
-      queryFn: () => ramu.invoke('files.list', taskId, binding.repoId, dir),
+      queryKey: ipcQueryKeyOn(host.id, 'files.list', taskId, binding.repoId, dir),
+      queryFn: () => queryInvokerFor(host.id)('files.list', taskId, binding.repoId, dir),
     })),
   })
   const children: Record<string, DirEntry[]> = {}
@@ -31,7 +36,7 @@ export function useRepoListing(
     async (dir: string) => {
       await invoke('files.list', taskId, binding.repoId, dir).catch(() => [])
     },
-    [taskId, binding.repoId],
+    [invoke, taskId, binding.repoId],
   )
 
   useEffect(() => {
@@ -57,11 +62,11 @@ export function useRepoListing(
   // Re-list expanded directories when something inside them changes on disk.
   useEffect(
     () =>
-      ramu.on('fs:changed', ({ cwd, path }) => {
+      on('fs:changed', ({ cwd, path }) => {
         if (cwd !== binding.cwd || path.startsWith('.git/')) return
         if (open.has(parentOf(path))) void load(parentOf(path))
       }),
-    [binding.cwd, open, load],
+    [on, binding.cwd, open, load],
   )
 
   const toggle = (dir: string) => {

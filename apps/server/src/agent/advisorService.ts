@@ -6,6 +6,7 @@ import { adviceMessage, advisorAgentId } from '@ramu/shared/chat/agentTasks'
 import type { AdviceRequest } from './types'
 import { WRITING_STATES } from './constants'
 import { errorMessage } from './util'
+import { ProviderLimitError } from './usageLimit'
 import { nativeAdvisorModel } from './nativeFeatures'
 import { transcriptOf } from './handoff'
 import type { BackgroundAnalysis } from './backgroundAnalysis'
@@ -113,7 +114,22 @@ export class AdvisorService {
         advisorPrompt(session.cwd, transcript, input.focus),
         { ...this.host.withStep(session.settings, step), autoFallback: session.settings.autoFallback },
         40_000,
-        { timeoutMs: ADVISOR_TIMEOUT_MS, signal: abort.signal },
+        {
+          timeoutMs: ADVISOR_TIMEOUT_MS,
+          signal: abort.signal,
+          // A limit pauses the advisor instead of failing it; its card says so and it retries after the reset.
+          defer: {
+            onWait: (retryAt) => {
+              if (this.host.task(id, agentId)?.status !== 'running') return
+              this.host.updateTask(id, agentId, {
+                waitingFor: retryAt ? 'provider' : null,
+                summary: retryAt
+                  ? `Limit reached · retrying around ${new Date(retryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : 'Reviewing the conversation…',
+              })
+            },
+          },
+        },
       )
       .then(
         ({ message, provider, model }) => {
@@ -129,10 +145,12 @@ export class AdvisorService {
         },
         (error) => {
           request.status = { requestId, status: 'failed', error: errorMessage(error) }
+          // A limit that outlasted the wait is a pause the user can retry, not an advisor failure.
+          const limited = error instanceof ProviderLimitError
           finish({
-            status: request.abort.signal.aborted ? 'stopped' : 'failed',
-            summary: '',
-            error: request.abort.signal.aborted ? undefined : errorMessage(error),
+            status: request.abort.signal.aborted || limited ? 'stopped' : 'failed',
+            summary: limited ? errorMessage(error) : '',
+            error: request.abort.signal.aborted || limited ? undefined : errorMessage(error),
           })
         },
       )

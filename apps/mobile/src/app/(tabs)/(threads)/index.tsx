@@ -3,11 +3,9 @@ import { Pressable, ScrollView as HScroll, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import {
   Check,
-  ChevronRight,
   Folder,
   FolderGit2,
   Network,
-  MessageCircleQuestion,
   MessagesSquare,
   Search,
   SquarePen,
@@ -28,6 +26,7 @@ import {
   useScrolledUnderBar,
   PageFlatList,
 } from '../../../components/Screen'
+import { PlanUsageSummary } from '../../../components/PlanUsage'
 import { ChatRow } from '../../../components/ChatRow'
 import { ProjectActionsSheet } from '../../../components/ChatActions'
 import { Disclosure, animateLayout } from '../../../components/Motion'
@@ -105,7 +104,6 @@ export default function Threads() {
     .filter((x) => x.pinnedAt !== null && filter !== 'archived')
     .sort((a, b) => b.pinnedAt! - a.pinnedAt!)
   const unpinned = mine.filter((x) => !pinned.includes(x))
-  const waiting = mine.filter((x) => x.status === 'needs-input')
   const standalone = unpinned.filter((x) => x.projectId === STANDALONE)
   const scopeName = scope ? (nameOf(scope) ?? 'Workspace') : 'All workspaces'
   const live = scoped.filter((x) => x.status !== 'archived')
@@ -195,7 +193,6 @@ export default function Threads() {
     return out
   }, [
     outbox,
-    waiting,
     pinned,
     unpinned,
     standalone,
@@ -341,7 +338,18 @@ export default function Threads() {
 
   return (
     <Screen>
-      <Header back={false} large collapsed={edge.scrolled} title={t.chats} right={actions} />
+      <Header
+        back={false}
+        large
+        collapsed={edge.scrolled}
+        title={t.chats}
+        right={
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <PlanUsageSummary actionOnly hostIds={merged ? computers.map((h) => h.id) : [selected]} />
+            {actions}
+          </View>
+        }
+      />
       <PageFlatList
         data={rows}
         keyExtractor={(row) => row.key}
@@ -357,32 +365,12 @@ export default function Threads() {
         ListHeaderComponent={
           <>
             <LargeTitle>{t.chats}</LargeTitle>
+            <Row onPress={() => router.push('/explorer')}>
+              <Folder size={17} color={c.soft} />
+              <T size={font.control}>{t.browseFiles}</T>
+            </Row>
+            <PlanUsageSummary hostIds={merged ? computers.map((h) => h.id) : [selected]} />
             {merged ? null : <ComputerSwitcher />}
-            {waiting.length && !filtering ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  tap()
-                  router.navigate('/inbox')
-                }}
-                style={({ pressed }) => ({
-                  marginHorizontal: space.l,
-                  marginTop: space.s,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: space.s,
-                  padding: space.m,
-                  borderRadius: radius.m,
-                  backgroundColor: pressed ? c.pressed : c.warnWash,
-                })}
-              >
-                <MessageCircleQuestion size={16} color={c.warn} />
-                <T weight="600" tone="warn" style={{ flex: 1 }}>
-                  {`${waiting.length} ${t.needsYou.toLowerCase()}`}
-                </T>
-                <ChevronRight size={16} color={c.muted} />
-              </Pressable>
-            ) : null}
             {!merged && pc?.status === 'offline' ? (
               <View
                 style={{

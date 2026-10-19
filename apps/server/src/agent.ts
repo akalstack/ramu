@@ -19,6 +19,7 @@ import type {
 } from '@ramu/shared/types'
 import type { UsageService } from './providers/usage'
 import { loadHelperHistory, type HelperHistoryLoader } from './agent/helperHistory'
+import { realGoalProbes, type GoalProbes } from './agent/goalProbes'
 import type { QueryFn } from './agent/types'
 import { SessionStore } from './agent/sessionStore'
 import { SessionRegistry } from './agent/sessionRegistry'
@@ -52,6 +53,8 @@ export class AgentService {
   private readonly parts: Collaborators
   private shutdown = false
   helperHistory: HelperHistoryLoader = loadHelperHistory
+  /** How goals read git and run a verification command; replaceable so tests need no processes. */
+  goalProbes: GoalProbes = realGoalProbes
   reviewHooks:
     | {
         begin(taskId: string, scope: AgentScope): Promise<string>
@@ -65,7 +68,8 @@ export class AgentService {
   toolConnection: ((session: AgentSessionInfo) => McpConnection) | undefined
   /** Shared-memory protocol and index for a session, the same for every provider. */
   memoryInstructions: ((session: AgentSessionInfo) => string) | undefined
-  learningInstructions: ((session: AgentSessionInfo) => string) | undefined
+  /** Guidance from the learning job. `checkpoint: false` leaves the progress summary out, when a handoff already carries it. */
+  learningInstructions: ((session: AgentSessionInfo, options?: { checkpoint?: boolean }) => string) | undefined
   sessionCheckpoint: ((id: string) => { seq: number; summary: string } | null) | undefined
   /** Plan usage per provider. Without it (tests) nothing switches early. */
   usage: (Pick<UsageService, 'list' | 'update'> & Partial<Pick<UsageService, 'all'>>) | undefined
@@ -107,6 +111,7 @@ export class AgentService {
         return parts.pump.agentCalls
       },
       analyze: (...a) => this.analyze(...a),
+      autoResumeOf: (...a) => parts.providerWaits.autoResumeOf(...a),
       applySavedPermission: (...a) => parts.requests.applySavedPermission(...a),
       get attempted() {
         return parts.router.attempted
@@ -151,6 +156,7 @@ export class AgentService {
       hasBlockingQuestions: (...a) => parts.requests.hasBlockingQuestions(...a),
       hasRunningTasks: (...a) => parts.store.hasRunningTasks(...a),
       helperHistory: () => this.helperHistory,
+      goalProbes: () => this.goalProbes,
       isRecoveryPending: (...a) => parts.store.isRecoveryPending(...a),
       isolationRoot: () => this.isolationRoot,
       launch: (...a) => parts.process.launch(...a),
@@ -168,6 +174,7 @@ export class AgentService {
       onEvent: (...a) => this.onEvent(...a),
       orderOf: (...a) => parts.router.orderOf(...a),
       pauseQueue: (...a) => parts.dispatcher.pauseQueue(...a),
+      planSwitch: (...a) => parts.process.planSwitch(...a),
       pendingBackground: (...a) => parts.registry.pendingBackground(...a),
       policyOf: (...a) => parts.router.policyOf(...a),
       preferences: () => this.preferences?.(),
@@ -181,7 +188,12 @@ export class AgentService {
       record: (...a) => parts.recorder.record(...a),
       refreshAccountUsage: () => this.refreshAccountUsage,
       refreshContext: (...a) => parts.contexts.refreshContext(...a),
+      rememberSession: (...a) => parts.process.rememberSession(...a),
       refreshProviderTools: (...a) => parts.process.refreshProviderTools(...a),
+      retryQuietly: (...a) => parts.router.retryQuietly(...a),
+      get lowConfidenceRetried() {
+        return parts.router.lowConfidenceRetried
+      },
       reviewHooks: () => this.reviewHooks,
       get revisions() {
         return parts.registry.revisions
@@ -202,6 +214,7 @@ export class AgentService {
       context: (...a) => parts.contexts.context(...a),
       setContext: (...a) => parts.contexts.setContext(...a),
       setGoal: (...a) => parts.goals.setGoal(...a),
+      setVerify: (...a) => parts.goals.setVerify(...a),
       setState: (...a) => parts.recorder.setState(...a),
       settleChild: (...a) => parts.subagents.settleChild(...a),
       settleTasks: (...a) => parts.tasks.settleTasks(...a),
@@ -220,6 +233,7 @@ export class AgentService {
       switchBeforeSend: (...a) => parts.router.switchBeforeSend(...a),
       syncTaskStatus: (...a) => parts.recorder.syncTaskStatus(...a),
       task: (...a) => parts.store.task(...a),
+      titleContext: (...a) => parts.store.titleContext(...a),
       toolConnection: () => this.toolConnection,
       trackDrain: (...a) => parts.registry.trackDrain(...a),
       get transitioning() {
@@ -248,7 +262,7 @@ export class AgentService {
     parts.recorder = new SessionRecorder(host, this.db)
     parts.dispatcher = new MessageDispatcher(host)
     parts.goals = new GoalManager(host, this.db)
-    parts.providerWaits = new ProviderWaits(host)
+    parts.providerWaits = new ProviderWaits(host, this.db)
     parts.requests = new UserRequests(host, this.db)
     parts.catalogs = new CatalogService(host)
     parts.router = new FallbackRouter(host, this.db)
@@ -287,6 +301,19 @@ export class AgentService {
     return this.parts.dispatcher.withWorkspaceReservation(covers, action)
   }
 
+  interactivePublished(sessionId: string, reference: import('@ramu/shared/interactive').InteractiveReference): void {
+    if (
+      this.events(sessionId).some(
+        (event) =>
+          event.kind === 'interactive' &&
+          event.reference.id === reference.id &&
+          event.reference.version === reference.version,
+      )
+    )
+      return
+    this.record(sessionId, { kind: 'interactive', reference })
+  }
+
   scheduleSaved(sessionId: string, schedule: Schedule): void {
     this.record(sessionId, { kind: 'schedule', schedule })
   }
@@ -317,16 +344,53 @@ export class AgentService {
     return this.parts.goals.setGoal(...args)
   }
 
+  setVerify(...args: Parameters<GoalManager['setVerify']>) {
+    return this.parts.goals.setVerify(...args)
+  }
+
   updateGoal(...args: Parameters<GoalManager['updateGoal']>) {
     return this.parts.goals.updateGoal(...args)
   }
 
   controlGoal(...args: Parameters<GoalManager['controlGoal']>) {
+    // The user resuming a goal that sits at a usage limit means "try now", also when auto-resume is off.
+    if (args[1] === 'resume' && this.parts.providerWaits.providerWait(args[0]))
+      this.parts.providerWaits.clearProviderWait(args[0])
     return this.parts.goals.controlGoal(...args)
   }
 
+  /**
+   * Re-arms what survives a restart or a settings change: goal timers, and every open usage-limit wait (retry timers turn
+   * on or off with the effective auto-resume). Called at startup and from the settings-saved hook.
+   */
   goalsSettingsChanged(...args: Parameters<GoalManager['goalsSettingsChanged']>) {
-    return this.parts.goals.goalsSettingsChanged(...args)
+    this.parts.goals.goalsSettingsChanged(...args)
+    this.parts.providerWaits.settingsChanged()
+  }
+
+  /** The open usage-limit wait of a thread, or null when it is not held at a limit. */
+  providerWait(...args: Parameters<ProviderWaits['providerWait']>) {
+    return this.parts.providerWaits.providerWait(...args)
+  }
+
+  /** Whether a thread at a usage limit continues by itself (its own choice, its parent's, else the global default). */
+  autoResumeOf(...args: Parameters<ProviderWaits['autoResumeOf']>) {
+    return this.parts.providerWaits.autoResumeOf(...args)
+  }
+
+  /** "Try again" for a thread at a usage limit; see `agent.retryLimitNow`. */
+  retryLimitNow(...args: Parameters<ProviderWaits['retryLimitNow']>) {
+    return this.parts.providerWaits.retryLimitNow(...args)
+  }
+
+  /** This thread's own auto-resume choice (null follows the global default); see `agent.setAutoResume`. */
+  setAutoResume(...args: Parameters<ProviderWaits['setAutoResume']>) {
+    return this.parts.providerWaits.setAutoResume(...args)
+  }
+
+  /** Shared timer spread for threads waiting on one limit; tests tighten it. */
+  get waitSpread() {
+    return this.parts.providerWaits.spread
   }
 
   questionStatus(...args: Parameters<UserRequests['questionStatus']>) {
@@ -375,6 +439,13 @@ export class AgentService {
 
   isRecoveryPending(...args: Parameters<SessionStore['isRecoveryPending']>) {
     return this.parts.store.isRecoveryPending(...args)
+  }
+
+  /** Startup: restore helper transcripts, resume interrupted chats, then re-arm goals and limit waits. `index.ts` calls only this. */
+  async recoverOnBoot(): Promise<void> {
+    await this.restoreHelperTranscripts()
+    await this.resumeInterruptedChats()
+    this.goalsSettingsChanged()
   }
 
   restoreHelperTranscripts(...args: Parameters<RestartRecovery['restoreHelperTranscripts']>) {
@@ -539,6 +610,10 @@ export class AgentService {
     return this.parts.analysis.draftTitle(...args)
   }
 
+  draftTitleResult(...args: Parameters<BackgroundAnalysis['draftTitleResult']>) {
+    return this.parts.analysis.draftTitleResult(...args)
+  }
+
   analyze(...args: Parameters<BackgroundAnalysis['analyze']>) {
     return this.parts.analysis.analyze(...args)
   }
@@ -617,6 +692,8 @@ export class AgentService {
     try {
       this.db.prepare('DELETE FROM agent_events WHERE session_id = ? AND seq >= ?').run(id, userSeq)
       this.db.prepare('UPDATE agent_sessions SET provider_session_id = NULL WHERE id = ?').run(id)
+      // Native sessions of other providers still remember the removed turns, so none of them may be resumed.
+      this.db.prepare('DELETE FROM session_provider_sessions WHERE session_id = ?').run(id)
       // A progress summary that covers removed turns would bring them back.
       this.db
         .prepare("DELETE FROM session_checkpoints WHERE session_id = ? AND json_extract(data, '$.seq') >= ?")
@@ -633,6 +710,7 @@ export class AgentService {
       reason: 'Rewound to before an edited message — the next message continues from the conversation above',
       handoff: true,
       previous: s.settings,
+      handoffInfo: { cause: 'rewind', mode: 'full', from: s.provider, fromSeq: 1 },
     })
   }
 

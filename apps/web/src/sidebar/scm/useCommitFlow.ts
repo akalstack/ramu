@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import type { AgentSettings, CommitDraft, GitStatus, RepositoryBinding } from '@ramu/shared/types'
-import { invoke } from '../../ipc'
 import { errorText } from '../../workspace/TaskPane'
 import { chooseCommitBranch } from '../../git/CommitBranchDialog'
 import { applyCommitScope, chooseCommit, type CommitPlan } from '../../git/CommitDialog'
@@ -10,6 +9,7 @@ import { notify } from '@/components/app-toaster'
 import { t } from '../../i18n'
 import { commitActionLabel } from './helpers'
 import type { GitRun } from './types'
+import { useHost } from '../../workspace/HostProvider'
 
 /** Commit message, AI draft and the commit action (with optional push, sync, amend or new branch). */
 export function useCommitFlow({
@@ -35,6 +35,7 @@ export function useCommitFlow({
   requireSaved: () => void
   reportError: (message: string) => void
 }) {
+  const { invoke } = useHost()
   // Smart commit: what is staged gets committed; with nothing staged, every change is staged first.
   const hasStaged = !!status?.entries.some((entry) => entry.staged && entry.staged !== 'unmerged')
   const allPaths = hasStaged
@@ -91,7 +92,13 @@ export function useCommitFlow({
     }
     const branchOptions =
       action === 'push' || action === 'sync' || action === 'new-branch'
-        ? await chooseCommitBranch(taskId, binding.repoId, action === 'new-branch', action === 'sync' ? 'sync' : 'push')
+        ? await chooseCommitBranch(
+            taskId,
+            binding.repoId,
+            action === 'new-branch',
+            action === 'sync' ? 'sync' : 'push',
+            invoke,
+          )
         : undefined
     if (branchOptions === null) return
     if (branchOptions?.newBranch || branchOptions?.autoBranch) requireSaved()
@@ -140,7 +147,7 @@ export function useCommitFlow({
     let pushedTo: string | null = branch.newBranch ?? branch.expectedBranch
     const work = withGitBusy(taskId, binding.repoId, async () => {
       if (branch.newBranch || branch.autoBranch || plan.action === 'sync') requireSaved()
-      await applyCommitScope(taskId, binding.repoId, status!, plan.paths)
+      await applyCommitScope(taskId, binding.repoId, status!, plan.paths, invoke)
       // A typed message has no draft fingerprint: the index was just rescoped, so an older draft's no longer matches.
       const drafted = plan.message.trim()
         ? null

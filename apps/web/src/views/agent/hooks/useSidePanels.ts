@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { AgentTask, Aside } from '@ramu/shared/types'
-import { invoke, ramu } from '../../../ipc'
+import { useHost } from '../../../workspace/HostProvider'
+import { useHostRuntime } from '../../../workspace/workspace'
 import { paneFadeIn } from '../../../workspace/paneMotion'
 import { animatePanelChange } from '../../../workspace/panelMotion'
 import type { AsideTarget } from '../types'
@@ -18,6 +19,8 @@ export function useSidePanels({
   root: RefObject<HTMLDivElement | null>
   tasks: AgentTask[]
 }) {
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   // The sub-agent panel: one agent's transcript, or '*' for the list of all of them.
   const [openAgent, setOpenAgentState] = useState<string | null>(null)
   // The aside panel: one aside (a new one carries its quote), or '*' for the list.
@@ -62,7 +65,7 @@ export function useSidePanels({
       },
       () => {},
     )
-    const off = ramu.on('aside:changed', ({ sessionId: changedSessionId, aside, asideId }) => {
+    const off = on('aside:changed', ({ sessionId: changedSessionId, aside, asideId }) => {
       if (changedSessionId !== sessionId) return
       setAsides((current) =>
         aside
@@ -74,7 +77,7 @@ export function useSidePanels({
       cancelled = true
       off()
     }
-  }, [sessionId])
+  }, [sessionId, invoke, on])
 
   /** With nothing to quote, the aside is about the whole chat: type the question straight away. Existing asides stay listed. */
   const newAside: AsideTarget = { id: null, quote: '', from: 'assistant' }

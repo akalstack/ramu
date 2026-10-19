@@ -7,7 +7,7 @@ import { ClaudeTextStream } from '../providers/claudeTextStream'
 import { latestTasks } from '@ramu/shared/chat/agentTasks'
 import { str } from './util'
 import { summarizeInput, summarizeToolResult, subagentOf, serverToolUse, serverToolResult } from './toolSummaries'
-import { isUsageLimit } from './usageLimit'
+import { classifyLimit } from '../providers/limitClassifier'
 import type { ContextUsageTracker } from './contextUsage'
 import type { SessionProcess } from './sessionProcess'
 import type { SessionRecorder } from './sessionRecorder'
@@ -73,10 +73,20 @@ export class ClaudeStreamPump {
           if (readings.length) this.host.usage()?.update(readings)
         }
         if (wire.type === 'rate_limit_event' && wire.rate_limit_info?.status === 'rejected') continue
-        if (wire.api_error === 'usage_limit_reached' || (msg.type === 'result' && msg.is_error && isUsageLimit(msg))) {
-          this.host.record(id, { kind: 'error', message: 'Claude usage limit reached.' })
+        const limit =
+          wire.api_error === 'usage_limit_reached'
+            ? ({ confidence: 'high' } as const)
+            : msg.type === 'result' && msg.is_error
+              ? classifyLimit(msg, { provider: 'claude-code', channel: 'error' })
+              : null
+        if (limit) {
+          this.host.record(id, {
+            kind: 'error',
+            message:
+              limit.confidence === 'high' ? 'Claude usage limit reached.' : 'Claude may have reached a usage limit.',
+          })
           // Queue after this pump exits so teardown never waits on itself.
-          queueMicrotask(() => void this.host.fallback(id))
+          queueMicrotask(() => void this.host.fallback(id, limit.confidence))
           return
         }
         this.handle(id, msg, textStream, streamText)
@@ -91,7 +101,8 @@ export class ClaudeStreamPump {
       if (this.host.live.get(id)?.query !== query) return // stopped or replaced
       flush()
       this.host.live.delete(id)
-      if (isUsageLimit(err)) queueMicrotask(() => void this.host.fallback(id))
+      const limit = classifyLimit(err, { provider: 'claude-code', channel: 'error' })
+      if (limit) queueMicrotask(() => void this.host.fallback(id, limit.confidence))
       else this.host.fail(id, err)
     } finally {
       flush()

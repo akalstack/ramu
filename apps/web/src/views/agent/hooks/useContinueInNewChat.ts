@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { clipText } from '@ramu/shared/text'
 import type { AgentSessionInfo, AgentSettings } from '@ramu/shared/types'
-import { invoke } from '../../../ipc'
+import { useHost } from '../../../workspace/HostProvider'
 import { errorText } from '../../../workspace/TaskPane'
 import { useWorkspaceActions } from '../../../workspace/workspace'
 
@@ -16,6 +16,7 @@ export function useContinueInNewChat({
   setError: (message: string | null) => void
 }) {
   const ws = useWorkspaceActions()
+  const { invoke } = useHost()
   const [continuing, setContinuing] = useState(false),
     [confirmContinue, setConfirmContinue] = useState(false)
   const continueInNewChat = async () => {

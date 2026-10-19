@@ -1,27 +1,32 @@
 import { useCallback, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { RepositoryBinding } from '@ramu/shared/types'
-import { ipcQueryKey } from '../../dataQueries'
-import { ramu } from '../../ipc'
+import { ipcQueryKeyOn } from '../../dataQueries'
+import { useHost } from '../../workspace/HostProvider'
+import { useHostRuntime } from '../../workspace/workspace'
+import { queryInvokerFor } from '../../git/hostQuery'
 import { errorText } from '../../workspace/TaskPane'
 
 /** Status, history, branches and stashes of one repository, refreshed on file changes and `ramu:git-updated`. */
 export function useRepositoryData(taskId: string, binding: RepositoryBinding, reportError: (message: string) => void) {
+  const host = useHost().id
+  const { on } = useHostRuntime()
+  const call = queryInvokerFor(host)
   const statusQuery = useQuery({
-    queryKey: ipcQueryKey('git.status', taskId, binding.repoId),
-    queryFn: () => ramu.invoke('git.status', taskId, binding.repoId),
+    queryKey: ipcQueryKeyOn(host, 'git.status', taskId, binding.repoId),
+    queryFn: () => call('git.status', taskId, binding.repoId),
   })
   const historyQuery = useQuery({
-    queryKey: ipcQueryKey('git.history', taskId, binding.repoId),
-    queryFn: () => ramu.invoke('git.history', taskId, binding.repoId),
+    queryKey: ipcQueryKeyOn(host, 'git.history', taskId, binding.repoId),
+    queryFn: () => call('git.history', taskId, binding.repoId),
   })
   const branchesQuery = useQuery({
-    queryKey: ipcQueryKey('git.branches', taskId, binding.repoId),
-    queryFn: () => ramu.invoke('git.branches', taskId, binding.repoId),
+    queryKey: ipcQueryKeyOn(host, 'git.branches', taskId, binding.repoId),
+    queryFn: () => call('git.branches', taskId, binding.repoId),
   })
   const stashesQuery = useQuery({
-    queryKey: ipcQueryKey('git.stashes', taskId, binding.repoId),
-    queryFn: () => ramu.invoke('git.stashes', taskId, binding.repoId),
+    queryKey: ipcQueryKeyOn(host, 'git.stashes', taskId, binding.repoId),
+    queryFn: () => call('git.stashes', taskId, binding.repoId),
   })
 
   useEffect(() => {
@@ -34,7 +39,7 @@ export function useRepositoryData(taskId: string, binding: RepositoryBinding, re
   }, [statusQuery.refetch, historyQuery.refetch, branchesQuery.refetch, stashesQuery.refetch, reportError])
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
-    const off = ramu.on('fs:changed', ({ cwd }) => {
+    const off = on('fs:changed', ({ cwd }) => {
       if (cwd === binding.cwd) {
         clearTimeout(timer)
         timer = setTimeout(() => void load(), 150)
@@ -47,7 +52,7 @@ export function useRepositoryData(taskId: string, binding: RepositoryBinding, re
       clearTimeout(timer)
       window.removeEventListener('ramu:git-updated', refresh)
     }
-  }, [load, binding.cwd])
+  }, [on, load, binding.cwd])
 
   return {
     status: statusQuery.data ?? null,

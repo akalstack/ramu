@@ -1,7 +1,9 @@
 // Unsent composer text survives switching chats, closing the window and restarting. It lives in this client's
-// localStorage (per device), keyed by chat or by project for a new chat, and is removed when the message is sent.
+// localStorage (per device and host), keyed by chat or by project for a new chat, and is removed when the message is sent.
 import { useEffect, useRef } from 'react'
 import { registerWorkspaceCheckpoint } from '../workspace/workspaceCheckpoint'
+import { ownHostStore, storeForHost } from '../hostStorage'
+import { ownHostId } from '../hosts'
 
 const PREFIX = 'ramu.draft.'
 const MAX_LENGTH = 200_000
@@ -17,7 +19,16 @@ export const draftKey = {
 
 const defaultStore = (): Store | null => {
   try {
-    return globalThis.localStorage ?? null
+    return ownHostStore()
+  } catch {
+    return null
+  }
+}
+
+/** Drafts of one host: a chat or project id only means something on its own host. */
+export const draftStore = (host: string): Store | null => {
+  try {
+    return storeForHost(host)
   } catch {
     return null
   }
@@ -67,24 +78,30 @@ export function pruneDrafts(store: Store | null = defaultStore(), now = Date.now
   } catch {}
 }
 
-/** Saves `value` under `key` shortly after it stops changing, and immediately when the key changes or the page closes. */
-export function useDraftPersistence(key: string, value: string): void {
-  const current = useRef({ key, value })
-  current.current = { key, value }
-  useEffect(() => registerWorkspaceCheckpoint(async () => saveDraft(current.current.key, current.current.value)), [])
-  const pending = useRef<{ key: string; value: string } | null>(null)
+const save = (entry: { key: string; value: string; host: string }) =>
+  saveDraft(entry.key, entry.value, draftStore(entry.host))
+
+/**
+ * Saves `value` under `key` shortly after it stops changing, and immediately when the key changes or the page closes.
+ * `host` is the host the chat or project belongs to (`useHost().id`); its storage and checkpoint are that host's.
+ */
+export function useDraftPersistence(key: string, value: string, host: string = ownHostId()): void {
+  const current = useRef({ key, value, host })
+  current.current = { key, value, host }
+  useEffect(() => registerWorkspaceCheckpoint(async () => save(current.current), host), [host])
+  const pending = useRef<{ key: string; value: string; host: string } | null>(null)
   useEffect(() => {
-    if (pending.current && pending.current.key !== key) saveDraft(pending.current.key, pending.current.value)
-    const entry = (pending.current = { key, value })
+    if (pending.current && (pending.current.key !== key || pending.current.host !== host)) save(pending.current)
+    const entry = (pending.current = { key, value, host })
     const timer = setTimeout(() => {
-      saveDraft(entry.key, entry.value)
+      save(entry)
       if (pending.current === entry) pending.current = null
     }, SAVE_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [key, value])
+  }, [key, value, host])
   useEffect(() => {
     const flush = () => {
-      if (pending.current) saveDraft(pending.current.key, pending.current.value)
+      if (pending.current) save(pending.current)
       pending.current = null
     }
     window.addEventListener('pagehide', flush)

@@ -1,22 +1,16 @@
-import { Clock3, WifiOff } from 'lucide-react'
-import { formatLocale, t, useLanguage } from '../i18n'
+import { ChevronDown, Clock3, WifiOff } from 'lucide-react'
+import { limitTrayView, type ProviderWaitState } from '@ramu/shared/chat/providerWait'
+import { Button } from '@/components/desktop-button'
+import { t, useLanguage } from '../i18n'
+import { limitTrayCopy, resumeTime } from './limitCopy'
+import { Menu } from '../Menu'
+import type { LimitRetry } from './useLimitRetry'
+import { autoResumeLabel, autoResumeSection, type AutoResumeControl } from './autoResumeMenu'
 
-/** The time of day, with the date when it is not today. */
-export function resumeTime(retryAt: number): string {
-  const date = new Date(retryAt),
-    sameDay = date.toDateString() === new Date().toDateString()
-  return date.toLocaleString(
-    formatLocale(),
-    sameDay
-      ? { hour: 'numeric', minute: '2-digit' }
-      : { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' },
-  )
-}
-
-/** Status-slot icon for chat lists: the chat is idle but will continue on its own after a usage limit resets. */
+/** Status-slot icon for chat lists: the chat is at a usage limit and continues on its own once it resets. */
 export function ProviderWaitIcon({ retryAt }: { retryAt: number }) {
   useLanguage()
-  const label = t('Waiting for usage limit · resumes around {0}', { '0': resumeTime(retryAt) })
+  const label = t('Limit reached · resumes around {0}', { '0': resumeTime(retryAt) })
   return (
     <span
       className="task-state provider-wait-state flex-none inline-flex items-center justify-center w-3 h-3"
@@ -29,22 +23,80 @@ export function ProviderWaitIcon({ retryAt }: { retryAt: number }) {
   )
 }
 
-/** Shown in the chat tray while every provider is at its usage limit. The chat is not failed: messages are kept and sent after the reset. */
-export function ProviderWaitNote({ retryAt }: { retryAt: number }) {
+const ACTION_LABEL = { 'try-again': 'Try again', 'try-anyway': 'Try anyway', resume: 'Resume' } as const
+
+/** One line of the chat tray for a thread at a usage limit. Presentational: the container supplies the actions. */
+export function LimitTrayRow({
+  wait,
+  autoResume,
+  now = Date.now(),
+  stillLimited = false,
+  busy = false,
+  onTry,
+}: {
+  wait: ProviderWaitState
+  autoResume: AutoResumeControl
+  now?: number
+  stillLimited?: boolean
+  busy?: boolean
+  onTry: () => void
+}) {
   useLanguage()
-  const time = resumeTime(retryAt)
-  const detail = t(
-    'Every provider you can fall back to has reached its limit. You can keep writing: messages are kept and sent, and unfinished work continues, once one is available. Next check around {0}.',
-    { '0': time },
-  )
+  const view = limitTrayView(wait, autoResume.effective.value, now)
+  const { title, detail } = limitTrayCopy(view, autoResume.effective.source, stillLimited)
+  const tooltip = [
+    `${title} · ${detail}`,
+    wait.reason,
+    t('You can keep writing: messages you send now are queued and the wait stays. Stop clears the wait.'),
+  ]
+    .filter(Boolean)
+    .join('\n')
   return (
-    <div role="status" title={detail} className="provider-wait flex items-center gap-2 min-h-7 px-1 text-caption">
+    <div role="status" title={tooltip} className="provider-wait flex items-center gap-2 min-h-7 px-1 text-caption">
       <Clock3 size={14} className="flex-none text-muted-foreground" aria-hidden="true" />
-      <strong className="flex-none font-medium text-foreground">{t('Waiting for a usage limit to reset')}</strong>
-      <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground">
-        {t('Resumes around {0}', { '0': time })}
+      <strong className="flex-none font-medium text-foreground">{title}</strong>
+      <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground">
+        {detail}
       </span>
+      <Button
+        variant={view.primary ? 'default' : 'ghost'}
+        size="xs"
+        className={view.primary ? 'flex-none' : 'flex-none text-muted-foreground'}
+        disabled={busy}
+        onClick={onTry}
+      >
+        {t(ACTION_LABEL[view.action])}
+      </Button>
+      <Menu
+        label={autoResumeLabel(autoResume)}
+        className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover flex-none h-6 gap-1 px-1.5 text-caption font-normal"
+        align="end"
+        icon={
+          <>
+            <span>{autoResumeLabel(autoResume)}</span>
+            <ChevronDown size={12} aria-hidden="true" />
+          </>
+        }
+        items={autoResumeSection(autoResume)}
+      />
     </div>
+  )
+}
+
+/**
+ * Shown in the chat tray while the thread is at a usage limit. The thread is not failed: messages are kept and sent
+ * when it continues. Try again checks the limit now; Auto-resume is this thread's own choice or the default.
+ */
+export function ProviderWaitNote({ retry, autoResume }: { retry: LimitRetry; autoResume: AutoResumeControl }) {
+  if (!retry.wait) return null
+  return (
+    <LimitTrayRow
+      wait={retry.wait}
+      autoResume={autoResume}
+      stillLimited={retry.stillLimited}
+      busy={retry.busy}
+      onTry={retry.tryNow}
+    />
   )
 }
 

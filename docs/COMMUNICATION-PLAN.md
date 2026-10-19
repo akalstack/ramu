@@ -1,0 +1,89 @@
+# Client–server communication
+
+## Human need and smallest usable delivery
+
+A person controls an agent and terminal from desktop or phone, switches between hosts, loses connectivity, then returns to the same work without missing output or accidentally repeating an action. A busy terminal must not delay Stop, approval answers or another host's updates. Improve that complete workflow before expanding transport scope.
+
+The first delivery is a capability-negotiated remote WebSocket path for existing typed calls and the agent/terminal subscriptions needed by that workflow, with bounded recovery and the existing HTTP/SSE path retained for compatibility. Ship it as the default only after the comparison below demonstrates a useful benefit. Keeping and improving HTTP/SSE is an acceptable outcome if WebSocket does not pass the gates. This is planned work; current transport remains documented in [Headless server](HEADLESS-SERVER.md#protocol).
+
+## Existing Ramu behavior to preserve
+
+Follow [Architecture](ARCHITECTURE.md), [UI](UI.md) and the [root product/planning guidance](../AGENTS.md#product-design-and-architecture). Extend these boundaries:
+
+- `packages/shared/src/api.ts` and domain types define named methods and push events. `packages/contracts/src/index.ts` owns wire versions, capabilities and encoding, including positional `undefined` arguments. Server handlers stay behind `ipc/registry.ts`, schemas and `ipc/dispatcher.ts`; transport changes must not create a second business API.
+- `apps/server/src/index.ts` serves `POST /invoke` and `GET /events` over a local Unix socket and authenticated network HTTP(S). The Unix socket carries HTTP too; it is not a WebSocket. Slow SSE clients are disconnected above the existing writable-buffer threshold. Events are broadcast rather than explicitly subscribed by resource.
+- `packages/client-runtime/src/index.ts`, `network.ts`, `limits.ts` and presence handling provide request deadlines/cancellation, per-origin work limits, network-aware reconnects, generation checks and quiet waiting/wake behavior. Keep those bounds and multi-host fairness; do not replace quiet offline behavior with continuous polling.
+- Desktop `main/computers.ts` and `main/hostInvoke.ts` own connections and host routing. Renderer `invokeOn`, host-qualified query/storage keys and `workspace/hostEvents.ts` preserve isolation and fair event delivery. Native dialogs, clipboard and lifecycle actions remain device-local.
+- Agent events already have sequence/revision data; `useAgentStream.ts` rehydrates on reconnect. Terminal output already has cursors and bounded hidden-host buffers in `workspace/terminalOutput.ts`. Mobile `runtime/transport.ts` and `runtime/store.tsx` already hydrate snapshots while buffering live events. Reuse these mechanisms and audit gaps; recovery is not wholly absent.
+- `remote/access.ts`, device records and method allowlists enforce pairing, owner/viewer access, origin restrictions and revocation. Local-only native requests remain unavailable remotely. Keep independent client/server upgrades and existing remote URL/HTTP-consent rules.
+
+These are useful existing properties, not evidence that Ramu performs better than T3. Establish comparative evidence before making superiority claims.
+
+## T3 Code reference
+
+Inspected upstream main at [`3ff5b3c82a62baddc0c2b1b227e9d3a06190c426`](https://github.com/pingdotgg/t3code/tree/3ff5b3c82a62baddc0c2b1b227e9d3a06190c426) on 2026-10-19. Findings apply to that source revision, not every installed release. Review licensing before copying implementation.
+
+- **Typed RPC and subscriptions over WebSocket.** [Contracts](https://github.com/pingdotgg/t3code/blob/3ff5b3c82a62baddc0c2b1b227e9d3a06190c426/packages/contracts/src/rpc.ts) define unary calls and streaming methods, including terminal attach/observe/write. [Server `/ws`](https://github.com/pingdotgg/t3code/blob/3ff5b3c82a62baddc0c2b1b227e9d3a06190c426/apps/server/src/ws.ts) checks protocol compatibility, authenticates the upgrade and runs Effect RPC with JSON serialization and scoped authorization. Adopt the typed boundary and subscription model through Ramu's existing dispatcher; an Effect migration is not required.
+- **Connection lifecycle separated from RPC usage.** [RPC sessions](https://github.com/pingdotgg/t3code/blob/3ff5b3c82a62baddc0c2b1b227e9d3a06190c426/packages/client-runtime/src/rpc/session.ts) establish the socket and initial configuration, validate environment identity and detect disconnects. The [supervisor](https://github.com/pingdotgg/t3code/blob/3ff5b3c82a62baddc0c2b1b227e9d3a06190c426/packages/client-runtime/src/connection/supervisor.ts) handles network/wake signals, jittered retry and session replacement. [Subscription clients](https://github.com/pingdotgg/t3code/blob/3ff5b3c82a62baddc0c2b1b227e9d3a06190c426/packages/client-runtime/src/rpc/client.ts) switch to replacement sessions. Ordinary calls and streaming commands are distinguished from durable subscriptions; do not interpret reconnection as safe automatic command replay.
+- **Bounded synchronization.** [Server streams](https://github.com/pingdotgg/t3code/blob/3ff5b3c82a62baddc0c2b1b227e9d3a06190c426/apps/server/src/ws.ts) accept sequence cursors, bound replay by count and serialized bytes, and use snapshots when replay is unsuitable. [Live stream budgets](https://github.com/pingdotgg/t3code/blob/3ff5b3c82a62baddc0c2b1b227e9d3a06190c426/apps/server/src/orchestration-v2/LiveStreamBudget.ts) bound retained items/bytes and report overflow so consumers can resume. Adopt these semantics around Ramu's existing event sequences, revisions and terminal cursors.
+- **Terminal flow control.** [Output protocol](https://github.com/pingdotgg/t3code/blob/3ff5b3c82a62baddc0c2b1b227e9d3a06190c426/apps/server/src/terminal/OutputProtocol.ts) tracks unacknowledged output chunks and their serialized sizes. Evaluate a similar application-level window so a slow consumer cannot build an unbounded queue. A transport acknowledgement is not an acknowledgement that a command completed.
+- **HTTP remains.** [HTTP routes](https://github.com/pingdotgg/t3code/blob/3ff5b3c82a62baddc0c2b1b227e9d3a06190c426/apps/server/src/http.ts) include assets and attachment uploads; the [HTTP client](https://github.com/pingdotgg/t3code/blob/3ff5b3c82a62baddc0c2b1b227e9d3a06190c426/packages/client-runtime/src/rpc/http.ts) uses a separate typed HTTP API. T3 therefore combines transports rather than moving every exchange to WebSocket. This inspection does not establish an HTTP fallback for all of its WebSocket RPC methods.
+
+## Transport decision
+
+Start with a hybrid candidate: WebSocket for interactive RPC/events, HTTP for pairing/health and existing suitable transfers, and the current local Unix-socket transport. Keep HTTP/SSE during migration. Ramu currently carries some file/attachment operations through RPC; identify large payloads before adding any dedicated transfer endpoints, and reuse file authorization if separation proves useful.
+
+Compare three options using the same task, environment and payloads: improved current HTTP/SSE, WebSocket for agent/terminal interaction with ordinary RPC retained on HTTP, and all interactive RPC/subscriptions on WebSocket. Each option must share handler authorization and recovery semantics. Default to the smallest option that meets the gates. Do not maintain duplicate active event streams or execute a mutation through both paths.
+
+Move all interactive RPC to WebSocket only if it brings measurable responsiveness or resource benefits, or materially simplifies a proven lifecycle problem without increasing recovery complexity. Retire legacy HTTP invocation/SSE only after a documented compatibility window and independently upgraded desktop/mobile/headless clients pass acceptance. Retain HTTP bootstrap/health and justified transfers. Change the local socket path only if its own measurements justify the cost. Video/audio media transport is a separate browser/computer-use decision.
+
+## Implementation increments
+
+### 1. Establish the baseline and recovery contract
+
+Use existing client-runtime/server test suites and focused fixtures; keep desktop startup verification in the single smoke script. Record hardware, build, host count, network latency/loss, thread/terminal load and dataset size. Measure request and terminal-input latency (p50/p95), Stop/approval response time, reconnect-to-synchronized time, bytes, request/connection counts, CPU and retained memory for one and three hosts. Include a heavily streaming background host and an idle phone.
+
+Audit missing events across reconnect, snapshot/live races, host restart and lost command replies. Specify transport-independent outcomes: current, synchronizing, disconnected, authorization rejected and outcome unknown. Preserve drafts and queued messages through every transition. Establish repeatable baseline ranges and an explicit budget for acceptable variation before comparing candidates; do not choose success thresholds after seeing results.
+
+### 2. Add a negotiated WebSocket session through existing services
+
+- Define versioned, validated envelopes in `packages/contracts`: handshake/capabilities, request ID, response/error, event/subscription identity and cancellation. Preserve existing method argument encoding. Keep correlation IDs distinct from mutation idempotency keys and subscription cursors.
+- Authenticate and validate protocol/origin/host identity before dispatch. Reuse paired-device permissions for every method and subscription, enforce expiry/revocation on open connections, and preserve local-only restrictions. Bind credentials to approved routes; never put long-lived tokens in URLs/logs. Choose browser/native authentication mechanisms explicitly since browser WebSocket cannot set arbitrary authorization headers.
+- Implement the adapter in server/client-runtime and the mobile transport boundary; keep Electron out of the server. Reuse a connection per active client–host session and existing ownership/ref counting. Do not add a socket per query or component. Leave the renderer's typed invocation interface stable.
+- Separate connection liveness, transport readiness and completed synchronization. Use bounded jittered reconnects, network/wake awareness, generation fencing and configurable-in-code heartbeat deadlines validated on phones/proxies. Do not copy T3's timeout values without evidence.
+- Negotiate before use. Fall back only for explicit lack of capability or a diagnosed unsupported upgrade; distinguish unsupported transport from revoked credentials, incompatible protocol and host-identity failure. Never silently bypass those failures. If a connection fails after a mutation was sent, report uncertain outcome and reconcile before any retry or fallback.
+
+### 3. Deliver recoverable agent and terminal interaction
+
+- Subscribe by host/resource with deterministic disposal and permissions. Keep shell summaries available across hosts while limiting detailed terminal/thread traffic to actual consumers. Preserve unread/inbox correctness and server-owned work when a consumer closes.
+- Extend existing sequence/revision/cursor handling with a bounded replay-to-live handoff. Define the high-water mark, server restart identity and expired-cursor/reset response. A gap, rewind, overflow or incompatible revision must trigger a bounded authoritative snapshot; do not silently skip data. Buffer live changes within item/byte bounds during hydration and restart synchronization if those bounds are exceeded.
+- Define terminal output acknowledgements/windows separately from input. Apply queue, frame, payload, subscription and in-flight request limits per client and host, plus global limits. Give Stop/approval/control work service under terminal load; test whether shared-socket ordering requires smaller output chunks or a separate terminal stream. Coalesce only replaceable updates; never discard required command outcomes or transcript events without explicit recovery.
+- On disconnect, settle pending requests deterministically. Retry safe reads under a bounded policy. For mutations, add scoped durable operation keys only where retry is necessary, with payload binding, retention and result lookup; otherwise reconcile state and show unknown outcome. Test a crash between side effect and result recording. WebSocket request IDs alone provide no exactly-once guarantee. Aborting a client wait does not prove server work stopped.
+- Use the existing connection notice and recovery actions, with accessible localized copy. Keep drafts editable and server work inspectable while disconnected. Expose useful diagnostics without requiring a transport setting for routine use.
+
+### 4. Choose defaults and widen only when justified
+
+Run the matched comparison and record the selected option, remaining failures and reasons in this plan while work is active. Require correctness/security gates first, then a repeatable improvement outside baseline variation in the identified user problem, with no material regression in idle mobile traffic, memory or multi-host fairness. If HTTP/SSE meets the need more simply, keep it and deliver the shared recovery improvements there.
+
+After the remote agent/terminal workflow passes, evaluate remaining Git/file/control calls and local transport separately. Keep fallback lifetime explicit and remove duplicate compatibility code when retirement is justified. Update [Architecture](ARCHITECTURE.md), [Headless server](HEADLESS-SERVER.md), mobile verification and capability documentation to describe the delivered behavior; remove finished items and delete this plan when nothing remains.
+
+## Acceptance and verification
+
+The representative task uses a local desktop host plus two paired hosts: stream an agent response and terminal output on one, type in another terminal, answer a permission request and Stop an agent, switch hosts, disconnect Wi-Fi, let the phone sleep, then resume. Verify final transcript/terminal state against the server, preserved drafts/unread state, bounded memory and prompt control response. Use simulated providers for repeatability; live-provider and physical-device acceptance remain separate evidence.
+
+Focused tests belong in existing package test directories:
+
+- Contract validation, positional arguments, malformed/oversized frames, request correlation, out-of-order responses, deadlines, cancellation and disposal.
+- Snapshot/live overlap, sequence gaps/duplicates, rewind, stale generations, cursor expiry, reconnect after overflow, host restart and server downgrade. A local event/config failure must not unnecessarily fail unrelated RPCs.
+- Lost acknowledgement after mutation, duplicate operation keys with different payloads, concurrent retries, uncertain outcomes and stopping a request whose server action has already completed.
+- Slow consumers, terminal floods, per-host/global limits and fairness; disconnected/idle clients must not create endless retry traffic. Include proxy upgrade refusal, proxy idle timeouts, path prefixes and SSH-tunnel routes.
+- Owner/viewer parity across HTTP and WebSocket, forged subscriptions, disallowed browser origins, expiry, immediate revocation, token rotation overlap, certificate/host changes and rejected downgrade. Native mobile certificate checks must cover every active transport.
+- New client/old server, old client/new server, explicit fallback and upgrade/reconnect during active work. Check iOS/Android foreground/background, network switching and physical-device recovery.
+
+Run scoped tests/typechecks for contracts, client-runtime, server and each touched client. Desktop-facing implementation requires `pnpm build` followed by `pnpm test:desktop-smoke`; do not rebuild during smoke or add another desktop startup/performance suite. Baseline measurements should use focused fixtures/manual acceptance. Documentation-only work needs formatting and link checks.
+
+## Dependencies and later options
+
+Coordinate credential renewal/native certificate enforcement with [Remote security](REMOTE-SECURITY-PLAN.md), route identity and reconnect wakeups with [Host discovery](HOST-DISCOVERY-PLAN.md), and terminal ownership with [Background terminals](BACKGROUND-TERMINALS-PLAN.md). A transport migration must not weaken those guarantees or claim to complete their remaining acceptance.
+
+Separate terminal sockets, binary encoding, compression, HTTP/2, relay support and media channels are later options only when measured failures justify them. Preserve provider-native transports (Codex app-server, ACP, SDKs, OpenCode HTTP) and the Ramu MCP endpoint; this plan concerns Ramu clients communicating with their execution host.

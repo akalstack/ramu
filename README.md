@@ -69,7 +69,7 @@ Built with Electron, React, React Native, and TypeScript. See the [architecture]
 | Command | Purpose |
 | --- | --- |
 | `pnpm dev` | Start with hot reload |
-| `pnpm check` | Type-check, test, and build |
+| `pnpm check` | Format, lint, type-check, test, and build |
 | `pnpm test:desktop-smoke` | One macOS desktop startup check with simulated providers |
 | `pnpm make` | Build installers for the current platform |
 | `pnpm server serve` | Run the workspace server without the desktop app (after `pnpm build`) |
@@ -79,6 +79,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and validation requirements. [R
 ## Guides
 
 [Providers](docs/PROVIDERS.md) · [Agents and routing](docs/AGENTS.md) · [Goals](docs/GOALS.md) · [Background work and reviews](docs/AUTOMATION.md) · [Pull requests and issues](docs/PULL-REQUESTS.md) · [Memory](docs/MEMORY.md) · [Learning](docs/LEARNING.md) · [Mobile](apps/mobile/README.md) · [Editor](docs/EDITOR.md)
+
+Remaining implementation and release work is tracked in [the roadmap](docs/ROADMAP.md). Completed plans are removed.
 
 ## License
 

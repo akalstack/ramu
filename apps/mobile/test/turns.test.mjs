@@ -59,3 +59,121 @@ test('failed tools stay visible outside the fold, and stopped turns say so', () 
   assert.equal(rows[1].label, 'Stopped after 5s')
   assert.equal(rows[2].status, 'failed')
 })
+
+const goal = (patch = {}) => ({
+  id: 'g1',
+  objective: 'Login works',
+  status: 'active',
+  turns: 1,
+  reason: '',
+  updatedAt: 1,
+  ...patch,
+})
+const goalEvent = (value) => ({ kind: 'goal', goal: value })
+
+test('a failed verification, a stall and the completion evidence get their own lines, apart from limit and pause', () => {
+  const failed = {
+    command: 'pnpm test',
+    ok: false,
+    code: 1,
+    at: 5,
+    output: 'Command exited with code 1.\nFAIL login.test.ts\nexpected 200, got 500',
+  }
+  const stall = { fingerprint: 'f', unchanged: 2, seq: 3 }
+  const items = transcript([
+    goalEvent(goal()),
+    goalEvent(goal({ check: failed })),
+    goalEvent(goal({ status: 'waiting-provider' })),
+    goalEvent(goal({ status: 'paused' })),
+    goalEvent(goal({ status: 'blocked', reason: 'No progress: the last 2 continuations changed nothing.', stall })),
+    goalEvent(
+      goal({
+        status: 'completed',
+        evidence: { checks: [{ name: 'pnpm test', passed: true }], changedFiles: ['src/login.ts'] },
+      }),
+    ),
+  ])
+  const notes = items.filter((item) => item.kind === 'note')
+  assert.deepEqual(
+    notes.map((n) => [n.goalNote, n.title, n.failed]),
+    [
+      ['set', 'Goal set', false],
+      ['verify-failed', 'Verification failed', true],
+      ['paused', 'Goal paused', false],
+      ['stalled', 'No progress', true],
+    ],
+  )
+  assert.equal(notes[1].detail, 'pnpm test · Exit 1\nFAIL login.test.ts\nexpected 200, got 500')
+  assert.match(notes[3].detail, /^No progress/)
+  const done = items.find((item) => item.kind === 'goal')
+  assert.equal(done.detail, 'Checks: pnpm test (passed)\nChanged: src/login.ts')
+})
+
+test('published interactive content stays visible after provider completion and replay', () => {
+  const reference = {
+    id: 'content',
+    version: 1,
+    sessionId: 'session',
+    title: 'Capacity',
+    summary: 'Explore capacity',
+    digest: 'hash',
+    createdAt: 1,
+    checked: true,
+  }
+  const events = [
+    { kind: 'user', text: 'Show capacity', at: 1 },
+    ...tool('preview', 2),
+    { kind: 'interactive', reference, at: 3 },
+    { kind: 'result', isError: false, text: '', costUsd: null, at: 4 },
+  ]
+  const rows = foldTurns(transcript(events), false, false)
+  assert.equal(rows.at(-1).kind, 'interactive')
+  assert.deepEqual(rows.at(-1).reference, reference)
+  assert.equal(
+    rows.some((r) => r.kind === 'summary' && r.items.some((i) => i.kind === 'interactive')),
+    false,
+  )
+  assert.deepEqual(foldTurns(transcript(structuredClone(events)), false, false), rows)
+})
+
+test('helper groups keep launch placement, stopped state, provider metadata and capabilities', () => {
+  const events = [
+    { kind: 'user', text: 'first' },
+    {
+      kind: 'agent',
+      agentId: 'a',
+      name: 'A',
+      status: 'stopped',
+      provider: 'codex',
+      model: 'test',
+      canStop: false,
+      canMessage: false,
+      startedAt: 10,
+      endedAt: 20,
+    },
+    { kind: 'question', requestId: 'q', questions: [], requestSource: { sessionId: 'child', agentId: 'a', name: 'A' } },
+    { kind: 'user', text: 'next' },
+    { kind: 'agent', agentId: 'advisor', name: 'Advisor', status: 'completed', taskType: 'advisor' },
+  ]
+  const rows = transcript(events)
+  assert.deepEqual(
+    rows.map((r) => r.kind),
+    ['user', 'agents', 'question', 'user', 'agents'],
+  )
+  assert.equal(rows[1].agents[0].status, 'stopped')
+  assert.equal(rows[1].agents[0].provider, 'codex')
+  assert.equal(rows[1].agents[0].endedAt, 20)
+  assert.equal(rows[1].agents[0].canMessage, false)
+  assert.equal(rows[2].requestSource.name, 'A')
+  assert.equal(rows[4].advisor, true)
+})
+
+test('a provider may reuse an approval id after its previous request was resolved', () => {
+  const rows = transcript([
+    { kind: 'permission-request', requestId: 'same', title: 'old', detail: 'old command' },
+    { kind: 'request-resolved', requestId: 'same', outcome: 'allowed' },
+    { kind: 'permission-request', requestId: 'same', title: 'new', detail: 'new command' },
+  ])
+  assert.equal(rows.at(-1).decision, undefined)
+  assert.equal(rows.filter((row) => row.kind === 'permission').length, 1)
+})

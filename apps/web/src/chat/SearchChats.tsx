@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { MessageSquare, Sparkles, User } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ChatSearchHit, Task } from '@ramu/shared/types'
-import { invoke } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import { timeAgo } from '../Menu'
 import { SearchInput } from '../SearchInput'
 import { useWorkspace } from '../workspace/workspace'
@@ -34,6 +34,7 @@ type Result = { key: string; task: Task; hit?: ChatSearchHit }
 export function SearchChats({ onClose }: { onClose: () => void }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<ChatSearchHit[]>([])
   const [loading, setLoading] = useState(false)
@@ -71,7 +72,7 @@ export function SearchChats({ onClose }: { onClose: () => void }) {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [needle])
+  }, [needle, invoke])
 
   const tasks = useMemo(() => new Map(ws.tasks.map((task) => [task.id, task])), [ws.tasks])
   const chats: Result[] = useMemo(() => {

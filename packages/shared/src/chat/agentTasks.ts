@@ -35,6 +35,14 @@ export function latestTasks(events: AgentEvent[]): AgentTask[] {
       const task: AgentTask & { kind?: string; at?: number } = { ...event }
       delete task.kind
       delete task.at
+      const previous = tasks.get(task.agentId)
+      if (
+        previous &&
+        previous.status !== 'running' &&
+        task.status === 'running' &&
+        !(task.resumedAt && task.resumedAt > (previous.endedAt ?? previous.resumedAt ?? 0))
+      )
+        continue
       tasks.set(task.agentId, task)
     }
   // Older background services saved the delivered advice without a task or its own transcript.
@@ -84,9 +92,9 @@ export function advisorTranscript(events: AgentEvent[], agentId: string): AgentE
   ]
 }
 
-/** A process that is gone cannot still be running its agents. */
-export function effectiveStatus(task: AgentTask, sessionLive: boolean): AgentTaskStatus {
-  return !sessionLive && task.status === 'running' ? 'stopped' : task.status
+/** Parent turn state cannot settle independently owned helpers. The server records actual stops. */
+export function effectiveStatus(task: AgentTask, _sessionLive: boolean): AgentTaskStatus {
+  return task.status
 }
 
 // A sub-agent Ramu runs reports back to its chat through a message the chat shows as a report, not as something you typed.

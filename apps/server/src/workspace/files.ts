@@ -3,7 +3,7 @@ import { REPLACE_CONTENT_LIMIT } from '@ramu/shared/search/searchLimits'
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { cp, lstat, mkdir, readdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, opendir, readdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from 'node:path'
 import type {
   DirEntry,
@@ -269,6 +269,31 @@ export async function listDir(root: string, relPath: string): Promise<DirEntry[]
       kind: e.isDirectory() ? 'dir' : 'file',
     }))
     .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1))
+}
+
+/** Bounded directory payload for mobile Explorer; no recursive traversal. */
+export async function browseDirectory(
+  root: string,
+  relPath: string,
+): Promise<{ entries: DirEntry[]; truncated: boolean }> {
+  const abs = await resolveInRoot(root, relPath)
+  const dir = await opendir(abs)
+  const entries: DirEntry[] = []
+  let truncated = false
+  for await (const entry of dir) {
+    if (entry.name === '.git' || (!entry.isDirectory() && !entry.isFile() && !entry.isSymbolicLink())) continue
+    if (entries.length === 2000) {
+      truncated = true
+      break
+    }
+    entries.push({
+      name: entry.name,
+      path: relPath ? `${relPath}/${entry.name}` : entry.name,
+      kind: entry.isDirectory() ? 'dir' : 'file',
+    })
+  }
+  entries.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1))
+  return { entries, truncated }
 }
 
 /** Quick open and file mentions also work in folders with no Git metadata. */

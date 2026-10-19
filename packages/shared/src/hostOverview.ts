@@ -16,7 +16,7 @@ export type HostDestination =
   | { kind: 'new'; projectId?: string }
   | { kind: 'summary'; summaryId: string }
   | { kind: 'inbox' }
-  | { kind: 'add-project' }
+  | { kind: 'host' }
 
 export function isHostDestination(value: unknown): value is HostDestination {
   if (!value || typeof value !== 'object') return false
@@ -32,7 +32,7 @@ export function isHostDestination(value: unknown): value is HostDestination {
     case 'summary':
       return id('summaryId')
     case 'inbox':
-    case 'add-project':
+    case 'host':
       return true
     default:
       return false

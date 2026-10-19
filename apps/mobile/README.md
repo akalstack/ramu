@@ -8,7 +8,7 @@ LAN/VPN. The production app has no seeded hosts or simulated conversations.
 
 1. Build this checkout's desktop/server (`pnpm build`) and start Ramu on the host.
 2. Open desktop **Settings → Remote access**, enable network access, then **Pair a
-   device**. Choose the reachable address in the QR selector. For a headless host,
+   device**. Review [remote access and device privileges](../../SECURITY.md#remote-access). Choose the reachable address in the QR selector. For a headless host,
    use `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`.
 3. Build once with `pnpm --filter @ramu/mobile build:ios` (or `build:android`), then run `pnpm dev:mobile` (Expo Go; use `pnpm --filter @ramu/mobile dev:build` for a development build) and open **Hosts → Pair**.
    Scan the desktop's QR offer, or enter its address and ten-character pairing code.
@@ -25,6 +25,14 @@ The React Native/React pins are isolated from desktop React through Metro. Insta
 SDK-compatible native modules with `pnpm --filter @ramu/mobile exec expo install …`.
 `pnpm dev:mobile` starts Metro for Expo Go on the Mac's LAN address (`scripts/start.mjs`; an iPhone often cannot resolve the `.local` name). Use a development build (`dev:build`) for the native adaptive header and background push; Expo Go's bundled navigation library does not include our native scroll-view bridge.
 
+## Files, workspace defaults and usage
+
+**Browse files** on Threads opens a host/project picker without creating a thread. Thread headers and project actions open Explorer for their exact checkout. Direct and transcript links share the existing code/Markdown/image/diff viewer. Directory responses stop at 2,000 entries with a truncation notice; filename/path search uses the bounded quick-open index and shows at most 200 matches. Existing-workspace Home selection and file-management context actions remain in the [Explorer plan](../../docs/EXPLORER-PLAN.md).
+
+**Plan usage** appears in Threads and beside the composer's model, opening a shared host/account sheet. Missing readings, notice-only limits, last-known readings and measured percentages are distinct. Percentages mean used; they are account-wide rather than per-thread. The refresh action is specifically for Claude. Native layout, routing projection and other remaining work are in the [usage plan](../../docs/PLAN-USAGE-UX-PLAN.md).
+
+Host Git settings now provide a default checkout mode and fixed branch prefix. A manual draft choice overrides the default; Use default restores inheritance. Sending freezes the chosen mode/prefix in the outbox, and creation retries use the same request ID. Generated names, richer draft restoration and additional offline acceptance remain in the [workspace plan](../../docs/WORKSPACE-DEFAULTS-PLAN.md).
+
 ## Navigation
 
 A native tab bar (Liquid Glass on iOS 26) with four places, each with its own stack:
@@ -32,7 +40,9 @@ A native tab bar (Liquid Glass on iOS 26) with four places, each with its own st
 - **Threads**: projects and threads for the selected host (the old Home list).
 - **Inbox**: what needs you (threads waiting, recaps that need a decision) across every connected
   host, plus Running, Recaps, Learned (what Ramu learned) and Completed. The tab badge and the app
-  icon count what needs you. Opening a summary shows its changes and starts a thread about it.
+  icon count what needs you. Recap cards swipe left for Done, Snooze and Dismiss (Snooze offers
+  In 3 hours, Tomorrow and Next week), and every action shows an Undo toast; a host that predates
+  snooze times snoozes for a day. Opening a summary shows its changes and starts a thread about it.
 - **Schedules**: the selected host's schedules with their next and last runs; swipe to
   pause, run now or delete; tap for runs; the editor covers daily, weekly, monthly, interval and one-time rules.
 - **Search**: the native search tab; finds threads on every host.
@@ -52,7 +62,7 @@ instead of blur, and one shared `Toggle`. Android builds need JDK 21 (JDK 25 bre
   independent status, revocation, catalog, usage and thread state. Selecting one
   does not reconnect the others. In-app alerts open their originating host.
 - Live thread/tool/helper transcripts, host models, reasoning/access/fallback settings, host file context and skills, queue/
-  steer, stop, permissions, ID-based questions, elicitation forms and goal controls.
+  steer, stop, permissions, ID-based questions, elicitation forms and goal controls (pause, resume, clear and a verify-command editor on hosts that support `agent.goal.verify`).
 - Persistent host metadata, drafts, question drafts and offline outbox. Native
   bearer tokens use SecureStore; the web preview uses browser local storage.
 - Explicitly offline messages deliver in order after reconnect. Delivery interrupted
@@ -80,8 +90,7 @@ instead of blur, and one shared `Toggle`. Android builds need JDK 21 (JDK 25 bre
 
 The app suspends streams when backgrounded and rehydrates all saved hosts on
 return. Agents continue on their hosts. It never promises background SSE delivery.
-Paired devices retain the host's existing broad remote privileges, including shell
-access. Network/device administration stays on the host desktop/CLI.
+Full-access devices can run shells and agents. The host can instead issue a viewer pairing for reading threads and answering input requests. Device access expires after 90 days of inactivity by default; active use extends it. Network/device administration stays on the host desktop/CLI. See [remote access](../../SECURITY.md#remote-access).
 
 ## Background notifications
 
@@ -90,6 +99,8 @@ push token independently with every host. Hosts send generic completion/input/fa
 alerts through Expo's gateway, with opaque host/task/session routing IDs instead
 of prompt or transcript content. Revocation and invalid-token receipts remove registrations.
 Foreground push banners are suppressed so SSE supplies the in-app notification.
+
+Settings → Notifications has one switch per kind of alert, sent to each host with the registration so the host only pushes what is on: a thread needs you, a thread fails, a thread finishes, a scheduled run finishes, fails or could not start (a thread started by a schedule counts here instead of under failed or finished; needing input is still "needs you"), and the **Daily recap**. A scheduled run that fails before its thread exists pushes "A scheduled run could not start." once and a tap opens the Schedules tab. The daily recap is off by default: when on, the host sends one "Your daily recap is ready." a day (no content) and a tap opens Inbox → Recaps. Recaps and learned summaries are otherwise silent and only show in the Inbox. Hosts that predate the switches ignore them and send every alert except the daily recap.
 
 A build owner must supply an Expo project ID and configure APNs/FCM credentials:
 
@@ -111,7 +122,8 @@ See [Expo push setup](https://docs.expo.dev/push-notifications/push-notification
 pnpm check
 pnpm --filter @ramu/mobile export:ios
 pnpm --filter @ramu/mobile export:android
-pnpm test:mobile # two disposable hosts and simulated providers; no paid calls
+pnpm --filter @ramu/mobile test # transport, store and model unit tests
+pnpm --filter @ramu/server exec vitest run test/mobileCompanion.test.ts test/mobileTerminal.test.ts test/mobileLiveActivity.test.ts
 ```
 
 `pnpm --filter @ramu/mobile web` provides a phone-sized browser preview. Tests cover
@@ -139,7 +151,7 @@ Expo scene support so Xcode 27 builds launch on iOS 27.
 
 ## Startup and terminal gestures
 
-Home uses the native **Workspaces** navigation title. The wordmark appears during
+The Threads tab uses the native **Threads** navigation title. The wordmark appears during
 startup with the same r-and-dot reveal as the desktop; reduced motion skips the
 movement. Native launch assets match light/dark appearance without baked-in masks.
 
@@ -206,3 +218,13 @@ there is no second command field. An extra-key rail appears with the keyboard,
 with visible Ctrl/Alt latches and a pinned Paste action. The same layout is shared
 on iOS and Android; safe areas, keyboard avoidance and native materials remain
 platform-aware. The terminal canvas stays dark while controls follow Ramu's theme.
+
+## Thread activity and Inbox answers
+
+A compact measured row above the composer opens pending input, helpers, advisor consultations, goals and the server queue. Connection and input take priority; cached offline requests remain visible with a reconnect explanation. The existing goal/queue controls move into this sheet when the activity row is present. Provider-limit controls keep their existing behavior. Context compaction has its own label, and the phone outbox remains a separate delivery surface.
+
+Helper cards preserve provider/model/effort, timing, recovery, isolation, capability and waiting metadata. Counts distinguish active, completed, failed and stopped tasks; advisors have their own groups. Helpers launched in older turns remain selected while active, while routine settled groups start collapsed. Message and Stop appear only when supported and connected. Output is labelled an excerpt; no fake child thread is created to display it.
+
+Inbox thread rows offer **Answer requests** to expand the same approval/question/form cards used in the transcript. Their host, session, request IDs and saved draft keys are shared, so answering in place requires no thread navigation. Offline rows preserve the request and explain reconnecting. Native device, long-list and accessibility acceptance remain in the activity plan.
+
+New-worktree outbox entries retain their host's naming strategy, instructions and bounded opening message along with checkout mode and prefix. Semantic/custom naming runs on that host during delivery. If it cannot generate a valid name within the deadline, the thread shows “Used default branch name.” Explicit native name generation/editing and frozen preview bases remain in the workspace plan.

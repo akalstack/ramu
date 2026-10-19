@@ -3,13 +3,14 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../i18n'
 import { ICON_BUTTON_CLASS } from '../changes/styles'
+import { deviceStorage } from '../deviceStorage'
 
 const KEY = 'ramu.review-layout'
 const EVENT = 'ramu:diff-layout'
 
 const savedSplit = () => {
   try {
-    return localStorage.getItem(KEY) !== 'inline'
+    return deviceStorage.getItem(KEY) !== 'inline'
   } catch {
     return true
   }
@@ -21,11 +22,16 @@ export function useDiffLayout() {
   useEffect(() => {
     const sync = () => setSplit(savedSplit())
     window.addEventListener(EVENT, sync)
-    return () => window.removeEventListener(EVENT, sync)
+    // Another host's window changed it.
+    const off = deviceStorage.subscribe((key) => key === KEY && sync())
+    return () => {
+      window.removeEventListener(EVENT, sync)
+      off()
+    }
   }, [])
   const change = (next: boolean) => {
     try {
-      localStorage.setItem(KEY, next ? 'split' : 'inline')
+      deviceStorage.setItem(KEY, next ? 'split' : 'inline')
     } catch {}
     setSplit(next)
     window.dispatchEvent(new Event(EVENT))

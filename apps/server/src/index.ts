@@ -1,10 +1,13 @@
 import { LocalDiagnostics } from './background/diagnostics'
 import { MobileLiveActivities } from './remote/mobileLiveActivity'
 import { MobilePush } from './remote/mobilePush'
-import type { AppPreferences } from '@ramu/shared/types'
+import { DEFAULT_FALLBACK_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
+import { InteractiveStore } from './interactive/store'
+import { registerInteractiveTools } from './interactive/tools'
 import { ToolRegistry } from './agent/toolRegistry'
 import { ExternalSkills } from './memory/externalSkills'
-import { LearningService } from './memory/learning'
+import { crossedSwitchAt, LearningService } from './memory/learning'
+import { migrateLearningDefault } from './memory/learningDefault'
 // Independent Node process. Electron windows are clients, never owners of agent lifetimes.
 import { createServer, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
@@ -24,17 +27,11 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod'
 import { runtimeInvoke, runtimeNetwork } from '@ramu/client-runtime'
 import { HostPresence } from './remote/presence'
-import {
-  CAPABILITIES,
-  MAX_REQUEST_BYTES,
-  PAIR_PATH,
-  PROTOCOL_VERSION,
-  decodeInvoke,
-  type Capability,
-} from '@ramu/contracts'
+import { CAPABILITIES, MAX_REQUEST_BYTES, PROTOCOL_VERSION, decodeInvoke, type Capability } from '@ramu/contracts'
 import { loadConfig } from './config'
-import { TokenStore, authorized } from './remote/auth'
-import { DeviceStore } from './remote/devices'
+import { TokenStore } from './remote/auth'
+import { DeviceStore, type DeviceInfo } from './remote/devices'
+import { RemoteAccess, deviceMayInvoke } from './remote/access'
 import {
   candidateUrls,
   localAddresses,
@@ -46,6 +43,7 @@ import {
 import { openDb } from './db'
 import { Workspace } from './workspace/workspace'
 import { AgentService } from './agent'
+import { ThreadTitles } from './agent/threadTitles'
 import { TerminalService } from './workspace/pty'
 import { createDispatcher } from './ipc'
 import { ScheduleService, scheduleSchema } from './background/schedules'
@@ -62,8 +60,13 @@ const config = loadConfig()
 const { userData, socketPath } = config
 mkdirSync(userData, { recursive: true })
 // Network clients present either their own device token (see `ramu pair`) or the older shared token.
-const remoteTokens = new TokenStore(config.tokenPath)
-const devices = new DeviceStore(config.devicesPath)
+const remoteTokens = config.allowLegacyToken ? new TokenStore(config.tokenPath) : null
+const devices = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
+const remoteAccess = new RemoteAccess({
+  devices,
+  browserOrigins: config.browserOrigins,
+  ...(remoteTokens ? { legacyToken: () => remoteTokens.current() } : {}),
+})
 const presence = new HostPresence(join(userData, 'presence.json'), (id) => devices.presenceKey(id))
 const stopPresenceNetwork = runtimeNetwork.subscribe(() => {
   if (network.enabled) presence.announce()
@@ -154,20 +157,20 @@ const db = openDb(join(userData, 'ramu.db'))
 const root = process.env.RAMU_WORKTREES ?? join(homedir(), '.ramu', 'worktrees')
 mkdirSync(root, { recursive: true })
 const workspace = new Workspace(db, root)
-// Review first was the stored default for one release; move those saved values to the new Automatic default once.
-if (!workspace.getAppState('migration:learning-auto-default', false)) {
-  const saved = workspace.getAppState<{ intelligence?: { learning?: string } } | null>('app-preferences', null)
-  if (saved?.intelligence?.learning === 'review')
-    workspace.setAppState('app-preferences', { ...saved, intelligence: { ...saved.intelligence, learning: 'auto' } })
-  workspace.setAppState('migration:learning-auto-default', true)
-}
+migrateLearningDefault(workspace)
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./providers/fakeAgent') : null
 let reviews!: ReviewService
-const mobilePush = new MobilePush(join(userData, 'mobile-push.json'), () => devices.list())
+const mobilePush = new MobilePush(
+  join(userData, 'mobile-push.json'),
+  () => devices.list(),
+  fetch,
+  (sessionId) => schedules.hasSession(sessionId),
+)
 const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {
     send('agent:event', { sessionId, event, seq, revision })
+    threadTitles?.observe(sessionId, event)
     queueMicrotask(() => {
       try {
         inbox.observe(agents.get(sessionId), event)
@@ -179,6 +182,7 @@ const agents = new AgentService(
   fake?.fakeQuery ?? query,
   fake?.fakeCodex,
 )
+const threadTitles = new ThreadTitles(db, workspace, agents, () => send('workspace:changed', {}))
 const mobileLiveActivities = new MobileLiveActivities(
   join(userData, 'mobile-live-activities.json'),
   () => devices.list(),
@@ -203,7 +207,13 @@ const inbox = new NoticeInbox(
 )
 const diagnostics = new LocalDiagnostics(workspace)
 process.on('uncaughtExceptionMonitor', (error) => diagnostics.record('service-crash', error))
-const schedules = new ScheduleService(db, workspace, agents, changed)
+const schedules = new ScheduleService(
+  db,
+  workspace,
+  agents,
+  changed,
+  () => void mobilePush.deliverScheduleFailure().catch(() => {}),
+)
 const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
 schedules.recover()
 // eslint-disable-next-line prefer-const -- declared earlier because closures built before this point reference it
@@ -217,11 +227,23 @@ agents.reviewHooks = {
   complete: (sessionId) => reviews!.complete(sessionId),
   validateFeedback: (reviewId) => reviews!.requireOriginalCheckout(reviewId),
 }
-const recaps = new RecapService(db, workspace, agents, changed)
+const recaps = new RecapService(db, workspace, agents, changed, () => void mobilePush.deliverDigest().catch(() => {}))
 const memory = new MemoryService(db, workspace, agents, () => send('memory:changed', {}), join(userData, 'memory'))
 memory.start()
-const learning = new LearningService(db, workspace, agents, memory, join(userData, 'skills'), () =>
-  send('memory:changed', {}),
+const learning = new LearningService(
+  db,
+  workspace,
+  agents,
+  memory,
+  join(userData, 'skills'),
+  () => send('memory:changed', {}),
+  // A better checkpoint is written ahead of an early switch (an add-on: the handoff never waits for it).
+  (session) =>
+    crossedSwitchAt(
+      agents.usage?.list({ [session.provider]: session.settings.accountId ?? 'default' }) ?? [],
+      session.settings,
+      agents.preferences?.()?.fallback.switchAt ?? DEFAULT_FALLBACK_PREFERENCES.switchAt,
+    ),
 )
 const externalSkills = new ExternalSkills(learning, workspace)
 const summaries = new SummaryService(db, workspace, agents, memory, learning, (created) =>
@@ -229,8 +251,11 @@ const summaries = new SummaryService(db, workspace, agents, memory, learning, (c
 )
 agents.sessionCheckpoint = (id) => learning.checkpoint(id)
 agents.onRewound = (sessionId, seq) => send('agent:rewound', { sessionId, seq })
-agents.learningInstructions = (session) =>
-  [summaries.isReviewChat(session.taskId) ? '' : learning.instructions(session.id), summaries.instructions(session)]
+agents.learningInstructions = (session, options) =>
+  [
+    summaries.isReviewChat(session.taskId) ? '' : learning.instructions(session.id, options),
+    summaries.instructions(session),
+  ]
     .filter(Boolean)
     .join('\n\n')
 const projectOf = (session: AgentSessionInfo) => {
@@ -243,6 +268,7 @@ const projectOf = (session: AgentSessionInfo) => {
 agents.memoryInstructions = (session) => memory.instructions(session, projectOf(session))
 // Calls that arrive over the network are marked, so a desktop dialog is never opened on this computer for someone else.
 const origin = new AsyncLocalStorage<{ network: boolean }>()
+const interactive = new InteractiveStore(db, (session, ref) => agents.interactivePublished(session, ref))
 const dispatcher = createDispatcher(
   {
     userData,
@@ -276,6 +302,8 @@ const dispatcher = createDispatcher(
     workspace,
     terminals,
     agents,
+    threadTitles,
+    interactive,
     schedules,
     pullRequestWatches,
     recaps,
@@ -300,6 +328,7 @@ async function stop(intentional = false) {
   // Capture after the scheduler drains, so a chat that finished during that wait is not resumed.
   if (!intentional) agents.prepareForRestart()
   reviews.stop()
+  await threadTitles?.stop()
   agents.stopAll(!intentional)
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))
@@ -347,11 +376,9 @@ const capabilities = (): Capability[] => [
   CAPABILITIES.hostRequests,
   ...(network.enabled ? [CAPABILITIES.remote, CAPABILITIES.pairing] : []),
 ]
-const failedAuth = new Map<string, { count: number; until: number }>()
 // Event streams of network clients stay open, so a revoked device must be cut off here, not only refused on its next request.
 const remoteStreams = new Map<ServerResponse, string | undefined>()
-const stillAuthorized = (header: string | undefined) =>
-  devices.authenticate(header) !== null || authorized(header, remoteTokens.current())
+const stillAuthorized = (header: string | undefined) => remoteAccess.authorized(header)
 const dropRevoked = () => {
   for (const [stream, header] of remoteStreams) if (!stillAuthorized(header)) stream.end()
 }
@@ -359,56 +386,14 @@ const json = { 'Content-Type': 'application/json' }
 // One handler serves both transports. Requests over TCP (`remote`) must present the bearer token.
 const handle = (remote: boolean) => async (req: import('node:http').IncomingMessage, res: ServerResponse) => {
   try {
+    let device: DeviceInfo | undefined
     if (remote) {
-      // Browser companions use the same bearer protocol; cookies are never accepted.
-      res.setHeader('Access-Control-Allow-Origin', '*')
-      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Ramu-Protocol')
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204).end()
-        return
-      }
+      const authenticated = await remoteAccess.accept(req, res)
+      if (authenticated === undefined) return
+      device = authenticated ?? undefined
     }
-    let deviceId: string | undefined
+    const deviceId = device?.id
     const path = (req.url ?? '/').split('?')[0]
-    if (remote) {
-      if (path === '/health' && req.method === 'GET') {
-        res.writeHead(200, json).end(JSON.stringify({ ok: true, protocol: PROTOCOL_VERSION }))
-        return
-      }
-      const peer = req.socket.remoteAddress ?? 'unknown',
-        limit = failedAuth.get(peer)
-      if (limit && limit.until > Date.now()) {
-        res.writeHead(429).end()
-        return
-      }
-      const rejected = (message?: string) => {
-        const count = (limit?.count ?? 0) + 1
-        failedAuth.set(peer, { count, until: count >= 5 ? Date.now() + Math.min(60000, 1000 * 2 ** (count - 5)) : 0 })
-        res.writeHead(401, json).end(message ? JSON.stringify({ error: message }) : undefined)
-      }
-      if (path === PAIR_PATH && req.method === 'POST') {
-        const request = JSON.parse((await rawBody(req, 4096)) || '{}')
-        const paired =
-          typeof request.code === 'string'
-            ? devices.redeem(request.code, typeof request.name === 'string' ? request.name : undefined)
-            : null
-        if (!paired) {
-          rejected('That pairing code is wrong, already used or expired')
-          return
-        }
-        failedAuth.delete(peer)
-        res.writeHead(200, json).end(JSON.stringify({ deviceId: paired.device.id, token: paired.token }))
-        return
-      }
-      const device = devices.authenticate(req.headers.authorization)
-      if (!device && !authorized(req.headers.authorization, remoteTokens.current())) {
-        rejected()
-        return
-      }
-      deviceId = device?.id
-      failedAuth.delete(peer)
-    }
     if (path === '/events' && req.method === 'GET') {
       if (remote && deviceId && req.socket.remoteAddress)
         presence.register(deviceId, req.socket.remoteAddress, Number(req.headers['x-ramu-presence-port']))
@@ -429,6 +414,12 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
       return
     }
     const { method, args } = await body(req)
+    if (remote && !deviceMayInvoke(device, method)) {
+      res
+        .writeHead(403, json)
+        .end(JSON.stringify({ error: 'This device is a viewer. This action requires full access.' }))
+      return
+    }
     let value: unknown
     if (method === 'host.reply') {
       if (remote) throw new Error('Desktop actions are only available on this host')
@@ -441,7 +432,7 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
     } else if (method === 'notifications.register') {
       if (!deviceId || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string')
         throw new Error('Push registration requires a paired phone')
-      mobilePush.register(deviceId, args[0], args[1])
+      mobilePush.register(deviceId, args[0], args[1], args[2])
     } else if (method === 'notifications.unregister') {
       if (!deviceId) throw new Error('Push registration requires a paired phone')
       mobilePush.remove(deviceId)
@@ -514,6 +505,7 @@ const mcpHttp = createServer(async (req, res) => {
       source,
     )
   const server = review ? withoutTools(registry.server) : registry.server
+  if (!review) registerInteractiveTools(server, interactive, source.id)
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
   learning.register(server, source.id)
@@ -856,7 +848,9 @@ async function networkMethod(method: string, args: unknown[]) {
   }
   if (method === 'network.pair') {
     if (!network.enabled) throw new Error('Turn on network access first')
-    const { code, expiresAt } = devices.createCode()
+    const role = args[0] ?? 'owner'
+    if (role !== 'owner' && role !== 'viewer') throw new Error('Invalid device role')
+    const { code, expiresAt } = devices.createCode(Date.now(), role)
     return { code, expiresAt, urls: candidateUrls(network.host, network.port, Boolean(config.tls)) }
   }
   if (method === 'network.revoke') {
@@ -891,9 +885,9 @@ const tick = setInterval(() => {
   void learning.tick().catch(console.error)
   void summaries.tick().catch(console.error)
 }, 5000)
-await agents.restoreHelperTranscripts()
-await agents.resumeInterruptedChats()
-agents.goalsSettingsChanged()
+// Restore helpers, resume interrupted chats and re-arm goals and usage-limit waits; tests pin this one call.
+threadTitles.recover()
+await agents.recoverOnBoot()
 void schedules.tick().catch(console.error)
 void recaps.tick().catch(console.error)
 process.on('SIGTERM', () => void stop())

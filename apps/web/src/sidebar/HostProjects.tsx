@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight, FolderOpen, FolderClosed, FolderPlus, Plus } from 'lucide-react'
 import { NO_PROJECT, type Computer, type Project, type Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { useComputers, StatusDot, activityText, statusText } from '../workspace/computers'
-import { navigateHost, useHostOverviews } from '../workspace/hostOverview'
-import { useWorkspace } from '../workspace/workspace'
+import { rememberHostRows, useHostOverviews } from '../workspace/hostOverview'
+import { HostScope, useWorkspace, useWorkspaceOf, useWorkspacesOf, type WorkspaceApi } from '../workspace/workspace'
+import { useHostSelection } from '../workspace/HostSelection'
 import { useAppSettings } from '../settings/AppSettings'
 import { useAddProject } from '../workspace/addProject'
+import { ownHostId } from '../hosts'
 import { t, useLanguage } from '../i18n'
 import { FadeText } from '../FadeText'
 import { ProjectsPanel } from './ProjectsPanel'
@@ -15,35 +17,52 @@ import { SectionHead } from './projects/SectionHead'
 import { Collapse } from './projects/Collapse'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, pinnedFirst } from './projects/constants'
 import { sidebarThreads, projectThreadPreview } from './projects/threadLists'
+import { hostRows } from './hostRows'
 
-/** One host filter and one consistent tree, with the active workspace retaining its project management controls. */
+/**
+ * Where the sidebar keeps which host groups and sections are open: the window's own store, so the tree does not jump
+ * when another host's store comes on screen.
+ */
+function useSidebarChrome(): WorkspaceApi {
+  const active = useWorkspace()
+  return useWorkspaceOf(ownHostId()) ?? active
+}
+
+/** One host's rows: from its own store once loaded (live, no polling), else from its last known overview. */
+function useHostGroupRows(id: string) {
+  const store = useWorkspaceOf(id)
+  const [overview] = useHostOverviews([id], () => !!store)
+  useEffect(() => {
+    if (store) rememberHostRows(id, { tasks: store.tasks, projects: store.projects })
+  }, [id, store?.tasks, store?.projects])
+  return { store, ...hostRows({ store, overview }) }
+}
+
+/** One host filter and one consistent tree, with the host on screen retaining its project management controls. */
 export function HostProjects() {
   useLanguage()
   const state = useComputers()
   const { preferences } = useAppSettings()
+  const { activeHost } = useHostSelection()
   if (!state || state.computers.length < 2) return <ProjectsPanel />
   if (!state.scope && preferences.recentChatMode)
-    return <MergedRecent computers={state.computers} current={state.current} />
+    return <MergedRecent computers={state.computers} current={activeHost} />
   const scoped = state.scope ? state.computers.filter((computer) => computer.id === state.scope) : state.computers
   return (
     <div className={`flex flex-col gap-3 pb-4 pt-1 ${state.scope ? '' : 'px-2'}`}>
       {scoped.map((computer) => (
-        <HostGroup
-          key={computer.id}
-          computer={computer}
-          current={computer.id === state.current}
-          grouped={!state.scope}
-        />
+        <HostGroup key={computer.id} computer={computer} current={computer.id === activeHost} grouped={!state.scope} />
       ))}
     </div>
   )
 }
 
 function HostGroup({ computer, current, grouped }: { computer: Computer; current: boolean; grouped: boolean }) {
-  const ws = useWorkspace()
-  const addProject = useAddProject()
+  const chrome = useSidebarChrome()
+  const { select } = useHostSelection()
+  const addProject = useAddProject(computer.id)
   const key = `host:${computer.id}`
-  const open = !grouped || ws.isExpanded(key)
+  const open = !grouped || chrome.isExpanded(key)
   const available = computer.status === 'connected'
   return (
     <section aria-label={computer.name} className="min-w-0">
@@ -54,7 +73,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
             className="flex min-w-0 flex-1 items-center gap-2 border-0 bg-transparent px-1 py-1 text-left text-control text-muted-foreground hover:text-foreground"
             title={computer.name}
             aria-expanded={open}
-            onClick={() => ws.setExpanded(key, !open)}
+            onClick={() => chrome.setExpanded(key, !open)}
           >
             <ChevronDown size={12} className={`flex-none transition-transform ${open ? '' : '-rotate-90'}`} />
             <span className="inline-flex flex-none items-center" title={activityText(computer)}>
@@ -86,8 +105,8 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
             className={`${ICON_BUTTON_CLASS} opacity-0 group-hover/host:opacity-100 group-focus-within/host:opacity-100`}
             aria-label={`${t('Add project')} · ${computer.name}`}
             title={t('Add project…')}
-            disabled={!available || (current && addProject.busy)}
-            onClick={() => (current ? void addProject.add() : navigateHost(computer.id, { kind: 'add-project' }))}
+            disabled={!available || addProject.busy}
+            onClick={() => void addProject.add()}
           >
             <FolderPlus size={14} />
           </Button>
@@ -98,38 +117,39 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
             disabled={!available}
             aria-label={`${t('New thread')} · ${computer.name}`}
             title={t('New thread')}
-            onClick={() => navigateHost(computer.id, { kind: 'new' })}
+            onClick={() => select(computer.id, { kind: 'new' })}
           >
             <Plus size={14} />
           </Button>
         </div>
       )}
       {open &&
-        (current ? <ProjectsPanel embedded={grouped} /> : <RemoteProjects computer={computer} embedded={grouped} />)}
+        (current ? <ProjectsPanel embedded={grouped} /> : <OtherHostProjects computer={computer} embedded={grouped} />)}
     </section>
   )
 }
 
-function RemoteProjects({ computer, embedded }: { computer: Computer; embedded: boolean }) {
-  const ws = useWorkspace()
+/** A host that is not on screen: its rows act on that host's store and open there through the selection. */
+function OtherHostProjects({ computer, embedded }: { computer: Computer; embedded: boolean }) {
+  const chrome = useSidebarChrome()
+  const { select } = useHostSelection()
   const { preferences } = useAppSettings()
-  const [overview] = useHostOverviews([computer.id])
+  const rows = useHostGroupRows(computer.id)
   const available = computer.status === 'connected'
-  const all = overview?.data?.tasks ?? []
-  const projects = overview?.data?.projects ?? []
+  const all = rows.tasks
+  const projects = rows.projects
   const { active, done } = sidebarThreads(all)
   const pinned = active.filter((task) => task.pinnedAt).sort(pinnedFirst)
   const loose = active.filter((task) => task.projectId === NO_PROJECT && !task.pinnedAt).sort(pinnedFirst)
   const projectsKey = `host:${computer.id}:projects`
-  const projectsOpen = embedded || ws.isExpanded(projectsKey)
-  const remote = { id: computer.id, tasks: all, available, refresh: () => overview!.refetch() }
+  const projectsOpen = embedded || chrome.isExpanded(projectsKey)
   const section = (name: string, tasks: Task[], hidePin = false, action?: React.ReactNode) => {
     if (!tasks.length) return null
     const key = `host:${computer.id}:${name}`
-    const open = ws.isExpanded(key)
+    const open = chrome.isExpanded(key)
     return (
       <>
-        <SectionHead title={t(name)} open={open} onToggle={() => ws.setExpanded(key, !open)} controls={key}>
+        <SectionHead title={t(name)} open={open} onToggle={() => chrome.setExpanded(key, !open)} controls={key}>
           {action}
         </SectionHead>
         <Collapse id={key} open={open} className="flex flex-col gap-0.5">
@@ -137,7 +157,6 @@ function RemoteProjects({ computer, embedded }: { computer: Computer; embedded: 
             <TaskRow
               key={task.id}
               task={task}
-              remote={remote}
               hidePin={hidePin}
               projectName={name === 'Threads' ? undefined : projects.find((p) => p.id === task.projectId)?.name}
             />
@@ -147,110 +166,118 @@ function RemoteProjects({ computer, embedded }: { computer: Computer; embedded: 
     )
   }
   return (
-    <div className={embedded ? '' : 'px-2'}>
-      {!available && (
-        <p role="status" className="px-2 py-1 text-caption text-muted-foreground">
-          {statusText(computer.status)}
-          {overview?.data ? ` · ${t('Last known activity')}` : ''}
-        </p>
-      )}
-      {overview?.isLoading && available && (
-        <p role="status" className="px-2 py-1 text-caption text-muted-foreground">
-          {t('Loading…')}
-        </p>
-      )}
-      {overview?.error || overview?.data?.errors.length ? (
-        <p role="status" className="px-2 py-1 text-caption text-muted-foreground">
-          {t('Some host activity could not be loaded.')}
-        </p>
-      ) : null}
-      {section('Pinned', pinned, true)}
-      {!embedded && (
-        <SectionHead
-          title={preferences.recentChatMode ? t('Recent threads') : t('Projects')}
-          open={projectsOpen}
-          onToggle={() => ws.setExpanded(projectsKey, !projectsOpen)}
-          controls={projectsKey}
-        />
-      )}
-      <Collapse open={projectsOpen} id={projectsKey}>
-        {preferences.recentChatMode
-          ? active
-              .filter((task) => !task.pinnedAt)
-              .sort(pinnedFirst)
-              .map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  remote={remote}
-                  projectName={projects.find((p) => p.id === task.projectId)?.name}
-                />
-              ))
-          : projects.map((project) => (
-              <RemoteProject
-                key={project.id}
-                project={project}
-                remote={remote}
-                limit={embedded ? Math.min(preferences.recentChats, 5) : preferences.recentChats}
-              />
-            ))}
-      </Collapse>
-      {!preferences.recentChatMode &&
-        section(
-          'Threads',
-          loose,
-          false,
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className={ICON_BUTTON_CLASS}
-            disabled={!available}
-            aria-label={t('New thread without a project')}
-            onClick={() => navigateHost(computer.id, { kind: 'new', projectId: NO_PROJECT })}
-          >
-            <Plus size={14} />
-          </Button>,
+    <HostScope host={computer.id} store={rows.store}>
+      <div className={embedded ? '' : 'px-2'}>
+        {!available && (
+          <p role="status" className="px-2 py-1 text-caption text-muted-foreground">
+            {statusText(computer.status)}
+            {rows.known ? ` · ${t('Last known activity')}` : ''}
+          </p>
         )}
-      {section('Done', done)}
-      {overview?.data && !projects.length && !all.length && (
-        <p className="px-2 py-1 text-caption text-muted-foreground">{t('No threads yet')}</p>
-      )}
-    </div>
+        {rows.loading && available && (
+          <p role="status" className="px-2 py-1 text-caption text-muted-foreground">
+            {t('Loading…')}
+          </p>
+        )}
+        {rows.failed ? (
+          <p role="status" className="px-2 py-1 text-caption text-muted-foreground">
+            {t('Some host activity could not be loaded.')}
+          </p>
+        ) : null}
+        {section('Pinned', pinned, true)}
+        {!embedded && (
+          <SectionHead
+            title={preferences.recentChatMode ? t('Recent threads') : t('Projects')}
+            open={projectsOpen}
+            onToggle={() => chrome.setExpanded(projectsKey, !projectsOpen)}
+            controls={projectsKey}
+          />
+        )}
+        <Collapse open={projectsOpen} id={projectsKey}>
+          {preferences.recentChatMode
+            ? active
+                .filter((task) => !task.pinnedAt)
+                .sort(pinnedFirst)
+                .map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    projectName={projects.find((p) => p.id === task.projectId)?.name}
+                  />
+                ))
+            : projects.map((project) => (
+                <OtherHostProject
+                  key={project.id}
+                  host={computer.id}
+                  project={project}
+                  tasks={all}
+                  available={available}
+                  limit={embedded ? Math.min(preferences.recentChats, 5) : preferences.recentChats}
+                />
+              ))}
+        </Collapse>
+        {!preferences.recentChatMode &&
+          section(
+            'Threads',
+            loose,
+            false,
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={ICON_BUTTON_CLASS}
+              disabled={!available}
+              aria-label={t('New thread without a project')}
+              onClick={() => select(computer.id, { kind: 'new', projectId: NO_PROJECT })}
+            >
+              <Plus size={14} />
+            </Button>,
+          )}
+        {section('Done', done)}
+        {rows.known && !projects.length && !all.length && (
+          <p className="px-2 py-1 text-caption text-muted-foreground">{t('No threads yet')}</p>
+        )}
+      </div>
+    </HostScope>
   )
 }
 
-function RemoteProject({
+function OtherHostProject({
+  host,
   project,
-  remote,
+  tasks: all,
+  available,
   limit,
 }: {
+  host: string
   project: Project
-  remote: NonNullable<React.ComponentProps<typeof TaskRow>['remote']>
+  tasks: Task[]
+  available: boolean
   limit: number
 }) {
-  const ws = useWorkspace()
-  const key = `host:${remote.id}:project:${project.id}`
-  const open = ws.isExpanded(key)
+  const chrome = useSidebarChrome()
+  const { select } = useHostSelection()
+  const key = `host:${host}:project:${project.id}`
+  const open = chrome.isExpanded(key)
   const [showAll, setShowAll] = useState(false)
-  const { tasks, hasMore } = projectThreadPreview(remote.tasks, project.id, limit, showAll)
+  const { tasks, hasMore } = projectThreadPreview(all, project.id, limit, showAll)
+  const openProject = () => select(host, { kind: 'project', projectId: project.id })
   return (
     <section className="project-group mb-0 [&:has(.task-list)]:mb-2.5 relative">
       <div
         role="button"
-        tabIndex={remote.available ? 0 : -1}
-        aria-disabled={!remote.available || undefined}
+        tabIndex={available ? 0 : -1}
+        aria-disabled={!available || undefined}
         aria-label={t('Open {0}', { '0': project.name })}
         title={project.root ?? project.name}
         className="project-row group/project flex min-h-[30px] items-center gap-2 rounded-(--radius-s) px-2 text-body leading-5 text-soft hover:bg-accent hover:text-foreground"
         onClick={() => {
-          if (remote.available) {
-            ws.setExpanded(key, true)
-            navigateHost(remote.id, { kind: 'project', projectId: project.id })
+          if (available) {
+            chrome.setExpanded(key, true)
+            openProject()
           }
         }}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && remote.available)
-            navigateHost(remote.id, { kind: 'project', projectId: project.id })
+          if (event.key === 'Enter' && available) openProject()
         }}
       >
         {open ? (
@@ -268,7 +295,7 @@ function RemoteProject({
             title={open ? t('Collapse') : t('Expand')}
             onClick={(event) => {
               event.stopPropagation()
-              ws.setExpanded(key, !open)
+              chrome.setExpanded(key, !open)
             }}
           >
             <ChevronRight size={14} className={open ? 'rotate-90' : ''} />
@@ -277,12 +304,12 @@ function RemoteProject({
             variant="ghost"
             size="icon-xs"
             className={ICON_BUTTON_CLASS}
-            disabled={!remote.available}
+            disabled={!available}
             aria-label={t('New thread in {0}', { '0': project.name })}
             title={t('New thread')}
             onClick={(event) => {
               event.stopPropagation()
-              navigateHost(remote.id, { kind: 'new', projectId: project.id })
+              select(host, { kind: 'new', projectId: project.id })
             }}
           >
             <Plus size={14} />
@@ -292,7 +319,7 @@ function RemoteProject({
       {open && (
         <div className="task-list flex flex-col gap-0.5 pt-0.5">
           {tasks.map((task) => (
-            <TaskRow key={task.id} task={task} nested remote={remote} />
+            <TaskRow key={task.id} task={task} nested />
           ))}
           {!tasks.length && (
             <div className="muted text-muted-foreground small text-caption empty-tasks p-[2px_10px]">
@@ -320,40 +347,38 @@ function RemoteProject({
 function MergedRecent({ computers, current }: { computers: Computer[]; current: string }) {
   const ws = useWorkspace()
   const remotes = computers.filter((computer) => computer.id !== current)
-  const overviews = useHostOverviews(remotes.map((computer) => computer.id))
+  const ids = remotes.map((computer) => computer.id)
+  const stores = useWorkspacesOf(ids)
+  const overviews = useHostOverviews(ids, (id) => !!stores[ids.indexOf(id)])
   const rows = [
     ...sidebarThreads(ws.tasks).active.map((task) => ({
       task,
       projectName: ws.projects.find((p) => p.id === task.projectId)?.name,
-      remote: undefined,
+      host: null as string | null,
+      store: null as WorkspaceApi | null,
     })),
-    ...overviews.flatMap((overview) => {
-      const computer = remotes.find((c) => c.id === overview.id)!
-      const tasks = overview.data?.tasks ?? []
-      const remote = {
-        id: computer.id,
-        tasks,
-        available: computer.status === 'connected',
-        refresh: () => overview.refetch(),
-      }
-      return sidebarThreads(tasks).active.map((task) => ({
+    ...remotes.flatMap((computer, index) => {
+      const store = stores[index] ?? null
+      const source = hostRows({ store, overview: overviews[index] })
+      return sidebarThreads(source.tasks).active.map((task) => ({
         task,
-        projectName: overview.data?.projects.find((p) => p.id === task.projectId)?.name,
-        remote,
+        projectName: source.projects.find((p) => p.id === task.projectId)?.name,
+        host: computer.id as string | null,
+        store,
       }))
     }),
   ].sort((a, b) => Number(!!b.task.pinnedAt) - Number(!!a.task.pinnedAt) || b.task.lastActiveAt - a.task.lastActiveAt)
   return (
     <div className="flex flex-col gap-0.5 px-2 pb-4 pt-1">
-      {rows.map(({ task, projectName, remote }) => (
-        <TaskRow
-          key={`${remote?.id ?? 'local'}:${task.id}`}
-          task={task}
-          projectName={projectName}
-          remote={remote}
-          merged
-        />
-      ))}
+      {rows.map(({ task, projectName, host, store }) =>
+        host ? (
+          <HostScope key={`${host}:${task.id}`} host={host} store={store}>
+            <TaskRow task={task} projectName={projectName} merged />
+          </HostScope>
+        ) : (
+          <TaskRow key={`${current}:${task.id}`} task={task} projectName={projectName} merged />
+        ),
+      )}
     </div>
   )
 }

@@ -8,7 +8,6 @@ export type ToggleKey =
   | 'autoPull'
   | 'localCrashReports'
   | 'autoWatchPullRequests'
-  | 'defaultAutoFallback'
   | 'includeTabContext'
   | 'warnModelChange'
   | 'recapsEnabled'

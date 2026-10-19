@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { ReviewBranchState } from '@ramu/shared/types'
 import { errorText } from '../lib/errors'
-import { invoke, ramu } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
+import { useHostRuntime } from '../workspace/workspace'
 
 /** Current/target branches of the review's repos, refreshed on focus, git HEAD changes and a slow timer. */
 export function useReviewBranches(id: string, loadedId: string | undefined, visible: boolean) {
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const [branches, setBranches] = useState<ReviewBranchState[]>([]),
     [branchError, setBranchError] = useState<string | null>(null)
   useEffect(() => {
@@ -33,7 +36,7 @@ export function useReviewBranches(id: string, loadedId: string | undefined, visi
         void refresh()
     }, 15000)
     window.addEventListener('focus', refresh)
-    const off = ramu.on('fs:changed', ({ path }) => {
+    const off = on('fs:changed', ({ path }) => {
       if (path === '.git/HEAD') void refresh()
     })
     return () => {
@@ -42,6 +45,6 @@ export function useReviewBranches(id: string, loadedId: string | undefined, visi
       window.removeEventListener('focus', refresh)
       off()
     }
-  }, [loadedId, id, visible])
+  }, [invoke, on, loadedId, id, visible])
   return { branches, branchError }
 }

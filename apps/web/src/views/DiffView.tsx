@@ -3,11 +3,11 @@ import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useRef, useState } from 'react'
 import type { RepositoryBinding, ViewDescriptor } from '@ramu/shared/types'
-import { invoke, ramu } from '../ipc'
 import { monaco } from '../editor/monaco'
 import { errorText } from '../workspace/TaskPane'
 import { useAppSettings } from '../settings/AppSettings'
-import { useWorkspace } from '../workspace/workspace'
+import { useHostRuntime, useWorkspace } from '../workspace/workspace'
+import { useHost } from '../workspace/HostProvider'
 import { registerSelection } from '../editor/editorBuffers'
 import { DiffLayoutToggle, useDiffLayout } from '../git/diffLayout'
 
@@ -24,6 +24,8 @@ export function DiffView({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const { preferences } = useAppSettings()
   const editorRef = useRef<monaco.editor.IStandaloneDiffEditor | null>(null)
   const host = useRef<HTMLDivElement>(null)
@@ -109,7 +111,7 @@ export function DiffView({
     }
     void load()
     let timer: ReturnType<typeof setTimeout> | undefined
-    const off = ramu.on('fs:changed', ({ cwd, path }) => {
+    const off = on('fs:changed', ({ cwd, path }) => {
       if (view.oid || cwd !== binding.cwd || (path !== view.path && path !== '.git/index' && path !== '.git/HEAD'))
         return
       clearTimeout(timer)
@@ -128,7 +130,7 @@ export function DiffView({
       original.dispose()
       modified.dispose()
     }
-  }, [taskId, binding.repoId, binding.cwd, view.path, view.staged, view.oid, view.stash])
+  }, [taskId, binding.repoId, binding.cwd, view.path, view.staged, view.oid, view.stash, invoke, on])
 
   useEffect(() => {
     editorRef.current?.updateOptions({ renderSideBySide: split })

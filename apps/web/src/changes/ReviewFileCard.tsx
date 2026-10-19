@@ -5,7 +5,6 @@ import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { t, useLanguage } from '../i18n'
-import { invoke } from '../ipc'
 import { useWorkspace } from '../workspace/workspace'
 import { useReviewDraft } from '../git/reviewDrafts'
 import { ReviewDiff, type InlineReviewBlock } from '../git/ReviewDiff'
@@ -15,6 +14,7 @@ import { CommentForm } from './CommentForm'
 import { FilePath } from './FilePath'
 import { ReviewThread } from './ReviewThread'
 import { DISCUSSION_COUNT_CLASS, ICON_BUTTON_CLASS } from './styles'
+import { useHost } from '../workspace/HostProvider'
 
 export function ReviewFileCard({
   file,
@@ -39,6 +39,7 @@ export function ReviewFileCard({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const [collapsed, setCollapsed] = useState(viewed),
     [composerOpen, setComposerOpen] = useState(false),
     [draftError, setDraftError] = useState<string | null>(null)

@@ -2,7 +2,7 @@
 
 The desktop app connects to a local service that owns threads, terminals, and schedules. Closing the window leaves them running. Reopening reconnects to stored state.
 
-The host must stay awake. **Settings → Background & Recaps** controls the service and macOS login startup. Packaged macOS builds enable login startup unless disabled; development builds opt in. Logs are in the profile's `background.log`.
+The host must stay awake. **Settings → Background & updates** controls the service, macOS login startup and daily recaps. Packaged macOS builds enable login startup unless disabled; development builds opt in. Logs are in the profile's `background.log`.
 
 ## Messages and questions
 
@@ -22,9 +22,24 @@ Threads sharing a checkout wait for the active writer. Queued messages and pause
 
 Schedules support Once, Daily, Weekly, Monthly, and intervals of at least five minutes. They capture the system timezone when created. Existing schedules keep that timezone; calendar schedules preserve local time across daylight-saving changes. Missing monthly dates are skipped.
 
+Each run records how it ended, from the thread's final state and its last error rather than from idleness alone:
+
+| Outcome | Meaning |
+| --- | --- |
+| completed | Succeeded: the thread went idle with no unanswered error and its goal, if any, is finished. |
+| failed | The thread failed or its last result was an error. The run keeps that error. A start that fails three times also fails the run. |
+| needs-input | The agent asked a question or needs approval, or its goal is blocked or out of turns. |
+| cancelled | You stopped the thread. |
+| interrupted | A restart cut it off, or a usage limit was reached with auto-resume off. |
+| missed | Skipped or cancelled before it started. |
+
+A thread that is idle between goal continuations, has messages queued, or waits for a usage limit to reset is still running, and a limit's own error never counts as a failure. Automation shows each run's outcome and error under **Recent runs**.
+
+**Three failed runs in a row pause the schedule**, with the reason and the last error on its card, so a broken task stops spending tokens until someone looks. A success breaks the count; cancelled, interrupted, missed and needs-input runs neither add to it nor reset it. Resume, or edit the schedule, to start counting again.
+
 **Run now** does not change the recurrence. Pause cancels queued runs, not work already running. Missed runs either execute the latest occurrence once or skip it. Busy checkouts wait and scheduled runs do not overlap.
 
-Recaps summarize recent threads and unfinished work. Home shows the ones that need your attention; **Inbox → Recaps** lists everything since your last visit and earlier, with **Refresh**. Items link to their source conversation and can be marked done, dismissed, or snoozed. Recaps use model tokens, but only when a thread's recent activity or the recap model changed since the last successful recap; otherwise the daily run just shows up to date. **Refresh** always asks the model unless there is no activity to summarize. Their daily time follows the current system timezone.
+Recaps summarize recent threads and unfinished work. Home shows the ones that need your attention; **Inbox → Recaps** lists everything since your last visit and earlier, with **Refresh**. Items link to their source conversation and can be marked done, dismissed, or snoozed (in 3 hours, tomorrow morning, or next week). A toast with **Undo** follows each action, which puts the item back. Recaps use model tokens, but only when a thread's recent activity or the recap model changed since the last successful recap; otherwise the daily run just shows up to date. **Refresh** always asks the model unless there is no activity to summarize. Their daily time follows the current system timezone. A phone that switched on **Settings → Notifications → Daily recap** gets one generic push ("Your daily recap is ready.", no content) per local day when the scheduled run produces items, never for a manual **Refresh**; it is off by default. A scheduled run that fails to start three times in a row (no thread ever exists) pushes the **scheduled** category once, and the phone opens the Schedules tab. Mobile recap cards swipe for Done, Snooze and Dismiss with the same durations and Undo.
 
 ## File context
 

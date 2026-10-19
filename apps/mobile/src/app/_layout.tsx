@@ -2,6 +2,7 @@ import { LiveActivityMonitor } from '../components/LiveActivityMonitor'
 import { StartupScreen } from '../components/StartupScreen'
 import { PushRouting } from '../components/PushRouting'
 import { NoticeBanner } from '../components/NoticeBanner'
+import { UndoToast } from '../components/UndoToast'
 import { Overlays } from '../components/Overlays'
 import { InboxBadge } from '../components/InboxBadge'
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider } from 'expo-router'
@@ -42,6 +43,7 @@ function Navigator() {
         </Pressable>
       ) : null}
       <NoticeBanner />
+      <UndoToast />
       <Overlays />
       <InboxBadge />
       <PushRouting />
@@ -51,6 +53,8 @@ function Navigator() {
         <Stack screenOptions={{ headerShown: Platform.OS !== 'web', contentStyle: { backgroundColor: c.window } }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="activity" />
+          <Stack.Screen name="explorer" />
+          <Stack.Screen name="file" />
           <Stack.Screen name="chat/[id]/index" />
           <Stack.Screen name="chat/[id]/changes" />
           <Stack.Screen name="chat/[id]/file" />

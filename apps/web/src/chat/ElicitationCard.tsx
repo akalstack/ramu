@@ -5,7 +5,7 @@ import { ExternalLink } from 'lucide-react'
 import type { AgentElicitation, ElicitationAction } from '@ramu/shared/types'
 import type { QuestionState } from '@ramu/shared/chat/questions'
 import { t, useLanguage } from '../i18n'
-import { invoke } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import { errorText } from '../workspace/TaskPane'
 
 export function ElicitationCard({
@@ -20,6 +20,7 @@ export function ElicitationCard({
   pending: boolean
 }) {
   useLanguage()
+  const { invoke } = useHost()
   const [values, setValues] = useState<Record<string, string>>(() => ({
     ...Object.fromEntries(
       request.fields
@@ -37,7 +38,7 @@ export function ElicitationCard({
       void invoke('agent.elicitationDraft', sessionId, request.requestId, values).catch(() => {})
     }, 250)
     return () => clearTimeout(timer)
-  }, [values, pending, sessionId, request.requestId])
+  }, [values, pending, sessionId, request.requestId, invoke])
   const submit = async (action: ElicitationAction) => {
     setBusy(true)
     setError(null)

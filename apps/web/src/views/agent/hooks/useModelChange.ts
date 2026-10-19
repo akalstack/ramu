@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { AgentEvent, AgentSessionInfo, AgentSettings } from '@ramu/shared/types'
-import { invoke } from '../../../ipc'
+import { useHost } from '../../../workspace/HostProvider'
 import { notifyError } from '../../../chat/Notifications'
 import { errorText } from '../../../workspace/TaskPane'
 
@@ -23,6 +23,7 @@ export function useModelChange({
   busyAgent: boolean
   warnModelChange: boolean
 }) {
+  const { invoke } = useHost()
   const [pendingSettings, setPendingSettings] = useState<AgentSettings | null>(null)
   // While the agent is working, a model change takes effect right away and the run continues with the new settings.
   // The model bar hands over one change when the slider is released. While the agent is working it is applied straight away.

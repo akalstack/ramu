@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { notifyError } from '../chat/Notifications'
 import { formatKeys, type Command as PaletteCommand } from '../commands'
 import { t, useLanguage } from '../i18n'
-import { invoke, ramu } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import { highlight } from '../lib/fuzzy'
 import { VirtualList } from '../lib/VirtualList'
 import { useModelSets } from '../models/ModelSets'
@@ -17,6 +17,7 @@ import { contentSource } from './contentSource'
 import { createPaletteEngine, type PaletteSnapshot } from './engine'
 import { buildRows, firstRevealed, moveSelection, resolveSelection, type PaletteRow } from './rows'
 import { parsePaletteQuery, type PaletteMode, type PaletteSource } from './sources'
+import { deviceStorage } from '../deviceStorage'
 
 const RECENT_KEY = 'ramu.recent-commands'
 const EMPTY: PaletteSnapshot = { mode: 'all', text: '', groups: [], pending: false }
@@ -26,7 +27,7 @@ const rowHeight = (row: PaletteRow) => (row.kind === 'result' ? 32 : row.kind ==
 
 function readRecent(): string[] {
   try {
-    const value = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')
+    const value = JSON.parse(deviceStorage.getItem(RECENT_KEY) ?? '[]')
     return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string').slice(0, 20) : []
   } catch {
     return []
@@ -49,6 +50,7 @@ export function Palette({
   mode: PaletteMode
   onClose: () => void
 }) {
+  const { invoke } = useHost()
   const language = useLanguage()
   const { initialSettings } = useModelSets()
   const [query, setQuery] = useState(mode === 'commands' ? '>' : '')
@@ -75,7 +77,7 @@ export function Palette({
     return () => {
       disposed = true
     }
-  }, [taskId])
+  }, [taskId, invoke])
 
   const wsRef = useRef(ws)
   wsRef.current = ws
@@ -84,7 +86,7 @@ export function Palette({
       const next = [id, ...recent.filter((key) => key !== id)].slice(0, 20)
       setRecent(next)
       try {
-        localStorage.setItem(RECENT_KEY, JSON.stringify(next))
+        deviceStorage.setItem(RECENT_KEY, JSON.stringify(next))
       } catch {
         /* Session history remains available. */
       }
@@ -100,7 +102,7 @@ export function Palette({
         contentSource({
           taskId,
           limit: SEARCH_RESULT_LIMIT,
-          search: (id, options) => ramu.invoke('files.search', id, options),
+          search: (id, options) => invoke('files.search', id, options),
           // Read through the ref so a workspace update does not make this source a new one mid-search.
           open: (match) =>
             wsRef.current.openView(taskId, {
@@ -120,12 +122,12 @@ export function Palette({
               ? wsRef.current.binding(taskId, repoId)?.repoName
               : undefined,
         }),
-        agentSource(ws, taskId, initialSettings),
+        agentSource(ws, taskId, initialSettings, invoke),
       )
     }
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `language` re-translates labels.
-  }, [commands, ws, taskId, files, recent, initialSettings, language])
+  }, [commands, ws, taskId, files, recent, initialSettings, language, invoke])
 
   useEffect(() => {
     const created = createPaletteEngine(setSnapshot)

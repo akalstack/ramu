@@ -1,30 +1,21 @@
-# Distribution and trust plan
+# Remaining distribution work
 
-Review of release readiness, 2026-10-17, made from `README.md`, `docs/RELEASING.md`, `apps/mobile/PLAN.md` and `apps/mobile/VERIFICATION.md`. Nothing here is implemented yet.
+Audited on 2026-10-18. Focused schedule-form tests and the release docs-check checklist are complete and have been removed from this plan. Current release instructions are in [Releasing](RELEASING.md).
 
-This is the largest gap between Ramu and the products it competes with. The features are broad; the delivery is not. Cursor, Zed and T3 Code ship signed, auto-updating builds on every platform they support.
+## Smallest usable delivery
 
-## Findings
+A person installs a supported packaged build, opens a thread and can obtain a verified update without configuring development tools. Deliver and validate each supported platform independently; signing, transport and native-device prerequisites remain mandatory for the affected release. Use existing installation/update messages with a specific recovery action. Broader platform availability is not a reason to add a second installer service or delay an otherwise validated platform. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
-Ordered by impact.
+## Ramu architecture boundary
 
-1. **Unsigned, un-notarized macOS builds.** CI builds are unsigned, so users meet Gatekeeper warnings. Automatic updates need a signed app and exclude prereleases, so every alpha update is manual.
-2. **Platform coverage.** Releases target macOS arm64/x64 and Linux x64. Linux packaged GUI validation is pending, and Windows has no release matrix entry or downloads.
-3. **Mobile is built from source only.** There are no store or TestFlight builds. Distribution needs an owned Expo project and APNs/FCM credentials, and push has not run on a device.
-4. **Device acceptance is pending.** `apps/mobile/VERIFICATION.md` lists camera pairing, local network, background push, Live Activity and Android visuals as unchecked.
-5. **Thin UI regression coverage.** There is one desktop smoke test by design. That is a sound policy, but it leaves UI regressions in large screens (for example `Automation.tsx`, about 779 lines) mostly unguarded.
-6. **Stale docs.** `docs/HEADLESS-SERVER.md` claimed mobile was outside the alpha and had no QR pairing. It was fixed on 2026-10-17; check the other docs for the same drift at each release.
+Follow [Architecture](ARCHITECTURE.md) and the existing [release workflow](RELEASING.md). Extend current Forge/CI/update and Expo/native packaging paths; desktop remains a thin shell around the same independently runnable server. Keep signing secrets in release infrastructure and device-native dependencies in their owning packages. Packaging must not introduce a separate backend, change RPC authorization or enable host administration. Any setup/update UI uses existing Settings/dialogs and app-composed controls under [UI](UI.md), without changing registry primitives. Reuse the single smoke script for packaged startup validation.
 
-## Plan
+| Work | Dependency and completion condition |
+| --- | --- |
+| Sign and notarize macOS | Obtain an Apple Developer ID and CI credentials. Forge already reads `RAMU_SIGN_IDENTITY`, `APPLE_API_KEY` (a `.p8` path), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`; the release workflow still needs certificate/key provisioning and environment wiring. Verify signing/notarization and run the desktop smoke test against the packaged app. |
+| Enable signed auto-updates | Depends on signed releases. `APP_AUTO_UPDATE` remains `false` in `packages/shared/src/updates.ts`. Enable installation after signing works, publish a stable channel alongside prereleases and document the channels. |
+| Validate Linux | Run the packaged GUI on a clean Linux x64 desktop, record the result in [Releasing](RELEASING.md), and update the README support claim. CI packaging alone does not establish GUI acceptance. |
+| Decide Windows support | Owner decision: declare the alpha unsupported, or add a Windows x64 CI build and packaged startup smoke test before offering downloads. The Forge makers exist, but the release workflow does not build Windows. Recommendation: keep it unsupported until macOS signing is established. |
+| Distribute mobile builds | Requires owned Expo/signing accounts, APNs/FCM credentials, provisioned devices and the [mobile acceptance checklist](../apps/mobile/VERIFICATION.md). Publish TestFlight and Android internal-track builds after the applicable [remote-security prerequisites](REMOTE-SECURITY-PLAN.md#plan). |
 
-1. **Sign and notarize macOS.** Add an Apple Developer ID, store the certificate and notarization credentials as CI secrets, and sign and notarize in the release workflow. Check the packaged app with `RAMU_PACKAGED_EXECUTABLE` and `pnpm test:desktop-smoke`. This unlocks step 2.
-2. **Auto-update.** Turn on automatic installation for signed releases and publish a stable channel next to prereleases. Document the channels in `docs/RELEASING.md`.
-3. **Validate Linux.** Run the packaged GUI on a clean Linux x64 machine, record the result in `docs/RELEASING.md`, and remove the "pending" note from the README when it passes.
-4. **Windows decision.** Either add a Windows x64 target with a smoke run in CI, or state that Windows is unsupported. Experimental with no downloads is a limbo that costs trust.
-5. **Mobile acceptance and TestFlight.** Work through `VERIFICATION.md` on a physical iPhone and an Android phone, set up the Expo, APNs and FCM credentials, then ship TestFlight and an Android internal track. Do this after `REMOTE-SECURITY-PLAN.md` steps 1–3.
-6. **Targeted UI tests.** Add focused unit tests for form and state logic in the largest screens, per the repo's testing rules, instead of a new end-to-end suite.
-7. **Docs check in the release checklist.** Add a line to `docs/RELEASING.md`: compare README, `HEADLESS-SERVER.md` and the mobile README against shipped behavior.
-
-## Order
-
-1, 2, 3, 4 are release infrastructure and can run alongside the other plans. 5 depends on the remote security work. 6 and 7 are small and can land any time.
+Remove each row when its completion condition is met. Delete this plan when no rows remain.

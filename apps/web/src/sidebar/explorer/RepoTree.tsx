@@ -6,17 +6,18 @@ import { useLanguage } from '../../i18n'
 import { useContextMenu } from '../../Menu'
 import { notifyError } from '../../chat/Notifications'
 import { errorText } from '../../workspace/TaskPane'
-import { invoke, ramu, copyText } from '../../ipc'
+import { ramu, copyText } from '../../ipc'
 import { FILE_DRAG_TYPE } from '../../composer/ComposerSuggestions'
 import { useWorkspace } from '../../workspace/workspace'
 import { ActionDialog } from './ActionDialog'
 import { REPO_TREE_CLASS, TREE_CHILDREN_CLASS, TREE_ROOT_CLASS } from './constants'
 import { explorerMenuEntries } from './menuEntries'
 import { baseName, freeName, isValidEntryName, isWithin, joinPath, parentOf } from './paths'
-import { shared, type TreeAction } from './shared'
+import { sharedForHost, type TreeAction } from './shared'
 import { TreeCaret } from './TreeCaret'
 import { TreeRow, type TreeRowHandlers } from './TreeRow'
 import { useRepoListing } from './useRepoListing'
+import { useHost } from '../../workspace/HostProvider'
 
 export function RepoTree({
   taskId,
@@ -29,6 +30,9 @@ export function RepoTree({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const host = useHost()
+  const { invoke } = host
+  const shared = sharedForHost(host.id)
   const [target, setTarget] = useState<DirEntry>({ name: binding.repoName, path: '', kind: 'dir' })
   const [action, setAction] = useState<TreeAction | null>(null)
   const [name, setName] = useState('')
@@ -178,6 +182,7 @@ export function RepoTree({
     setBusy(true)
     void (async () => {
       try {
+        if (!host.isLocal) throw new Error('Choose files on the remote host instead of dropping local paths.')
         const done = await invoke('files.import', taskId, binding.repoId, dir, paths)
         setOpen((current) => new Set([...current, dir]))
         setPicked(done)
@@ -308,6 +313,8 @@ export function RepoTree({
   const context = useContextMenu(
     'Explorer actions',
     explorerMenuEntries({
+      shared,
+      isLocal: host.isLocal,
       ws,
       taskId,
       binding,

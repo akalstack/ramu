@@ -200,7 +200,7 @@ export function LearningSettings({ value, onChange }: Props) {
           options={[
             { value: 'off', label: t('Off') },
             { value: 'review', label: t('Ask me first') },
-            { value: 'auto', label: t('Save automatically (recommended)') },
+            { value: 'auto', label: t('Save automatically') },
           ]}
           onChange={(learning) => onChange({ ...value, learning: learning as IntelligencePreferences['learning'] })}
         />

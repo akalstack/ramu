@@ -1,3 +1,5 @@
+import { helperActive } from '@ramu/shared/chat/helperPresentation'
+import { useHostConnection } from '../../../workspace/computers'
 import { Spinner } from '@/components/ui/spinner'
 import { t as translate, useLanguage } from '../../../i18n'
 import { ChevronRight } from 'lucide-react'
@@ -13,16 +15,19 @@ import { TaskStatusIcon } from './TaskStatus'
 /** A consultation remains visible in the main chat even with Agents closed. */
 export function AdvisorActivity({ task, live, onOpen }: { task: AgentTask; live: boolean; onOpen: () => void }) {
   useLanguage()
+  const { offline } = useHostConnection()
   const status = effectiveStatus(task, live)
-  const elapsed = useElapsed(task.startedAt, status === 'running')
+  const elapsed = useElapsed(task.startedAt, !offline && helperActive(task))
   const label =
-    status === 'running'
-      ? 'Consulting advisor…'
-      : status === 'completed'
-        ? 'Advisor finished'
-        : status === 'failed'
-          ? 'Advisor failed'
-          : 'Advisor stopped'
+    task.waitingFor === 'provider' && status === 'running'
+      ? 'Advisor waiting for provider'
+      : status === 'running'
+        ? 'Consulting advisor…'
+        : status === 'completed'
+          ? 'Advisor finished'
+          : status === 'failed'
+            ? 'Advisor failed'
+            : 'Advisor stopped'
   const duration = elapsed ?? (task.endedAt && task.startedAt ? task.endedAt - task.startedAt : null)
   return (
     <ChatActivityButton
@@ -31,8 +36,15 @@ export function AdvisorActivity({ task, live, onOpen }: { task: AgentTask; live:
       onClick={onOpen}
       title={task.error ?? translate("Open the advisor's answer")}
     >
-      {status === 'running' ? <Spinner className="size-3.5 flex-none" /> : <TaskStatusIcon status={status} />}
-      <span role="status">{translate(label)}</span>
+      {!offline && helperActive(task) && !task.waitingFor ? (
+        <Spinner className="size-3.5 flex-none" />
+      ) : (
+        <TaskStatusIcon status={status} active={!offline && helperActive(task) && !task.waitingFor} />
+      )}
+      <span role="status">
+        {offline ? `${translate('Last known')} · ` : ''}
+        {translate(label)}
+      </span>
       {(task.model || task.provider) && (
         <span className="chat-activity-meta truncate">
           {task.model ? modelDisplayName(task.model) : providerName(task.provider!)}

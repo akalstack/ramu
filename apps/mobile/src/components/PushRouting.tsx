@@ -3,6 +3,7 @@ import { Platform } from 'react-native'
 import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
 import { useStore } from '../runtime/store'
+import { pushTarget } from '../runtime/pushTarget'
 /** Refresh the originating computer before opening a push deep link. Foreground SSE supplies the toast. */
 export function PushRouting() {
   const store = useStore(),
@@ -22,19 +23,18 @@ export function PushRouting() {
           }),
         })
         const route = async (response: import('expo-notifications').NotificationResponse) => {
-          const data = response.notification.request.content.data
-          if (
-            !alive ||
-            !data ||
-            typeof data.computerId !== 'string' ||
-            typeof data.taskId !== 'string' ||
-            !store.computers.some((c) => c.id === data.computerId)
+          const target = pushTarget(
+            response.notification.request.content.data,
+            store.computers.map((c) => c.id),
           )
-            return
-          store.select(data.computerId)
-          await store.refresh(data.computerId).catch(() => {})
+          if (!alive || !target) return
+          store.select(target.computerId)
+          // Not about one thread: the schedules, or the Inbox on its recaps.
+          if (target.kind === 'schedules') return router.navigate('/schedules')
+          if (target.kind === 'recaps') return router.navigate({ pathname: '/inbox', params: { tab: 'recaps' } })
+          await store.refresh(target.computerId).catch(() => {})
           if (alive)
-            router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(data.computerId, data.taskId) } })
+            router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(target.computerId, target.taskId) } })
         }
         const listener = module.addNotificationResponseReceivedListener((response) => void route(response))
         remove = () => listener.remove()

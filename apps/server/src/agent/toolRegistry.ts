@@ -26,6 +26,9 @@ const ALIASES: Record<string, string> = {
   review: 'diff feedback discussion',
   advisor: 'advice consult opinion',
   session: 'history transcript checkpoint',
+  preview: 'interactive visual chart simulation calculator diagram prototype',
+  publish: 'interactive visual chart simulation calculator diagram prototype',
+  interactive: 'visual chart simulation calculator diagram prototype',
 }
 const reply = (value: unknown): CallToolResult => ({ content: [{ type: 'text', text: JSON.stringify(value) }] })
 

@@ -14,4 +14,6 @@ export interface UsageReading {
   status: 'ok' | 'warning' | 'limited'
   plan?: string
   updatedAt: number
+  /** Inferred by Ramu from a limit notice the provider printed, not reported by its usage API; it proves a limit, never room. */
+  source?: 'notice'
 }

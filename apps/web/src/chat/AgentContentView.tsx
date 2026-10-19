@@ -8,7 +8,7 @@ import remarkGfm from 'remark-gfm'
 import { FileText, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import type { AgentContent } from '@ramu/shared/types'
 import { agentContent, inlineMedia, resourceDownload } from '@ramu/shared/chat/agentContent'
-import { invoke } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import { monaco } from '../editor/monaco'
 import { t, useLanguage } from '../i18n'
 
@@ -32,6 +32,7 @@ function AgentImage({ content, taskId }: { content: Extract<AgentContent, { type
     const normalized = agentContent(content)[0]
     return normalized?.type === 'image' ? inlineMedia(normalized.mimeType, normalized.data, 'image') : undefined
   }, [content.mimeType, content.data, content.uri])
+  const { invoke } = useHost()
   const [src, setSrc] = useState(inline)
   const [failed, setFailed] = useState(false)
   useEffect(() => {
@@ -53,7 +54,7 @@ function AgentImage({ content, taskId }: { content: Extract<AgentContent, { type
     return () => {
       active = false
     }
-  }, [inline, taskId, content.uri])
+  }, [inline, taskId, content.uri, invoke])
   return (
     <figure className="agent-image m-0 space-y-2">
       {src && !failed ? (

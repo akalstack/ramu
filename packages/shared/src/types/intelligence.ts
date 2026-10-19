@@ -18,7 +18,7 @@ export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
   toolSearch: true,
   crossThreadRecall: true,
   toolAwareSkills: true,
-  learning: 'auto',
+  learning: 'review',
   maintenanceModel: null,
   dailyReviews: 5,
   archiveSkillDays: 90,

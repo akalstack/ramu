@@ -7,10 +7,11 @@ import { ArrowUp, FileText, Paperclip, Play, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Attachment, FileContext } from '@ramu/shared/types'
-import { invoke, ramu } from '../ipc'
+import { invoke as ownInvoke, ramu } from '../ipc'
 import { ComposerSuggestions, FILE_DRAG_TYPE, MAX_PINNED_FILES, useComposerSuggestions } from './ComposerSuggestions'
 import { Attachments } from './Attachments'
 import { registerWorkspaceCheckpoint } from '../workspace/workspaceCheckpoint'
+import { useHost } from '../workspace/HostProvider'
 
 const CHIPS_SHOWN = 4
 // Keep long documents out of the prompt box while leaving ordinary pastes inline.
@@ -62,8 +63,11 @@ export function Composer({
   onAttachmentsChange?: (files: Attachment[]) => void
   /** While a turn is running and the box is empty, the send button becomes a stop button. */
   stop?: { active: boolean; onStop: () => void }
-  /** After a stopped turn, an empty box offers a play button to carry on. */
-  resume?: { active: boolean; onResume: () => void }
+  /**
+   * After a stopped turn, an empty box offers a play button to carry on. At a usage limit it is "Try again" instead,
+   * through `label` and `title` (English keys).
+   */
+  resume?: { active: boolean; onResume: () => void; label?: string; title?: string }
   /** Shown above the text, e.g. review comments riding along with this message. */
   chips?: ReactNode
   /** Lets the message go out with no text, because the chips carry the content. */
@@ -95,6 +99,8 @@ export function Composer({
   uploadState.current = uploading
   const pinnedCount = useRef(suggestions.pinned.length)
   pinnedCount.current = suggestions.pinned.length
+  // Attachments upload to the host the composer sends to; the native picker runs on this window's own host.
+  const { id: checkpointHost, isLocal, invoke } = useHost()
   useEffect(
     () =>
       registerWorkspaceCheckpoint(
@@ -104,14 +110,26 @@ export function Composer({
           !pendingUploads.current &&
           !currentFiles.current.length &&
           !pinnedCount.current,
+        checkpointHost,
       ),
-    [],
+    [checkpointHost],
   )
   const uploadQueue = useRef(Promise.resolve())
   const pendingUploads = useRef(0)
   const pastedCount = useRef(0)
   const importFiles = (files?: File[], dropped = false): Promise<boolean> => {
     if (!onAttachmentsChange) return Promise.resolve(false)
+    if (!files && !isLocal)
+      return new Promise<boolean>((resolve) => {
+        const picker = document.createElement('input')
+        picker.type = 'file'
+        picker.multiple = true
+        picker.onchange = () => {
+          void importFiles(Array.from(picker.files ?? [])).then(resolve)
+        }
+        picker.oncancel = () => resolve(false)
+        picker.click()
+      })
     pendingUploads.current++
     setUploading(true)
     const operation = uploadQueue.current.then(async () => {
@@ -149,7 +167,7 @@ export function Composer({
                 return invoke('attachments.add', file.name, encoded)
               }),
             )
-          : await invoke('attachments.pick')
+          : await ownInvoke('attachments.pick')
         if (selected.length + currentFiles.current.length > 10) throw new Error('Attach up to 10 files per message.')
         currentFiles.current = [...currentFiles.current, ...selected]
         onAttachmentsChange(currentFiles.current)
@@ -487,14 +505,22 @@ export function Composer({
             size="icon-sm"
             className={`send${showStop ? ' stop' : showResume ? ' resume' : ''}`}
             aria-busy={submitting}
-            aria-label={submitting ? t('Sending') : showStop ? t('Stop') : showResume ? t('Resume') : t(submitLabel)}
+            aria-label={
+              submitting
+                ? t('Sending')
+                : showStop
+                  ? t('Stop')
+                  : showResume
+                    ? t(resume?.label ?? 'Resume')
+                    : t(submitLabel)
+            }
             title={
               submitting
                 ? t('Sending')
                 : showStop
                   ? t('Stop this turn')
                   : showResume
-                    ? t('Resume where it stopped')
+                    ? t(resume?.title ?? 'Resume where it stopped')
                     : `${t(submitLabel)} (Enter)${onAlternateSubmit && alternateLabel ? ` · ${t(alternateLabel)} (⌘Enter / Ctrl+Enter)` : ''}`
             }
             disabled={showStop || showResume ? false : !canSend}

@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query'
 import type { RamuMethods } from '@ramu/shared/api'
+import { ownHostId } from './hosts'
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -14,7 +15,13 @@ export const queryClient = new QueryClient({
     },
   },
 })
-export const ipcQueryKey = (method: string, ...args: unknown[]) => ['ipc', method, ...args] as const
+/**
+ * Every cached read is keyed by the host it came from: `['ipc', hostId, method, ...args]`, so one cache can hold many
+ * hosts. A call that names no host means this window's own host, whose id is known before the host list loads.
+ */
+export const ipcQueryKeyOn = (host: string, method: string, ...args: unknown[]) =>
+  ['ipc', host, method, ...args] as const
+export const ipcQueryKey = (method: string, ...args: unknown[]) => ipcQueryKeyOn(ownHostId(), method, ...args)
 // Reads always refresh when requested; cached data remains available immediately
 // to loader UIs. Commands, shell writes and dialogs never enter the query cache.
 const extraDataQueries = new Set<string>([
@@ -60,11 +67,21 @@ export const isDataQuery = (method: string) =>
 export function cachedData<M extends keyof RamuMethods>(method: M, ...args: Parameters<RamuMethods[M]>) {
   return queryClient.getQueryData<Awaited<ReturnType<RamuMethods[M]>>>(ipcQueryKey(method, ...args))
 }
-export function invalidateData(...domains: string[]) {
+export function cachedDataOn<M extends keyof RamuMethods>(
+  host: string,
+  method: M,
+  ...args: Parameters<RamuMethods[M]>
+) {
+  return queryClient.getQueryData<Awaited<ReturnType<RamuMethods[M]>>>(ipcQueryKeyOn(host, method, ...args))
+}
+/** Marks one host's cached reads in these domains stale (all of that host's reads when none are given). */
+export function invalidateDataOn(host: string, ...domains: string[]) {
   return queryClient.invalidateQueries({
-    queryKey: ['ipc'],
+    queryKey: ['ipc', host],
     predicate: (query) =>
-      !domains.length || domains.some((domain) => String(query.queryKey[1]).startsWith(`${domain}.`)),
+      !domains.length || domains.some((domain) => String(query.queryKey[2]).startsWith(`${domain}.`)),
     refetchType: 'none',
   })
 }
+/** Same, for this window's own host. */
+export const invalidateData = (...domains: string[]) => invalidateDataOn(ownHostId(), ...domains)

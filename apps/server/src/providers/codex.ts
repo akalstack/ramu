@@ -1,4 +1,5 @@
 import { permissionKey } from '../agent/permissionApprovals'
+import { classifyLimit } from './limitClassifier'
 import { elicitationRequest, elicitationContent } from '../agent/elicitation'
 import { attachmentPrompt } from '../attachments'
 import { agentContent } from '@ramu/shared/chat/agentContent'
@@ -203,7 +204,7 @@ class CodexSession implements CodexRunner {
   constructor(
     private readonly scope: AgentScope,
     private readonly settings: AgentSettings,
-    private readonly emit: (event: AgentEvent, usageLimit?: boolean) => void,
+    private readonly emit: (event: AgentEvent, usageLimit?: boolean | 'low') => void,
     private readonly readOnly = false,
   ) {}
   setTools(connection: McpConnection): void {
@@ -653,7 +654,7 @@ class CodexSession implements CodexRunner {
     }
     if (m.method === 'error') {
       const info = JSON.stringify(p.error?.codexErrorInfo ?? '')
-      this.limit ||= /usageLimitExceeded|rateLimitExceeded/i.test(info)
+      this.limit ||= classifyLimit(info, { provider: 'codex', channel: 'error' })?.confidence === 'high'
       if (!p.willRetry) this.emit({ kind: 'error', message: p.error?.message || 'Codex failed' }, this.limit)
     }
     if (m.method === 'item/agentMessage/delta') {
@@ -754,7 +755,9 @@ class CodexSession implements CodexRunner {
       if (this.completedTurns.size > 100) this.completedTurns.delete(this.completedTurns.values().next().value!)
       this.turnId = ''
       const error = p.turn.error
-      this.limit ||= /usageLimitExceeded|rateLimitExceeded/i.test(JSON.stringify(error?.codexErrorInfo ?? ''))
+      this.limit ||=
+        classifyLimit(JSON.stringify(error?.codexErrorInfo ?? ''), { provider: 'codex', channel: 'error' })
+          ?.confidence === 'high'
       this.emit(
         { kind: 'result', isError: p.turn.status === 'failed', text: error?.message || p.turn.status, costUsd: null },
         this.limit,

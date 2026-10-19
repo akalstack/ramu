@@ -18,7 +18,8 @@ import type {
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from '../agent/agentRunner'
 import { openCodeConfigEnv } from './acp'
 import { providerBinary, providerEnvironment } from './providerBinaries'
-import { isLimitMessage, isLimitReply, limitedReading } from './usageLimit'
+import { classifyLimit, limitSignal } from './limitClassifier'
+import { limitedReading } from './usageLimit'
 
 type Wire = Record<string, any>
 type Client = ReturnType<typeof OpenCode.make>
@@ -247,7 +248,7 @@ export class OpenCodeSession implements AgentRunner {
   constructor(
     private scope: AgentScope,
     private settings: AgentSettings,
-    private emit: (event: AgentEvent, limit?: boolean) => void,
+    private emit: (event: AgentEvent, limit?: boolean | 'low') => void,
     private readOnly = false,
     /** Tests pass a client for an already running server. */
     private connect?: () => Promise<Client>,
@@ -436,16 +437,19 @@ export class OpenCodeSession implements AgentRunner {
     if (this.stopped) return
     const reply = [...this.text.values()].join('\n').trim()
     const error = outcome.error
-    const limited = error ? isLimitMessage(error) : isLimitReply(reply, this.tools)
-    if (limited) this.emit({ kind: 'usage', readings: [limitedReading(this.settings, error ?? reply)] })
+    const match = error
+      ? classifyLimit(error, { provider: 'opencode', channel: 'error' })
+      : classifyLimit(reply, { provider: 'opencode', channel: 'reply', toolCalls: this.tools })
+    if (match?.confidence === 'high')
+      this.emit({ kind: 'usage', readings: [limitedReading(this.settings, error ?? reply)] })
     this.emit(
       {
         kind: 'result',
-        isError: !!error || limited,
-        text: error ?? (limited ? reply : outcome.interrupted ? 'cancelled' : 'end_turn'),
+        isError: !!error || !!match,
+        text: error ?? (match ? reply : outcome.interrupted ? 'cancelled' : 'end_turn'),
         costUsd: this.cost || null,
       },
-      limited,
+      limitSignal(match),
     )
   }
 

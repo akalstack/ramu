@@ -27,7 +27,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Input } from '@/components/ui/input'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Dialog, Menu } from '../Menu'
-import { invoke } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import { t, useLanguage } from '../i18n'
 import { registerSelection } from './editorBuffers'
 import type { monaco } from './monaco'
@@ -81,6 +81,7 @@ export function MarkdownEditor({
   onOpenFile: (path: string) => void
 }) {
   useLanguage()
+  const { invoke } = useHost()
   const host = useRef<HTMLDivElement>(null)
   const callbacks = useRef({ onSave, onOpenFile })
   callbacks.current = { onSave, onOpenFile }
@@ -254,7 +255,7 @@ export function MarkdownEditor({
       rich.view.dom.removeEventListener('keydown', keydown, true)
       rich.destroy()
     }
-  }, [model, viewId, taskId, repoId, path])
+  }, [model, viewId, taskId, repoId, path, invoke])
   const run = (action: (editor: Editor) => void) => {
     if (!editor) return
     model.pushStackElement()

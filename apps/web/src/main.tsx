@@ -11,10 +11,12 @@ import { monaco } from './editor/monaco'
 import { createRoot } from 'react-dom/client'
 import { useCallback, useEffect, useState } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClient, invalidateData } from './dataQueries'
-import { ramu } from './ipc'
+import { queryClient, invalidateDataOn } from './dataQueries'
+import { bridge } from './ipc'
+import { ownHostId } from './hosts'
 import { pruneDrafts } from './composer/drafts'
 import { App } from './App'
+import { HostProvider } from './workspace/HostProvider'
 import { StartupScreen } from './Brand'
 import { ErrorBoundary } from './ErrorBoundary'
 
@@ -40,18 +42,20 @@ function Startup() {
     }
   }, [])
   useEffect(() => {
+    // Every host's cached reads go stale on that host's own events (this window may show several hosts' stores).
+    const host = (from?: string) => from ?? ownHostId()
     const offs = [
-      ramu.on('fs:changed', () => {
-        void invalidateData('files', 'git')
+      bridge.on('fs:changed', (_, from) => {
+        void invalidateDataOn(host(from), 'files', 'git')
       }),
-      ramu.on('automation:changed', () => {
-        void invalidateData('reviews', 'tasks')
+      bridge.on('automation:changed', (_, from) => {
+        void invalidateDataOn(host(from), 'reviews', 'tasks')
       }),
-      ramu.on('agent:event', () => {
-        void invalidateData('agent')
+      bridge.on('agent:event', (_, from) => {
+        void invalidateDataOn(host(from), 'agent')
       }),
-      ramu.on('background:connection', ({ connected }) => {
-        if (connected) void invalidateData()
+      bridge.on('background:connection', ({ connected }, from) => {
+        if (connected) void invalidateDataOn(host(from))
       }),
     ]
     return () => offs.forEach((off) => off())
@@ -59,18 +63,22 @@ function Startup() {
   return (
     <StartupScreen ready={fontsReady && appReady}>
       <ErrorBoundary scope="app">
-        <TooltipProvider delay={350}>
-          <App onReady={onReady} />
-        </TooltipProvider>
+        <HostProvider>
+          <TooltipProvider delay={350}>
+            <App onReady={onReady} />
+          </TooltipProvider>
+        </HostProvider>
       </ErrorBoundary>
     </StartupScreen>
   )
 }
 
 // Fonts and application data load behind one continuous logo-to-wordmark reveal.
-pruneDrafts()
-createRoot(document.getElementById('root')!).render(
-  <QueryClientProvider client={queryClient}>
-    <Startup />
-  </QueryClientProvider>,
-)
+if (!new URLSearchParams(location.search).has('ramu-storage-migration')) {
+  pruneDrafts()
+  createRoot(document.getElementById('root')!).render(
+    <QueryClientProvider client={queryClient}>
+      <Startup />
+    </QueryClientProvider>,
+  )
+}

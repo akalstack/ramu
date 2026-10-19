@@ -1,5 +1,6 @@
 import { systemTimezone } from '@ramu/shared/workspace/timezone'
 import { cleanLabel, clipText } from '@ramu/shared/text'
+import { goalContinues } from '@ramu/shared/chat/goalHold'
 import { randomUUID } from 'node:crypto'
 import { DateTime } from 'luxon'
 import { z } from 'zod'
@@ -15,6 +16,8 @@ export const settingsSchema = z.object({
   serviceTier: z.enum(['standard', 'fast']).default('standard'),
   access: z.enum(['edits', 'auto', 'full']),
   autoFallback: z.boolean(),
+  /** Unset follows the global auto-resume setting. */
+  autoResume: z.boolean().optional(),
 })
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)
 const instant = z
@@ -94,6 +97,8 @@ const mapSchedule = (r: ScheduleRow): Schedule => ({
   nextRunAt: r.next_run_at,
   createdAt: r.created_at,
 })
+/** This many failed runs in a row pause a schedule, so a broken task stops spending runs and tokens until someone looks. */
+export const MAX_CONSECUTIVE_FAILURES = 3
 const RUN_COLUMNS =
   'id, schedule_id AS scheduleId, due_at AS dueAt, task_id AS taskId, session_id AS sessionId, status, attempts, retry_at AS retryAt, error, created_at AS createdAt'
 
@@ -109,16 +114,26 @@ export class ScheduleService {
     private readonly workspace: Workspace,
     private readonly agents: AgentService,
     private readonly changed: () => void,
+    /** A run gave up (three failed starts) before any thread existed, so no thread event can announce it. Called once per run. */
+    private readonly startFailed?: (run: ScheduleRun) => void,
   ) {}
   list(): Schedule[] {
     return (this.db.prepare('SELECT * FROM schedules ORDER BY created_at DESC').all() as unknown as ScheduleRow[]).map(
       mapSchedule,
     )
   }
+  private find(id: string): Schedule | null {
+    const row = this.db.prepare('SELECT * FROM schedules WHERE id = ?').get(id) as unknown as ScheduleRow | undefined
+    return row ? mapSchedule(row) : null
+  }
   get(id: string): Schedule {
-    const s = this.list().find((s) => s.id === id)
-    if (!s) throw new Error('Unknown schedule')
-    return s
+    const schedule = this.find(id)
+    if (!schedule) throw new Error('Unknown schedule')
+    return schedule
+  }
+  /** Whether a schedule started this agent session; its thread belongs to a run. */
+  hasSession(sessionId: string): boolean {
+    return Boolean(this.db.prepare('SELECT 1 FROM schedule_runs WHERE session_id=? LIMIT 1').get(sessionId))
   }
   runs(id?: string): ScheduleRun[] {
     return this.db
@@ -143,8 +158,14 @@ export class ScheduleService {
       old = id ? this.get(id) : null
     const at = nextOccurrence(value.rule, value.timezone, now)
     if (at === null) throw new Error('Choose a future execution time')
+    // An edit may be the fix for what failed, so earlier failures stop counting; a pause and its reason stay until resumed.
+    const extras = {
+      failuresAfter: this.lastRunMark(),
+      ...(old?.state === 'paused' && old.pausedReason ? { pausedReason: old.pausedReason } : {}),
+    }
     const schedule: Schedule = {
       ...value,
+      ...extras,
       id: id ?? randomUUID(),
       state: old?.state === 'paused' ? 'paused' : 'active',
       nextRunAt: at,
@@ -154,7 +175,7 @@ export class ScheduleService {
       .prepare(
         'INSERT INTO schedules VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data=excluded.data, state=excluded.state, next_run_at=excluded.next_run_at',
       )
-      .run(schedule.id, JSON.stringify(value), schedule.state, at, schedule.createdAt)
+      .run(schedule.id, JSON.stringify({ ...value, ...extras }), schedule.state, at, schedule.createdAt)
     // Editing cancels occurrences that have not begun; an already-running chat remains independent.
     if (id)
       this.db
@@ -171,6 +192,8 @@ export class ScheduleService {
     this.db
       .prepare('UPDATE schedules SET state=?, next_run_at=? WHERE id=?')
       .run(paused ? 'paused' : at === null ? 'completed' : 'active', at, id)
+    // A resume starts the failure count again and drops the reason it was paused for.
+    if (!paused) this.patchData(id, { pausedReason: undefined, failuresAfter: this.lastRunMark() })
     if (paused)
       this.db
         .prepare(
@@ -179,6 +202,35 @@ export class ScheduleService {
         .run(id)
     this.changed()
     return this.get(id)
+  }
+  /** A point in the run history: failed runs up to here no longer count towards pausing. */
+  private lastRunMark(): number {
+    return (this.db.prepare('SELECT COALESCE(MAX(rowid), 0) AS mark FROM schedule_runs').get() as { mark: number }).mark
+  }
+  private patchData(id: string, patch: Partial<Pick<Schedule, 'pausedReason' | 'failuresAfter'>>): void {
+    const row = this.db.prepare('SELECT data FROM schedules WHERE id = ?').get(id) as { data: string } | undefined
+    if (row)
+      this.db
+        .prepare('UPDATE schedules SET data=? WHERE id=?')
+        .run(JSON.stringify({ ...JSON.parse(row.data), ...patch }), id)
+  }
+  /** Pauses an active schedule once its last runs have all failed; successes break the count, other endings do not add to it. */
+  private pauseAfterFailures(scheduleId: string): void {
+    const schedule = this.find(scheduleId)
+    if (schedule?.state !== 'active') return
+    const since = schedule.failuresAfter ?? 0
+    const recent = this.db
+      .prepare(
+        "SELECT status, error FROM schedule_runs WHERE schedule_id=? AND rowid>? AND status IN ('completed','failed') ORDER BY due_at DESC LIMIT ?",
+      )
+      .all(scheduleId, since, MAX_CONSECUTIVE_FAILURES) as { status: string; error: string | null }[]
+    if (recent.length < MAX_CONSECUTIVE_FAILURES || recent.some((run) => run.status !== 'failed')) return
+    this.pause(scheduleId, true)
+    const last = recent[0]!.error ? ` Last error: ${clipText(recent[0]!.error.replace(/\s+/g, ' '), 200)}` : ''
+    this.patchData(scheduleId, {
+      pausedReason: `Paused after ${MAX_CONSECUTIVE_FAILURES} failed runs in a row.${last}`,
+    })
+    this.changed()
   }
   delete(id: string): void {
     this.get(id)
@@ -216,6 +268,47 @@ export class ScheduleService {
         "UPDATE schedule_runs SET status='interrupted', error='Background service restarted. Open the thread to inspect and continue; actions were not replayed.' WHERE status IN ('running','needs-input') AND NOT EXISTS (SELECT 1 FROM agent_recovery WHERE agent_recovery.session_id = schedule_runs.session_id)",
       )
       .run()
+  }
+  /** The latest thing that went wrong in the run's thread: a failed result, or (only when the thread failed) an error event. */
+  private lastError(sessionId: string, failed: boolean): string | null {
+    const row = this.db
+      .prepare(
+        `SELECT event FROM agent_events WHERE session_id=? AND json_extract(event,'$.kind') IN (${failed ? "'result','error'" : "'result'"}) ORDER BY seq DESC LIMIT 1`,
+      )
+      .get(sessionId) as { event: string } | undefined
+    if (!row) return null
+    const event = JSON.parse(row.event) as { kind: string; isError?: boolean; text?: string; message?: string }
+    const text = event.kind === 'error' ? event.message : event.isError ? event.text : null
+    return text?.trim() ? clipText(text.replace(/\s+/g, ' ').trim(), 300) : null
+  }
+  /**
+   * What a run in progress has come to, from the thread's final state and its last error, not from idleness alone.
+   * A thread that is idle between goal continuations, or because it waits for a usage limit to reset, is still running.
+   */
+  private outcome(run: ScheduleRun): { status: ScheduleRun['status']; error: string | null } {
+    const session = this.agents.get(run.sessionId!)
+    if (this.agents.isRecoveryPending(session.id)) return { status: 'running', error: null }
+    if (session.state === 'needs-input') return { status: 'needs-input', error: null }
+    // A run held at a usage limit is not done: it continues after the reset, or, with auto-resume off, stops there.
+    // The limit's own error result must not read as a failure, so this comes before any error check.
+    if (this.agents.providerWait?.(session.id)) {
+      return this.agents.autoResumeOf(session.id)
+        ? { status: 'running', error: null }
+        : { status: 'interrupted', error: 'Usage limit reached. Auto-resume is off; open the thread to resume.' }
+    }
+    if (session.state === 'stopped') return { status: 'cancelled', error: null }
+    if (session.state === 'restored') return { status: 'interrupted', error: null }
+    if (session.state === 'failed')
+      return { status: 'failed', error: this.lastError(session.id, true) ?? 'The agent failed.' }
+    if (session.state !== 'idle') return { status: 'running', error: null }
+    const goal = this.agents.getGoal(session.id)
+    if (goalContinues(goal)) return { status: 'running', error: null }
+    if (this.agents.queued(session.id).length) return { status: 'running', error: null }
+    // The agent stopped on purpose and needs a person: a blocked goal, or one that used up its continuation turns.
+    if (goal && ['blocked', 'turn-limit'].includes(goal.status))
+      return { status: 'needs-input', error: goal.reason ? clipText(goal.reason, 300) : null }
+    const error = this.lastError(session.id, false)
+    return error ? { status: 'failed', error } : { status: 'completed', error: null }
   }
   async tick(now = Date.now()): Promise<void> {
     if (this.ticking || this.stopping) return
@@ -310,6 +403,12 @@ export class ScheduleService {
               String(error),
               run.id,
             )
+          if (attempts >= 3) {
+            this.pauseAfterFailures(run.scheduleId)
+            try {
+              this.startFailed?.({ ...run, attempts, status: 'failed', error: String(error) })
+            } catch {}
+          }
         }
         this.changed()
       }
@@ -319,20 +418,12 @@ export class ScheduleService {
         )
         .all() as unknown as ScheduleRun[]
       for (const run of active) {
-        const session = this.agents.get(run.sessionId!)
-        const status = this.agents.isRecoveryPending(session.id)
-          ? 'running'
-          : session.state === 'needs-input'
-            ? 'needs-input'
-            : session.state === 'idle'
-              ? 'completed'
-              : session.state === 'failed'
-                ? 'failed'
-                : ['stopped', 'restored'].includes(session.state)
-                  ? 'interrupted'
-                  : 'running'
+        const { status, error } = this.outcome(run)
         if (status !== run.status) {
-          this.db.prepare('UPDATE schedule_runs SET status=? WHERE id=?').run(status, run.id)
+          this.db
+            .prepare('UPDATE schedule_runs SET status=?, error=COALESCE(?, error) WHERE id=?')
+            .run(status, error, run.id)
+          if (status === 'failed') this.pauseAfterFailures(run.scheduleId)
           this.changed()
         }
       }

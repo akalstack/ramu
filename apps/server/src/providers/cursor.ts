@@ -13,7 +13,8 @@ import type {
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from '../agent/agentRunner'
 import { attachmentPrompt } from '../attachments'
 import { providerEnvironment } from './providerBinaries'
-import { isLimitMessage, isLimitReply, limitedReading } from './usageLimit'
+import { classifyLimit, limitSignal } from './limitClassifier'
+import { limitedReading } from './usageLimit'
 
 type Sdk = Pick<typeof import('@cursor/sdk'), 'Agent' | 'Cursor'>
 type Wire = Record<string, any>
@@ -93,7 +94,7 @@ export class CursorSession implements AgentRunner {
   constructor(
     private scope: AgentScope,
     private settings: AgentSettings,
-    private emit: (event: AgentEvent, limit?: boolean) => void,
+    private emit: (event: AgentEvent, limit?: boolean | 'low') => void,
     private readOnly = false,
     private sdk?: Sdk,
   ) {}
@@ -197,16 +198,21 @@ export class CursorSession implements AgentRunner {
       .trim()
     const failed = thrown ?? (result?.status === 'error' ? result.error?.message || 'Cursor failed' : undefined)
     const cancelled = this.cancelled || result?.status === 'cancelled'
-    const limited = failed ? isLimitMessage(failed) : !cancelled && isLimitReply(reply, this.tools)
-    if (limited) this.emit({ kind: 'usage', readings: [limitedReading(this.settings, failed ?? reply)] })
+    const match = failed
+      ? classifyLimit(failed, { provider: 'cursor', channel: 'error' })
+      : cancelled
+        ? null
+        : classifyLimit(reply, { provider: 'cursor', channel: 'reply', toolCalls: this.tools })
+    if (match?.confidence === 'high')
+      this.emit({ kind: 'usage', readings: [limitedReading(this.settings, failed ?? reply)] })
     this.emit(
       {
         kind: 'result',
-        isError: !!failed || limited,
-        text: failed ?? (limited ? reply : cancelled ? 'cancelled' : 'end_turn'),
+        isError: !!failed || !!match,
+        text: failed ?? (match ? reply : cancelled ? 'cancelled' : 'end_turn'),
         costUsd: null,
       },
-      limited,
+      limitSignal(match),
     )
   }
 

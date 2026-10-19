@@ -15,6 +15,12 @@ export interface AgentSettings {
   serviceTier?: 'standard' | 'fast'
   access: 'edits' | 'auto' | 'full'
   autoFallback: boolean
+  /**
+   * This thread's own choice for continuing by itself after a usage limit. Unset follows `fallback.autoResume` live, so it is
+   * not a copy of the global value. Sub-agents and the advisor inherit the parent's effective value. Change it with
+   * `agent.setAutoResume`, not `agent.configure`.
+   */
+  autoResume?: boolean
 }
 export interface AgentModel {
   provider: AgentProvider
@@ -48,6 +54,46 @@ export type AgentSessionState =
   | 'stopped'
   /** Transcript restored from disk; no live process. */
   | 'restored'
+
+/** Why a conversation is carried to a provider session that has not seen it. */
+export type HandoffCause = 'limit' | 'switch' | 'account' | 'resume-unavailable' | 'rewind'
+/**
+ * The handoff recorded on a `settings` event. The cause and (for a delta) `fromSeq` are set when the switch is made; the
+ * coverage fields (`toSeq`, `chars`, `omitted`, `shortened`) are filled in place when the next launch builds the prompt.
+ * Event numbers are 1-based positions in the thread's event log, the same numbers `session_recall` takes.
+ */
+export interface HandoffInfo {
+  cause: HandoffCause
+  mode: 'full' | 'delta'
+  /** The provider the thread came from. */
+  from?: AgentProvider
+  /** First event carried. A delta starts after the last event the target provider already saw. */
+  fromSeq?: number
+  /** Last event carried; absent until the handoff has been built. */
+  toSeq?: number
+  /** Size of the handoff block in characters. */
+  chars?: number
+  /** Events left out of the transcript, in whole. */
+  omitted?: number
+  /** Events kept but cut short (old tool results, tool calls and assistant text). */
+  shortened?: number
+}
+
+/** Fields of the `provider-wait` event: a thread held at a usage limit, to be continued at `retryAt`. `retryAt` null ends the wait. */
+export interface ProviderWaitFields {
+  retryAt: number | null
+  retryDelay?: number
+  updatedAt: number
+  /** The retry time is a backoff guess, not a reset the provider reported. */
+  guessed?: boolean
+  /** The login that is limited, for threads that share one limit. */
+  provider?: AgentProvider
+  accountId?: string
+  /** Set once the user was told the limit reset while auto-resume is off, so a restart does not tell them again. */
+  resetNotifiedAt?: number
+  /** Why the thread is held, when it is not only the limit (for example a handoff that does not fit another model). */
+  reason?: string
+}
 
 export type PermissionScope = 'once' | 'project' | 'user'
 export interface SavedPermissionRule {
@@ -138,11 +184,21 @@ export interface QueuedMessage {
 
 /** When the event was recorded (ms). Absent on events stored before timestamps existed.
  *  `agentId` marks text and tool events that a sub-agent produced; they belong to that agent's own transcript, not the main one. */
-export type AgentEvent = AgentEventBody & { at?: number; agentId?: string }
+export type AgentEvent = AgentEventBody & {
+  at?: number
+  agentId?: string
+  requestSource?: { sessionId: string; agentId: string; name: string; requestId?: string }
+}
 
 export type AgentTaskStatus = 'running' | 'completed' | 'failed' | 'stopped'
 /** A sub-agent or background task the main agent started. Recorded once and updated in place as it progresses. */
 export interface AgentTask {
+  /** Ramu-owned session; absent for native provider helpers without a separate session. */
+  childSessionId?: string
+  /** Authoritative dependency state; never inferred from summary wording. */
+  waitingFor?: 'provider' | 'input' | null
+  /** Explicitly resumed after a terminal task state. */
+  resumedAt?: number
   agentId: string
   /** The tool call that started it, when there is one. */
   toolUseId?: string
@@ -211,9 +267,10 @@ export interface AgentToolDetails {
   locations?: { path: string; line?: number }[]
 }
 type AgentEventBody =
+  | { kind: 'interactive'; reference: import('../interactive').InteractiveReference }
   | { kind: 'goal'; goal: ChatGoal | null }
   | { kind: 'schedule'; schedule: Schedule }
-  | { kind: 'provider-wait'; retryAt: number | null; retryDelay?: number; updatedAt: number }
+  | ({ kind: 'provider-wait' } & ProviderWaitFields)
   | { kind: 'queue'; messages: QueuedMessage[]; paused?: boolean }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
@@ -292,7 +349,15 @@ type AgentEventBody =
     }
   | { kind: 'error'; message: string }
   | { kind: 'state'; state: AgentSessionState }
-  | { kind: 'settings'; settings: AgentSettings; reason: string; handoff: boolean; previous?: AgentSettings }
+  | {
+      kind: 'settings'
+      settings: AgentSettings
+      reason: string
+      handoff: boolean
+      previous?: AgentSettings
+      /** Why the conversation is handed over and, once the next launch has built it, what was carried. Present only with `handoff`. */
+      handoffInfo?: HandoffInfo
+    }
   | ({ kind: 'agent' } & AgentTask)
 
 export type PermissionReply = { requestId: string; allow: boolean; message?: string }

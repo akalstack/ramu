@@ -7,6 +7,8 @@ import {
   applyValue,
   buildEdit,
   isOutdated,
+  limitChoiceEdits,
+  limitChoiceState,
   patchSetting,
   searchSettings,
   setHostSetting,
@@ -134,4 +136,87 @@ test('search leaves out rows the host does not have, but keeps phone settings', 
   assert.ok(titles.includes('Automatic pull'))
   assert.ok(!titles.includes('Pull behavior'))
   assert.ok(titles.includes('Haptic feedback'))
+})
+
+const limitRow = () => SETTINGS_ROWS.access.flatMap((group) => group.rows).find((row) => row.kind === 'limit')
+const readFrom = (values) => (path) => values[path]
+
+test('the limit choice replaces the single fallback toggle and edits both stored settings', () => {
+  const row = limitRow()
+  assert.equal(row.title, 'When a usage limit is reached')
+  assert.equal(row.path, 'defaultAutoFallback')
+  assert.equal(row.resumePath, 'fallback.autoResume')
+  const all = Object.values(SETTINGS_ROWS).flatMap((groups) => groups.flatMap((group) => group.rows))
+  assert.ok(!all.some((entry) => entry.title === 'Automatic provider fallback'))
+})
+
+test('the limit choice maps the stored pair to three options and shows the hidden fourth only when stored', () => {
+  const row = limitRow()
+  const state = (fallback, resume) =>
+    limitChoiceState(readFrom({ defaultAutoFallback: fallback, 'fallback.autoResume': resume }), row)
+  assert.equal(state(true, true).current, 'switch')
+  assert.equal(state(false, true).current, 'wait')
+  assert.equal(state(false, false).current, 'stop')
+  assert.deepEqual(
+    state(true, true).options.map((option) => option.label),
+    ['Switch to another model', 'Wait on this model', 'Stop and let me decide'],
+  )
+  const fourth = state(true, false)
+  assert.equal(fourth.current, 'switch-then-stop')
+  assert.equal(fourth.options.at(-1).label, 'Switch, then stop if none has room')
+})
+
+test('picking an option saves both settings, and only the ones that change', () => {
+  const row = limitRow()
+  const read = readFrom({ defaultAutoFallback: true, 'fallback.autoResume': true })
+  assert.deepEqual(limitChoiceEdits('wait', read, row), [['defaultAutoFallback', false]])
+  assert.deepEqual(limitChoiceEdits('stop', read, row), [
+    ['defaultAutoFallback', false],
+    ['fallback.autoResume', false],
+  ])
+  assert.deepEqual(limitChoiceEdits('switch', read, row), [])
+  assert.deepEqual(limitChoiceEdits('switch-then-stop', read, row), [['fallback.autoResume', false]])
+})
+
+test('a host with both settings gets the limit choice; one with only the fallback setting gets the old switch instead', () => {
+  const rows = (settings) => visibleGroups('access', settings).flatMap((group) => group.rows)
+  const both = [setting('defaultAutoFallback', true), setting('fallback.autoResume', true)]
+  const modern = rows(both).find((row) => row.path === 'defaultAutoFallback')
+  assert.equal(modern.kind, 'limit')
+  assert.equal(modern.title, 'When a usage limit is reached')
+  // An older host: same setting, the single switch it always had, so nothing is hidden.
+  const older = rows([setting('defaultAutoFallback', true)]).find((row) => row.path === 'defaultAutoFallback')
+  assert.equal(older.kind, 'toggle')
+  assert.equal(older.title, 'Automatic provider fallback')
+  assert.match(older.help, /waits and resumes on the same provider/)
+  // Only the resume setting, or neither: there is nothing to edit.
+  assert.ok(!rows([setting('fallback.autoResume', true)]).some((row) => row.path === 'defaultAutoFallback'))
+  assert.ok(!rows([]).some((row) => row.path === 'defaultAutoFallback'))
+  const title = (settings) =>
+    searchSettings('fallback', settings)
+      .filter((hit) => hit.section === 'access')
+      .map((hit) => hit.title)
+  assert.ok(title(both).includes('When a usage limit is reached'))
+  assert.ok(title([setting('defaultAutoFallback', true)]).includes('Automatic provider fallback'))
+  assert.ok(!title([setting('defaultAutoFallback', true)]).includes('When a usage limit is reached'))
+})
+
+test('the limit choice is found by the words people use for it', () => {
+  for (const query of ['fallback', 'wait', 'stop', 'switch', 'resume', 'limit'])
+    assert.ok(
+      searchSettings(query, null).some((hit) => hit.title === 'When a usage limit is reached'),
+      query,
+    )
+})
+
+test('branch naming shows only the inputs used by the selected strategy', () => {
+  const paths = (strategy) =>
+    visibleGroups('git', [
+      setting('worktreeBranchNaming', strategy),
+      setting('worktreeBranchInstructions', 'Use ticket/'),
+      setting('worktreeBranchPrefix', 'ramu/'),
+    ]).flatMap((group) => group.rows.map((row) => row.path))
+  assert.deepEqual(paths('fixed'), ['worktreeBranchNaming', 'worktreeBranchPrefix'])
+  assert.deepEqual(paths('semantic'), ['worktreeBranchNaming'])
+  assert.deepEqual(paths('custom'), ['worktreeBranchNaming', 'worktreeBranchInstructions'])
 })

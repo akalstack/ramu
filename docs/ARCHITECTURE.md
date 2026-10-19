@@ -18,7 +18,7 @@ Call an ongoing conversation and its work a **thread** in product copy. A **task
 | `apps/server` | Workspace service and `ramu` CLI. Agents, providers, files, Git, terminals, schedules, SQLite. Must not import Electron or `apps/desktop`. |
 | `apps/desktop` | Electron windows, menus, native dialogs, the preload bridge, update checks, packaging. Reaches the server through `@ramu/client-runtime`. |
 | `apps/web` | React workspace UI and Monaco editor, rendered in the desktop app. |
-| `apps/mobile` | Expo companion app that pairs with a server over the network. Not part of the alpha release. |
+| `apps/mobile` | Expo companion app that pairs with a server over the network. Built from source; there are no store or TestFlight builds yet. |
 | `apps/site` | Project website. |
 | `packages/shared` | Domain types, the API method table, and pure helpers used by every app, grouped into `chat/`, `review/`, `search/`, `workspace/` and `providers/` (import as `@ramu/shared/<folder>/<module>`). |
 | `packages/contracts` | Wire protocol: versions, capabilities, request encoding. |
@@ -37,6 +37,12 @@ Every call is a method in the table in `packages/shared/src/api.ts`, for example
 5. **Call it** from the UI through `apps/web/src/ipc.ts`.
 
 Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockCheckouts`) when a handler must not interleave with another on the same thread or repository.
+
+## Hosts and windows
+
+The desktop has one shell renderer for every paired host. `HostSelectionProvider` selects a host and destination; `WorkspaceProvider` lazily mounts a `HostWorkspace` store for each requested connected host. Sidebar rows read those live stores, and `useWorkspace()` refers to the store on screen. Main retains connection lifecycle and delivers host-tagged events to the shell. `workspace/hostEvents.ts` routes them to host listeners and coalesces hidden-store work fairly; terminal output has bounded cursor-aware buffers.
+
+`invokeOn(host, method, ...args)` in `apps/web/src/ipc.ts` routes explicit host calls through `hostInvoke.ts` (known, connected host; server-only allow-list). Native menus, dialogs, clipboard and device lifecycle operations stay local. Queries use `['ipc', hostId, method, ...]`; content state lives under `host:<hostId>:`. `deviceState.ts` owns device-wide UI choices. Legacy remote storage partitions are imported once before the shell starts, without overwriting newer shell values, and then no remote renderer is retained. Notification clicks select their host and thread in the same shell. Remaining real-host measurements and migration acceptance are tracked in [the roadmap](ROADMAP.md#host-and-provider-acceptance).
 
 ## Server layout (`apps/server/src`)
 
@@ -66,6 +72,9 @@ Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockChe
 | `changes/` | The review tab for a thread's recorded changes. |
 | `workspace/` | Layout, panes, terminals, project switching, paired hosts. |
 | `sidebar/` | Projects, Explorer, Source Control and Search panels, each in its own subfolder. |
+| `inbox/` | The Inbox page (Waiting, Running, Recaps, Learned, Completed), recap actions, and the cross-host Inbox. |
+| `summaries/` | The "What Ramu learned" card, host and notice. |
+| `palette/` | The command palette and its sources (see [UI development](UI.md#command-palette)). |
 | `editor/` | Monaco setup and editor buffers. |
 | `lib/` | Small framework-free helpers and hooks. |
 | `components/` | Shared UI primitives (`components/ui` is shadcn-based). |
@@ -78,7 +87,7 @@ Accounts: every enabled account of a provider is tried in order (selected accoun
 
 ## Testing
 
-- `pnpm check`: format, typecheck, unit tests, release-script tests, build. CI runs it on macOS and Linux.
+- `pnpm check`: format, lint, knip, typecheck, unit tests, release-script tests, build. CI runs it on macOS and Linux. While working, run only the scoped checks for the package you touched (`pnpm --filter @ramu/web test`, `typecheck`, and so on).
 - `pnpm test:desktop-smoke`: one desktop startup check with simulated providers and an isolated profile (macOS). Run after `pnpm build`; release checks also run it against the packaged macOS app.
 - Server tests are in `apps/server/test`, mirroring `src` by file name.
 

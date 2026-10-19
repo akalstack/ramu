@@ -195,7 +195,12 @@ export function chatsSource(ws: WorkspaceApi): PaletteSource {
 }
 
 /** Sends what was typed to the open conversation, or starts a chat with it. */
-export function agentSource(ws: WorkspaceApi, taskId: string, initialSettings: AgentSettings): PaletteSource {
+export function agentSource(
+  ws: WorkspaceApi,
+  taskId: string,
+  initialSettings: AgentSettings,
+  call: typeof invoke = invoke,
+): PaletteSource {
   return {
     id: 'agent',
     label: t('Agent'),
@@ -217,11 +222,11 @@ export function agentSource(ws: WorkspaceApi, taskId: string, initialSettings: A
             detail: chat ? t('Send to the agent') : t('Start a thread with the agent'),
             run: async () => {
               if (chat?.kind === 'agent') {
-                await invoke('agent.send', chat.sessionId, text)
+                await call('agent.send', chat.sessionId, text)
                 ws.activateView(taskId, chat.id)
               } else if (isWorkspaceCtx(taskId)) {
                 // From a project's workspace view, a message starts a new chat (task) in that project.
-                const task = await invoke('tasks.create', {
+                const task = await call('tasks.create', {
                   projectId: ws.projectOf(taskId)!.id,
                   title: titleFrom(text),
                   mode: isWorktreeCtx(taskId) ? 'worktree' : 'current',
@@ -229,10 +234,10 @@ export function agentSource(ws: WorkspaceApi, taskId: string, initialSettings: A
                 })
                 await ws.refresh()
                 ws.openTask(task.id)
-                const session = await invoke('agent.start', task.id, text, initialSettings)
+                const session = await call('agent.start', task.id, text, initialSettings)
                 ws.openView(task.id, { kind: 'agent', sessionId: session.id })
               } else {
-                const session = await invoke('agent.start', taskId, text, initialSettings)
+                const session = await call('agent.start', taskId, text, initialSettings)
                 ws.openView(taskId, { kind: 'agent', sessionId: session.id })
               }
             },

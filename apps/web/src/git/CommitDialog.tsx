@@ -12,6 +12,8 @@ import { useAppSettings } from '../settings/AppSettings'
 import { LETTER } from '../sidebar/scm/constants'
 import { commitActionLabel } from '../sidebar/scm/helpers'
 import { usePullRequestSupport } from './usePullRequestSupport'
+import type { RamuBridge } from '@ramu/shared/api'
+import { useHost } from '../workspace/HostProvider'
 
 /** What the popup hands back: the files to commit, how far to take them, the branch, and an optional message. */
 export interface CommitPlan {
@@ -61,19 +63,26 @@ export function chooseCommit(request: Omit<Request, 'resolve'>): Promise<CommitP
  * Brings the index in line with the plan: selected files that are unstaged get staged, and staged files left out get
  * unstaged, so the commit holds exactly what was ticked.
  */
-export async function applyCommitScope(taskId: string, repoId: string, status: GitStatus, paths: string[]) {
+export async function applyCommitScope(
+  taskId: string,
+  repoId: string,
+  status: GitStatus,
+  paths: string[],
+  /** The repository's host (`useHost().invoke`); the window's own host by default. */
+  hostInvoke: RamuBridge['invoke'] = invoke,
+) {
   const chosen = new Set(paths)
   const stage = status.entries.filter((e) => chosen.has(e.path) && e.unstaged && e.unstaged !== 'unmerged')
   const unstage = status.entries.filter((e) => !chosen.has(e.path) && stagedEntry(e))
   if (unstage.length)
-    await invoke(
+    await hostInvoke(
       'git.unstage',
       taskId,
       repoId,
       unstage.map((e) => e.path),
     )
   if (stage.length)
-    await invoke(
+    await hostInvoke(
       'git.stage',
       taskId,
       repoId,
@@ -130,6 +139,7 @@ function CommitForm({
   onRememberAction: (action: CommitAction) => void
   onDone: (plan: CommitPlan | null) => void
 }) {
+  const host = useHost()
   const { status } = request
   const entries = useMemo(() => committable(status), [status])
   const hasStaged = entries.some(stagedEntry)
@@ -157,7 +167,7 @@ function CommitForm({
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
-    void invoke('git.commitBranchInfo', request.taskId, request.repoId).then(
+    void host.invoke('git.commitBranchInfo', request.taskId, request.repoId).then(
       (info) => {
         if (cancelled) return
         setBranchInfo(info)

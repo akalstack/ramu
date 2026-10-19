@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings } from '@ramu/shared/types'
-import { invoke, ramu } from '../../ipc'
-import { useWorkspace } from '../../workspace/workspace'
+import { useHostRuntime, useWorkspace } from '../../workspace/workspace'
+import { useHost } from '../../workspace/HostProvider'
 
 /** Model settings for drafting commit messages, mirroring the task's active agent chat. */
 export function useAgentSettings(taskId: string) {
   const ws = useWorkspace()
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const [settings, setSettings] = useState<AgentSettings>(DEFAULT_AGENT_SETTINGS)
   useEffect(() => {
     let cancelled = false
@@ -14,7 +16,7 @@ export function useAgentSettings(taskId: string) {
       void invoke('agent.get', view.sessionId).then((s) => {
         if (!cancelled) setSettings(s.settings)
       })
-    const off = ramu.on('agent:event', ({ sessionId, event }) => {
+    const off = on('agent:event', ({ sessionId, event }) => {
       if (view?.kind === 'agent' && sessionId === view.sessionId && event.kind === 'settings')
         setSettings(event.settings)
     })
@@ -22,6 +24,6 @@ export function useAgentSettings(taskId: string) {
       cancelled = true
       off()
     }
-  }, [taskId, ws.taskUi[taskId]?.activeAgentViewId])
+  }, [invoke, on, taskId, ws.taskUi[taskId]?.activeAgentViewId])
   return [settings, setSettings] as const
 }

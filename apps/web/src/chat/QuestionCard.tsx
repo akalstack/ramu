@@ -5,7 +5,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ShieldQuestion } fro
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { questionKey, questionAnswer, type QuestionRequest, type QuestionState } from '@ramu/shared/chat/questions'
-import { invoke } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import { errorText } from '../workspace/TaskPane'
 
 const EMPTY: QuestionState = { answers: {}, drafts: {}, waiting: false }
@@ -141,6 +141,7 @@ function QuestionForm({
   onCollapse: () => void
 }) {
   useLanguage()
+  const { invoke } = useHost()
   const [drafts, setDrafts] = useState<Record<string, string>>(status.drafts)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -162,7 +163,7 @@ function QuestionForm({
       void invoke('agent.questionDraft', sessionId, request.requestId, drafts).catch(() => {})
     }, 250)
     return () => clearTimeout(timer)
-  }, [drafts, sessionId, request.requestId])
+  }, [drafts, sessionId, request.requestId, invoke])
   const q = questions[Math.min(page, questions.length - 1)]!
   const key = questionKey(q)
   const answered = questionAnswer(status.answers, key)

@@ -13,6 +13,9 @@ import type {
 import { readLastVisit, saveLastVisit } from '../storage'
 import { useStore } from './store'
 import { buildInbox, type InboxModel } from './inbox'
+import { looseInvoke } from './settingsModel'
+import { actOnHost, applyRecapAction, RECAP_TOAST, type RecapAction } from './recapActions'
+import { showToast } from './toast'
 
 // What the computers keep beyond threads: recaps, what Ramu learned, and schedules. Every online computer is read
 // at once (Inbox shows what needs you on all of them) and refreshed when the computer says automation changed.
@@ -34,7 +37,13 @@ interface AutomationStore {
   visit: number
   reload(computerId: string): Promise<void>
   refreshRecaps(computerId: string): Promise<void>
-  actRecap(computerId: string, item: RecapItem, action: 'done' | 'dismissed' | 'snoozed'): Promise<void>
+  /**
+   * Done, Dismiss or Snooze a recap item (`until` is when a snooze ends) and show an Undo toast; `'open'` puts it back.
+   * Resolves once the host has answered; the card is already gone by then.
+   */
+  actRecap(computerId: string, item: RecapItem, action: RecapAction, until?: number): Promise<void>
+  /** Whether this host takes a chosen snooze time. An older one snoozes for a day whatever is asked, so the menu is not offered. */
+  snoozeChoices(computerId: string): boolean
   readSummary(computerId: string, id: string): Promise<LibrarySummary>
   dismissSummary(computerId: string, id: string): Promise<void>
   runSummaries(computerId: string): Promise<void>
@@ -58,6 +67,8 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
   )
   const storeRef = useRef(store)
   storeRef.current = store
+  // Computers found to ignore a chosen snooze time (older hosts); they get the plain one-day Snooze.
+  const [dayOnly, setDayOnly] = useState<ReadonlySet<string>>(new Set())
 
   // "Since your last visit" means since you last left the app, not since this screen last mounted: the marker moves
   // forward only after the app was in the background for a while, so recaps don't vanish on the next tap.
@@ -142,7 +153,7 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AutomationStore>(() => {
     const call = <T,>(id: string, run: (invoke: typeof store.invoke) => Promise<T>) => run(storeRef.current.invoke)
-    return {
+    const api: AutomationStore = {
       of: (id) => state[id] ?? empty,
       visit,
       inbox: buildInbox({
@@ -168,22 +179,33 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
           throw error
         }
       },
-      actRecap: async (id, item, action) => {
+      snoozeChoices: (id) => !dayOnly.has(id),
+      actRecap: async (id, item, action, until) => {
         // Gone at once; the computer confirms (or the reload below puts it back).
-        const current = state[id]?.recaps
-        if (current)
-          patch(id, {
-            recaps: {
-              ...current,
-              items: current.items.map((x) =>
-                x.id === item.id
-                  ? { ...x, status: action, snoozedUntil: action === 'snoozed' ? Date.now() + 86_400_000 : null }
-                  : x,
-              ),
+        setState((all) => {
+          const current = all[id]?.recaps
+          if (!current) return all
+          return {
+            ...all,
+            [id]: {
+              ...all[id]!,
+              recaps: { ...current, items: applyRecapAction(current.items, item.id, action, until) },
             },
-          })
+          }
+        })
         try {
-          await call(id, (invoke) => invoke(id, 'recaps.act', item.id, action))
+          const outcome = await actOnHost(
+            (...args) => call(id, (invoke) => looseInvoke(invoke)(id, 'recaps.act', ...args)),
+            item.id,
+            action,
+            until,
+          )
+          if (!outcome.exactTime) setDayOnly((old) => new Set(old).add(id))
+          if (action !== 'open')
+            showToast(RECAP_TOAST[action], {
+              label: 'undo',
+              run: () => void api.actRecap(id, item, 'open').catch(() => {}),
+            })
         } finally {
           void load(id, ['recaps'])
         }
@@ -219,8 +241,9 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
       },
       previewRule: (id, rule, timezone) => call(id, (invoke) => invoke(id, 'schedules.preview', rule, timezone)),
     }
+    return api
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, store.chats, store.computers, store.appPreferences, visit, load, patch])
+  }, [state, store.chats, store.computers, store.appPreferences, visit, load, patch, dayOnly])
   return <Context.Provider value={value}>{children}</Context.Provider>
 }
 

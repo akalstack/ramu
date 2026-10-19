@@ -9,11 +9,13 @@ import { commitAndPush } from './commitShortcut'
 import { useAnyGitBusy } from './gitBusy'
 import { useGitChangeCount } from './useGitChangeCount'
 import { useAnyPullRequestSupport } from './usePullRequestSupport'
+import { useHost } from '../workspace/HostProvider'
 
 /** Source Control's Commit & push for a chat's or project's checkout: shown only while it has changes, same smart commit as the shortcut. */
 export function CommitPushButton({ taskId }: { taskId: string }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const changes = useGitChangeCount(taskId, ws.bindings[taskId] ?? [])
   // Spinning only while git is really working; choosing in the popup, or cancelling it, leaves the button alone.
   const busy = useAnyGitBusy(
@@ -33,7 +35,7 @@ export function CommitPushButton({ taskId }: { taskId: string }) {
         className={`${GHOST_TEXT_BUTTON_CLASS} commit-push-chip gap-1.5 rounded-r-none text-soft`}
         disabled={busy}
         title={`${t('Commit & Push')} (${formatKeys('mod+alt+p')})`}
-        onClick={() => void commitAndPush(ws, taskId).catch(() => {})}
+        onClick={() => void commitAndPush(ws, taskId, false, invoke).catch(() => {})}
       >
         {busy ? (
           <LoaderCircle size={13} className="spin [animation:spin_0.9s_linear_infinite]" />
@@ -57,7 +59,7 @@ export function CommitPushButton({ taskId }: { taskId: string }) {
                 {t('Commit & Push')}
               </>
             ),
-            onSelect: () => void commitAndPush(ws, taskId).catch(() => {}),
+            onSelect: () => void commitAndPush(ws, taskId, false, invoke).catch(() => {}),
           },
           ...(canCreatePr
             ? [
@@ -69,7 +71,7 @@ export function CommitPushButton({ taskId }: { taskId: string }) {
                       {t('Commit, Push & PR')}
                     </>
                   ),
-                  onSelect: () => void commitAndPush(ws, taskId, true).catch(() => {}),
+                  onSelect: () => void commitAndPush(ws, taskId, true, invoke).catch(() => {}),
                 },
               ]
             : []),

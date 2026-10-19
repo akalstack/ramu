@@ -9,17 +9,20 @@ import type { LibrarySummary } from '@ramu/shared/types'
 import { Composer } from '../composer/Composer'
 import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
-import { ramu } from '../ipc'
+import { bridge } from '../ipc'
 import { useModelSets } from '../models/ModelSets'
-import { useWorkspace } from '../workspace/workspace'
+import { useWorkspaceOf } from '../workspace/workspace'
+import { ownHostId } from '../hosts'
+import { useHostSelection } from '../workspace/HostSelection'
 import { focusLibraryItem } from './libraryFocus'
 import { closeSummary, type SummaryCall } from './openSummary'
 import { CHANGE_LABELS, DISMISS_LABEL, groupItems } from './summaryLogic'
 
 /** A summary, its linked items, and at the bottom a message box that starts a review chat about it. Read-only itself. */
-export function SummaryView({ id, call }: { id: string; call: SummaryCall }) {
+export function SummaryView({ id, call, host }: { id: string; call: SummaryCall; host: string }) {
   useLanguage()
-  const ws = useWorkspace()
+  const { select } = useHostSelection()
+  const ws = useWorkspaceOf(host)
   const { initialSettings } = useModelSets()
   const [summary, setSummary] = useState<LibrarySummary | null>(null)
   const [text, setText] = useState('')
@@ -36,10 +39,11 @@ export function SummaryView({ id, call }: { id: string; call: SummaryCall }) {
   )
   useEffect(() => {
     void load('summaries.read').catch((reason) => setError(errorText(reason)))
-    return ramu.on('summaries:changed', () => {
+    return bridge.on('summaries:changed', (_, from) => {
+      if ((from ?? ownHostId()) !== host) return
       void load('summaries.get').catch(() => {})
     })
-  }, [load])
+  }, [load, host])
   const send = async () => {
     const message = text.trim()
     if (!message || busy) return
@@ -47,10 +51,8 @@ export function SummaryView({ id, call }: { id: string; call: SummaryCall }) {
     setError(null)
     try {
       const started = await call('summaries.discuss', id, message, initialSettings)
-      await ws.refresh()
       closeSummary()
-      ws.openTask(started.taskId)
-      ws.openView(started.taskId, { kind: 'agent', sessionId: started.sessionId })
+      select(host, { kind: 'task', taskId: started.taskId, sessionId: started.sessionId })
     } catch (reason) {
       setError(errorText(reason))
     } finally {
@@ -125,7 +127,7 @@ export function SummaryView({ id, call }: { id: string; call: SummaryCall }) {
                 <section className="mt-4">
                   <h4 className="mb-1 text-caption font-medium text-muted-foreground">{t('Discussed in thread')}</h4>
                   {summary.chatIds.map((chatId) => {
-                    const task = ws.tasks.find((entry) => entry.id === chatId)
+                    const task = ws?.tasks.find((entry) => entry.id === chatId)
                     return task ? (
                       <Button
                         key={chatId}
@@ -133,7 +135,7 @@ export function SummaryView({ id, call }: { id: string; call: SummaryCall }) {
                         className="h-7 min-h-7 w-full justify-start gap-2 px-2 text-left text-soft"
                         onClick={() => {
                           closeSummary()
-                          ws.openTask(chatId)
+                          select(host, { kind: 'task', taskId: chatId })
                         }}
                       >
                         <MessageSquare size={13} />

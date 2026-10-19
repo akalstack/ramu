@@ -14,7 +14,8 @@ import {
   type ReasoningEffort,
 } from '@ramu/shared/types'
 import { useAppSettings } from '../settings/AppSettings'
-import { invoke, ramu } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
+import { useHostRuntime } from '../workspace/workspace'
 
 export const modelDisplayName = (name: string) =>
   name
@@ -65,6 +66,8 @@ const Context = createContext<{
 } | null>(null)
 
 export function ModelSetsProvider({ children }: { children: ReactNode }) {
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const app = useAppSettings()
   const [preferences, setPreferences] = useState<ModelPreferences | null>(null)
   const [catalogs, setCatalogs] = useState<ProviderCatalog[]>([])
@@ -88,14 +91,14 @@ export function ModelSetsProvider({ children }: { children: ReactNode }) {
     return () => {
       disposed = true
     }
-  }, [])
+  }, [invoke])
   useEffect(
     () =>
-      ramu.on('settings:models', (value) => {
+      on('settings:models', (value) => {
         setPreferences(value)
         setError(null)
       }),
-    [],
+    [on],
   )
   if (!preferences) return <BootScreen />
   const selected =

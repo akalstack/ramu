@@ -30,6 +30,8 @@ export default defineConfig({
       // The workspace server also ships inside the app (daemon.js) so a packaged install needs nothing else.
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/main/index.ts'), daemon: resolve(__dirname, '../server/src/index.ts') },
+        // Playwright ships its own runtime files; keep it as a packaged production dependency.
+        external: ['playwright-core'],
         output: { entryFileNames: '[name].js' },
       },
     },

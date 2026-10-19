@@ -4,7 +4,7 @@ Goals keep a thread working toward an objective across turns. They persist with 
 
 ## Settings
 
-In **Settings → Goals**:
+In **Settings → Goals & delegation**:
 
 - **Automatic goals** is on by default. Agents can create goals for work that needs further turns. Turn it off to start goals manually with `/goal`.
 - **Maximum continuation turns** defaults to 10. Choose a preset, a custom limit from 1–1000, or Unlimited. Initial turns, user messages, and quota retries do not count.
@@ -24,14 +24,60 @@ Use Pause, Resume, or Clear in the goal bar. Pause prevents further turns; Stop 
 
 `/goal` without arguments shows the current goal. An updated objective is queued for an agent already working.
 
+### Verification command
+
+You can give a goal a command that Ramu runs itself when the agent says the goal is done. Only you can set it, so an agent cannot use a goal to run commands outside its approvals.
+
+```text
+/goal Login works and tests pass
+verify: pnpm --filter @ramu/server test
+/goal verify: pnpm typecheck
+/goal verify: off
+```
+
+A last line `verify: <command>` in a new goal sets the command; `/goal verify: <command>` changes it on the current goal and `/goal verify: off` removes it. The command runs in the thread's folder, with a ten-minute limit.
+
+On the desktop, the shield button in the goal bar edits the same command: a command to set or change it, a blank field (or `off`) to remove it. It calls `agent.goal.verify`, a call the agent's goal tools do not have, so an agent cannot set it. The mobile app has the same editor: the shield button in the composer's goal tray opens a sheet with the current command, the last check (passed, or how it failed with the end of its output) and one field, with the same rules (2000 characters, blank or `off` removes it, hidden for a completed goal). `/goal verify:` still works in both. A host that predates `agent.goal.verify` answers "Unknown method"; the phone then says to update Ramu on that host and hides the button for it.
+
 ## Continuation
 
 The working agent reports progress and completion. Active goals continue after a turn ends. User messages, required answers, approvals, and workspace writers take priority. Completed goals stop; blocked goals need user input or an explicit resume.
 
+### Completion needs evidence
+
+`update_goal(completed)` is checked before it is accepted. No model judges it; the checks are deterministic:
+
+- It must carry `evidence`: the checks the agent ran with whether each passed (`evidence.checks`), and the files it changed (`evidence.changedFiles`). No checks, or any failed check, rejects the claim, and the agent reads why and goes on.
+- Ramu compares the uncommitted files in the thread's repository with what they were when the goal began. Every file that changed since then must be named in `changedFiles`, or in `otherChanges` when the agent did not change it (your own edits, another thread). Files that were already dirty and untouched are ignored, so a busy shared checkout does not block completion. Outside a git repository, or for a goal that began before this check existed, only the first rule applies.
+- Evidence is accepted only for the goal and instructions that were current when validation began. Editing the objective or verification command, replacing the claim, pausing/stopping, or receiving new instructions or required input while validation runs requires a fresh report.
+- The accepted evidence is kept on the completed goal.
+
+With a verification command, a claim does not complete the goal by itself. Ramu records it, waits for the turn to end, then runs the command. A pass completes the goal and the passing result is recorded on it. A failure keeps the goal active, and its output (the end of it, with credentials removed) is sent to the agent as the next continuation, once. That continuation counts as a turn, so the limit still applies. The goal bar's progress text shows the failure, and the transcript gets a **Verification failed** row with the command, how it ended (exit code, timeout, could not run) and the end of its output. Pausing, clearing or stopping the goal ends a running command. Editing the objective or command, or accepting a replacement completion claim, also cancels the old command. A late result cannot complete the replacement claim. Instructions received after a pending claim require fresh evidence, including after restart.
+
+### Stalls
+
+Before each continuation Ramu compares what the previous turn left behind with what the continuation before it left: the files changed since the goal began, and the tool calls with their results. When two continuations in a row leave the same, the goal becomes **blocked** with the reason "No progress", instead of spending the remaining turns. A message from you, or **Resume**, starts the count again. A retry after a usage limit is not a continuation and never counts, and the turn limit is checked first.
+
+The tool comparison associates each parent call with bounded result summaries, text, terminal output, resource text and diff content, plus error/running state. Changing remote results can therefore count as progress even when local files do not change. Tool/terminal IDs, unrelated results and helper output do not reset the parent’s stall count. This detects repeated activity; it does not establish that changing output is useful progress.
+
+The block leaves a **No progress** row in the transcript with the reason. It is separate from **Goal needs input** (the agent asked for something), **Goal paused** (you paused it) and **Limit reached** (a provider's usage limit, which is never a failure of the goal).
+
+A completed goal's row lists the evidence: the checks the agent ran with their results, the files it changed, and the verification command that passed.
+
+Limits: the baseline and the stall count survive a restart. In a folder outside git the file part of the comparison is empty, so only the tool trail decides.
+
 Usage failures try the thread's fallback list first. If no provider is available, the goal waits for a reset and retries. Unknown reset times retry with increasing delays, up to 15 minutes. Authentication errors require intervention.
+
+Whether a waiting goal continues by itself is the thread's **auto-resume**: the thread's own choice, otherwise the global setting (on by default). With it off, the goal stays waiting for the provider, nothing retries, and it continues when you press **Resume** or **Try again**. A goal paused by you keeps its own paused state.
+
+### Paused: by you or by a limit
+
+A goal held back from continuing has one status, `paused`, and a `pausedBy` that says who holds it: `user` (you paused it, or pressed Stop; it never resumes by itself) or `provider-limit` (the provider's usage limit; it continues at the reset). A missing `pausedBy` means `user`, which is what every goal paused before the merge was. The words stay different: **Limit reached · resumes …** for the limit and **Goal paused** for yours. The field is `pausedBy` and not `reason`, because `reason` is the goal's progress text. A limit hold is never a stall (no continuation was spent on it, and the retry does not count), never counts towards the turn limit, and never fails a verification; the **Pause** button on a held goal turns it into your pause, which the retry timer then leaves alone.
+
+Older data and hosts used a separate status, `waiting-provider`. A database upgrade rewrites those goal events into the merged shape, goals still read it from a host that has not been updated (`goalHold` in `packages/shared/src/chat/goalHold.ts` accepts both), and Ramu never writes it again. The other direction degrades: an app or host from before the merge that talks to a newer one shows a goal held at a limit as **Goal paused**, and its Resume acts as **Try again**. Every provider in a fallback switch carries the goal: providers that receive session guidance get it there, the others get it in the handoff's state block. See [limits and handoff](AGENTS.md#usage-limits-and-fallback).
 
 Goal detection depends on the model following its instructions. Creating a goal does not grant permission for additional work.
 
 ## Checks
 
-`apps/server/test/goals.test.ts` covers lifecycle, limits, waiting, and persistence. Add focused unit or integration tests for goal behavior changes. After building, run `pnpm test:desktop-smoke` for desktop startup validation. Live model checks are opt-in: `RAMU_REAL_GOALS=1 pnpm exec vitest run test/goals.live.test.ts`.
+`apps/server/test/goals.test.ts` covers lifecycle, limits, waiting, persistence, the evidence gate, verification and stalls; `goalMigration.test.ts` covers the rewrite of persisted goals and their re-arming after the upgrade; `packages/shared/test/goalHold.test.ts` covers the two kinds of pause; `goalVerifyIpc.test.ts` covers the verification-command call. `packages/shared/test/goalHistory.test.ts`, `apps/web/test/goalBar.test.ts` and `apps/mobile/test/turns.test.mjs` cover the history rows; `apps/mobile/test/goalVerify.test.mjs` covers the phone's verify editor logic. `apps/server/test/goalProbes.test.ts` runs the git snapshot and the command runner for real. Add focused unit or integration tests for goal behavior changes. After building, run `pnpm test:desktop-smoke` for desktop startup validation. Live model checks are opt-in: `RAMU_REAL_GOALS=1 pnpm exec vitest run test/goals.live.test.ts`.

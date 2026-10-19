@@ -7,7 +7,9 @@ import { Button } from '@/components/desktop-button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Separator } from '@/components/ui/separator'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
-import { invoke, ramu } from '../ipc'
+import { invoke as ownInvoke, ramu } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
+import { useHostRuntime } from '../workspace/workspace'
 import { t, useLanguage } from '../i18n'
 import { workspaceVisible, onWorkspaceVisibility } from '../workspace/workspaceLifetime'
 import { errorText } from '../lib/errors'
@@ -16,6 +18,9 @@ import { useComputers } from '../workspace/computers'
 /** Global activity remains visible on Home and in every checkout. */
 export function BackgroundActivity() {
   useLanguage()
+  // Activity and notices are the host's; the background service status is this window's own (main handles it).
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const [activities, setActivities] = useState<Activity[]>([])
   const [connected, setConnected] = useState(true)
   useEffect(() => {
@@ -30,7 +35,7 @@ export function BackgroundActivity() {
       try {
         const state = await readBackgroundActivity(
           () => invoke('activity.status'),
-          () => invoke('background.status'),
+          () => ownInvoke('background.status'),
         )
         if (!disposed && request === revision) {
           online = state.connected
@@ -45,19 +50,19 @@ export function BackgroundActivity() {
       onWorkspaceVisibility(() => {
         if (workspaceVisible()) void refresh()
       }),
-      ramu.on('activity:changed', () => {
+      on('activity:changed', () => {
         void refresh()
       }),
       ramu.on('updates:changed', () => {
         void refresh()
       }),
-      ramu.on('memory:changed', () => {
+      on('memory:changed', () => {
         void refresh()
       }),
-      ramu.on('automation:changed', () => {
+      on('automation:changed', () => {
         void refresh()
       }),
-      ramu.on('background:connection', ({ connected }) => {
+      on('background:connection', ({ connected }) => {
         ++revision
         online = connected
         setConnected(connected)
@@ -75,12 +80,12 @@ export function BackgroundActivity() {
       clearInterval(timer)
       offs.forEach((off) => off())
     }
-  }, [])
+  }, [invoke, on])
   const stop = async (id: string) => {
     await invoke('activity.cancel', id)
     const state = await readBackgroundActivity(
       () => invoke('activity.status'),
-      () => invoke('background.status'),
+      () => ownInvoke('background.status'),
     )
     setActivities(state.activities)
     setConnected(state.connected)
@@ -119,8 +124,9 @@ export function BackgroundActivityIndicator({
   }
   const missed = useNotices()
   // A computer that rejected this device never comes back by itself, so it is not "reconnecting".
+  const host = useHost()
   const computers = useComputers()
-  const rejected = computers?.computers.find((computer) => computer.id === computers.current)?.status === 'rejected'
+  const rejected = computers?.computers.find((computer) => computer.id === host.id)?.status === 'rejected'
   const disconnected = rejected ? t('Pair again') : t('Reconnecting…')
   const active = connected ? items : []
   const total = active.length + missed.length
@@ -162,7 +168,7 @@ export function BackgroundActivityIndicator({
               className="min-h-6 px-2 py-0 text-caption"
               onClick={() => {
                 notices.clear()
-                void invoke('notices.clear').catch(() => {})
+                void host.invoke('notices.clear').catch(() => {})
               }}
             >
               {t('Clear all')}

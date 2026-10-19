@@ -2,6 +2,7 @@ import { Button } from '@/components/desktop-button'
 import { Sparkles } from 'lucide-react'
 import { DateTime } from 'luxon'
 import { t, useLanguage } from '../i18n'
+import { useHost } from '../workspace/HostProvider'
 import { openSummary } from './openSummary'
 import { homeSummary, unreadCount } from './summaryLogic'
 import { useSummaries } from './useSummaries'
@@ -11,6 +12,7 @@ import { FeedSection } from '../HomeSection'
 /** The latest "What Ramu learned" on Home: a short summary with an unread dot. Hidden when there is nothing to show. */
 export function LearnedCard() {
   useLanguage()
+  const host = useHost()
   const { preferences } = useAppSettings()
   const { snapshot } = useSummaries()
   const summary = homeSummary(snapshot, preferences.intelligence)
@@ -21,7 +23,7 @@ export function LearnedCard() {
       <Button
         variant="secondary"
         className="bg-card hover:bg-card-hover h-auto w-full flex-col items-start gap-1 rounded-(--radius-m) p-4 text-left font-normal whitespace-normal"
-        onClick={() => openSummary(summary.id)}
+        onClick={() => openSummary(summary.id, host.invoke, host.id)}
       >
         <span className="flex w-full items-center gap-2 text-caption text-muted-foreground">
           <Sparkles size={12} />

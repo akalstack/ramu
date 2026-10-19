@@ -1,9 +1,9 @@
 import type { GitStash, PullMode, RepositoryBinding } from '@ramu/shared/types'
-import { invoke } from '../../ipc'
 import { errorText } from '../../workspace/TaskPane'
 import { withGitBusy } from '../../git/gitBusy'
 import { useWorkspace } from '../../workspace/workspace'
 import type { GitRun } from './types'
+import { useHost } from '../../workspace/HostProvider'
 
 /** Repository-level Git actions; each runs under the busy flag, then refreshes. */
 export function useGitActions({
@@ -18,6 +18,7 @@ export function useGitActions({
   reportError: (message: string) => void
 }) {
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const run: GitRun = async (fn) => {
     try {
       await withGitBusy(taskId, binding.repoId, fn)

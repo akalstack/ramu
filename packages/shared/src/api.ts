@@ -1,8 +1,10 @@
+import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
 import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './chat/activity'
 import type { AppUpdateStatus } from './updates'
 import type { ProviderConfiguration, ProviderStatus } from './providers/providers'
+import type { LimitRetryResult } from './chat/providerWait'
 // The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
 import type {
   PullMode,
@@ -102,6 +104,12 @@ export interface MobileLiveActivityRegistration {
 }
 
 export interface RamuMethods {
+  /** Local desktop-only document origin. Never forwarded to a remote host. */
+  'app.content.mount'(html: string): string
+  'app.content.release'(url: string): void
+  'interactive.get'(sessionId: string, id: string, version: number): import('./interactive').InteractiveDocument
+  'interactive.list'(sessionId: string): import('./interactive').InteractiveReference[]
+
   'onboarding.get'(): { needed: boolean }
   'onboarding.complete'(): void
   'diagnostics.export'(): string
@@ -177,7 +185,7 @@ export interface RamuMethods {
   'notices.list'(): import('./chat/notices').InboxNotice[]
   'notices.dismiss'(id: string): void
   'notices.clear'(): void
-  'notifications.register'(token: string, computerId: string): void
+  'notifications.register'(token: string, computerId: string, categories?: string[]): void
   'notifications.unregister'(): void
   'liveActivity.status'(): { enabled: boolean }
   'liveActivity.register'(registration: MobileLiveActivityRegistration): { enabled: boolean }
@@ -191,7 +199,7 @@ export interface RamuMethods {
   /** Access from other devices. These run only for the local desktop app, never for a paired device. */
   'network.status'(): NetworkStatus
   'network.configure'(input: NetworkSettingsInput): NetworkStatus
-  'network.pair'(): PairingOffer
+  'network.pair'(role?: 'owner' | 'viewer'): PairingOffer
   'network.revoke'(deviceId: string): NetworkStatus
   /** Computers this app is connected to, all at once. Handled by the desktop app itself. */
   'computers.settings.invoke'(id: string, method: string, args: unknown[]): unknown
@@ -204,10 +212,18 @@ export interface RamuMethods {
     method: M,
     args: Parameters<RamuMethods[M]>,
   ): ReturnType<RamuMethods[M]>
+  /** Runs an allow-listed method on one host's server, whichever window asks. Same as `RamuBridge.invokeOn`. */
+  'computers.invoke'(id: string, method: string, args: unknown[]): unknown
   'computers.overview'(id: string): HostOverview
   'computers.navigate'(id: string, destination: HostDestination): void
   'computers.navigation.ready'(): void
-  'computers.recapAct'(id: string, recapId: string, action: 'done' | 'dismissed' | 'snoozed'): void
+  /** The hosts whose workspace stores this window shows besides its own; their host events reach it while on screen. */
+  'computers.recapAct'(
+    id: string,
+    recapId: string,
+    action: 'open' | 'done' | 'dismissed' | 'snoozed',
+    until?: number,
+  ): void
   /** Brings a computer's window to the front. Rejects when it cannot be reached. */
   'computers.open'(id: string): void
   'computers.pair'(url: string, code: string, name?: string): Computers
@@ -221,7 +237,6 @@ export interface RamuMethods {
     changes: { name?: string; enabled?: boolean; retryMode?: 'events' | 'periodic' },
   ): Computers
   /** Renderer acknowledgement after its workspace has been safely persisted. */
-  'computers.checkpoint'(requestId: string, safe: boolean): boolean
   'skills.list'(taskId: string): SkillInfo[]
   'schedules.list'(): Schedule[]
   'schedules.save'(input: ScheduleInput, id?: string): Schedule
@@ -232,7 +247,7 @@ export interface RamuMethods {
   'schedules.preview'(rule: ScheduleRule, timezone: string): number[]
   'recaps.get'(): RecapSnapshot
   'recaps.refresh'(): RecapSnapshot
-  'recaps.act'(id: string, action: 'open' | 'done' | 'dismissed' | 'snoozed'): void
+  'recaps.act'(id: string, action: 'open' | 'done' | 'dismissed' | 'snoozed', until?: number): void
   'memory.get'(): MemorySnapshot
   'memory.save'(input: MemoryInput, id?: string): Memory
   'memory.archive'(id: string): Memory
@@ -262,7 +277,16 @@ export interface RamuMethods {
   'repos.pick'(purpose?: 'project' | 'repository'): string | null
   'workspaces.list'(): WorktreeWorkspace[]
   'tasks.list'(): Task[]
-  'tasks.plan'(projectId: string, title: string, repoIds: string[]): WorktreePlanEntry[]
+  'tasks.workspaceOptions'(projectId: string): {
+    defaultCheckoutMode: 'current' | 'worktree'
+    branchPrefix: string
+    branchNaming: BranchNamingStrategy
+    branchInstructions: string
+    worktreeUnavailable: string | null
+  }
+  'tasks.plan'(projectId: string, title: string, repoIds: string[], choice?: BranchChoice): WorktreePlanEntry[]
+  'tasks.generateBranch'(projectId: string, title: string, intent: BranchNamingIntent, requestId?: string): BranchChoice
+  'tasks.cancelBranch'(requestId: string): void
   'tasks.create'(input: CreateTaskInput, plan?: WorktreePlanEntry[]): Task
   'tasks.setup'(taskId: string): RepositoryBinding[]
   'tasks.rename'(taskId: string, title: string): Task
@@ -319,6 +343,8 @@ export interface RamuMethods {
   /** Permanently deletes a file or folder inside the checkout. */
   'files.delete'(taskId: string, repoId: string, path: string): void
   'files.reveal'(taskId: string, repoId: string, path: string): void
+  'files.explorerBindings'(context: string): RepositoryBinding[]
+  'files.browse'(context: string, repoId: string, path: string): { entries: DirEntry[]; truncated: boolean }
   'files.list'(taskId: string, repoId: string, path: string): DirEntry[]
   'files.read'(taskId: string, repoId: string, path: string): FileContent
   'files.editorconfig'(taskId: string, repoId: string, path: string): EditorConfigProps
@@ -407,6 +433,12 @@ export interface RamuMethods {
   'agent.get'(sessionId: string): AgentSessionInfo
   'agent.goal'(sessionId: string): ChatGoal | null
   'agent.goal.control'(sessionId: string, action: 'pause' | 'resume' | 'clear'): ChatGoal | null
+  /**
+   * Sets, changes or removes (null or blank) the command Ramu runs when the agent claims the goal is done. Only the user
+   * can call this; the agent's goal tools cannot. Rejects with no goal, or a completed one. The command runs in the
+   * thread's folder with a ten-minute limit.
+   */
+  'agent.goal.verify'(sessionId: string, command: string | null): ChatGoal
   'agent.events'(sessionId: string): AgentEvent[]
   /** Sequenced persisted events for race-free remote hydration. */
   'agent.snapshot'(sessionId: string): { revision: number; events: { seq: number; event: AgentEvent }[] }
@@ -417,6 +449,7 @@ export interface RamuMethods {
   'agent.scope'(taskId: string): AgentScope
   'attachments.pick'(): Attachment[]
   'attachments.add'(name: string, base64: string): Attachment
+  'attachments.status'(ids: string[]): { id: string; available: boolean }[]
   'attachments.text'(attachmentId: string): string | null
   'attachments.preview'(id: string): string | null
   'attachments.menu'(id: string, removable: boolean, point: { x: number; y: number }): 'preview' | 'remove' | null
@@ -452,6 +485,17 @@ export interface RamuMethods {
   'agent.resumeQueue'(sessionId: string): void
   'agent.sendQueuedNow'(sessionId: string, messageId: string): void
   'agent.interrupt'(sessionId: string): void
+  /**
+   * Try again now for a thread held at a usage limit: re-checks usage and, only if there is room or the provider has no
+   * reading, sends the continuation. Otherwise the thread stays in the limit wait with the updated reset time and no
+   * failed turn. A thread that is not at a limit returns `{ resumed: false, retryAt: null, guessed: false }`.
+   */
+  'agent.retryLimitNow'(sessionId: string): LimitRetryResult
+  /**
+   * Sets this thread's own auto-resume choice (true or false), or clears it with null to follow the global
+   * `fallback.autoResume`. Takes effect at once: it clears or re-arms the thread's limit timer. Does not touch the provider.
+   */
+  'agent.setAutoResume'(sessionId: string, autoResume: boolean | null): AgentSessionInfo
   /** Opening message for a new chat that continues this one, carrying the transcript as context. */
   'agent.continuationPrompt'(sessionId: string): string
   'agent.stop'(sessionId: string): void
@@ -527,13 +571,18 @@ export type PushEvents = {
   /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */
   'background:connection': { connected: boolean; rejected?: boolean }
   'computers:changed': Computers
-  'computers:navigate': HostDestination
+  'computers:navigate': { hostId: string; destination: HostDestination }
   'computers:activity': { ids: string[] }
-  'workspace:visibility': { visible: boolean }
-  'workspace:checkpoint': { requestId: string }
   'updates:changed': AppUpdateStatus
   'providers:updates': ProviderStatus[]
-  'notify:inapp': { sessionId: string; taskId: string; kind: 'done' | 'input' | 'failed'; title: string; body: string }
+  'notify:inapp': {
+    hostId?: string
+    sessionId: string
+    taskId: string
+    kind: 'done' | 'input' | 'failed'
+    title: string
+    body: string
+  }
   'notify:open': { sessionId: string; taskId: string }
   'agent:event': { sessionId: string; event: AgentEvent; seq?: number; revision?: number }
   /** The chat's transcript was cut back: events from `seq` on are gone. */
@@ -547,14 +596,33 @@ export type PushEvents = {
   'term:changed': { taskId: string }
   'notices:changed': import('./chat/notices').InboxNotice[]
   'fs:changed': { cwd: string; path: string }
+  /** Another window changed a device-wide UI value (`value` null means removed). */
+  'device-state:changed': { key: string; value: string | null }
 }
 
 export interface RamuBridge {
+  /** The host this window belongs to ('local' for the first window). Available before any call completes. */
+  readonly hostId: string
   invoke<M extends keyof RamuMethods>(
     method: M,
     ...args: Parameters<RamuMethods[M]>
   ): Promise<Awaited<ReturnType<RamuMethods[M]>>>
-  on<E extends keyof PushEvents>(event: E, listener: (payload: PushEvents[E]) => void): () => void
+  /**
+   * Like `invoke`, but on an explicit host. Only methods the main process allow-lists work on a host other than this
+   * window's own; it rejects for an unknown, offline or paused host. `invoke` itself is unchanged (variadic).
+   */
+  invokeOn<M extends keyof RamuMethods>(
+    host: string,
+    method: M,
+    ...args: Parameters<RamuMethods[M]>
+  ): Promise<Awaited<ReturnType<RamuMethods[M]>>>
+  /**
+   * Host events carry their server's host ID; window events carry the shell's host ID.
+   */
+  on<E extends keyof PushEvents>(event: E, listener: (payload: PushEvents[E], hostId?: string) => void): () => void
+  /** Device-wide UI state (panel widths and the like) shared by every window, loaded synchronously at startup. */
+  readonly deviceState: Readonly<Record<string, string>>
+  setDeviceState(key: string, value: string | null): void
   /** The on-disk path of a file or folder dropped onto the window ('' when it has none). */
   pathForFile(file: File): string
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { RepositoryBinding } from '@ramu/shared/types'
-import { invoke, ramu } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
+import { useHostRuntime } from '../workspace/workspace'
 
 export interface GitChanges {
   count: number
@@ -15,6 +16,8 @@ export function useGitChanges(taskId: string | null, bindings: RepositoryBinding
   const key = JSON.stringify(
     bindings.filter((b) => b.setupState === 'ready' && !b.folderOnly).map((b) => ({ repoId: b.repoId, cwd: b.cwd })),
   )
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const [result, setResult] = useState({ context: '', changes: NONE })
   const context = `${taskId}:${key}:${lines}`
   useEffect(() => {
@@ -53,7 +56,7 @@ export function useGitChanges(taskId: string | null, bindings: RepositoryBinding
       timer = setTimeout(() => void load(), 150)
     }
     void load()
-    const off = ramu.on('fs:changed', ({ cwd }) => {
+    const off = on('fs:changed', ({ cwd }) => {
       if (repositories.some((repo) => repo.cwd === cwd)) refresh()
     })
     window.addEventListener('ramu:git-updated', refresh)
@@ -65,7 +68,7 @@ export function useGitChanges(taskId: string | null, bindings: RepositoryBinding
       window.removeEventListener('ramu:git-updated', refresh)
       window.removeEventListener('focus', refresh)
     }
-  }, [taskId, key, lines, context])
+  }, [invoke, on, taskId, key, lines, context])
   return result.context === context ? result.changes : NONE
 }
 

@@ -5,7 +5,7 @@ import { parseThreadReference, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { t, useLanguage } from '../i18n'
-import { invoke } from '../ipc'
+import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
 import { errorText } from '../workspace/TaskPane'
 import { notifyError } from './Notifications'
@@ -19,6 +19,7 @@ function SkillReference({ name }: { name: string }) {
 export function ChatLink({ href, children, taskId }: { href?: string; children: ReactNode; taskId?: string }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const thread = href && parseThreadReference(href)
   if (thread)
     return (

@@ -1,3 +1,5 @@
+import { helperActions, helperActive } from '@ramu/shared/chat/helperPresentation'
+import { useHostConnection } from '../../../workspace/computers'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { Button } from '@/components/desktop-button'
@@ -32,6 +34,7 @@ import { UserBubble } from './UserMessage'
 /** One sub-agent's own conversation beside the chat, or the list of all of them. */
 export function AgentTaskPanel({
   tasks,
+  selectedIds,
   openId,
   events,
   results,
@@ -44,6 +47,7 @@ export function AgentTaskPanel({
   onMessage,
 }: {
   tasks: AgentTask[]
+  selectedIds?: string[]
   openId: string
   events: AgentEvent[]
   results: Map<string, ToolResult>
@@ -56,7 +60,13 @@ export function AgentTaskPanel({
   onMessage: (task: AgentTask, text: string) => Promise<void>
 }) {
   useLanguage()
+  const { offline } = useHostConnection()
   const task = openId === '*' ? undefined : tasks.find((entry) => entry.agentId === openId)
+  const [showHistory, setShowHistory] = useState(false)
+  const listed = selectedIds
+    ? tasks.filter((entry) => selectedIds.includes(entry.agentId))
+    : tasks.filter((entry) => entry.taskType !== 'advisor')
+  const historical = tasks.filter((entry) => !listed.includes(entry) && entry.taskType !== 'advisor')
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const body = useRef<HTMLDivElement>(null)
@@ -99,6 +109,7 @@ export function AgentTaskPanel({
     const el = body.current
     if (el) el.scrollTop = el.scrollHeight
   }, [own.length])
+  const actions = task ? helperActions(task, !offline) : { canStop: false, canMessage: false }
   const status = task ? effectiveStatus(task, live) : 'stopped'
   const send = async () => {
     if (!task || !draft.trim() || sending) return
@@ -130,7 +141,7 @@ export function AgentTaskPanel({
         )}
         {task ? (
           <>
-            <TaskStatusIcon status={status} />
+            <TaskStatusIcon status={status} active={!offline && Boolean(task && helperActive(task))} />
             <span className={PANEL_TITLE_CLASS} title={task.name}>
               {task.name}
             </span>
@@ -142,7 +153,7 @@ export function AgentTaskPanel({
           </>
         )}
         <span className="grow flex-1 min-w-0 text-left" />
-        {task && status === 'running' && live && task.canStop && (
+        {task && actions.canStop && (
           <Button variant="ghost" size="sm" className={GHOST_TEXT_BUTTON_CLASS} onClick={() => onStop(task)}>
             <Square size={11} />
             {translate('Stop')}
@@ -161,7 +172,7 @@ export function AgentTaskPanel({
       </header>
       {!task ? (
         <div className={`${PANEL_BODY_CLASS} agent-panel-list gap-2 pt-3`}>
-          {tasks.map((entry) => (
+          {listed.map((entry) => (
             <AgentTaskCard
               key={entry.agentId}
               task={entry}
@@ -170,6 +181,39 @@ export function AgentTaskPanel({
               onStop={onStop}
             />
           ))}
+          {historical.length > 0 && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-expanded={showHistory}
+                onClick={() => setShowHistory((value) => !value)}
+              >
+                {translate('Earlier activity')} · {historical.length}
+              </Button>
+              {showHistory &&
+                historical.map((entry) => (
+                  <AgentTaskCard
+                    key={entry.agentId}
+                    task={entry}
+                    live={live}
+                    onOpen={() => onSelect(entry.agentId)}
+                    onStop={onStop}
+                  />
+                ))}
+            </>
+          )}
+          {tasks
+            .filter((entry) => entry.taskType === 'advisor')
+            .map((entry) => (
+              <AgentTaskCard
+                key={entry.agentId}
+                task={entry}
+                live={live}
+                onOpen={() => onSelect(entry.agentId)}
+                onStop={onStop}
+              />
+            ))}
         </div>
       ) : (
         <>
@@ -249,7 +293,7 @@ export function AgentTaskPanel({
                 </div>
               )}
           </div>
-          {task.canMessage && live ? (
+          {actions.canMessage ? (
             <form
               className="agent-panel-compose [&_textarea]:min-h-[56px] [&_textarea]:max-h-[160px] [&_textarea]:p-[8px_44px_8px_12px] [&_textarea]:[border:1px_solid_transparent] [&_textarea]:rounded-(--radius-m) [&_textarea]:[background:var(--field)] [&_textarea]:resize-none [&_textarea]:text-control relative flex-none m-[0_10px_10px] min-w-0"
               onSubmit={(event) => {
@@ -289,7 +333,7 @@ export function AgentTaskPanel({
                 : task.recovered
                   ? translate('This sub-agent’s previous process ended. Continue through the main thread.')
                   : task.canMessage
-                    ? translate('Resume the thread to message this agent.')
+                    ? translate('Reconnect to message this agent.')
                     : translate('Background commands do not take messages.')}
             </p>
           )}

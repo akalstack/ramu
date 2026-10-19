@@ -1,8 +1,10 @@
 // Project / task / binding model. Every surface (editor, diff, terminal, agent)
 // takes its working directory from a RepositoryBinding, never from the repo root.
+import { branchForTitle, validBranchName, type BranchChoice } from '@ramu/shared/workspaceDefaults'
+import { KeyedLock } from '../ipc/keyedLock'
 import { randomUUID } from 'node:crypto'
 import { cleanLabel } from '@ramu/shared/text'
-import { existsSync, mkdirSync, realpathSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { mkdir, readdir, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative } from 'node:path'
 import type { Db } from '../db'
@@ -36,7 +38,7 @@ interface BindingRow {
   setup_error: string | null
 }
 
-const TASK_COLUMNS = `t.id, t.project_id AS projectId, t.title, t.mode, t.workspace_id AS workspaceId, t.status, t.created_at AS createdAt, t.pinned_at AS pinnedAt, t.done_at AS doneAt,
+const TASK_COLUMNS = `t.id, t.project_id AS projectId, t.title, t.title_generation_state AS titleGenerationState, t.mode, t.workspace_id AS workspaceId, t.status, t.created_at AS createdAt, t.pinned_at AS pinnedAt, t.done_at AS doneAt,
   COALESCE((SELECT MAX(COALESCE(json_extract(e.event, '$.at'), s.created_at))
     FROM agent_sessions s JOIN agent_events e ON e.session_id = s.id
     WHERE s.task_id = t.id AND s.parent_session_id IS NULL
@@ -45,6 +47,7 @@ const TASK_COLUMNS = `t.id, t.project_id AS projectId, t.title, t.mode, t.worksp
   (SELECT MIN(w.retryAt) FROM (SELECT (SELECT json_extract(e.event, '$.retryAt') FROM agent_events e
       WHERE e.session_id = s.id AND json_extract(e.event, '$.kind') = 'provider-wait' ORDER BY e.seq DESC LIMIT 1) AS retryAt
     FROM agent_sessions s WHERE s.task_id = t.id AND s.parent_session_id IS NULL) w) AS waitingUntil,
+  (SELECT json_extract(value, '$') FROM app_state WHERE key = 'branch-fallback:' || t.id) AS branchNamingFallback,
   (SELECT 'library-review' FROM library_summary_chats c WHERE c.task_id = t.id) AS kind`
 
 export const PROJECT_PREFIX = 'project:'
@@ -70,6 +73,7 @@ export function slugify(s: string): string {
 }
 
 export class Workspace {
+  private readonly allocation = new KeyedLock()
   constructor(
     private readonly db: Db,
     /** Directory under which task-owned worktrees are created. */
@@ -271,16 +275,32 @@ export class Workspace {
     const t = cleanLabel(title)
     if (!t) throw new Error('Thread title is required')
     this.getTask(id)
-    this.db.prepare("UPDATE tasks SET title = ?, title_source = 'manual' WHERE id = ?").run(t, id)
+    this.db
+      .prepare(
+        "UPDATE tasks SET title = ?, title_source = 'manual', title_revision = title_revision + 1, title_generation_state = 'idle', title_needs_refinement = 0 WHERE id = ?",
+      )
+      .run(t, id)
+    this.db.prepare('DELETE FROM task_title_jobs WHERE task_id = ?').run(id)
     return this.getTask(id)
   }
 
-  /** An AI-written title. Unless forced (an explicit "Rename with AI"), a title the user typed is left alone. */
-  setGeneratedTitle(id: string, title: string, force = false): Task {
+  /** Apply only to the captured revision; deliberate edits and newer requests always win. */
+  setGeneratedTitle(id: string, title: string, force = false, revision?: number, needsRefinement = false): Task {
     this.getTask(id)
+    const cleaned = cleanLabel(title)
+    if (!cleaned) return this.getTask(id)
     this.db
-      .prepare("UPDATE tasks SET title = ?, title_source = 'ai' WHERE id = ? AND (title_source != 'manual' OR ?)")
-      .run(cleanLabel(title) || 'New thread', id, force ? 1 : 0)
+      .prepare(
+        `UPDATE tasks SET title = ?, title_source = 'ai', title_revision = title_revision + 1,
+        title_generation_state = 'complete', title_needs_refinement = ?
+        WHERE id = ? AND (title_source != 'manual' OR ?) AND (? IS NULL OR title_revision = ?)`,
+      )
+      .run(cleaned, needsRefinement ? 1 : 0, id, force ? 1 : 0, revision ?? null, revision ?? null)
+    this.db
+      .prepare(
+        'DELETE FROM task_title_jobs WHERE task_id = ? AND revision < (SELECT title_revision FROM tasks WHERE id = ?)',
+      )
+      .run(id, id)
     return this.getTask(id)
   }
 
@@ -350,6 +370,7 @@ export class Workspace {
         .run(id)
       this.db.prepare('DELETE FROM agent_sessions WHERE task_id = ?').run(id)
       this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id)
+      this.db.prepare('DELETE FROM app_state WHERE key = ?').run(`branch-fallback:${id}`)
       if (removeWorktrees && workspaceId) {
         this.db.prepare('DELETE FROM bindings WHERE task_id = ?').run(workspaceId)
         this.db.prepare('DELETE FROM workspaces WHERE id = ?').run(workspaceId)
@@ -400,8 +421,27 @@ export class Workspace {
     this.db.prepare('DELETE FROM repositories WHERE id = ?').run(id)
   }
 
+  async worktreeUnavailable(projectId: string): Promise<string | null> {
+    this.getProject(projectId)
+    const repos = this.listRepositories(projectId)
+    if (!repos.length) return 'This project has no repositories'
+    for (const repo of repos) {
+      if (!existsSync(join(repo.root, '.git'))) return `${repo.name} is not a Git repository`
+      if (!(await gitCli.headOid(repo.root))) return `${repo.name} has no commits to branch from`
+    }
+    return null
+  }
+
   /** Worktree paths and branch names that createTask would use, shown to the user before creation. */
-  async planWorktrees(projectId: string, title: string, repoIds: string[]): Promise<WorktreePlanEntry[]> {
+  async planWorktrees(
+    projectId: string,
+    title: string,
+    repoIds: string[],
+    prefix = 'ramu/',
+    choice?: BranchChoice,
+  ): Promise<WorktreePlanEntry[]> {
+    if (choice && (!validBranchName(choice.name) || choice.name.length > 160))
+      throw new Error('Invalid Git branch name')
     const project = this.getProject(projectId)
     const slug = slugify(title)
     const taskDir = this.uniqueDir(join(this.worktreesRoot, slugify(project.name), slug))
@@ -414,18 +454,54 @@ export class Workspace {
         throw new Error(
           `${repo.name} is not a Git repository. Initialize it in Source Control to use isolated worktrees.`,
         )
-      const baseRef = (await gitCli.currentBranch(repo.root)) ?? (await gitCli.headOid(repo.root))
-      if (!baseRef) throw new Error(`${repo.name} has no commits to branch from`)
-      let taskBranch = `ramu/${slug}${suffix}`
-      for (let n = 2; await gitCli.branchExists(repo.root, taskBranch); n++) taskBranch = `ramu/${slug}${suffix}-${n}`
-      plan.push({ repoId, repoName: repo.name, baseRef, taskBranch, path: join(taskDir, repo.name) })
+      const baseOid = await gitCli.headOid(repo.root)
+      const baseRef = (await gitCli.currentBranch(repo.root)) ?? baseOid
+      if (!baseRef || !baseOid) throw new Error(`${repo.name} has no commits to branch from`)
+      const stem = choice ? choice.name : `${branchForTitle(title, prefix)}${suffix}`
+      const reserved = (
+        this.db
+          .prepare("SELECT task_branch AS branch FROM bindings WHERE repo_id = ? AND mode = 'worktree'")
+          .all(repoId) as { branch: string }[]
+      ).map((b) => b.branch.toLowerCase())
+      const names = new Set([...(await gitCli.branches(repo.root)).map((b) => b.name.toLowerCase()), ...reserved])
+      let taskBranch = stem
+      for (
+        let n = 2;
+        [...names].some(
+          (name) =>
+            name === taskBranch.toLowerCase() ||
+            name.startsWith(`${taskBranch.toLowerCase()}/`) ||
+            taskBranch.toLowerCase().startsWith(`${name}/`),
+        );
+        n++
+      ) {
+        if (choice?.source === 'manual') throw new Error(`Branch ${choice.name} is already taken in ${repo.name}`)
+        if (n > 1000) throw new Error('No available worktree branch name')
+        taskBranch = `${stem}-${n}`
+      }
+      plan.push({ repoId, repoName: repo.name, baseRef, baseOid, taskBranch, path: join(taskDir, repo.name) })
     }
     return plan
   }
 
   private uniqueDir(base: string): string {
     let dir = base
-    for (let n = 2; existsSync(dir); n++) dir = `${base}-${n}`
+    const existingNames = new Set(
+      existsSync(dirname(base)) ? readdirSync(dirname(base)).map((name) => name.toLowerCase()) : [],
+    )
+    const reserved = new Set(
+      (this.db.prepare("SELECT cwd FROM bindings WHERE mode = 'worktree'").all() as { cwd: string }[]).map((b) =>
+        dirname(b.cwd).toLowerCase(),
+      ),
+    )
+    for (
+      let n = 2;
+      existingNames.has(basename(dir).toLowerCase()) || existsSync(dir) || reserved.has(dir.toLowerCase());
+      n++
+    ) {
+      if (n > 1000) throw new Error('No available worktree directory')
+      dir = `${base}-${n}`
+    }
     return dir
   }
 
@@ -433,7 +509,54 @@ export class Workspace {
    * Creates the task and its bindings. Current-checkout bindings are ready immediately and
    * touch nothing in Git. Worktree bindings are recorded as pending; call setupTask to create them.
    */
-  async createTask(input: CreateTaskInput, plan?: WorktreePlanEntry[]): Promise<Task> {
+  private readonly preparingNames = new Map<string, { fingerprint: string; promise: Promise<Task> }>()
+
+  createTask(
+    input: CreateTaskInput,
+    plan?: WorktreePlanEntry[],
+    prepareName?: () => Promise<BranchChoice>,
+  ): Promise<Task> {
+    const fingerprint = JSON.stringify(input)
+    if (input.requestId) {
+      const previous = this.getAppState<{ taskId: string; fingerprint: string } | null>(
+        `task-request:${input.requestId}`,
+        null,
+      )
+      if (previous)
+        return previous.fingerprint === fingerprint
+          ? Promise.resolve(this.getTask(previous.taskId))
+          : Promise.reject(new Error('Creation request was already used with different inputs'))
+      const preparing = this.preparingNames.get(input.requestId)
+      if (preparing)
+        return preparing.fingerprint === fingerprint
+          ? preparing.promise
+          : Promise.reject(new Error('Creation request was already used with different inputs'))
+    }
+    // Slow inference stays outside the global allocation lock. Allocation rechecks idempotency.
+    const promise = (async () => {
+      const choice =
+        input.mode === 'worktree' && !input.workspaceId ? (input.branchChoice ?? (await prepareName?.())) : undefined
+      return this.allocation.run('create', () => this.allocateTask(input, plan, choice))
+    })()
+    if (input.requestId) {
+      const key = input.requestId
+      this.preparingNames.set(key, { fingerprint, promise })
+      void promise.finally(() => this.preparingNames.delete(key)).catch(() => {})
+    }
+    return promise
+  }
+
+  private async allocateTask(input: CreateTaskInput, plan?: WorktreePlanEntry[], choice?: BranchChoice): Promise<Task> {
+    const requestKey = input.requestId ? `task-request:${input.requestId}` : null
+    const fingerprint = JSON.stringify(input)
+    if (requestKey) {
+      const previous = this.getAppState<{ taskId: string; fingerprint: string } | null>(requestKey, null)
+      if (previous) {
+        if (previous.fingerprint !== fingerprint)
+          throw new Error('Creation request was already used with different inputs')
+        return this.getTask(previous.taskId)
+      }
+    }
     const title = cleanLabel(input.title)
     if (!title) throw new Error('Thread title is required')
     // Repositories belong to the project: a task always covers all of them.
@@ -455,13 +578,23 @@ export class Workspace {
       if (plan) throw new Error('An existing workspace does not need a worktree plan')
     }
     if (input.mode === 'worktree' && !input.workspaceId) {
-      plan ??= await this.planWorktrees(
+      const expected = plan
+      plan = await this.planWorktrees(
         input.projectId,
         title,
         repos.map((r) => r.id),
+        input.branchPrefix,
+        choice,
       )
-      if (plan.length !== repos.length || !repos.every((r) => plan!.some((p) => p.repoId === r.id))) {
-        throw new Error('Worktree plan does not match the selected repositories')
+      if (expected) {
+        if (expected.length !== repos.length || !repos.every((r) => expected.some((p) => p.repoId === r.id)))
+          throw new Error('Worktree plan does not match the selected repositories')
+        for (const entry of expected) {
+          const actual = plan.find((p) => p.repoId === entry.repoId)!
+          if (entry.baseOid && entry.baseOid !== actual.baseOid)
+            throw new Error('Repository HEAD changed since preview. Review the worktree plan and try again.')
+          // Paths and branch names are advisory. Only the server allocates mutation targets.
+        }
       }
     }
 
@@ -498,6 +631,16 @@ export class Workspace {
           insertBinding.run(task.workspaceId!, repo.id, 'worktree', p.path, p.taskBranch, p.baseRef, 'pending')
         }
       }
+      if (plan && task.workspaceId && !input.workspaceId)
+        this.setAppState(
+          `worktree-bases:${task.workspaceId}`,
+          Object.fromEntries(plan.map((p) => [p.repoId, p.baseOid])),
+        )
+      if (choice?.source === 'fallback') {
+        task.branchNamingFallback = true
+        this.setAppState(`branch-fallback:${task.id}`, true)
+      }
+      if (requestKey) this.setAppState(requestKey, { taskId: task.id, fingerprint })
       this.db.exec('COMMIT')
     } catch (err) {
       this.db.exec('ROLLBACK')
@@ -507,20 +650,46 @@ export class Workspace {
   }
 
   /** Creates pending worktrees. Safe to call again after a partial failure: only unfinished bindings run. */
-  async setupTask(taskId: string): Promise<RepositoryBinding[]> {
+  setupTask(taskId: string): Promise<RepositoryBinding[]> {
+    return this.allocation.run(`setup:${this.workspaceIdOf(taskId) ?? taskId}`, () => this.setupBindings(taskId))
+  }
+
+  private async setupBindings(taskId: string): Promise<RepositoryBinding[]> {
     for (const b of this.listBindings(taskId)) {
       if (b.mode !== 'worktree' || b.setupState === 'ready') continue
       const repo = this.getRepository(b.repoId)
       try {
+        const workspaceId = this.workspaceIdOf(taskId)!
+        const baseOid = this.getAppState<Record<string, string>>(`worktree-bases:${workspaceId}`, {})[b.repoId]
+        const ownershipKey = `worktree-branch:${workspaceId}:${b.repoId}`
         const registered = await this.registeredWorktree(repo.root, b.cwd)
         if (!registered) {
+          await mkdir(this.worktreesRoot, { recursive: true })
+          const root = await realpath(this.worktreesRoot)
+          let ancestor = dirname(b.cwd)
+          while (!existsSync(ancestor)) ancestor = dirname(ancestor)
+          if (!isWithin(root, await realpath(ancestor))) throw new Error('Worktree directory escaped the managed root')
           await mkdir(join(b.cwd, '..'), { recursive: true })
+          if (!isWithin(root, await realpath(dirname(b.cwd))))
+            throw new Error('Worktree directory escaped the managed root')
+          await gitCli.git(repo.root, ['check-ref-format', '--branch', b.taskBranch!])
           if (await gitCli.branchExists(repo.root, b.taskBranch!)) {
-            // A previous attempt created the branch but not the worktree.
-            await gitCli.worktreeAddExistingBranch(repo.root, b.cwd, b.taskBranch!)
+            const owned = this.getAppState<string | null>(ownershipKey, null)
+            const actual = (
+              await gitCli.git(repo.root, ['rev-parse', '--verify', `refs/heads/${b.taskBranch!}`])
+            ).trim()
+            if (!owned || owned !== actual)
+              throw new Error(
+                'Worktree branch already exists without matching ownership. Resolve the conflict before retrying setup.',
+              )
           } else {
-            await gitCli.worktreeAdd(repo.root, b.cwd, b.taskBranch!, b.baseRef!)
+            const oid = baseOid ?? (await gitCli.git(repo.root, ['rev-parse', '--verify', b.baseRef!])).trim()
+            await gitCli.git(repo.root, ['branch', '--', b.taskBranch!, oid])
+            this.setAppState(ownershipKey, oid)
           }
+          await gitCli.worktreeAddExistingBranch(repo.root, b.cwd, b.taskBranch!)
+        } else if ((await gitCli.currentBranch(b.cwd)) !== b.taskBranch) {
+          throw new Error('Registered worktree no longer uses its recorded branch')
         }
         const cwd = await realpath(b.cwd)
         this.db
@@ -578,6 +747,15 @@ export class Workspace {
       )
       .all(workspaceId) as unknown as BindingRow[]
     return rows.map((row) => ({ ...toBinding(row), taskId: ctx }))
+  }
+
+  /** Explorer must never allocate a project-free folder just by opening a read surface. */
+  explorerBindings(ctx: string): RepositoryBinding[] {
+    if (this.projectIdOf(ctx) === NO_PROJECT) {
+      const folder = join(this.worktreesRoot, '..', 'chats', isProjectCtx(ctx) ? 'general' : this.getTask(ctx).id)
+      if (!existsSync(folder)) return []
+    }
+    return this.fileBindings(ctx)
   }
 
   /** File surfaces also expose each project-free chat's existing working folder. */

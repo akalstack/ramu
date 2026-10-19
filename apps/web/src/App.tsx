@@ -4,6 +4,7 @@ import { BackgroundActivity } from './chat/BackgroundActivity'
 import { AppUpdateNotice } from './settings/AppUpdates'
 import { animatePanelChange, cancelPanelMotion } from './workspace/panelMotion'
 import { errorText } from './lib/errors'
+import { useSidebarWidth } from './workspace/panelLayout'
 import { t, useLanguage } from './i18n'
 import { Kbd } from '@/components/ui/kbd'
 import { ProviderSetupTerminal } from './models/ProviderSetupTerminal'
@@ -35,7 +36,7 @@ import { buildCommands, formatKeys, useKeybindings } from './commands'
 import { Palette } from './palette/Palette'
 import type { PaletteMode } from './palette/sources'
 import { copyText, invoke, ramu } from './ipc'
-import { setShownTerminal, useUnseenTerminalOutput } from './workspace/terminalActivity'
+import { useUnseenTerminalOutput } from './workspace/terminalActivity'
 import { Dropdown, useContextMenu } from './Menu'
 import { WorkspaceSyncDialog } from './WorkspaceSync'
 import type { GitBranchInfo, GitStatus } from '@ramu/shared/types'
@@ -69,21 +70,45 @@ import { paneFadeIn } from './workspace/paneMotion'
 import { ComputerSwitcher, useComputers } from './workspace/computers'
 import { useAddProject } from './workspace/addProject'
 import { HostProjects } from './sidebar/HostProjects'
-import { navigateHost } from './workspace/hostOverview'
 import { HostNavigation } from './workspace/HostNavigation'
+import { ActiveHostSettings } from './settings/hostPreferences'
+import { HostSelectionProvider, useHostSelection } from './workspace/HostSelection'
+import { useHost } from './workspace/HostProvider'
 import { TaskPane } from './workspace/TaskPane'
-import { isWorkspaceCtx, worktreeCtx, projectCtx, useWorkspace, WorkspaceProvider } from './workspace/workspace'
+import {
+  isWorkspaceCtx,
+  worktreeCtx,
+  projectCtx,
+  useHostRuntime,
+  useWorkspace,
+  WorkspaceProvider,
+} from './workspace/workspace'
 
 export function App({ onReady }: { onReady?: () => void }) {
   useLanguage()
 
   return (
     <AppSettingsProvider>
-      <ModelSetsProvider>
-        <WorkspaceProvider>
-          {(loaded) => (loaded ? <ReadyShell onReady={onReady} /> : <BootScreen />)}
-        </WorkspaceProvider>
-      </ModelSetsProvider>
+      <HostSelectionProvider>
+        {(activeHost) => (
+          <>
+            <HostNavigation />
+            <WorkspaceProvider activeHost={activeHost}>
+              {(loaded) =>
+                loaded ? (
+                  <ActiveHostSettings>
+                    <ModelSetsProvider>
+                      <ReadyShell onReady={onReady} />
+                    </ModelSetsProvider>
+                  </ActiveHostSettings>
+                ) : (
+                  <BootScreen />
+                )
+              }
+            </WorkspaceProvider>
+          </>
+        )}
+      </HostSelectionProvider>
     </AppSettingsProvider>
   )
 }
@@ -96,7 +121,6 @@ function ReadyShell({ onReady }: { onReady?: () => void }) {
   }, [onReady])
   return (
     <>
-      <HostNavigation />
       <Shell />
       <Onboarding />
     </>
@@ -108,6 +132,8 @@ function Shell() {
 
   const ws = useWorkspace()
   const computers = useComputers()
+  const { activeHost, select } = useHostSelection()
+  const { invoke: hostInvoke } = useHost()
   const { ui } = ws
   const addProject = useAddProject()
   const [createScheduleRequested, setCreateScheduleRequested] = useState(false)
@@ -120,17 +146,15 @@ function Shell() {
       () => !!document.querySelector('.shell.no-sidebar'),
     )
   const { preferences, save } = useAppSettings()
-  const latest = useRef({ preferences, save })
-  latest.current = { preferences, save }
-  const saveLayout = (patch: Partial<typeof preferences>) =>
-    void latest.current
-      .save({ ...latest.current.preferences, ...patch })
-      .catch((reason) => notifyError(errorText(reason), 'Settings'))
+  // The sidebar width is shared by every host's window (device-wide); `preferences.sidebarWidth` only seeds it.
+  const [sidebarWidth, setSidebarWidth] = useSidebarWidth(preferences.sidebarWidth)
+  const currentSidebarWidth = useRef(sidebarWidth)
+  currentSidebarWidth.current = sidebarWidth
   // The sidebar, main area and tools column are panels of one group. Their default sizes always mirror the
   // current ones, so the group keeps them when another panel joins or leaves.
   const sidebarPanel = usePanelRef()
-  const [navWidth, setNavWidth] = useState(preferences.sidebarWidth)
-  const [expandedWidth, setExpandedWidth] = useState(preferences.sidebarWidth)
+  const [navWidth, setNavWidth] = useState(sidebarWidth)
+  const [expandedWidth, setExpandedWidth] = useState(sidebarWidth)
   const onSidebarResize = (size: PanelSize) => {
     const width = Math.round(size.inPixels)
     setNavWidth(width)
@@ -138,11 +162,11 @@ function Shell() {
     if (width > 0 && !collapsed) setExpandedWidth(width)
     setSidebarHidden((hidden) => (hidden === collapsed ? hidden : collapsed))
   }
-  // Dragging remembers sizes; the sidebar width is a preference, the tools column a layout size.
+  // Dragging remembers sizes: the sidebar width and the tools column are device-wide layout sizes.
   const onShellLayout = (_layout: Layout, meta: { isUserInteraction: boolean }) => {
     if (!meta.isUserInteraction) return
     const sidebar = Math.round(sidebarPanel.current?.getSize().inPixels ?? 0)
-    if (sidebar > 0 && sidebar !== latest.current.preferences.sidebarWidth) saveLayout({ sidebarWidth: sidebar })
+    if (sidebar > 0 && sidebar !== currentSidebarWidth.current) setSidebarWidth(sidebar)
   }
   useLayoutEffect(() => {
     const panel = sidebarPanel.current
@@ -157,9 +181,9 @@ function Shell() {
   // Settings → reset layout sizes (and any other change of the saved width) applies to the live panel.
   useEffect(() => {
     const panel = sidebarPanel.current
-    if (panel && !panel.isCollapsed() && Math.abs(panel.getSize().inPixels - preferences.sidebarWidth) > 1)
-      panel.resize(preferences.sidebarWidth)
-  }, [preferences.sidebarWidth])
+    if (panel && !panel.isCollapsed() && Math.abs(panel.getSize().inPixels - sidebarWidth) > 1)
+      panel.resize(sidebarWidth)
+  }, [sidebarWidth])
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance')
   const [settingsTarget, setSettingsTarget] = useState<string | undefined>()
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -202,12 +226,13 @@ function Shell() {
         {
           ...ws,
           newTask: (projectId) => {
-            if (projectId === undefined && computers?.scope) navigateHost(computers.scope, { kind: 'new' })
+            if (projectId === undefined && computers?.scope) select(computers.scope, { kind: 'new' })
             else ws.newTask(projectId)
           },
         },
         {
           defaultTerminalDock: preferences.defaultTerminalDock,
+          invoke: hostInvoke,
           openPalette: setPalette,
           toggleSidebar,
           addProject: () => void addProject.add(),
@@ -245,7 +270,17 @@ function Shell() {
           }))
         : []),
     ],
-    [ws, computers?.scope, language, actionContext, projectActions, addProject.busy, preferences.defaultTerminalDock],
+    [
+      ws,
+      computers?.scope,
+      select,
+      hostInvoke,
+      language,
+      actionContext,
+      projectActions,
+      addProject.busy,
+      preferences.defaultTerminalDock,
+    ],
   )
   useKeybindings(commands, palette === null && !settingsOpen && !searchingChats)
   useEffect(() => {
@@ -303,14 +338,18 @@ function Shell() {
   ).size
   // Output from a terminal nobody is looking at: a dot on the Terminal button until the panel is opened.
   // Only this workspace's terminals count, and a freshly opened shell's startup output doesn't (see terminalActivity).
-  const terminalUnseen = useUnseenTerminalOutput(activeWorkspace)
-  useLayoutEffect(() => setShownTerminal(terminalShown ? activeWorkspace : null), [terminalShown, activeWorkspace])
+  const { activity } = useHostRuntime()
+  const terminalUnseen = useUnseenTerminalOutput(activity, activeWorkspace)
+  useLayoutEffect(
+    () => activity.setShownTerminal(terminalShown ? activeWorkspace : null),
+    [activity, terminalShown, activeWorkspace],
+  )
   const recaps = useRecaps()
   // What Inbox's Waiting tab holds: threads waiting on you and recaps that need a decision.
   const inboxCount =
     ws.tasks.filter((task) => task.status === 'needs-input').length +
     recaps.attention.length +
-    (computers?.computers.filter((c) => c.id !== computers.current).reduce((sum, c) => sum + c.needsInput, 0) ?? 0)
+    (computers?.computers.filter((c) => c.id !== activeHost).reduce((sum, c) => sum + c.needsInput, 0) ?? 0)
   const attentionChats = ws.tasks.filter(
     (task) => task.status !== 'archived' && (ws.unread.has(task.id) || task.status === 'needs-input'),
   ).length
@@ -486,7 +525,7 @@ function Shell() {
           collapsedSize={0}
           minSize={SIDEBAR_WIDTH_RANGE[0]}
           maxSize={SIDEBAR_WIDTH_RANGE[1]}
-          defaultSize={preferences.sidebarWidth}
+          defaultSize={sidebarWidth}
           onResize={onSidebarResize}
         >
           <aside
@@ -501,7 +540,7 @@ function Shell() {
                 <Button
                   variant="secondary"
                   className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] flex-1 min-w-0 bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start"
-                  onClick={() => (computers?.scope ? navigateHost(computers.scope, { kind: 'new' }) : ws.newTask())}
+                  onClick={() => (computers?.scope ? select(computers.scope, { kind: 'new' }) : ws.newTask())}
                 >
                   <SquarePen data-icon="inline-start" />{' '}
                   <span className="grow flex-1 min-w-0 truncate text-left">{t('New thread')}</span>{' '}
@@ -579,7 +618,7 @@ function Shell() {
             className="bg-transparent"
             onDoubleClick={() => {
               sidebarPanel.current?.resize(DEFAULT_SIDEBAR_WIDTH)
-              saveLayout({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH })
+              setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)
             }}
           />
         )}
@@ -641,7 +680,9 @@ function Shell() {
 function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode }) {
   useLanguage()
   const computers = useComputers()
-  const host = computers?.computers.find((c) => c.id === computers.current)
+  const { activeHost } = useHostSelection()
+  const { invoke } = useHost()
+  const host = computers?.computers.find((c) => c.id === activeHost)
 
   const ws = useWorkspace()
   const ctx = ws.ui.activeTaskId
@@ -780,6 +821,8 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
   useLanguage()
 
   const ws = useWorkspace()
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
   const taskId = ws.ui.activeTaskId
   const state = taskId ? ws.taskUi[taskId] : undefined
   const view = state?.views.find((v) => v.id === state.activeViewId)
@@ -822,7 +865,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
         window.dispatchEvent(new Event('ramu:git-updated'))
       }
     })
-  }, [taskId, binding?.repoId, binding?.setupState])
+  }, [taskId, binding?.repoId, binding?.setupState, invoke])
   useAutoFetch(binding?.setupState === 'ready' ? autoFetch : null)
 
   useEffect(() => {
@@ -848,7 +891,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
     }
     void load()
     // Like VS Code, skip file-change refreshes while a git operation runs; 'ramu:git-updated' refreshes once it finishes.
-    const off = ramu.on('fs:changed', ({ cwd }) => {
+    const off = on('fs:changed', ({ cwd }) => {
       if (cwd === binding.cwd && !isGitBusy(taskId, binding.repoId)) refresh()
     })
     window.addEventListener('ramu:git-updated', refresh)
@@ -858,7 +901,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
       clearTimeout(timer)
       window.removeEventListener('ramu:git-updated', refresh)
     }
-  }, [taskId, binding?.repoId, binding?.cwd, binding?.setupState, revision])
+  }, [taskId, binding?.repoId, binding?.cwd, binding?.setupState, revision, invoke, on])
 
   if (!binding || !taskId)
     return (

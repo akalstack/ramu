@@ -1,5 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react'
 import { useDiffLayout } from '../git/diffLayout'
+import { deviceStorage } from '../deviceStorage'
 
 const NARROW_REVIEW = 720
 
@@ -10,7 +11,7 @@ export function useReviewLayout(root: RefObject<HTMLDivElement | null>, reviewId
   const [narrow, setNarrow] = useState(false)
   const [treeOpen, setTreeOpen] = useState(() => {
       try {
-        return localStorage.getItem('ramu.review-tree') !== 'closed'
+        return deviceStorage.getItem('ramu.review-tree') !== 'closed'
       } catch {
         return true
       }
@@ -24,7 +25,7 @@ export function useReviewLayout(root: RefObject<HTMLDivElement | null>, reviewId
     }
     setTreeOpen(!treeOpen)
     try {
-      localStorage.setItem('ramu.review-tree', treeOpen ? 'closed' : 'open')
+      deviceStorage.setItem('ramu.review-tree', treeOpen ? 'closed' : 'open')
     } catch {}
   }
   const split = sideBySide && !narrow

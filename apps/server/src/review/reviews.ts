@@ -904,7 +904,10 @@ Conversation evidence: ${JSON.stringify(conversation)}
 <change-data>
 ${JSON.stringify(data)}
 </change-data>`
-      const response = await this.agents.analyze(prompt, this.agents.get(review.sessionId).settings)
+      // A usage limit pauses the review and retries after the reset instead of failing it.
+      const response = await this.agents.analyze(prompt, this.agents.get(review.sessionId).settings, undefined, {
+        defer: true,
+      })
       const findings = findingSchema.parse(
         JSON.parse(response.message.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')),
       )

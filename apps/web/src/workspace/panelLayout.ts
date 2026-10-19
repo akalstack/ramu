@@ -1,5 +1,9 @@
-import { useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import { DEFAULT_SIDEBAR_WIDTH, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
 import { useDefaultLayout, useGroupRef, type Layout, type LayoutStorage } from 'react-resizable-panels'
+import { ownHostId } from '../hosts'
+import { deviceStorage } from '../deviceStorage'
+import { clearOwnHostLayout, hostStorageFor } from '../hostStorage'
 
 /**
  * Panel layouts are remembered per group and per set of visible panels (chat + editor,
@@ -7,9 +11,40 @@ import { useDefaultLayout, useGroupRef, type Layout, type LayoutStorage } from '
  * exactly what the user last left it at instead of recomputing from fixed pixel widths.
  */
 const PREFIX = 'ramu.layout.'
+/** Device-wide, like the sidebar width: the group layouts here (Source Control's panes) look the same in every host's window. */
 const storage: LayoutStorage = {
-  getItem: (key) => localStorage.getItem(PREFIX + key),
-  setItem: (key, value) => localStorage.setItem(PREFIX + key, value),
+  getItem: (key) => deviceStorage.getItem(PREFIX + key),
+  setItem: (key, value) => deviceStorage.setItem(PREFIX + key, value),
+}
+/** The shell's sidebar width, shared by every host's window. `preferences.sidebarWidth` is only its starting value. */
+export const SIDEBAR_WIDTH_KEY = 'ramu.sidebar-width'
+
+/** Parses a stored sidebar width; anything outside the allowed range counts as unset. */
+export function parseSidebarWidth(raw: string | null): number | null {
+  const value = raw === null ? NaN : Number(raw)
+  return Number.isInteger(value) && value >= SIDEBAR_WIDTH_RANGE[0] && value <= SIDEBAR_WIDTH_RANGE[1] ? value : null
+}
+
+/**
+ * The shared sidebar width, live across windows. Until a width has been stored the host's saved preference applies,
+ * and is then stored once so every host's window starts from the same value.
+ */
+export function useSidebarWidth(preferred: number): [number, (width: number) => void] {
+  const raw = useSyncExternalStore(
+    (listener) => deviceStorage.subscribe((key) => key === SIDEBAR_WIDTH_KEY && listener()),
+    () => deviceStorage.getItem(SIDEBAR_WIDTH_KEY),
+  )
+  const stored = parseSidebarWidth(raw)
+  const lastPreferred = useRef(preferred)
+  useEffect(() => {
+    const changed = lastPreferred.current !== preferred
+    lastPreferred.current = preferred
+    // Seed once, and follow the preference when it is saved or reset (Settings), so those still move the sidebar.
+    if ((stored === null || changed) && parseSidebarWidth(String(preferred)) !== null)
+      deviceStorage.setItem(SIDEBAR_WIDTH_KEY, String(preferred))
+  }, [stored, preferred])
+  const set = useCallback((width: number) => deviceStorage.setItem(SIDEBAR_WIDTH_KEY, String(Math.round(width))), [])
+  return [stored ?? preferred, set]
 }
 
 let epoch = 0
@@ -29,7 +64,9 @@ export function useLayoutEpoch() {
 }
 
 export function resetPanelLayouts() {
-  for (const key of Object.keys(localStorage)) if (key.startsWith(PREFIX)) localStorage.removeItem(key)
+  for (const key of deviceStorage.keys(PREFIX)) deviceStorage.removeItem(key)
+  deviceStorage.setItem(SIDEBAR_WIDTH_KEY, String(DEFAULT_SIDEBAR_WIDTH))
+  clearOwnHostLayout()
   epoch++
   listeners.forEach((listener) => listener())
 }
@@ -52,8 +89,8 @@ export function usePanelLayout(id: string, panelIds: string[], fallback: (panelI
   return { groupRef: group, defaultLayout: wanted, onLayoutChanged, size }
 }
 
-/** A single pixel size (a sidebar or tool column) remembered across launches. */
-export function readSize(key: string, fallback: number) {
-  const value = Number(localStorage.getItem(PREFIX + key))
+/** A single per-workspace size (a split share) remembered across launches, under this window's host. */
+export function readSize(key: string, fallback: number, host = ownHostId()) {
+  const value = Number(hostStorageFor(host).getItem(PREFIX + key))
   return Number.isFinite(value) && value > 0 ? value : fallback
 }

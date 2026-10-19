@@ -1,38 +1,30 @@
 # Remote access hardening plan
 
-Review of pairing and remote access (`apps/server/src/remote`, `apps/server/src/index.ts`, `apps/mobile`, `packages/client-runtime`), 2026-10-17, made from the code and docs. Nothing here is implemented yet.
+Remaining work after the server access-boundary changes. Current policy and configuration are documented in [Security](../SECURITY.md#remote-access).
 
-A paired device can run terminals and agents with the host's provider credentials. Remote access is the most powerful and least hardened part of Ramu, so it comes first among the plans from this review.
+## Smallest usable delivery
 
-## What is already good
+A person pairs a device with a clear access role, uses its permitted thread actions, and can recover an expired or changed connection through existing host/device settings. Deliver renewal, viewer controls and native transport independently where their prerequisites permit; transport protections remain release gates. Explain connection/access problems with a concrete next action rather than proof/token terminology. Optional client-key evaluation must demonstrate a benefit before becoming implementation scope or adding user controls. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
-- Pairing codes are single-use, expire in 10 minutes, are limited to 5 pending, and only their SHA-256 hash is stored.
-- Each device has its own 256-bit token, stored only as a hash in a `0600` file. Revocation applies without a restart.
-- Per-IP rate limiting with backoff covers `/pair` and token failures.
-- A non-loopback `--listen` is refused without TLS or `--private-network`.
+## Ramu design and architecture
 
-## Findings
-
-Ordered by impact.
-
-1. **Device tokens never expire.** There is no rotation or refresh; a lost phone stays valid until someone revokes it by hand. A legacy shared token also keeps working in parallel and does not expire.
-2. **Every paired device is fully privileged.** There is no read-only or scoped role. A phone used only to approve requests can still open a terminal.
-3. **Weak transport posture on mobile.** `apps/mobile/app.json` sets `NSAllowsArbitraryLoads: true`, there is no certificate pinning, and a self-signed or private-CA host has no special handling. Plain HTTP pairing is gated only by a consent prompt.
-4. **Broad CORS.** Remote responses send `Access-Control-Allow-Origin: *`. Bearer auth limits the risk, but nothing needs a wildcard.
-5. **Security docs say nothing about remote access.** `SECURITY.md` is 9 lines and never mentions pairing; the one warning about paired-device power lives in `docs/HEADLESS-SERVER.md` and CLI help.
-6. **Test gaps.** `devices.test.ts` covers the store, but nothing exercises the `/pair` HTTP route, the rate limiter, or the 429 path.
-7. **No relay and no end-to-end encryption.** Documented and deliberate, so this is a product limit, not a defect. It does mean security rests on the user's network.
+Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend existing `remote/` authentication, pairing, device records and access allowlists; keep renewal inside the established client/runtime transport instead of a second session system. Server protocol/capability changes use `packages/contracts` and current validated RPC/event paths. Native iOS/Android transport adapters belong in mobile; Electron/native dependencies must not enter the headless server or pure shared code. Add lifetime/role controls to existing host Settings/device rows with composed app controls and native mobile patterns, semantic tokens, localization and accessible explanations. Hiding a viewer action supplements server authorization, never replaces it.
 
 ## Plan
 
-Do steps 1–3 before any wider mobile distribution.
+1. **Rotating renewal.** Inactive device credentials now expire after 90 days by default, configurable through `RAMU_DEVICE_TOKEN_DAYS` (`never` is explicit). Active use extends expiry with the existing credential. Implement rotating renewal with durable client acknowledgement and bounded overlap before claiming secret rotation; handle lost responses, concurrent SSE/invoke requests and revoked predecessors. Legacy shared-token authentication is opt-in with `RAMU_ALLOW_LEGACY_TOKEN=1`. Add host UI for choosing token lifetime; expiry is already displayed.
+2. **Viewer client experience.** The host binds owner/viewer access to pairing codes, enforces an explicit viewer RPC allowlist, and offers role selection in Settings/CLI. Add capability-aware mobile/desktop action hiding and explain denied actions. Verify all viewer thread/input hydration paths; permitted approval answers can authorize execution by the existing agent. Do not market this role as untrusted public sharing.
+3. **Mobile transport.** Replace blanket `NSAllowsArbitraryLoads` with an implemented native transport policy for explicitly approved hosts. Pin certificate fingerprints at HTTPS pairing, verify both fetch and SSE transports, and require review when a certificate changes. A dynamic host exception cannot be implemented securely by changing JavaScript URL checks alone.
+4. **Acceptance.** Verify expiry/re-pairing, live stream revocation, viewer request answers and full-access clients on paired desktop/iOS/Android devices. Signing/distribution still requires this native transport work.
 
-1. **Document it.** Add a "Remote access" section to `SECURITY.md`: what a paired device can do, what to expose, how to revoke, and that tokens do not expire yet. Link it from the mobile README pairing step. Small and independent of the rest.
-2. **Token lifetime.** Give device tokens an optional expiry (default 90 days, configurable, "never" allowed) and show it in `ramu devices` and Settings. Add silent renewal on use, so active devices do not need re-pairing, with the renewed token returned over the authenticated channel. Retire the legacy shared token behind a flag, off by default for new data directories.
-3. **Test the pairing surface.** Cover `/pair` success, expired and reused codes, the pending-code cap, the rate limiter and its 429 path, and revoked-token rejection on both `/invoke` and `/events`.
-4. **Device roles.** Add a `viewer` role that can read threads and answer permission and question requests but not run terminals, edit files, change settings, or start agents. Choose the role at pairing; enforce it in the `/invoke` method table, not in the clients.
-5. **Mobile transport.** Replace the blanket `NSAllowsArbitraryLoads` with per-host exceptions for hosts the user explicitly approved. Pin the certificate fingerprint at pairing for HTTPS hosts and warn when it changes.
-6. **Tighten CORS.** Drop the wildcard unless a browser client is explicitly enabled, and restrict origins when it is.
+## T3 Code reference and additional hardening
+
+Use T3 Code as a reference at [`9c161462c94f7d9d6d9169da5c841457cbadf213`](https://github.com/pingdotgg/t3code/tree/9c161462c94f7d9d6d9169da5c841457cbadf213), inspected on 2026-10-18. Its [token exchange](https://github.com/pingdotgg/t3code/blob/9c161462c94f7d9d6d9169da5c841457cbadf213/apps/server/src/auth/http.ts) can bind an access token to a client proof key; its [authentication service](https://github.com/pingdotgg/t3code/blob/9c161462c94f7d9d6d9169da5c841457cbadf213/apps/server/src/auth/EnvironmentAuth.ts) verifies proof-bound requests. This is source evidence of optional proof-bound authentication, not a claim that every T3 connection uses it or rotates its direct-pairing credential.
+
+- **Client-key-bound credential evaluation.** After the existing transport/renewal work, evaluate whether proof-bound device credentials materially reduce bearer-token theft risk in Ramu. Prototype through the existing `remote/` device/auth boundary and versioned contracts, with keys in device-owned secure storage and signing in Electron main/mobile native adapters. Evaluate a standard proof mechanism such as DPoP, including method/URL/token binding, replay protection, clock skew, proxies, key loss and revocation across invoke/fetch and SSE connection establishment. A client proof key authenticates the client; it does not authenticate a discovered host or replace TLS/certificate checks. Record compatibility, storage and recovery evidence before committing to rollout; do not import T3's session architecture or make this evaluation a prerequisite for initial discovery. If adopted, define negotiated capability support and an explicit legacy-device migration without silent downgrade of proof-bound grants.
+- **Pairing and route boundary.** Implement offer cancellation, exact completion, verified stable host identity, safe re-pairing and route-specific credential/transport policy in the [host discovery and pairing plan](HOST-DISCOVERY-PLAN.md#t3-code-reference-and-pairing-enhancements). Preserve Ramu's owner/viewer server allowlists and local administration boundaries. Coordinate identity/key-change review with native certificate handling; neither discovered identifiers nor client-key proofs justify sending stored credentials to an unverified endpoint.
+
+HTTP tests now cover pairing success, expired/reused/evicted codes, retry backoff/429, revocation on invoke/events, role escalation attempts and browser-origin restrictions through the production authentication boundary. Browser CORS requires an exact `RAMU_BROWSER_ORIGINS` allowlist; no wildcard is emitted.
 
 ## Out of scope
 
@@ -40,4 +32,4 @@ A relay and end-to-end encryption are larger designs. Revisit them only after st
 
 ## Verification
 
-Unit tests for steps 2–4 in `apps/server/test`; a mobile test for the per-host exception in `apps/mobile/test`. Run `pnpm --filter @ramu/server test` and `pnpm --filter @ramu/mobile test`.
+Keep renewal and viewer regression tests in `apps/server/test`; add native transport tests and per-host exception tests in `apps/mobile/test`. If client-key binding is adopted, cover replay, wrong key/method/URL/token, skew, reconnect, revocation, key loss and downgrade rejection with server/client adapter tests. Run tests and types scoped to every touched package, including `pnpm --filter @ramu/server test` and `pnpm --filter @ramu/mobile test`. Desktop-facing implementation also requires `pnpm build` followed by the existing `pnpm test:desktop-smoke`.

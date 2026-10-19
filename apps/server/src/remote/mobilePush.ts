@@ -1,9 +1,23 @@
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
 import type { AgentEvent, AgentSessionInfo, ChatGoal } from '@ramu/shared/types'
+import { goalContinues } from '@ramu/shared/chat/goalHold'
+/**
+ * What a phone can switch on or off. `done` and `failed` cover ordinary threads; a thread started by a schedule that finishes
+ * or fails counts as `scheduled` instead, so scheduled work can be muted on its own, and so does a scheduled run that could
+ * not start a thread at all. `input` covers every thread. `digest` is the once-a-day "your recap is ready" note.
+ */
+export const PUSH_CATEGORIES = ['input', 'failed', 'done', 'scheduled', 'digest'] as const
+export type PushCategory = (typeof PUSH_CATEGORIES)[number]
+/** Off until a phone asks for them: a registration that lists no categories (an older app) does not get these. */
+export const OPT_IN_CATEGORIES: readonly PushCategory[] = ['digest']
+/** Where a tap on a push that is not about one thread goes; see `pushTarget` in the mobile app. */
+export type PushTarget = 'schedules' | 'recaps'
 interface Registration {
   deviceId: string
   token: string
   computerId: string
+  /** Absent means every category except the opt-in ones, as for phones registered before the switches existed. */
+  categories?: PushCategory[]
 }
 interface Ticket {
   status: 'ok' | 'error'
@@ -20,6 +34,7 @@ export class MobilePush {
     private path: string,
     private devices: () => { id: string }[],
     private request: typeof fetch = fetch,
+    private isScheduled: (sessionId: string) => boolean = () => false,
   ) {
     try {
       this.registrations = JSON.parse(readFileSync(path, 'utf8'))
@@ -30,14 +45,20 @@ export class MobilePush {
     writeFileSync(temp, JSON.stringify(this.registrations), { mode: 0o600 })
     renameSync(temp, this.path)
   }
-  register(deviceId: string, token: string, computerId: string) {
+  register(deviceId: string, token: string, computerId: string, categories?: unknown) {
     if (!this.devices().some((d) => d.id === deviceId)) throw new Error('Pair this phone before registering push')
     if (
       !/^(ExponentPushToken|ExpoPushToken)\[[a-zA-Z0-9_-]{10,200}\]$/.test(token) ||
       !/^[a-zA-Z0-9_-]{1,100}$/.test(computerId)
     )
       throw new Error('Invalid push registration')
-    this.registrations = [...this.registrations.filter((r) => r.deviceId !== deviceId), { deviceId, token, computerId }]
+    const chosen = Array.isArray(categories)
+      ? PUSH_CATEGORIES.filter((category) => (categories as unknown[]).includes(category))
+      : undefined
+    this.registrations = [
+      ...this.registrations.filter((r) => r.deviceId !== deviceId),
+      { deviceId, token, computerId, ...(chosen ? { categories: chosen } : {}) },
+    ]
     this.save()
   }
   remove(deviceId: string) {
@@ -63,7 +84,7 @@ export class MobilePush {
         if (
           event.state === 'idle' &&
           ['running', 'starting'].includes(previous) &&
-          (!goal || !['active', 'waiting-provider', 'blocked'].includes(goal.status))
+          (!goal || !(goalContinues(goal) || goal.status === 'blocked'))
         )
           kind = 'done'
         if (event.state === 'needs-input') kind = 'input'
@@ -79,6 +100,9 @@ export class MobilePush {
       if (this.questions.size > 500) this.questions.delete(this.questions.values().next().value!)
     } else if (event.kind === 'goal' && event.goal && ['blocked', 'turn-limit'].includes(event.goal.status))
       kind = 'input'
+    // A usage limit reset while auto-resume is off: nothing continues the thread, so the user is told once to resume it.
+    else if (event.kind === 'provider-wait' && event.retryAt !== null && event.resetNotifiedAt !== undefined)
+      kind = 'input'
     if (kind) void this.deliver(session, kind).catch(() => {})
   }
   private headers() {
@@ -90,8 +114,49 @@ export class MobilePush {
     }
   }
   async deliver(session: AgentSessionInfo, kind: 'done' | 'input' | 'failed') {
+    const category: PushCategory = kind !== 'input' && this.isScheduled(session.id) ? 'scheduled' : kind
+    await this.send(
+      category,
+      kind === 'done'
+        ? 'Agent work finished.'
+        : kind === 'input'
+          ? 'An agent needs your input.'
+          : 'Agent work stopped with an error.',
+      (registration) => ({
+        computerId: registration.computerId,
+        taskId: session.taskId,
+        sessionId: session.id,
+        kind,
+      }),
+    )
+  }
+  /** A scheduled run gave up before any thread existed, so there is nothing to open but the schedules. Generic text only. */
+  async deliverScheduleFailure() {
+    await this.send('scheduled', 'A scheduled run could not start.', (registration) => ({
+      computerId: registration.computerId,
+      kind: 'scheduled',
+      target: 'schedules' satisfies PushTarget,
+    }))
+  }
+  /** The once-a-day note that a recap is ready. No content, and only for phones that switched it on. */
+  async deliverDigest() {
+    await this.send('digest', 'Your daily recap is ready.', (registration) => ({
+      computerId: registration.computerId,
+      kind: 'digest',
+      target: 'recaps' satisfies PushTarget,
+    }))
+  }
+  private wants(registration: Registration, category: PushCategory) {
+    return registration.categories ? registration.categories.includes(category) : !OPT_IN_CATEGORIES.includes(category)
+  }
+  private async send(
+    category: PushCategory,
+    body: string,
+    data: (registration: Registration) => Record<string, unknown>,
+  ) {
     this.prune()
     for (const registration of this.registrations) {
+      if (!this.wants(registration, category)) continue
       const result = await this.request('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
         headers: this.headers(),
@@ -99,20 +164,15 @@ export class MobilePush {
         body: JSON.stringify({
           to: registration.token,
           title: 'Ramu',
-          body:
-            kind === 'done'
-              ? 'Agent work finished.'
-              : kind === 'input'
-                ? 'An agent needs your input.'
-                : 'Agent work stopped with an error.',
+          body,
           sound: 'default',
-          data: { computerId: registration.computerId, taskId: session.taskId, sessionId: session.id, kind },
+          data: data(registration),
         }),
       })
       if (!result.ok) continue
-      const { data } = (await result.json()) as { data: Ticket }
-      if (data.details?.error === 'DeviceNotRegistered') this.remove(registration.deviceId)
-      else if (data.id) this.receipts.set(data.id, registration)
+      const { data: ticket } = (await result.json()) as { data: Ticket }
+      if (ticket.details?.error === 'DeviceNotRegistered') this.remove(registration.deviceId)
+      else if (ticket.id) this.receipts.set(ticket.id, registration)
     }
   }
   async checkReceipts() {

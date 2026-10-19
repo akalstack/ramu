@@ -30,21 +30,20 @@ export type TranscriptItem = (
       /** The text as sent, including any hidden <ramu-context>. */ raw?: string
     }
   /** An image the agent returned (MCP or tool content). */
+  | { kind: 'interactive'; id: string; reference: import('@ramu/shared/interactive').InteractiveReference }
   | { kind: 'image'; id: string; uri: string; alt?: string }
   | { kind: 'text'; id: string; text: string }
   | { kind: 'tool'; id: string; tool: ToolKind; verb: string; subject: string; status: ToolStatus; detail?: string }
   | {
       kind: 'agents'
       id: string
-      agents: {
+      advisor?: boolean
+      earlier?: boolean
+      agents: (import('@ramu/shared/types').AgentTask & {
         id: string
-        name: string
         type: string
-        status: 'running' | 'completed' | 'failed'
-        summary: string
-        prompt?: string
-        /** What the sub-agent itself wrote along the way. */ log?: string
-      }[]
+        log?: string
+      })[]
     }
   | {
       kind: 'question'
@@ -56,7 +55,7 @@ export type TranscriptItem = (
   | { kind: 'permission'; id: string; title: string; command: string; decision?: 'allow' | 'deny' }
   | { kind: 'elicitation'; id: string; request: import('@ramu/shared/types').AgentElicitation; outcome?: string }
   | { kind: 'changes'; id: string; files: number; additions: number; deletions: number }
-  | { kind: 'goal'; id: string; objective: string; turns: number }
+  | { kind: 'goal'; id: string; objective: string; turns: number; detail?: string }
   /** Turn boundary from a provider result or a terminal state; drives the Worked-for fold and is never drawn. */
   | { kind: 'end'; id: string; ended: boolean; interrupted: boolean }
   /** Live "Working for 12s" rule above the steps of the running turn. */
@@ -68,15 +67,21 @@ export type TranscriptItem = (
       title: string
       detail?: string
       failed?: boolean
+      /** Set on a goal's turning-point note, so the title follows the app language. */
+      goalNote?: import('@ramu/shared/chat/goalHistory').GoalChangeType
       wait?: boolean
+      /** Set on the usage-limit note: when it is expected to lift, and whether that time is only a guess. */
+      limit?: { retryAt: number; guessed: boolean; provider?: import('@ramu/shared/types').AgentProvider }
       settings?: import('@ramu/shared/types').AgentSettings
       previous?: import('@ramu/shared/types').AgentSettings
     }
   /** A finished turn's routine steps folded under "Worked for 12m 48s". */
   | { kind: 'summary'; id: string; label: string; items: TranscriptItem[] }
-) & { at?: number }
+) & { at?: number; requestSource?: { sessionId: string; agentId: string; name: string; requestId?: string } }
 
 export interface Chat extends Task {
+  executionState?: import('@ramu/shared/types').AgentSessionState
+  compacting?: boolean
   taskId: string
   sessionId: string | null
   computerId: string

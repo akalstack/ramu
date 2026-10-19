@@ -1,0 +1,61 @@
+[
+  {
+    "id": "codex-usage-limit-exceeded-info",
+    "synthetic": true,
+    "origin": "apps/server/test/codex.test.ts line 47 codexErrorInfo",
+    "provider": "codex",
+    "channel": "error",
+    "toolCalls": 0,
+    "value": {
+      "message": "Limit reached",
+      "codexErrorInfo": "usageLimitExceeded"
+    },
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "structured"
+    }
+  },
+  {
+    "id": "codex-usage-limit-exceeded-string",
+    "synthetic": true,
+    "origin": "apps/server/src/providers/codex.ts (codexErrorInfo regex)",
+    "provider": "codex",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "\"usageLimitExceeded\"",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider"
+    }
+  },
+  {
+    "id": "codex-rate-limit-exceeded-string",
+    "synthetic": true,
+    "origin": "apps/server/src/providers/codex.ts (codexErrorInfo regex)",
+    "provider": "codex",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "\"rateLimitExceeded\"",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider"
+    }
+  },
+  {
+    "id": "codex-fake-agent-result",
+    "synthetic": true,
+    "origin": "apps/server/src/providers/fakeAgent.ts text \"usageLimitExceeded\"",
+    "provider": "codex",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "usageLimitExceeded",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider"
+    }
+  }
+]

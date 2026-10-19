@@ -1,11 +1,12 @@
 import { Button } from '@/components/desktop-button'
 import { X } from 'lucide-react'
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { t, useLanguage } from '../i18n'
 import { ExplorerPanel } from '../sidebar/ExplorerPanel'
 import { ScmPanel } from '../sidebar/ScmPanel'
 import { SearchPanel } from '../sidebar/SearchPanel'
 import { useWorkspace } from './workspace'
+import { deviceStorage } from '../deviceStorage'
 
 export type WorkspaceTool = 'explorer' | 'search' | 'scm'
 
@@ -77,13 +78,21 @@ const RAIL_WIDTH = { key: 'ramu.layout.tools-rail', min: 220, max: 480, fallback
 const savedRailWidth = () =>
   Math.min(
     RAIL_WIDTH.max,
-    Math.max(RAIL_WIDTH.min, Number(localStorage.getItem(RAIL_WIDTH.key)) || RAIL_WIDTH.fallback),
+    Math.max(RAIL_WIDTH.min, Number(deviceStorage.getItem(RAIL_WIDTH.key)) || RAIL_WIDTH.fallback),
   )
 
 /** The tools rail beside the whole task stack, full height, with a draggable inner edge. The width is written straight to the element while dragging and saved on release. */
 export function WorkspaceRail({ tool }: { tool: WorkspaceTool }) {
   const rail = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(savedRailWidth)
+  // Another host's window dragged the rail: this one follows.
+  useEffect(
+    () =>
+      deviceStorage.subscribe((key) => {
+        if (key === RAIL_WIDTH.key) setWidth(savedRailWidth())
+      }),
+    [],
+  )
   const drag = (event: React.PointerEvent<HTMLDivElement>) => {
     const handle = event.currentTarget,
       startX = event.clientX,
@@ -110,7 +119,7 @@ export function WorkspaceRail({ tool }: { tool: WorkspaceTool }) {
       handle.removeEventListener('pointercancel', end)
       delete document.documentElement.dataset.railDragging
       delete handle.dataset.sashActive
-      localStorage.setItem(RAIL_WIDTH.key, String(next))
+      deviceStorage.setItem(RAIL_WIDTH.key, String(next))
       setWidth(next)
     }
     handle.addEventListener('pointermove', move)
@@ -122,7 +131,7 @@ export function WorkspaceRail({ tool }: { tool: WorkspaceTool }) {
     if (!step) return
     event.preventDefault()
     const next = Math.min(RAIL_WIDTH.max, Math.max(RAIL_WIDTH.min, width + step))
-    localStorage.setItem(RAIL_WIDTH.key, String(next))
+    deviceStorage.setItem(RAIL_WIDTH.key, String(next))
     setWidth(next)
   }
   return (
@@ -142,7 +151,7 @@ export function WorkspaceRail({ tool }: { tool: WorkspaceTool }) {
         onPointerDown={drag}
         onKeyDown={keyboard}
         onDoubleClick={() => {
-          localStorage.setItem(RAIL_WIDTH.key, String(RAIL_WIDTH.fallback))
+          deviceStorage.setItem(RAIL_WIDTH.key, String(RAIL_WIDTH.fallback))
           setWidth(RAIL_WIDTH.fallback)
         }}
         className="pane-sash absolute inset-y-0 -left-[3px] z-10 w-[5px] cursor-col-resize outline-none touch-none"

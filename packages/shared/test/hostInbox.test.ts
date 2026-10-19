@@ -108,6 +108,8 @@ it('validates navigation destinations before IPC dispatch', () => {
     { kind: 'task', taskId: '' },
     { kind: 'task', taskId: 't', sessionId: 3 },
     { kind: 'shell', command: 'x' },
+    // Adding a project on another host now runs in the window that asks (its own folder browser).
+    { kind: 'add-project' },
   ])
     expect(isHostDestination(destination)).toBe(false)
 })

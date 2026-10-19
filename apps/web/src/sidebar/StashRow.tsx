@@ -3,11 +3,11 @@ import { Archive, ChevronRight } from 'lucide-react'
 import type { GitCommitFile, GitStash, RepositoryBinding } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { ContentSkeleton } from '@/components/content-skeleton'
-import { invoke } from '../ipc'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { useWorkspace } from '../workspace/workspace'
 import { FILE_ROW, FileRowLabel } from './FileRow'
+import { useHost } from '../workspace/HostProvider'
 
 export function StashRow({
   taskId,
@@ -22,6 +22,7 @@ export function StashRow({
 }) {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const [expanded, setExpanded] = useState(false)
   const [files, setFiles] = useState<GitCommitFile[] | null>(null)
   const [error, setError] = useState<string | null>(null)

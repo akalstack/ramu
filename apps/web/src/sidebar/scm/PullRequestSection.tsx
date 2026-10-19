@@ -13,13 +13,14 @@ import { cn } from 'cn'
 import { Button } from '@/components/desktop-button'
 import { Dropdown } from '../../Menu'
 import { t } from '../../i18n'
-import { invoke, ramu } from '../../ipc'
-import { ipcQueryKey } from '../../dataQueries'
+import { ipcQueryKeyOn } from '../../dataQueries'
 import { useModelSets } from '../../models/ModelSets'
 import { errorText } from '../../workspace/TaskPane'
-import { useWorkspace } from '../../workspace/workspace'
+import { useHostRuntime, useWorkspace } from '../../workspace/workspace'
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import { startCheckoutChat } from './startCheckoutChat'
+import { useHost } from '../../workspace/HostProvider'
+import { queryInvokerFor } from '../../git/hostQuery'
 
 const STATE_LABEL: Record<PullRequestInfo['state'], string> = { open: 'Open', closed: 'Closed', merged: 'Merged' }
 
@@ -61,33 +62,37 @@ export function PullRequestSection({
   reportError: (message: string) => void
 }) {
   const ws = useWorkspace()
+  const host = useHost()
+  const { invoke } = host
+  const call = queryInvokerFor(host.id)
+  const { on } = useHostRuntime()
   const { initialSettings } = useModelSets()
   const [creating, setCreating] = useState(false)
   const [starting, setStarting] = useState<PullRequestFeedbackKind | null>(null)
   const [watching, setWatching] = useState(false)
   const query = useQuery({
-    queryKey: ipcQueryKey('forge.pullRequest', taskId, binding.repoId, status?.branch ?? null),
-    queryFn: () => ramu.invoke('forge.pullRequest', taskId, binding.repoId),
+    queryKey: ipcQueryKeyOn(host.id, 'forge.pullRequest', taskId, binding.repoId, status?.branch ?? null),
+    queryFn: () => call('forge.pullRequest', taskId, binding.repoId),
     enabled: !!status?.remote,
   })
   const branchInfo = useQuery({
-    queryKey: ipcQueryKey('git.commitBranchInfo', taskId, binding.repoId, status?.branch ?? null),
-    queryFn: () => ramu.invoke('git.commitBranchInfo', taskId, binding.repoId),
+    queryKey: ipcQueryKeyOn(host.id, 'git.commitBranchInfo', taskId, binding.repoId, status?.branch ?? null),
+    queryFn: () => call('git.commitBranchInfo', taskId, binding.repoId),
     enabled: !!status?.remote,
   })
   const pr = query.data?.pullRequest ?? null
   const watchQuery = useQuery({
-    queryKey: ipcQueryKey('forge.watchStatus', taskId, binding.repoId, pr?.url ?? ''),
-    queryFn: () => ramu.invoke('forge.watchStatus', taskId, binding.repoId, pr!.url),
+    queryKey: ipcQueryKeyOn(host.id, 'forge.watchStatus', taskId, binding.repoId, pr?.url ?? ''),
+    queryFn: () => call('forge.watchStatus', taskId, binding.repoId, pr!.url),
     enabled: pr?.state === 'open',
   })
   const { refetch: refreshWatch } = watchQuery
   useEffect(() => {
     if (pr?.state !== 'open') return
-    return ramu.on('workspace:changed', () => {
+    return on('workspace:changed', () => {
       void refreshWatch()
     })
-  }, [refreshWatch, pr?.state])
+  }, [on, refreshWatch, pr?.state])
   const { refetch } = query
 
   // Keep visible PR details fresh; opted-in feedback delivery belongs to the background service.
@@ -139,6 +144,7 @@ export function PullRequestSection({
           : t('Address review on #{0}', { '0': pr.number }),
         prompt,
         settings.model ? settings : initialSettings,
+        invoke,
       )
     } catch (error) {
       reportError(errorText(error))

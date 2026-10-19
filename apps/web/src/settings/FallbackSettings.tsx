@@ -1,6 +1,7 @@
 import { SettingsField, useSettingsInvoke } from './SettingsScope'
 import { SettingsGroupTitle, SettingsRow } from '@/components/settings-row'
 import { errorText } from '../lib/errors'
+import { limitChoiceOf, limitChoiceSwitches } from '@ramu/shared/chat/limitPolicy'
 import { t, useLanguage } from '../i18n'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
@@ -366,7 +367,8 @@ export function FallbackSettings({
   const fallback = value.fallback
   const set = (patch: Partial<AppPreferences['fallback']>) =>
     onChange({ ...value, fallback: { ...fallback, ...patch } })
-  const off = !value.defaultAutoFallback
+  // Only "Switch to another model" (or the hidden switch-then-stop combination) uses these.
+  const off = !limitChoiceSwitches(limitChoiceOf(value))
   return (
     <>
       <SettingsRow setting="fallback.switchAt" className="">

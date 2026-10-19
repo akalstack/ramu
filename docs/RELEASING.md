@@ -21,6 +21,8 @@ pnpm test:desktop-smoke # macOS, simulated providers
 
 Preparation updates the version in the root and every workspace `package.json` (the desktop app reads its own) and writes `releases/v0.1.0.md`. It does not commit, tag, push, or publish. Replace the generated scaffold with user-facing changes and installation limitations. A version-only change does not require a lockfile update.
 
+Docs check: compare `README.md`, `docs/HEADLESS-SERVER.md` and `apps/mobile/README.md` against what the release actually ships (platforms, install and pairing steps, Settings names, commands that still exist). Fix drift before tagging; stale release docs cost more trust than a missing feature.
+
 ## Draft
 
 Commit the intended release files, create a matching tag, and push it:

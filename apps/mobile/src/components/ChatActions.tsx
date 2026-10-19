@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import {
@@ -20,6 +20,7 @@ import type { MobileProject } from '../runtime/types'
 import { font, radius, space, useTheme } from '../theme'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
+import { useT } from '../i18n'
 import { Button, Row, Sheet, T, type Icon } from './ui'
 
 /** One-shot pin/archive commands shared by the row's swipe actions. */
@@ -81,6 +82,9 @@ export function ChatActionsSheet({
 }) {
   const { c } = useTheme()
   const store = useStore()
+  const t = useT()
+  const [naming, setNaming] = useState(false)
+  const titleRequest = useRef(false)
   const [renaming, setRenaming] = useState(false)
   const [title, setTitle] = useState(chat.title)
   useEffect(() => {
@@ -148,9 +152,26 @@ export function ChatActionsSheet({
       ? [
           {
             icon: Sparkles,
-            label: 'Rename with AI',
-            onPress: () =>
-              void run(() => store.invoke(chat.computerId, 'tasks.generateTitle', chat.taskId, chat.settings!, true)),
+            label:
+              naming || chat.titleGenerationState === 'pending'
+                ? t.namingThread
+                : chat.titleGenerationState === 'failed'
+                  ? t.retryTitleGeneration
+                  : t.renameWithAI,
+            onPress:
+              naming || chat.titleGenerationState === 'pending' || !store.isOnline(chat.computerId)
+                ? undefined
+                : () => {
+                    if (titleRequest.current) return
+                    titleRequest.current = true
+                    setNaming(true)
+                    void run(() =>
+                      store.invoke(chat.computerId, 'tasks.generateTitle', chat.taskId, chat.settings!, true),
+                    ).finally(() => {
+                      titleRequest.current = false
+                      setNaming(false)
+                    })
+                  },
           },
         ]
       : []),
@@ -198,7 +219,15 @@ export function ChatActionsSheet({
         </View>
       ) : (
         items.map((item) => (
-          <Row key={item.label} onPress={item.onPress}>
+          <Row
+            key={item.label}
+            onPress={item.onPress}
+            accessibilityRole="button"
+            accessibilityState={{
+              disabled: !item.onPress,
+              busy: item.icon === Sparkles && (naming || chat.titleGenerationState === 'pending'),
+            }}
+          >
             <item.icon size={18} color={item.danger ? c.bad : c.soft} />
             <T tone={item.danger ? 'bad' : 'text'}>{item.label}</T>
           </Row>
@@ -244,6 +273,14 @@ export function ProjectActionsSheet({
     setTimeout(fn, 300)
   }
   const items = [
+    {
+      icon: FolderSearch,
+      label: 'Browse files',
+      onPress: () =>
+        later(() =>
+          router.push({ pathname: '/explorer', params: { computer: project.computerId, ctx: `project:${raw}` } }),
+        ),
+    },
     {
       icon: SquarePen,
       label: 'New thread',
@@ -316,7 +353,14 @@ export function ProjectActionsSheet({
         </View>
       ) : (
         items.map((item) => (
-          <Row key={item.label} onPress={item.onPress}>
+          <Row
+            key={item.label}
+            onPress={item.onPress}
+            accessibilityRole="button"
+            accessibilityState={{
+              disabled: !item.onPress,
+            }}
+          >
             <item.icon size={18} color={'danger' in item && item.danger ? c.bad : c.soft} />
             <T tone={'danger' in item && item.danger ? 'bad' : 'text'}>{item.label}</T>
           </Row>

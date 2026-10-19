@@ -49,6 +49,45 @@ export function cleanTitle(raw: string): string | null {
   return title ? (title.length > 60 ? `${clipText(title, 59).trimEnd()}…` : title) : null
 }
 
+export interface TitleDraft {
+  title: string
+  needsRefinement: boolean
+}
+
+/** Structured output is optional, but malformed structured output is never displayed as a title. */
+export function parseTitleDraft(raw: string): TitleDraft | null {
+  const text = stripRouterLine(raw)
+    .trim()
+    .replace(/^```(?:json)?\s*\n/, '')
+    .replace(/\n```$/, '')
+  let value: unknown = text
+  if (/^[{["\]]/.test(text)) {
+    try {
+      value = JSON.parse(text)
+    } catch {
+      if (!text.startsWith('"')) return null
+    }
+  }
+  let needsRefinement = false
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const draft = value as Record<string, unknown>
+    if (draft.needsRefinement !== undefined && typeof draft.needsRefinement !== 'boolean') return null
+    needsRefinement = draft.needsRefinement === true
+    value = draft.title
+  }
+  if (typeof value !== 'string' || value.length > 2000) return null
+  if (
+    [...value].some((character) => {
+      const code = character.codePointAt(0)!
+      return (code < 32 && ![9, 10, 13].includes(code)) || code === 127
+    })
+  )
+    return null
+  const title = cleanTitle(value)
+  if (!title || /^(?:new (?:thread|chat)|untitled(?: thread| chat)?|chat title)$/i.test(title)) return null
+  return { title, needsRefinement }
+}
+
 /** Takes a trailing `Branch: name` line off a drafted commit message. */
 export function splitBranchLine<T extends { message: string }>(draft: T): T & { branch?: string } {
   const match = /\n?[ \t]*branch:[ \t]*`?([^`\n]+?)`?[ \t]*$/i.exec(draft.message.trimEnd())

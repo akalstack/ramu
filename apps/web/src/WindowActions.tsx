@@ -37,10 +37,11 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import type { ProjectAction } from '@ramu/shared/types'
 import { formatKeys } from './commands'
-import { invoke } from './ipc'
+import { useHost } from './workspace/HostProvider'
 import { Menu, type MenuEntry } from './Menu'
 import { errorText } from './workspace/TaskPane'
 import { useWorkspace } from './workspace/workspace'
+import { hostStorageFor } from './hostStorage'
 
 /** Window-bar actions for the open chat, like T3 Code: saved project commands that run in a terminal. */
 export function WindowActions({ ctx, projectId }: { ctx: string; projectId?: string }) {
@@ -99,10 +100,11 @@ export const PROJECT_ACTIONS_EVENT = 'ramu:project-actions'
 /** The project's saved actions, refreshed whenever any window-bar control changes them. */
 export function useProjectActions(projectId?: string) {
   const [actions, setActions] = useState<ProjectAction[]>([])
+  const { invoke } = useHost()
   const load = useCallback(() => {
     if (!projectId) return setActions([])
     void invoke('projects.actions', projectId).then(setActions, () => setActions([]))
-  }, [projectId])
+  }, [projectId, invoke])
   useEffect(() => {
     load()
     window.addEventListener(PROJECT_ACTIONS_EVENT, load)
@@ -122,11 +124,12 @@ function ActionsControl({ ctx, projectId }: { ctx: string; projectId: string }) 
   const actions = useProjectActions(projectId)
   const [editing, setEditing] = useState<ProjectAction | 'new' | null>(null)
   const [managing, setManaging] = useState(false)
-  const [lastId, setLastId] = useState<string | null>(() => localStorage.getItem(`ramu.last-action:${projectId}`))
+  const hostStorage = hostStorageFor(useHost().id)
+  const [lastId, setLastId] = useState<string | null>(() => hostStorage.getItem(`ramu.last-action:${projectId}`))
   const run = (action: ProjectAction) => {
     setLastId(action.id)
     try {
-      localStorage.setItem(`ramu.last-action:${projectId}`, action.id)
+      hostStorage.setItem(`ramu.last-action:${projectId}`, action.id)
     } catch {
       /* Remembered for this session only. */
     }
@@ -243,6 +246,7 @@ function ActionDialog({
   onClose: () => void
 }) {
   useLanguage()
+  const { invoke } = useHost()
   const [name, setName] = useState(action?.name ?? '')
   const [command, setCommand] = useState(action?.command ?? '')
   const [keys, setKeys] = useState(action?.keys ?? '')
@@ -436,6 +440,7 @@ function ManageDialog({
   onClose: () => void
 }) {
   useLanguage()
+  const { invoke } = useHost()
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),

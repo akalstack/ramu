@@ -71,3 +71,20 @@ it('replaces a malformed token file', () => {
   writeFileSync(path, 'not-a-token')
   expect(loadToken(path)).toMatch(/^[a-f0-9]{64}$/)
 })
+
+it('requires explicit legacy and browser access, and validates credential lifetimes', () => {
+  const base = { RAMU_USER_DATA: '/tmp/ramu-profile' }
+  expect(loadConfig(base)).toMatchObject({
+    allowLegacyToken: false,
+    browserOrigins: [],
+    deviceLifetimeMs: 90 * 86400000,
+  })
+  expect(loadConfig({ ...base, RAMU_DEVICE_TOKEN_DAYS: 'never' }).deviceLifetimeMs).toBeNull()
+  expect(
+    loadConfig({ ...base, RAMU_ALLOW_LEGACY_TOKEN: '1', RAMU_BROWSER_ORIGINS: 'https://app.example' }),
+  ).toMatchObject({ allowLegacyToken: true, browserOrigins: ['https://app.example'] })
+  for (const days of ['0', '-1', 'garbage', 'Infinity'])
+    expect(() => loadConfig({ ...base, RAMU_DEVICE_TOKEN_DAYS: days })).toThrow()
+  for (const origin of ['*', 'null', 'https://app.example/path', 'file:///tmp'])
+    expect(() => loadConfig({ ...base, RAMU_BROWSER_ORIGINS: origin })).toThrow()
+})

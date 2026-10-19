@@ -2,13 +2,14 @@ import { t, useLanguage } from '../i18n'
 import { Input } from '@/components/ui/input'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Dialog, Dropdown } from '../Menu'
-import { invoke } from '../ipc'
+import { useHost } from './HostProvider'
 import { errorText } from './TaskPane'
 import { useWorkspace } from './workspace'
 
 export function CreateEntryDialog() {
   useLanguage()
   const ws = useWorkspace()
+  const { invoke } = useHost()
   const [request, setRequest] = useState<{ taskId: string; kind: 'file' | 'dir' } | null>(null)
   const [repoId, setRepoId] = useState('')
   const [path, setPath] = useState('')

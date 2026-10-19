@@ -1,4 +1,5 @@
 import { permissionKey, PermissionApprovals, commandPatterns } from './permissionApprovals'
+import { goalContinues } from '@ramu/shared/chat/goalHold'
 import type { AppPreferences, AgentEvent, AgentSessionState } from '@ramu/shared/types'
 import type { MessageDispatcher } from './messageDispatcher'
 import type { GoalManager } from './goalManager'
@@ -275,7 +276,9 @@ export class SessionRecorder {
     const child = this.host.children.get(id)
     if (child && (state === 'running' || state === 'starting') && child.settled) {
       child.settled = false
-      this.host.updateTask(child.parentId, id, { status: 'running' })
+      this.host.updateTask(child.parentId, id, { status: 'running', resumedAt: Date.now(), waitingFor: null })
+    } else if (child && (state === 'running' || state === 'starting')) {
+      this.host.updateTask(child.parentId, id, { waitingFor: null })
     } else if (child) this.host.settleChild(id)
     if (state === 'running')
       queueMicrotask(() => {
@@ -285,10 +288,7 @@ export class SessionRecorder {
       queueMicrotask(() => {
         void this.host.dispatchQueued(id)
       })
-    if (
-      ['idle', 'failed', 'restored'].includes(state) &&
-      ['active', 'waiting-provider'].includes(this.host.getGoal(id)?.status ?? '')
-    )
+    if (['idle', 'failed', 'restored'].includes(state) && goalContinues(this.host.getGoal(id)))
       this.host.scheduleGoal(id)
     if (['idle', 'failed', 'stopped'].includes(state) && !this.host.reviewHooks()?.complete)
       this.host.wakeWorkspaceQueue()

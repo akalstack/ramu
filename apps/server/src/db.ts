@@ -190,6 +190,56 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
       db.exec('ALTER TABLE tasks ADD COLUMN done_at INTEGER;')
     }
   },
+  // One native provider session per login a thread has used, with the last event that provider saw, so a thread that comes
+  // back to a provider resumes it and carries only what it missed. `agent_sessions.provider_session_id` stays the current one.
+  `CREATE TABLE IF NOT EXISTS session_provider_sessions (
+    session_id TEXT NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    provider_session_id TEXT NOT NULL,
+    last_seq INTEGER NOT NULL,
+    context_max INTEGER,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (session_id, provider, account_id)
+  );`,
+  // Goal statuses `paused` and `waiting-provider` merged: a limit hold is `paused` with `pausedBy: 'provider-limit'`. A paused goal
+  // with no `pausedBy` stays the user's, which is what every one was, so only the retired status needs rewriting. Goals persist as
+  // events and are re-armed from the latest one at startup, so a goal held at a limit before the upgrade keeps resuming.
+  `UPDATE agent_events
+    SET event = json_set(event, '$.goal.status', 'paused', '$.goal.pausedBy', 'provider-limit')
+    WHERE json_extract(event, '$.kind') = 'goal' AND json_extract(event, '$.goal.status') = 'waiting-provider';`,
+  `CREATE TABLE interactive_previews (
+    id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE,
+    input TEXT NOT NULL, result TEXT NOT NULL, created_at INTEGER NOT NULL
+  );
+  CREATE TABLE interactive_versions (
+    id TEXT NOT NULL, version INTEGER NOT NULL, session_id TEXT NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE,
+    request_id TEXT NOT NULL, request_signature TEXT NOT NULL, reference TEXT NOT NULL, html TEXT NOT NULL, preview TEXT,
+    PRIMARY KEY(id,version), UNIQUE(session_id,request_id)
+  );
+  CREATE INDEX interactive_versions_by_session ON interactive_versions(session_id);
+  CREATE INDEX interactive_previews_by_session ON interactive_previews(session_id,created_at);`,
+  // Title ownership and bounded, restart-safe generation. A manual rename invalidates every older request.
+  (db) => {
+    const columns = new Set(
+      (db.prepare('PRAGMA table_info(tasks)').all() as { name: string }[]).map((column) => column.name),
+    )
+    for (const [name, definition] of [
+      ['title_revision', 'INTEGER NOT NULL DEFAULT 0'],
+      ['title_generation_state', "TEXT NOT NULL DEFAULT 'idle'"],
+      ['title_auto_attempted', 'INTEGER NOT NULL DEFAULT 0'],
+      ['title_needs_refinement', 'INTEGER NOT NULL DEFAULT 0'],
+      ['title_refinement_attempted', 'INTEGER NOT NULL DEFAULT 0'],
+    ])
+      if (!columns.has(name!)) db.exec(`ALTER TABLE tasks ADD COLUMN ${name} ${definition};`)
+    db.exec(`CREATE TABLE IF NOT EXISTS task_title_jobs (
+      task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+      revision INTEGER NOT NULL,
+      kind TEXT NOT NULL CHECK (kind IN ('automatic', 'refinement', 'manual')),
+      settings TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0
+    );`)
+  },
 ]
 
 export type Db = DatabaseSync

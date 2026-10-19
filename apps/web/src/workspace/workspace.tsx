@@ -3,8 +3,21 @@ import { showChat } from './layoutPrefs'
 import { persistentTaskUi } from '@ramu/shared/workspace/sourceNavigation'
 import { animatePanelChange, type PanelMotionScope } from './panelMotion'
 import { t, useLanguage } from '../i18n'
-// Renderer-side workspace state: projects, tasks, open task tabs and their view tabs.
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+// Renderer-side workspace state: projects, tasks, open task tabs and their view tabs. One store per host
+// (`HostWorkspace`), mounted lazily by `WorkspaceProvider`; `useWorkspace()` is the store of the host on screen.
+import {
+  createContext,
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
 import { NO_PROJECT, type TaskStatus } from '@ramu/shared/types'
 import type {
   Project,
@@ -16,9 +29,8 @@ import type {
   WorkspaceUiState,
   WorktreeWorkspace,
 } from '@ramu/shared/types'
-import { useAppSettings } from '../settings/AppSettings'
-import { invoke, ramu } from '../ipc'
-import { closeAfterTerminalCheck } from './terminalRegistry'
+import { useHostPreferences } from '../settings/hostPreferences'
+import { bridge, invokerFor } from '../ipc'
 import {
   splitTerminal,
   terminalFocusAfterClose,
@@ -27,8 +39,37 @@ import {
 } from '@ramu/shared/workspace/terminalGroups'
 import { onWorkspaceVisibility, workspaceVisible } from './workspaceLifetime'
 import { registerWorkspaceCheckpoint } from './workspaceCheckpoint'
+import { hostStorageFor } from '../hostStorage'
+import { ownHostId } from '../hosts'
+import { HostProvider } from './HostProvider'
+import { useComputers } from './computers'
+import { createEventPump, createHostEventRouter } from './hostEvents'
+import {
+  createHostRuntime,
+  createMountRequests,
+  createRuntimeRegistry,
+  mountedHosts,
+  type HostRuntime,
+} from './hostRuntime'
+import { commitUnread, inboxUnread, loadUnread, statusUnread } from './unread'
+import { createUiPersistence } from './uiPersistence'
+import {
+  EMPTY_TASK_UI,
+  effectiveTaskUi,
+  focus,
+  isPreviewable,
+  isProjectCtx,
+  isWorkspaceCtx,
+  isWorktreeCtx,
+  projectCtx,
+  tabOrder,
+  viewKey,
+  workspaceOfTask,
+  worktreeCtx,
+  type ViewInput,
+} from './workspaceModel'
 
-type ViewInput = ViewDescriptor extends infer V ? (V extends ViewDescriptor ? Omit<V, 'id'> : never) : never
+export { isPreviewable, isWorkspaceCtx, isWorktreeCtx, projectCtx, tabOrder, worktreeCtx } from './workspaceModel'
 
 export interface WorkspaceApi {
   projects: Project[]
@@ -110,12 +151,13 @@ export interface WorkspaceApi {
   projectOf(taskId: string): Project | undefined
 }
 
-const Ctx = createContext<WorkspaceApi | null>(null)
 type WorkspaceActions = Pick<
   WorkspaceApi,
   'task' | 'refresh' | 'openTask' | 'openView' | 'newTask' | 'consumeSourceNavigation'
 >
+const Ctx = createContext<WorkspaceApi | null>(null)
 const ActionsCtx = createContext<WorkspaceActions | null>(null)
+const RuntimeCtx = createContext<HostRuntime | null>(null)
 
 /** Commands read fresh state when called, without subscribing to panel/UI changes. */
 export function useWorkspaceActions(): WorkspaceActions {
@@ -124,73 +166,168 @@ export function useWorkspaceActions(): WorkspaceActions {
   return actions
 }
 
+/** The store of the host on screen (or, below a host's own store, that host's). */
 export function useWorkspace(): WorkspaceApi {
   const ws = useContext(Ctx)
   if (!ws) throw new Error('WorkspaceProvider missing')
   return ws
 }
 
-/** Previewable views can reuse a tab when opened for browsing. */
-export function isPreviewable(
-  v: ViewInput | ViewDescriptor,
-): v is Extract<ViewInput | ViewDescriptor, { kind: 'file' | 'diff' | 'git' }> {
-  return v.kind === 'file' || v.kind === 'diff' || v.kind === 'git'
+/** The per-host parts of the store above: terminals, terminal activity, host events, storage. */
+export function useHostRuntime(): HostRuntime {
+  const runtime = useContext(RuntimeCtx)
+  if (!runtime) throw new Error('WorkspaceProvider missing')
+  return runtime
 }
 
-function viewKey(v: ViewInput | ViewDescriptor): string {
-  switch (v.kind) {
-    case 'file':
-      return `file:${v.repoId}:${v.path}`
-    case 'diff':
-      return `diff:${v.repoId}:${v.path}:${v.oid ?? v.staged}${v.stash ? ':stash' : ''}`
-    case 'git':
-      return `git:${v.repoId}:${v.oid ?? 'upstream'}`
-    case 'review':
-      return `review:${v.taskId}`
-    case 'agent':
-      return `agent:${v.sessionId}`
-    case 'terminal':
-      // Several terminals per repository are allowed.
-      return `terminal:${crypto.randomUUID()}`
+// Live wiring: one event router over the bridge, one pump shared by every host, one runtime per mounted host.
+const router = createHostEventRouter(bridge, ownHostId)
+const pump = createEventPump()
+const runtimes = createRuntimeRegistry((host) =>
+  createHostRuntime(
+    host,
+    {
+      invoke: invokerFor(host),
+      storage: hostStorageFor(host),
+      router,
+      pump,
+      busyMessage: (busy) =>
+        busy === 1
+          ? t('A command is still running in this terminal. Close it anyway?')
+          : t('Commands are still running in {count} terminals. Close them anyway?', { count: busy }),
+    },
+    // Starts off screen unless it is the window's own host; `HostWorkspace` sets it from its `active` prop.
+    host === ownHostId(),
+  ),
+)
+const mountRequests = createMountRequests()
+
+// Every loaded store's API by host, for views that show a host other than the active one (the sidebar, selection).
+const published = new Map<string, WorkspaceApi>()
+const publishedListeners = new Set<() => void>()
+let publishedVersion = 0
+const publish = (host: string, api: WorkspaceApi | null) => {
+  if ((published.get(host) ?? null) === api) return
+  if (api) published.set(host, api)
+  else published.delete(host)
+  publishedVersion++
+  for (const listener of publishedListeners) listener()
+}
+export const subscribePublished = (listener: () => void) => {
+  publishedListeners.add(listener)
+  return () => {
+    publishedListeners.delete(listener)
   }
 }
+/** A host's loaded store, read at call time (for code that runs after a render, like applying a selection). */
+export const publishedStore = (host: string): WorkspaceApi | null => published.get(host) ?? null
+/** Asks for `host`'s store to mount; it stays while that host is saved (and subscribed while it is connected). */
+export const requestHostStore = (host: string) => mountRequests.request(host)
 
-/** Stable view order: conversations first, followed by the other views in opening order. */
-export function tabOrder(views: ViewDescriptor[]): ViewDescriptor[] {
-  return [...views.filter((v) => v.kind === 'agent'), ...views.filter((v) => v.kind !== 'agent')]
+/**
+ * `host`'s store: mounts it on first use and keeps it subscribed while that host is connected. Null until it has
+ * loaded, or while the host is not connected. The sidebar shows every host this way.
+ */
+export function useWorkspaceOf(host: string): WorkspaceApi | null {
+  useEffect(() => mountRequests.request(host), [host])
+  return useSyncExternalStore(subscribePublished, () => published.get(host) ?? null)
 }
 
-/** The active tab is the main content; the last focused conversation is the one docked beside files. */
-function focus(s: TaskUiState, v: ViewDescriptor, defaultDock: 'right' | 'bottom'): TaskUiState {
-  if (v.kind === 'terminal')
-    return {
-      ...s,
-      activeTerminalId: v.id,
-      terminalOpen: true,
-      ...((s.terminalDock ?? defaultDock) === 'right'
-        ? {
-            activeViewId: v.id,
-            terminalReturnViewId: s.views.some((view) => view.id === s.activeViewId && view.kind === 'terminal')
-              ? s.terminalReturnViewId
-              : s.activeViewId,
-          }
-        : {}),
-    }
-  return { ...s, activeViewId: v.id, activeAgentViewId: v.kind === 'agent' ? v.id : s.activeAgentViewId }
+/** `useWorkspaceOf` for a list of hosts (the merged recent list), in the same order. */
+export function useWorkspacesOf(hosts: readonly string[]): (WorkspaceApi | null)[] {
+  const key = hosts.join('\n')
+  useEffect(() => {
+    for (const host of key.split('\n')) if (host) mountRequests.request(host)
+  }, [key])
+  const version = useSyncExternalStore(subscribePublished, () => publishedVersion)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` changes whenever a published store does.
+  return useMemo(() => (key ? key.split('\n') : []).map((host) => published.get(host) ?? null), [key, version])
 }
 
-/** A context is a task id, or "project:<id>" for a project's own workspace view. */
-export const projectCtx = (projectId: string) => `project:${projectId}`
-export const worktreeCtx = (id: string) => `worktree:${id}`
-export const isWorktreeCtx = (ctx: string) => ctx.startsWith('worktree:')
-export const isWorkspaceCtx = (ctx: string) => isProjectCtx(ctx) || isWorktreeCtx(ctx)
-export const isProjectCtx = (ctx: string) => ctx.startsWith('project:')
+const ScopeCtx = createContext<{ store: WorkspaceApi | null } | null>(null)
+/**
+ * Rows of one host, shown inside another host's shell (the sidebar's host groups): below it `useHost()` is that host
+ * and `useRowStore()` that host's store, or null while it has not loaded (rows then show the last known overview).
+ */
+export function HostScope({
+  host,
+  store,
+  children,
+}: {
+  host: string
+  store: WorkspaceApi | null
+  children: ReactNode
+}) {
+  const scope = useMemo(() => ({ store }), [store])
+  return (
+    <HostProvider hostId={host}>
+      <ScopeCtx.Provider value={scope}>{children}</ScopeCtx.Provider>
+    </HostProvider>
+  )
+}
+/** The store a row belongs to: the nearest `HostScope`'s (maybe not loaded yet), else the store on screen. */
+export function useRowStore(): WorkspaceApi | null {
+  const active = useContext(Ctx)
+  const scope = useContext(ScopeCtx)
+  return scope ? scope.store : active
+}
 
-const EMPTY_TASK_UI: TaskUiState = { views: [], activeViewId: null }
+/**
+ * Holds one store per mounted host and renders `children` under the active host's store. `activeHost` defaults to the
+ * window's own host, so a single-host window has exactly one store, as before. Switching `activeHost` keeps every
+ * store's state; only the shell below remounts (phase 4 may lift the shell out to avoid that).
+ */
+export function WorkspaceProvider({
+  children,
+  activeHost,
+}: {
+  children: (loaded: boolean) => ReactNode
+  activeHost?: string
+}) {
+  const own = ownHostId()
+  const active = activeHost ?? own
+  const computers = useComputers()
+  const requested = useSyncExternalStore(mountRequests.subscribe, mountRequests.snapshot)
+  const hosts = mountedHosts({
+    own,
+    active,
+    requested,
+    status: (host) => computers?.computers.find((computer) => computer.id === host)?.status ?? null,
+  })
+  const mounted = hosts.join('\n')
+  useEffect(() => runtimes.retain(mounted.split('\n')), [mounted])
+  useEffect(() => {
+    if (computers) mountRequests.retain((host) => computers.computers.some((computer) => computer.id === host))
+  }, [computers])
+  return (
+    <>
+      {hosts.map((host) => (
+        <HostWorkspace key={host} hostId={host} active={host === active}>
+          {host === active ? children : null}
+        </HostWorkspace>
+      ))}
+    </>
+  )
+}
 
-export function WorkspaceProvider({ children }: { children: (loaded: boolean) => ReactNode }) {
+/** One host's store. Memoised: the host list changing must not re-render a store whose props did not change. */
+const HostWorkspace = memo(function HostWorkspace({
+  hostId,
+  active,
+  children,
+}: {
+  hostId: string
+  active: boolean
+  children: ((loaded: boolean) => ReactNode) | null
+}) {
+  const runtime = runtimes.get(hostId)
+  const { invoke, storage } = runtime
+  const activeRef = useRef(active)
+  activeRef.current = active
+  useLayoutEffect(() => runtime.setActive(active), [runtime, active])
   const language = useLanguage()
-  const { preferences } = useAppSettings()
+  // The workspace preferences of this store's host (the window's own settings for its own host).
+  const preferences = useHostPreferences(hostId, runtime.on)
   const closedEditors = useRef<Record<string, ViewInput[]>>({})
   const [loaded, setLoaded] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
@@ -203,7 +340,10 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
   const [bindings, setBindings] = useState<Record<string, RepositoryBinding[]>>({})
   const [dirty, setDirtyMap] = useState<Record<string, boolean>>({})
   const [composing, setComposing] = useState<string | null>(null)
-  const dirtyTasks = useRef(new Set<string>())
+  // Saved to the host only while this store is on screen (see uiPersistence).
+  const [persistence] = useState(() => createUiPersistence(invoke))
+  useLayoutEffect(() => persistence.setActive(active), [persistence, active])
+  useEffect(() => () => persistence.dispose(), [persistence])
   const snapshot = useRef({ loaded, ui, taskUi, dirty, composing, composingWorkspace })
   snapshot.current = { loaded, ui, taskUi, dirty, composing, composingWorkspace }
   useEffect(
@@ -224,10 +364,10 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
           composingWorkspace: current.composingWorkspace,
         })
         // A clean offline workspace can sleep too: this checkpoint belongs to the client, not its host.
-        localStorage.setItem('ramu.workspace.resume', resume)
+        storage.setItem('ramu.workspace.resume', resume)
         return true
-      }),
-    [],
+      }, hostId),
+    [hostId, storage],
   )
 
   const refresh = useCallback(async () => {
@@ -262,13 +402,16 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         )
       return current
     })
-  }, [])
+  }, [invoke])
 
-  const refreshBindings = useCallback(async (taskId: string) => {
-    const bs = await invoke('tasks.bindings', taskId)
-    setBindings((m) => ({ ...m, [taskId]: bs }))
-    return bs
-  }, [])
+  const refreshBindings = useCallback(
+    async (taskId: string) => {
+      const bs = await invoke('tasks.bindings', taskId)
+      setBindings((m) => ({ ...m, [taskId]: bs }))
+      return bs
+    },
+    [invoke],
+  )
 
   // Restore the previous session's UI.
   useEffect(() => {
@@ -282,7 +425,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         composingWorkspace: string | null
       } | null
       try {
-        resume = JSON.parse(localStorage.getItem('ramu.workspace.resume') ?? 'null')
+        resume = JSON.parse(storage.getItem('ramu.workspace.resume') ?? 'null')
         if (resume?.workspace && resume?.tasks) {
           saved.workspace = resume.workspace
           saved.tasks = resume.tasks
@@ -310,12 +453,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       for (const task of await invoke('tasks.list')) {
         const own = saved.tasks[task.id]
         if (!own || task.projectId === NO_PROJECT) continue
-        const ctx =
-          task.projectId === NO_PROJECT
-            ? task.id
-            : task.workspaceId
-              ? worktreeCtx(task.workspaceId)
-              : projectCtx(task.projectId)
+        const ctx = workspaceOfTask(task)
         if (openTaskIds.includes(task.id)) contextsToRestore.add(ctx)
         const shared = saved.tasks[ctx] ?? { views: [], activeViewId: null }
         shared.views = shared.views.filter((v) => v.kind !== 'agent')
@@ -328,21 +466,21 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         }
         own.views = own.views.filter((v) => v.kind === 'agent')
         saved.tasks[ctx] = shared
-        dirtyTasks.current.add(task.id)
-        dirtyTasks.current.add(ctx)
+        persistence.touch(task.id)
+        persistence.touch(ctx)
       }
       setTaskUi(saved.tasks)
-      if (resume) for (const id of Object.keys(saved.tasks)) dirtyTasks.current.add(id)
+      if (resume) for (const id of Object.keys(saved.tasks)) persistence.touch(id)
       for (const ctx of Object.keys(saved.tasks).filter((ctx) => contextsToRestore.has(ctx))) await refreshBindings(ctx)
       for (const t of openTaskIds) await refreshBindings(t)
       setLoaded(true)
       if (resume) {
         setComposing(resume.composing)
         setComposingWorkspace(resume.composingWorkspace)
-        localStorage.removeItem('ramu.workspace.resume')
+        storage.removeItem('ramu.workspace.resume')
       }
     })()
-  }, [refresh, refreshBindings])
+  }, [refresh, refreshBindings, invoke, storage, persistence])
   useEffect(
     () =>
       onWorkspaceVisibility(() => {
@@ -351,63 +489,36 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     [refresh],
   )
 
-  // Persist UI state (debounced).
+  // Persist UI state (debounced, and only while on screen).
+  const savedUi = useRef<WorkspaceUiState | null>(null)
   useEffect(() => {
-    if (!loaded) return
-    const t = setTimeout(() => void invoke('ui.setWorkspace', ui).catch(() => {}), 250)
-    return () => clearTimeout(t)
-  }, [ui, loaded])
-  useEffect(() => {
-    if (!loaded || !dirtyTasks.current.size) return
-    const t = setTimeout(() => {
-      for (const id of dirtyTasks.current)
-        void invoke('ui.setTask', id, persistentTaskUi(taskUi[id] ?? EMPTY_TASK_UI)).catch(() => {
-          dirtyTasks.current.add(id)
-        })
-      dirtyTasks.current.clear()
-    }, 250)
-    return () => clearTimeout(t)
-  }, [taskUi, loaded])
+    persistence.update({ ui, taskUi }, savedUi.current !== ui)
+    savedUi.current = ui
+  }, [persistence, ui, taskUi])
+  useEffect(() => persistence.setLoaded(loaded), [persistence, loaded])
 
-  // A chat that stops working while you look elsewhere stays marked until you open it.
-  const [unread, setUnread] = useState<Set<string>>(() => {
-    try {
-      return new Set(JSON.parse(localStorage.getItem('ramu.unread') ?? '[]') as string[])
-    } catch {
-      return new Set()
-    }
-  })
+  // A chat that stops working while you look elsewhere stays marked until you open it. Each host keeps its own marks;
+  // only the store on screen counts as watching, so a hidden host never clears the chat it last had open.
+  const [unread, setUnread] = useState<Set<string>>(() => loadUnread(storage))
   const previousStatus = useRef(new Map<string, TaskStatus>())
   useEffect(() => {
     const evaluate = () =>
-      setUnread((current) => {
-        const next = new Set(current)
-        const ids = new Set(tasks.map((task) => task.id))
-        for (const task of tasks) {
-          const before = previousStatus.current.get(task.id)
-          const watching = ui.activeTaskId === task.id && !composing && document.hasFocus()
-          if (
-            before === 'running' &&
-            (task.status === 'ready-for-review' || task.status === 'needs-input' || task.status === 'failed') &&
-            !watching
-          )
-            next.add(task.id)
-          if (watching) next.delete(task.id)
-          previousStatus.current.set(task.id, task.status)
-        }
-        for (const id of next) if (!ids.has(id)) next.delete(id)
-        if (next.size === current.size && [...next].every((id) => current.has(id))) return current
-        try {
-          localStorage.setItem('ramu.unread', JSON.stringify([...next]))
-        } catch {
-          /* Marks still work for this session. */
-        }
-        return next
-      })
+      setUnread((current) =>
+        commitUnread(
+          storage,
+          current,
+          statusUnread(
+            current,
+            tasks,
+            previousStatus.current,
+            (taskId) => activeRef.current && ui.activeTaskId === taskId && !composing && document.hasFocus(),
+          ),
+        ),
+      )
     evaluate()
     window.addEventListener('focus', evaluate)
     return () => window.removeEventListener('focus', evaluate)
-  }, [tasks, ui.activeTaskId, composing])
+  }, [tasks, ui.activeTaskId, composing, active, storage])
 
   // Unread follows the computer's inbox too: a chat that finished while this window was closed is marked, and opening it
   // on a paired phone clears the mark here.
@@ -415,50 +526,47 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     let previous = new Set<string>()
     const apply = (list: import('@ramu/shared/chat/notices').InboxNotice[]) => {
       const done = new Set(list.filter((notice) => notice.kind === 'done').map((notice) => notice.taskId))
-      setUnread((current) => {
-        const next = new Set(current)
-        for (const id of done) next.add(id)
-        for (const id of previous) if (!done.has(id)) next.delete(id)
-        if (next.size === current.size && [...next].every((id) => current.has(id))) return current
-        try {
-          localStorage.setItem('ramu.unread', JSON.stringify([...next]))
-        } catch {
-          /* Marks still work for this session. */
-        }
-        return next
-      })
+      setUnread((current) => commitUnread(storage, current, inboxUnread(current, done, previous)))
       previous = done
     }
     void invoke('notices.list').then(apply, () => {})
-    return ramu.on('notices:changed', apply)
-  }, [])
+    // The latest list wins, so a hidden host's burst of notice changes applies once.
+    return runtime.on('notices:changed', (list) => runtime.deliver('notices', () => apply(list)))
+  }, [runtime, invoke, storage])
 
-  // Chat badges follow authoritative session state, including background projects.
+  // Chat badges follow authoritative session state, including background projects. Events come from this store's
+  // host only; a host that is not on screen applies them through the shared pump (coalesced, fair between hosts).
   useEffect(() => {
     let disposed = false
     let timer: ReturnType<typeof setTimeout> | undefined
     let request = 0
-    const automation = ramu.on('automation:changed', () => {
-      void refresh()
-    })
+    const automation = runtime.on('automation:changed', () =>
+      runtime.deliver('refresh', () => {
+        void refresh()
+      }),
+    )
     // Chats and projects created, renamed, pinned or removed from a paired phone (or another window).
     let pending: ReturnType<typeof setTimeout> | undefined
-    const changed = ramu.on('workspace:changed', () => {
-      clearTimeout(pending)
-      pending = setTimeout(() => void refresh().catch(() => {}), 60)
-    })
-    const off = ramu.on('agent:event', ({ event }) => {
+    const changed = runtime.on('workspace:changed', () =>
+      runtime.deliver('workspace', () => {
+        clearTimeout(pending)
+        pending = setTimeout(() => void refresh().catch(() => {}), 60)
+      }),
+    )
+    const off = runtime.on('agent:event', ({ event }) => {
       if (event.kind !== 'state' && event.kind !== 'user' && event.kind !== 'provider-wait') return
-      clearTimeout(timer)
-      timer = setTimeout(() => {
-        const current = ++request
-        void invoke('tasks.list').then(
-          (chats) => {
-            if (!disposed && current === request) setTasks(chats)
-          },
-          () => undefined,
-        )
-      }, 50)
+      runtime.deliver('tasks', () => {
+        clearTimeout(timer)
+        timer = setTimeout(() => {
+          const current = ++request
+          void invoke('tasks.list').then(
+            (chats) => {
+              if (!disposed && current === request) setTasks(chats)
+            },
+            () => undefined,
+          )
+        }, 50)
+      })
     })
     return () => {
       disposed = true
@@ -468,45 +576,54 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
       clearTimeout(timer)
       clearTimeout(pending)
     }
-  }, [refresh])
+  }, [refresh, runtime, invoke])
 
   // Branch switches and worktree changes are picked up when bindings are re-read.
   useEffect(
     () =>
-      ramu.on('fs:changed', ({ path }) => {
-        if (path === '.git/HEAD') void refresh()
+      runtime.on('fs:changed', ({ path }) => {
+        if (path === '.git/HEAD')
+          runtime.deliver('refresh', () => {
+            void refresh()
+          })
       }),
-    [refresh],
+    [refresh, runtime],
   )
 
   // Stable identity: editors depend on it in effects and must not be recreated when dirty state changes.
-  const setDirty = useCallback((viewId: string, d: boolean) => {
-    setDirtyMap((m) => (m[viewId] === d ? m : { ...m, [viewId]: d }))
-    if (d)
-      setTaskUi((current) =>
-        Object.fromEntries(
-          Object.entries(current).map(([owner, state]) => {
-            if (!state.views.some((view) => view.id === viewId && isPreviewable(view) && view.preview))
-              return [owner, state]
-            dirtyTasks.current.add(owner)
-            return [
-              owner,
-              {
-                ...state,
-                views: state.views.map((view) =>
-                  view.id === viewId && isPreviewable(view) ? { ...view, preview: false } : view,
-                ),
-              },
-            ]
-          }),
-        ),
-      )
-  }, [])
+  const setDirty = useCallback(
+    (viewId: string, d: boolean) => {
+      setDirtyMap((m) => (m[viewId] === d ? m : { ...m, [viewId]: d }))
+      if (d)
+        setTaskUi((current) =>
+          Object.fromEntries(
+            Object.entries(current).map(([owner, state]) => {
+              if (!state.views.some((view) => view.id === viewId && isPreviewable(view) && view.preview))
+                return [owner, state]
+              persistence.touch(owner)
+              return [
+                owner,
+                {
+                  ...state,
+                  views: state.views.map((view) =>
+                    view.id === viewId && isPreviewable(view) ? { ...view, preview: false } : view,
+                  ),
+                },
+              ]
+            }),
+          ),
+        )
+    },
+    [persistence],
+  )
 
-  const updateTaskUi = useCallback((taskId: string, fn: (s: TaskUiState) => TaskUiState) => {
-    dirtyTasks.current.add(taskId)
-    setTaskUi((m) => ({ ...m, [taskId]: fn(m[taskId] ?? EMPTY_TASK_UI) }))
-  }, [])
+  const updateTaskUi = useCallback(
+    (taskId: string, fn: (s: TaskUiState) => TaskUiState) => {
+      persistence.touch(taskId)
+      setTaskUi((m) => ({ ...m, [taskId]: fn(m[taskId] ?? EMPTY_TASK_UI) }))
+    },
+    [persistence],
+  )
 
   const consumeSourceNavigation = useCallback(
     (taskId: string, viewId: string, requestId?: string) => {
@@ -525,36 +642,9 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
   const api = useMemo<WorkspaceApi>(() => {
     const workspaceOf = (ctx: string) => {
       const task = tasks.find((t) => t.id === ctx)
-      return task
-        ? task.projectId === NO_PROJECT
-          ? task.id
-          : task.workspaceId
-            ? worktreeCtx(task.workspaceId)
-            : projectCtx(task.projectId)
-        : ctx
+      return task ? workspaceOfTask(task) : ctx
     }
-    const effectiveUi = { ...taskUi }
-    for (const task of tasks) {
-      const own = taskUi[task.id] ?? EMPTY_TASK_UI
-      const shared = taskUi[workspaceOf(task.id)] ?? EMPTY_TASK_UI
-      effectiveUi[task.id] = {
-        ...shared,
-        ...own,
-        activeViewId:
-          shared.activeViewId ?? own.activeAgentViewId ?? own.views.find((view) => view.kind === 'agent')?.id ?? null,
-        dockWidth: shared.dockWidth,
-        dockHidden: shared.dockHidden,
-        views: [...own.views.filter((v) => v.kind === 'agent'), ...shared.views.filter((v) => v.kind !== 'agent')],
-        activeTerminalId: shared.activeTerminalId,
-        terminalReturnViewId: shared.terminalReturnViewId,
-        terminalOpen: shared.terminalOpen,
-        terminalLayout: shared.terminalLayout,
-        terminalGroups: shared.terminalGroups,
-        terminalTabPosition: shared.terminalTabPosition,
-        terminalHeight: shared.terminalHeight,
-        terminalDock: shared.terminalDock,
-      }
-    }
+    const effectiveUi = effectiveTaskUi(tasks, taskUi, workspaceOf)
     const viewsOf = (taskId: string) => effectiveUi[taskId]?.views ?? []
     const closeViews = (taskId: string, viewIds: string[]) => {
       const requested = new Set(viewIds)
@@ -698,7 +788,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         const shared = workspaceOf(taskId)
         if (shared !== taskId) void refreshBindings(shared)
         // Opening a chat while the workspace shows only the editor would otherwise change nothing on screen.
-        showChat(shared)
+        showChat(shared, storage)
         setUi((u) => ({
           ...u,
           openTaskIds: [...new Set([...u.openTaskIds, shared, taskId])],
@@ -947,7 +1037,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         setTaskUi((m) =>
           Object.fromEntries(
             Object.entries(m).map(([id, state]) => {
-              dirtyTasks.current.add(id)
+              persistence.touch(id)
               const { dockWidth: _dock, terminalHeight: _terminal, ...rest } = state
               return [id, rest]
             }),
@@ -986,6 +1076,8 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     preferences.previewTabs,
     preferences.defaultTerminalDock,
     language,
+    storage,
+    persistence,
   ])
 
   // Resolve delayed snapshot callbacks against the latest state, including when
@@ -1071,14 +1163,14 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
         else api.setTerminalPanel(taskId, settings)
       },
       closeView: (taskId, viewId) =>
-        closeAfterTerminalCheck([viewId], () => {
+        runtime.terminals.closeAfterTerminalCheck([viewId], () => {
           const scope = closingPanel(api.taskUi[taskId], [viewId])
           if (active(taskId) && scope && !(scope === 'editor' && toolOpen()) && !api.dirty[viewId])
             change((current) => current.closeView(taskId, viewId), scope)
           else api.closeView(taskId, viewId)
         }),
       closeViews: (taskId, viewIds) =>
-        closeAfterTerminalCheck(viewIds, () => {
+        runtime.terminals.closeAfterTerminalCheck(viewIds, () => {
           const scope = closingPanel(api.taskUi[taskId], viewIds)
           if (active(taskId) && scope && !(scope === 'editor' && toolOpen()) && !viewIds.some((id) => api.dirty[id]))
             change((current) => current.closeViews(taskId, viewIds), scope)
@@ -1089,7 +1181,7 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
           ? change((current) => current.showChat(taskId), 'editor')
           : api.showChat(taskId),
     }
-  }, [api])
+  }, [api, runtime])
 
   const latestActionsApi = useRef(animatedApi)
   latestActionsApi.current = animatedApi
@@ -1106,9 +1198,18 @@ export function WorkspaceProvider({ children }: { children: (loaded: boolean) =>
     [],
   )
 
+  // Published for views of other hosts (`useWorkspaceOf`) once restored; the active store is also the context below.
+  useLayoutEffect(() => publish(hostId, loaded ? animatedApi : null), [hostId, animatedApi, loaded])
+  useLayoutEffect(() => () => publish(hostId, null), [hostId])
+
+  if (!children) return null
   return (
-    <ActionsCtx.Provider value={actions}>
-      <Ctx.Provider value={animatedApi}>{children(loaded)}</Ctx.Provider>
-    </ActionsCtx.Provider>
+    <HostProvider hostId={hostId}>
+      <RuntimeCtx.Provider value={runtime}>
+        <ActionsCtx.Provider value={actions}>
+          <Ctx.Provider value={animatedApi}>{children(loaded)}</Ctx.Provider>
+        </ActionsCtx.Provider>
+      </RuntimeCtx.Provider>
+    </HostProvider>
   )
-}
+})
