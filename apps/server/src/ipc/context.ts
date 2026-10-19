@@ -99,14 +99,19 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     if (models) host.send('settings:models', models)
     preferencesChanged(preferences)
   }
+  let catalogConfiguration = JSON.stringify(loadPreferences().providerBinaries)
   const preferencesChanged = (preferences: AppPreferences) => {
+    const nextConfiguration = JSON.stringify(preferences.providerBinaries)
+    const catalogChanged = nextConfiguration !== catalogConfiguration
+    catalogConfiguration = nextConfiguration
     host.send('settings:changed', preferences)
     recaps.settingsChanged()
     providers.settingsChanged()
     awake.settingsChanged()
     host.send('usage:changed', usage.list())
     updates.settingsChanged()
-    agents.invalidateCatalog()
+    // Ordinary preference saves must not launch provider discovery for the returned settings snapshot.
+    if (catalogChanged) agents.invalidateCatalog()
     agents.goalsSettingsChanged()
     memory?.settingsChanged()
     learning?.settingsChanged()

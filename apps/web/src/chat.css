@@ -210,7 +210,7 @@
   background: var(--primary-hover);
 }
 .composer-bar .send:disabled {
-  background: #ffffff14;
+  background: rgb(var(--ink) / 0.08);
   color: var(--placeholder);
   opacity: 1;
   box-shadow: none;

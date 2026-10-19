@@ -50,7 +50,7 @@ export function AnimatedMark({ size, className = '' }: { size: number; className
           className="animated-mark-stem"
           d="M356 694V518C356 402 434 334 548 334"
           pathLength="1"
-          stroke="#dedee3"
+          style={{ stroke: 'var(--brand-mark)' }}
           strokeWidth="120"
           strokeLinecap="round"
         />
@@ -115,7 +115,7 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
           aria-hidden={released}
         >
           <div
-            className="startup-logo [&_>_svg]:block [&_>_svg]:w-full [&_>_svg]:h-auto [&_>_svg]:overflow-visible w-[min(280px,_calc(100vw_-_48px))] [color:#f5f5f7]"
+            className="startup-logo [&_>_svg]:block [&_>_svg]:w-full [&_>_svg]:h-auto [&_>_svg]:overflow-visible w-[min(280px,_calc(100vw_-_48px))] [color:var(--text)]"
             dangerouslySetInnerHTML={{ __html: startupLogo }}
             onAnimationEnd={(event) => {
               if (event.animationName === 'ramu-startup-dot') setMotionDone(true)
@@ -130,5 +130,13 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
 /** The "ramu." wordmark, drawn for dark surfaces. */
 export function Wordmark({ height, className }: { height: number; className?: string }) {
   useLanguage()
-  return <img className={className} src={wordmark} height={height} alt="Ramu" draggable={false} />
+  return (
+    <img
+      className={`${className ?? ''} [:root[data-appearance='light']_&]:[filter:invert(1)_hue-rotate(180deg)]`}
+      src={wordmark}
+      height={height}
+      alt="Ramu"
+      draggable={false}
+    />
+  )
 }

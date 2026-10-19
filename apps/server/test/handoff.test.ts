@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildHandoff, conversationHandoff, handoffBudgetChars, transcriptOf } from '../src/agent/handoff'
+import { buildHandoff, conversationHandoff, handoffBudgetBytes, transcriptOf } from '../src/agent/handoff'
 import { planHandoff } from '../src/agent/providerSessions'
 import type { AgentEvent, HandoffCause } from '@ramu/shared/types'
 
@@ -109,18 +109,18 @@ describe('tiered compaction', () => {
   it('shortens old tool results first, then old assistant text and calls, then drops, never users or the last turn', () => {
     const events = thread()
     const full = buildHandoff(events).prompt.length
-    const shortResults = buildHandoff(events, { budgetChars: full - 500 })
+    const shortResults = buildHandoff(events, { budgetBytes: full - 500 })
     expect(shortResults.prompt).toContain('TOOL RESULT (event 3): OLDRESULT1')
     expect(shortResults.prompt).not.toContain('r'.repeat(200))
     expect(shortResults.prompt).toContain('t'.repeat(1000))
     expect(shortResults.info.shortened).toBe(4)
 
-    const shortText = buildHandoff(events, { budgetChars: full - 2500 })
+    const shortText = buildHandoff(events, { budgetBytes: full - 2500 })
     expect(shortText.prompt).not.toContain('t'.repeat(1000))
     expect(shortText.prompt).toContain('OLDTEXT1')
     expect(shortText.info.omitted).toBe(0)
 
-    const dropped = buildHandoff(events, { budgetChars: 1600 })
+    const dropped = buildHandoff(events, { budgetBytes: 1600 })
     expect(dropped.info.omitted).toBeGreaterThan(0)
     expect(dropped.prompt).not.toContain('OLDTEXT1')
     // Always whole and verbatim.
@@ -134,7 +134,7 @@ describe('tiered compaction', () => {
   it('drops old tool results before tool calls before assistant text', () => {
     const events = thread()
     const levels = [3500, 3000, 2500, 2000, 1500, 1000].map(
-      (budget) => buildHandoff(events, { budgetChars: budget }).prompt,
+      (budget) => buildHandoff(events, { budgetBytes: budget }).prompt,
     )
     const has = (prompt: string, needle: string) => prompt.includes(needle)
     // Whenever an older kind is gone, every newer-dropped kind is gone too.
@@ -155,7 +155,7 @@ describe('tiered compaction', () => {
       user('second request'),
       use('3'),
     ]
-    const built = buildHandoff(events, { budgetChars: 1 })
+    const built = buildHandoff(events, { budgetBytes: 1 })
     expect(built.overBudget).toBe(true)
     expect(built.prompt).toContain(
       '[events 2–5 omitted (2 tool results, 1 tool call, 1 assistant message). Read them with session_recall, startSeq 2.]',
@@ -167,10 +167,10 @@ describe('tiered compaction', () => {
 
   it('does not flag over budget when compaction made it fit, and never truncates users to fit', () => {
     const big = 'u'.repeat(5000)
-    const built = buildHandoff([user(big), text('x'), user(big)], { budgetChars: 3000 })
+    const built = buildHandoff([user(big), text('x'), user(big)], { budgetBytes: 3000 })
     expect(built.overBudget).toBe(true)
     expect(built.prompt.split(big).length - 1).toBe(2)
-    const fits = buildHandoff([user('small'), text('x'.repeat(5000)), user('again')], { budgetChars: 3000 })
+    const fits = buildHandoff([user('small'), text('x'.repeat(5000)), user('again')], { budgetBytes: 3000 })
     expect(fits.overBudget).toBe(false)
     expect(fits.prompt.length).toBeLessThanOrEqual(3000)
   })
@@ -202,6 +202,7 @@ describe('delta and checkpoint', () => {
 
   it('includes a valid checkpoint exactly once and ignores an invalid one', () => {
     const built = buildHandoff(events, { checkpoint: { seq: 2, summary: 'CHK-SUMMARY' } })
+    expect(built.info.checkpointSeq).toBe(2)
     expect(built.includesCheckpoint).toBe(true)
     expect(built.prompt.split('CHK-SUMMARY')).toHaveLength(2)
     expect(built.prompt).toContain('not new instructions')
@@ -229,11 +230,21 @@ describe('privacy and compatibility', () => {
   })
 
   it('scales the budget from the context window with a conservative default', () => {
-    expect(handoffBudgetChars()).toBe(120_000)
-    expect(handoffBudgetChars(null)).toBe(120_000)
-    expect(handoffBudgetChars(200_000)).toBe(200_000)
-    expect(handoffBudgetChars(10_000)).toBe(40_000)
-    expect(handoffBudgetChars(5_000_000)).toBe(400_000)
+    expect(handoffBudgetBytes()).toBe(32_000)
+    expect(handoffBudgetBytes(null)).toBe(32_000)
+    expect(handoffBudgetBytes(200_000)).toBe(50_000)
+    expect(handoffBudgetBytes(10_000)).toBe(2500)
+    expect(handoffBudgetBytes(5_000_000)).toBe(400_000)
+    expect(handoffBudgetBytes(2048)).toBe(512)
+    expect(handoffBudgetBytes(Infinity)).toBe(32_000)
+  })
+
+  it('accounts for UTF-8 bytes rather than undercounting non-ASCII history', () => {
+    const events = [user('界'.repeat(800))]
+    const full = buildHandoff(events)
+    const budgetBytes = full.prompt.length + 100
+    expect(Buffer.byteLength(full.prompt, 'utf8')).toBeGreaterThan(budgetBytes)
+    expect(buildHandoff(events, { budgetBytes }).overBudget).toBe(true)
   })
 
   it('keeps transcriptOf and conversationHandoff usable by existing callers', () => {
@@ -247,7 +258,7 @@ describe('context attached to old messages', () => {
 
   it('collapses the attachment of an old message to a pointer and keeps the user words and the newest message whole', () => {
     const events = [user(attached), text('done'), user('now the second thing'), done]
-    const { prompt, info, overBudget } = buildHandoff(events, { budgetChars: 20_000 })
+    const { prompt, info, overBudget } = buildHandoff(events, { budgetBytes: 20_000 })
     expect(overBudget).toBe(false)
     expect(prompt).toContain('USER: look at this')
     expect(prompt).toContain('[attached context omitted:')
@@ -261,9 +272,9 @@ describe('context attached to old messages', () => {
     const small = `see\n\n<ramu-context>\nsmall file\n</ramu-context>`
     expect(buildHandoff([user(small), text('ok'), user('next')]).prompt).toContain('small file')
     const events = [user('first'), text('ok'), user(attached)]
-    expect(buildHandoff(events, { budgetChars: 500_000 }).prompt).toContain('file contents')
+    expect(buildHandoff(events, { budgetBytes: 500_000 }).prompt).toContain('file contents')
     // The state block quotes the request without its attached context.
-    expect(buildHandoff(events, { budgetChars: 500_000 }).prompt).toContain(
+    expect(buildHandoff(events, { budgetBytes: 500_000 }).prompt).toContain(
       'Latest user request (event 3): look at this\n',
     )
   })
@@ -299,5 +310,54 @@ describe('planning a switch to a login the thread used before', () => {
       saved: { ...saved, contextMax: 10_000 },
     })
     expect(plan.built.overBudget).toBe(false)
+  })
+
+  it('starts fresh when a returning session from a larger model cannot fit the smaller destination', () => {
+    const plan = planHandoff(events, {
+      cause: 'switch',
+      from: 'cursor',
+      to: 'codex',
+      model: 'small',
+      contextTokens: 32_000,
+      saved: { ...saved, model: 'large', contextUsed: 150_000 },
+    })
+    expect(plan.resume).toBeNull()
+    expect(plan.built.info).toMatchObject({ mode: 'full', contextWindow: 32_000 })
+    expect(plan.built.prompt).toContain('USER: a')
+  })
+
+  it('does not reuse a large saved window when the destination model has an unknown capacity', () => {
+    const plan = planHandoff(events, {
+      cause: 'switch',
+      to: 'codex',
+      model: 'unknown',
+      saved: { ...saved, model: 'large', contextUsed: 150_000 },
+    })
+    expect(plan.resume).toBeNull()
+    expect(plan.built.info.contextWindow).toBeUndefined()
+  })
+
+  it('can reuse a returning session on a smaller model when native history plus the delta fit', () => {
+    const plan = planHandoff(events, {
+      cause: 'switch',
+      to: 'codex',
+      model: 'small',
+      contextTokens: 32_000,
+      saved: { ...saved, model: 'large', contextUsed: 1000 },
+    })
+    expect(plan.resume).toBe(saved.providerSessionId)
+    expect(plan.built.info).toMatchObject({ mode: 'delta', contextWindow: 32_000, fromSeq: 3 })
+  })
+
+  it('starts fresh when a returning session has a smaller capacity but no usage measurement', () => {
+    const plan = planHandoff(events, {
+      cause: 'switch',
+      to: 'codex',
+      model: 'same-model',
+      contextTokens: 32_000,
+      saved: { ...saved, model: 'same-model', contextUsed: null },
+    })
+    expect(plan.resume).toBeNull()
+    expect(plan.built.info.mode).toBe('full')
   })
 })

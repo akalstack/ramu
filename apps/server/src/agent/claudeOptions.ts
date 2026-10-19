@@ -1,6 +1,6 @@
 import type { CanUseTool, Options } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionInfo, AppPreferences, McpConnection } from '@ramu/shared/types'
-import { discoverMcpServers } from '../context'
+import { claudeMcpServers, claudeMcpEnvironment } from '../providers/claudeMcp'
 import { providerAdapter } from '../providers/adapters'
 import { providerEnvironment } from '../providers/providerBinaries'
 import { baseMode } from './settings'
@@ -30,6 +30,7 @@ export function claudeLaunchOptions({
   preferences,
   hooks,
 }: ClaudeLaunch): Options {
+  const env = providerEnvironment('claude-code', preferences?.().providerBinaries, s.settings.accountId ?? 'default')
   const plugins = connection?.skillsDir
     ? (providerAdapter('claude-code').skillsLaunch?.(connection.skillsDir).plugins ?? [])
     : []
@@ -47,7 +48,7 @@ export function claudeLaunchOptions({
     ...(connection
       ? {
           mcpServers: {
-            ...(discoverMcpServers(s, ['ramu']) as NonNullable<Options['mcpServers']>),
+            ...(claudeMcpServers(s, connection.mcpConfigDirs, env) as NonNullable<Options['mcpServers']>),
             ramu: {
               type: 'http' as const,
               url: connection.url,
@@ -72,14 +73,7 @@ export function claudeLaunchOptions({
     ...(s.settings.model ? { model: s.settings.model } : {}),
     ...(s.settings.effort ? { effort: s.settings.effort as Options['effort'] } : {}),
     ...(resume ? { resume } : {}),
-    ...(connection || (s.settings.accountId && s.settings.accountId !== 'default')
-      ? {
-          env: {
-            ...providerEnvironment('claude-code', preferences?.().providerBinaries, s.settings.accountId ?? 'default'),
-            ...(connection ? { MCP_TOOL_TIMEOUT: String(3_600_000) } : {}),
-          },
-        }
-      : {}),
+    env: connection ? claudeMcpEnvironment(env) : env,
     ...(hooks ? { hooks } : {}),
     // Sub-agents get their own transcript and progress line in the chat.
     forwardSubagentText: true,

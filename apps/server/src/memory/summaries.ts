@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { basename } from 'node:path'
 import { z } from 'zod'
+import { toolQuery, toolResultLimit } from '../toolInputs'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { cleanLabel } from '@ramu/shared/text'
 import {
@@ -705,7 +706,7 @@ export function registerLibraryTools(server: McpServer, host: LibraryToolHost, s
     {
       description:
         'Search every saved memory (all projects and global), active ones first. Entries marked protected are left alone unless the user explicitly asks to change them.',
-      inputSchema: { query: z.string().max(500), limit: z.number().int().min(1).max(30).default(10) },
+      inputSchema: { query: toolQuery, limit: toolResultLimit.default(10) },
     },
     ({ query, limit }) =>
       reply(() => {

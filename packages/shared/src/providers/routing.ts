@@ -96,8 +96,6 @@ export interface RouteContext {
   now?: number
   /** Steps already used for this chat, as `provider:model`. */
   attempted?: ReadonlySet<string>
-  /** Move up to a higher-ranked entry with room even when the current one is fine. Main chats only. */
-  promote?: boolean
 }
 
 /** The first chain entry that is available, not tried yet and under the threshold. */
@@ -112,11 +110,11 @@ export function nextStep(chain: FallbackStep[], context: RouteContext): Fallback
   return null
 }
 
-/** peak is the reading that forced the move; a move up to a higher-ranked entry has none. */
+/** The usage reading that requires switching models. */
 export interface RouteDecision {
   step: FallbackStep
   reason: string
-  peak?: UsageReading
+  peak: UsageReading
 }
 
 export function windowName(reading: UsageReading): string {
@@ -138,11 +136,7 @@ export function limitReason(provider: AgentProvider, peak: UsageReading): string
   return `${providerName(provider)}'s ${windowName(peak)} limit ${peak.status === 'limited' ? 'was reached' : `was at ${peak.usedPercent}%`}${reset}`
 }
 
-/**
- * Where a message should go instead: the highest-ranked entry with room when the chat's model is over the threshold,
- * or, with `promote`, a higher-ranked entry than the chat's own once it has room.
- * Null means send as planned: fallback is off, nothing is better, or the chat's model is not in the order.
- */
+/** Switch only when the current model reaches the usage threshold and another entry has room. */
 export function planRoute(
   settings: Pick<AgentSettings, 'provider' | 'model' | 'autoFallback'>,
   order: FallbackStep[],
@@ -162,15 +156,7 @@ export function planRoute(
     const step = nextStep(order, { ...context, attempted })
     return step ? { step, peak, reason: limitReason(settings.provider, peak) } : null
   }
-  if (!context.promote) return null
-  // A model outside the order is the user's own choice; it stays until it runs out.
-  const rank = order.findIndex((entry) => {
-    const step = resolveStep(entry, context.catalogs)
-    return !!step && stepKey(step) === current
-  })
-  if (rank <= 0) return null
-  const step = nextStep(order.slice(0, rank), { ...context, attempted })
-  return step ? { step, reason: 'A higher-ranked model has room' } : null
+  return null
 }
 
 /** `provider:model` for a chat's settings, with the provider's default model filled in. */

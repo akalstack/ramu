@@ -55,7 +55,7 @@ import { RecapService } from './memory/recaps'
 import { MemoryService, registerMemoryTools } from './memory/memory'
 import { SummaryService, registerLibraryTools, withoutTools } from './memory/summaries'
 import { discoverSkills } from './context'
-import type { AgentSessionInfo, ScheduleInput } from '@ramu/shared/types'
+import { NO_PROJECT, type AgentSessionInfo, type ScheduleInput } from '@ramu/shared/types'
 
 const config = loadConfig()
 const { userData, socketPath } = config
@@ -765,11 +765,21 @@ agents.toolConnection = (session) => {
       (workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence?.toolSearch ?? true),
   })
   const review = summaries.isReviewChat(session.taskId)
+  const projectId = projectOf(session)
+  const projectRoot = workspace.listProjects().find((project) => project.id === projectId)?.root
+  const mcpConfigDirs =
+    projectId && projectId !== NO_PROJECT
+      ? [
+          ...(projectRoot ? [projectRoot] : []),
+          ...workspace.listBindings(session.taskId).map((binding) => workspace.getRepository(binding.repoId).root),
+        ]
+      : []
   const skillsDir = review ? null : learning.exportDir(projectOf(session), session.provider, session.cwd)
   return {
     url: `http://127.0.0.1:${address.port}/mcp`,
     token,
     ...(review ? { restricted: true } : {}),
+    ...(mcpConfigDirs.length ? { mcpConfigDirs } : {}),
     ...(skillsDir ? { skillsDir } : {}),
   }
 }

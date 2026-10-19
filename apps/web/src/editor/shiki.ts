@@ -7,7 +7,7 @@ import { createOnigurumaEngine } from 'shiki/engine/oniguruma'
 import { bundledLanguages } from 'shiki/langs'
 import { bundledThemes } from 'shiki/themes'
 import * as monacoApi from 'monaco-editor/editor/editor.api.js'
-import { RAMU_EDITOR_COLORS } from './editorTheme'
+import { RAMU_EDITOR_COLORS, RAMU_EDITOR_COLORS_LIGHT } from './editorTheme'
 import { monarchReady } from './monacoLanguages'
 
 type Monaco = Parameters<typeof shikiToMonaco>[1]
@@ -74,17 +74,17 @@ async function engine() {
 
 function createHighlighter() {
   return (highlighter ??= (async () => {
-    const theme = (await bundledThemes['github-dark-default']()).default
     // `rules` is not in Shiki's theme type, but @shikijs/monaco reads it when present.
-    const ramu = {
-      ...theme,
-      name: 'ramu',
-      // Only the token colors come from GitHub's theme; the surfaces are Ramu's own.
-      colors: RAMU_EDITOR_COLORS,
-      rules: monacoRules(theme),
-    } as typeof theme
+    const ramu = async (source: 'github-dark-default' | 'github-light-default', name: string, colors: object) => {
+      const theme = (await bundledThemes[source]()).default
+      // Only the token colors come from GitHub's themes; the surfaces are Ramu's own.
+      return { ...theme, name, colors, rules: monacoRules(theme) } as typeof theme
+    }
     return createHighlighterCore({
-      themes: [ramu],
+      themes: [
+        await ramu('github-dark-default', 'ramu', RAMU_EDITOR_COLORS),
+        await ramu('github-light-default', 'ramu-light', RAMU_EDITOR_COLORS_LIGHT),
+      ],
       langs: [],
       engine: await engine(),
     })
@@ -107,6 +107,19 @@ async function install(monacoLanguage: string, language: string) {
   monaco.editor.setTheme = setTheme
   monaco.editor.create = create
   shikiToMonaco(shiki, monaco)
+}
+
+/** Registers an editor theme with GitHub's token colors and the given workbench colors, ready for `setTheme`. */
+export async function defineEditorTheme(name: string, base: 'dark' | 'light', colors: Record<string, string>) {
+  const shiki = await createHighlighter()
+  const theme = (await bundledThemes[base === 'dark' ? 'github-dark-default' : 'github-light-default']()).default
+  await shiki.loadTheme({ ...theme, name, colors, rules: monacoRules(theme) } as typeof theme)
+  chain = chain.then(() => {
+    monaco.editor.setTheme = setTheme
+    monaco.editor.create = create
+    shikiToMonaco(shiki, monaco)
+  })
+  await chain
 }
 
 /** Resolves once Shiki colors the Monaco language; resolves anyway when Shiki has no grammar for it. */

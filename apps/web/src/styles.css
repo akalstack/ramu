@@ -9,20 +9,24 @@
   --bubble: #2c2c31;
   --raised: #29292d;
   --raised-2: #232327;
+  /* Filled-but-quiet surfaces (secondary buttons, user bubbles, muted blocks): raised on dark, tinted on light. */
+  --subtle: var(--raised);
   --code-bg: #141416;
   /* Controls are filled, not outlined: a translucent fill reads on the window, the canvas and raised surfaces alike. */
-  --fill: rgba(255, 255, 255, 0.05);
-  --fill-hover: rgba(255, 255, 255, 0.08);
+  /* Overlay ink: white over dark surfaces, black over light ones. Every translucent fill and line derives from it. */
+  --ink: 255 255 255;
+  --fill: rgb(var(--ink) / 0.05);
+  --fill-hover: rgb(var(--ink) / 0.08);
   --field: var(--fill);
-  --hover: rgba(255, 255, 255, 0.055);
-  --pressed: rgba(255, 255, 255, 0.09);
-  --line: rgba(255, 255, 255, 0.065);
+  --hover: rgb(var(--ink) / 0.055);
+  --pressed: rgb(var(--ink) / 0.09);
+  --line: rgb(var(--ink) / 0.065);
   --pane-border-width: 1px;
   --pane-border-color: var(--line);
   --pane-border-active: var(--accent);
-  --line-strong: rgba(255, 255, 255, 0.11);
+  --line-strong: rgb(var(--ink) / 0.11);
   /* The faint edge floating surfaces (menus, popovers, dialogs) keep against dark content. */
-  --edge: rgba(255, 255, 255, 0.07);
+  --edge: rgb(var(--ink) / 0.07);
   --text: #f5f5f7;
   --soft: #c7c7cc;
   --muted: #a1a1a8;
@@ -41,6 +45,7 @@
   --font-hero: calc(var(--ui-font-size) + 12px);
   --chat-column-width: 760px;
   --primary-ink: #ffffff;
+  --brand-mark: #dedee3;
   --accent-wash: color-mix(in srgb, var(--accent) 10%, transparent);
   --ok: #30d158;
   --ok-wash: #30d15814;
@@ -66,6 +71,44 @@
   --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.2);
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   @apply [color-scheme:dark];
+}
+/* Light appearance: the same roles on paper-white surfaces. Status colors darken to stay readable on white. */
+:root[data-appearance='light'] {
+  --window: #ececef;
+  --canvas: #ffffff;
+  --bubble: #ebebef;
+  --raised: #ffffff;
+  --raised-2: #f6f6f8;
+  --subtle: #f0f0f3;
+  --code-bg: #f4f4f6;
+  --ink: 0 0 0;
+  /* Black overlays read weaker than white ones, so the light steps are a little stronger. */
+  --fill: rgb(var(--ink) / 0.055);
+  --fill-hover: rgb(var(--ink) / 0.09);
+  --hover: rgb(var(--ink) / 0.06);
+  --pressed: rgb(var(--ink) / 0.1);
+  --line: rgb(var(--ink) / 0.1);
+  --line-strong: rgb(var(--ink) / 0.16);
+  --edge: rgb(var(--ink) / 0.1);
+  --brand-mark: #2a2a30;
+  --text: #17171a;
+  --soft: #46464d;
+  --muted: #62626a;
+  --text-body: #26262b;
+  --placeholder: #8a8a92;
+  --ok: #1a7f37;
+  --ok-wash: #1a7f3714;
+  --warn: #9a5b00;
+  --warn-wash: #9a5b0014;
+  --bad: #c62828;
+  --bad-wash: #c6282814;
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.16), 0 1px 3px rgba(0, 0, 0, 0.1);
+  @apply [color-scheme:light];
+}
+/* On a white canvas a raised surface needs an edge, since there is no lighter tone to lift it. */
+:root[data-appearance='light'] .composer {
+  @apply [border:1px_solid_var(--line-strong)];
+  @apply [box-shadow:0_1px_3px_rgba(0,_0,_0,_0.06)];
 }
 /* Grayscale antialiasing is the default; the Appearance setting switches back to the heavier macOS rendering. */
 :root:not([data-font-smoothing='system']) {
@@ -646,7 +689,7 @@ body {
   @apply [-webkit-backdrop-filter:blur(30px)_saturate(1.6)];
   @apply [backdrop-filter:blur(30px)_saturate(1.6)];
   @apply [border-color:var(--line-strong)];
-  @apply [box-shadow:0_22px_60px_rgba(0,_0,_0,_0.5),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgba(255,_255,_255,_0.05)];
+  @apply [box-shadow:0_22px_60px_rgba(0,_0,_0,_0.5),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgb(var(--ink)_/_0.05)];
 }
 
 /* Optical centring. Labels are mostly lowercase, so text sits ~1px above the geometric centre:
@@ -998,6 +1041,9 @@ button.scm-sync:hover:not(:disabled) {
   --float-bg: color-mix(in srgb, var(--raised) 58%, transparent);
   --float-blur: blur(34px) saturate(1.9);
 }
+:root[data-appearance='light'] {
+  --float-bg: color-mix(in srgb, var(--raised) 86%, transparent);
+}
 [data-slot='dropdown-menu-content'],
 [data-slot='dropdown-menu-sub-content'],
 [data-slot='select-content'],
@@ -1007,7 +1053,7 @@ button.scm-sync:hover:not(:disabled) {
   @apply [-webkit-backdrop-filter:var(--float-blur)];
   @apply [backdrop-filter:var(--float-blur)];
   @apply [border:1px_solid_var(--edge)];
-  @apply [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgba(255,_255,_255,_0.07)];
+  @apply [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgb(var(--ink)_/_0.07)];
 }
 [data-slot='dialog-overlay'] {
   @apply [-webkit-backdrop-filter:blur(6px)];

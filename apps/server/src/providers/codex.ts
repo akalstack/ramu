@@ -1,5 +1,6 @@
+import { modelContextWindow } from './modelContext'
 import { permissionKey } from '../agent/permissionApprovals'
-import { codexMcpConfig, repoMcpServers } from './discoveredMcp'
+import { codexMcpConfig, repoMcpServers, configuredMcpStatus } from './discoveredMcp'
 import { classifyLimit } from './limitClassifier'
 import { elicitationRequest, elicitationContent } from '../agent/elicitation'
 import { attachmentPrompt } from '../attachments'
@@ -148,6 +149,7 @@ export async function codexModels(accountId?: string): Promise<AgentModel[]> {
             provider: 'codex',
             id: m.model,
             name: m.displayName,
+            ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
             efforts: (m.supportedReasoningEfforts ?? []).map((e: Wire) => e.reasoningEffort),
             defaultEffort: m.defaultReasoningEffort,
             isDefault: m.isDefault,
@@ -211,6 +213,53 @@ class CodexSession implements CodexRunner {
   setTools(connection: McpConnection): void {
     this.connection = connection
   }
+  async mcpStatus() {
+    if (!this.rpc || !this.threadId || this.stopped) return configuredMcpStatus(this.scope, this.connection)
+    const servers = []
+    const seen = new Set<string>()
+    let cursor: string | undefined
+    do {
+      const page = await this.rpc.request('mcpServerStatus/list', {
+        threadId: this.threadId,
+        limit: 100,
+        detail: 'toolsAndAuthOnly',
+        ...(cursor ? { cursor } : {}),
+      })
+      for (const server of page.data ?? []) {
+        const states: Record<string, string> = {
+          notStarted: 'pending',
+          starting: 'pending',
+          authenticationRequired: 'needs-auth',
+          cancelled: 'cancelled',
+        }
+        // A tool catalog or saved credentials alone do not prove a live connection.
+        const status = server.runtimeStatus
+          ? (states[server.runtimeStatus] ?? server.runtimeStatus)
+          : server.authStatus === 'notLoggedIn'
+            ? 'needs-auth'
+            : server.toolsError
+              ? 'failed'
+              : 'unknown'
+        servers.push({
+          name: String(server.name),
+          status,
+          ...(server.tools ? { toolCount: Object.keys(server.tools).length } : {}),
+          ...(server.toolsError ? { error: String(server.toolsError) } : {}),
+        })
+      }
+      cursor = page.nextCursor ?? undefined
+      if (cursor && seen.has(cursor)) throw new Error('Codex repeated an MCP inventory cursor')
+      if (cursor) seen.add(cursor)
+      if (seen.size >= 100) throw new Error('Codex MCP inventory exceeded the page limit')
+    } while (cursor)
+    return { supported: true, live: true, source: 'live' as const, canReload: true, servers }
+  }
+
+  async reloadMcp(): Promise<void> {
+    if (!this.rpc || this.stopped) throw new Error('Codex session is not running')
+    await this.rpc.request('config/mcpServer/reload', {})
+  }
+
   private policies() {
     if (this.readOnly) return { approvalPolicy: 'never', sandboxPolicy: { type: 'readOnly' } }
     return this.settings.access === 'full'
@@ -229,7 +278,7 @@ class CodexSession implements CodexRunner {
       this.connection,
       [
         ...(this.connection?.interceptSubagents ? [CODEX_HOOK_CONFIG] : []),
-        ...(this.connection ? codexMcpConfig(repoMcpServers(this.scope)) : []),
+        ...(this.connection ? codexMcpConfig(repoMcpServers(this.scope, this.connection?.mcpConfigDirs)) : []),
       ],
       this.settings.accountId ?? 'default',
     )
@@ -261,6 +310,7 @@ class CodexSession implements CodexRunner {
     this.threadId = result.thread.id
     this.emit({
       kind: 'init',
+      mcpServers: configuredMcpStatus(this.scope, this.connection).servers,
       model: result.model || this.settings.model || 'Codex default',
       cwd: this.scope.cwd,
       providerSessionId: this.threadId,

@@ -1,3 +1,4 @@
+import { mcpServerDetails } from './mcpStatus'
 import { toolDescription, toolInput } from '../providers/acpEvents'
 import { agentContent } from '@ramu/shared/chat/agentContent'
 import type { Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk'
@@ -177,6 +178,7 @@ export class ClaudeStreamPump {
             model: msg.model,
             cwd: msg.cwd,
             providerSessionId: msg.session_id,
+            mcpServers: mcpServerDetails(msg.mcp_servers ?? []),
           })
           this.host.setState(id, 'running')
         }

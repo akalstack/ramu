@@ -171,36 +171,27 @@ describe('planRoute', () => {
       planRoute(claude, [step('claude-code', 'claude-opus')], { usage, catalogs, switchAt: 90, now: NOW }),
     ).toBeNull()
   })
-  it('moves up to a higher-ranked model with room only when asked', () => {
+  it('keeps a lower-ranked model while higher-ranked models recover', () => {
     const order = [step('claude-code', 'claude-opus'), step('codex', 'gpt-sol'), step('claude-code', 'claude-sonnet')]
     const sonnet = { ...claude, model: 'claude-sonnet' }
-    expect(planRoute(sonnet, order, { usage: [], catalogs, switchAt: 90, now: NOW })).toBeNull()
-    const up = planRoute(sonnet, order, { usage: [], catalogs, switchAt: 90, now: NOW, promote: true })
-    expect(up?.step.model).toBe('claude-opus')
-    expect(up?.peak).toBeUndefined()
-    // Opus is out, so the best with room is Codex.
-    expect(
-      planRoute(sonnet, order, {
-        usage: [reading({ window: 'weekly', scope: 'Opus', usedPercent: 99, resetsAt: NOW + 1 })],
-        catalogs,
-        switchAt: 90,
-        now: NOW,
-        promote: true,
-      })?.step.model,
-    ).toBe('gpt-sol')
+    for (const usage of [
+      [],
+      [reading({ window: 'weekly', scope: 'Opus', usedPercent: 99, resetsAt: NOW + 1 })],
+      [reading({ window: 'weekly', scope: 'Opus', usedPercent: 99, resetsAt: NOW - 1 })],
+    ]) {
+      expect(planRoute(sonnet, order, { usage, catalogs, switchAt: 90, now: NOW })).toBeNull()
+    }
   })
-  it('never moves the top model, or one outside the order, up', () => {
+  it('can return to a higher-ranked model when the current model reaches its threshold', () => {
     const order = [step('claude-code', 'claude-opus'), step('codex', 'gpt-sol')]
-    expect(planRoute(claude, order, { usage: [], catalogs, switchAt: 90, now: NOW, promote: true })).toBeNull()
     expect(
-      planRoute({ ...claude, model: 'claude-haiku' }, order, {
-        usage: [],
+      planRoute({ ...claude, provider: 'codex', model: 'gpt-sol' }, order, {
+        usage: [reading({ provider: 'codex', usedPercent: 95, resetsAt: NOW + 1 })],
         catalogs,
         switchAt: 90,
         now: NOW,
-        promote: true,
-      }),
-    ).toBeNull()
+      })?.step.model,
+    ).toBe('claude-opus')
   })
   it('maps effort onto the target model', () => {
     const usage = [reading({ usedPercent: 99, resetsAt: NOW + 1 })]

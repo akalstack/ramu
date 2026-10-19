@@ -141,6 +141,64 @@ beforeEach(() => {
 afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
 describe('AgentService', () => {
+  it.each(['stop', 'configure'] as const)('closes provider prompts when %s detaches their runner', async (action) => {
+    let starts = 0
+    const settings = { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' as const, access: 'auto' as const }
+    const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => ({
+      start: async () => {
+        if (starts++ === 0) {
+          emit({
+            kind: 'elicitation',
+            ...elicitationRequest('mcp', {
+              serverName: 'ramu',
+              message: 'Allow tool search?',
+              mode: 'form',
+              requestedSchema: { type: 'object', properties: {} },
+            }),
+          })
+          emit({
+            kind: 'permission-request',
+            requestId: 'permission',
+            toolName: 'Bash',
+            title: 'Run command',
+            detail: 'pwd',
+          })
+          const question = { header: 'Next', question: 'Continue?', multiSelect: false, options: [] }
+          emit({ kind: 'question', requestId: 'blocking', questions: [question] })
+          emit({ kind: 'question', requestId: 'async', responseMode: 'message', questions: [question] })
+          emit({ kind: 'state', state: 'needs-input' })
+        } else emit({ kind: 'state', state: 'running' })
+      },
+      send: async () => {},
+      steer: async () => {},
+      interrupt: async () => {},
+      stop: async () => {
+        emit({ kind: 'request-resolved', requestId: 'mcp', outcome: 'cancelled' })
+      },
+      replyPermission: () => {},
+      replyQuestion: () => {},
+    })
+    const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
+    vi.spyOn(svc, 'catalog').mockResolvedValue([
+      {
+        provider: 'codex',
+        models: [{ provider: 'codex', id: 'test', name: 'Test', isDefault: true, efforts: [], defaultEffort: null }],
+      },
+    ])
+    const chat = svc.start('t', scopeOf(cwd), 'Find Jira', settings)
+    await until(() => svc.get(chat.id).state === 'needs-input')
+    if (action === 'configure') await svc.configure(chat.id, { ...settings, access: 'full' })
+    else await svc.stopAndWait(chat.id)
+    const resolved = svc.events(chat.id).filter((event) => event.kind === 'request-resolved')
+    expect(resolved.map((event) => [event.requestId, event.outcome])).toEqual([
+      ['mcp', 'cancelled'],
+      ['permission', 'cancelled'],
+      ['blocking', 'cancelled'],
+    ])
+    expect(() => svc.replyElicitation(chat.id, 'mcp', 'accept', {})).toThrow(/already closed/)
+    await svc.stopAndWait(chat.id)
+  })
+
   it('lets only the user cancel a turn on providers whose steering interrupts it', async () => {
     const steered: string[] = []
     let ready = false
@@ -1093,7 +1151,7 @@ describe('Conversation provider settings and handoffs', () => {
   it('changes effort and permissions while a turn is waiting for approval, cancels the old request and resumes natively', async () => {
     const calls: Options[] = []
     const svc = service(calls)
-    const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
+    const s = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, model: 'sonnet', access: 'edits' })
     await until(() => svc.get(s.id).state === 'needs-input')
     await svc.configure(s.id, { ...full, model: 'sonnet', effort: 'high' })
     expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'request-resolved', outcome: 'cancelled' }))
@@ -2079,7 +2137,7 @@ describe('switching before a limit', () => {
     svc.stopAll()
   })
 
-  it('follows the configured chain: same provider, other model, with effort mapped', async () => {
+  it('follows the configured chain with a handoff when the other model has no known context capacity', async () => {
     const { svc } = withRouting([reading({ window: 'weekly', scope: 'Opus', usedPercent: 98 })], {
       order: [
         { id: 'a', provider: 'claude-code', model: 'sonnet', effort: 'high' },
@@ -2091,7 +2149,13 @@ describe('switching before a limit', () => {
     await svc.send(s.id, 'continue')
     await until(() => svc.get(s.id).state === 'idle' && svc.get(s.id).settings.model === 'sonnet')
     expect(svc.get(s.id)).toMatchObject({ provider: 'claude-code', providerSessionId: 'provider-1' })
-    expect(svc.events(s.id)).toContainEqual(expect.objectContaining({ kind: 'settings', handoff: false }))
+    expect(svc.events(s.id)).toContainEqual(
+      expect.objectContaining({
+        kind: 'settings',
+        handoff: true,
+        handoffInfo: expect.objectContaining({ mode: 'full' }),
+      }),
+    )
     svc.stopAll()
   })
 
@@ -2113,20 +2177,28 @@ describe('switching before a limit', () => {
     svc.stopAll()
   })
 
-  it('moves back up the order once a higher-ranked model has room', async () => {
+  it('keeps an automatic fallback after higher-ranked models recover, until its own threshold', async () => {
     const { svc, store } = withRouting([reading({ usedPercent: 40 })])
     const s = svc.start('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(s.id).state === 'idle')
-    store.readings = [reading({ usedPercent: 95, resetsAt: Date.now() + 200 })]
+    store.readings = [reading({ usedPercent: 95, resetsAt: Date.now() + 3_600_000 })]
     await svc.send(s.id, 'move over')
     await until(() => svc.get(s.id).provider === 'codex' && svc.get(s.id).state === 'idle')
-    await new Promise((r) => setTimeout(r, 250))
-    await svc.send(s.id, 'welcome back')
-    await until(() => svc.get(s.id).provider === 'claude-code' && svc.get(s.id).state === 'idle')
-    expect(svc.events(s.id)).toContainEqual(
-      expect.objectContaining({ kind: 'settings', reason: expect.stringContaining('higher-ranked') }),
-    )
+    store.readings = [reading({ usedPercent: 95, resetsAt: Date.now() - 1 })]
+    await svc.send(s.id, 'keep going')
+    await until(() => svc.get(s.id).state === 'idle')
+    expect(svc.get(s.id).provider).toBe('codex')
     svc.stopAll()
+    const { svc: restored, store: restoredStore } = withRouting([])
+    restored.markRestoredOnBoot()
+    await restored.send(s.id, 'still keep going')
+    await until(() => restored.get(s.id).state === 'idle')
+    expect(restored.get(s.id).provider).toBe('codex')
+    restoredStore.readings = [reading({ provider: 'codex', usedPercent: 99 })]
+    await restored.send(s.id, 'now switch at the threshold')
+    await until(() => restored.get(s.id).state === 'idle')
+    expect(restored.get(s.id).provider).toBe('claude-code')
+    restored.stopAll()
   })
 
   it('keeps a model picked by hand until it runs out, then follows the order again', async () => {
@@ -2134,7 +2206,6 @@ describe('switching before a limit', () => {
     const s = svc.start('t', scopeOf(cwd), 'hello', full)
     await until(() => svc.get(s.id).state === 'idle')
     await svc.configure(s.id, { ...full, provider: 'codex', model: 'codex-test' })
-    expect(svc.providerHold(s.id)).toBe('picked')
     await svc.send(s.id, 'stay')
     await until(() => svc.get(s.id).state === 'idle')
     expect(svc.get(s.id).provider).toBe('codex')
@@ -2145,11 +2216,50 @@ describe('switching before a limit', () => {
     svc.stopAll()
   })
 
-  it('starts a new thread on the highest-ranked model with room', async () => {
+  it('keeps the requested model for a new thread and follow-ups, including after restart', async () => {
     const { svc } = withRouting([])
     const s = await svc.startReviewed('t', scopeOf(cwd), 'hello', { ...full, provider: 'codex', model: 'codex-test' })
-    await until(() => svc.get(s.id).provider === 'claude-code' && svc.get(s.id).state === 'idle')
+    await until(() => svc.get(s.id).state === 'idle')
+    expect(svc.get(s.id).provider).toBe('codex')
+    await svc.send(s.id, 'stay on my choice')
+    await until(() => svc.get(s.id).state === 'idle')
+    expect(svc.get(s.id).provider).toBe('codex')
     svc.stopAll()
+    const { svc: restored } = withRouting([])
+    restored.markRestoredOnBoot()
+    await restored.send(s.id, 'still my choice')
+    await until(() => restored.get(s.id).state === 'idle')
+    expect(restored.get(s.id).provider).toBe('codex')
+    restored.holdProvider(s.id, null)
+    await restored.send(s.id, 'fallback enabled without a usage limit')
+    await until(() => restored.get(s.id).state === 'idle')
+    expect(restored.get(s.id).provider).toBe('codex')
+    restored.stopAll()
+  })
+
+  it('keeps an explicit selection of the model the thread already runs', async () => {
+    const { svc } = withRouting([])
+    const s = svc.start('t', scopeOf(cwd), 'hello', { ...full, provider: 'codex', model: 'codex-test' })
+    await until(() => svc.get(s.id).state === 'idle')
+    await svc.configure(s.id, svc.get(s.id).settings)
+    await svc.send(s.id, 'stay on this model')
+    await until(() => svc.get(s.id).state === 'idle')
+    expect(svc.get(s.id).provider).toBe('codex')
+    svc.stopAll()
+  })
+
+  it('retains a changed model after restarting the service', async () => {
+    const { svc } = withRouting([])
+    const s = svc.start('t', scopeOf(cwd), 'hello', full)
+    await until(() => svc.get(s.id).state === 'idle')
+    await svc.configure(s.id, { ...full, provider: 'codex', model: 'codex-test' })
+    svc.stopAll()
+    const { svc: restored } = withRouting([])
+    restored.markRestoredOnBoot()
+    await restored.send(s.id, 'keep my model')
+    await until(() => restored.get(s.id).state === 'idle')
+    expect(restored.get(s.id).provider).toBe('codex')
+    restored.stopAll()
   })
 
   it('records Codex usage from its runner without putting it in the thread', async () => {
@@ -3731,4 +3841,83 @@ it('keeps Antigravity Auto rules internal and preserves them when saved approval
   } finally {
     svc.stopAll()
   }
+})
+
+describe('MCP connection status', () => {
+  it('reads live status and reconnects a known server without sending an agent prompt', async () => {
+    const reconnectMcpServer = vi.fn(async () => {})
+    const mcpServerStatus = vi.fn(async () => [
+      {
+        name: 'pentools-atlassian',
+        status: 'connected',
+        tools: [{ name: 'jira' }],
+        config: { headers: { Authorization: 'secret' } },
+      },
+    ])
+    const query: QueryFn = (options) => Object.assign(fakeQuery([])(options), { mcpServerStatus, reconnectMcpServer })
+    const svc = new AgentService(db, () => {}, query)
+    const chat = svc.start('t', scopeOf(cwd), 'hello', full)
+    await until(() => svc.get(chat.id).state === 'idle')
+    expect(await svc.mcpStatus(chat.id)).toEqual({
+      supported: true,
+      live: true,
+      source: 'live',
+      canReconnect: true,
+      servers: [{ name: 'pentools-atlassian', status: 'connected', toolCount: 1 }],
+    })
+    await svc.reconnectMcp(chat.id, 'pentools-atlassian')
+    expect(reconnectMcpServer).toHaveBeenCalledExactlyOnceWith('pentools-atlassian')
+    await expect(svc.reconnectMcp(chat.id, 'missing')).rejects.toThrow('Unknown MCP server')
+    expect(svc.events(chat.id).filter((event) => event.kind === 'user')).toHaveLength(1)
+    svc.stopAll()
+    expect(await svc.mcpStatus(chat.id)).toMatchObject({ supported: true, live: false })
+    await expect(svc.reconnectMcp(chat.id, 'pentools-atlassian')).rejects.toThrow('while a Claude session is active')
+  })
+
+  it('routes native runner status and recovery controls without returning raw configuration', async () => {
+    const reconnectMcp = vi.fn(async () => {})
+    const reloadMcp = vi.fn(async () => {})
+    const factory = (...args: Parameters<typeof fakeCodex>) => ({
+      ...fakeCodex(...args),
+      mcpStatus: async () => ({
+        supported: true,
+        live: true,
+        source: 'live' as const,
+        canReconnect: true,
+        canReload: true,
+        servers: [
+          {
+            name: 'atlassian',
+            status: 'failed',
+            error: 'Cannot reach https://user:secret@example.com',
+            toolCount: 3,
+            config: { token: 'private' },
+          },
+        ],
+      }),
+      reconnectMcp,
+      reloadMcp,
+    })
+    const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
+    const chat = svc.start('t', scopeOf(cwd), 'hello', { ...full, provider: 'codex', model: 'codex-test' })
+    await until(() => svc.get(chat.id).state === 'idle')
+    const status = await svc.mcpStatus(chat.id)
+    expect(status.servers).toEqual([
+      { name: 'atlassian', status: 'failed', error: 'Cannot reach [server URL]', toolCount: 3 },
+    ])
+    await svc.reconnectMcp(chat.id, 'atlassian')
+    await svc.reloadMcp(chat.id)
+    expect(reconnectMcp).toHaveBeenCalledExactlyOnceWith('atlassian')
+    expect(reloadMcp).toHaveBeenCalledTimes(1)
+    await expect(svc.reconnectMcp(chat.id, 'missing')).rejects.toThrow('Unknown or unsupported MCP server')
+    svc.stopAll()
+  })
+
+  it('keeps a snapshot for a runner that has no live MCP API', async () => {
+    const svc = service()
+    const chat = svc.start('t', scopeOf(cwd), 'hello', { ...full, provider: 'codex', model: 'codex-test' })
+    await until(() => svc.get(chat.id).state === 'idle')
+    expect(await svc.mcpStatus(chat.id)).toEqual({ supported: true, live: false, source: 'snapshot', servers: [] })
+    svc.stopAll()
+  })
 })

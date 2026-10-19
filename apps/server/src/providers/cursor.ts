@@ -1,6 +1,7 @@
+import { modelContextWindow } from './modelContext'
 // Cursor chats through the official TypeScript SDK (`@cursor/sdk`), running the agent loop locally in this process.
 // The SDK has no approval callback: full access runs unsandboxed, other access levels run in Cursor's sandbox.
-import { cursorMcpServers, repoMcpServers } from './discoveredMcp'
+import { cursorMcpServers, repoMcpServers, configuredMcpStatus } from './discoveredMcp'
 import type { AgentOptions, ModelSelection, Run, RunResult, SDKAgent, SDKMessage } from '@cursor/sdk'
 import type {
   AgentEvent,
@@ -43,6 +44,7 @@ export async function cursorModels(accountId?: string, sdk?: Sdk): Promise<Agent
     provider: 'cursor',
     id: m.id,
     name: m.displayName || m.id,
+    ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
     efforts: [],
     defaultEffort: null,
     isDefault: m.id === 'auto-smart' || (index === 0 && !models.some((x) => x.id === 'auto-smart')),
@@ -104,11 +106,17 @@ export class CursorSession implements AgentRunner {
     this.connection = connection
   }
 
+  async mcpStatus() {
+    return configuredMcpStatus(this.scope, this.connection)
+  }
+
   /** Not persisted by the SDK, so they go with every create, resume and send. */
   private mcpServers(): AgentOptions['mcpServers'] {
     return this.connection
       ? {
-          ...(cursorMcpServers(repoMcpServers(this.scope)) as NonNullable<AgentOptions['mcpServers']>),
+          ...(cursorMcpServers(repoMcpServers(this.scope, this.connection?.mcpConfigDirs)) as NonNullable<
+            AgentOptions['mcpServers']
+          >),
           ramu: {
             type: 'http',
             url: this.connection.url,
@@ -149,6 +157,7 @@ export class CursorSession implements AgentRunner {
     } else this.agent = await Agent.create(this.options())
     this.emit({
       kind: 'init',
+      mcpServers: configuredMcpStatus(this.scope, this.connection).servers,
       cwd: this.scope.cwd,
       model: this.settings.model || 'auto',
       providerSessionId: this.agent.agentId,

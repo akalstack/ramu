@@ -3,7 +3,7 @@ import { nativeMonacoMenu } from './monacoMenu'
 import * as monaco from 'monaco-editor/editor/editor.api.js'
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker'
 import './monacoLanguages'
-import { RAMU_EDITOR_COLORS } from './editorTheme'
+import { RAMU_EDITOR_COLORS, RAMU_EDITOR_COLORS_LIGHT, editorThemeName } from './editorTheme'
 import { setupShiki } from './shiki'
 import 'monaco-editor/editor/browser/coreCommands.js'
 import 'monaco-editor/editor/contrib/bracketMatching/browser/bracketMatching.js'
@@ -36,7 +36,13 @@ monaco.editor.defineTheme('ramu', {
 
 // Static chat code blocks share the editor's token colors even before an editor opens. Monaco's own dark
 // tokens show until Shiki finishes loading; it then redefines this theme with TextMate colors.
-monaco.editor.setTheme('ramu')
+monaco.editor.defineTheme('ramu-light', {
+  base: 'vs',
+  inherit: true,
+  rules: [],
+  colors: RAMU_EDITOR_COLORS_LIGHT,
+})
+monaco.editor.setTheme(editorThemeName())
 setupShiki()
 
 // Slim scrollbars everywhere, to match the rest of the app.

@@ -83,8 +83,8 @@ export class SessionStarter {
       (LEGACY_ACCOUNT_PROVIDERS.has(settings.provider) || providerAccountId(settings.provider) !== 'default')
     )
       settings = { ...settings, accountId: providerAccountId(settings.provider) }
-    // A new chat starts on the highest-ranked model with room.
-    const route = await this.host.route(settings, true)
+    // Keep the requested model unless its usage requires falling back.
+    const route = await this.host.route(settings)
     const requested = settings
     if (route) settings = this.host.withStep(settings, route.step)
     const started = await this.startRouted(taskId, scope, prompt, settings, attachments)

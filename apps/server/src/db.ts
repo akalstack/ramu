@@ -240,6 +240,19 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
       attempts INTEGER NOT NULL DEFAULT 0
     );`)
   },
+  (db) => {
+    const columns = new Set(
+      (db.prepare('PRAGMA table_info(session_provider_sessions)').all() as { name: string }[]).map(
+        (column) => column.name,
+      ),
+    )
+    if (!columns.has('model')) db.exec('ALTER TABLE session_provider_sessions ADD COLUMN model TEXT;')
+    if (!columns.has('context_used')) db.exec('ALTER TABLE session_provider_sessions ADD COLUMN context_used INTEGER;')
+    db.exec(`CREATE TABLE IF NOT EXISTS model_context_windows (
+      provider TEXT NOT NULL, account_id TEXT NOT NULL, model TEXT NOT NULL,
+      context_max INTEGER NOT NULL, PRIMARY KEY (provider, account_id, model)
+    );`)
+  },
 ]
 
 export type Db = DatabaseSync

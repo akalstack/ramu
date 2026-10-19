@@ -1,5 +1,5 @@
 import type { AgentEvent, AgentProvider, HandoffCause, HandoffInfo } from '@ramu/shared/types'
-import { buildHandoff, handoffBudgetChars, type BuiltHandoff } from './handoff'
+import { buildHandoff, handoffBudgetBytes, DEFAULT_CONTEXT_TOKENS, type BuiltHandoff } from './handoff'
 import type { Db } from '../db'
 
 /** A provider session a thread used before, and the last event of the thread it saw. */
@@ -9,6 +9,8 @@ export interface SavedProviderSession {
   lastSeq: number
   /** The context window the provider reported, in tokens, when known. */
   contextMax: number | null
+  model?: string | null
+  contextUsed?: number | null
 }
 
 /** Native sessions per provider login for a thread, so returning to a provider resumes it and sends only what it missed. */
@@ -22,26 +24,52 @@ export class ProviderSessions {
     providerSessionId: string,
     lastSeq: number,
     contextMax: number | null,
+    model?: string,
+    contextUsed?: number | null,
   ): void {
     this.db
       .prepare(
-        `INSERT INTO session_provider_sessions (session_id, provider, account_id, provider_session_id, last_seq, context_max, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO session_provider_sessions (session_id, provider, account_id, provider_session_id, last_seq, context_max, updated_at, model, context_used)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(session_id, provider, account_id) DO UPDATE SET provider_session_id = excluded.provider_session_id,
-           last_seq = excluded.last_seq, context_max = excluded.context_max, updated_at = excluded.updated_at`,
+           last_seq = excluded.last_seq, context_max = excluded.context_max, updated_at = excluded.updated_at,
+           model = excluded.model, context_used = excluded.context_used`,
       )
-      .run(id, provider, accountId ?? 'default', providerSessionId, lastSeq, contextMax, Date.now())
+      .run(
+        id,
+        provider,
+        accountId ?? 'default',
+        providerSessionId,
+        lastSeq,
+        contextMax,
+        Date.now(),
+        model ?? null,
+        contextUsed ?? null,
+      )
   }
 
   get(id: string, provider: AgentProvider, accountId: string | undefined): SavedProviderSession | null {
     const row = this.db
       .prepare(
-        'SELECT provider_session_id, last_seq, context_max FROM session_provider_sessions WHERE session_id = ? AND provider = ? AND account_id = ?',
+        'SELECT provider_session_id, last_seq, context_max, model, context_used FROM session_provider_sessions WHERE session_id = ? AND provider = ? AND account_id = ?',
       )
       .get(id, provider, accountId ?? 'default') as
-      { provider_session_id: string; last_seq: number; context_max: number | null } | undefined
+      | {
+          provider_session_id: string
+          last_seq: number
+          context_max: number | null
+          model: string | null
+          context_used: number | null
+        }
+      | undefined
     return row
-      ? { providerSessionId: row.provider_session_id, lastSeq: row.last_seq, contextMax: row.context_max }
+      ? {
+          providerSessionId: row.provider_session_id,
+          lastSeq: row.last_seq,
+          contextMax: row.context_max,
+          model: row.model,
+          contextUsed: row.context_used,
+        }
       : null
   }
 
@@ -90,23 +118,35 @@ export function planHandoff(
     checkpoint?: { seq: number; summary: string } | null
     goal?: string | null
     queued?: { text: string }[]
-    /** The window of the provider the thread stays on, when the target is the same one (a rewind or a lost session). */
+    /** Destination model's capacity. Takes precedence over the old native session's window. */
     contextTokens?: number | null
+    /** Selected target model; a saved session from another model must be checked against this target. */
+    model?: string
   },
 ): HandoffPlan {
-  const saved = DELTA_RESUME_PROVIDERS.has(input.to) ? input.saved : null
-  const budgetChars = handoffBudgetChars(saved?.contextMax ?? input.contextTokens)
+  const sameModel = input.model === undefined || input.saved?.model === input.model
+  const targetWindow = input.contextTokens ?? (sameModel ? input.saved?.contextMax : null)
+  const saved =
+    DELTA_RESUME_PROVIDERS.has(input.to) && (sameModel || (targetWindow && input.saved?.contextUsed != null))
+      ? input.saved
+      : null
+  const budgetBytes = handoffBudgetBytes(targetWindow)
   const shared = {
     cause: input.cause,
     ...(input.from ? { from: input.from } : {}),
     to: input.to,
     goal: input.goal,
     queued: input.queued,
-    budgetChars,
+    budgetBytes,
+    ...(targetWindow ? { contextWindow: targetWindow } : {}),
   }
   if (saved && saved.lastSeq <= events.length) {
     const delta = buildHandoff(events, { ...shared, mode: 'delta', fromSeq: saved.lastSeq + 1 })
-    if (!delta.overBudget) return { resume: saved.providerSessionId, built: delta }
+    const shrinking = targetWindow != null && saved.contextMax != null && targetWindow < saved.contextMax
+    const occupied = saved.contextUsed ?? (sameModel && !shrinking ? 0 : Infinity)
+    const fitsNative =
+      occupied + Buffer.byteLength(delta.prompt, 'utf8') <= (targetWindow ?? DEFAULT_CONTEXT_TOKENS) * 0.75
+    if (!delta.overBudget && fitsNative) return { resume: saved.providerSessionId, built: delta }
   }
   return { resume: null, built: buildHandoff(events, { ...shared, mode: 'full', checkpoint: input.checkpoint }) }
 }
@@ -118,5 +158,6 @@ export function pendingHandoff(plan: HandoffPlan, cause: HandoffCause, from?: Ag
     mode: plan.resume ? 'delta' : 'full',
     ...(from ? { from } : {}),
     fromSeq: plan.built.info.fromSeq ?? 1,
+    ...(plan.built.info.contextWindow ? { contextWindow: plan.built.info.contextWindow } : {}),
   }
 }

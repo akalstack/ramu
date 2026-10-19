@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { join } from 'node:path'
 import type { ProviderConfiguration, ProviderSignIn, ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
+import type { SelectionTransition } from './selectionTransition'
 
 export const parseProviderVersion = (output: string): string | null =>
   output.match(/\b\d{4}\.\d{2}\.\d{2}-[a-z0-9]+\b/i)?.[0] ??
@@ -66,6 +67,8 @@ export interface NativeFeatures {
 /** Everything that varies per provider. Shared mechanics (spawning, caching, timeouts) stay in providers.ts / providerBinaries.ts. */
 export interface ProviderAdapter {
   readonly id: AgentProvider
+  /** How new settings reach an existing native session; a live runner may refine this using negotiated capabilities. */
+  readonly selectionTransition: SelectionTransition
   /** Environment variable that overrides the executable path. */
   readonly binaryEnvVar: string
   /** Executable file names searched on PATH and in `searchDirs`; the first is the fallback. */

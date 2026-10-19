@@ -1,7 +1,17 @@
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/desktop-button'
-import { ChevronRight, Copy, FileDiff, FileText, Folder, FolderOpen, MoreHorizontal, Undo2 } from 'lucide-react'
+import {
+  ArrowUp,
+  ChevronRight,
+  Copy,
+  FileDiff,
+  FileText,
+  Folder,
+  FolderOpen,
+  MoreHorizontal,
+  Undo2,
+} from 'lucide-react'
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { GitCommit, GitCommitFile, RepositoryBinding } from '@ramu/shared/types'
 import { copyText } from '../ipc'
@@ -227,7 +237,7 @@ export function CommitHistoryRow({
   const refs = commitRefs(commit.refs, branch)
   return (
     <div
-      className={`commit-history-entry [&::before]:[content:''] [&::before]:absolute [&::before]:left-[var(--commit-dot-x)] [&::before]:w-px [&::before]:[background:var(--line-strong)] [&::before]:pointer-events-none [&::before]:top-0 [&::before]:h-[9px] [&::after]:[content:''] [&::after]:absolute [&::after]:left-[var(--commit-dot-x)] [&::after]:w-px [&::after]:[background:var(--line-strong)] [&::after]:pointer-events-none [&::after]:top-[19px] [&::after]:bottom-0 [&:first-child::before]:[content:none] [&:last-child:not(.expanded)::after]:[content:none] [&.expanded_>_.commit-history-head]:bg-hover [&.outgoing_.commit-dot]:bg-(--accent) [&.outgoing_.commit-dot]:[box-shadow:0_0_0_2px_var(--accent-wash),0_0_6px_var(--accent)] [&.outgoing_.commit-subject]:text-foreground [&.expanded_.commit-history-actions]:flex [&.expanded_.commit-age]:hidden relative [--commit-dot-x:27px] ${expanded ? ' expanded' : ''}${commit.outgoing ? ' outgoing' : ''}`}
+      className={`commit-history-entry [&::before]:[content:''] [&::before]:absolute [&::before]:left-[var(--commit-dot-x)] [&::before]:w-px [&::before]:[background:var(--line-strong)] [&::before]:pointer-events-none [&::before]:top-0 [&::before]:h-[9px] [&::after]:[content:''] [&::after]:absolute [&::after]:left-[var(--commit-dot-x)] [&::after]:w-px [&::after]:[background:var(--line-strong)] [&::after]:pointer-events-none [&::after]:top-[19px] [&::after]:bottom-0 [&:first-child::before]:[content:none] [&:last-child:not(.expanded)::after]:[content:none] [&.expanded_>_.commit-history-head]:bg-hover [&.outgoing_.commit-dot]:bg-(--accent) [&.outgoing_.commit-subject]:text-foreground [&.expanded_.commit-history-actions]:flex [&.expanded_.commit-age]:hidden relative [--commit-dot-x:27px] ${expanded ? ' expanded' : ''}${commit.outgoing ? ' outgoing' : ''}`}
     >
       <div
         className="commit-history-head [&:hover]:bg-hover [&:has(.commit-history-actions_.on)]:bg-hover [&_button.git-commit-row]:flex [&_button.git-commit-row]:items-center [&_button.git-commit-row]:justify-start [&_button.git-commit-row]:flex-1 [&_button.git-commit-row]:min-w-0 [&_button.git-commit-row]:h-7 [&_button.git-commit-row]:min-h-7 [&_button.git-commit-row]:p-[0_6px_0_4px] [&_button.git-commit-row]:gap-1.5 [&_button.git-commit-row]:[border:0] [&_button.git-commit-row]:rounded-(--radius-s) [&_button.git-commit-row]:bg-transparent [&_button.git-commit-row]:text-soft [&_button.git-commit-row]:text-body [&_button.git-commit-row]:text-left [&_button.git-commit-row:hover:not(:disabled)]:bg-transparent [&_button.git-commit-row:hover:not(:disabled)]:[border:0] [&:hover_.commit-history-actions]:flex [&:focus-within_.commit-history-actions]:flex [&:has(.commit-history-actions_.on)_.commit-history-actions]:flex [&:hover_.commit-age]:hidden [&:focus-within_.commit-age]:hidden [&:has(.commit-history-actions_.on)_.commit-age]:hidden flex items-center gap-0.5 min-h-7 rounded-(--radius-s)"
@@ -257,6 +267,15 @@ export function CommitHistoryRow({
           <span className="commit-subject flex-initial min-w-12 overflow-hidden text-ellipsis whitespace-nowrap">
             {commit.subject}
           </span>
+          {commit.outgoing && (
+            <span
+              className="commit-outgoing flex-none inline-flex items-center text-(--accent)"
+              title={t('Not pushed yet')}
+            >
+              <ArrowUp size={11} aria-hidden="true" />
+              <span className="sr-only">{t('Not pushed yet')}</span>
+            </span>
+          )}
           {refs.map((ref) => (
             <span
               key={ref}

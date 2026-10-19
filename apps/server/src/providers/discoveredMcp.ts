@@ -1,5 +1,6 @@
-import type { AgentScope } from '@ramu/shared/types'
-import { discoverMcpServers, type DiscoveredMcpServer } from '../context'
+import type { AgentScope, AgentMcpStatus, McpConnection } from '@ramu/shared/types'
+import { claudeMcpServers } from './claudeMcp'
+import type { DiscoveredMcpServer } from '../context'
 
 type Wire = Record<string, any>
 const text = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback)
@@ -15,6 +16,7 @@ const plainName = (name: string) => /^[A-Za-z0-9_-]{1,64}$/.test(name)
 
 export interface NormalizedMcp {
   name: string
+  startupTimeoutMs?: number
   url?: string
   headers: Record<string, string>
   command?: string
@@ -23,11 +25,22 @@ export interface NormalizedMcp {
 }
 
 /** The repositories' `.mcp.json` servers, deduplicated, in one shape each provider converts from. */
-export function repoMcpServers(scope: AgentScope): NormalizedMcp[] {
-  return Object.entries(discoverMcpServers(scope, ['ramu']) as Record<string, DiscoveredMcpServer>)
+export function repoMcpServers(scope: AgentScope, configDirs: string[] = []): NormalizedMcp[] {
+  // Claude-local repository MCPs are a shared tool source; provider model credentials remain native.
+  return Object.entries(claudeMcpServers(scope, configDirs) as Record<string, DiscoveredMcpServer>)
     .filter(([name]) => plainName(name))
     .map(([name, s]) => ({
       name,
+      startupTimeoutMs:
+        typeof s.startup_timeout_sec === 'number' && Number.isFinite(s.startup_timeout_sec) && s.startup_timeout_sec > 0
+          ? s.startup_timeout_sec * 1000
+          : s.timeout &&
+              typeof s.timeout === 'object' &&
+              typeof (s.timeout as Wire).startup === 'number' &&
+              Number.isFinite((s.timeout as Wire).startup) &&
+              (s.timeout as Wire).startup > 0
+            ? (s.timeout as Wire).startup
+            : 60_000,
       ...(typeof s.url === 'string' ? { url: s.url } : { command: text(s.command) }),
       headers: record(s.headers),
       args: strings(s.args),
@@ -43,16 +56,19 @@ export function codexMcpConfig(servers: NormalizedMcp[]): string[] {
       .join(',')}}`
   return servers.flatMap((s) => {
     const key = `mcp_servers.${s.name}`
-    return s.url
-      ? [
-          `${key}.url=${JSON.stringify(s.url)}`,
-          ...(Object.keys(s.headers).length ? [`${key}.http_headers=${table(s.headers)}`] : []),
-        ]
-      : [
-          `${key}.command=${JSON.stringify(s.command)}`,
-          ...(s.args.length ? [`${key}.args=${JSON.stringify(s.args)}`] : []),
-          ...(Object.keys(s.env).length ? [`${key}.env=${table(s.env)}`] : []),
-        ]
+    return [
+      `${key}.startup_timeout_sec=${(s.startupTimeoutMs ?? 60_000) / 1000}`,
+      ...(s.url
+        ? [
+            `${key}.url=${JSON.stringify(s.url)}`,
+            ...(Object.keys(s.headers).length ? [`${key}.http_headers=${table(s.headers)}`] : []),
+          ]
+        : [
+            `${key}.command=${JSON.stringify(s.command)}`,
+            ...(s.args.length ? [`${key}.args=${JSON.stringify(s.args)}`] : []),
+            ...(Object.keys(s.env).length ? [`${key}.env=${table(s.env)}`] : []),
+          ]),
+    ]
   })
 }
 
@@ -74,9 +90,15 @@ export function openCodeMcpServers(servers: NormalizedMcp[]): Record<string, Wir
     servers.map((s) => [
       s.name,
       s.url
-        ? { type: 'remote', url: s.url, ...(Object.keys(s.headers).length ? { headers: s.headers } : {}) }
+        ? {
+            type: 'remote',
+            timeout: { startup: s.startupTimeoutMs ?? 60_000 },
+            url: s.url,
+            ...(Object.keys(s.headers).length ? { headers: s.headers } : {}),
+          }
         : {
             type: 'local',
+            timeout: { startup: s.startupTimeoutMs ?? 60_000 },
             command: [s.command, ...s.args],
             ...(Object.keys(s.env).length ? { environment: s.env } : {}),
           },
@@ -94,4 +116,14 @@ export function cursorMcpServers(servers: NormalizedMcp[]): Record<string, Wire>
         : { command: s.command, args: s.args, ...(Object.keys(s.env).length ? { env: s.env } : {}) },
     ]),
   )
+}
+
+/** Inventory for runtimes without a live status API. Configured never implies connected. */
+export function configuredMcpStatus(scope: AgentScope, connection?: McpConnection, http = true): AgentMcpStatus {
+  const servers = repoMcpServers(scope, connection?.mcpConfigDirs).map((server) => ({
+    name: server.name,
+    status: server.url && !http ? 'unsupported' : 'configured',
+  }))
+  if (connection) servers.push({ name: 'ramu', status: http ? 'configured' : 'unsupported' })
+  return { supported: true, live: false, source: 'configuration', servers }
 }

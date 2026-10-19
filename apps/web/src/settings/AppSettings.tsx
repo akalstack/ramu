@@ -1,3 +1,5 @@
+import { useResolvedAppearance } from '../appearance'
+import { isCustomTheme, useEffectiveTheme } from '../theme/themes'
 import { cancelPanelMotion } from '../workspace/panelMotion'
 import { configureLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
@@ -12,9 +14,23 @@ const Context = createContext<{
   reload: () => Promise<void>
   save: (preferences: AppPreferences) => Promise<void>
 } | null>(null)
+/** Primary, hover and accent text color per accent. The accent is also text and links, so on light it is a deeper shade. */
+const DARK_ACCENTS = {
+  blue: ['#0a84ff', '#3395ff', '#64a8ff'],
+  violet: ['#7652d4', '#8060d8', '#b7a6f3'],
+  teal: ['#087f7b', '#11928e', '#5bd4ca'],
+}
+const LIGHT_ACCENTS = {
+  blue: ['#0a6cd6', '#0a84ff', '#0a5fc0'],
+  violet: ['#6a43c9', '#7652d4', '#5b36b8'],
+  teal: ['#087f7b', '#0a8f8a', '#06625f'],
+}
+
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [preferences, setPreferences] = useState(DEFAULT_APP_PREFERENCES)
   const [loaded, setLoaded] = useState(false)
+  const appearance = useResolvedAppearance()
+  const theme = useEffectiveTheme()
   useEffect(() => {
     void Promise.all([invoke('settings.app.get'), invoke('app.systemLanguages').catch(() => navigator.languages)])
       .then(
@@ -56,14 +72,13 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   }, [preferences.language])
   useEffect(() => {
     const root = document.documentElement
-    const colors = {
-      blue: ['#0a84ff', '#3395ff', '#64a8ff'],
-      violet: ['#7652d4', '#8060d8', '#b7a6f3'],
-      teal: ['#087f7b', '#11928e', '#5bd4ca'],
-    }[preferences.accent]
-    root.style.setProperty('--primary', colors[0]!)
-    root.style.setProperty('--primary-hover', colors[1]!)
-    root.style.setProperty('--accent', colors[2]!)
+    const colors = (appearance === 'light' ? LIGHT_ACCENTS : DARK_ACCENTS)[preferences.accent]
+    // A custom theme owns its own primary and accent colors; the accent choice applies to Ramu Default.
+    if (!isCustomTheme(theme)) {
+      root.style.setProperty('--primary', colors[0]!)
+      root.style.setProperty('--primary-hover', colors[1]!)
+      root.style.setProperty('--accent', colors[2]!)
+    }
     root.style.setProperty(
       '--sans',
       preferences.fontFamily === 'system'
@@ -77,7 +92,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
       document.getAnimations().forEach((animation) => animation.cancel())
     }
     root.dataset.fontSmoothing = preferences.fontSmoothing ? 'grayscale' : 'system'
-  }, [preferences])
+  }, [preferences, appearance, theme])
   return (
     <Context.Provider
       value={{

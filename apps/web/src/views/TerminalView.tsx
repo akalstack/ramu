@@ -12,8 +12,52 @@ import { unseenOutput } from '../workspace/terminalOutput'
 import { t } from '../i18n'
 import { FILE_DRAG_TYPE } from '../composer/ComposerSuggestions'
 import { createOutputGate } from '../workspace/terminalActivity'
+import { isCustomTheme, effectiveTheme, useEffectiveTheme } from '../theme/themes'
+import type { RamuTheme } from '@ramu/shared/theme'
+import { resolvedAppearance, useResolvedAppearance, type ResolvedAppearance } from '../appearance'
 
 const shellQuote = (path: string) => (/^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`)
+
+const LIGHT_TERMINAL = {
+  background: '#f4f4f6',
+  foreground: '#26262b',
+  cursor: '#7652d4',
+  cursorAccent: '#f4f4f6',
+  selectionBackground: '#7652d433',
+  black: '#26262b',
+  red: '#c62828',
+  green: '#1a7f37',
+  yellow: '#8a5a00',
+  blue: '#1f5fbf',
+  magenta: '#8a3fa8',
+  cyan: '#0f7a80',
+  white: '#62626a',
+  brightBlack: '#62626a',
+  brightRed: '#d32f2f',
+  brightGreen: '#2e8f4a',
+  brightYellow: '#9a6a00',
+  brightBlue: '#2f6fd0',
+  brightMagenta: '#9a4fb8',
+  brightCyan: '#1a8a90',
+  brightWhite: '#8a8a92',
+}
+
+/** The dark theme keeps xterm's ANSI palette; the light one darkens every color that would vanish on white. */
+function terminalTheme(appearance: ResolvedAppearance, custom: RamuTheme) {
+  if (isCustomTheme(custom)) {
+    const c = custom[appearance].colors
+    return {
+      ...(appearance === 'light' ? LIGHT_TERMINAL : {}),
+      background: c.codeBackground,
+      foreground: c.textBody,
+      cursor: c.accent,
+      cursorAccent: c.codeBackground,
+      selectionBackground: `${c.accent}40`,
+    }
+  }
+  if (appearance === 'dark') return { background: '#141416', cursor: '#72b4ff', selectionBackground: '#72b4ff35' }
+  return LIGHT_TERMINAL
+}
 
 export function TerminalView({
   viewId,
@@ -54,6 +98,12 @@ export function TerminalView({
   // Read once: a project action runs when its terminal opens, never on a later re-render.
   const runOnce = useRef(run)
 
+  const appearance = useResolvedAppearance()
+  const theme = useEffectiveTheme()
+  useEffect(() => {
+    if (terminal.current) terminal.current.options.theme = terminalTheme(appearance, theme)
+  }, [appearance, theme])
+
   useEffect(() => {
     if (terminal.current) {
       terminal.current.options.fontSize = preferences.terminalFontSize
@@ -66,7 +116,7 @@ export function TerminalView({
       fontSize: preferences.terminalFontSize,
       fontFamily: '"SF Mono", Menlo, "Geist Mono Variable", monospace',
       lineHeight: 1.25,
-      theme: { background: '#141416', cursor: '#72b4ff', selectionBackground: '#72b4ff35' },
+      theme: terminalTheme(resolvedAppearance(), effectiveTheme()),
       cursorBlink: true,
       screenReaderMode: true,
       scrollback: 5000,

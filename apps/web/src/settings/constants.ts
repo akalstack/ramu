@@ -8,9 +8,7 @@ export type DraftSetter = Dispatch<SetStateAction<AppPreferences>>
 export const SETTINGS_FORM_CLASS =
   'settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0'
 
-export const GHOST_BUTTON_CLASS =
-  'ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover'
-export const GHOST_ICON_BUTTON_CLASS = `${GHOST_BUTTON_CLASS} icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)`
+export { GHOST_BUTTON_CLASS, GHOST_ICON_BUTTON_CLASS } from '@/components/button-classes'
 export const SECONDARY_BUTTON_CLASS = 'bg-fill hover:bg-fill-hover'
 
 // Preferences each section's "Reset to defaults" restores.

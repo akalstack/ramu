@@ -55,3 +55,38 @@ it('catalogs only registered capabilities and preserves handler scope errors', a
   expect(registry.search('shell')).toEqual([])
   expect((await registry.invoke('memory_read', { id: 'foreign' }, {})).isError).toBe(true)
 })
+
+it.each([false, true])('accepts larger discovery requests with deferred tools %s', async (deferred) => {
+  const server = new McpServer({ name: 'ramu', version: 'test' })
+  const registry = new ToolRegistry(server, deferred)
+  for (let i = 0; i < 105; i++)
+    registry.server.registerTool(`memory_${i}`, { description: 'Search memory', inputSchema: {} }, () => ({
+      content: [],
+    }))
+  registry.expose()
+  const client = new Client({ name: 'test', version: '1' })
+  const [left, right] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(left), client.connect(right)])
+  try {
+    const tools = (await client.listTools()).tools
+    expect(tools.find((tool) => tool.name === 'tool_search')!.inputSchema.properties).toMatchObject({
+      query: { maxLength: 4000 },
+      limit: { maximum: 100, default: 5 },
+    })
+    for (const limit of [undefined, 20, 100]) {
+      const result = await client.callTool({
+        name: 'tool_search',
+        arguments: { query: 'memory '.repeat(100), ...(limit === undefined ? {} : { limit }) },
+      })
+      expect(result.isError).not.toBe(true)
+      expect(JSON.parse((result.content as { text: string }[])[0]!.text)).toHaveLength(limit ?? 5)
+    }
+    for (const args of [{ limit: 101 }, { limit: 0 }, { limit: 1.5 }, { query: 'x'.repeat(4001) }]) {
+      const result = await client.callTool({ name: 'tool_search', arguments: { query: '', ...args } })
+      expect(result.isError).toBe(true)
+    }
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})

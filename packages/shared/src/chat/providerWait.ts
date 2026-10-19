@@ -94,6 +94,7 @@ export function handoffSummary(info: HandoffInfo | undefined): {
   shortened: number
   omitted: number
   chars: number
+  checkpointSeq: number | null
 } | null {
   if (!info) return null
   const delivered = info.toSeq !== undefined && info.toSeq > 0
@@ -105,6 +106,7 @@ export function handoffSummary(info: HandoffInfo | undefined): {
     shortened: info.shortened ?? 0,
     omitted: info.omitted ?? 0,
     chars: info.chars ?? 0,
+    checkpointSeq: info.checkpointSeq ?? null,
   }
 }
 

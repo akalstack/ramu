@@ -1,9 +1,11 @@
+import { modelContextWindow } from './modelContext'
 // Native OpenCode, Cursor and Google Antigravity ACP runtimes; JSON-RPC 2.0, newline framing.
-import { acpMcpServers, repoMcpServers } from './discoveredMcp'
+import { acpMcpServers, repoMcpServers, configuredMcpStatus } from './discoveredMcp'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { providerAdapter } from './adapters'
+import type { SelectionTransition } from './selectionTransition'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { createInterface } from 'node:readline'
 import { AcpEvents, nativeShell } from './acpEvents'
@@ -177,8 +179,8 @@ const optionsOf = (config: Wire): Wire[] => (config.options ?? []).flatMap((opti
 export function acpSessionModels(provider: AcpProvider, session: Wire): AgentModel[] {
   const config = (session.configOptions ?? []).find((c: Wire) => c.category === 'model' || c.id === 'model')
   const models: Wire[] = config
-    ? optionsOf(config).map((m) => ({ id: m.value, name: m.name }))
-    : (session.models?.availableModels ?? []).map((m: Wire) => ({ id: m.modelId, name: m.name }))
+    ? optionsOf(config).map((m) => ({ ...m, id: m.value, name: m.name }))
+    : (session.models?.availableModels ?? []).map((m: Wire) => ({ ...m, id: m.modelId, name: m.name }))
   const current = config?.currentValue ?? session.models?.currentModelId
   // ACP exposes reasoning as one session-wide option; only levels Ramu understands can be offered.
   const level = effortConfig(session)
@@ -192,6 +194,7 @@ export function acpSessionModels(provider: AcpProvider, session: Wire): AgentMod
     provider,
     id: m.id,
     name: m.name || m.id,
+    ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
     efforts,
     defaultEffort,
     isDefault: m.id === current,
@@ -359,9 +362,11 @@ class AcpSession implements AgentRunner {
   readonly canSteer = true
   /** A runtime that advertises `_session/steering` takes input into the running turn; the rest cancel it and start over. */
   private nativeSteering = false
+  private canResume?: boolean
   get steerInterrupts(): boolean {
     return !this.nativeSteering
   }
+  private mcpHttp = true
   private loading = false
   private events: AcpEvents
   private pending = new Map<string, Wire>()
@@ -378,6 +383,24 @@ class AcpSession implements AgentRunner {
   setTools(connection: McpConnection): void {
     this.connection = connection
   }
+  async mcpStatus() {
+    return configuredMcpStatus(this.scope, this.connection, this.mcpHttp)
+  }
+
+  planSettingsTransition(settings: AgentSettings): SelectionTransition {
+    if (
+      this.sessionId &&
+      !this.loading &&
+      settings.model &&
+      settings.model !== this.settings.model &&
+      !acpSessionModels(this.settings.provider as AcpProvider, this.session).some(
+        (model) => model.id === settings.model,
+      )
+    )
+      return { type: 'reject', reason: 'The selected model is unavailable in this ACP session' }
+    return { type: this.canResume === false ? 'handoff' : 'restart-and-resume' }
+  }
+
   async start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void> {
     const provider = this.settings.provider as AcpProvider
     this.rpc = new AcpRpc(
@@ -401,6 +424,7 @@ class AcpSession implements AgentRunner {
     }
     const init = await this.rpc.initialize()
     const capabilities = init.agentCapabilities ?? {}
+    this.canResume = !!(capabilities.sessionCapabilities?.resume || capabilities.loadSession)
     this.prompts = capabilities.promptCapabilities
     this.nativeSteering = init._meta?.steering?.supported === true
     // `session/resume` continues without replaying history; `session/load` is the older way. With neither, the caller continues from the transcript.
@@ -417,6 +441,7 @@ class AcpSession implements AgentRunner {
       )
     // HTTP MCP is optional in ACP. A runtime that lists its MCP support without HTTP cannot reach Ramu's tools, so say so instead of losing them silently.
     const mcp = capabilities.mcpCapabilities
+    this.mcpHttp = mcp?.http === true || !mcp
     const tools = this.connection && !(mcp && mcp.http !== true) ? this.connection : undefined
     if (this.connection && !tools)
       this.emit({
@@ -430,17 +455,19 @@ class AcpSession implements AgentRunner {
         ...(resume ? { sessionId: resume } : {}),
         cwd: this.scope.cwd,
         additionalDirectories: this.scope.additionalDirs,
-        mcpServers: tools
-          ? [
-              ...acpMcpServers(repoMcpServers(this.scope), mcp?.http === true || !mcp),
-              {
-                type: 'http',
-                name: 'ramu',
-                url: tools.url,
-                headers: [{ name: 'Authorization', value: `Bearer ${tools.token}` }],
-              },
-            ]
-          : [],
+        mcpServers: [
+          ...acpMcpServers(repoMcpServers(this.scope, this.connection?.mcpConfigDirs), this.mcpHttp),
+          ...(tools
+            ? [
+                {
+                  type: 'http',
+                  name: 'ramu',
+                  url: tools.url,
+                  headers: [{ name: 'Authorization', value: `Bearer ${tools.token}` }],
+                },
+              ]
+            : []),
+        ],
       })
     } catch (e) {
       // The runtime answered but no longer has the session; a crash or timeout is a different failure and stays one.
@@ -519,6 +546,7 @@ class AcpSession implements AgentRunner {
     }
     this.emit({
       kind: 'init',
+      mcpServers: configuredMcpStatus(this.scope, this.connection, this.mcpHttp).servers,
       cwd: this.scope.cwd,
       model:
         this.settings.model ||

@@ -1,5 +1,6 @@
 import type {
   AgentEvent,
+  AgentMcpStatus,
   AgentProvider,
   ElicitationAction,
   AgentScope,
@@ -7,15 +8,21 @@ import type {
   Attachment,
   McpConnection,
 } from '@ramu/shared/types'
+import type { SelectionTransition } from '../providers/selectionTransition'
 
 /** The provider cannot continue the saved session (no resume support, or it no longer has it). The chat goes on from its transcript. */
 export class ResumeUnavailable extends Error {}
 
 export interface AgentRunner {
+  /** Read-only preflight before stopping the process or changing the thread's saved settings. */
+  planSettingsTransition?(settings: AgentSettings): SelectionTransition
   /** Whether `steer` accepts input during a turn. Runners without it are always queued. */
   readonly canSteer?: boolean
   /** Steering cancels the running turn instead of adding to it, so only the user's own messages may use it. */
   readonly steerInterrupts?: boolean
+  mcpStatus?(): Promise<AgentMcpStatus>
+  reconnectMcp?(name: string): Promise<void>
+  reloadMcp?(): Promise<void>
   setTools?(connection: McpConnection): void
   start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void>
   send(prompt: string, attachments?: Attachment[]): Promise<void>

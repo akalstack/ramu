@@ -11,6 +11,7 @@ import { agentContent, inlineMedia, resourceDownload } from '@ramu/shared/chat/a
 import { useHost } from '../workspace/HostProvider'
 import { monaco } from '../editor/monaco'
 import { t, useLanguage } from '../i18n'
+import { editorThemeName } from '../editor/editorTheme'
 
 function ContentLink({ uri, label, taskId }: { uri: string; label: string; taskId?: string }) {
   if (/^https?:\/\//i.test(uri))
@@ -89,7 +90,7 @@ function AgentDiff({ content, taskId }: { content: Extract<AgentContent, { type:
     )
     const modified = monaco.editor.createModel(content.newText, original.getLanguageId())
     const editor = monaco.editor.createDiffEditor(host.current!, {
-      theme: 'ramu',
+      theme: editorThemeName(),
       readOnly: true,
       automaticLayout: true,
       renderSideBySide: false,

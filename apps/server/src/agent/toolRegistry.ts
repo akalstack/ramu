@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { toolQuery, toolResultLimit } from '../toolInputs'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 
@@ -106,7 +107,7 @@ export class ToolRegistry {
       {
         description:
           'Discover only tools exposed by Ramu. Search names and descriptions with keywords; returns matching argument schemas. Use tool_invoke to call a match. Empty query lists the first tools.',
-        inputSchema: { query: z.string().max(500), limit: z.number().int().min(1).max(10).default(5) },
+        inputSchema: { query: toolQuery, limit: toolResultLimit.default(5) },
       },
       ({ query, limit }) => reply(this.search(query, limit)),
     )

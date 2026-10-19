@@ -1,3 +1,4 @@
+import { modelContextWindow } from '../providers/modelContext'
 import type { Query } from '@anthropic-ai/claude-agent-sdk'
 import { providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider, ProviderCatalog } from '@ramu/shared/types'
@@ -83,6 +84,7 @@ export function discoverCatalogs({ providerOff, providerQuery }: CatalogSource):
             provider: 'claude-code',
             id: m.value,
             name: m.displayName,
+            ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
             efforts: m.supportedEffortLevels ?? [],
             defaultEffort: claudeDefaultEffort(m.supportedEffortLevels ?? []),
             isDefault: i === 0,

@@ -6,7 +6,7 @@ type Translate = (text: string, values?: Record<string, string | number>) => str
 
 /**
  * The second line of a "Context handoff" separator: what was carried to the new provider, such as "Carried events 1–412
- * from Claude Code (full handoff, 3 old results shortened)". Null until the next launch has built the handoff, since the
+ * from Claude Code (compacted handoff, 3 old results shortened)". Null until the next launch has built the handoff, since the
  * range is only known then.
  */
 export function handoffLine(info: HandoffInfo | undefined, translate: Translate): string | null {
@@ -18,7 +18,12 @@ export function handoffLine(info: HandoffInfo | undefined, translate: Translate)
     ? translate('Carried events {0}–{1} from {2}', values)
     : translate('Carried events {0}–{1}', values)
   const details = [
-    summary.mode === 'delta' ? translate('new events only') : translate('full handoff'),
+    summary.mode === 'delta'
+      ? translate('new events only')
+      : summary.shortened || summary.omitted || summary.checkpointSeq
+        ? translate('compacted handoff')
+        : translate('full handoff'),
+    ...(summary.checkpointSeq ? [translate('checkpoint through event {0}', { 0: summary.checkpointSeq })] : []),
     ...(summary.shortened ? [translate('{0} old results shortened', { 0: summary.shortened })] : []),
     ...(summary.omitted ? [translate('{0} events left out', { 0: summary.omitted })] : []),
   ]

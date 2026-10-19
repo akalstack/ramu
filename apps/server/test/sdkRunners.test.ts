@@ -386,3 +386,55 @@ describe('Allow edits native policies', () => {
     },
   )
 })
+
+it('reads OpenCode live MCP state and reconnects through its native client', async () => {
+  const { client } = fakeOpenCode('bash')
+  const connections: unknown[] = []
+  const withMcp = {
+    ...client,
+    mcp: {
+      list: async () => ({
+        data: [
+          { name: 'atlassian', status: { status: 'needs_auth', error: 'Sign in first' } },
+          { name: 'docs', status: { status: 'connected' } },
+        ],
+      }),
+      connect: async (input: unknown) => {
+        connections.push(input)
+      },
+    },
+  }
+  const runner = new OpenCodeSession(
+    scope,
+    { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode' },
+    () => {},
+    false,
+    async () => withMcp as never,
+  )
+  try {
+    await runner.start('hello', null)
+    expect(await runner.mcpStatus()).toMatchObject({
+      live: true,
+      canReconnect: true,
+      servers: [
+        { name: 'atlassian', status: 'needs-auth', error: 'Sign in first' },
+        { name: 'docs', status: 'connected' },
+      ],
+    })
+    await runner.reconnectMcp('atlassian')
+    expect(connections).toEqual([{ server: 'atlassian', location: { directory: scope.cwd } }])
+  } finally {
+    await runner.stop()
+  }
+})
+
+it('shows Cursor workspace configuration without claiming a verified connection', async () => {
+  const { sdk } = fakeCursor([])
+  const runner = new CursorSession(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor' }, () => {}, false, sdk)
+  runner.setTools({ url: 'http://localhost/mcp', token: 'secret' })
+  expect(await runner.mcpStatus()).toMatchObject({
+    live: false,
+    source: 'configuration',
+    servers: [{ name: 'ramu', status: 'configured' }],
+  })
+})

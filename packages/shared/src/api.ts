@@ -2,6 +2,7 @@ import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './w
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
 import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './chat/activity'
+import type { RamuTheme, ThemeIssue, ThemeRole } from './theme'
 import type { AppUpdateStatus } from './updates'
 import type { ProviderConfiguration, ProviderStatus } from './providers/providers'
 import type { LimitRetryResult } from './chat/providerWait'
@@ -37,6 +38,7 @@ import type {
   ChatGoal,
   UsageReading,
   ContextUsage,
+  AgentMcpStatus,
   Aside,
   AgentEvent,
   Attachment,
@@ -325,7 +327,11 @@ export interface RamuMethods {
   'repos.remove'(repoId: string): void
   'tasks.bindings'(taskId: string): RepositoryBinding[]
   'settings.models.get'(): ModelPreferences | null
-  'providers.status'(configuration?: ProviderConfiguration, checkLatest?: boolean): Promise<ProviderStatus[]>
+  'providers.status'(
+    configuration?: ProviderConfiguration,
+    checkLatest?: boolean,
+    refresh?: boolean,
+  ): Promise<ProviderStatus[]>
   /** Sign-in email per provider and login ID, for the logins whose CLI reports one. */
   'providers.accountEmails'(): Promise<Record<string, Record<string, string>>>
   'providers.loginCommand'(
@@ -557,8 +563,27 @@ export interface RamuMethods {
     question: string,
   ): Aside
   'aside.delete'(sessionId: string, asideId: string): void
+  /**
+   * A draft theme from this host's provider for a brief. `seed` is the theme being refined; locked roles come back
+   * unchanged. The draft may carry readability issues after the repair rounds; applying it stays a device action.
+   */
+  'theme.generate'(
+    brief: string,
+    seed: RamuTheme,
+    locked?: { light: ThemeRole[]; dark: ThemeRole[] },
+    feedback?: string,
+  ): { theme: RamuTheme; issues: ThemeIssue[]; provider: string; model: string }
+  /** Up to three drafts in different directions for a brief, to choose between. Each uses a draft's provider usage. */
+  'theme.candidates'(
+    brief: string,
+    seed: RamuTheme,
+    locked?: { light: ThemeRole[]; dark: ThemeRole[] },
+  ): { theme: RamuTheme; issues: ThemeIssue[]; provider: string; model: string }[]
   /** Keep the chat's current provider despite the usage threshold: for the next message, for this chat until its limit resets, or clear. */
   'agent.holdProvider'(sessionId: string, scope: 'message' | 'chat' | null): void
+  'agent.mcpStatus'(sessionId: string): Promise<AgentMcpStatus>
+  'agent.reloadMcp'(sessionId: string): Promise<void>
+  'agent.reconnectMcp'(sessionId: string, name: string): Promise<void>
   'agent.providerHold'(sessionId: string): 'message' | 'chat' | 'picked' | null
   /** Moves one running command to the background so the agent can carry on (Claude only). False when it already finished. */
   'agent.backgroundTool'(sessionId: string, toolUseId: string): boolean

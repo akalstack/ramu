@@ -3,6 +3,7 @@ import { defineAdapter, npmLatest, runCli, selfUpdate } from '../adapter'
 
 export const opencodeAdapter = defineAdapter({
   id: 'opencode',
+  selectionTransition: { type: 'restart-and-resume' },
   binaryEnvVar: 'RAMU_OPENCODE_BIN',
   executableNames: () => ['opencode'],
   searchDirs: (home) => [join(home, '.opencode/bin'), join(home, '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin'],

@@ -9,7 +9,6 @@ import {
   type AgentSessionInfo,
   type AgentSettings,
   type AgentProvider,
-  type HandoffInfo,
   type ProviderCatalog,
 } from '@ramu/shared/types'
 import {
@@ -45,7 +44,7 @@ import type { Db } from '../db'
 export interface FallbackRouterHost
   extends
     Pick<CatalogService, 'validateSettings'>,
-    Pick<SessionProcess, 'fail' | 'halt' | 'launch' | 'planSwitch' | 'rememberSession'>,
+    Pick<SessionProcess, 'fail' | 'halt' | 'launch' | 'planSwitch' | 'planTransition' | 'rememberSession'>,
     Pick<ProviderWaits, 'waitForGoalProvider'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
     Pick<SessionRegistry, 'draining' | 'revisions' | 'transitioning'>,
@@ -69,9 +68,6 @@ export class FallbackRouter {
   // Set from the composer's provider chip. The pre-emptive switch (see docs/AGENTS.md) must honour it; 'message' clears after one send.
   private readonly holds = new Map<string, 'message' | 'chat'>()
 
-  /** Chats whose model the user picked by hand: they don't move up the order until they next hit a limit. */
-  private readonly pinned = new Set<string>()
-
   /** Steps (`provider:model`) a chat has already been through while falling back. */
   readonly attempted = new Map<string, Set<string>>()
 
@@ -81,16 +77,16 @@ export class FallbackRouter {
   /** Chats that already had their one quiet retry of a low-confidence limit match since their last message. */
   readonly lowConfidenceRetried = new Set<string>()
 
-  /** The user changed model, effort or access. A new model is pinned: it doesn't move up the order until it next runs out. */
+  /** Apply user changes to model, effort or access. */
   async configure(id: string, settings: AgentSettings): Promise<AgentSessionInfo> {
     const current = this.host.get(id).settings
     // The per-thread auto-resume choice changes only through setAutoResume, so a settings save never drops or sets it.
     const { autoResume: _ignored, ...incoming } = settings
     settings = current.autoResume === undefined ? incoming : { ...incoming, autoResume: current.autoResume }
     if (sameSettings(current, settings)) return this.host.get(id)
-    if (stepKey(current) !== stepKey(settings)) this.pinned.add(id)
+    const updated = await this.applySettings(id, settings)
     this.holds.delete(id)
-    return this.applySettings(id, settings)
+    return updated
   }
 
   /** Moves a chat to other settings (any provider): ends the old process, keeps or hands over the conversation, relaunches if it was mid-request. */
@@ -112,17 +108,17 @@ export class FallbackRouter {
         throw new Error('Provider switch cancelled')
       // A login the thread used before resumes its own session and gets only what it missed; a new one gets the whole
       // conversation, and a conversation too large for it is refused here, before anything changes.
-      let resume = sameIdentity ? s.providerSessionId : null
-      let handoffInfo: HandoffInfo | undefined
-      if (!sameIdentity) {
-        const plan = this.host.planSwitch(id, settings, settings.provider === s.provider ? 'account' : 'switch')
-        if (!plan.fits)
-          throw new Error(
-            `The conversation is too large to carry to ${providerName(settings.provider)} in one handoff. Keep this model, start a new thread from a summary, or pick a model with a larger context window.`,
-          )
-        resume = plan.resume
-        handoffInfo = plan.info
-      }
+      const plan = this.host.planTransition(
+        id,
+        settings,
+        !sameIdentity && settings.provider === s.provider ? 'account' : 'switch',
+      )
+      if (!plan.fits)
+        throw new Error(
+          `The conversation is too large to carry to ${providerName(settings.provider)} in one handoff. Keep this model, start a new thread from a summary, or pick a model with a larger context window.`,
+        )
+      const resume = plan.resume
+      const handoffInfo = plan.info
       // Terminate the old process before releasing its checkout or starting another provider.
       this.host.halt(id)
       await this.host.draining.get(id)
@@ -140,7 +136,7 @@ export class FallbackRouter {
           (WRITING_STATES.includes(s.state)
             ? 'Changed settings — continuing the current request'
             : 'Changed conversation settings'),
-        handoff: !sameIdentity,
+        handoff: !!handoffInfo,
         previous: s.settings,
         ...(handoffInfo ? { handoffInfo } : {}),
       })
@@ -160,17 +156,14 @@ export class FallbackRouter {
     }
   }
 
-  /** Clearing the hold also lets a model the user picked by hand move up the order again. */
+  /** Clear the hold to allow usage-limit fallback again. */
   holdProvider(id: string, scope: 'message' | 'chat' | null): void {
     if (scope) this.holds.set(id, scope)
-    else {
-      this.holds.delete(id)
-      this.pinned.delete(id)
-    }
+    else this.holds.delete(id)
   }
 
-  providerHold(id: string): 'message' | 'chat' | 'picked' | null {
-    return this.holds.get(id) ?? (this.pinned.has(id) ? 'picked' : null)
+  providerHold(id: string): 'message' | 'chat' | null {
+    return this.holds.get(id) ?? null
   }
 
   /** Preferences and usage, once the app has provided them; tests run without. */
@@ -216,7 +209,12 @@ export class FallbackRouter {
 
   private accountName(provider: AgentProvider, accountId: string | undefined): string {
     if (!accountId || accountId === 'default') return 'the default account'
-    return `account "${this.host.preferences()?.providerBinaries[provider]?.accounts?.find((entry) => entry.id === accountId)?.name?.trim() || accountId}"`
+    return `account "${
+      this.host
+        .preferences()
+        ?.providerBinaries[provider]?.accounts?.find((entry) => entry.id === accountId)
+        ?.name?.trim() || accountId
+    }"`
   }
 
   /** Fallback order and threshold for a session: a sub-agent may use its own order and an earlier threshold. */
@@ -251,11 +249,8 @@ export class FallbackRouter {
     }
   }
 
-  /**
-   * Where settings should go instead: on from a model at the switch threshold, or, with `promote`, up to a
-   * higher-ranked model with room. Background work (titles, recaps, commit messages) keeps its model until it runs out.
-   */
-  async route(settings: AgentSettings, promote = false): Promise<RouteDecision | null> {
+  /** Route foreground and background work only when its model reaches the usage threshold. */
+  async route(settings: AgentSettings): Promise<RouteDecision | null> {
     const routing = this.routing(settings)
     if (!routing || !settings.autoFallback) return null
     const catalogs = await this.host.catalog()
@@ -263,7 +258,6 @@ export class FallbackRouter {
       usage: routing.usage,
       catalogs,
       switchAt: routing.prefs.fallback.switchAt,
-      promote,
     })
   }
 
@@ -278,18 +272,13 @@ export class FallbackRouter {
     })
   }
 
-  /**
-   * Before a message goes out: move on if the chat's model is over the threshold, or up to a higher-ranked model
-   * that has room. A hold from the composer chip keeps the model for one message or the chat; a model the user
-   * picked by hand isn't moved up until it next runs out.
-   */
+  /** Before sending, fall back only at the usage threshold, respecting explicit composer holds. */
   async switchBeforeSend(id: string): Promise<boolean> {
     const routing = this.routing(this.host.get(id).settings)
     if (!routing) return false
     const s = this.host.get(id)
     const catalogs = await this.host.catalog()
     const policy = this.policyOf(s, catalogs, routing.prefs)
-    const promote = !s.parentId && !this.pinned.has(id)
     // Another login of the same provider comes before another model.
     if (!this.holds.has(id) && isOver(peakFor(routing.usage, s.settings.provider, s.settings.model), policy.switchAt)) {
       const tried = this.attemptedAccounts.get(id) ?? new Set<string>()
@@ -312,7 +301,6 @@ export class FallbackRouter {
       catalogs,
       switchAt: policy.switchAt,
       now: Date.now(),
-      promote,
     })
     const hold = this.holds.get(id)
     if (!decision) {
@@ -324,7 +312,6 @@ export class FallbackRouter {
       return false
     }
     if (hold === 'chat') return false
-    if (decision.peak) this.pinned.delete(id)
     await this.applySettings(
       id,
       this.withStep(s.settings, decision.step),
@@ -382,11 +369,6 @@ export class FallbackRouter {
     this.host.setState(id, 'starting')
     const revision = this.host.revisions.get(id) ?? 0
     try {
-      this.host.halt(id)
-      await this.host.draining.get(id)
-      if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0))
-        throw new Error('Provider switch cancelled')
-      this.host.setState(id, 'starting')
       const catalogs = await this.host.catalog()
       if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
       resolveAttempted(catalogs)
@@ -404,9 +386,11 @@ export class FallbackRouter {
         ? this.host.planSwitch(id, { provider: s.provider, accountId: account }, 'limit')
         : null
       if (account && accountPlan?.fits) {
+        this.host.halt(id)
+        await this.host.draining.get(id)
+        if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
         tried.add(accountKey(s.provider, account))
         const accountSettings = { ...s.settings, accountId: account }
-        this.pinned.delete(id)
         this.host.rememberSession(id)
         this.db
           .prepare('UPDATE agent_sessions SET settings = ?, provider_session_id = ? WHERE id = ?')
@@ -434,19 +418,31 @@ export class FallbackRouter {
       // A conversation that does not fit another provider's handoff budget is never sent truncated: skip that model, and
       // if nothing else is left, hold the thread at the limit with the reason.
       let step = next()
-      let plan: ReturnType<SessionProcess['planSwitch']> | null = null
+      let plan: ReturnType<SessionProcess['planTransition']> | null = null
       let tooLarge: AgentProvider | null = null
+      let rejected: string | undefined
       while (step) {
-        plan = step.provider === s.provider ? null : this.host.planSwitch(id, this.withStep(s.settings, step), 'limit')
-        if (!plan || plan.fits) break
-        tooLarge = step.provider
+        try {
+          const models = catalogs.find((catalog) => catalog.provider === step!.provider)?.models
+          const model = step.model
+            ? models?.find((model) => model.id === step!.model)
+            : (models?.find((model) => model.isDefault) ?? models?.[0])
+          plan = this.host.planTransition(id, this.withStep(s.settings, step), 'limit', model?.contextWindow)
+          if (plan.fits) break
+          tooLarge = step.provider
+        } catch (error) {
+          rejected = error instanceof Error ? error.message : String(error)
+        }
         attempted.add(stepKey(step))
         step = next()
       }
       if (!step) {
+        this.host.halt(id)
+        await this.host.draining.get(id)
+        if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
         const reason = tooLarge
           ? `The conversation is too large to carry to ${providerName(tooLarge)} in one handoff, so ${providerName(s.provider)} is the only option.`
-          : undefined
+          : rejected
         if (this.host.waitForGoalProvider(id, reason)) return
         this.host.fail(
           id,
@@ -460,8 +456,10 @@ export class FallbackRouter {
       const settings = this.withStep(s.settings, step)
       const same = step.provider === s.provider
       const peak = peakFor(routing?.usage ?? [], s.provider, s.settings.model)
-      this.pinned.delete(id)
-      const resume = same ? s.providerSessionId : (plan?.resume ?? null)
+      const resume = plan?.resume ?? null
+      this.host.halt(id)
+      await this.host.draining.get(id)
+      if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
       if (!same) this.host.rememberSession(id)
       this.db
         .prepare('UPDATE agent_sessions SET provider = ?, settings = ?, provider_session_id = ? WHERE id = ?')
@@ -470,9 +468,9 @@ export class FallbackRouter {
         kind: 'settings',
         settings,
         reason: `${providerName(s.provider)} usage limit reached${peak ? ` (${limitReason(s.provider, peak).replace(`${providerName(s.provider)}'s `, '')})` : ''} — continuing with ${providerName(step.provider)}${same ? ` on ${step.model}` : ''}`,
-        handoff: !same,
+        handoff: !!plan?.info,
         previous: s.settings,
-        ...(plan ? { handoffInfo: plan.info } : {}),
+        ...(plan?.info ? { handoffInfo: plan.info } : {}),
       })
       this.host.transitioning.delete(id)
       this.host.launch(

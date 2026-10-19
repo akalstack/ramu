@@ -18,6 +18,7 @@ import {
 import { dirname, join } from 'node:path'
 import { cleanLabel } from '@ramu/shared/text'
 import { z } from 'zod'
+import { toolQuery, toolResultLimit } from '../toolInputs'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentService } from '../agent'
 import type { Workspace } from '../workspace/workspace'
@@ -1162,20 +1163,13 @@ export function registerMemoryTools(
       description:
         'Search the long-term memory shared by every provider and thread, for this project plus global memories. Results are ranked by relevance, importance and recent use. Use it before substantial work and when the user refers to earlier decisions or preferences.',
       inputSchema: {
-        query: z
-          .string()
-          .max(500)
-          .describe('Keywords for the topic, at most 500 characters. Empty lists the strongest memories.'),
+        query: toolQuery.describe(
+          'Keywords for the topic, at most 4,000 characters. Empty lists the strongest memories.',
+        ),
         kind: z.enum(MEMORY_KINDS).optional(),
         format: z.enum(['full', 'concise']).default('full'),
         tags: z.array(z.string().max(40)).max(12).optional(),
-        limit: z
-          .number()
-          .int()
-          .min(1)
-          .max(30)
-          .default(8)
-          .describe('Integer 1 to 30, default 8. To see more, search again with narrower keywords or a kind.'),
+        limit: toolResultLimit.default(8),
       },
     },
     ({ query, kind, limit, format, tags }) =>

@@ -30,6 +30,12 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([z.string().max(200)]),
       run: (query: string) => agents.searchMessages(query),
     },
+    'agent.mcpStatus': { args: z.tuple([id]), run: (s: string) => agents.mcpStatus(s) },
+    'agent.reloadMcp': { args: z.tuple([id]), run: (s: string) => agents.reloadMcp(s) },
+    'agent.reconnectMcp': {
+      args: z.tuple([id, z.string().min(1).max(500)]),
+      run: (s: string, name: string) => agents.reconnectMcp(s, name),
+    },
     'agent.scope': { args: z.tuple([id]), run: (taskId: string) => workspace.agentScope(taskId) },
     'agent.catalog': { args: z.tuple([z.boolean().optional()]), run: (refresh?: boolean) => agents.catalog(refresh) },
     'agent.configure': {

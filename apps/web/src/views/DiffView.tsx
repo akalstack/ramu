@@ -10,6 +10,7 @@ import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { useHost } from '../workspace/HostProvider'
 import { registerSelection } from '../editor/editorBuffers'
 import { DiffLayoutToggle, useDiffLayout } from '../git/diffLayout'
+import { editorThemeName } from '../editor/editorTheme'
 
 type DiffViewDesc = Extract<ViewDescriptor, { kind: 'diff' }>
 
@@ -49,7 +50,7 @@ export function DiffView({
     const original = monaco.editor.createModel('', languageId)
     const modified = monaco.editor.createModel('', languageId)
     const editor = monaco.editor.createDiffEditor(host.current!, {
-      theme: 'ramu',
+      theme: editorThemeName(),
       automaticLayout: true,
       readOnly: true,
       originalEditable: false,

@@ -1,5 +1,6 @@
 // Structured agent service: the façade over the collaborators in ./agent/. Each owns one slice of the state (sessions,
 // queue, goals, routing, sub-agents, ...); this class builds them, wires their hosts and exposes the public API.
+import { mcpRequest, mcpServerDetails } from './agent/mcpStatus'
 import { PermissionApprovals } from './agent/permissionApprovals'
 import { providerBinary } from './providers/providerBinaries'
 import { DEFAULT_RUNNERS, sameRunnerForAll } from './providers/runners'
@@ -7,6 +8,7 @@ import type { AgentRunnerFactory, ProviderRunners } from './agent/agentRunner'
 import type { Db } from './db'
 import type {
   ContextUsage,
+  AgentMcpStatus,
   AppPreferences,
   AgentEvent,
   AgentTask,
@@ -178,6 +180,7 @@ export class AgentService {
       orderOf: (...a) => parts.router.orderOf(...a),
       pauseQueue: (...a) => parts.dispatcher.pauseQueue(...a),
       planSwitch: (...a) => parts.process.planSwitch(...a),
+      planTransition: (...a) => parts.process.planTransition(...a),
       pendingBackground: (...a) => parts.registry.pendingBackground(...a),
       policyOf: (...a) => parts.router.policyOf(...a),
       launchSettings: (...a) => parts.process.launchSettings(...a),
@@ -216,6 +219,9 @@ export class AgentService {
       send: (...a) => this.send(...a),
       sessionCheckpoint: () => this.sessionCheckpoint,
       context: (...a) => parts.contexts.context(...a),
+      modelContextWindow: (...a) => parts.contexts.modelContextWindow(...a),
+      rememberModelContext: (...a) => parts.contexts.rememberModelContext(...a),
+      clearContext: (...a) => parts.contexts.clearContext(...a),
       setContext: (...a) => parts.contexts.setContext(...a),
       setGoal: (...a) => parts.goals.setGoal(...a),
       setVerify: (...a) => parts.goals.setVerify(...a),
@@ -278,7 +284,7 @@ export class AgentService {
     parts.pump = new ClaudeStreamPump(host, this.db)
     parts.starter = new SessionStarter(host, this.db)
     parts.recovery = new RestartRecovery(host, this.db)
-    parts.contexts = new ContextUsageTracker(host)
+    parts.contexts = new ContextUsageTracker(host, this.db)
     this.parts = parts
   }
 
@@ -585,6 +591,58 @@ export class AgentService {
 
   continuationPrompt(...args: Parameters<BackgroundAnalysis['continuationPrompt']>) {
     return this.parts.analysis.continuationPrompt(...args)
+  }
+
+  /** Live provider state, or the last startup snapshot when the thread has no active Claude process. */
+  async mcpStatus(id: string): Promise<AgentMcpStatus> {
+    this.get(id)
+    const runner = this.parts.registry.runners.get(id)
+    if (runner?.mcpStatus) {
+      const status = await mcpRequest(runner.mcpStatus())
+      if (this.parts.registry.runners.get(id) !== runner) throw new Error('The provider changed. Refresh MCP status.')
+      return { ...status, servers: mcpServerDetails(status.servers) }
+    }
+    const query = this.parts.registry.live.get(id)?.query
+    if (query?.mcpServerStatus) {
+      const servers = mcpServerDetails(await mcpRequest(query.mcpServerStatus()))
+      if (this.parts.registry.live.get(id)?.query !== query)
+        throw new Error('The provider changed. Refresh MCP status.')
+      return { supported: true, live: true, source: 'live', canReconnect: true, servers }
+    }
+    const init = this.events(id).findLast((event) => event.kind === 'init')
+    return {
+      supported: true,
+      live: false,
+      source: 'snapshot',
+      servers: init?.kind === 'init' ? (init.mcpServers ?? []) : [],
+    }
+  }
+
+  async reconnectMcp(id: string, name: string): Promise<void> {
+    const session = this.get(id)
+    const runner = this.parts.registry.runners.get(id)
+    if (runner?.reconnectMcp) {
+      const status = await mcpRequest(runner.mcpStatus!())
+      if (this.parts.registry.runners.get(id) !== runner) throw new Error('The provider changed. Refresh MCP status.')
+      if (!status.canReconnect || !status.servers.some((server) => server.name === name))
+        throw new Error('Unknown or unsupported MCP server')
+      await mcpRequest(runner.reconnectMcp(name), 70_000)
+      return
+    }
+    const query = this.parts.registry.live.get(id)?.query
+    if (session.provider !== 'claude-code' || !query?.reconnectMcpServer)
+      throw new Error('Reconnect is available while a Claude session is active. Send a message to start it.')
+    const servers = await mcpRequest(query.mcpServerStatus())
+    if (this.parts.registry.live.get(id)?.query !== query) throw new Error('The provider changed. Refresh MCP status.')
+    if (!servers.some((server) => server.name === name)) throw new Error('Unknown MCP server')
+    await mcpRequest(query.reconnectMcpServer(name), 70_000)
+  }
+
+  async reloadMcp(id: string): Promise<void> {
+    this.get(id)
+    const runner = this.parts.registry.runners.get(id)
+    if (!runner?.reloadMcp) throw new Error('This provider does not support reloading MCP servers in an active thread.')
+    await mcpRequest(runner.reloadMcp(), 70_000)
   }
 
   holdProvider(...args: Parameters<FallbackRouter['holdProvider']>) {

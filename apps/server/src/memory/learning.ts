@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { z } from 'zod'
+import { toolResultLimit } from '../toolInputs'
 import { writeInstalledSkill } from './skillFiles'
 import { historyScope, SessionSearch, visibleRecallEvent } from './sessionSearch'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -131,6 +132,7 @@ export class LearningService {
     private readonly nearLimit?: (session: AgentSessionInfo) => boolean,
   ) {
     for (const job of this.jobs()) if (job.status === 'running') this.saveJob({ ...job, status: 'queued', error: null })
+    this.coalesceQueued()
   }
   preferences(): IntelligencePreferences {
     return {
@@ -159,11 +161,23 @@ export class LearningService {
   snapshot(): LearningSnapshot {
     return { skills: this.skills(), jobs: this.jobs().slice(0, 200), running: this.running }
   }
-  private saveJob(job: LearningJob) {
+  private saveJob(job: LearningJob, coalesce = false) {
     this.db
       .prepare('INSERT INTO learning_jobs VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data=excluded.data')
       .run(job.id, job.sessionId, job.seq, JSON.stringify(job))
+    if (coalesce) this.coalesceQueued()
     this.changed()
+  }
+  /** Unstarted turns share one review of the latest trace; completed proposals remain independently reviewable. */
+  private coalesceQueued(): void {
+    this.db.exec(`DELETE FROM learning_jobs
+      WHERE json_extract(data, '$.status') = 'queued'
+      AND EXISTS (
+        SELECT 1 FROM learning_jobs newer
+        WHERE newer.session_id = learning_jobs.session_id
+        AND newer.seq > learning_jobs.seq
+        AND json_extract(newer.data, '$.status') = 'queued'
+      )`)
   }
   private project(sessionId: string): string | null {
     const id = this.workspace.getTask(this.agents.get(sessionId).taskId).projectId
@@ -334,7 +348,7 @@ export class LearningService {
       error: null,
       proposal: null,
     }
-    this.saveJob(job)
+    this.saveJob(job, true)
     return job
   }
   async tick(manual = false): Promise<void> {
@@ -810,7 +824,7 @@ ${JSON.stringify({ previousCheckpoint: this.checkpoint(job.sessionId), trace: bo
           sessionId: z.string().min(1).max(200).optional(),
           scope: historyScope,
           startSeq: z.number().int().min(1).default(1),
-          limit: z.number().int().min(1).max(10).default(5),
+          limit: toolResultLimit.default(5),
         },
       },
       ({ sessionId: targetId, scope, startSeq, limit }) => ({

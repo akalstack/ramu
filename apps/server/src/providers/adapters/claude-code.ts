@@ -5,6 +5,7 @@ import { defineAdapter, npmLatest, runCli, selfUpdate } from '../adapter'
 
 export const claudeCodeAdapter = defineAdapter({
   id: 'claude-code',
+  selectionTransition: { type: 'restart-and-resume' },
   binaryEnvVar: 'RAMU_CLAUDE_BIN',
   executableNames: () => ['claude'],
   accountEnv: (root) => ({ CLAUDE_CONFIG_DIR: root }),

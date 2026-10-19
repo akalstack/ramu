@@ -1,7 +1,7 @@
 import { permissionKey } from '../agent/permissionApprovals'
 // OpenCode 2 chats through its HTTP API (`@opencode/client`). Each chat runs its own `opencode serve`, so the
 // account's config directories and the per-chat config (Ramu's tool server, skills, sub-agent switch) stay separate.
-import { openCodeMcpServers, repoMcpServers } from './discoveredMcp'
+import { openCodeMcpServers, repoMcpServers, configuredMcpStatus } from './discoveredMcp'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { createInterface } from 'node:readline'
@@ -261,6 +261,27 @@ export class OpenCodeSession implements AgentRunner {
     this.connection = connection
   }
 
+  async mcpStatus() {
+    if (!this.client || this.stopped) return configuredMcpStatus(this.scope, this.connection)
+    const { data } = await this.client.mcp.list({ location: { directory: this.scope.cwd } })
+    return {
+      supported: true,
+      live: true,
+      source: 'live' as const,
+      canReconnect: true,
+      servers: data.map((server) => ({
+        name: server.name,
+        status: server.status.status === 'needs_auth' ? 'needs-auth' : server.status.status,
+        ...('error' in server.status ? { error: server.status.error } : {}),
+      })),
+    }
+  }
+
+  async reconnectMcp(name: string): Promise<void> {
+    if (!this.client || this.stopped) throw new Error('OpenCode session is not running')
+    await this.client.mcp.connect({ server: name, location: { directory: this.scope.cwd } })
+  }
+
   async start(prompt: string, resume: string | null, attachments?: Attachment[]): Promise<void> {
     const client = await (this.connect?.() ?? this.startServer())
     this.client = client
@@ -290,6 +311,7 @@ export class OpenCodeSession implements AgentRunner {
     }
     this.emit({
       kind: 'init',
+      mcpServers: configuredMcpStatus(this.scope, this.connection).servers,
       cwd: this.scope.cwd,
       model: this.settings.model || 'OpenCode default',
       providerSessionId: this.sessionId,
@@ -303,7 +325,7 @@ export class OpenCodeSession implements AgentRunner {
       ...openCodeServerEnv(
         this.connection,
         undefined,
-        this.connection ? openCodeMcpServers(repoMcpServers(this.scope)) : {},
+        this.connection ? openCodeMcpServers(repoMcpServers(this.scope, this.connection?.mcpConfigDirs)) : {},
       ),
     }
     const server = await startServer(this.scope.cwd, env)

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { mergeMethods } from './helpers'
 import { registerAgentHandlers } from './handlers/agent'
 import { registerAsideHandlers } from './handlers/aside'
+import { registerThemeHandlers } from './handlers/theme'
 import { registerBackgroundHandlers } from './handlers/background'
 import { registerFileHandlers } from './handlers/files'
 import { registerForgeHandlers } from './handlers/forge'
@@ -37,6 +38,7 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable =>
     registerWorkspaceHandlers(ctx),
     registerAgentHandlers(ctx),
     registerAsideHandlers(ctx),
+    registerThemeHandlers(ctx),
     registerGitHandlers(ctx),
     registerForgeHandlers(ctx),
     registerFileHandlers(ctx),

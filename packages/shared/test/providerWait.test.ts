@@ -79,6 +79,15 @@ describe('limit wait state and policy', () => {
         shortened: 2,
         chars: 900,
       }),
-    ).toEqual({ mode: 'delta', cause: 'switch', from: 'codex', range: [30, 41], shortened: 2, omitted: 0, chars: 900 })
+    ).toEqual({
+      mode: 'delta',
+      cause: 'switch',
+      from: 'codex',
+      range: [30, 41],
+      shortened: 2,
+      omitted: 0,
+      chars: 900,
+      checkpointSeq: null,
+    })
   })
 })

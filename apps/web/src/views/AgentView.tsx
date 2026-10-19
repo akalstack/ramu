@@ -1,3 +1,4 @@
+import { McpStatusDialog } from './agent/components/McpStatusDialog'
 import { ThreadActivitySummary } from '../chat/ThreadActivity'
 import { helperActive, helperGroups } from '@ramu/shared/chat/helperPresentation'
 import { threadActivity, goalActivityLabel, type ActivityKind } from '@ramu/shared/chat/threadActivity'
@@ -122,6 +123,14 @@ export const AgentView = memo(function AgentView({
   const [attachments, setAttachments] = useState<Attachment[]>(
     () => savedChat(view.sessionId, host.id)?.attachments ?? [],
   )
+  const [mcpOpen, setMcpOpen] = useState(false)
+  useEffect(() => {
+    const open = () => {
+      if (root.current?.checkVisibility()) setMcpOpen(true)
+    }
+    window.addEventListener('ramu:mcp-status', open)
+    return () => window.removeEventListener('ramu:mcp-status', open)
+  }, [])
   const [draft, setDraft] = useState(
     () => savedChat(view.sessionId, host.id)?.draft ?? loadDraft(draftKey.chat(view.sessionId), draftStore(host.id)),
   )
@@ -462,6 +471,14 @@ export const AgentView = memo(function AgentView({
       setOpenAside({ id: aside.id, quote: aside.quote, from: aside.quoteFrom, keepFocus: true })
     }, true)
   const send = (mode: 'queue' | 'steer' = action, context: FileContext[] = []) => {
+    if (draft.trim() === '/mcp') {
+      const submitted = draft
+      const consumed = consumeDraft()
+      if (!consumed.persisted) notifyError(translate('The local draft could not be cleared.'), 'Draft')
+      if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
+      setMcpOpen(true)
+      return
+    }
     const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(draft.trim())
     return side && !attachments.length && !attached.length ? askAside(side[1]!.trim()) : sendToAgent(mode, context)
   }
@@ -601,6 +618,13 @@ export const AgentView = memo(function AgentView({
       />
       <div className="agent-split [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex flex-1 min-h-0 min-w-0 [container:agent-split_/_inline-size]">
         <div className="agent-main relative flex flex-col [flex:1_1_0] min-w-0 min-h-0">
+          {mcpOpen && (
+            <McpStatusDialog
+              key={`${host.id}:${view.sessionId}:${session?.provider}`}
+              sessionId={view.sessionId}
+              onClose={() => setMcpOpen(false)}
+            />
+          )}
           {editing && (
             <EditFromHereDialog
               edit={editing}

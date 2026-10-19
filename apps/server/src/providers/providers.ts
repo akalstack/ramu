@@ -61,6 +61,8 @@ export class ProviderService {
   private closed = false
   private automaticRunning = false
   private generation = 0
+  private statusCache?: { key: string; at: number; result: Promise<ProviderStatus[]> }
+  private statusConfiguration = ''
   private releases: Cache
   private dismissed: Record<string, boolean>
   private updating = new Map<AgentProvider, Promise<ProviderStatus>>()
@@ -77,7 +79,11 @@ export class ProviderService {
     this.settingsChanged()
   }
   settingsChanged() {
-    configureProviderBinaries(this.preferences().providerBinaries ?? {})
+    const config = this.preferences().providerBinaries ?? {}
+    const key = JSON.stringify(config)
+    if (key !== this.statusConfiguration) this.statusCache = undefined
+    this.statusConfiguration = key
+    configureProviderBinaries(config)
     this.generation++
     clearTimeout(this.timer)
     if (this.shouldCheck() && !this.closed) {
@@ -179,11 +185,13 @@ export class ProviderService {
   async signIn(provider: AgentProvider, accountId = 'default'): Promise<void> {
     const adapter = providerAdapter(provider)
     if (!adapter.signIn) throw new Error('Use the Login command for this provider.')
+    this.statusCache = undefined
     await adapter.signIn({
       installed: !!findExecutable(providerBinary(provider, this.preferences().providerBinaries)),
       accountId,
       acpSignIn,
     })
+    this.statusCache = undefined
   }
   /** Shell-free updater, shared by manual actions and the detached service timer. */
   update(provider: AgentProvider): Promise<ProviderStatus> {
@@ -221,6 +229,7 @@ export class ProviderService {
                 : resolve(),
           ),
         )
+      this.statusCache = undefined
       return (await this.status()).find((status) => status.provider === provider)!
     }
     const work = (this.activity ? this.activity.run('Updating CLI', provider, update) : update())
@@ -228,7 +237,10 @@ export class ProviderService {
         this.updateErrors.set(provider, (error as Error).message)
         throw error
       })
-      .finally(() => this.updating.delete(provider))
+      .finally(() => {
+        this.updating.delete(provider)
+        this.statusCache = undefined
+      })
     this.updating.set(provider, work)
     return work
   }
@@ -245,9 +257,31 @@ export class ProviderService {
   async updates() {
     return this.preferences().providerUpdateChecks ? this.notices(await this.status()) : []
   }
-  status(overrides?: ProviderConfiguration, checkLatest = false, force = true): Promise<ProviderStatus[]> {
+  status(
+    overrides?: ProviderConfiguration,
+    checkLatest = false,
+    force = true,
+    refresh = false,
+  ): Promise<ProviderStatus[]> {
+    const key = JSON.stringify(overrides ?? this.preferences().providerBinaries ?? {})
+    // Automatic release checks omit login probes, so they must not replace the full settings result.
+    if (!refresh && !checkLatest && force && this.statusCache?.key === key && Date.now() - this.statusCache.at < 60_000)
+      return this.statusCache.result
     const work = () => this.readStatus(overrides, checkLatest, force)
-    return checkLatest && this.activity ? this.activity.run('Checking CLI updates', undefined, work) : work()
+    const result = checkLatest && this.activity ? this.activity.run('Checking CLI updates', undefined, work) : work()
+    if (force) {
+      const entry = { key, at: Date.now(), result }
+      this.statusCache = entry
+      void result.then(
+        () => {
+          entry.at = Date.now()
+        },
+        () => {
+          if (this.statusCache === entry) this.statusCache = undefined
+        },
+      )
+    }
+    return result
   }
   private async readStatus(
     overrides?: ProviderConfiguration,

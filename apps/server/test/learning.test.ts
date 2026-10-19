@@ -159,6 +159,44 @@ it('stages durable learning, deduplicates a completed turn across restart and ap
   await restarted.settle()
 })
 
+it('coalesces unstarted turns into one review containing the earlier work', async () => {
+  const first = service.enqueue('s')!
+  trace.push(
+    { kind: 'user', text: 'Also verify integration' },
+    { kind: 'tool-use', toolUseId: 'integration', name: 'shell', summary: 'run integration tests' },
+    { kind: 'result', isError: false, text: 'verified', costUsd: null },
+  )
+  const latest = service.enqueue('s')!
+  expect(service.jobs()).toMatchObject([{ id: latest.id, seq: trace.length, status: 'queued' }])
+  expect(service.jobs().some((job) => job.id === first.id)).toBe(false)
+  expect(service.enqueue('s')).toBeNull()
+  await service.tick(true)
+  expect(analyze).toHaveBeenCalledTimes(1)
+  expect(analyze.mock.calls[0]![0]).toContain('Fix retries')
+  expect(analyze.mock.calls[0]![0]).toContain('Also verify integration')
+})
+
+it('cleans up a queued backlog after restart while preserving pending proposals', async () => {
+  await service.tick(true)
+  const pending = service.jobs()[0]!
+  const insert = db.prepare('INSERT INTO learning_jobs VALUES (?, ?, ?, ?)')
+  for (const seq of [10, 20, 30]) {
+    const job = { ...pending, id: `queued-${seq}`, seq, status: 'queued', proposal: null }
+    insert.run(job.id, job.sessionId, seq, JSON.stringify(job))
+  }
+  const restarted = new LearningService(
+    db,
+    workspace,
+    { get: () => session, events: () => trace, analyze },
+    memory,
+    join(root, 'skills'),
+    () => {},
+  )
+  expect(restarted.jobs().filter((job) => job.status === 'queued')).toMatchObject([{ seq: 30 }])
+  expect(restarted.jobs().find((job) => job.id === pending.id)?.status).toBe('pending')
+  await restarted.settle()
+})
+
 it('refuses cancelled turns and honors the daily review budget even after a proposal is dismissed', async () => {
   trace[trace.length - 1] = { kind: 'result', isError: false, text: 'cancelled', costUsd: null }
   expect(service.enqueue('s')).toBeNull()
@@ -277,7 +315,9 @@ it('discovers cross-thread recall and skill selection through real deferred MCP 
     expect(registry.search('previous threads').map((entry) => entry.name)).toContain('session_search')
     const result = await call('session_search', { query: 'authentication' })
     expect(result.matches[0]).toMatchObject({ sessionId: 'other', seq: 1 })
+    expect((await call('session_search', { query: 'authentication '.repeat(100), limit: 100 })).matches).toHaveLength(1)
     expect((await call('session_recall', { sessionId: 'other' })).events[0].event.text).toContain('refresh rotation')
+    expect((await call('session_recall', { sessionId: 'other', limit: 100 })).events).toHaveLength(1)
     const invalid = await client.callTool({
       name: 'tool_invoke',
       arguments: { name: 'session_recall', arguments: { startSeq: 0 } },

@@ -2,6 +2,12 @@ import { SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import type { AppPreferences } from '@ramu/shared/types'
 import { t } from '../i18n'
+import { PasteTheme, ThemeEditor } from '../theme/ThemeEditor'
+import { removeTheme, selectTheme, themeLibrary, useSelectedTheme, useThemeLibrary } from '../theme/themes'
+import { useRef, useState } from 'react'
+import { importThemeFile, themeDigest, type RamuTheme } from '@ramu/shared/theme'
+import { notifyError } from '../chat/Notifications'
+import { setAppearance, useAppearance, type Appearance } from '../appearance'
 import { Dropdown } from '../Menu'
 import { SECONDARY_BUTTON_CLASS, SETTINGS_FORM_CLASS, sizeOptions } from './constants'
 import { ToggleRow, type DraftProps } from './ToggleRow'
@@ -14,6 +20,34 @@ export function AppearanceSettings({
   onResetSizes,
 }: DraftProps & { sizesReset: boolean; onResetSizes: () => void }) {
   const toggleProps = { draft, onChange, busy }
+  const appearance = useAppearance()
+  const [editing, setEditing] = useState(false)
+  const [opened, setOpened] = useState<{ theme: RamuTheme; notice?: string } | null>(null)
+  const [pasting, setPasting] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+  /** Previews a shared theme. The same theme again is reused; a changed copy of an installed id becomes its own theme. */
+  const openImported = async (text: string) => {
+    const result = await importThemeFile(text)
+    if (!result.ok) {
+      notifyError(t(result.error), t('Import theme'))
+      return false
+    }
+    const same = themeLibrary().find((theme) => theme.id === result.theme.id)
+    if (same && (await themeDigest(same)) === result.digest) {
+      selectTheme(same.id)
+      return true
+    }
+    const theme = same ? { ...result.theme, id: `${result.theme.id}-${Date.now().toString(36)}` } : result.theme
+    const notice = result.edited
+      ? t('The colors in this file were changed after it was exported.')
+      : result.issues.length
+        ? t('Some colors are hard to read. Adjust them before keeping this theme.')
+        : undefined
+    setOpened({ theme, notice })
+    return true
+  }
+  const saved = useThemeLibrary()
+  const current = useSelectedTheme()
   return (
     <div className={SETTINGS_FORM_CLASS}>
       <SettingsRow setting="language">
@@ -29,10 +63,81 @@ export function AppearanceSettings({
           onChange={(language) => onChange({ ...draft, language: language as AppPreferences['language'] })}
         />
       </SettingsRow>
+      <SettingsRow>
+        <SettingsLabel
+          title={t('Theme')}
+          help={t('Choose light or dark, or follow your device. Applies immediately on this device only.')}
+        />
+        <Dropdown
+          label={t('Theme')}
+          value={appearance}
+          options={[
+            { value: 'system', label: t('Match device') },
+            { value: 'light', label: t('Light') },
+            { value: 'dark', label: t('Dark') },
+          ]}
+          onChange={(value) => setAppearance(value as Appearance)}
+        />
+      </SettingsRow>
+      <SettingsRow>
+        <SettingsLabel
+          title={t('Colors')}
+          help={t('Adjust every color of the app, light and dark. Nothing changes until you keep it.')}
+        />
+        <span className="flex flex-wrap items-center justify-end gap-2 min-w-0">
+          {saved.length > 0 && (
+            <Dropdown
+              label={t('Color theme')}
+              value={current.id}
+              options={[
+                { value: 'ramu-default', label: 'Ramu Default' },
+                ...saved.map((x) => ({ value: x.id, label: x.name })),
+              ]}
+              onChange={(id) => selectTheme(id === 'ramu-default' ? null : id)}
+            />
+          )}
+          <Button variant="secondary" className={SECONDARY_BUTTON_CLASS} onClick={() => setEditing(true)}>
+            {t('Customize colors')}
+          </Button>
+          <Button variant="secondary" className={SECONDARY_BUTTON_CLASS} onClick={() => fileInput.current?.click()}>
+            {t('Import theme')}
+          </Button>
+          <Button variant="ghost" onClick={() => setPasting(true)}>
+            {t('Paste JSON')}
+          </Button>
+          {current.id !== 'ramu-default' && (
+            <Button variant="ghost" onClick={() => removeTheme(current.id)}>
+              {t('Delete theme')}
+            </Button>
+          )}
+        </span>
+      </SettingsRow>
+      {editing && <ThemeEditor onClose={() => setEditing(false)} />}
+      {pasting && <PasteTheme onClose={() => setPasting(false)} onPreview={openImported} />}
+      {opened && <ThemeEditor imported={opened.theme} notice={opened.notice} onClose={() => setOpened(null)} />}
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".json,application/json"
+        hidden
+        onChange={async (event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (file) await openImported(await file.text())
+        }}
+      />
       <SettingsRow setting="accent">
-        <SettingsLabel title={t('Primary color')} help={t('Used for primary actions, activity, and links.')} />
+        <SettingsLabel
+          title={t('Primary color')}
+          help={
+            current.id === 'ramu-default'
+              ? t('Used for primary actions, activity, and links.')
+              : t('Set by your color theme. Choose Ramu Default to use this.')
+          }
+        />
         <Dropdown
           label={t('Primary color')}
+          disabled={current.id !== 'ramu-default'}
           value={draft.accent}
           options={[
             { value: 'blue', label: t('Blue') },

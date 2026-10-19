@@ -624,7 +624,7 @@ function Shell() {
           />
         )}
         <ResizablePanel id="main" minSize={360}>
-          <main className="main flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] bg-canvas rounded-(--radius-m) [box-shadow:inset_0_1px_0_rgba(255,_255,_255,_0.025),_0_8px_28px_rgba(0,_0,_0,_0.28)]">
+          <main className="main flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] bg-canvas rounded-(--radius-m) [box-shadow:inset_0_1px_0_rgb(var(--ink)_/_0.025),_0_8px_28px_rgba(0,_0,_0,_0.28)]">
             <div className="task-area flex-1 min-h-0 flex">
               {landing && <HomePage />}
               {ui.sidebar === 'inbox' && <InboxPage />}

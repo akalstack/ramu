@@ -409,10 +409,15 @@ export async function worktreePaths(repoRoot: string): Promise<string[]> {
 
 export async function history(cwd: string): Promise<GitCommit[]> {
   if (!(await headOid(cwd))) return []
-  // Commits not yet on the upstream; without an upstream nothing is marked.
+  // Commits not yet on the upstream. A branch without one is compared with every remote branch instead, so a
+  // never-published branch is marked; a repository with no remote has nothing to push to and marks nothing.
   const [raw, ahead] = await Promise.all([
     git(cwd, ['log', '--max-count=30', '--format=%H%x00%h%x00%an%x00%at%x00%s%x00%D']),
-    git(cwd, ['rev-list', '--max-count=30', '@{upstream}..HEAD']).catch(() => ''),
+    git(cwd, ['rev-list', '--max-count=30', '@{upstream}..HEAD']).catch(async () =>
+      (await git(cwd, ['remote'])).trim()
+        ? git(cwd, ['rev-list', '--max-count=30', 'HEAD', '--not', '--remotes']).catch(() => '')
+        : '',
+    ),
   ])
   const outgoing = new Set(ahead.split('\n').filter(Boolean))
   return raw

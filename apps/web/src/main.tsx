@@ -15,6 +15,9 @@ import { queryClient, invalidateDataOn } from './dataQueries'
 import { bridge } from './ipc'
 import { ownHostId } from './hosts'
 import { pruneDrafts } from './composer/drafts'
+import { installAppearance } from './appearance'
+import { installTheme } from './theme/themes'
+import { installEditorTheme } from './editor/customEditorTheme'
 import { App } from './App'
 import { HostProvider } from './workspace/HostProvider'
 import { StartupScreen } from './Brand'
@@ -72,6 +75,10 @@ function Startup() {
     </StartupScreen>
   )
 }
+
+installAppearance()
+installTheme()
+installEditorTheme()
 
 // Fonts and application data load behind one continuous logo-to-wordmark reveal.
 if (!new URLSearchParams(location.search).has('ramu-storage-migration')) {

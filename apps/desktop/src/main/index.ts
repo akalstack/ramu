@@ -31,6 +31,7 @@ import {
   clipboard,
   safeStorage,
   powerMonitor,
+  nativeTheme,
   WebContentsView,
   type Session,
   type WebContents,
@@ -355,6 +356,14 @@ async function main() {
   }
   // Device-wide UI state is shared by every window and is never buffered: it is tiny and idempotent.
   const deviceState = new DeviceState(join(userData, 'device-state.json'))
+  // Native chrome (menus, dialogs, scrollbars, the pre-paint window color) follows the page's appearance choice.
+  const applyAppearance = () => {
+    const choice = deviceState.snapshot().appearance
+    nativeTheme.themeSource = choice === 'system' || choice === 'light' ? choice : 'dark'
+    win.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#131315' : '#ececef')
+  }
+  applyAppearance()
+  nativeTheme.on('updated', applyAppearance)
   const activityHosts = new Set<string>()
   let activityTimer: NodeJS.Timeout | undefined
   const observeHostActivity = (id: string, channel: string, payload: any) => {
@@ -834,6 +843,7 @@ async function main() {
     } catch {
       return
     }
+    if (key === 'appearance') applyAppearance()
   })
 
   const legacyStorage: Record<string, Record<string, string>> = {}

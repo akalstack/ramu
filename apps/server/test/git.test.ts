@@ -166,3 +166,17 @@ describe('Git management', () => {
     expect((await git.stagedPatch(repo)).fingerprint).not.toBe(first.fingerprint)
   })
 })
+
+describe('commits not pushed yet', () => {
+  it('marks nothing without a remote, everything for a never-published branch, and only new commits after publishing', async () => {
+    expect((await git.history(repo)).map((commit) => commit.outgoing)).toEqual([false])
+    const remote = join(tmp, 'remote.git')
+    sh(tmp, 'init', '-q', '--bare', '-b', 'main', remote)
+    sh(repo, 'remote', 'add', 'origin', remote)
+    expect((await git.history(repo)).map((commit) => commit.outgoing)).toEqual([true])
+    sh(repo, 'push', '-q', '--set-upstream', 'origin', 'main')
+    writeFileSync(join(repo, 'hello.txt'), 'two\n')
+    sh(repo, 'commit', '-q', '-am', 'Second')
+    expect((await git.history(repo)).map((commit) => commit.outgoing)).toEqual([true, false])
+  })
+})

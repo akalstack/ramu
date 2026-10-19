@@ -7,6 +7,7 @@ import { useHostRuntime } from '../workspace/workspace'
 import { monaco } from '../editor/monaco'
 import { errorText } from '../workspace/TaskPane'
 import { useAppSettings } from '../settings/AppSettings'
+import { editorThemeName } from '../editor/editorTheme'
 
 export function GitDetailsView({
   taskId,
@@ -33,7 +34,7 @@ export function GitDetailsView({
     const model = monaco.editor.createModel('', 'diff')
     const editor = monaco.editor.create(host.current!, {
       model,
-      theme: 'ramu',
+      theme: editorThemeName(),
       readOnly: true,
       automaticLayout: true,
       fontSize: preferences.editorFontSize,

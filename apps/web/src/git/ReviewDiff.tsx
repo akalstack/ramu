@@ -9,6 +9,7 @@ import type { ChangeFile, ReviewComment } from '@ramu/shared/types'
 import { monaco } from '../editor/monaco'
 import { reviewCommentMenu } from '../editor/monacoMenu'
 import { useNearViewport } from '../lib/useNearViewport'
+import { editorThemeName } from '../editor/editorTheme'
 
 // Set when stepping past the last change of a file: the next file's diff takes it and lands on its first (or last) change.
 const reviewEntry: { current: { fileId: string; direction: 'next' | 'previous' } | null } = { current: null }
@@ -117,7 +118,7 @@ export function ReviewDiff({
       ),
       modified = monaco.editor.createModel(file.newContent, original.getLanguageId())
     const diff = monaco.editor.createDiffEditor(host.current!, {
-      theme: 'ramu',
+      theme: editorThemeName(),
       readOnly: true,
       originalEditable: false,
       automaticLayout: true,

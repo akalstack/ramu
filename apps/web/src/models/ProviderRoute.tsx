@@ -17,7 +17,7 @@ import { defaultOrder, peakFor, planRoute } from '@ramu/shared/providers/routing
 
 const WARN_AT = 80
 
-/** Where the next message goes before it is sent: on from a model near its limit, or up to a higher-ranked one. */
+/** Shows usage-limit fallback for the next message. */
 /** Soft filled pill: the background is the only thing that changes on hover, and there is no border, so nothing shifts. */
 const CHIP =
   'h-7 min-h-7 gap-1.5 rounded-full border-0 bg-fill px-2.5 text-caption font-normal text-soft [box-shadow:none] [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground [&.on]:bg-hover [&.on]:text-foreground [&_svg]:flex-none [&_svg]:text-muted-foreground [&.warn]:bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] [&.warn]:text-warn [&.warn:hover]:bg-[color-mix(in_srgb,var(--warn)_20%,transparent)] [&.bad]:bg-[color-mix(in_srgb,var(--bad)_12%,transparent)] [&.bad]:text-bad [&.bad:hover]:bg-[color-mix(in_srgb,var(--bad)_20%,transparent)] [&.warn_svg]:text-warn [&.bad_svg]:text-bad [&.switching]:text-foreground [&_.route-reason]:text-muted-foreground'
@@ -48,7 +48,7 @@ export function ProviderRouteChip({
   const { preferences } = useAppSettings()
   const { catalogs } = useModelSets()
   const [hold, setHold] = useState<'message' | 'chat' | 'picked' | null>(null)
-  // Picking a model by hand pins the chat on the server, so ask again when the model changes.
+  // Refresh any explicit usage-limit hold when the model changes.
   useEffect(() => {
     void invoke('agent.providerHold', sessionId).then(setHold, () => {})
   }, [sessionId, settings.provider, settings.model, invoke])
@@ -63,9 +63,7 @@ export function ProviderRouteChip({
     catalogs,
     switchAt: preferences.fallback.switchAt,
     now,
-    promote: hold !== 'picked',
   })
-  const moveUp = !!route && !route.peak
   const settingsItem = {
     key: 'settings',
     label: t('Fallback settings…'),
@@ -75,7 +73,7 @@ export function ProviderRouteChip({
     ? [...autoResumeSection(autoResume), { key: 'auto-resume-sep', separator: true }]
     : []
   // Nothing to warn about: a quiet icon, so Auto-resume can still be set (or cleared) before a limit, in the same menu.
-  if (!warn && !moveUp && !limited) {
+  if (!warn && !limited) {
     if (!autoResume) return null
     return (
       <Menu
@@ -89,10 +87,9 @@ export function ProviderRouteChip({
   const next: FallbackStep | undefined = route?.step
   const held = hold === 'message' || hold === 'chat'
   const switching = !!route && !held
-  const reason =
-    peak && !moveUp
-      ? `${providerName(settings.provider)} ${windowLabel(peak, true)} ${peak.status === 'limited' ? t('limited') : `${peak.usedPercent}%`}`
-      : t('Higher in your order')
+  const reason = peak
+    ? `${providerName(settings.provider)} ${windowLabel(peak, true)} ${peak.status === 'limited' ? t('limited') : `${peak.usedPercent}%`}`
+    : t('Plan usage')
   const tone = peak ? usageTone(peak) : ''
   const keep = (scope: 'message' | 'chat' | null) => {
     setHold(scope)
@@ -150,9 +147,7 @@ export function ProviderRouteChip({
       ? [
           {
             key: 'release',
-            label: moveUp
-              ? t('Move up to {0}', { '0': name(next) })
-              : t('Use the fallback ({0}) again', { '0': providerName(next.provider) }),
+            label: t('Use the fallback ({0}) again', { '0': providerName(next.provider) }),
             onSelect: () => keep(null),
           },
         ]
@@ -207,9 +202,9 @@ export function ProviderRouteChip({
       items={[
         {
           key: 'about',
-          heading: moveUp
-            ? t('Next message moves up to {0}, higher in your fallback order', { '0': name(next!) })
-            : t('Next message goes to {0} with the conversation handed over', { '0': providerName(next!.provider) }),
+          heading: t('Next message goes to {0} with the conversation handed over', {
+            '0': providerName(next!.provider),
+          }),
         },
         {
           key: 'message',
@@ -219,7 +214,7 @@ export function ProviderRouteChip({
         {
           key: 'chat',
           label: t('Keep {0} for this thread', { '0': providerName(settings.provider) }),
-          ...(moveUp ? {} : { title: t('Until its limit resets') }),
+          title: t('Until its limit resets'),
           onSelect: () => keep('chat'),
         },
         { key: 'sep', separator: true },

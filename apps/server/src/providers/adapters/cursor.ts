@@ -4,6 +4,7 @@ import { loadCursorSdk } from '../cursor'
 
 export const cursorAdapter = defineAdapter({
   id: 'cursor',
+  selectionTransition: { type: 'restart-and-resume' },
   binaryEnvVar: 'RAMU_CURSOR_BIN',
   executableNames: () => ['agent', 'cursor-agent'],
   accountEnv: (root) => ({

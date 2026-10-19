@@ -5,6 +5,38 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { openDb } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
+import { ProviderSessions } from '../src/agent/providerSessions'
+
+it('upgrades saved native sessions without assuming their old context belongs to a known model', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-context-migration-'))
+  const path = join(dir, 'profile.sqlite')
+  let db = openDb(path)
+  try {
+    db.exec(`INSERT INTO projects (id, name, created_at) VALUES ('p', 'Project', 0);
+      INSERT INTO tasks (id, project_id, title, mode, status, created_at) VALUES ('t', 'p', 'Task', 'current', 'idle', 0);
+      INSERT INTO agent_sessions (id, task_id, provider, cwd, additional_dirs, covers, state, created_at) VALUES ('s', 't', 'codex', '/work', '[]', '[]', 'idle', 0);`)
+    new ProviderSessions(db).save('s', 'codex', undefined, 'native-thread', 12, 1_000_000, 'large', 150_000)
+    const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
+    db.exec(`ALTER TABLE session_provider_sessions DROP COLUMN model;
+      ALTER TABLE session_provider_sessions DROP COLUMN context_used;
+      DROP TABLE model_context_windows;
+      PRAGMA user_version = ${version - 1};`)
+    db.close()
+    db = openDb(path)
+    expect(new ProviderSessions(db).get('s', 'codex', undefined)).toEqual({
+      providerSessionId: 'native-thread',
+      lastSeq: 12,
+      contextMax: 1_000_000,
+      model: null,
+      contextUsed: null,
+    })
+    expect(db.prepare('SELECT * FROM model_context_windows').all()).toEqual([])
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+  } finally {
+    db.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
 
 it('migrates legacy worktree conversations without losing bindings, transcripts, UI, or saved access settings', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ramu-migration-'))

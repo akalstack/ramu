@@ -1,18 +1,14 @@
-import { useSettingsInvoke } from './SettingsScope'
+import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
 import { errorText } from '../lib/errors'
 import { SettingsRow } from '@/components/settings-row'
 import { t, useLanguage } from '../i18n'
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ownHostId } from '../hosts'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
-import {
-  AGENT_PROVIDERS,
-  providerAccountRows,
-  providerEnabled,
-  providerName,
-  type ProviderStatus,
-} from '@ramu/shared/providers/providers'
+import { AGENT_PROVIDERS, providerAccountRows, providerEnabled, providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
 import { runProviderCommand } from '../models/ProviderSetupTerminal'
 import { useAccountUsage } from './Usage'
@@ -27,27 +23,40 @@ export function ProviderSettings({
 }) {
   const invoke = useSettingsInvoke()
   useLanguage()
-  const [statuses, setStatuses] = useState<ProviderStatus[]>([])
-  const [busy, setBusy] = useState(true),
-    [updating, setUpdating] = useState<AgentProvider | null>(null)
+  const scope = useContext(SettingsScopeContext)
+  const queryClient = useQueryClient()
+  const [updating, setUpdating] = useState<AgentProvider | null>(null)
   const [signingIn, setSigningIn] = useState<AgentProvider | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const sequence = useRef(0),
     config = value.providerBinaries
+  const statusQuery = useQuery({
+    queryKey: ['provider-settings', scope?.primaryId || ownHostId(), config],
+    queryFn: () => invoke('providers.status', config, false),
+    enabled: false,
+    staleTime: 60_000,
+  })
+  const statuses = statusQuery.data ?? []
+  const busy = statusQuery.isFetching || (!statusQuery.data && !statusQuery.isError)
+  const loginPending = useRef(false)
   const accountUsage = useAccountUsage()
-  // Background refreshes (config edits, focus) update statuses in place; only the button shows progress.
+  // Cache entries are host/configuration scoped, so reopening never shows another host’s logins.
   const refresh = async (latest = false, quiet = false) => {
     const request = ++sequence.current
-    if (!quiet) setBusy(true)
     setError(null)
     try {
-      const next = await invoke('providers.status', config, latest)
-      if (request === sequence.current) setStatuses(next)
+      const queryKey = ['provider-settings', scope?.primaryId || ownHostId(), config]
+      // Reopening and focus reuse fresh data; explicit actions always ask the host again.
+      const fresh = !quiet || loginPending.current
+      loginPending.current = false
+      await queryClient.fetchQuery({
+        queryKey,
+        queryFn: () => invoke('providers.status', config, latest, fresh),
+        staleTime: fresh ? 0 : 60_000,
+      })
     } catch (reason) {
       if (request === sequence.current) setError(errorText(reason))
-    } finally {
-      if (request === sequence.current) setBusy(false)
     }
   }
   useEffect(() => {
@@ -56,7 +65,7 @@ export function ProviderSettings({
       clearTimeout(timer)
       sequence.current++
     }
-  }, [config])
+  }, [config, invoke])
   const change = (provider: AgentProvider, patch: Partial<NonNullable<(typeof config)[AgentProvider]>>) =>
     onChange({ ...value, providerBinaries: { ...config, [provider]: { binary: '', ...config[provider], ...patch } } })
   const browse = async (provider: AgentProvider, key: 'binary' | 'harness') => {
@@ -71,7 +80,7 @@ export function ProviderSettings({
     const onFocus = () => void refresh(false, true)
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-  }, [config])
+  }, [config, invoke])
   /** The top enabled login is the one new threads use. */
   const arrange = (
     provider: AgentProvider,
@@ -129,7 +138,10 @@ export function ProviderSettings({
         : { ...config, [provider]: { binary: '', ...config[provider], accountId } }
     try {
       const command = await invoke('providers.loginCommand', provider, target)
-      if (command) runProviderCommand(`${providerName(provider)} · ${t('Login')}`, command)
+      if (command) {
+        loginPending.current = true
+        runProviderCommand(`${providerName(provider)} · ${t('Login')}`, command)
+      }
     } catch (reason) {
       setError(errorText(reason))
     }

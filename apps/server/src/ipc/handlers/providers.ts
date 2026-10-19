@@ -16,8 +16,9 @@ export const registerProviderHandlers: RegisterHandlers = ({
   accountUsage,
 }) => ({
   'providers.status': {
-    args: z.tuple([providerBinaries.optional(), z.boolean().optional()]),
-    run: (config?: ProviderConfiguration, latest?: boolean) => providers.status(config, latest),
+    args: z.tuple([providerBinaries.optional(), z.boolean().optional(), z.boolean().optional()]),
+    run: (config?: ProviderConfiguration, latest?: boolean, refresh?: boolean) =>
+      providers.status(config, latest, true, refresh),
   },
   'providers.accountEmails': { args: z.tuple([]), run: () => providers.accountEmails() },
   'providers.signIn': {

@@ -2,7 +2,14 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { codexContext, codexModels, codexReadings, codexHelperHistory, toolOfOtherItem } from '../src/providers/codex'
+import {
+  codexContext,
+  createCodexRunner,
+  codexModels,
+  codexReadings,
+  codexHelperHistory,
+  toolOfOtherItem,
+} from '../src/providers/codex'
 import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
 
 let tmp: string
@@ -33,6 +40,8 @@ rl.on('line', line => {
     return;
   }
   if (m.method === 'initialize') send({id:m.id,result:{userAgent:'test'}});
+  if (m.method === 'mcpServerStatus/list') send({id:m.id,result:{data:m.params.cursor ? [{name:'needs-login',runtimeStatus:'authenticationRequired',authStatus:'notLoggedIn',tools:{}}] : [{name:'connected',runtimeStatus:'connected',authStatus:'oAuth',tools:{jira:{name:'jira'}}},{name:'cached',runtimeStatus:null,authStatus:'oAuth',tools:{cachedTool:{name:'cached'}}}],nextCursor:m.params.cursor ? null : 'second-page'}});
+  if (m.method === 'config/mcpServer/reload') send({id:m.id,result:{}});
   if (m.method === 'model/list') send({id:m.id,result:{data:[{model:'codex-wire',displayName:'Codex wire',hidden:false,supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'high'}],defaultReasoningEffort:'low',isDefault:true}],nextCursor:null}});
   if (m.method === 'thread/start' || m.method === 'thread/resume') send({id:m.id,result:{thread:{id:'thread-1'},model:'codex-wire'}});
   if (m.method === 'thread/read') {
@@ -163,6 +172,31 @@ describe('Codex app-server wire adapter', () => {
         .filter((message) => message.method === 'thread/read')
         .every((message) => message.params.includeTurns),
     ).toBe(true)
+  })
+  it('reads thread-scoped MCP status across pages and reloads without starting another turn', async () => {
+    const runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' }, () => {})
+    try {
+      await runner.start('hello', null)
+      const status = await runner.mcpStatus!()
+      expect(status).toMatchObject({
+        live: true,
+        canReload: true,
+        servers: [
+          { name: 'connected', status: 'connected', toolCount: 1 },
+          { name: 'cached', status: 'unknown', toolCount: 1 },
+          { name: 'needs-login', status: 'needs-auth', toolCount: 0 },
+        ],
+      })
+      await runner.reloadMcp!()
+      const requests = messages().filter((m) => m.method === 'mcpServerStatus/list')
+      expect(requests).toHaveLength(2)
+      expect(requests[0].params).toMatchObject({ threadId: 'thread-1', detail: 'toolsAndAuthOnly' })
+      expect(requests[1].params.cursor).toBe('second-page')
+      expect(messages().filter((m) => m.method === 'config/mcpServer/reload')).toHaveLength(1)
+      expect(messages().filter((m) => m.method === 'turn/start')).toHaveLength(1)
+    } finally {
+      await runner.stop()
+    }
   })
   it('discovers actual model names and supported reasoning levels', async () => {
     expect(await codexModels()).toEqual([

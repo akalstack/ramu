@@ -1,10 +1,12 @@
 import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
+import { requestOutcomes } from '@ramu/shared/chat/questions'
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from './agentRunner'
 import type {
   AppPreferences,
   GoalPreferences,
   AgentEvent,
   AgentProvider,
+  AgentSettings,
   Attachment,
   HandoffCause,
   HandoffInfo,
@@ -18,9 +20,11 @@ import { createCanUseTool } from './permissions'
 import { claudeLaunchOptions } from './claudeOptions'
 import { sessionGuidance } from './guidance'
 import { usesRamuQuestionTools } from './nativeFeatures'
-import { buildHandoff, handoffBudgetChars, type BuiltHandoff } from './handoff'
+import { buildHandoff, handoffBudgetBytes, DEFAULT_CONTEXT_TOKENS, type BuiltHandoff } from './handoff'
 import { ProviderSessions, pendingHandoff, planHandoff } from './providerSessions'
 import { classifyLimit } from '../providers/limitClassifier'
+import { providerAdapter } from '../providers/adapters'
+import { sameProviderIdentity } from '../providers/selectionTransition'
 import type { AdvisorService } from './advisorService'
 import type { ContextUsageTracker } from './contextUsage'
 import type { MessageDispatcher } from './messageDispatcher'
@@ -50,7 +54,10 @@ export interface LaunchSettings {
 export interface SessionProcessHost
   extends
     Pick<AdvisorService, 'advisorStep' | 'claudeAdvisorModel'>,
-    Pick<ContextUsageTracker, 'context' | 'refreshContext' | 'setContext' | 'usageReader'>,
+    Pick<
+      ContextUsageTracker,
+      'context' | 'modelContextWindow' | 'clearContext' | 'refreshContext' | 'setContext' | 'usageReader'
+    >,
     Pick<MessageDispatcher, 'pauseQueue' | 'steering'>,
     Pick<GoalManager, 'controlGoal' | 'getGoal' | 'goalPreferences' | 'saveGoal' | 'setGoal'>,
     Pick<ProviderWaits, 'clearProviderWait' | 'waitForGoalProvider'>,
@@ -161,6 +168,8 @@ export class SessionProcess {
         s.providerSessionId,
         this.host.events(id).length,
         this.host.context(id)?.max ?? null,
+        s.settings.model,
+        this.host.context(id)?.used ?? null,
       )
   }
 
@@ -170,20 +179,53 @@ export class SessionProcess {
    */
   planSwitch(
     id: string,
-    target: { provider: AgentProvider; accountId?: string },
+    target: { provider: AgentProvider; accountId?: string; model?: string },
     cause: HandoffCause,
+    freshSession = false,
+    contextTokens?: number | null,
   ): { resume: string | null; info: HandoffInfo; fits: boolean } {
     const s = this.host.get(id)
+    const model = target.model ?? (target.provider === s.provider ? s.settings.model : '')
+    const window = contextTokens ?? this.host.modelContextWindow({ ...target, model })
     const plan = planHandoff(this.host.events(id), {
       cause,
       from: s.provider,
       to: target.provider,
-      saved: this.sessions.get(id, target.provider, target.accountId),
+      saved: freshSession ? null : this.sessions.get(id, target.provider, target.accountId),
+      model,
+      contextTokens: window,
       checkpoint: this.host.sessionCheckpoint()?.(id) ?? null,
       goal: !this.host.toolConnection() && !s.parentId ? (this.host.getGoal(id)?.objective ?? null) : null,
       queued: this.host.queued(id),
     })
     return { resume: plan.resume, info: pendingHandoff(plan, cause, s.provider), fits: !plan.built.overBudget }
+  }
+
+  /** Preflight every manual or automatic settings change while the live runner still has its capabilities. */
+  planTransition(
+    id: string,
+    target: AgentSettings,
+    cause: HandoffCause,
+    contextTokens?: number,
+  ): { resume: string | null; info?: HandoffInfo; fits: boolean } {
+    const s = this.host.get(id)
+    const observedWindow = this.host.modelContextWindow(target)
+    const window = contextTokens == null ? observedWindow : Math.min(contextTokens, observedWindow ?? Infinity)
+    if (!sameProviderIdentity(s.settings, target)) return this.planSwitch(id, target, cause, false, window)
+    const transition =
+      this.host.runners.get(id)?.planSettingsTransition?.(target) ?? providerAdapter(s.provider).selectionTransition
+    if (transition.type === 'reject') throw new Error(transition.reason)
+    const context = this.host.context(id)
+    const modelChanged = s.settings.model !== target.model
+    // An unknown destination cannot inherit the outgoing model's capacity. A smaller window needs room for native history,
+    // instructions and the next turn; if usage is unavailable, use a fresh session when shrinking or changing to an unknown window.
+    const fitsNative = modelChanged
+      ? window != null && context != null && context.used <= window * 0.75
+      : window == null || context == null || context.used <= window * 0.75
+    if (transition.type === 'restart-and-resume' && s.providerSessionId && fitsNative)
+      return { resume: s.providerSessionId, fits: true }
+    // A fresh session must never pick the same incompatible saved session back up as a delta.
+    return this.planSwitch(id, target, cause, true, window)
   }
 
   /**
@@ -196,6 +238,8 @@ export class SessionProcess {
     id: string,
     resume: string | null,
     hasGuidance: boolean,
+    request: string,
+    attachments: Attachment[],
   ): { resume: string | null; built: BuiltHandoff } | 'too-large' | null {
     const s = this.host.get(id)
     const events = this.host.events(id)
@@ -208,18 +252,27 @@ export class SessionProcess {
     // cannot leave the provider without it.
     const hasHistory = events.some((e) => !e.agentId && (e.kind === 'user' || e.kind === 'text'))
     if (!delta && !(!resume && (marked || hasHistory))) return null
-    const cause = info?.cause ?? (marked ? 'switch' : 'resume-unavailable')
+    const cause = undelivered ? info.cause : 'resume-unavailable'
     const saved = this.sessions.get(id, s.provider, s.settings.accountId)
     const sameProvider = cause === 'rewind' || cause === 'resume-unavailable'
-    const contextTokens = (delta ? saved?.contextMax : null) ?? (sameProvider ? this.host.context(id)?.max : null)
+    const contextTokens =
+      (undelivered ? info?.contextWindow : null) ??
+      this.host.modelContextWindow(s.settings) ??
+      (sameProvider ? this.host.context(id)?.max : null)
+    const inputTokens = Buffer.byteLength(request, 'utf8') + attachments.length * 8192
+    const budgetBytes = Math.min(
+      handoffBudgetBytes(contextTokens),
+      Math.max(0, Math.floor((contextTokens ?? DEFAULT_CONTEXT_TOKENS) * 0.75) - inputTokens),
+    )
     const common = {
       cause,
-      ...(info?.from ? { from: info.from } : {}),
+      from: undelivered ? info.from : s.provider,
       to: s.provider,
       // Providers that receive session guidance already get the goal there.
       goal: !hasGuidance && !s.parentId ? (this.host.getGoal(id)?.objective ?? null) : null,
       queued: this.host.queued(id),
-      budgetChars: handoffBudgetChars(contextTokens),
+      budgetBytes,
+      ...(contextTokens ? { contextWindow: contextTokens } : {}),
     }
     const checkpoint = this.host.sessionCheckpoint()?.(id) ?? null
     let native = resume
@@ -227,7 +280,10 @@ export class SessionProcess {
       events,
       delta ? { ...common, mode: 'delta', fromSeq: info.fromSeq } : { ...common, mode: 'full', checkpoint },
     )
-    if (delta && built.overBudget) {
+    const fitsNative =
+      (saved?.contextUsed ?? 0) + Buffer.byteLength(built.prompt, 'utf8') + inputTokens <=
+      (contextTokens ?? DEFAULT_CONTEXT_TOKENS) * 0.75
+    if (delta && (built.overBudget || !fitsNative)) {
       native = null
       built = buildHandoff(events, { ...common, mode: 'full', checkpoint })
     }
@@ -257,7 +313,7 @@ export class SessionProcess {
     const connection = this.host.toolConnection()?.(s)
     // The conversation reaches a provider session that has not seen it: a switch, a lost session, a rewind. Built first so
     // the checkpoint goes out once, in the handoff, and not again in the session guidance.
-    const carried = this.carry(id, resume, !!connection)
+    const carried = this.carry(id, resume, !!connection, prompt, attachments)
     if (carried === 'too-large') {
       if (recordUser)
         this.host.record(id, { kind: 'user', text: prompt, ...(attachments.length ? { attachments } : {}) })
@@ -271,6 +327,7 @@ export class SessionProcess {
     }
     // A delta that did not fit has no native session to resume: null means a fresh one, not "keep the old id".
     if (carried) resume = carried.resume
+    this.host.clearContext(id)
     // With automatic goals off and no goal yet, the policy waits until /goal starts one.
     const pins = this.currentSettings(id)
     if (connection) this.launchPins.set(id, pins)
@@ -424,13 +481,20 @@ export class SessionProcess {
 
   halt(id: string): void {
     this.host.cancelWaiters(id)
-    for (const event of this.host.events(id))
+    const events = this.host.events(id)
+    const outcomes = requestOutcomes(events)
+    // Runner callbacks are ignored after detaching it below. Persist cancellation here so its prompts cannot survive it.
+    for (const event of events)
       if (
-        event.kind === 'question' &&
-        event.responseMode === 'ramu' &&
-        !this.host.questionStatus(id, event.requestId).outcome
-      )
+        (event.kind === 'permission-request' ||
+          event.kind === 'elicitation' ||
+          (event.kind === 'question' && event.responseMode !== 'message')) &&
+        (!event.requestSource || event.requestSource.sessionId === id) &&
+        !outcomes.has(event.requestId)
+      ) {
         this.host.record(id, { kind: 'request-resolved', requestId: event.requestId, outcome: 'cancelled' })
+        outcomes.set(event.requestId, 'cancelled')
+      }
     const codex = this.host.runners.get(id)
     this.nativeOffAtLaunch.delete(id)
     this.launchPins.delete(id)
@@ -445,7 +509,7 @@ export class SessionProcess {
     if (!live) return
     for (const [requestId, p] of live.pending) {
       p.resolve({ behavior: 'deny', message: 'Session stopped by the user', interrupt: true })
-      this.host.record(id, { kind: 'request-resolved', requestId, outcome: 'cancelled' })
+      if (!outcomes.has(requestId)) this.host.record(id, { kind: 'request-resolved', requestId, outcome: 'cancelled' })
     }
     live.pending.clear()
     live.input.close()

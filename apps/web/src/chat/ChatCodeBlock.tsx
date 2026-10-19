@@ -83,7 +83,7 @@ export function ChatCodeBlock({ source, hint }: { source: string; hint?: string 
           </Button>
         </CodeBlockActions>
       </CodeBlockHeader>
-      <CodeBlockContent className="px-3.5 py-3 text-[length:0.88em] leading-[1.6] text-[#dcdce2]">
+      <CodeBlockContent className="px-3.5 py-3 text-[length:0.88em] leading-[1.6] text-(--text-body)">
         {colored === null ? (
           source
         ) : (

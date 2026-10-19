@@ -42,7 +42,9 @@ export interface HandoffOptions {
   mode?: 'full' | 'delta'
   /** Delta: carry only events from this 1-based number on. */
   fromSeq?: number
-  budgetChars?: number
+  budgetBytes?: number
+  /** Destination model's capacity, when known. */
+  contextWindow?: number
   /** The goal objective, only for providers that do not receive session guidance. */
   goal?: string | null
   /** Messages queued but not yet sent. */
@@ -58,12 +60,13 @@ export interface BuiltHandoff {
   includesCheckpoint: boolean
 }
 
-const DEFAULT_BUDGET_CHARS = 120_000
+export const DEFAULT_CONTEXT_TOKENS = 128_000
 
-/** How many characters of handoff a model with this context window (in tokens) can take: a quarter of it, at four characters a token. */
-export function handoffBudgetChars(contextTokens?: number | null): number {
-  if (!contextTokens || contextTokens <= 0) return DEFAULT_BUDGET_CHARS
-  return Math.min(400_000, Math.max(40_000, Math.round(contextTokens * 4 * 0.25)))
+/** UTF-8 byte allowance: charge a token per byte and reserve three quarters for instructions, input and output. No floor may exceed a small model's window. */
+export function handoffBudgetBytes(contextTokens?: number | null): number {
+  const window =
+    contextTokens && Number.isFinite(contextTokens) && contextTokens > 0 ? contextTokens : DEFAULT_CONTEXT_TOKENS
+  return Math.min(400_000, Math.floor(window * 0.25))
 }
 
 const FRAME =
@@ -248,7 +251,7 @@ function transcriptAt(items: Item[], level: number): { text: string; omitted: nu
 export function buildHandoff(events: AgentEvent[], options: HandoffOptions = {}): BuiltHandoff {
   const cause = options.cause ?? 'switch'
   const delta = options.mode === 'delta'
-  const budget = options.budgetChars ?? handoffBudgetChars()
+  const budget = options.budgetBytes ?? handoffBudgetBytes()
   const checkpoint =
     !delta && options.checkpoint && options.checkpoint.seq > 0 && options.checkpoint.seq <= events.length
       ? options.checkpoint
@@ -297,7 +300,7 @@ export function buildHandoff(events: AgentEvent[], options: HandoffOptions = {})
   let level = 0
   let built = transcriptAt(items, 0)
   let prompt = assemble(built.text)
-  while (prompt.length > budget && level < LEVELS - 1) {
+  while (Buffer.byteLength(prompt, 'utf8') > budget && level < LEVELS - 1) {
     level++
     built = transcriptAt(items, level)
     prompt = assemble(built.text)
@@ -313,8 +316,10 @@ export function buildHandoff(events: AgentEvent[], options: HandoffOptions = {})
       chars: prompt.length,
       omitted: built.omitted,
       shortened: built.shortened,
+      ...(checkpoint ? { checkpointSeq: checkpoint.seq } : {}),
+      ...(options.contextWindow ? { contextWindow: options.contextWindow } : {}),
     },
-    overBudget: prompt.length > budget,
+    overBudget: Buffer.byteLength(prompt, 'utf8') > budget,
     includesCheckpoint: !!checkpoint,
   }
 }

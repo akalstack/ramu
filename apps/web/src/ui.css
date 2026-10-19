@@ -38,9 +38,9 @@
   --color-popover-foreground: var(--text);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-ink);
-  --color-secondary: var(--raised);
+  --color-secondary: var(--subtle);
   --color-secondary-foreground: var(--text);
-  --color-muted: var(--raised);
+  --color-muted: var(--subtle);
   --color-muted-foreground: var(--muted);
   --color-accent: var(--pressed);
   --color-accent-foreground: var(--text);

@@ -19,6 +19,7 @@ const viewerMethods = new Set([
   'agent.scope',
   'agent.catalog',
   'agent.providerHold',
+  'agent.mcpStatus',
   'agent.replyPermission',
   'agent.replyQuestion',
   'agent.replyElicitation',

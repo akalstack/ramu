@@ -390,6 +390,21 @@ it('reports a resume the runtime cannot do as recoverable, so the thread can con
   vi.stubEnv('RAMU_LOST', '1')
   await expect(start('hello', 'cursor', 'full', 'gone')).rejects.toBeInstanceOf(AcpResumeUnavailable)
 })
+
+it.each([false, true])('plans settings changes using negotiated resume support (%s)', async (resumable) => {
+  if (!resumable) vi.stubEnv('RAMU_NO_RESUME', '1')
+  await start('hello')
+  const target = {
+    ...DEFAULT_AGENT_SETTINGS,
+    provider: 'cursor' as const,
+    model: 'wire-model',
+    effort: 'high' as const,
+  }
+  expect(runner!.planSettingsTransition!(target)).toEqual({ type: resumable ? 'restart-and-resume' : 'handoff' })
+  expect(runner!.planSettingsTransition!({ ...target, model: 'missing-model' })).toMatchObject({ type: 'reject' })
+  // Preflight itself never closes or mutates the live session.
+  expect(log().filter((m) => m.method === 'session/new')).toHaveLength(1)
+})
 it('sends images only to runtimes that accept them, and otherwise names the saved file', async () => {
   const path = join(dir, 'shot.png')
   writeFileSync(path, 'png')
@@ -411,6 +426,35 @@ it('sends images only to runtimes that accept them, and otherwise names the save
       .params.prompt.map((block: { type: string }) => block.type),
   ).toEqual(['text', 'image'])
 })
+it('still supplies repository stdio MCPs when a runtime cannot connect over HTTP', async () => {
+  writeFileSync(
+    join(dir, '.mcp.json'),
+    JSON.stringify({
+      mcpServers: {
+        local: { command: 'local-mcp', args: ['--stdio'] },
+        remote: { type: 'http', url: 'https://remote.example/mcp' },
+      },
+    }),
+  )
+  await startWith(
+    'hello',
+    { mcpCapabilities: { http: false } },
+    { tools: { url: 'http://localhost/mcp', token: 'secret' } },
+  )
+  expect(log().find((m) => m.method === 'session/new').params.mcpServers).toEqual([
+    { name: 'local', command: 'local-mcp', args: ['--stdio'], env: [] },
+  ])
+  expect(await runner!.mcpStatus!()).toMatchObject({
+    live: false,
+    source: 'configuration',
+    servers: [
+      { name: 'local', status: 'configured' },
+      { name: 'remote', status: 'unsupported' },
+      { name: 'ramu', status: 'unsupported' },
+    ],
+  })
+})
+
 it('does not hand Ramu tools to a runtime that cannot reach HTTP MCP servers, and says so', async () => {
   const tools: McpConnection = { url: 'http://127.0.0.1:1/mcp', token: 'secret' }
   await startWith('hello', { mcpCapabilities: { http: false } }, { tools })

@@ -5,9 +5,12 @@ import type { AppPreferences, AgentSettings, AgentProvider, ProviderCatalog } fr
 import { codexModels } from '../providers/codex'
 import type { QueryFn } from './types'
 import { fakeCatalogs, discoverCatalogs } from './catalog'
+import type { ContextUsageTracker } from './contextUsage'
 
 /** What CatalogService needs from the rest of the service. */
-export interface CatalogServiceHost {
+export interface CatalogServiceHost extends Partial<
+  Pick<ContextUsageTracker, 'rememberModelContext' | 'modelContextWindow'>
+> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   preferences(): AppPreferences | undefined
   providerQuery: QueryFn
@@ -79,5 +82,10 @@ export class CatalogService {
       throw new Error('Fast mode is not available for this Codex model.')
     if (settings.effort && !model.efforts.includes(settings.effort))
       throw new Error('This model does not support that reasoning effort')
+    if (model.contextWindow)
+      this.host.rememberModelContext?.(
+        settings,
+        Math.min(model.contextWindow, this.host.modelContextWindow?.(settings) ?? Infinity),
+      )
   }
 }

@@ -108,7 +108,10 @@ function InteractiveDocumentCard({
       )
     }
     const observer = new MutationObserver(sendTheme)
-    observer.observe(window.document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] })
+    observer.observe(window.document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'style', 'data-appearance'],
+    })
     const receive = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return
       const m = event.data

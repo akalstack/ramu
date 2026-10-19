@@ -22,6 +22,22 @@ export interface AgentSettings {
    */
   autoResume?: boolean
 }
+/** Safe connection details; provider configuration, headers and credentials never cross the API. */
+export interface AgentMcpServer {
+  name: string
+  status: string
+  toolCount?: number
+  error?: string
+}
+export interface AgentMcpStatus {
+  supported: boolean
+  live: boolean
+  servers: AgentMcpServer[]
+  source?: 'live' | 'snapshot' | 'configuration'
+  canReconnect?: boolean
+  canReload?: boolean
+}
+
 export interface AgentModel {
   provider: AgentProvider
   id: string
@@ -30,6 +46,8 @@ export interface AgentModel {
   defaultEffort: ReasoningEffort | null
   isDefault: boolean
   serviceTiers?: string[]
+  /** Context capacity reported by the provider, in tokens; absent when not exposed. */
+  contextWindow?: number
 }
 export interface ProviderCatalog {
   provider: AgentProvider
@@ -77,6 +95,10 @@ export interface HandoffInfo {
   omitted?: number
   /** Events kept but cut short (old tool results, tool calls and assistant text). */
   shortened?: number
+  /** Older history represented by a saved summary rather than replayed verbatim. */
+  checkpointSeq?: number
+  /** Destination capacity used for this transfer; persisted so launch uses the same budget as preflight. */
+  contextWindow?: number
 }
 
 /** Fields of the `provider-wait` event: a thread held at a usage limit, to be continued at `retryAt`. `retryAt` null ends the wait. */
@@ -274,7 +296,14 @@ type AgentEventBody =
   | { kind: 'queue'; messages: QueuedMessage[]; paused?: boolean }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
-  | { kind: 'init'; model: string; cwd: string; providerSessionId: string; provider?: AgentProvider }
+  | {
+      kind: 'init'
+      model: string
+      cwd: string
+      providerSessionId: string
+      provider?: AgentProvider
+      mcpServers?: AgentMcpServer[]
+    }
   | { kind: 'text'; text: string; messageId?: string; nativeMessageId?: string }
   | { kind: 'content'; content: AgentContent[]; messageId?: string }
   | {
@@ -400,6 +429,8 @@ export interface McpConnection {
   restricted?: boolean
   /** Ramu's exported managed skills for this chat's scope, set only for providers that load them through their own skill system. */
   skillsDir?: string
+  /** Original project/repository directories whose MCP definitions belong to this workspace. */
+  mcpConfigDirs?: string[]
   /** Codex only: a hook asks Ramu before each of Codex's own sub-agents starts, so Ramu can send it elsewhere. */ interceptSubagents?: boolean
   /** Claude only: Ramu's advisor replaces Claude Code's own, which is turned off. */
   replaceAdvisor?: boolean

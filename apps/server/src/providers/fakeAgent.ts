@@ -174,6 +174,31 @@ export function fakeAnalysis(prompt: string): string {
     return `Side answer: ${prompt.match(/<question>\n([\s\S]*?)\n<\/question>/)?.[1] ?? ''}`.trim()
   if (prompt.startsWith('advisor:'))
     return `Advisor review: ${prompt.match(/<agent-focus>\n([\s\S]*?)\n<\/agent-focus>/)?.[1] ?? 'general check'}. Verify the tests before declaring done.`
+  if (prompt.startsWith('theme-draft:')) {
+    // A warm paper-and-ink fixture that passes the readability checks, so the AI theme flow is testable offline.
+    const seed = JSON.parse(prompt.match(/<seed-theme>\n([\s\S]*?)\n<\/seed-theme>/)![1]!)
+    const warm = (variant: 'light' | 'dark', colors: Record<string, string>) => ({
+      overlay: seed[variant].overlay,
+      colors: { ...seed[variant].colors, ...colors },
+    })
+    return JSON.stringify({
+      name: 'Warm paper',
+      light: warm('light', {
+        window: '#efe6d8',
+        canvas: '#fbf6ec',
+        raised: '#fffaf0',
+        subtle: '#f1e8d8',
+        bubble: '#eadfca',
+      }),
+      dark: warm('dark', {
+        window: '#1a1511',
+        canvas: '#221c17',
+        raised: '#2e2620',
+        subtle: '#2e2620',
+        bubble: '#372e26',
+      }),
+    })
+  }
   if (prompt.startsWith('chat-title:')) return prompt.match(/<first-message>\n([^\n]*)/)?.[1]?.slice(0, 60) ?? 'Thread'
   const data = prompt.match(/<change-data>\s*([\s\S]*?)\s*<\/change-data>/)?.[1]
   if (data) {
