@@ -24,7 +24,12 @@ export const questionInputSchema = z.object({
   blocking: z.boolean().default(false),
 })
 
-export function registerQuestionTools(server: McpServer, agents: AgentService, sessionId: string): void {
+export function registerQuestionTools(
+  server: McpServer,
+  agents: AgentService,
+  sessionId: string,
+  followUpOnly = false,
+): void {
   // Unsent drafts are UI state, not answers available to the agent.
   const report = ({ drafts: _drafts, ...state }: QuestionState & { request: QuestionRequest }) => state
   const result = async (operation: () => unknown) => {
@@ -37,15 +42,20 @@ export function registerQuestionTools(server: McpServer, agents: AgentService, s
       }
     }
   }
-  server.registerTool(
-    'ask_user',
-    {
-      description:
-        'Ask the user structured questions. Returns immediately while you continue independent work, unless blocking=true or the user disabled async questions. Related questions must use grouping=together and are answered together. Use independent only for separately useful answers. Explain the dependent decision in dependsOn. Before dependent work, check question_status and use wait_for_answer if needed. Never assume an unanswered decision.',
-      inputSchema: questionInputSchema.shape,
-    },
-    (input, extra) => result(async () => report(await agents.askQuestion(sessionId, input, extra.signal))),
-  )
+  // With async questions off, ask_user waits for answers, so the follow-up tools only serve questions asked before that.
+  const async = agents.preferences?.()?.asyncQuestions !== false || agents.hasPendingAsyncQuestions(sessionId)
+  if (!followUpOnly)
+    server.registerTool(
+      'ask_user',
+      {
+        description: async
+          ? 'Ask the user structured questions. Returns immediately while you continue independent work, unless blocking=true or the user disabled async questions. Related questions must use grouping=together and are answered together. Use independent only for separately useful answers. Explain the dependent decision in dependsOn. Before dependent work, check question_status and use wait_for_answer if needed. Never assume an unanswered decision.'
+          : 'Ask the user structured questions and wait for the answers. Related questions must use grouping=together and are answered together. Use independent only for separately useful answers. Explain the dependent decision in dependsOn. Never assume an unanswered decision.',
+        inputSchema: questionInputSchema.shape,
+      },
+      (input, extra) => result(async () => report(await agents.askQuestion(sessionId, input, extra.signal))),
+    )
+  if (!async) return
   server.registerTool(
     'question_status',
     {

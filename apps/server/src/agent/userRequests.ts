@@ -132,6 +132,14 @@ export class UserRequests {
     })
   }
 
+  /** Unanswered questions asked without waiting; they keep the async question tools available after async is turned off. */
+  hasPendingAsyncQuestions(id: string): boolean {
+    const events = this.host.events(id)
+    return events.some(
+      (e) => e.kind === 'question' && e.responseMode === 'message' && !questionState(events, e.requestId).outcome,
+    )
+  }
+
   hasBlockingQuestions(id: string): boolean {
     const events = this.host.events(id)
     const outcomes = requestOutcomes(events)

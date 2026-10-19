@@ -5,7 +5,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { AgentService } from '../src/agent'
 import { openDb, type Db } from '../src/db'
 import { registerQuestionTools } from '../src/agent/questionTools'
-import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
+import { DEFAULT_AGENT_SETTINGS, DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 
 let db: Db, agents: AgentService, server: McpServer, client: Client, sessionId: string
 beforeEach(async () => {
@@ -145,4 +145,46 @@ it('cancels a blocking question whose tool call is aborted rather than accepting
   await rejected
   expect(agents.questionStatus(sessionId, request.requestId).outcome).toBe('cancelled')
   expect(() => agents.replyQuestion(sessionId, request.requestId, { db: 'SQLite' })).toThrow('closed')
+})
+
+it('offers only ask_user with async questions off, unless earlier async questions are still pending', async () => {
+  const toolsWith = async () => {
+    const off = new McpServer({ name: 'question-test-off', version: '1' })
+    registerQuestionTools(off, agents, sessionId)
+    const offClient = new Client({ name: 'question-test-off', version: '1' })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    await off.connect(serverTransport)
+    await offClient.connect(clientTransport)
+    try {
+      return (await offClient.listTools()).tools.map((tool) => tool.name)
+    } finally {
+      await offClient.close()
+      await off.close()
+    }
+  }
+  await client.callTool({ name: 'ask_user', arguments: { questions: [{ id: 'db', question: 'Database?' }] } })
+  agents.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions: false })
+  expect(await toolsWith()).toEqual(['ask_user', 'question_status', 'wait_for_answer', 'close_question'])
+  const [pending] = agents.events(sessionId).filter((event) => event.kind === 'question')
+  agents.replyQuestion(sessionId, (pending as { requestId: string }).requestId, { db: 'SQLite' })
+  expect(await toolsWith()).toEqual(['ask_user'])
+})
+
+it('follow-up-only registration leaves out ask_user for providers with a native question tool', async () => {
+  const followUp = new McpServer({ name: 'question-test-native', version: '1' })
+  registerQuestionTools(followUp, agents, sessionId, true)
+  const followUpClient = new Client({ name: 'question-test-native', version: '1' })
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  await followUp.connect(serverTransport)
+  await followUpClient.connect(clientTransport)
+  try {
+    expect((await followUpClient.listTools()).tools.map((tool) => tool.name)).toEqual([
+      'question_status',
+      'wait_for_answer',
+      'close_question',
+    ])
+  } finally {
+    await followUpClient.close()
+    await followUp.close()
+  }
 })

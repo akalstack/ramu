@@ -6,6 +6,9 @@ import { TOOL_PRESENTATION_PREAMBLE, USER_MESSAGE_PREAMBLE } from './agentInstru
 import { TOOL_DISCOVERY_INSTRUCTIONS } from '../intelligence'
 import { NATIVE_SUBAGENT_PREAMBLE } from './constants'
 
+// Async questions off: ask_user waits for answers, so the status, wait and close guidance would be unused tokens.
+const BLOCKING_QUESTION_PREAMBLE = `Use Ramu's ask_user tool for clarification; it waits for the answer before returning. Group related questions with grouping="together" when their answers must be used together; use "independent" only when each answer is independently useful. Set dependsOn to explain exactly which decision or work needs the answer. Native blocking questions and permission approvals still require an answer. Never assume an unanswered required decision.`
+
 /** Which optional sections a chat's guidance includes; the text of each section is supplied by the caller or defined here. */
 export interface GuidanceSections {
   /** Ramu's async questions, Ramu's questions made blocking, or only the provider's own question tool. */
@@ -27,7 +30,7 @@ export function sessionGuidance(sections: GuidanceSections): string {
     sections.questions === 'async'
       ? QUESTION_PREAMBLE
       : sections.questions === 'blocking'
-        ? `${QUESTION_PREAMBLE}\nAsync questions are disabled. Use ask_user (Ramu will wait for an answer) or a native blocking question. Do not use request_user_input_async.`
+        ? BLOCKING_QUESTION_PREAMBLE
         : 'When you need a decision from the user, ask with your built-in question tool and wait for the answer. Never assume an unanswered decision.'
   let instructions = `${USER_MESSAGE_PREAMBLE}\n\n${TOOL_PRESENTATION_PREAMBLE}\n\n${questions}`
   if (sections.background) instructions += `\n\n${BACKGROUND_PREAMBLE}`

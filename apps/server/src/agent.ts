@@ -396,6 +396,10 @@ export class AgentService {
     return this.parts.providerWaits.spread
   }
 
+  hasPendingAsyncQuestions(...args: Parameters<UserRequests['hasPendingAsyncQuestions']>) {
+    return this.parts.requests.hasPendingAsyncQuestions(...args)
+  }
+
   questionStatus(...args: Parameters<UserRequests['questionStatus']>) {
     return this.parts.requests.questionStatus(...args)
   }

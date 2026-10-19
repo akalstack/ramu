@@ -515,7 +515,9 @@ const mcpHttp = createServer(async (req, res) => {
   if (!review) pullRequestWatches.register(server, source.id)
   learning.register(server, source.id)
   // With async questions off, Claude and Codex ask through their own blocking question tools instead.
+  // A native-question provider keeps the follow-up tools while async questions asked earlier are still unanswered.
   if (usesRamuQuestions(agents.preferences?.(), source)) registerQuestionTools(server, agents, source.id)
+  else if (agents.hasPendingAsyncQuestions(source.id)) registerQuestionTools(server, agents, source.id, true)
   if (!source.parentId) registerGoalTools(server, agents, source.id)
   if (agents.advisorStep(source.id)) registerAdvisorTools(server, agents, source.id)
   if (memory.enabled()) registerMemoryTools(server, memory, source, projectOf(source))
