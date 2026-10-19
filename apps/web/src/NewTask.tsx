@@ -506,7 +506,6 @@ export function NewTask({
       <div className="start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
         {(agentDraft.defaults?.requested ||
           agentDraft.blocked ||
-          agentDraft.choice.selection ||
           agentDraft.unsupported ||
           agentDraft.problem) && (
           <div className="flex flex-wrap items-center gap-2 px-2 text-caption text-muted-foreground" role="status">
