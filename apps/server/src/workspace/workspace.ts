@@ -303,17 +303,24 @@ export class Workspace {
   }
 
   /** Apply only to the captured revision; deliberate edits and newer requests always win. */
-  setGeneratedTitle(id: string, title: string, force = false, revision?: number, needsRefinement = false): Task {
+  setGeneratedTitle(
+    id: string,
+    title: string,
+    force = false,
+    revision?: number,
+    needsRefinement = false,
+    source: 'ai' | 'provider' = 'ai',
+  ): Task {
     this.getTask(id)
     const cleaned = cleanLabel(title)
     if (!cleaned) return this.getTask(id)
     this.db
       .prepare(
-        `UPDATE tasks SET title = ?, title_source = 'ai', title_revision = title_revision + 1,
+        `UPDATE tasks SET title = ?, title_source = ?, title_revision = title_revision + 1,
         title_generation_state = 'complete', title_needs_refinement = ?
         WHERE id = ? AND (title_source != 'manual' OR ?) AND (? IS NULL OR title_revision = ?)`,
       )
-      .run(cleaned, needsRefinement ? 1 : 0, id, force ? 1 : 0, revision ?? null, revision ?? null)
+      .run(cleaned, source, needsRefinement ? 1 : 0, id, force ? 1 : 0, revision ?? null, revision ?? null)
     this.db
       .prepare(
         'DELETE FROM task_title_jobs WHERE task_id = ? AND revision < (SELECT title_revision FROM tasks WHERE id = ?)',
@@ -322,11 +329,11 @@ export class Workspace {
     return this.getTask(id)
   }
 
-  titleSource(id: string): 'prompt' | 'ai' | 'manual' {
+  titleSource(id: string): 'prompt' | 'ai' | 'provider' | 'manual' {
     return (
       (
         this.db.prepare('SELECT title_source AS source FROM tasks WHERE id = ?').get(id) as
-          { source: 'prompt' | 'ai' | 'manual' } | undefined
+          { source: 'prompt' | 'ai' | 'provider' | 'manual' } | undefined
       )?.source ?? 'prompt'
     )
   }

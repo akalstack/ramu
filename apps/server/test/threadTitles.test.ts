@@ -193,6 +193,75 @@ describe('server-owned thread titles', () => {
   })
 })
 
+describe('provider-supplied titles', () => {
+  const supplier = () => new ThreadTitles(db, workspace, agents, changed, 1000, () => true, 50, 500)
+
+  it('uses an unsolicited useful provider title with zero Ramu generation calls', async () => {
+    await titles.stop()
+    titles = supplier()
+    vi.useFakeTimers()
+    titles.observe('session', user)
+    titles.acceptProviderTitle('session', '  "Fix duplicate payment retries."\n')
+    titles.observe('session', result)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(draft).not.toHaveBeenCalled()
+    expect(workspace.getTask('task').title).toBe('Fix duplicate payment retries')
+    expect(workspace.titleSource('task')).toBe('provider')
+  })
+
+  it('falls back once after the grace period when no title arrives, and after a failed or silent turn', async () => {
+    await titles.stop()
+    titles = supplier()
+    vi.useFakeTimers()
+    titles.observe('session', user)
+    await vi.advanceTimersByTimeAsync(40)
+    expect(draft).not.toHaveBeenCalled()
+    titles.observe('session', { ...result, isError: true })
+    await vi.advanceTimersByTimeAsync(60)
+    expect(draft).toHaveBeenCalledTimes(1)
+
+    draft.mockClear()
+    db.exec(`UPDATE tasks SET title_source='prompt', title_auto_attempted=0 WHERE id='task'`)
+    titles.observe('session', user)
+    await vi.advanceTimersByTimeAsync(600)
+    expect(draft).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects placeholders, control characters, old sessions, manual names and settled titles', () => {
+    for (const raw of ['', '  ', 'New thread', 'Untitled chat', 'Bad\u0000title', 'x'.repeat(2001)])
+      expect(titles.acceptProviderTitle('session', raw)).toBeNull()
+    agents.list = () => [{ ...session, id: 'newer' } as AgentSessionInfo]
+    expect(titles.acceptProviderTitle('session', 'Late old session')).toBeNull()
+    agents.list = () => [session]
+    workspace.renameTask('task', 'My name')
+    expect(titles.acceptProviderTitle('session', 'Provider name')).toBeNull()
+    db.exec(`UPDATE tasks SET title_source='ai', title_needs_refinement=0 WHERE id='task'`)
+    expect(titles.acceptProviderTitle('session', 'Provider name')).toBeNull()
+    expect(workspace.getTask('task').title).toBe('My name')
+    agents.get = () => {
+      throw Error('Deleted')
+    }
+    expect(titles.acceptProviderTitle('session', 'After delete')).toBeNull()
+  })
+
+  it('cancels a pending fallback and rejects its superseded result', async () => {
+    const gate = deferred<TitleDraft | null>()
+    draft.mockReturnValueOnce(gate.promise)
+    titles.observe('session', user)
+    await flush()
+    titles.acceptProviderTitle('session', 'Provider title')
+    gate.resolve({ title: 'Fallback title', needsRefinement: false })
+    await flush()
+    expect(workspace.getTask('task')).toMatchObject({ title: 'Provider title', titleGenerationState: 'complete' })
+    expect(workspace.titleSource('task')).toBe('provider')
+  })
+
+  it('may replace a vague fallback title that still needs refinement', () => {
+    db.exec(`UPDATE tasks SET title_source='ai', title_needs_refinement=1 WHERE id='task'`)
+    expect(titles.acceptProviderTitle('session', 'Payment retry duplicates')?.title).toBe('Payment retry duplicates')
+  })
+})
+
 describe('title output and untrusted context', () => {
   it('accepts structured and plain titles, rejects malformed data and known placeholders', () => {
     expect(parseTitleDraft('{"title":"Cegah pembayaran ganda","needsRefinement":false}')).toEqual({

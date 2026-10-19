@@ -22,7 +22,7 @@ A new thread immediately shows its opening-message title. The execution server s
 
 **Rename** is authoritative. **Rename with AI** explicitly generates from the conversation and previous title, including a manual name. A later manual edit or newer regeneration wins over older work. Once a useful automatic title is accepted it stays stable; a vague opening may receive one refinement after a completed reply supplies context. Thread titles never rename Git branches, working directories or workspace labels.
 
-The existing title action shows **Naming thread** while pending and **Retry title generation** after failure, synchronized across clients. A failed or limited request keeps the current usable name. Each running attempt has a 15-second deadline; title work shares a two-request concurrency limit and never waits for quota resets. Pending work receives at most one retry after a server restart; settled failures require an explicit retry. Native provider-title reuse is still unverified; see [remaining title work](THREAD-TITLES-PLAN.md).
+The existing title action shows **Naming thread** while pending and **Retry title generation** after failure, synchronized across clients. A failed or limited request keeps the current usable name. Each running attempt has a 15-second deadline; title work shares a two-request concurrency limit and never waits for quota resets. Pending work receives at most one retry after a server restart; settled failures require an explicit retry. The server can accept a title a provider session supplies on its own, ahead of the fallback, without a second inference call; no provider is enabled for this until a live session verifies it. See [remaining title work](THREAD-TITLES-PLAN.md).
 
 ## Sub-agents
 

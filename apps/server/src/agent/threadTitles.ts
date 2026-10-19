@@ -1,7 +1,11 @@
-import type { AgentEvent, AgentSettings, Task } from '@ramu/shared/types'
+import type { AgentEvent, AgentSessionInfo, AgentSettings, Task } from '@ramu/shared/types'
 import type { AgentService } from '../agent'
 import type { Db } from '../db'
 import type { Workspace } from '../workspace/workspace'
+import { cleanTitle } from './text'
+
+const PLACEHOLDER =
+  /^(?:new (?:thread|chat|session|conversation)|untitled(?: thread| chat| session)?|chat title|conversation)$/i
 
 type Kind = 'automatic' | 'refinement' | 'manual'
 interface TitleJob {
@@ -32,7 +36,53 @@ export class ThreadTitles {
     private readonly agents: Pick<AgentService, 'get' | 'list' | 'events' | 'draftTitleResult'>,
     private readonly changed: () => void,
     private readonly deadlineMs = 15_000,
+    /** Providers verified to supply titles are given time before the fallback runs; none are verified yet. */
+    private readonly suppliesTitles: (session: AgentSessionInfo) => boolean = () => false,
+    private readonly graceMs = 5_000,
+    private readonly turnLimitMs = 120_000,
   ) {}
+
+  private readonly waits = new Map<string, NodeJS.Timeout>()
+
+  private wait(taskId: string, settings: AgentSettings, ms: number): void {
+    clearTimeout(this.waits.get(taskId))
+    const timer = setTimeout(() => {
+      this.waits.delete(taskId)
+      if (!this.stopping) void this.generate(taskId, settings).catch(() => {})
+    }, ms)
+    timer.unref()
+    this.waits.set(taskId, timer)
+  }
+
+  /**
+   * Accepts a title the active provider session supplied on its own. Manual names and settled useful automatic
+   * names win; a pending fallback is cancelled and its late result rejected by the revision bump.
+   */
+  acceptProviderTitle(sessionId: string, raw: string): Task | null {
+    if (this.stopping || typeof raw !== 'string' || raw.length > 2000) return null
+    try {
+      const session = this.agents.get(sessionId)
+      const top = this.agents.list(session.taskId)
+      if (top.at(-1)?.id !== sessionId) return null
+      if ([...raw].some((c) => (c.codePointAt(0)! < 32 && !'\t\n\r'.includes(c)) || c.codePointAt(0) === 127))
+        return null
+      const title = cleanTitle(raw)
+      if (!title || PLACEHOLDER.test(title)) return null
+      const state = this.db
+        .prepare('SELECT title_source AS source, title_needs_refinement AS refine FROM tasks WHERE id = ?')
+        .get(session.taskId) as { source: string; refine: number } | undefined
+      if (!state || state.source === 'manual' || (state.source !== 'prompt' && !state.refine)) return null
+      clearTimeout(this.waits.get(session.taskId))
+      this.waits.delete(session.taskId)
+      const task = this.workspace.setGeneratedTitle(session.taskId, title, false, undefined, false, 'provider')
+      this.db.prepare('UPDATE tasks SET title_auto_attempted = 1 WHERE id = ?').run(session.taskId)
+      this.pending.get(session.taskId)?.controller.abort()
+      this.changed()
+      return task
+    } catch {
+      return null
+    }
+  }
 
   observe(sessionId: string, event: AgentEvent): void {
     if (this.stopping || event.agentId || !['user', 'result'].includes(event.kind)) return
@@ -40,8 +90,15 @@ export class ThreadTitles {
     try {
       const session = this.agents.get(sessionId)
       if (!this.agents.list(session.taskId).some((s) => s.id === sessionId)) return
-      if (event.kind === 'user') void this.generate(session.taskId, session.settings).catch(() => {})
-      else if (event.kind === 'result' && !event.isError) this.refine(session.taskId, session.settings)
+      if (event.kind === 'user') {
+        if (this.suppliesTitles(session)) {
+          if (!this.waits.has(session.taskId)) this.wait(session.taskId, session.settings, this.turnLimitMs)
+        } else void this.generate(session.taskId, session.settings).catch(() => {})
+      } else if (event.kind === 'result') {
+        // Failed or interrupted turns also end the wait so fallback is never blocked by a provider that stays silent.
+        if (this.waits.has(session.taskId)) this.wait(session.taskId, session.settings, this.graceMs)
+        if (!event.isError) this.refine(session.taskId, session.settings)
+      }
     } catch {
       // A deleted session/task cannot authorize background work.
     }
@@ -49,6 +106,8 @@ export class ThreadTitles {
 
   rename(taskId: string, title: string): Task {
     const task = this.workspace.renameTask(taskId, title)
+    clearTimeout(this.waits.get(taskId))
+    this.waits.delete(taskId)
     this.pending.get(taskId)?.controller.abort()
     return task
   }
@@ -242,6 +301,8 @@ export class ThreadTitles {
 
   async stop(): Promise<void> {
     this.stopping = true
+    for (const timer of this.waits.values()) clearTimeout(timer)
+    this.waits.clear()
     const entries = [...this.pending.values()]
     for (const entry of entries) entry.controller.abort()
     for (const entry of this.queue.splice(0)) entry.reject(new Error('Title generation is stopping'))

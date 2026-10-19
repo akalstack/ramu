@@ -27,9 +27,21 @@ Candidate references to investigate:
 - [ACP session metadata updates](https://github.com/agentclientprotocol/agent-client-protocol/blob/main/docs/rfds/session-info-update.mdx): a possible title notification; verify implementation and runtime support.
 - [Codex title implementation](https://github.com/openai/codex/blob/main/codex-rs/tui/src/app/thread_title.rs): illustrates separate generation inside the CLI UI; do not assume it runs automatically for an app-server client.
 
+## Shipped server policy (provider-agnostic)
+
+`ThreadTitles.acceptProviderTitle` accepts a bounded, plain-text title from the newest top-level session of a task, rejecting placeholders, control characters, old sessions, deleted tasks, manual names and settled useful titles. It stores provenance `provider`, cancels pending fallback and supersedes its late result. A constructor predicate (`suppliesTitles`, false for every provider today) defers fallback until a short grace period after the turn result, or a turn limit if no result arrives. Covered by fake-provider tests in `apps/server/test/threadTitles.test.ts`.
+
 ## Remaining implementation
 
-### Prefer an existing provider title
+### Wire a verified provider
+
+- Verify one provider live, then make `suppliesTitles` true for it and call `acceptProviderTitle` from its runner/event boundary (normalize metadata before it reaches workspace code). Until then nothing calls it.
+- Persist and restore waiting across a server restart; today the wait is in memory and restart falls back to the existing recovery rules.
+- Native explicit regeneration remains unimplemented.
+
+### Prefer an existing provider title (remaining parts)
+
+The policy, provenance, race handling and fake-provider tests above are done; the items below still need a verified provider or are not yet covered.
 
 - For a provider verified to supply titles, wait through the first completed turn and a short bounded delivery grace period before scheduling fallback. Bound stalled, failed or interrupted turns; title work must never block the conversation. Providers without verified metadata continue through the existing server fallback.
 - Normalize and accept a nonempty, bounded provider title for the correct host, task and active provider session. Reject known placeholders, control characters and invalid metadata; render as plain text. Avoid rejecting useful native titles solely because they differ from Ramu's preferred word count.
