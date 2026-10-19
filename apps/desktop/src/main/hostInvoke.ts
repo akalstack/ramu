@@ -51,7 +51,9 @@ const NATIVE = new Set([
 export const isHostInvokeAllowed = (method: unknown): method is string =>
   typeof method === 'string' &&
   !NATIVE.has(method) &&
-  (['settings.app.get', 'settings.app.set', 'settings.models.get', 'settings.models.set'].includes(method) ||
+  (['mcp.status', 'settings.app.get', 'settings.app.set', 'settings.models.get', 'settings.models.set'].includes(
+    method,
+  ) ||
     (DOMAINS.has(method.split('.')[0]!) && method.includes('.')))
 
 export interface HostRouting {

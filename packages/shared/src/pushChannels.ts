@@ -23,6 +23,7 @@ export const HOST_PUSH_CHANNELS = [
   'settings:models',
   'activity:changed',
   'providers:updates',
+  'mcp:changed',
   'background:connection',
 ] as const satisfies readonly (keyof PushEvents)[]
 export type HostPushChannel = (typeof HOST_PUSH_CHANNELS)[number]

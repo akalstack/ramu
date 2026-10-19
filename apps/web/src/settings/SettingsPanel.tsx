@@ -32,6 +32,7 @@ import { inResetSection, resetSection } from './resetDefaults'
 import { ShortcutsSettings, type Shortcut } from './ShortcutsSettings'
 import { SystemSettings } from './SystemSettings'
 import { ToggleRow } from './ToggleRow'
+import { McpSettings } from './McpSettings'
 
 export function SettingsPanel({
   onClose,
@@ -168,6 +169,7 @@ export function SettingsPanel({
               </>
             )}
             {page === 'remote' && <RemoteAccessSettings />}
+            {page === 'agent-setup' && <McpSettings />}
             {page === 'system' && <SystemSettings {...draftProps} />}
             {page === 'appearance' && (
               <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />

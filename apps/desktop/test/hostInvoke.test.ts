@@ -69,6 +69,19 @@ describe('routeInvoke', () => {
 })
 
 describe('isHostInvokeAllowed', () => {
+  it('allows Shared MCP status while keeping administration on its execution host', () => {
+    expect(isHostInvokeAllowed('mcp.status')).toBe(true)
+    for (const method of [
+      'mcp.save',
+      'mcp.check',
+      'mcp.account',
+      'mcp.approve',
+      'mcp.disconnect',
+      'mcp.remove',
+      'mcp.checkCredentialStore',
+    ])
+      expect(isHostInvokeAllowed(method)).toBe(false)
+  })
   it('allows server-only domains and blocks native ones', () => {
     for (const method of ['tasks.list', 'agent.submit', 'git.status', 'files.read', 'term.write', 'projects.list'])
       expect(isHostInvokeAllowed(method)).toBe(true)

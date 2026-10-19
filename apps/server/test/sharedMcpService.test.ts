@@ -1,0 +1,219 @@
+import { afterEach, expect, it, vi } from 'vitest'
+import { fileURLToPath } from 'node:url'
+import { dirname } from 'node:path'
+import { openDb } from '../src/db'
+import { Workspace } from '../src/workspace/workspace'
+import { SharedMcpStorage } from '../src/mcp/storage'
+import { SharedMcpService } from '../src/mcp/service'
+import { connectSharedMcpStdio } from '../src/mcp/stdio'
+import { registerSharedMcpHandlers } from '../src/ipc/handlers/mcp'
+import type { HandlerContext } from '../src/ipc/types'
+import type { SharedMcpConnection, SharedMcpInspection, SharedMcpManagement } from '@ramu/shared/mcp'
+import { deviceMayInvoke } from '../src/remote/access'
+import { HostCredentialStore } from '../src/credentials/store'
+
+const cleanup: (() => void | Promise<void>)[] = []
+afterEach(async () => {
+  for (const close of cleanup.splice(0).reverse()) await close()
+})
+function fixture() {
+  const db = openDb(':memory:')
+  cleanup.push(() => db.close())
+  const workspace = new Workspace(db, '/test/worktrees')
+  const connect = vi.fn((connection, _session, signal) => connectSharedMcpStdio(connection, signal))
+  const changed = vi.fn()
+  const manager = new SharedMcpService(new SharedMcpStorage(workspace), undefined, changed, connect)
+  cleanup.push(() => manager.close())
+  let local = true
+  const handlers = registerSharedMcpHandlers({
+    getSharedMcp: () => manager,
+    host: { canAdministerIntegrations: () => local },
+  } as unknown as HandlerContext)
+  const invoke = (method: string, ...args: unknown[]) => {
+    const entry = handlers[method]!
+    return entry.run(...entry.args.parse(args))
+  }
+  const path = fileURLToPath(new URL('./fixtures/shared-mcp.mjs', import.meta.url))
+  const input: Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'> = {
+    name: 'Shared local service',
+    serviceAccountId: 'alice',
+    enabled: true,
+    providers: ['claude-code', 'codex'],
+    scope: { hostWide: false, projectIds: ['project'] },
+    transport: { type: 'stdio', command: process.execPath, args: [path], cwd: dirname(path), envSecretRefs: {} },
+  }
+  const status = () => invoke('mcp.status') as SharedMcpManagement & { canAdminister: boolean }
+  return {
+    manager,
+    invoke,
+    connect,
+    input,
+    status,
+    changed,
+    remote: () => {
+      local = false
+    },
+  }
+}
+
+it('saves without execution, explicitly checks and approves actual tools, and reuses access across accounts', async () => {
+  const { invoke, connect, manager, input, status } = fixture()
+  const connection = invoke('mcp.save', input) as SharedMcpConnection
+  expect(connect).not.toHaveBeenCalled()
+  expect(status().connections[0]?.status).toBe('not-connected')
+  for (const accountId of ['a', 'b']) invoke('mcp.account', { provider: 'codex', accountId, shareApprovals: true })
+  const selection = { provider: 'codex' as const, accountId: 'a', projectId: 'project' }
+  const inspection = (await invoke('mcp.check', connection.id, selection)) as SharedMcpInspection
+  expect(status().connections[0]).toMatchObject({ status: 'connected', toolCount: 1 })
+  expect(inspection.tools[0]?.name).toBe('inspect_environment')
+  const reviewed = {
+    connectionId: connection.id,
+    revision: inspection.revision,
+    catalogRevision: inspection.catalogRevision,
+    provider: 'codex',
+    accountId: 'a',
+    scope: input.scope,
+    tools: [{ name: 'inspect_environment', action: 'read', approval: 'connection' }],
+  }
+  expect(() => invoke('mcp.approve', { ...reviewed, catalogRevision: 'forged' })).toThrow('current tools')
+  expect(() =>
+    invoke('mcp.approve', { ...reviewed, tools: [{ name: 'forged', action: 'read', approval: 'connection' }] }),
+  ).toThrow('current tools')
+  invoke('mcp.approve', reviewed)
+  const gateway = manager.gateway(
+    'thread',
+    { ...selection, hostId: status().hostId, accountId: 'b', role: 'interactive', externalToolsAllowed: true },
+    async () => false,
+  )
+  cleanup.push(() => gateway.close())
+  expect((await gateway.discover(connection.id)).tools[0]?.name).toBe('inspect_environment')
+  expect((await gateway.invoke(connection.id, inspection.catalogRevision, 'inspect_environment', {})).isError).not.toBe(
+    true,
+  )
+  await invoke('mcp.disconnect', connection.id)
+  await expect(gateway.invoke(connection.id, inspection.catalogRevision, 'inspect_environment', {})).rejects.toThrow(
+    'Review',
+  )
+  expect(status().connections[0]?.status).toBe('not-connected')
+  await invoke('mcp.remove', connection.id)
+  expect(status().connections).toEqual([])
+})
+
+it('lets paired clients read safe status but denies every administration operation on the server', async () => {
+  const { invoke, remote, status, input } = fixture()
+  const connection = invoke('mcp.save', input) as SharedMcpConnection
+  remote()
+  expect(status().canAdminister).toBe(false)
+  for (const [method, args] of [
+    ['mcp.save', [input]],
+    ['mcp.account', [{ provider: 'codex', accountId: 'a', shareApprovals: true }]],
+    ['mcp.check', [connection.id, { provider: 'codex', accountId: 'a', projectId: 'project' }]],
+    ['mcp.disconnect', [connection.id]],
+    ['mcp.remove', [connection.id]],
+    ['mcp.checkCredentialStore', []],
+  ] as const)
+    await expect(Promise.resolve().then(() => invoke(method, ...args))).rejects.toThrow('host running Ramu')
+  const viewer = {
+    id: 'viewer',
+    name: 'Phone',
+    role: 'viewer' as const,
+    createdAt: 0,
+    lastSeenAt: null,
+    expiresAt: null,
+  }
+  expect(deviceMayInvoke(viewer, 'mcp.status')).toBe(true)
+  for (const method of [
+    'mcp.save',
+    'mcp.account',
+    'mcp.check',
+    'mcp.approve',
+    'mcp.disconnect',
+    'mcp.remove',
+    'mcp.checkCredentialStore',
+  ])
+    expect(deviceMayInvoke(viewer, method)).toBe(false)
+  expect(status().connections).toHaveLength(1)
+})
+
+it('cannot approve a previously inspected catalog after editing its connection', async () => {
+  const { invoke, input } = fixture()
+  const connection = invoke('mcp.save', input) as SharedMcpConnection
+  invoke('mcp.account', { provider: 'codex', accountId: 'a', shareApprovals: true })
+  const inspection = (await invoke('mcp.check', connection.id, {
+    provider: 'codex',
+    accountId: 'a',
+    projectId: 'project',
+  })) as SharedMcpInspection
+  invoke('mcp.save', { ...input, serviceAccountId: 'bob' }, connection.id)
+  expect(() =>
+    invoke('mcp.approve', {
+      connectionId: connection.id,
+      revision: inspection.revision,
+      catalogRevision: inspection.catalogRevision,
+      provider: 'codex',
+      accountId: 'a',
+      scope: input.scope,
+      tools: [{ name: 'inspect_environment', action: 'read', approval: 'connection' }],
+    }),
+  ).toThrow('current tools')
+})
+
+it('checks HTTP through the isolated connection factory and sanitizes a failed setup', async () => {
+  const { invoke, input, status, connect } = fixture()
+  const connection = invoke('mcp.save', {
+    ...input,
+    transport: { type: 'http', url: 'https://example.test/mcp', headerSecretRefs: {} },
+  }) as SharedMcpConnection
+  invoke('mcp.account', { provider: 'codex', accountId: 'a', shareApprovals: true })
+  await expect(
+    invoke('mcp.check', connection.id, { provider: 'codex', accountId: 'a', projectId: 'project' }),
+  ).rejects.toThrow('server URL')
+  expect(status().connections[0]?.status).toBe('failed')
+  expect(connect).toHaveBeenCalledOnce()
+})
+
+it('retains a removable definition when credential cleanup fails and clears only its own references on retry', async () => {
+  const db = openDb(':memory:')
+  cleanup.push(() => db.close())
+  const storage = new SharedMcpStorage(new Workspace(db, '/unused'))
+  const values = new Map<string, string>()
+  let locked = false
+  const credentials = new HostCredentialStore(async (_service, key) => ({
+    setPassword: async (value) => {
+      values.set(key, value)
+    },
+    getPassword: async () => values.get(key) ?? null,
+    deletePassword: async () => {
+      if (locked) throw new Error('locked with private data')
+      return values.delete(key)
+    },
+  }))
+  const manager = new SharedMcpService(storage, credentials)
+  cleanup.push(() => manager.close())
+  const connection = manager.save({
+    name: 'Account cleanup',
+    serviceAccountId: 'alice',
+    enabled: true,
+    providers: ['codex'],
+    scope: { hostWide: true, projectIds: [] },
+    transport: { type: 'http', url: 'https://example.test/mcp', headerSecretRefs: {} },
+  })
+  const scope = { hostId: storage.hostId, integration: 'mcp' as const, connectionId: connection.id, accountId: 'alice' }
+  const reference = await credentials.put(scope, 'service-test-secret')
+  const { id, hostId: _host, revision: _revision, ...definition } = connection
+  manager.save(
+    {
+      ...definition,
+      transport: { type: 'http', url: 'https://example.test/mcp', headerSecretRefs: { Authorization: reference } },
+    },
+    id,
+  )
+  locked = true
+  await expect(manager.remove(id)).rejects.toThrow('unavailable or locked')
+  expect(manager.list().connections).toHaveLength(1)
+  expect(values.size).toBe(1)
+  locked = false
+  await manager.remove(id)
+  expect(manager.list().connections).toEqual([])
+  expect(values.size).toBe(0)
+})

@@ -20,6 +20,7 @@ const viewerMethods = new Set([
   'agent.catalog',
   'agent.providerHold',
   'agent.mcpStatus',
+  'mcp.status',
   'agent.replyPermission',
   'agent.replyQuestion',
   'agent.replyElicitation',

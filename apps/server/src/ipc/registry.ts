@@ -9,6 +9,7 @@ import { registerForgeHandlers } from './handlers/forge'
 import { registerGitHandlers } from './handlers/git'
 import { registerMemoryHandlers } from './handlers/memory'
 import { registerProviderHandlers } from './handlers/providers'
+import { registerSharedMcpHandlers } from './handlers/mcp'
 import { registerReviewHandlers } from './handlers/reviews'
 import { registerScheduleHandlers } from './handlers/schedules'
 import { registerSearchHandlers } from './handlers/search'
@@ -49,6 +50,7 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable =>
     registerSummaryHandlers(ctx),
     registerSettingsHandlers(ctx),
     registerProviderHandlers(ctx),
+    registerSharedMcpHandlers(ctx),
     registerUiHandlers(ctx),
     registerBackgroundHandlers(ctx),
     registerScheduleHandlers(ctx),

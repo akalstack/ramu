@@ -16,6 +16,7 @@ import {
   Palette,
   ShieldCheck,
   MonitorSmartphone,
+  Plug,
   Target,
   X,
   type LucideIcon,
@@ -36,6 +37,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'archived', label: 'Archived threads', Icon: Archive, group: 'Workspace' },
   { id: 'chats', label: 'Threads', Icon: MessageSquare, group: 'Agents' },
   { id: 'providers', label: 'Providers & models', Icon: Cpu, group: 'Agents' },
+  { id: 'agent-setup', label: 'Agent setup', Icon: Plug, group: 'Agents' },
   { id: 'access', label: 'Access & Fallback', Icon: ShieldCheck, group: 'Agents' },
   { id: 'workflows', label: 'Goals & delegation', Icon: Target, group: 'Agents' },
   { id: 'memory', label: 'Memory & skills', Icon: Brain, group: 'Agents' },
@@ -46,6 +48,7 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
+  { section: 'agent-setup', title: 'MCP servers', words: 'shared tools external service connection authentication' },
   { section: 'archived', title: 'Archived threads', words: 'history restore unarchive delete' },
   { section: 'system', title: 'Keep local crash reports', words: 'diagnostics privacy errors crash local export' },
   {

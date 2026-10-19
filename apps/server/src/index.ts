@@ -9,6 +9,8 @@ import { ExternalSkills } from './memory/externalSkills'
 import { crossedSwitchAt, LearningService } from './memory/learning'
 import { migrateLearningDefault } from './memory/learningDefault'
 import { SettingsStore } from './settings/settingsStore'
+import { SharedMcpStorage } from './mcp/storage'
+import { SharedMcpService } from './mcp/service'
 // Independent Node process. Electron windows are clients, never owners of agent lifetimes.
 import { createServer, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
@@ -274,9 +276,20 @@ agents.memoryInstructions = (session) => memory.instructions(session, projectOf(
 // Calls that arrive over the network are marked, so a desktop dialog is never opened on this computer for someone else.
 const origin = new AsyncLocalStorage<{ network: boolean }>()
 const interactive = new InteractiveStore(db, (session, ref) => agents.interactivePublished(session, ref))
+let sharedMcp: SharedMcpService | undefined
+const getSharedMcp = () => {
+  try {
+    return (sharedMcp ??= new SharedMcpService(new SharedMcpStorage(workspace), undefined, () =>
+      send('mcp:changed', {}),
+    ))
+  } catch {
+    throw new Error('Shared MCP configuration could not be loaded. Restore valid configuration on this host.')
+  }
+}
 const dispatcher = createDispatcher(
   {
     userData,
+    canAdministerIntegrations: () => origin.getStore()?.network !== true,
     send,
     native: (method, path) => {
       if (origin.getStore()?.network)
@@ -305,6 +318,7 @@ const dispatcher = createDispatcher(
   },
   {
     workspace,
+    getSharedMcp,
     terminals,
     agents,
     threadTitles,
@@ -339,6 +353,7 @@ async function stop(intentional = false) {
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))
   await Promise.all([recaps.settle(), reviews.settle(), memory.settle(), learning.settle(), summaries.settle()])
   terminals.closeAll()
+  await sharedMcp?.close()
   dispatcher.close()
   for (const c of clients) c.end()
   for (const r of nativeRequests.values()) {

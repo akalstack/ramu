@@ -24,6 +24,7 @@ import type { KeyedLock } from './keyedLock'
 import type { FileWatchers } from './watchers'
 
 export interface Services {
+  getSharedMcp?: () => import('../mcp/service').SharedMcpService
   threadTitles?: import('../agent/threadTitles').ThreadTitles
   interactive?: import('../interactive/store').InteractiveStore
   diagnostics?: import('../background/diagnostics').LocalDiagnostics
@@ -42,6 +43,8 @@ export interface Services {
 }
 export interface RuntimeHost {
   userData: string
+  /** Initial integration/credential administration is local to the execution host. */
+  canAdministerIntegrations?(): boolean
   send(channel: string, payload: unknown): void
   native(method: 'pickExecutable' | 'pickDirectory' | 'pickAttachments' | 'reveal', path?: string): Promise<unknown>
 }

@@ -6,6 +6,14 @@ import type { RamuTheme, ThemeIssue, ThemeRole } from './theme'
 import type { AppUpdateStatus } from './updates'
 import type { ProviderConfiguration, ProviderStatus } from './providers/providers'
 import type { LimitRetryResult } from './chat/providerWait'
+import type {
+  SharedMcpConnection,
+  SharedMcpGrant,
+  SharedMcpInspection,
+  SharedMcpManagement,
+  SharedMcpProviderAccount,
+  SharedMcpSelection,
+} from './mcp'
 // The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
 import type {
   PullMode,
@@ -334,6 +342,14 @@ export interface RamuMethods {
   ): Promise<ProviderStatus[]>
   /** Sign-in email per provider and login ID, for the logins whose CLI reports one. */
   'providers.accountEmails'(): Promise<Record<string, Record<string, string>>>
+  'mcp.status'(): SharedMcpManagement & { canAdminister: boolean }
+  'mcp.save'(input: Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>, connectionId?: string): SharedMcpConnection
+  'mcp.account'(account: SharedMcpProviderAccount): void
+  'mcp.check'(connectionId: string, selection: SharedMcpSelection): Promise<SharedMcpInspection>
+  'mcp.approve'(input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }): SharedMcpGrant
+  'mcp.disconnect'(connectionId: string): Promise<void>
+  'mcp.remove'(connectionId: string): Promise<void>
+  'mcp.checkCredentialStore'(): Promise<'available' | 'unavailable' | 'not-checked'>
   'providers.loginCommand'(
     provider: ProviderStatus['provider'],
     configuration?: ProviderConfiguration,
@@ -632,6 +648,7 @@ export type PushEvents = {
   'computers:activity': { ids: string[] }
   'updates:changed': AppUpdateStatus
   'providers:updates': ProviderStatus[]
+  'mcp:changed': Record<string, never>
   'notify:inapp': {
     hostId?: string
     sessionId: string

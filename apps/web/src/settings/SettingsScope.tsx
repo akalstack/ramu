@@ -50,7 +50,7 @@ interface Target {
 }
 
 /** These pages configure one machine (binaries, login, service, network), so "all environments" has no meaning. */
-const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = ['providers', 'system', 'remote']
+const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = ['providers', 'agent-setup', 'system', 'remote']
 /** Remote access and archived history describe the current environment; it is not selectable. */
 const CURRENT_ENVIRONMENT_SECTIONS: readonly string[] = ['remote', 'archived']
 export const isSingleEnvironmentSection = (section: string) => SINGLE_ENVIRONMENT_SECTIONS.includes(section)
@@ -326,9 +326,7 @@ export function SettingsFieldNotice({ path }: { path: string }) {
   if (!scope) return null
   const state = scope.field(path)
   return state.disabled ? (
-    <span className="block mt-1 text-caption text-muted-foreground">
-      {t('Not supported by every selected host.')}
-    </span>
+    <span className="block mt-1 text-caption text-muted-foreground">{t('Not supported by every selected host.')}</span>
   ) : state.mixed ? (
     <span className="flex flex-wrap items-center gap-2 mt-1 text-caption text-muted-foreground" role="status">
       {t('Mixed')}
