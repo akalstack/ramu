@@ -251,7 +251,6 @@ it('discovers cross-thread recall and skill selection through real deferred MCP 
     name: 'browser-tests',
     description: 'Test with a browser',
     content: 'Run browser checks.',
-    activation: { requires_tools: ['browser_open'] },
     status: 'active',
     pinned: false,
     revision: 1,
@@ -279,10 +278,6 @@ it('discovers cross-thread recall and skill selection through real deferred MCP 
     const result = await call('session_search', { query: 'authentication' })
     expect(result.matches[0]).toMatchObject({ sessionId: 'other', seq: 1 })
     expect((await call('session_recall', { sessionId: 'other' })).events[0].event.text).toContain('refresh rotation')
-    expect(await call('skill_resolve', { availableTools: [] })).toEqual([])
-    expect((await call('skill_resolve', { id: 'browser', availableTools: ['browser_open'] })).content).toBe(
-      'Run browser checks.',
-    )
     const invalid = await client.callTool({
       name: 'tool_invoke',
       arguments: { name: 'session_recall', arguments: { startSeq: 0 } },

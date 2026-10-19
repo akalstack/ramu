@@ -76,42 +76,15 @@ it('prefers the project skill when it shares a name with a global one', () => {
   expect(readFileSync(file, 'utf8')).toContain('Project steps.')
 })
 
-it('withholds conditional skills from catalogs and existing provider exports when off, retaining ordinary skills and stored procedures', async () => {
-  insert(skill('ordinary', 'ordinary', 'p'))
-  insert({ ...skill('conditional', 'conditional', 'p'), activation: { requires_tools: ['browser_open'] } })
-  const markdown =
-    '---\nname: installed\ndescription: Installed\nmetadata:\n  hermes:\n    requires_tools: [shell]\n---\nInstructions'
-  insert({
-    ...skill('installed', 'installed', 'p'),
-    installation: { source: '/local', skill: 'installed', cliVersion: '1.7.2', markdown, files: {} },
-  })
-  const dir = service.exportDir('p', 'codex', root)!
-  expect(readdirSync(join(dir, 'skills'))).toHaveLength(3)
-  workspace.setAppState('app-preferences', { intelligence: { toolAwareSkills: false, learning: 'off' } })
-  service.settingsChanged()
-  await nextTick()
-  expect(readdirSync(join(dir, 'skills'))).toEqual(['ramu-ordinary'])
-  expect(readdirSync(join(root, '.agents', 'skills'))).toEqual(['ramu-ordinary'])
-  expect(service.catalog('p').map((value) => value.name)).toEqual(['ordinary'])
-  expect(service.skills()).toHaveLength(3)
-  expect(service.instructions('s')).not.toContain('skill_resolve')
-  workspace.setAppState('app-preferences', { intelligence: { toolAwareSkills: true, learning: 'off' } })
-  service.settingsChanged()
-  await nextTick()
-  expect(readdirSync(join(dir, 'skills'))).toHaveLength(3)
-})
-
-it('removes disabled tools from new registrations and rejects an earlier resolver without affecting same-thread recall', () => {
+it('removes disabled tools from new registrations and rejects an earlier search without affecting same-thread recall', () => {
   const handlers = new Map<string, (args: Record<string, unknown>) => unknown>()
   const server = {
     registerTool: (name: string, _config: unknown, handler: never) => handlers.set(name, handler),
   } as unknown as McpServer
   service.register(server, 's')
-  const resolve = handlers.get('skill_resolve')!,
-    search = handlers.get('session_search')!,
+  const search = handlers.get('session_search')!,
     recall = handlers.get('session_recall')!
-  workspace.setAppState('app-preferences', { intelligence: { toolAwareSkills: false, crossThreadRecall: false } })
-  expect(() => resolve({ availableTools: [], availableToolsets: [], inventoryComplete: false })).toThrow('turned off')
+  workspace.setAppState('app-preferences', { intelligence: { crossThreadRecall: false } })
   expect(() => search({ query: 'test', scope: 'project', limit: 5, offset: 0 })).toThrow('turned off')
   expect(() => recall({ sessionId: 'other', scope: 'all', startSeq: 1, limit: 5 })).toThrow('turned off')
   expect(() => recall({ startSeq: 1, limit: 5 })).not.toThrow()
@@ -119,68 +92,13 @@ it('removes disabled tools from new registrations and rejects an earlier resolve
   service.register(server, 's')
   expect([...handlers.keys()]).toEqual(['session_recall'])
   expect(service.instructions('s')).not.toContain('session_search')
-  workspace.setAppState('app-preferences', { intelligence: { toolAwareSkills: true, crossThreadRecall: false } })
-  handlers.clear()
-  service.register(server, 's')
-  expect([...handlers.keys()]).toEqual(['skill_resolve', 'session_recall'])
-  workspace.setAppState('app-preferences', { intelligence: { toolAwareSkills: false, crossThreadRecall: true } })
+  workspace.setAppState('app-preferences', { intelligence: { crossThreadRecall: true } })
   handlers.clear()
   service.register(server, 's')
   expect([...handlers.keys()]).toEqual(['session_search', 'session_recall'])
 })
 
-it('resolves tool-aware variants against each runtime without exposing incompatible procedures', async () => {
-  insert({
-    ...skill('browser', 'browser-tests', 'p'),
-    activation: { requires_tools: ['browser_open'] },
-    content: 'Run the native browser tests.',
-  })
-  insert({
-    ...skill('fallback', 'browser-cli', 'p'),
-    activation: { requires_tools: ['shell'], fallback_for_tools: ['browser_open'] },
-    content: 'Run the browser CLI from the shell.',
-  })
-  insert({ ...skill('other', 'other-project', 'q'), activation: { requires_tools: ['shell'] } })
-  const handlers = new Map<string, (args: Record<string, unknown>) => { content: { text: string }[] }>()
-  service.register(
-    {
-      registerTool: (name: string, _config: unknown, handler: never) => handlers.set(name, handler),
-    } as unknown as McpServer,
-    's',
-  )
-  const resolve = (tools: string[], id?: string, inventoryComplete = true) =>
-    JSON.parse(
-      handlers.get('skill_resolve')!({ id, availableTools: tools, availableToolsets: [], inventoryComplete })
-        .content[0]!.text,
-    )
-  expect(resolve(['shell', 'browser_open']).map((value: { id: string }) => value.id)).toEqual(['browser'])
-  expect(resolve(['shell']).map((value: { id: string }) => value.id)).toEqual(['fallback'])
-  expect(resolve(['shell'], undefined, false)).toEqual([])
-  expect(resolve(['shell'], 'browser')).toMatchObject({ available: false, reasons: ['Requires tool: browser_open'] })
-  expect(resolve(['shell'], 'browser').content).toBeUndefined()
-  expect(resolve(['shell', 'browser_open'], 'browser').content).toContain('native browser tests')
-  expect(() => resolve(['shell'], 'other')).toThrow('unavailable')
-  service.control('fallback', 'disable')
-  expect(resolve(['shell'])).toEqual([])
-})
-
-it('exports stable runtime gates so concurrent providers in a shared checkout cannot select for one another', () => {
-  insert({
-    ...skill('browser', 'browser-tests', 'p'),
-    activation: { requires_tools: ['browser_open'] },
-    content: 'Only run these browser instructions when compatible.',
-  })
-  const codex = service.exportDir('p', 'codex', root)!
-  const claude = service.exportDir('p', 'claude-code', root)!
-  expect(codex).toBe(claude)
-  const text = readFileSync(join(codex, 'skills', 'ramu-browser-tests', 'SKILL.md'), 'utf8')
-  expect(text).toContain('skill_resolve')
-  expect(text).toContain('browser_open')
-  expect(text).not.toContain('Only run these browser instructions')
-  expect(service.skills()[0]!.content).toContain('Only run these browser instructions')
-})
-
-it('honors Hermes activation metadata in existing installed skills and retains approved supporting files', () => {
+it('exports installed skills as installed and retains approved supporting files', () => {
   const markdown =
     '---\nname: browser-tests\ndescription: Test in a browser\nmetadata:\n  hermes:\n    requires_toolsets: [browser]\n    fallback_for_tools: [premium_browser]\n---\nRun the procedure.\n'
   insert({
@@ -196,7 +114,7 @@ it('honors Hermes activation metadata in existing installed skills and retains a
   })
   const dir = service.exportDir('p', 'opencode', root)!
   const exported = join(dir, 'skills', 'ramu-browser-tests')
-  expect(readFileSync(join(exported, 'SKILL.md'), 'utf8')).toContain('skill_resolve')
+  expect(readFileSync(join(exported, 'SKILL.md'), 'utf8')).toContain('Run the procedure.')
   expect(readFileSync(join(exported, 'references/check.md'), 'utf8')).toBe('Approved reference')
 })
 
@@ -219,7 +137,7 @@ it('lists no skills in the instructions and registers no skill tools for any pro
   insert(skill('a', 'alpha', 'p'))
   const tools: string[] = []
   service.register({ registerTool: (name: string) => tools.push(name) } as unknown as McpServer, 's')
-  expect(tools).toEqual(['skill_resolve', 'session_search', 'session_recall'])
+  expect(tools).toEqual(['session_search', 'session_recall'])
   for (const each of ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as const) {
     provider = each
     expect(service.instructions('s')).not.toContain('alpha')
@@ -277,7 +195,7 @@ it('does not link for providers that load the export themselves', () => {
 it('loads the export as a Claude plugin only when the thread has one', () => {
   const launch = (skillsDir?: string) =>
     claudeLaunchOptions({
-      session: { ...session(), cwd: '/tmp', additionalDirs: [] } as AgentSessionInfo,
+      session: { ...session(), cwd: '/tmp', additionalDirs: [], covers: ['/tmp'] } as AgentSessionInfo,
       connection: { url: 'http://127.0.0.1:1/mcp', token: 't', instructions: '', ...(skillsDir ? { skillsDir } : {}) },
       advisorModel: undefined,
       abort: new AbortController(),

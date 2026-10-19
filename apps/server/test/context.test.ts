@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync, symlinkSync, realpathSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { discoverSkills, withContext } from '../src/context'
+import { discoverMcpServers, discoverSkills, withContext } from '../src/context'
 import type { Workspace } from '../src/workspace/workspace'
 let root: string, cwd: string, ws: Workspace
 beforeEach(() => {
@@ -113,7 +113,29 @@ it('discovers skills inside repositories nested under the agent folder', () => {
   const repo = join(cwd, 'child-repo'),
     folder = join(repo, '.claude', 'skills', 'ramu-test-child-skill')
   mkdirSync(folder, { recursive: true })
-  writeFileSync(join(folder, 'SKILL.md'), '---\nname: ramu-test-child-skill\ndescription: Child repo skill.\n---\nBody\n')
+  writeFileSync(
+    join(folder, 'SKILL.md'),
+    '---\nname: ramu-test-child-skill\ndescription: Child repo skill.\n---\nBody\n',
+  )
   const names = discoverSkills({ cwd, additionalDirs: [], covers: [repo] }).map((s) => s.name)
   expect(names).toContain('ramu-test-child-skill')
+})
+it('merges MCP servers from covered repositories without duplicates', () => {
+  const repo = join(cwd, 'child-repo'),
+    other = join(root, 'other')
+  mkdirSync(repo, { recursive: true })
+  mkdirSync(other)
+  const write = (dir: string, mcpServers: object) =>
+    writeFileSync(join(dir, '.mcp.json'), JSON.stringify({ mcpServers }))
+  write(cwd, { db: { command: 'db-mcp', args: ['--x'] } })
+  write(repo, {
+    db: { command: 'other' },
+    alias: { command: 'db-mcp', args: ['--x'] },
+    docs: { url: 'https://d' },
+    ramu: { url: 'x' },
+  })
+  write(other, { docs2: { url: 'https://d' }, extra: { command: 'extra' } })
+  const found = discoverMcpServers({ cwd, additionalDirs: [], covers: [cwd, repo, other] }, ['ramu'])
+  expect(Object.keys(found).sort()).toEqual(['db', 'docs', 'extra'])
+  expect(found.db).toEqual({ command: 'db-mcp', args: ['--x'] })
 })

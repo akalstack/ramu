@@ -61,7 +61,6 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
 export const CHATS_INTELLIGENCE_KEYS = ['toolSearch'] as const
 export const MEMORY_INTELLIGENCE_KEYS = [
   'crossThreadRecall',
-  'toolAwareSkills',
   'learning',
   'maintenanceModel',
   'dailyReviews',

@@ -101,8 +101,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Open project": "Buka proyek",
   "Recall past conversations": "Ingat percakapan sebelumnya",
   "Let agents search earlier threads across providers. Turning this off keeps your history and same-thread recall. Applies when a thread starts or restarts.": "Izinkan agen mencari thread sebelumnya lintas provider. Menonaktifkannya tetap menyimpan riwayat dan ingatan dalam thread yang sama. Berlaku saat thread dimulai atau restart.",
-  "Tool-aware skills": "Skill sesuai alat",
-  "Select skills that match the agent’s current tools. When off, skills with tool requirements are withheld; ordinary skills stay available.": "Pilih skill yang sesuai dengan alat agen saat ini. Saat nonaktif, skill yang memerlukan alat tertentu tidak disediakan; skill biasa tetap tersedia.",
   "No agents yet": "Belum ada agen",
   "Start a thread to see its progress here.": "Mulai thread untuk melihat perkembangannya di sini.",
   "Sub-agent": "Sub-agent",

@@ -79,6 +79,43 @@ export function discoverSkills(scope: AgentScope): SkillInfo[] {
   for (const root of roots) walk(root, 0)
   return [...found.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
+export type DiscoveredMcpServer = Record<string, unknown>
+
+const mcpSignature = (server: DiscoveredMcpServer) =>
+  JSON.stringify(
+    typeof server.url === 'string'
+      ? ['url', server.url]
+      : ['command', server.command, server.args ?? [], server.env ?? {}],
+  )
+
+/**
+ * MCP servers from `.mcp.json` in every covered repository. Claude only reads the working folder's file, so
+ * repositories added to a project would otherwise lose theirs. The first definition of a name wins (working folder
+ * first), a server with the same command or URL under another name is skipped, and `reserved` names are never taken.
+ */
+export function discoverMcpServers(scope: AgentScope, reserved: string[] = []): Record<string, DiscoveredMcpServer> {
+  const found: Record<string, DiscoveredMcpServer> = {},
+    seen = new Set<string>()
+  for (const dir of new Set([scope.cwd, ...scope.additionalDirs, ...scope.covers])) {
+    let servers: unknown
+    try {
+      servers = (JSON.parse(readFileSync(join(dir, '.mcp.json'), 'utf8')) as { mcpServers?: unknown }).mcpServers
+    } catch {
+      continue // Missing or invalid files are omitted.
+    }
+    if (!servers || typeof servers !== 'object') continue
+    for (const [name, server] of Object.entries(servers)) {
+      if (reserved.includes(name) || name in found || !server || typeof server !== 'object') continue
+      const config = server as DiscoveredMcpServer,
+        signature = mcpSignature(config)
+      if (typeof config.url !== 'string' && typeof config.command !== 'string') continue
+      if (seen.has(signature)) continue
+      seen.add(signature)
+      found[name] = config
+    }
+  }
+  return found
+}
 export async function withContext(
   workspace: Workspace,
   taskId: string,

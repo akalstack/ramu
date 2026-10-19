@@ -1,5 +1,6 @@
 import type { CanUseTool, Options } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionInfo, AppPreferences, McpConnection } from '@ramu/shared/types'
+import { discoverMcpServers } from '../context'
 import { providerAdapter } from '../providers/adapters'
 import { providerEnvironment } from '../providers/providerBinaries'
 import { baseMode } from './settings'
@@ -46,6 +47,7 @@ export function claudeLaunchOptions({
     ...(connection
       ? {
           mcpServers: {
+            ...(discoverMcpServers(s, ['ramu']) as NonNullable<Options['mcpServers']>),
             ramu: {
               type: 'http' as const,
               url: connection.url,

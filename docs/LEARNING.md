@@ -56,25 +56,6 @@ Ask the agent about earlier work, for example, “How did we fix authentication 
 
 Search defaults to the current project. `scope: "all"` explicitly searches all projects on this workspace server; project-free threads otherwise search only project-free history. Results include excerpts, thread titles, message sequence numbers and source links. On desktop, a source link opens and highlights the original message. The agent can pass the returned `sessionId` and `seq` as `startSeq` to `session_recall` to read surrounding events, using the same scope rules. Search has `offset`/`nextOffset` pagination; recall returns `nextSeq` for another page. Reasoning is omitted from recall. Retrieved history is evidence, not new instructions, and current files still need checking.
 
-## Tool-aware skills
-
-**Settings → Memory & skills → Tool-aware skills** is on by default and independent of automatic learning. Save to apply. Turning it off withholds conditional skills from the picker and provider exports and blocks new compatibility resolutions; ordinary skills stay available. Stored skills and revisions are kept, and enabling it restores the conditional exports. Running providers refresh their native skill lists when they next rescan, at the latest in the next provider session.
-
-Skills can declare tools or toolsets they require, and tools whose absence makes them useful as a fallback. Installed skills accept these fields under `metadata.ramu`; existing `metadata.hermes` fields are also recognized:
-
-```yaml
-metadata:
-  ramu:
-    requires_tools: [shell]
-    fallback_for_tools: [browser_open]
-```
-
-This example offers a shell procedure when `browser_open` is missing. `requires_toolsets` and `fallback_for_toolsets` work the same way with explicitly verified labels such as `terminal` or `browser`. Tool names match exactly, so use the names exposed by the runtime. All requirements must be present; a fallback is skipped if any of its listed alternatives is available. Skills without conditions keep their existing behavior.
-
-The agent uses `skill_resolve` with its current `availableTools` and `availableToolsets` to list compatible skills, then passes a skill `id` to retrieve its procedure and supporting-file directory. Missing-tool fallbacks require `inventoryComplete: true`; otherwise Ramu withholds them because a tool may still exist in a deferred catalog. Ramu does not guess native tools from provider names. Compatibility uses the agent-reported inventory and does not grant permissions or execute anything.
-
-Conditional skills load through a small provider-native wrapper that asks the agent to resolve compatibility before using the procedure. Wrappers stay stable when different providers share a checkout, and require a fresh resolution after a provider or tool change. Project skill precedence, disabled/archived status, and installed-skill protections still apply. Learned skills can carry the same optional `activation` fields; review threads can inspect or update those fields through `skill_inspect` and `skill_update` (`activation: null` clears an override).
-
 ## Validation
 
 `pnpm check` covers shared contracts, queue persistence, review budgets, stale revisions, protected memory, tool invocation validation, and provider guidance. Add focused unit or integration tests for future learning behavior changes. After building, `pnpm test:desktop-smoke` checks desktop startup with an isolated profile and simulated providers. Real-provider quality needs opt-in live evaluations; simulated tests establish application behavior.

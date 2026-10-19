@@ -176,19 +176,6 @@ export function LearningSettings({ value, onChange }: Props) {
           onCheckedChange={(crossThreadRecall) => onChange({ ...value, crossThreadRecall })}
         />
       </SettingsRow>
-      <SettingsRow setting="intelligence.toolAwareSkills">
-        <SettingsLabel
-          title={t('Tool-aware skills')}
-          help={t(
-            'Select skills that match the agent’s current tools. When off, skills with tool requirements are withheld; ordinary skills stay available.',
-          )}
-        />
-        <Switch
-          aria-label={t('Tool-aware skills')}
-          checked={value.toolAwareSkills}
-          onCheckedChange={(toolAwareSkills) => onChange({ ...value, toolAwareSkills })}
-        />
-      </SettingsRow>
       <SettingsRow setting="intelligence.learning">
         <SettingsLabel
           title={t('Automatic learning')}
