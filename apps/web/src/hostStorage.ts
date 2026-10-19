@@ -12,6 +12,7 @@ const PER_HOST_EXACT = new Set([
   'ramu.unread',
   'ramu.workspace.resume',
   'ramu.outbox',
+  'ramu.saved-drafts',
   'ramu.navigation-locations',
   'ramu.last-project',
 ])

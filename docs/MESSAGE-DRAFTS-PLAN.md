@@ -1,6 +1,6 @@
 # Saved message drafts on desktop and mobile
 
-Desktop implementation, mobile hardware-keyboard shortcuts and native acceptance remain unfinished. Current mobile behavior and attachment/storage boundaries are documented in [Saved message drafts](MESSAGE-DRAFTS.md). Let a person put an unsent message aside, compose something else, then restore it for review on desktop, iOS and Android. Follow [Architecture](ARCHITECTURE.md), [UI](UI.md) and the [root product and planning guidance](../AGENTS.md#planning-docs). Move shipped behavior into the feature guides, remove completed items and delete this plan when finished.
+Mobile hardware-keyboard shortcuts, desktop captured-context/uploads-in-flight and branch-name snapshots, and native acceptance remain unfinished. Basic desktop save/list/restore/delete is shipped (see the feature guide). Current mobile behavior and attachment/storage boundaries are documented in [Saved message drafts](MESSAGE-DRAFTS.md). Let a person put an unsent message aside, compose something else, then restore it for review on desktop, iOS and Android. Follow [Architecture](ARCHITECTURE.md), [UI](UI.md) and the [root product and planning guidance](../AGENTS.md#planning-docs). Move shipped behavior into the feature guides, remove completed items and delete this plan when finished.
 
 ## Smallest usable delivery
 

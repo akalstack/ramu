@@ -12,6 +12,9 @@ import { ComposerSuggestions, FILE_DRAG_TYPE, MAX_PINNED_FILES, useComposerSugge
 import { Attachments } from './Attachments'
 import { registerWorkspaceCheckpoint } from '../workspace/workspaceCheckpoint'
 import { useHost } from '../workspace/HostProvider'
+import { SavedDraftsControl } from './SavedDraftsControl'
+import { SAVE_DRAFT_EVENT } from './savedDraftEvents'
+import type { MessageDraftSnapshot, SavedDraftScope } from '@ramu/shared/chat/savedDrafts'
 
 const CHIPS_SHOWN = 4
 // Keep long documents out of the prompt box while leaving ordinary pastes inline.
@@ -311,6 +314,23 @@ export function Composer({
     return () => window.removeEventListener('ramu:chat-drop', onChatDrop)
   }, [])
   const canSend = !submitting && !disabled && !uploading && hasContent
+  const savedScope: SavedDraftScope | null = suggestions.scope
+    ? { kind: chat ? 'thread' : 'new', id: suggestions.scope }
+    : null
+  const savedSnapshot: MessageDraftSnapshot = {
+    text: value,
+    attachments,
+    context: suggestions.pinned.map((file) => ({ ...file, source: 'mention' as const, referenceOnly: true })),
+    mentions: [],
+  }
+  const applySaved = (next: MessageDraftSnapshot) => {
+    onChange(next.text)
+    onAttachmentsChange?.(next.attachments)
+    suggestions.clearPinned()
+    if (next.context.length) suggestions.pinMany(next.context.map(({ repoId, path }) => ({ repoId, path })))
+    setCaret(next.text.length)
+    requestAnimationFrame(() => ref.current?.focus())
+  }
   return (
     <>
       <div
@@ -493,6 +513,19 @@ export function Composer({
               onArrowUpEmpty()
               return
             }
+            if (
+              e.key.toLowerCase() === 's' &&
+              (e.metaKey || e.ctrlKey) &&
+              !e.shiftKey &&
+              !e.altKey &&
+              !e.nativeEvent.isComposing &&
+              persistentDraft &&
+              onAttachmentsChange
+            ) {
+              e.preventDefault()
+              window.dispatchEvent(new Event(SAVE_DRAFT_EVENT))
+              return
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               if ((e.metaKey || e.ctrlKey) && onAlternateSubmit) {
@@ -514,6 +547,16 @@ export function Composer({
             >
               <Paperclip size={15} />
             </Button>
+          )}
+          {persistentDraft && onAttachmentsChange && (
+            <SavedDraftsControl
+              host={checkpointHost}
+              scope={savedScope}
+              snapshot={savedSnapshot}
+              uploading={uploading}
+              focused={() => !!rootRef.current?.contains(document.activeElement)}
+              onApply={applySaved}
+            />
           )}
           {controls ? (
             <div className="composer-controls flex min-w-0 flex-1 flex-wrap items-center gap-1">{controls}</div>
