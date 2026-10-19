@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DeviceStore, PAIRING_TTL_MS } from '../src/remote/devices'
-import { RemoteAccess, deviceMayInvoke } from '../src/remote/access'
+import { RemoteAccess, accessOf, deviceMayInvoke } from '../src/remote/access'
 
 const cleanup: (() => Promise<void> | void)[] = []
 afterEach(async () => {
@@ -113,4 +113,13 @@ it('rejects unapproved browser origins, and only emits CORS for explicitly enabl
   const allowed = await f.request('/invoke', { method: 'OPTIONS', headers: { Origin: 'https://companion.example' } })
   expect(allowed.status).toBe(204)
   expect(allowed.headers.get('access-control-allow-origin')).toBe('https://companion.example')
+})
+
+it('reports the caller role for client action hiding, defaulting local and legacy callers to owner', async () => {
+  const f = await fixture()
+  const viewer = f.devices.redeem(f.devices.createCode(f.now(), 'viewer').code, 'Phone', f.now())!.device
+  const owner = f.devices.redeem(f.devices.createCode(f.now(), 'owner').code, 'Laptop', f.now())!.device
+  expect(accessOf(viewer)).toBe('viewer')
+  expect(accessOf(owner)).toBe('owner')
+  expect(accessOf(undefined)).toBe('owner')
 })

@@ -62,6 +62,9 @@ const viewerMethods = new Set([
 ])
 export const deviceMayInvoke = (device: DeviceInfo | undefined, method: string): boolean =>
   device?.role !== 'viewer' || viewerMethods.has(method)
+/** What this device is told about its own access so clients can hide actions the server would refuse. Advisory only. */
+export const accessOf = (device: DeviceInfo | undefined): 'owner' | 'viewer' =>
+  device?.role === 'viewer' ? 'viewer' : 'owner'
 
 /** HTTP authentication shared by production and route tests. No cookies or implicit browser origins. */
 export class RemoteAccess {

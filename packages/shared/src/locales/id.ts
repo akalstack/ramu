@@ -2412,6 +2412,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Device access": "Akses perangkat",
   "View threads and answer requests": "Lihat thread dan jawab permintaan",
   "Viewer": "Peninjau",
+  "This device can view threads and answer requests, but not send messages. Ask the host owner to pair it with full access.": "Perangkat ini dapat melihat thread dan menjawab permintaan, tetapi tidak dapat mengirim pesan. Minta pemilik host memasangkannya dengan akses penuh.",
   "Expires {0}": "Kedaluwarsa {0}",
   "Never expires": "Tidak kedaluwarsa",
   "Reset time passed; awaiting update": "Waktu reset lewat; menunggu pembaruan",

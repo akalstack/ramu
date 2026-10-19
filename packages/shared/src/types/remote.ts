@@ -3,6 +3,8 @@ export interface BackgroundStatus {
   platform?: string
   protocol?: number
   capabilities?: string[]
+  /** The asking device's own role. Absent on older hosts, which means full access. Hiding actions supplements server checks. */
+  access?: 'owner' | 'viewer'
   running: boolean
   pid: number
   startedAt: number

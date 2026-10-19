@@ -15,6 +15,7 @@ import { useHost } from '../workspace/HostProvider'
 import { SavedDraftsControl } from './SavedDraftsControl'
 import { SAVE_DRAFT_EVENT } from './savedDraftEvents'
 import type { MessageDraftSnapshot, SavedDraftScope } from '@ramu/shared/chat/savedDrafts'
+import { VIEW_ONLY_NOTICE, isViewOnly } from './viewerAccess'
 
 const CHIPS_SHOWN = 4
 // Keep long documents out of the prompt box while leaving ordinary pastes inline.
@@ -104,6 +105,18 @@ export function Composer({
   pinnedCount.current = suggestions.pinned.length
   // Attachments upload to the host the composer sends to; the native picker runs on this window's own host.
   const { id: checkpointHost, isLocal, invoke } = useHost()
+  const [viewOnly, setViewOnly] = useState(false)
+  useEffect(() => {
+    if (isLocal) return setViewOnly(false)
+    let live = true
+    Promise.resolve(invoke('background.status')).then(
+      (status) => live && setViewOnly(isViewOnly(status)),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [isLocal, invoke])
   const scopeKey = JSON.stringify([checkpointHost, suggestions.scope])
   const [submissionFailure, setSubmissionFailure] = useState<{ scope: string; message: string } | null>(null)
   const currentScope = useRef({ host: checkpointHost, scope: suggestions.scope })
@@ -313,7 +326,7 @@ export function Composer({
     window.addEventListener('ramu:chat-drop', onChatDrop)
     return () => window.removeEventListener('ramu:chat-drop', onChatDrop)
   }, [])
-  const canSend = !submitting && !disabled && !uploading && hasContent
+  const canSend = !submitting && !disabled && !viewOnly && !uploading && hasContent
   const savedScope: SavedDraftScope | null = suggestions.scope
     ? { kind: chat ? 'thread' : 'new', id: suggestions.scope }
     : null
@@ -421,6 +434,11 @@ export function Composer({
             files={attachments}
             onRemove={(id) => onAttachmentsChange?.(attachments.filter((file) => file.id !== id))}
           />
+        )}
+        {viewOnly && (
+          <div className="text-muted-foreground small text-caption" role="status">
+            {t(VIEW_ONLY_NOTICE)}
+          </div>
         )}
         {attachmentError && (
           <div className="error text-bad small text-caption" role="alert">

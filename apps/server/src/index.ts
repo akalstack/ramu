@@ -34,7 +34,7 @@ import { CAPABILITIES, MAX_REQUEST_BYTES, PROTOCOL_VERSION, decodeInvoke, type C
 import { loadConfig } from './config'
 import { TokenStore } from './remote/auth'
 import { DeviceStore, type DeviceInfo } from './remote/devices'
-import { RemoteAccess, deviceMayInvoke } from './remote/access'
+import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
 import {
   candidateUrls,
   localAddresses,
@@ -476,6 +476,7 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
         version: serviceVersion,
         protocol: PROTOCOL_VERSION,
         capabilities: capabilities(),
+        access: accessOf(device),
         ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}),
       }
     else if (method.startsWith('network.')) {

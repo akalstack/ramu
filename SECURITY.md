@@ -10,7 +10,7 @@ Agents run with your user permissions and can read files, edit code, and execute
 
 ## Remote access
 
-A device paired with full access can read workspace data, run agents and terminals, edit files, and use the host's provider credentials. Pair only devices you trust. A viewer can read conversations and answer approval/question requests; approving a request can authorize the agent to execute it. Viewer access is therefore intended for trusted reviewers, not public sharing.
+A device paired with full access can read workspace data, run agents and terminals, edit files, and use the host's provider credentials. Pair only devices you trust. A viewer can read conversations and answer approval/question requests; approving a request can authorize the agent to execute it. Viewer access is therefore intended for trusted reviewers, not public sharing. The desktop composer disables sending on a viewer host and explains why; this is a convenience, and the host still refuses every disallowed request.
 
 Expose the server only on a trusted LAN/VPN or through authenticated HTTPS/tunnelling. Ramu has no relay or end-to-end encryption. HTTP sends bearer credentials and workspace data without application-level encryption. Native mobile certificate pinning is still unfinished; use a trusted HTTPS certificate or your own authenticated VPN.
 
