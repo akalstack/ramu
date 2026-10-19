@@ -1,3 +1,4 @@
+import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
@@ -170,7 +171,7 @@ export function ElicitationCard({
         <div className="row flex gap-1.5 mt-2">
           <Button
             variant="default"
-            className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
+            className={PRIMARY_ACTION_CLASS}
             disabled={
               busy ||
               request.fields.some(

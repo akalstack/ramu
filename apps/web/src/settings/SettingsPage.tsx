@@ -1,3 +1,4 @@
+import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { cn } from 'cn'
 import { SettingsTargetSelector, SettingsScopeContext } from './SettingsScope'
 import { t, useLanguage } from '../i18n'
@@ -146,6 +147,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'appearance', title: 'Crisper text', words: 'font smoothing antialiasing grayscale' },
   { section: 'appearance', title: 'Layout sizes', words: 'reset width height split terminal' },
   { section: 'editor', title: 'Preview tabs', words: 'single click open file' },
+  { section: 'editor', title: 'Default Markdown view', words: 'source edit preview read rendered viewer' },
   { section: 'editor', title: 'Editor font size', words: 'monaco text' },
   { section: 'editor', title: 'Terminal font size', words: 'xterm text' },
   { section: 'editor', title: 'Default terminal tabs', words: 'top right position' },
@@ -461,7 +463,7 @@ export function SettingsPage({
           </Button>
           <Button
             variant="default"
-            className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
+            className={PRIMARY_ACTION_CLASS}
             disabled={busy || !hasChanges || (scope && !scope.ready) || undefined}
             onClick={onSave}
           >

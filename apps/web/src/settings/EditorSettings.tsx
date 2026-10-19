@@ -25,6 +25,26 @@ export function EditorSettings({ draft, onChange, busy }: DraftProps) {
           onChange={(value) => onChange({ ...draft, editorFontSize: Number(value) })}
         />
       </SettingsRow>
+      <SettingsRow setting="defaultMarkdownView">
+        <SettingsLabel
+          title={t('Default Markdown view')}
+          help={t('Choose how Markdown files open. Links to a specific line open Source.')}
+        />
+        <Dropdown
+          label={t('Default Markdown view')}
+          value={draft.defaultMarkdownView}
+          disabled={busy}
+          options={[
+            { value: 'source', label: t('Source') },
+            { value: 'edit', label: t('Edit') },
+            { value: 'preview', label: t('Preview') },
+          ]}
+          onChange={(value) => {
+            if (value === 'source' || value === 'edit' || value === 'preview')
+              onChange({ ...draft, defaultMarkdownView: value })
+          }}
+        />
+      </SettingsRow>
       <SettingsGroupTitle>{t('Terminal')}</SettingsGroupTitle>
       <SettingsRow setting="terminalFontSize">
         <strong>{t('Terminal font size')}</strong>

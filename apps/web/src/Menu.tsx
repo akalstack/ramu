@@ -18,6 +18,7 @@ import {
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/desktop-button'
+import { DANGER_ACTION_CLASS, PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { Button as NativeButton } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { ChevronDown, ChevronRight } from 'lucide-react'
@@ -422,9 +423,7 @@ export function Dialog({
           <Button
             variant={danger ? 'destructive' : 'default'}
             className={
-              danger
-                ? 'danger-btn whitespace-nowrap'
-                : 'whitespace-nowrap primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100'
+              danger ? `${DANGER_ACTION_CLASS} whitespace-nowrap` : `${PRIMARY_ACTION_CLASS} whitespace-nowrap`
             }
             onClick={onConfirm}
             disabled={busy || confirmDisabled}

@@ -318,3 +318,110 @@ describe('account rotation', () => {
     ).toBeNull()
   })
 })
+
+describe('account-aware routing across providers', () => {
+  const providers = ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as const
+  const allCatalogs = providers.map((provider) => ({
+    provider,
+    models: [model(provider, 'main', { isDefault: true })],
+  }))
+  const configuration = Object.fromEntries(
+    providers.map((provider) => [
+      provider,
+      {
+        binary: '',
+        accountId: 'a',
+        defaultAccountEnabled: false,
+        accounts: [{ id: 'a' }, { id: 'b' }],
+      },
+    ]),
+  )
+  const settings = (provider: (typeof providers)[number]) => ({
+    provider,
+    model: 'main',
+    accountId: 'a',
+    autoFallback: true,
+    effort: 'high' as const,
+    serviceTier: 'fast' as const,
+  })
+  const windows = (provider: (typeof providers)[number], weekly = 98) => [
+    reading({ provider, accountId: 'a', usedPercent: 100, status: 'limited', resetsAt: NOW + 10000 }),
+    reading({ provider, accountId: 'b', usedPercent: 3, resetsAt: NOW + 10000 }),
+    reading({ provider, accountId: 'b', window: 'weekly', usedPercent: weekly, resetsAt: NOW + 100000 }),
+  ]
+  it.each(providers)(
+    '%s tries another account before leaving the model, even with 98%% weekly usage in limit-only mode',
+    (provider) => {
+      const route = planRoute(settings(provider), [], {
+        usage: [],
+        accounts: { configuration, usage: windows(provider) },
+        catalogs: allCatalogs,
+        switchAt: null,
+        now: NOW,
+      })
+      expect(route?.step).toMatchObject({
+        provider,
+        model: 'main',
+        accountId: 'b',
+        effort: 'high',
+        serviceTier: 'fast',
+      })
+    },
+  )
+  it.each(providers)('%s respects the weekly threshold despite room in the 5-hour window', (provider) => {
+    const context = {
+      usage: [],
+      accounts: { configuration, usage: windows(provider) },
+      catalogs: allCatalogs,
+      switchAt: 95 as const,
+      now: NOW,
+    }
+    expect(planRoute(settings(provider), [], context)).toBeNull()
+    expect(
+      planRoute(settings(provider), [], {
+        ...context,
+        accounts: {
+          configuration,
+          usage: windows(provider, 100).map((r) => (r.window === 'weekly' ? { ...r, status: 'limited' as const } : r)),
+        },
+        switchAt: null,
+      }),
+    ).toBeNull()
+  })
+  it('selects an available login of the next provider when its primary login is limited', () => {
+    const usage = [
+      ...windows('claude-code', 100).map((r) => ({ ...r, status: 'limited' as const })),
+      ...windows('codex', 30),
+    ]
+    const route = planRoute(settings('claude-code'), [step('codex', 'main')], {
+      usage: [],
+      accounts: { configuration, usage },
+      catalogs: allCatalogs,
+      switchAt: null,
+      now: NOW,
+    })
+    expect(route?.step).toMatchObject({ provider: 'codex', accountId: 'b' })
+  })
+  it('isolates the current login, disabled logins, expired windows and fallback opt-out', () => {
+    const context = {
+      usage: [],
+      accounts: { configuration, usage: windows('codex') },
+      catalogs: allCatalogs,
+      switchAt: null,
+      now: NOW,
+    }
+    expect(planRoute({ ...settings('codex'), accountId: 'b' }, [], context)).toBeNull()
+    expect(planRoute({ ...settings('codex'), autoFallback: false }, [], context)).toBeNull()
+    expect(planRoute(settings('codex'), [], { ...context, now: NOW + 1000000 })).toBeNull()
+    const disabled = {
+      ...configuration,
+      codex: { binary: '', defaultAccountEnabled: false, accounts: [{ id: 'a' }, { id: 'b', enabled: false }] },
+    }
+    expect(
+      planRoute(settings('codex'), [], { ...context, accounts: { configuration: disabled, usage: windows('codex') } }),
+    ).toBeNull()
+    expect(
+      planRoute(settings('codex'), [], { ...context, attemptedAccounts: new Set([accountKey('codex', 'b')]) }),
+    ).toBeNull()
+  })
+})

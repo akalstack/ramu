@@ -1,5 +1,7 @@
+import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { t, useLanguage } from '../i18n'
 import { Kbd } from '@/components/ui/kbd'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ShieldQuestion } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
@@ -372,11 +374,7 @@ function QuestionForm({
         {!together && !answered && (
           <Button
             variant="secondary"
-            className={
-              last
-                ? 'primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100'
-                : ''
-            }
+            className={last ? PRIMARY_ACTION_CLASS : ''}
             disabled={busy || !value.trim()}
             onClick={() => void send([key])}
           >
@@ -386,11 +384,7 @@ function QuestionForm({
         {!last && (
           <Button
             variant="secondary"
-            className={
-              together
-                ? 'primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100'
-                : ''
-            }
+            className={together ? PRIMARY_ACTION_CLASS : ''}
             disabled={busy}
             onClick={() => setPage(page + 1)}
           >
@@ -400,7 +394,7 @@ function QuestionForm({
         {together && last && (
           <Button
             variant="default"
-            className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
+            className={PRIMARY_ACTION_CLASS}
             disabled={!canSendAll}
             title={canSendAll ? undefined : t('Answer every question first')}
             onClick={() => void send(unanswered.map(questionKey))}
@@ -418,13 +412,11 @@ export function QuestionRow({
   request,
   status,
   pending,
-  showAnswers = true,
   onOpen,
 }: {
   request: QuestionRequest
   status: QuestionState
   pending: boolean
-  showAnswers?: boolean
   onOpen?: (requestId: string) => void
 }) {
   useLanguage()
@@ -476,20 +468,64 @@ export function QuestionRow({
           {status.reason ? `: ${status.reason}` : ''}
         </span>
       </div>
-      {!showAnswers && <p className="m-0 text-muted-foreground">{summary}</p>}
-      {showAnswers && (
-        <dl className="question-row-answers [&_>_div]:grid [&_>_div]:[grid-template-columns:minmax(0,_1fr)_minmax(0,_1fr)] [&_>_div]:gap-3 [&_dt]:text-soft [&_dd]:m-0 grid gap-1 m-0">
-          {request.questions.map((q) => {
-            const answer = questionAnswer(status.answers, questionKey(q))
-            return (
-              <div key={questionKey(q)}>
-                <dt>{q.question}</dt>
-                <dd className={answer ? '' : 'muted text-muted-foreground'}>{answer ?? t('No answer')}</dd>
-              </div>
-            )
-          })}
-        </dl>
-      )}
+      <dl className="question-row-answers flex flex-col gap-3 m-0">
+        {request.questions.map((q) => {
+          const answer = questionAnswer(status.answers, questionKey(q))
+          const selected = new Set(answer ? (q.multiSelect ? answer.split(', ') : [answer]) : [])
+          return (
+            <Collapsible key={questionKey(q)} className="flex flex-col gap-1.5 min-w-0">
+              <dt className="text-soft">
+                {q.options.length > 0 ? (
+                  <CollapsibleTrigger
+                    render={<Button variant="ghost" />}
+                    className="flex items-start justify-between gap-2 w-full h-auto p-0 text-left whitespace-normal font-normal"
+                  >
+                    <span>{q.question}</span>
+                    <ChevronRight className="mt-0.5 flex-none text-muted-foreground [[data-open]_>_&]:rotate-90" />
+                  </CollapsibleTrigger>
+                ) : (
+                  q.question
+                )}
+              </dt>
+              <dd className="flex flex-col gap-2 m-0">
+                {q.options.length > 0 && (
+                  <CollapsibleContent>
+                    <ul className="flex flex-col gap-1.5 m-0 p-0 list-none">
+                      {q.options.map((option) => (
+                        <li key={option.label}>
+                          <label className="flex items-start gap-2">
+                            <input
+                              type={q.multiSelect ? 'checkbox' : 'radio'}
+                              checked={selected.has(option.label)}
+                              disabled
+                              readOnly
+                              className="flex-none mt-0.5"
+                            />
+                            <span className={selected.has(option.label) ? 'text-foreground' : 'text-muted-foreground'}>
+                              {option.label}
+                              {option.description && (
+                                <span className="block text-caption text-muted-foreground">{option.description}</span>
+                              )}
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </CollapsibleContent>
+                )}
+                {answer ? (
+                  <div className="flex flex-col gap-1 mt-1 rounded-(--radius-s) bg-raised px-3 py-2">
+                    <span className="text-caption text-muted-foreground">{t('Answer')}</span>
+                    <p className="m-0 whitespace-pre-wrap wrap-anywhere font-semibold text-foreground">{answer}</p>
+                  </div>
+                ) : (
+                  <p className="m-0 text-muted-foreground">{t('No answer')}</p>
+                )}
+              </dd>
+            </Collapsible>
+          )
+        })}
+      </dl>
     </div>
   )
 }

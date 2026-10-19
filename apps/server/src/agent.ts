@@ -178,6 +178,8 @@ export class AgentService {
       onContext: () => this.onContext,
       onEvent: (...a) => this.onEvent(...a),
       orderOf: (...a) => parts.router.orderOf(...a),
+      otherAccount: (...a) => parts.router.otherAccount(...a),
+      freshAccountUsage: (...a) => parts.router.freshAccountUsage(...a),
       pauseQueue: (...a) => parts.dispatcher.pauseQueue(...a),
       planSwitch: (...a) => parts.process.planSwitch(...a),
       planTransition: (...a) => parts.process.planTransition(...a),
@@ -344,6 +346,11 @@ export class AgentService {
       process.stop(id)
       if (preserveRecovery) dispatcher.updateQueue(id, store.queued(id), paused)
     }
+  }
+
+  /** The latest goal of a session for list views; cheap to call for every thread. */
+  goalOf(...args: Parameters<GoalManager['goalOf']>) {
+    return this.parts.goals.goalOf(...args)
   }
 
   getGoal(...args: Parameters<GoalManager['getGoal']>) {
@@ -758,6 +765,7 @@ export class AgentService {
     this.db.exec('BEGIN')
     try {
       this.db.prepare('DELETE FROM agent_events WHERE session_id = ? AND seq >= ?').run(id, userSeq)
+      this.parts.goals.forgetGoal(id)
       this.db.prepare('UPDATE agent_sessions SET provider_session_id = NULL WHERE id = ?').run(id)
       // Native sessions of other providers still remember the removed turns, so none of them may be resumed.
       this.db.prepare('DELETE FROM session_provider_sessions WHERE session_id = ?').run(id)

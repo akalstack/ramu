@@ -91,7 +91,7 @@ function hasStructuredLimit(value: unknown, depth = 0): boolean {
 }
 
 function asText(value: unknown): { text: string; object?: unknown } {
-  if (value instanceof Error) return { text: value.message }
+  if (value instanceof Error) return { text: value.message, object: value }
   if (typeof value === 'string') {
     const trimmed = value.trim()
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {

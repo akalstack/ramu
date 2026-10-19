@@ -1,3 +1,4 @@
+import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { usePaged } from './cards'
 import { useSettingsInvoke } from './SettingsScope'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
@@ -482,7 +483,7 @@ function MemoryEditor({
         </Button>
         <Button
           variant="default"
-          className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover"
+          className={PRIMARY_ACTION_CLASS}
           disabled={!value.title.trim() || !value.content.trim()}
           onClick={onSave}
         >

@@ -2,8 +2,10 @@ import { cn } from 'cn'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/desktop-button'
-import { Code2, Lock, Pencil, WrapText } from 'lucide-react'
+import { WrapText } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { MarkdownViewControl, initialMarkdownView } from '../editor/MarkdownViewControl'
+import type { AppPreferences } from '@ramu/shared/types'
 import { MarkdownEditor } from '../editor/MarkdownEditor'
 import { MarkdownPreview } from '../editor/MarkdownPreview'
 import { ChatFind } from '../chat/ChatFind'
@@ -273,7 +275,9 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
     return () => window.removeEventListener('ramu:word-wrap', apply)
   }, [])
   const markdown = isMarkdown(view.path)
-  const [mode, setMode] = useState<'source' | 'editing' | 'locked'>(view.selection ? 'source' : 'editing')
+  const [mode, setMode] = useState<AppPreferences['defaultMarkdownView']>(() =>
+    initialMarkdownView(preferences.defaultMarkdownView, !!view.selection),
+  )
   const [previewText, setPreviewText] = useState('')
   const previewPane = useRef<HTMLDivElement>(null)
   const [findingPreview, setFindingPreview] = useState(false)
@@ -289,7 +293,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
     }
   }, [mode])
   useEffect(() => {
-    if (!markdown || mode !== 'locked') return
+    if (!markdown || mode !== 'preview') return
     const model = editorRef.current?.getModel()
     if (!model) return
     setPreviewText(model.getValue())
@@ -330,47 +334,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
         <span className="path text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
           {view.path}
         </span>
-        {markdown && (
-          <span
-            className="view-header-group inline-flex gap-px p-0.5 [border:1px_solid_transparent] rounded-(--radius-s) bg-fill"
-            role="group"
-            aria-label={t('Markdown view')}
-          >
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-              aria-pressed={mode === 'source'}
-              aria-label={t('Source')}
-              title={t('Source')}
-              onClick={() => setMode('source')}
-            >
-              <Code2 size={14} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-              aria-pressed={mode === 'editing'}
-              aria-label={t('Editing')}
-              title={t('Edit rendered Markdown')}
-              onClick={() => setMode('editing')}
-            >
-              <Pencil size={14} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-              aria-pressed={mode === 'locked'}
-              aria-label={t('Locked')}
-              title={t('Locked')}
-              onClick={() => setMode('locked')}
-            >
-              <Lock size={14} />
-            </Button>
-          </span>
-        )}
+        {markdown && <MarkdownViewControl mode={mode} onChange={setMode} />}
         {(!markdown || mode === 'source') && (
           <Button
             variant="ghost"
@@ -470,13 +434,13 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
             }}
             className={cn(
               'relative outline-none md-preview-pane flex-1 min-h-0 min-w-0',
-              mode === 'editing' ? 'overflow-hidden' : 'overflow-auto p-[16px_24px_32px]',
+              mode === 'edit' ? 'overflow-hidden' : 'overflow-auto p-[16px_24px_32px]',
             )}
           >
             <div
-              className={`${mode === 'editing' ? 'h-full min-h-0' : 'md-preview [&_h1]:text-[length:1.6em] [&_h1]:m-[0_0_12px] [&_h1]:pb-1.5 [&_h1]:[border-bottom:1px_solid_var(--line)] [&_h2]:text-[length:1.3em] [&_h2]:m-[20px_0_8px] [&_h2]:pb-1 [&_h2]:[border-bottom:1px_solid_var(--line)] [&_h3]:text-[length:1.1em] [&_img]:max-w-full [&_.md-frontmatter]:mb-4 [&_.md-frontmatter]:p-[8px_12px] [&_.md-frontmatter]:[border:1px_solid_transparent] [&_.md-frontmatter]:rounded-(--radius-s) [&_.md-frontmatter]:text-soft [&_.md-frontmatter]:bg-fill [&_.md-frontmatter_summary]:cursor-pointer [&_.md-frontmatter_summary]:text-control [&_.md-frontmatter_pre]:mb-0 [&_blockquote]:m-[8px_0] [&_blockquote]:p-[2px_12px] [&_blockquote]:[border-left:3px_solid_var(--line-strong)] [&_blockquote]:text-soft [&_hr]:[border:0] [&_hr]:[border-top:1px_solid_var(--line)] [&_hr]:m-[16px_0] max-w-[820px] m-[0_auto] text-chat leading-[1.65] select-text msg [&.user]:self-end [&.user]:whitespace-pre-wrap [&.user]:max-w-[78%] [&.user]:mt-[18px] [&.user]:w-[fit-content] [&.user]:[background:var(--bubble)] [&.user]:[border:0] [&.user]:[box-shadow:none] [&.user]:text-chat [&.user]:leading-[1.55] [&.user]:p-[10px_16px_11px] [&.user]:rounded-(--radius-l) [&.user]:tracking-[-0.006em] [&.user]:[color:var(--text-body)] [&.assistant]:relative [&.assistant]:tracking-[-0.008em] [&.assistant]:text-chat [&.assistant]:leading-[1.65] [&.assistant]:[color:var(--text-body)] [&.assistant_>_:first-child]:mt-0 [&.assistant_>_:last-child]:mb-0 [&.assistant_p]:m-[0_0_10px] [&.assistant_ul]:pl-5 [&.assistant_ul]:m-[0_0_10px] [&.assistant_ol]:pl-5 [&.assistant_ol]:m-[0_0_10px] [&.assistant_code]:[background:rgb(var(--ink)_/_0.075)] [&.assistant_code]:[border:0] [&.assistant_code]:rounded-(--radius-xs) [&.assistant_code]:p-[0_5px] [&.assistant_code]:[color:var(--text-body)] [&.assistant_code]:text-[length:0.88em] [&.assistant_pre]:overflow-x-auto [&.assistant_pre]:[white-space:pre] [&.assistant_pre]:[background:var(--code-bg)] [&.assistant_pre]:[border:1px_solid_transparent] [&.assistant_pre]:rounded-(--radius-m) [&.assistant_pre]:p-[12px_14px] [&.assistant_pre]:m-[4px_0_12px] [&.assistant_pre]:leading-[1.6] [&.assistant_pre]:[box-shadow:inset_0_1px_0_rgb(var(--ink)_/_0.02)] [&.assistant_pre]:text-[length:0.88em] [&.assistant_pre_code]:bg-transparent [&.assistant_pre_code]:p-0 [&.assistant_pre_code]:[border:none] [&.assistant_pre_code]:text-[length:inherit] [&.assistant_pre_code]:[color:var(--text-body)] [&.assistant_a]:text-brand [&.assistant_a]:[text-decoration:none] [&.assistant_table]:[border-collapse:collapse] [&.assistant_table]:m-[6px_0] [&.assistant_th]:[border:1px_solid_var(--line-strong)] [&.assistant_th]:p-[3px_8px] [&.assistant_td]:[border:1px_solid_var(--line-strong)] [&.assistant_td]:p-[3px_8px] [&.meta]:text-caption [&.meta]:text-muted-foreground [&.error]:text-bad [&.assistant:hover_.msg-actions]:opacity-100 [&.assistant.generating]:[animation:arrive_100ms_var(--ease)] [&.user_.muted.small.block]:mt-0.5 [&.user_.muted.small.block]:[color:rgb(var(--ink)_/_0.7)] [&.assistant_li]:m-[3px_0] [&.assistant_li::marker]:text-muted-foreground [&.assistant_strong]:font-semibold [&.assistant_strong]:[color:var(--text)] [&.assistant_h1]:text-[length:1em] [&.assistant_h1]:font-semibold [&.assistant_h1]:m-[16px_0_6px] [&.assistant_h1]:tracking-[-0.012em] [&.assistant_h2]:text-[length:1em] [&.assistant_h2]:font-semibold [&.assistant_h2]:m-[16px_0_6px] [&.assistant_h2]:tracking-[-0.012em] [&.assistant_h3]:text-[length:1em] [&.assistant_h3]:font-semibold [&.assistant_h3]:m-[16px_0_6px] [&.assistant_h3]:tracking-[-0.012em] [&.assistant_a:hover]:[text-decoration:underline] [.msg-wrap.user_&.user]:max-w-full [.msg-wrap.user_&.user]:mt-3.5 [&.assistant_.msg-actions]:mt-2 [&.assistant_:is(h1,_h2,_h3,_h4,_strong)]:text-foreground break-words assistant'}`}
+              className={`${mode === 'edit' ? 'h-full min-h-0' : 'md-preview [&_h1]:text-[length:1.6em] [&_h1]:m-[0_0_12px] [&_h1]:pb-1.5 [&_h1]:[border-bottom:1px_solid_var(--line)] [&_h2]:text-[length:1.3em] [&_h2]:m-[20px_0_8px] [&_h2]:pb-1 [&_h2]:[border-bottom:1px_solid_var(--line)] [&_h3]:text-[length:1.1em] [&_img]:max-w-full [&_.md-frontmatter]:mb-4 [&_.md-frontmatter]:p-[8px_12px] [&_.md-frontmatter]:[border:1px_solid_transparent] [&_.md-frontmatter]:rounded-(--radius-s) [&_.md-frontmatter]:text-soft [&_.md-frontmatter]:bg-fill [&_.md-frontmatter_summary]:cursor-pointer [&_.md-frontmatter_summary]:text-control [&_.md-frontmatter_pre]:mb-0 [&_blockquote]:m-[8px_0] [&_blockquote]:p-[2px_12px] [&_blockquote]:[border-left:3px_solid_var(--line-strong)] [&_blockquote]:text-soft [&_hr]:[border:0] [&_hr]:[border-top:1px_solid_var(--line)] [&_hr]:m-[16px_0] max-w-[820px] m-[0_auto] text-chat leading-[1.65] select-text msg [&.user]:self-end [&.user]:whitespace-pre-wrap [&.user]:max-w-[78%] [&.user]:mt-[18px] [&.user]:w-[fit-content] [&.user]:[background:var(--bubble)] [&.user]:[border:0] [&.user]:[box-shadow:none] [&.user]:text-chat [&.user]:leading-[1.55] [&.user]:p-[10px_16px_11px] [&.user]:rounded-(--radius-l) [&.user]:tracking-[-0.006em] [&.user]:[color:var(--text-body)] [&.assistant]:relative [&.assistant]:tracking-[-0.008em] [&.assistant]:text-chat [&.assistant]:leading-[1.65] [&.assistant]:[color:var(--text-body)] [&.assistant_>_:first-child]:mt-0 [&.assistant_>_:last-child]:mb-0 [&.assistant_p]:m-[0_0_10px] [&.assistant_ul]:pl-5 [&.assistant_ul]:m-[0_0_10px] [&.assistant_ol]:pl-5 [&.assistant_ol]:m-[0_0_10px] [&.assistant_code]:[background:rgb(var(--ink)_/_0.075)] [&.assistant_code]:[border:0] [&.assistant_code]:rounded-(--radius-xs) [&.assistant_code]:p-[0_5px] [&.assistant_code]:[color:var(--text-body)] [&.assistant_code]:text-[length:0.88em] [&.assistant_pre]:overflow-x-auto [&.assistant_pre]:[white-space:pre] [&.assistant_pre]:[background:var(--code-bg)] [&.assistant_pre]:[border:1px_solid_transparent] [&.assistant_pre]:rounded-(--radius-m) [&.assistant_pre]:p-[12px_14px] [&.assistant_pre]:m-[4px_0_12px] [&.assistant_pre]:leading-[1.6] [&.assistant_pre]:[box-shadow:inset_0_1px_0_rgb(var(--ink)_/_0.02)] [&.assistant_pre]:text-[length:0.88em] [&.assistant_pre_code]:bg-transparent [&.assistant_pre_code]:p-0 [&.assistant_pre_code]:[border:none] [&.assistant_pre_code]:text-[length:inherit] [&.assistant_pre_code]:[color:var(--text-body)] [&.assistant_a]:text-brand [&.assistant_a]:[text-decoration:none] [&.assistant_table]:[border-collapse:collapse] [&.assistant_table]:m-[6px_0] [&.assistant_th]:[border:1px_solid_var(--line-strong)] [&.assistant_th]:p-[3px_8px] [&.assistant_td]:[border:1px_solid_var(--line-strong)] [&.assistant_td]:p-[3px_8px] [&.meta]:text-caption [&.meta]:text-muted-foreground [&.error]:text-bad [&.assistant:hover_.msg-actions]:opacity-100 [&.assistant.generating]:[animation:arrive_100ms_var(--ease)] [&.user_.muted.small.block]:mt-0.5 [&.user_.muted.small.block]:[color:rgb(var(--ink)_/_0.7)] [&.assistant_li]:m-[3px_0] [&.assistant_li::marker]:text-muted-foreground [&.assistant_strong]:font-semibold [&.assistant_strong]:[color:var(--text)] [&.assistant_h1]:text-[length:1em] [&.assistant_h1]:font-semibold [&.assistant_h1]:m-[16px_0_6px] [&.assistant_h1]:tracking-[-0.012em] [&.assistant_h2]:text-[length:1em] [&.assistant_h2]:font-semibold [&.assistant_h2]:m-[16px_0_6px] [&.assistant_h2]:tracking-[-0.012em] [&.assistant_h3]:text-[length:1em] [&.assistant_h3]:font-semibold [&.assistant_h3]:m-[16px_0_6px] [&.assistant_h3]:tracking-[-0.012em] [&.assistant_a:hover]:[text-decoration:underline] [.msg-wrap.user_&.user]:max-w-full [.msg-wrap.user_&.user]:mt-3.5 [&.assistant_.msg-actions]:mt-2 [&.assistant_:is(h1,_h2,_h3,_h4,_strong)]:text-foreground break-words assistant'}`}
             >
-              {mode === 'editing' && !loading && editorRef.current?.getModel() ? (
+              {mode === 'edit' && !loading && editorRef.current?.getModel() ? (
                 <MarkdownEditor
                   model={editorRef.current.getModel()!}
                   viewId={view.id}
@@ -486,7 +450,7 @@ function TextFileView({ taskId, view, binding }: { taskId: string; view: FileVie
                   onSave={() => saveRef.current()}
                   onOpenFile={(path) => ws.openView(taskId, { kind: 'file', repoId: binding.repoId, path })}
                 />
-              ) : mode === 'locked' ? (
+              ) : mode === 'preview' ? (
                 <MarkdownPreview
                   text={previewText}
                   taskId={taskId}

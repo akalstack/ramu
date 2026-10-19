@@ -4,11 +4,24 @@ import { useRouter } from 'expo-router'
 import { Archive, ArchiveRestore, Clock, GitBranch, Pin, PinOff } from 'lucide-react-native'
 import { font, useTheme } from '../theme'
 import type { Chat } from '../runtime/types'
-import { ago } from '../i18n'
+import { ago, useT, type Strings } from '../i18n'
+import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { Row, StatusIcon, T, tap } from './ui'
 import { ChatActionsSheet, useChatCommands } from './ChatActions'
 import { SwipeRow } from './SwipeRow'
 import { useStore } from '../runtime/store'
+
+const SHORT = {
+  working: ['threadWorking', 'threadWorkingFull'],
+  goal: ['threadGoal', 'threadGoalFull'],
+  paused: ['threadPaused', 'threadPausedFull'],
+  blocked: ['threadInput', 'threadBlockedFull'],
+  'turn-limit': ['threadTurnLimit', 'threadTurnLimitFull'],
+  input: ['threadInput', 'threadInputFull'],
+  limit: ['threadLimit', 'threadLimitFull'],
+  failed: ['threadFailed', 'threadFailedFull'],
+  finished: ['threadFinished', 'threadFinishedFull'],
+} as const satisfies Record<string, readonly [keyof Strings, keyof Strings]>
 
 /** A chat inside a rounded card; `divider` draws the hairline between stacked rows. */
 export function ChatRow({ chat, project, divider }: { chat: Chat; project?: string; divider?: boolean }) {
@@ -16,11 +29,16 @@ export function ChatRow({ chat, project, divider }: { chat: Chat; project?: stri
   const router = useRouter()
   const [menu, setMenu] = useState(false)
   const commands = useChatCommands(chat)
+  const strings = useT()
   const store = useStore()
   // Unread, shared with the desktop: the computer keeps a "finished" notice until the chat is opened on any device.
   const unread =
     Boolean(chat.sessionId) &&
     (store.inbox[chat.computerId] ?? []).some((n) => n.sessionId === chat.sessionId && n.kind === 'done')
+  const status = chat.pending
+    ? null
+    : threadStatus(chat, unread && (chat.status === 'idle' || chat.status === 'ready-for-review'), chat.goal)
+  const [shortKey, fullKey] = status ? SHORT[status.kind] : []
   // A thread with no project and nothing to preview is one line; its row is centered instead of leaving a blank line.
   const hasDetail = Boolean(project || chat.mode === 'worktree' || chat.preview)
   const actions = chat.pending
@@ -58,7 +76,7 @@ export function ChatRow({ chat, project, divider }: { chat: Chat; project?: stri
             borderTopWidth: divider ? StyleSheet.hairlineWidth : 0,
             borderTopColor: c.lineStrong,
           }}
-          accessibilityLabel={chat.title}
+          accessibilityLabel={fullKey ? `${chat.title}, ${strings[fullKey]}` : chat.title}
         >
           <View style={{ paddingTop: hasDetail ? 2 : 0 }}>
             {chat.pending ? (
@@ -80,6 +98,15 @@ export function ChatRow({ chat, project, divider }: { chat: Chat; project?: stri
                 {chat.title}
               </T>
               {chat.pinnedAt !== null ? <Pin size={11} color={c.muted} /> : null}
+              {shortKey ? (
+                <T
+                  size={font.caption}
+                  weight="500"
+                  tone={status?.kind === 'input' ? 'warn' : status?.kind === 'failed' ? 'bad' : 'soft'}
+                >
+                  {strings[shortKey]}
+                </T>
+              ) : null}
               <T size={font.caption} tone="muted">
                 {ago(chat.lastActiveAt)}
               </T>

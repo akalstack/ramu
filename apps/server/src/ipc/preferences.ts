@@ -143,6 +143,7 @@ export const appPreferences = z.object({
   fontSmoothing: z.boolean().default(true),
   reduceMotion: z.boolean().default(false),
   recentChatMode: z.boolean().default(false),
+  defaultMarkdownView: z.enum(['source', 'edit', 'preview']).default(DEFAULT_APP_PREFERENCES.defaultMarkdownView),
   editorFontSize: z.number().int().min(10).max(22),
   terminalFontSize: z.number().int().min(8).max(22),
   previewTabs: z.boolean(),

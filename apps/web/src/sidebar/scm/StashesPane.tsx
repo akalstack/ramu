@@ -81,8 +81,9 @@ export function StashesPane({
           </p>
         )}
         <Button
-          variant="secondary"
-          className="bg-fill hover:bg-fill-hover git-stash-new"
+          variant="ghost"
+          size="sm"
+          className="git-stash-new w-full justify-start"
           disabled={busy || !canStash}
           title={canStash ? undefined : t('Nothing to stash')}
           onClick={onStash}

@@ -6,6 +6,7 @@ import type {
   AppPreferences,
   ProviderCatalog,
 } from '@ramu/shared/types'
+import { providerAccountOrder } from '@ramu/shared/providers/providers'
 import { effectiveAutoResume, type LimitRetryResult } from '@ramu/shared/chat/providerWait'
 import { goalContinues, isLimitHold, isUserPaused } from '@ramu/shared/chat/goalHold'
 import { resolveStep, isOver, peakFor } from '@ramu/shared/providers/routing'
@@ -231,26 +232,40 @@ export class ProviderWaits {
   private candidates(
     session: AgentSessionInfo,
     catalogs: ProviderCatalog[],
-  ): Pick<AgentSettings, 'provider' | 'model'>[] {
-    return [
+  ): Pick<AgentSettings, 'provider' | 'model' | 'accountId'>[] {
+    const prefs = this.host.preferences()
+    const steps = [
       session.settings,
-      ...(session.settings.autoFallback ? this.host.policyOf(session, catalogs, this.host.preferences()).order : []),
+      ...(session.settings.autoFallback ? this.host.policyOf(session, catalogs, prefs).order : []),
     ]
+    return steps.flatMap((step) => {
+      const model = resolveStep({ ...step, id: 'retry', effort: null }, catalogs)?.model ?? step.model
+      const own =
+        step.provider === session.provider
+          ? (session.settings.accountId ?? 'default')
+          : (providerAccountOrder(prefs?.providerBinaries, step.provider)[0] ?? 'default')
+      const accounts = session.settings.autoFallback
+        ? [...new Set([own, ...providerAccountOrder(prefs?.providerBinaries, step.provider)])]
+        : [own]
+      return accounts.map((accountId) => ({ provider: step.provider, model, accountId }))
+    })
   }
 
-  /** Whether, since the wait began, a reading shows room on some candidate (a reset passed or a fresh reading is under the limit). */
+  /** Whether a candidate login gained room since the wait began. */
   private roomSince(session: AgentSessionInfo, catalogs: ProviderCatalog[], wait: ProviderWaitEvent): boolean {
-    const readings = this.host.routing(session.settings)?.usage ?? []
-    return this.candidates(session, catalogs).some(
-      (step) =>
-        resolveStep({ ...(step as { provider: AgentProvider; model: string }), id: 'retry', effort: null }, catalogs) &&
+    const all = this.host.routing(session.settings)?.all ?? []
+    return this.candidates(session, catalogs).some((step) => {
+      const readings = all.filter((reading) => (reading.accountId ?? 'default') === step.accountId)
+      return (
+        !!resolveStep({ ...step, id: 'retry', effort: null }, catalogs) &&
         readings.some(
           (r) =>
             r.provider === step.provider &&
             (r.updatedAt > wait.updatedAt || (!!r.resetsAt && r.resetsAt > wait.updatedAt && r.resetsAt <= Date.now())),
         ) &&
-        !isOver(peakFor(readings, step.provider, step.model), null),
-    )
+        !isOver(peakFor(readings, step.provider, step.model), null)
+      )
+    })
   }
 
   /** What the timer does for one thread: retry now, drop it, or look again after a delay. */
@@ -336,7 +351,7 @@ export class ProviderWaits {
     const catalogs = await this.host.catalog()
     if (this.host.shutdown() || this.providerWait(id)?.updatedAt !== wait.updatedAt) return still(this.providerWait(id))
     const live = this.host.get(id)
-    const all = this.host.routing(live.settings)?.usage ?? []
+    const all = this.host.routing(live.settings)?.all ?? []
     const real = all.filter((reading) => reading.source !== 'notice')
     const roomOrBlind = this.candidates(live, catalogs).some((step) => {
       if (
@@ -344,8 +359,9 @@ export class ProviderWaits {
       )
         return false
       // No reading of its own: the only way to learn is to try.
-      if (!real.some((reading) => reading.provider === step.provider)) return true
-      return !isOver(peakFor(real, step.provider, step.model), null)
+      const own = real.filter((reading) => (reading.accountId ?? 'default') === step.accountId)
+      if (!own.some((reading) => reading.provider === step.provider)) return true
+      return !isOver(peakFor(own, step.provider, step.model), null)
     })
     if (roomOrBlind) {
       const resumed = await this.resume(id, true)
@@ -355,7 +371,14 @@ export class ProviderWaits {
     // Still limited: keep the wait with the latest reset the readings give, and keep the timer going.
     const now = Date.now()
     const resets = this.candidates(live, catalogs)
-      .map((step) => peakFor(all, step.provider, step.model, now))
+      .map((step) =>
+        peakFor(
+          all.filter((reading) => (reading.accountId ?? 'default') === step.accountId),
+          step.provider,
+          step.model,
+          now,
+        ),
+      )
       .filter((reading) => isOver(reading, null) && reading?.resetsAt && reading.resetsAt > now)
       .map((reading) => reading!.resetsAt!)
     const retryAt = resets.length ? Math.min(...resets) + 1000 : wait.retryAt!

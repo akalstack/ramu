@@ -177,3 +177,42 @@ test('a provider may reuse an approval id after its previous request was resolve
   assert.equal(rows.at(-1).decision, undefined)
   assert.equal(rows.filter((row) => row.kind === 'permission').length, 1)
 })
+
+test('mobile groups consecutive tools inside live turns and finished work, preserving each result', () => {
+  const events = [
+    { kind: 'user', text: 'check', at: 1000 },
+    ...tool('first', 2000),
+    ...tool('second', 3000),
+    { kind: 'text', text: 'Summary', at: 4000 },
+  ]
+  const live = foldTurns(transcript(events), true, false)
+  const group = live.find((row) => row.kind === 'tools')
+  assert.deepEqual(
+    group.tools.map((entry) => [entry.id, entry.status, entry.detail]),
+    [
+      ['first', 'completed', 'ok'],
+      ['second', 'completed', 'ok'],
+    ],
+  )
+  const finished = foldTurns(
+    transcript([...events, { kind: 'result', text: '', isError: false, at: 5000 }]),
+    false,
+    false,
+  )
+  assert.equal(finished.find((row) => row.kind === 'summary').items[0].kind, 'tools')
+  assert.equal(finished.at(-1).text, 'Summary')
+})
+
+test('mobile preserves plan states and keeps unfinished steps visible after the turn', () => {
+  const entries = [
+    { content: 'Inspect', status: 'completed' },
+    { content: 'Fix', status: 'in_progress' },
+    { content: 'Verify', status: 'pending' },
+  ]
+  const items = transcript([
+    { kind: 'plan', entries },
+    { kind: 'result', text: '', isError: false },
+  ])
+  assert.deepEqual(items[0].entries, entries)
+  assert.equal(foldTurns(items, false, false)[0].kind, 'plan')
+})

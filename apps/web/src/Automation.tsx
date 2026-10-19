@@ -1,3 +1,4 @@
+import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { useSettingsEvents, useSettingsInvoke } from './settings/SettingsScope'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { errorText } from './lib/errors'
@@ -129,11 +130,7 @@ export function SchedulesPage({
               {t('Agents run in the background, even when Ramu is closed.')}
             </p>
           </div>
-          <Button
-            variant="default"
-            className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
-            onClick={() => setEditing('new')}
-          >
+          <Button variant="default" className={PRIMARY_ACTION_CLASS} onClick={() => setEditing('new')}>
             <Plus size={14} />
             {t('New schedule')}
           </Button>
@@ -624,7 +621,7 @@ function ScheduleEditor({
           <Button
             variant="default"
             type="button"
-            className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
+            className={PRIMARY_ACTION_CLASS}
             disabled={!canSaveSchedule({ busy, previewLoading, preview, name: input.name, prompt: input.prompt })}
             onClick={() => void save()}
           >

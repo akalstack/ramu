@@ -1,3 +1,4 @@
+import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { SearchMatchPreview } from './SearchMatchPreview'
 import { Spinner } from '@/components/ui/spinner'
 import { useQuery } from '@tanstack/react-query'
@@ -519,7 +520,7 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
             />
             <Button
               variant="default"
-              className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
+              className={PRIMARY_ACTION_CLASS}
               disabled={!canReplace}
               onClick={() => void applyReplace()}
             >

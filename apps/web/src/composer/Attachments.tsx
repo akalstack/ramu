@@ -434,17 +434,18 @@ function AttachmentItem({
     <AttachmentCard
       size={size === 'small' ? 'xs' : 'default'}
       orientation={tile ? 'vertical' : 'horizontal'}
-      className={tile ? 'w-24 p-1.5 has-data-[slot=attachment-content]:w-30' : 'max-w-60'}
+      className={tile ? 'w-24 gap-0 overflow-hidden has-data-[slot=attachment-content]:w-30' : 'max-w-60 flex-nowrap'}
+      style={tile ? { padding: 0 } : undefined}
       onContextMenu={menu}
       onKeyDown={(event) => {
         if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) menu(event)
       }}
     >
-      <AttachmentMedia variant={image ? 'image' : 'icon'} className={tile ? 'rounded-md' : undefined}>
+      <AttachmentMedia variant={image ? 'image' : 'icon'} className={tile ? 'rounded-[inherit]' : undefined}>
         {image && thumb ? <img src={thumb} alt="" /> : <File />}
       </AttachmentMedia>
       {(!image || size === 'small' || names) && (
-        <AttachmentContent>
+        <AttachmentContent className={tile ? 'px-2 py-1.5' : undefined}>
           <AttachmentTitle>{file.name}</AttachmentTitle>
           {size === 'normal' && <AttachmentDescription>{kb(file)}</AttachmentDescription>}
         </AttachmentContent>
@@ -457,12 +458,13 @@ function AttachmentItem({
         onClick={(event) => onPreview(event.currentTarget)}
       />
       {onRemove && (
-        <AttachmentActions>
+        <AttachmentActions style={tile ? { top: 4, right: 4 } : undefined}>
           <AttachmentAction
             variant="secondary"
+            size="icon-xs"
             aria-label={t('Remove attachment {0}', { '0': file.name })}
             title={t('Remove')}
-            className="opacity-0 transition-opacity group-focus-within/attachment:opacity-100 group-hover/attachment:opacity-100"
+            className="rounded-full border border-(--line-strong) p-0 opacity-0 transition-opacity group-focus-within/attachment:opacity-100 group-hover/attachment:opacity-100"
             onClick={(event) => {
               event.stopPropagation()
               onRemove()

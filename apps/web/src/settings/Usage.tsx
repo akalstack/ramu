@@ -318,7 +318,7 @@ function UsageBar({ reading, tone, thin }: { reading: UsageReading; tone: UsageT
 
 const VISIBLE_ACCOUNTS = 2
 
-/** Each other login on one line, at its fullest window, since that is what decides fallback. Beyond a couple, the rest fold away unless they are at their limit. */
+/** Show every window: room in a 5-hour window does not imply room in the weekly allowance. */
 function OtherAccounts({ provider, others }: { provider: AgentProvider; others: AccountRows }) {
   const [expanded, setExpanded] = useState(false)
   const rows = others.map((account) => ({ ...account, peak: peakUsage(account.readings, provider) }))
@@ -334,29 +334,27 @@ function OtherAccounts({ provider, others }: { provider: AgentProvider; others: 
       <span className="text-caption text-muted-foreground">
         {t('Other accounts, used when this one is at its limit')}
       </span>
-      {shown.map(({ id, name, peak }) => {
-        const tone = peak ? usageTone(peak) : 'ok',
-          known = !!peak && usagePercent(peak) !== null
-        return (
-          <div
-            key={id}
-            className="grid grid-cols-[minmax(0,5.5rem)_1fr_auto] items-center gap-x-2 text-caption"
-            title={peak ? [windowLabel(peak), resetText(peak.resetsAt)].filter(Boolean).join(' · ') : undefined}
-          >
-            <span className="truncate text-muted-foreground">{name}</span>
-            {known ? <UsageBar reading={peak!} tone={tone} thin /> : <span />}
-            <span className={cn('text-right tabular-nums', toneText[tone])}>
-              {!peak
-                ? t('No data yet')
-                : peak.status === 'limited'
-                  ? t('Limit reached')
-                  : known
-                    ? `${usagePercent(peak)}% ${windowLabel(peak, true)}`
-                    : t('Not reported')}
-            </span>
-          </div>
-        )
-      })}
+      {shown.map(({ id, name, readings }) => (
+        <div key={id} className="flex min-w-0 flex-col gap-1.5">
+          <span className="truncate text-caption text-muted-foreground" title={name}>
+            {name}
+          </span>
+          {!readings.length && <span className="text-caption text-muted-foreground">{t('No data yet')}</span>}
+          {readings.map((reading) => (
+            <div
+              key={`${reading.window}:${reading.scope ?? ''}`}
+              className="flex flex-col gap-1"
+              title={[usageHint(reading), resetText(reading.resetsAt)].filter(Boolean).join(' · ')}
+            >
+              <div className="flex justify-between gap-2 text-caption">
+                <span className="text-muted-foreground">{windowLabel(reading)}</span>
+                <span className={cn('tabular-nums', toneText[usageTone(reading)])}>{usageStatusText(reading)}</span>
+              </div>
+              {usagePercent(reading) !== null && <UsageBar reading={reading} tone={usageTone(reading)} thin />}
+            </div>
+          ))}
+        </div>
+      ))}
       {(hidden > 0 || expanded) && rows.length > VISIBLE_ACCOUNTS && (
         <button
           type="button"

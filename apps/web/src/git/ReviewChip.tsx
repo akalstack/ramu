@@ -65,6 +65,7 @@ export function CommentsChip({ groups, onRemove }: { groups: PendingComments[]; 
           </span>
           <Button
             variant="secondary"
+            size="icon-xs"
             type="button"
             className="bg-fill hover:bg-fill-hover comments-chip-x [&:focus-visible]:opacity-100 [&:hover]:[background:linear-gradient(var(--hover),_var(--hover)),_linear-gradient(var(--pressed),_var(--pressed)),_var(--canvas)] absolute top-[50%] [transform:translateY(-50%)] grid place-items-center p-0 [border:0] rounded-full opacity-0 cursor-pointer [transition:opacity_0.12s_var(--ease)] w-[22px] h-[22px] right-[5px] [box-shadow:inset_0_0_0_1px_var(--line-strong)] text-foreground [background:linear-gradient(var(--pressed),_var(--pressed)),_var(--canvas)]"
             aria-label={t('Remove comments from this message')}

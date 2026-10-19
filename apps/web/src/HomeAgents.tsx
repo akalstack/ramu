@@ -3,6 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { DateTime } from 'luxon'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
+import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
+import { threadStatus } from '@ramu/shared/chat/threadStatus'
+import { ThreadHoverCard } from './sidebar/projects/ThreadHoverCard'
 import { Check, RotateCcw, Square } from 'lucide-react'
 import { FadeText } from './FadeText'
 import { StateDot } from './sidebar/projects/TaskStateIcon'
@@ -22,6 +25,7 @@ import { notifyError } from './chat/Notifications'
 import { errorText } from './lib/errors'
 import { ProviderWaitIcon } from './models/ProviderWait'
 import { timeAgo } from './Menu'
+import { goalActive, groupOf, type AgentGroup } from './agentGroups'
 
 function PendingInput({ sessionId }: { sessionId: string }) {
   const { events } = useAgentStream(sessionId)
@@ -74,17 +78,6 @@ function PendingInput({ sessionId }: { sessionId: string }) {
   )
 }
 
-export type AgentGroup = 'Waiting for your input' | 'Running' | 'Limit reached' | 'Done'
-
-const groupOf = (session: AgentSessionInfo): AgentGroup =>
-  session.state === 'needs-input' || session.pendingInput
-    ? 'Waiting for your input'
-    : session.waitingUntil
-      ? 'Limit reached'
-      : ['running', 'starting'].includes(session.state)
-        ? 'Running'
-        : 'Done'
-
 /** Every live thread and helper (archived threads excluded), grouped by what it needs from you. Shared by Home and Inbox. */
 export function useAgentOverview() {
   const ws = useWorkspace()
@@ -113,9 +106,10 @@ export function useAgentOverview() {
     }
     const lastActive = (session: AgentSessionInfo) =>
       ws.tasks.find((task) => task.id === session.taskId)?.lastActiveAt ?? 0
-    for (const session of sessions.data ?? [])
-      if (ws.tasks.some((task) => task.id === session.taskId && task.status !== 'archived'))
-        out[groupOf(session)].push(session)
+    for (const session of sessions.data ?? []) {
+      const task = ws.tasks.find((entry) => entry.id === session.taskId)
+      if (task && task.status !== 'archived') out[groupOf(session, task)].push(session)
+    }
     for (const list of Object.values(out)) list.sort((a, b) => lastActive(b) - lastActive(a))
     return out
   }, [sessions.data, ws.tasks])
@@ -128,16 +122,19 @@ function AgentState({
   group,
   at,
   unread,
+  goal,
 }: {
   session: AgentSessionInfo
   group: AgentGroup
   at?: number
   unread?: boolean
+  /** The thread's goal is what keeps it running. */
+  goal?: boolean
 }) {
   if (group === 'Limit reached' && session.waitingUntil) return <ProviderWaitIcon retryAt={session.waitingUntil} />
   if (group === 'Waiting for your input')
     return <StateDot kind="dot warn text-warn" label={t('Waiting for your input')} />
-  if (group === 'Running') return <StateDot kind="spinner" label={t('Agent working')} />
+  if (group === 'Running') return <StateDot kind="spinner" label={t(goal ? 'Working toward goal' : 'Agent working')} />
   if (session.state === 'failed') return <StateDot kind="dot bad" label={t('Agent failed')} />
   return (
     <>
@@ -175,7 +172,7 @@ export function AgentRow({
 }) {
   useLanguage()
   const ws = useWorkspace()
-  const { invoke } = useHost()
+  const { invoke, status: hostStatus } = useHost()
   const task = ws.tasks.find((task) => task.id === session.taskId)
   const project = ws.projects.find((project) => project.id === task?.projectId)
   const stop = () =>
@@ -191,74 +188,99 @@ export function AgentRow({
   const open = () => openAgent(ws, session)
   return (
     <article className="agent-row">
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={title}
-        onClick={open}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') open()
-        }}
-        className={`[&:hover_.row-actions]:flex [&:focus-within_.row-actions]:flex [&:hover_.agent-time]:hidden [&:focus-within_.agent-time]:hidden flex min-h-9 cursor-default items-center gap-2 rounded-(--radius-s) px-2.5 text-body leading-5 text-soft [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] hover:bg-accent hover:text-foreground`}
-      >
-        <FadeText className="min-w-0 flex-1 overflow-hidden text-left whitespace-nowrap" text={title} />
-        {helper && (
-          <span className="flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
-            {t('Sub-agent')}
+      <HoverCard open={helper || !task ? false : undefined}>
+        <HoverCardTrigger
+          render={<div />}
+          delay={400}
+          closeDelay={120}
+          role="button"
+          tabIndex={0}
+          aria-label={title}
+          onClick={open}
+          onKeyDown={(e) => {
+            if (e.target === e.currentTarget && e.key === 'Enter') open()
+          }}
+          className={`[&:hover_.row-actions]:flex [&:focus-within_.row-actions]:flex [&:hover_.agent-time]:hidden [&:focus-within_.agent-time]:hidden flex min-h-9 cursor-default items-center gap-2 rounded-(--radius-s) px-2.5 text-body leading-5 text-soft [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] hover:bg-accent hover:text-foreground`}
+        >
+          <FadeText className="min-w-0 flex-1 overflow-hidden text-left whitespace-nowrap" text={title} />
+          {helper && (
+            <span className="flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
+              {t('Sub-agent')}
+            </span>
+          )}
+          {prefix && (
+            <span className="max-w-[25%] min-w-0 truncate text-caption text-muted-foreground" title={prefix}>
+              {prefix}
+            </span>
+          )}
+          <span className="hidden max-w-[40%] min-w-0 flex-none truncate text-caption text-muted-foreground @[480px]:inline">
+            {[
+              helpers > 0 && t(helpers === 1 ? '1 sub-agent' : '{0} sub-agents', { 0: helpers }),
+              session.settings.model || session.provider,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
+          <AgentState
+            session={session}
+            group={group}
+            at={task?.lastActiveAt}
+            unread={ws.unread.has(session.taskId)}
+            goal={goalActive(session, task)}
+          />
+          {group === 'Done' && !helper && (
+            <span className="row-actions hidden flex-none items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={ICON_BUTTON_CLASS}
+                aria-label={task?.doneAt ? t('Reopen thread') : t('Mark thread done')}
+                title={task?.doneAt ? t('Reopen') : t('Mark done')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void invoke('tasks.done', session.taskId, !task?.doneAt)
+                    .then(() => ws.refresh())
+                    .catch((error) => notifyError(errorText(error)))
+                }}
+              >
+                {task?.doneAt ? <RotateCcw size={14} /> : <Check size={14} />}
+              </Button>
+            </span>
+          )}
+          {group !== 'Done' && (
+            <span className="row-actions hidden flex-none items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={ICON_BUTTON_CLASS}
+                aria-label={t('Stop')}
+                title={t('Stop')}
+                disabled={!!session.nativeTask && !session.nativeTask.canStop}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  stop()
+                }}
+              >
+                <Square size={11} />
+              </Button>
+            </span>
+          )}
+        </HoverCardTrigger>
+        {task && !helper && (
+          <ThreadHoverCard
+            task={task}
+            status={threadStatus(task, ws.unread.has(task.id), task.goalState)}
+            workspaceName={
+              task.workspaceId ? ws.workspaces.find((workspace) => workspace.id === task.workspaceId)?.name : undefined
+            }
+            sharedWorkspace={
+              !!task.workspaceId &&
+              ws.tasks.some((other) => other.id !== task.id && other.workspaceId === task.workspaceId)
+            }
+            offline={hostStatus !== 'connected'}
+          />
         )}
-        {prefix && (
-          <span className="max-w-[25%] min-w-0 truncate text-caption text-muted-foreground" title={prefix}>
-            {prefix}
-          </span>
-        )}
-        <span className="hidden max-w-[40%] min-w-0 flex-none truncate text-caption text-muted-foreground @[480px]:inline">
-          {[
-            helpers > 0 && t(helpers === 1 ? '1 sub-agent' : '{0} sub-agents', { 0: helpers }),
-            session.settings.model || session.provider,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </span>
-        <AgentState session={session} group={group} at={task?.lastActiveAt} unread={ws.unread.has(session.taskId)} />
-        {group === 'Done' && !helper && (
-          <span className="row-actions hidden flex-none items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={ICON_BUTTON_CLASS}
-              aria-label={task?.doneAt ? t('Reopen thread') : t('Mark thread done')}
-              title={task?.doneAt ? t('Reopen') : t('Mark done')}
-              onClick={(e) => {
-                e.stopPropagation()
-                void invoke('tasks.done', session.taskId, !task?.doneAt)
-                  .then(() => ws.refresh())
-                  .catch((error) => notifyError(errorText(error)))
-              }}
-            >
-              {task?.doneAt ? <RotateCcw size={14} /> : <Check size={14} />}
-            </Button>
-          </span>
-        )}
-        {group !== 'Done' && (
-          <span className="row-actions hidden flex-none items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={ICON_BUTTON_CLASS}
-              aria-label={t('Stop')}
-              title={t('Stop')}
-              disabled={!!session.nativeTask && !session.nativeTask.canStop}
-              onClick={(e) => {
-                e.stopPropagation()
-                stop()
-              }}
-            >
-              <Square size={11} />
-            </Button>
-          </span>
-        )}
-      </div>
+      </HoverCard>
       {group === 'Waiting for your input' && (
         <div className="px-2.5 pt-1 pb-3">
           <PendingInput sessionId={session.id} />

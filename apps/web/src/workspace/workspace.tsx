@@ -56,6 +56,7 @@ import { createUiPersistence } from './uiPersistence'
 import {
   EMPTY_TASK_UI,
   effectiveTaskUi,
+  effectiveBindings,
   focus,
   isPreviewable,
   isProjectCtx,
@@ -554,7 +555,8 @@ const HostWorkspace = memo(function HostWorkspace({
       }),
     )
     const off = runtime.on('agent:event', ({ event }) => {
-      if (event.kind !== 'state' && event.kind !== 'user' && event.kind !== 'provider-wait') return
+      if (event.kind !== 'state' && event.kind !== 'user' && event.kind !== 'provider-wait' && event.kind !== 'goal')
+        return
       runtime.deliver('tasks', () => {
         clearTimeout(timer)
         timer = setTimeout(() => {
@@ -645,6 +647,7 @@ const HostWorkspace = memo(function HostWorkspace({
       return task ? workspaceOfTask(task) : ctx
     }
     const effectiveUi = effectiveTaskUi(tasks, taskUi, workspaceOf)
+    const sharedBindings = effectiveBindings(tasks, bindings)
     const viewsOf = (taskId: string) => effectiveUi[taskId]?.views ?? []
     const closeViews = (taskId: string, viewIds: string[]) => {
       const requested = new Set(viewIds)
@@ -713,7 +716,7 @@ const HostWorkspace = memo(function HostWorkspace({
       ui,
       taskUi: effectiveUi,
       workspaceOf,
-      bindings,
+      bindings: sharedBindings,
       dirty,
       composing,
       unread,
@@ -1044,7 +1047,7 @@ const HostWorkspace = memo(function HostWorkspace({
           ),
         ),
       setDirty,
-      binding: (taskId, repoId) => bindings[taskId]?.find((b) => b.repoId === repoId),
+      binding: (taskId, repoId) => sharedBindings[taskId]?.find((b) => b.repoId === repoId),
       task: (taskId) => tasks.find((t) => t.id === taskId),
       projectOf(taskId) {
         if (isWorktreeCtx(taskId))

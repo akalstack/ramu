@@ -14,7 +14,7 @@ import type {
   AgentSessionState,
   ProviderCatalog,
 } from '@ramu/shared/types'
-import { subagentTarget, settingsKey, nextStep } from '@ramu/shared/providers/routing'
+import { subagentTarget, settingsKey, accountKey, nextStep } from '@ramu/shared/providers/routing'
 import { SUBAGENT_PREAMBLE, subagentNotePrompt, taskReportPrompt } from '@ramu/shared/chat/agentTasks'
 import { applyIsolation, collectPatch, createIsolation, removeIsolation } from '../workspace/isolation'
 import type { ChildRun, SubagentInput, SubagentResult } from './types'
@@ -42,7 +42,10 @@ export interface SubagentRunnerHost
     Pick<SessionRecorder, 'record'>,
     Pick<SessionRegistry, 'transitioning'>,
     Pick<UserRequests, 'childRequests'>,
-    Pick<FallbackRouter, 'attempted' | 'policyOf' | 'routing' | 'subagentSettings' | 'withStep'>,
+    Pick<
+      FallbackRouter,
+      'attempted' | 'policyOf' | 'routing' | 'subagentSettings' | 'withStep' | 'otherAccount' | 'freshAccountUsage'
+    >,
     Pick<ProviderWaits, 'autoResumeOf' | 'providerWait'>,
     Pick<SessionStore, 'createSession' | 'events' | 'get' | 'task'>,
     Pick<AgentTasks, 'updateTask'> {
@@ -495,14 +498,35 @@ export class SubagentRunner {
     this.continued.add(task.agentId)
     void (async () => {
       const catalogs = await this.host.catalog()
-      const routing = this.host.routing()
+      await this.host.freshAccountUsage(parent.provider)
+      const routing = this.host.routing(parent.settings)
       const policy = this.host.policyOf({ parentId: id }, catalogs, prefs)
-      const step = nextStep(policy.order, {
-        usage: routing?.usage ?? [],
-        catalogs,
-        switchAt: policy.switchAt,
-        attempted: new Set([settingsKey(parent.settings, catalogs)]),
-      })
+      const settings = { ...parent.settings, model: task.model ?? parent.settings.model }
+      const account = routing
+        ? this.host.otherAccount(
+            settings,
+            routing,
+            catalogs,
+            policy.switchAt,
+            new Set([accountKey(parent.provider, settings.accountId)]),
+          )
+        : null
+      const step = account
+        ? {
+            id: '',
+            provider: parent.provider,
+            model: settings.model,
+            effort: settings.effort,
+            serviceTier: settings.serviceTier,
+            accountId: account,
+          }
+        : nextStep(policy.order, {
+            usage: routing?.usage ?? [],
+            accounts: routing?.accounts,
+            catalogs,
+            switchAt: policy.switchAt,
+            attempted: new Set([settingsKey(parent.settings, catalogs)]),
+          })
       if (!step) return
       const lines = this.host
         .events(id)

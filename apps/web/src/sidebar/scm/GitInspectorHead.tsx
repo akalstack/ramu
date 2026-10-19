@@ -34,7 +34,13 @@ export function GitInspectorHead({
   const { preferences } = useAppSettings()
   return (
     <div className={GIT_INSPECTOR_HEAD}>
-      <Button variant="tree" className="git-inspector-heading" aria-expanded={open} onClick={onToggle}>
+      <Button
+        variant="tree"
+        size="sm"
+        className="git-inspector-heading w-auto flex-none px-1"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
         <Caret open={open} />
         Git
       </Button>

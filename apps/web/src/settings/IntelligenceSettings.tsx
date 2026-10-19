@@ -1,3 +1,4 @@
+import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { InstalledSkills } from './InstalledSkills'
 import { useSettingsInvoke } from './SettingsScope'
 import { useCallback, useEffect, useState } from 'react'
@@ -217,7 +218,7 @@ export function LearningSettings({ value, onChange }: Props) {
                     disabled={busy}
                     variant="default"
                     size="sm"
-                    className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover"
+                    className={PRIMARY_ACTION_CLASS}
                     onClick={() => void act(() => invoke('learning.apply', job.id))}
                   >
                     {t('Apply')}

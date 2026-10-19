@@ -113,3 +113,58 @@ test('loopback HTTP addresses do not require a warning or consent, private LAN H
   assert.equal(needsHttpConsent('http://192.168.1.10:7421'), true)
   assert.equal(needsHttpConsent('https://host.example'), false)
 })
+
+test('mobile question history merges independent replies and keeps original options and typed answers', () => {
+  const questions = [
+    {
+      id: 'target',
+      question: 'Where?',
+      options: [
+        { label: 'Story', description: 'Use a story' },
+        { label: 'Epic', description: 'Use an epic' },
+      ],
+    },
+    { id: 'details', question: 'Details?', options: [] },
+  ]
+  const events = [
+    { kind: 'question', requestId: 'q', questions, grouping: 'independent', responseMode: 'message' },
+    { kind: 'question-state', requestId: 'q', answers: { target: 'Story' } },
+    { kind: 'question-state', requestId: 'q', answers: { details: 'My own answer' } },
+    { kind: 'request-resolved', requestId: 'q', outcome: 'answered' },
+  ]
+  const question = transcript(events).find((item) => item.kind === 'question')
+  assert.deepEqual(question.answers, { target: 'Story', details: 'My own answer' })
+  assert.deepEqual(question.questions, questions)
+  assert.equal(question.outcome, 'answered')
+})
+
+test('mobile closed questions display a close reason without treating it as an answer', () => {
+  const question = transcript([
+    { kind: 'question', requestId: 'q', questions: [{ question: 'Where?', options: [] }] },
+    { kind: 'question-state', requestId: 'q', reason: 'Work no longer needs it.' },
+    { kind: 'request-resolved', requestId: 'q', outcome: 'obsolete' },
+  ])[0]
+  assert.deepEqual(question.answers, {})
+  assert.equal(question.reason, 'Work no longer needs it.')
+  assert.equal(question.outcome, 'obsolete')
+})
+
+test('mobile keeps a tool call input distinct from its output, including while output is pending', () => {
+  const call = {
+    kind: 'tool-use',
+    toolUseId: 'cmd',
+    name: 'Bash',
+    summary: 'test',
+    input: 'pnpm test',
+    toolKind: 'execute',
+  }
+  const pending = transcript([call])[0]
+  assert.equal(pending.input, 'pnpm test')
+  assert.equal(pending.detail, undefined)
+  const complete = transcript([
+    call,
+    { kind: 'tool-result', toolUseId: 'cmd', summary: 'Tests passed', isError: false },
+  ])[0]
+  assert.equal(complete.input, 'pnpm test')
+  assert.equal(complete.detail, 'Tests passed')
+})

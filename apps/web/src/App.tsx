@@ -39,7 +39,9 @@ import { copyText, invoke, ramu } from './ipc'
 import { useUnseenTerminalOutput } from './workspace/terminalActivity'
 import { Dropdown, useContextMenu } from './Menu'
 import { WorkspaceSyncDialog } from './WorkspaceSync'
-import type { GitBranchInfo, GitStatus } from '@ramu/shared/types'
+import { useQuery } from '@tanstack/react-query'
+import { repositoryQueryKey } from './git/repositoryQueryKey'
+import { queryInvokerFor } from './git/hostQuery'
 import { BranchPicker, SyncButton, useAutoFetch } from './git/GitControls'
 import { isGitBusy, useGitBusy, withGitBackground, withGitBusy } from './git/gitBusy'
 import { CommitBranchDialog } from './git/CommitBranchDialog'
@@ -823,7 +825,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
   useLanguage()
 
   const ws = useWorkspace()
-  const { invoke } = useHost()
+  const { id: host, invoke } = useHost()
   const { on } = useHostRuntime()
   const taskId = ws.ui.activeTaskId
   const state = taskId ? ws.taskUi[taskId] : undefined
@@ -837,10 +839,25 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
   const repoId = picked ?? view?.repoId ?? (taskId ? ws.bindings[taskId]?.[0]?.repoId : undefined)
   const candidate = taskId && repoId ? ws.binding(taskId, repoId) : undefined
   const binding = candidate?.folderOnly ? undefined : candidate
-  const [status, setStatus] = useState<GitStatus | null>(null)
-  const [branches, setBranches] = useState<GitBranchInfo[]>([])
+  const call = queryInvokerFor(host)
+  const statusQuery = useQuery({
+    queryKey: repositoryQueryKey(host, 'git.status', binding),
+    queryFn: () => call('git.status', taskId!, binding!.repoId),
+    enabled: !!taskId && binding?.setupState === 'ready',
+  })
+  const branchesQuery = useQuery({
+    queryKey: repositoryQueryKey(host, 'git.branches', binding),
+    queryFn: () => call('git.branches', taskId!, binding!.repoId),
+    enabled: !!taskId && binding?.setupState === 'ready',
+  })
+  const { refetch: refreshStatus } = statusQuery
+  const { refetch: refreshBranches } = branchesQuery
+  const checkoutCwd = binding?.cwd
+  const checkoutRepo = binding?.repoId
+  const checkoutReady = binding?.setupState === 'ready'
+  const status = binding?.setupState === 'ready' ? (statusQuery.data ?? null) : null
+  const branches = binding?.setupState === 'ready' ? (branchesQuery.data ?? []) : []
   const busy = useGitBusy(taskId, binding?.repoId)
-  const [revision, setRevision] = useState(0)
   const { preferences } = useAppSettings()
   const [syncAll, setSyncAll] = useState(false)
   const autoPullContext = useRef({ taskId, repoId, allowed: false })
@@ -871,39 +888,25 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
   useAutoFetch(binding?.setupState === 'ready' ? autoFetch : null)
 
   useEffect(() => {
-    setStatus(null)
-    setBranches([])
-    if (!taskId || !binding || binding.setupState !== 'ready') return
-    let disposed = false
+    if (!taskId || !checkoutRepo || !checkoutReady) return
     let timer: ReturnType<typeof setTimeout> | undefined
-    let request = 0
-    const load = async () => {
-      const current = ++request
-      const results = await Promise.allSettled([
-        invoke('git.status', taskId, binding.repoId),
-        invoke('git.branches', taskId, binding.repoId),
-      ])
-      if (disposed || current !== request) return
-      if (results[0].status === 'fulfilled') setStatus(results[0].value)
-      if (results[1].status === 'fulfilled') setBranches(results[1].value)
-    }
     const refresh = () => {
       clearTimeout(timer)
-      timer = setTimeout(() => void load(), 150)
+      timer = setTimeout(() => {
+        void refreshStatus({ cancelRefetch: false })
+        void refreshBranches({ cancelRefetch: false })
+      }, 150)
     }
-    void load()
-    // Like VS Code, skip file-change refreshes while a git operation runs; 'ramu:git-updated' refreshes once it finishes.
     const off = on('fs:changed', ({ cwd }) => {
-      if (cwd === binding.cwd && !isGitBusy(taskId, binding.repoId)) refresh()
+      if (cwd === checkoutCwd && !isGitBusy(taskId, checkoutRepo)) refresh()
     })
     window.addEventListener('ramu:git-updated', refresh)
     return () => {
-      disposed = true
       off()
       clearTimeout(timer)
       window.removeEventListener('ramu:git-updated', refresh)
     }
-  }, [taskId, binding?.repoId, binding?.cwd, binding?.setupState, revision, invoke, on])
+  }, [taskId, checkoutRepo, checkoutCwd, checkoutReady, on, refreshStatus, refreshBranches])
 
   if (!binding || !taskId)
     return (
@@ -921,7 +924,6 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
     } catch (e) {
       notifyError(errorText(e), `Git · ${binding.repoName}`)
     } finally {
-      setRevision((value) => value + 1)
       window.dispatchEvent(new Event('ramu:git-updated'))
     }
   }

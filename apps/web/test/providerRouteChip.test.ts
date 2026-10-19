@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, expect, it, vi } from 'vitest'
+import type { ProviderConfiguration } from '@ramu/shared/providers/providers'
 import {
   DEFAULT_APP_PREFERENCES,
   type AgentSettings,
@@ -11,6 +12,8 @@ import {
 const state = vi.hoisted(() => ({
   menus: [] as { label: string; className: string; items: any[] }[],
   usage: [] as UsageReading[],
+  accountUsage: [] as UsageReading[],
+  providerBinaries: {} as ProviderConfiguration,
   calls: [] as unknown[][],
 }))
 const catalogs: ProviderCatalog[] = [
@@ -48,12 +51,15 @@ vi.mock('../src/Menu', () => ({
 }))
 vi.mock('../src/settings/Usage', () => ({
   useUsage: () => state.usage,
+  useAccountUsage: () => state.accountUsage,
   resetText: () => null,
   usageTone: () => 'bad',
   windowLabel: () => '5h',
 }))
 vi.mock('../src/settings/AppSettings', () => ({
-  useAppSettings: () => ({ preferences: { ...DEFAULT_APP_PREFERENCES, showUsageLimits: true } }),
+  useAppSettings: () => ({
+    preferences: { ...DEFAULT_APP_PREFERENCES, showUsageLimits: true, providerBinaries: state.providerBinaries },
+  }),
 }))
 vi.mock('../src/models/ModelSets', () => ({
   useModelSets: () => ({ catalogs }),
@@ -91,11 +97,11 @@ const settings: AgentSettings = {
   autoFallback: true,
 }
 const control = autoResumeControl({}, undefined, () => {})
-const render = (props: { limited?: boolean; withControl?: boolean }) =>
+const render = (props: { limited?: boolean; withControl?: boolean; accountId?: string }) =>
   renderToStaticMarkup(
     createElement(ProviderRouteChip, {
       sessionId: 's',
-      settings: { ...settings },
+      settings: { ...settings, accountId: props.accountId },
       limited: props.limited,
       autoResume: props.withControl === false ? undefined : control,
     }),
@@ -104,6 +110,8 @@ const labels = (items: any[]) => items.map((item) => item.label ?? item.heading 
 beforeEach(() => {
   state.menus = []
   state.usage = []
+  state.accountUsage = []
+  state.providerBinaries = {}
   state.calls = []
 })
 
@@ -172,4 +180,33 @@ it('choosing Continue with switches the thread to that provider and then tries a
     'agent.configure',
     'agent.retryLimitNow',
   ])
+})
+
+it('previews a switch to another Claude account before Codex and reads the thread account independently', () => {
+  state.providerBinaries = { 'claude-code': { binary: '', accounts: [{ id: 'second', name: 'Second' }] } }
+  state.accountUsage = [
+    { provider: 'claude-code', window: 'five_hour', usedPercent: 100, status: 'limited', updatedAt: Date.now() },
+    {
+      provider: 'claude-code',
+      accountId: 'second',
+      window: 'five_hour',
+      usedPercent: 3,
+      status: 'ok',
+      updatedAt: Date.now(),
+    },
+    {
+      provider: 'claude-code',
+      accountId: 'second',
+      window: 'weekly',
+      usedPercent: 98,
+      status: 'warning',
+      updatedAt: Date.now(),
+    },
+  ]
+  render({})
+  expect(state.menus[0]!.label).toContain('Sending with Claude:')
+  state.menus = []
+  render({ accountId: 'second' })
+  expect(state.menus[0]!.label).not.toContain('Sending with')
+  expect(state.menus[0]!.label).not.toContain('limited')
 })

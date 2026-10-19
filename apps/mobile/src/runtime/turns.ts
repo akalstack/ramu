@@ -12,6 +12,7 @@ export function formatDuration(ms: number): string {
 const settled = (item: TranscriptItem) =>
   item.kind === 'text' ||
   (item.kind === 'tool' && item.status === 'completed') ||
+  (item.kind === 'plan' && item.entries.every((entry) => entry.status === 'completed')) ||
   (item.kind === 'permission' && item.decision === 'allow') ||
   (item.kind === 'elicitation' && item.outcome !== undefined) ||
   (item.kind === 'question' && item.answers !== undefined)
@@ -27,45 +28,64 @@ export function foldTurns(items: TranscriptItem[], live: boolean, waiting: boole
     if (item.kind === 'user' || !turns.length) turns.push([])
     turns.at(-1)!.push(item)
   }
-  return turns.flatMap((turn, index) => {
-    const user = turn[0]?.kind === 'user' ? turn[0] : undefined
-    const notes = turn.filter((item) => item.kind === 'note')
-    const body = turn.filter((item) => item !== user && item.kind !== 'end' && item.kind !== 'note')
-    const ends = turn.filter((item): item is Extract<TranscriptItem, { kind: 'end' }> => item.kind === 'end')
-    const result = ends.find((item) => item.ended)
-    const isLast = index === turns.length - 1
-    const finished = Boolean(result) || !isLast || (!live && !waiting)
-    const startedAt = user?.at ?? body.find((item) => item.at !== undefined)?.at
-    if (!finished)
+  return groupTools(
+    turns.flatMap((turn, index) => {
+      const user = turn[0]?.kind === 'user' ? turn[0] : undefined
+      const notes = turn.filter((item) => item.kind === 'note')
+      const body = turn.filter((item) => item !== user && item.kind !== 'end' && item.kind !== 'note')
+      const ends = turn.filter((item): item is Extract<TranscriptItem, { kind: 'end' }> => item.kind === 'end')
+      const result = ends.find((item) => item.ended)
+      const isLast = index === turns.length - 1
+      const finished = Boolean(result) || !isLast || (!live && !waiting)
+      const startedAt = user?.at ?? body.find((item) => item.at !== undefined)?.at
+      if (!finished)
+        return [
+          ...(user ? [user] : []),
+          { kind: 'working' as const, id: `working-${user?.id ?? index}`, since: startedAt },
+          ...body,
+          ...notes,
+        ]
+      let start = body.length
+      while (start > 0 && body[start - 1]!.kind === 'text') start--
+      const work = body.slice(0, start)
+      const folded = work.filter(settled)
+      const kept = work.filter((item) => !settled(item))
+      const endedAt = (result ?? ends[0])?.at ?? body.findLast((item) => item.at !== undefined)?.at
+      const done = Boolean(result) && !result!.interrupted
+      const duration = startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : undefined
+      const label = done
+        ? duration !== undefined
+          ? `Worked for ${formatDuration(duration)}`
+          : 'Worked'
+        : duration !== undefined
+          ? `Stopped after ${formatDuration(duration)}`
+          : 'Stopped'
       return [
         ...(user ? [user] : []),
-        { kind: 'working' as const, id: `working-${user?.id ?? index}`, since: startedAt },
-        ...body,
+        ...(folded.length
+          ? [{ kind: 'summary' as const, id: `summary-${user?.id ?? index}`, label, items: folded }]
+          : []),
+        ...kept,
+        ...body.slice(start),
         ...notes,
       ]
-    let start = body.length
-    while (start > 0 && body[start - 1]!.kind === 'text') start--
-    const work = body.slice(0, start)
-    const folded = work.filter(settled)
-    const kept = work.filter((item) => !settled(item))
-    const endedAt = (result ?? ends[0])?.at ?? body.findLast((item) => item.at !== undefined)?.at
-    const done = Boolean(result) && !result!.interrupted
-    const duration = startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : undefined
-    const label = done
-      ? duration !== undefined
-        ? `Worked for ${formatDuration(duration)}`
-        : 'Worked'
-      : duration !== undefined
-        ? `Stopped after ${formatDuration(duration)}`
-        : 'Stopped'
-    return [
-      ...(user ? [user] : []),
-      ...(folded.length
-        ? [{ kind: 'summary' as const, id: `summary-${user?.id ?? index}`, label, items: folded }]
-        : []),
-      ...kept,
-      ...body.slice(start),
-      ...notes,
-    ]
-  })
+    }),
+  )
+}
+
+/** Consecutive tools share one disclosure, keeping status and every call's details. */
+export function groupTools(items: TranscriptItem[]): TranscriptItem[] {
+  const grouped: TranscriptItem[] = []
+  for (const item of items) {
+    if (item.kind === 'summary') {
+      grouped.push({ ...item, items: groupTools(item.items) })
+      continue
+    }
+    const last = grouped.at(-1)
+    if (item.kind === 'tool' && last?.kind === 'tool') {
+      grouped[grouped.length - 1] = { kind: 'tools', id: last.id, at: last.at, tools: [last, item] }
+    } else if (item.kind === 'tool' && last?.kind === 'tools') last.tools.push(item)
+    else grouped.push(item)
+  }
+  return grouped
 }

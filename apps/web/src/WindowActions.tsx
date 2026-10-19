@@ -1,3 +1,4 @@
+import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { t, useLanguage } from './i18n'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Kbd } from '@/components/ui/kbd'
@@ -376,7 +377,7 @@ function ActionDialog({
             <Button
               variant="default"
               type="submit"
-              className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
+              className={PRIMARY_ACTION_CLASS}
               disabled={busy || !name.trim() || !command.trim()}
             >
               {t('Save')}
@@ -632,12 +633,7 @@ function ManageDialog({
             </Button>
           )}
           <span className="grow flex-1 min-w-0" />
-          <Button
-            variant="default"
-            type="button"
-            className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover"
-            onClick={onClose}
-          >
+          <Button variant="default" type="button" className={PRIMARY_ACTION_CLASS} onClick={onClose}>
             {t('Done')}
           </Button>
         </div>

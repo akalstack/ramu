@@ -2,7 +2,7 @@ import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
 import { ChatLink } from '../../../chat/ChatReferences'
 import { parseThreadReference, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
 import { useLanguage } from '../../../i18n'
-import { Children, memo, useEffect, useMemo, useRef, useState } from 'react'
+import { Children, memo, useEffect, useMemo, useRef } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { AgentEvent } from '@ramu/shared/types'
@@ -15,23 +15,20 @@ import { Message, MessageContent } from '@/components/ui/message'
 import { MessageActions } from './MessageActions'
 import { MSG_CLASS } from '../styles'
 
-// Streamed words fade in on the compositor: each is a CSS animation, so nothing runs in JavaScript per frame. Words that arrive
-// together are staggered with an animation-delay so they flow in rather than landing as one block; the cap keeps a big chunk prompt.
-const STAGGER_MS = 28
-const STAGGER_CAP_MS = 400
+// Only newly received words fade briefly. No stagger or typing queue: text is readable as soon as it arrives.
+const WORD_FADE_MS = 120
 // A message already this long when it first appears (a chat opened mid-stream) shows what it has and fades only what follows.
 const SETTLED_CHARS = 160
 
 /** Where the words of the message stand: `plan[i]` is word i's delay (ms), or -1 when it is shown without a fade. */
 interface WordPlan {
   plan: number[]
-  /** Index of the next word in this render, and of the first word that is new in it. */
+  /** Index of the next word in this render. */
   next: number
-  batch: number
   settle: boolean
 }
 
-/** Words that arrive while the agent is writing fade in, so the newest few read dimmer. A word's delay is decided once, so later renders never restart it. */
+/** Previously rendered words stay settled; only new words get the brief fade. */
 function fadeIn(children: React.ReactNode, words: WordPlan): React.ReactNode {
   return Children.map(children, (child) =>
     typeof child === 'string'
@@ -39,14 +36,15 @@ function fadeIn(children: React.ReactNode, words: WordPlan): React.ReactNode {
           if (part === '' || /^\s+$/.test(part)) return part
           const at = words.next++
           let delay = words.plan[at]
+          const existing = delay !== undefined
           if (delay === undefined) {
-            delay = words.settle ? -1 : Math.min((at - words.batch) * STAGGER_MS, STAGGER_CAP_MS)
+            delay = words.settle ? -1 : 0
             words.plan[at] = delay
           }
-          return delay < 0 ? (
+          return existing || delay < 0 ? (
             part
           ) : (
-            <span key={i} className="stream-word" style={{ animation: `stream-in 0.6s ease-out ${delay}ms both` }}>
+            <span key={i} className="stream-word" style={{ animation: `stream-in ${WORD_FADE_MS}ms ease-out both` }}>
               {part}
             </span>
           )
@@ -80,23 +78,12 @@ export const AssistantText = memo(function AssistantText({
   sessionId?: string
 }) {
   useLanguage()
-  const words = useRef<WordPlan>({ plan: [], next: 0, batch: 0, settle: e.text.length > SETTLED_CHARS })
+  const words = useRef<WordPlan>({ plan: [], next: 0, settle: e.text.length > SETTLED_CHARS })
   words.current.next = 0
-  words.current.batch = words.current.plan.length
   useEffect(() => {
     words.current.settle = false
   }, [])
-  // The last words keep fading for a moment after the reply ends, instead of snapping to full.
-  const [lingering, setLingering] = useState(false)
-  useEffect(() => {
-    if (generating) {
-      setLingering(true)
-      return
-    }
-    const timer = setTimeout(() => setLingering(false), 800)
-    return () => clearTimeout(timer)
-  }, [generating])
-  const fading = generating || lingering
+  const fading = generating
   // Stable component identities: a fresh `a` function every tick would remount every link (and replay its fade) on each typewriter step.
   const components = useMemo<Components>(
     () => ({

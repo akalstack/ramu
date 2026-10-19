@@ -10,7 +10,7 @@ import { providerName } from '../../chat/AgentControls'
 import { Menu } from '../../Menu'
 import { errorText } from '../../workspace/TaskPane'
 import { formatKeys } from '../../commands'
-import { ICON_BUTTON } from './classes'
+import { COMMIT_ACTION, ICON_BUTTON } from './classes'
 import { commitActionLabel } from './helpers'
 import type { CommitFn } from './useCommitFlow'
 
@@ -122,14 +122,11 @@ export function CommitBox({
         </Button>
       </div>
       {!syncOnly && (
-        <ButtonGroup
-          className="scm-commit-split [&_>_button.scm-commit]:flex-1 [&_>_button.scm-commit]:w-auto [&_>_button.scm-commit]:min-w-0 [&_>_button.scm-commit]:m-0 [&_>_button.scm-commit]:[border-radius:var(--radius-s)_0_0_var(--radius-s)] flex gap-0 mb-1.5"
-          aria-label={t('Commit')}
-        >
+        <ButtonGroup className="scm-commit-split w-full gap-0 mb-1.5" aria-label={t('Commit')}>
           <Button
             variant="default"
             size="sm"
-            className="scm-commit primary bg-primary! text-primary-foreground! border-transparent font-semibold hover:bg-primary-hover! disabled:opacity-50"
+            className={`${COMMIT_ACTION} scm-commit flex-1 min-w-0 rounded-r-none`}
             aria-label={commitLabel}
             disabled={!canRunCommit(commitAction)}
             title={
@@ -161,7 +158,7 @@ export function CommitBox({
             disabled={!canRunCommit(commitAction)}
             label={t('Commit options')}
             icon={<ChevronDown size={14} />}
-            className="scm-commit-menu bg-primary! text-primary-foreground! border-transparent border-l border-l-primary-foreground/25 hover:bg-primary-hover! aria-expanded:bg-primary-hover! disabled:opacity-50"
+            className={`${COMMIT_ACTION} scm-commit-menu relative w-(--action-size) flex-none px-0 rounded-l-none before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-2 before:w-px before:bg-primary-foreground/25`}
             align="end"
             items={[
               {
@@ -222,7 +219,7 @@ export function CommitBox({
           status={status}
           busy={busy}
           pullMode={preferences.pullMode}
-          className="scm-commit primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover mb-1.5"
+          className={`${COMMIT_ACTION} scm-commit w-full mb-1.5`}
           showLabel
           onSync={onSync}
           onPublishRepository={onPublishRepository}

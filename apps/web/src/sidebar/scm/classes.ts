@@ -1,11 +1,13 @@
+import { GHOST_ICON_BUTTON_CLASS, PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 // Tailwind class strings shared by several Source Control components.
 
 /** Compact ghost icon button used for row and header actions. */
-export const ICON_BUTTON =
-  'ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)'
+export const ICON_BUTTON = GHOST_ICON_BUTTON_CLASS
 
-export const PRIMARY_BUTTON =
-  'primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100'
+export const PRIMARY_BUTTON = PRIMARY_ACTION_CLASS
+
+/** Commit and sync share the primary action states; only their compact sidebar geometry differs. */
+export const COMMIT_ACTION = `${PRIMARY_ACTION_CLASS} h-(--action-size) min-h-(--action-size) rounded-(--radius-s) gap-1.5 px-2.5 text-[length:var(--font-control)]`
 
 export const CARET =
   "caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]"

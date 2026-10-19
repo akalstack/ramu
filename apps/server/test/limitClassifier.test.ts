@@ -188,3 +188,15 @@ describe('parseResetTime', () => {
     expect(at('2 files at 5 are failing')).toBeUndefined()
   })
 })
+
+it.each(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as const)(
+  'preserves a structured limit code on an Error for %s',
+  (provider) => {
+    const error = Object.assign(new Error('Provider request rejected'), { code: 'usage_limit_reached' })
+    expect(classifyLimit(error, { provider, channel: 'error' })).toMatchObject({
+      confidence: 'high',
+      source: 'structured',
+    })
+    expect(classifyLimit(new Error('Provider request rejected'), { provider, channel: 'error' })).toBeNull()
+  },
+)

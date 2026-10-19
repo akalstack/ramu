@@ -200,6 +200,15 @@ describe('Ramu goals', () => {
     expect(prompts).toHaveLength(4)
   })
 
+  it('gives lists the latest goal and keeps it current as the goal changes', async () => {
+    expect(service.goalOf(id)).toBeNull()
+    service.setGoal(id, 'Ship the login change')
+    expect(service.goalOf(id)).toMatchObject({ status: 'active', objective: 'Ship the login change' })
+    service.controlGoal(id, 'pause')
+    expect(service.goalOf(id)?.status).toBe('paused')
+    expect(service.goalOf(id)).toEqual(service.getGoal(id))
+  })
+
   it('completed and blocked goals do not continue; a user reply can unblock', async () => {
     service.setGoal(id, 'Login works and tests pass')
     await service.updateGoal(id, 'blocked', 'Need the authentication endpoint')

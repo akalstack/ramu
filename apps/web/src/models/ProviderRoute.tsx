@@ -2,7 +2,7 @@ import { t, useLanguage } from '../i18n'
 import { ArrowRight, Gauge } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { AgentSessionInfo, AgentSettings, FallbackStep } from '@ramu/shared/types'
-import { providerName } from '@ramu/shared/providers/providers'
+import { providerName, providerAccountOrder, accountDisplayName } from '@ramu/shared/providers/providers'
 import { useAppSettings } from '../settings/AppSettings'
 import { useHost } from '../workspace/HostProvider'
 import { Menu, type MenuEntry } from '../Menu'
@@ -12,8 +12,8 @@ import { notifyError } from '../chat/Notifications'
 import { errorText } from '../workspace/TaskPane'
 import { modelDisplayName, useModelSets } from './ModelSets'
 import { ProviderIcon } from './ProviderIcon'
-import { resetText, usageTone, useUsage, windowLabel } from '../settings/Usage'
-import { defaultOrder, peakFor, planRoute } from '@ramu/shared/providers/routing'
+import { resetText, usageTone, useUsage, useAccountUsage, windowLabel } from '../settings/Usage'
+import { defaultOrder, peakFor, planRoute, resolveStep } from '@ramu/shared/providers/routing'
 
 const WARN_AT = 80
 
@@ -44,7 +44,9 @@ export function ProviderRouteChip({
 }) {
   useLanguage()
   const { invoke } = useHost()
-  const usage = useUsage()
+  const selectedUsage = useUsage()
+  const allUsage = useAccountUsage()
+  const usage = allUsage.length ? allUsage : selectedUsage
   const { preferences } = useAppSettings()
   const { catalogs } = useModelSets()
   const [hold, setHold] = useState<'message' | 'chat' | 'picked' | null>(null)
@@ -54,12 +56,21 @@ export function ProviderRouteChip({
   }, [sessionId, settings.provider, settings.model, invoke])
   const now = Date.now()
   // Readings count only until their window resets, exactly as the main process sees them.
-  const peak = peakFor(usage, settings.provider, settings.model, now)
+  const accountId =
+    settings.accountId ?? providerAccountOrder(preferences.providerBinaries, settings.provider)[0] ?? 'default'
+  const ownUsage = usage.filter(
+    (reading) => reading.provider !== settings.provider || (reading.accountId ?? 'default') === accountId,
+  )
+  const model =
+    resolveStep({ id: '', provider: settings.provider, model: settings.model, effort: null }, catalogs)?.model ??
+    settings.model
+  const peak = peakFor(ownUsage, settings.provider, model, now)
   const warn = preferences.showUsageLimits && !!peak && (peak.usedPercent >= WARN_AT || peak.status === 'limited')
   const order = preferences.fallback.order ?? defaultOrder(catalogs)
   // The chat's own flag decides: the global default only seeds it when a chat starts.
   const route = planRoute(settings, order, {
-    usage,
+    usage: ownUsage,
+    accounts: { configuration: preferences.providerBinaries, usage },
     catalogs,
     switchAt: preferences.fallback.switchAt,
     now,
@@ -84,7 +95,7 @@ export function ProviderRouteChip({
       />
     )
   }
-  const next: FallbackStep | undefined = route?.step
+  const next = route?.step
   const held = hold === 'message' || hold === 'chat'
   const switching = !!route && !held
   const reason = peak
@@ -95,13 +106,16 @@ export function ProviderRouteChip({
     setHold(scope)
     void invoke('agent.holdProvider', sessionId, scope).catch(() => {})
   }
-  const name = (step: FallbackStep) => {
+  const name = (step: FallbackStep & { accountId?: string }) => {
     const model = catalogs.find((c) => c.provider === step.provider)?.models.find((m) => m.id === step.model)
-    return model ? modelDisplayName(model.name) : providerName(step.provider)
+    const name = model ? modelDisplayName(model.name) : providerName(step.provider)
+    if (step.accountId === undefined) return name
+    const account = accountDisplayName(preferences.providerBinaries, step.provider, step.accountId)
+    return `${name} · ${account.name || (account.fallback === 'default' ? t('Default account') : t('Account {0}', { '0': account.number }))}`
   }
   // Held at a limit: other providers that are not known to be limited, to continue on right now with the conversation handed over.
   const continueItems = (): MenuEntry[] => {
-    const steps = continueOptions({ settings, order, catalogs, usage, now })
+    const steps = continueOptions({ settings, order, catalogs, usage: selectedUsage, now })
     if (!steps.length) return []
     return [
       { key: 'continue-heading', heading: t('Continue on another provider') },

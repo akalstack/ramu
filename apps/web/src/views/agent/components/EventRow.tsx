@@ -185,7 +185,6 @@ export function EventRow({
         <QuestionRow
           request={e}
           status={questionStates.get(e.requestId) ?? { answers: {}, drafts: {}, waiting: false }}
-          showAnswers={e.responseMode !== 'message' || questionStates.get(e.requestId)?.outcome !== 'answered'}
           pending={(e.responseMode === 'message' || live) && !outcomes.has(e.requestId)}
           onOpen={onOpenQuestion}
         />

@@ -1,3 +1,4 @@
+import { translate } from '@ramu/shared/i18n'
 import { Helpers } from './Helpers'
 import { InteractiveContent } from './InteractiveContent'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
@@ -30,7 +31,7 @@ import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
 import { Button, Card, Sheet, T, tap, type Icon } from './ui'
 import { formatDuration } from '../runtime/turns'
-import { Breathe, Disclosure, animateLayout } from './Motion'
+import { Breathe, Collapse, Disclosure } from './Motion'
 
 const toolIcons: Record<ToolKind, Icon> = {
   read: FileCode2,
@@ -292,6 +293,10 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <ImageBlock uri={item.uri} alt={item.alt} />
     case 'tool':
       return <ToolRow item={item} />
+    case 'tools':
+      return <ToolGroup item={item} />
+    case 'plan':
+      return <PlanCard item={item} />
     case 'agents':
       return <AgentsGroup item={item} chat={chat} />
     case 'question':
@@ -434,7 +439,6 @@ function TurnSummary({ label, children }: { label: string; children: ReactNode }
         onPress={() => {
           tap()
           toggled()
-          animateLayout()
           setOpen((o) => !o)
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 2 }}
@@ -444,11 +448,11 @@ function TurnSummary({ label, children }: { label: string; children: ReactNode }
         </T>
         <Disclosure open={open} color={c.muted} />
       </Pressable>
-      {open ? (
+      <Collapse open={open}>
         <View style={{ gap: space.m, paddingLeft: space.s, borderLeftWidth: 1, borderLeftColor: c.line }}>
           {children}
         </View>
-      ) : null}
+      </Collapse>
     </View>
   )
 }
@@ -513,8 +517,107 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
   )
 }
 
+function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> }) {
+  const { c } = useTheme()
+  const { language } = useStore()
+  const [open, setOpen] = useState(false)
+  const toggled = useContext(RowToggle)
+  const running = item.tools.filter((tool) => tool.status === 'in_progress').length
+  const failed = item.tools.filter((tool) => tool.status === 'failed').length
+  return (
+    <View style={{ gap: space.xs }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => {
+          tap()
+          toggled()
+          setOpen((value) => !value)
+        }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
+      >
+        <Breathe active={running > 0}>
+          <Wrench size={14} color={failed ? c.bad : running ? c.accent : c.muted} />
+        </Breathe>
+        <T size={font.control} tone="muted" style={{ flex: 1 }}>
+          {item.tools.length} {language === 'id' ? 'alat' : 'tools'}
+          {running ? ` · ${running} ${language === 'id' ? 'berjalan' : 'running'}` : ''}
+          {failed ? ` · ${failed} ${language === 'id' ? 'gagal' : 'failed'}` : ''}
+        </T>
+        <Disclosure open={open} color={c.muted} />
+      </Pressable>
+      <Collapse open={open}>
+        <View style={{ paddingLeft: space.s, borderLeftWidth: 1, borderLeftColor: c.line, gap: space.xs }}>
+          {item.tools.map((tool) => (
+            <ToolRow key={tool.id} item={tool} />
+          ))}
+        </View>
+      </Collapse>
+    </View>
+  )
+}
+
+function PlanCard({ item }: { item: Extract<TranscriptItem, { kind: 'plan' }> }) {
+  const { c } = useTheme()
+  const { language } = useStore()
+  const [open, setOpen] = useState(true)
+  const toggled = useContext(RowToggle)
+  const completed = item.entries.filter((entry) => entry.status === 'completed').length
+  return (
+    <View style={{ gap: space.s }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => {
+          tap()
+          toggled()
+          setOpen((value) => !value)
+        }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
+      >
+        <T weight="600" size={font.control} style={{ flex: 1 }}>
+          {translate(language, 'Plan')} · {completed}/{item.entries.length}
+        </T>
+        <Disclosure open={open} color={c.muted} />
+      </Pressable>
+      <Collapse open={open}>
+        <View style={{ gap: space.s }}>
+          {item.entries.map((entry, index) => (
+            <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}>
+              <Breathe active={entry.status === 'in_progress'}>
+                {entry.status === 'completed' ? (
+                  <Check size={14} color={c.ok} />
+                ) : (
+                  <View
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderWidth: 1,
+                      borderColor: entry.status === 'in_progress' ? c.accent : c.lineStrong,
+                      borderRadius: 7,
+                    }}
+                  />
+                )}
+              </Breathe>
+              <T
+                size={font.control}
+                tone={entry.status === 'completed' ? 'muted' : 'soft'}
+                style={{ flex: 1 }}
+                accessibilityLabel={`${entry.content}, ${translate(language, entry.status === 'completed' ? 'Completed' : entry.status === 'in_progress' ? 'Running' : 'Pending')}`}
+              >
+                {entry.content}
+              </T>
+            </View>
+          ))}
+        </View>
+      </Collapse>
+    </View>
+  )
+}
+
 function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) {
   const { c } = useTheme()
+  const { language: storeLanguage } = useStore()
   const [open, setOpen] = useState(false)
   const [full, setFull] = useState(false)
   const toggled = useContext(RowToggle)
@@ -534,11 +637,12 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
   return (
     <View>
       <Pressable
-        disabled={!item.detail}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open, disabled: !item.detail && !item.input }}
+        disabled={!item.detail && !item.input}
         onPress={() => {
           tap()
           toggled()
-          animateLayout()
           setOpen((o) => !o)
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: 3 }}
@@ -558,7 +662,12 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         >
           {item.subject}
         </T>
-        {item.detail ? <Disclosure open={open} size={13} color={c.placeholder} /> : null}
+        {failed ? (
+          <T size={font.caption} tone="bad">
+            {storeLanguage === 'id' ? 'Gagal' : 'Failed'}
+          </T>
+        ) : null}
+        {item.detail || item.input ? <Disclosure open={open} size={13} color={c.placeholder} /> : null}
       </Pressable>
       {filePath ? (
         <Pressable
@@ -576,7 +685,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
           </T>
         </Pressable>
       ) : null}
-      {open && item.detail ? (
+      <Collapse open={open}>
         <View
           style={{
             marginLeft: 22,
@@ -586,8 +695,28 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
             borderRadius: radius.s,
           }}
         >
+          {item.input ? (
+            <View style={{ gap: space.xs, marginBottom: item.detail ? space.s : 0 }}>
+              <T size={font.caption} weight="600" tone="muted">
+                {storeLanguage === 'id' ? 'Masukan' : 'Input'}
+              </T>
+              <T size={font.caption} mono copyable={item.input}>
+                {item.input}
+              </T>
+            </View>
+          ) : null}
+          <T size={font.caption} weight="600" tone="muted">
+            {storeLanguage === 'id' ? 'Keluaran' : 'Output'}
+          </T>
           <T size={font.caption} mono tone={failed ? 'bad' : 'soft'} numberOfLines={PREVIEW_LINES} ellipsizeMode="tail">
-            {item.detail}
+            {item.detail ||
+              (running
+                ? storeLanguage === 'id'
+                  ? 'Berjalan…'
+                  : 'Running…'
+                : storeLanguage === 'id'
+                  ? 'Tidak ada keluaran'
+                  : 'No output')}
           </T>
           {long ? (
             <Pressable
@@ -606,7 +735,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
             </Pressable>
           ) : null}
         </View>
-      ) : null}
+      </Collapse>
       {item.detail ? (
         <Sheet open={full} onClose={() => setFull(false)} title={`${item.verb} ${item.subject}`.trim()}>
           <View style={{ paddingHorizontal: space.l, paddingBottom: space.m }}>
@@ -642,14 +771,17 @@ function Option({
   description?: string
   selected: boolean
   multi: boolean
-  onPress: () => void
+  onPress?: () => void
 }) {
   const { c } = useTheme()
   return (
     <Pressable
+      accessibilityRole={multi ? 'checkbox' : 'radio'}
+      accessibilityState={{ checked: selected, disabled: !onPress }}
+      disabled={!onPress}
       onPress={() => {
         tap()
-        onPress()
+        onPress?.()
       }}
       style={({ pressed }) => ({
         flexDirection: 'row',
@@ -672,7 +804,7 @@ function Option({
           justifyContent: 'center',
         }}
       >
-        {selected ? <Check size={11} color="#fff" strokeWidth={3} /> : null}
+        {selected ? <Check size={11} color={c.primaryInk} strokeWidth={3} /> : null}
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <T size={font.body - 1} weight="500">
@@ -685,6 +817,96 @@ function Option({
         ) : null}
       </View>
     </Pressable>
+  )
+}
+
+function QuestionHistory({ item }: { item: Extract<TranscriptItem, { kind: 'question' }> }) {
+  const { c } = useTheme()
+  const { language } = useStore()
+  const t = (text: string) => translate(language, text)
+  const outcome =
+    item.outcome === 'dismissed'
+      ? 'Dismissed'
+      : item.outcome === 'obsolete'
+        ? 'No longer needed'
+        : item.outcome === 'cancelled'
+          ? 'Cancelled'
+          : 'Answered'
+  return (
+    <Card style={{ padding: space.m, gap: space.m, backgroundColor: c.fill }}>
+      <T size={font.control} tone="muted">
+        {t('Asked a question')} · {t(outcome)}
+        {item.reason ? `: ${item.reason}` : ''}
+      </T>
+      {item.questions.map((question) => (
+        <QuestionHistoryEntry
+          key={question.id ?? question.question}
+          question={question}
+          answer={item.answers?.[question.id ?? question.question]}
+        />
+      ))}
+    </Card>
+  )
+}
+
+function QuestionHistoryEntry({
+  question,
+  answer,
+}: {
+  question: import('@ramu/shared/types').AgentQuestion
+  answer?: string
+}) {
+  const { c } = useTheme()
+  const { language } = useStore()
+  const [open, setOpen] = useState(false)
+  const toggled = useContext(RowToggle)
+  const selected = new Set(answer ? (question.multiSelect ? answer.split(', ') : [answer]) : [])
+  return (
+    <View style={{ gap: space.s }}>
+      <Pressable
+        disabled={!question.options.length}
+        accessibilityRole={question.options.length ? 'button' : 'text'}
+        accessibilityState={question.options.length ? { expanded: open } : undefined}
+        onPress={() => {
+          tap()
+          toggled()
+          setOpen((value) => !value)
+        }}
+        style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}
+      >
+        <T size={font.control} tone="soft" style={{ flex: 1 }}>
+          {question.question}
+        </T>
+        {question.options.length ? <Disclosure open={open} color={c.muted} /> : null}
+      </Pressable>
+      <Collapse open={open}>
+        <View style={{ gap: space.s }}>
+          {question.options.map((option) => (
+            <Option
+              key={option.label}
+              label={option.label}
+              description={option.description}
+              selected={selected.has(option.label)}
+              multi={question.multiSelect}
+            />
+          ))}
+        </View>
+      </Collapse>
+      {answer ? (
+        <View style={{ gap: space.xs, backgroundColor: c.raised, padding: space.m, borderRadius: radius.s }}>
+          <T size={font.caption} tone="muted">
+            {translate(language, 'Answer')}
+          </T>
+          <T size={font.control} weight="600" copyable={answer}>
+            {answer}
+          </T>
+        </View>
+      ) : (
+        <T size={font.control} tone="muted">
+          {translate(language, 'No answer')}
+        </T>
+      )}
+    </View>
   )
 }
 
@@ -703,16 +925,7 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
   useEffect(() => {
     store.setDraft(draftKey, JSON.stringify({ picked, other }))
   }, [draftKey, picked, other])
-  if (item.answers) {
-    return (
-      <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
-        <Check size={14} color={c.ok} />
-        <T size={font.control} tone="muted" style={{ flex: 1 }} numberOfLines={2}>
-          Answered: {Object.values(item.answers).join(' · ')}
-        </T>
-      </View>
-    )
-  }
+  if (item.answers) return <QuestionHistory item={item} />
   const ready = item.questions.every(
     (q) => (picked[q.id ?? q.question]?.length ?? 0) > 0 || other[q.id ?? q.question]?.trim(),
   )
@@ -724,7 +937,7 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
         </T>
       ) : null}
       {item.questions.map((q) => (
-        <View key={q.question} style={{ gap: space.s }}>
+        <View key={q.id ?? q.question} style={{ gap: space.s }}>
           <T size={font.caption} weight="600" tone="warn" style={{ textTransform: 'uppercase', letterSpacing: 0.4 }}>
             {q.header}
           </T>
@@ -740,7 +953,8 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
                 description={o.description}
                 multi={q.multiSelect}
                 selected={sel}
-                onPress={() =>
+                onPress={() => {
+                  setOther((old) => ({ ...old, [q.id ?? q.question]: '' }))
                   setPicked((p) => {
                     const cur = p[q.id ?? q.question] ?? []
                     const next = q.multiSelect
@@ -752,7 +966,7 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
                         : [o.label]
                     return { ...p, [q.id ?? q.question]: next }
                   })
-                }
+                }}
               />
             )
           })}
@@ -760,7 +974,11 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
             placeholder="Other answer…"
             placeholderTextColor={c.placeholder}
             value={other[q.id ?? q.question] ?? ''}
-            onChangeText={(v) => setOther((o) => ({ ...o, [q.id ?? q.question]: v }))}
+            accessibilityLabel={q.question}
+            onChangeText={(v) => {
+              setPicked((old) => ({ ...old, [q.id ?? q.question]: [] }))
+              setOther((o) => ({ ...o, [q.id ?? q.question]: v }))
+            }}
             style={{
               color: c.text,
               fontSize: font.body - 1,
@@ -772,7 +990,9 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
         </View>
       ))}
       <View style={{ flexDirection: 'row', gap: space.s, justifyContent: 'flex-end' }}>
-        <Button kind="ghost" title="Dismiss" onPress={() => answer(chatId, item.id, { _: 'Dismissed' })} />
+        {item.responseMode === 'message' ? (
+          <Button kind="ghost" title="Dismiss" onPress={() => answer(chatId, item.id, { _: 'Dismissed' })} />
+        ) : null}
         <Button
           title="Submit"
           disabled={!ready}
@@ -869,19 +1089,36 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
 function GoalDone({ item }: { item: Extract<TranscriptItem, { kind: 'goal' }> }) {
   const { c } = useTheme()
   const strings = useT()
+  const [open, setOpen] = useState(false)
+  const toggled = useContext(RowToggle)
   return (
-    <View style={{ gap: 2 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+    <View style={{ gap: space.s }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => {
+          tap()
+          toggled()
+          setOpen((value) => !value)
+        }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
+      >
         <Flag size={14} color={c.ok} strokeWidth={1.8} />
-        <T size={font.control} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+        <T size={font.control} tone="muted" style={{ flex: 1 }}>
           {fill(strings.goalReached, item.turns, item.objective)}
         </T>
-      </View>
-      {item.detail ? (
-        <T size={font.caption} tone="placeholder" numberOfLines={4} style={{ marginLeft: 14 + space.s }}>
-          {item.detail}
-        </T>
-      ) : null}
+        <Disclosure open={open} color={c.muted} />
+      </Pressable>
+      <Collapse open={open}>
+        <View style={{ gap: space.s, paddingLeft: 14 + space.s }}>
+          <T>{item.objective}</T>
+          {item.detail ? (
+            <T size={font.caption} tone="muted" copyable={item.detail}>
+              {item.detail}
+            </T>
+          ) : null}
+        </View>
+      </Collapse>
     </View>
   )
 }

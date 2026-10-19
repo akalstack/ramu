@@ -35,7 +35,7 @@ import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/
 import { KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { OfflineBanner, PendingBubble } from '../../../components/Outbox'
 import { ContextMeter } from '../../../components/ContextMeter'
-import { Arrive, Presence, Shimmer } from '../../../components/Motion'
+import { Arrive, Presence, Shimmer, useReducedMotion } from '../../../components/Motion'
 import { ChatActionsSheet } from '../../../components/ChatActions'
 import { useAutomation } from '../../../runtime/automation'
 
@@ -67,6 +67,8 @@ export default function ChatScreen() {
     }, []),
   )
   const following = useRef(true)
+  const smoothSendScroll = useRef(false)
+  const reducedMotion = useReducedMotion()
   const userScrolling = useRef(false)
   const [away, setAway] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -119,6 +121,7 @@ export default function ChatScreen() {
   const restTop = useRef(-topInset)
   restTop.current = -topInset
   const toEnd = (animated: boolean) => {
+    animated = animated && !reducedMotion
     if (!ios) return scroll.current?.scrollToEnd({ animated })
     const m = metrics.current
     // Not measured yet: an offset worked out from a zero-height viewport lands far down and hides the first messages.
@@ -217,7 +220,7 @@ export default function ChatScreen() {
     chatId: string
     model: import('../../../components/Composer').ModelChoice
   } | null>(null)
-  // Entries that appear while the screen is open and the agent is working animate in; the first load and recycled rows do not.
+  // New chat blocks animate in; first loads, history pagination and recycled rows do not.
   const openedAt = useRef(Date.now())
   const seen = useRef(new Set<string>())
   // Finished turns fold into "Worked for…"; the running turn renders block by block, and only its newest reply animates.
@@ -225,6 +228,30 @@ export default function ChatScreen() {
     () => foldTurns(chat?.items ?? [], chat?.status === 'running', chat?.status === 'needs-input'),
     [chat?.items, chat?.status],
   )
+  const arrivals = useRef({
+    chatId: id,
+    initialized: false,
+    known: new Set<string>(),
+    rows: null as typeof rows | null,
+    fresh: new Set<string>(),
+  })
+  const freshIds = useMemo(() => {
+    if (arrivals.current.chatId !== id) {
+      arrivals.current = { chatId: id, initialized: false, known: new Set(), rows: null, fresh: new Set() }
+      seen.current.clear()
+      openedAt.current = Date.now()
+    }
+    const state = arrivals.current
+    if (state.rows === rows) return state.fresh
+    const fresh = new Set<string>()
+    if (state.initialized && Date.now() - openedAt.current > 800)
+      for (const row of rows) if (!state.known.has(row.id)) fresh.add(row.id)
+    for (const row of rows) state.known.add(row.id)
+    if (rows.length) state.initialized = true
+    state.rows = rows
+    state.fresh = fresh
+    return fresh
+  }, [rows, id])
   // A long chat draws its latest turns; "Earlier turns" brings back the previous page without moving what you are reading.
   const [turnsShown, setTurnsShown] = useState(TURN_PAGE)
   const [pagedBack, setPagedBack] = useState(false)
@@ -635,17 +662,13 @@ export default function ChatScreen() {
             maintainVisibleContentPosition={pagedBack ? { minIndexForVisible: 0 } : undefined}
             keyExtractor={(item) => item.id}
             renderItem={({ item, index }) => {
-              const fresh = !seen.current.has(item.id) && Date.now() - openedAt.current > 800
+              const fresh = freshIds.has(item.id) && !seen.current.has(item.id)
               seen.current.add(item.id)
               const streaming = running && item.kind === 'text' && index === pageRows.length - 1
               return (
-                <Arrive animate={fresh && running}>
+                <Arrive animate={fresh && item.kind !== 'text'}>
                   <InteractiveVisibility.Provider value={contentScreenFocused && visibleContentRows.has(item.id)}>
-                    <TranscriptItemView
-                      item={item}
-                      chat={chat}
-                      meta={{ ...itemMeta.get(item.id), streaming, fresh: fresh && running }}
-                    />
+                    <TranscriptItemView item={item} chat={chat} meta={{ ...itemMeta.get(item.id), streaming, fresh }} />
                   </InteractiveVisibility.Provider>
                 </Arrive>
               )
@@ -687,14 +710,19 @@ export default function ChatScreen() {
             }}
             onContentSizeChange={(_, height) => {
               metrics.current.content = height
-              if (following.current && !settling.current && Date.now() - held.current > 600) toEnd(false)
+              if (following.current && !settling.current && Date.now() - held.current > 600) {
+                toEnd(smoothSendScroll.current && !reducedMotion)
+                smoothSendScroll.current = false
+              }
             }}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             ListFooterComponent={
               <View style={{ gap: space.m, paddingTop: space.m }}>
                 {pending.map((o) => (
-                  <PendingBubble key={o.id} item={o} computer={computer?.name ?? 'the host'} onEdit={editPending} />
+                  <Arrive key={o.id} animate={o.createdAt >= openedAt.current}>
+                    <PendingBubble item={o} computer={computer?.name ?? 'the host'} onEdit={editPending} />
+                  </Arrive>
                 ))}
                 {running && !offline ? (
                   <Arrive animate>
@@ -775,6 +803,7 @@ export default function ChatScreen() {
                         router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id, aside: made.id } })
                       })
                   following.current = true
+                  smoothSendScroll.current = true
                   return store.send(chat.id, text, mode, attachments, context)
                 }}
                 taskId={chat.taskId || undefined}
@@ -870,7 +899,7 @@ export default function ChatScreen() {
                   }}
                 >
                   {running ? (
-                    <ActivityIndicator size="small" color={c.accent} />
+                    <ActivityIndicator size="small" color={c.text} />
                   ) : (
                     <ArrowDown size={18} color={c.text} strokeWidth={2} />
                   )}

@@ -48,6 +48,7 @@ import { useAppSettings } from '../settings/AppSettings'
 import { useChatHidden, useEditorSide } from './layoutPrefs'
 import { isPreviewable, isWorkspaceCtx, tabOrder, useHostRuntime, useWorkspace } from './workspace'
 import { WorkspaceRail, workspaceToolOf } from './WorkspaceTools'
+import { HideWorkspaceButton } from './HideWorkspaceButton'
 import { SlidePane } from './paneMotion'
 import { terminalGroups } from '@ramu/shared/workspace/terminalGroups'
 
@@ -480,6 +481,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                     )}
                   </Button>
                 )}
+                <HideWorkspaceButton onHide={() => ws.hideWorkspace(taskId)} />
               </div>
               <div
                 className="editor-area flex-1 min-h-0 min-w-0 flex flex-col"

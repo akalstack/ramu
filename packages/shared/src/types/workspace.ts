@@ -1,4 +1,5 @@
 import type { BranchChoice, BranchNamingIntent } from '../workspaceDefaults'
+import type { ChatGoal } from './goal'
 export type CheckoutMode = 'current' | 'worktree'
 
 export interface Project {
@@ -69,6 +70,16 @@ export interface WorktreeWorkspace {
 }
 
 /** A project-level chat. The legacy Task name remains for stored-profile compatibility. */
+/** What a list needs of a goal: its state and objective, not its evidence or transcript. */
+export interface TaskGoalSummary {
+  status: Exclude<ChatGoal['status'], 'completed'>
+  pausedBy?: ChatGoal['pausedBy']
+  objective: string
+  /** A completion claim is waiting for, or running, the verification command. */
+  verifying?: boolean
+  reason?: string
+}
+
 export interface Task {
   id: string
   projectId: string
@@ -89,6 +100,11 @@ export interface Task {
   waitingUntil?: number | null
   /** Naming failed during this thread's initial workspace creation. */
   branchNamingFallback?: boolean | null
+  /**
+   * The thread's unfinished goal, for list views. Absent from older hosts, which means unknown, not "no goal"; null
+   * means there is none (or it is complete).
+   */
+  goalState?: TaskGoalSummary | null
   /** A chat started from a "What Ramu learned" summary; it shows a Review label under Chats. */
   kind?: 'library-review' | null
 }

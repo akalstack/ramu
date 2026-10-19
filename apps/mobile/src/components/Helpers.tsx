@@ -18,7 +18,7 @@ import { formatDuration } from '../runtime/turns'
 import { ProviderIcon } from './Logos'
 import { Markdown } from './Markdown'
 import { Button, Card, Divider, Sheet, T, tap } from './ui'
-import { Disclosure, animateLayout } from './Motion'
+import { Collapse, Disclosure } from './Motion'
 
 type Helper = Extract<TranscriptItem, { kind: 'agents' }>['agents'][number]
 const copy = (key: string, id: boolean) =>
@@ -230,7 +230,6 @@ export function Helpers({
         onPress={() => {
           tap()
           onToggle?.()
-          animateLayout()
           setOpen((value) => !value)
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, padding: space.m, minHeight: 44 }}
@@ -248,39 +247,39 @@ export function Helpers({
         </View>
         <Disclosure open={open} color={c.muted} />
       </Pressable>
-      {open
-        ? sortHelpers(agents).map((helper) => (
-            <View key={helper.agentId}>
-              <Divider inset={space.m} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`${helper.name}, ${copy(helperStatusLabel(helper), id)}`}
-                onPress={() => setShownId(helper.agentId)}
-                style={{ padding: space.m, minHeight: 44, gap: space.s }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                  {helper.provider ? (
-                    <ProviderIcon provider={helper.provider} size={16} />
-                  ) : (
-                    <Bot size={16} color={c.soft} />
-                  )}
-                  <T weight="500" style={{ flex: 1 }}>
-                    {helper.name}
-                  </T>
-                  <T size={font.caption} tone={helper.status === 'failed' ? 'bad' : 'muted'}>
-                    {copy(helperStatusLabel(helper), id)}
-                  </T>
-                </View>
-                {helper.summary || helper.lastTool ? (
-                  <T size={font.caption} tone="muted" numberOfLines={2}>
-                    {helper.summary ?? helper.lastTool}
-                  </T>
-                ) : null}
-                <HelperTime task={helper} online={online} />
-              </Pressable>
-            </View>
-          ))
-        : null}
+      <Collapse open={open}>
+        {sortHelpers(agents).map((helper) => (
+          <View key={helper.agentId}>
+            <Divider inset={space.m} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${helper.name}, ${copy(helperStatusLabel(helper), id)}`}
+              onPress={() => setShownId(helper.agentId)}
+              style={{ padding: space.m, minHeight: 44, gap: space.s }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                {helper.provider ? (
+                  <ProviderIcon provider={helper.provider} size={16} />
+                ) : (
+                  <Bot size={16} color={c.soft} />
+                )}
+                <T weight="500" style={{ flex: 1 }}>
+                  {helper.name}
+                </T>
+                <T size={font.caption} tone={helper.status === 'failed' ? 'bad' : 'muted'}>
+                  {copy(helperStatusLabel(helper), id)}
+                </T>
+              </View>
+              {helper.summary || helper.lastTool ? (
+                <T size={font.caption} tone="muted" numberOfLines={2}>
+                  {helper.summary ?? helper.lastTool}
+                </T>
+              ) : null}
+              <HelperTime task={helper} online={online} />
+            </Pressable>
+          </View>
+        ))}
+      </Collapse>
       <HelperDetails
         key={`${chat.computerId}:${chat.sessionId}:${shownId}`}
         task={agents.find((helper) => helper.agentId === shownId)}

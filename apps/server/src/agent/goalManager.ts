@@ -64,6 +64,20 @@ export class GoalManager {
   /** Verification commands in flight, so Stop, pause, clear and shutdown can end them. */
   private readonly verifying = new Map<string, AbortController>()
 
+  /** The latest goal of each session, read once from the transcript and kept current by `saveGoal`, so list reads stay cheap. */
+  private readonly latestGoals = new Map<string, ChatGoal | null>()
+
+  /** A list row's view of a session's goal, without reading its transcript each time. */
+  goalOf(id: string): ChatGoal | null {
+    if (!this.latestGoals.has(id)) this.latestGoals.set(id, this.getGoal(id))
+    return this.latestGoals.get(id) ?? null
+  }
+
+  /** Forget what was cached for a session whose events were removed, such as a rewind. */
+  forgetGoal(id: string) {
+    this.latestGoals.delete(id)
+  }
+
   getGoal(id: string): ChatGoal | null {
     this.host.get(id)
     const row = this.db
@@ -85,6 +99,7 @@ export class GoalManager {
     this.goalTimers.delete(id)
     const before = this.getGoal(id)
     this.host.record(id, { kind: 'goal', goal })
+    this.latestGoals.set(id, goal)
     if (!goal || goal.status === 'completed') this.endGoalTracking(id, before?.id)
     if (goal && goalContinues(goal)) this.scheduleGoal(id)
     return goal

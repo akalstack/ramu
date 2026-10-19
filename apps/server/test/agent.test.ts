@@ -3508,6 +3508,36 @@ describe('questions while work continues', () => {
     restored.svc.stopAll()
   })
 
+  it('preserves the offered options and submitted choice through restart', async () => {
+    const first = fixture(),
+      chat = first.start()
+    const offered = [
+      {
+        id: 'target',
+        question: 'Which Jira target?',
+        header: 'Jira target',
+        multiSelect: false,
+        options: [
+          { label: 'Create under a Story', description: 'Use the existing story.' },
+          { label: 'Create a new Epic', description: 'Group the drafts.' },
+        ],
+      },
+    ]
+    const asked = await first.svc.askQuestion(chat.id, { questions: offered })
+    first.svc.replyQuestion(chat.id, asked.request.requestId, { target: 'Create under a Story' })
+    await until(() => first.steers.length === 1)
+    first.svc.prepareForRestart()
+    first.svc.stopAll(true)
+    const restored = fixture()
+    restored.svc.markRestoredOnBoot()
+    expect(restored.svc.questionStatus(chat.id, asked.request.requestId)).toMatchObject({
+      request: { questions: offered },
+      answers: { target: 'Create under a Story' },
+      outcome: 'answered',
+    })
+    restored.svc.stopAll()
+  })
+
   it('closes obsolete questions with a reason and allows dismissal without fabricating an answer', async () => {
     const { svc, start, steers } = fixture(),
       chat = start()

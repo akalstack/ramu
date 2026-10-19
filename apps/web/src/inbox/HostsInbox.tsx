@@ -3,6 +3,9 @@ import { buildInbox, INBOX_TABS, type InboxChat, type InboxTab } from '@ramu/sha
 import { hostInboxInput } from '@ramu/shared/hostOverview'
 import type { Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
+import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
+import { HostProvider } from '../workspace/HostProvider'
+import { ThreadHoverCard } from '../sidebar/projects/ThreadHoverCard'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useComputers, statusText } from '../workspace/computers'
 import { useHostOverviews } from '../workspace/hostOverview'
@@ -10,8 +13,8 @@ import { useHostSelection } from '../workspace/HostSelection'
 import { FeedSection } from '../HomeSection'
 import { t, useLanguage } from '../i18n'
 import { timeAgo } from '../Menu'
-import { StateDot } from '../sidebar/projects/TaskStateIcon'
-import { ProviderWaitIcon } from '../models/ProviderWait'
+import { StatusMark } from '../sidebar/projects/TaskStateIcon'
+import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { savedInboxTab, saveInboxTab } from './navigation'
 import { SnoozeMenu, notifyRecapAction, type RecapAction } from './recaps'
 import { ramu } from '../ipc'
@@ -51,42 +54,61 @@ export function HostsInbox() {
   const available = (id: string) => pc(id)?.status === 'connected'
   const shown = <T,>(list: T[]) => (tab === 'all' ? list.slice(0, 5) : list)
   const row =
-    'flex min-h-12 w-full cursor-default items-center gap-3 rounded-(--radius-s) border-0 bg-transparent px-2.5 py-1.5 text-left text-body leading-5 text-soft hover:bg-accent hover:text-foreground disabled:opacity-60'
+    'flex min-h-12 w-full cursor-default items-center gap-3 rounded-(--radius-s) border-0 bg-transparent px-2.5 py-1.5 text-left text-body leading-5 text-soft hover:bg-accent hover:text-foreground aria-disabled:opacity-60'
+  // The same status as the sidebar, including goal states; a finished result shows its age instead of a mark.
   const state = (task?: Task) => {
     if (!task) return null
-    if (task.status === 'running') return <StateDot kind="spinner" label={t('Agent working')} />
-    if (task.status === 'needs-input') return <StateDot kind="dot warn text-warn" label={t('Waiting for your input')} />
-    if (task.waitingUntil) return <ProviderWaitIcon retryAt={task.waitingUntil} />
-    if (task.status === 'failed') return <StateDot kind="dot bad" label={t('Agent failed')} />
-    return null
+    const status = threadStatus(task, false, task.goalState)
+    return status ? <StatusMark task={task} status={status} /> : null
   }
   const chats = (list: InboxChat[]) =>
     shown(list).map((chat) => {
       const task = data(chat.computerId)?.tasks.find((entry) => entry.id === chat.taskId)
       return (
-        <button
-          key={chat.id}
-          className={row}
-          disabled={!available(chat.computerId)}
-          onClick={() =>
-            select(chat.computerId, {
-              kind: 'task',
-              taskId: chat.taskId,
-              ...(chat.sessionId ? { sessionId: chat.sessionId } : {}),
-            })
-          }
-        >
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-foreground">{task?.title}</span>
-            <span className="block truncate text-caption text-muted-foreground">
-              {where(chat.computerId, chat.taskId)}
-            </span>
-          </span>
-          {state(task)}
-          <span className="min-w-6 flex-none text-right text-caption text-muted-foreground tabular-nums">
-            {timeAgo(chat.lastActiveAt)}
-          </span>
-        </button>
+        <HostProvider key={JSON.stringify([chat.computerId, chat.id])} hostId={chat.computerId}>
+          <HoverCard open={!task ? false : undefined}>
+            <HoverCardTrigger
+              render={<button />}
+              delay={400}
+              closeDelay={120}
+              className={row}
+              aria-disabled={!available(chat.computerId)}
+              onClick={() =>
+                available(chat.computerId) &&
+                select(chat.computerId, {
+                  kind: 'task',
+                  taskId: chat.taskId,
+                  ...(chat.sessionId ? { sessionId: chat.sessionId } : {}),
+                })
+              }
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-foreground">{task?.title}</span>
+                <span className="block truncate text-caption text-muted-foreground">
+                  {where(chat.computerId, chat.taskId)}
+                </span>
+              </span>
+              {state(task)}
+              <span className="min-w-6 flex-none text-right text-caption text-muted-foreground tabular-nums">
+                {timeAgo(chat.lastActiveAt)}
+              </span>
+            </HoverCardTrigger>
+            {task && (
+              <ThreadHoverCard
+                task={task}
+                status={threadStatus(task, false, task.goalState)}
+                hostName={pc(chat.computerId)?.name}
+                sharedWorkspace={
+                  !!task.workspaceId &&
+                  !!data(chat.computerId)?.tasks.some(
+                    (other) => other.id !== task.id && other.workspaceId === task.workspaceId,
+                  )
+                }
+                offline={!available(chat.computerId)}
+              />
+            )}
+          </HoverCard>
+        </HostProvider>
       )
     })
   const actRecap = async (id: string, recapId: string, action: RecapAction, until?: number) => {

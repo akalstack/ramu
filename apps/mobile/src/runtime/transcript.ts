@@ -8,7 +8,7 @@ import {
   parseTaskReport,
   parseTaskStop,
 } from '@ramu/shared/chat/agentTasks'
-import { requestOutcomes, parseAnswerMessage } from '@ramu/shared/chat/questions'
+import { requestOutcomes, parseAnswerMessage, questionState } from '@ramu/shared/chat/questions'
 import { goalChanges, goalFactLines } from '@ramu/shared/chat/goalHistory'
 import { providerWaitState, type ProviderWaitState } from '@ramu/shared/chat/providerWait'
 
@@ -38,7 +38,8 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
   const helperEvents = new Map<string, AgentEvent[]>()
   const goals = goalChanges(events)
   for (const e of events) {
-    if (e.kind === 'question-state' && e.answers) answers.set(e.requestId, e.answers)
+    if (e.kind === 'question-state' && e.answers)
+      answers.set(e.requestId, { ...answers.get(e.requestId), ...e.answers })
     if (e.kind === 'tool-result') results.set(`${e.agentId ?? ''}:${e.toolUseId}`, e)
     if (e.agentId && e.kind !== 'agent') {
       const own = helperEvents.get(e.agentId) ?? []
@@ -156,9 +157,9 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
       })
     } else if (e.kind === 'plan')
       items.push({
-        kind: 'text',
+        kind: 'plan',
         id,
-        text: e.entries.map((x) => `${x.status === 'completed' ? '✓' : '•'} ${x.content}`).join('\n'),
+        entries: e.entries,
       })
     else if (e.kind === 'tool-use') {
       const result = results.get(`:${e.toolUseId}`)
@@ -179,7 +180,8 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
           : e.status === 'failed'
             ? 'failed'
             : 'in_progress',
-        detail: result?.summary || e.input,
+        detail: result?.summary,
+        input: e.input,
       })
     } else if (e.kind === 'question')
       items.push({
@@ -189,9 +191,11 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
           (q) => resolved.has(e.requestId) || !answers.get(e.requestId)?.[q.id ?? q.question],
         ),
         submitted: answers.get(e.requestId),
-        answers: resolved.has(e.requestId)
-          ? (answers.get(e.requestId) ?? { _: resolved.get(e.requestId)! })
-          : undefined,
+        answers: resolved.has(e.requestId) ? (answers.get(e.requestId) ?? {}) : undefined,
+        outcome: resolved.get(e.requestId),
+        reason: questionState(events, e.requestId).reason,
+        responseMode: e.responseMode,
+        grouping: e.grouping,
       })
     else if (e.kind === 'permission-request' && latestPermissions.get(e.requestId) === index)
       items.push({

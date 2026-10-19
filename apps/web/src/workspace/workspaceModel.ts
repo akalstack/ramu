@@ -1,7 +1,7 @@
 // Pure workspace rules shared by every host's store: contexts, view identity and order, and how a chat's own views
 // combine with its workspace's shared ones. No React and no bridge, so the store's logic can be tested.
 import { NO_PROJECT } from '@ramu/shared/types'
-import type { Task, TaskUiState, ViewDescriptor } from '@ramu/shared/types'
+import type { RepositoryBinding, Task, TaskUiState, ViewDescriptor } from '@ramu/shared/types'
 
 export type ViewInput = ViewDescriptor extends infer V ? (V extends ViewDescriptor ? Omit<V, 'id'> : never) : never
 
@@ -70,6 +70,19 @@ export function workspaceOfTask(task: Pick<Task, 'id' | 'projectId' | 'workspace
     : task.workspaceId
       ? worktreeCtx(task.workspaceId)
       : projectCtx(task.projectId)
+}
+
+/** Reuse known checkout bindings while another thread's own binding read is still pending. */
+export function effectiveBindings(
+  tasks: readonly Task[],
+  bindings: Record<string, RepositoryBinding[]>,
+): Record<string, RepositoryBinding[]> {
+  const effective = { ...bindings }
+  for (const task of tasks) {
+    const shared = bindings[workspaceOfTask(task)]
+    if (!effective[task.id] && shared) effective[task.id] = shared
+  }
+  return effective
 }
 
 /** Each chat's own conversations plus its workspace's editors and terminals, as the panes show them. */

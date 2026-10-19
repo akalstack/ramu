@@ -45,6 +45,8 @@
   --font-hero: calc(var(--ui-font-size) + 12px);
   --chat-column-width: 760px;
   --primary-ink: #ffffff;
+  /* Text on the darkened error fill of destructive buttons; a theme does not change it, so it always reads. */
+  --bad-ink: #ffffff;
   --brand-mark: #dedee3;
   --accent-wash: color-mix(in srgb, var(--accent) 10%, transparent);
   --ok: #30d158;
@@ -366,39 +368,7 @@ kbd {
     opacity: 0;
   }
 }
-/* Search chats: the palette's look, with a search field like Settings' and two-line message matches. */
-button.danger-btn {
-  @apply [background:color-mix(in_srgb,_var(--bad),_black_30%)];
-  @apply [border-color:transparent];
-  @apply [color:#fff];
-  @apply font-semibold;
-}
-button.danger-btn:hover:not(:disabled) {
-  @apply [background:color-mix(in_srgb,_var(--bad),_black_18%)];
-}
-
 /* Chat details */
-button.scm-commit.primary {
-  @apply w-full;
-  @apply justify-center;
-  @apply [background:var(--primary)];
-  @apply [color:var(--primary-ink)];
-  @apply [border:none];
-  @apply rounded-(--radius-s);
-  @apply h-7;
-  @apply p-[6px_12px];
-  @apply gap-2;
-  @apply text-control;
-}
-button.scm-commit.primary:hover:not(:disabled) {
-  @apply [background:var(--primary-hover)];
-  @apply [border:none];
-}
-button.scm-commit.primary:disabled {
-  @apply [background:var(--primary)];
-  @apply [opacity:0.5];
-}
-
 /* Bottom terminal panel, independent of editor and conversation selection. */
 
 /* Model and effort share one title, followed directly by the stepped track. */
@@ -704,24 +674,6 @@ kbd {
   @apply text-warn;
   @apply opacity-100;
 }
-button.scm-sync {
-  @apply w-full;
-  @apply justify-center;
-  @apply gap-1.5;
-  @apply h-7;
-  @apply min-h-7;
-  @apply mt-1.5;
-  @apply [border:1px_solid_transparent];
-  @apply rounded-(--radius-s);
-  @apply [background:var(--hover)];
-  @apply text-foreground;
-  @apply text-control;
-  @apply tabular-nums;
-}
-button.scm-sync:hover:not(:disabled) {
-  @apply [background:var(--pressed)];
-}
-
 /* Dropdown menus (shadcn) match the compact hand-built menus: content-sized, 28px rows, one radius ladder (item 8px inside a 4px pad = 12px panel). */
 :where([data-slot='dropdown-menu-content'], [data-slot='dropdown-menu-sub-content']) {
   @apply w-[max-content];
@@ -1000,7 +952,7 @@ button.scm-sync:hover:not(:disabled) {
 /* Working state: a live "Working for 4s" rule above the steps, streamed words fading in, and a quiet "Thinking" below. */
 @keyframes stream-in {
   from {
-    opacity: 0;
+    opacity: 0.5;
   }
   to {
     opacity: 1;
@@ -1401,11 +1353,9 @@ button.scm-sync:hover:not(:disabled) {
   60%,
   100% {
     transform: translateY(0);
-    opacity: 0.35;
   }
   30% {
     transform: translateY(-1.5px);
-    opacity: 1;
   }
 }
 /* The chat title is left-aligned inside its switcher, with the chevron right after the text. */
@@ -1555,52 +1505,6 @@ button.ghost.danger-text {
   }
 }
 
-/* One commit action with a separate, keyboard-accessible options trigger. */
-button.scm-commit-menu {
-  @apply relative;
-  @apply w-7;
-  @apply h-7;
-  @apply [border:0];
-  @apply [border-radius:0_var(--radius-s)_var(--radius-s)_0];
-}
-.scm-commit-menu::before {
-  @apply [content:''];
-  @apply absolute;
-  @apply left-0;
-  @apply top-2;
-  @apply bottom-2;
-  @apply w-px;
-  @apply [background:#ffffff40];
-}
-button.scm-commit-menu:disabled {
-  @apply [background:var(--primary)];
-  @apply [color:var(--primary-ink)];
-  @apply [opacity:.5];
-}
-
-/* Git section (branch, commits, stashes). One block: same 8px gutter and 28px rows as the lists above it. */
-button.git-inspector-heading {
-  @apply flex-none;
-  @apply w-auto;
-  @apply justify-start;
-  @apply gap-1.5;
-  @apply h-7;
-  @apply p-[0_6px_0_4px];
-  @apply [border:0];
-  @apply [background:none];
-  @apply text-foreground;
-  @apply text-control;
-  @apply font-semibold;
-}
-button.git-inspector-heading:hover:not(:disabled) {
-  @apply [background:none];
-  @apply [border:0];
-}
-button.git-inspector-heading > svg {
-  @apply w-[13px];
-  @apply flex-none;
-}
-
 /* Commit graph: a dot per commit on one line. Filled dots are on the upstream; rings are not pushed yet. */
 
 .git-stashes .stash-row {
@@ -1644,24 +1548,6 @@ button.git-inspector-heading > svg {
 .git-stashes .stash-row:focus-within .stash-actions {
   @apply opacity-100;
 }
-button.git-stash-new {
-  @apply w-full;
-  @apply justify-start;
-  @apply h-7;
-  @apply min-h-7;
-  @apply p-[0_6px];
-  @apply gap-2;
-  @apply [border:0];
-  @apply [background:transparent];
-  @apply text-muted-foreground;
-  @apply text-caption;
-}
-button.git-stash-new:hover:not(:disabled) {
-  @apply [background:var(--hover)];
-  @apply [border:0];
-  @apply text-foreground;
-}
-
 /* Toasts (shadcn Toast, composed in components/app-toaster): above the status bar on the right, on Ramu's floating surface. */
 [data-slot='toast'] {
   @apply [background:var(--float-bg)];

@@ -9,12 +9,11 @@ import { NO_PROJECT } from '@ramu/shared/types'
 import { focusComposer } from '../composer/ComposerInput'
 import { Spinner } from '@/components/ui/spinner'
 import { t as translate, useLanguage } from '../i18n'
-import { LoadingDots } from '@/components/loading-dots'
+import { ScrollToLatestButton } from './agent/components/ScrollToLatestButton'
 import { isCompacting } from '@ramu/shared/chat/compaction'
 import { Button } from '@/components/desktop-button'
 import {
   MessageScroller,
-  MessageScrollerButton,
   MessageScrollerContent,
   MessageScrollerItem,
   MessageScrollerProvider,
@@ -22,7 +21,6 @@ import {
 } from '@/components/ui/message-scroller'
 import { TranscriptScrollApi } from './agent/components/TranscriptScrollApi'
 import type { FileContext } from '@ramu/shared/types'
-import { ArrowDown } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, AgentEvent } from '@ramu/shared/types'
 import { agentActivityLabel } from '@ramu/shared/chat/agentActivity'
@@ -91,6 +89,8 @@ import { SelectionActions } from './agent/components/SelectionActions'
 import { EditFromHereDialog } from './agent/components/EditFromHereDialog'
 import { MESSAGE_ACTION_EVENT, type MessageActionDetail } from './agent/components/MessageQuoteActions'
 import { WORKING_CLASS } from './agent/styles'
+import { PendingSubmission } from './agent/components/PendingSubmission'
+import { pendingSubmissionVisible, type PendingSubmission as Submission } from './agent/lib/pendingSubmission'
 
 /** A chat with an agent: its transcript, the message box and the side panels for sub-agents and asides. */
 export const AgentView = memo(function AgentView({
@@ -139,6 +139,8 @@ export const AgentView = memo(function AgentView({
   /** The sent message being edited in place. The composer and its draft are left alone. */
   const [editing, setEditing] = useState<MessageEdit | null>(null)
   const [configuring, setConfiguring] = useState(false)
+  const [pendingSubmission, setPendingSubmission] = useState<Submission | null>(null)
+  const showingSubmission = pendingSubmissionVisible(pendingSubmission, sourceEvents, queued)
   const [dropping, setDropping] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const { scroller, stick, onScroll } = useTranscriptScroll({
@@ -500,6 +502,14 @@ export const AgentView = memo(function AgentView({
         return
       }
       const outgoing = submitted
+      stick.current = true
+      scrollToEnd.current?.()
+      setPendingSubmission({
+        text: outgoing,
+        attachments: submittedFiles,
+        afterEvent: sourceEvents.length,
+        queuedIds: queued.map((message) => message.id),
+      })
       setConfiguring(true)
       try {
         await applyPendingSettings()
@@ -529,8 +539,8 @@ export const AgentView = memo(function AgentView({
         if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
         setAttachments((current) => current.filter((file) => !submittedFiles.some((sent) => sent.id === file.id)))
         stick.current = true
-        scrollToEnd.current?.()
       } finally {
+        setPendingSubmission(null)
         setConfiguring(false)
       }
     }, true)
@@ -679,7 +689,7 @@ export const AgentView = memo(function AgentView({
                   ref={scroller}
                   onScroll={onScroll}
                   aria-label={translate('Conversation')}
-                  className="scroll-fade-y px-6 pt-3 pb-7"
+                  className={`scroll-fade-y px-6 pt-3 pb-7 ${showingSubmission ? 'motion-safe:scroll-smooth' : ''}`}
                 >
                   {hiddenTurns > 0 && (
                     <Button
@@ -719,6 +729,11 @@ export const AgentView = memo(function AgentView({
                         />
                       </MessageScrollerItem>
                     ))}
+                    {showingSubmission && pendingSubmission && (
+                      <MessageScrollerItem messageId="pending-submission">
+                        <PendingSubmission submission={pendingSubmission} />
+                      </MessageScrollerItem>
+                    )}
                     {activityLabel && (compacting || !statusGroup) && (
                       <div
                         className={WORKING_CLASS}
@@ -731,15 +746,7 @@ export const AgentView = memo(function AgentView({
                     )}
                   </MessageScrollerContent>
                 </MessageScrollerViewport>
-                <MessageScrollerButton
-                  variant="outline"
-                  behavior="auto"
-                  className="rounded-full shadow-sm backdrop-blur-sm"
-                  aria-label={working ? translate('Agent is working. Scroll to latest') : translate('Scroll to latest')}
-                  title={translate('Scroll to latest')}
-                >
-                  {working ? <LoadingDots /> : <ArrowDown size={14} />}
-                </MessageScrollerButton>
+                <ScrollToLatestButton working={working} />
               </MessageScroller>
               <SelectionActions
                 scroller={scroller}

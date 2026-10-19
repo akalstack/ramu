@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { themeCssVariables, type ThemeVariant } from '@ramu/shared/theme'
+import { Button } from '@/components/desktop-button'
 import { t } from '../i18n'
 
 /** The translucent steps styles.css derives from the overlay ink; a preview scope has to restate them itself. */
@@ -111,13 +112,12 @@ export function ThemePreview({ variant, compact = false }: { variant: ThemeVaria
           ))}
         </div>
         <div className="flex items-center gap-1.5">
-          <span
-            className="rounded-(--radius-s) px-2 py-0.5"
-            style={{ background: 'var(--primary)', color: 'var(--primary-ink)' }}
-          >
+          <Button variant="default" tabIndex={-1} aria-hidden>
             {t('Send')}
-          </span>
-          <span className="rounded-(--radius-s) px-2 py-0.5 bg-fill">{t('Cancel')}</span>
+          </Button>
+          <Button variant="secondary" tabIndex={-1} aria-hidden>
+            {t('Cancel')}
+          </Button>
           <span
             className="flex-1 truncate rounded-(--radius-xs) px-1.5 py-0.5 font-mono"
             style={{ background: 'var(--code-bg)', color: 'var(--text-body)' }}

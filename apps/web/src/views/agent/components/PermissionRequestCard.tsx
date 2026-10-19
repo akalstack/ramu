@@ -1,3 +1,4 @@
+import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import { ShieldQuestion } from 'lucide-react'
@@ -92,12 +93,7 @@ export function PermissionRequestCard({
             </div>
           )}
           <div className="row flex flex-wrap gap-1.5">
-            <Button
-              variant="default"
-              className="primary bg-primary text-primary-foreground border-transparent font-semibold justify-center hover:bg-primary-hover disabled:bg-raised disabled:text-muted-foreground disabled:opacity-100"
-              disabled={busy}
-              onClick={() => void act(true)}
-            >
+            <Button variant="default" className={PRIMARY_ACTION_CLASS} disabled={busy} onClick={() => void act(true)}>
               {translate('Allow once')}
             </Button>
             {e.approvalKey && e.approvalProjectId && (

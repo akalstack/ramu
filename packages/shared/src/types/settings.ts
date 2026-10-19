@@ -37,6 +37,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   accent: 'blue' | 'violet' | 'teal'
   fontFamily: 'system' | 'geist'
   fontSize: number
+  /** Opening mode for Markdown files without a requested source selection. */
+  defaultMarkdownView: 'source' | 'edit' | 'preview'
   editorFontSize: number
   terminalFontSize: number
   previewTabs: boolean
@@ -116,6 +118,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   fontSmoothing: true,
   reduceMotion: false,
   recentChatMode: false,
+  defaultMarkdownView: 'preview',
   editorFontSize: 13,
   terminalFontSize: 12,
   previewTabs: true,

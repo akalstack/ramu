@@ -3632,3 +3632,106 @@ for (const os of ['ios', 'android']) {
     hooks.dispose()
   })
 }
+
+function chatView() {
+  let states = []
+  const componentStates = new Map()
+  let cursor = 0
+  const store = { language: 'en', drafts: {}, chats: [], setDraft() {} }
+  const component = load('components/Transcript.tsx', 'ios', {
+    react: {
+      ...require('react'),
+      useState(initial) {
+        const at = cursor++
+        if (!(at in states)) states[at] = typeof initial === 'function' ? initial() : initial
+        return [
+          states[at],
+          (next) => {
+            states[at] = typeof next === 'function' ? next(states[at]) : next
+          },
+        ]
+      },
+      useEffect() {},
+      useContext: () => () => {},
+    },
+    '../runtime/store': { useStore: () => store },
+    '@ramu/shared/i18n': { translate: (_language, text) => text },
+    '../i18n': { useT: () => ({}), fill: (text) => text },
+    './ui': { ...components, tap() {}, T: 'T', Card: 'Card' },
+    './Motion': { Collapse: 'Collapse', Disclosure: 'Disclosure', Breathe: 'Breathe' },
+  })
+  const invoke = (node) => {
+    states = componentStates.get(node.type) ?? []
+    componentStates.set(node.type, states)
+    cursor = 0
+    return node.type(node.props)
+  }
+  return {
+    invoke,
+    block(item) {
+      const root = component.TranscriptItemView({ item, chat: { id: 'chat' } })
+      const block = nodes(root).find((node) => node.type?.name === 'TranscriptBlock')
+      return invoke(invoke(block))
+    },
+  }
+}
+
+test('mobile answered questions keep the bold answer outside the collapsed original options', () => {
+  const view = chatView()
+  let tree = view.block({
+    kind: 'question',
+    id: 'q',
+    outcome: 'answered',
+    answers: { q: 'Story' },
+    questions: [
+      {
+        id: 'q',
+        question: 'Where?',
+        multiSelect: false,
+        options: [
+          { label: 'Story', description: 'Under the story' },
+          { label: 'Epic', description: 'New epic' },
+        ],
+      },
+    ],
+  })
+  tree = view.invoke(tree) // QuestionHistory
+  const entry = nodes(tree).find((node) => node.type?.name === 'QuestionHistoryEntry')
+  let history = view.invoke(entry)
+  const collapse = find(history, 'Collapse')
+  assert.equal(collapse.props.open, false)
+  const answer = nodes(history).find((node) => node.props?.copyable === 'Story')
+  assert.equal(answer.props.weight, '600')
+  assert.ok(!nodes(collapse).includes(answer))
+  const options = nodes(collapse).filter((node) => node.type?.name === 'Option')
+  assert.deepEqual(
+    options.map((node) => [node.props.label, node.props.selected]),
+    [
+      ['Story', true],
+      ['Epic', false],
+    ],
+  )
+  find(history, 'Pressable').props.onPress()
+  history = view.invoke(entry)
+  assert.equal(find(history, 'Collapse').props.open, true)
+  assert.equal(find(history, 'Pressable').props.accessibilityState.expanded, true)
+})
+
+test('mobile grouped tool rows expand with the same disclosure and preserve every tool', () => {
+  const view = chatView()
+  const item = {
+    kind: 'tools',
+    id: 'first',
+    tools: [
+      { kind: 'tool', id: 'first', tool: 'read', verb: 'Read', subject: 'a.ts', status: 'completed' },
+      { kind: 'tool', id: 'second', tool: 'execute', verb: 'Bash', subject: 'tests', status: 'in_progress' },
+    ],
+  }
+  let tree = view.block(item)
+  assert.equal(find(tree, 'Collapse').props.open, false)
+  assert.equal(nodes(tree).filter((node) => node.type?.name === 'ToolRow').length, 2)
+  find(tree, 'Pressable').props.onPress()
+  tree = view.block(item)
+  assert.equal(find(tree, 'Collapse').props.open, true)
+  assert.equal(find(tree, 'Pressable').props.accessibilityState.expanded, true)
+})

@@ -64,18 +64,19 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
     let disposed = false
     setLoading(true)
     setLoadError(null)
-    void Promise.all([invoke('files.all', scope), invoke('skills.list', scope)])
-      .then(
-        ([f, s]) => {
-          if (!disposed) {
-            setFiles(f)
-            setSkills(s)
-          }
-        },
-        (e) => {
-          if (!disposed) setLoadError(errorText(e))
-        },
-      )
+    // A skills failure must not hide files (and slash commands need no file scan).
+    const request =
+      mode === '@'
+        ? invoke('files.all', scope).then((files) => {
+            if (!disposed) setFiles(files)
+          })
+        : invoke('skills.list', scope).then((skills) => {
+            if (!disposed) setSkills(skills)
+          })
+    void request
+      .then(undefined, (e) => {
+        if (!disposed) setLoadError(errorText(e))
+      })
       .finally(() => {
         if (!disposed) setLoading(false)
       })
@@ -333,12 +334,21 @@ export function ComposerSuggestions({
 }) {
   useLanguage()
 
+  const listRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    document.getElementById(`${suggestions.listId}-${suggestions.selected}`)?.scrollIntoView({ block: 'nearest' })
-  }, [suggestions.listId, suggestions.selected])
+    const list = listRef.current
+    const option = document.getElementById(`${suggestions.listId}-${suggestions.selected}`)
+    if (!list || !option) return
+    // Scroll only the popup, keeping the composer and transcript in place.
+    const top = option.getBoundingClientRect().top - list.getBoundingClientRect().top - list.clientTop
+    if (top < 0) list.scrollTop += top
+    else if (top + option.offsetHeight > list.clientHeight)
+      list.scrollTop += top + option.offsetHeight - list.clientHeight
+  }, [suggestions.listId, suggestions.selected, suggestions.choices])
   return (
     <div
-      className="composer-suggestions [&_button]:w-full [&_button]:[border:0] [&_button]:bg-transparent [&_button]:text-left [&_button]:flex [&_button]:items-center [&_button]:justify-between [&_button]:gap-3.5 [&_button]:p-[10px_12px] [&_button]:rounded-(--radius-s) [&_button.selected]:[background:rgb(var(--ink)_/_0.07)] [&_button_strong]:text-caption [&_button_strong]:font-medium [&_button_>_span:first-child]:min-w-0 [&_button_.block]:overflow-hidden [&_button_.block]:text-ellipsis [&_button_.block]:whitespace-nowrap [&_button_.block]:max-w-[600px] [&_button_.block]:mt-[3px] [animation:arrive_120ms_var(--ease)] [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] [box-shadow:0_18px_48px_rgba(0,_0,_0,_0.45),_0_2px_8px_rgba(0,_0,_0,_0.25),_inset_0_1px_0_rgb(var(--ink)_/_0.07)] absolute z-100 bottom-[calc(100%_+_8px)] left-0 right-0 max-h-[330px] overflow-y-auto bg-raised [border:1px_solid_var(--edge)] rounded-(--radius-row) [box-shadow:0_10px_35px_#0008] p-[5px]"
+      ref={listRef}
+      className="composer-suggestions [animation:arrive_120ms_var(--ease)] [background:var(--float-bg)] [-webkit-backdrop-filter:var(--float-blur)] [backdrop-filter:var(--float-blur)] absolute z-100 bottom-[calc(100%_+_8px)] left-0 right-0 max-h-[330px] overflow-x-hidden overflow-y-auto bg-raised [border:1px_solid_var(--edge)] rounded-(--radius-row) [box-shadow:0_10px_35px_#0008] p-[5px]"
       role="listbox"
       id={suggestions.listId}
       aria-label={t('Commands, skills, and files')}
@@ -359,17 +369,22 @@ export function ComposerSuggestions({
           id={`${suggestions.listId}-${i}`}
           role="option"
           aria-selected={i === suggestions.selected}
-          className={i === suggestions.selected ? 'selected' : ''}
+          title={choice.label}
+          className="w-full min-w-0 justify-between gap-3.5 rounded-(--radius-s) border-0 bg-transparent p-[10px_12px] text-left aria-selected:bg-hover hover:bg-hover"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onChoose(i)}
         >
-          <span>
-            <strong>{choice.label}</strong>
-            <span className="muted text-muted-foreground small text-caption block block">{choice.description}</span>
+          <span className="min-w-0 flex-1">
+            <strong className="block truncate text-caption font-medium">
+              {choice.file ? choice.file.path.split('/').pop() : choice.label}
+            </strong>
+            <span className="mt-[3px] block truncate text-muted-foreground text-caption">
+              {choice.file ? choice.label : choice.description}
+            </span>
           </span>
           <Badge
             variant="outline"
-            className="chip tabular-nums text-caption bg-hover rounded-full p-[1px_8px] text-soft whitespace-nowrap"
+            className="shrink-0 chip tabular-nums text-caption bg-hover rounded-full p-[1px_8px] text-soft whitespace-nowrap"
           >
             {t(choice.kind)}
           </Badge>

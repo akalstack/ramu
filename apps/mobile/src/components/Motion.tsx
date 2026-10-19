@@ -94,18 +94,69 @@ export function Shimmer({
 /** Entries that appear while the agent works rise 4 pt and fade in, like the desktop's `arrive` keyframe. */
 export function Arrive({ animate, children }: { animate: boolean; children: ReactNode }) {
   const reduced = useReducedMotion()
-  const progress = useRef(new Animated.Value(animate && !reduced ? 0 : 1)).current
+  const enter = useRef(animate).current
+  const progress = useRef(new Animated.Value(enter && !reduced ? 0 : 1)).current
   useEffect(() => {
-    if (!animate || reduced) return
-    Animated.timing(progress, {
+    if (!enter || reduced) {
+      progress.setValue(1)
+      return
+    }
+    const animation = Animated.timing(progress, {
       toValue: 1,
       duration: 200,
       easing: Easing.out(Easing.quad),
       useNativeDriver: true,
-    }).start()
-  }, [animate, reduced, progress])
+    })
+    animation.start()
+    return () => animation.stop()
+  }, [enter, reduced, progress])
   const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [4, 0] })
   return <Animated.View style={{ opacity: progress, transform: [{ translateY }] }}>{children}</Animated.View>
+}
+
+/** Height and opacity disclosure motion, shared by every expandable transcript block. */
+export function Collapse({ open, children }: { open: boolean; children: ReactNode }) {
+  const reduced = useReducedMotion()
+  const [mounted, setMounted] = useState(open)
+  const [height, setHeight] = useState(0)
+  const size = useRef(new Animated.Value(0)).current
+  const opacity = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    if (open) setMounted(true)
+    const animation = Animated.parallel([
+      Animated.timing(size, {
+        toValue: open ? height : 0,
+        duration: reduced ? 0 : 200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }),
+      Animated.timing(opacity, {
+        toValue: open ? 1 : 0,
+        duration: reduced ? 0 : 160,
+        useNativeDriver: false,
+      }),
+    ])
+    animation.start(({ finished }) => {
+      if (finished && !open) setMounted(false)
+    })
+    return () => animation.stop()
+  }, [open, height, reduced, size, opacity])
+  if (!open && !mounted) return null
+  return (
+    <Animated.View
+      pointerEvents={open ? 'auto' : 'none'}
+      accessibilityElementsHidden={!open}
+      importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+      style={{ height: size, opacity, overflow: 'hidden' }}
+    >
+      <View
+        onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
+      >
+        {children}
+      </View>
+    </Animated.View>
+  )
 }
 
 /** A soft breathing pulse while `active` (a tool still running), settling back to full opacity when it stops. */
@@ -177,9 +228,10 @@ export function animateLayout(duration = 220) {
 
 /** A disclosure chevron that turns from right to down, as in iOS lists and Android expandable rows. */
 export function Disclosure({ open, size = 14, color }: { open: boolean; size?: number; color: string }) {
+  const reduced = useReducedMotion()
   const turn = useRef(new Animated.Value(open ? 1 : 0)).current
   useEffect(() => {
-    if (reduceMotion) {
+    if (reduced) {
       turn.setValue(open ? 1 : 0)
       return
     }
@@ -189,7 +241,7 @@ export function Disclosure({ open, size = 14, color }: { open: boolean; size?: n
       easing: Easing.out(Easing.quad),
       useNativeDriver: true,
     }).start()
-  }, [open, turn])
+  }, [open, reduced, turn])
   const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] })
   return (
     <Animated.View style={{ transform: [{ rotate }] }}>

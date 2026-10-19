@@ -137,7 +137,25 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       run: (workspaceId: string, name: string, before: string) =>
         workspace.renameWorktreeWorkspace(workspaceId, name, before),
     },
-    'tasks.list': { args: z.tuple([]), run: () => workspace.listTasks() },
+    'tasks.list': {
+      args: z.tuple([]),
+      run: () =>
+        workspace.listTasks().map((task) => {
+          const main = agents.list(task.id).findLast((session) => !session.parentId)
+          const goal = main ? agents.goalOf(main.id) : null
+          if (!goal || goal.status === 'completed') return { ...task, goalState: null }
+          return {
+            ...task,
+            goalState: {
+              status: goal.status,
+              ...(goal.pausedBy ? { pausedBy: goal.pausedBy } : {}),
+              objective: goal.objective.slice(0, 300),
+              ...(goal.claim ? { verifying: true } : {}),
+              ...(goal.reason ? { reason: goal.reason.slice(0, 300) } : {}),
+            },
+          }
+        }),
+    },
     'tasks.workspaceOptions': {
       args: z.tuple([id]),
       run: async (projectId: string) => {

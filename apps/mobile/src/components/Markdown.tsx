@@ -55,11 +55,8 @@ export function ReferenceBadge({ chip, onPress }: { chip: ReferenceChip; onPress
   )
 }
 
-// The reply being written fades in word by word, like the desktop's `stream-in`: a new word starts clear and settles over
-// FADE_MS, and words that arrive together are staggered so they flow in instead of landing as one block.
-const FADE_MS = 900
-const STAGGER_MS = 30
-const STAGGER_CAP_MS = 420
+// Match desktop: a brief fade on new words, with no stagger or delayed typing queue.
+const FADE_MS = 120
 // A burst (a reopened chat, a big chunk) fades only its last words, so a frame never repaints hundreds of spans.
 const MAX_FADING = 24
 
@@ -96,12 +93,7 @@ function fadeWords(text: string, key: string, fade: WordFade, tint: string): Rea
     const at = fade.index++
     let born = fade.births[at]
     if (born === undefined) {
-      const last = fade.births.at(-1) ?? 0
-      // Never before an earlier word, never later than the cap, so the tail of a big chunk still arrives promptly.
-      born =
-        fade.settled || at < fade.total - MAX_FADING
-          ? 0
-          : Math.max(last, fade.now, Math.min(last + STAGGER_MS, fade.now + STAGGER_CAP_MS))
+      born = fade.settled || at < fade.total - MAX_FADING ? 0 : fade.now
       fade.births[at] = born
     }
     const progress = Math.min(1, Math.max(0, (fade.now - born) / FADE_MS))
@@ -112,7 +104,7 @@ function fadeWords(text: string, key: string, fade: WordFade, tint: string): Rea
     if (plain) out.push(plain)
     plain = ''
     out.push(
-      <Text key={`${key}-${i}`} style={{ color: withAlpha(tint, 1 - (1 - progress) ** 2) }}>
+      <Text key={`${key}-${i}`} style={{ color: withAlpha(tint, 0.5 + 0.5 * (1 - (1 - progress) ** 2)) }}>
         {part}
       </Text>,
     )

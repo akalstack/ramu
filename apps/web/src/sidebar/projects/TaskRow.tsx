@@ -30,6 +30,9 @@ import { WorkspaceNameDialog } from '../../workspace/WorkspaceNameDialog'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS } from './constants'
 import { InlineEdit } from './InlineEdit'
 import { TaskStateIcon } from './TaskStateIcon'
+import { ThreadHoverCard } from './ThreadHoverCard'
+import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
+import { threadStatus } from '@ramu/shared/chat/threadStatus'
 
 /**
  * One thread in the sidebar, on whichever host it lives: the host comes from the nearest `HostScope` (or the store on
@@ -69,6 +72,7 @@ export function TaskRow({
     else if (!unavailable) select(host.id, { kind: 'task', taskId: task.id })
   }
   const [renaming, setRenaming] = useState(false)
+  const [hover, setHover] = useState(false)
   const [renamingWorkspace, setRenamingWorkspace] = useState<{
     host: string
     openedOn: string
@@ -229,117 +233,137 @@ export function TaskRow({
 
   const contextMenu = useContextMenu(`${task.title} actions`, items)
 
+  const status = threadStatus(task, onScreen && !!ws?.unread.has(task.id), task.goalState)
   return (
     <>
-      <div
-        onContextMenu={unavailable ? undefined : contextMenu.onContextMenu}
-        className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 ${projectName || hostName ? 'min-h-11' : 'min-h-[30px]'} rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${archived ? ' archived' : ''}${nested ? ' pl-[31px]' : ''}`}
-        role="button"
-        tabIndex={0}
-        aria-disabled={unavailable || undefined}
-        onClick={() => !renaming && open()}
-        onDoubleClick={() => {
-          if (!unavailable) setRenaming(true)
-        }}
-        onKeyDown={(e) => {
-          if (unavailable) return
-          contextMenu.onKeyDown(e)
-          if (e.key === 'Enter' && !renaming) open()
-        }}
-      >
-        {renaming ? (
-          <InlineEdit
-            value={task.title}
-            onDone={(v) => {
-              setRenaming(false)
-              if (v && v !== task.title) void run(() => host.invoke('tasks.rename', task.id, v))
-            }}
-          />
-        ) : (
-          <>
-            {projectName || hostName ? (
-              <span className="grow flex-1 min-w-0 flex flex-col py-1 text-left">
-                <FadeText className="task-title overflow-hidden whitespace-nowrap" text={task.title} />
-                <span className="task-project truncate text-caption text-muted-foreground">
-                  {[projectName, hostName].filter(Boolean).join(' · ')}
+      <HoverCard open={hover && !renaming} onOpenChange={setHover}>
+        <HoverCardTrigger
+          delay={400}
+          closeDelay={120}
+          render={<div />}
+          onContextMenu={
+            unavailable
+              ? undefined
+              : (e: React.MouseEvent<HTMLElement>) => {
+                  setHover(false)
+                  contextMenu.onContextMenu(e)
+                }
+          }
+          className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 ${projectName || hostName ? 'min-h-11' : 'min-h-[30px]'} rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${archived ? ' archived' : ''}${nested ? ' pl-[31px]' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-disabled={unavailable || undefined}
+          onClick={() => !renaming && open()}
+          onDoubleClick={() => {
+            if (!unavailable) setRenaming(true)
+          }}
+          onKeyDown={(e) => {
+            if (unavailable) return
+            contextMenu.onKeyDown(e)
+            if (e.key === 'Enter' && !renaming) open()
+          }}
+        >
+          {renaming ? (
+            <InlineEdit
+              value={task.title}
+              onDone={(v) => {
+                setRenaming(false)
+                if (v && v !== task.title) void run(() => host.invoke('tasks.rename', task.id, v))
+              }}
+            />
+          ) : (
+            <>
+              {projectName || hostName ? (
+                <span className="grow flex-1 min-w-0 flex flex-col py-1 text-left">
+                  <FadeText className="task-title overflow-hidden whitespace-nowrap" text={task.title} />
+                  <span className="task-project truncate text-caption text-muted-foreground">
+                    {[projectName, hostName].filter(Boolean).join(' · ')}
+                  </span>
                 </span>
-              </span>
-            ) : (
-              <FadeText
-                className="grow flex-1 min-w-0 text-left task-title overflow-hidden whitespace-nowrap"
-                text={task.title}
-              />
-            )}
-            {task.kind === 'library-review' && (
-              <span className="task-kind flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
-                {t('Review')}
-              </span>
-            )}
-          </>
-        )}
-        {task.pinnedAt && !archived && !hidePin && (
-          <Pin
-            size={12}
-            className="task-pin muted text-muted-foreground mode-icon flex-none"
-            aria-label={t('Pinned')}
-          />
-        )}
-        {(naming || task.titleGenerationState === 'pending') && (
-          <Sparkles
-            size={12}
-            className="muted text-muted-foreground mode-icon flex-none"
-            aria-label={t('Naming thread')}
-          />
-        )}
-        {task.mode === 'worktree' && (
-          <span title={ws?.workspaces.find((w) => w.id === task.workspaceId)?.name ?? t('Isolated worktrees')}>
-            <GitBranch
+              ) : (
+                <FadeText
+                  className="grow flex-1 min-w-0 text-left task-title overflow-hidden whitespace-nowrap"
+                  text={task.title}
+                />
+              )}
+              {task.kind === 'library-review' && (
+                <span className="task-kind flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
+                  {t('Review')}
+                </span>
+              )}
+            </>
+          )}
+          {task.pinnedAt && !archived && !hidePin && (
+            <Pin
+              size={12}
+              className="task-pin muted text-muted-foreground mode-icon flex-none"
+              aria-label={t('Pinned')}
+            />
+          )}
+          {(naming || task.titleGenerationState === 'pending') && (
+            <Sparkles
               size={12}
               className="muted text-muted-foreground mode-icon flex-none"
-              aria-label={t('Isolated worktrees')}
+              aria-label={t('Naming thread')}
             />
-          </span>
-        )}
-        <span className={`${ROW_ACTIONS_CLASS} task-actions`}>
-          {!archived && (
+          )}
+          {task.mode === 'worktree' && (
+            <span title={ws?.workspaces.find((w) => w.id === task.workspaceId)?.name ?? t('Isolated worktrees')}>
+              <GitBranch
+                size={12}
+                className="muted text-muted-foreground mode-icon flex-none"
+                aria-label={t('Isolated worktrees')}
+              />
+            </span>
+          )}
+          <span className={`${ROW_ACTIONS_CLASS} task-actions`}>
+            {!archived && (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={ICON_BUTTON_CLASS}
+                disabled={unavailable}
+                aria-label={task.pinnedAt ? t('Unpin thread') : t('Pin thread')}
+                title={task.pinnedAt ? t('Unpin') : t('Pin')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void run(() => host.invoke('tasks.pin', task.id, !task.pinnedAt))
+                }}
+              >
+                {task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon-xs"
               className={ICON_BUTTON_CLASS}
               disabled={unavailable}
-              aria-label={task.pinnedAt ? t('Unpin thread') : t('Pin thread')}
-              title={task.pinnedAt ? t('Unpin') : t('Pin')}
+              aria-label={archived ? t('Unarchive thread') : done ? t('Reopen thread') : t('Mark thread done')}
+              title={archived ? t('Unarchive') : done ? t('Reopen') : t('Mark done')}
               onClick={(e) => {
                 e.stopPropagation()
-                void run(() => host.invoke('tasks.pin', task.id, !task.pinnedAt))
+                void run(async () => {
+                  if (archived) {
+                    await host.invoke('tasks.archive', task.id, false)
+                  } else {
+                    await host.invoke('tasks.done', task.id, !done)
+                  }
+                })
               }}
             >
-              {task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}
+              {archived ? <ArchiveRestore size={14} /> : done ? <RotateCcw size={14} /> : <Check size={14} />}
             </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className={ICON_BUTTON_CLASS}
-            disabled={unavailable}
-            aria-label={archived ? t('Unarchive thread') : done ? t('Reopen thread') : t('Mark thread done')}
-            title={archived ? t('Unarchive') : done ? t('Reopen') : t('Mark done')}
-            onClick={(e) => {
-              e.stopPropagation()
-              void run(async () => {
-                if (archived) {
-                  await host.invoke('tasks.archive', task.id, false)
-                } else {
-                  await host.invoke('tasks.done', task.id, !done)
-                }
-              })
-            }}
-          >
-            {archived ? <ArchiveRestore size={14} /> : done ? <RotateCcw size={14} /> : <Check size={14} />}
-          </Button>
-        </span>
-        <TaskStateIcon task={task} unread={onScreen && !!ws?.unread.has(task.id)} />
-      </div>
+          </span>
+          <TaskStateIcon task={task} unread={onScreen && !!ws?.unread.has(task.id)} />
+        </HoverCardTrigger>
+        <ThreadHoverCard
+          task={task}
+          status={status}
+          workspaceName={workspace?.name}
+          sharedWorkspace={sharedWorktree}
+          offline={!onScreen && host.status !== 'connected'}
+        />
+      </HoverCard>
       {contextMenu.menu}
       {renamingWorkspace?.host === host.id && renamingWorkspace.openedOn === activeHost && (
         <WorkspaceNameDialog

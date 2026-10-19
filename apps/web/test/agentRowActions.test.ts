@@ -1,12 +1,14 @@
 import { createElement, type ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { AgentSessionInfo } from '@ramu/shared/types'
+import type { AgentSessionInfo, Task } from '@ramu/shared/types'
 import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
 import { AgentRow } from '../src/HomeAgents'
 
 const state = vi.hoisted(() => ({
-  task: { id: 'thread', title: 'A finished thread', doneAt: null as number | null },
+  task: { id: 'thread', title: 'A finished thread', doneAt: null, status: 'idle', workspaceId: null } as Task,
+  hostStatus: 'connected',
+  cards: [] as Record<string, unknown>[],
   invoke: vi.fn(),
   refresh: vi.fn(),
   forgetTask: vi.fn(),
@@ -15,11 +17,14 @@ const state = vi.hoisted(() => ({
 }))
 vi.mock('../src/i18n', () => ({ useLanguage: () => {}, t: (text: string) => text }))
 vi.mock('../src/ipc', () => ({ invoke: state.invoke }))
-vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ id: 'local', invoke: state.invoke }) }))
+vi.mock('../src/workspace/HostProvider', () => ({
+  useHost: () => ({ id: 'local', status: state.hostStatus, invoke: state.invoke }),
+}))
 vi.mock('../src/workspace/workspace', () => ({
   useWorkspace: () => ({
     tasks: [state.task],
     projects: [],
+    workspaces: [{ id: 'checkout', name: 'Feature checkout' }],
     unread: new Set(),
     refresh: state.refresh,
     forgetTask: state.forgetTask,
@@ -33,6 +38,12 @@ vi.mock('@/components/desktop-button', () => ({
   }: ComponentProps<'button'> & { variant?: string; size?: string }) => {
     state.buttons.push(props)
     return createElement('button', props)
+  },
+}))
+vi.mock('../src/sidebar/projects/ThreadHoverCard', () => ({
+  ThreadHoverCard: (props: Record<string, unknown>) => {
+    state.cards.push(props)
+    return null
   },
 }))
 vi.mock('../src/chat/Notifications', () => ({ notifyError: state.notifyError }))
@@ -67,6 +78,10 @@ const click = () => {
 beforeEach(() => {
   vi.clearAllMocks()
   state.buttons = []
+  state.cards = []
+  state.hostStatus = 'connected'
+  state.task.workspaceId = null
+  state.task.goalState = null
   state.task.doneAt = null
   state.invoke.mockResolvedValue(undefined)
 })
@@ -97,4 +112,35 @@ it('reports a failed mark-done action without removing the thread', async () => 
   await vi.waitFor(() => expect(state.notifyError).toHaveBeenCalledWith('Cannot mark done'))
   expect(state.refresh).not.toHaveBeenCalled()
   expect(state.forgetTask).not.toHaveBeenCalled()
+})
+
+it('gives Home rows their exact workspace and shared goal status without navigating or fetching', () => {
+  state.task.workspaceId = 'checkout'
+  state.task.goalState = { status: 'active', objective: 'Ship the change' }
+  render()
+  expect(state.cards).toEqual([
+    expect.objectContaining({
+      task: state.task,
+      workspaceName: 'Feature checkout',
+      offline: false,
+      status: { kind: 'goal', short: 'Goal', full: 'Working toward goal' },
+    }),
+  ])
+  expect(state.invoke).not.toHaveBeenCalled()
+})
+
+it('qualifies cached Home details when the host disconnects', () => {
+  state.hostStatus = 'offline'
+  render()
+  expect(state.cards[0]?.offline).toBe(true)
+})
+
+it('does not show the parent checkout as a helper’s checkout', () => {
+  renderToStaticMarkup(
+    createElement(AgentRow, {
+      session: { ...session, parentId: 'parent' },
+      group: 'Done',
+    }),
+  )
+  expect(state.cards).toEqual([])
 })

@@ -33,7 +33,7 @@ export function TurnSummary({ label, children }: { label: string; children: Reac
           )}
         </MarkerIcon>
       </CollapsibleTrigger>
-      <CollapsibleContent className="turn-summary-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:none]">
+      <CollapsibleContent className="turn-summary-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden motion-safe:[transition:height_200ms_var(--ease)]">
         <div className="turn-summary-body flex flex-col gap-3 pt-3">{children}</div>
       </CollapsibleContent>
     </Collapsible>

@@ -9,7 +9,7 @@ import type {
   SwitchThreshold,
   UsageReading,
 } from '../types'
-import { providerName } from './providers'
+import { providerName, providerAccountOrder, type ProviderConfiguration } from './providers'
 import { usageAppliesTo } from '@ramu/shared/providers/usageScope'
 
 // One place decides where a chat or sub-agent continues when a provider's plan is nearly used up.
@@ -96,14 +96,24 @@ export interface RouteContext {
   now?: number
   /** Steps already used for this chat, as `provider:model`. */
   attempted?: ReadonlySet<string>
+  /** All enabled logins and their readings, before considering a different model. */
+  accounts?: { configuration: ProviderConfiguration; usage: UsageReading[] }
+  attemptedAccounts?: ReadonlySet<string>
 }
 
 /** The first chain entry that is available, not tried yet and under the threshold. */
-export function nextStep(chain: FallbackStep[], context: RouteContext): FallbackStep | null {
+export function nextStep(chain: FallbackStep[], context: RouteContext): (FallbackStep & { accountId?: string }) | null {
   const now = context.now ?? Date.now()
   for (const entry of chain) {
     const step = resolveStep(entry, context.catalogs)
     if (!step || context.attempted?.has(stepKey(step))) continue
+    if (context.accounts) {
+      for (const accountId of providerAccountOrder(context.accounts.configuration, step.provider)) {
+        const usage = context.accounts.usage.filter((reading) => (reading.accountId ?? 'default') === accountId)
+        if (!isOver(peakFor(usage, step.provider, step.model, now), context.switchAt)) return { ...step, accountId }
+      }
+      continue
+    }
     if (isOver(peakFor(context.usage, step.provider, step.model, now), context.switchAt)) continue
     return step
   }
@@ -112,7 +122,7 @@ export function nextStep(chain: FallbackStep[], context: RouteContext): Fallback
 
 /** The usage reading that requires switching models. */
 export interface RouteDecision {
-  step: FallbackStep
+  step: FallbackStep & { accountId?: string }
   reason: string
   peak: UsageReading
 }
@@ -138,7 +148,8 @@ export function limitReason(provider: AgentProvider, peak: UsageReading): string
 
 /** Switch only when the current model reaches the usage threshold and another entry has room. */
 export function planRoute(
-  settings: Pick<AgentSettings, 'provider' | 'model' | 'autoFallback'>,
+  settings: Pick<AgentSettings, 'provider' | 'model' | 'autoFallback'> &
+    Partial<Pick<AgentSettings, 'accountId' | 'effort' | 'serviceTier'>>,
   order: FallbackStep[],
   context: RouteContext,
 ): RouteDecision | null {
@@ -151,8 +162,35 @@ export function planRoute(
   const attempted = new Set(context.attempted ?? [])
   attempted.add(stepKey(settings))
   attempted.add(current)
-  const peak = peakFor(context.usage, settings.provider, model, context.now)
+  const accountId =
+    settings.accountId ??
+    (context.accounts ? providerAccountOrder(context.accounts.configuration, settings.provider)[0] : undefined) ??
+    'default'
+  const usage = context.accounts
+    ? context.accounts.usage.filter((reading) => (reading.accountId ?? 'default') === accountId)
+    : context.usage
+  const peak = peakFor(usage, settings.provider, model, context.now)
   if (peak && isOver(peak, context.switchAt)) {
+    if (context.accounts) {
+      const next = nextAccount(
+        { ...settings, accountId },
+        providerAccountOrder(context.accounts.configuration, settings.provider),
+        { ...context, usage: context.accounts.usage, attempted: context.attemptedAccounts },
+      )
+      if (next)
+        return {
+          step: {
+            id: '',
+            provider: settings.provider,
+            model,
+            effort: settings.effort ?? null,
+            serviceTier: settings.serviceTier,
+            accountId: next,
+          },
+          peak,
+          reason: limitReason(settings.provider, peak),
+        }
+    }
     const step = nextStep(order, { ...context, attempted })
     return step ? { step, peak, reason: limitReason(settings.provider, peak) } : null
   }

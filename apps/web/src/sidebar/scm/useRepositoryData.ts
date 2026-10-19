@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { RepositoryBinding } from '@ramu/shared/types'
-import { ipcQueryKeyOn } from '../../dataQueries'
+import { repositoryQueryKey } from '../../git/repositoryQueryKey'
 import { useHost } from '../../workspace/HostProvider'
 import { useHostRuntime } from '../../workspace/workspace'
 import { queryInvokerFor } from '../../git/hostQuery'
@@ -13,19 +13,19 @@ export function useRepositoryData(taskId: string, binding: RepositoryBinding, re
   const { on } = useHostRuntime()
   const call = queryInvokerFor(host)
   const statusQuery = useQuery({
-    queryKey: ipcQueryKeyOn(host, 'git.status', taskId, binding.repoId),
+    queryKey: repositoryQueryKey(host, 'git.status', binding),
     queryFn: () => call('git.status', taskId, binding.repoId),
   })
   const historyQuery = useQuery({
-    queryKey: ipcQueryKeyOn(host, 'git.history', taskId, binding.repoId),
+    queryKey: repositoryQueryKey(host, 'git.history', binding),
     queryFn: () => call('git.history', taskId, binding.repoId),
   })
   const branchesQuery = useQuery({
-    queryKey: ipcQueryKeyOn(host, 'git.branches', taskId, binding.repoId),
+    queryKey: repositoryQueryKey(host, 'git.branches', binding),
     queryFn: () => call('git.branches', taskId, binding.repoId),
   })
   const stashesQuery = useQuery({
-    queryKey: ipcQueryKeyOn(host, 'git.stashes', taskId, binding.repoId),
+    queryKey: repositoryQueryKey(host, 'git.stashes', binding),
     queryFn: () => call('git.stashes', taskId, binding.repoId),
   })
 
@@ -34,9 +34,18 @@ export function useRepositoryData(taskId: string, binding: RepositoryBinding, re
       if (error) reportError(errorText(error))
   }, [statusQuery.error, historyQuery.error, branchesQuery.error, stashesQuery.error, reportError])
 
+  const { refetch: refreshStatus } = statusQuery
+  const { refetch: refreshHistory } = historyQuery
+  const { refetch: refreshBranches } = branchesQuery
+  const { refetch: refreshStashes } = stashesQuery
   const load = useCallback(async () => {
-    await Promise.all([statusQuery.refetch(), historyQuery.refetch(), branchesQuery.refetch(), stashesQuery.refetch()])
-  }, [statusQuery.refetch, historyQuery.refetch, branchesQuery.refetch, stashesQuery.refetch, reportError])
+    await Promise.all([
+      refreshStatus({ cancelRefetch: false }),
+      refreshHistory({ cancelRefetch: false }),
+      refreshBranches({ cancelRefetch: false }),
+      refreshStashes({ cancelRefetch: false }),
+    ])
+  }, [refreshStatus, refreshHistory, refreshBranches, refreshStashes])
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const off = on('fs:changed', ({ cwd }) => {

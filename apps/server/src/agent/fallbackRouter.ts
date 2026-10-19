@@ -26,6 +26,7 @@ import {
   planRoute,
   stepKey,
   type RouteDecision,
+  type RouteContext,
 } from '@ramu/shared/providers/routing'
 import { WRITING_STATES } from './constants'
 import { LIMIT_CONTINUATION } from './providerWait'
@@ -167,19 +168,29 @@ export class FallbackRouter {
   }
 
   /** Preferences and usage, once the app has provided them; tests run without. */
-  routing(settings?: AgentSettings): { prefs: AppPreferences; usage: UsageReading[]; all: UsageReading[] } | null {
+  routing(settings?: AgentSettings): {
+    prefs: AppPreferences
+    usage: UsageReading[]
+    all: UsageReading[]
+    accounts: NonNullable<RouteContext['accounts']>
+  } | null {
     const source = this.host.preferencesSource()
     const usage = this.host.usage()
     if (!source || !usage) return null
+    const prefs = source()
+    const all = usage.all?.() ?? usage.list()
     return {
-      prefs: source(),
-      usage: usage.list(settings ? { [settings.provider]: settings.accountId ?? 'default' } : {}),
-      all: usage.all?.() ?? [],
+      prefs,
+      usage: usage.list(
+        settings ? { [settings.provider]: settings.accountId ?? providerAccountId(settings.provider) } : {},
+      ),
+      all,
+      accounts: { configuration: prefs.providerBinaries, usage: all },
     }
   }
 
   /** Another login of the same provider with room, when the user turned account rotation on for it; null otherwise. */
-  private otherAccount(
+  otherAccount(
     settings: AgentSettings,
     routing: { prefs: AppPreferences },
     catalogs: ProviderCatalog[],
@@ -198,7 +209,7 @@ export class FallbackRouter {
   }
 
   /** Waits briefly for a current reading of the provider's other logins; a slow read never holds up the chat. */
-  private async freshAccountUsage(provider: AgentProvider): Promise<void> {
+  async freshAccountUsage(provider: AgentProvider): Promise<void> {
     const refresh = this.host.refreshAccountUsage()
     if (!refresh) return
     await Promise.race([
@@ -237,11 +248,14 @@ export class FallbackRouter {
     return prefs?.fallback.order ?? defaultOrder(catalogs)
   }
 
-  withStep(settings: AgentSettings, step: FallbackStep): AgentSettings {
+  withStep(settings: AgentSettings, step: FallbackStep & { accountId?: string }): AgentSettings {
     return {
       ...settings,
       accountId:
-        step.provider === settings.provider ? (settings.accountId ?? 'default') : providerAccountId(step.provider),
+        step.accountId ??
+        (step.provider === settings.provider
+          ? (settings.accountId ?? providerAccountId(settings.provider))
+          : providerAccountId(step.provider)),
       provider: step.provider,
       model: step.model,
       effort: step.effort,
@@ -251,11 +265,19 @@ export class FallbackRouter {
 
   /** Route foreground and background work only when its model reaches the usage threshold. */
   async route(settings: AgentSettings): Promise<RouteDecision | null> {
-    const routing = this.routing(settings)
+    let routing = this.routing(settings)
     if (!routing || !settings.autoFallback) return null
     const catalogs = await this.host.catalog()
+    const model =
+      resolveStep({ id: '', provider: settings.provider, model: settings.model, effort: null }, catalogs)?.model ??
+      settings.model
+    if (isOver(peakFor(routing.usage, settings.provider, model), routing.prefs.fallback.switchAt)) {
+      await this.freshAccountUsage(settings.provider)
+      routing = this.routing(settings) ?? routing
+    }
     return planRoute(settings, this.orderOf(catalogs, routing.prefs), {
       usage: routing.usage,
+      accounts: routing.accounts,
       catalogs,
       switchAt: routing.prefs.fallback.switchAt,
     })
@@ -266,7 +288,7 @@ export class FallbackRouter {
     this.host.record(id, {
       kind: 'settings',
       settings: to,
-      reason: `${reason} — continuing with ${providerName(to.provider)}`,
+      reason: `${reason} — continuing ${from.provider === to.provider && from.accountId !== to.accountId ? `on ${this.accountName(to.provider, to.accountId)}` : `with ${providerName(to.provider)}`}`,
       handoff: false,
       previous: from,
     })
@@ -274,33 +296,32 @@ export class FallbackRouter {
 
   /** Before sending, fall back only at the usage threshold, respecting explicit composer holds. */
   async switchBeforeSend(id: string): Promise<boolean> {
-    const routing = this.routing(this.host.get(id).settings)
-    if (!routing) return false
     const s = this.host.get(id)
+    let routing = this.routing(s.settings)
+    if (!routing) return false
     const catalogs = await this.host.catalog()
     const policy = this.policyOf(s, catalogs, routing.prefs)
-    // Another login of the same provider comes before another model.
-    if (!this.holds.has(id) && isOver(peakFor(routing.usage, s.settings.provider, s.settings.model), policy.switchAt)) {
+    const model =
+      resolveStep({ id: '', provider: s.provider, model: s.settings.model, effort: null }, catalogs)?.model ??
+      s.settings.model
+    if (
+      !this.holds.has(id) &&
+      s.settings.autoFallback &&
+      isOver(peakFor(routing.usage, s.provider, model), policy.switchAt)
+    ) {
       const tried = this.attemptedAccounts.get(id) ?? new Set<string>()
-      tried.add(accountKey(s.settings.provider, s.settings.accountId))
+      tried.add(accountKey(s.provider, s.settings.accountId))
       this.attemptedAccounts.set(id, tried)
-      await this.freshAccountUsage(s.settings.provider)
-      const account = this.otherAccount(s.settings, routing, catalogs, policy.switchAt, tried)
-      if (account) {
-        tried.add(accountKey(s.settings.provider, account))
-        await this.applySettings(
-          id,
-          { ...s.settings, accountId: account },
-          `${providerName(s.settings.provider)} on ${this.accountName(s.settings.provider, s.settings.accountId)} is at its limit — continuing on ${this.accountName(s.settings.provider, account)}`,
-        )
-        return true
-      }
+      await this.freshAccountUsage(s.provider)
+      routing = this.routing(s.settings) ?? routing
     }
     const decision = planRoute(s.settings, policy.order, {
       usage: routing.usage,
+      accounts: routing.accounts,
       catalogs,
       switchAt: policy.switchAt,
       now: Date.now(),
+      attemptedAccounts: this.attemptedAccounts.get(id),
     })
     const hold = this.holds.get(id)
     if (!decision) {
@@ -312,10 +333,12 @@ export class FallbackRouter {
       return false
     }
     if (hold === 'chat') return false
+    if (decision.step.accountId)
+      this.attemptedAccounts.get(id)?.add(accountKey(decision.step.provider, decision.step.accountId))
     await this.applySettings(
       id,
       this.withStep(s.settings, decision.step),
-      `${decision.reason} — continuing with ${providerName(decision.step.provider)}`,
+      `${decision.reason} — continuing ${decision.step.provider === s.provider && decision.step.accountId !== s.settings.accountId ? `on ${this.accountName(s.provider, decision.step.accountId)}` : `with ${providerName(decision.step.provider)}`}`,
     )
     return true
   }
@@ -372,7 +395,7 @@ export class FallbackRouter {
       const catalogs = await this.host.catalog()
       if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
       resolveAttempted(catalogs)
-      const routing = this.routing(s.settings)
+      let routing = this.routing(s.settings)
       const configured =
         !!routing?.prefs.fallback.order || (!!s.parentId && routing?.prefs.subagents.fallback === 'separate')
       const policy = this.policyOf(s, catalogs, routing?.prefs)
@@ -380,7 +403,10 @@ export class FallbackRouter {
       tried.add(accountKey(s.settings.provider, s.settings.accountId))
       this.attemptedAccounts.set(id, tried)
       // The limit just hit belongs to this login, so try the provider's other logins before leaving it.
-      if (routing) await this.freshAccountUsage(s.provider)
+      if (routing) {
+        await this.freshAccountUsage(s.provider)
+        routing = this.routing(s.settings) ?? routing
+      }
       const account = routing ? this.otherAccount(s.settings, routing, catalogs, policy.switchAt, tried) : null
       const accountPlan = account
         ? this.host.planSwitch(id, { provider: s.provider, accountId: account }, 'limit')
@@ -414,7 +440,13 @@ export class FallbackRouter {
       }
       this.attemptedAccounts.delete(id)
       const next = () =>
-        nextStep(policy.order, { usage: routing?.usage ?? [], catalogs, switchAt: policy.switchAt, attempted })
+        nextStep(policy.order, {
+          usage: routing?.usage ?? [],
+          accounts: routing?.accounts,
+          catalogs,
+          switchAt: policy.switchAt,
+          attempted,
+        })
       // A conversation that does not fit another provider's handoff budget is never sent truncated: skip that model, and
       // if nothing else is left, hold the thread at the limit with the reason.
       let step = next()
@@ -460,7 +492,8 @@ export class FallbackRouter {
       this.host.halt(id)
       await this.host.draining.get(id)
       if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
-      if (!same) this.host.rememberSession(id)
+      if (!same || (settings.accountId ?? 'default') !== (s.settings.accountId ?? 'default'))
+        this.host.rememberSession(id)
       this.db
         .prepare('UPDATE agent_sessions SET provider = ?, settings = ?, provider_session_id = ? WHERE id = ?')
         .run(step.provider, JSON.stringify(settings), resume, id)
@@ -503,7 +536,12 @@ export class FallbackRouter {
     const routing = this.routing(settings)
     if (routing) {
       const policy = this.policyOf({ parentId }, catalogs, routing.prefs)
-      const decision = planRoute(settings, policy.order, { usage: routing.usage, catalogs, switchAt: policy.switchAt })
+      const decision = planRoute(settings, policy.order, {
+        usage: routing.usage,
+        accounts: routing.accounts,
+        catalogs,
+        switchAt: policy.switchAt,
+      })
       if (decision) {
         settings = this.withStep(settings, decision.step)
         reason = decision.reason

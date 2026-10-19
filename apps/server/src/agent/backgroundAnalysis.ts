@@ -12,7 +12,7 @@ import {
   type CommitStyle,
   type ProviderCatalog,
 } from '@ramu/shared/types'
-import { settingsKey, nextStep, peakFor, isOver } from '@ramu/shared/providers/routing'
+import { settingsKey, accountKey, nextStep, peakFor, isOver } from '@ramu/shared/providers/routing'
 import { effectiveAutoResume } from '@ramu/shared/chat/providerWait'
 import type { QueryFn } from './types'
 import { InputQueue } from './inputQueue'
@@ -35,7 +35,7 @@ export interface BackgroundAnalysisHost
   extends
     Pick<BackgroundAnalysis, 'analyze'>,
     Pick<CatalogService, 'validateSettings'>,
-    Pick<FallbackRouter, 'orderOf' | 'route' | 'routing' | 'withStep'>,
+    Pick<FallbackRouter, 'orderOf' | 'route' | 'routing' | 'withStep' | 'otherAccount' | 'freshAccountUsage'>,
     Pick<SessionStore, 'events' | 'get' | 'list' | 'titleContext'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   providerQuery: QueryFn
@@ -161,6 +161,7 @@ export class BackgroundAnalysis {
     if (signal?.aborted) throw new Error('Background analysis stopped')
     const cwd = mkdtempSync(join(tmpdir(), 'ramu-commit-draft-'))
     const tried = new Set<string>()
+    const triedAccounts = new Set<string>()
     let waited = 0
     // Titles, recaps and commit messages follow the same rule, quietly.
     let chosen = settings
@@ -171,6 +172,7 @@ export class BackgroundAnalysis {
       for (;;) {
         if (signal?.aborted) throw new Error('Background analysis stopped')
         tried.add(settingsKey(chosen, await this.host.catalog()))
+        triedAccounts.add(accountKey(chosen.provider, chosen.accountId))
         try {
           await this.host.validateSettings(chosen)
           if (this.host.shutdown()) throw new Error('Background service is stopping')
@@ -200,10 +202,14 @@ export class BackgroundAnalysis {
                     if (event.kind === 'text') text = event.text
                     if (event.kind === 'result')
                       event.isError
-                        ? reject(new Error(limit === true ? 'usage_limit_reached' : event.text))
+                        ? reject(
+                            Object.assign(new Error(event.text), limit === true ? { code: 'usage_limit_reached' } : {}),
+                          )
                         : resolve(text)
                     if (event.kind === 'error')
-                      reject(new Error(limit === true ? 'usage_limit_reached' : event.message))
+                      reject(
+                        Object.assign(new Error(event.message), limit === true ? { code: 'usage_limit_reached' } : {}),
+                      )
                     if (event.kind === 'state' && event.state === 'failed')
                       reject(new Error('Background analysis provider failed'))
                     if (event.kind === 'permission-request') runner?.replyPermission(event.requestId, false)
@@ -276,17 +282,26 @@ export class BackgroundAnalysis {
           const limit = classifyLimit(e, { provider: chosen.provider, channel: 'error' })
           if (limit?.confidence !== 'high') throw e
           const catalogs = await this.host.catalog()
+          await this.host.freshAccountUsage(chosen.provider)
           const routing = this.host.routing(chosen)
+          const switchAt = routing ? routing.prefs.fallback.switchAt : DEFAULT_FALLBACK_PREFERENCES.switchAt
+          const account = routing ? this.host.otherAccount(chosen, routing, catalogs, switchAt, triedAccounts) : null
+          if (account) {
+            chosen = { ...chosen, accountId: account }
+            continue
+          }
           const step = settings.autoFallback
             ? nextStep(this.host.orderOf(catalogs, routing?.prefs), {
                 usage: routing?.usage ?? [],
+                accounts: routing?.accounts,
                 catalogs,
                 switchAt: routing ? routing.prefs.fallback.switchAt : DEFAULT_FALLBACK_PREFERENCES.switchAt,
                 attempted: tried,
               })
             : null
           if (step) {
-            chosen = this.host.withStep(settings, step)
+            chosen = this.host.withStep(chosen, step)
+            triedAccounts.clear()
             continue
           }
           // Nothing left to switch to. Work nobody is blocked on waits for the reset; the rest reports when it lifts.
@@ -306,6 +321,7 @@ export class BackgroundAnalysis {
           }
           waited += delay
           tried.clear()
+          triedAccounts.clear()
         }
       }
     } finally {

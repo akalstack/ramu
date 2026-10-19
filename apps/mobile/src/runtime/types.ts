@@ -19,6 +19,17 @@ export interface Computer {
 export type ToolKind = 'read' | 'edit' | 'search' | 'execute' | 'think' | 'fetch' | 'other'
 export type ToolStatus = 'in_progress' | 'completed' | 'failed'
 
+export interface TranscriptTool {
+  kind: 'tool'
+  id: string
+  tool: ToolKind
+  verb: string
+  subject: string
+  status: ToolStatus
+  detail?: string
+  input?: string
+}
+
 export type TranscriptItem = (
   | {
       kind: 'user'
@@ -33,7 +44,9 @@ export type TranscriptItem = (
   | { kind: 'interactive'; id: string; reference: import('@ramu/shared/interactive').InteractiveReference }
   | { kind: 'image'; id: string; uri: string; alt?: string }
   | { kind: 'text'; id: string; text: string }
-  | { kind: 'tool'; id: string; tool: ToolKind; verb: string; subject: string; status: ToolStatus; detail?: string }
+  | TranscriptTool
+  | { kind: 'tools'; id: string; tools: TranscriptTool[] }
+  | { kind: 'plan'; id: string; entries: { content: string; status: 'pending' | 'in_progress' | 'completed' }[] }
   | {
       kind: 'agents'
       id: string
@@ -51,6 +64,10 @@ export type TranscriptItem = (
       questions: AgentQuestion[]
       answers?: Record<string, string>
       submitted?: Record<string, string>
+      outcome?: string
+      reason?: string
+      responseMode?: 'message' | 'ramu'
+      grouping?: 'together' | 'independent'
     }
   | { kind: 'permission'; id: string; title: string; command: string; decision?: 'allow' | 'deny' }
   | { kind: 'elicitation'; id: string; request: import('@ramu/shared/types').AgentElicitation; outcome?: string }
