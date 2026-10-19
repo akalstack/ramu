@@ -6,6 +6,8 @@ People should be able to use the providers enabled in Ramu without building a mo
 
 ## Dynamic default set
 
+Shipped: when Codex is not among the active providers, `recommendedSets` builds the set from each enabled provider's default model and up to three of its real efforts, and `migrateModelDefaults` replaces only an untouched generated Codex set. Remaining here: reviewed ordering for mixed combinations that include Codex, and the Settings choice below.
+
 Choose defaults from the active combination of Claude, Codex, Antigravity and Cursor selected in Ramu. Extend the host-owned provider catalog, `recommendedSets` and model-preference migration rather than adding a second routing system. Start with one generated set whose models and real effort names are available from enabled providers. Preserve user-edited sets and explicit default choices.
 
 Define and review the preferred model/effort order for each active combination, with deterministic fallback when a provider is disabled, unavailable or has an incomplete catalog. Do not claim a universally best model without task evidence. Explain an unavailable selection and offer a clear correction rather than silently replacing a reviewed draft or running thread.

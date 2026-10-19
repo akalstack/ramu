@@ -1,6 +1,53 @@
-import type { AgentModel, ModelPreferences, ModelStep, ProviderCatalog, ReasoningEffort } from '../types'
+import type { AgentModel, AgentProvider, ModelPreferences, ModelStep, ProviderCatalog, ReasoningEffort } from '../types'
+
+const GENERATED_ORDER: AgentProvider[] = ['claude-code', 'antigravity', 'cursor', 'opencode']
+const LADDER: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+
+/**
+ * When Codex is not among the active providers, build the set from what the enabled providers report: each
+ * provider's default model at up to three of its own efforts (lowest practical, its default, a stronger one).
+ * Nothing here names a model that no catalog lists.
+ */
+function generatedFromCatalogs(catalogs: ProviderCatalog[]): ModelPreferences | null {
+  const steps: ModelStep[] = []
+  let defaultStepId = ''
+  for (const provider of GENERATED_ORDER) {
+    const models = catalogs.filter((catalog) => catalog.provider === provider).flatMap((catalog) => catalog.models)
+    const model = models.find((entry) => entry.isDefault) ?? models[0]
+    if (!model) continue
+    const efforts = [...model.efforts].sort((a, b) => LADDER.indexOf(a) - LADDER.indexOf(b))
+    const chosen = efforts.length
+      ? [
+          ...new Set(
+            [
+              efforts.find((effort) => effort !== 'none' && effort !== 'minimal') ?? efforts[0]!,
+              model.defaultEffort && efforts.includes(model.defaultEffort) ? model.defaultEffort : undefined,
+              efforts.find((effort) => LADDER.indexOf(effort) > LADDER.indexOf(model.defaultEffort ?? 'medium')),
+            ].filter((effort): effort is ReasoningEffort => !!effort),
+          ),
+        ].sort((a, b) => LADDER.indexOf(a) - LADDER.indexOf(b))
+      : [null]
+    for (const effort of chosen) {
+      const id = `${provider}-${model.id}-${effort ?? 'default'}`
+      steps.push({ id, name: `${model.name}${effort ? ` ${effort}` : ''}`, provider, model: model.id, effort })
+      if (!defaultStepId && effort === (model.defaultEffort ?? chosen[0])) defaultStepId = id
+    }
+  }
+  if (!steps.length) return null
+  return {
+    defaultBarMode: 'model',
+    sets: [{ id: 'recommended', name: 'Default', steps }],
+    defaultSetId: 'recommended',
+    defaultStepId: defaultStepId || steps[0]!.id,
+  }
+}
 
 export function recommendedSets(catalogs: ProviderCatalog[]): ModelPreferences {
+  const hasCodex = catalogs.some((catalog) => catalog.provider === 'codex' && catalog.models.length)
+  if (!hasCodex) {
+    const generated = generatedFromCatalogs(catalogs)
+    if (generated) return generated
+  }
   const models = catalogs.flatMap((catalog) => catalog.models).filter((model) => model.provider === 'codex')
   const family = (name: string, preferred: string) =>
     models.find((model) => model.id === preferred) ??
@@ -36,6 +83,23 @@ export function migrateModelDefaults(value: ModelPreferences, defaults: ModelPre
   const old = value.sets.find((set) => set.id === 'recommended')
   if (!old) return value
   const steps = defaults.sets[0]!.steps
+  if (steps.every((step) => step.provider !== 'codex')) {
+    // Codex is not active: replace only the untouched generated Codex set, never an edited one.
+    const codex = recommendedSets([]).sets[0]!.steps
+    const untouched =
+      old.steps.length === codex.length &&
+      old.steps.every((step, index) => {
+        const expected = codex[index]!
+        return step.id === expected.id && step.provider === expected.provider && step.model === expected.model
+      })
+    if (!untouched) return value
+    const keep = old.steps.some((step) => step.id === value.defaultStepId)
+    return {
+      ...value,
+      sets: value.sets.map((set) => (set.id === old.id ? { ...set, steps } : set)),
+      defaultStepId: keep ? defaults.defaultStepId : value.defaultStepId,
+    }
+  }
   const oldNames = ['Light', 'Balanced', 'Deep', 'Advanced', 'Maximum']
   const oldIds = ['light', 'balanced', 'deep', 'advanced', 'maximum']
   const shortNames = ['Luna High', 'Sol Light', 'Sol Medium', 'Astra Light', 'Astra Medium']

@@ -80,3 +80,51 @@ describe('new-thread model defaults', () => {
     expect(migrateModelDefaults(defaults, defaults)).toBe(defaults)
   })
 })
+
+describe('generated defaults for the active providers', () => {
+  const claude = {
+    provider: 'claude-code' as const,
+    models: [
+      {
+        provider: 'claude-code' as const,
+        id: 'opus',
+        name: 'Opus',
+        isDefault: true,
+        efforts: ['low', 'medium', 'high'] as ('low' | 'medium' | 'high')[],
+        defaultEffort: 'medium' as const,
+      },
+    ],
+  }
+  it('builds steps only from models the enabled providers list', () => {
+    const prefs = recommendedSets([claude])
+    const steps = prefs.sets[0]!.steps
+    expect(steps.map((step) => [step.provider, step.model, step.effort])).toEqual([
+      ['claude-code', 'opus', 'low'],
+      ['claude-code', 'opus', 'medium'],
+      ['claude-code', 'opus', 'high'],
+    ])
+    expect(steps.find((step) => step.id === prefs.defaultStepId)?.effort).toBe('medium')
+  })
+  it('keeps the Codex defaults when Codex is active or nothing is known', () => {
+    expect(recommendedSets([]).sets[0]!.steps[0]!.provider).toBe('codex')
+    expect(
+      recommendedSets([
+        claude,
+        {
+          provider: 'codex',
+          models: [{ ...claude.models[0]!, provider: 'codex', id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol' }],
+        },
+      ]).sets[0]!.steps[0]!.provider,
+    ).toBe('codex')
+  })
+  it('replaces untouched Codex defaults without Codex, but not an edited set', () => {
+    const codexDefaults = recommendedSets([])
+    const next = recommendedSets([claude])
+    expect(migrateModelDefaults(codexDefaults, next).sets[0]!.steps[0]!.provider).toBe('claude-code')
+    const edited = {
+      ...codexDefaults,
+      sets: codexDefaults.sets.map((set) => ({ ...set, steps: set.steps.slice(1) })),
+    }
+    expect(migrateModelDefaults(edited, next)).toBe(edited)
+  })
+})

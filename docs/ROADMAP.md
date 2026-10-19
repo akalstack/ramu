@@ -6,7 +6,7 @@ Each plan follows the [root product and planning guidance](../AGENTS.md#product-
 
 ## Feature work
 
-- [Model selection preferences](MODEL-SELECTION-PLAN.md): dynamic default sets from active Claude/Codex/Antigravity/Cursor combinations; Settings choice between steps and model-then-effort selection; scoped defaults through the mobile settings plan.
+- [Model selection preferences](MODEL-SELECTION-PLAN.md): dynamic default sets for mixed combinations that include Codex (Codex-free combinations are generated); Settings choice between steps and model-then-effort selection; scoped defaults through the mobile settings plan.
 - [Mobile settings preferences](MOBILE-SETTINGS-PLAN.md): shared scope controls for model, appearance, language, reading, composer and notification preferences, with All devices, All mobile devices and This phone choices, visible inheritance and safe synchronization.
 
 - [Assistant workflow](ASSISTANT-WORKFLOW-PLAN.md): default Auto/manual project selection using names/aliases followed by AI routing when needed, memory correctness/source links, and targeted verification/recovery, Inbox and existing PR-watch improvements. Reuse existing services.
