@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { Copy, FileQuestion, FolderSearch } from 'lucide-react-native'
@@ -27,6 +27,36 @@ const MARKDOWN = /\.(md|markdown|mdx)$/i
  * One screen for every way the desktop opens a file: the file itself, its unstaged changes, or its staged changes.
  * Text is virtualized by line, images pinch to zoom, and a link with a line number lands on that line.
  */
+const CodeLine = memo(function CodeLine({
+  line,
+  number,
+  tokens,
+  highlighted,
+  wash,
+}: {
+  line: string
+  number: number
+  tokens?: Parameters<typeof CodeTokens>[0]['tokens']
+  highlighted: boolean
+  wash: string
+}) {
+  return (
+    <View style={{ flexDirection: 'row', backgroundColor: highlighted ? wash : 'transparent' }}>
+      <T
+        size={11}
+        mono
+        tone="placeholder"
+        style={{ width: 38, paddingRight: space.s, textAlign: 'right', lineHeight: 18 }}
+      >
+        {number}
+      </T>
+      <T size={12} mono tone="soft" copyable={line} style={{ flex: 1, lineHeight: 18 }}>
+        {line === '' ? ' ' : tokens ? <CodeTokens tokens={tokens} /> : line}
+      </T>
+    </View>
+  )
+})
+
 export function FileViewer({
   computerId,
   contextId: taskId,
@@ -398,21 +428,13 @@ export function FileViewer({
             )
           }
           renderItem={({ item, index }) => (
-            <View
-              style={{ flexDirection: 'row', backgroundColor: target === index + 1 ? c.accentWash : 'transparent' }}
-            >
-              <T
-                size={11}
-                mono
-                tone="placeholder"
-                style={{ width: 38, paddingRight: space.s, textAlign: 'right', lineHeight: 18 }}
-              >
-                {index + 1}
-              </T>
-              <T size={12} mono tone="soft" copyable={item} style={{ flex: 1, lineHeight: 18 }}>
-                {item === '' ? ' ' : colored?.[index] ? <CodeTokens tokens={colored[index]!} /> : item}
-              </T>
-            </View>
+            <CodeLine
+              line={item}
+              number={index + 1}
+              tokens={colored?.[index]}
+              highlighted={target === index + 1}
+              wash={c.accentWash}
+            />
           )}
         />
       ) : (

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Archive, ArchiveRestore, Clock, GitBranch, Pin, PinOff } from 'lucide-react-native'
@@ -24,7 +24,15 @@ const SHORT = {
 } as const satisfies Record<string, readonly [keyof Strings, keyof Strings]>
 
 /** A chat inside a rounded card; `divider` draws the hairline between stacked rows. */
-export function ChatRow({ chat, project, divider }: { chat: Chat; project?: string; divider?: boolean }) {
+export const ChatRow = memo(function ChatRow({
+  chat,
+  project,
+  divider,
+}: {
+  chat: Chat
+  project?: string
+  divider?: boolean
+}) {
   const { c } = useTheme()
   const router = useRouter()
   const [menu, setMenu] = useState(false)
@@ -135,4 +143,4 @@ export function ChatRow({ chat, project, divider }: { chat: Chat; project?: stri
       {chat.pending ? null : <ChatActionsSheet chat={chat} open={menu} onClose={() => setMenu(false)} />}
     </>
   )
-}
+})

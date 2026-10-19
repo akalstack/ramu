@@ -1,7 +1,7 @@
 import { translate } from '@ramu/shared/i18n'
 import { Helpers } from './Helpers'
 import { InteractiveContent } from './InteractiveContent'
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, memo, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ActionSheetIOS, Alert, Image, Linking, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import type { Attachment } from '@ramu/shared/types'
@@ -31,7 +31,8 @@ import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
 import { Button, Card, Sheet, T, tap, type Icon } from './ui'
 import { formatDuration } from '../runtime/turns'
-import { Breathe, Collapse, Disclosure } from './Motion'
+import { Arrive, Breathe, Collapse, Disclosure } from './Motion'
+import { InteractiveVisibility } from './InteractiveVisibility'
 
 const toolIcons: Record<ToolKind, Icon> = {
   read: FileCode2,
@@ -213,6 +214,34 @@ export interface ItemMeta {
   /** The reply began while this chat was open, so its first words fade in too. */
   fresh?: boolean
 }
+
+/** A chat list row. Memoised on primitives, so streaming into the last row or scrolling doesn't re-render the other rows. */
+export const TranscriptListRow = memo(function TranscriptListRow({
+  item,
+  chat,
+  date,
+  footer,
+  streaming,
+  fresh,
+  visible,
+}: {
+  item: TranscriptItem
+  chat: Chat
+  date?: string
+  footer?: boolean
+  streaming: boolean
+  fresh: boolean
+  visible: boolean
+}) {
+  const meta = useMemo(() => ({ date, footer, streaming, fresh }), [date, footer, streaming, fresh])
+  return (
+    <Arrive animate={fresh}>
+      <InteractiveVisibility.Provider value={visible}>
+        <TranscriptItemView item={item} chat={chat} meta={meta} />
+      </InteractiveVisibility.Provider>
+    </Arrive>
+  )
+})
 
 export function TranscriptItemView({ item, chat, meta }: { item: TranscriptItem; chat: Chat; meta?: ItemMeta }) {
   return (

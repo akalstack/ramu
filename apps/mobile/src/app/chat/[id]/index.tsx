@@ -1,4 +1,3 @@
-import { InteractiveVisibility } from '../../../components/InteractiveVisibility'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, FlatList, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -29,7 +28,8 @@ import { STANDALONE } from '../../../runtime/types'
 import { Header, HeaderButton, Screen, PageFlatList, nativeScrollEdge } from '../../../components/Screen'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { Composer } from '../../../components/Composer'
-import { MessageMenu, RowToggle, TranscriptItemView, type ItemMeta } from '../../../components/Transcript'
+import type { TranscriptItem } from '../../../runtime/types'
+import { MessageMenu, RowToggle, TranscriptListRow, type ItemMeta } from '../../../components/Transcript'
 import { ConnectionDot, Row, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
@@ -41,6 +41,8 @@ import { useAutomation } from '../../../runtime/automation'
 
 /** Turns drawn at a time; a chat can have hundreds. */
 const TURN_PAGE = 15
+
+const RowSeparator = () => <View style={{ height: space.m + 2 }} />
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -280,6 +282,21 @@ export default function ChatScreen() {
     })
     return map
   }, [pageRows, store.language])
+  const renderRow = ({ item, index }: { item: TranscriptItem; index: number }) => {
+    const fresh = !seen.current.has(item.id) && Date.now() - openedAt.current > 800
+    seen.current.add(item.id)
+    return (
+      <TranscriptListRow
+        item={item}
+        chat={chat!}
+        date={itemMeta.get(item.id)?.date}
+        footer={itemMeta.get(item.id)?.footer}
+        streaming={running && item.kind === 'text' && index === pageRows.length - 1}
+        fresh={fresh && running}
+        visible={contentScreenFocused && visibleContentRows.has(item.id)}
+      />
+    )
+  }
   if (!chat)
     return (
       <Screen>
@@ -661,22 +678,11 @@ export default function ChatScreen() {
             onViewableItemsChanged={contentViewabilityChanged}
             maintainVisibleContentPosition={pagedBack ? { minIndexForVisible: 0 } : undefined}
             keyExtractor={(item) => item.id}
-            renderItem={({ item, index }) => {
-              const fresh = freshIds.has(item.id) && !seen.current.has(item.id)
-              seen.current.add(item.id)
-              const streaming = running && item.kind === 'text' && index === pageRows.length - 1
-              return (
-                <Arrive animate={fresh && item.kind !== 'text'}>
-                  <InteractiveVisibility.Provider value={contentScreenFocused && visibleContentRows.has(item.id)}>
-                    <TranscriptItemView item={item} chat={chat} meta={{ ...itemMeta.get(item.id), streaming, fresh }} />
-                  </InteractiveVisibility.Provider>
-                </Arrive>
-              )
-            }}
+            renderItem={renderRow}
             initialNumToRender={20}
             maxToRenderPerBatch={12}
             windowSize={7}
-            ItemSeparatorComponent={() => <View style={{ height: space.m + 2 }} />}
+            ItemSeparatorComponent={RowSeparator}
             style={{ flex: 1 }}
             contentInset={ios ? { bottom: cover } : undefined}
             scrollIndicatorInsets={ios ? { bottom: cover } : undefined}

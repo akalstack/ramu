@@ -120,6 +120,7 @@ for (const os of ['android', 'ios']) {
     let destination
     const { default: Menu } = load('app/settings/index.tsx', os, {
       react: {
+        memo: (component) => component,
         useState: () => [
           query,
           (next) => {
@@ -188,6 +189,7 @@ test('appearance overrides reach native controls and System releases the overrid
   const saved = []
   const { ThemeProvider } = load('theme/index.tsx', 'ios', {
     react: {
+      memo: (component) => component,
       createContext: () => ({ Provider: 'ThemeProvider' }),
       useState: () => [
         preference,
@@ -245,6 +247,7 @@ for (const os of ['android', 'ios']) {
           },
         },
         react: {
+          memo: (component) => component,
           useRef: () => ref,
           useCallback: (callback) => callback,
           useState: () => {
@@ -374,6 +377,7 @@ test('a new-thread form keeps its chosen host when the global selection changes'
   }
   const { default: NewChat } = load('app/new.tsx', 'android', {
     react: {
+      memo: (component) => component,
       useRef: (current) => ({ current }),
       useState(initial) {
         const index = cursor++
@@ -426,6 +430,7 @@ test('helper details honor capabilities and disconnected hosts without losing th
   }
   const { HelperDetails } = load('components/Helpers.tsx', 'android', {
     react: {
+      memo: (component) => component,
       useState: (value) => [value === '' ? 'hello' : value, () => {}],
       useEffect() {},
       useRef: (value) => ({ current: value }),
@@ -524,6 +529,7 @@ for (const os of ['ios', 'android']) {
     }
     const { default: NewChat } = load('app/new.tsx', os, {
       react: {
+        memo: (component) => component,
         useRef: (current) => ({ current }),
         useState(initial) {
           const index = cursor++
@@ -612,6 +618,7 @@ function hookHarness() {
   }
   return {
     react: {
+      memo: (component) => component,
       useMemo: memo,
       useCallback: (callback, deps) => memo(() => callback, deps),
       useState(initial) {
@@ -2561,6 +2568,7 @@ for (const ambiguous of [false, true]) {
     }
     const { StoreProvider } = load('runtime/store.tsx', 'ios', {
       react: {
+        memo: (component) => component,
         ...hooks.react,
         createContext: () => ({ Provider: 'Store' }),
         useEffect() {},
@@ -3640,6 +3648,7 @@ function chatView() {
   const store = { language: 'en', drafts: {}, chats: [], setDraft() {} }
   const component = load('components/Transcript.tsx', 'ios', {
     react: {
+      memo: (component) => component,
       ...require('react'),
       useState(initial) {
         const at = cursor++
