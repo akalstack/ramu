@@ -26,7 +26,8 @@ function field(text: string, key: string): string {
 /** Only known skill locations, with bounded traversal; never execute skill content during discovery. */
 export function discoverSkills(scope: AgentScope): SkillInfo[] {
   const roots: string[] = []
-  for (const cwd of [scope.cwd, ...scope.additionalDirs]) {
+  // Repositories under a shared workspace or task folder are not additional dirs, so scan every covered repo too.
+  for (const cwd of new Set([scope.cwd, ...scope.additionalDirs, ...scope.covers])) {
     let dir = cwd
     for (let i = 0; i < 12; i++) {
       roots.push(join(dir, '.agents', 'skills'), join(dir, '.claude', 'skills'), join(dir, '.codex', 'skills'))

@@ -81,6 +81,11 @@ const en = {
     'Could not save or restore the draft. Your message is kept. Check available device storage and try again.',
   savedDraftReadFailed: 'Could not read saved drafts. The stored data has been kept for recovery.',
   openOriginalDraft: 'Open original composer',
+  useDraftHere: 'Use in this composer',
+  useDraftHereHint:
+    'Review this message before using it here. File and skill references become text, and captured file context stays as quoted data. Attachments need a host check. This composer keeps its project, workspace and model.',
+  savedDraftRecoveryTooLarge:
+    'This draft has too much captured context to restore as text here. The saved original is kept. Copy the text you need from its preview, or open the original composer.',
   savedDraftScopeMissing: 'The original thread or project is unavailable. The saved message is kept here for review.',
   attachmentNeedsCheck: 'Attachment needs a host check before sending',
   savedAttachmentOffline:
@@ -421,6 +426,11 @@ const id: typeof en = {
     'Tidak dapat menyimpan atau memulihkan draf. Pesan Anda tetap ada. Periksa ruang penyimpanan perangkat lalu coba lagi.',
   savedDraftReadFailed: 'Tidak dapat membaca draf tersimpan. Data tetap disimpan untuk pemulihan.',
   openOriginalDraft: 'Buka kotak pesan asal',
+  useDraftHere: 'Gunakan di kotak pesan ini',
+  useDraftHereHint:
+    'Tinjau pesan sebelum menggunakannya di sini. Referensi berkas dan skill menjadi teks, dan konteks berkas tetap menjadi data kutipan. Lampiran perlu diperiksa di host. Proyek, ruang kerja, dan model kotak pesan ini tetap dipakai.',
+  savedDraftRecoveryTooLarge:
+    'Konteks yang direkam terlalu besar untuk dipulihkan sebagai teks di sini. Draf asal tetap tersimpan. Salin teks yang diperlukan dari pratinjau, atau buka kotak pesan asal.',
   savedDraftScopeMissing: 'Thread atau proyek asal tidak tersedia. Pesan tersimpan tetap dapat ditinjau di sini.',
   attachmentNeedsCheck: 'Lampiran perlu diperiksa di host sebelum dikirim',
   savedAttachmentOffline:

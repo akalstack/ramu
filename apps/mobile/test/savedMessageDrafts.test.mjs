@@ -139,3 +139,42 @@ test('explicit saved drafts retain partial branch edits and their bounded naming
   })
   assert.throws(() => save(corrupt), /invalid/)
 })
+
+test('same-host recovery moves missing-scope work atomically and preserves destination settings and unrelated sidecars', () => {
+  const saved = save()
+  const targetKey = 'host:chat:surviving'
+  const targetScope = { kind: 'thread', id: targetKey, threadId: 'surviving' }
+  const current = {
+    ...saved.drafts,
+    [targetKey]: 'Current work',
+    [`${targetKey}:workspace`]: '{"version":1,"mode":"current"}',
+    [`${targetKey}:agent`]: '{"version":1,"selection":{"provider":"codex","model":"manual","effort":null}}',
+  }
+  const input = {
+    drafts: current,
+    knownHosts: ['host', 'other'],
+    hostId: 'host',
+    key: targetKey,
+    scope: targetScope,
+    expectedRevision: 1,
+    expectedActive: mobileMessageDraft(current, targetKey),
+    command: { kind: 'restore-here', id: 'saved', itemRevision: 1, parkId: 'current', at: 2 },
+  }
+  const next = moveMobileMessageDraft(input)
+  assert.equal(next.active.workspace.mode, 'current')
+  assert.match(next.active.text, /captured text/)
+  assert.deepEqual(next.active.context, [])
+  assert.deepEqual(next.active.mentions, [])
+  assert.equal(next.drafts[`${targetKey}:restored-attachments`], 'yes')
+  assert.equal(next.drafts[`${targetKey}:agent`], current[`${targetKey}:agent`])
+  assert.equal(next.drafts['other:new:other:p'], current['other:new:other:p'])
+  const library = JSON.parse(next.drafts[savedMessagesKey('host')])
+  assert.equal(library.items[0].snapshot.text, 'Current work')
+  assert.deepEqual(library.items[0].scope, targetScope)
+  assert.throws(() => moveMobileMessageDraft({ ...input, hostId: 'other' }), /host/)
+  assert.throws(
+    () => moveMobileMessageDraft({ ...input, drafts: { ...current, [targetKey]: 'Newer edit' } }),
+    /conflict/,
+  )
+  assert.equal(JSON.parse(current[savedMessagesKey('host')]).items[0].id, 'saved')
+})

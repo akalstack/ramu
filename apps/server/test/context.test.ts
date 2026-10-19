@@ -109,3 +109,11 @@ it('discovers nearest project skills first and shows folded descriptions', async
   expect(prompt).toContain(entry.path)
   expect(prompt).not.toContain('/managed/copy/SKILL.md')
 })
+it('discovers skills inside repositories nested under the agent folder', () => {
+  const repo = join(cwd, 'child-repo'),
+    folder = join(repo, '.claude', 'skills', 'ramu-test-child-skill')
+  mkdirSync(folder, { recursive: true })
+  writeFileSync(join(folder, 'SKILL.md'), '---\nname: ramu-test-child-skill\ndescription: Child repo skill.\n---\nBody\n')
+  const names = discoverSkills({ cwd, additionalDirs: [], covers: [repo] }).map((s) => s.name)
+  expect(names).toContain('ramu-test-child-skill')
+})

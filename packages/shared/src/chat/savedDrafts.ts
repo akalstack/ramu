@@ -1,5 +1,6 @@
 import { parseBranchNameDraft, type WorkspaceChoice } from '@ramu/shared/workspaceDefaults'
 import type { Attachment, FileContext } from '../types'
+import { chatReferences } from '@ramu/shared/chat/chatReferences'
 
 /** Explicit saves have no expiry. Limits reject a move; they never truncate or evict saved work. */
 export const SAVED_DRAFT_LIMITS = { items: 40, text: 200_000, storageBytes: 4 * 1024 * 1024 } as const
@@ -40,7 +41,8 @@ export interface SavedDraftLibrary {
   revision: number
   items: SavedMessageDraft[]
 }
-export type SavedDraftProblem = 'invalid' | 'version' | 'host' | 'conflict' | 'empty' | 'full' | 'uploading' | 'scope'
+export type SavedDraftProblem =
+  'invalid' | 'version' | 'host' | 'conflict' | 'empty' | 'full' | 'recovery-size' | 'uploading' | 'scope'
 export class SavedDraftError extends Error {
   readonly code: SavedDraftProblem
   constructor(code: SavedDraftProblem) {
@@ -225,9 +227,37 @@ export function readSavedDrafts(raw: string | null, hostId: string): SavedDraftL
 
 export type SavedDraftCommand =
   | { kind: 'save'; id: string; at: number; uploadsPending?: boolean }
-  | { kind: 'restore'; id: string; itemRevision: number; parkId?: string; at: number }
+  | { kind: 'restore' | 'restore-here'; id: string; itemRevision: number; parkId?: string; at: number }
   | { kind: 'delete'; id: string; itemRevision: number }
   | { kind: 'undo-delete'; item: SavedMessageDraft }
+
+/** References from another checkout remain readable data, never new live file/skill bindings. */
+function recoverMessageDraft(source: MessageDraftSnapshot, destination: MessageDraftSnapshot): MessageDraftSnapshot {
+  const literal = (value: string, block = false) => {
+    let length = block ? 3 : 1
+    for (const match of value.matchAll(/`+/g)) length = Math.max(length, match[0].length + 1)
+    const fence = '`'.repeat(length)
+    return block ? `${fence}json\n${value}\n${fence}` : `${fence} ${value} ${fence}`
+  }
+  let text = chatReferences(source.text)
+    .map((part) => {
+      if (part.kind === 'text') return part.text
+      const mention = source.mentions.find((entry) => (entry.token ?? entry.insertion).trim() === part.text)
+      return literal(mention ? `${mention.file.repoId}/${mention.file.path}` : part.text)
+    })
+    .join('')
+  if (source.context.length || source.mentions.length) {
+    text += `\n\n${literal(JSON.stringify({ context: source.context, mentions: source.mentions }, null, 2), true)}`
+  }
+  if (text.length > SAVED_DRAFT_LIMITS.text) return fail('recovery-size')
+  return {
+    text,
+    attachments: source.attachments,
+    context: [],
+    mentions: [],
+    ...(destination.workspace ? { workspace: destination.workspace } : {}),
+  }
+}
 
 /**
  * One pure move: the client durably commits library AND active together before updating its composer.
@@ -272,12 +302,13 @@ export function moveMessageDraft(input: {
     next.items = next.items.filter((entry) => entry.id !== item.id)
     if (command.kind === 'delete') deleted = item
     else {
-      if (savedDraftScopeKey(item.scope) !== savedDraftScopeKey(scope)) return fail('scope')
+      const sameScope = savedDraftScopeKey(item.scope) === savedDraftScopeKey(scope)
+      if (command.kind === 'restore' ? !sameScope : sameScope) return fail('scope')
       if (hasMessageDraft(active)) {
         if (!command.parkId) return fail('conflict')
         save(command.parkId, command.at)
       }
-      result = item.snapshot
+      result = command.kind === 'restore-here' ? recoverMessageDraft(item.snapshot, active) : item.snapshot
     }
   }
   if (next.items.length > SAVED_DRAFT_LIMITS.items || JSON.stringify(next).length * 2 > SAVED_DRAFT_LIMITS.storageBytes)

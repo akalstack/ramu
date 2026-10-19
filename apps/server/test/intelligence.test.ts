@@ -31,7 +31,7 @@ it('lists managed skills for a new-thread project context before a task exists',
         if (context !== 'project:alpha') throw new Error('Unexpected context')
         return 'alpha'
       },
-      agentScope: () => ({ cwd: '/nonexistent-ramu-fixture', additionalDirs: [] }),
+      agentScope: () => ({ cwd: '/nonexistent-ramu-fixture', additionalDirs: [], covers: [] }),
     },
     learning: {
       catalog: (projectId: string) => [

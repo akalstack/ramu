@@ -76,6 +76,8 @@ export class SessionProcess {
 
   /** Whether a Codex chat's process was started without its own sub-agent tools. */
   private readonly nativeOffAtLaunch = new Map<string, boolean>()
+  /** Sessions whose launch instructions carry the goal policy; the others get it with their first goal turn. */
+  readonly goalPolicySent = new Set<string>()
 
   private readonly codexHookAtLaunch = new Map<string, boolean>()
 
@@ -241,6 +243,13 @@ export class SessionProcess {
     }
     // A delta that did not fit has no native session to resume: null means a fresh one, not "keep the old id".
     if (carried) resume = carried.resume
+    // With automatic goals off and no goal yet, the policy waits until /goal starts one.
+    const goalPolicy =
+      !s.parentId && (this.host.goalPreferences().mode !== 'manual' || this.host.getGoal(id))
+        ? goalInstructions(this.host.goalPreferences(), this.host.getGoal(id))
+        : null
+    if (connection && goalPolicy) this.goalPolicySent.add(id)
+    else this.goalPolicySent.delete(id)
     if (connection) {
       connection.instructions = sessionGuidance({
         questions: !usesRamuQuestions(this.host.preferences(), s)
@@ -250,7 +259,7 @@ export class SessionProcess {
             : 'blocking',
         background: (this.host.preferences()?.autoBackgroundSeconds ?? 1) !== 0,
         advisor: !!this.host.advisorStep(id),
-        goal: !s.parentId ? goalInstructions(this.host.goalPreferences(), this.host.getGoal(id)) : null,
+        goal: goalPolicy,
         nativeSubagentNote:
           // Antigravity's sub-agent tool cannot be switched off; Cursor's and OpenCode's are, at launch.
           s.provider === 'antigravity' && this.host.nativeSubagentsOff(s),

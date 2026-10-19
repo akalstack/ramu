@@ -152,6 +152,9 @@ export class AgentService {
       getGoal: (...a) => parts.goals.getGoal(...a),
       goalCommand: (...a) => parts.dispatcher.goalCommand(...a),
       goalPreferences: (...a) => parts.goals.goalPreferences(...a),
+      get goalPolicySent() {
+        return parts.process.goalPolicySent
+      },
       halt: (...a) => parts.process.halt(...a),
       hasBlockingQuestions: (...a) => parts.requests.hasBlockingQuestions(...a),
       hasRunningTasks: (...a) => parts.store.hasRunningTasks(...a),

@@ -1472,7 +1472,7 @@ test('returning from Explorer updates only the mounted composer’s context and 
   await settle()
   render()
   focus()
-  tree = render()
+  render()
   assert.equal(sent, 1)
   assert.equal(store.drafts['a:chat:task'], 'Keep my original request')
   assert.equal(JSON.parse(store.drafts['a:chat:task:context']).length, 2)
@@ -1878,6 +1878,139 @@ for (const os of ['ios', 'android']) {
   })
 }
 
+for (const os of ['ios', 'android']) {
+  test(`${os} missing-scope saved drafts require review and preserve both messages on cancellation or failed writes`, () => {
+    const hooks = hookHarness()
+    const alerts = []
+    const sourceKey = 'a:new:deleted-project'
+    const targetKey = 'a:chat:target'
+    let scope = { kind: 'thread', id: targetKey, threadId: 'target', label: 'Current thread' }
+    const source = mobileSavedDrafts.moveMobileMessageDraft({
+      drafts: {
+        [sourceKey]: 'Recover @auth.ts',
+        [`${sourceKey}:context`]: '[{"repoId":"r","path":"auth.ts","source":"tab","content":"captured code"}]',
+        [`${sourceKey}:attachments`]:
+          '[{"id":"a","name":"shot.png","size":4,"mimeType":"image/png","path":"/host/shot.png"}]',
+      },
+      knownHosts: ['a'],
+      hostId: 'a',
+      key: sourceKey,
+      scope: { kind: 'new', id: sourceKey, projectId: 'deleted-project', label: 'Deleted project' },
+      expectedRevision: 0,
+      expectedActive: {
+        ...savedDraftModel.emptyMessageDraft(),
+        text: 'Recover @auth.ts',
+        context: [{ repoId: 'r', path: 'auth.ts', source: 'tab', content: 'captured code' }],
+        attachments: [{ id: 'a', name: 'shot.png', size: 4, mimeType: 'image/png', path: '/host/shot.png' }],
+      },
+      command: { kind: 'save', id: 'missing-source', at: 1 },
+    })
+    const store = {
+      language: 'en',
+      chats: [],
+      projects: [],
+      drafts: { ...source.drafts, [targetKey]: 'Current message' },
+      moveSavedDraft: (input) => {
+        const next = mobileSavedDrafts.moveMobileMessageDraft({ ...input, drafts: store.drafts, knownHosts: ['a'] })
+        if (failWrite) throw new Error('quota')
+        store.drafts = next.drafts
+        return next
+      },
+      invoke: () => assert.fail('Recovery must not execute host work'),
+    }
+    let active = mobileSavedDrafts.mobileMessageDraft(store.drafts, targetKey)
+    let failWrite = false,
+      applied = 0,
+      closed = 0
+    const { useSavedMessageDrafts } = load('components/SavedMessageDrafts.tsx', os, {
+      react: hooks.react,
+      'react-native': {
+        Alert: { alert: (...args) => alerts.push(args) },
+        AccessibilityInfo: { announceForAccessibility() {} },
+      },
+      'expo-router': { useRouter: () => ({ push: () => assert.fail('Recovery must not navigate') }) },
+      '../runtime/store': { useStore: () => store },
+      '../i18n': { useT: () => new Proxy({}, { get: (_, key) => String(key) }) },
+    })
+    const render = () =>
+      hooks.render(() =>
+        useSavedMessageDrafts({
+          hostId: 'a',
+          scope,
+          snapshot: active,
+          uploading: false,
+          busy: false,
+          open: true,
+          onClose: () => closed++,
+          onApply: (value) => {
+            active = value
+            applied++
+          },
+        }),
+      )
+    const button = (actions, title) =>
+      nodes(actions.sheet).find((node) => node.type === 'Button' && node.props.title === title)
+    let actions = render()
+    nodes(actions.sheet)
+      .find((node) => node.type === 'Row' && node.props.children?.props?.children === 'allHostDrafts')
+      .props.onPress()
+    actions = render()
+    nodes(actions.sheet)
+      .find((node) => node.type === 'Row' && node.key === 'missing-source')
+      .props.onPress()
+    actions = render()
+    button(actions, 'openOriginalDraft').props.onPress()
+    assert.equal(alerts.at(-1)[1], 'savedDraftScopeMissing')
+    button(actions, 'useDraftHere').props.onPress()
+    assert.match(alerts.at(-1)[1], /useDraftHereHint/)
+    assert.match(alerts.at(-1)[1], /saveCurrentDraftHint/)
+    assert.equal(applied, 0) // Dismissing the review is cancellation.
+    assert.equal(active.text, 'Current message')
+    failWrite = true
+    alerts.at(-1)[2][1].onPress()
+    assert.equal(alerts.at(-1)[1], 'savedDraftFailed')
+    assert.equal(applied, 0)
+    assert.equal(closed, 0)
+    assert.equal(JSON.parse(store.drafts[mobileSavedDrafts.savedMessagesKey('a')]).items[0].id, 'missing-source')
+    failWrite = false
+    button(actions, 'useDraftHere').props.onPress()
+    const lateConfirmation = alerts.at(-1)[2][1].onPress
+    scope = { ...scope, id: 'a:chat:other', threadId: 'other' }
+    render()
+    lateConfirmation()
+    assert.equal(applied, 0)
+    scope = { ...scope, id: targetKey, threadId: 'target' }
+    render()
+    actions = render()
+    lateConfirmation()
+    assert.equal(applied, 0, 'returning to the original composer does not revive an old confirmation')
+    nodes(actions.sheet)
+      .find((node) => node.type === 'Row' && node.props.children?.props?.children === 'allHostDrafts')
+      .props.onPress()
+    actions = render()
+    nodes(actions.sheet)
+      .find((node) => node.type === 'Row' && node.key === 'missing-source')
+      .props.onPress()
+    actions = render()
+    button(actions, 'useDraftHere').props.onPress()
+    alerts.at(-1)[2][1].onPress()
+    assert.equal(applied, 1)
+    assert.equal(closed, 1)
+    assert.match(active.text, /captured code/)
+    assert.deepEqual(active.context, [])
+    assert.equal(store.drafts[`${targetKey}:restored-attachments`], 'yes')
+    const library = JSON.parse(store.drafts[mobileSavedDrafts.savedMessagesKey('a')])
+    assert.equal(library.items[0].snapshot.text, 'Current message')
+    assert.equal(library.items[0].scope.id, targetKey)
+    const confirmAfterUnmount = alerts.at(-1)[2][1].onPress
+    const alertCount = alerts.length
+    hooks.dispose()
+    confirmAfterUnmount()
+    assert.equal(alerts.length, alertCount)
+    assert.equal(applied, 1)
+  })
+}
+
 for (const scenario of ['offline', 'missing', 'old-host', 'available', 'changed-owner']) {
   test(`restored attachments ${scenario} are checked on their owning host before any message delivery`, async () => {
     const hooks = hookHarness()
@@ -1949,7 +2082,7 @@ for (const scenario of ['offline', 'missing', 'old-host', 'available', 'changed-
       request.resolve([{ id: 'image', available: true }])
     }
     await settle()
-    tree = render()
+    render()
     assert.equal(sent.length, scenario === 'available' ? 1 : 0)
     if (scenario === 'offline') assert.equal(calls.length, 0)
     else assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), ['a', 'attachments.status', ['image']])
@@ -2052,7 +2185,7 @@ for (const os of ['ios', 'android']) {
       '../components/Keyboard': { useKeyboardInset: () => 0 },
     })
     const render = () => hooks.render(() => NewChat())
-    let tree = render()
+    render()
     assert.equal(requests.length, 1)
     listeners.get('a')('workspace:changed', {})
     listeners.get('a')('settings:changed', {})
@@ -2066,11 +2199,11 @@ for (const os of ['ios', 'android']) {
     }
     requests[2].resolve(latest)
     await settle()
-    tree = render()
+    let tree = render()
     nodes(tree)
       .find((node) => node.key === 'current')
       .props.onPress()
-    tree = render()
+    render()
     requests[0].resolve({ ...latest, branchPrefix: 'stale/' })
     requests[1].resolve({ ...latest, branchPrefix: 'also-stale/' })
     await settle()
@@ -2246,7 +2379,7 @@ for (const os of ['ios', 'android']) {
     rename.resolve({ id: 'w', name: 'New label' })
     await saving
     sheet.props.onClose()
-    tree = render()
+    render()
     assert.deepEqual(
       calls.filter((call) => call.method === 'workspaces.rename'),
       [{ host: 'a', method: 'workspaces.rename', args: ['w', 'New label', 'Original'] }],
@@ -2386,7 +2519,7 @@ for (const os of ['ios', 'android']) {
     tree = render()
     assert.ok(nodes(tree).some((node) => node.props?.children === 'branchNameProvisional'))
     find(tree, 'TextInput').props.onChangeText('manual/changed')
-    tree = render()
+    render()
     tree = render()
     assert.ok(!nodes(tree).some((node) => node.props?.children === 'branchNameProvisional'))
     button(tree, 'branchNamePreview').props.onPress()
@@ -2604,7 +2737,7 @@ for (const os of ['ios', 'android']) {
     assert.equal(controls.props.choice.name, 'mine/login')
     const reviewed = [{ repoId: 'repo', baseOid: 'reviewed-base' }]
     controls.props.onReview(reviewed)
-    tree = render()
+    render()
     online = false
     render()
     tree = render()

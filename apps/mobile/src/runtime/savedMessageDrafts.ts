@@ -61,7 +61,7 @@ export function moveMobileMessageDraft(input: {
     [`${key}:context`]: JSON.stringify(moved.active.context),
     [`${key}:mentions`]: JSON.stringify(moved.active.mentions),
   }
-  if (input.command.kind === 'restore')
+  if (input.command.kind === 'restore' || input.command.kind === 'restore-here')
     next[`${key}:restored-attachments`] = moved.active.attachments.length ? 'yes' : ''
   if (input.command.kind === 'save') next[`${key}:restored-attachments`] = ''
   if (moved.active.workspace) next[`${key}:workspace`] = JSON.stringify({ version: 1, ...moved.active.workspace })

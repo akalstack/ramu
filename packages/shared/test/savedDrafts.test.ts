@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { chatReferences } from '../src/chat/chatReferences'
 import {
   emptyMessageDraft,
   emptySavedDrafts,
@@ -200,4 +201,55 @@ it('rejects capacity and size overflow without truncation or eviction; a swap st
   }))
   expect(() => save(emptySavedDrafts('host'), huge)).toThrow('full')
   expect(JSON.stringify(library)).toBe(raw)
+})
+
+it('recovers a removed scope into another composer as reviewed text without adopting its checkout or live references', () => {
+  const source = snapshot()
+  source.text = 'Review @auth.ts and $security. Keep `@literal.ts` unchanged.'
+  const saved = save(emptySavedDrafts('host'), source)
+  const destination = { ...emptyMessageDraft(), text: 'Urgent work', workspace: { mode: 'current' as const } }
+  const recovered = moveMessageDraft({
+    library: saved.library,
+    hostId: 'host',
+    expectedRevision: 1,
+    scope: { kind: 'thread', id: 'different-thread' },
+    active: destination,
+    expectedActive: structuredClone(destination),
+    command: { kind: 'restore-here', id: 'draft', itemRevision: 1, parkId: 'parked', at: 2 },
+  })
+  expect(recovered.active.workspace).toEqual(destination.workspace)
+  expect(recovered.active.attachments).toEqual(source.attachments)
+  expect(recovered.active.context).toEqual([])
+  expect(recovered.active.mentions).toEqual([])
+  expect(recovered.active.text).toContain('r/auth.ts')
+  expect(recovered.active.text).toContain('unsaved excerpt')
+  expect(recovered.active.text).toContain('"startLine": 2')
+  expect(recovered.active.text).toContain('"oid": "abcdef"')
+  expect(recovered.active.text).toContain('`@literal.ts`')
+  expect(chatReferences(recovered.active.text).every((part) => part.kind === 'text')).toBe(true)
+  expect(recovered.library.items).toHaveLength(1)
+  expect(recovered.library.items[0]?.snapshot).toEqual(destination)
+  expect(saved.library.items[0]?.snapshot).toEqual(source)
+  expect(() =>
+    move(saved.library, emptyMessageDraft(), { kind: 'restore-here', id: 'draft', itemRevision: 1, at: 2 }),
+  ).toThrow('scope')
+})
+
+it('keeps the saved source and current message when quoted recovery exceeds the text limit', () => {
+  const source = snapshot()
+  source.context[0]!.content = 'x'.repeat(SAVED_DRAFT_LIMITS.text)
+  const saved = save(emptySavedDrafts('host'), source)
+  const raw = JSON.stringify(saved)
+  expect(() =>
+    moveMessageDraft({
+      library: saved.library,
+      hostId: 'host',
+      expectedRevision: 1,
+      scope: { kind: 'new', id: 'new:other-project' },
+      active: emptyMessageDraft(),
+      expectedActive: emptyMessageDraft(),
+      command: { kind: 'restore-here', id: 'draft', itemRevision: 1, at: 2 },
+    }),
+  ).toThrow('recovery-size')
+  expect(JSON.stringify(saved)).toBe(raw)
 })

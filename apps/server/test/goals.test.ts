@@ -5,7 +5,7 @@ import { AgentService, type QueryFn } from '../src/agent'
 import type { AgentRunnerFactory } from '../src/agent/agentRunner'
 import { openDb, type Db } from '../src/db'
 import { turnActivity } from '../src/agent/goalEvidence'
-import { goalInstructions, goalPreferencesSchema, registerGoalTools } from '../src/agent/goals'
+import { goalInstructions, goalPreferencesSchema, goalState, registerGoalTools } from '../src/agent/goals'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { VerifyResult, WorkspaceSnapshot } from '../src/agent/goalProbes'
 
@@ -117,6 +117,34 @@ describe('Ramu goals', () => {
     expect(prompt).toContain('when the scope grows')
     expect(prompt).toContain('audit ALL requirements')
     expect(goalInstructions({ mode: 'manual', maxTurns: 10 }, null)).toContain('explicitly requests')
+  })
+
+  it('gives a manual-mode thread the goal policy once, when /goal starts a goal mid-thread', async () => {
+    prefs.goals.mode = 'manual'
+    const connection: { url: string; token: string; instructions?: string } = {
+      url: 'http://127.0.0.1:9/mcp',
+      token: 't',
+    }
+    service.toolConnection = () => connection
+    const manual = service.start('t', { cwd: '/tmp', covers: [], additionalDirs: [] }, 'Explain login', {
+      ...DEFAULT_AGENT_SETTINGS,
+      provider: 'codex',
+      autoFallback: false,
+    }).id
+    await tick(0)
+    expect(connection.instructions).not.toContain('Ramu owns goals')
+    done()
+    await tick()
+    const before = prompts.length
+    await service.send(manual, '/goal Fix login')
+    await tick()
+    expect(prompts.slice(before).join('\n')).toContain('Ramu owns goals')
+    const sent = prompts.length
+    done()
+    await tick()
+    expect(prompts.length).toBeGreaterThan(sent)
+    expect(prompts.slice(sent).join('\n')).not.toContain('Ramu owns goals')
+    expect(prompts.at(-1)).toContain(goalState(service.getGoal(manual)).slice(0, 20))
   })
 
   it('continues idle unfinished work, keeps user history intact, and stops at the cap', async () => {

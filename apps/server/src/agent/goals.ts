@@ -25,6 +25,11 @@ function promptGoal(goal: ChatGoal) {
   return { id, objective, status, turns, reason, updatedAt, ...(verify ? { verify } : {}) }
 }
 
+/** Per-turn goal state for a session whose system instructions already carry the goal policy. */
+export function goalState(goal: ChatGoal | null): string {
+  return `Current goal: ${goal ? JSON.stringify(promptGoal(goal)) : 'none'}`
+}
+
 export function goalInstructions(preferences: GoalPreferences, goal: ChatGoal | null): string {
   return `Ramu owns goals and continuation for this thread. Do not start the provider's native /goal or another continuation loop.
 Use Ramu's MCP tools set_goal, get_goal and update_goal. When a goal is warranted, use set_goal rather than merely describing a goal in your response. If your runtime defers tool discovery, discover the Ramu goal tools before concluding they are unavailable.
@@ -59,7 +64,11 @@ export function registerGoalTools(server: McpServer, agents: AgentService, sessi
   server.registerTool(
     'set_goal',
     {
-      description: `Set or refine this thread’s Ramu goal from the user’s requested outcome. The thread's goal mode takes precedence: Off prohibits goals; Manual requires an explicit user goal request; Auto uses the following decision rule. ${AUTO_GOAL_POLICY} Never expand scope or resume a paused goal.`,
+      // Automatic goals off: the long decision rule would only cost tokens on every request.
+      description:
+        agents.preferences?.()?.goals?.mode === 'manual'
+          ? 'Set or refine this thread’s Ramu goal. Automatic goals are off: call this only when the user explicitly requests a goal, and quote that request in continuationReason. Never expand scope or resume a paused goal.'
+          : `Set or refine this thread’s Ramu goal from the user’s requested outcome. The thread's goal mode takes precedence: Off prohibits goals; Manual requires an explicit user goal request; Auto uses the following decision rule. ${AUTO_GOAL_POLICY} Never expand scope or resume a paused goal.`,
       inputSchema: {
         objective: z.string().trim().min(1).max(8000),
         continuationReason: z

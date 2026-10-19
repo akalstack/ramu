@@ -50,14 +50,20 @@ export function useSavedMessageDrafts({
   const [all, setAll] = useState(false)
   const [selected, setSelected] = useState<SavedMessageDraft | null>(null)
   const [deleted, setDeleted] = useState<SavedMessageDraft | null>(null)
-  const owner = JSON.stringify([hostId, scope?.id])
-  const current = useRef(owner)
+  const owner = JSON.stringify([hostId, scope ? savedDraftScopeKey(scope) : null])
+  const current = useRef<string | null>(owner)
+  const revision = useRef({ value: 0 }).current
   current.current = owner
   useEffect(() => {
+    current.current = owner
     setAll(false)
     setSelected(null)
     setDeleted(null)
-  }, [owner])
+    return () => {
+      revision.value++
+      if (current.current === owner) current.current = null
+    }
+  }, [owner, revision])
   const rawLibrary = store.drafts[savedMessagesKey(hostId)] ?? null
   const { library, readError } = useMemo(() => {
     try {
@@ -69,6 +75,7 @@ export function useSavedMessageDrafts({
   const explanation = (error: unknown) => {
     if (error instanceof SavedDraftError) {
       if (error.code === 'full') return t.savedDraftFull
+      if (error.code === 'recovery-size') return t.savedDraftRecoveryTooLarge
       if (error.code === 'uploading') return t.savedDraftUploading
       if (error.code === 'conflict') return t.savedDraftChanged
     }
@@ -89,20 +96,21 @@ export function useSavedMessageDrafts({
       onApply(result.active)
       if (result.deleted) setDeleted(result.deleted)
       if (command.kind === 'undo-delete') setDeleted(null)
-      if (command.kind === 'restore') setSelected(null)
+      if (command.kind === 'restore' || command.kind === 'restore-here') setSelected(null)
       if (close) onClose()
       if (command.kind === 'save') AccessibilityInfo.announceForAccessibility(t.draftSaved)
     } catch (error) {
       Alert.alert(t.savedDrafts, explanation(error))
     }
   }
-  const restore = (item: SavedMessageDraft) => {
+  const restore = (item: SavedMessageDraft, here = false) => {
     const capturedOwner = owner
+    const capturedRevision = revision.value
     const action = () => {
-      if (current.current !== capturedOwner) return
+      if (current.current !== capturedOwner || revision.value !== capturedRevision) return
       move(
         {
-          kind: 'restore',
+          kind: here ? 'restore-here' : 'restore',
           id: item.id,
           itemRevision: item.revision,
           ...(hasMessageDraft(snapshot) ? { parkId: uid() } : {}),
@@ -111,7 +119,16 @@ export function useSavedMessageDrafts({
         true,
       )
     }
-    if (!hasMessageDraft(snapshot)) action()
+    if (here)
+      Alert.alert(
+        t.useDraftHere,
+        `${t.useDraftHereHint}${hasMessageDraft(snapshot) ? `\n\n${t.saveCurrentDraftHint}` : ''}`,
+        [
+          { text: t.cancel, style: 'cancel' },
+          { text: hasMessageDraft(snapshot) ? t.saveCurrentAndRestore : t.useDraftHere, onPress: action },
+        ],
+      )
+    else if (!hasMessageDraft(snapshot)) action()
     else
       Alert.alert(t.restoreDraft, t.saveCurrentDraftHint, [
         { text: t.cancel, style: 'cancel' },
@@ -198,6 +215,18 @@ export function useSavedMessageDrafts({
               disabled={busy || uploading}
               onPress={() => (sameScope ? restore(selected) : openOriginal(selected))}
             />
+            {!sameScope && scope ? (
+              <>
+                <T tone="muted" size={font.caption}>
+                  {t.useDraftHereHint}
+                </T>
+                <Button
+                  title={t.useDraftHere}
+                  disabled={busy || uploading || !library}
+                  onPress={() => restore(selected, true)}
+                />
+              </>
+            ) : null}
             <Button
               kind="danger"
               title={t.deleteDraft}

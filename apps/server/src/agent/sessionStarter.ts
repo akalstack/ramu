@@ -9,7 +9,7 @@ import {
   type Attachment,
 } from '@ramu/shared/types'
 import { stepKey } from '@ramu/shared/providers/routing'
-import { goalInstructions } from './goals'
+import { goalInstructions, goalState } from './goals'
 import { WRITING_STATES } from './constants'
 import { LEGACY_ACCOUNT_PROVIDERS } from './settings'
 import type { MessageDispatcher } from './messageDispatcher'
@@ -38,7 +38,7 @@ export interface SessionStarterHost
       | 'workspaceReservations'
     >,
     Pick<GoalManager, 'controlGoal' | 'getGoal' | 'goalPreferences'>,
-    Pick<SessionProcess, 'fail' | 'launch' | 'refreshProviderTools'>,
+    Pick<SessionProcess, 'fail' | 'goalPolicySent' | 'launch' | 'refreshProviderTools'>,
     Pick<ProviderWaits, 'providerWait' | 'scheduleProvider'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
     Pick<
@@ -217,11 +217,12 @@ export class SessionStarter {
     if (!recordUser && !this.host.isRecoveryPending(id) && !internalGoal && !providerRetry) return
     if (recordUser) this.db.prepare('DELETE FROM agent_recovery WHERE session_id = ?').run(id)
     if (recordUser && this.host.getGoal(id)?.status === 'blocked') this.host.controlGoal(id, 'resume')
-    const instructions =
-      !s.parentId && (this.host.toolConnection() || this.host.getGoal(id))
-        ? goalInstructions(this.host.goalPreferences(), this.host.getGoal(id))
-        : ''
-    const actualText = instructions ? `${text}\n\n<ramu-goals>\n${instructions}\n</ramu-goals>` : text
+    // Follow-ups carry only the changing goal state, plus the policy once if the launch instructions left it out.
+    const goal = !s.parentId ? this.host.getGoal(id) : null
+    const sendPolicy = !!goal && !this.host.goalPolicySent.has(id)
+    if (sendPolicy) this.host.goalPolicySent.add(id)
+    const goalText = goal && (sendPolicy ? goalInstructions(this.host.goalPreferences(), goal) : goalState(goal))
+    const actualText = goalText ? `${text}\n\n<ramu-goals>\n${goalText}\n</ramu-goals>` : text
     this.host.attempted.set(id, new Set([stepKey(s.settings)]))
     this.host.attemptedAccounts.delete(id)
     this.host.lowConfidenceRetried.delete(id)
