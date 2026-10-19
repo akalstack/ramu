@@ -159,7 +159,7 @@ function openAgent(ws: ReturnType<typeof useWorkspace>, session: AgentSessionInf
 }
 
 /**
- * One agent, drawn like a sidebar thread row: project prefix, title, a Sub-agent tag, and the state or age at the end,
+ * One agent, drawn like a sidebar thread row: title, project, a Sub-agent tag, and the state or age at the end,
  * which gives way to Stop on hover. Helpers listed under their thread are indented. A row waiting on you shows its
  * question, approval or form under it so it can be answered in place.
  */
@@ -201,15 +201,15 @@ export function AgentRow({
         }}
         className={`[&:hover_.row-actions]:flex [&:focus-within_.row-actions]:flex [&:hover_.agent-time]:hidden [&:focus-within_.agent-time]:hidden flex min-h-9 cursor-default items-center gap-2 rounded-(--radius-s) px-2.5 text-body leading-5 text-soft [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] hover:bg-accent hover:text-foreground`}
       >
-        {prefix && (
-          <span className="max-w-[40%] flex-none truncate font-medium text-muted-foreground after:ml-1 after:[content:'·']">
-            {prefix}
-          </span>
-        )}
         <FadeText className="min-w-0 flex-1 overflow-hidden text-left whitespace-nowrap" text={title} />
         {helper && (
           <span className="flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
             {t('Sub-agent')}
+          </span>
+        )}
+        {prefix && (
+          <span className="max-w-[25%] min-w-0 truncate text-caption text-muted-foreground" title={prefix}>
+            {prefix}
           </span>
         )}
         <span className="hidden max-w-[40%] min-w-0 flex-none truncate text-caption text-muted-foreground @[480px]:inline">

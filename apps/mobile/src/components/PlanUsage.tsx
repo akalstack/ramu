@@ -12,6 +12,7 @@ import {
   usageStale,
   usageTone,
   usageWindow,
+  usageScopeHint,
 } from '@ramu/shared/usage/presentation'
 import { useStore } from '../runtime/store'
 import { providerNames } from '../runtime/types'
@@ -36,6 +37,7 @@ export function PlanUsageReading({ reading: r, offline = false }: { reading: Usa
           : 'Not reported'
       : `${Math.round(percent)}% ${used}`
   const lastKnown = offline || usageStale(r, now)
+  const scopeHint = usageScopeHint(r, language)
   return (
     <View style={{ padding: space.m, gap: space.s }}>
       <T weight="600">
@@ -45,6 +47,11 @@ export function PlanUsageReading({ reading: r, offline = false }: { reading: Usa
         {usageWindow(r, false, language)} · {value}
         {r.plan ? ` · ${r.plan}` : ''}
       </T>
+      {scopeHint ? (
+        <T tone="muted" size={font.caption}>
+          {scopeHint}
+        </T>
+      ) : null}
       {percent !== null ? (
         <View style={{ height: 5, borderRadius: 3, backgroundColor: c.fill, overflow: 'hidden' }}>
           <View

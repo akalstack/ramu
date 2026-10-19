@@ -13,6 +13,12 @@ export const projectActionSchema = z.object({
 /** Repository configuration deliberately excludes credentials, binaries and permission escalation. */
 export const projectConfigSchema = z.object({
   name: z.string().min(1).max(200).optional(),
+  agent: z
+    .object({
+      preferredProvider: z.string().trim().min(1).max(80).optional(),
+      preferredModel: z.string().trim().min(1).max(200).optional(),
+    })
+    .optional(),
   actions: z
     .array(projectActionSchema)
     .max(30)

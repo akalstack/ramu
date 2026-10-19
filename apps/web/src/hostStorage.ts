@@ -18,6 +18,7 @@ const PER_HOST_EXACT = new Set([
 const PER_HOST_PREFIXES = [
   'ramu.draft.',
   'ramu.new-thread-workspace:',
+  'ramu.new-thread-agent:',
   'ramu.last-action:',
   'ramu.review-viewed:',
   'ramu.layout.',

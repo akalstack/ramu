@@ -59,6 +59,9 @@ export default function Explorer() {
   const workspaces = project ? projectWorkspaces(project.computerId, project.id, catalog.rows) : []
   const [bindings, setBindings] = useState<RepositoryBinding[]>([])
   const [directories, setDirectories] = useState<Record<string, Record<string, DirEntry[]>>>({})
+  const [continuations, setContinuations] = useState<
+    Record<string, { repoId: string; path: string; cursor: string; loading?: boolean }>
+  >({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
   const [matches, setMatches] = useState<{ repoId: string; path: string }[]>([])
@@ -74,21 +77,41 @@ export default function Explorer() {
   const scopeIdentity = scope ? JSON.stringify([scope.host, scope.context]) : ''
   const activeScope = useRef(scopeIdentity)
   activeScope.current = scopeIdentity
-  const loadDirectory = async (binding: RepositoryBinding, path: string, version = epoch.current) => {
+  const loadDirectory = async (binding: RepositoryBinding, path: string, version = epoch.current, cursor?: string) => {
     if (!scope || binding.setupState !== 'ready' || activeScope.current !== scopeIdentity || version !== epoch.current)
       return
     const key = `${version}:${explorerKey(scope.host, scope.context, binding.repoId, path)}`
     if (inFlight.current.has(key)) return
     inFlight.current.add(key)
+    const directoryKey = explorerKey(scope.host, scope.context, binding.repoId, path)
+    if (cursor)
+      setContinuations((all) => ({ ...all, [directoryKey]: { repoId: binding.repoId, path, cursor, loading: true } }))
     try {
-      const { entries, truncated } = await store.invoke(scope.host, 'files.browse', scope.context, binding.repoId, path)
-      if (version === epoch.current) {
-        if (truncated) setError(t.explorerTruncated)
-        setDirectories((all) => ({ ...all, [binding.repoId]: { ...all[binding.repoId], [path]: entries } }))
+      const { entries, truncated, nextCursor } = cursor
+        ? await store.invoke(scope.host, 'files.browse', scope.context, binding.repoId, path, cursor)
+        : await store.invoke(scope.host, 'files.browse', scope.context, binding.repoId, path)
+      if (version === epoch.current && activeScope.current === scopeIdentity) {
+        if (truncated && !nextCursor) setError(t.explorerTruncated)
+        setDirectories((all) => ({
+          ...all,
+          [binding.repoId]: {
+            ...all[binding.repoId],
+            [path]: cursor ? [...(all[binding.repoId]?.[path] ?? []), ...entries] : entries,
+          },
+        }))
+        setContinuations((all) => {
+          const next = { ...all }
+          if (nextCursor) next[directoryKey] = { repoId: binding.repoId, path, cursor: nextCursor }
+          else delete next[directoryKey]
+          return next
+        })
         return entries
       }
     } catch (cause) {
-      if (version === epoch.current) setError(String(cause instanceof Error ? cause.message : cause))
+      if (version === epoch.current && activeScope.current === scopeIdentity) {
+        setError(String(cause instanceof Error ? cause.message : cause))
+        if (cursor) setContinuations((all) => ({ ...all, [directoryKey]: { repoId: binding.repoId, path, cursor } }))
+      }
     } finally {
       inFlight.current.delete(key)
     }
@@ -104,6 +127,7 @@ export default function Explorer() {
       setQuery('')
     }
     lastScope.current = identity
+    setContinuations({})
     setError('')
     if (!scope || !online) {
       setLoading(false)
@@ -392,6 +416,31 @@ export default function Explorer() {
                   </View>
                 ))}
               </View>
+            }
+            ListFooterComponent={
+              !query.trim() ? (
+                <View>
+                  {Object.entries(continuations)
+                    .filter(([, page]) =>
+                      explorerAncestors(`${page.path ? `${page.path}/` : ''}entry`)
+                        .filter(Boolean)
+                        .every((path) => expanded.has(`${page.repoId}:${path}`)),
+                    )
+                    .map(([key, page]) => {
+                      const binding = bindings.find((binding) => binding.repoId === page.repoId)
+                      return binding ? (
+                        <Row
+                          key={key}
+                          disabled={!online || loading || page.loading}
+                          onPress={() => void loadDirectory(binding, page.path, epoch.current, page.cursor)}
+                        >
+                          {page.loading ? <ActivityIndicator color={c.accent} /> : null}
+                          <T>{`${t.loadMoreFiles} · ${binding.repoName}${page.path ? `/${page.path}` : ''}`}</T>
+                        </Row>
+                      ) : null
+                    })}
+                </View>
+              ) : null
             }
             renderItem={({ item: row }) => {
               const binding = bindings.find((b) => b.repoId === row.repoId)!

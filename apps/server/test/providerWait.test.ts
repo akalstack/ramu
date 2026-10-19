@@ -189,6 +189,23 @@ describe('boot path', () => {
 })
 
 describe('a thread held at a usage limit', () => {
+  it('waits and resumes with switching enabled when only one provider and model are available', async () => {
+    script.limit = true
+    const svc = make()
+    vi.mocked(svc.catalog).mockResolvedValue(catalog.filter((entry) => entry.provider === 'codex'))
+    const s = svc.start('t', scopeOf(cwd), 'task', { ...stay, model: 'codex-test', autoFallback: true })
+    await until(() => !!waitOf(svc, s.id) && svc.get(s.id).state === 'idle')
+    expect(starts.map((start) => start.provider)).toEqual(['codex'])
+    expect(waitOf(svc, s.id)).toMatchObject({ provider: 'codex', accountId: 'default' })
+    expect(failed(svc, s.id)).toBe(false)
+
+    script.limit = false
+    expire(svc, s.id)
+    await until(() => !waitOf(svc, s.id) && svc.get(s.id).state === 'idle' && starts.length === 2)
+    expect(starts[1]).toMatchObject({ provider: 'codex', prompt: LIMIT_CONTINUATION })
+    expect(failed(svc, s.id)).toBe(false)
+  })
+
   it('records the wait with its login, never fails, and shows an unknown reset as guessed', async () => {
     script.limit = true
     const svc = make()

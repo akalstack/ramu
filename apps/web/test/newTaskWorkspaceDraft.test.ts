@@ -2,13 +2,18 @@ import type { BranchChoice, WorkspaceChoice } from '@ramu/shared/workspaceDefaul
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { DEFAULT_AGENT_SETTINGS, NO_PROJECT, type FileContext } from '@ramu/shared/types'
+import { DEFAULT_AGENT_SETTINGS, NO_PROJECT, type FileContext, type AgentSettings } from '@ramu/shared/types'
 
 const state = vi.hoisted(() => ({
   prompt: 'Fix login',
   failMethod: '',
   setupFailed: false,
   consumed: 0,
+  draftUnchanged: true,
+  draftPersisted: true,
+  model: null as AgentSettings | null,
+  modelFailure: '',
+  modelConsumed: 0,
   draft: {
     choice: {
       mode: null as 'current' | 'worktree' | null,
@@ -60,6 +65,20 @@ vi.mock('../src/workspace/HostSelection', () => ({ useHostSelection: () => ({ ac
 vi.mock('../src/workspace/addProject', () => ({ useAddProject: () => ({ busy: false }) }))
 vi.mock('../src/workspace/computers', () => ({ useComputers: () => null, StatusDot: () => null }))
 vi.mock('../src/composer/useWorkspaceDraft', () => ({ useWorkspaceDraft: () => state.draft }))
+vi.mock('../src/composer/useAgentDraft', () => ({
+  useAgentDraft: (_project: string, settings: unknown) => ({
+    settings: state.model ?? settings,
+    choice: { version: 1 },
+    defaults: undefined,
+    verify: async () => {
+      if (state.modelFailure) throw Error(state.modelFailure)
+      return state.model ?? settings
+    },
+    consume() {
+      state.modelConsumed++
+    },
+  }),
+}))
 vi.mock('../src/composer/drafts', () => ({
   clearDraft() {},
   draftKey: { newChat: (id: string) => id },
@@ -67,7 +86,7 @@ vi.mock('../src/composer/drafts', () => ({
   loadDraft: () => state.prompt,
   useDraftPersistence: () => () => {
     state.consumed++
-    return { unchanged: true, persisted: true }
+    return { unchanged: state.draftUnchanged, persisted: state.draftPersisted }
   },
 }))
 vi.mock('../src/hostStorage', () => ({ hostStorageFor: () => ({ getItem: () => null, setItem() {} }) }))
@@ -116,6 +135,11 @@ beforeEach(() => {
   state.failMethod = ''
   state.setupFailed = false
   state.consumed = 0
+  state.draftUnchanged = true
+  state.draftPersisted = true
+  state.model = null
+  state.modelFailure = ''
+  state.modelConsumed = 0
   state.calls = []
   state.workspaces = []
   state.composer = undefined
@@ -244,4 +268,41 @@ it('expires a generated snapshot with changed request inputs and preserves inval
   expect(state.draft.choice.branch).toBeUndefined()
   await state.composer!.onSubmit([])
   expect(state.calls.some((call) => call.method === 'tasks.create')).toBe(true)
+})
+
+it('revalidates model defaults before allocating a thread and preserves the draft when they need review', async () => {
+  state.modelFailure = 'Project model defaults changed. Review the model before sending.'
+  render()
+  await expect(state.composer!.onSubmit([])).rejects.toThrow('Project model defaults changed')
+  expect(state.calls).toEqual([])
+  expect(state.consumed).toBe(0)
+  expect(state.modelConsumed).toBe(0)
+  expect(state.prompt).toBe('Fix login')
+})
+
+it('starts with the reviewed effective model settings and consumes model intent only after successful delivery', async () => {
+  state.model = {
+    ...DEFAULT_AGENT_SETTINGS,
+    provider: 'codex',
+    model: 'reviewed-model',
+    effort: 'high',
+    access: 'edits',
+  }
+  render()
+  await state.composer!.onSubmit([])
+  expect(state.calls.find((call) => call.method === 'agent.start')!.args[2]).toEqual(state.model)
+  expect(state.modelConsumed).toBe(1)
+})
+
+it('retains model intent when newer text survives a send acknowledgement or text persistence failed', async () => {
+  state.model = { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', model: 'keep-for-newer-draft' }
+  state.draftUnchanged = false
+  render()
+  await state.composer!.onSubmit([])
+  expect(state.modelConsumed).toBe(0)
+  state.draftUnchanged = true
+  state.draftPersisted = false
+  render()
+  await state.composer!.onSubmit([])
+  expect(state.modelConsumed).toBe(0)
 })

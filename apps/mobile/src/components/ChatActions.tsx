@@ -22,6 +22,7 @@ import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { useT } from '../i18n'
 import { Button, Row, Sheet, T, type Icon } from './ui'
+import { ProjectCommandSettings } from './ProjectCommandSettings'
 
 /** One-shot pin/archive commands shared by the row's swipe actions. */
 export function useChatCommands(chat: Chat) {
@@ -249,11 +250,14 @@ export function ProjectActionsSheet({
 }) {
   const { c } = useTheme()
   const store = useStore()
+  const t = useT()
   const router = useRouter()
+  const [managingActions, setManagingActions] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(project.name)
   useEffect(() => {
     if (open) {
+      setManagingActions(false)
       setRenaming(false)
       setName(project.name)
     }
@@ -273,6 +277,11 @@ export function ProjectActionsSheet({
     setTimeout(fn, 300)
   }
   const items = [
+    {
+      icon: SquareTerminal,
+      label: t.manageProjectActions,
+      onPress: () => setManagingActions(true),
+    },
     {
       icon: FolderSearch,
       label: 'Browse files',
@@ -320,6 +329,17 @@ export function ProjectActionsSheet({
       },
     },
   ]
+  if (managingActions)
+    return (
+      <ProjectCommandSettings
+        key={`${project.computerId}:${raw}`}
+        hostId={project.computerId}
+        projectId={raw}
+        projectName={project.name}
+        open={open}
+        onClose={onClose}
+      />
+    )
   return (
     <Sheet open={open} onClose={onClose} title={renaming ? 'Rename project' : project.name}>
       {renaming ? (

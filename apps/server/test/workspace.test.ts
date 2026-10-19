@@ -642,6 +642,54 @@ describe('authoritative worktree creation', () => {
       setupError: expect.stringContaining('ownership'),
     })
   })
+  it('reserves case-conflicting folders and branch namespaces without changing the current checkout', async () => {
+    const project = ws.createProject('Case collisions')
+    const repo = await ws.addRepository(project.id, web)
+    mkdirSync(join(tmp, 'worktrees', 'case-collisions', 'SAME-TITLE'), { recursive: true })
+    sh(web, 'branch', 'Feature/Reserved')
+    const before = fingerprint(web)
+    const plan = await ws.planWorktrees(project.id, 'Same title', [repo.id])
+    expect(plan[0]!.path).toBe(join(tmp, 'worktrees', 'case-collisions', 'same-title-2', 'web app'))
+    for (const name of ['feature', 'feature/reserved', 'feature/reserved/child']) {
+      await expect(ws.planWorktrees(project.id, 'Manual', [repo.id], '', { name, source: 'manual' })).rejects.toThrow(
+        'already taken',
+      )
+    }
+    expect(ws.listTasks(project.id)).toEqual([])
+    expect(fingerprint(web)).toEqual(before)
+  })
+  it('retains pending allocation and creation receipts across a database reopen', async () => {
+    const database = join(tmp, 'allocation.sqlite')
+    let db = openDb(database)
+    try {
+      let workspace = new Workspace(db, join(tmp, 'durable-worktrees'))
+      const project = workspace.createProject('Restart')
+      await workspace.addRepository(project.id, web)
+      const input = {
+        projectId: project.id,
+        title: 'Same title',
+        mode: 'worktree' as const,
+        requestId: 'durable-request',
+      }
+      const first = await workspace.createTask(input)
+      const binding = workspace.listBindings(first.id)[0]!
+      expect(existsSync(binding.cwd)).toBe(false)
+      db.close()
+      db = openDb(database)
+      workspace = new Workspace(db, join(tmp, 'durable-worktrees'))
+      expect((await workspace.createTask(input)).id).toBe(first.id)
+      const second = await workspace.createTask({ ...input, requestId: 'after-restart' })
+      const secondBinding = workspace.listBindings(second.id)[0]!
+      expect(secondBinding.cwd).not.toBe(binding.cwd)
+      expect(secondBinding.taskBranch).toBe('ramu/same-title-2')
+      expect((await workspace.setupTask(first.id))[0]!.setupState).toBe('ready')
+      expect((await workspace.setupTask(second.id))[0]!.setupState).toBe('ready')
+      expect((await workspace.createTask(input)).id).toBe(first.id)
+      expect(workspace.listTasks(project.id)).toHaveLength(2)
+    } finally {
+      db.close()
+    }
+  })
 })
 
 describe('read-only Explorer scope', () => {
@@ -668,10 +716,69 @@ describe('read-only Explorer scope', () => {
     const { browseDirectory } = await import('../src/workspace/files')
     const root = join(tmp, 'many-files')
     mkdirSync(root)
-    for (let index = 0; index < 2001; index++) writeFileSync(join(root, `${index}.txt`), '')
+    for (let index = 0; index < 2001; index++) {
+      const name =
+        index === 1999 && process.platform !== 'win32' ? '1999\\notes.txt' : `${String(index).padStart(4, '0')}.txt`
+      writeFileSync(join(root, name), '')
+    }
     const result = await browseDirectory(realpathSync(root), '')
     expect(result.entries).toHaveLength(2000)
     expect(result.truncated).toBe(true)
+    expect(result.nextCursor).toEqual(expect.any(String))
+    if (process.platform !== 'win32') expect(result.entries.at(-1)!.name).toBe('1999\\notes.txt')
+    const rest = await browseDirectory(realpathSync(root), '', result.nextCursor)
+    expect(rest.entries).toHaveLength(1)
+    expect(rest.truncated).toBe(false)
+    expect(rest.nextCursor).toBeUndefined()
+    expect(new Set([...result.entries, ...rest.entries].map((entry) => entry.path)).size).toBe(2001)
+    const { project, repositories } = await ws.addProjectFromFolder(root)
+    const repo = repositories[0]!
+    const dispatcher = createDispatcher({ userData: join(tmp, 'profile'), send() {}, native: async () => {} }, {
+      workspace: ws,
+    } as Services)
+    try {
+      const first = (await dispatcher.invoke('files.browse', [`project:${project.id}`, repo.id, ''])) as Awaited<
+        ReturnType<typeof browseDirectory>
+      >
+      expect(first.entries).toHaveLength(2000)
+      const second = (await dispatcher.invoke('files.browse', [
+        `project:${project.id}`,
+        repo.id,
+        '',
+        first.nextCursor,
+      ])) as Awaited<ReturnType<typeof browseDirectory>>
+      expect(second.entries).toEqual(rest.entries)
+      expect(() =>
+        dispatcher.invoke('files.browse', [`project:${project.id}`, repo.id, '', 'x'.repeat(8193)]),
+      ).toThrow()
+    } finally {
+      dispatcher.close()
+    }
+    await expect(browseDirectory(realpathSync(root), '', 'bad-cursor')).rejects.toThrow('continuation')
+    await expect(browseDirectory(realpathSync(web), '', result.nextCursor)).rejects.toThrow('continuation')
+    writeFileSync(join(root, 'new-file.txt'), '')
+    await expect(browseDirectory(realpathSync(root), '', result.nextCursor)).rejects.toThrow('Directory changed')
+  })
+  it('paginates directories before files with deterministic ordering and no symlink traversal', async () => {
+    const { browseDirectory } = await import('../src/workspace/files')
+    const root = join(tmp, 'paged-folders')
+    mkdirSync(root)
+    for (let index = 2001; index >= 0; index--) mkdirSync(join(root, `folder-${String(index).padStart(4, '0')}`))
+    mkdirSync(join(root, '.git'))
+    writeFileSync(join(root, '000-file.txt'), '')
+    symlinkSync(web, join(root, 'outside-link'))
+    const first = await browseDirectory(realpathSync(root), '')
+    const last = await browseDirectory(realpathSync(root), '', first.nextCursor)
+    expect(first.entries[0]!.name).toBe('folder-0000')
+    expect(first.entries.at(-1)!.name).toBe('folder-1999')
+    expect(last.entries.map((entry) => [entry.name, entry.kind])).toEqual([
+      ['folder-2000', 'dir'],
+      ['folder-2001', 'dir'],
+      ['000-file.txt', 'file'],
+      ['outside-link', 'file'],
+    ])
+    expect(last.truncated).toBe(false)
+    await expect(browseDirectory(realpathSync(root), 'outside-link')).rejects.toThrow('outside')
   })
 })
 

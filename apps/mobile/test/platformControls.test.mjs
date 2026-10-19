@@ -13,6 +13,7 @@ import * as savedDraftModel from '../../../packages/shared/src/chat/savedDrafts.
 import * as localCommitStorage from '../src/storage/localCommit.ts'
 import * as mobileSavedDrafts from '../src/runtime/savedMessageDrafts.ts'
 import * as fileContextKeys from '../../../packages/shared/src/chat/fileContext.ts'
+import * as agentDraftModel from '../../../packages/shared/src/workspace/agentDefaults.ts'
 
 const require = createRequire(import.meta.url)
 const palette = new Proxy({}, { get: (_, key) => String(key) })
@@ -70,6 +71,28 @@ function load(file, os, overrides = {}, globals = {}) {
     exports: module.exports,
     require: (id) => {
       if (id in mocks) return mocks[id]
+      if (id === '@ramu/shared/types')
+        return {
+          DEFAULT_AGENT_SETTINGS: {
+            provider: 'claude-code',
+            model: '',
+            effort: null,
+            access: 'full',
+            autoFallback: true,
+          },
+        }
+      if (id.endsWith('/useAgentDraft'))
+        return {
+          useAgentDraft: (_host, _project, _key, settings) => ({
+            settings,
+            choice: { version: 1 },
+            verify: async () => settings,
+            consume() {},
+            change() {},
+            useHostDefault() {},
+            useProjectDefault() {},
+          }),
+        }
       if (id.endsWith('/composerDrafts')) return explorerDrafts
       if (id === './SavedMessageDrafts')
         return { useSavedMessageDrafts: () => ({ canSave: false, count: 0, save() {}, sheet: null }) }
@@ -570,25 +593,34 @@ for (const os of ['ios', 'android']) {
 
 function hookHarness() {
   const states = [],
+    setters = [],
     refs = [],
-    effects = []
+    effects = [],
+    memos = []
   let stateIndex = 0,
     refIndex = 0,
-    effectIndex = 0
+    effectIndex = 0,
+    memoIndex = 0
   const pending = []
+  const memo = (compute, deps) => {
+    const index = memoIndex++
+    const previous = memos[index]
+    if (previous && deps?.every((dep, i) => Object.is(dep, previous.deps?.[i]))) return previous.value
+    const value = compute()
+    memos[index] = { deps, value }
+    return value
+  }
   return {
     react: {
-      useMemo: (compute) => compute(),
-      useCallback: (callback) => callback,
+      useMemo: memo,
+      useCallback: (callback, deps) => memo(() => callback, deps),
       useState(initial) {
         const index = stateIndex++
         if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial
-        return [
-          states[index],
-          (next) => {
-            states[index] = typeof next === 'function' ? next(states[index]) : next
-          },
-        ]
+        setters[index] ??= (next) => {
+          states[index] = typeof next === 'function' ? next(states[index]) : next
+        }
+        return [states[index], setters[index]]
       },
       useRef(initial) {
         const index = refIndex++
@@ -605,7 +637,7 @@ function hookHarness() {
       },
     },
     render(run) {
-      stateIndex = refIndex = effectIndex = 0
+      stateIndex = refIndex = effectIndex = memoIndex = 0
       const tree = run()
       while (pending.length) pending.shift()()
       return tree
@@ -2673,6 +2705,797 @@ for (const os of ['ios', 'android']) {
     online = false
     tree = render()
     assert.equal(button(tree).props.disabled, true)
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} Explorer loads continuation pages once and discards pages from a previous host`, async () => {
+    const hooks = hookHarness()
+    const calls = []
+    let params = { computer: 'a', ctx: 'project:p' }
+    let finishPage
+    const store = {
+      projects: [],
+      computers: [
+        { id: 'a', name: 'Laptop' },
+        { id: 'b', name: 'Server' },
+      ],
+      isOnline: () => true,
+      subscribe: () => () => {},
+      invoke: async (host, method, context, repo, path, cursor) => {
+        calls.push([host, method, context, repo, path, cursor])
+        if (method === 'files.explorerBindings') return [{ repoId: 'r', repoName: 'Repo', setupState: 'ready' }]
+        if (method === 'files.browse') {
+          if (cursor === 'page-2')
+            return new Promise((resolve) => {
+              finishPage = resolve
+            })
+          return {
+            entries: [{ name: `${host}.txt`, path: `${host}.txt`, kind: 'file' }],
+            truncated: host === 'a',
+            ...(host === 'a' ? { nextCursor: 'page-2' } : {}),
+          }
+        }
+        throw Error(`Unexpected ${method}`)
+      },
+    }
+    const { default: Explorer } = load('app/explorer.tsx', os, {
+      react: hooks.react,
+      'expo-router': { useLocalSearchParams: () => params, useRouter: () => ({ push() {} }), useFocusEffect() {} },
+      '@ramu/shared/workspace/explorer': explorerScopes,
+      '../runtime/useWorkspaces': { useWorkspaces: () => ({ rows: [] }) },
+      '../runtime/store': { useStore: () => store },
+      '../i18n': { useT: () => ({ loadMoreFiles: 'Load more files' }) },
+    })
+    const render = () => hooks.render(() => Explorer())
+    render()
+    await settle()
+    let tree = render()
+    const more = nodes(find(tree, 'PageFlatList').props.ListFooterComponent).find((node) => node.type === 'Row')
+    assert.ok(more)
+    more.props.onPress()
+    more.props.onPress()
+    tree = render()
+    assert.equal(
+      nodes(find(tree, 'PageFlatList').props.ListFooterComponent).find((node) => node.type === 'Row').props.disabled,
+      true,
+    )
+    assert.equal(calls.filter((call) => call[5] === 'page-2').length, 1)
+    finishPage({ entries: [{ name: 'second.txt', path: 'second.txt', kind: 'file' }], truncated: false })
+    await settle()
+    tree = render()
+    assert.deepEqual(
+      find(tree, 'PageFlatList').props.data.map((row) => row.entry.path),
+      ['a.txt', 'second.txt'],
+    )
+    assert.equal(
+      nodes(find(tree, 'PageFlatList').props.ListFooterComponent).filter((node) => node.type === 'Row').length,
+      0,
+    )
+    // Refresh, then switch hosts while the second page is outstanding.
+    // The label is optional in this fixture; use the refresh button's position.
+    const buttons = nodes(find(tree, 'Header').props.right).filter((node) => node.type === 'HeaderButton')
+    buttons.at(-1).props.onPress()
+    render()
+    await settle()
+    tree = render()
+    nodes(find(tree, 'PageFlatList').props.ListFooterComponent)
+      .find((node) => node.type === 'Row')
+      .props.onPress()
+    const oldFinish = finishPage
+    params = { computer: 'b', ctx: 'project:p' }
+    render()
+    await settle()
+    oldFinish({
+      entries: [{ name: 'stale.txt', path: 'stale.txt', kind: 'file' }],
+      truncated: false,
+      nextCursor: 'stale',
+    })
+    await settle()
+    tree = render()
+    assert.deepEqual(
+      find(tree, 'PageFlatList').props.data.map((row) => row.entry.path),
+      ['b.txt'],
+    )
+    assert.equal(
+      nodes(find(tree, 'PageFlatList').props.ListFooterComponent).filter((node) => node.type === 'Row').length,
+      0,
+    )
+    more.props.onPress()
+    assert.equal(calls.filter((call) => call[5] === 'page-2').length, 2)
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} usage detail preserves provider allowance explanations in English and Indonesian`, async () => {
+    const presentation = await import('../../../packages/shared/src/usage/presentation.ts')
+    const store = { language: 'en' }
+    const { PlanUsageReading } = load('components/PlanUsage.tsx', os, {
+      '@ramu/shared/usage/presentation': presentation,
+      '../runtime/store': { useStore: () => store },
+      '../runtime/types': { providerNames: { cursor: 'Cursor', antigravity: 'Antigravity' } },
+    })
+    for (const language of ['en', 'id']) {
+      store.language = language
+      for (const [provider, scope] of [
+        ['cursor', undefined],
+        ['cursor', 'Cursor models'],
+        ['cursor', 'Other models'],
+        ['antigravity', 'Claude'],
+        ['antigravity', 'GPT'],
+      ]) {
+        const reading = { provider, scope, window: 'monthly', status: 'ok', usedPercent: 30, updatedAt: Date.now() }
+        const tree = PlanUsageReading({ reading })
+        assert.ok(nodes(tree).some((node) => node.props?.children === presentation.usageScopeHint(reading, language)))
+      }
+    }
+  })
+}
+
+test('usage refresh recovers after transient failure and reconnect without losing last-known account data', async () => {
+  const presentation = await import('../../../packages/shared/src/usage/presentation.ts')
+  const providers = await import('../../../packages/shared/src/providers/providers.ts')
+  const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+  const hooks = hookHarness()
+  const listeners = new Set()
+  let online = true,
+    failRefresh = true,
+    failAccounts = false,
+    percent = 15,
+    reads = 0
+  const store = {
+    language: 'en',
+    computers: [{ id: 'a', name: 'Laptop' }],
+    appPreferences: {},
+    usage: {},
+    isOnline: () => online,
+    subscribe: (_host, listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    invoke: async (_host, method) => {
+      if (method === 'usage.refresh') {
+        if (failRefresh) throw Error('Connection lost')
+        return []
+      }
+      reads++
+      if (failAccounts) throw Error('Temporary network failure')
+      return [
+        { provider: 'claude-code', window: 'five_hour', usedPercent: percent, updatedAt: Date.now(), status: 'ok' },
+      ]
+    },
+  }
+  const { PlanUsageSheet, PlanUsageReading } = load('components/PlanUsage.tsx', 'android', {
+    react: hooks.react,
+    'expo-router': { useRouter: () => ({ push() {} }) },
+    '@ramu/shared/usage/presentation': presentation,
+    '@ramu/shared/providers/providers': providers,
+    '../runtime/goalVerify': { isMethodMissing },
+    '../runtime/store': { useStore: () => store },
+  })
+  const render = () => hooks.render(() => PlanUsageSheet({ hosts: ['a'], open: true, onClose() {} }))
+  const reading = () => nodes(render()).find((node) => node.type === PlanUsageReading).props.reading
+  const refresh = () =>
+    nodes(render()).find(
+      (node) => node.type === 'Row' && nodes(node).some((child) => child.props?.children === 'Refresh Claude usage'),
+    )
+  const hasError = () => nodes(render()).some((node) => node.props?.tone === 'bad')
+  render()
+  await settle()
+  refresh().props.onPress()
+  await settle()
+  assert.equal(reading().usedPercent, 15)
+  assert.equal(hasError(), true)
+  assert.equal(typeof refresh().props.onPress, 'function', 'transient failure must not disable retry')
+  failRefresh = false
+  percent = 20
+  refresh().props.onPress()
+  await settle()
+  assert.equal(reading().usedPercent, 20)
+  assert.equal(hasError(), false)
+  failAccounts = true
+  for (const listener of listeners) listener('usage:changed')
+  await settle()
+  assert.equal(reading().usedPercent, 20)
+  assert.equal(hasError(), true)
+  online = false
+  render()
+  assert.equal(listeners.size, 0)
+  const before = reads
+  assert.equal(reading().usedPercent, 20)
+  assert.equal(reads, before)
+  online = true
+  failAccounts = false
+  percent = 25
+  render()
+  await settle()
+  assert.equal(reading().usedPercent, 25)
+  assert.equal(hasError(), false)
+  assert.equal(listeners.size, 1)
+  hooks.dispose()
+})
+
+const actionSettingsCopy = {
+  manageProjectActions: 'Manage actions',
+  moveActionUp: 'Move up',
+  moveActionDown: 'Move down',
+  hideProjectAction: 'Hide action',
+  showProjectAction: 'Show action',
+  useRepositoryOrder: 'Use repository order',
+  actionSettingsUnsupported: 'Update host',
+  actionSettingsOffline: 'Connect to change actions',
+  hiddenAction: 'Hidden',
+  hiddenActionsHint: 'Hidden actions do not appear in menus or shortcuts.',
+}
+for (const os of ['ios', 'android']) {
+  test(`${os} project action management reorders IDs and hides/restores on the owning host without executing commands`, async () => {
+    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+    const hooks = hookHarness()
+    const calls = []
+    const a = { id: 'test', name: 'Test', command: 'echo test', source: 'ramu.json' }
+    const b = { id: 'dev', name: 'Dev', command: 'echo dev', source: 'ramu.json' }
+    let settings = { actions: [a, b], hiddenIds: [], customOrder: false }
+    let finish
+    const store = {
+      isOnline: () => true,
+      subscribe: () => () => {},
+      invoke: async (host, method, ...args) => {
+        calls.push([host, method, ...args])
+        if (method === 'projects.actionSettings') return settings
+        if (method === 'projects.reorderActions') {
+          settings = { ...settings, actions: [b, a], customOrder: true }
+          return settings
+        }
+        if (method === 'projects.setActionVisibility') {
+          settings = { ...settings, hiddenIds: args[2] ? [args[1]] : [] }
+          return new Promise((resolve) => {
+            finish = () => resolve(settings)
+          })
+        }
+        if (method === 'projects.resetActionOrder') {
+          settings = { ...settings, actions: [a, b], customOrder: false }
+          return settings
+        }
+        throw Error(`Unexpected ${method}`)
+      },
+    }
+    const { ProjectCommandSettings } = load('components/ProjectCommandSettings.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+      '../runtime/goalVerify': { isMethodMissing },
+      '../i18n': { useT: () => actionSettingsCopy },
+    })
+    const render = () =>
+      hooks.render(() => ProjectCommandSettings({ hostId: 'remote', projectId: 'p', open: true, onClose() {} }))
+    const button = (label) =>
+      nodes(render()).find(
+        (node) => node.type === 'Button' && (node.props.accessibilityLabel === label || node.props.title === label),
+      )
+    render()
+    await settle()
+    button('Move down: Test').props.onPress()
+    await settle()
+    assert.ok(
+      calls.some(
+        (call) => JSON.stringify(call) === JSON.stringify(['remote', 'projects.reorderActions', 'p', ['dev', 'test']]),
+      ),
+    )
+    const hide = button('Hide action: Test')
+    hide.props.onPress()
+    hide.props.onPress()
+    assert.equal(calls.filter((call) => call[1] === 'projects.setActionVisibility').length, 1)
+    assert.equal(button('Hide action: Test').props.disabled, true)
+    finish()
+    await settle()
+    assert.equal(button('Show action: Test').props.disabled, false)
+    button('Show action: Test').props.onPress()
+    finish()
+    await settle()
+    button('Use repository order').props.onPress()
+    await settle()
+    assert.ok(calls.every(([, method]) => method.startsWith('projects.')))
+    assert.ok(calls.every(([host]) => host === 'remote'))
+    assert.deepEqual(settings.hiddenIds, [])
+    hooks.dispose()
+  })
+
+  test(`${os} project action management fences stale hosts, unsupported methods, offline controls and dismissed reads`, async () => {
+    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+    const hooks = hookHarness()
+    const requests = [],
+      listeners = new Map()
+    let props = { hostId: 'a', projectId: 'p', open: true, onClose() {} }
+    let online = true
+    const store = {
+      isOnline: () => online,
+      subscribe: (host, listener) => {
+        listeners.set(host, listener)
+        return () => listeners.delete(host)
+      },
+      invoke: (host, method) => {
+        const request = { host, method, ...deferred() }
+        requests.push(request)
+        return request.promise
+      },
+    }
+    const { ProjectCommandSettings } = load('components/ProjectCommandSettings.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+      '../runtime/goalVerify': { isMethodMissing },
+      '../i18n': { useT: () => actionSettingsCopy },
+    })
+    const render = () => hooks.render(() => ProjectCommandSettings(props))
+    const has = (text) => nodes(render()).some((node) => node.props?.children === text)
+    const settings = (name) => ({
+      actions: [{ id: 'same-id', name, command: 'echo safe', source: 'ramu.json' }],
+      hiddenIds: [],
+      customOrder: false,
+    })
+    render()
+    requests[0].resolve(settings('Host A'))
+    await settle()
+    assert.ok(
+      nodes(render()).some((node) => Array.isArray(node.props?.children) && node.props.children[0] === 'Host A'),
+    )
+    listeners.get('a')('workspace:changed')
+    const late = requests[1]
+    props = { ...props, hostId: 'b' }
+    render()
+    requests[2].reject(Error('Unknown method projects.actionSettings'))
+    late.resolve(settings('Late A'))
+    await settle()
+    assert.equal(has('Update host'), true)
+    assert.equal(nodes(render()).filter((node) => node.type === 'Button').length, 0)
+    online = false
+    render()
+    assert.equal(has('Connect to change actions'), true)
+    assert.equal(listeners.size, 0)
+    online = true
+    render()
+    requests.at(-1).resolve(settings('Host B'))
+    await settle()
+    const oldButton = nodes(render()).find(
+      (node) => node.type === 'Button' && node.props.accessibilityLabel === 'Hide action: Host B',
+    )
+    online = false
+    render()
+    assert.ok(
+      nodes(render())
+        .filter((node) => node.type === 'Button')
+        .every((node) => node.props.disabled),
+    )
+    props = { ...props, hostId: 'c' }
+    render()
+    const count = requests.length
+    oldButton.props.onPress()
+    assert.equal(requests.length, count)
+    online = true
+    render()
+    const last = requests.at(-1)
+    props = { ...props, open: false }
+    render()
+    last.resolve(settings('After dismissal'))
+    await settle()
+    assert.equal(listeners.size, 0)
+    assert.equal(
+      nodes(render()).some(
+        (node) => Array.isArray(node.props?.children) && node.props.children[0] === 'After dismissal',
+      ),
+      false,
+    )
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} project menu opens action management for its explicit host and project without starting work`, () => {
+    const hooks = hookHarness()
+    let closed = 0
+    const store = { isOnline: () => true }
+    const { ProjectActionsSheet } = load('components/ChatActions.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+      '../i18n': { useT: () => actionSettingsCopy },
+      './ProjectCommandSettings': { ProjectCommandSettings: 'ProjectCommandSettings' },
+    })
+    const render = () =>
+      hooks.render(() =>
+        ProjectActionsSheet({
+          project: { id: 'remote:p', computerId: 'remote', name: 'Project' },
+          open: true,
+          onClose: () => {
+            closed++
+          },
+        }),
+      )
+    nodes(render())
+      .find((node) => node.type === 'Row' && nodes(node).some((child) => child.props?.children === 'Manage actions'))
+      .props.onPress()
+    const manager = find(render(), 'ProjectCommandSettings')
+    assert.equal(manager.props.hostId, 'remote')
+    assert.equal(manager.props.projectId, 'p')
+    manager.props.onClose()
+    assert.equal(closed, 1)
+    hooks.dispose()
+  })
+}
+
+const projectModelCopy = {
+  projectModelChoose: 'Choose a model before starting',
+  projectModelInvalid: 'Invalid model choice',
+  projectModelChanged: 'Project model changed; review before sending',
+  projectModelManual: 'Draft model',
+  projectModelLoading: 'Loading project model',
+  projectModelDefault: 'Project model default',
+  projectModelUnsupported: 'Update host for project defaults',
+  projectModelUseDefault: 'Use project default',
+  projectModelUseHost: 'Use host default',
+}
+const modelBase = {
+  provider: 'codex',
+  model: 'host-model',
+  effort: 'high',
+  access: 'edits',
+  autoFallback: false,
+  accountId: 'work',
+  serviceTier: 'fast',
+}
+const modelRepository = {
+  status: 'ready',
+  source: 'ramu.json',
+  requested: { provider: 'claude-code', model: 'repository-model' },
+  selection: { provider: 'claude-code', model: 'repository-model', effort: 'low' },
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} explicit new-thread models survive default changes and stay isolated by host and composer scope`, async () => {
+    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+    const hooks = hookHarness(),
+      listeners = new Set(),
+      calls = []
+    let props = { host: 'a', project: 'a:p', key: 'a:new:a:p', base: modelBase }
+    let latest = modelRepository,
+      online = true
+    const store = {
+      drafts: {},
+      isOnline: () => online,
+      setDraft: (key, value) => {
+        store.drafts[key] = value
+      },
+      subscribe: (_host, listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+      invoke: async (...args) => {
+        calls.push(args)
+        return latest
+      },
+    }
+    const { useAgentDraft } = load('runtime/useAgentDraft.ts', os, {
+      react: hooks.react,
+      './store': { useStore: () => store },
+      './goalVerify': { isMethodMissing },
+      '@ramu/shared/workspace/agentDefaults': agentDraftModel,
+      '../i18n': { useT: () => projectModelCopy },
+    })
+    const render = () => hooks.render(() => useAgentDraft(props.host, props.project, props.key, props.base))
+    assert.equal(render().blocked, true)
+    await settle()
+    assert.equal(render().settings.model, 'repository-model')
+    assert.equal(render().settings.accountId, undefined)
+    assert.equal(render().settings.access, 'edits')
+    render().change({ ...render().settings, access: 'auto' })
+    latest = { ...modelRepository, selection: { ...modelRepository.selection, model: 'new-repository-model' } }
+    for (const listener of listeners) listener('workspace:changed')
+    await settle()
+    assert.equal(render().settings.model, 'new-repository-model')
+    assert.equal(render().settings.access, 'auto')
+    render().change({
+      ...render().settings,
+      provider: 'codex',
+      model: 'chosen',
+      effort: 'high',
+      serviceTier: 'standard',
+    })
+    props = { ...props, base: { ...modelBase, model: 'changed-host-model' } }
+    assert.equal(render().settings.model, 'chosen')
+    props = { host: 'b', project: 'b:p', key: 'b:new:b:p', base: modelBase }
+    assert.notEqual(render().settings.model, 'chosen')
+    await settle()
+    props = { host: 'a', project: 'a:p', key: 'a:new:a:p', base: modelBase }
+    assert.equal(render().settings.model, 'chosen')
+    props = { ...props, key: 'a:new:a:p:files:worktree' }
+    assert.notEqual(render().settings.model, 'chosen')
+    props = { ...props, key: 'a:new:a:p' }
+    render().useProjectDefault()
+    await settle()
+    assert.equal(render().settings.model, 'new-repository-model')
+    online = false
+    const count = calls.length
+    assert.equal((await render().verify()).model, 'new-repository-model')
+    assert.equal(calls.length, count)
+    hooks.dispose()
+  })
+
+  test(`${os} model preflight rejects changed or late host results and preserves newer choices after enqueue`, async () => {
+    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+    const hooks = hookHarness(),
+      calls = []
+    let props = { host: 'a', project: 'a:p', key: 'a:new:a:p' },
+      latest = modelRepository,
+      waiting
+    const store = {
+      drafts: {},
+      isOnline: () => true,
+      subscribe: () => () => {},
+      setDraft: (key, value) => {
+        store.drafts[key] = value
+      },
+      invoke: (...args) => {
+        calls.push(args)
+        return waiting ? waiting.promise : Promise.resolve(latest)
+      },
+    }
+    const { useAgentDraft } = load('runtime/useAgentDraft.ts', os, {
+      react: hooks.react,
+      './store': { useStore: () => store },
+      './goalVerify': { isMethodMissing },
+      '@ramu/shared/workspace/agentDefaults': agentDraftModel,
+      '../i18n': { useT: () => projectModelCopy },
+    })
+    const render = () => hooks.render(() => useAgentDraft(props.host, props.project, props.key, modelBase))
+    render()
+    await settle()
+    latest = { ...modelRepository, selection: { ...modelRepository.selection, model: 'changed-before-send' } }
+    await assert.rejects(render().verify(), /review before sending/)
+    assert.equal(render().settings.model, 'changed-before-send')
+    assert.equal((await render().verify()).model, 'changed-before-send')
+    waiting = deferred()
+    const old = render().verify()
+    props = { host: 'b', project: 'b:p', key: 'b:new:b:p' }
+    render()
+    waiting.resolve(modelRepository)
+    await assert.rejects(old, /review before sending/)
+    await settle()
+    assert.notEqual(render().settings.model, 'changed-before-send')
+    waiting = undefined
+    render().useHostDefault()
+    const sent = render()
+    sent.change({ ...modelBase, model: 'newer-manual' })
+    render()
+    sent.consume()
+    assert.equal(JSON.parse(store.drafts['b:new:b:p:agent']).selection.model, 'newer-manual')
+    render().consume()
+    assert.equal(store.drafts['b:new:b:p:agent'], '')
+    hooks.dispose()
+  })
+
+  test(`${os} unknown saved model formats require an explicit model and old hosts keep their displayed host default`, async () => {
+    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+    const hooks = hookHarness()
+    const store = {
+      drafts: { 'a:new:a:p:agent': '{"version":99}' },
+      isOnline: () => true,
+      subscribe: () => () => {},
+      setDraft: (key, value) => {
+        store.drafts[key] = value
+      },
+      invoke: async () => {
+        throw Error('Unknown method tasks.agentDefaults')
+      },
+    }
+    const { useAgentDraft } = load('runtime/useAgentDraft.ts', os, {
+      react: hooks.react,
+      './store': { useStore: () => store },
+      './goalVerify': { isMethodMissing },
+      '@ramu/shared/workspace/agentDefaults': agentDraftModel,
+      '../i18n': { useT: () => projectModelCopy },
+    })
+    const render = () => hooks.render(() => useAgentDraft('a', 'a:p', 'a:new:a:p', modelBase))
+    render()
+    await settle()
+    assert.equal(render().blocked, true)
+    render().change({ ...render().settings, access: 'auto' })
+    assert.equal(store.drafts['a:new:a:p:agent'], '{"version":99}')
+    render().useHostDefault()
+    assert.equal(render().blocked, false)
+    assert.equal((await render().verify()).model, 'host-model')
+    store.drafts = {}
+    assert.equal(render().unsupported, true)
+    assert.equal(render().blocked, false)
+    assert.equal((await render().verify()).model, 'host-model')
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} New thread queues the reviewed repository model and preserves its draft when the preference changes before send`, async () => {
+    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+    const hooks = hookHarness(),
+      submitted = [],
+      destinations = [],
+      calls = []
+    let latest = modelRepository
+    const copy = { ...projectModelCopy, newChat: 'New thread' }
+    const store = {
+      selected: 'a',
+      computers: [{ id: 'a', name: 'Laptop', status: 'online' }],
+      projects: [{ id: 'a:p', computerId: 'a', name: 'Project' }],
+      drafts: { 'a:new:a:p': 'Keep the full draft' },
+      defaults: { a: modelBase },
+      appPreferences: { a: { defaultCheckoutMode: 'current' } },
+      isOnline: () => true,
+      subscribe: () => () => {},
+      setDraft: (key, value) => {
+        store.drafts[key] = value
+      },
+      invoke: async (host, method, ...args) => {
+        calls.push([host, method, ...args])
+        if (method === 'tasks.agentDefaults') return latest
+        if (method === 'tasks.workspaceOptions')
+          return {
+            defaultCheckoutMode: 'current',
+            branchNaming: 'fixed',
+            branchPrefix: 'ramu/',
+            branchInstructions: '',
+            worktreeUnavailable: null,
+          }
+        throw Error(`Unexpected ${method}`)
+      },
+      createChat: async (input) => {
+        submitted.push(input)
+        return 'a:pending'
+      },
+    }
+    const agentHook = load('runtime/useAgentDraft.ts', os, {
+      react: hooks.react,
+      './store': { useStore: () => store },
+      './goalVerify': { isMethodMissing },
+      '@ramu/shared/workspace/agentDefaults': agentDraftModel,
+      '../i18n': { useT: () => copy },
+    })
+    const { default: NewChat } = load('app/new.tsx', os, {
+      react: hooks.react,
+      'expo-router': {
+        useLocalSearchParams: () => ({ project: 'a:p' }),
+        useRouter: () => ({ replace: (to) => destinations.push(to) }),
+      },
+      '@ramu/shared/workspaceDefaults': workspaceDefaults,
+      '@ramu/shared/workspace/explorer': explorerScopes,
+      '../runtime/workspaces': workspaceChoices,
+      '../runtime/useWorkspaces': { useWorkspaces: () => ({ rows: [] }) },
+      '../runtime/useAgentDraft': agentHook,
+      '../runtime/store': { useStore: () => store },
+      '../runtime/types': { STANDALONE: 'no-project' },
+      '../i18n': { useT: () => copy },
+      '../components/Keyboard': { useKeyboardInset: () => 0 },
+    })
+    const render = () => hooks.render(() => NewChat())
+    render()
+    await settle()
+    const composer = find(render(), 'Composer')
+    assert.equal(composer.props.model.provider, 'claude-code')
+    assert.equal(composer.props.model.model, 'repository-model')
+    assert.equal(composer.props.model.settings.access, 'edits')
+    assert.equal(composer.props.model.settings.accountId, undefined)
+    await composer.props.onSend('Keep the full draft', 'send', [], [])
+    assert.equal(submitted[0].provider, 'claude-code')
+    assert.equal(submitted[0].model, 'repository-model')
+    assert.equal(submitted[0].settings.autoFallback, false)
+    latest = { ...modelRepository, selection: { ...modelRepository.selection, model: 'new-model-before-send' } }
+    await assert.rejects(
+      find(render(), 'Composer').props.onSend('Keep the full draft', 'send', [], []),
+      /review before sending/,
+    )
+    assert.equal(submitted.length, 1)
+    assert.equal(store.drafts['a:new:a:p'], 'Keep the full draft')
+    const current = find(render(), 'Composer')
+    assert.equal(current.props.model.model, 'new-model-before-send')
+    current.props.onModel({
+      provider: 'codex',
+      model: 'manual-model',
+      effort: 'high',
+      settings: { access: 'edits', autoFallback: false },
+    })
+    await find(render(), 'Composer').props.onSend('Keep the full draft', 'send', [], [])
+    assert.equal(submitted[1].model, 'manual-model')
+    assert.equal(store.drafts['a:new:a:p:agent'], '')
+    assert.equal(destinations.length, 2)
+    store.createChat = async (input) => {
+      submitted.push(input)
+      store.drafts['a:new:a:p'] = 'Newer unsent text'
+      return 'a:newer-pending'
+    }
+    find(render(), 'Composer').props.onModel({ provider: 'codex', model: 'retain-for-newer-text', effort: 'high' })
+    await find(render(), 'Composer').props.onSend('Keep the full draft', 'send', [], [])
+    assert.equal(JSON.parse(store.drafts['a:new:a:p:agent']).selection.model, 'retain-for-newer-text')
+    assert.equal(store.drafts['a:new:a:p'], 'Newer unsent text')
+    assert.ok(calls.every(([host]) => host === 'a'))
+    assert.ok(calls.every(([, method]) => ['tasks.workspaceOptions', 'tasks.agentDefaults'].includes(method)))
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} unhydrated hosts never present an invented host default and restored manual drafts retain their reviewed access policy`, async () => {
+    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+    const hooks = hookHarness()
+    const store = {
+      drafts: {},
+      isOnline: () => false,
+      subscribe: () => () => {},
+      setDraft: (key, value) => {
+        store.drafts[key] = value
+      },
+      invoke: async () => {
+        throw Error('Offline')
+      },
+    }
+    const { useAgentDraft } = load('runtime/useAgentDraft.ts', os, {
+      react: hooks.react,
+      './store': { useStore: () => store },
+      './goalVerify': { isMethodMissing },
+      '@ramu/shared/workspace/agentDefaults': agentDraftModel,
+      '../i18n': { useT: () => projectModelCopy },
+    })
+    const render = () =>
+      hooks.render(() => useAgentDraft('a', 'a:p', 'a:new:a:p', { ...modelBase, access: 'full' }, false))
+    assert.equal(render().blocked, true)
+    render().useHostDefault()
+    assert.equal(store.drafts['a:new:a:p:agent'], undefined)
+    const previous = agentDraftModel.editAgentDraft({ version: 1 }, modelBase, {
+      ...modelBase,
+      model: 'reviewed-manual-model',
+    })
+    store.drafts['a:new:a:p:agent'] = JSON.stringify(previous)
+    assert.equal(render().blocked, false)
+    assert.equal((await render().verify()).access, 'edits')
+    assert.equal(render().settings.autoFallback, false)
+    assert.equal(render().settings.model, 'reviewed-manual-model')
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} a configuration refresh supersedes an older model preflight without overwriting the newer selection`, async () => {
+    const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+    const hooks = hookHarness(),
+      requests = []
+    let listener
+    const store = {
+      drafts: {},
+      isOnline: () => true,
+      setDraft() {},
+      subscribe: (_host, read) => {
+        listener = read
+        return () => {}
+      },
+      invoke: () => {
+        const request = deferred()
+        requests.push(request)
+        return request.promise
+      },
+    }
+    const { useAgentDraft } = load('runtime/useAgentDraft.ts', os, {
+      react: hooks.react,
+      './store': { useStore: () => store },
+      './goalVerify': { isMethodMissing },
+      '@ramu/shared/workspace/agentDefaults': agentDraftModel,
+      '../i18n': { useT: () => projectModelCopy },
+    })
+    const render = () => hooks.render(() => useAgentDraft('a', 'a:p', 'a:new:a:p', modelBase))
+    render()
+    requests[0].resolve(modelRepository)
+    await settle()
+    const pending = render().verify()
+    listener('workspace:changed')
+    requests[2].resolve({ ...modelRepository, selection: { ...modelRepository.selection, model: 'newest-model' } })
+    await settle()
+    requests[1].resolve(modelRepository)
+    await assert.rejects(pending, /review before sending/)
+    assert.equal(render().settings.model, 'newest-model')
     hooks.dispose()
   })
 }

@@ -20,6 +20,13 @@ export interface ProjectAction {
   source?: 'ramu.json' | '.ramu/config.json'
 }
 
+/** Management includes hidden commands; ordinary action lists and shortcuts exclude them. */
+export interface ProjectActionSettings {
+  actions: ProjectAction[]
+  hiddenIds: string[]
+  customOrder: boolean
+}
+
 /** A message in some chat that contains the searched text, with a short excerpt around the first match. */
 export interface ChatSearchHit {
   taskId: string

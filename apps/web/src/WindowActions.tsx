@@ -11,6 +11,8 @@ import {
   ArrowUp,
   ChevronDown,
   GripVertical,
+  Eye,
+  EyeOff,
   Pencil,
   Play,
   Plus,
@@ -18,7 +20,7 @@ import {
   SquareTerminal,
   Trash2,
 } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import {
   DndContext,
   KeyboardSensor,
@@ -42,15 +44,17 @@ import { Menu, type MenuEntry } from './Menu'
 import { errorText } from './workspace/TaskPane'
 import { useWorkspace } from './workspace/workspace'
 import { PROJECT_ACTIONS_EVENT, useProjectActions } from './workspace/useProjectActions'
+import { useProjectActionSettings } from './workspace/useProjectActionSettings'
 export { useProjectActions } from './workspace/useProjectActions'
 import { hostStorageFor } from './hostStorage'
 
 /** Window-bar actions for the open chat, like T3 Code: saved project commands that run in a terminal. */
 export function WindowActions({ ctx, projectId }: { ctx: string; projectId?: string }) {
   useLanguage()
+  const host = useHost()
   return (
     <div className="window-actions [&_+_.workspace-tool-buttons]:ml-2 [&_button]:h-7 [&_button]:min-h-7 [&_button]:gap-1.5 [&_button]:p-[0_10px] [&_button]:[border:0] [&_button]:rounded-(--radius-s) [&_button]:bg-fill [&_button]:text-soft [&_button]:text-control [&_button]:whitespace-nowrap [&_button:hover:not(:disabled)]:[background:var(--fill-hover)] [&_button:hover:not(:disabled)]:text-foreground [&_button.on]:[background:var(--fill-hover)] [&_button.on]:text-foreground [&_button_>_svg]:flex-none [&_button_>_span]:max-w-[140px] [&_button_>_span]:overflow-hidden [&_button_>_span]:text-ellipsis [&_.split-button_>_.split-menu]:w-6 [&_.split-button_>_.split-menu]:p-0 [&_.split-button_>_.split-menu]:justify-center [&_.split-button_>_.split-menu]:[border-top-left-radius:0] [&_.split-button_>_.split-menu]:[border-bottom-left-radius:0] [&_.split-button_>_.split-menu]:text-muted-foreground flex items-center gap-1.5 flex-none ml-auto [-webkit-app-region:no-drag]">
-      {projectId && <ActionsControl ctx={ctx} projectId={projectId} />}
+      {projectId && <ActionsControl key={JSON.stringify([host.id, projectId, ctx])} ctx={ctx} projectId={projectId} />}
     </div>
   )
 }
@@ -146,6 +150,9 @@ function ActionsControl({ ctx, projectId }: { ctx: string; projectId: string }) 
           <Plus size={14} />
           <span>{t('Add action')}</span>
         </Button>
+        <Button variant="ghost" size="icon-xs" aria-label={t('Manage actions')} onClick={() => setManaging(true)}>
+          <Settings2 />
+        </Button>
         {dialog}
       </>
     )
@@ -237,7 +244,10 @@ function ActionDialog({
   const [keys, setKeys] = useState(action?.keys ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const pending = useRef(false)
   const save = async (next: ProjectAction[]) => {
+    if (pending.current) return
+    pending.current = true
     setBusy(true)
     setError(null)
     try {
@@ -247,6 +257,7 @@ function ActionDialog({
     } catch (reason) {
       setError(errorText(reason))
     } finally {
+      pending.current = false
       setBusy(false)
     }
   }
@@ -415,7 +426,7 @@ function SortableActionRow({ id, busy, children }: { id: string; busy: boolean; 
 
 function ManageDialog({
   projectId,
-  actions,
+  actions: fallbackActions,
   onEdit,
   onClose,
 }: {
@@ -425,30 +436,46 @@ function ManageDialog({
   onClose: () => void
 }) {
   useLanguage()
-  const { invoke } = useHost()
+  const { invoke, status } = useHost()
+  const settings = useProjectActionSettings(projectId)
+  const hidden = new Set(settings.hiddenIds)
+  const actions = settings.supported ? settings.actions.filter((action) => !hidden.has(action.id)) : fallbackActions
+  const hiddenActions = settings.actions.filter((action) => hidden.has(action.id))
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const save = async (next: ProjectAction[]) => {
+  const pending = useRef(false)
+  const disabled = busy || settings.loading || status !== 'connected'
+  const mutate = async (operation: () => Promise<unknown>) => {
+    if (pending.current || disabled) return
+    pending.current = true
     setBusy(true)
     setError(null)
     try {
-      await invoke('projects.setActions', projectId, next)
+      await operation()
       window.dispatchEvent(new Event(PROJECT_ACTIONS_EVENT))
     } catch (reason) {
       setError(errorText(reason))
     } finally {
+      pending.current = false
       setBusy(false)
     }
   }
+  const save = (next: ProjectAction[]) => mutate(() => invoke('projects.setActions', projectId, next))
   const move = (from: number, to: number) => {
-    if (busy || from === to || to < 0 || to >= actions.length) return
+    if (disabled || !settings.supported || from === to || to < 0 || to >= actions.length) return
     const next = [...actions]
     next.splice(to, 0, next.splice(from, 1)[0]!)
-    void save(next)
+    void mutate(() =>
+      invoke(
+        'projects.reorderActions',
+        projectId,
+        next.map((action) => action.id),
+      ),
+    )
   }
   const drop = (event: DragEndEvent) => {
     const from = actions.findIndex((action) => action.id === event.active.id),
@@ -467,11 +494,11 @@ function ManageDialog({
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={drop}>
           <SortableContext items={actions.map((action) => action.id)} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col gap-1 mt-3" role="list">
-              {actions.length === 0 && (
+              {actions.length === 0 && hiddenActions.length === 0 && (
                 <div className="p-[10px_4px] text-caption text-muted-foreground">{t('No actions yet.')}</div>
               )}
               {actions.map((action, index) => (
-                <SortableActionRow key={action.id} id={action.id} busy={busy}>
+                <SortableActionRow key={action.id} id={action.id} busy={disabled || !settings.supported}>
                   <span className="flex-1 min-w-0 flex flex-col text-left">
                     <span className="overflow-hidden text-ellipsis whitespace-nowrap">
                       {action.name}
@@ -491,7 +518,7 @@ function ManageDialog({
                     type="button"
                     className="flex-none"
                     aria-label={t('Move {0} up', { '0': action.name })}
-                    disabled={busy || index === 0}
+                    disabled={disabled || !settings.supported || index === 0}
                     onClick={() => move(index, index - 1)}
                   >
                     <ArrowUp size={14} />
@@ -502,7 +529,7 @@ function ManageDialog({
                     type="button"
                     className="flex-none"
                     aria-label={t('Move {0} down', { '0': action.name })}
-                    disabled={busy || index === actions.length - 1}
+                    disabled={disabled || !settings.supported || index === actions.length - 1}
                     onClick={() => move(index, index + 1)}
                   >
                     <ArrowDown size={14} />
@@ -513,7 +540,7 @@ function ManageDialog({
                     type="button"
                     className="flex-none"
                     aria-label={t('Edit {0}', { '0': action.name })}
-                    disabled={busy}
+                    disabled={disabled}
                     onClick={() => onEdit(action)}
                   >
                     <Pencil size={14} />
@@ -522,9 +549,21 @@ function ManageDialog({
                     variant="ghost"
                     size="icon-xs"
                     type="button"
+                    aria-label={t('Hide {0}', { '0': action.name })}
+                    disabled={disabled || !settings.supported}
+                    onClick={() =>
+                      void mutate(() => invoke('projects.setActionVisibility', projectId, action.id, true))
+                    }
+                  >
+                    <EyeOff />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
                     className="flex-none"
                     aria-label={t('Delete {0}', { '0': action.name })}
-                    disabled={busy || Boolean(action.source)}
+                    disabled={disabled || Boolean(action.source)}
                     onClick={() => void save(actions.filter((current) => current.id !== action.id))}
                   >
                     <Trash2 size={14} />
@@ -534,6 +573,39 @@ function ManageDialog({
             </div>
           </SortableContext>
         </DndContext>
+        {hiddenActions.length > 0 && (
+          <div className="flex flex-col gap-2 mt-3" role="list" aria-label={t('Hidden actions')}>
+            <p className="text-caption text-muted-foreground">
+              {t('Hidden actions do not appear in menus or shortcuts.')}
+            </p>
+            {hiddenActions.map((action) => (
+              <div key={action.id} role="listitem" className="flex items-center gap-2">
+                <span className="flex-1 min-w-0 flex flex-col">
+                  <span className="truncate">{action.name}</span>
+                  <span className="truncate text-caption text-muted-foreground">
+                    {action.command}
+                    {action.source ? ` · ${action.source}` : ''}
+                  </span>
+                </span>
+                <Button
+                  variant="ghost"
+                  disabled={disabled}
+                  onClick={() => void mutate(() => invoke('projects.setActionVisibility', projectId, action.id, false))}
+                >
+                  <Eye data-icon="inline-start" />
+                  {t('Show action')}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        {settings.error && (
+          <p role="status" className="text-caption text-muted-foreground">
+            {/^Unknown method\b/.test(settings.error)
+              ? t('Update this host to manage action order and visibility.')
+              : settings.error}
+          </p>
+        )}
         {error && (
           <div className="error text-bad small text-caption mt-2" role="alert">
             {error}
@@ -544,12 +616,21 @@ function ManageDialog({
             type="button"
             variant="ghost"
             className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground"
-            disabled={busy}
+            disabled={disabled}
             onClick={() => onEdit('new')}
           >
             <Plus size={14} />
             {t('Add action')}
           </Button>
+          {settings.customOrder && (
+            <Button
+              variant="ghost"
+              disabled={disabled}
+              onClick={() => void mutate(() => invoke('projects.resetActionOrder', projectId))}
+            >
+              {t('Use repository order')}
+            </Button>
+          )}
           <span className="grow flex-1 min-w-0" />
           <Button
             variant="default"

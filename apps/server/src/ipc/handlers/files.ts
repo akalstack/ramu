@@ -23,8 +23,9 @@ export const registerFileHandlers: RegisterHandlers = (ctx) => {
   return {
     'files.explorerBindings': { args: z.tuple([id]), run: (context: string) => workspace.explorerBindings(context) },
     'files.browse': {
-      args: z.tuple([id, id, relPath]),
-      run: (context: string, repo: string, path: string) => files.browseDirectory(cwdOf(context, repo), path),
+      args: z.tuple([id, id, relPath, z.string().min(1).max(8192).optional()]),
+      run: (context: string, repo: string, path: string, cursor?: string) =>
+        files.browseDirectory(cwdOf(context, repo), path, cursor),
     },
     'files.create': {
       args: z.tuple([id, id, relPath, z.enum(['file', 'dir'])]),

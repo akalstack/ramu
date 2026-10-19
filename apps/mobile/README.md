@@ -25,15 +25,25 @@ The React Native/React pins are isolated from desktop React through Metro. Insta
 SDK-compatible native modules with `pnpm --filter @ramu/mobile exec expo install …`.
 `pnpm dev:mobile` starts Metro for Expo Go on the Mac's LAN address (`scripts/start.mjs`; an iPhone often cannot resolve the `.local` name). Use a development build (`dev:build`) for the native adaptive header and background push; Expo Go's bundled navigation library does not include our native scroll-view bridge.
 
+## Project actions
+
+A project's menu offers **Manage actions** for the selected host. Inspect the command and its repository source, move visible actions, hide/show commands or restore repository order. These settings are shared with other clients of that host. They never run a command, create a terminal or edit repository files. Hidden actions remain recoverable and are excluded from desktop menus and shortcuts. Offline and older hosts explain unavailable changes. Add or edit command definitions on desktop or in `ramu.json`.
+
 ## Files, workspace defaults and usage
 
-**Browse files** on Threads opens a host/project picker without creating a thread. Thread headers and project actions open Explorer for their exact checkout. Direct and transcript links share the existing code/Markdown/image/diff viewer. Directory responses stop at 2,000 entries with a truncation notice; filename/path search uses the bounded quick-open index and shows at most 200 matches. Existing-workspace Home selection and file-management context actions remain in the [Explorer plan](../../docs/EXPLORER-PLAN.md).
+**Browse files** on Threads opens a host/project picker without creating a thread. Thread headers and project actions open Explorer for their exact checkout. Direct and transcript links share the existing code/Markdown/image/diff viewer. Directory responses contain at most 2,000 entries per page, with **Load more files** on supporting hosts and a truncation notice on older hosts. A changed directory requires refresh; filename/path search uses the bounded quick-open index and shows at most 200 matches. Native existing-workspace acceptance and file-management context actions remain in the [Explorer plan](../../docs/EXPLORER-PLAN.md).
 
-**Plan usage** appears in Threads and beside the composer's model, opening a shared host/account sheet. Missing readings, notice-only limits, last-known readings and measured percentages are distinct. Percentages mean used; they are account-wide rather than per-thread. The refresh action is specifically for Claude. Native layout, routing projection and other remaining work are in the [usage plan](../../docs/PLAN-USAGE-UX-PLAN.md).
+**Plan usage** appears in Threads and beside the composer's model, opening a shared host/account sheet. Missing readings, notice-only limits, last-known readings and measured percentages are distinct. Percentages mean used; they are account-wide rather than per-thread. The refresh action is specifically for Claude. Cursor/Antigravity allowance explanations are shared with desktop and localized. Transient refresh failures preserve the last reading and allow retry; reconnect refreshes the account data. Native layout, routing projection and other remaining work are in the [usage plan](../../docs/PLAN-USAGE-UX-PLAN.md).
 
 In New thread → Workspace, select an existing workspace and use **Rename workspace** to edit its shared label. Saving keeps thread titles, Git branches, files and checkout IDs intact. The name is checked against the one the editor opened with; concurrent changes require review, and an older host shows an update hint. Offline saves are disabled.
 
 Host Git settings now provide a default checkout mode and fixed branch prefix. A manual draft choice overrides the default; Use default restores inheritance. Sending freezes the chosen mode/prefix in the outbox, and creation retries use the same request ID. On a supporting host, optional branch-name details preserve manual edits and offer Generate name for semantic/custom naming. Further draft and device acceptance remains in the [workspace plan](../../docs/WORKSPACE-DEFAULTS-PLAN.md).
+
+## New-thread model defaults
+
+A registered project's `ramu.json` (or `.ramu/config.json`) can suggest `agent.preferredProvider` and `agent.preferredModel`. New thread shows the source and resolves the choice on that host. An explicit model choice stays with the active draft and survives reopening; **Use project default** resumes inheritance. Unavailable or invalid preferences keep the draft intact and offer a different model or a known **Use host default**. Changes detected during Send require review before anything is queued.
+
+When host defaults have not loaded, reconnect or choose a reviewed model; the app does not label its own fallback as the host's default. Restored manual choices keep their reviewed access/fallback policy offline. Queuing freezes the selected settings, so a later repository edit does not change pending work. Existing threads and restored saved-message content keep their current model choices.
 
 ## Navigation
 

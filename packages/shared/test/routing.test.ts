@@ -148,10 +148,10 @@ describe('planRoute', () => {
       }),
     ).toBeNull()
   })
-  it('keeps the provider but changes model when only that model window is exhausted', () => {
+  it('changes model with a single provider when only that model window is exhausted', () => {
     const decision = planRoute(claude, chain, {
       usage: [reading({ window: 'weekly', scope: 'Opus', usedPercent: 98, resetsAt: NOW + 1 })],
-      catalogs,
+      catalogs: catalogs.filter((catalog) => catalog.provider === 'claude-code'),
       switchAt: 90,
       now: NOW,
     })

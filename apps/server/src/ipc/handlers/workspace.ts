@@ -1,5 +1,7 @@
 import { generateBranchName } from '../../workspace/branchNaming'
 import { projectActionSchema } from '../../workspace/projectConfig'
+import { ProjectActions } from '../../workspace/projectActions'
+import { projectAgentDefaults } from '../../workspace/projectAgentDefaults'
 import { z } from 'zod'
 import {
   DEFAULT_AGENT_SETTINGS,
@@ -73,15 +75,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       worktreeBranchInstructions: config.workspace?.branchInstructions ?? prefs.worktreeBranchInstructions,
     }
   }
-  const projectActions = (projectId: string): ProjectAction[] => {
-    const { config, source } = projectConfiguration(projectId)
-    const saved = workspace.getAppState<ProjectAction[]>(`project-actions:${projectId}`, [])
-    const overridden = new Set(saved.map((action) => action.id))
-    return [
-      ...(config.actions ?? []).filter((action) => !overridden.has(action.id)).map((action) => ({ ...action, source })),
-      ...saved,
-    ]
-  }
+  const projectActions = new ProjectActions(workspace, projectConfiguration)
   const generate = (title: string, intent: BranchNamingIntent, signal?: AbortSignal) => {
     const prefs = loadPreferences()
     const models = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
@@ -159,6 +153,18 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           configError: error,
           worktreeUnavailable: await workspace.worktreeUnavailable(projectId),
         }
+      },
+    },
+    'tasks.agentDefaults': {
+      args: z.tuple([id, agentSettings.shape.provider]),
+      run: async (projectId: string, provider: AgentSettings['provider']) => {
+        const initial = projectConfiguration(projectId)
+        let catalog: ReturnType<typeof agents.catalog> | undefined
+        const discover = () => (catalog ??= agents.catalog())
+        const result = await projectAgentDefaults(initial, provider, discover)
+        const current = projectConfiguration(projectId)
+        const identity = (value: typeof initial) => JSON.stringify([value.config.agent, value.source, value.error])
+        return identity(initial) === identity(current) ? result : projectAgentDefaults(current, provider, discover)
       },
     },
     'tasks.plan': {
@@ -300,20 +306,31 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     },
     'projects.actions': {
       args: z.tuple([id]),
-      run: projectActions,
+      run: (projectId: string) => projectActions.list(projectId),
+    },
+    'projects.actionSettings': {
+      args: z.tuple([id]),
+      run: (projectId: string) => projectActions.settings(projectId),
+    },
+    'projects.setActionVisibility': {
+      args: z.tuple([id, z.string().min(1).max(64), z.boolean()]),
+      run: (projectId: string, actionId: string, hidden: boolean) =>
+        projectActions.visibility(projectId, actionId, hidden),
+    },
+    'projects.resetActionOrder': {
+      args: z.tuple([id]),
+      run: (projectId: string) => projectActions.resetOrder(projectId),
+    },
+    'projects.reorderActions': {
+      args: z.tuple([id, z.array(z.string().min(1).max(64)).max(60)]),
+      run: (projectId: string, actionIds: string[]) => projectActions.reorder(projectId, actionIds),
     },
     'projects.setActions': {
       args: z.tuple([
         id,
         z.array(projectActionSchema.extend({ source: z.enum(['ramu.json', '.ramu/config.json']).optional() })).max(60),
       ]),
-      run: (projectId: string, actions: ProjectAction[]) => {
-        if (!workspace.listProjects().some((p) => p.id === projectId)) throw new Error('Unknown project')
-        const local = actions.filter((action) => !action.source).map((action) => projectActionSchema.parse(action))
-        if (local.length > 30) throw new Error('A project can have at most 30 saved actions')
-        workspace.setAppState(`project-actions:${projectId}`, local)
-        return projectActions(projectId)
-      },
+      run: (projectId: string, actions: ProjectAction[]) => projectActions.save(projectId, actions),
     },
     'projects.reorder': {
       args: z.tuple([z.array(id).max(500)]),

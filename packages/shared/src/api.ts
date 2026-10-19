@@ -45,6 +45,7 @@ import type {
   ProviderCatalog,
   AgentScope,
   ProjectAction,
+  ProjectActionSettings,
   ChatSearchHit,
   FolderInspection,
   AgentSessionInfo,
@@ -278,6 +279,10 @@ export interface RamuMethods {
   'workspaces.list'(): WorktreeWorkspace[]
   'workspaces.rename'(workspaceId: string, name: string, before: string): WorktreeWorkspace
   'tasks.list'(): Task[]
+  'tasks.agentDefaults'(
+    projectId: string,
+    defaultProvider: AgentSettings['provider'],
+  ): import('./workspace/agentDefaults').ProjectAgentDefaults
   'tasks.workspaceOptions'(projectId: string): {
     defaultCheckoutMode: 'current' | 'worktree'
     branchPrefix: string
@@ -312,6 +317,10 @@ export interface RamuMethods {
   'projects.reveal'(projectId: string): void
   'projects.actions'(projectId: string): ProjectAction[]
   'projects.setActions'(projectId: string, actions: ProjectAction[]): ProjectAction[]
+  'projects.actionSettings'(projectId: string): ProjectActionSettings
+  'projects.setActionVisibility'(projectId: string, actionId: string, hidden: boolean): ProjectActionSettings
+  'projects.resetActionOrder'(projectId: string): ProjectActionSettings
+  'projects.reorderActions'(projectId: string, actionIds: string[]): ProjectActionSettings
   'repos.remove'(repoId: string): void
   'tasks.bindings'(taskId: string): RepositoryBinding[]
   'settings.models.get'(): ModelPreferences | null
@@ -354,7 +363,16 @@ export interface RamuMethods {
   'files.delete'(taskId: string, repoId: string, path: string): void
   'files.reveal'(taskId: string, repoId: string, path: string): void
   'files.explorerBindings'(context: string): RepositoryBinding[]
-  'files.browse'(context: string, repoId: string, path: string): { entries: DirEntry[]; truncated: boolean }
+  'files.browse'(
+    context: string,
+    repoId: string,
+    path: string,
+    cursor?: string,
+  ): {
+    entries: DirEntry[]
+    truncated: boolean
+    nextCursor?: string
+  }
   'files.list'(taskId: string, repoId: string, path: string): DirEntry[]
   'files.read'(taskId: string, repoId: string, path: string): FileContent
   'files.editorconfig'(taskId: string, repoId: string, path: string): EditorConfigProps

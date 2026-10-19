@@ -94,6 +94,11 @@ it('binds the role to the host-issued code and denies viewer execution', async (
     'settings.app.set',
     'background.stop',
     'agent.start',
+    'projects.actionSettings',
+    'tasks.agentDefaults',
+    'projects.setActionVisibility',
+    'projects.resetActionOrder',
+    'projects.reorderActions',
     'future.read',
   ])
     expect(deviceMayInvoke(device, method)).toBe(false)

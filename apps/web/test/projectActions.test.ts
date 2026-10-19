@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   cleanup: undefined as (() => void) | undefined,
   pendingEffect: undefined as (() => void) | undefined,
   requests: [] as {
+    method: string
     host: string
     project: string
     resolve: (value: unknown) => void
@@ -17,9 +18,9 @@ const state = vi.hoisted(() => ({
   listeners: new Map<string, () => void>(),
 }))
 const invoke = vi.hoisted(
-  () => (_method: string, project: string) =>
+  () => (method: string, project: string) =>
     new Promise((resolve, reject) => {
-      state.requests.push({ host: state.host, project, resolve, reject })
+      state.requests.push({ host: state.host, method, project, resolve, reject })
     }),
 )
 const runtime = vi.hoisted(() => ({
@@ -54,10 +55,19 @@ vi.mock('react', () => ({
 vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ id: state.host, status: state.status, invoke }) }))
 vi.mock('../src/workspace/workspace', () => ({ useHostRuntime: () => runtime }))
 import { PROJECT_ACTIONS_EVENT, useProjectActions } from '../src/workspace/useProjectActions'
+import { useProjectActionSettings } from '../src/workspace/useProjectActionSettings'
 
 function RenderActions(project?: string) {
   state.index = 0
   const result = useProjectActions(project)
+  const effect = state.pendingEffect
+  state.pendingEffect = undefined
+  effect?.()
+  return result
+}
+function RenderSettings(project: string) {
+  state.index = 0
+  const result = useProjectActionSettings(project)
   const effect = state.pendingEffect
   state.pendingEffect = undefined
   effect?.()
@@ -134,4 +144,48 @@ it('clears actions on project changes or failed refreshes and reloads on reconne
   state.requests[3]!.resolve([])
   await Promise.resolve()
   expect(RenderActions('q')).toEqual([])
+})
+
+it('loads hidden-action metadata on the correct host and ignores superseded reads and closed dialogs', async () => {
+  RenderSettings('p')
+  expect(state.requests[0]!.method).toBe('projects.actionSettings')
+  state.listeners.get('a:workspace:changed')!()
+  const settings = { actions: action('Current'), hiddenIds: ['test'], customOrder: true }
+  state.requests[1]!.resolve(settings)
+  await Promise.resolve()
+  expect(RenderSettings('p')).toMatchObject({ ...settings, supported: true, loading: false })
+  state.requests[0]!.resolve({ ...settings, hiddenIds: [] })
+  await Promise.resolve()
+  expect(RenderSettings('p').hiddenIds).toEqual(['test'])
+  state.host = 'b'
+  expect(RenderSettings('p').actions).toEqual([])
+  state.requests[2]!.resolve({ actions: action('Host B'), hiddenIds: [], customOrder: false })
+  await Promise.resolve()
+  expect(RenderSettings('p').actions[0]!.name).toBe('Host B')
+  state.listeners.get('b:workspace:changed')!()
+  state.cleanup?.()
+  state.requests[3]!.resolve(settings)
+  await Promise.resolve()
+  expect(RenderSettings('p').actions[0]!.name).toBe('Host B')
+})
+
+it('reports unsupported hosts without exposing management commands and retries after reconnect', async () => {
+  RenderSettings('p')
+  state.requests[0]!.reject(new Error('Unknown method projects.actionSettings'))
+  await Promise.resolve()
+  expect(RenderSettings('p')).toMatchObject({
+    supported: false,
+    loading: false,
+    error: 'Unknown method projects.actionSettings',
+  })
+  state.status = 'disconnected'
+  RenderSettings('p')
+  state.requests[1]!.reject(new Error('Offline'))
+  await Promise.resolve()
+  expect(RenderSettings('p').actions).toEqual([])
+  state.status = 'connected'
+  RenderSettings('p')
+  state.requests[2]!.resolve({ actions: [], hiddenIds: [], customOrder: false })
+  await Promise.resolve()
+  expect(RenderSettings('p')).toMatchObject({ supported: true, error: '' })
 })

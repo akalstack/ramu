@@ -1,4 +1,4 @@
-import { usageTone, usagePercent } from '@ramu/shared/usage/presentation'
+import { usageTone, usagePercent, usageScopeHint } from '@ramu/shared/usage/presentation'
 export { usageTone } from '@ramu/shared/usage/presentation'
 import { t, useLanguage, formatLocale } from '../i18n'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -168,15 +168,8 @@ const isCursorOverall = (reading: UsageReading) =>
 
 /** What a window means, for the providers whose windows are not obvious from their name. */
 export function usageHint(reading: UsageReading): string | undefined {
-  if (reading.provider === 'cursor') {
-    if (isCursorOverall(reading)) return t('Combined usage across both allowances, not a third quota.')
-    if (reading.scope === 'Cursor models') return t('Grok and Composer use this first. Auto can use either pool.')
-    if (reading.scope === 'Other models')
-      return t('Claude, GPT, and Gemini use this pool. Grok and Composer fall back here.')
-  }
-  if (reading.provider === 'antigravity' && (reading.scope === 'Claude' || reading.scope === 'GPT'))
-    return t('Claude and GPT share one allowance.')
-  return undefined
+  const hint = usageScopeHint(reading)
+  return hint ? t(hint) : undefined
 }
 
 export function windowLabel(reading: UsageReading, short = false): string {

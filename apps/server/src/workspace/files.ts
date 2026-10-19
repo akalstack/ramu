@@ -271,29 +271,97 @@ export async function listDir(root: string, relPath: string): Promise<DirEntry[]
     .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1))
 }
 
-/** Bounded directory payload for mobile Explorer; no recursive traversal. */
+const compareDirectoryEntries = (a: DirEntry, b: DirEntry) =>
+  a.kind === b.kind ? (a.name < b.name ? -1 : a.name > b.name ? 1 : 0) : a.kind === 'dir' ? -1 : 1
+
+/** Bounded directory payload and retained page; no recursive traversal or persistent cursor state. */
 export async function browseDirectory(
   root: string,
   relPath: string,
-): Promise<{ entries: DirEntry[]; truncated: boolean }> {
+  cursor?: string,
+): Promise<{ entries: DirEntry[]; truncated: boolean; nextCursor?: string }> {
   const abs = await resolveInRoot(root, relPath)
+  const revisionOf = async () => {
+    const info = await stat(abs, { bigint: true })
+    return `${info.dev}:${info.ino}:${info.mtimeNs}:${info.ctimeNs}`
+  }
+  const revision = await revisionOf()
+  const directory = createHash('sha256').update(abs).digest('hex')
+  let after: DirEntry | undefined
+  if (cursor !== undefined) {
+    try {
+      if (!cursor || cursor.length > 8192) throw new Error()
+      const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'))
+      if (
+        value.version !== 1 ||
+        value.directory !== directory ||
+        value.revision !== revision ||
+        !['file', 'dir'].includes(value.kind) ||
+        typeof value.name !== 'string' ||
+        !value.name ||
+        value.name.includes('/') ||
+        value.name.includes('\0')
+      )
+        throw new Error()
+      after = { name: value.name, path: '', kind: value.kind }
+    } catch {
+      throw new Error('Directory changed or continuation is invalid. Refresh files and try again.')
+    }
+  }
   const dir = await opendir(abs)
+  // A max heap retains only the smallest page plus one lookahead, even for huge folders.
   const entries: DirEntry[] = []
-  let truncated = false
+  const limit = 2000
   for await (const entry of dir) {
     if (entry.name === '.git' || (!entry.isDirectory() && !entry.isFile() && !entry.isSymbolicLink())) continue
-    if (entries.length === 2000) {
-      truncated = true
-      break
-    }
-    entries.push({
+    const next: DirEntry = {
       name: entry.name,
       path: relPath ? `${relPath}/${entry.name}` : entry.name,
       kind: entry.isDirectory() ? 'dir' : 'file',
-    })
+    }
+    if (after && compareDirectoryEntries(next, after) <= 0) continue
+    if (entries.length < limit + 1) {
+      let index = entries.push(next) - 1
+      while (index > 0) {
+        const parent = (index - 1) >> 1
+        if (compareDirectoryEntries(entries[parent]!, entries[index]!) >= 0) break
+        ;[entries[parent], entries[index]] = [entries[index]!, entries[parent]!]
+        index = parent
+      }
+    } else if (compareDirectoryEntries(next, entries[0]!) < 0) {
+      entries[0] = next
+      let index = 0
+      while (index * 2 + 1 < entries.length) {
+        let child = index * 2 + 1
+        if (child + 1 < entries.length && compareDirectoryEntries(entries[child + 1]!, entries[child]!) > 0) child++
+        if (compareDirectoryEntries(entries[index]!, entries[child]!) >= 0) break
+        ;[entries[index], entries[child]] = [entries[child]!, entries[index]!]
+        index = child
+      }
+    }
   }
-  entries.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1))
-  return { entries, truncated }
+  if (revision !== (await revisionOf())) throw new Error('Directory changed. Refresh files and try again.')
+  entries.sort(compareDirectoryEntries)
+  const truncated = entries.length > limit
+  if (truncated) entries.pop()
+  const last = entries.at(-1)
+  return {
+    entries,
+    truncated,
+    ...(truncated && last
+      ? {
+          nextCursor: Buffer.from(
+            JSON.stringify({
+              version: 1,
+              directory,
+              revision,
+              name: last.name,
+              kind: last.kind,
+            }),
+          ).toString('base64url'),
+        }
+      : {}),
+  }
 }
 
 /** Quick open and file mentions also work in folders with no Git metadata. */

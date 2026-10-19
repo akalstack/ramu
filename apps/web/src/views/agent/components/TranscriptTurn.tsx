@@ -140,9 +140,10 @@ export function TranscriptTurn({
   return (
     <div className="turn [&_>_[data-block-index]:has(.msg.user)]:flex [&_>_[data-block-index]:has(.msg.user)]:justify-end flex flex-col gap-3.5 min-w-0">
       {dateSeparator !== undefined && (
-        <Marker variant="separator" className="mt-5 mb-6 text-control [.turn:first-child_&]:mt-1">
+        <Marker className="mt-5 mb-6 justify-center text-control [.turn:first-child_&]:mt-1">
           <MarkerContent>
             <time
+              className="text-muted-foreground"
               dateTime={new Date(dateSeparator).toISOString()}
               title={new Date(dateSeparator).toLocaleString(formatLocale())}
             >

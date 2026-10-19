@@ -15,6 +15,7 @@ export function ThreadActivitySummary({
 }) {
   useLanguage()
   if (!model.primary) return null
+  // The transcript already shows the working status; the dock lists only other activity.
   const label = (kind: ActivityKind) =>
     ({
       connection: t('Offline · last-known activity'),
@@ -26,7 +27,8 @@ export function ThreadActivitySummary({
       goal: goalLabel,
       queue: t('{0} queued', { 0: model.queueCount }),
     })[kind]
-  const kinds = [model.primary, ...model.secondary.filter((kind) => kind !== 'working')]
+  const kinds = [model.primary, ...model.secondary].filter((kind) => kind !== 'working')
+  if (!kinds.length) return null
   return (
     <div aria-label={t('Thread activity')} className="flex min-w-0 flex-wrap items-center gap-1 px-1 py-0.5">
       {kinds.slice(0, 3).map((kind, index) => (

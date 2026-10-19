@@ -19,7 +19,6 @@ import {
   NO_PROJECT,
   type FileContext,
   type Attachment,
-  type AgentSettings,
   type CheckoutMode,
   type IssueLink,
   type Repository,
@@ -39,6 +38,7 @@ import { hostStorageFor } from './hostStorage'
 import { draftKey, draftStore, loadDraft, useDraftPersistence } from './composer/drafts'
 import { notifyError } from './chat/Notifications'
 import { useWorkspaceDraft } from './composer/useWorkspaceDraft'
+import { useAgentDraft } from './composer/useAgentDraft'
 import { clearWorkspaceDraft } from './composer/workspaceDraft'
 import { useHost } from './workspace/HostProvider'
 import { useAddProject } from './workspace/addProject'
@@ -229,17 +229,25 @@ export function NewTask({
   const repos = ws.repos[projectId] ?? []
   const project = ws.projects.find((p) => p.id === projectId)
   const { initialSettings } = useModelSets()
-  const [settings, setSettings] = useState<AgentSettings>(initialSettings)
-  useEffect(
-    () => setSettings(initialSettings),
-    [
-      initialSettings.provider,
-      initialSettings.model,
-      initialSettings.effort,
-      initialSettings.access,
-      initialSettings.autoFallback,
-    ],
-  )
+  const agentDraft = useAgentDraft(projectId, initialSettings)
+  const settings = agentDraft.settings
+  const modelNotice = agentDraft.choice.selection
+    ? t('Model chosen for this draft')
+    : !agentDraft.confirmed
+      ? t('The saved model choice could not be restored. Choose a model again.')
+      : agentDraft.loading
+        ? t('Loading project model defaults…')
+        : agentDraft.unsupported
+          ? t('This host uses host model defaults. Update it for repository preferences.')
+          : agentDraft.defaults?.status === 'invalid'
+            ? t('Project configuration is invalid. Choose a model or correct the file.')
+            : agentDraft.defaults?.reason === 'provider'
+              ? t("The project's preferred provider is unavailable on this host.")
+              : agentDraft.defaults?.reason === 'model'
+                ? t("The project's preferred model is not in this host's catalog.")
+                : agentDraft.error || agentDraft.defaults?.reason === 'catalog'
+                  ? t("Could not load the project's model catalog.")
+                  : t('Project model default')
   const workspaceDraft = useWorkspaceDraft(host.id, projectId, general ? null : ws.composingWorkspace)
   const workspaceId = general ? null : (workspaceDraft.choice.workspaceId ?? null)
   const manualMode = general ? null : workspaceDraft.choice.mode
@@ -347,6 +355,7 @@ export function NewTask({
     setBusy(true)
     let created: string | null = null
     try {
+      const sendSettings = await agentDraft.verify()
       const fingerprint = JSON.stringify([
         host.id,
         projectId,
@@ -385,7 +394,7 @@ export function NewTask({
         'agent.start',
         task.id,
         prompt,
-        settings,
+        sendSettings,
         attachments.map((file) => file.id),
         context,
       )
@@ -395,8 +404,12 @@ export function NewTask({
       // The link lets this chat's pull request close the issue; losing it only loses that line.
       if (issue) void host.invoke('forge.linkIssue', task.id, issue).catch(() => {})
       setIssue(null)
-      if (!consumeDraft().persisted) notifyError(t('Message sent, but the local draft could not be cleared.'), 'Draft')
-      clearWorkspaceDraft(projectId, draftStore(host.id), workspaceDraft.choice)
+      const consumed = consumeDraft()
+      if (!consumed.persisted) notifyError(t('Message sent, but the local draft could not be cleared.'), 'Draft')
+      if (consumed.unchanged && consumed.persisted) {
+        clearWorkspaceDraft(projectId, draftStore(host.id), workspaceDraft.choice)
+        agentDraft.consume()
+      }
       ws.openTask(task.id)
       ws.openView(task.id, { kind: 'agent', sessionId: session.id })
       void ws.refresh()
@@ -491,6 +504,40 @@ export function NewTask({
         )}
       </div>
       <div className="start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
+        {(agentDraft.defaults?.requested ||
+          agentDraft.blocked ||
+          agentDraft.choice.selection ||
+          agentDraft.unsupported ||
+          agentDraft.problem) && (
+          <div className="flex flex-wrap items-center gap-2 px-2 text-caption text-muted-foreground" role="status">
+            <span>{modelNotice}</span>
+            {agentDraft.defaults?.requested && (
+              <span>
+                {`${agentDraft.defaults.source ?? 'ramu.json'} · `}
+                {[agentDraft.defaults.requested.provider, agentDraft.defaults.requested.model]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            )}
+            {agentDraft.choice.selection ? (
+              <Button variant="ghost" size="xs" disabled={busy} onClick={agentDraft.useProjectDefault}>
+                {t('Use project default')}
+              </Button>
+            ) : agentDraft.blocked ? (
+              <Button variant="ghost" size="xs" disabled={busy} onClick={agentDraft.useHostDefault}>
+                {t('Use host default')}
+              </Button>
+            ) : null}
+            {agentDraft.problem && (
+              <>
+                {agentDraft.confirmed && <span>{t('Model choice could not be saved on this device.')}</span>}
+                <Button variant="ghost" size="xs" onClick={agentDraft.retry}>
+                  {t('Retry')}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
         {!general && workspaceDraft.problem && (
           <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
             {workspaceDraft.confirmed
@@ -508,15 +555,27 @@ export function NewTask({
             {t('Saved workspace is unavailable. Choose another workspace.')}
           </p>
         )}
-        {!general && !workspaceId && (
-          <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
-            {options.data
-              ? `${t('Default')}: ${t(options.data.defaultCheckoutMode === 'worktree' ? 'New worktree' : 'Current checkout')}${resolution.reason ? ` · ${t('Using current checkout')} — ${resolution.reason}` : ''}`
-              : t('Loading workspace settings…')}
-            {options.data?.configSource && ` · ${options.data.configSource}`}
-            {options.data?.configError && ` · ${t(options.data.configError)}`}
-          </p>
-        )}
+        {!general &&
+          !workspaceId &&
+          (!options.data ||
+            options.data.defaultCheckoutMode === 'worktree' ||
+            resolution.reason ||
+            options.data.configSource ||
+            options.data.configError) && (
+            <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
+              {options.data
+                ? [
+                    options.data.defaultCheckoutMode === 'worktree' || resolution.reason
+                      ? `${t('Default')}: ${t(options.data.defaultCheckoutMode === 'worktree' ? 'New worktree' : 'Current checkout')}${resolution.reason ? ` · ${t('Using current checkout')} — ${resolution.reason}` : ''}`
+                      : null,
+                    options.data.configSource,
+                    options.data.configError ? t(options.data.configError) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                : t('Loading workspace settings…')}
+            </p>
+          )}
         {!general && mode === 'worktree' && !workspaceId && (
           <NewWorktreeSummary
             projectId={projectId}
@@ -678,7 +737,7 @@ export function NewTask({
           attachments={attachments}
           onAttachmentsChange={setAttachments}
           autoFocus
-          controls={<AgentControls settings={settings} onChange={setSettings} disabled={busy} />}
+          controls={<AgentControls settings={settings} onChange={agentDraft.change} disabled={busy} />}
           value={prompt}
           onChange={(v) => {
             setPrompt(v)

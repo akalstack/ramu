@@ -7,6 +7,7 @@ import {
   usageStale,
   usageTone,
   usageWindow,
+  usageScopeHint,
 } from '../src/usage/presentation'
 const reading = (overrides: Partial<UsageReading> = {}): UsageReading => ({
   provider: 'claude-code',
@@ -85,4 +86,21 @@ it('localizes allowance windows without translating provider model identities', 
   expect(usageWindow(reading({ window: 'monthly' }), true, 'id')).toBe('bln')
   expect(usageWindow(reading({ window: 'quota' }), false, 'id')).toBe('Kuota')
   expect(usageWindow(reading({ provider: 'cursor', window: 'monthly' }), false, 'id')).toBe('Keseluruhan')
+})
+
+it('explains reported provider pools consistently and keeps unknown scopes unexplained', () => {
+  const overall = reading({ provider: 'cursor', window: 'monthly' })
+  expect(usageScopeHint(overall)).toBe('Combined usage across both allowances, not a third quota.')
+  expect(usageScopeHint(overall, 'id')).toBe('Pemakaian gabungan dari kedua jatah, bukan kuota ketiga.')
+  expect(usageScopeHint(reading({ provider: 'cursor', scope: 'Cursor models' }))).toContain('Auto')
+  expect(usageScopeHint(reading({ provider: 'cursor', scope: 'Other models' }), 'id')).toContain(
+    'Claude, GPT, dan Gemini',
+  )
+  for (const scope of ['Claude', 'GPT']) {
+    expect(usageScopeHint(reading({ provider: 'antigravity', scope }))).toBe('Claude and GPT share one allowance.')
+    expect(usageScopeHint(reading({ provider: 'antigravity', scope }), 'id')).toBe('Claude dan GPT berbagi satu jatah.')
+  }
+  expect(usageScopeHint(reading({ provider: 'cursor', window: 'quota' }))).toBeUndefined()
+  expect(usageScopeHint(reading({ provider: 'cursor', scope: 'Future pool' }))).toBeUndefined()
+  expect(usageScopeHint(reading({ provider: 'codex', scope: 'GPT' }))).toBeUndefined()
 })

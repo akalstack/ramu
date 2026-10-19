@@ -23,6 +23,27 @@ export function usageWindow(reading: UsageReading, short = false, language: 'en'
   }
   return reading.scope ? `${reading.scope} · ${labels[reading.window]}` : labels[reading.window]
 }
+
+/** Explain provider-reported pools without inventing scopes for other readings. */
+export function usageScopeHint(reading: UsageReading, language: 'en' | 'id' = 'en'): string | undefined {
+  if (reading.provider === 'cursor') {
+    if (reading.window === 'monthly' && !reading.scope)
+      return language === 'id'
+        ? 'Pemakaian gabungan dari kedua jatah, bukan kuota ketiga.'
+        : 'Combined usage across both allowances, not a third quota.'
+    if (reading.scope === 'Cursor models')
+      return language === 'id'
+        ? 'Grok dan Composer memakai ini lebih dulu. Auto bisa memakai salah satu jatah.'
+        : 'Grok and Composer use this first. Auto can use either pool.'
+    if (reading.scope === 'Other models')
+      return language === 'id'
+        ? 'Claude, GPT, dan Gemini memakai jatah ini. Grok dan Composer beralih ke sini bila habis.'
+        : 'Claude, GPT, and Gemini use this pool. Grok and Composer fall back here.'
+  }
+  if (reading.provider === 'antigravity' && (reading.scope === 'Claude' || reading.scope === 'GPT'))
+    return language === 'id' ? 'Claude dan GPT berbagi satu jatah.' : 'Claude and GPT share one allowance.'
+  return undefined
+}
 /** Unknown account identity is safe only when the host reported one unambiguous account. */
 export function relevantUsage(
   readings: UsageReading[],

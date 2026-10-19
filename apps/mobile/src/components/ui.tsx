@@ -142,6 +142,7 @@ export function IconButton({
 
 export function Button({
   title,
+  accessibilityLabel,
   icon: I,
   onPress,
   kind = 'primary',
@@ -149,6 +150,7 @@ export function Button({
   style,
 }: {
   title: string
+  accessibilityLabel?: string
   icon?: Icon
   onPress?: () => void
   kind?: 'primary' | 'secondary' | 'danger' | 'ghost'
@@ -161,6 +163,7 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? title}
       accessibilityState={{ disabled: Boolean(disabled) }}
       android_ripple={{ color: kind === 'primary' ? 'rgba(255,255,255,0.16)' : c.pressed }}
       disabled={disabled}

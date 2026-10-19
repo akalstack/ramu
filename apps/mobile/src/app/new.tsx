@@ -1,9 +1,10 @@
-import type { WorktreePlanEntry } from '@ramu/shared/types'
+import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type WorktreePlanEntry } from '@ramu/shared/types'
 import type { RamuMethods } from '@ramu/shared/api'
 import { currentBranchChoice, validBranchName, resolveCheckoutMode } from '@ramu/shared/workspaceDefaults'
 import { projectWorkspaces } from '@ramu/shared/workspace/explorer'
 import { readWorkspaceChoice, type WorkspaceChoice } from '../runtime/workspaces'
 import { useWorkspaces } from '../runtime/useWorkspaces'
+import { useAgentDraft } from '../runtime/useAgentDraft'
 import { isMethodMissing } from '../runtime/goalVerify'
 import { newComposerKey } from '../runtime/composerDrafts'
 import { useEffect, useRef, useState } from 'react'
@@ -29,7 +30,7 @@ import { Header, Screen } from '../components/Screen'
 import { useKeyboardInset } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
 import { Composer, type ModelChoice } from '../components/Composer'
-import { Row, Sheet, T, tap } from '../components/ui'
+import { Button, Row, Sheet, T, tap } from '../components/ui'
 import { BranchNameControls } from '../components/BranchNameControls'
 import { WorkspaceNameSheet } from '../components/WorkspaceNameSheet'
 
@@ -184,18 +185,51 @@ export default function NewChat() {
   const [reviewed, setReviewed] = useState<{ key: string; plan: WorktreePlanEntry[] } | null>(null)
   const [picker, setPicker] = useState<'project' | 'mode' | 'host' | null>(null)
   // Starts on the computer's default model step (Settings › Models), like the desktop; a pick here overrides it.
-  const [picked, setModel] = useState<ModelChoice | null>(null)
   const preset = store.defaults[selected]
-  const model: ModelChoice =
-    picked ??
-    (preset
-      ? {
-          provider: preset.provider,
-          model: preset.model,
-          effort: preset.effort ?? '',
-          settings: { access: preset.access, autoFallback: preset.autoFallback, serviceTier: preset.serviceTier },
-        }
-      : { provider: 'claude-code', model: '', effort: '' })
+  const agentDraft = useAgentDraft(selected, projectId, composerKey, preset ?? DEFAULT_AGENT_SETTINGS, !!preset)
+  const asModelChoice = (value: AgentSettings): ModelChoice => ({
+    provider: value.provider,
+    model: value.model,
+    effort: value.effort ?? '',
+    settings: {
+      access: value.access,
+      autoFallback: value.autoFallback,
+      serviceTier: value.serviceTier,
+      accountId: value.accountId,
+    },
+  })
+  const model = asModelChoice(agentDraft.settings)
+  const modelNotice =
+    !preset && agentDraft.blocked
+      ? t.projectModelHostUnknown
+      : agentDraft.choice.selection
+        ? t.projectModelManual
+        : agentDraft.invalid
+          ? t.projectModelInvalid
+          : !preset
+            ? t.projectModelHostUnknown
+            : agentDraft.loading
+              ? t.projectModelLoading
+              : agentDraft.unsupported
+                ? t.projectModelUnsupported
+                : agentDraft.defaults?.status === 'invalid'
+                  ? t.projectModelConfigInvalid
+                  : agentDraft.defaults?.reason === 'provider'
+                    ? t.projectModelProviderUnavailable
+                    : agentDraft.defaults?.reason === 'model'
+                      ? t.projectModelUnavailable
+                      : agentDraft.error || agentDraft.defaults?.reason === 'catalog'
+                        ? t.projectModelCatalogFailed
+                        : t.projectModelDefault
+  const chooseModel = (next: ModelChoice) =>
+    agentDraft.change({
+      ...agentDraft.settings,
+      ...next.settings,
+      provider: next.provider,
+      model: next.model,
+      effort: (next.effort || null) as AgentSettings['effort'],
+      ...(next.provider !== model.provider ? { accountId: undefined, serviceTier: 'standard' as const } : {}),
+    })
   const project = list.find((p) => p.id === projectId)
   const pc = computers.find((x) => x.id === selected)
   useEffect(() => {
@@ -227,6 +261,29 @@ export default function NewChat() {
           </View>
         </View>
         <View style={{ paddingBottom: Math.max(insets.bottom, space.s) }}>
+          {agentDraft.defaults?.requested ||
+          agentDraft.blocked ||
+          agentDraft.choice.selection ||
+          agentDraft.unsupported ? (
+            <View style={{ paddingHorizontal: space.m, gap: space.s }}>
+              <T tone="muted" size={font.caption}>
+                {modelNotice}
+              </T>
+              {agentDraft.defaults?.requested ? (
+                <T tone="muted" size={font.caption}>
+                  {`${agentDraft.defaults.source ?? 'ramu.json'} · `}
+                  {[agentDraft.defaults.requested.provider, agentDraft.defaults.requested.model]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </T>
+              ) : null}
+              {agentDraft.choice.selection ? (
+                <Button title={t.projectModelUseDefault} kind="ghost" onPress={agentDraft.useProjectDefault} />
+              ) : agentDraft.blocked && preset ? (
+                <Button title={t.projectModelUseHost} kind="ghost" onPress={agentDraft.useHostDefault} />
+              ) : null}
+            </View>
+          ) : null}
           <Composer
             key={composerKey}
             running={false}
@@ -318,7 +375,7 @@ export default function NewChat() {
               offline ? `What should the agent do? Sends when ${pc?.name ?? 'it'} is back` : t.newPlaceholder
             }
             model={model}
-            onModel={setModel}
+            onModel={chooseModel}
             onSend={async (text, _mode, attachments, context) => {
               if (projectId === null) {
                 setPicker('project')
@@ -344,6 +401,7 @@ export default function NewChat() {
               }
               if (mode === 'worktree' && !workspaceId && sendChoice && !workspaceOptions?.branchNameControls)
                 throw new Error(t.branchNameOutdated)
+              const sendModel = asModelChoice(await agentDraft.verify())
               const id = await createChat({
                 computerId: selected,
                 projectId,
@@ -367,8 +425,9 @@ export default function NewChat() {
                 branchPrefix,
                 attachments,
                 context,
-                ...model,
+                ...sendModel,
               })
+              if (storeRef.current.drafts[composerKey] === text) agentDraft.consume()
               router.replace({ pathname: '/chat/[id]', params: { id } })
             }}
           />
@@ -384,7 +443,6 @@ export default function NewChat() {
               if (computer.id !== selected) {
                 setHost(computer.id)
                 setProjectId(null)
-                setModel(null)
               }
               setPicker('project')
             }}

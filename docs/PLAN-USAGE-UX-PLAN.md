@@ -13,10 +13,10 @@ Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend the current usage
 ## Remaining implementation
 
 - Connect the thread label to an authoritative effective next-message routing/account projection when available. The current chip names current/staged selection and leaves ambiguous accounts unselected; it does not predict fallback.
-- Retain provider-specific scope explanations in mobile detail and verify short/full window-label and reset-date localization across clients. Routing and presentation now share provider-aware model-scope applicability; validate additional provider model identities with live evidence.
-- Validate account detail event refresh and old-host handling against real paired hosts. Native component tests cover event refresh, out-of-order responses, dismissal/host changes, unsupported refresh and preservation of last-known data; network loss and upgrade acceptance remain.
+- Verify short/full window-label, scope-explanation and reset-date localization across clients. Routing and presentation now share provider-aware model-scope applicability; validate additional provider model identities with live evidence.
+- Validate account detail event refresh and old-host handling against real paired hosts. Physical network-loss and upgrade acceptance remain.
 - Improve narrow/large-text header action overflow and per-provider summary expansion/counts. Verify the Access & Fallback link preserves the selected host and localized offline wording on native devices.
-- Extend focused native component tests to transient refresh failure, reconnect and effective next-message account identity; run physical iOS/Android accessibility and composer/keyboard acceptance. Current-account filtering tests do not establish the pending server routing projection or native-device acceptance.
+- Extend focused native component tests to effective next-message account identity; run physical iOS/Android accessibility and composer/keyboard acceptance. Current-account filtering tests do not establish the pending server routing projection or native-device acceptance.
 
 ## Acceptance and verification
 

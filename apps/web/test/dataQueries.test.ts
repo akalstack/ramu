@@ -32,9 +32,28 @@ it('invalidates the changed domain while keeping cached data for background refr
 })
 
 it('caches data reads without caching commands or shell operations', () => {
-  for (const method of ['agent.get', 'agent.events', 'files.list', 'files.search', 'git.status', 'reviews.get'])
+  for (const method of [
+    'agent.get',
+    'agent.events',
+    'files.list',
+    'files.search',
+    'git.status',
+    'reviews.get',
+    'projects.actionSettings',
+    'tasks.agentDefaults',
+  ])
     expect(isDataQuery(method)).toBe(true)
-  for (const method of ['agent.start', 'term.open', 'term.write', 'term.resize', 'files.write', 'git.checkout'])
+  for (const method of [
+    'agent.start',
+    'term.open',
+    'term.write',
+    'term.resize',
+    'files.write',
+    'git.checkout',
+    'projects.reorderActions',
+    'projects.setActionVisibility',
+    'projects.resetActionOrder',
+  ])
     expect(isDataQuery(method)).toBe(false)
 })
 
