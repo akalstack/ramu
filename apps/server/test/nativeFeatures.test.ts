@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_APP_PREFERENCES, type AgentSessionInfo, type AppPreferences } from '@ramu/shared/types'
-import { nativeAdvisorModel, usesRamuQuestions } from '../src/agent/nativeFeatures'
+import { nativeAdvisorModel, usesRamuQuestionTools } from '../src/agent/nativeFeatures'
 
 const chat = (provider: AgentSessionInfo['provider'], parentId?: string) =>
   ({ provider, ...(parentId ? { parentId } : {}) }) as AgentSessionInfo
@@ -21,9 +21,9 @@ describe('native-first provider features', () => {
 
   it("keeps Ramu's questions for async answers and providers without a native question tool", () => {
     const blocking = { ...DEFAULT_APP_PREFERENCES, asyncQuestions: false }
-    expect(usesRamuQuestions(DEFAULT_APP_PREFERENCES, chat('codex'))).toBe(true)
-    expect(usesRamuQuestions(blocking, chat('codex'))).toBe(false)
-    expect(usesRamuQuestions(blocking, chat('claude-code'))).toBe(false)
-    expect(usesRamuQuestions(blocking, chat('cursor'))).toBe(true)
+    expect(usesRamuQuestionTools(DEFAULT_APP_PREFERENCES.asyncQuestions, chat('codex'))).toBe(true)
+    expect(usesRamuQuestionTools(blocking.asyncQuestions, chat('codex'))).toBe(false)
+    expect(usesRamuQuestionTools(blocking.asyncQuestions, chat('claude-code'))).toBe(false)
+    expect(usesRamuQuestionTools(blocking.asyncQuestions, chat('cursor'))).toBe(true)
   })
 })

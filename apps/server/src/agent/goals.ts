@@ -66,7 +66,7 @@ export function registerGoalTools(server: McpServer, agents: AgentService, sessi
     {
       // Automatic goals off: the long decision rule would only cost tokens on every request.
       description:
-        agents.preferences?.()?.goals?.mode === 'manual'
+        agents.launchSettings(sessionId).goalMode === 'manual'
           ? 'Set or refine this thread’s Ramu goal. Automatic goals are off: call this only when the user explicitly requests a goal, and quote that request in continuationReason. Never expand scope or resume a paused goal.'
           : `Set or refine this thread’s Ramu goal from the user’s requested outcome. The thread's goal mode takes precedence: Off prohibits goals; Manual requires an explicit user goal request; Auto uses the following decision rule. ${AUTO_GOAL_POLICY} Never expand scope or resume a paused goal.`,
       inputSchema: {

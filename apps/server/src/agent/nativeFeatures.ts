@@ -12,7 +12,7 @@ export function nativeAdvisorModel(prefs: AppPreferences | undefined, s: AgentSe
   return providerAdapter(s.provider).native?.advisor && advisor.step.provider === s.provider ? advisor.step.model : null
 }
 
-/** Ramu's question tools are needed for async answers; with async questions off, a native blocking tool is enough. */
-export function usesRamuQuestions(prefs: AppPreferences | undefined, s: AgentSessionInfo): boolean {
-  return prefs?.asyncQuestions !== false || !providerAdapter(s.provider).native?.blockingQuestions
+/** Ramu's question tools serve a chat unless async questions are off and the provider has its own blocking question tool. */
+export function usesRamuQuestionTools(asyncQuestions: boolean, s: AgentSessionInfo): boolean {
+  return asyncQuestions || !providerAdapter(s.provider).native?.blockingQuestions
 }

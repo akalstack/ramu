@@ -180,6 +180,7 @@ export class AgentService {
       planSwitch: (...a) => parts.process.planSwitch(...a),
       pendingBackground: (...a) => parts.registry.pendingBackground(...a),
       policyOf: (...a) => parts.router.policyOf(...a),
+      launchSettings: (...a) => parts.process.launchSettings(...a),
       preferences: () => this.preferences?.(),
       preferencesSource: () => this.preferences,
       providerQuery: (args) => this.providerQuery(args),
@@ -396,8 +397,9 @@ export class AgentService {
     return this.parts.providerWaits.spread
   }
 
-  hasPendingAsyncQuestions(...args: Parameters<UserRequests['hasPendingAsyncQuestions']>) {
-    return this.parts.requests.hasPendingAsyncQuestions(...args)
+  /** The question and goal settings a chat's running process was launched with. */
+  launchSettings(...args: Parameters<SessionProcess['launchSettings']>) {
+    return this.parts.process.launchSettings(...args)
   }
 
   questionStatus(...args: Parameters<UserRequests['questionStatus']>) {

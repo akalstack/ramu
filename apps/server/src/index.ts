@@ -21,7 +21,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { registerQuestionTools } from './agent/questionTools'
-import { usesRamuQuestions } from './agent/nativeFeatures'
+import { usesRamuQuestionTools } from './agent/nativeFeatures'
 import { registerAdvisorTools } from './agent/advisor'
 import { registerGoalTools } from './agent/goals'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -515,9 +515,9 @@ const mcpHttp = createServer(async (req, res) => {
   if (!review) pullRequestWatches.register(server, source.id)
   learning.register(server, source.id)
   // With async questions off, Claude and Codex ask through their own blocking question tools instead.
-  // A native-question provider keeps the follow-up tools while async questions asked earlier are still unanswered.
-  if (usesRamuQuestions(agents.preferences?.(), source)) registerQuestionTools(server, agents, source.id)
-  else if (agents.hasPendingAsyncQuestions(source.id)) registerQuestionTools(server, agents, source.id, true)
+  // The chat keeps the question setting it launched with, so its tools match its instructions until it relaunches.
+  if (usesRamuQuestionTools(agents.launchSettings(source.id).asyncQuestions, source))
+    registerQuestionTools(server, agents, source.id)
   if (!source.parentId) registerGoalTools(server, agents, source.id)
   if (agents.advisorStep(source.id)) registerAdvisorTools(server, agents, source.id)
   if (memory.enabled()) registerMemoryTools(server, memory, source, projectOf(source))

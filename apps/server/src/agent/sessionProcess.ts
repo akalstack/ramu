@@ -2,9 +2,9 @@ import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from './agentRunner'
 import type {
   AppPreferences,
+  GoalPreferences,
   AgentEvent,
   AgentProvider,
-  AgentSessionInfo,
   Attachment,
   HandoffCause,
   HandoffInfo,
@@ -16,7 +16,7 @@ import { errorMessage } from './util'
 import { createCanUseTool } from './permissions'
 import { claudeLaunchOptions } from './claudeOptions'
 import { sessionGuidance } from './guidance'
-import { usesRamuQuestions } from './nativeFeatures'
+import { usesRamuQuestionTools } from './nativeFeatures'
 import { buildHandoff, handoffBudgetChars, type BuiltHandoff } from './handoff'
 import { ProviderSessions, pendingHandoff, planHandoff } from './providerSessions'
 import { classifyLimit } from '../providers/limitClassifier'
@@ -81,12 +81,16 @@ export class SessionProcess {
   readonly goalPolicySent = new Set<string>()
 
   private readonly codexHookAtLaunch = new Map<string, boolean>()
-  /** The question and goal settings a session's launch instructions were written for. */
-  private readonly guidanceAtLaunch = new Map<string, string>()
+  /** The question and goal settings a running process was launched with; a settings change applies at its next launch. */
+  private readonly launchPins = new Map<string, { asyncQuestions: boolean; goalMode: GoalPreferences['mode'] }>()
 
-  private guidanceKey(s: AgentSessionInfo): string {
-    const asyncQuestions = this.host.preferences()?.asyncQuestions !== false
-    return `${usesRamuQuestions(this.host.preferences(), s) ? asyncQuestions : 'native'}|${this.host.goalPreferences().mode}`
+  launchSettings(id: string): { asyncQuestions: boolean; goalMode: GoalPreferences['mode'] } {
+    return (
+      this.launchPins.get(id) ?? {
+        asyncQuestions: this.host.preferences()?.asyncQuestions !== false,
+        goalMode: this.host.goalPreferences().mode,
+      }
+    )
   }
 
   private get sessions(): ProviderSessions {
@@ -105,24 +109,20 @@ export class SessionProcess {
     const s = this.host.get(id)
     const prefs = this.host.preferences()
     if (s.parentId || !prefs || !this.host.runners.has(id) || this.host.hasRunningTasks(id)) return
-    const guidanceStale = this.guidanceAtLaunch.has(id) && this.guidanceAtLaunch.get(id) !== this.guidanceKey(s)
-    if (!guidanceStale) {
-      if (isAcpProvider(s.provider) || s.provider === 'claude-code') {
-        // Sub-agent switches for OpenCode, Cursor and Antigravity are fixed when the runner starts; it resumes the same session.
-        if (!this.nativeOffAtLaunch.has(id) || this.host.nativeSubagentsOff(s) === this.nativeOffAtLaunch.get(id))
-          return
-      } else {
-        if (s.provider !== 'codex') return
-        const hook = prefs.subagents.codexHook
-        let wanted: boolean
-        try {
-          wanted = !hook && (await this.host.subagentSettings(id)).redirect
-        } catch {
-          return
-        }
-        if (wanted === (this.nativeOffAtLaunch.get(id) ?? false) && hook === (this.codexHookAtLaunch.get(id) ?? false))
-          return
+    if (isAcpProvider(s.provider) || s.provider === 'claude-code') {
+      // Sub-agent switches for OpenCode, Cursor and Antigravity are fixed when the runner starts; it resumes the same session.
+      if (!this.nativeOffAtLaunch.has(id) || this.host.nativeSubagentsOff(s) === this.nativeOffAtLaunch.get(id)) return
+    } else {
+      if (s.provider !== 'codex') return
+      const hook = prefs.subagents.codexHook
+      let wanted: boolean
+      try {
+        wanted = !hook && (await this.host.subagentSettings(id)).redirect
+      } catch {
+        return
       }
+      if (wanted === (this.nativeOffAtLaunch.get(id) ?? false) && hook === (this.codexHookAtLaunch.get(id) ?? false))
+        return
     }
     this.host.transitioning.add(id)
     try {
@@ -256,18 +256,22 @@ export class SessionProcess {
     // A delta that did not fit has no native session to resume: null means a fresh one, not "keep the old id".
     if (carried) resume = carried.resume
     // With automatic goals off and no goal yet, the policy waits until /goal starts one.
+    const pins = {
+      asyncQuestions: this.host.preferences()?.asyncQuestions !== false,
+      goalMode: this.host.goalPreferences().mode,
+    }
+    if (connection) this.launchPins.set(id, pins)
     const goalPolicy =
-      !s.parentId && (this.host.goalPreferences().mode !== 'manual' || this.host.getGoal(id))
-        ? goalInstructions(this.host.goalPreferences(), this.host.getGoal(id))
+      !s.parentId && (pins.goalMode !== 'manual' || this.host.getGoal(id))
+        ? goalInstructions({ ...this.host.goalPreferences(), mode: pins.goalMode }, this.host.getGoal(id))
         : null
-    if (connection && !s.parentId) this.guidanceAtLaunch.set(id, this.guidanceKey(s))
     if (connection && goalPolicy) this.goalPolicySent.add(id)
     else this.goalPolicySent.delete(id)
     if (connection) {
       connection.instructions = sessionGuidance({
-        questions: !usesRamuQuestions(this.host.preferences(), s)
+        questions: !usesRamuQuestionTools(pins.asyncQuestions, s)
           ? 'native'
-          : this.host.preferences()?.asyncQuestions !== false
+          : pins.asyncQuestions
             ? 'async'
             : 'blocking',
         background: (this.host.preferences()?.autoBackgroundSeconds ?? 1) !== 0,
@@ -416,7 +420,7 @@ export class SessionProcess {
         this.host.record(id, { kind: 'request-resolved', requestId: event.requestId, outcome: 'cancelled' })
     const codex = this.host.runners.get(id)
     this.nativeOffAtLaunch.delete(id)
-    this.guidanceAtLaunch.delete(id)
+    this.launchPins.delete(id)
     this.codexHookAtLaunch.delete(id)
     if (codex || this.host.live.has(id)) this.host.settleTasks(id)
     if (codex) {

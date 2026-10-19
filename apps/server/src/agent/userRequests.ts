@@ -29,6 +29,7 @@ export interface UserRequestsHost
     Pick<SessionRegistry, 'live' | 'runners'>,
     Pick<SessionStore, 'events' | 'get' | 'queued'> {
   preferences(): AppPreferences | undefined
+  launchSettings(id: string): { asyncQuestions: boolean }
   shutdown(): AgentService['shutdown']
 }
 
@@ -82,7 +83,7 @@ export class UserRequests {
     if (!questions.length || new Set(questions.map(questionKey)).size !== questions.length)
       throw new Error('Questions need unique IDs.')
     const requestId = randomUUID()
-    const blocking = input.blocking || this.host.preferences()?.asyncQuestions === false
+    const blocking = input.blocking || !this.host.launchSettings(id).asyncQuestions
     this.host.record(id, {
       kind: 'question',
       requestId,
@@ -130,14 +131,6 @@ export class UserRequests {
       signal?.addEventListener('abort', cancel, { once: true })
       check()
     })
-  }
-
-  /** Unanswered questions asked without waiting; they keep the async question tools available after async is turned off. */
-  hasPendingAsyncQuestions(id: string): boolean {
-    const events = this.host.events(id)
-    return events.some(
-      (e) => e.kind === 'question' && e.responseMode === 'message' && !questionState(events, e.requestId).outcome,
-    )
   }
 
   hasBlockingQuestions(id: string): boolean {

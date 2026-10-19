@@ -147,44 +147,39 @@ it('cancels a blocking question whose tool call is aborted rather than accepting
   expect(() => agents.replyQuestion(sessionId, request.requestId, { db: 'SQLite' })).toThrow('closed')
 })
 
-it('offers only ask_user with async questions off, unless earlier async questions are still pending', async () => {
-  const toolsWith = async () => {
-    const off = new McpServer({ name: 'question-test-off', version: '1' })
-    registerQuestionTools(off, agents, sessionId)
-    const offClient = new Client({ name: 'question-test-off', version: '1' })
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-    await off.connect(serverTransport)
-    await offClient.connect(clientTransport)
-    try {
-      return (await offClient.listTools()).tools.map((tool) => tool.name)
-    } finally {
-      await offClient.close()
-      await off.close()
-    }
-  }
-  await client.callTool({ name: 'ask_user', arguments: { questions: [{ id: 'db', question: 'Database?' }] } })
-  agents.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions: false })
-  expect(await toolsWith()).toEqual(['ask_user', 'question_status', 'wait_for_answer', 'close_question'])
-  const [pending] = agents.events(sessionId).filter((event) => event.kind === 'question')
-  agents.replyQuestion(sessionId, (pending as { requestId: string }).requestId, { db: 'SQLite' })
-  expect(await toolsWith()).toEqual(['ask_user'])
-})
-
-it('follow-up-only registration leaves out ask_user for providers with a native question tool', async () => {
-  const followUp = new McpServer({ name: 'question-test-native', version: '1' })
-  registerQuestionTools(followUp, agents, sessionId, true)
-  const followUpClient = new Client({ name: 'question-test-native', version: '1' })
+const toolNames = async (id: string) => {
+  const probe = new McpServer({ name: 'question-test-probe', version: '1' })
+  registerQuestionTools(probe, agents, id)
+  const probeClient = new Client({ name: 'question-test-probe', version: '1' })
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-  await followUp.connect(serverTransport)
-  await followUpClient.connect(clientTransport)
+  await probe.connect(serverTransport)
+  await probeClient.connect(clientTransport)
   try {
-    expect((await followUpClient.listTools()).tools.map((tool) => tool.name)).toEqual([
-      'question_status',
-      'wait_for_answer',
-      'close_question',
-    ])
+    return (await probeClient.listTools()).tools.map((tool) => tool.name)
   } finally {
-    await followUpClient.close()
-    await followUp.close()
+    await probeClient.close()
+    await probe.close()
   }
+}
+const startPinned = async (asyncQuestions: boolean, cwd: string) => {
+  agents.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions })
+  agents.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 't' })
+  const id = agents.start('t', { cwd, additionalDirs: [], covers: [cwd] }, 'Do the work', {
+    ...DEFAULT_AGENT_SETTINGS,
+    provider: 'codex',
+    access: 'full',
+  }).id
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  return id
+}
+
+it('keeps the question tools a chat launched with when the async setting changes later', async () => {
+  const asyncChat = await startPinned(true, '/workspace-a')
+  agents.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions: false })
+  expect(await toolNames(asyncChat)).toEqual(['ask_user', 'question_status', 'wait_for_answer', 'close_question'])
+  const blockingChat = await startPinned(false, '/workspace-b')
+  agents.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions: true })
+  expect(await toolNames(blockingChat)).toEqual(['ask_user'])
+  await agents.stopAndWait(asyncChat)
+  await agents.stopAndWait(blockingChat)
 })

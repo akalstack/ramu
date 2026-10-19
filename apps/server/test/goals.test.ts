@@ -147,13 +147,9 @@ describe('Ramu goals', () => {
     expect(prompts.at(-1)).toContain(goalState(service.getGoal(manual)).slice(0, 20))
   })
 
-  it('relaunches an idle session when the goal setting changed since its instructions were written', async () => {
-    let launches = 0
-    service.toolConnection = () => {
-      launches++
-      return { url: 'http://127.0.0.1:9/mcp', token: 't' }
-    }
-    const fresh = service.start('t', { cwd: '/tmp', covers: [], additionalDirs: [] }, 'Explain login', {
+  it('keeps the goal and question settings a chat launched with until it launches again', async () => {
+    service.toolConnection = () => ({ url: 'http://127.0.0.1:9/mcp', token: 't' })
+    const fresh = service.start('t', { cwd: '/tmp-pinned', covers: [], additionalDirs: [] }, 'Explain login', {
       ...DEFAULT_AGENT_SETTINGS,
       provider: 'codex',
       autoFallback: false,
@@ -161,15 +157,16 @@ describe('Ramu goals', () => {
     await tick(0)
     done()
     await tick()
-    expect(launches).toBe(1)
-    await service.send(fresh, 'Same settings')
-    expect(launches).toBe(1)
-    done()
-    await tick()
     prefs.goals.mode = 'manual'
+    prefs.asyncQuestions = false
     await service.send(fresh, 'Settings changed')
+    expect(service.launchSettings(fresh)).toEqual({ asyncQuestions: true, goalMode: 'auto' })
+    const stopped = service.stopAndWait(fresh)
     await tick()
-    expect(launches).toBe(2)
+    await stopped
+    await service.send(fresh, 'Back after the process ended')
+    await tick()
+    expect(service.launchSettings(fresh)).toEqual({ asyncQuestions: false, goalMode: 'manual' })
   })
 
   it('continues idle unfinished work, keeps user history intact, and stops at the cap', async () => {
