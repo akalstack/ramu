@@ -13,6 +13,7 @@ import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
 import { runProviderCommand } from '../models/ProviderSetupTerminal'
 import { useAccountUsage } from './Usage'
 import { ProviderCard } from './ProviderCard'
+import { providerStatusQuery } from './providerStatusQuery'
 
 export function ProviderSettings({
   value,
@@ -31,12 +32,10 @@ export function ProviderSettings({
 
   const sequence = useRef(0),
     config = value.providerBinaries
-  const statusQuery = useQuery({
-    queryKey: ['provider-settings', scope?.primaryId || ownHostId(), config],
-    queryFn: () => invoke('providers.status', config, false),
-    enabled: false,
-    staleTime: 60_000,
-  })
+  const host = scope?.primaryId || ownHostId()
+  const status = (...args: Parameters<import('@ramu/shared/api').RamuMethods['providers.status']>) =>
+    invoke('providers.status', ...args)
+  const statusQuery = useQuery({ ...providerStatusQuery(host, config, status), enabled: false })
   const statuses = statusQuery.data ?? []
   const busy = statusQuery.isFetching || (!statusQuery.data && !statusQuery.isError)
   const loginPending = useRef(false)
@@ -46,15 +45,10 @@ export function ProviderSettings({
     const request = ++sequence.current
     setError(null)
     try {
-      const queryKey = ['provider-settings', scope?.primaryId || ownHostId(), config]
       // Reopening and focus reuse fresh data; explicit actions always ask the host again.
       const fresh = !quiet || loginPending.current
       loginPending.current = false
-      await queryClient.fetchQuery({
-        queryKey,
-        queryFn: () => invoke('providers.status', config, latest, fresh),
-        staleTime: fresh ? 0 : 60_000,
-      })
+      await queryClient.fetchQuery(providerStatusQuery(host, config, status, latest, fresh))
     } catch (reason) {
       if (request === sequence.current) setError(errorText(reason))
     }

@@ -11,6 +11,8 @@ import {
   providerEnvironment,
 } from '../src/providers/providerBinaries'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
+import { providerAdapter } from '../src/providers/adapters'
 import type { ProviderStatus } from '@ramu/shared/providers/providers'
 
 let dir: string, bin: string, preferences: AppPreferences, store: Map<string, unknown>, service: ProviderService
@@ -232,4 +234,47 @@ it('auto-updates in the daemon even when provider notices are disabled', async (
 it('refuses to replace a custom Codex binary with an unrelated npm installation', async () => {
   create()
   await expect(service.update('codex')).rejects.toThrow('custom Codex')
+})
+
+it('caches and coalesces status probes, expires them, and bypasses the cache for explicit refreshes', async () => {
+  const probes = AGENT_PROVIDERS.map((provider) => {
+    const adapter = providerAdapter(provider)
+    vi.spyOn(adapter, 'signInState').mockResolvedValue({ signedIn: true })
+    return vi.spyOn(adapter, 'probeVersion').mockResolvedValue('1.2.3')
+  })
+  const now = Date.now()
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+  create()
+  const first = service.status()
+  expect(service.status()).toBe(first)
+  const statuses = await first
+  expect(await service.status()).toBe(statuses)
+  preferences = { ...preferences, fontSize: preferences.fontSize + 1 }
+  service.settingsChanged()
+  expect(await service.status()).toBe(statuses)
+  probes.forEach((probe) => expect(probe).toHaveBeenCalledOnce())
+
+  clock.mockReturnValue(now + 60_001)
+  await service.status()
+  probes.forEach((probe) => expect(probe).toHaveBeenCalledTimes(2))
+  await service.status(undefined, false, true, true)
+  probes.forEach((probe) => expect(probe).toHaveBeenCalledTimes(3))
+
+  preferences.providerBinaries = { ...preferences.providerBinaries, codex: { binary: bin, enabled: false } }
+  service.settingsChanged()
+  expect((await service.status()).find((status) => status.provider === 'codex')?.enabled).toBe(false)
+  probes.forEach((probe) => expect(probe).toHaveBeenCalledTimes(4))
+})
+
+it('does not substitute an automatic release check for cached login status', async () => {
+  for (const provider of AGENT_PROVIDERS) {
+    vi.spyOn(providerAdapter(provider), 'signInState').mockResolvedValue({ signedIn: true })
+    vi.spyOn(providerAdapter(provider), 'probeVersion').mockResolvedValue('1.2.3')
+  }
+  mockReleases()
+  create()
+  const statuses = await service.status()
+  expect((await service.status(undefined, true, false))[0]?.signIn).toBeUndefined()
+  expect(await service.status()).toBe(statuses)
+  expect(statuses[0]?.signIn?.default?.signedIn).toBe(true)
 })
