@@ -207,6 +207,7 @@ export const modelPreferences = z
         z.object({
           id,
           name: z.string().trim().min(1).max(80),
+          generated: z.object({ fingerprint: z.string().max(50_000), defaultStepId: id }).optional(),
           steps: z
             .array(
               z.object({

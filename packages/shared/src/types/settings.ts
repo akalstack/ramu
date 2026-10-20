@@ -22,6 +22,8 @@ export interface ModelSet {
   id: string
   name: string
   steps: ModelStep[]
+  /** Snapshot identity for safe catalog refresh. Editing any generated content makes it user-owned. */
+  generated?: { fingerprint: string; defaultStepId: string }
 }
 export interface ModelPreferences {
   defaultBarMode?: 'effort' | 'model'

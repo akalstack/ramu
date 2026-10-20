@@ -18,6 +18,33 @@ import {
 const setting = (path, value, schema = {}) => ({ path, value, schema })
 const snapshot = (...settings) => ({ protocol: 1, settings })
 
+test('model selection offers the host-supported flow and patches only that choice', async () => {
+  const field = setting('$models.defaultBarMode', 'model', { type: 'string', enum: ['model', 'effort'] })
+  const groups = visibleGroups('providers', [field])
+  const row = groups.flatMap((group) => group.rows).find((row) => row.path === field.path)
+  assert.deepEqual(row.options, [
+    { value: 'model', label: 'Steps' },
+    { value: 'effort', label: 'Model then effort' },
+  ])
+  const calls = []
+  await patchSetting(
+    async (method, edits) => {
+      calls.push({ method, edits })
+      return snapshot({ ...field, value: 'effort' })
+    },
+    snapshot(field),
+    field.path,
+    'effort',
+  )
+  assert.deepEqual(calls, [{ method: 'settings.app.patch', edits: [{ ...field, before: 'model', value: 'effort' }] }])
+  assert.equal(
+    visibleGroups('providers', [])
+      .flatMap((group) => group.rows)
+      .some((row) => row.path === field.path),
+    false,
+  )
+})
+
 test('every section has a page, rows only exist for known sections, and sections are unique', () => {
   const ids = SETTINGS_SECTIONS.map((section) => section.id)
   assert.equal(new Set(ids).size, ids.length)

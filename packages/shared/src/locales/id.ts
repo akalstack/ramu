@@ -1,6 +1,11 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  "Model selection": "Pemilihan model",
+  "Steps": "Langkah",
+  "Model then effort": "Model lalu effort",
+  "Choose configured steps, or choose a model and adjust its supported effort. Switching keeps your current selection and draft.": "Pilih langkah yang diatur, atau pilih model dan sesuaikan effort yang didukung. Mengganti cara pemilihan tetap mempertahankan pilihan dan draf saat ini.",
+
   "Default Markdown view": "Tampilan Markdown bawaan",
   "Choose how Markdown files open. Links to a specific line open Source.": "Pilih tampilan saat membuka berkas Markdown. Tautan ke baris tertentu membuka Sumber.",
   "Source": "Sumber",

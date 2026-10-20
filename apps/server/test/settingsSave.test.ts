@@ -8,6 +8,8 @@ import { CatalogService } from '../src/agent/catalogService'
 import * as catalog from '../src/agent/catalog'
 import { SettingsStore } from '../src/settings/settingsStore'
 import { configureProviderBinaries } from '../src/providers/providerBinaries'
+import { recommendedSets } from '@ramu/shared/providers/modelDefaults'
+import type { ModelPreferences } from '@ramu/shared/types'
 
 it('reuses discovered models across ordinary saves and refreshes them for UI and external provider changes', async () => {
   vi.stubEnv('RAMU_FAKE_AGENT', '0')
@@ -26,6 +28,7 @@ it('reuses discovered models across ordinary saves and refreshes them for UI and
       settingsStore: store,
       getAppState: (key: string, fallback: unknown) =>
         key === 'app-preferences' ? store.preferences() : key === 'model-preferences' ? store.models() : fallback,
+      setAppState: (_key: string, value: unknown) => store.set(undefined, value),
     },
     recaps: { settingsChanged: () => {} },
     agents: {
@@ -43,6 +46,36 @@ it('reuses discovered models across ordinary saves and refreshes them for UI and
   }
   try {
     let saved = await snapshot()
+    expect(discovery).toHaveBeenCalledTimes(1)
+    store.set(undefined, recommendedSets([]))
+    const generated = (await dispatcher.invoke('settings.models.get', [])) as ModelPreferences
+    expect(generated.sets[0]!.generated).toBeDefined()
+    expect(store.models()).toEqual(generated)
+    expect(new Set(generated.sets[0]!.steps.map((step) => step.provider))).toEqual(
+      new Set(
+        catalog
+          .fakeCatalogs()
+          .filter((entry) => entry.models.length)
+          .map((entry) => entry.provider),
+      ),
+    )
+    store.set(undefined, null)
+    // Selecting a flow on a phone creates host defaults when absent, then changes only presentation.
+    saved = await patch(saved, '$models.defaultBarMode', 'effort')
+    expect(saved.models?.defaultBarMode).toBe('effort')
+    const models = saved.models!
+    const external = { ...models, sets: [...models.sets, { ...models.sets[0]!, id: 'custom', name: 'Custom' }] }
+    store.set(store.preferences(), external)
+    saved = await patch(saved, '$models.defaultBarMode', 'model')
+    expect(saved.models?.sets).toEqual(external.sets)
+    expect(saved.models?.defaultStepId).toBe(models.defaultStepId)
+    expect(saved.models?.defaultBarMode).toBe('model')
+    const stale = saved
+    store.set(undefined, { ...saved.models, defaultBarMode: 'effort' })
+    await expect(patch(stale, '$models.defaultBarMode', 'model')).rejects.toThrow(/changed elsewhere/)
+    saved = await snapshot()
+    saved = await patch(saved, '$models.defaultBarMode', 'model')
+    expect(saved.models?.sets).toEqual(external.sets)
     expect(discovery).toHaveBeenCalledTimes(1)
     for (const value of [true, false, true]) {
       saved = await patch(saved, 'autoWatchPullRequests', value)

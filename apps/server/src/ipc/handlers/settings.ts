@@ -8,6 +8,7 @@ import {
   type SettingSchema,
 } from '@ramu/shared/settingsCompatibility'
 import type { AppPreferences, ModelPreferences } from '@ramu/shared/types'
+import { migrateModelDefaults, recommendedSets } from '@ramu/shared/providers/modelDefaults'
 import { applySettingEdits, validateSettingModels } from '../../sharedSettings'
 import { appPreferences, modelPreferences } from '../preferences'
 import type { RegisterHandlers } from '../types'
@@ -23,6 +24,8 @@ export const registerSettingsHandlers: RegisterHandlers = ({
 }) => {
   const sharedSettingsSchema = z.toJSONSchema(appPreferences, { unrepresentable: 'any' }) as SettingSchema
   const modelSettingsSchema = z.toJSONSchema(modelPreferences.nullable(), { unrepresentable: 'any' }) as SettingSchema
+  const selectionMode = z.enum(['model', 'effort'])
+  const selectionModeSchema = z.toJSONSchema(selectionMode) as SettingSchema
   const modelSettings = () => workspace.getAppState<ModelPreferences | null>('model-preferences', null)
   const settingsSnapshot = async (): Promise<SettingsSnapshot> => {
     const preferences = loadPreferences(),
@@ -35,6 +38,7 @@ export const registerSettingsHandlers: RegisterHandlers = ({
       settings: [
         ...portableSettings(sharedSettingsSchema, preferences as unknown as Record<string, unknown>),
         { path: '$models', schema: modelSettingsSchema, value: models },
+        { path: '$models.defaultBarMode', schema: selectionModeSchema, value: models?.defaultBarMode ?? 'model' },
       ],
     }
   }
@@ -88,19 +92,32 @@ export const registerSettingsHandlers: RegisterHandlers = ({
       run: async (edits: SettingEdit[]) => {
         // Resolve dynamic choices before reading current values; comparison and persistence then stay synchronous.
         const catalogs = agents ? await agents.catalog() : null
-        const modelEdits = edits.filter((edit) => edit.path === '$models')
+        const modelEdits = edits.filter((edit) => edit.path === '$models' || edit.path === '$models.defaultBarMode')
         if (modelEdits.length > 1) throw new Error('Duplicate model settings')
-        const modelEdit = modelEdits[0]
+        const modeEdit = modelEdits.find((edit) => edit.path === '$models.defaultBarMode')
+        const modelEdit = modelEdits.find((edit) => edit.path === '$models')
         if (modelEdit && schemaKey(modelEdit.schema) !== schemaKey(modelSettingsSchema))
           throw new Error('Model options changed. Reload before saving.')
         if (modelEdit && !sameValue(modelSettings(), modelEdit.before) && !sameValue(modelSettings(), modelEdit.value))
           throw new Error('Model sets changed elsewhere. Reload before saving.')
-        const models = modelEdit ? modelPreferences.parse(modelEdit.value) : undefined
+        if (modeEdit && schemaKey(modeEdit.schema) !== schemaKey(selectionModeSchema))
+          throw new Error('Model selection options changed. Reload before saving.')
+        const currentMode = modelSettings()?.defaultBarMode ?? 'model'
+        if (modeEdit && !sameValue(currentMode, modeEdit.before) && !sameValue(currentMode, modeEdit.value))
+          throw new Error('Model selection changed elsewhere. Reload before saving.')
+        const models = modelEdit
+          ? modelPreferences.parse(modelEdit.value)
+          : modeEdit
+            ? modelPreferences.parse({
+                ...(modelSettings() ?? recommendedSets(catalogs ?? [])),
+                defaultBarMode: selectionMode.parse(modeEdit.value),
+              })
+            : undefined
         const preferences = applySettingEdits(
           sharedSettingsSchema,
           appPreferences,
           loadPreferences(),
-          edits.filter((edit) => edit.path !== '$models'),
+          edits.filter((edit) => edit.path !== '$models' && edit.path !== '$models.defaultBarMode'),
         )
         for (const edit of edits) {
           const match = /^providerBinaries\.([^.]+)\.(accountId|accounts|accountOrder|defaultAccountEnabled)$/.exec(
@@ -141,11 +158,23 @@ export const registerSettingsHandlers: RegisterHandlers = ({
     },
     'settings.models.get': {
       args: z.tuple([]),
-      run: (): ModelPreferences | null => {
+      run: async (): Promise<ModelPreferences> => {
+        const catalogs = agents ? await agents.catalog() : []
         const saved = workspace.getAppState<
           (Omit<ModelPreferences, 'defaultBarMode'> & { defaultBarMode?: string }) | null
         >('model-preferences', null)
-        return saved ? { ...saved, defaultBarMode: saved.defaultBarMode === 'effort' ? 'effort' : 'model' } : null
+        const defaults = recommendedSets(catalogs)
+        if (!saved) return defaults
+        const normalized = {
+          ...saved,
+          defaultBarMode: saved.defaultBarMode === 'effort' ? ('effort' as const) : ('model' as const),
+        }
+        const updated = migrateModelDefaults(normalized, defaults)
+        if (updated !== normalized) {
+          workspace.setAppState('model-preferences', updated)
+          host.send('settings:models', updated)
+        }
+        return updated
       },
     },
     'settings.models.set': {

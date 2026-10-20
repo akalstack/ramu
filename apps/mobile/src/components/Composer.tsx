@@ -1395,6 +1395,10 @@ function QuickSteps({
   onChange: (m: ModelChoice) => void
 }) {
   const [mode, setMode] = useState<'model' | 'effort'>(prefs?.defaultBarMode ?? 'model')
+  useEffect(() => {
+    setMode(prefs?.defaultBarMode ?? 'model')
+    setPreview(null)
+  }, [prefs?.defaultBarMode])
   const [setId, setSetId] = useState(prefs?.defaultSetId ?? '')
   const [preview, setPreview] = useState<number | null>(null)
   if (!prefs?.sets.length && mode === 'model') return null

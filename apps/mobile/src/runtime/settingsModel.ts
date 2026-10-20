@@ -309,6 +309,22 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
   ],
   providers: [
     {
+      title: 'Model selection',
+      rows: [
+        {
+          kind: 'choice',
+          path: '$models.defaultBarMode',
+          title: 'Model selection',
+          help: 'Choose configured steps, or choose a model and adjust its supported effort. Switching keeps your current selection and draft.',
+          words: 'model effort steps selection slider',
+          options: [
+            { value: 'model', label: 'Steps' },
+            { value: 'effort', label: 'Model then effort' },
+          ],
+        },
+      ],
+    },
+    {
       title: 'Usage',
       rows: [
         {

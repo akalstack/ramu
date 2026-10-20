@@ -77,18 +77,23 @@ export function ModelSetsEditor({
           </p>
         </div>
         <label>
-          {t('Default bar mode')}
+          {t('Model selection')}
           <Dropdown
-            label={t('Default bar mode')}
+            label={t('Model selection')}
             value={draft.defaultBarMode ?? 'model'}
             options={[
-              { value: 'model', label: t('Model + effort') },
-              { value: 'effort', label: t('Effort only') },
+              { value: 'model', label: t('Steps') },
+              { value: 'effort', label: t('Model then effort') },
             ]}
             onChange={(mode) => setDraft({ ...draft, defaultBarMode: mode === 'effort' ? 'effort' : 'model' })}
             disabled={busy}
           />
         </label>
+        <p className="muted text-muted-foreground text-caption">
+          {t(
+            'Choose configured steps, or choose a model and adjust its supported effort. Switching keeps your current selection and draft.',
+          )}
+        </p>
         <div className="settings-defaults grid [grid-template-columns:minmax(0,_1fr)_minmax(0,_1fr)] gap-3">
           <label>
             {t('Default set')}

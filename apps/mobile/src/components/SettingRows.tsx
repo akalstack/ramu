@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react'
+import { translate } from '@ramu/shared/i18n'
+import { useStore } from '../runtime/store'
 import { ActivityIndicator, TextInput, View } from 'react-native'
 import { Check, ChevronsUpDown } from 'lucide-react-native'
 import type { LimitChoice } from '@ramu/shared/chat/limitPolicy'
@@ -171,6 +173,14 @@ export function TextRow({
 
 /** One computer-side row, drawn from its definition and the live value. */
 function HostRow({ row, host, disabled }: { row: SettingRow; host: Host; disabled?: boolean }) {
+  const { language } = useStore()
+  if (row.path === '$models.defaultBarMode' && row.kind === 'choice')
+    row = {
+      ...row,
+      title: translate(language, row.title),
+      help: row.help ? translate(language, row.help) : undefined,
+      options: row.options.map((option) => ({ ...option, label: translate(language, option.label) })),
+    }
   const value = host.read(row.path)
   if (row.kind === 'toggle')
     return (
@@ -246,6 +256,7 @@ export function HostNotice({ host, name, children }: { host: Host; name?: string
 
 /** A section's computer-side rows in the desktop's groups. */
 export function HostGroups({ section, host, name }: { section: SettingsSection; host: Host; name?: string }) {
+  const { language } = useStore()
   if (host.state.status !== 'ready') return <HostNotice host={host} name={name} />
   const groups = visibleGroups(section, host.state.settings, host.read)
   if (!groups.length)
@@ -258,7 +269,7 @@ export function HostGroups({ section, host, name }: { section: SettingsSection; 
     <>
       {groups.map((group) => (
         <View key={group.title ?? 'rows'}>
-          {group.title ? <SectionLabel>{group.title}</SectionLabel> : null}
+          {group.title ? <SectionLabel>{translate(language, group.title)}</SectionLabel> : null}
           <Card style={{ marginHorizontal: space.l }}>
             {group.rows.map((row, index) => (
               <View key={row.path}>
