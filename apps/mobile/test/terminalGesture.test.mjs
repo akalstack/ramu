@@ -89,13 +89,18 @@ function surface() {
     Set,
   }
   vm.runInNewContext(readFileSync(new URL('../scripts/terminal-gesture.js', import.meta.url), 'utf8'), context)
-  context.installTerminalGesture(
-    { clearSelection() {}, modes: { applicationCursorKeysMode: true } },
-    (value) => messages.push(value),
-    TerminalGesture,
-    arrowSequence,
-  )
+  const terminal = {
+    clearSelection() {},
+    modes: { applicationCursorKeysMode: true },
+    options: {},
+    blurred: 0,
+    blur() {
+      this.blurred++
+    },
+  }
+  context.installTerminalGesture(terminal, (value) => messages.push(value), TerminalGesture, arrowSequence)
   return {
+    terminal,
     messages,
     event(name, x = 100, id = 1) {
       let prevented = false
@@ -203,4 +208,15 @@ test('cursor overlay stays beside the hold and inside small or edge-adjacent vie
       assert.ok(position.top <= Math.max(0, height - 112))
     }
   }
+})
+
+test('read-only control disables the terminal input and releases focus without blocking ordinary scrolling', () => {
+  const view = surface()
+  view.control(false)
+  assert.equal(view.terminal.options.disableStdin, true)
+  assert.equal(view.terminal.blurred, 1)
+  view.event('pointerdown')
+  assert.equal(view.event('touchmove'), false)
+  view.control(true)
+  assert.equal(view.terminal.options.disableStdin, false)
 })

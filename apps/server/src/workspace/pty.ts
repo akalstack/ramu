@@ -168,6 +168,8 @@ export class TerminalService {
     const e = this.ownedBackground(taskId, id)
     const bg = e.bg!
     if (e.exited || bg.forced || (bg.stopRequested && !force)) return backgroundInfo(e)
+    if (force && !bg.stopRequested) throw new Error('Request graceful stop before force stop.')
+    if (force && process.platform === 'win32') throw new Error('Force stop is unavailable on this host.')
     bg.stopRequested = true
     bg.forced = force
     this.checkpoint(e)

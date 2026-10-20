@@ -1,6 +1,16 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  "Background command details changed. Refresh before continuing.": "Detail perintah latar belakang berubah. Muat ulang sebelum melanjutkan.",
+  "This command has no controllable live process. Saved output is read-only.": "Perintah ini tidak memiliki proses aktif yang dapat dikendalikan. Output tersimpan hanya dapat dibaca.",
+  "Update Ramu on this host to manage background commands.": "Perbarui Ramu di host ini untuk mengelola perintah latar belakang.",
+  "Loading background commands…": "Memuat perintah latar belakang…",
+  "Could not load background commands.": "Tidak dapat memuat perintah latar belakang.",
+  "All commands": "Semua perintah",
+  "Output is read-only. Closing this sheet never stops a command.": "Output hanya dapat dibaca. Menutup panel ini tidak menghentikan perintah.",
+  "No tracked background commands in this thread.": "Tidak ada perintah latar belakang yang terlacak di thread ini.",
+  "Request graceful stop before force stop.": "Minta penghentian normal sebelum menghentikan paksa.",
+  "Force stop is unavailable on this host.": "Penghentian paksa tidak tersedia di host ini.",
   "Host: {0}": "Host: {0}",
   "Stop commands and delete thread": "Hentikan perintah dan hapus thread",
   "Stop known commands and delete thread": "Hentikan perintah yang diketahui dan hapus thread",

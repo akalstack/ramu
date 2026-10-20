@@ -41,7 +41,7 @@ The managed MCP command path is documented in [UI](UI.md#workspace-and-terminals
 - **Permissions and stop feedback:** extend the managed tools beyond Full access using the existing command approval flow, and feed human stops into the agent event boundary so the agent does not relaunch.
 - **Removal and recovery acceptance:** verify command review, graceful-stop timeout/retry, retained final output after failed removal, shared-worktree protection, unknown ownership and older-host recovery in packaged desktop/iOS/Android and two-host runs. Current deletion and persistence behavior is in [UI](UI.md#workspace-and-terminals).
 - **Providers:** native Claude/Codex/ACP/OpenCode/Cursor command handles, sub-agent attribution and excerpt labelling are unstarted.
-- **Client:** sub-agent attribution, host/offline/old-host states beyond last-known rows, mobile list/output/stop, and client tests for hide-versus-stop and draft/focus preservation.
+- **Client:** sub-agent attribution and native-device acceptance of output gestures, focus recovery, accessibility, large text and narrow layouts. Current mobile discovery, read-only output, stop controls and host/offline/old-host behavior are documented in [UI](UI.md#workspace-and-terminals).
 - **Acceptance:** the manual representative task, two hosts, restart and platform-specific (Windows) termination checks.
 
 Provider-specific lifecycle work must use verified owner handles; unregistered daemonized processes remain unsupported. Extend the same host-owned metadata, authorization, bounded output and existing surfaces instead of adding a second process manager.

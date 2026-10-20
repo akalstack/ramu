@@ -121,7 +121,9 @@ function installTerminalGesture(term, post, TerminalGesture, arrowSequence) {
       const value = JSON.parse(event.data)
       if (value.kind === 'gesture-control') {
         enabled = value.enabled === true
+        if (term.options) term.options.disableStdin = !enabled
         if (!enabled) {
+          term.blur?.()
           pointers.clear()
           cancel()
         }

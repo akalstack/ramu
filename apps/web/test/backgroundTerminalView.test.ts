@@ -5,6 +5,7 @@ const control = vi.hoisted(() => ({
   effects: [] as (() => unknown)[],
   cleanups: [] as (() => void)[],
   input: (_data: string) => {},
+  data: (_chunk: { id: string; data: string; cursor: number }) => {},
   exit: (_code: number) => {},
   errors: [] as unknown[],
   writes: [] as string[],
@@ -64,7 +65,10 @@ vi.mock('../src/workspace/workspace', () => ({
       shellOf() {},
       takeAdopted() {},
       trackTerminal() {},
-      onData: () => () => {},
+      onData: (_id: string, callback: typeof control.data) => {
+        control.data = callback
+        return () => {}
+      },
       onExit: (_id: string, callback: (code: number) => void) => {
         control.exit = callback
         return () => {}
@@ -162,4 +166,20 @@ it('keeps a background command’s final output visible when its live process ex
   expect(control.options.disableStdin).toBe(true)
   expect(control.onExit).not.toHaveBeenCalled()
   expect(control.writes.join('')).toContain('Exit code')
+})
+
+it('advances the replay cursor across live output and marks a stream gap instead of duplicating it', async () => {
+  control.invoke.mockImplementation(async (method: string) => {
+    if (method === 'term.snapshot') return { output: 'ab', cursor: 2, exited: false }
+    if (method === 'term.list')
+      return [{ id: 'command', taskId: 'task', repoId: null, cwd: '/checkout', exited: false, background: true }]
+    return undefined
+  })
+  await mount()
+  control.data({ id: 'command', data: 'cd', cursor: 4 })
+  control.data({ id: 'command', data: 'cd', cursor: 4 })
+  control.data({ id: 'command', data: 'gh', cursor: 8 })
+  expect(control.writes.filter((chunk) => chunk === 'cd')).toHaveLength(1)
+  expect(control.writes.some((chunk) => chunk.includes('Older output was truncated'))).toBe(true)
+  expect(control.writes.at(-1)).toBe('gh')
 })

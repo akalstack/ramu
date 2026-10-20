@@ -1,3 +1,4 @@
+import { terminalOutputUpdate, type TerminalOutputState } from '@ramu/shared/workspace/terminalOutput'
 import { createElement, useEffect, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { TerminalGestureOverlay, readGesture, type GestureDisplay } from './TerminalGestureOverlay'
@@ -5,6 +6,7 @@ import { terminalHtml } from '../assets/terminal'
 export interface TerminalViewProps {
   /** Which shell `output` belongs to; a different one always starts the screen over. */ session?: string
   output: string
+  cursor?: number
   enabled?: boolean
   keyboardAction?: { sequence: number; visible: boolean }
   keyAction?: { sequence: number; key: string }
@@ -14,6 +16,7 @@ export interface TerminalViewProps {
 export default function TerminalView({
   session,
   output,
+  cursor,
   onInput,
   onResize,
   enabled = true,
@@ -24,8 +27,7 @@ export default function TerminalView({
   const callbacks = useRef({ onInput, onResize, enabled })
   callbacks.current = { onInput, onResize, enabled }
   const [ready, setReady] = useState(false)
-  const previous = useRef('')
-  const shown = useRef(session)
+  const previous = useRef<TerminalOutputState>({ output: '' })
   const consumedKey = useRef<number | undefined>(undefined)
   const [gesture, setGesture] = useState<GestureDisplay | null>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
@@ -46,18 +48,11 @@ export default function TerminalView({
   }, [])
   useEffect(() => {
     if (!ready) return
-    const switched = shown.current !== session
-    shown.current = session
-    const incremental = !switched && output.startsWith(previous.current)
-    frame.current?.contentWindow?.postMessage(
-      JSON.stringify({
-        kind: incremental ? 'output' : 'reset',
-        data: incremental ? output.slice(previous.current.length) : output,
-      }),
-      '*',
-    )
-    previous.current = output
-  }, [output, session, ready])
+    const next = { session, output, cursor }
+    const message = terminalOutputUpdate(previous.current, next)
+    frame.current?.contentWindow?.postMessage(JSON.stringify(message), '*')
+    previous.current = next
+  }, [output, cursor, session, ready])
   useEffect(() => {
     if (ready) frame.current?.contentWindow?.postMessage(JSON.stringify({ kind: 'gesture-control', enabled }), '*')
     if (!enabled) setGesture(null)

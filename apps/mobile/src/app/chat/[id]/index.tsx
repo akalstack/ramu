@@ -27,6 +27,8 @@ import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
 import { Header, HeaderButton, Screen, PageFlatList, nativeScrollEdge } from '../../../components/Screen'
 import { ThreadActivity } from '../../../components/ThreadActivity'
+import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
+import { translate } from '@ramu/shared/i18n'
 import { Composer } from '../../../components/Composer'
 import type { TranscriptItem } from '../../../runtime/types'
 import { MessageMenu, RowToggle, TranscriptListRow, type ItemMeta } from '../../../components/Transcript'
@@ -162,6 +164,7 @@ export default function ChatScreen() {
   }>()
   const [refresh, setRefresh] = useState(0)
   const [sheet, setSheet] = useState(false)
+  const [backgroundFor, setBackgroundFor] = useState<string | null>(null)
   const [actions, setActions] = useState<'closed' | 'menu' | 'rename'>('closed')
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<string>()
@@ -477,6 +480,11 @@ export default function ChatScreen() {
       onPress: () => router.push({ pathname: '/explorer', params: { computer: chat.computerId, ctx: chat.taskId } }),
     },
     { icon: SquareTerminal, label: 'Terminal', onPress: openTerminal },
+    {
+      icon: SquareTerminal,
+      label: translate(store.language, 'Background terminals'),
+      onPress: () => setBackgroundFor(chat.id),
+    },
     ...(chat.sessionId
       ? [
           {
@@ -788,7 +796,18 @@ export default function ChatScreen() {
               ]}
             >
               <Composer
-                activity={<ThreadActivity chat={chat} />}
+                activity={
+                  <>
+                    <ThreadActivity chat={chat} />
+                    <BackgroundTerminals
+                      key={`${chat.computerId}:${chat.taskId}`}
+                      chat={chat}
+                      open={backgroundFor === chat.id}
+                      onOpen={() => setBackgroundFor(chat.id)}
+                      onClose={() => setBackgroundFor((current) => (current === chat.id ? null : current))}
+                    />
+                  </>
+                }
                 running={running}
                 model={staged?.chatId === chat.id ? staged.model : currentModel}
                 currentModel={staged?.chatId === chat.id ? currentModel : undefined}

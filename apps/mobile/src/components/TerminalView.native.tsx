@@ -1,3 +1,4 @@
+import { terminalOutputUpdate, type TerminalOutputState } from '@ramu/shared/workspace/terminalOutput'
 import { useEffect, useRef, useState } from 'react'
 import { AppState, View } from 'react-native'
 import { tap } from './ui'
@@ -9,6 +10,7 @@ import type { TerminalViewProps } from './TerminalView'
 export default function TerminalView({
   session,
   output,
+  cursor,
   onInput,
   onResize,
   enabled = true,
@@ -22,26 +24,20 @@ export default function TerminalView({
   }, [])
   const view = useRef<WebView>(null)
   const [ready, setReady] = useState(false)
-  const previous = useRef('')
-  const shown = useRef(session)
+  const previous = useRef<TerminalOutputState>({ output: '' })
   const consumedKey = useRef<number | undefined>(undefined)
   const [gesture, setGesture] = useState<GestureDisplay | null>(null)
   const gestureActive = useRef(false)
   const [size, setSize] = useState({ width: 0, height: 0 })
   useEffect(() => {
     if (!ready) return
-    const switched = shown.current !== session
-    shown.current = session
-    const incremental = !switched && output.startsWith(previous.current)
-    const message = JSON.stringify({
-      kind: incremental ? 'output' : 'reset',
-      data: incremental ? output.slice(previous.current.length) : output,
-    })
+    const next = { session, output, cursor }
+    const message = JSON.stringify(terminalOutputUpdate(previous.current, next))
     view.current?.injectJavaScript(
       `window.dispatchEvent(new MessageEvent('message',{data:${JSON.stringify(message)}}));true;`,
     )
-    previous.current = output
-  }, [output, session, ready])
+    previous.current = next
+  }, [output, cursor, session, ready])
   useEffect(() => {
     if (!ready) return
     const message = JSON.stringify({ kind: 'gesture-control', enabled: enabled && appActive })

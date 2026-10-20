@@ -281,9 +281,10 @@ export function TerminalView({
             if (!unseen) return
             if (unseen.reset)
               term.write(
-                `\x1bc\x1b[2m[${t('Older terminal output was truncated while this workspace was hidden.')}]\x1b[0m\r\n`,
+                `\x1bc\x1b[2m[${t('Showing the most recent terminal output. Older output was truncated.')}]\x1b[0m\r\n`,
               )
             term.write(unseen.data)
+            replayed = chunk.cursor ?? replayed + unseen.data.length
             if (gate.output()) runtime.activity.markTerminalOutput(ws.workspaceOf(taskId))
           }),
         )

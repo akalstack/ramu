@@ -135,7 +135,8 @@ export function TerminalScreen({
   useEffect(() => {
     let alive = true
     const load = async (auto: boolean) => {
-      let list = await store.invoke(computerId, 'term.list', ctx)
+      // Managed commands have their own inspect/stop sheet; an ordinary shell tab must not adopt their handles.
+      let list = (await store.invoke(computerId, 'term.list', ctx)).filter((terminal) => !terminal.background)
       if (!alive) return
       if (!list.length && auto && !autoOpened.current.has(ctx)) {
         autoOpened.current.add(ctx)

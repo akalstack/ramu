@@ -6,6 +6,8 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as settingsModel from '../src/runtime/settingsModel.ts'
 import * as taskRemoval from '../../../packages/shared/src/chat/taskRemoval.ts'
+import * as terminalOutput from '../../../packages/shared/src/workspace/terminalOutput.ts'
+import * as terminalKeys from '../src/runtime/terminalKeys.ts'
 import * as workspaceDefaults from '../../../packages/shared/src/workspaceDefaults.ts'
 import * as workspaceChoices from '../src/runtime/workspaces.ts'
 import * as explorerScopes from '../../../packages/shared/src/workspace/explorer.ts'
@@ -50,6 +52,10 @@ function load(file, os, overrides = {}, globals = {}) {
   }
   const mocks = {
     'react-native': native,
+    '@ramu/shared/i18n': {
+      translate: (_language, text, params = {}) =>
+        text.replace(/\{(\w+)\}/g, (_, key) => String(params[key] ?? `{${key}}`)),
+    },
     'expo-router': { Stack, useRouter: () => ({ push() {} }), useFocusEffect() {} },
     'lucide-react-native': components,
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
@@ -3843,5 +3849,330 @@ for (const os of ['ios', 'android']) {
     f.alerts[0][2].find((button) => button.text === 'Delete').onPress()
     await settle()
     assert.deepEqual(f.calls[1], ['remote', 'tasks.delete', 'task', false])
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  function managedFixture(options = {}) {
+    const hooks = hookHarness(),
+      listeners = new Map(),
+      calls = [],
+      alerts = []
+    let open = options.open ?? true,
+      host = 'a',
+      online = true,
+      snapshot = options.snapshot
+    let record = {
+      id: 'command',
+      taskId: 'task',
+      repoId: null,
+      cwd: '/checkout',
+      command: 'pnpm dev',
+      state: 'running',
+      startedAt: 1,
+      endedAt: null,
+      exitCode: null,
+      cursor: 3,
+      output: 'abc',
+      capabilities: { inspect: true, stop: true, forceStop: true, input: true },
+      ...options.record,
+    }
+    const store = {
+      language: 'en',
+      computers: [
+        { id: 'a', name: 'Host A' },
+        { id: 'b', name: 'Host B' },
+      ],
+      drafts: { message: 'keep this draft' },
+      isOnline: () => online,
+      invoke: async (...args) => {
+        calls.push(args)
+        if (options.invoke) return options.invoke(...args)
+        if (args[1] === 'term.background.list') return [record]
+        if (args[1] === 'term.background.inspect') return snapshot ? snapshot.promise : record
+        if (args[1] === 'term.background.stop') {
+          record = { ...record, state: 'stopping' }
+          return record
+        }
+        throw new Error(`Unexpected ${args[1]}`)
+      },
+      subscribe: (id, callback) => {
+        const set = listeners.get(id) ?? new Set()
+        set.add(callback)
+        listeners.set(id, set)
+        return () => set.delete(callback)
+      },
+    }
+    const { BackgroundTerminals } = load('components/BackgroundTerminals.tsx', os, {
+      react: hooks.react,
+      'react-native': { Alert: { alert: (...args) => alerts.push(args) } },
+      '../runtime/store': { useStore: () => store },
+      '../runtime/goalVerify': { isMethodMissing: (error) => /unknown method/i.test(String(error)) },
+      '@ramu/shared/workspace/terminalOutput': terminalOutput,
+      './TerminalView': { default: 'TerminalView' },
+    })
+    const render = () =>
+      hooks.render(() =>
+        BackgroundTerminals({
+          chat: {
+            id: `${host}:task`,
+            taskId: 'task',
+            computerId: host,
+            title: 'Selected task',
+            executionState: 'idle',
+          },
+          open,
+          onOpen: () => {
+            open = true
+          },
+          onClose: () => {
+            open = false
+          },
+        }),
+      )
+    const emit = (channel, value, id = host) => {
+      for (const callback of [...(listeners.get(id) ?? [])]) callback(channel, value)
+    }
+    const select = async () => {
+      render()
+      await settle()
+      find(render(), 'Row').props.onPress()
+      render()
+      await settle()
+      return render()
+    }
+    return {
+      render,
+      select,
+      emit,
+      calls,
+      alerts,
+      hooks,
+      store,
+      listeners,
+      setOpen: (value) => {
+        open = value
+      },
+      setHost: (value) => {
+        host = value
+      },
+      setOnline: (value) => {
+        online = value
+      },
+      setRecord: (value) => {
+        record = value
+      },
+      clearSnapshot: () => {
+        snapshot = null
+      },
+    }
+  }
+  test(`${os} discovers managed commands after the turn ends and inspecting/hiding never opens or closes a shell`, async () => {
+    const f = managedFixture({ open: false })
+    f.render()
+    await settle()
+    const badge = nodes(f.render()).find(
+      (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Background terminals',
+    )
+    assert.ok(badge)
+    badge.props.onPress()
+    f.render()
+    await settle()
+    find(f.render(), 'Row').props.onPress()
+    f.render()
+    await settle()
+    const view = find(f.render(), 'TerminalView')
+    assert.equal(view.props.enabled, false)
+    assert.equal(view.props.output, 'abc')
+    view.props.onInput('must-not-run\r')
+    view.props.onResize(80, 24)
+    find(f.render(), 'Sheet').props.onClose()
+    f.render()
+    await settle()
+    assert.equal(f.listeners.get('a').size, 1, 'closing output leaves only the count subscription')
+    assert.ok(f.calls.every(([, method]) => ['term.background.list', 'term.background.inspect'].includes(method)))
+    assert.equal(f.store.drafts.message, 'keep this draft')
+    f.hooks.dispose()
+  })
+  test(`${os} hydrates output without duplicates and ignores data from another host or command`, async () => {
+    const response = deferred()
+    const f = managedFixture({ snapshot: response })
+    f.render()
+    await settle()
+    find(f.render(), 'Row').props.onPress()
+    f.render()
+    f.emit('term:data', { id: 'command', data: 'bcd', cursor: 4 })
+    f.emit('term:data', { id: 'command', data: 'cdef', cursor: 6 })
+    f.emit('term:data', { id: 'command', data: 'cdef', cursor: 6 })
+    f.emit('term:data', { id: 'other', data: 'wrong-command', cursor: 100 })
+    response.resolve({
+      id: 'command',
+      taskId: 'task',
+      cwd: '/checkout',
+      command: 'pnpm dev',
+      state: 'running',
+      startedAt: 1,
+      exitCode: null,
+      cursor: 3,
+      output: 'abc',
+      capabilities: { inspect: true, stop: true, forceStop: true, input: true },
+    })
+    await settle()
+    assert.equal(find(f.render(), 'TerminalView').props.output, 'abcdef')
+    f.emit('term:data', { id: 'command', data: 'cdef', cursor: 6 })
+    f.emit('term:data', { id: 'command', data: 'BAD', cursor: 9 }, 'b')
+    assert.equal(find(f.render(), 'TerminalView').props.output, 'abcdef')
+    f.emit('term:data', { id: 'command', data: 'ij', cursor: 10 })
+    assert.equal(find(f.render(), 'TerminalView').props.output, 'ij')
+    assert.equal(find(f.render(), 'TerminalView').props.cursor, 10)
+    f.hooks.dispose()
+  })
+  test(`${os} requires fresh stop capabilities and explicit force approval without replaying launches`, async () => {
+    const f = managedFixture()
+    let tree = await f.select()
+    const stop = nodes(tree).find((node) => node.type === 'Button' && node.props.title === 'Stop')
+    stop.props.onPress()
+    stop.props.onPress()
+    await settle()
+    f.render()
+    await settle()
+    tree = f.render()
+    assert.equal(f.calls.filter(([, method]) => method === 'term.background.stop').length, 1)
+    assert.deepEqual(
+      f.calls.find(([, method]) => method === 'term.background.stop'),
+      ['a', 'term.background.stop', 'task', 'command', false],
+    )
+    const force = nodes(tree).find((node) => node.type === 'Button' && node.props.title === 'Force stop')
+    force.props.onPress()
+    assert.equal(f.calls.filter(([, method]) => method === 'term.background.stop').length, 1)
+    const approve = f.alerts[0][2].find((button) => button.text === 'Force stop')
+    approve.onPress()
+    await settle()
+    f.render()
+    await settle()
+    assert.equal(f.calls.filter(([, method]) => method === 'term.background.stop').length, 2)
+    assert.equal(f.calls.findLast(([, method]) => method === 'term.background.stop')[4], true)
+    assert.ok(f.calls.every(([, method]) => method.startsWith('term.background.')))
+    f.hooks.dispose()
+  })
+  test(`${os} leaves unknown records read-only and disables cached controls while offline`, async () => {
+    const unknown = managedFixture({
+      record: { state: 'unknown', capabilities: { inspect: true, stop: false, forceStop: false, input: false } },
+    })
+    let tree = await unknown.select()
+    assert.equal(find(tree, 'TerminalView').props.enabled, false)
+    assert.equal(
+      nodes(tree).some((node) => node.type === 'Button' && ['Stop', 'Force stop'].includes(node.props.title)),
+      false,
+    )
+    unknown.hooks.dispose()
+    const f = managedFixture()
+    await f.select()
+    f.setOnline(false)
+    f.render()
+    tree = f.render()
+    assert.equal(nodes(tree).find((node) => node.type === 'Button' && node.props.title === 'Stop').props.disabled, true)
+    assert.equal(
+      f.calls.some(([, method]) => method === 'term.background.stop'),
+      false,
+    )
+    f.hooks.dispose()
+  })
+  test(`${os} rejects stale inspection responses and force confirmations after leaving a host`, async () => {
+    const response = deferred()
+    const f = managedFixture({ snapshot: response })
+    f.render()
+    await settle()
+    find(f.render(), 'Row').props.onPress()
+    f.render()
+    f.setHost('b')
+    f.render()
+    await settle()
+    f.render()
+    response.resolve({ id: 'command', taskId: 'task', output: 'host-a-secret', cursor: 13 })
+    await settle()
+    assert.equal(find(f.render(), 'TerminalView'), undefined)
+    assert.equal(f.listeners.get('a').size, 0)
+    f.hooks.dispose()
+    const stopping = managedFixture({ record: { state: 'stopping' } })
+    const tree = await stopping.select()
+    nodes(tree)
+      .find((node) => node.type === 'Button' && node.props.title === 'Force stop')
+      .props.onPress()
+    stopping.setOpen(false)
+    stopping.render()
+    stopping.alerts[0][2].find((button) => button.text === 'Force stop').onPress()
+    await settle()
+    assert.equal(
+      stopping.calls.some(([, method]) => method === 'term.background.stop'),
+      false,
+    )
+    stopping.hooks.dispose()
+  })
+  test(`${os} explains an older host without creating a terminal`, async () => {
+    const f = managedFixture({
+      invoke: async () => {
+        throw new Error('Unknown method term.background.list')
+      },
+    })
+    f.render()
+    await settle()
+    const tree = f.render()
+    assert.ok(
+      nodes(tree).some(
+        (node) =>
+          node.type === 'T' && node.props.children === 'Update Ramu on this host to manage background commands.',
+      ),
+    )
+    assert.equal(find(tree, 'TerminalView'), undefined)
+    assert.deepEqual(
+      f.calls.map(([, method]) => method),
+      ['term.background.list'],
+    )
+    f.hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} ordinary terminal tabs never adopt managed command records`, async () => {
+    const hooks = hookHarness(),
+      calls = []
+    const store = {
+      computers: [{ id: 'a', status: 'online', name: 'Host A' }],
+      chats: [],
+      projects: [],
+      invoke: async (...args) => {
+        calls.push(args)
+        if (args[1] === 'term.list')
+          return [{ id: 'background', taskId: 'task', repoId: null, cwd: '/checkout', exited: true, background: true }]
+        if (args[1] === 'term.open')
+          return { id: 'ordinary', taskId: 'task', repoId: null, cwd: '/checkout', exited: false }
+        if (args[1] === 'term.snapshot') return { output: 'ordinary-output', cursor: 15, exited: false }
+        throw new Error(`Unexpected ${args[1]}`)
+      },
+      subscribe: () => () => {},
+    }
+    const { TerminalScreen } = load('components/TerminalScreen.tsx', os, {
+      react: hooks.react,
+      'react-native': { Keyboard: { addListener: () => ({ remove() {} }) } },
+      '../runtime/store': { useStore: () => store },
+      '../runtime/terminalKeys': terminalKeys,
+      './TerminalView': { default: 'TerminalView' },
+    })
+    const render = () => hooks.render(() => TerminalScreen({ computerId: 'a', ctx: 'task', onBack() {} }))
+    render()
+    await settle()
+    render()
+    await settle()
+    assert.equal(find(render(), 'TerminalView').props.session, 'ordinary')
+    assert.equal(
+      calls.some(([, method, id]) => method === 'term.snapshot' && id === 'background'),
+      false,
+    )
+    assert.ok(
+      calls.some(([, method]) => method === 'term.open'),
+      'opening the ordinary Terminal screen remains an explicit shell action',
+    )
+    hooks.dispose()
   })
 }
