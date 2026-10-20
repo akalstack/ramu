@@ -39,16 +39,12 @@ The managed MCP command path is documented in [UI](UI.md#workspace-and-terminals
 ## Remaining implementation
 
 - **Permissions and stop feedback:** extend the managed tools beyond Full access using the existing command approval flow, and feed human stops into the agent event boundary so the agent does not relaunch.
-- **Durability:** records are in memory; add durable ownership records with restart reconciliation (report unknown after restart) and a stop-and-remove choice before deleting a thread or workspace (today `closeTask` kills them silently).
+- **Removal and recovery acceptance:** add a stop-and-remove choice before deleting a thread or workspace (today explicit deletion still calls `closeTask` without a command-specific confirmation). Verify persisted ownership, saved-output truncation, unknown/read-only recovery and archive cleanup protection in packaged two-host/device runs. Current persistence and retention behavior is in [UI](UI.md#workspace-and-terminals).
 - **Providers:** native Claude/Codex/ACP/OpenCode/Cursor command handles, sub-agent attribution and excerpt labelling are unstarted.
 - **Client:** sub-agent attribution, host/offline/old-host states beyond last-known rows, mobile list/output/stop, and client tests for hide-versus-stop and draft/focus preservation.
 - **Acceptance:** the manual representative task, two hosts, restart and platform-specific (Windows) termination checks.
 
-- Trace persistent execution paths for each supported provider and record actual capabilities. Deliver one supported end-to-end path first; unsupported providers show a reason. Route Ramu-managed launches through the existing terminal service and register native executions through their provider boundary. Do not claim coverage for arbitrary unregistered daemonized processes.
-- Add shared metadata: stable owner-qualified ID, thread/sub-agent and workspace association, backend, command/cwd, timestamps, state, output cursor, exit outcome and action capabilities. Keep command lifecycle separate from agent-turn/helper status. Bound output retention/history; do not persist environment variables or credentials as metadata, and preserve existing output access rules.
-- Extend server list/snapshot/event and stop contracts with ownership validation, authorization, idempotency and restart reconciliation. Keep provider handles opaque and revalidate them on every action. Disconnected, unsupported and old-host controls explain their limits; cached rows cannot authorize mutations.
-- Compose discovery and details from existing desktop components, preserving composer drafts, navigation position, keyboard focus and output performance. Cover empty/loading/error/offline states, English/Indonesian copy and screen-reader labels. State must not depend on color.
-- Deliver mobile list/output/stop through existing thread/terminal sheets as a separate increment using the same typed API. Unsupported input or force-stop capabilities have a clear explanation; device-local commands never substitute for host control.
+Provider-specific lifecycle work must use verified owner handles; unregistered daemonized processes remain unsupported. Extend the same host-owned metadata, authorization, bounded output and existing surfaces instead of adding a second process manager.
 
 ## Acceptance and validation
 

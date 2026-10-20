@@ -68,6 +68,7 @@ export function TerminalView({
   onExit,
   actions,
   initialCommand,
+  backgroundId,
   run,
 }: {
   viewId?: string
@@ -78,12 +79,14 @@ export function TerminalView({
   onExit?: () => void
   actions?: ReactNode
   initialCommand?: string
+  /** An inspect-only attachment target; losing it must never create a replacement shell. */
+  backgroundId?: string
   /** Typed into the task's shell once it opens (project actions). */ run?: string
 }) {
   const { preferences } = useAppSettings()
   const ws = useWorkspace()
   // This host's shells: its bound invoke, its terminal registry and output, and its Terminal-button dot.
-  const { invoke } = useHost()
+  const { id: executionHost, invoke } = useHost()
   const runtime = useHostRuntime()
   const { allShells, beginOpening, forgetTerminal, shellOf, takeAdopted, trackTerminal } = runtime.terminals
   const terminal = useRef<Terminal | null>(null)
@@ -169,7 +172,9 @@ export function TerminalView({
     window.addEventListener('pointercancel', endResize)
     // Install input before opening the shell so early typing is not dropped.
     let pendingInput = ''
+    let readOnly = false
     const input = term.onData((data) => {
+      if (readOnly) return
       if (!termId) {
         pendingInput += data
         return
@@ -191,7 +196,7 @@ export function TerminalView({
     // Back in this view after a project switch: reattach to the shell that kept running, with its output replayed.
     let replayed = 0
     const reattach = (async () => {
-      let known = viewId && !initialCommand ? (shellOf(viewId) ?? takeAdopted(taskId)) : undefined
+      let known = backgroundId ?? (viewId && !initialCommand ? (shellOf(viewId) ?? takeAdopted(taskId)) : undefined)
       // A fresh view (after a restart, or one the phone opened) takes a live shell nobody shows yet before starting another.
       if (!known && viewId && !initialCommand) {
         const live = await invoke('term.list', taskId).catch(() => [])
@@ -209,19 +214,33 @@ export function TerminalView({
         const info = (await invoke('term.list', taskId)).find((entry) => entry.id === shell)
         // An ended persistent command still shows its final output instead of being replaced by a new shell.
         if (!info || (snap.exited && !info.background)) {
+          if (backgroundId)
+            throw new Error(
+              t('This background command is unavailable. Reconnect or check its thread. No shell was started.'),
+            )
           if (viewId) forgetTerminal(viewId, shell)
           return null
         }
+        if (snap.cursor > snap.output.length)
+          term.write(`\x1b[2m[${t('Showing the most recent terminal output. Older output was truncated.')}]\x1b[0m\r\n`)
         term.write(snap.output)
         replayed = snap.cursor
         return info
       } catch {
+        if (backgroundId)
+          throw new Error(
+            t('This background command is unavailable. Reconnect or check its thread. No shell was started.'),
+          )
         if (viewId) forgetTerminal(viewId, shell)
         return null
       }
     })()
     const opening = reattach.then((info) => {
       if (info) return { info, resumed: true }
+      if (backgroundId)
+        throw new Error(
+          t('This background command is unavailable. Reconnect or check its thread. No shell was started.'),
+        )
       const settled = beginOpening(taskId)
       return (
         initialCommand ? invoke('term.openSetup', cols, rows) : invoke('term.open', taskId, repoId, cols, rows)
@@ -243,6 +262,10 @@ export function TerminalView({
         if (disposed)
           return void (resumed ? undefined : viewId ? trackTerminal(viewId, info.id) : invoke('term.close', info.id))
         termId = info.id
+        readOnly = info.exited
+        term.options.disableStdin = readOnly
+        if (readOnly && info.background)
+          term.write(`\r\n\x1b[2m[${t('Saved output · no live terminal is attached.')}]\x1b[0m\r\n`)
         if (viewId) trackTerminal(viewId, info.id)
         // Geometry may have changed while the shell was opening, before its
         // ID existed and resize notifications could be delivered.
@@ -268,6 +291,12 @@ export function TerminalView({
         offs.push(() => typed.dispose())
         offs.push(
           runtime.terminals.onExit(info.id, (code) => {
+            if (info.background) {
+              readOnly = true
+              term.options.disableStdin = true
+              term.write(`\r\n\x1b[2m[${t('Exit code {0}', { 0: code })}]\x1b[0m\r\n`)
+              return
+            }
             // Like other editors, a shell that exits closes its tab. A shell that fails right away stays open so its error is readable.
             if (code !== 0 && Date.now() - openedAt < 1500)
               term.write(`\r\n\x1b[2m[process exited with code ${code}]\x1b[0m\r\n`)
@@ -275,7 +304,7 @@ export function TerminalView({
           }),
         )
         scheduleFit()
-        if (pendingInput) {
+        if (pendingInput && !readOnly) {
           void invoke('term.write', info.id, pendingInput).catch((e) => setError(errorText(e)))
           pendingInput = ''
         }
@@ -311,7 +340,7 @@ export function TerminalView({
       terminal.current = null
       term.dispose()
     }
-  }, [taskId, repoId, initialCommand])
+  }, [taskId, repoId, initialCommand, backgroundId, executionHost])
 
   useEffect(() => {
     const term = terminal.current
@@ -336,7 +365,7 @@ export function TerminalView({
       loss.dispose()
       addon.dispose() // GPU unavailable: retain the working DOM renderer.
     }
-  }, [active, taskId, repoId, initialCommand])
+  }, [active, taskId, repoId, initialCommand, backgroundId, executionHost])
 
   useEffect(() => {
     if (active) scheduleFitRef.current?.()

@@ -253,6 +253,12 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
       context_max INTEGER NOT NULL, PRIMARY KEY (provider, account_id, model)
     );`)
   },
+  `CREATE TABLE IF NOT EXISTS background_terminals (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    data TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS background_terminals_task ON background_terminals(task_id);`,
 ]
 
 export type Db = DatabaseSync

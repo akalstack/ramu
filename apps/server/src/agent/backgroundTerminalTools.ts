@@ -3,7 +3,7 @@ import type { AgentSessionInfo } from '@ramu/shared/types'
 import { z } from 'zod'
 import type { TerminalService } from '../workspace/pty'
 
-export const BACKGROUND_TERMINAL_GUIDE = `Use background_terminal_launch for a development server or watcher that should remain running after your reply. The user can inspect and stop it in Background terminals. Commands run on this thread's execution host, in this session's checkout, and end when the host server restarts. This path requires Full access; otherwise use the provider's native command tool and permission flow. Never use it to bypass a restriction. Do not restart a command the user stopped without a new instruction.`
+export const BACKGROUND_TERMINAL_GUIDE = `Use background_terminal_launch for a development server or watcher that should remain running after your reply. The user can inspect and stop it in Background terminals. Commands run on this thread's execution host, in this session's checkout. After a host restart, saved commands without a verified process handle are Unknown and their saved output is read-only; inspect and verify them before starting anything again. Ramu never replays saved launches automatically. This path requires Full access; otherwise use the provider's native command tool and permission flow. Never use it to bypass a restriction. Do not restart a command the user stopped without a new instruction.`
 
 /** The authenticated MCP connection supplies the session; tool arguments cannot select a host, thread or cwd. */
 export function registerBackgroundTerminalTools(
@@ -59,6 +59,10 @@ export function registerBackgroundTerminalTools(
     ({ id, force }) => {
       const session = scope(true)
       const command = terminals.inspectBackground(session.taskId, id)
+      if (!command.capabilities.stop && command.state === 'unknown')
+        throw new Error(
+          'No verified process handle is available. Inspect saved output and verify the command on its host; it cannot be stopped through this record.',
+        )
       if (force && command.state === 'running') throw new Error('Request graceful stop before force stop.')
       if (force && !command.capabilities.forceStop) throw new Error('Force stop is unavailable on this host.')
       return result(terminals.stopBackground(session.taskId, id, force))

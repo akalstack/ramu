@@ -33,7 +33,15 @@ export type ViewDescriptor =
     }
   /** Without a repoId the terminal starts where the task's agent runs (the workspace). */
   /** A project action's terminal carries its name and command; the command runs once, right after `runAt`, and not again when the view is restored. */
-  | { kind: 'terminal'; id: string; repoId?: string; title?: string; command?: string; runAt?: number }
+  | {
+      kind: 'terminal'
+      id: string
+      repoId?: string
+      title?: string
+      command?: string
+      runAt?: number
+      backgroundId?: string
+    }
 
 export interface TaskUiState {
   terminalGroups?: TerminalGroup[]

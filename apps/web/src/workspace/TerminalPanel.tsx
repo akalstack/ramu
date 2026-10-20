@@ -311,6 +311,7 @@ export function TerminalPanel({
                   viewId={view.id}
                   taskId={taskId}
                   repoId={view.repoId ?? null}
+                  backgroundId={view.backgroundId}
                   label={label(view)}
                   run={view.command && view.runAt && Date.now() - view.runAt < 15_000 ? view.command : undefined}
                   active={shown && open && visible && !hidden}

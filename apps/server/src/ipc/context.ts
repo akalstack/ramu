@@ -23,7 +23,7 @@ import type { HandlerContext, RuntimeHost, Services } from './types'
 
 /** Builds the services and helpers every handler group shares, and wires them into the agent service. */
 export function createHandlerContext(host: RuntimeHost, services: Services): HandlerContext {
-  const { workspace, agents, recaps, memory, learning } = services
+  const { workspace, agents, recaps, memory, learning, terminals } = services
   const hostFolders = new HostFolders(() => workspace.listProjects().flatMap((p) => (p.root ? [p.root] : [])))
   const activity = new ActivityService((items) => host.send('activity:changed', items))
   configureProviderAccounts(join(host.userData, 'provider-accounts'))
@@ -131,6 +131,14 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     await activity.run('Cleaning up archived threads', undefined, async () => {
       for (const task of tasks) {
         try {
+          // Deliberately persistent commands outlive a turn/archive. Cleanup cannot silently remove their owner.
+          if (
+            terminals
+              .listBackground(task.id)
+              .some((command) => ['running', 'stopping', 'unknown'].includes(command.state))
+          )
+            continue
+          terminals.closeTask(task.id)
           await workspace.deleteTask(task.id, false)
         } catch {
           /* Retried on the next pass. */

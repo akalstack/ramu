@@ -57,7 +57,7 @@ const viewSchema = z.discriminatedUnion('kind', [
     threadId: id.optional(),
     requestId: id.optional(),
   }),
-  z.object({ kind: z.literal('terminal'), id, repoId: id.optional() }),
+  z.object({ kind: z.literal('terminal'), id, repoId: id.optional(), backgroundId: z.string().uuid().optional() }),
 ])
 const taskUiSchema = z.object({
   views: z.array(viewSchema).max(200),

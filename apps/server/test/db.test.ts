@@ -16,11 +16,10 @@ it('upgrades saved native sessions without assuming their old context belongs to
       INSERT INTO tasks (id, project_id, title, mode, status, created_at) VALUES ('t', 'p', 'Task', 'current', 'idle', 0);
       INSERT INTO agent_sessions (id, task_id, provider, cwd, additional_dirs, covers, state, created_at) VALUES ('s', 't', 'codex', '/work', '[]', '[]', 'idle', 0);`)
     new ProviderSessions(db).save('s', 'codex', undefined, 'native-thread', 12, 1_000_000, 'large', 150_000)
-    const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
     db.exec(`ALTER TABLE session_provider_sessions DROP COLUMN model;
       ALTER TABLE session_provider_sessions DROP COLUMN context_used;
       DROP TABLE model_context_windows;
-      PRAGMA user_version = ${version - 1};`)
+      PRAGMA user_version = 24;`)
     db.close()
     db = openDb(path)
     expect(new ProviderSessions(db).get('s', 'codex', undefined)).toEqual({

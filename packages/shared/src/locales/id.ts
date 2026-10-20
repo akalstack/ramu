@@ -1,6 +1,11 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  "Command status cannot be verified. Saved output is available.": "Status perintah tidak dapat dipastikan. Output tersimpan tersedia.",
+  "Showing the most recent terminal output. Older output was truncated.": "Menampilkan output terminal terbaru. Output yang lebih lama dipotong.",
+  "Saved output · no live terminal is attached.": "Output tersimpan · tidak terhubung ke terminal aktif.",
+  "This background command is unavailable. Reconnect or check its thread. No shell was started.": "Perintah latar belakang ini tidak tersedia. Hubungkan kembali atau periksa thread-nya. Tidak ada shell yang dimulai.",
+
   "Model selection": "Pemilihan model",
   "Steps": "Langkah",
   "Model then effort": "Model lalu effort",

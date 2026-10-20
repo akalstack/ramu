@@ -5,6 +5,7 @@ import { DEFAULT_FALLBACK_PREFERENCES, type AppPreferences } from '@ramu/shared/
 import { InteractiveStore } from './interactive/store'
 import { registerInteractiveTools } from './interactive/tools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
+import { SqliteBackgroundTerminalHistory } from './workspace/backgroundTerminalHistory'
 import { ToolRegistry } from './agent/toolRegistry'
 import { ExternalSkills } from './memory/externalSkills'
 import { crossedSwitchAt, LearningService } from './memory/learning'
@@ -202,6 +203,7 @@ const terminals = new TerminalService(
   (id, data, cursor) => send('term:data', { id, data, cursor }),
   (id, code) => send('term:exit', { id, code }),
   (taskId) => send('term:changed', { taskId }),
+  new SqliteBackgroundTerminalHistory(db),
 )
 const inbox = new NoticeInbox(
   (items) => send('notices:changed', items),

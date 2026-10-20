@@ -92,6 +92,7 @@ it.skipIf(!posix)('reports a failed exit, and closing a viewer leaves a running 
   await until(() => service.listBackground('a').find((t) => t.id === failing.id)!.state === 'failed')
   expect(service.listBackground('a')[0]).toMatchObject({ state: 'failed', exitCode: 3 })
   const running = service.launchBackground('a', null, tmpdir(), 'sleep 300')
+  expect(service.busy(running.id)).toBe(false)
   service.close(running.id)
   expect(service.listBackground('a').find((t) => t.id === running.id)!.state).toBe('running')
   service.closeTask('a')

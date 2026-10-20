@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { BackgroundTerminalInfo } from '@ramu/shared/api'
 import { Button } from '@/components/desktop-button'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
@@ -11,26 +11,40 @@ import { canForceStop, isLiveTerminal, readBackgroundTerminals } from './backgro
 /** Thread-scoped entry for persistent commands; quiet until the thread has some, and still there once the agent is idle. */
 export function BackgroundTerminals({ taskId }: { taskId: string }) {
   useLanguage()
-  const { invoke } = useHost()
+  const { id: hostId, invoke, status } = useHost()
   const runtime = useHostRuntime()
   const ws = useWorkspace()
-  const [terminals, setTerminals] = useState<BackgroundTerminalInfo[]>([])
-  const [stale, setStale] = useState(false)
+  const scope = `${hostId}:${taskId}`
+  const [reading, setReading] = useState({ scope, terminals: [] as BackgroundTerminalInfo[], stale: false })
+  const latest = useRef(reading)
+  latest.current = reading
+  const refresh = useRef<{ scope: string; run: () => Promise<void> } | null>(null)
+  const terminals = reading.scope === scope ? reading.terminals : []
+  const stale = reading.scope !== scope || reading.stale || status !== 'connected'
   const [error, setError] = useState<string | null>(null)
 
-  const refresh = useCallback(async () => {
-    const next = await readBackgroundTerminals(invoke as never, taskId, terminals)
-    setTerminals(next.terminals)
-    setStale(next.stale)
-  }, [invoke, taskId, terminals])
   useEffect(() => {
-    void refresh()
+    setError(null)
+    let active = true
+    let revision = 0
+    let previous = latest.current.scope === scope ? latest.current.terminals : []
+    const load = async () => {
+      const mine = ++revision
+      const next = await readBackgroundTerminals(invoke as never, taskId, previous)
+      if (!active || mine !== revision) return
+      previous = next.terminals
+      setReading({ scope, ...next })
+    }
+    refresh.current = { scope, run: load }
+    void load()
     const off = runtime.on('term:changed', (event) => {
-      if (event.taskId === taskId) void refresh()
+      if (event.taskId === taskId) void load()
     })
-    return off
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId, runtime])
+    return () => {
+      active = false
+      off()
+    }
+  }, [scope, taskId, runtime, invoke, status])
 
   if (!terminals.length) return null
   const live = terminals.filter(isLiveTerminal).length
@@ -40,6 +54,7 @@ export function BackgroundTerminals({ taskId }: { taskId: string }) {
       stopping: t('Stopping'),
       exited: t('Exited'),
       failed: t('Failed'),
+      unknown: t('Unknown'),
     })[terminal.state]
   const stop = async (terminal: BackgroundTerminalInfo, force: boolean) => {
     setError(null)
@@ -48,16 +63,22 @@ export function BackgroundTerminals({ taskId }: { taskId: string }) {
     } catch (e) {
       setError(errorText(e))
     }
-    void refresh()
+    if (refresh.current?.scope === scope) void refresh.current.run()
   }
   // Opens the existing terminal view for this command; closing that view later leaves the command running.
   const open = (terminal: BackgroundTerminalInfo) => {
-    if (!runtime.terminals.allShells().includes(terminal.id)) runtime.terminals.queueAdopt(taskId, terminal.id)
     const shown = ws.taskUi[taskId]?.views.find(
-      (view) => view.kind === 'terminal' && runtime.terminals.shellOf(view.id) === terminal.id,
+      (view) =>
+        view.kind === 'terminal' &&
+        (view.backgroundId === terminal.id || runtime.terminals.shellOf(view.id) === terminal.id),
     )
     if (shown) ws.activateView(taskId, shown.id)
-    else ws.openView(taskId, { kind: 'terminal', ...(terminal.repoId ? { repoId: terminal.repoId } : {}) })
+    else
+      ws.openView(taskId, {
+        kind: 'terminal',
+        backgroundId: terminal.id,
+        ...(terminal.repoId ? { repoId: terminal.repoId } : {}),
+      })
   }
 
   return (
@@ -89,11 +110,16 @@ export function BackgroundTerminals({ taskId }: { taskId: string }) {
                 {' · '}
                 {new Date(terminal.startedAt).toLocaleTimeString()}
               </span>
+              {terminal.state === 'unknown' && (
+                <p className="text-caption text-muted-foreground">
+                  {t('Command status cannot be verified. Saved output is available.')}
+                </p>
+              )}
               <div className="flex gap-1">
                 <Button variant="outline" size="sm" disabled={stale} onClick={() => open(terminal)}>
                   {t('Open output')}
                 </Button>
-                {isLiveTerminal(terminal) && (
+                {isLiveTerminal(terminal) && terminal.capabilities.stop && (
                   <Button
                     variant="outline"
                     size="sm"

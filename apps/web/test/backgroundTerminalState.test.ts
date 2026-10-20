@@ -36,4 +36,6 @@ it('offers force stop only while stopping and when the owner supports it', () =>
   ).toBe(false)
   expect(canForceStop(terminal({ state: 'exited' }))).toBe(false)
   expect(isLiveTerminal(terminal({ state: 'failed' }))).toBe(false)
+  expect(isLiveTerminal(terminal({ state: 'unknown' }))).toBe(false)
+  expect(canForceStop(terminal({ state: 'unknown' }))).toBe(false)
 })

@@ -1,34 +1,10 @@
 // PTY-backed terminals. Each terminal is started in a binding's cwd and keeps that reference.
 import { randomUUID } from 'node:crypto'
 import * as nodePty from 'node-pty'
+import type { BackgroundTerminalHistory, BackgroundTerminalRecord } from './backgroundTerminalHistory'
 
-export interface TerminalInfo {
-  id: string
-  taskId: string
-  repoId: string | null
-  cwd: string
-  exited: boolean
-  /** Set for a persistent command Ramu launched for a thread; ordinary shells omit it. */
-  background?: true
-}
-
-export type BackgroundTerminalState = 'running' | 'stopping' | 'exited' | 'failed'
-
-/** Server-owned metadata for one Ramu-launched persistent command. Never carries environment or credentials. */
-export interface BackgroundTerminalInfo {
-  id: string
-  taskId: string
-  repoId: string | null
-  cwd: string
-  command: string
-  state: BackgroundTerminalState
-  startedAt: number
-  endedAt: number | null
-  /** Exit code once ended; null while running. */
-  exitCode: number | null
-  cursor: number
-  capabilities: { inspect: true; stop: true; forceStop: boolean; input: true }
-}
+import type { TerminalInfo, BackgroundTerminalInfo, BackgroundTerminalState } from '@ramu/shared/api'
+export type { TerminalInfo, BackgroundTerminalInfo, BackgroundTerminalState } from '@ramu/shared/api'
 
 interface BackgroundMeta {
   command: string
@@ -51,13 +27,19 @@ const MAX_COMMAND = 4000
 
 export class TerminalService {
   private readonly terms = new Map<string, Entry>()
+  private readonly history = new Map<string, BackgroundTerminalRecord>()
+  private readonly checkpoints = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly warned = new Set<string>()
 
   constructor(
     private readonly onData: (id: string, data: string, cursor: number) => void,
     private readonly onExit: (id: string, code: number) => void,
     /** A shell was opened, ended or closed in this workspace; every device re-reads the list. */
     private readonly onChange: (taskId: string) => void = () => {},
-  ) {}
+    private readonly storage?: BackgroundTerminalHistory,
+  ) {
+    for (const record of storage?.load() ?? []) this.history.set(record.id, record)
+  }
 
   open(taskId: string, repoId: string | null, cwd: string, cols = 80, rows = 24): TerminalInfo {
     return info(this.start(taskId, repoId, cwd, cols, rows))
@@ -70,6 +52,7 @@ export class TerminalService {
     cols: number,
     rows: number,
     command?: string,
+    id = randomUUID(),
   ): Entry {
     const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh')
     const win = process.platform === 'win32'
@@ -81,7 +64,7 @@ export class TerminalService {
       rows,
       env: { ...process.env, TERM_PROGRAM: 'Ramu' } as Record<string, string>,
     })
-    const entry: Entry = { id: randomUUID(), taskId, repoId, cwd, exited: false, pty, shell, output: '', cursor: 0 }
+    const entry: Entry = { id, taskId, repoId, cwd, exited: false, pty, shell, output: '', cursor: 0 }
     if (command) {
       entry.background = true
       entry.bg = { command, startedAt: Date.now(), endedAt: null, exitCode: null, stopRequested: false, forced: false }
@@ -91,12 +74,21 @@ export class TerminalService {
       entry.cursor += d.length
       entry.output = (entry.output + d).slice(-256_000)
       this.onData(entry.id, d, entry.cursor)
+      if (entry.bg && this.terms.has(entry.id) && !this.checkpoints.has(entry.id)) {
+        const timer = setTimeout(() => {
+          this.checkpoints.delete(entry.id)
+          this.checkpoint(entry)
+        }, 1000)
+        timer.unref()
+        this.checkpoints.set(entry.id, timer)
+      }
     })
     pty.onExit(({ exitCode }) => {
       entry.exited = true
       if (entry.bg) {
         entry.bg.endedAt = Date.now()
         entry.bg.exitCode = exitCode
+        this.checkpoint(entry)
       }
       this.onExit(entry.id, exitCode)
       this.onChange(entry.taskId)
@@ -116,19 +108,50 @@ export class TerminalService {
       (e) => e.bg && !e.exited && e.taskId === taskId && e.repoId === repoId && e.cwd === cwd && e.bg.command === text,
     )
     if (running) return backgroundInfo(running)
-    return backgroundInfo(this.start(taskId, repoId, cwd, 80, 24, text))
+    const id = randomUUID()
+    const prepared: BackgroundTerminalRecord = {
+      id,
+      taskId,
+      repoId,
+      cwd,
+      command: text,
+      state: 'unknown',
+      startedAt: Date.now(),
+      endedAt: null,
+      exitCode: null,
+      cursor: 0,
+      output: '',
+      capabilities: { inspect: true, stop: false, forceStop: false, input: false },
+    }
+    // Record intent before spawning. A storage failure must never leave an untracked command running.
+    this.storage?.save(prepared)
+    this.history.set(id, prepared)
+    try {
+      const entry = this.start(taskId, repoId, cwd, 80, 24, text, id)
+      this.checkpoint(entry, true)
+      return backgroundInfo(entry)
+    } catch (error) {
+      this.destroy(id, false)
+      throw error
+    }
   }
 
   /** The thread's persistent commands, running first then newest first. */
   listBackground(taskId: string): BackgroundTerminalInfo[] {
-    return [...this.terms.values()]
-      .filter((e) => e.bg && e.taskId === taskId)
-      .map(backgroundInfo)
+    const records = new Map(
+      [...this.history.values()].filter((record) => record.taskId === taskId).map((record) => [record.id, record]),
+    )
+    for (const record of [...this.terms.values()].filter((e) => e.bg && e.taskId === taskId).map(backgroundInfo))
+      records.set(record.id, { ...record, output: '' })
+    return [...records.values()]
+      .map(({ output: _output, ...record }) => record)
       .sort((a, b) => Number(isLive(b)) - Number(isLive(a)) || b.startedAt - a.startedAt)
   }
 
   /** Rejects any id that is not a persistent command owned by this thread. */
   inspectBackground(taskId: string, id: string): BackgroundTerminalInfo & { output: string } {
+    const saved = this.history.get(id)
+    if (!this.terms.has(id) && saved?.taskId === taskId) return { ...saved, capabilities: { ...saved.capabilities } }
     const e = this.ownedBackground(taskId, id)
     return { ...backgroundInfo(e), output: e.output }
   }
@@ -143,6 +166,7 @@ export class TerminalService {
     if (e.exited || bg.forced || (bg.stopRequested && !force)) return backgroundInfo(e)
     bg.stopRequested = true
     bg.forced = force
+    this.checkpoint(e)
     this.signalGroup(e, force ? 'SIGKILL' : 'SIGTERM')
     this.onChange(e.taskId)
     return backgroundInfo(e)
@@ -169,24 +193,35 @@ export class TerminalService {
   }
 
   list(taskId: string): TerminalInfo[] {
-    return [...this.terms.values()].filter((entry) => entry.taskId === taskId).map(info)
+    const records = new Map(
+      [...this.history.values()]
+        .filter((entry) => entry.taskId === taskId)
+        .map((entry) => [entry.id, savedInfo(entry)]),
+    )
+    for (const entry of this.terms.values()) if (entry.taskId === taskId) records.set(entry.id, info(entry))
+    return [...records.values()]
   }
 
   snapshot(id: string): { output: string; cursor: number; exited: boolean } {
+    const saved = this.history.get(id)
+    if (!this.terms.has(id) && saved) return { output: saved.output, cursor: saved.cursor, exited: true }
     const entry = this.require(id)
     return { output: entry.output, cursor: entry.cursor, exited: entry.exited }
   }
 
   get(id: string): TerminalInfo | undefined {
     const e = this.terms.get(id)
-    return e && info(e)
+    return e ? info(e) : this.history.has(id) ? savedInfo(this.history.get(id)!) : undefined
   }
 
   write(id: string, data: string): void {
-    this.require(id).pty.write(data)
+    const entry = this.require(id)
+    if (entry.exited) throw new Error('This terminal has ended. Its output is read-only.')
+    entry.pty.write(data)
   }
 
   resize(id: string, cols: number, rows: number): void {
+    if (!this.terms.has(id) && this.history.has(id)) return
     const e = this.require(id)
     if (!e.exited) e.pty.resize(cols, rows)
   }
@@ -203,7 +238,8 @@ export class TerminalService {
   busy(id: string): boolean {
     const e = this.terms.get(id)
     if (!e || e.exited) return false
-    if (e.bg) return true
+    // Closing a persistent command's output only detaches the view; it cannot terminate that command.
+    if (e.bg) return false
     const name = (value: string) =>
       value
         .split(/[\\/]/)
@@ -218,7 +254,9 @@ export class TerminalService {
   }
 
   closeTask(taskId: string): void {
-    for (const [id, e] of this.terms) if (e.taskId === taskId) this.destroy(id)
+    this.storage?.removeTask(taskId)
+    for (const [id, e] of this.terms) if (e.taskId === taskId) this.destroy(id, false)
+    for (const [id, record] of this.history) if (record.taskId === taskId) this.history.delete(id)
   }
 
   closeAll(): void {
@@ -226,14 +264,25 @@ export class TerminalService {
   }
 
   /** Ends and forgets a terminal, persistent commands included (thread removal, shutdown). */
-  private destroy(id: string): void {
+  private destroy(id: string, preserve = true): void {
     const e = this.terms.get(id)
     if (!e) return
+    if (preserve) this.checkpoint(e)
+    clearTimeout(this.checkpoints.get(id))
+    this.checkpoints.delete(id)
+    this.terms.delete(id)
     if (!e.exited) {
       if (e.bg) this.signalGroup(e, 'SIGKILL')
       else e.pty.kill()
     }
-    this.terms.delete(id)
+    const saved = this.history.get(id)
+    if (preserve && saved)
+      this.history.set(id, {
+        ...backgroundInfo(e),
+        output: e.output.slice(-64_000),
+        state: e.exited ? backgroundInfo(e).state : 'unknown',
+        capabilities: { inspect: true, stop: false, forceStop: false, input: false },
+      })
     this.onChange(e.taskId)
   }
 
@@ -241,6 +290,41 @@ export class TerminalService {
     const e = this.terms.get(id)
     if (!e) throw new Error(`Unknown terminal ${id}`)
     return e
+  }
+
+  private checkpoint(entry: Entry, strict = false): void {
+    if (!entry.bg || !this.terms.has(entry.id)) return
+    clearTimeout(this.checkpoints.get(entry.id))
+    this.checkpoints.delete(entry.id)
+    const record = { ...backgroundInfo(entry), output: entry.output.slice(-64_000) }
+    try {
+      this.storage?.save(record)
+      this.history.set(entry.id, record)
+      const ordered = [...this.history.values()]
+        .filter((saved) => saved.taskId === entry.taskId)
+        .sort((a, b) => b.startedAt - a.startedAt || b.id.localeCompare(a.id))
+      for (const old of ordered.slice(100))
+        if (old.state === 'exited' || old.state === 'failed') {
+          this.history.delete(old.id)
+          this.terms.delete(old.id)
+        }
+      this.warned.delete(entry.id)
+    } catch (error) {
+      if (strict) throw error
+      if (!this.warned.has(entry.id)) console.warn('Could not checkpoint background terminal history.', error)
+      this.warned.add(entry.id)
+    }
+  }
+}
+
+function savedInfo(record: BackgroundTerminalRecord): TerminalInfo {
+  return {
+    id: record.id,
+    taskId: record.taskId,
+    repoId: record.repoId,
+    cwd: record.cwd,
+    exited: true,
+    background: true,
   }
 }
 
@@ -270,6 +354,11 @@ function backgroundInfo(e: Entry): BackgroundTerminalInfo {
     endedAt: bg.endedAt,
     exitCode: bg.exitCode,
     cursor: e.cursor,
-    capabilities: { inspect: true, stop: true, forceStop: process.platform !== 'win32', input: true },
+    capabilities: {
+      inspect: true,
+      stop: !e.exited,
+      forceStop: !e.exited && process.platform !== 'win32',
+      input: !e.exited,
+    },
   }
 }

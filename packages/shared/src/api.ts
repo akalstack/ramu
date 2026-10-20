@@ -99,7 +99,7 @@ export interface TerminalInfo {
   background?: true
 }
 
-export type BackgroundTerminalState = 'running' | 'stopping' | 'exited' | 'failed'
+export type BackgroundTerminalState = 'running' | 'stopping' | 'exited' | 'failed' | 'unknown'
 
 /** One persistent command Ramu launched for a thread. The host owns identity, lifecycle and output. */
 export interface BackgroundTerminalInfo {
@@ -113,7 +113,7 @@ export interface BackgroundTerminalInfo {
   endedAt: number | null
   exitCode: number | null
   cursor: number
-  capabilities: { inspect: true; stop: true; forceStop: boolean; input: true }
+  capabilities: { inspect: true; stop: boolean; forceStop: boolean; input: boolean }
 }
 
 /** Counts only: lock-screen content never includes prompts, paths, host names or credentials. */
