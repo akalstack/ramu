@@ -4,6 +4,7 @@ import { MobilePush } from './remote/mobilePush'
 import { DEFAULT_FALLBACK_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 import { InteractiveStore } from './interactive/store'
 import { registerInteractiveTools } from './interactive/tools'
+import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { ToolRegistry } from './agent/toolRegistry'
 import { ExternalSkills } from './memory/externalSkills'
 import { crossedSwitchAt, LearningService } from './memory/learning'
@@ -527,6 +528,7 @@ const mcpHttp = createServer(async (req, res) => {
     )
   const server = review ? withoutTools(registry.server) : registry.server
   if (!review) registerInteractiveTools(server, interactive, source.id)
+  if (!review) registerBackgroundTerminalTools(server, terminals, source, () => agents.get(source.id))
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
   // A chat keeps the settings it launched with, so its tools match its instructions until it relaunches. Turning a
