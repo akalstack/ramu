@@ -1,6 +1,28 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  "Host: {0}": "Host: {0}",
+  "Stop commands and delete thread": "Hentikan perintah dan hapus thread",
+  "Stop known commands and delete thread": "Hentikan perintah yang diketahui dan hapus thread",
+  "Delete thread and forget records": "Hapus thread dan catatan perintah",
+  "Checking background commands…": "Memeriksa perintah latar belakang…",
+  "Background commands must stop before deletion. If one keeps running, the thread is kept so you can inspect or force stop it.": "Perintah latar belakang harus berhenti sebelum penghapusan. Jika masih berjalan, thread dipertahankan agar perintah dapat diperiksa atau dihentikan paksa.",
+  "Unknown commands cannot be stopped from these records. Deleting forgets their saved output and keeps the checkout files. Verify those commands on the host.": "Perintah yang statusnya tidak diketahui tidak dapat dihentikan dari catatan ini. Penghapusan akan membuang output tersimpan dan mempertahankan berkas checkout. Periksa perintah tersebut di host.",
+  "Worktrees are kept while a command has unknown status.": "Worktree dipertahankan selama status perintah tidak diketahui.",
+  "Reconnect to this host before deleting the thread.": "Hubungkan kembali ke host ini sebelum menghapus thread.",
+  "Some archived threads have background commands. Review deletion from each thread first.": "Beberapa thread arsip memiliki perintah latar belakang. Tinjau penghapusan dari masing-masing thread terlebih dahulu.",
+  "This thread is being deleted. Wait for deletion to finish.": "Thread ini sedang dihapus. Tunggu sampai penghapusan selesai.",
+  "Background commands changed or need review. Review the current commands before deleting this thread.": "Perintah latar belakang berubah atau perlu ditinjau. Tinjau perintah saat ini sebelum menghapus thread ini.",
+  "A background command has unknown status. Keep the worktree and verify the command on its host before removing files.": "Status sebuah perintah latar belakang tidak diketahui. Pertahankan worktree dan periksa perintah di host sebelum menghapus berkas.",
+  "Unknown commands cannot be stopped. Review that deleting this thread will forget their saved records while keeping its files.": "Perintah yang statusnya tidak diketahui tidak dapat dihentikan. Tinjau bahwa penghapusan thread akan membuang catatan tersimpan namun mempertahankan berkasnya.",
+  "Background commands are still stopping. Open Background terminals and use Force stop if available, then try deleting again.": "Perintah latar belakang masih dalam proses berhenti. Buka Terminal latar belakang dan gunakan Hentikan paksa jika tersedia, lalu coba hapus lagi.",
+  "Background command scope changed. Reload the thread before deleting.": "Cakupan perintah latar belakang berubah. Muat ulang thread sebelum menghapusnya.",
+  "This removes the thread from the host. Files in the checkout stay.": "Ini menghapus thread dari host. Berkas di checkout tetap dipertahankan.",
+  "This removes the thread from the host. Choose whether to keep its worktree. Branches are kept.": "Ini menghapus thread dari host. Pilih apakah worktree tetap dipertahankan. Branch tetap disimpan.",
+  "Could not update thread": "Tidak dapat memperbarui thread",
+  "Delete and remove worktree": "Hapus thread beserta worktree",
+  "Update Ramu on this host to review background commands before deleting.": "Perbarui Ramu di host ini untuk meninjau perintah latar belakang sebelum menghapus.",
+
   "Command status cannot be verified. Saved output is available.": "Status perintah tidak dapat dipastikan. Output tersimpan tersedia.",
   "Showing the most recent terminal output. Older output was truncated.": "Menampilkan output terminal terbaru. Output yang lebih lama dipotong.",
   "Saved output · no live terminal is attached.": "Output tersimpan · tidak terhubung ke terminal aktif.",

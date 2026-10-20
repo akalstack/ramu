@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as settingsModel from '../src/runtime/settingsModel.ts'
+import * as taskRemoval from '../../../packages/shared/src/chat/taskRemoval.ts'
 import * as workspaceDefaults from '../../../packages/shared/src/workspaceDefaults.ts'
 import * as workspaceChoices from '../src/runtime/workspaces.ts'
 import * as explorerScopes from '../../../packages/shared/src/workspace/explorer.ts'
@@ -3744,3 +3745,103 @@ test('mobile grouped tool rows expand with the same disclosure and preserve ever
   assert.equal(find(tree, 'Collapse').props.open, true)
   assert.equal(find(tree, 'Pressable').props.accessibilityState.expanded, true)
 })
+
+for (const os of ['ios', 'android']) {
+  const deletion = (rows, invokeOverride) => {
+    const alerts = [],
+      calls = []
+    const { confirmChatDeletion } = load('components/ChatActions.tsx', os, {
+      'react-native': { Alert: { alert: (...args) => alerts.push(args) } },
+      '@ramu/shared/i18n': { translate: (_language, text) => text },
+      '@ramu/shared/chat/taskRemoval': taskRemoval,
+    })
+    const chat = {
+      id: 'remote:task',
+      taskId: 'task',
+      title: 'Selected thread',
+      computerId: 'remote',
+      mode: 'worktree',
+      workspaceId: 'workspace',
+    }
+    const store = {
+      language: 'en',
+      computers: [{ id: 'remote', name: 'Selected host' }],
+      chats: [],
+      invoke: async (...args) => {
+        calls.push(args)
+        return invokeOverride ? invokeOverride(...args) : args[1] === 'term.background.list' ? rows : undefined
+      },
+      refresh: async () => {},
+    }
+    return { alerts, calls, chat, store, confirmChatDeletion }
+  }
+  test(`${os} deletion shows commands on their host and sends one reviewed request only after approval`, async () => {
+    const f = deletion([{ id: 'command', taskId: 'task', command: 'pnpm dev', state: 'running' }])
+    let done = 0
+    await f.confirmChatDeletion(f.store, f.chat, () => done++)
+    assert.equal(f.calls.length, 1)
+    assert.ok(f.alerts[0][1].includes('Selected host'))
+    assert.ok(f.alerts[0][1].includes('pnpm dev'))
+    assert.ok(f.alerts[0][1].includes('\n\n'))
+    const approve = f.alerts[0][2].find((button) => button.text === 'Stop commands and delete thread')
+    approve.onPress()
+    approve.onPress()
+    await settle()
+    assert.equal(f.calls.filter(([, method]) => method === 'tasks.delete').length, 1)
+    assert.deepEqual(f.calls[1], [
+      'remote',
+      'tasks.delete',
+      'task',
+      false,
+      { backgroundIds: ['command'], forgetUnknown: false },
+    ])
+    assert.equal(done, 1)
+  })
+  test(`${os} unknown ownership requires acknowledgement and never offers worktree removal`, async () => {
+    const f = deletion([{ id: 'unknown', taskId: 'task', command: 'old server', state: 'unknown' }])
+    await f.confirmChatDeletion(f.store, f.chat)
+    assert.ok(f.alerts[0][1].includes('Unknown commands cannot be stopped'))
+    assert.equal(
+      f.alerts[0][2].some((button) => button.text === 'Delete and remove worktree'),
+      false,
+    )
+    f.alerts[0][2].find((button) => button.text === 'Delete thread and forget records').onPress()
+    await settle()
+    assert.deepEqual(f.calls[1], [
+      'remote',
+      'tasks.delete',
+      'task',
+      false,
+      { backgroundIds: ['unknown'], forgetUnknown: true },
+    ])
+  })
+  test(`${os} late review and unavailable hosts never authorize deletion`, async () => {
+    const response = deferred()
+    const f = deletion([], () => response.promise)
+    let current = true
+    const pending = f.confirmChatDeletion(f.store, f.chat, undefined, () => current)
+    current = false
+    response.resolve([])
+    await pending
+    assert.equal(f.alerts.length, 0)
+    assert.equal(f.calls.length, 1)
+    const offline = deletion([], async () => {
+      throw new Error('offline')
+    })
+    await offline.confirmChatDeletion(offline.store, offline.chat)
+    assert.equal(offline.alerts[0][0], 'Could not update thread')
+    assert.equal(offline.calls.length, 1)
+  })
+  test(`${os} keeps shared worktrees and retains the ordinary two-argument deletion when no command needs review`, async () => {
+    const f = deletion([])
+    f.store.chats = [{ taskId: 'other', computerId: 'remote', workspaceId: 'workspace' }]
+    await f.confirmChatDeletion(f.store, f.chat)
+    assert.equal(
+      f.alerts[0][2].some((button) => button.text === 'Delete and remove worktree'),
+      false,
+    )
+    f.alerts[0][2].find((button) => button.text === 'Delete').onPress()
+    await settle()
+    assert.deepEqual(f.calls[1], ['remote', 'tasks.delete', 'task', false])
+  })
+}

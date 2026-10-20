@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import * as nodePty from 'node-pty'
 import type { BackgroundTerminalHistory, BackgroundTerminalRecord } from './backgroundTerminalHistory'
+import { removalCommands, type TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
 
 import type { TerminalInfo, BackgroundTerminalInfo, BackgroundTerminalState } from '@ramu/shared/api'
 export type { TerminalInfo, BackgroundTerminalInfo, BackgroundTerminalState } from '@ramu/shared/api'
@@ -30,6 +31,7 @@ export class TerminalService {
   private readonly history = new Map<string, BackgroundTerminalRecord>()
   private readonly checkpoints = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly warned = new Set<string>()
+  private readonly removing = new Set<string>()
 
   constructor(
     private readonly onData: (id: string, data: string, cursor: number) => void,
@@ -42,6 +44,7 @@ export class TerminalService {
   }
 
   open(taskId: string, repoId: string | null, cwd: string, cols = 80, rows = 24): TerminalInfo {
+    this.assertTaskAvailable(taskId)
     return info(this.start(taskId, repoId, cwd, cols, rows))
   }
 
@@ -102,6 +105,7 @@ export class TerminalService {
    * the running one, so a retried request never starts a second server.
    */
   launchBackground(taskId: string, repoId: string | null, cwd: string, command: string): BackgroundTerminalInfo {
+    this.assertTaskAvailable(taskId)
     const text = command.trim()
     if (!text || text.length > MAX_COMMAND) throw new Error('Command must be 1 to 4000 characters.')
     const running = [...this.terms.values()].find(
@@ -253,10 +257,56 @@ export class TerminalService {
     }
   }
 
-  closeTask(taskId: string): void {
-    this.storage?.removeTask(taskId)
-    for (const [id, e] of this.terms) if (e.taskId === taskId) this.destroy(id, false)
-    for (const [id, record] of this.history) if (record.taskId === taskId) this.history.delete(id)
+  closeTask(taskId: string, options: { keepHistory?: boolean } = {}): void {
+    if (!options.keepHistory) this.storage?.removeTask(taskId)
+    for (const [id, e] of this.terms) if (e.taskId === taskId) this.destroy(id, options.keepHistory ?? false)
+    if (!options.keepHistory)
+      for (const [id, record] of this.history) if (record.taskId === taskId) this.history.delete(id)
+  }
+
+  assertTaskAvailable(taskId: string): void {
+    if (this.removing.has(taskId)) throw new Error('This thread is being deleted. Wait for deletion to finish.')
+  }
+
+  async withTaskRemoval<T>(taskIds: string[], action: () => Promise<T>): Promise<T> {
+    for (const id of taskIds) this.assertTaskAvailable(id)
+    taskIds.forEach((id) => this.removing.add(id))
+    try {
+      return await action()
+    } finally {
+      taskIds.forEach((id) => this.removing.delete(id))
+    }
+  }
+
+  reviewRemoval(taskId: string, removeWorktrees: boolean, review?: TaskRemovalReview): void {
+    const commands = removalCommands(this.listBackground(taskId))
+    if (commands.some((command) => !review?.backgroundIds.includes(command.id)))
+      throw new Error(
+        'Background commands changed or need review. Review the current commands before deleting this thread.',
+      )
+    if (commands.some((command) => command.state === 'unknown')) {
+      if (removeWorktrees)
+        throw new Error(
+          'A background command has unknown status. Keep the worktree and verify the command on its host before removing files.',
+        )
+      if (!review?.forgetUnknown)
+        throw new Error(
+          'Unknown commands cannot be stopped. Review that deleting this thread will forget their saved records while keeping its files.',
+        )
+    }
+  }
+
+  async stopForRemoval(taskId: string, timeoutMs = 3000): Promise<void> {
+    const commands = this.listBackground(taskId).filter(isLive)
+    for (const command of commands) this.stopBackground(taskId, command.id)
+    const deadline = Date.now() + timeoutMs
+    while (commands.some((command) => this.terms.get(command.id)?.exited === false)) {
+      if (Date.now() >= deadline)
+        throw new Error(
+          'Background commands are still stopping. Open Background terminals and use Force stop if available, then try deleting again.',
+        )
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
   }
 
   closeAll(): void {

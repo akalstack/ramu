@@ -340,7 +340,11 @@ export interface RamuMethods {
   'tasks.archive'(taskId: string, archived: boolean): Task
   'tasks.pin'(taskId: string, pinned: boolean): Task
   'tasks.done'(taskId: string, done: boolean): Task
-  'tasks.delete'(taskId: string, removeWorktrees: boolean): void
+  'tasks.delete'(
+    taskId: string,
+    removeWorktrees: boolean,
+    review?: import('./chat/taskRemoval').TaskRemovalReview,
+  ): void
   'projects.rename'(projectId: string, name: string): Project
   'projects.reorder'(projectIds: string[]): Project[]
   'projects.remove'(projectId: string): void

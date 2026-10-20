@@ -1,3 +1,5 @@
+import { translate } from '@ramu/shared/i18n'
+import { readRemovalCommands, removalReview, removalError } from '@ramu/shared/chat/taskRemoval'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
@@ -24,9 +26,121 @@ import { useT } from '../i18n'
 import { Button, Row, Sheet, T, type Icon } from './ui'
 import { ProjectCommandSettings } from './ProjectCommandSettings'
 
+/** Presents one review for the selected host; it never retries a deletion automatically. */
+export async function confirmChatDeletion(
+  store: Pick<ReturnType<typeof useStore>, 'invoke' | 'refresh' | 'language' | 'computers' | 'chats'>,
+  chat: Chat,
+  done?: () => void,
+  isCurrent: () => boolean = () => true,
+  presented?: () => void,
+) {
+  const t = (text: string) => translate(store.language, text)
+  try {
+    const commands = await readRemovalCommands(
+      (method, taskId) => store.invoke(chat.computerId, method, taskId),
+      chat.taskId,
+    )
+    if (!isCurrent()) return
+    const unknown = commands.some((command) => command.state === 'unknown')
+    const live = commands.some((command) => command.state !== 'unknown')
+    const shared =
+      !!chat.workspaceId &&
+      store.chats.some(
+        (other) =>
+          other.computerId === chat.computerId &&
+          other.taskId !== chat.taskId &&
+          other.workspaceId === chat.workspaceId,
+      )
+    const canRemoveWorktree = chat.mode === 'worktree' && !unknown && !shared
+    let deleting = false
+    const remove = async (removeWorktrees: boolean) => {
+      if (deleting) return
+      deleting = true
+      try {
+        if (commands.length)
+          await store.invoke(chat.computerId, 'tasks.delete', chat.taskId, removeWorktrees, removalReview(commands))
+        else await store.invoke(chat.computerId, 'tasks.delete', chat.taskId, removeWorktrees)
+        await store.refresh(chat.computerId)
+        done?.()
+      } catch (error) {
+        Alert.alert(t('Could not update thread'), t(removalError(error)))
+      }
+    }
+    const host = store.computers.find((computer) => computer.id === chat.computerId)?.name ?? chat.computerId
+    const message = [
+      chat.title,
+      host,
+      t(
+        canRemoveWorktree
+          ? 'This removes the thread from the host. Choose whether to keep its worktree. Branches are kept.'
+          : 'This removes the thread from the host. Files in the checkout stay.',
+      ),
+      ...commands.map(
+        (command) =>
+          `${command.command} · ${t(command.state === 'unknown' ? 'Unknown' : command.state === 'stopping' ? 'Stopping' : 'Running')}`,
+      ),
+      ...(live
+        ? [
+            t(
+              'Background commands must stop before deletion. If one keeps running, the thread is kept so you can inspect or force stop it.',
+            ),
+          ]
+        : []),
+      ...(unknown
+        ? [
+            t(
+              'Unknown commands cannot be stopped from these records. Deleting forgets their saved output and keeps the checkout files. Verify those commands on the host.',
+            ),
+          ]
+        : []),
+    ].join('\n\n')
+    presented?.()
+    Alert.alert(t('Delete thread?'), message, [
+      { text: t('Cancel'), style: 'cancel' },
+      {
+        text: t(
+          live
+            ? unknown
+              ? 'Stop known commands and delete thread'
+              : 'Stop commands and delete thread'
+            : unknown
+              ? 'Delete thread and forget records'
+              : 'Delete',
+        ),
+        style: 'destructive',
+        onPress: () => {
+          void remove(false)
+        },
+      },
+      ...(canRemoveWorktree
+        ? [
+            {
+              text: t('Delete and remove worktree'),
+              style: 'destructive' as const,
+              onPress: () => {
+                void remove(true)
+              },
+            },
+          ]
+        : []),
+    ])
+  } catch (error) {
+    if (isCurrent()) Alert.alert(t('Could not update thread'), error instanceof Error ? error.message : String(error))
+  }
+}
+
 /** One-shot pin/archive commands shared by the row's swipe actions. */
 export function useChatCommands(chat: Chat) {
   const store = useStore()
+  const revision = useRef(0)
+  const loading = useRef(false)
+  useEffect(
+    () => () => {
+      revision.current++
+      loading.current = false
+    },
+    [chat.computerId, chat.taskId],
+  )
   const run = async (fn: () => Promise<unknown>) => {
     try {
       await fn()
@@ -42,23 +156,13 @@ export function useChatCommands(chat: Chat) {
     toggleArchive: () =>
       run(() => store.invoke(chat.computerId, 'tasks.archive', chat.taskId, chat.status !== 'archived')),
     /** Asks first; `done` runs after the chat is gone (a chat screen leaves itself). */
-    confirmDelete: (done?: () => void) => {
-      const remove = (removeWorktrees: boolean) =>
-        void run(async () => {
-          await store.invoke(chat.computerId, 'tasks.delete', chat.taskId, removeWorktrees)
-          done?.()
-        })
-      Alert.alert(
-        'Delete thread?',
-        `${chat.title}\n\nThis removes the thread from the host. Files in the checkout stay.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: () => remove(false) },
-          ...(chat.mode === 'worktree'
-            ? [{ text: 'Delete and remove worktree', style: 'destructive' as const, onPress: () => remove(true) }]
-            : []),
-        ],
-      )
+    confirmDelete: (done?: () => void, presented?: () => void) => {
+      if (loading.current) return
+      loading.current = true
+      const mine = revision.current
+      void confirmChatDeletion(store, chat, done, () => revision.current === mine, presented).finally(() => {
+        if (revision.current === mine) loading.current = false
+      })
     },
   }
 }
@@ -94,6 +198,7 @@ export function ChatActionsSheet({
       setTitle(chat.title)
     }
   }, [open, rename, chat.title])
+  const commands = useChatCommands(chat)
   const archived = chat.status === 'archived'
   const pinned = chat.pinnedAt !== null
   const run = async (fn: () => Promise<unknown>) => {
@@ -105,26 +210,7 @@ export function ChatActionsSheet({
       Alert.alert('Could not update thread', error instanceof Error ? error.message : String(error))
     }
   }
-  const remove = (removeWorktrees: boolean) =>
-    void run(async () => {
-      await store.invoke(chat.computerId, 'tasks.delete', chat.taskId, removeWorktrees)
-      onGone?.()
-    })
-  const confirmDelete = () => {
-    onClose()
-    const worktree = chat.mode === 'worktree'
-    Alert.alert(
-      'Delete thread?',
-      `${chat.title}\n\nThis removes the thread from the host. Files in the checkout stay.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => remove(false) },
-        ...(worktree
-          ? [{ text: 'Delete and remove worktree', style: 'destructive' as const, onPress: () => remove(true) }]
-          : []),
-      ],
-    )
-  }
+  const confirmDelete = () => commands.confirmDelete(onGone, onClose)
   const items: { icon: Icon; label: string; danger?: boolean; onPress?: () => void }[] = [
     ...extras.map((extra) => ({
       ...extra,

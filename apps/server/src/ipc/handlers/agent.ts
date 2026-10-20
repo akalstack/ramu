@@ -95,9 +95,11 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         if (settings) await agents.validateSettings(settings)
         prompt = await withContext(workspace, taskId, prompt, context)
         const scope = workspace.agentScope(taskId)
-        return lockCheckouts(ctx, scope.covers, () =>
-          agents.startReviewed(taskId, scope, prompt, settings, attachmentStore.resolve(attachmentIds)),
-        )
+        return lockCheckouts(ctx, scope.covers, () => {
+          workspace.getTask(taskId)
+          ctx.terminals?.assertTaskAvailable(taskId)
+          return agents.startReviewed(taskId, scope, prompt, settings, attachmentStore.resolve(attachmentIds))
+        })
       },
     },
     'agent.submit': {
@@ -106,9 +108,11 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         const taskId = agents.get(s).taskId
         workspace.setDone(taskId, false)
         t = await withContext(workspace, taskId, t, context)
-        return lockSession(ctx, s, () =>
-          agents.submit(s, t, mode, attachmentStore.resolve(attachmentIds), undefined, true),
-        )
+        return lockSession(ctx, s, () => {
+          workspace.getTask(taskId)
+          ctx.terminals?.assertTaskAvailable(taskId)
+          return agents.submit(s, t, mode, attachmentStore.resolve(attachmentIds), undefined, true)
+        })
       },
     },
     'agent.removeQueued': {

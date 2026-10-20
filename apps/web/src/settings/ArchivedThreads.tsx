@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { readRemovalCommands } from '@ramu/shared/chat/taskRemoval'
 import { Button } from '@/components/desktop-button'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { t, useLanguage } from '../i18n'
@@ -62,6 +63,11 @@ export function ArchivedThreads() {
             setClearBusy(true)
             setClearError(null)
             try {
+              const commands = await Promise.all(archivedChats.map((task) => readRemovalCommands(invoke, task.id)))
+              if (commands.some((rows) => rows.length))
+                throw new Error(
+                  t('Some archived threads have background commands. Review deletion from each thread first.'),
+                )
               for (const task of archivedChats) {
                 await invoke('tasks.delete', task.id, false)
                 ws.forgetTask(task.id)

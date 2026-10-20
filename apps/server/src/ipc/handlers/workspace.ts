@@ -18,6 +18,7 @@ import {
 } from '@ramu/shared/workspaceDefaults'
 import { agentSettings, id } from '../schemas'
 import type { RegisterHandlers } from '../types'
+import type { TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
 
 const namingIntent = z.object({
   strategy: z.enum(['fixed', 'semantic', 'custom']),
@@ -306,15 +307,41 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       },
     },
     'tasks.delete': {
-      args: z.tuple([id, z.boolean()]),
-      run: async (taskId: string, removeWorktrees: boolean) => {
-        await Promise.all(agents.list(taskId).map((s) => agents.stopAndWait(s.id)))
-        terminals.closeTask(taskId)
-        const workspaceId = workspace.getTask(taskId).workspaceId
-        await workspace.deleteTask(taskId, removeWorktrees)
-        notices?.forgetTask(taskId)
-        watchers.release(taskId)
-        if (removeWorktrees && workspaceId) terminals.closeTask(`worktree:${workspaceId}`)
+      args: z.tuple([
+        id,
+        z.boolean(),
+        z
+          .object({ backgroundIds: z.array(z.string().uuid()).max(2000), forgetUnknown: z.boolean().optional() })
+          .optional(),
+      ]),
+      run: async (taskId: string, removeWorktrees: boolean, review?: TaskRemovalReview) => {
+        const covers = workspace.explorerBindings(taskId).map((binding) => binding.cwd)
+        return lock.runMany([`delete-task:${taskId}`, ...covers.map((cwd) => `checkout:${cwd}`)], async () => {
+          const task = workspace.getTask(taskId)
+          if (
+            removeWorktrees &&
+            task.workspaceId &&
+            workspace.listTasks().some((other) => other.id !== taskId && other.workspaceId === task.workspaceId)
+          )
+            throw new Error(
+              'This isolated workspace is used by other threads. Delete only this thread or remove the other threads first.',
+            )
+          const contexts = [taskId, ...(removeWorktrees && task.workspaceId ? [`worktree:${task.workspaceId}`] : [])]
+          return terminals.withTaskRemoval(contexts, async () => {
+            terminals.reviewRemoval(taskId, removeWorktrees, review)
+            await Promise.all(agents.list(taskId).map((session) => agents.stopAndWait(session.id)))
+            terminals.reviewRemoval(taskId, removeWorktrees, review)
+            await terminals.stopForRemoval(taskId)
+            terminals.closeTask(taskId, { keepHistory: true })
+            if (removeWorktrees && task.workspaceId)
+              terminals.closeTask(`worktree:${task.workspaceId}`, { keepHistory: true })
+            await workspace.deleteTask(taskId, removeWorktrees)
+            terminals.closeTask(taskId)
+            notices?.forgetTask(taskId)
+            watchers.release(taskId)
+            if (removeWorktrees && task.workspaceId) terminals.closeTask(`worktree:${task.workspaceId}`)
+          })
+        })
       },
     },
     'projects.reveal': {

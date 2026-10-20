@@ -2,7 +2,6 @@ import { useComputers } from '../../workspace/computers'
 import { useHost } from '../../workspace/HostProvider'
 import { useHostSelection } from '../../workspace/HostSelection'
 import { Button } from '@/components/desktop-button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Archive,
   ArchiveRestore,
@@ -20,7 +19,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { Task } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
 import { copyText } from '../../ipc'
-import { Dialog, useContextMenu, type MenuEntry } from '../../Menu'
+import { useContextMenu, type MenuEntry } from '../../Menu'
+import { DeleteThreadDialog } from '../../chat/DeleteThreadDialog'
 import { errorText } from '../../workspace/TaskPane'
 import { notifyError } from '../../chat/Notifications'
 import { useRowStore } from '../../workspace/workspace'
@@ -87,8 +87,6 @@ export function TaskRow({
   const [deleting, setDeleting] = useState(false)
   const sharedWorktree =
     !!task.workspaceId && (ws?.tasks ?? []).some((t) => t.id !== task.id && t.workspaceId === task.workspaceId)
-  const [removeWorktrees, setRemoveWorktrees] = useState(true)
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const active = onScreen && ws?.ui.activeTaskId === task.id && !ws.composing
   const archived = task.status === 'archived'
@@ -379,48 +377,20 @@ export function TaskRow({
       )}
       {error && !deleting && <div className={ROW_ERROR_CLASS}>{error}</div>}
       {deleting && (
-        <Dialog
-          title={t('Delete “{0}”?', { '0': task.title })}
-          confirmLabel={t('Delete thread')}
-          danger
-          busy={busy}
-          error={error}
+        <DeleteThreadDialog
+          task={task}
+          hostName={computers?.computers.find((computer) => computer.id === host.id)?.name}
+          sharedWorktree={sharedWorktree}
           onCancel={() => {
             setDeleting(false)
             setError(null)
           }}
-          onConfirm={async () => {
-            setBusy(true)
-            setError(null)
-            try {
-              await host.invoke('tasks.delete', task.id, task.mode === 'worktree' && !sharedWorktree && removeWorktrees)
-              forget()
-              await refresh()
-              setDeleting(false)
-            } catch (e) {
-              setError(errorText(e))
-            } finally {
-              setBusy(false)
-            }
+          onDeleted={async () => {
+            forget()
+            await refresh()
+            setDeleting(false)
           }}
-        >
-          <p>{t('This removes the thread and its agent transcripts. Its running agents are stopped.')}</p>
-          {task.mode === 'worktree' && !sharedWorktree ? (
-            <label>
-              <Checkbox checked={removeWorktrees} onCheckedChange={(checked) => setRemoveWorktrees(checked === true)} />
-              <span>
-                {t('Also remove its worktrees')}
-                <span className="muted text-muted-foreground block block">
-                  {t('Only if they have no uncommitted changes. Branches are kept.')}
-                </span>
-              </span>
-            </label>
-          ) : (
-            <p className="muted text-muted-foreground">
-              {t('Shared files, terminals, worktrees, and other threads stay open.')}
-            </p>
-          )}
-        </Dialog>
+        />
       )}
     </>
   )

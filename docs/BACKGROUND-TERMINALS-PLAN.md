@@ -39,7 +39,7 @@ The managed MCP command path is documented in [UI](UI.md#workspace-and-terminals
 ## Remaining implementation
 
 - **Permissions and stop feedback:** extend the managed tools beyond Full access using the existing command approval flow, and feed human stops into the agent event boundary so the agent does not relaunch.
-- **Removal and recovery acceptance:** add a stop-and-remove choice before deleting a thread or workspace (today explicit deletion still calls `closeTask` without a command-specific confirmation). Verify persisted ownership, saved-output truncation, unknown/read-only recovery and archive cleanup protection in packaged two-host/device runs. Current persistence and retention behavior is in [UI](UI.md#workspace-and-terminals).
+- **Removal and recovery acceptance:** verify command review, graceful-stop timeout/retry, retained final output after failed removal, shared-worktree protection, unknown ownership and older-host recovery in packaged desktop/iOS/Android and two-host runs. Current deletion and persistence behavior is in [UI](UI.md#workspace-and-terminals).
 - **Providers:** native Claude/Codex/ACP/OpenCode/Cursor command handles, sub-agent attribution and excerpt labelling are unstarted.
 - **Client:** sub-agent attribution, host/offline/old-host states beyond last-known rows, mobile list/output/stop, and client tests for hide-versus-stop and draft/focus preservation.
 - **Acceptance:** the manual representative task, two hosts, restart and platform-specific (Windows) termination checks.
