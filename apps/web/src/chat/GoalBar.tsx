@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react'
 import { ChatActivityButton } from './ChatActivity'
+import { ComposerTraySection } from '../composer/ComposerTraySection'
 import { Button } from '@/components/desktop-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -192,26 +193,21 @@ export function GoalBar({
 }) {
   useLanguage()
   const [editing, setEditing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const { preferences } = useAppSettings()
   const active = goalContinues(goal)
   const Icon = goalIcon(goal),
     limit = preferences.goals.maxTurns
   return (
-    <Collapsible
-      className="goal-bar [&[data-status='paused']_.goal-icon]:text-muted-foreground [&:is([data-status='blocked'],_[data-status='turn-limit'],_[data-status='limit'])_.goal-icon]:text-warn [&[data-open]_.goal-summary_.caret]:opacity-100 [&[data-open]_.goal-summary_.caret]:[transform:rotate(90deg)] text-control"
+    <ComposerTraySection
+      className="goal-bar [&[data-status='paused']_.goal-icon]:text-muted-foreground [&:is([data-status='blocked'],_[data-status='turn-limit'],_[data-status='limit'])_.goal-icon]:text-warn"
       data-status={goalState(goal)}
       aria-label={t('Thread goal')}
-    >
-      <div className="goal-bar-header flex items-center gap-0.5 min-h-8">
-        <CollapsibleTrigger
-          render={
-            <Button
-              variant="ghost"
-              className="goal-summary [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:0] [&_svg]:flex-none [&_svg]:w-[var(--icon-compact)] [&_svg]:h-[var(--icon-compact)] [&_.caret]:text-muted-foreground [&_.caret]:opacity-0 [&_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] [&:is(:hover,_:focus-visible)_.caret]:opacity-100 flex flex-1 items-center justify-start gap-2 min-w-0 h-7 p-[0_4px] [border:0] rounded-(--radius-s) bg-transparent text-control font-normal text-left"
-            />
-          }
-        >
-          <Icon size={14} className="goal-icon text-brand" />
+      open={expanded}
+      onOpenChange={setExpanded}
+      icon={<Icon className="goal-icon text-brand" />}
+      title={
+        <span className="flex min-w-0 items-center gap-2">
           <strong className="goal-status flex-none text-foreground font-medium">{t(goalLabel(goal))}</strong>
           <span
             className="goal-objective flex-initial min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-soft font-normal"
@@ -227,54 +223,56 @@ export function GoalBar({
               {goal.turns}/{limit}
             </span>
           )}
-          <ChevronRight
-            size={14}
-            className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]"
-          />
-        </CollapsibleTrigger>
-        {onVerify && goal.status !== 'completed' && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action goal-verify-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)"
-            aria-label={goal.verify ? t('Edit verification command') : t('Set verification command')}
-            title={goal.verify ? t('Edit verification command') : t('Set verification command')}
-            aria-pressed={editing}
-            onClick={() => setEditing((open) => !open)}
-          >
-            <ShieldCheck size={14} className={goal.verify ? 'text-brand' : undefined} />
-          </Button>
-        )}
-        {goal.status !== 'completed' && (
+        </span>
+      }
+      actions={
+        <>
+          {onVerify && goal.status !== 'completed' && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action goal-verify-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)"
+              aria-label={goal.verify ? t('Edit verification command') : t('Set verification command')}
+              title={goal.verify ? t('Edit verification command') : t('Set verification command')}
+              aria-pressed={editing}
+              onClick={() => {
+                setExpanded(true)
+                setEditing((open) => !open)
+              }}
+            >
+              <ShieldCheck size={14} className={goal.verify ? 'text-brand' : undefined} />
+            </Button>
+          )}
+          {goal.status !== 'completed' && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)"
+              aria-label={active ? t('Pause goal') : t('Resume goal')}
+              title={active ? t('Pause goal') : t('Resume goal')}
+              onClick={() => onControl(active ? 'pause' : 'resume')}
+            >
+              {active ? <Pause size={14} /> : <Play size={14} />}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-xs"
             className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)"
-            aria-label={active ? t('Pause goal') : t('Resume goal')}
-            title={active ? t('Pause goal') : t('Resume goal')}
-            onClick={() => onControl(active ? 'pause' : 'resume')}
+            aria-label={t('Clear goal')}
+            title={t('Clear goal')}
+            onClick={() => onControl('clear')}
           >
-            {active ? <Pause size={14} /> : <Play size={14} />}
+            <X size={14} />
           </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)"
-          aria-label={t('Clear goal')}
-          title={t('Clear goal')}
-          onClick={() => onControl('clear')}
-        >
-          <X size={14} />
-        </Button>
-      </div>
+        </>
+      }
+    >
       {editing && onVerify && (
         <GoalVerifyEditor current={goal.verify} onSave={onVerify} onClose={() => setEditing(false)} />
       )}
-      <CollapsibleContent className="tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden [transition:height_160ms_var(--ease)]">
-        <GoalDetails goal={goal} />
-      </CollapsibleContent>
-    </Collapsible>
+      <GoalDetails goal={goal} />
+    </ComposerTraySection>
   )
 }
 

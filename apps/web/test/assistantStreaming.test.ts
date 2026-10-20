@@ -35,12 +35,25 @@ const render = (text: string, generating = true) => {
 it('settles existing text and fades only appended words without stagger or whole-reply motion', () => {
   const first = render('Hello there')
   expect(first.match(/class="stream-word"/g)).toHaveLength(2)
-  expect(first).toContain('stream-in 120ms ease-out both')
+  expect(first).not.toContain('animation-delay')
   const appended = render('Hello there friend')
-  expect(appended.match(/class="stream-word"/g)).toHaveLength(1)
-  expect(appended).toContain('Hello there ')
+  expect(appended.match(/class="stream-word"/g)).toHaveLength(3)
+  expect(appended).toContain('<span class="stream-word">Hello</span> <span class="stream-word">there</span>')
   expect(appended).not.toContain('animation-delay')
   expect(appended).not.toContain('animation:arrive')
+})
+it('keeps word spans stable across repeated chunks so their running animation can finish', () => {
+  const first = render('Hello there')
+  expect(render('Hello there')).toBe(first)
+  expect(render('Hello there friend')).toContain('<span class="stream-word">Hello</span>')
+})
+it('animates prose inside links, emphasis, headings and tables without wrapping code blocks', () => {
+  const html = render(
+    '#### Heading\n\n[Linked words](https://example.com) and **bold words**.\n\n| Column |\n| --- |\n| Cell |\n\n```js\nconst answer = 42\n```',
+  )
+  for (const word of ['Heading', 'Linked', 'words', 'bold', 'Column', 'Cell'])
+    expect(html).toContain(`<span class="stream-word">${word}</span>`)
+  expect(html).toContain('<code class="language-js">const answer = 42')
 })
 it('shows reopened reply history immediately and fades only its new suffix', () => {
   const history = 'Existing content '.repeat(20)

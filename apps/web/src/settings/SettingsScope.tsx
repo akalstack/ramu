@@ -50,7 +50,7 @@ interface Target {
 }
 
 /** These pages configure one machine (binaries, login, service, network), so "all environments" has no meaning. */
-const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = ['providers', 'agent-setup', 'system', 'remote']
+const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = ['providers', 'environment', 'agent-setup', 'system', 'remote']
 /** Remote access and archived history describe the current environment; it is not selectable. */
 const CURRENT_ENVIRONMENT_SECTIONS: readonly string[] = ['remote', 'archived']
 export const isSingleEnvironmentSection = (section: string) => SINGLE_ENVIRONMENT_SECTIONS.includes(section)
@@ -339,7 +339,10 @@ export function SettingsFieldNotice({ path }: { path: string }) {
 
 /** Machine actions use the same explicit target; bulk preference edits never run an action on an arbitrary computer. */
 export function useSettingsInvoke(): typeof invoke {
-  const scope = useContext(SettingsScopeContext)
+  return useScopedInvoke(useContext(SettingsScopeContext))
+}
+/** The same routing for the settings panel itself, which owns the scope rather than reading it from context. */
+export function useScopedInvoke(scope: SettingsScope | null): typeof invoke {
   return useMemo(() => {
     if (!scope) return invoke
     return (async (method: string, ...args: unknown[]) => {

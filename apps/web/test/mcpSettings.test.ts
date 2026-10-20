@@ -62,7 +62,6 @@ it('names the server, selected project and providers without claiming native-run
   expect(html).toContain('Not connected')
   expect(html).not.toContain('Ready')
   expect(html).not.toContain('alice') // an unverified service-account ID is not presented as authenticated identity
-  expect(html).toContain('Search MCP servers')
 })
 
 it('renders administration unavailable for a paired client while preserving status', () => {
@@ -87,6 +86,5 @@ it('keeps authentication failures distinct and presents an actionable empty stat
   expect(html).toContain('Sign-in required')
   expect(html).toContain('Sign in to the external service')
   const empty = render(true, { ...snapshot, connections: [] })
-  expect(empty).toContain('No MCP servers')
-  expect(empty).toContain('review its tools')
+  expect(empty).toContain('No servers connected through Ramu yet.')
 })

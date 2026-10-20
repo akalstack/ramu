@@ -83,7 +83,9 @@ export function BackgroundTerminals({ taskId }: { taskId: string }) {
 
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="ghost" size="sm" className="text-caption" />}>
+      <PopoverTrigger
+        render={<Button variant="ghost" size="sm" className="composer-stack-activity justify-start text-caption" />}
+      >
         {t('{0} background terminals', { 0: live || terminals.length })}
       </PopoverTrigger>
       <PopoverContent className="flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 p-2">

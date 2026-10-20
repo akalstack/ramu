@@ -347,7 +347,7 @@ export function ModelBar({
                     title={t('Model set settings')}
                     onClick={() =>
                       window.dispatchEvent(
-                        new CustomEvent('ramu:settings', { detail: { section: 'providers', target: 'Model sets' } }),
+                        new CustomEvent('ramu:settings', { detail: { section: 'models', target: 'Model sets' } }),
                       )
                     }
                   >

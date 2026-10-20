@@ -81,6 +81,7 @@ function RenderComposer(onSubmit: (context: FileContext[]) => Promise<void>) {
     onSubmit,
     placeholder: 'Message',
     submitLabel: 'Send',
+    onAttachmentsChange() {},
   })
   while (state.pending.length) state.pending.shift()!()
   return tree
@@ -104,6 +105,24 @@ function send(tree: ReactNode) {
   expect(button).toBeDefined()
   ;(button!.onClick as () => void)()
 }
+
+it('keeps the normal composer actions and leaves Save shortcuts to the app', () => {
+  const tree = RenderComposer(async () => {})
+  expect(find(tree, (props) => props['aria-label'] === 'Attach files')).toBeDefined()
+  expect(find(tree, (props) => props['aria-label'] === 'Save draft')).toBeUndefined()
+  expect(find(tree, (props) => props['aria-label'] === 'Saved drafts')).toBeUndefined()
+  const input = find(tree, (props) => typeof props.onKeyDown === 'function')!
+  for (const modifier of ['metaKey', 'ctrlKey']) {
+    const preventDefault = vi.fn()
+    ;(input.onKeyDown as (event: unknown) => void)({
+      key: 's',
+      [modifier]: true,
+      nativeEvent: { isComposing: false },
+      preventDefault,
+    })
+    expect(preventDefault).not.toHaveBeenCalled()
+  }
+})
 async function settled() {
   for (let i = 0; i < 8; i++) await Promise.resolve()
 }

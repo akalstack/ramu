@@ -36,7 +36,7 @@ Already-running native sub-agents keep their provider. After a service restart, 
 
 ## Usage limits and fallback
 
-**Settings → Access & Fallback** holds one list of provider and model pairs, best first. The default is Claude Code, then Codex. Fallback chooses the highest model on the list that has room:
+**Settings → Models → Provider fallback** holds one list of provider and model pairs, best first. The default is Claude Code, then Codex. Fallback chooses the highest model on the list that has room:
 
 - When its model reaches the limit, the thread moves to the highest model in the fallback order that has room. Unavailable or limited entries are skipped. The default switch point is **Only at the limit**; 80%, 90%, and 95% thresholds switch earlier.
 - New threads and automatically switched threads keep their current model while it has room. A higher model becoming available does not trigger another switch.

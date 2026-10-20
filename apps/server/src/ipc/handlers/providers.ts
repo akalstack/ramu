@@ -5,10 +5,17 @@ import { claudeAdvisorModel } from '../../agent/advisor'
 import { providerBinaries } from '../preferences'
 import { agentSettings, relPath } from '../schemas'
 import type { RegisterHandlers } from '../types'
+import { ENVIRONMENT_SCOPES, type ProviderEnvironmentValues } from '@ramu/shared/providers/environment'
+
+const environmentValues = z.partialRecord(
+  z.enum(ENVIRONMENT_SCOPES as [string, ...string[]]),
+  z.array(z.object({ key: z.string().max(128), value: z.string().max(32 * 1024) })).max(500),
+)
 
 /** Provider sign-in and updates, plus usage limits and provider-specific helpers. */
 export const registerProviderHandlers: RegisterHandlers = ({
   host,
+  environment,
   providers,
   usage,
   agents,
@@ -39,6 +46,22 @@ export const registerProviderHandlers: RegisterHandlers = ({
     args: z.tuple([agentSettings.shape.provider, relPath, z.string().max(200)]),
     run: (provider: ProviderStatus['provider'], binary: string, latestVersion: string) =>
       providers.dismiss({ provider, binary, latestVersion } as ProviderStatus),
+  },
+  // Values are credentials: only the execution host reads or changes them; other clients see names.
+  'providers.environment': {
+    args: z.tuple([z.boolean().optional()]),
+    run: async (retry?: boolean) => {
+      if (retry) await environment.load()
+      return environment.status(host.canAdministerIntegrations?.() === true)
+    },
+  },
+  'providers.setEnvironment': {
+    args: z.tuple([environmentValues]),
+    run: (values: ProviderEnvironmentValues) => {
+      if (host.canAdministerIntegrations?.() !== true)
+        throw new Error('Change environment variables on the host running Ramu')
+      return environment.save(values)
+    },
   },
   'providers.pickBinary': { args: z.tuple([]), run: () => host.native('pickExecutable') },
   'usage.get': { args: z.tuple([]), run: () => usage.list() },

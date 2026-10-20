@@ -553,7 +553,7 @@ async function main() {
         throw new Error('That host is not connected')
       if (
         typeof operation !== 'string' ||
-        !/^(mcp\.|providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.list$|diagnostics\.(export|clear)$)/.test(
+        !/^(mcp\.|providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.(list|setup)$|diagnostics\.(export|clear)$)/.test(
           operation,
         ) ||
         !Array.isArray(parameters)

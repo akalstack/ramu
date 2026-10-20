@@ -155,10 +155,12 @@ function CommitForm({
   const [action, setAction] = useState<CommitAction>(
     request.action !== 'commit' ? request.action : canPublish ? defaultAction : 'commit',
   )
-  const [openPr, setOpenPr] = useState(!!request.pullRequest && canPr)
+  // Support loads asynchronously; it controls discovery, not an already requested PR.
+  // Keep that intent so a cold query or refetch cannot turn Commit, Push & PR into push only.
+  const [openPr, setOpenPr] = useState(!!request.pullRequest && canPublish)
   // A pull request needs the commit on the remote, so it always pushes.
   const publishing = (openPr || action !== 'commit') && canPublish
-  const chosenAction: CommitAction = openPr && canPr ? 'push' : publishing ? action : 'commit'
+  const chosenAction: CommitAction = openPr ? 'push' : publishing ? action : 'commit'
   const [branchInfo, setBranchInfo] = useState<{ branch: string | null; defaultBranch: string | null } | null>(null)
   const [newBranch, setNewBranch] = useState(false)
   // A new branch is named by AI from the commit (empty), or written here.
@@ -195,7 +197,7 @@ function CommitForm({
     if (!selected.length || (wantsBranch && ownName && !branchName.trim())) return
     if (publishing && !openPr) onRememberAction(action)
     onDone({
-      pullRequest: openPr && canPr,
+      pullRequest: openPr,
       paths: selected.map((entry) => entry.path),
       action: chosenAction,
       branch: !wantsBranch
@@ -206,7 +208,7 @@ function CommitForm({
       message,
     })
   }
-  const submitLabel = openPr && canPr ? t('Commit, Push & PR') : commitActionLabel(chosenAction)
+  const submitLabel = openPr ? t('Commit, Push & PR') : commitActionLabel(chosenAction)
 
   const SEGMENTS =
     'inline-flex flex-none gap-0.5 p-0.5 rounded-(--radius-s) bg-fill [&_button]:h-6 [&_button]:px-2.5 [&_button]:text-caption [&_button]:rounded-(--radius-xs) [&_button]:bg-transparent [&_button]:text-muted-foreground [&_button:hover:not(:disabled)]:text-foreground [&_[aria-pressed=true]]:bg-hover [&_[aria-pressed=true]]:text-foreground [&_button:disabled]:opacity-40'
@@ -361,7 +363,7 @@ function CommitForm({
               )}
             </div>
           )}
-          {canPr && (
+          {(canPr || openPr) && (
             <label className="flex cursor-pointer items-center gap-2 text-control text-soft">
               <Checkbox checked={openPr} onCheckedChange={(value) => setOpenPr(!!value)} />
               {t('Create a pull request after pushing')}

@@ -58,6 +58,7 @@ export interface TranscriptContext {
   /** Whether a source message was requested, so folded work keeps its block indexes for navigation. */
   hasSourceSeq: boolean
   eventSequences: Map<AgentEvent, number>
+  claimArrival?: (event: AgentEvent) => boolean
   onBackground: ((toolUseId: string) => void) | undefined
   onOpenAgent: (agentId: string | null) => void
   onStopTask: (task: AgentTask) => void

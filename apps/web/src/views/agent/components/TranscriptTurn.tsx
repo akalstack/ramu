@@ -14,6 +14,8 @@ import { EventRow } from './EventRow'
 import { ToolGroup } from './ToolGroup'
 import { Marker, MarkerContent } from '@/components/ui/marker'
 import { TurnSummary } from './TurnSummary'
+import { useLayoutEffect, useRef } from 'react'
+import { reducedMotion } from '../../../workspace/panelMotion'
 
 type TurnReview = React.ComponentProps<typeof TurnChanges>['review']
 
@@ -23,6 +25,7 @@ function TranscriptBlock({
   ctx,
   turn,
   finished,
+  assistantActions,
   latest = false,
 }: {
   block: Block
@@ -30,11 +33,19 @@ function TranscriptBlock({
   turn: Turn
   /** The turn is done, so its tool rows no longer show live activity. */
   finished: boolean
+  assistantActions: boolean
   latest?: boolean
 }) {
   const index = blockIndex(b, ctx.blocks)
+  const row = useRef<HTMLDivElement>(null)
+  const event = b.kind === 'tools' ? b.tools[0] : b.event
+  const { claimArrival } = ctx
+  useLayoutEffect(() => {
+    if (!event || !claimArrival?.(event) || reducedMotion()) return
+    row.current?.classList.add('transcript-arrival')
+  }, [event, claimArrival])
   return (
-    <div data-block-index={index}>
+    <div ref={row} data-block-index={index}>
       {b.kind === 'tools' ? (
         <ToolGroup
           tools={b.tools}
@@ -70,6 +81,7 @@ function TranscriptBlock({
           taskId={ctx.taskId}
           sessionId={ctx.sessionId}
           live={ctx.live}
+          assistantActions={assistantActions}
           generating={
             ctx.working && (b.event === ctx.liveText || (b.event.kind === 'thinking' && b === turn.items.at(-1)))
           }
@@ -119,7 +131,15 @@ export function TranscriptTurn({
     ? foldTurn(turn.items, ctx.outcomes, ctx.results)
     : { folded: [] as Block[], kept: turn.items, answer: [] as Block[] }
   const renderBlock = (b: Block, latest = false) => (
-    <TranscriptBlock key={blockIndex(b, blocks)} block={b} ctx={ctx} turn={turn} finished={finished} latest={latest} />
+    <TranscriptBlock
+      key={blockIndex(b, blocks)}
+      block={b}
+      ctx={ctx}
+      turn={turn}
+      finished={finished}
+      assistantActions={finished && answer.includes(b)}
+      latest={latest}
+    />
   )
   // Several sub-agents in a row read as one line with a summary, expanding to their cards.
   const renderList = (list: Block[]) =>

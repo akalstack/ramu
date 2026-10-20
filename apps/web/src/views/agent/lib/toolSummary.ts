@@ -8,6 +8,26 @@ import { type ToolResult, type ToolUse } from '../types'
 export const toolLabel = (name: string) =>
   name.startsWith('mcp__') ? name.split('__').slice(2).join('__') || name : name
 
+/**
+ * The headline for a tool the provider gave no title: tool search says what it looked for, and a tool whose summary is just its
+ * JSON input shows its name instead. Null leaves the caller's usual "verb + summary" line.
+ */
+export function toolFallbackTitle(tool: ToolUse, running: boolean): string | null {
+  if (tool.title?.trim()) return null
+  if (tool.name === 'ToolSearch') {
+    const query = /^"?query"?\s*[:=]\s*"?([^"}]*)/.exec(tool.summary)?.[1] ?? tool.summary
+    const picked = /^select:(.+)$/.exec(query.trim())?.[1]
+    if (picked) {
+      const names = picked.split(',').map((name) => toolLabel(name.trim()))
+      return `${translate(running ? 'Loading' : 'Loaded')} ${names.join(', ')}`
+    }
+    return `${translate(running ? 'Searching tools' : 'Searched tools')}${query.trim() ? ` “${query.trim()}”` : ''}`
+  }
+  if (/^[{[]/.test(tool.summary.trim()))
+    return `${translate(toolVerb('Used', running))} ${toolLabel(tool.name)}`
+  return null
+}
+
 const VERBS: Record<string, [string, string, string]> = {
   Bash: ['Ran', 'command', 'commands'],
   Edit: ['Edited', 'file', 'files'],

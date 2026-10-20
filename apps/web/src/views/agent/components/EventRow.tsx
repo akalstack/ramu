@@ -30,6 +30,7 @@ export function EventRow({
   taskId,
   live,
   generating = false,
+  assistantActions = false,
   outcomes,
   questionStates,
   latest = false,
@@ -43,6 +44,7 @@ export function EventRow({
   taskId?: string
   live: boolean
   generating?: boolean
+  assistantActions?: boolean
   outcomes: Map<string, string>
   questionStates: Map<string, QuestionState>
   latest?: boolean
@@ -148,7 +150,16 @@ export function EventRow({
         />
       )
     case 'text':
-      return <AssistantText event={e} generating={generating} latest={latest} taskId={taskId} sessionId={sessionId} />
+      return (
+        <AssistantText
+          event={e}
+          generating={generating}
+          actions={assistantActions}
+          latest={latest}
+          taskId={taskId}
+          sessionId={sessionId}
+        />
+      )
     case 'turn-diff':
       return <TurnDiff diff={e.diff} />
     case 'thinking':

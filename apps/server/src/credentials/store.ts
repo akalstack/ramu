@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 
 export interface HostCredentialScope {
   hostId: string
-  integration: 'mcp' | 'forge'
+  integration: 'mcp' | 'forge' | 'provider-env'
   connectionId: string
   accountId: string
 }
@@ -25,7 +25,7 @@ const referencePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3
 const safeError = () =>
   new Error('The host credential store is unavailable or locked. Unlock it on the execution host and try again.')
 
-/** OS-backed, host-owned credential storage shared by MCP and Git hosting.
+/** OS-backed, host-owned credential storage shared by MCP, Git hosting and provider environment variables.
  * Only opaque references enter SQLite/settings. No native errors or values are returned in status.
  * A replacement gets a new reference; callers publish it only after validating the new connection. */
 export class HostCredentialStore {
@@ -41,7 +41,7 @@ export class HostCredentialStore {
   private entry(scope: HostCredentialScope, reference: string) {
     if (
       !referencePattern.test(reference) ||
-      !['mcp', 'forge'].includes(scope.integration) ||
+      !['mcp', 'forge', 'provider-env'].includes(scope.integration) ||
       [scope.hostId, scope.connectionId, scope.accountId].some((value) => !value || value.length > 200)
     )
       throw new Error('Invalid host credential reference or scope')

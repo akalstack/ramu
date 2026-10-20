@@ -1,3 +1,4 @@
+import { animateThreadListChange } from './workspace/threadListMotion'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { DateTime } from 'luxon'
@@ -187,7 +188,7 @@ export function AgentRow({
   const prefix = helper ? task?.title : (project?.name ?? t('No project'))
   const open = () => openAgent(ws, session)
   return (
-    <article className="agent-row">
+    <article className="agent-row" data-thread-motion-row="">
       <HoverCard open={helper || !task ? false : undefined}>
         <HoverCardTrigger
           render={<div />}
@@ -238,9 +239,10 @@ export function AgentRow({
                 title={task?.doneAt ? t('Reopen') : t('Mark done')}
                 onClick={(e) => {
                   e.stopPropagation()
-                  void invoke('tasks.done', session.taskId, !task?.doneAt)
-                    .then(() => ws.refresh())
-                    .catch((error) => notifyError(errorText(error)))
+                  void animateThreadListChange(async () => {
+                    await invoke('tasks.done', session.taskId, !task?.doneAt)
+                    await ws.refresh()
+                  }).catch((error) => notifyError(errorText(error)))
                 }}
               >
                 {task?.doneAt ? <RotateCcw size={14} /> : <Check size={14} />}

@@ -30,7 +30,10 @@ export function ThreadActivitySummary({
   const kinds = [model.primary, ...model.secondary].filter((kind) => kind !== 'working')
   if (!kinds.length) return null
   return (
-    <div aria-label={t('Thread activity')} className="flex min-w-0 flex-wrap items-center gap-1 px-1 py-0.5">
+    <div
+      aria-label={t('Thread activity')}
+      className="composer-stack-activity flex min-w-0 flex-wrap items-center gap-1 py-0.5"
+    >
       {kinds.slice(0, 3).map((kind, index) => (
         <Button
           key={kind}

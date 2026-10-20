@@ -6,7 +6,6 @@ import { notifyError } from './chat/Notifications'
 import { errorText } from './workspace/TaskPane'
 import type { RamuBridge } from '@ramu/shared/api'
 import { invoke } from './ipc'
-import { SAVE_DRAFT_EVENT, SAVED_DRAFTS_EVENT } from './composer/savedDraftEvents'
 import { withGitBusy } from './git/gitBusy'
 import { commitAndPush } from './git/commitShortcut'
 import type { PaletteMode } from './palette/sources'
@@ -121,18 +120,6 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       ? [{ id: 'project.add', title: t('Add project…'), category: t('Project'), run: shell.addProject }]
       : []),
     {
-      id: 'composer.save-draft',
-      title: t('Save draft'),
-      category: t('Thread'),
-      run: () => window.dispatchEvent(new Event(SAVE_DRAFT_EVENT)),
-    },
-    {
-      id: 'composer.saved-drafts',
-      title: t('Saved drafts'),
-      category: t('Thread'),
-      run: () => window.dispatchEvent(new Event(SAVED_DRAFTS_EVENT)),
-    },
-    {
       id: 'task.new',
       title: t('New thread'),
       category: t('Thread'),
@@ -241,9 +228,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       title: t('Model sets and reasoning defaults'),
       category: t('Preferences'),
       run: () =>
-        window.dispatchEvent(
-          new CustomEvent('ramu:settings', { detail: { section: 'providers', target: 'Model sets' } }),
-        ),
+        window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models', target: 'Model sets' } })),
     },
     ...SETTINGS_SECTIONS.map((section) => ({
       id: `settings.${section.id}`,

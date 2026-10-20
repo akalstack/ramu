@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useFocusEffect } from 'expo-router'
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
-import type { MessageDraftSnapshot, SavedDraftScope } from '@ramu/shared/chat/savedDrafts'
-import { useSavedMessageDrafts } from './SavedMessageDrafts'
 import { isMethodMissing } from '../runtime/goalVerify'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
 import { ThreadUsageChip } from './PlanUsage'
@@ -512,14 +510,12 @@ export function Composer({
   limited,
   onCancelEdit,
   draftKey,
-  draftScope,
   computerId,
   taskId,
   scope,
   chatId,
 }: {
   draftKey?: string
-  draftScope?: SavedDraftScope
   computerId?: string
   taskId?: string
   /** Where `@` and `/` look for files and skills: the chat's task, or `project:<id>` before a chat exists. Defaults to `taskId`. */
@@ -590,13 +586,12 @@ export function Composer({
   >(() => decodeDraft('mentions', []))
   const [caret, setCaret] = useState(0)
   const [forced, setForced] = useState<{ start: number; end: number } | undefined>()
-  const [menu, setMenu] = useState<'actions' | 'context' | 'skills' | 'settings' | 'saved-drafts' | null>(null)
+  const [menu, setMenu] = useState<'actions' | 'context' | 'skills' | 'settings' | null>(null)
   const [files, setFiles] = useState<{ repoId: string; path: string }[]>([])
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [filter, setFilter] = useState('')
   const [uploading, setUploading] = useState(false)
   const uploadPending = useRef(false)
-  const movedDraft = useRef(0)
   const origin = useRef(draftKey)
   origin.current = draftKey
   const pc = computerId ?? store.selected
@@ -604,44 +599,6 @@ export function Composer({
   attachmentOwner.current = JSON.stringify([pc, draftKey])
   // The Auto-resume choice belongs to the thread's session, so it is offered once the thread has one.
   const limitChat = chatId ? store.chats.find((entry) => entry.id === chatId) : undefined
-  const workspaceDraft = decodeDraft<MessageDraftSnapshot['workspace']>('workspace', undefined)
-  const draftSnapshot: MessageDraftSnapshot = {
-    text,
-    attachments,
-    context,
-    mentions,
-    ...(workspaceDraft
-      ? { workspace: { mode: workspaceDraft.mode, workspaceId: workspaceDraft.workspaceId, name: workspaceDraft.name } }
-      : {}),
-  }
-  const savedDrafts = useSavedMessageDrafts({
-    hostId: pc,
-    scope:
-      draftScope ??
-      (draftKey && !onCancelEdit
-        ? {
-            kind: chatId ? 'thread' : 'new',
-            id: draftKey,
-            ...(chatId ? { threadId: chatId } : {}),
-            label: store.chats.find((entry) => entry.id === chatId)?.title,
-          }
-        : undefined),
-    snapshot: draftSnapshot,
-    uploading,
-    busy,
-    isUploading: () => uploadPending.current,
-    isBusy: () => sending.current,
-    open: menu === 'saved-drafts',
-    onClose: () => setMenu(null),
-    onApply: (draft) => {
-      movedDraft.current++
-      setText(draft.text)
-      setAttachments(draft.attachments)
-      setContext(draft.context)
-      setMentions(draft.mentions)
-      setCaret(0)
-    },
-  })
   const split = useMemo(() => splitQuotes(text), [text])
   const suggest = useComposerSuggest({ computerId: pc, scope: scope ?? taskId, chatId, text: split.body, caret })
   // Takes the editable body (without quotes) and keeps the quotes in front of it in the draft.
@@ -739,7 +696,6 @@ export function Composer({
     if (uploadPending.current) return
     uploadPending.current = true
     const owner = attachmentOwner.current
-    const moveRevision = movedDraft.current
     setUploading(true)
     setMenu(null)
     try {
@@ -747,8 +703,7 @@ export function Composer({
         store,
         pc,
         (a) => {
-          if (attachmentOwner.current === owner && movedDraft.current === moveRevision)
-            setAttachments((old) => [...old, a])
+          if (attachmentOwner.current === owner) setAttachments((old) => [...old, a])
         },
         kind,
       )
@@ -1129,21 +1084,6 @@ export function Composer({
             </Row>
           </>
         ) : null}
-        {draftKey && !onCancelEdit ? (
-          <>
-            <Row accessibilityRole="button" disabled={!savedDrafts.canSave} onPress={savedDrafts.save}>
-              <T tone={savedDrafts.canSave ? 'text' : 'muted'}>{t.saveDraft}</T>
-            </Row>
-            {uploading ? (
-              <T size={font.caption} tone="muted" style={{ padding: space.m }}>
-                {t.savedDraftUploading}
-              </T>
-            ) : null}
-            <Row accessibilityRole="button" onPress={() => setMenu('saved-drafts')}>
-              <T>{t.savedDrafts}</T>
-            </Row>
-          </>
-        ) : null}
         <Row onPress={() => setMenu('settings')}>
           <T>Agent settings</T>
         </Row>
@@ -1268,7 +1208,6 @@ export function Composer({
           </>
         ) : null}
       </Sheet>
-      {savedDrafts.sheet}
     </Glass>
   )
 }

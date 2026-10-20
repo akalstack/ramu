@@ -51,6 +51,7 @@ import { outbox, useOutbox } from '../composer/outbox'
 import { useHostConnection } from '../workspace/computers'
 import { HostWaitNote, ProviderWaitNote } from '../models/ProviderWait'
 import { ComposerTray } from '../composer/ComposerTray'
+import { ComposerStack } from '../composer/ComposerStack'
 import { limitTrayView, providerWaitState } from '@ramu/shared/chat/providerWait'
 import { useAutoResume } from '../models/useAutoResume'
 import { useLimitRetry } from '../models/useLimitRetry'
@@ -83,6 +84,7 @@ import { ModelChangeDialog } from './agent/components/ModelChangeDialog'
 import { PendingQuestionsBar } from './agent/components/PendingQuestionsBar'
 import { QueuedMessages } from './agent/components/QueuedMessages'
 import { TranscriptTurn } from './agent/components/TranscriptTurn'
+import { useTranscriptArrival } from './agent/hooks/useTranscriptArrival'
 import { WorkingText } from './agent/components/WorkingText'
 import { AsidePanel } from './agent/components/AsidePanel'
 import { AgentTaskPanel } from './agent/components/AgentTaskPanel'
@@ -161,6 +163,7 @@ export const AgentView = memo(function AgentView({
   const openQuestion = (requestId: string) => setQuestionFocus({ requestId, at: Date.now() })
   const results = useMemo(() => toolResultsOf(events), [events])
   const blocks = useMemo(() => toBlocks(events), [events])
+  const claimArrival = useTranscriptArrival(eventSequences, hydrating)
   const goalNotes = useMemo(() => goalChanges(events), [events])
   const latestAssistant = blocks.findLast((block) => block.kind === 'event' && block.event.kind === 'text')
   const live = session ? LIVE.includes(session.state) : false
@@ -355,6 +358,7 @@ export const AgentView = memo(function AgentView({
       working: '.composer',
     }[kind]
     const node = root.current?.querySelector<HTMLElement>(selector)
+    node?.querySelector<HTMLButtonElement>('.composer-tray-trigger[aria-expanded="false"]')?.click()
     node?.scrollIntoView({ block: 'center', behavior: 'auto' })
   }
 
@@ -568,6 +572,7 @@ export const AgentView = memo(function AgentView({
     hasSourceSeq: !!view.sourceSeq,
     eventSequences,
     onBackground: session?.provider === 'claude-code' && live ? backgroundTool : undefined,
+    claimArrival,
     onOpenAgent: setOpenAgent,
     onStopTask: stopTask,
     onOpenQuestion: openQuestion,
@@ -757,150 +762,151 @@ export const AgentView = memo(function AgentView({
               />
             </div>
           </MessageScrollerProvider>
-          <div className="composer-dock [&_>_*]:w-full [&_>_*]:max-w-[var(--chat-column-width)] [&_>_*]:ml-auto [&_>_*]:mr-auto [&_.error]:mb-1.5 [&_.error]:text-control [&_.composer]:relative [&_.composer]:z-1 flex-none p-[0_calc(24px_+_var(--chat-scrollbar-width,_0px))_14px_24px]">
-            {error && <div className="error text-bad">{error}</div>}
-            {session?.taskId && <BackgroundTerminals taskId={session.taskId} />}
-            <ThreadActivitySummary
-              workingLabel={activityLabel ? translate(activityLabel) : undefined}
-              model={activity}
-              goalLabel={translate(goalActivityLabel(activity.goalState))}
-              onOpen={openActivity}
-            />
-            {(hostOffline ||
-              providerWait ||
-              liveGoal ||
-              queued.length > 0 ||
-              pending.length > 0 ||
-              dockQuestions.length > 0) && (
-              <ComposerTray className="chat-tray [&_.question-dock_+_*]:mt-0.5 [&_.question-dock_+_*]:pt-0.5 [&_.question-dock_+_*]:[border-top:1px_solid_var(--line)] [&_.provider-wait_+_*]:mt-0.5 [&_.provider-wait_+_*]:pt-0.5 [&_.provider-wait_+_*]:[border-top:1px_solid_var(--line)] [&_.message-queue]:gap-0 [&_.message-queue]:p-0 [&_.message-queue]:m-0 [&_.message-queue]:[border:0] [&_.message-queue]:[border-radius:0] [&_.message-queue]:bg-transparent [&_.message-queue]:max-h-[136px] [&_.goal-bar_+_.message-queue]:mt-0.5 [&_.goal-bar_+_.message-queue]:pt-0.5 [&_.goal-bar_+_.message-queue]:[border-top:1px_solid_var(--line)] flex-col">
-                {dockQuestions.length > 0 && (
-                  <QuestionDock
-                    sessionId={view.sessionId}
-                    requests={dockQuestions}
-                    states={questionStates}
-                    open={questionDockOpen}
-                    onOpenChange={setQuestionDockOpen}
-                    focus={questionFocus}
-                  />
-                )}
-                {hostOffline && <HostWaitNote name={hostName} />}
-                {providerWait && <ProviderWaitNote retry={limitRetry} autoResume={autoResume} />}
-                {liveGoal && (
-                  <GoalBar
-                    goal={liveGoal}
-                    onControl={(action) => {
-                      void act(() => invoke('agent.goal.control', view.sessionId, action))
-                    }}
-                    onVerify={(command) => {
-                      void act(() => invoke('agent.goal.verify', view.sessionId, command))
-                    }}
-                  />
-                )}
-                {(queued.length > 0 || pending.length > 0) && (
-                  <QueuedMessages
-                    sessionId={view.sessionId}
-                    queued={queued}
-                    pending={pending}
-                    paused={queuePaused}
-                    hostName={hostName}
-                    hostOffline={hostOffline}
-                    busyAgent={busyAgent}
-                    supportsSteering={supportsSteering}
-                    configuring={configuring}
-                    act={act}
-                    onRecall={recallIntoComposer}
-                  />
-                )}
-              </ComposerTray>
-            )}
-            <Composer
-              persistentDraft
-              attachments={attachments}
-              onAttachmentsChange={setAttachments}
-              stop={{
-                active: live && busyAgent,
-                onStop: () => {
-                  setInterrupted(true)
-                  void act(() => invoke('agent.interrupt', view.sessionId))
-                },
-              }}
-              resume={{
-                ...limitResume(limitView),
-                active: !busyAgent && !!session && (stopped || limitResume(limitView).active),
-                onResume: () => {
-                  if (limitResume(limitView).active) {
-                    stick.current = true
-                    limitRetry.tryNow()
-                    return
-                  }
-                  setInterrupted(false)
-                  stick.current = true
-                  void act(() => invoke('agent.submit', view.sessionId, RESUME_PROMPT, 'steer', [], []))
-                },
-              }}
-              value={draft}
-              allowEmpty={attached.length > 0}
-              chips={
-                <>
-                  {session && (
-                    <ProviderRouteChip
+          <div className="composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(24px_+_var(--chat-scrollbar-width,_0px))_14px_24px]">
+            <ComposerStack>
+              {error && <div className="error text-bad">{error}</div>}
+              {session?.taskId && <BackgroundTerminals taskId={session.taskId} />}
+              <ThreadActivitySummary
+                workingLabel={activityLabel ? translate(activityLabel) : undefined}
+                model={activity}
+                goalLabel={translate(goalActivityLabel(activity.goalState))}
+                onOpen={openActivity}
+              />
+              {(hostOffline ||
+                providerWait ||
+                liveGoal ||
+                queued.length > 0 ||
+                pending.length > 0 ||
+                dockQuestions.length > 0) && (
+                <ComposerTray className="chat-tray">
+                  {dockQuestions.length > 0 && (
+                    <QuestionDock
                       sessionId={view.sessionId}
-                      settings={pendingSettings ?? session.settings}
-                      limited={!!providerWait}
-                      autoResume={autoResume}
-                      onSession={setSession}
+                      requests={dockQuestions}
+                      states={questionStates}
+                      open={questionDockOpen}
+                      onOpenChange={setQuestionDockOpen}
+                      focus={questionFocus}
                     />
                   )}
-                  {attached.length > 0 && (
-                    <CommentsChip
-                      groups={attached}
-                      onRemove={() =>
-                        void act(async () => {
-                          for (const group of attached)
-                            await invoke('reviews.select', group.review.id, group.ids, false)
-                        })
-                      }
+                  {hostOffline && <HostWaitNote name={hostName} />}
+                  {providerWait && <ProviderWaitNote retry={limitRetry} autoResume={autoResume} />}
+                  {liveGoal && (
+                    <GoalBar
+                      goal={liveGoal}
+                      onControl={(action) => {
+                        void act(() => invoke('agent.goal.control', view.sessionId, action))
+                      }}
+                      onVerify={(command) => {
+                        void act(() => invoke('agent.goal.verify', view.sessionId, command))
+                      }}
                     />
                   )}
-                </>
-              }
-              disabled={configuring || !session}
-              controls={
-                session && (
+                  {(queued.length > 0 || pending.length > 0) && (
+                    <QueuedMessages
+                      sessionId={view.sessionId}
+                      queued={queued}
+                      pending={pending}
+                      paused={queuePaused}
+                      hostName={hostName}
+                      hostOffline={hostOffline}
+                      busyAgent={busyAgent}
+                      supportsSteering={supportsSteering}
+                      configuring={configuring}
+                      act={act}
+                      onRecall={recallIntoComposer}
+                    />
+                  )}
+                </ComposerTray>
+              )}
+              <Composer
+                attachments={attachments}
+                onAttachmentsChange={setAttachments}
+                stop={{
+                  active: live && busyAgent,
+                  onStop: () => {
+                    setInterrupted(true)
+                    void act(() => invoke('agent.interrupt', view.sessionId))
+                  },
+                }}
+                resume={{
+                  ...limitResume(limitView),
+                  active: !busyAgent && !!session && (stopped || limitResume(limitView).active),
+                  onResume: () => {
+                    if (limitResume(limitView).active) {
+                      stick.current = true
+                      limitRetry.tryNow()
+                      return
+                    }
+                    setInterrupted(false)
+                    stick.current = true
+                    void act(() => invoke('agent.submit', view.sessionId, RESUME_PROMPT, 'steer', [], []))
+                  },
+                }}
+                value={draft}
+                allowEmpty={attached.length > 0}
+                chips={
                   <>
-                    <AgentControls
-                      settings={pendingSettings ?? session.settings}
-                      current={session.settings}
-                      onChange={changeSettings}
-                      disabled={false}
-                      running={working}
-                      trailing={<ContextMeter sessionId={view.sessionId} />}
-                    />
+                    {session && (
+                      <ProviderRouteChip
+                        sessionId={view.sessionId}
+                        settings={pendingSettings ?? session.settings}
+                        limited={!!providerWait}
+                        autoResume={autoResume}
+                        onSession={setSession}
+                      />
+                    )}
+                    {attached.length > 0 && (
+                      <CommentsChip
+                        groups={attached}
+                        onRemove={() =>
+                          void act(async () => {
+                            for (const group of attached)
+                              await invoke('reviews.select', group.review.id, group.ids, false)
+                          })
+                        }
+                      />
+                    )}
                   </>
-                )
-              }
-              onChange={setDraft}
-              onArrowUpEmpty={editing ? undefined : editLast}
-              chat
-              onSubmit={(context) => send(action, context)}
-              onAlternateSubmit={
-                busyAgent && supportsSteering && !hostOffline ? (context) => send(opposite, context) : undefined
-              }
-              alternateDisabled={configuring || !session}
-              alternateLabel={opposite === 'queue' ? 'Queue' : 'Steer'}
-              placeholder={
-                hostOffline
-                  ? translate('Message · sends when {0} is back', { 0: hostName })
-                  : limitView
-                    ? limitPlaceholder(limitView, autoResume.effective.value)
-                    : live || busyAgent
-                      ? translate('Reply to the agent')
-                      : translate('Message the agent')
-              }
-              submitLabel={
-                hostOffline || limitView ? 'Queue' : busyAgent ? (action === 'queue' ? 'Queue' : 'Steer') : 'Send'
-              }
-            />
+                }
+                disabled={configuring || !session}
+                controls={
+                  session && (
+                    <>
+                      <AgentControls
+                        settings={pendingSettings ?? session.settings}
+                        current={session.settings}
+                        onChange={changeSettings}
+                        disabled={false}
+                        running={working}
+                        trailing={<ContextMeter sessionId={view.sessionId} />}
+                      />
+                    </>
+                  )
+                }
+                onChange={setDraft}
+                onArrowUpEmpty={editing ? undefined : editLast}
+                chat
+                onSubmit={(context) => send(action, context)}
+                onAlternateSubmit={
+                  busyAgent && supportsSteering && !hostOffline ? (context) => send(opposite, context) : undefined
+                }
+                alternateDisabled={configuring || !session}
+                alternateLabel={opposite === 'queue' ? 'Queue' : 'Steer'}
+                placeholder={
+                  hostOffline
+                    ? translate('Message · sends when {0} is back', { 0: hostName })
+                    : limitView
+                      ? limitPlaceholder(limitView, autoResume.effective.value)
+                      : live || busyAgent
+                        ? translate('Reply to the agent')
+                        : translate('Message the agent')
+                }
+                submitLabel={
+                  hostOffline || limitView ? 'Queue' : busyAgent ? (action === 'queue' ? 'Queue' : 'Steer') : 'Send'
+                }
+              />
+            </ComposerStack>
           </div>
         </div>
         <div

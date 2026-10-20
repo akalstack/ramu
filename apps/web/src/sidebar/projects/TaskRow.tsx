@@ -1,3 +1,4 @@
+import { animateThreadListChange } from '../../workspace/threadListMotion'
 import { useComputers } from '../../workspace/computers'
 import { useHost } from '../../workspace/HostProvider'
 import { useHostSelection } from '../../workspace/HostSelection'
@@ -98,8 +99,10 @@ export function TaskRow({
   const run = async (fn: () => Promise<unknown>) => {
     setError(null)
     try {
-      await fn()
-      await refresh()
+      await animateThreadListChange(async () => {
+        await fn()
+        await refresh()
+      })
     } catch (e) {
       setError(errorText(e))
     }
@@ -239,6 +242,7 @@ export function TaskRow({
           delay={400}
           closeDelay={120}
           render={<div />}
+          data-thread-motion-row=""
           onContextMenu={
             unavailable
               ? undefined

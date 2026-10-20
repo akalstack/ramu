@@ -4,6 +4,24 @@ import { claudeMcpServers, claudeMcpEnvironment } from '../providers/claudeMcp'
 import { providerAdapter } from '../providers/adapters'
 import { providerEnvironment } from '../providers/providerBinaries'
 import { baseMode } from './settings'
+import { sharedSessionServers } from './projectSetup'
+
+/** Servers shared through Agent setup that this Claude account does not already load from its own configuration. */
+function claudeSharedServers(
+  s: { cwd: string; additionalDirs: string[]; covers: string[] },
+  configDirs: string[] = [],
+  env: NodeJS.ProcessEnv,
+): NonNullable<Options['mcpServers']> {
+  const dirs = [...new Set([s.cwd, ...s.additionalDirs, ...s.covers, ...configDirs])]
+  return Object.fromEntries(
+    sharedSessionServers(dirs, 'claude-code', env).map((server) => [
+      server.name,
+      server.transport.type === 'http'
+        ? { type: 'http' as const, url: server.transport.url, headers: server.headers }
+        : { command: server.transport.command, args: server.transport.args, env: server.env },
+    ]),
+  )
+}
 
 /** What building a chat's Claude options needs from the service. */
 export interface ClaudeLaunch {
@@ -49,6 +67,7 @@ export function claudeLaunchOptions({
       ? {
           mcpServers: {
             ...(claudeMcpServers(s, connection.mcpConfigDirs, env) as NonNullable<Options['mcpServers']>),
+            ...claudeSharedServers(s, connection.mcpConfigDirs, env),
             ramu: {
               type: 'http' as const,
               url: connection.url,
@@ -69,6 +88,8 @@ export function claudeLaunchOptions({
     permissionMode: baseMode(s.settings),
     // A review chat about learned memories has no built-in file, shell or Git tools, only Ramu's own.
     ...(connection?.restricted ? { tools: [] } : {}),
+    // Ramu's ask_user serves every question, so the model has no second tool to pick for the same job.
+    ...(connection?.replaceQuestions ? { disallowedTools: ['AskUserQuestion'] } : {}),
     ...(s.settings.access === 'full' ? { allowDangerouslySkipPermissions: true } : {}),
     ...(s.settings.model ? { model: s.settings.model } : {}),
     ...(s.settings.effort ? { effort: s.settings.effort as Options['effort'] } : {}),

@@ -339,11 +339,14 @@ export class UserRequests {
         throw new Error('These questions are related. Send all their answers together.')
       const combined: Record<string, string> = Object.assign(Object.create(null), status.answers, submitted)
       const done = status.request.questions.every((q) => combined[questionKey(q)])
-      const waiting = !!this.questionWaiters.get(`${id}:${requestId}`)?.size
+      const working = WRITING_STATES.includes(this.host.get(id).state)
+      const waiting = working && !!this.questionWaiters.get(`${id}:${requestId}`)?.size
+      // A finished turn can leave a tool waiter behind; resolving it cannot resume the agent.
+      const deliverMessage = !waiting && (status.request.responseMode === 'message' || !working)
       // Persist delivery before closing the question. Unsent answers use the normal durable queue.
       this.db.exec('SAVEPOINT question_answer')
       try {
-        if (status.request.responseMode === 'message' && !waiting) {
+        if (deliverMessage) {
           const text = answerMessage(
             requestId,
             available
@@ -366,7 +369,7 @@ export class UserRequests {
         this.db.exec('ROLLBACK TO question_answer; RELEASE question_answer')
         throw error
       }
-      if (status.request.responseMode === 'message' && !waiting) {
+      if (deliverMessage) {
         this.host.workspaceQueue.add(id)
         queueMicrotask(() => {
           void this.host.dispatchSteering(id)

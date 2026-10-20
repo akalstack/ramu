@@ -4,6 +4,7 @@ import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import type { AgentProvider } from '@ramu/shared/types'
 import type { ProviderConfiguration } from '@ramu/shared/providers/providers'
 import { supportsProviderAccounts } from '@ramu/shared/providers/providers'
+import { scopedEnvironment, type ProviderEnvironmentValues } from '@ramu/shared/providers/environment'
 import { antigravityFileNames, managedAntigravityAt } from './adapters/antigravity'
 import { providerAdapter } from './adapters'
 
@@ -43,6 +44,11 @@ export function providerAccountHome(provider: AgentProvider, id: string): string
 }
 export function configureProviderBinaries(value: ProviderConfiguration) {
   configuration = value
+}
+let customEnvironment: ProviderEnvironmentValues = {}
+/** Variables from Settings → Environment variables, loaded from the host credential store. */
+export function configureProviderEnvironment(value: ProviderEnvironmentValues) {
+  customEnvironment = value
 }
 const expand = (path: string) => (path.startsWith('~/') ? join(homedir(), path.slice(2)) : path)
 export function findExecutable(command: string): string | null {
@@ -90,15 +96,20 @@ export function providerEnvironment(
   accountId = overrides[provider]?.accountId || 'default',
 ): NodeJS.ProcessEnv {
   const env = { ...process.env }
+  let accountEnv: Record<string, string> = {}
   if (accountId !== 'default') {
     if (!overrides[provider]?.accounts?.some((account) => account.id === accountId))
       throw new Error('The selected provider account no longer exists')
     const root = providerAccountHome(provider, accountId)
     // Credentials remain in the CLI's own store; Ramu stores only profile names/IDs.
     prepareProviderAccount(provider, root)
-    Object.assign(env, providerAccountEnv(provider, root))
+    accountEnv = providerAccountEnv(provider, root)
+    Object.assign(env, accountEnv)
     for (const key of providerAccountClearedEnv(provider)) delete env[key]
   }
+  // Variables set in Ramu win over the inherited shell; an account's own config folders still win over them.
+  for (const [key, value] of Object.entries(scopedEnvironment(customEnvironment, provider)))
+    if (!(key in accountEnv)) env[key] = value
   return (
     providerAdapter(provider).extendEnvironment?.(env, {
       overrides,

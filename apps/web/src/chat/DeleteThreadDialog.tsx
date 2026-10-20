@@ -1,3 +1,4 @@
+import { animateThreadListChange } from '../workspace/threadListMotion'
 import { useEffect, useRef, useState } from 'react'
 import type { BackgroundTerminalInfo } from '@ramu/shared/api'
 import type { Task } from '@ramu/shared/types'
@@ -81,23 +82,25 @@ export function DeleteThreadDialog({
       busy={busy}
       error={error}
       onCancel={onCancel}
-      onConfirm={async () => {
-        const approvedScope = scope
-        setBusy(true)
-        setError(null)
-        try {
-          if (commands.length) await host.invoke('tasks.delete', task.id, removeFiles, removalReview(commands))
-          else await host.invoke('tasks.delete', task.id, removeFiles)
-          if (latest.current === approvedScope) await onDeleted()
-        } catch (reason) {
-          if (latest.current !== approvedScope) return
-          setError(t(removalError(reason)))
-          // Refresh the visible commands, but deletion always needs another explicit click.
-          setAttempt((value) => value + 1)
-        } finally {
-          if (latest.current === approvedScope) setBusy(false)
-        }
-      }}
+      onConfirm={() =>
+        animateThreadListChange(async () => {
+          const approvedScope = scope
+          setBusy(true)
+          setError(null)
+          try {
+            if (commands.length) await host.invoke('tasks.delete', task.id, removeFiles, removalReview(commands))
+            else await host.invoke('tasks.delete', task.id, removeFiles)
+            if (latest.current === approvedScope) await onDeleted()
+          } catch (reason) {
+            if (latest.current !== approvedScope) return
+            setError(t(removalError(reason)))
+            // Refresh the visible commands, but deletion always needs another explicit click.
+            setAttempt((value) => value + 1)
+          } finally {
+            if (latest.current === approvedScope) setBusy(false)
+          }
+        })
+      }
     >
       <p>{t('This removes the thread and its agent transcripts. Its running agents are stopped.')}</p>
       <p className="text-caption text-muted-foreground">{t('Host: {0}', { 0: hostName ?? host.id })}</p>

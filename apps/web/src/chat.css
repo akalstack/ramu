@@ -1,4 +1,160 @@
 /* Chat surfaces retain the original reading layout and quiet controls. */
+.composer-stack {
+  --composer-tray-inset: clamp(12px, 3%, 20px);
+  --composer-tray-overlap: 12px;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+  width: 100%;
+  max-width: var(--chat-column-width);
+  min-width: 0;
+  margin-inline: auto;
+}
+.composer-stack > .composer {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+.composer-tray {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: calc(100% - 2 * var(--composer-tray-inset));
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0 auto calc(-1 * var(--composer-tray-overlap));
+  padding: 4px 8px calc(4px + var(--composer-tray-overlap));
+  border-radius: var(--radius-l) var(--radius-l) 0 0;
+  background: var(--composer-tray);
+}
+.composer-tray.start-chips {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 2px;
+}
+.start-chips > .start-context {
+  min-height: 32px;
+}
+.chat-tray > * + * {
+  border-top: 1px solid var(--line);
+}
+.composer-tray-section {
+  min-width: 0;
+  font-size: var(--font-control);
+}
+.composer-tray-header {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  gap: 4px;
+}
+.composer-tray-trigger {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  text-align: left;
+  font-size: inherit;
+  font-weight: 400;
+}
+.composer-tray-trigger > svg {
+  flex: none;
+  width: var(--icon-compact);
+  height: var(--icon-compact);
+  color: var(--muted);
+}
+.composer-tray-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-tray-chevron {
+  transition: transform 160ms var(--ease);
+}
+.composer-tray-trigger[data-panel-open] > .composer-tray-chevron {
+  transform: rotate(180deg);
+}
+.composer-tray-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding-right: 4px;
+}
+.composer-tray-panel {
+  height: var(--collapsible-panel-height);
+  overflow: hidden;
+  transition:
+    height 160ms var(--ease),
+    opacity 160ms var(--ease);
+}
+.composer-tray-panel:is([data-starting-style], [data-ending-style]) {
+  height: 0;
+  opacity: 0;
+}
+.composer-tray-details {
+  min-width: 0;
+  padding: 0 8px 8px;
+}
+.composer-tray .provider-wait {
+  min-height: 36px;
+  padding-inline: 8px;
+}
+.composer-stack-activity {
+  width: calc(100% - 2 * var(--composer-tray-inset));
+  box-sizing: border-box;
+  margin-inline: auto;
+}
+.message-queue-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 136px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.question-dock.blocking .composer-tray-trigger > svg:first-child {
+  color: var(--warn);
+}
+.composer-tray .goal-details,
+.composer-tray .goal-verify-editor {
+  padding: 0;
+}
+.composer-tray .goal-verify-editor {
+  margin-bottom: 8px;
+}
+
+.transcript-arrival {
+  animation: arrive 180ms var(--ease);
+}
+.stream-word {
+  animation: stream-in 180ms var(--ease) both;
+}
+
+/* Automatic following must not flash the native thumb between streamed updates.
+   Keep its gutter stable, and reveal it consistently when the reader interacts. */
+.transcript [data-slot='message-scroller-viewport'] {
+  scrollbar-color: transparent transparent;
+}
+.transcript [data-slot='message-scroller-viewport']::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+.transcript [data-slot='message-scroller-viewport']:is(:hover, :focus-visible) {
+  scrollbar-color: color-mix(in srgb, var(--text) 28%, transparent) transparent;
+}
+.transcript [data-slot='message-scroller-viewport']:is(:hover, :focus-visible)::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--text) 28%, transparent);
+}
+
 .composer {
   position: relative;
   background: var(--raised);
@@ -14,7 +170,7 @@
   gap: 12px;
   max-height: min(52vh, 460px);
   overflow: hidden;
-  padding: 8px 16px 12px;
+  padding: 4px 0 0;
   outline: none;
 }
 /* The options scroll; the header and the answer buttons stay in view. */
@@ -47,6 +203,9 @@
   font-weight: 600;
   line-height: 1.55;
   overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 .question-dock-card .option {
   position: relative;
@@ -64,12 +223,12 @@
 }
 .question-dock-card .option:hover,
 .question-dock-card .option.selected {
-  background: var(--hover);
+  background: var(--fill-hover);
 }
 .question-dock-card .option.selected {
-  border-color: var(--line-strong);
+  background: var(--fill-hover);
 }
-.question-dock-card .option:focus-within {
+.question-dock-card .option:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -82,10 +241,23 @@
   border-color: var(--text);
   color: var(--text);
 }
-.question-dock-card .question-answer {
-  height: 36px;
+.question-dock-card textarea.question-answer {
+  border: 0;
+  background: var(--fill);
+  padding: 8px 12px;
+  line-height: 1.5;
+  field-sizing: content;
+  min-height: 36px;
+  max-height: 160px;
+  resize: none;
   border-radius: var(--radius-s);
   font-size: var(--font-chat);
+}
+/* The answer field keeps a quiet neutral edge instead of the primitive's ring, whether clicked or tabbed to. */
+.question-dock-card textarea.question-answer:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: var(--fill-hover);
 }
 .question-dock-card fieldset:disabled .option {
   cursor: default;

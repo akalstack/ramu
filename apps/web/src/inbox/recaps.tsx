@@ -1,3 +1,4 @@
+import { animateThreadListChange } from '../workspace/threadListMotion'
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown, FolderClosed } from 'lucide-react'
@@ -106,13 +107,15 @@ export function useRecaps() {
   const recent = open.filter((i) => i.group === 'recent')
   const act = async (id: string, action: RecapAction, until?: number) => {
     try {
-      await (until === undefined ? invoke('recaps.act', id, action) : invoke('recaps.act', id, action, until))
-      await client.invalidateQueries({ queryKey: key })
+      await animateThreadListChange(async () => {
+        await (until === undefined ? invoke('recaps.act', id, action) : invoke('recaps.act', id, action, until))
+        await client.invalidateQueries({ queryKey: key })
+      })
       notifyRecapAction(action, () => {
-        invoke('recaps.act', id, 'open').then(
-          () => client.invalidateQueries({ queryKey: key }),
-          (e) => notifyError(errorText(e), 'Recaps'),
-        )
+        void animateThreadListChange(async () => {
+          await invoke('recaps.act', id, 'open')
+          await client.invalidateQueries({ queryKey: key })
+        }).catch((e) => notifyError(errorText(e), 'Recaps'))
       })
     } catch (e) {
       notifyError(errorText(e), 'Recaps')
@@ -147,7 +150,7 @@ export function RecapCard({
   const ws = useWorkspace()
   const project = ws.projects.find((p) => p.id === ws.tasks.find((task) => task.id === item.taskId)?.projectId)
   return (
-    <article className="recap-card flex flex-col gap-1.5 rounded-(--radius-m) bg-card p-4">
+    <article data-thread-motion-row="" className="recap-card flex flex-col gap-1.5 rounded-(--radius-m) bg-card p-4">
       {project && (
         <span className="muted text-muted-foreground small text-caption flex items-center gap-1">
           <FolderClosed size={12} />

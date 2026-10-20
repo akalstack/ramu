@@ -27,6 +27,7 @@ import {
 import { AgentControls } from './chat/AgentControls'
 import { Composer } from './composer/Composer'
 import { ComposerTray } from './composer/ComposerTray'
+import { ComposerStack } from './composer/ComposerStack'
 import { ramu } from './ipc'
 import { ownHostId } from './hosts'
 import { Combobox, Menu } from './Menu'
@@ -504,10 +505,7 @@ export function NewTask({
         )}
       </div>
       <div className="start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
-        {(agentDraft.defaults?.requested ||
-          agentDraft.blocked ||
-          agentDraft.unsupported ||
-          agentDraft.problem) && (
+        {(agentDraft.defaults?.requested || agentDraft.blocked || agentDraft.unsupported || agentDraft.problem) && (
           <div className="flex flex-wrap items-center gap-2 px-2 text-caption text-muted-foreground" role="status">
             <span>{modelNotice}</span>
             {agentDraft.defaults?.requested && (
@@ -602,150 +600,151 @@ export function NewTask({
             )}
           </NewWorktreeSummary>
         )}
-        <ComposerTray className="start-chips items-start gap-0.5 px-1.5">
-          <div className="start-context flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
-            {computerItems.length > 1 && (
-              <Menu
-                label={t('Host')}
-                className={CHIP}
-                icon={
-                  <>
-                    {currentComputer?.local ? <Monitor size={13} /> : <Network size={13} />}{' '}
-                    <span className="chip-label">{currentComputer?.name}</span>
-                  </>
-                }
-                items={computerItems}
+        <ComposerStack>
+          <ComposerTray className="start-chips">
+            <div className="start-context flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
+              {computerItems.length > 1 && (
+                <Menu
+                  label={t('Host')}
+                  className={CHIP}
+                  icon={
+                    <>
+                      {currentComputer?.local ? <Monitor size={13} /> : <Network size={13} />}{' '}
+                      <span className="chip-label">{currentComputer?.name}</span>
+                    </>
+                  }
+                  items={computerItems}
+                />
+              )}
+              <Combobox
+                label={t('Project')}
+                searchPlaceholder={t('Search projects…')}
+                value={project?.id ?? NO_PROJECT}
+                icon={<FolderClosed size={13} />}
+                bare
+                className={`${CHIP} max-w-[220px]`}
+                options={projectOptions}
+                onChange={onProjectChange}
               />
-            )}
-            <Combobox
-              label={t('Project')}
-              searchPlaceholder={t('Search projects…')}
-              value={project?.id ?? NO_PROJECT}
-              icon={<FolderClosed size={13} />}
-              bare
-              className={`${CHIP} max-w-[220px]`}
-              options={projectOptions}
-              onChange={onProjectChange}
-            />
-            {!general && (
-              <Menu
-                label={t('Where the work happens')}
-                className={CHIP}
-                icon={
-                  <>
-                    <current.Icon size={13} />{' '}
-                    <span className="chip-label">{existingWorkspace ? current.label : t(current.label)}</span>
-                  </>
-                }
-                items={[
-                  {
-                    key: 'default',
-                    label: t('Use default'),
-                    onSelect: () => {
-                      workspaceDraft.choose({ mode: null, branch: workspaceDraft.choice.branch })
+              {!general && (
+                <Menu
+                  label={t('Where the work happens')}
+                  className={CHIP}
+                  icon={
+                    <>
+                      <current.Icon size={13} />{' '}
+                      <span className="chip-label">{existingWorkspace ? current.label : t(current.label)}</span>
+                    </>
+                  }
+                  items={[
+                    {
+                      key: 'default',
+                      label: t('Use default'),
+                      onSelect: () => {
+                        workspaceDraft.choose({ mode: null, branch: workspaceDraft.choice.branch })
+                      },
                     },
-                  },
-                  ...MODES.map((m) => ({
-                    key: m.id,
-                    disabled: m.id === 'worktree' && Boolean(options.data?.worktreeUnavailable),
-                    label: (
-                      <>
-                        <m.Icon size={14} />
-                        <span>
-                          {t(m.label)}
-                          <span className="muted text-muted-foreground block block">{t(m.hint)}</span>
-                        </span>
-                      </>
-                    ),
-                    onSelect: () => {
-                      workspaceDraft.choose({ mode: m.id, branch: workspaceDraft.choice.branch })
-                    },
-                  })),
-                  ...ws.workspaces
-                    .filter((w) => w.projectId === projectId)
-                    .map((w) => ({
-                      key: w.id,
+                    ...MODES.map((m) => ({
+                      key: m.id,
+                      disabled: m.id === 'worktree' && Boolean(options.data?.worktreeUnavailable),
                       label: (
                         <>
-                          <GitBranch size={14} />
-                          <span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis">
-                            {w.name}
-                            <span className="muted text-muted-foreground block block">
-                              {t('Existing isolated worktree')}
-                            </span>
+                          <m.Icon size={14} />
+                          <span>
+                            {t(m.label)}
+                            <span className="muted text-muted-foreground block block">{t(m.hint)}</span>
                           </span>
                         </>
                       ),
                       onSelect: () => {
-                        workspaceDraft.choose({ mode: 'worktree', workspaceId: w.id, name: w.name })
+                        workspaceDraft.choose({ mode: m.id, branch: workspaceDraft.choice.branch })
                       },
                     })),
-                  ...(existingWorkspace
-                    ? [
-                        {
-                          key: 'rename-workspace',
-                          label: t('Rename workspace…'),
-                          disabled: busy || host.status !== 'connected',
-                          onSelect: () =>
-                            setRenamingWorkspace({
-                              host: host.id,
-                              project: projectId,
-                              openedOn: activeHost,
-                              workspace: existingWorkspace,
-                            }),
+                    ...ws.workspaces
+                      .filter((w) => w.projectId === projectId)
+                      .map((w) => ({
+                        key: w.id,
+                        label: (
+                          <>
+                            <GitBranch size={14} />
+                            <span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis">
+                              {w.name}
+                              <span className="muted text-muted-foreground block block">
+                                {t('Existing isolated worktree')}
+                              </span>
+                            </span>
+                          </>
+                        ),
+                        onSelect: () => {
+                          workspaceDraft.choose({ mode: 'worktree', workspaceId: w.id, name: w.name })
                         },
-                      ]
-                    : []),
-                ]}
-              />
-            )}
-            {!general && issues.length > 0 && (
-              <Combobox
-                label={t('Start from an issue')}
-                searchPlaceholder={t('Search issues…')}
-                value={issue ? issueValue(issue) : ''}
-                icon={<CircleDot size={13} />}
-                className="h-7 min-h-7 p-[0_10px] rounded-full bg-transparent text-soft text-control max-w-[260px]"
-                title={issue?.title}
-                disabled={busy}
-                options={[
-                  { value: '', label: t('No issue') },
-                  ...issues.map((entry) => ({
-                    value: issueValue(entry),
-                    label: `${repos.length > 1 ? `${entry.repoName} ` : ''}#${entry.number} ${entry.title}`,
-                  })),
-                ]}
-                onChange={(value) => void pickIssue(value)}
-              />
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center tray-settings"
-            aria-label={t('Thread settings')}
-            title={t('Thread settings')}
-            onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git' } }))}
-          >
-            <Settings size={14} />
-          </Button>
-        </ComposerTray>
-        <Composer
-          persistentDraft
-          scopeId={workspaceId ? `worktree:${workspaceId}` : `project:${projectId}`}
-          attachments={attachments}
-          onAttachmentsChange={setAttachments}
-          autoFocus
-          controls={<AgentControls settings={settings} onChange={agentDraft.change} disabled={busy} />}
-          value={prompt}
-          onChange={(v) => {
-            setPrompt(v)
-          }}
-          onSubmit={send}
-          disabled={busy || (!general && !repos.length)}
-          placeholder={general || repos.length ? t('Message the agent') : t('Add a repository to this project first')}
-          submitLabel={t('Start thread')}
-        />
+                      })),
+                    ...(existingWorkspace
+                      ? [
+                          {
+                            key: 'rename-workspace',
+                            label: t('Rename workspace…'),
+                            disabled: busy || host.status !== 'connected',
+                            onSelect: () =>
+                              setRenamingWorkspace({
+                                host: host.id,
+                                project: projectId,
+                                openedOn: activeHost,
+                                workspace: existingWorkspace,
+                              }),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              )}
+              {!general && issues.length > 0 && (
+                <Combobox
+                  label={t('Start from an issue')}
+                  searchPlaceholder={t('Search issues…')}
+                  value={issue ? issueValue(issue) : ''}
+                  icon={<CircleDot size={13} />}
+                  className="h-7 min-h-7 p-[0_10px] rounded-full bg-transparent text-soft text-control max-w-[260px]"
+                  title={issue?.title}
+                  disabled={busy}
+                  options={[
+                    { value: '', label: t('No issue') },
+                    ...issues.map((entry) => ({
+                      value: issueValue(entry),
+                      label: `${repos.length > 1 ? `${entry.repoName} ` : ''}#${entry.number} ${entry.title}`,
+                    })),
+                  ]}
+                  onChange={(value) => void pickIssue(value)}
+                />
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center tray-settings"
+              aria-label={t('Thread settings')}
+              title={t('Thread settings')}
+              onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git' } }))}
+            >
+              <Settings size={14} />
+            </Button>
+          </ComposerTray>
+          <Composer
+            scopeId={workspaceId ? `worktree:${workspaceId}` : `project:${projectId}`}
+            attachments={attachments}
+            onAttachmentsChange={setAttachments}
+            autoFocus
+            controls={<AgentControls settings={settings} onChange={agentDraft.change} disabled={busy} />}
+            value={prompt}
+            onChange={(v) => {
+              setPrompt(v)
+            }}
+            onSubmit={send}
+            disabled={busy || (!general && !repos.length)}
+            placeholder={general || repos.length ? t('Message the agent') : t('Add a repository to this project first')}
+            submitLabel={t('Start thread')}
+          />
+        </ComposerStack>
         {error && <div className="error text-bad start-error p-[6px_8px_0] text-control">{error}</div>}
         {renamingWorkspace?.host === host.id &&
           renamingWorkspace.project === projectId &&

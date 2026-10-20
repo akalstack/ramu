@@ -3493,6 +3493,27 @@ describe('questions while work continues', () => {
     svc.stopAll()
   })
 
+  it.each(['message', 'ramu'] as const)(
+    'resumes a completed turn with a stale %s question waiter',
+    async (responseMode) => {
+      const { svc, start, outputs, starts, steers } = fixture(),
+        chat = start()
+      const asked = svc.askQuestion(chat.id, { questions, blocking: responseMode === 'ramu' })
+      const request = svc.events(chat.id).findLast((event) => event.kind === 'question')!
+      const requestId = request.requestId
+      const waiting = responseMode === 'ramu' ? asked : svc.waitForAnswer(chat.id, (await asked).request.requestId)
+      outputs.get('1')!({ kind: 'result', isError: false, text: 'Waiting for your answer', costUsd: null })
+      expect(svc.get(chat.id).state).toBe('idle')
+      svc.replyQuestion(chat.id, requestId, { db: 'SQLite', region: 'Jakarta' })
+      expect(await waiting).toMatchObject({ outcome: 'answered' })
+      await until(() => starts.length === 2)
+      expect(starts[1]?.prompt).toContain('SQLite')
+      expect(steers).toHaveLength(0)
+      expect(svc.queued(chat.id)).toHaveLength(0)
+      svc.stopAll()
+    },
+  )
+
   it('delivers late answers after the thread failed or was stopped', async () => {
     const failed = fixture(),
       failedChat = failed.start()

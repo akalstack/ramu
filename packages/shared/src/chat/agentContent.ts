@@ -58,6 +58,8 @@ export function agentContent(value: unknown): AgentContent[] {
         },
       ]
     }
+    // Tool search answers with references to the tools it loaded.
+    if (b.type === 'tool_reference' && typeof b.tool_name === 'string') return [{ type: 'text', text: b.tool_name }]
     return [{ type: 'unsupported', label: `Unsupported content: ${str(b.type) ?? 'unknown'}` }]
   })
 }

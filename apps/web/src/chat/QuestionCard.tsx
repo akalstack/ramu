@@ -3,9 +3,10 @@ import { t, useLanguage } from '../i18n'
 import { Kbd } from '@/components/ui/kbd'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ShieldQuestion } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ShieldQuestion } from 'lucide-react'
+import { ComposerTraySection } from '../composer/ComposerTraySection'
 import { Button } from '@/components/desktop-button'
-import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { questionKey, questionAnswer, type QuestionRequest, type QuestionState } from '@ramu/shared/chat/questions'
 import { useHost } from '../workspace/HostProvider'
 import { errorText } from '../workspace/TaskPane'
@@ -38,7 +39,7 @@ export function QuestionDock({
       setCurrentId(focus.requestId)
       onOpenChange(true)
     }
-  }, [focus])
+  }, [focus, onOpenChange])
   const index = Math.max(
     0,
     requests.findIndex((request) => request.requestId === currentId),
@@ -75,53 +76,31 @@ export function QuestionDock({
       </Button>
     </span>
   )
-  if (!open)
-    return (
-      <div
-        className={`question-dock [&.blocking_.question-dock-header_>_svg]:text-warn [&.blocking_.question-dock-bar_>_svg:first-child]:text-warn w-full min-w-0 m-0 [border:0] rounded-(--radius-m) bg-transparent overflow-hidden [animation:fade-only_120ms_var(--ease)] collapsed${blocking ? ' blocking' : ''}`}
-        role="region"
-        aria-label={t('Questions from the agent')}
-      >
-        <Button
-          variant="secondary"
-          type="button"
-          className="bg-fill hover:bg-fill-hover question-dock-bar [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&_>_svg:first-child]:flex-none [&_>_svg:first-child]:text-muted-foreground flex items-center justify-start gap-2 w-full h-10 px-4 [border:0] [border-radius:0] bg-transparent text-left text-foreground font-normal"
-          aria-expanded={false}
-          onClick={() => onOpenChange(true)}
-        >
-          <ShieldQuestion size={14} />
-          <span className="question-dock-bar-text flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-            {blocking
-              ? t('The agent is waiting for your answer')
-              : t('{0} waiting for your answer', {
-                  '0': remaining.length === 1 ? t('1 question') : t('{0} questions', { '0': remaining.length }),
-                })}
-            <span className="muted text-muted-foreground"> · {request.dependsOn || remaining[0]?.question}</span>
-          </span>
-          <ChevronUp
-            size={13}
-            className="caret [&.open]:[transform:rotate(90deg)] [:is(.tool-group,_.tool)_>_[data-slot='collapsible-trigger']:is(:hover,_:focus-visible)_&]:opacity-100 [:is(.tool-group,_.tool)[data-open]_>_[data-slot='collapsible-trigger']_>_&]:[transform:rotate(90deg)] text-muted-foreground flex-none [transition:transform_0.15s_var(--ease)]"
-          />
-        </Button>
-      </div>
-    )
   return (
-    <div
-      className={`question-dock [&.blocking_.question-dock-header_>_svg]:text-warn [&.blocking_.question-dock-bar_>_svg:first-child]:text-warn w-full min-w-0 m-0 [border:0] rounded-(--radius-m) bg-transparent overflow-hidden [animation:fade-only_120ms_var(--ease)] ${blocking ? ' blocking' : ''}`}
+    <ComposerTraySection
+      className={`question-dock${blocking ? ' blocking' : ''}`}
       role="region"
       aria-label={t('Questions from the agent')}
+      open={open}
+      onOpenChange={onOpenChange}
+      icon={<ShieldQuestion />}
+      title={
+        blocking
+          ? t('The agent is waiting for your answer')
+          : t('{0} waiting for your answer', {
+              '0': remaining.length === 1 ? t('1 question') : t('{0} questions', { '0': remaining.length }),
+            })
+      }
+      actions={pager}
     >
       <QuestionForm
         key={request.requestId}
         sessionId={sessionId}
         request={request}
         status={status}
-        blocking={blocking}
-        pager={pager}
-        focusAt={focus?.requestId === request.requestId ? focus.at : null}
-        onCollapse={() => onOpenChange(false)}
+        focusAt={open && focus?.requestId === request.requestId ? focus.at : null}
       />
-    </div>
+    </ComposerTraySection>
   )
 }
 
@@ -129,18 +108,12 @@ function QuestionForm({
   sessionId,
   request,
   status,
-  blocking,
-  pager,
   focusAt,
-  onCollapse,
 }: {
   sessionId: string
   request: QuestionRequest
   status: QuestionState
-  blocking: boolean
-  pager: React.ReactNode
   focusAt: number | null
-  onCollapse: () => void
 }) {
   useLanguage()
   const { invoke } = useHost()
@@ -231,7 +204,9 @@ function QuestionForm({
     if (together && canSendAll) void send(unanswered.map(questionKey))
   }
   const onKeyDown = (event: React.KeyboardEvent) => {
-    const typing = event.target instanceof HTMLInputElement && event.target.type === 'text'
+    const typing =
+      event.target instanceof HTMLTextAreaElement ||
+      (event.target instanceof HTMLInputElement && event.target.type === 'text')
     if (
       event.key === 'Enter' &&
       !event.shiftKey &&
@@ -258,30 +233,11 @@ function QuestionForm({
       tabIndex={-1}
       onKeyDown={onKeyDown}
     >
-      <header className="question-dock-header [&_>_svg]:flex-none [&_>_svg]:text-muted-foreground flex items-center gap-2 min-h-8 text-control text-soft">
-        <ShieldQuestion size={14} />
-        <span className="question-dock-title flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-          {blocking
-            ? t('The agent is waiting for your answer')
-            : t('The agent can keep working. You can answer later.')}
-        </span>
-        {questions.length > 1 && (
-          <span className="muted text-muted-foreground small text-caption question-dock-step flex-none tabular-nums">
-            {t('Question {0} of {1}', { '0': page + 1, '1': questions.length })}
-          </span>
-        )}
-        {pager}
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-          aria-label={t('Answer later')}
-          title={t('Answer later')}
-          onClick={onCollapse}
-        >
-          <ChevronDown size={14} />
-        </Button>
-      </header>
+      {questions.length > 1 && (
+        <div className="question-dock-step text-caption text-muted-foreground tabular-nums">
+          {t('Question {0} of {1}', { '0': page + 1, '1': questions.length })}
+        </div>
+      )}
       <div className="question-dock-body">
         {request.dependsOn && (
           <p className="small text-caption question-dock-needed m-0">
@@ -329,7 +285,8 @@ function QuestionForm({
               ))}
             </div>
           )}
-          <Input
+          <Textarea
+            rows={1}
             className="question-answer"
             aria-label={t('Answer: {0}', { '0': q.question })}
             placeholder={q.options.length ? t('Or type your own answer') : t('Type your answer')}
@@ -428,7 +385,7 @@ export function QuestionRow({
       <Button
         variant="secondary"
         type="button"
-        className="bg-fill hover:bg-fill-hover question-row [&:is(button).pending]:flex-row [&:is(button).pending]:items-center [&:is(button).pending]:gap-2 [&:is(button).pending]:w-full [&:is(button).pending]:h-auto [&:is(button).pending]:bg-raised [&:is(button).pending]:text-foreground [&:is(button).pending]:font-normal [&:is(button).pending]:text-left [&:is(button).pending]:whitespace-normal [&:is(button).pending:hover]:[border-color:var(--line-strong)] [&_.caret]:flex-none [&_.caret]:text-muted-foreground flex flex-col gap-1.5 m-[8px_0] p-[8px_12px] [border:1px_solid_transparent] rounded-(--radius-m) text-control bg-fill pending"
+        className="bg-fill hover:bg-fill-hover question-row [&:is(button).pending]:flex-row [&:is(button).pending]:items-center [&:is(button).pending]:gap-2 [&:is(button).pending]:w-full [&:is(button).pending]:h-auto [&:is(button).pending]:bg-raised [&:is(button).pending]:text-foreground [&:is(button).pending]:font-normal [&:is(button).pending]:text-left [&:is(button).pending]:whitespace-normal [&:is(button).pending:hover]:bg-fill-hover focus:outline-none focus-visible:bg-fill-hover focus:ring-0 focus:[border-color:transparent] [&_.caret]:flex-none [&_.caret]:text-muted-foreground flex flex-col gap-1.5 m-[8px_0] p-[8px_12px] [border:1px_solid_transparent] rounded-(--radius-m) text-control bg-fill pending"
         data-question-request={request.requestId}
         onClick={() => onOpen?.(request.requestId)}
       >

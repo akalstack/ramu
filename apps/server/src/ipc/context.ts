@@ -12,6 +12,7 @@ import { AppUpdateService } from '../background/appUpdates'
 import { runtimeVersion } from '../build'
 import { configureProviderAccounts, providerEnvironment } from '../providers/providerBinaries'
 import { UsageService } from '../providers/usage'
+import { ProviderEnvironmentStore } from '../providers/environmentStore'
 import { ExtraUsageReader, readAntigravityUsage, readCursorUsage } from '../providers/providerUsage'
 import { ACCOUNT_USAGE_INTERVAL_MS, AccountUsage } from '../providers/accountUsage'
 import { codexUsage } from '../providers/codex'
@@ -27,6 +28,12 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
   const hostFolders = new HostFolders(() => workspace.listProjects().flatMap((p) => (p.root ? [p.root] : [])))
   const activity = new ActivityService((items) => host.send('activity:changed', items))
   configureProviderAccounts(join(host.userData, 'provider-accounts'))
+  const environment = new ProviderEnvironmentStore(
+    (key, fallback) => workspace.getAppState(key, fallback),
+    (key, value) => workspace.setAppState(key, value),
+  )
+  // Loaded before threads resume; a locked credential store is reported in Settings and retried there.
+  void environment.load().catch(() => {})
   const storedPreferences = () => workspace.getAppState<Partial<AppPreferences>>('app-preferences', {})
   const managedSkills = (taskId: string) => learning?.catalog(workspace.projectIdOf(taskId)) ?? []
   const withContext = (ws: Workspace, taskId: string, prompt: string, context?: FileContext[]) =>
@@ -175,6 +182,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     usage,
     extraUsage,
     accountUsage,
+    environment,
     loadPreferences,
     savePreferences,
     storedPreferences,

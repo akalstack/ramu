@@ -19,7 +19,8 @@ import { useAppSettings, AppSettingsOverride } from './AppSettings'
 import { SettingsPage, type SettingsSection } from './SettingsPage'
 import { errorText } from '../workspace/TaskPane'
 import { useWorkspace } from '../workspace/workspace'
-import { AccessSettings } from './AccessSettings'
+import { AccessSettings, ProviderFallbackSettings } from './AccessSettings'
+import { EnvironmentSettings, useProviderEnvironment } from './EnvironmentSettings'
 import { AppearanceSettings } from './AppearanceSettings'
 import { ArchivedThreads } from './ArchivedThreads'
 import { ChatsSettings } from './ChatsSettings'
@@ -32,7 +33,7 @@ import { inResetSection, resetSection } from './resetDefaults'
 import { ShortcutsSettings, type Shortcut } from './ShortcutsSettings'
 import { SystemSettings } from './SystemSettings'
 import { ToggleRow } from './ToggleRow'
-import { McpSettings } from './McpSettings'
+import { AgentSetup } from './AgentSetup'
 
 export function SettingsPanel({
   onClose,
@@ -70,7 +71,9 @@ export function SettingsPanel({
       )
       .map((field) => field.path) ?? []
   const modelsChanged = !sameValue(draft, scope.models)
-  const hasChanges = paths.length > 0 || modelsChanged || scope.edited.size > 0
+  const environment = useProviderEnvironment(scope, page === 'environment')
+  const settingsChanged = paths.length > 0 || modelsChanged || scope.edited.size > 0
+  const hasChanges = settingsChanged || environment.changed
   scope.dirty.current = !scope.loading && hasChanges
   useEffect(() => {
     if (scope.loading) return
@@ -96,6 +99,8 @@ export function SettingsPanel({
               })),
             }
           : draft
+      if (environment.changed) await environment.save()
+      if (!settingsChanged) return
       const saved = await scope.save(appDraft, models, [...paths, ...(modelsChanged ? ['$models'] : [])])
       if (saved) {
         setDraft(models)
@@ -153,6 +158,9 @@ export function SettingsPanel({
               if (!busy) onClose()
             }}
           >
+            {page === 'environment' && (
+              <EnvironmentSettings environment={environment} preferences={appDraft} busy={busy} />
+            )}
             {page === 'providers' && (
               <>
                 <SettingsGroupTitle>{t('Providers')}</SettingsGroupTitle>
@@ -169,7 +177,7 @@ export function SettingsPanel({
               </>
             )}
             {page === 'remote' && <RemoteAccessSettings />}
-            {page === 'agent-setup' && <McpSettings />}
+            {page === 'agent-setup' && <AgentSetup />}
             {page === 'system' && <SystemSettings {...draftProps} />}
             {page === 'appearance' && (
               <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />
@@ -211,7 +219,7 @@ export function SettingsPanel({
             {page === 'chats' && <ChatsSettings {...draftProps} />}
             {page === 'git' && <GitSettings {...draftProps} />}
             {page === 'shortcuts' && <ShortcutsSettings shortcuts={shortcuts} />}
-            {page === 'providers' && (
+            {page === 'models' && (
               <ModelSetsEditor
                 draft={draft}
                 setDraft={setDraft}
@@ -229,6 +237,7 @@ export function SettingsPanel({
                 }}
               />
             )}
+            {page === 'models' && <ProviderFallbackSettings {...draftProps} />}
             {pageKeys && (
               <div className="settings-maintenance flex items-center gap-2 pt-3 justify-between">
                 <Button variant="ghost" className={GHOST_BUTTON_CLASS} disabled={busy} onClick={() => setReset(page)}>

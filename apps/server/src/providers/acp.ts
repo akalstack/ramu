@@ -1,6 +1,6 @@
 import { modelContextWindow } from './modelContext'
 // Native OpenCode, Cursor and Google Antigravity ACP runtimes; JSON-RPC 2.0, newline framing.
-import { acpMcpServers, repoMcpServers, configuredMcpStatus } from './discoveredMcp'
+import { acpMcpServers, sessionMcpServers, configuredMcpStatus } from './discoveredMcp'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -456,7 +456,15 @@ class AcpSession implements AgentRunner {
         cwd: this.scope.cwd,
         additionalDirectories: this.scope.additionalDirs,
         mcpServers: [
-          ...acpMcpServers(repoMcpServers(this.scope, this.connection?.mcpConfigDirs), this.mcpHttp),
+          ...acpMcpServers(
+            sessionMcpServers(
+              this.scope,
+              this.connection?.mcpConfigDirs,
+              this.settings.provider,
+              this.settings.accountId,
+            ),
+            this.mcpHttp,
+          ),
           ...(tools
             ? [
                 {
@@ -546,7 +554,10 @@ class AcpSession implements AgentRunner {
     }
     this.emit({
       kind: 'init',
-      mcpServers: configuredMcpStatus(this.scope, this.connection, this.mcpHttp).servers,
+      mcpServers: configuredMcpStatus(this.scope, this.connection, this.mcpHttp, {
+        provider: this.settings.provider,
+        accountId: this.settings.accountId,
+      }).servers,
       cwd: this.scope.cwd,
       model:
         this.settings.model ||

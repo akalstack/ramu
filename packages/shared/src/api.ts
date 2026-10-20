@@ -1,4 +1,5 @@
 import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
+import type { ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
 import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './chat/activity'
@@ -13,6 +14,7 @@ import type {
   SharedMcpManagement,
   SharedMcpProviderAccount,
   SharedMcpSelection,
+  ProjectSetup,
 } from './mcp'
 // The renderer-facing contract. Each method maps 1:1 to a validated handler in src/main/ipc.ts.
 import type {
@@ -300,6 +302,7 @@ export interface RamuMethods {
   'folders.clone'(parent: string, name: string, url: string): string
   'folders.addProject'(path: string): { project: Project; repositories: Repository[] }
   'projects.list'(): Project[]
+  'projects.setup'(projectId: string): ProjectSetup
   'projects.create'(name: string): Project
   'projects.inspect'(dir: string): FolderInspection
   'projects.addFolder'(dir: string, repos?: string[]): { project: Project; repositories: Repository[] }
@@ -373,6 +376,8 @@ export interface RamuMethods {
   'mcp.disconnect'(connectionId: string): Promise<void>
   'mcp.remove'(connectionId: string): Promise<void>
   'mcp.checkCredentialStore'(): Promise<'available' | 'unavailable' | 'not-checked'>
+  /** Give a declared server to every provider and account, or stop. Takes effect for new sessions. */
+  'mcp.share'(key: string, shared: boolean): void
   'providers.loginCommand'(
     provider: ProviderStatus['provider'],
     configuration?: ProviderConfiguration,
@@ -382,6 +387,8 @@ export interface RamuMethods {
   'providers.update'(provider: ProviderStatus['provider']): Promise<ProviderStatus>
   'providers.updates'(): Promise<ProviderStatus[]>
   'providers.dismissUpdate'(provider: ProviderStatus['provider'], binary: string, latestVersion: string): void
+  'providers.environment'(retry?: boolean): Promise<ProviderEnvironmentStatus>
+  'providers.setEnvironment'(values: ProviderEnvironmentValues): Promise<ProviderEnvironmentStatus>
   'providers.pickBinary'(): string | null
   'settings.app.snapshot'(): SettingsSnapshot
   'settings.app.patch'(edits: SettingEdit[]): SettingsSnapshot

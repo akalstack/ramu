@@ -10,13 +10,6 @@ import {
   type ExplorerFileInput,
   type ExplorerDestination,
 } from './composerDrafts'
-import { moveMobileMessageDraft } from './savedMessageDrafts'
-import type {
-  MessageDraftSnapshot,
-  SavedDraftCommand,
-  SavedDraftScope,
-  SavedMessageDraft,
-} from '@ramu/shared/chat/savedDrafts'
 import { createWorkspaceTask, workspaceCreation } from './workspaces'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
@@ -155,14 +148,6 @@ interface Store extends State {
   setDraft(key: string, text: string): void
   addExplorerFile(input: ExplorerFileInput): ExplorerDestination
   clearComposerDraft(key: string, expected: ComposerSnapshot): boolean
-  moveSavedDraft(input: {
-    hostId: string
-    key: string
-    scope: SavedDraftScope
-    expectedRevision: number
-    expectedActive: MessageDraftSnapshot
-    command: SavedDraftCommand
-  }): { active: MessageDraftSnapshot; deleted?: SavedMessageDraft }
 
   dismissError(): void
   enablePush(): Promise<void>
@@ -1300,24 +1285,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           change((s) => ({ ...s, chats: s.chats.map((c) => (c.id === id ? { ...c, ...before } : c)) }))
           report(error)
         })
-    },
-    moveSavedDraft: (input) => {
-      const next = moveMobileMessageDraft({
-        ...input,
-        drafts: ref.current.drafts,
-        knownHosts: ref.current.computers.map((host) => host.id),
-      })
-      writeLocal({
-        computers: ref.current.computers,
-        projects: ref.current.projects,
-        chats: ref.current.chats,
-        selected: ref.current.selected,
-        language: ref.current.language,
-        outbox: ref.current.outbox,
-        drafts: next.drafts,
-      })
-      change((s) => ({ ...s, drafts: next.drafts }))
-      return { active: next.active, deleted: next.deleted }
     },
     clearComposerDraft: (key, expected) => {
       if (!ref.current.computers.some((host) => key.startsWith(`${host.id}:`))) return false

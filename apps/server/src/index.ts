@@ -1,4 +1,5 @@
 import { LocalDiagnostics } from './background/diagnostics'
+import { configureMcpSharing, MCP_SHARING_KEY, type McpSharing } from './agent/projectSetup'
 import { MobileLiveActivities } from './remote/mobileLiveActivity'
 import { MobilePush } from './remote/mobilePush'
 import { DEFAULT_FALLBACK_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
@@ -162,6 +163,7 @@ const db = openDb(join(userData, 'ramu.db'))
 const root = process.env.RAMU_WORKTREES ?? join(homedir(), '.ramu', 'worktrees')
 mkdirSync(root, { recursive: true })
 const workspace = new Workspace(db, root)
+configureMcpSharing(() => workspace.getAppState<McpSharing>(MCP_SHARING_KEY, {}))
 migrateLearningDefault(workspace)
 workspace.settingsStore = new SettingsStore(userData, {
   preferences: workspace.getAppState('app-preferences', {}),

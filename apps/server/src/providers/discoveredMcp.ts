@@ -1,6 +1,8 @@
 import type { AgentScope, AgentMcpStatus, McpConnection } from '@ramu/shared/types'
 import { claudeMcpServers } from './claudeMcp'
 import type { DiscoveredMcpServer } from '../context'
+import type { AgentProvider } from '@ramu/shared/types'
+import { accountEnvironment, sharedSessionServers } from '../agent/projectSetup'
 
 type Wire = Record<string, any>
 const text = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback)
@@ -46,6 +48,34 @@ export function repoMcpServers(scope: AgentScope, configDirs: string[] = []): No
       args: strings(s.args),
       env: record(s.env),
     }))
+}
+
+/**
+ * Repository servers plus every server shared through Agent setup that this provider account does not already load
+ * itself, so one setup reaches every provider and account.
+ */
+export function sessionMcpServers(
+  scope: AgentScope,
+  configDirs: string[] = [],
+  provider: AgentProvider,
+  accountId?: string,
+): NormalizedMcp[] {
+  const repo = repoMcpServers(scope, configDirs)
+  const names = new Set(repo.map((s) => s.name))
+  const dirs = [...new Set([scope.cwd, ...scope.additionalDirs, ...scope.covers, ...configDirs])]
+  return [
+    ...repo,
+    ...sharedSessionServers(dirs, provider, accountEnvironment(provider, accountId))
+      .filter((s) => !names.has(s.name))
+      .map((s): NormalizedMcp => ({
+        name: s.name,
+        startupTimeoutMs: 60_000,
+        ...(s.transport.type === 'http' ? { url: s.transport.url } : { command: s.transport.command }),
+        headers: s.headers,
+        args: s.transport.type === 'stdio' ? s.transport.args : [],
+        env: s.env,
+      })),
+  ]
 }
 
 /** Codex `-c` overrides; values are JSON strings, which TOML reads as basic strings. */
@@ -119,8 +149,17 @@ export function cursorMcpServers(servers: NormalizedMcp[]): Record<string, Wire>
 }
 
 /** Inventory for runtimes without a live status API. Configured never implies connected. */
-export function configuredMcpStatus(scope: AgentScope, connection?: McpConnection, http = true): AgentMcpStatus {
-  const servers = repoMcpServers(scope, connection?.mcpConfigDirs).map((server) => ({
+export function configuredMcpStatus(
+  scope: AgentScope,
+  connection?: McpConnection,
+  http = true,
+  session?: { provider: AgentProvider; accountId?: string },
+): AgentMcpStatus {
+  const servers = (
+    session
+      ? sessionMcpServers(scope, connection?.mcpConfigDirs, session.provider, session.accountId)
+      : repoMcpServers(scope, connection?.mcpConfigDirs)
+  ).map((server) => ({
     name: server.name,
     status: server.url && !http ? 'unsupported' : 'configured',
   }))

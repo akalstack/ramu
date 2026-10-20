@@ -2,7 +2,7 @@ import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
 import { ChatLink } from '../../../chat/ChatReferences'
 import { parseThreadReference, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
 import { useLanguage } from '../../../i18n'
-import { Children, memo, useEffect, useMemo, useRef } from 'react'
+import { Children, createElement, memo, useEffect, useMemo, useRef, type ElementType } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { AgentEvent } from '@ramu/shared/types'
@@ -16,13 +16,12 @@ import { MessageActions } from './MessageActions'
 import { MSG_CLASS } from '../styles'
 
 // Only newly received words fade briefly. No stagger or typing queue: text is readable as soon as it arrives.
-const WORD_FADE_MS = 120
 // A message already this long when it first appears (a chat opened mid-stream) shows what it has and fades only what follows.
 const SETTLED_CHARS = 160
 
-/** Where the words of the message stand: `plan[i]` is word i's delay (ms), or -1 when it is shown without a fade. */
+/** Which words arrived while this message was mounted. Their spans stay stable until streaming finishes. */
 interface WordPlan {
-  plan: number[]
+  plan: boolean[]
   /** Index of the next word in this render. */
   next: number
   settle: boolean
@@ -35,18 +34,13 @@ function fadeIn(children: React.ReactNode, words: WordPlan): React.ReactNode {
       ? child.split(/(\s+)/).map((part, i) => {
           if (part === '' || /^\s+$/.test(part)) return part
           const at = words.next++
-          let delay = words.plan[at]
-          const existing = delay !== undefined
-          if (delay === undefined) {
-            delay = words.settle ? -1 : 0
-            words.plan[at] = delay
-          }
-          return existing || delay < 0 ? (
-            part
-          ) : (
-            <span key={i} className="stream-word" style={{ animation: `stream-in ${WORD_FADE_MS}ms ease-out both` }}>
+          const animated = (words.plan[at] ??= !words.settle)
+          return animated ? (
+            <span key={i} className="stream-word">
               {part}
             </span>
+          ) : (
+            part
           )
         })
       : child,
@@ -60,6 +54,14 @@ const streaming = (words: WordPlan): Components => ({
   h1: ({ children }) => <h1>{fadeIn(children, words)}</h1>,
   h2: ({ children }) => <h2>{fadeIn(children, words)}</h2>,
   h3: ({ children }) => <h3>{fadeIn(children, words)}</h3>,
+  h4: ({ children }) => <h4>{fadeIn(children, words)}</h4>,
+  h5: ({ children }) => <h5>{fadeIn(children, words)}</h5>,
+  h6: ({ children }) => <h6>{fadeIn(children, words)}</h6>,
+  del: ({ children }) => <del>{fadeIn(children, words)}</del>,
+  th: ({ children, ...props }) =>
+    createElement((chatMarkdownComponents.th ?? 'th') as ElementType, props, fadeIn(children, words)),
+  td: ({ children, ...props }) =>
+    createElement((chatMarkdownComponents.td ?? 'td') as ElementType, props, fadeIn(children, words)),
 })
 
 /** Memoized: the markdown parse is the costliest part of a transcript, and layout changes re-render the chat without changing a message. */
@@ -91,7 +93,7 @@ export const AssistantText = memo(function AssistantText({
       ...(fading ? streaming(words.current) : {}),
       a: ({ href, children }) => (
         <ChatLink href={href} taskId={taskId}>
-          {children}
+          {fading ? fadeIn(children, words.current) : children}
         </ChatLink>
       ),
     }),

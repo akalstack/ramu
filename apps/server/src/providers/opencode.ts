@@ -1,7 +1,7 @@
 import { permissionKey } from '../agent/permissionApprovals'
 // OpenCode 2 chats through its HTTP API (`@opencode/client`). Each chat runs its own `opencode serve`, so the
 // account's config directories and the per-chat config (Ramu's tool server, skills, sub-agent switch) stay separate.
-import { openCodeMcpServers, repoMcpServers, configuredMcpStatus } from './discoveredMcp'
+import { openCodeMcpServers, sessionMcpServers, configuredMcpStatus } from './discoveredMcp'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { createInterface } from 'node:readline'
@@ -311,7 +311,10 @@ export class OpenCodeSession implements AgentRunner {
     }
     this.emit({
       kind: 'init',
-      mcpServers: configuredMcpStatus(this.scope, this.connection).servers,
+      mcpServers: configuredMcpStatus(this.scope, this.connection, true, {
+        provider: 'opencode',
+        accountId: this.settings.accountId,
+      }).servers,
       cwd: this.scope.cwd,
       model: this.settings.model || 'OpenCode default',
       providerSessionId: this.sessionId,
@@ -325,7 +328,11 @@ export class OpenCodeSession implements AgentRunner {
       ...openCodeServerEnv(
         this.connection,
         undefined,
-        this.connection ? openCodeMcpServers(repoMcpServers(this.scope, this.connection?.mcpConfigDirs)) : {},
+        this.connection
+          ? openCodeMcpServers(
+              sessionMcpServers(this.scope, this.connection?.mcpConfigDirs, 'opencode', this.settings.accountId),
+            )
+          : {},
       ),
     }
     const server = await startServer(this.scope.cwd, env)

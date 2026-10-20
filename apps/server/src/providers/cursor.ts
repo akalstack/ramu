@@ -1,7 +1,7 @@
 import { modelContextWindow } from './modelContext'
 // Cursor chats through the official TypeScript SDK (`@cursor/sdk`), running the agent loop locally in this process.
 // The SDK has no approval callback: full access runs unsandboxed, other access levels run in Cursor's sandbox.
-import { cursorMcpServers, repoMcpServers, configuredMcpStatus } from './discoveredMcp'
+import { cursorMcpServers, sessionMcpServers, configuredMcpStatus } from './discoveredMcp'
 import type { AgentOptions, ModelSelection, Run, RunResult, SDKAgent, SDKMessage } from '@cursor/sdk'
 import type {
   AgentEvent,
@@ -114,9 +114,9 @@ export class CursorSession implements AgentRunner {
   private mcpServers(): AgentOptions['mcpServers'] {
     return this.connection
       ? {
-          ...(cursorMcpServers(repoMcpServers(this.scope, this.connection?.mcpConfigDirs)) as NonNullable<
-            AgentOptions['mcpServers']
-          >),
+          ...(cursorMcpServers(
+            sessionMcpServers(this.scope, this.connection?.mcpConfigDirs, 'cursor', this.settings.accountId),
+          ) as NonNullable<AgentOptions['mcpServers']>),
           ramu: {
             type: 'http',
             url: this.connection.url,
@@ -157,7 +157,10 @@ export class CursorSession implements AgentRunner {
     } else this.agent = await Agent.create(this.options())
     this.emit({
       kind: 'init',
-      mcpServers: configuredMcpStatus(this.scope, this.connection).servers,
+      mcpServers: configuredMcpStatus(this.scope, this.connection, true, {
+        provider: 'cursor',
+        accountId: this.settings.accountId,
+      }).servers,
       cwd: this.scope.cwd,
       model: this.settings.model || 'auto',
       providerSessionId: this.agent.agentId,

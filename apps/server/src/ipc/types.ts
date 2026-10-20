@@ -9,6 +9,7 @@ import type { AppUpdateService } from '../background/appUpdates'
 import type { UsageService } from '../providers/usage'
 import type { ExtraUsageReader } from '../providers/providerUsage'
 import type { AccountUsage } from '../providers/accountUsage'
+import type { ProviderEnvironmentStore } from '../providers/environmentStore'
 import type { AttachmentStore } from '../attachments'
 import type { HostFolders } from '../remote/hostFolders'
 import type { AgentService } from '../agent'
@@ -72,6 +73,7 @@ export interface HandlerContext extends Services {
   usage: UsageService
   extraUsage: ExtraUsageReader
   accountUsage: AccountUsage
+  environment: ProviderEnvironmentStore
   loadPreferences(): AppPreferences
   savePreferences(preferences: AppPreferences, models?: ModelPreferences): void
   /** The stored preferences as written, without defaults or validation. */

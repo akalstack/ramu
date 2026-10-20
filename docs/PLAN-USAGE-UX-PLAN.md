@@ -8,7 +8,7 @@ A person can tell whether the next message can run, inspect the correct account 
 
 ## Ramu design and architecture
 
-Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend the current usage chip, shared account sheet and Access & Fallback controls, using composed desktop controls outside `components/ui/` and existing native mobile components/tokens. Derive next-message identity from the existing server routing/usage collaborators through validated named methods; do not predict it independently in a client or add another polling/fallback engine. Preserve host/account-qualified queries and event invalidation, old-host capability handling and the separation between device visibility preferences and host routing policy.
+Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend the current usage chip, shared account sheet and the fallback controls in Settings → Models, using composed desktop controls outside `components/ui/` and existing native mobile components/tokens. Derive next-message identity from the existing server routing/usage collaborators through validated named methods; do not predict it independently in a client or add another polling/fallback engine. Preserve host/account-qualified queries and event invalidation, old-host capability handling and the separation between device visibility preferences and host routing policy.
 
 ## Remaining implementation
 

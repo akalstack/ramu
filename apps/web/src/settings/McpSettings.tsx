@@ -9,7 +9,6 @@ import { Field, FieldLabel } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dialog, Dropdown } from '../Menu'
 import { t, useLanguage } from '../i18n'
@@ -277,9 +276,9 @@ export function McpSettings() {
   const hostName = scope?.available.find((host) => host.id === scope.primaryId)?.name ?? t('This host')
   return (
     <div className="flex flex-col gap-3">
-      <SettingsGroupTitle>{t('MCP servers')}</SettingsGroupTitle>
+      <SettingsGroupTitle className="m-0">{t('Connected through Ramu')}</SettingsGroupTitle>
       <p className="m-0 text-caption text-muted-foreground">
-        {t('Connect an external service once on this host and choose which projects and providers may use it.')}
+        {t('Add a remote server no provider has yet. Ramu connects it and lets you review its tools first.')}
       </p>
       {(error || query.error || projects.error) && (
         <Alert variant="destructive">
@@ -292,11 +291,14 @@ export function McpSettings() {
         </Alert>
       )}
       <div className="flex flex-wrap gap-2">
-        <Input
-          aria-label={t('Search MCP servers')}
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
+        {(data?.connections.length ?? 0) > 5 && (
+          <Input
+            aria-label={t('Search MCP servers')}
+            placeholder={t('Search MCP servers')}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        )}
         <Button disabled={!canAdminister || busy} onClick={() => setEditing('new')}>
           {t('Add server')}
         </Button>
@@ -310,14 +312,7 @@ export function McpSettings() {
       </div>
       {!data && !query.error && <p role="status">{t('Loading…')}</p>}
       {data?.connections.length === 0 && (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>{t('No MCP servers')}</EmptyTitle>
-            <EmptyDescription>
-              {t('Add a server, then connect and review its tools before enabling access.')}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <p className="m-0 text-caption text-muted-foreground">{t('No servers connected through Ramu yet.')}</p>
       )}
       <SettingsCardList>
         {data?.connections

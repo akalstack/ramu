@@ -7,7 +7,7 @@ import { ChevronRight } from 'lucide-react'
 import { describeRamuTool, ramuTool } from '@ramu/shared/chat/ramuTools'
 import { toolIsRunning, toolVerb } from '@ramu/shared/chat/toolStatus'
 import { type ToolResult, type ToolUse } from '../types'
-import { describeTools } from '../lib/toolSummary'
+import { describeTools, toolFallbackTitle } from '../lib/toolSummary'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { ShadowPre } from './ShadowPre'
 import { WorkingText } from './WorkingText'
@@ -95,7 +95,7 @@ export function ToolGroup({
             const row = call ? describeRamuTool(call, r?.summary) : undefined
             const humanTitle = row
               ? `${translate(toolRunning ? row.running : row.done)}${row.subject ? ` ${row.subject}` : ''}`
-              : t.title?.trim()
+              : (t.title?.trim() ?? toolFallbackTitle(t, toolRunning) ?? undefined)
             const inputText = t.input ?? (humanTitle === summary ? undefined : summary)
             const failed = r ? r.isError || r.status === 'failed' : t.status === 'failed'
             const state = failed
@@ -107,6 +107,10 @@ export function ToolGroup({
                   : !r || r.running
                     ? 'Stopped'
                     : 'Completed'
+            // Threads recorded before tool references were read keep a placeholder for them; it says nothing.
+            const shown = (r?.content ?? t.content)?.filter(
+              (item) => !(item.type === 'unsupported' && item.label === 'Unsupported content: tool_reference'),
+            )
             const movable = !!onBackground && t.name === 'Bash' && toolRunning
             return (
               <Collapsible
@@ -160,9 +164,9 @@ export function ToolGroup({
                             </pre>
                           </div>
                         )}
-                        {(r?.content ?? t.content)?.length ? (
+                        {shown?.length ? (
                           <div className="tool-rich-content p-[8px_12px]">
-                            <AgentContentView content={(r?.content ?? t.content)!} taskId={taskId} plainText={bash} />
+                            <AgentContentView content={shown} taskId={taskId} plainText={bash} />
                           </div>
                         ) : (
                           <ShadowPre>

@@ -3,7 +3,7 @@ import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, wri
 import { isAbsolute, join } from 'node:path'
 import { z } from 'zod'
 import { toolResultLimit } from '../toolInputs'
-import { writeInstalledSkill } from './skillFiles'
+import { copySharedSkill, writeInstalledSkill } from './skillFiles'
 import { historyScope, SessionSearch, visibleRecallEvent } from './sessionSearch'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
@@ -111,13 +111,25 @@ function substantiveTurn(events: AgentEvent[], resultIndex: number): boolean {
   return Boolean(request) && !(trivial && tools.length <= 1)
 }
 
+/** One provider account's skill export for one scope. */
+interface ExportTarget {
+  projectId: string | null
+  provider: AgentProvider
+  accountId: string
+}
+
 /** Persistent review queue; model proposals never execute tools or write arbitrary paths. */
 export class LearningService {
   private running = false
   private stopping = false
   private abort?: AbortController
   private active?: Promise<void>
-  private readonly exported = new Set<string | null>()
+  private readonly exported = new Map<string, ExportTarget & { cwd: string }>()
+  /**
+   * Skills from a person's own provider folders that Agent setup shares with every provider and account. Set at
+   * startup; returns the real folders to copy for one provider account, already excluding skills it loads itself.
+   */
+  sharedSkills?: (target: ExportTarget & { cwd: string }) => { name: string; dir: string }[]
   private exportPending = false
   /** Provider skill folders holding links into an export, kept current with it. Keyed by folder. */
   private readonly linked = new Map<string, { target: SkillLinkTarget; export: string }>()
@@ -236,11 +248,12 @@ export class LearningService {
    * The folder a provider loads for this scope, brought up to date; null when it cannot be written. For providers that only
    * scan a skills folder in the chat's working directory, the export is also linked into that folder.
    */
-  exportDir(task: string | null, provider: AgentProvider, cwd: string): string | null {
+  exportDir(task: string | null, provider: AgentProvider, cwd: string, accountId = 'default'): string | null {
     const projectId = task === NO_PROJECT ? null : task
-    this.exported.add(projectId)
+    const target = { projectId, provider, accountId, cwd }
+    this.exported.set(`${projectId}\0${provider}\0${accountId}`, target)
     try {
-      const dir = this.syncExport(projectId)
+      const dir = this.syncExport(target)
       if (isAbsolute(cwd))
         for (const linkDir of providerAdapter(provider).skillsLaunch?.(dir, cwd).linkDirs ?? [])
           this.link({ dir: linkDir, cwd }, dir)
@@ -257,12 +270,19 @@ export class LearningService {
    * Ramu-owned and never inside a user's skill folders: a local plugin whose `skills/ramu-<name>/SKILL.md` entries are the
    * active skills of one scope (project skills win over global ones). Skills that left the scope are removed.
    */
-  private syncExport(projectId: string | null): string {
-    const dir = join(
+  private syncExport({ projectId, provider, accountId, cwd }: ExportTarget & { cwd: string }): string {
+    const scopeDir = join(
       this.root,
       'export',
       projectId === null ? 'global' : `project-${createHash('sha256').update(projectId).digest('hex').slice(0, 16)}`,
     )
+    // One export per provider account, since shared skills depend on what each one already loads itself.
+    const dir = join(
+      scopeDir,
+      `${provider}-${accountId === 'default' ? 'default' : createHash('sha256').update(accountId).digest('hex').slice(0, 12)}`,
+    )
+    // The export used to be one folder per scope; links into it are moved to the new folder below.
+    for (const legacy of ['skills', '.claude-plugin']) rmSync(join(scopeDir, legacy), { recursive: true, force: true })
     const skillsDir = join(dir, 'skills'),
       manifest = join(dir, '.claude-plugin', 'plugin.json'),
       info = `${JSON.stringify({ name: 'ramu-managed', description: 'Skills managed by Ramu', version: '1.0.0' })}\n`
@@ -278,9 +298,22 @@ export class LearningService {
       .filter((skill) => this.usable(skill))
       .sort((a, b) => Number(a.projectId !== null) - Number(b.projectId !== null)))
       wanted.set(`ramu-${skill.name}`.slice(0, 64).replace(/-+$/, ''), skill)
+    const copies = new Map<string, string>()
+    for (const shared of this.sharedSkills?.({ projectId, provider, accountId, cwd }) ?? []) {
+      const name = `ramu-${shared.name}`.slice(0, 64).replace(/-+$/, '')
+      // A skill managed by Ramu under the same name wins over a shared copy.
+      if (!wanted.has(name) && !copies.has(name)) copies.set(name, shared.dir)
+    }
     for (const name of readdirSync(skillsDir))
-      if (!wanted.has(name)) rmSync(join(skillsDir, name), { recursive: true, force: true })
+      if (!wanted.has(name) && !copies.has(name)) rmSync(join(skillsDir, name), { recursive: true, force: true })
     for (const [name, skill] of wanted) this.writeSkill(join(skillsDir, name), name, skill)
+    for (const [name, source] of copies)
+      try {
+        copySharedSkill(source, join(skillsDir, name), name)
+      } catch {
+        // A folder that cannot be copied safely (links, too large) is left out rather than half-copied.
+        rmSync(join(skillsDir, name), { recursive: true, force: true })
+      }
     return dir
   }
   /** Runs once after the current change, so a skill edited inside a database transaction is exported only if it committed. */
@@ -289,9 +322,9 @@ export class LearningService {
     this.exportPending = true
     setImmediate(() => {
       this.exportPending = false
-      for (const projectId of this.exported)
+      for (const target of this.exported.values())
         try {
-          this.syncExport(projectId)
+          this.syncExport(target)
         } catch {
           /* Retried by the next change or launch. */
         }

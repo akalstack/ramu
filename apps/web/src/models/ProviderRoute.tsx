@@ -78,7 +78,10 @@ export function ProviderRouteChip({
   const settingsItem = {
     key: 'settings',
     label: t('Fallback settings…'),
-    onSelect: () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'access' } })),
+    onSelect: () =>
+      window.dispatchEvent(
+        new CustomEvent('ramu:settings', { detail: { section: 'models', target: 'Provider fallback' } }),
+      ),
   }
   const resumeItems: MenuEntry[] = autoResume
     ? [...autoResumeSection(autoResume), { key: 'auto-resume-sep', separator: true }]

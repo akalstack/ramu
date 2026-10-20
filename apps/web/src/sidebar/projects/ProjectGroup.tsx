@@ -1,3 +1,4 @@
+import { animateThreadListChange } from '../../workspace/threadListMotion'
 import { Button } from '@/components/desktop-button'
 import {
   Archive,
@@ -73,8 +74,10 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   const act = async (fn: () => Promise<unknown>) => {
     setError(null)
     try {
-      await fn()
-      await ws.refresh()
+      await animateThreadListChange(async () => {
+        await fn()
+        await ws.refresh()
+      })
     } catch (e) {
       setError(errorText(e))
     }

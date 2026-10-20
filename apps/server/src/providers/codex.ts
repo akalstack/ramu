@@ -1,6 +1,6 @@
 import { modelContextWindow } from './modelContext'
 import { permissionKey } from '../agent/permissionApprovals'
-import { codexMcpConfig, repoMcpServers, configuredMcpStatus } from './discoveredMcp'
+import { codexMcpConfig, sessionMcpServers, configuredMcpStatus } from './discoveredMcp'
 import { classifyLimit } from './limitClassifier'
 import { elicitationRequest, elicitationContent } from '../agent/elicitation'
 import { attachmentPrompt } from '../attachments'
@@ -278,7 +278,11 @@ class CodexSession implements CodexRunner {
       this.connection,
       [
         ...(this.connection?.interceptSubagents ? [CODEX_HOOK_CONFIG] : []),
-        ...(this.connection ? codexMcpConfig(repoMcpServers(this.scope, this.connection?.mcpConfigDirs)) : []),
+        ...(this.connection
+          ? codexMcpConfig(
+              sessionMcpServers(this.scope, this.connection?.mcpConfigDirs, 'codex', this.settings.accountId),
+            )
+          : []),
       ],
       this.settings.accountId ?? 'default',
     )
@@ -310,7 +314,10 @@ class CodexSession implements CodexRunner {
     this.threadId = result.thread.id
     this.emit({
       kind: 'init',
-      mcpServers: configuredMcpStatus(this.scope, this.connection).servers,
+      mcpServers: configuredMcpStatus(this.scope, this.connection, true, {
+        provider: 'codex',
+        accountId: this.settings.accountId,
+      }).servers,
       model: result.model || this.settings.model || 'Codex default',
       cwd: this.scope.cwd,
       providerSessionId: this.threadId,

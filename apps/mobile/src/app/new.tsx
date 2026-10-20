@@ -354,14 +354,6 @@ export default function NewChat() {
               </>
             }
             draftKey={composerKey}
-            draftScope={{
-              kind: 'new',
-              id: composerKey,
-              ...(projectId ? { projectId } : {}),
-              ...(draftContext ? { contextId: draftContext } : {}),
-              label:
-                list.find((p) => p.id === projectId)?.name ?? (projectId === STANDALONE ? t.standalone : t.newChat),
-            }}
             computerId={selected}
             scope={
               projectId && projectId !== STANDALONE

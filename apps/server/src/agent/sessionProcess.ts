@@ -358,6 +358,8 @@ export class SessionProcess {
     if (connection && this.host.nativeSubagentsOff(s)) connection.nativeSubagents = false
     if (connection && s.provider === 'claude-code' && this.host.claudeAdvisorModel(id) === '')
       connection.replaceAdvisor = true
+    if (connection && s.provider === 'claude-code' && usesRamuQuestionTools(pins.asyncQuestions, s))
+      connection.replaceQuestions = true
     if ((isAcpProvider(s.provider) || s.provider === 'claude-code') && connection && !s.parentId)
       this.nativeOffAtLaunch.set(id, connection.nativeSubagents === false)
     const request = explicitGoal ? prompt.replace(/^\s*\/goal\s+/, 'Work toward this Ramu goal: ') : prompt

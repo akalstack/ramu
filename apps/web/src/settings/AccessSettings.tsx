@@ -33,6 +33,22 @@ export function AccessSettings({
         />
       </SettingsRow>
       <PermissionRules disabled={busy} />
+    </div>
+  )
+}
+
+/** What happens when a model reaches its usage limit; shown with model sets on the Models page. */
+export function ProviderFallbackSettings({
+  draft,
+  onChange,
+  busy,
+}: {
+  draft: AppPreferences
+  onChange: DraftSetter
+  busy: boolean
+}) {
+  return (
+    <div className={`${SETTINGS_FORM_CLASS} mt-8`}>
       <SettingsGroupTitle>{t('Provider fallback')}</SettingsGroupTitle>
       <LimitChoiceRow draft={draft} onChange={onChange} busy={busy} />
       <FallbackSettings value={draft} onChange={onChange} busy={busy} />

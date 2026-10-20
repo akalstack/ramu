@@ -1,5 +1,6 @@
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
+import { ComposerTraySection } from '../../../composer/ComposerTraySection'
 import {
   DndContext,
   KeyboardSensor,
@@ -294,44 +295,56 @@ export function QueuedMessages({
     void act(() => invoke('agent.reorderQueued', sessionId, arrayMove(ids, from, to)))
   }
   return (
-    <div
-      className="message-queue flex flex-col gap-1.5 p-[8px_12px] mb-2 max-h-[180px] overflow-auto [border:1px_solid_transparent] rounded-(--radius-s) bg-raised"
+    <ComposerTraySection
+      className="message-queue"
       aria-label={translate('Queued messages')}
+      defaultOpen
+      title={
+        <>
+          {translate('Queued messages')}{' '}
+          <span className="text-muted-foreground tabular-nums">{queued.length + pending.length}</span>
+        </>
+      }
+      icon={<ListEnd />}
+      actions={
+        paused && (
+          <>
+            <span className="text-muted-foreground text-caption">{translate('Paused')}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={GHOST_TEXT_BUTTON_CLASS}
+              onClick={() => void act(() => invoke('agent.resumeQueue', sessionId))}
+            >
+              {translate('Resume messages')}
+            </Button>
+          </>
+        )
+      }
     >
-      {paused && (
-        <div className="message-queue-heading flex items-center justify-between gap-2">
-          <span className="muted text-muted-foreground small text-caption">{translate('Paused')}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={GHOST_TEXT_BUTTON_CLASS}
-            onClick={() => void act(() => invoke('agent.resumeQueue', sessionId))}
-          >
-            {translate('Resume messages')}
-          </Button>
-        </div>
-      )}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorder}>
-        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          {queued.map((message) => (
-            <HostQueuedRow
-              key={message.id}
-              message={message}
-              sessionId={sessionId}
-              busyAgent={busyAgent}
-              supportsSteering={supportsSteering}
-              configuring={configuring}
-              reorderDisabled={queued.length < 2}
-              act={act}
-              onRecall={onRecall}
-            />
-          ))}
-        </SortableContext>
-      </DndContext>
-      {/* Outbox messages wait on this device, after everything the host already queued. Same row, but the host can't send them early. */}
-      {pending.map((item) => (
-        <OutboxRow key={item.id} item={item} hostName={hostName} hostOffline={hostOffline} onRecall={onRecall} />
-      ))}
-    </div>
+      <div className="message-queue-list">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorder}>
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+            {queued.map((message) => (
+              <HostQueuedRow
+                key={message.id}
+                message={message}
+                sessionId={sessionId}
+                busyAgent={busyAgent}
+                supportsSteering={supportsSteering}
+                configuring={configuring}
+                reorderDisabled={queued.length < 2}
+                act={act}
+                onRecall={onRecall}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
+        {/* Outbox messages wait on this device, after everything the host already queued. Same row, but the host can't send them early. */}
+        {pending.map((item) => (
+          <OutboxRow key={item.id} item={item} hostName={hostName} hostOffline={hostOffline} onRecall={onRecall} />
+        ))}
+      </div>
+    </ComposerTraySection>
   )
 }

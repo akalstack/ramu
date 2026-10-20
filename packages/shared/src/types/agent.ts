@@ -451,4 +451,6 @@ export interface McpConnection {
   /** Codex only: a hook asks Ramu before each of Codex's own sub-agents starts, so Ramu can send it elsewhere. */ interceptSubagents?: boolean
   /** Claude only: Ramu's advisor replaces Claude Code's own, which is turned off. */
   replaceAdvisor?: boolean
+  /** Claude only: Ramu's question tools are in use, so Claude Code's own `AskUserQuestion` is turned off. */
+  replaceQuestions?: boolean
 }

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parse, stringify } from 'yaml'
@@ -19,7 +19,11 @@ export const isSkillScript = (path: string, mode = 0) =>
   /\.(?:sh|bash|zsh|fish|py|pyc|js|mjs|cjs|ts|tsx|jsx|rb|pl|ps1|bat|cmd|exe|dll|so|dylib|wasm|jar)$/i.test(path) ||
   !!(mode & 0o111)
 
-export function readSkillFolder(root: string): {
+export function readSkillFolder(
+  root: string,
+  /** Skip dot-files such as `.DS_Store` instead of refusing the folder, for copies of a person's own skills. */
+  options: { skipHidden?: boolean } = {},
+): {
   markdown: string
   files: Record<string, string>
   scripts: Set<string>
@@ -31,6 +35,7 @@ export function readSkillFolder(root: string): {
   function walk(dir: string, prefix = '', depth = 0) {
     if (depth > 16) throw new Error('Skill folders are nested too deeply.')
     for (const name of readdirSync(dir)) {
+      if (options.skipHidden && name.startsWith('.')) continue
       const path = prefix ? `${prefix}/${name}` : name
       if (!safeSkillPath(path)) throw new Error(`Unsafe skill path: ${path}`)
       const full = join(dir, name),
@@ -114,4 +119,30 @@ export function writeInstalledSkill(dir: string, name: string, skill: ManagedSki
     writeFileSync(temporary, bytes, { mode: 0o600 })
     renameSync(temporary, target)
   }
+}
+
+/**
+ * Copies a person's own skill folder into a Ramu export under `name`, renaming it in SKILL.md so providers list the copy
+ * by its export folder. Bounded like an install; links and special files are refused. Unchanged copies are left alone.
+ */
+export function copySharedSkill(source: string, dir: string, name: string): void {
+  const { files, markdown } = readSkillFolder(source, { skipHidden: true })
+  const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(markdown)
+  const renamed = front
+    ? markdown.replace(front[1]!, /^name:.*$/m.test(front[1]!) ? front[1]!.replace(/^name:.*$/m, `name: ${name}`) : `name: ${name}\n${front[1]}`)
+    : `---\nname: ${name}\n---\n${markdown}`
+  files['SKILL.md'] = Buffer.from(renamed).toString('base64')
+  const digest = createHash('sha256').update(JSON.stringify(Object.entries(files).sort())).digest('hex')
+  const marker = join(dir, '.ramu-source')
+  try {
+    if (readFileSync(marker, 'utf8') === digest) return
+  } catch {
+    /* First copy, or the export was cleared. */
+  }
+  rmSync(dir, { recursive: true, force: true })
+  for (const [path, data] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, path)), { recursive: true })
+    writeFileSync(join(dir, path), Buffer.from(data, 'base64'), { mode: 0o600 })
+  }
+  writeFileSync(marker, digest)
 }

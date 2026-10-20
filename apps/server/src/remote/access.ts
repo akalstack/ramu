@@ -21,6 +21,7 @@ const viewerMethods = new Set([
   'agent.providerHold',
   'agent.mcpStatus',
   'mcp.status',
+  'projects.setup',
   'agent.replyPermission',
   'agent.replyQuestion',
   'agent.replyElicitation',

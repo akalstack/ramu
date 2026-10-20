@@ -56,37 +56,9 @@ const en = {
   workspaceRenameConflict: 'Workspace name changed elsewhere. Reopen the name editor to review it.',
   savedContextPreviewTruncated: 'Preview shows the first 4000 characters. Restore keeps the full captured context.',
   forgetHostDraftHint:
-    'Removes phone credentials, active and saved drafts, and the outbox. Uploaded attachments and agents remain on this host. Revoke the old device there to invalidate its token.',
+    'Removes phone credentials, current messages, and the outbox. Uploaded attachments and agents remain on this host. Revoke the old device there to invalidate its token.',
   forgetHostFailed: 'Could not forget host',
 
-  saveDraft: 'Save draft',
-  savedDrafts: 'Saved drafts',
-  draftSaved: 'Draft saved',
-  restoreDraft: 'Restore draft',
-  previewDraft: 'Preview draft',
-  deleteDraft: 'Delete draft',
-  undoDeleteDraft: 'Undo delete',
-  backToSavedDrafts: 'Back to saved drafts',
-  allHostDrafts: 'All drafts on this host',
-  currentScopeDrafts: 'Drafts for this composer',
-  noSavedDrafts: 'No saved drafts here yet.',
-  savedDraftDeviceHint: 'Saved on this device. Restoring never sends a message.',
-  saveCurrentAndRestore: 'Save current and restore',
-  saveCurrentDraftHint: 'Keep your current message as another saved draft before restoring this one?',
-  savedDraftUploading: 'Wait for attachments to finish uploading, or cancel the picker before saving or restoring.',
-  savedDraftFull:
-    'Saved drafts are full. Delete a saved item or reduce this message before trying again. Your message is kept.',
-  savedDraftChanged: 'The message or saved drafts changed. Review the current composer and try again.',
-  savedDraftFailed:
-    'Could not save or restore the draft. Your message is kept. Check available device storage and try again.',
-  savedDraftReadFailed: 'Could not read saved drafts. The stored data has been kept for recovery.',
-  openOriginalDraft: 'Open original composer',
-  useDraftHere: 'Use in this composer',
-  useDraftHereHint:
-    'Review this message before using it here. File and skill references become text, and captured file context stays as quoted data. Attachments need a host check. This composer keeps its project, workspace and model.',
-  savedDraftRecoveryTooLarge:
-    'This draft has too much captured context to restore as text here. The saved original is kept. Copy the text you need from its preview, or open the original composer.',
-  savedDraftScopeMissing: 'The original thread or project is unavailable. The saved message is kept here for review.',
   attachmentNeedsCheck: 'Attachment needs a host check before sending',
   savedAttachmentOffline:
     'Reconnect this host to check restored attachments before sending. You can still edit and save the draft.',
@@ -420,38 +392,9 @@ const id: typeof en = {
   savedContextPreviewTruncated:
     'Pratinjau menampilkan 4000 karakter pertama. Pemulihan mempertahankan seluruh konteks yang direkam.',
   forgetHostDraftHint:
-    'Menghapus kredensial, draf aktif dan tersimpan, serta kotak keluar di ponsel. Lampiran yang diunggah dan agen tetap ada di host ini. Cabut perangkat lama di sana untuk membatalkan tokennya.',
+    'Menghapus kredensial, pesan saat ini, serta kotak keluar di ponsel. Lampiran yang diunggah dan agen tetap ada di host ini. Cabut perangkat lama di sana untuk membatalkan tokennya.',
   forgetHostFailed: 'Tidak dapat melupakan host',
 
-  saveDraft: 'Simpan draf',
-  savedDrafts: 'Draf tersimpan',
-  draftSaved: 'Draf disimpan',
-  restoreDraft: 'Pulihkan draf',
-  previewDraft: 'Pratinjau draf',
-  deleteDraft: 'Hapus draf',
-  undoDeleteDraft: 'Urungkan penghapusan',
-  backToSavedDrafts: 'Kembali ke draf tersimpan',
-  allHostDrafts: 'Semua draf di host ini',
-  currentScopeDrafts: 'Draf untuk kotak pesan ini',
-  noSavedDrafts: 'Belum ada draf tersimpan di sini.',
-  savedDraftDeviceHint: 'Disimpan di perangkat ini. Memulihkan tidak akan mengirim pesan.',
-  saveCurrentAndRestore: 'Simpan pesan saat ini dan pulihkan',
-  saveCurrentDraftHint: 'Simpan pesan saat ini sebagai draf lain sebelum memulihkan draf ini?',
-  savedDraftUploading:
-    'Tunggu lampiran selesai diunggah, atau batalkan pemilih berkas sebelum menyimpan atau memulihkan.',
-  savedDraftFull:
-    'Penyimpanan draf penuh. Hapus draf atau kurangi ukuran pesan sebelum mencoba lagi. Pesan Anda tetap tersimpan.',
-  savedDraftChanged: 'Pesan atau draf tersimpan telah berubah. Tinjau pesan saat ini lalu coba lagi.',
-  savedDraftFailed:
-    'Tidak dapat menyimpan atau memulihkan draf. Pesan Anda tetap ada. Periksa ruang penyimpanan perangkat lalu coba lagi.',
-  savedDraftReadFailed: 'Tidak dapat membaca draf tersimpan. Data tetap disimpan untuk pemulihan.',
-  openOriginalDraft: 'Buka kotak pesan asal',
-  useDraftHere: 'Gunakan di kotak pesan ini',
-  useDraftHereHint:
-    'Tinjau pesan sebelum menggunakannya di sini. Referensi berkas dan skill menjadi teks, dan konteks berkas tetap menjadi data kutipan. Lampiran perlu diperiksa di host. Proyek, ruang kerja, dan model kotak pesan ini tetap dipakai.',
-  savedDraftRecoveryTooLarge:
-    'Konteks yang direkam terlalu besar untuk dipulihkan sebagai teks di sini. Draf asal tetap tersimpan. Salin teks yang diperlukan dari pratinjau, atau buka kotak pesan asal.',
-  savedDraftScopeMissing: 'Thread atau proyek asal tidak tersedia. Pesan tersimpan tetap dapat ditinjau di sini.',
   attachmentNeedsCheck: 'Lampiran perlu diperiksa di host sebelum dikirim',
   savedAttachmentOffline:
     'Hubungkan kembali host ini untuk memeriksa lampiran yang dipulihkan sebelum mengirim. Anda tetap dapat mengedit dan menyimpan draf.',
