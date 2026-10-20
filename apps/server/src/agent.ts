@@ -509,6 +509,7 @@ export class AgentService {
         settings: { ...parent.settings, model: task.model ?? parent.settings.model },
         state: running ? 'running' : task.status === 'failed' ? 'failed' : 'idle',
         pendingInput: false,
+        inputSummary: null,
         waitingUntil: null,
         nativeTask: task,
       })

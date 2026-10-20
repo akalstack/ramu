@@ -4176,3 +4176,62 @@ for (const os of ['ios', 'android']) {
     hooks.dispose()
   })
 }
+
+for (const os of ['ios', 'android']) {
+  test(`${os} thread rows expose approval priority, old-host input and offline last-known status without changing navigation`, () => {
+    let destination
+    let online = true
+    const goalHold = load('../../../packages/shared/src/chat/goalHold.ts', os)
+    const status = load('../../../packages/shared/src/chat/threadStatus.ts', os, { './goalHold': goalHold })
+    const strings = {
+      threadApproval: 'Approval',
+      threadApprovalFull: 'Approval needed',
+      threadInput: 'Needs input',
+      threadInputFull: 'Waiting for your input',
+      threadOffline: 'Offline · last-known activity',
+      offline: 'Offline',
+    }
+    const { ChatRow } = load('components/ChatRow.tsx', os, {
+      react: { memo: (component) => component, useState: () => [false, () => {}] },
+      'expo-router': {
+        useRouter: () => ({
+          push: (route) => {
+            destination = route
+          },
+        }),
+      },
+      '@ramu/shared/chat/threadStatus': status,
+      '../i18n': { useT: () => strings, ago: () => 'now' },
+      '../runtime/store': {
+        useStore: () => ({ isOnline: () => online, inbox: { a: [{ kind: 'done', sessionId: 's' }] } }),
+      },
+      './ChatActions': { useChatCommands: () => ({}), ChatActionsSheet: 'ChatActionsSheet' },
+      './SwipeRow': { SwipeRow: 'SwipeRow' },
+      './ui': { Row: 'Row', T: 'T', StatusIcon: 'StatusIcon' },
+    })
+    const chat = {
+      id: 'a:t',
+      taskId: 't',
+      computerId: 'a',
+      title: 'Build',
+      status: 'idle',
+      sessionId: 's',
+      pinnedAt: null,
+      items: [],
+      inputSummary: { count: 1, approvals: 1, requests: [] },
+    }
+    let tree = ChatRow({ chat })
+    assert.equal(find(tree, 'Row').props.accessibilityLabel, 'Build, Approval needed')
+    assert.equal(find(tree, 'StatusIcon').props.status, 'needs-input')
+    assert.ok(nodes(tree).some((node) => node.type === 'T' && node.props.children === 'Approval'))
+    find(tree, 'Row').props.onPress()
+    assert.deepEqual(JSON.parse(JSON.stringify(destination)), { pathname: '/chat/[id]', params: { id: 'a:t' } })
+    online = false
+    tree = ChatRow({ chat })
+    assert.match(find(tree, 'Row').props.accessibilityLabel, /Offline · last-known activity/)
+    assert.ok(nodes(tree).some((node) => node.type === 'T' && node.props.children === 'Offline'))
+    tree = ChatRow({ chat: { ...chat, status: 'needs-input', inputSummary: undefined } })
+    assert.match(find(tree, 'Row').props.accessibilityLabel, /Waiting for your input/)
+    assert.ok(!nodes(tree).some((node) => node.type === 'T' && node.props.children === 'Approval'))
+  })
+}

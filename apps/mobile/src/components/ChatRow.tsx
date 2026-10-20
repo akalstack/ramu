@@ -17,6 +17,7 @@ const SHORT = {
   paused: ['threadPaused', 'threadPausedFull'],
   blocked: ['threadInput', 'threadBlockedFull'],
   'turn-limit': ['threadTurnLimit', 'threadTurnLimitFull'],
+  approval: ['threadApproval', 'threadApprovalFull'],
   input: ['threadInput', 'threadInputFull'],
   limit: ['threadLimit', 'threadLimitFull'],
   failed: ['threadFailed', 'threadFailedFull'],
@@ -46,6 +47,7 @@ export const ChatRow = memo(function ChatRow({
   const status = chat.pending
     ? null
     : threadStatus(chat, unread && (chat.status === 'idle' || chat.status === 'ready-for-review'), chat.goal)
+  const online = store.isOnline(chat.computerId)
   const [shortKey, fullKey] = status ? SHORT[status.kind] : []
   // A thread with no project and nothing to preview is one line; its row is centered instead of leaving a blank line.
   const hasDetail = Boolean(project || chat.mode === 'worktree' || chat.preview)
@@ -84,12 +86,14 @@ export const ChatRow = memo(function ChatRow({
             borderTopWidth: divider ? StyleSheet.hairlineWidth : 0,
             borderTopColor: c.lineStrong,
           }}
-          accessibilityLabel={fullKey ? `${chat.title}, ${strings[fullKey]}` : chat.title}
+          accessibilityLabel={[chat.title, fullKey ? strings[fullKey] : null, !online ? strings.threadOffline : null]
+            .filter(Boolean)
+            .join(', ')}
         >
           <View style={{ paddingTop: hasDetail ? 2 : 0 }}>
             {chat.pending ? (
               <Clock size={16} color={c.muted} />
-            ) : unread && (chat.status === 'idle' || chat.status === 'ready-for-review') ? (
+            ) : status?.kind === 'finished' ? (
               <View
                 accessibilityLabel="Unread"
                 style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}
@@ -97,7 +101,9 @@ export const ChatRow = memo(function ChatRow({
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.accent }} />
               </View>
             ) : (
-              <StatusIcon status={chat.status} />
+              <StatusIcon
+                status={status?.kind === 'approval' || status?.kind === 'input' ? 'needs-input' : chat.status}
+              />
             )}
           </View>
           <View style={{ flex: 1, gap: 2 }}>
@@ -106,11 +112,22 @@ export const ChatRow = memo(function ChatRow({
                 {chat.title}
               </T>
               {chat.pinnedAt !== null ? <Pin size={11} color={c.muted} /> : null}
+              {!online ? (
+                <T size={font.caption} tone="muted">
+                  {strings.offline}
+                </T>
+              ) : null}
               {shortKey ? (
                 <T
                   size={font.caption}
                   weight="500"
-                  tone={status?.kind === 'input' ? 'warn' : status?.kind === 'failed' ? 'bad' : 'soft'}
+                  tone={
+                    status?.kind === 'input' || status?.kind === 'approval'
+                      ? 'warn'
+                      : status?.kind === 'failed'
+                        ? 'bad'
+                        : 'soft'
+                  }
                 >
                   {strings[shortKey]}
                 </T>

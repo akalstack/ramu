@@ -1,3 +1,4 @@
+import { mergeInputSummaries } from '@ramu/shared/chat/inputSummary'
 import { generateBranchName } from '../../workspace/branchNaming'
 import { projectActionSchema } from '../../workspace/projectConfig'
 import { ProjectActions } from '../../workspace/projectActions'
@@ -142,11 +143,14 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       args: z.tuple([]),
       run: () =>
         workspace.listTasks().map((task) => {
-          const main = agents.list(task.id).findLast((session) => !session.parentId)
+          const sessions = agents.list(task.id).filter((session) => !session.parentId)
+          const main = sessions.at(-1)
+          const inputSummary = mergeInputSummaries(sessions.map((session) => session.inputSummary))
           const goal = main ? agents.goalOf(main.id) : null
-          if (!goal || goal.status === 'completed') return { ...task, goalState: null }
+          if (!goal || goal.status === 'completed') return { ...task, goalState: null, inputSummary }
           return {
             ...task,
+            inputSummary,
             goalState: {
               status: goal.status,
               ...(goal.pausedBy ? { pausedBy: goal.pausedBy } : {}),

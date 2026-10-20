@@ -1,4 +1,4 @@
-import type { LibrarySummary, RecapItem, TaskStatus } from './types'
+import type { LibrarySummary, RecapItem, TaskStatus, ThreadInputSummary } from './types'
 
 // Shared desktop/mobile inbox: what needs you, what is running, recaps, learning, and finished work.
 // Keep derivation independent of rendering and apply host scope before limits or counts.
@@ -12,6 +12,7 @@ export interface InboxChat {
   taskId: string
   computerId: string
   status: TaskStatus
+  inputSummary?: ThreadInputSummary | null
   lastActiveAt: number
   sessionId: string | null
   doneAt?: number | null
@@ -88,8 +89,11 @@ export function buildInbox(input: {
   const live = input.chats.filter(
     (chat) => inScope(chat.computerId) && !chat.pending && !chat.doneAt && chat.status !== 'archived',
   )
-  const waiting = live.filter((chat) => chat.status === 'needs-input').sort((a, b) => b.lastActiveAt - a.lastActiveAt)
-  const running = live.filter((chat) => chat.status === 'running').sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  const needsInput = (chat: InboxChat) => chat.status === 'needs-input' || !!chat.inputSummary?.count
+  const waiting = live.filter(needsInput).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  const running = live
+    .filter((chat) => chat.status === 'running' && !needsInput(chat))
+    .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   const enabled = input.recapsEnabled ?? (() => true)
   const recaps = splitRecaps(
     input.recaps.filter((r) => inScope(r.computerId) && enabled(r.computerId)),
@@ -106,7 +110,9 @@ export function buildInbox(input: {
   const completed = live
     .filter(
       (chat) =>
-        (chat.status === 'ready-for-review' || chat.status === 'idle' || chat.status === 'failed') && chat.sessionId,
+        (chat.status === 'ready-for-review' || chat.status === 'idle' || chat.status === 'failed') &&
+        !needsInput(chat) &&
+        chat.sessionId,
     )
     .filter((chat) => chat.lastActiveAt >= since)
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)

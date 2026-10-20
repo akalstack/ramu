@@ -16,7 +16,12 @@ export function StatusMark({ task, status }: { task: Task; status: ThreadStatus 
   useLanguage()
   if (!status) return null
   if (status.kind === 'working' || status.kind === 'goal') return <StateDot kind="spinner" label={t(status.full)} />
-  if (status.kind === 'input' || status.kind === 'blocked' || status.kind === 'turn-limit')
+  if (
+    status.kind === 'approval' ||
+    status.kind === 'input' ||
+    status.kind === 'blocked' ||
+    status.kind === 'turn-limit'
+  )
     return <StateDot kind="dot warn text-warn" label={t(status.full)} />
   if (status.kind === 'paused') return <StateDot kind="dot" label={t(status.full)} />
   if (status.kind === 'limit')

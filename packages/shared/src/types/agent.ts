@@ -136,7 +136,24 @@ export interface PermissionRemoval {
   projectId?: string
 }
 
+/** Bounded, host-authored list context. IDs address the existing request in its owning session. */
+export interface ThreadInputRequest {
+  sessionId: string
+  requestId: string
+  kind: 'approval' | 'question' | 'connector'
+  title: string
+  source?: { sessionId: string; agentId: string; name: string; requestId?: string }
+}
+export interface ThreadInputSummary {
+  count: number
+  approvals: number
+  /** At most three requests, approvals first. Open the thread to review all requests. */
+  requests: ThreadInputRequest[]
+}
+
 export interface AgentSessionInfo {
+  /** Absent on older hosts; null means no unresolved request. */
+  inputSummary?: ThreadInputSummary | null
   /** Overview-only fields; native helpers remain owned by their parent provider session. */
   pendingInput?: boolean
   waitingUntil?: number | null

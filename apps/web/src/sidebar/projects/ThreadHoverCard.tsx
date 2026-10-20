@@ -100,6 +100,21 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
       {status && status.short !== status.full && (
         <div className="text-caption text-muted-foreground">{t(status.full)}</div>
       )}
+      {!!task.inputSummary?.count && (
+        <div className="flex flex-col gap-1 text-caption" aria-label={t('Pending requests')}>
+          <span className="text-muted-foreground">{t('{0} input requests', { 0: task.inputSummary.count })}</span>
+          {task.inputSummary.requests.map((request) => (
+            <div key={`${request.sessionId}:${request.requestId}`} className="text-soft [overflow-wrap:anywhere]">
+              <span>
+                {t(request.kind === 'approval' ? 'Approval needed' : 'Waiting for your input')}: {request.title}
+              </span>
+              {request.source && (
+                <span className="block text-muted-foreground">{t('From {0}', { 0: request.source.name })}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       {task.goalState && (
         <div className="flex flex-col gap-0.5 text-caption">
           <span className="text-soft [overflow-wrap:anywhere]">

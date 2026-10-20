@@ -1,3 +1,4 @@
+import { changesThreadSummary } from '@ramu/shared/chat/inputSummary'
 import { closingPanel } from '@ramu/shared/workspace/panelClose'
 import { showChat } from './layoutPrefs'
 import { persistentTaskUi } from '@ramu/shared/workspace/sourceNavigation'
@@ -555,8 +556,7 @@ const HostWorkspace = memo(function HostWorkspace({
       }),
     )
     const off = runtime.on('agent:event', ({ event }) => {
-      if (event.kind !== 'state' && event.kind !== 'user' && event.kind !== 'provider-wait' && event.kind !== 'goal')
-        return
+      if (!changesThreadSummary(event)) return
       runtime.deliver('tasks', () => {
         clearTimeout(timer)
         timer = setTimeout(() => {

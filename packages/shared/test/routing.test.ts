@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_AGENT_SETTINGS,
   DEFAULT_SUBAGENT_PREFERENCES,
   type AgentModel,
   type FallbackStep,
@@ -8,6 +9,7 @@ import {
 } from '../src/types'
 import { accountDisplayName, providerAccountOrder, providerAccountRows } from '../src/providers/providers'
 import {
+  capSubagentEffort,
   accountKey,
   defaultOrder,
   isOver,
@@ -423,5 +425,35 @@ describe('account-aware routing across providers', () => {
     expect(
       planRoute(settings('codex'), [], { ...context, attemptedAccounts: new Set([accountKey('codex', 'b')]) }),
     ).toBeNull()
+  })
+})
+
+describe('sub-agent effort caps', () => {
+  const settings = { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' as const, model: 'gpt-sol', effort: 'xhigh' as const }
+  it('uses the stricter cap and never rounds upward across unsupported levels', () => {
+    expect(
+      capSubagentEffort(
+        settings,
+        { ...DEFAULT_SUBAGENT_PREFERENCES, maxEffort: 'high', modelMaxEffort: { 'codex:gpt-sol': 'medium' } },
+        catalogs,
+      ).effort,
+    ).toBe('medium')
+    expect(() =>
+      capSubagentEffort(settings, { ...DEFAULT_SUBAGENT_PREFERENCES, maxEffort: 'minimal' }, catalogs),
+    ).toThrow(/No supported effort/)
+    expect(capSubagentEffort(settings, DEFAULT_SUBAGENT_PREFERENCES, catalogs)).toEqual(settings)
+  })
+  it('caps model defaults and keeps provider model identities separate', () => {
+    expect(
+      capSubagentEffort({ ...settings, effort: null }, { ...DEFAULT_SUBAGENT_PREFERENCES, maxEffort: 'low' }, catalogs)
+        .effort,
+    ).toBe('low')
+    expect(
+      capSubagentEffort(
+        settings,
+        { ...DEFAULT_SUBAGENT_PREFERENCES, modelMaxEffort: { 'claude-code:gpt-sol': 'low' } },
+        catalogs,
+      ).effort,
+    ).toBe('xhigh')
   })
 })

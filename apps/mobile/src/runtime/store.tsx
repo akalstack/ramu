@@ -1,3 +1,4 @@
+import { inputSummary } from '@ramu/shared/chat/inputSummary'
 import type { BranchNamingIntent, BranchChoice } from '@ramu/shared/workspaceDefaults'
 import { normalizeHelperGroups } from './threadActivity'
 import { isCompacting } from '@ramu/shared/chat/compaction'
@@ -335,6 +336,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               ? {
                   ...chat,
                   items,
+                  inputSummary: ['stopped', 'failed'].includes(chat.executionState ?? '')
+                    ? null
+                    : inputSummary(
+                        ordered.map((x) => x[1]),
+                        sessionId,
+                      ),
                   compacting:
                     chat.executionState !== 'stopped' &&
                     chat.executionState !== 'failed' &&
@@ -555,6 +562,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                           : task.status === 'ready-for-review'
                             ? 'ready-for-review'
                             : 'idle',
+                inputSummary: ['stopped', 'failed'].includes(sessionState ?? '')
+                  ? null
+                  : inputSummary(events, session?.id ?? ''),
                 executionState: sessionState,
                 compacting: sessionState !== 'stopped' && sessionState !== 'failed' && isCompacting(events),
                 items: transcript(
@@ -1348,7 +1358,7 @@ export function useChat(id?: string) {
 export function counts(chats: Chat[], computerId: string) {
   const mine = chats.filter((c) => c.computerId === computerId && !c.pending)
   return {
-    running: mine.filter((c) => c.status === 'running').length,
-    waiting: mine.filter((c) => c.status === 'needs-input').length,
+    running: mine.filter((c) => c.status === 'running' && !c.inputSummary?.count).length,
+    waiting: mine.filter((c) => c.status === 'needs-input' || !!c.inputSummary?.count).length,
   }
 }

@@ -76,6 +76,7 @@ export const fallbackStep = z.object({
   effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable(),
   serviceTier: z.enum(['standard', 'fast']).optional(),
 })
+const effortCap = fallbackStep.shape.effort
 const threshold = z.union([z.literal(80), z.literal(90), z.literal(95), z.null()])
 const order = z.array(fallbackStep).max(10)
 /** Settings saved with a list per provider become one order: the Claude Code list (or the first set), led by that provider. */
@@ -104,6 +105,9 @@ const subagentPreferences = z.preprocess(
   migrateChains,
   z.object({
     mode: z.enum(['native', 'single', 'per-provider']).default('native'),
+    autoSelect: z.enum(['off', 'model-and-effort', 'effort-only']).default('off'),
+    maxEffort: effortCap.default(null),
+    modelMaxEffort: z.record(z.string().max(400), effortCap.unwrap()).default({}),
     single: fallbackStep.nullable().default(null),
     perProvider: z.partialRecord(providerId, fallbackStep.nullable()).default({}),
     byType: z

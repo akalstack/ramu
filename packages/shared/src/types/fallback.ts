@@ -23,6 +23,11 @@ export interface FallbackPreferences {
 export interface SubagentPreferences {
   /** native: each provider's own sub-agents. single: all run on one step. per-provider: a step (or native) per provider. */
   mode: 'native' | 'single' | 'per-provider'
+  /** Ask the destination provider to choose for each cross-provider task. Off preserves configured routing. */
+  autoSelect: 'off' | 'model-and-effort' | 'effort-only'
+  maxEffort: ReasoningEffort | null
+  /** Provider-qualified model keys (provider:model). Both caps apply; the lower wins. */
+  modelMaxEffort: Record<string, ReasoningEffort>
   single: FallbackStep | null
   /** null means native for that provider. */
   perProvider: Partial<Record<AgentProvider, FallbackStep | null>>
@@ -63,6 +68,9 @@ export interface AdviceStatus {
 export const DEFAULT_FALLBACK_PREFERENCES: FallbackPreferences = { switchAt: null, autoResume: true }
 export const DEFAULT_SUBAGENT_PREFERENCES: SubagentPreferences = {
   mode: 'native',
+  autoSelect: 'off',
+  maxEffort: null,
+  modelMaxEffort: {},
   single: null,
   perProvider: {},
   byType: [],

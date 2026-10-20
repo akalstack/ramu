@@ -43,6 +43,16 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Model then effort": "Model lalu effort",
   "Choose configured steps, or choose a model and adjust its supported effort. Switching keeps your current selection and draft.": "Pilih langkah yang diatur, atau pilih model dan sesuaikan effort yang didukung. Mengganti cara pemilihan tetap mempertahankan pilihan dan draf saat ini.",
 
+  "Automatic selection": "Pemilihan otomatis",
+  "For cross-provider tasks, ask the destination provider to choose. Adds a short selection request; unavailable selection uses the configured model and effort.": "Untuk tugas lintas penyedia, minta penyedia tujuan memilih. Menambahkan permintaan pemilihan singkat; jika tidak tersedia, gunakan model dan effort yang diatur.",
+  "No cap": "Tanpa batas",
+  "Maximum sub-agent effort": "Effort maksimum sub-agent",
+  "Caps Ramu-managed sub-agents, including fallbacks. Native sub-agents keep their provider settings. The lower of the global and model caps applies.": "Membatasi sub-agent yang dikelola Ramu, termasuk fallback. Sub-agent native mengikuti pengaturan penyedianya. Batas terendah antara global dan model berlaku.",
+  "Per-model effort caps": "Batas effort per model",
+  "Configure model caps": "Atur batas model",
+  "Maximum effort for {0}": "Effort maksimum untuk {0}",
+  "No model cap": "Tanpa batas model",
+
   "Default Markdown view": "Tampilan Markdown bawaan",
   "Choose how Markdown files open. Links to a specific line open Source.": "Pilih tampilan saat membuka berkas Markdown. Tautan ke baris tertentu membuka Sumber.",
   "Source": "Sumber",

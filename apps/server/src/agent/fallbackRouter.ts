@@ -12,6 +12,7 @@ import {
   type ProviderCatalog,
 } from '@ramu/shared/types'
 import {
+  capSubagentEffort,
   defaultOrder,
   resolveStep,
   subagentOrder,
@@ -337,7 +338,7 @@ export class FallbackRouter {
       this.attemptedAccounts.get(id)?.add(accountKey(decision.step.provider, decision.step.accountId))
     await this.applySettings(
       id,
-      this.withStep(s.settings, decision.step),
+      this.cappedChildSettings(s, this.withStep(s.settings, decision.step), catalogs),
       `${decision.reason} — continuing ${decision.step.provider === s.provider && decision.step.accountId !== s.settings.accountId ? `on ${this.accountName(s.provider, decision.step.accountId)}` : `with ${providerName(decision.step.provider)}`}`,
     )
     return true
@@ -459,7 +460,12 @@ export class FallbackRouter {
           const model = step.model
             ? models?.find((model) => model.id === step!.model)
             : (models?.find((model) => model.isDefault) ?? models?.[0])
-          plan = this.host.planTransition(id, this.withStep(s.settings, step), 'limit', model?.contextWindow)
+          plan = this.host.planTransition(
+            id,
+            this.cappedChildSettings(s, this.withStep(s.settings, step), catalogs),
+            'limit',
+            model?.contextWindow,
+          )
           if (plan.fits) break
           tooLarge = step.provider
         } catch (error) {
@@ -485,7 +491,7 @@ export class FallbackRouter {
         return
       }
       attempted.add(stepKey(step))
-      const settings = this.withStep(s.settings, step)
+      const settings = this.cappedChildSettings(s, this.withStep(s.settings, step), catalogs)
       const same = step.provider === s.provider
       const peak = peakFor(routing?.usage ?? [], s.provider, s.settings.model)
       const resume = plan?.resume ?? null
@@ -518,6 +524,15 @@ export class FallbackRouter {
       this.host.transitioning.delete(id)
       this.host.settleChild(id)
     }
+  }
+
+  private cappedChildSettings(
+    session: AgentSessionInfo,
+    settings: AgentSettings,
+    catalogs: ProviderCatalog[],
+  ): AgentSettings {
+    const prefs = this.host.preferences()?.subagents
+    return session.parentId && prefs ? capSubagentEffort(settings, prefs, catalogs) : settings
   }
 
   /** The settings a new sub-agent of this chat should run on, and whether Ramu (not the provider) must run it. */

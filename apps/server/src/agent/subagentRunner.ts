@@ -1,3 +1,6 @@
+import { selectSubagentSettings } from './subagentSelection'
+import type { BackgroundAnalysis } from './backgroundAnalysis'
+import { capSubagentEffort } from '@ramu/shared/providers/routing'
 import { forwardedRequestId } from './childRequests'
 import { clipText } from '@ramu/shared/text'
 import { providerName } from '@ramu/shared/providers/providers'
@@ -36,6 +39,7 @@ import type { AgentService } from '../agent'
 /** What SubagentRunner needs from the rest of the service. */
 export interface SubagentRunnerHost
   extends
+    Pick<BackgroundAnalysis, 'analyze'>,
     Pick<CatalogService, 'validateSettings'>,
     Pick<MessageDispatcher, 'submit'>,
     Pick<SessionProcess, 'launch' | 'stop'>,
@@ -127,12 +131,35 @@ export class SubagentRunner {
     else finish('')
   }
 
-  /** Starts a sub-agent as a session of its own on the provider and model routing picks. Foreground waits for its report. */
+  private readonly pendingStarts = new Map<symbol, string>()
+
   async spawnSubagent(
     parentId: string,
     input: SubagentInput,
     signal?: AbortSignal,
     forced?: { step: FallbackStep; reason: string },
+  ): Promise<SubagentResult> {
+    const cap = this.host.preferences()?.subagents.maxConcurrent ?? 3
+    const active = [...this.children.values()].filter((run) => run.parentId === parentId && !run.settled).length
+    const pending = [...this.pendingStarts.values()].filter((id) => id === parentId).length
+    if (active + pending >= cap)
+      throw new Error(`${cap} sub-agents are already running. Wait for one to finish, then try again.`)
+    const reservation = Symbol()
+    this.pendingStarts.set(reservation, parentId)
+    try {
+      return await this.startSubagent(parentId, input, signal, forced, reservation)
+    } finally {
+      this.pendingStarts.delete(reservation)
+    }
+  }
+
+  /** Starts a sub-agent as a session of its own on the provider and model routing picks. Foreground waits for its report. */
+  private async startSubagent(
+    parentId: string,
+    input: SubagentInput,
+    signal: AbortSignal | undefined,
+    forced: { step: FallbackStep; reason: string } | undefined,
+    reservation: symbol,
   ): Promise<SubagentResult> {
     const parent = this.host.get(parentId)
     if (parent.parentId) throw new Error('A sub-agent cannot start sub-agents through Ramu. Use your own tools.')
@@ -148,8 +175,29 @@ export class SubagentRunner {
           from: parent.provider,
         }
       : await this.host.subagentSettings(parentId, input.type)
-    await this.host.validateSettings(target.settings)
     const catalogs = await this.host.catalog()
+    const selectionPrefs = this.host.preferences()?.subagents
+    if (selectionPrefs) {
+      if (
+        target.settings.provider !== parent.provider &&
+        selectionPrefs.autoSelect &&
+        selectionPrefs.autoSelect !== 'off'
+      ) {
+        const selection = await selectSubagentSettings(
+          target.settings,
+          selectionPrefs,
+          catalogs,
+          `${input.description}\n${input.prompt}`,
+          (...args) => this.host.analyze(...args),
+          signal,
+        )
+        target.settings = selection.settings
+        target.reason = [target.reason, selection.note].filter(Boolean).join('; ')
+      } else target.settings = capSubagentEffort(target.settings, selectionPrefs, catalogs)
+    }
+    if (signal?.aborted || this.host.shutdown() || this.host.get(parentId).state === 'stopped')
+      throw new Error('Sub-agent start was cancelled.')
+    await this.host.validateSettings(target.settings)
     const name = clipText(input.name?.trim() || input.description.trim() || 'Sub-agent', 80)
     // Its own copy of the checkout, when asked for: parallel helpers never overwrite each other or the chat.
     const isolationRoot = this.host.isolationRoot()
@@ -183,6 +231,7 @@ export class SubagentRunner {
       toolUses: 0,
       startedAt: Date.now(),
     }
+    this.pendingStarts.delete(reservation)
     this.children.set(child.id, run)
     this.host.attempted.set(child.id, new Set([settingsKey(target.settings, catalogs)]))
     const settings = target.settings

@@ -260,3 +260,28 @@ export function nextAccount(
   }
   return null
 }
+
+/** Apply both sub-agent caps without rounding above either ceiling. */
+export function capSubagentEffort(
+  settings: AgentSettings,
+  prefs: SubagentPreferences,
+  catalogs: ProviderCatalog[],
+): AgentSettings {
+  const model = catalogs
+    .find((c) => c.provider === settings.provider)
+    ?.models.find((m) => (settings.model ? m.id === settings.model : m.isDefault))
+  if (!model) return settings
+  const caps = [
+    prefs.maxEffort,
+    prefs.modelMaxEffort?.[stepKey({ provider: settings.provider, model: model.id })],
+  ].filter((e): e is ReasoningEffort => !!e)
+  if (!caps.length) return settings
+  const ceiling = Math.min(...caps.map((e) => EFFORT_ORDER.indexOf(e)))
+  const wanted = nearestEffort(settings.effort, model)
+  if (wanted === null || EFFORT_ORDER.indexOf(wanted) <= ceiling) return { ...settings, effort: wanted }
+  const effort = [...model.efforts]
+    .filter((e) => EFFORT_ORDER.indexOf(e) <= ceiling)
+    .sort((a, b) => EFFORT_ORDER.indexOf(b) - EFFORT_ORDER.indexOf(a))[0]
+  if (!effort) throw new Error(`No supported effort for ${model.id} is within the sub-agent effort cap.`)
+  return { ...settings, effort }
+}

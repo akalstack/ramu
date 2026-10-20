@@ -138,3 +138,38 @@ it('only accepts supported host thread commands with the required arguments', as
   expect(isHostTaskCommand('tasks.delete', ['', true])).toBe(false)
   expect(isHostTaskCommand('background.stop', [])).toBe(false)
 })
+
+it('puts async questions and approvals in Waiting even when execution continues, and keeps them out of Completed', () => {
+  const summary = { count: 1, approvals: 1, requests: [] }
+  const chats: InboxChat[] = [
+    {
+      id: 'live',
+      computerId: 'a',
+      taskId: 'live',
+      sessionId: 's',
+      status: 'running',
+      lastActiveAt: Date.now(),
+      inputSummary: summary,
+    },
+    {
+      id: 'idle',
+      computerId: 'a',
+      taskId: 'idle',
+      sessionId: 'i',
+      status: 'idle',
+      lastActiveAt: Date.now(),
+      inputSummary: { ...summary, approvals: 0 },
+    },
+  ]
+  const result = buildInbox({ chats, recaps: [], summaries: [] })
+  expect(result.waiting.map((chat) => chat.id)).toEqual(['live', 'idle'])
+  expect(result.running).toEqual([])
+  expect(result.completed.flatMap((day) => day.items)).toEqual([])
+  const cleared = buildInbox({
+    chats: chats.map((chat) => ({ ...chat, inputSummary: null })),
+    recaps: [],
+    summaries: [],
+  })
+  expect(cleared.waiting).toEqual([])
+  expect(cleared.running.map((chat) => chat.id)).toEqual(['live'])
+})

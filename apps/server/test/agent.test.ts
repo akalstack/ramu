@@ -2299,6 +2299,42 @@ describe('sub-agents Ramu runs', () => {
     return s
   }
 
+  it('selects effort on the destination provider and records the capped result', async () => {
+    const svc = routed({ autoSelect: 'effort-only', maxEffort: 'medium' })
+    const parent = await parentOf(svc)
+    const analyze = vi.spyOn(svc, 'analyze').mockResolvedValue({
+      message: '{"model":"codex-test","effort":"low"}',
+      provider: 'codex',
+      model: 'codex-test',
+    })
+    const result = await svc.spawnSubagent(parent.id, { description: 'Review', prompt: 'Review code' })
+    expect(analyze).toHaveBeenCalledOnce()
+    expect(svc.get(result.agentId).settings.effort).toBe('low')
+    expect(svc.task(parent.id, result.agentId)).toMatchObject({ model: 'codex-test', effort: 'low' })
+    svc.stopAll()
+  })
+
+  it('reserves concurrency while selection runs and cancels before starting a stopped parent child', async () => {
+    const svc = routed({ autoSelect: 'effort-only', maxConcurrent: 1 })
+    const parent = await parentOf(svc)
+    let finish!: (result: { message: string; provider: 'codex'; model: string }) => void
+    vi.spyOn(svc, 'analyze').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const start = svc.spawnSubagent(parent.id, { description: 'Review', prompt: 'Review code' })
+    await until(() => !!finish)
+    await expect(svc.spawnSubagent(parent.id, { description: 'Second', prompt: 'More' })).rejects.toThrow(
+      /already running/,
+    )
+    svc.stop(parent.id)
+    finish({ message: '{"model":"codex-test","effort":"low"}', provider: 'codex', model: 'codex-test' })
+    await expect(start).rejects.toThrow(/cancelled/)
+    svc.stopAll()
+  })
+
   it('runs a foreground sub-agent on another provider and returns its report', async () => {
     const svc = routed()
     const parent = await parentOf(svc)

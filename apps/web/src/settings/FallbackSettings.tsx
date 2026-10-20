@@ -1,3 +1,4 @@
+import { SubagentSelectionSettings } from './SubagentSelectionSettings'
 import { SettingsField, useSettingsInvoke } from './SettingsScope'
 import { SettingsGroupTitle, SettingsRow } from '@/components/settings-row'
 import { errorText } from '../lib/errors'
@@ -573,6 +574,7 @@ export function SubagentSettings({
           ))}
         </div>
       )}
+      <SubagentSelectionSettings value={sub} onChange={set} busy={busy} />
       <div className="settings-intro">
         <h4>{t('By type')}</h4>
         <p className="muted text-muted-foreground small text-caption">

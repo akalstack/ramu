@@ -1,5 +1,6 @@
 import type { BranchChoice, BranchNamingIntent } from '../workspaceDefaults'
 import type { ChatGoal } from './goal'
+import type { ThreadInputSummary } from './agent'
 export type CheckoutMode = 'current' | 'worktree'
 
 export interface Project {
@@ -105,6 +106,8 @@ export interface Task {
    * means there is none (or it is complete).
    */
   goalState?: TaskGoalSummary | null
+  /** Unresolved requests from main sessions, including forwarded helper input. Older hosts omit this. */
+  inputSummary?: ThreadInputSummary | null
   /** A chat started from a "What Ramu learned" summary; it shows a Review label under Chats. */
   kind?: 'library-review' | null
 }
