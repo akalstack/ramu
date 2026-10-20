@@ -1,11 +1,10 @@
-import { useContext, useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { AgentProvider } from '@ramu/shared/types'
-import type { ProjectMcpServer, ProjectSetupSource } from '@ramu/shared/mcp'
+import type { ProjectMcpServer, ProjectSetupSource, ProjectSkill } from '@ramu/shared/mcp'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
 import { Input } from '@/components/desktop-input'
 import { Switch } from '@/components/ui/switch'
-import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Dropdown } from '../Menu'
@@ -14,7 +13,7 @@ import { errorText } from '../lib/errors'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { useWorkspace } from '../workspace/workspace'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
-import { SettingsCard, SettingsCardList, usePaged } from './cards'
+import { usePaged } from './cards'
 import { McpSettings } from './McpSettings'
 
 const CAPTION = 'm-0 text-caption text-muted-foreground'
@@ -52,54 +51,105 @@ function fromText(sources: ProjectSetupSource[]) {
   return places.length > 2 ? t('{places} and {count} more', { places: shown, count: places.length - 2 }) : shown
 }
 
-function serverStatus(server: ProjectMcpServer) {
-  if (server.shared) return t('Every provider and account')
-  if (server.shareBlocked) return t(server.shareBlocked)
-  if (!server.nativeProviders.length) return t('Turned off in every provider')
-  return t('Only {providers}', { providers: server.nativeProviders.map(providerName).join(', ') })
+type Shareable = Pick<ProjectMcpServer, 'shared' | 'shareBlocked' | 'nativeProviders'>
+
+/** One line on who has it now: shared, only some providers, or off everywhere. */
+function reach(item: Shareable) {
+  if (item.shared) return t('Shared with every provider and account')
+  if (item.shareBlocked) return t(item.shareBlocked)
+  if (!item.nativeProviders.length) return t('Turned off in every provider')
+  return t('Only in {providers}', { providers: item.nativeProviders.map(providerName).join(', ') })
 }
 
-function ServerRow({
-  server,
+/** A name, who has it, where it comes from, and the one switch that shares it. */
+function ShareRow({
+  name,
+  detail,
+  item,
+  providers,
+  sources,
+  label,
   disabled,
   onShare,
 }: {
-  server: ProjectMcpServer
+  name: string
+  detail: string
+  item: Shareable
+  providers: AgentProvider[]
+  sources: ProjectSetupSource[]
+  label: string
   disabled: boolean
   onShare(shared: boolean): void
 }) {
-  const location =
-    server.transport.type === 'http'
-      ? server.transport.url
-      : [server.transport.command, ...server.transport.args].join(' ')
   return (
     <SettingsRow>
       <span>
         <span className="flex min-w-0 items-center gap-2">
-          <strong className="min-w-0 truncate">{server.name}</strong>
-          <ProviderStrip providers={server.providers} />
+          <strong className="min-w-0 truncate">{name}</strong>
+          <ProviderStrip providers={providers} />
         </span>
-        <span className="block truncate small text-caption text-muted-foreground" title={location}>
-          {location}
+        <span className="block truncate small text-caption text-muted-foreground" title={detail}>
+          {detail}
         </span>
         <span className="block small text-caption text-muted-foreground">
-          {serverStatus(server)} · {t('From {places}', { places: fromText(server.sources) })}
+          {reach(item)} · {t('From {places}', { places: fromText(sources) })}
         </span>
       </span>
       <Switch
-        aria-label={t('Share {name} with every provider and account', { name: server.name })}
-        checked={server.shared}
-        disabled={disabled || !!server.shareBlocked || !server.nativeProviders.length}
+        aria-label={label}
+        checked={item.shared}
+        disabled={disabled || !!item.shareBlocked || !item.nativeProviders.length}
         onCheckedChange={onShare}
       />
     </SettingsRow>
   )
 }
 
+/** A titled run of rows. `user` items come from the person's own provider files; `project` from the project's folders. */
+function Group({ title, help, children }: { title: string; help: string; children: ReactNode }) {
+  return (
+    <section className="mb-4">
+      <h5 className="m-0 text-control font-medium">{title}</h5>
+      <p className={`${CAPTION} mb-2 mt-0.5`}>{help}</p>
+      {children}
+    </section>
+  )
+}
+
+function Skills({
+  skills,
+  disabled,
+  onShare,
+}: {
+  skills: ProjectSkill[]
+  disabled: boolean
+  onShare(name: string, shared: boolean): void
+}) {
+  const paged = usePaged(skills, 10)
+  return (
+    <>
+      {paged.shown.map((skill) => (
+        <ShareRow
+          key={skill.name}
+          name={skill.name}
+          detail={skill.description}
+          item={skill}
+          providers={skill.providers}
+          sources={skill.sources}
+          label={t('Share {name} with every provider and account', { name: skill.name })}
+          disabled={disabled}
+          onShare={(shared) => onShare(skill.name, shared)}
+        />
+      ))}
+      {paged.more}
+    </>
+  )
+}
+
 /**
- * Settings → Agent setup. For one project: the MCP servers declared anywhere agents look (each provider's own
- * settings, Claude's local scope, the project's repositories), each with one switch that gives it to every provider
- * and account; then servers connected through Ramu, then the skills found in the same places.
+ * Settings → Agent setup. For one project, what its agents get: MCP servers and skills from the person's own provider
+ * files (every project) and from the project's folders, each with one switch that gives it to every provider and
+ * account, followed by servers connected through Ramu itself.
  */
 export function AgentSetup() {
   useLanguage()
@@ -142,12 +192,12 @@ export function AgentSetup() {
     [on, refetch],
   )
   const canAdminister = status.data?.canAdminister === true && ready
-  const share = async (server: ProjectMcpServer, shared: boolean) => {
+  const share = async (id: string, work: () => Promise<unknown>) => {
     const current = epoch.current
-    setPending(server.key)
+    setPending(id)
     setError('')
     try {
-      await invoke('mcp.share', server.key, shared)
+      await work()
       if (current === epoch.current) await refetch()
     } catch (reason) {
       if (current === epoch.current) setError(errorText(reason))
@@ -155,19 +205,45 @@ export function AgentSetup() {
       if (current === epoch.current) setPending(null)
     }
   }
+  const data = setup.data
+  const mcp = (scopeName: 'user' | 'project') => (data?.mcp ?? []).filter((server) => server.scope === scopeName)
   const query = search.trim().toLowerCase()
-  const skills = (setup.data?.skills ?? []).filter(
+  const skills = (data?.skills ?? []).filter(
     (skill) => !query || skill.name.includes(query) || skill.description.toLowerCase().includes(query),
   )
-  const paged = usePaged(skills, 10)
+  const skillsIn = (scopeName: 'user' | 'project') => skills.filter((skill) => skill.scope === scopeName)
+  const locked = !canAdminister || pending !== null
+  const servers = (scopeName: 'user' | 'project') =>
+    mcp(scopeName).map((server) => (
+      <ShareRow
+        key={server.key}
+        name={server.name}
+        detail={
+          server.transport.type === 'http'
+            ? server.transport.url
+            : [server.transport.command, ...server.transport.args].join(' ')
+        }
+        item={server}
+        providers={server.providers}
+        sources={server.sources}
+        label={t('Share {name} with every provider and account', { name: server.name })}
+        disabled={locked}
+        onShare={(shared) => void share(server.key, () => invoke('mcp.share', server.key, shared))}
+      />
+    ))
+  const skillList = (scopeName: 'user' | 'project') => (
+    <Skills
+      skills={skillsIn(scopeName)}
+      disabled={locked}
+      onShare={(name, shared) => void share(name, () => invoke('skills.share', name, shared))}
+    />
+  )
+  const projectName = projects.data?.find((project) => project.id === projectId)?.name
   return (
     <div className="flex flex-col">
       {projects.data && projects.data.length > 0 && (
         <SettingsRow>
-          <SettingsLabel
-            title={t('Project')}
-            help={t('Shows what agents get in this project, including servers from your own provider settings.')}
-          />
+          <SettingsLabel title={t('Project')} help={t('Choose a project to see what its agents get.')} />
           <Dropdown
             label={t('Project')}
             value={projectId ?? ''}
@@ -176,41 +252,46 @@ export function AgentSetup() {
           />
         </SettingsRow>
       )}
-
-      <SettingsGroupTitle>{t('MCP servers')}</SettingsGroupTitle>
-      <p className={`${CAPTION} mb-3`}>
-        {t(
-          'Turn on sharing to give a server to every provider and every account, with the sign-in it already has. New threads pick up changes.',
-        )}
-      </p>
       {(error || setup.error || projects.error) && (
         <Alert variant="destructive" className="mb-3">
           <AlertDescription>{error || errorText(setup.error ?? projects.error)}</AlertDescription>
         </Alert>
       )}
-      {!setup.data && !setup.error && !!projectId && (
+      {!data && !setup.error && !!projectId && (
         <p role="status" className={`${CAPTION} mb-4`}>
           {t('Loading…')}
         </p>
       )}
-      {setup.data?.mcp.length === 0 && (
-        <p className={`${CAPTION} mb-4`}>{t('No MCP servers in your provider settings or this project.')}</p>
+
+      <SettingsGroupTitle>{t('MCP servers')}</SettingsGroupTitle>
+      <p className={`${CAPTION} mb-4`}>
+        {t(
+          'Tools agents can call. Share a server to give it to every provider and account, using the sign-in it already has. New threads pick up changes.',
+        )}
+      </p>
+      {data && mcp('user').length + mcp('project').length === 0 && (
+        <p className={`${CAPTION} mb-4`}>{t('No MCP servers found yet.')}</p>
       )}
-      {setup.data?.mcp.map((server) => (
-        <ServerRow
-          key={server.key}
-          server={server}
-          disabled={!canAdminister || pending !== null}
-          onShare={(shared) => void share(server, shared)}
-        />
-      ))}
-      {setup.data && setup.data.diagnostics.length > 0 && (
+      {mcp('user').length > 0 && (
+        <Group title={t('Your settings')} help={t('From your own provider files, so every project has them.')}>
+          {servers('user')}
+        </Group>
+      )}
+      {mcp('project').length > 0 && (
+        <Group
+          title={projectName ? t('{project} only', { project: projectName }) : t('This project')}
+          help={t('From the project’s repositories and Claude’s per-project list.')}
+        >
+          {servers('project')}
+        </Group>
+      )}
+      {data && data.diagnostics.length > 0 && (
         <details className={`${CAPTION} mb-4`}>
           <summary className="cursor-pointer select-none">
-            {t('{count} files could not be read', { count: setup.data.diagnostics.length })}
+            {t('{count} files could not be read', { count: data.diagnostics.length })}
           </summary>
           <ul className="m-0 mt-1 flex list-none flex-col gap-0.5 p-0">
-            {setup.data.diagnostics.map((item) => (
+            {data.diagnostics.map((item) => (
               <li key={item.file} className="break-all">
                 {item.file}: {item.message}
               </li>
@@ -219,18 +300,16 @@ export function AgentSetup() {
         </details>
       )}
 
-      <div className="mt-4">
-        <McpSettings />
-      </div>
+      <McpSettings />
 
       <SettingsGroupTitle className="mt-8">{t('Skills')}</SettingsGroupTitle>
-      <p className={`${CAPTION} mb-3`}>
+      <p className={`${CAPTION} mb-4`}>
         {t(
-          'Skills in these folders load in the providers shown. Install skills for every provider in Memory & skills.',
+          'Instructions agents can load. Share a skill to copy it to every provider and account that does not have it. Your original files are not changed.',
         )}
       </p>
-      {(setup.data?.skills.length ?? 0) > 10 && (
-        <div className="mb-3">
+      {(data?.skills.length ?? 0) > 10 && (
+        <div className="mb-4">
           <Input
             aria-label={t('Search skills')}
             placeholder={t('Search skills')}
@@ -239,27 +318,20 @@ export function AgentSetup() {
           />
         </div>
       )}
-      {setup.data?.skills.length === 0 && (
-        <p className={CAPTION}>{t('No skills in your user folders or this project.')}</p>
+      {data?.skills.length === 0 && <p className={CAPTION}>{t('No skills found yet.')}</p>}
+      {skillsIn('user').length > 0 && (
+        <Group title={t('Your settings')} help={t('From your own provider folders, so every project has them.')}>
+          {skillList('user')}
+        </Group>
       )}
-      <SettingsCardList>
-        {paged.shown.map((skill) => (
-          <SettingsCard
-            key={skill.name}
-            title={skill.name}
-            badges={
-              <>
-                <ProviderStrip providers={skill.providers} />
-                {skill.nameConflict && <Badge variant="outline">{t('Differs between copies')}</Badge>}
-              </>
-            }
-            meta={skill.description}
-          >
-            <p className={`${CAPTION} truncate`}>{t('From {places}', { places: fromText(skill.sources) })}</p>
-          </SettingsCard>
-        ))}
-        {paged.more}
-      </SettingsCardList>
+      {skillsIn('project').length > 0 && (
+        <Group
+          title={projectName ? t('{project} only', { project: projectName }) : t('This project')}
+          help={t('From the project’s repositories.')}
+        >
+          {skillList('project')}
+        </Group>
+      )}
     </div>
   )
 }

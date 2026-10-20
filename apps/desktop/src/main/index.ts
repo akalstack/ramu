@@ -896,8 +896,12 @@ async function main() {
     delete legacyStorage[host]
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) await win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  else await win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
+  if (process.env.ELECTRON_RENDERER_URL) {
+    // The dev server versions its pre-bundled packages (`?v=<hash>`) and answers a stale one with 504 "Outdated Optimize
+    // Dep". Modules kept from earlier runs in this profile's HTTP cache hold old hashes, so start every dev run clean.
+    await win.webContents.session.clearCache()
+    await win.loadURL(process.env.ELECTRON_RENDERER_URL)
+  } else await win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
 
   computers.start()
   const networkWake = () => refreshRuntimeNetwork(true)

@@ -129,28 +129,53 @@ export function BackgroundActivityIndicator({
   const rejected = computers?.computers.find((computer) => computer.id === host.id)?.status === 'rejected'
   const disconnected = rejected ? t('Pair again') : t('Reconnecting…')
   const active = connected ? items : []
-  const total = active.length + missed.length
   const summary = !connected
     ? disconnected
     : active.length
       ? t('{0} running', { 0: active.length })
       : t('No background activity')
+  const activityLabel = !connected ? disconnected : active.length === 1 ? t(active[0]!.label) : summary
+  const notificationSummary = missed.length === 1 ? t('1 notification') : t('{0} notifications', { 0: missed.length })
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant="ghost"
-            className="status-activity ml-auto min-w-7 flex-none h-[22px] min-h-[22px] border-0 rounded-(--radius-s) bg-transparent px-1.5 py-0 gap-1 text-caption leading-[18px] text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:text-foreground aria-expanded:bg-hover [&_svg]:size-3.5"
-          />
-        }
-        aria-label={t('Background activity')}
-        aria-description={summary}
-        title={`${t('Background activity')} · ${summary}`}
-      >
-        <Bell data-icon="inline-start" />
-        {total > 0 && <span className="tabular-nums">{total}</span>}
-      </PopoverTrigger>
+      <div className="ml-auto flex min-w-0 max-w-[240px] items-center gap-1">
+        {(!connected || active.length > 0) && (
+          <>
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  className="min-w-0 shrink h-[22px] min-h-[22px] rounded-(--radius-s) px-1.5 py-0 gap-1.5 text-caption! leading-[18px] text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover [&_svg]:size-3.5"
+                />
+              }
+              aria-label={t('Background activity')}
+              aria-description={summary}
+              title={activityLabel}
+            >
+              {connected ? (
+                <LoaderCircle data-icon="inline-start" className="text-brand animate-spin motion-reduce:animate-none" />
+              ) : (
+                <WifiOff data-icon="inline-start" />
+              )}
+              <span className="truncate">{activityLabel}</span>
+            </PopoverTrigger>
+          </>
+        )}
+        <PopoverTrigger
+          render={
+            <Button
+              variant="ghost"
+              className="status-activity min-w-7 flex-none h-[22px] min-h-[22px] border-0 rounded-(--radius-s) bg-transparent px-1.5 py-0 gap-1 text-caption! leading-[18px] text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:text-foreground aria-expanded:bg-hover [&_svg]:size-3.5"
+            />
+          }
+          aria-label={t('Notifications')}
+          aria-description={notificationSummary}
+          title={`${t('Notifications')} · ${notificationSummary}`}
+        >
+          <Bell data-icon="inline-start" />
+          {missed.length > 0 && <span className="tabular-nums">{missed.length}</span>}
+        </PopoverTrigger>
+      </div>
       <PopoverContent
         side="top"
         align="end"
@@ -159,27 +184,13 @@ export function BackgroundActivityIndicator({
       >
         <PopoverHeader className="flex-row items-center gap-3 px-3.5 py-2.5">
           <PopoverTitle className="m-0 flex-1 text-control leading-5 font-semibold">
-            {missed.length ? t('Notifications and activity') : t('Background activity')}
+            {t('Notifications and activity')}
           </PopoverTitle>
-          {missed.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="min-h-6 px-2 py-0 text-caption"
-              onClick={() => {
-                notices.clear()
-                void host.invoke('notices.clear').catch(() => {})
-              }}
-            >
-              {t('Clear all')}
-            </Button>
-          )}
-          {active.length > 0 && <span className="text-caption text-muted-foreground tabular-nums">{summary}</span>}
           <Button
             variant="ghost"
             size="icon-sm"
             className="size-6 min-h-6 border-0 bg-transparent hover:bg-transparent shadow-none text-muted-foreground hover:text-foreground"
-            aria-label={t('Close background activity')}
+            aria-label={t('Close notifications and activity')}
             onClick={() => setOpen(false)}
           >
             <X data-icon="inline-start" />
@@ -187,95 +198,125 @@ export function BackgroundActivityIndicator({
         </PopoverHeader>
         <Separator />
         <div role="status" aria-live="polite" className="min-h-0 overflow-y-auto overscroll-contain max-h-72">
-          {missed.length > 0 && (
-            <ul className="m-0 flex list-none flex-col gap-1 p-2">
-              {missed.map((notice) => (
-                <li key={notice.id} className="flex items-start gap-2.5 rounded-(--radius-s) px-1.5 py-2">
-                  <span aria-hidden className="mt-0.5 shrink-0 text-muted-foreground [&_svg]:size-3.5">
-                    {notice.icon ??
-                      (notice.type === 'error' ? (
-                        <OctagonX className="text-destructive" />
-                      ) : notice.type === 'success' ? (
-                        <CircleCheck className="text-[var(--ok)]" />
-                      ) : (
-                        <Info />
-                      ))}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-control leading-5">{notice.title}</div>
-                    {notice.description && (
-                      <div className="mt-0.5 text-caption leading-[1.5] text-muted-foreground wrap-anywhere select-text">
-                        {notice.description}
-                      </div>
+          {!connected && missed.length > 0 && (
+            <div className="flex items-center gap-2 px-3.5 py-3 text-caption text-muted-foreground">
+              <WifiOff aria-hidden className="size-3.5 shrink-0" />
+              {disconnected}
+            </div>
+          )}
+          {active.length > 0 && (
+            <section aria-label={t('Running')}>
+              <h3 className="m-0 flex items-center gap-2 px-3.5 pt-3 text-caption font-normal text-muted-foreground">
+                {t('Running')} <span className="tabular-nums">{active.length}</span>
+              </h3>
+              <ul className="m-0 flex list-none flex-col gap-1 p-2">
+                {active.map((item) => (
+                  <li key={item.id} className="flex items-start gap-2.5 rounded-(--radius-s) px-1.5 py-2">
+                    <LoaderCircle
+                      aria-hidden
+                      className="size-3.5 shrink-0 mt-0.5 text-brand animate-spin motion-reduce:animate-none"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-control leading-5">{t(item.label)}</div>
+                      {item.detail && (
+                        <div className="mt-0.5 text-caption leading-[1.5] text-muted-foreground wrap-anywhere select-text">
+                          {item.detail}
+                        </div>
+                      )}
+                    </div>
+                    {item.cancellable && onStop && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="min-h-6 px-2 py-0 text-caption"
+                        disabled={stopping.has(item.id)}
+                        aria-label={t('Stop {0}', { 0: t(item.label) })}
+                        onClick={() => void stop(item.id)}
+                      >
+                        {stopping.has(item.id) ? t('Stopping…') : t('Stop')}
+                      </Button>
                     )}
-                  </div>
-                  {notice.onAction && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="min-h-6 px-2 py-0 text-caption"
-                      onClick={notice.onAction}
-                    >
-                      {notice.actionLabel}
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="size-6 min-h-6 border-0 bg-transparent hover:bg-transparent shadow-none text-muted-foreground hover:text-foreground"
-                    aria-label={t('Dismiss notification')}
-                    onClick={() => (notice.onDismiss ?? (() => notices.remove(notice.id)))()}
-                  >
-                    <X data-icon="inline-start" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
           {missed.length > 0 && active.length > 0 && <Separator />}
-          {active.length ? (
-            <ul className="m-0 flex list-none flex-col gap-1 p-2">
-              {active.map((item) => (
-                <li key={item.id} className="flex items-start gap-2.5 rounded-(--radius-s) px-1.5 py-2">
-                  <LoaderCircle
-                    aria-hidden
-                    className="size-3.5 shrink-0 mt-0.5 text-brand animate-spin motion-reduce:animate-none"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-control leading-5">{t(item.label)}</div>
-                    {item.detail && (
-                      <div className="mt-0.5 text-caption leading-[1.5] text-muted-foreground wrap-anywhere select-text">
-                        {item.detail}
-                      </div>
+          {missed.length > 0 && (
+            <section aria-label={t('Notifications')}>
+              <div className="flex items-center gap-2 px-3.5 pt-2">
+                <h3 className="m-0 flex flex-1 items-center gap-2 text-caption font-normal text-muted-foreground">
+                  {t('Notifications')} <span className="tabular-nums">{missed.length}</span>
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-6 px-2 py-0 text-caption"
+                  onClick={() => {
+                    notices.clear()
+                    void host.invoke('notices.clear').catch(() => {})
+                  }}
+                >
+                  {t('Clear all')}
+                </Button>
+              </div>
+              <ul className="m-0 flex list-none flex-col gap-1 p-2">
+                {missed.map((notice) => (
+                  <li key={notice.id} className="flex items-start gap-2.5 rounded-(--radius-s) px-1.5 py-2">
+                    <span aria-hidden className="mt-0.5 shrink-0 text-muted-foreground [&_svg]:size-3.5">
+                      {notice.icon ??
+                        (notice.type === 'error' ? (
+                          <OctagonX className="text-destructive" />
+                        ) : notice.type === 'success' ? (
+                          <CircleCheck className="text-[var(--ok)]" />
+                        ) : (
+                          <Info />
+                        ))}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-control leading-5">{notice.title}</div>
+                      {notice.description && (
+                        <div className="mt-0.5 text-caption leading-[1.5] text-muted-foreground wrap-anywhere select-text">
+                          {notice.description}
+                        </div>
+                      )}
+                    </div>
+                    {notice.onAction && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="min-h-6 px-2 py-0 text-caption"
+                        onClick={notice.onAction}
+                      >
+                        {notice.actionLabel}
+                      </Button>
                     )}
-                  </div>
-                  {item.cancellable && onStop && (
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="min-h-6 px-2 py-0 text-caption"
-                      disabled={stopping.has(item.id)}
-                      aria-label={t('Stop {0}', { 0: t(item.label) })}
-                      onClick={() => void stop(item.id)}
+                      size="icon-sm"
+                      className="size-6 min-h-6 border-0 bg-transparent hover:bg-transparent shadow-none text-muted-foreground hover:text-foreground"
+                      aria-label={t('Dismiss notification')}
+                      onClick={() => (notice.onDismiss ?? (() => notices.remove(notice.id)))()}
                     >
-                      {stopping.has(item.id) ? t('Stopping…') : t('Stop')}
+                      <X data-icon="inline-start" />
                     </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : missed.length ? null : (
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {active.length === 0 && missed.length === 0 && (
             <Empty className="gap-2 rounded-none px-5 py-6">
               <EmptyHeader className="gap-1.5">
                 <EmptyMedia className="mb-1 text-muted-foreground [&_svg]:size-5">
                   {connected ? <CircleCheck aria-hidden /> : <WifiOff aria-hidden />}
                 </EmptyMedia>
                 <EmptyTitle className="text-control font-medium">
-                  {connected ? t('No background activity') : disconnected}
+                  {connected ? t('You are all caught up') : disconnected}
                 </EmptyTitle>
                 <EmptyDescription className="text-caption">
                   {connected
-                    ? t('Background tasks will appear here.')
+                    ? t('Notifications and background tasks will appear here.')
                     : t('Activity will appear when this host reconnects.')}
                 </EmptyDescription>
               </EmptyHeader>

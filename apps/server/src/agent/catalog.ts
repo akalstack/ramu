@@ -1,3 +1,4 @@
+import { modelLegacyMetadata } from '../providers/modelLifecycle'
 import { modelContextWindow } from '../providers/modelContext'
 import type { Query } from '@anthropic-ai/claude-agent-sdk'
 import { providerName } from '@ramu/shared/providers/providers'
@@ -84,6 +85,7 @@ export function discoverCatalogs({ providerOff, providerQuery }: CatalogSource):
             provider: 'claude-code',
             id: m.value,
             name: m.displayName,
+            ...modelLegacyMetadata(m),
             ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
             efforts: m.supportedEffortLevels ?? [],
             defaultEffort: claudeDefaultEffort(m.supportedEffortLevels ?? []),

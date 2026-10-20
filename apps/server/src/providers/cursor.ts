@@ -1,3 +1,4 @@
+import { modelLegacyMetadata } from './modelLifecycle'
 import { modelContextWindow } from './modelContext'
 // Cursor chats through the official TypeScript SDK (`@cursor/sdk`), running the agent loop locally in this process.
 // The SDK has no approval callback: full access runs unsandboxed, other access levels run in Cursor's sandbox.
@@ -15,18 +16,24 @@ import type {
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from '../agent/agentRunner'
 import { attachmentPrompt } from '../attachments'
 import { providerEnvironment } from './providerBinaries'
+import { storedCursorKey } from './cursorAuth'
 import { classifyLimit, limitSignal } from './limitClassifier'
 import { limitedReading } from './usageLimit'
 
-type Sdk = Pick<typeof import('@cursor/sdk'), 'Agent' | 'Cursor'>
+type Sdk = Pick<typeof import('@cursor/sdk'), 'Agent' | 'Cursor' | 'FileCredentialStore'>
 type Wire = Record<string, any>
 
 /** Loaded on first use: the SDK is large and only Cursor chats need it. */
 export const loadCursorSdk = (): Promise<Sdk> => import('@cursor/sdk')
 
-/** The API key for an account, when one is set; otherwise the SDK uses its own stored login (`Cursor.auth.login`). */
-export const cursorApiKey = (accountId?: string): string | undefined =>
-  providerEnvironment('cursor', undefined, accountId ?? 'default').CURSOR_API_KEY || undefined
+/**
+ * The API key for an account: one set in its environment, else the login saved in its own folder. The default account
+ * returns none and lets the SDK use its stored login (`Cursor.auth.login`).
+ */
+export const cursorApiKey = (accountId?: string): string | undefined => {
+  const env = providerEnvironment('cursor', undefined, accountId ?? 'default')
+  return env.CURSOR_API_KEY || (env.RAMU_CURSOR_SDK_DIR ? storedCursorKey(env) : undefined) || undefined
+}
 
 /** Ramu's model id as the SDK's selection. Cursor's router needs `optimize_for`, so "auto" asks for a balanced pick. */
 export function cursorModel(id: string | undefined): ModelSelection {
@@ -44,6 +51,7 @@ export async function cursorModels(accountId?: string, sdk?: Sdk): Promise<Agent
     provider: 'cursor',
     id: m.id,
     name: m.displayName || m.id,
+    ...modelLegacyMetadata(m),
     ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
     efforts: [],
     defaultEffort: null,

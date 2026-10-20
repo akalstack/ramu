@@ -18,7 +18,10 @@ it('points every provider at its own account directory and drops shared credenti
     const claude = providerEnvironment('claude-code', config, 'work')
     expect(claude.CLAUDE_CONFIG_DIR).toBe(join(root, 'claude-code', 'work'))
     expect(claude.ANTHROPIC_API_KEY).toBeUndefined()
-    expect(providerEnvironment('antigravity', config, 'work').GEMINI_HOME).toBe(join(root, 'antigravity', 'work'))
+    expect(providerEnvironment('antigravity', config, 'work')).toMatchObject({
+      GEMINI_HOME: join(root, 'antigravity', 'work'),
+      AGY_ACP_FORCE_FILE_STORAGE: '1',
+    })
     expect(providerEnvironment('cursor', config, 'work')).toMatchObject({
       CURSOR_CONFIG_DIR: join(root, 'cursor', 'work'),
       AGENT_CLI_CREDENTIAL_STORE: 'file',

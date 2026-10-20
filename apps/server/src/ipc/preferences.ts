@@ -49,7 +49,6 @@ export const providerBinaries = z
               .optional(),
             autoUpdate: z.boolean().optional(),
             enabled: z.boolean().optional(),
-            usageKeychain: z.boolean().optional(),
             defaultAccountEnabled: z.boolean().optional(),
             harness: z
               .string()

@@ -59,3 +59,26 @@ it('reads a single login for standalone providers, whose own reading only arrive
   expect(other).not.toHaveBeenCalled()
   expect(update).toHaveBeenCalledWith([expect.not.objectContaining({ accountId: expect.anything() })])
 })
+
+it('reads and tags the only enabled Antigravity account without reading the default login', async () => {
+  const update = vi.fn()
+  const read = vi.fn(async () => [{ ...reading(40), provider: 'antigravity' as const }])
+  const usage = new AccountUsage(
+    update,
+    () => ({
+      antigravity: {
+        binary: '',
+        accountId: 'work',
+        defaultAccountEnabled: false,
+        accounts: [{ id: 'work', name: 'Work' }],
+      },
+    }),
+    { antigravity: read },
+    ['antigravity'],
+  )
+  await usage.refresh(undefined, 1_000_000)
+  expect(read).toHaveBeenCalledExactlyOnceWith('work')
+  expect(update).toHaveBeenCalledWith([expect.objectContaining({ provider: 'antigravity', accountId: 'work' })])
+  await usage.refresh(undefined, 1_000_001)
+  expect(read).toHaveBeenCalledTimes(1)
+})

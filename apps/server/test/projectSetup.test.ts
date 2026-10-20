@@ -1,8 +1,25 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { codexServers, discoverProjectSetup, parseJsonc, sharedSessionServers } from '../src/agent/projectSetup'
+import {
+  codexDisabledSkills,
+  codexServers,
+  discoverProjectSetup,
+  parseJsonc,
+  sharedSessionServers,
+  sharedSessionSkills,
+} from '../src/agent/projectSetup'
+import { copySharedSkill } from '../src/memory/skillFiles'
 
 let root: string, home: string
 const skill = (name: string, body = 'Does a thing.') => `---\nname: ${name}\ndescription: ${body}\n---\nBody`
@@ -126,9 +143,9 @@ it('merges skills by name across user and project folders and flags differing co
   put(join(root, 'b/.claude/skills/loose/SKILL.md'), '---\nname: loose\ndescription: Reads a: b — c\n---\n')
   const setup = discover(['b'])
   const review = setup.skills.find((s) => s.name === 'review')!
-  expect(review.sources.map((s) => s.label)).toEqual(['User', 'b'])
-  expect([review.scope, review.nameConflict]).toEqual(['project', true])
-  expect(review.providers).toEqual(expect.arrayContaining(['claude-code', 'codex', 'cursor']))
+  expect(review.sources.map((s) => s.label)).toEqual(['b', 'User'])
+  expect([review.scope, review.nameConflict]).toEqual(['user', true])
+  expect(review.providers).toEqual(['claude-code', 'codex', 'opencode'])
   expect(setup.skills.find((s) => s.name === 'lint')!.nameConflict).toBe(false)
   expect(setup.skills.find((s) => s.name === 'loose')!.description).toBe('Reads a: b — c')
 })
@@ -230,5 +247,77 @@ describe('sharing with every provider and account', () => {
     expect(after.mcp.find((s) => s.name === 'repl')!.providers).toHaveLength(5)
     expect(after.mcp.find((s) => s.name === 'atlassian')!.providers).toEqual(['codex'])
     expect(JSON.stringify(after)).not.toContain('secret-key')
+  })
+})
+
+describe('skills shared with every provider and account', () => {
+  const dirs = () => {
+    mkdirSync(join(root, 'repo'), { recursive: true })
+    return [join(root, 'repo')]
+  }
+  const names = (provider: Parameters<typeof sharedSessionSkills>[1], accountEnv = {}, sharing = {}) =>
+    sharedSessionSkills(dirs(), provider, accountEnv, sharing, { env: {}, home }).map((s) => s.name)
+
+  it('lists a skill with the providers that really load it, and honours Codex turning it off', () => {
+    put(join(home, '.claude/skills/bitbucket/SKILL.md'), skill('bitbucket'))
+    put(join(home, '.codex/skills/hatch-pet/SKILL.md'), skill('hatch-pet'))
+    put(
+      join(home, '.codex/config.toml'),
+      `[[skills.config]]\npath = "${join(home, '.codex/skills/hatch-pet/SKILL.md')}"\nenabled = false\n`,
+    )
+    const setup = discover([])
+    const bitbucket = setup.skills.find((s) => s.name === 'bitbucket')!
+    expect(bitbucket.providers).toEqual(['claude-code', 'opencode'])
+    expect([bitbucket.shared, bitbucket.nativeProviders]).toEqual([false, ['claude-code', 'opencode']])
+    expect(setup.skills.find((s) => s.name === 'hatch-pet')!.providers).toEqual([])
+    expect([
+      ...codexDisabledSkills(
+        '[[skills.config]]\npath = "/x/SKILL.md"\nenabled = false\n[[skills.config]]\npath = "/y/SKILL.md"\nenabled = true',
+      ),
+    ]).toEqual(['/x/SKILL.md'])
+  })
+
+  it('shares nothing until a skill is turned on, then reaches every provider that lacks it', () => {
+    put(join(home, '.claude/skills/bitbucket/SKILL.md'), skill('bitbucket'))
+    expect(names('codex')).toEqual([])
+    const on = { bitbucket: true }
+    expect(names('codex', {}, on)).toEqual(['bitbucket'])
+    expect(names('cursor', {}, on)).toEqual(['bitbucket'])
+    // Claude loads it from its own folder already.
+    expect(names('claude-code', {}, on)).toEqual([])
+    const shared = discoverProjectSetup('p', [], [], {}, {}, home, on).skills[0]!
+    expect([shared.shared, shared.providers.length]).toEqual([true, 5])
+  })
+
+  it('reaches a second Claude account, whose own folder is empty', () => {
+    put(join(home, '.claude/skills/bitbucket/SKILL.md'), skill('bitbucket'))
+    const accountB = join(root, 'accounts/claude/b')
+    mkdirSync(accountB, { recursive: true })
+    expect(names('claude-code', { CLAUDE_CONFIG_DIR: accountB }, { bitbucket: true })).toEqual(['bitbucket'])
+  })
+
+  it('prefers the project copy and refuses names other providers would not accept', () => {
+    put(join(home, '.claude/skills/review/SKILL.md'), skill('review', 'User copy.'))
+    put(join(root, 'repo/.agents/skills/review/SKILL.md'), skill('review', 'Project copy.'))
+    put(join(home, '.claude/skills/odd/SKILL.md'), '---\nname: Odd Name\ndescription: x\n---\n')
+    const [review] = sharedSessionSkills(dirs(), 'cursor', {}, { review: true }, { env: {}, home })
+    expect(review!.dir).toContain('repo/.agents/skills/review')
+    const odd = discoverProjectSetup('p', [], [], {}, {}, home, { 'Odd Name': true }).skills.find(
+      (s) => s.name === 'Odd Name',
+    )!
+    expect([odd.shared, !!odd.shareBlocked]).toEqual([false, true])
+  })
+
+  it('copies a skill under its export name without hidden files and refuses links', () => {
+    put(join(root, 'src/SKILL.md'), skill('bitbucket'))
+    put(join(root, 'src/scripts/run.sh'), 'echo')
+    put(join(root, 'src/.DS_Store'), '')
+    const out = join(root, 'out/ramu-bitbucket')
+    copySharedSkill(join(root, 'src'), out, 'ramu-bitbucket')
+    expect(readFileSync(join(out, 'SKILL.md'), 'utf8')).toContain('name: ramu-bitbucket')
+    expect(existsSync(join(out, 'scripts/run.sh'))).toBe(true)
+    expect(existsSync(join(out, '.DS_Store'))).toBe(false)
+    symlinkSync('/etc/hosts', join(root, 'src/link'))
+    expect(() => copySharedSkill(join(root, 'src'), join(root, 'out/other'), 'ramu-other')).toThrow(/symlink/)
   })
 })

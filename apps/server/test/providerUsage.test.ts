@@ -1,4 +1,8 @@
-import { expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import {
   antigravityModelReadings,
   antigravityUsageReadings,
@@ -6,6 +10,13 @@ import {
   readAntigravityUsage,
   readCursorUsage,
 } from '../src/providers/providerUsage'
+
+const execFile = vi.hoisted(() => vi.fn())
+vi.mock('node:child_process', () => ({ execFile }))
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 it('maps Cursor plan usage to monthly readings: overall, and the two allowances behind it', () => {
   const readings = cursorUsageReadings(
@@ -101,9 +112,81 @@ it('falls back to per-model quotas for accounts without a quota summary', () => 
   expect(antigravityModelReadings({})).toEqual([])
 })
 it('reads nothing without a stored login, and never sends a Cursor token to another host', async () => {
-  expect(await readCursorUsage(false, { AGENT_CLI_CREDENTIAL_STORE: 'memory' })).toEqual([])
-  expect(
-    await readCursorUsage(false, { CURSOR_AUTH_TOKEN: 'secret', CURSOR_API_ENDPOINT: 'https://evil.example' }),
-  ).toEqual([])
+  expect(await readCursorUsage({ AGENT_CLI_CREDENTIAL_STORE: 'memory' })).toEqual([])
+  expect(await readCursorUsage({ CURSOR_AUTH_TOKEN: 'secret', CURSOR_API_ENDPOINT: 'https://evil.example' })).toEqual(
+    [],
+  )
   expect(await readAntigravityUsage({ GEMINI_HOME: '/nonexistent' })).toEqual([])
+})
+
+const token = { client_id: 'client', client_secret: 'secret', refresh_token: 'refresh', project_id: 'project' }
+const quotaResponse = { buckets: [{ bucketId: 'gemini-pro', window: '5h', remainingFraction: 0.6 }] }
+function mockQuotaService() {
+  const fetchMock = vi.fn(
+    async (url: string) =>
+      new Response(JSON.stringify(url.includes('oauth2.googleapis.com') ? { access_token: 'access' } : quotaResponse)),
+  )
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+it('reads a private file login and never borrows the shared Keychain login', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'ramu-agy-usage-'))
+  const keychainCalls = execFile.mock.calls.length
+  try {
+    mkdirSync(join(home, 'antigravity-acp'))
+    writeFileSync(join(home, 'antigravity-acp', 'acp_token.json'), JSON.stringify(token))
+    mockQuotaService()
+    expect(await readAntigravityUsage({ GEMINI_HOME: home, AGY_ACP_FORCE_FILE_STORAGE: '1' })).toEqual([
+      expect.objectContaining({ usedPercent: 40 }),
+    ])
+    rmSync(join(home, 'antigravity-acp', 'acp_token.json'))
+    expect(await readAntigravityUsage({ GEMINI_HOME: home })).toEqual([])
+    expect(execFile.mock.calls.length).toBe(keychainCalls)
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+it('never runs the macOS security tool to find a login', async () => {
+  const calls = execFile.mock.calls.length
+  const fetchMock = mockQuotaService()
+  expect(await readAntigravityUsage({ GEMINI_HOME: '/nonexistent' })).toEqual([])
+  expect(await readCursorUsage({ CURSOR_CONFIG_DIR: '/nonexistent' })).toEqual([])
+  expect(execFile.mock.calls.length).toBe(calls)
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+it('reads the default Antigravity login from its file in the home folder, with file storage', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'ramu-agy-home-'))
+  try {
+    mkdirSync(join(home, 'antigravity-acp'))
+    writeFileSync(join(home, 'antigravity-acp', 'acp_token.json'), JSON.stringify(token))
+    mockQuotaService()
+    expect(await readAntigravityUsage({ GEMINI_HOME: home })).toEqual([expect.objectContaining({ usedPercent: 40 })])
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+it("reads a Cursor account's own saved login and never another account's", async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-cursor-'))
+  try {
+    mkdirSync(join(dir, 'sdk'))
+    writeFileSync(
+      join(dir, 'sdk', 'auth.json'),
+      JSON.stringify({ version: 1, backendUrl: 'x', apiKey: 'account-key', createdAtMs: 1 }),
+    )
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ planUsage: { totalPercentUsed: 10 } })))
+    vi.stubGlobal('fetch', fetchMock)
+    await readCursorUsage({ RAMU_CURSOR_SDK_DIR: join(dir, 'sdk'), CURSOR_CONFIG_DIR: dir })
+    const headers = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>
+    expect(headers.Authorization).toBe('Bearer account-key')
+    // An expired key is not used.
+    writeFileSync(
+      join(dir, 'sdk', 'auth.json'),
+      JSON.stringify({ version: 1, backendUrl: 'x', apiKey: 'old', createdAtMs: 1, apiKeyExpiresAtMs: 5 }),
+    )
+    fetchMock.mockClear()
+    expect(await readCursorUsage({ RAMU_CURSOR_SDK_DIR: join(dir, 'sdk'), CURSOR_CONFIG_DIR: dir })).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

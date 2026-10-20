@@ -39,7 +39,7 @@ export const registerBackgroundHandlers: RegisterHandlers = ({
       else if (activityId === 'memory') memory?.cancel()
       else if (activityId === 'learning') learning?.cancel()
       else if (activityId === 'recaps') recaps.cancel()
-      else throw new Error('This background activity cannot be stopped.')
+      else activity.cancel(activityId)
     },
   },
   'updates.status': { args: z.tuple([]), run: () => updates.status() },

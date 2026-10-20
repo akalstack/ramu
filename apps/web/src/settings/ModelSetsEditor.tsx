@@ -1,3 +1,5 @@
+import { isGeneratedModelSet } from '@ramu/shared/providers/modelDefaults'
+import { providerName } from '@ramu/shared/providers/providers'
 import { SettingsField } from './SettingsScope'
 import type { useSettingsScope } from './SettingsScope'
 import { Button } from '@/components/desktop-button'
@@ -41,9 +43,11 @@ export function ModelSetsEditor({
   onRefresh: () => void
 }) {
   const set = draft.sets.find((entry) => entry.id === selected) ?? draft.sets[0]!
+  const automatic = isGeneratedModelSet(set)
   const models = catalogs.flatMap((catalog) => catalog.models)
   const updateSteps = (steps: ModelStep[]) =>
     setDraft((current) => {
+      if (automatic) return current
       const next = {
         ...current,
         sets: current.sets.map((entry) => (entry.id === set.id ? { ...entry, steps } : entry)),
@@ -153,7 +157,7 @@ export function ModelSetsEditor({
             className={GHOST_ICON_BUTTON_CLASS}
             title={t('Remove set')}
             aria-label={t('Remove model set')}
-            disabled={busy || draft.sets.length < 2}
+            disabled={busy || automatic || draft.sets.length < 2}
             onClick={() => {
               const sets = draft.sets.filter((entry) => entry.id !== set.id)
               const fallback = sets[0]!
@@ -169,54 +173,77 @@ export function ModelSetsEditor({
             <Trash2 size={13} />
           </Button>
         </div>
-        <label className="settings-set-name">
-          {t('Set name')}
-          <Input
-            value={set.name}
-            maxLength={80}
-            disabled={busy}
-            onChange={(event) =>
-              setDraft({
-                ...draft,
-                sets: draft.sets.map((entry) => (entry.id === set.id ? { ...entry, name: event.target.value } : entry)),
-              })
-            }
-          />
-        </label>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropStep}>
-          <SortableContext items={set.steps.map((step) => step.id)} strategy={verticalListSortingStrategy}>
-            <div className="settings-steps flex flex-col gap-2">
+        {automatic ? (
+          <>
+            <p className="text-muted-foreground text-caption">
+              {t(
+                'Default updates automatically from active providers. Add a custom set to edit model and effort choices.',
+              )}
+            </p>
+            <ol className="settings-steps flex flex-col gap-2" aria-label={t('Automatic model steps')}>
               {set.steps.map((step, index) => (
-                <ModelStepCard
-                  key={step.id}
-                  step={step}
-                  index={index}
-                  count={set.steps.length}
-                  models={models}
-                  catalogs={catalogs}
-                  busy={busy}
-                  onMove={(delta) => move(index, delta)}
-                  onRemove={() => updateSteps(set.steps.filter((entry) => entry.id !== step.id))}
-                  onUpdate={(next) => updateSteps(set.steps.map((entry) => (entry.id === next.id ? next : entry)))}
-                />
+                <li key={step.id} className="flex items-center gap-2 rounded-(--radius-s) bg-fill p-2.5">
+                  <span className="text-muted-foreground text-caption">{index + 1}</span>
+                  <span className="min-w-0 flex-1">{modelStepName(step, catalogs)}</span>
+                  <span className="text-muted-foreground text-caption">{providerName(step.provider)}</span>
+                </li>
               ))}
+            </ol>
+          </>
+        ) : (
+          <>
+            <label className="settings-set-name">
+              {t('Set name')}
+              <Input
+                value={set.name}
+                maxLength={80}
+                disabled={busy}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    sets: draft.sets.map((entry) =>
+                      entry.id === set.id ? { ...entry, name: event.target.value } : entry,
+                    ),
+                  })
+                }
+              />
+            </label>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropStep}>
+              <SortableContext items={set.steps.map((step) => step.id)} strategy={verticalListSortingStrategy}>
+                <div className="settings-steps flex flex-col gap-2">
+                  {set.steps.map((step, index) => (
+                    <ModelStepCard
+                      key={step.id}
+                      step={step}
+                      index={index}
+                      count={set.steps.length}
+                      models={models}
+                      catalogs={catalogs}
+                      busy={busy}
+                      onMove={(delta) => move(index, delta)}
+                      onRemove={() => updateSteps(set.steps.filter((entry) => entry.id !== step.id))}
+                      onUpdate={(next) => updateSteps(set.steps.map((entry) => (entry.id === next.id ? next : entry)))}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+            <div className="settings-set-footer [&_>_span]:ml-auto flex items-center gap-2">
+              <Button
+                variant="ghost"
+                className={GHOST_BUTTON_CLASS}
+                disabled={busy || set.steps.length >= MAX_SET_STEPS}
+                onClick={() => updateSteps([...set.steps, { ...set.steps.at(-1)!, id: crypto.randomUUID() }])}
+              >
+                <Plus size={13} />
+                {t('Add step')}
+              </Button>
+              <span className="muted text-muted-foreground small text-caption">
+                {set.steps.length} {t(' steps · up to 20')}
+              </span>
             </div>
-          </SortableContext>
-        </DndContext>
-        <div className="settings-set-footer [&_>_span]:ml-auto flex items-center gap-2">
-          <Button
-            variant="ghost"
-            className={GHOST_BUTTON_CLASS}
-            disabled={busy || set.steps.length >= MAX_SET_STEPS}
-            onClick={() => updateSteps([...set.steps, { ...set.steps.at(-1)!, id: crypto.randomUUID() }])}
-          >
-            <Plus size={13} />
-            {t('Add step')}
-          </Button>
-          <span className="muted text-muted-foreground small text-caption">
-            {set.steps.length} {t(' steps · up to 20')}
-          </span>
-        </div>
+          </>
+        )}
         <div className="settings-maintenance flex items-center gap-2 pt-3 justify-between">
           <Button variant="ghost" className={GHOST_BUTTON_CLASS} disabled={busy} onClick={onRestore}>
             <RotateCcw size={13} />

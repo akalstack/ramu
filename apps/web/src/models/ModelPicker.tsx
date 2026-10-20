@@ -1,3 +1,4 @@
+import { useShowLegacyModels, visiblePickerModels } from './modelVisibility'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { Kbd } from '@/components/ui/kbd'
@@ -42,7 +43,7 @@ export function ModelPicker({
   const language = useLanguage()
   const { catalogs, preferences, reload } = useModelSets()
   const app = useAppSettings()
-  const favorites = app.preferences.favoriteModels ?? []
+  const favorites = useMemo(() => app.preferences.favoriteModels ?? [], [app.preferences.favoriteModels])
   const all = useMemo(() => catalogs.flatMap((catalog) => catalog.models), [catalogs])
   const modelByKey = useMemo(() => new Map(all.map((model) => [keyOf(model), model])), [all])
   const searchable = useMemo(
@@ -55,6 +56,7 @@ export function ModelPicker({
       ),
     [all],
   )
+  const [showLegacy, setShowLegacy] = useShowLegacyModels()
   const [tab, setTab] = useState<Tab>('all')
   const [query, setQuery] = useState('')
   const [editingFavorites, setEditingFavorites] = useState(false)
@@ -95,10 +97,10 @@ export function ModelPicker({
   )
   const matchingModels = useMemo(
     () =>
-      all.filter(
+      visiblePickerModels(all, { showLegacy, query: q, settings, favorites }).filter(
         (model) => (q || tab === 'all' || model.provider === tab) && (!q || searchable.get(model)!.includes(q)),
       ),
-    [all, searchable, q, tab],
+    [all, searchable, q, tab, showLegacy, settings, favorites],
   )
   const favoriteKeys = useMemo(() => new Set(favorites), [favorites])
   const matchingKeys = useMemo(() => new Set(matchingModels.map(keyOf)), [matchingModels])
@@ -135,7 +137,7 @@ export function ModelPicker({
     if (list.current) list.current.scrollTop = 0
     setScrollTop(0)
     pendingFocus.current = null
-  }, [q, tab])
+  }, [q, tab, showLegacy])
   useLayoutEffect(() => {
     if (pendingFocus.current === null) return
     const row = list.current?.querySelector<HTMLElement>(`[data-model-index="${pendingFocus.current}"]`)
@@ -407,6 +409,7 @@ export function ModelPicker({
                     <span className="mp-sub flex items-center gap-[5px] text-caption text-muted-foreground leading-[1.4]">
                       <ProviderIcon provider={model.provider} size={13} />
                       {providerName(model.provider)}
+                      {model.isLegacy && <> · {t('Legacy')}</>}
                       {usageByProvider.get(model.provider)}
                     </span>
                   </span>
@@ -473,6 +476,17 @@ export function ModelPicker({
             document.body,
           )}
         </DndContext>
+        {!q && tab !== 'sets' && all.some((model) => model.isLegacy && (tab === 'all' || model.provider === tab)) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="m-1 shrink-0"
+            aria-pressed={showLegacy}
+            onClick={() => setShowLegacy(!showLegacy)}
+          >
+            {showLegacy ? t('Hide legacy models') : t('Show legacy models')}
+          </Button>
+        )}
       </div>
     </div>
   )

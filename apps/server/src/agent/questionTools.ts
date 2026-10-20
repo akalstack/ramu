@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentService } from '../agent'
-import type { QuestionRequest, QuestionState } from '@ramu/shared/chat/questions'
+import { QUESTION_INPUT_GUIDANCE, type QuestionRequest, type QuestionState } from '@ramu/shared/chat/questions'
 
 export const questionInputSchema = z.object({
   questions: z
@@ -14,7 +14,10 @@ export const questionInputSchema = z.object({
         options: z
           .array(z.object({ label: z.string().min(1).max(1000), description: z.string().max(2000).default('') }))
           .max(20)
-          .default([]),
+          .default([])
+          .describe(
+            'Optional suggested choices. Omit or use [] for a free-text-only question requiring the user’s own answer.',
+          ),
       }),
     )
     .min(1)
@@ -42,9 +45,12 @@ export function registerQuestionTools(server: McpServer, agents: AgentService, s
   server.registerTool(
     'ask_user',
     {
-      description: async
-        ? 'Ask the user structured questions. Returns immediately while you continue independent work, unless blocking=true or the user disabled async questions. Related questions must use grouping=together and are answered together. Use independent only for separately useful answers. Explain the dependent decision in dependsOn. Before dependent work, check question_status and use wait_for_answer if needed. Never assume an unanswered decision.'
-        : 'Ask the user structured questions and wait for the answers. Related questions must use grouping=together and are answered together. Use independent only for separately useful answers. Explain the dependent decision in dependsOn. Never assume an unanswered decision.',
+      description:
+        QUESTION_INPUT_GUIDANCE +
+        ' ' +
+        (async
+          ? 'Ask the user structured questions. Returns immediately while you continue independent work, unless blocking=true or the user disabled async questions. Related questions must use grouping=together and are answered together. Use independent only for separately useful answers. Explain the dependent decision in dependsOn. Before dependent work, check question_status and use wait_for_answer if needed. Never assume an unanswered decision.'
+          : 'Ask the user structured questions and wait for the answers. Related questions must use grouping=together and are answered together. Use independent only for separately useful answers. Explain the dependent decision in dependsOn. Never assume an unanswered decision.'),
       inputSchema: questionInputSchema.shape,
     },
     (input, extra) => result(async () => report(await agents.askQuestion(sessionId, input, extra.signal))),

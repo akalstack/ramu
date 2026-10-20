@@ -1,3 +1,4 @@
+import { modelLegacyMetadata } from './modelLifecycle'
 import { modelContextWindow } from './modelContext'
 // Native OpenCode, Cursor and Google Antigravity ACP runtimes; JSON-RPC 2.0, newline framing.
 import { acpMcpServers, sessionMcpServers, configuredMcpStatus } from './discoveredMcp'
@@ -194,6 +195,7 @@ export function acpSessionModels(provider: AcpProvider, session: Wire): AgentMod
     provider,
     id: m.id,
     name: m.name || m.id,
+    ...modelLegacyMetadata(m),
     ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
     efforts,
     defaultEffort,

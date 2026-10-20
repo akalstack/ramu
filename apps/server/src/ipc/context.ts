@@ -65,29 +65,21 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     (readings) => usage.update(readings),
     () => {
       const config = loadPreferences().providerBinaries
-      return {
-        cursor: providerEnabled(config, 'cursor'),
-        antigravity: providerEnabled(config, 'antigravity'),
-        keychain: !!config.cursor?.usageKeychain,
-      }
+      return { cursor: providerEnabled(config, 'cursor') }
     },
   )
-  // Every login's usage, for providers where "use all accounts" is on, and Codex's even with one login. Read on demand and on a timer below.
+  // Read every enabled login on demand and on a timer; Codex and Antigravity also need reads with only one login.
   const accountUsage = new AccountUsage(
     (readings) => usage.update(readings),
     () => loadPreferences().providerBinaries,
     {
       'claude-code': (account) => (agents ? agents.claudeAccountUsage(account) : Promise.resolve([])),
       codex: (account) => codexUsage(account),
-      cursor: (account) =>
-        readCursorUsage(
-          !!loadPreferences().providerBinaries.cursor?.usageKeychain,
-          providerEnvironment('cursor', loadPreferences().providerBinaries, account),
-        ),
+      cursor: (account) => readCursorUsage(providerEnvironment('cursor', loadPreferences().providerBinaries, account)),
       antigravity: (account) =>
         readAntigravityUsage(providerEnvironment('antigravity', loadPreferences().providerBinaries, account)),
     },
-    ['codex'],
+    ['codex', 'antigravity'],
   )
   const loadPreferences = (): AppPreferences => {
     const saved = storedPreferences()

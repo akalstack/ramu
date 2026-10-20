@@ -1,3 +1,4 @@
+import { modelLegacyMetadata } from './modelLifecycle'
 import { modelContextWindow } from './modelContext'
 import { permissionKey } from '../agent/permissionApprovals'
 import { codexMcpConfig, sessionMcpServers, configuredMcpStatus } from './discoveredMcp'
@@ -149,6 +150,7 @@ export async function codexModels(accountId?: string): Promise<AgentModel[]> {
             provider: 'codex',
             id: m.model,
             name: m.displayName,
+            ...modelLegacyMetadata(m),
             ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
             efforts: (m.supportedReasoningEfforts ?? []).map((e: Wire) => e.reasoningEffort),
             defaultEffort: m.defaultReasoningEffort,

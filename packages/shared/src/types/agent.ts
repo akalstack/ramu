@@ -45,6 +45,8 @@ export interface AgentModel {
   efforts: ReasoningEffort[]
   defaultEffort: ReasoningEffort | null
   isDefault: boolean
+  /** Older but still selectable. Classified by the execution host; never invalidates a saved thread. */
+  isLegacy?: boolean
   serviceTiers?: string[]
   /** Context capacity reported by the provider, in tokens; absent when not exposed. */
   contextWindow?: number

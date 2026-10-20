@@ -129,10 +129,15 @@ export function copySharedSkill(source: string, dir: string, name: string): void
   const { files, markdown } = readSkillFolder(source, { skipHidden: true })
   const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(markdown)
   const renamed = front
-    ? markdown.replace(front[1]!, /^name:.*$/m.test(front[1]!) ? front[1]!.replace(/^name:.*$/m, `name: ${name}`) : `name: ${name}\n${front[1]}`)
+    ? markdown.replace(
+        front[1]!,
+        /^name:.*$/m.test(front[1]!) ? front[1]!.replace(/^name:.*$/m, `name: ${name}`) : `name: ${name}\n${front[1]}`,
+      )
     : `---\nname: ${name}\n---\n${markdown}`
   files['SKILL.md'] = Buffer.from(renamed).toString('base64')
-  const digest = createHash('sha256').update(JSON.stringify(Object.entries(files).sort())).digest('hex')
+  const digest = createHash('sha256')
+    .update(JSON.stringify(Object.entries(files).sort()))
+    .digest('hex')
   const marker = join(dir, '.ramu-source')
   try {
     if (readFileSync(marker, 'utf8') === digest) return

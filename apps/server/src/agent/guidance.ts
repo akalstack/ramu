@@ -1,14 +1,14 @@
 import { INTERACTIVE_GUIDE } from '../interactive/tools'
 import { BACKGROUND_TERMINAL_GUIDE } from './backgroundTerminalTools'
 import { BACKGROUND_PREAMBLE } from '@ramu/shared/chat/agentTasks'
-import { QUESTION_PREAMBLE } from '@ramu/shared/chat/questions'
+import { QUESTION_INPUT_GUIDANCE, QUESTION_PREAMBLE } from '@ramu/shared/chat/questions'
 import { ADVISOR_PREAMBLE } from './advisor'
 import { TOOL_PRESENTATION_PREAMBLE, USER_MESSAGE_PREAMBLE } from './agentInstructions'
 import { TOOL_DISCOVERY_INSTRUCTIONS } from '../intelligence'
 import { NATIVE_SUBAGENT_PREAMBLE } from './constants'
 
 // Async questions off: ask_user waits for answers, so the status, wait and close guidance would be unused tokens.
-const BLOCKING_QUESTION_PREAMBLE = `Use Ramu's ask_user tool for clarification; it waits for the answer before returning. Group related questions with grouping="together" when their answers must be used together; use "independent" only when each answer is independently useful. Set dependsOn to explain exactly which decision or work needs the answer. Native blocking questions and permission approvals still require an answer. Never assume an unanswered required decision.`
+const BLOCKING_QUESTION_PREAMBLE = `Use Ramu's ask_user tool for clarification; it waits for the answer before returning. ${QUESTION_INPUT_GUIDANCE} Group related questions with grouping="together" when their answers must be used together; use "independent" only when each answer is independently useful. Set dependsOn to explain exactly which decision or work needs the answer. Native blocking questions and permission approvals still require an answer. Never assume an unanswered required decision.`
 
 /** Which optional sections a chat's guidance includes; the text of each section is supplied by the caller or defined here. */
 export interface GuidanceSections {

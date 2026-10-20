@@ -28,7 +28,7 @@ import { ProviderIcon } from '../models/ProviderIcon'
 import { SettingsField } from './SettingsScope'
 import type { useAccountUsage } from './Usage'
 import { SECONDARY_BUTTON_CLASS } from './constants'
-import { PROVIDER_ACTIONS_CLASS, ProviderAddAccount, type ProviderPrefs } from './ProviderAccountControls'
+import { ProviderAddAccount, type ProviderPrefs } from './ProviderAccountControls'
 import { ProviderLoginRow } from './ProviderLoginRow'
 
 const BROWSE_BUTTON_CLASS = `${SECONDARY_BUTTON_CLASS} icon p-0 size-(--action-size) flex-none justify-center`
@@ -127,7 +127,7 @@ export function ProviderCard({
       </header>
       {!enabled && (
         <p className="muted text-muted-foreground small text-caption">
-          {t('Hidden from model pickers and never started. Turn it on to use it again.')}
+          {t('Off. Hidden from model pickers and never started.')}
         </p>
       )}
       {enabled && (
@@ -187,54 +187,11 @@ export function ProviderCard({
           {accounts && (
             <p className="muted text-muted-foreground small text-caption">
               {t(
-                'New threads use the top account; existing threads keep theirs. When the account a thread is using reaches its limit, it continues on the next enabled account below it before switching models.',
+                'New threads use the top login. When it reaches its limit, a thread moves to the next one before switching models.',
               )}
             </p>
           )}
-          <div className={PROVIDER_ACTIONS_CLASS}>
-            {canUpdate ? (
-              <Button
-                variant="secondary"
-                className={SECONDARY_BUTTON_CLASS}
-                disabled={(!status?.installed && provider !== 'antigravity') || updating !== null || status?.updating}
-                onClick={onUpdate}
-              >
-                <RefreshCw
-                  size={14}
-                  className={updating === provider ? 'spin [animation:spin_0.9s_linear_infinite]' : ''}
-                />
-                {provider === 'antigravity'
-                  ? updating === provider
-                    ? t(status?.installed ? 'Updating…' : 'Installing…')
-                    : t(status?.installed ? 'Update runtime' : 'Install runtime')
-                  : updating === provider
-                    ? t('Updating…')
-                    : t('Update CLI')}
-              </Button>
-            ) : (
-              <a href={status?.downloadUrl ?? status?.docsUrl} target="_blank" rel="noreferrer">
-                {t('Provider website ↗')}
-              </a>
-            )}
-          </div>
-          {provider === 'cursor' && (
-            <SettingsRow setting={`providerBinaries.${provider}.usageKeychain`} className="settings-toggle">
-              <span className="small text-caption">
-                {t('Show plan usage')}
-                <span className="muted text-muted-foreground block small text-caption">
-                  {t(
-                    'Reads your Cursor login from the macOS Keychain to show monthly usage. macOS asks for permission.',
-                  )}
-                </span>
-              </span>
-              <Switch
-                aria-label={t('Show Cursor plan usage')}
-                checked={preferences?.usageKeychain ?? false}
-                onCheckedChange={(usageKeychain) => onChange({ usageKeychain })}
-              />
-            </SettingsRow>
-          )}
-          {canUpdate && (
+          {canUpdate ? (
             <SettingsRow
               setting={`providerBinaries.${provider}.autoUpdate`}
               className="settings-toggle [&:not(:has(+_.settings-row))]:mb-0"
@@ -242,22 +199,46 @@ export function ProviderCard({
               <span className="small text-caption">
                 {t(provider === 'antigravity' ? 'Auto-update runtime' : 'Auto-update CLI')}
                 <span className="muted text-muted-foreground block block small text-caption">
-                  {t('Updates apply to new provider processes. Running threads stay connected.')}
+                  {t('Applies to new threads. Running threads stay connected.')}
                 </span>
               </span>
-              <Switch
-                aria-label={t(provider === 'antigravity' ? 'Auto-update {0} runtime' : 'Auto-update {0} CLI', {
-                  '0': providerName(provider),
-                })}
-                checked={preferences?.autoUpdate ?? false}
-                onCheckedChange={(autoUpdate) => onChange({ autoUpdate })}
-              />
+              <span className="flex flex-none items-center gap-2.5">
+                {(status?.updateAvailable ||
+                  updating === provider ||
+                  (provider === 'antigravity' && !status?.installed)) && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className={SECONDARY_BUTTON_CLASS}
+                    disabled={updating !== null || status?.updating}
+                    onClick={onUpdate}
+                  >
+                    <RefreshCw
+                      size={14}
+                      className={updating === provider ? 'spin [animation:spin_0.9s_linear_infinite]' : ''}
+                    />
+                    {updating === provider
+                      ? t(status?.installed ? 'Updating…' : 'Installing…')
+                      : !status?.installed
+                        ? t('Install runtime')
+                        : status.latestVersion
+                          ? t('Update to {0}', { '0': status.latestVersion })
+                          : t('Update now')}
+                  </Button>
+                )}
+                <Switch
+                  aria-label={t(provider === 'antigravity' ? 'Auto-update {0} runtime' : 'Auto-update {0} CLI', {
+                    '0': providerName(provider),
+                  })}
+                  checked={preferences?.autoUpdate ?? false}
+                  onCheckedChange={(autoUpdate) => onChange({ autoUpdate })}
+                />
+              </span>
             </SettingsRow>
-          )}
-          {status?.latestVersion && status.updateAvailable && (
-            <p className="muted text-muted-foreground small text-caption">
-              {t('Available version: {0}', { '0': status.latestVersion })}
-            </p>
+          ) : (
+            <a href={status?.downloadUrl ?? status?.docsUrl} target="_blank" rel="noreferrer">
+              {t('Provider website ↗')}
+            </a>
           )}
           {[status?.versionError, status?.error, status?.updateError].filter(Boolean).map((message) => (
             <p key={message} className="error text-bad small text-caption" role="alert">

@@ -57,3 +57,33 @@ it('offers both selection flows and changes only the presentation preference', (
   expect(saved.defaultStepId).toBe(draft.defaultStepId)
   for (const text of ['Model selection', 'Steps', 'Model then effort']) expect(translate('id', text)).not.toBe(text)
 })
+
+it('shows automatic steps without editing controls, while custom sets stay editable', () => {
+  const draft = recommendedSets([])
+  draft.sets.push({ id: 'custom', name: 'My models', steps: [{ ...draft.sets[0]!.steps[0]!, id: 'custom-step' }] })
+  const render = (selected: string) =>
+    renderToStaticMarkup(
+      createElement(ModelSetsEditor, {
+        draft,
+        selected,
+        setDraft() {},
+        setSelected() {},
+        catalogs: [],
+        busy: false,
+        onRestore() {},
+        onRefresh() {},
+      }),
+    )
+  const automatic = render('recommended')
+  expect(automatic).toContain('Default updates automatically from active providers.')
+  expect(automatic).toContain('aria-label="Automatic model steps"')
+  expect(automatic).toContain('GPT-6.1 Sol Low')
+  expect(automatic).not.toContain('Set name')
+  expect(automatic).not.toContain('Add step')
+  expect(automatic).toMatch(/<button[^>]*aria-label="Remove model set"[^>]*disabled/)
+  const custom = render('custom')
+  expect(custom).toContain('Set name')
+  expect(custom).toContain('Add step')
+  expect(custom).not.toContain('Automatic model steps')
+  expect(translate('id', 'Automatic model steps')).not.toBe('Automatic model steps')
+})

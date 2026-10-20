@@ -1,3 +1,4 @@
+import { classifyLegacyCatalog } from '../providers/modelLifecycle'
 import { providerAccountId } from '../providers/providerBinaries'
 import { acpModels } from '../providers/acp'
 import { providerName, providerEnabled } from '@ramu/shared/providers/providers'
@@ -28,11 +29,11 @@ export class CatalogService {
 
   discoverCatalog(refresh: boolean): Promise<ProviderCatalog[]> {
     if (refresh) this.catalogs = null
-    if (process.env.RAMU_FAKE_AGENT === '1') return Promise.resolve(fakeCatalogs())
+    if (process.env.RAMU_FAKE_AGENT === '1') return Promise.resolve(fakeCatalogs().map(classifyLegacyCatalog))
     this.catalogs ??= discoverCatalogs({
       providerOff: (provider) => this.providerOff(provider),
       providerQuery: (args) => this.host.providerQuery(args),
-    })
+    }).then((catalogs) => catalogs.map(classifyLegacyCatalog))
     return this.catalogs
   }
 

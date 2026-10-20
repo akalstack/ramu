@@ -37,9 +37,24 @@ describe('provider adapter registry', () => {
   it('maps account profile environments', () => {
     expect(providerAccountEnv('codex', '/r')).toEqual({ CODEX_HOME: '/r' })
     expect(providerAccountEnv('claude-code', '/r')).toEqual({ CLAUDE_CONFIG_DIR: '/r' })
-    expect(providerAccountEnv('antigravity', '/r')).toEqual({ GEMINI_HOME: '/r' })
-    expect(Object.keys(providerAccountEnv('cursor', '/r'))).toContain('AGENT_CLI_CREDENTIAL_STORE')
+    expect(providerAccountEnv('antigravity', '/r')).toEqual({ GEMINI_HOME: '/r', AGY_ACP_FORCE_FILE_STORAGE: '1' })
+    expect(providerAccountEnv('cursor', '/r')).toMatchObject({
+      AGENT_CLI_CREDENTIAL_STORE: 'file',
+      RAMU_CURSOR_SDK_DIR: '/r/sdk',
+    })
     expect(providerAccountClearedEnv('codex')).toEqual(['OPENAI_API_KEY', 'CODEX_API_KEY'])
+  })
+
+  it('keeps every login in a file, including the default account, so the macOS Keychain is never used', () => {
+    const ctx = { overrides: {}, binary: () => '/x/agy_acp_server.par', expand: (path: string) => path }
+    expect(providerAdapter('antigravity').extendEnvironment!({}, ctx)).toMatchObject({
+      AGY_ACP_FORCE_FILE_STORAGE: '1',
+    })
+    expect(providerAdapter('cursor').extendEnvironment!({}, ctx)).toMatchObject({ AGENT_CLI_CREDENTIAL_STORE: 'file' })
+    // A choice made in the environment still wins.
+    expect(providerAdapter('cursor').extendEnvironment!({ AGENT_CLI_CREDENTIAL_STORE: 'memory' }, ctx)).toMatchObject({
+      AGENT_CLI_CREDENTIAL_STORE: 'memory',
+    })
   })
 
   it('only offers terminal login and self-update where the CLI supports them', () => {

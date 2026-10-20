@@ -265,6 +265,7 @@ export function TaskRow({
             if (e.key === 'Enter' && !renaming) open()
           }}
         >
+          {done && <Check size={14} className="flex-none text-muted-foreground" aria-label={t('Done')} />}
           {renaming ? (
             <InlineEdit
               value={task.title}

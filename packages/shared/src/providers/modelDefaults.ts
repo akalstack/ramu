@@ -11,59 +11,123 @@ import type {
 const GENERATED_ORDER: AgentProvider[] = ['codex', 'claude-code', 'antigravity', 'cursor', 'opencode']
 const LADDER: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
 
-/** Deterministic provider groups; each step uses a model and effort reported by that provider. */
+/** Share five choices across usable providers, redistributing slots a small catalog cannot fill. */
 function generatedFromCatalogs(catalogs: ProviderCatalog[]): ModelPreferences | null {
-  const steps: ModelStep[] = []
-  let defaultStepId = ''
-  for (const provider of GENERATED_ORDER) {
-    const models = catalogs
-      .filter((catalog) => catalog.provider === provider)
-      .flatMap((catalog) => catalog.models)
-      .filter((model) => model.provider === provider)
-    if (provider === 'codex') {
-      const codex = codexSteps(models)
-      if (codex.length) {
-        steps.push(...codex)
-        defaultStepId = codex.find((step) => step.id === 'sol-light')?.id ?? codex[0]!.id
-        continue
-      }
+  const groups = GENERATED_ORDER.map((provider) => {
+    const models = [
+      ...new Map(
+        catalogs
+          .filter((catalog) => catalog.provider === provider)
+          .flatMap((catalog) => catalog.models)
+          .filter((model) => model.provider === provider)
+          .map((model) => [model.id, model]),
+      ).values(),
+    ]
+    return { provider, models, choices: providerChoices(provider, models), count: 0 }
+  }).filter((group) => group.choices.length)
+  if (!groups.length) return null
+  let remaining = 5
+  while (remaining) {
+    let allocated = false
+    for (const group of groups) {
+      if (!remaining) break
+      if (group.count >= group.choices.length) continue
+      group.count++
+      remaining--
+      allocated = true
     }
-    const model = models.find((entry) => entry.isDefault) ?? models[0]
-    if (!model) continue
-    const efforts = [...model.efforts].sort((a, b) => LADDER.indexOf(a) - LADDER.indexOf(b))
-    const chosen = efforts.length
-      ? [
-          ...new Set(
-            [
-              efforts.find((effort) => effort !== 'none' && effort !== 'minimal') ?? efforts[0]!,
-              model.defaultEffort && efforts.includes(model.defaultEffort) ? model.defaultEffort : undefined,
-              efforts.find((effort) => LADDER.indexOf(effort) > LADDER.indexOf(model.defaultEffort ?? 'medium')),
-            ].filter((effort): effort is ReasoningEffort => !!effort),
-          ),
-        ].sort((a, b) => LADDER.indexOf(a) - LADDER.indexOf(b))
-      : [null]
-    for (const effort of chosen) {
-      const id = generatedStepId(provider, model.id, effort)
-      steps.push({
-        id,
-        name: `${model.name}${effort ? ` ${effort}` : ''}`.slice(0, 260),
-        provider,
-        model: model.id,
-        effort,
-      })
-      if (!defaultStepId && effort === (model.defaultEffort ?? chosen[0])) defaultStepId = id
-    }
+    if (!allocated) break
   }
-  if (!steps.length) return null
-  const selected = defaultStepId || steps[0]!.id
+  const steps = groups.flatMap(({ choices, count, models, provider }) => {
+    const preferred =
+      (provider === 'codex' ? choices.find((step) => step.id === 'sol-light') : undefined) ??
+      choices.find((step) =>
+        models.some((model) => model.isDefault && model.id === step.model && step.effort === model.defaultEffort),
+      )
+    if (count === 1) return [preferred ?? choices[0]!]
+    // Preserve the light/default/capable range as the allocation shrinks.
+    const priorities =
+      count === 2 && provider !== 'codex'
+        ? [0, choices.length - 1]
+        : [0, 1, choices.length - 1, 2, choices.length - 2, ...choices.map((_, index) => index)]
+    const indices = [...new Set(priorities)]
+      .filter((index) => index >= 0 && index < choices.length)
+      .slice(0, count)
+      .sort((a, b) => a - b)
+    return indices.map((index) => choices[index]!)
+  })
+  const selected =
+    steps.find((step) => step.id === 'sol-light') ??
+    steps.find((step) =>
+      groups.some(({ models }) =>
+        models.some(
+          (model) =>
+            model.isDefault &&
+            model.provider === step.provider &&
+            model.id === step.model &&
+            model.defaultEffort === step.effort,
+        ),
+      ),
+    ) ??
+    steps[0]!
   const set: ModelSet = { id: 'recommended', name: 'Default', steps }
-  set.generated = { fingerprint: fingerprint(set), defaultStepId: selected }
+  set.generated = { fingerprint: fingerprint(set), defaultStepId: selected.id }
   return {
     defaultBarMode: 'model',
     sets: [set],
     defaultSetId: 'recommended',
-    defaultStepId: selected,
+    defaultStepId: selected.id,
   }
+}
+
+function providerChoices(provider: AgentProvider, models: AgentModel[]): ModelStep[] {
+  const familyOrder = (model: AgentModel) => {
+    if (provider !== 'claude-code') return model.isDefault ? 0 : 1
+    const name = `${model.id} ${model.name}`.toLowerCase()
+    return name.includes('sonnet') ? 0 : name.includes('opus') ? 1 : model.isDefault ? 2 : 3
+  }
+  const ordered = [...models].sort((a, b) => familyOrder(a) - familyOrder(b) || a.id.localeCompare(b.id))
+  const step = (model: AgentModel, effort: ReasoningEffort | null): ModelStep => ({
+    id: generatedStepId(provider, model.id, effort),
+    name: `${model.name}${effort ? ` ${effort}` : ''}`.slice(0, 260),
+    provider,
+    model: model.id,
+    effort,
+  })
+  const all = ordered.flatMap((model) =>
+    model.efforts.length
+      ? [...new Set(model.efforts)]
+          .sort((a, b) => LADDER.indexOf(a) - LADDER.indexOf(b))
+          .map((effort) => step(model, effort))
+      : [step(model, null)],
+  )
+  const preferred =
+    provider === 'codex'
+      ? codexSteps(models)
+      : ordered.flatMap((model, index) => {
+          const efforts = [...new Set(model.efforts)].sort((a, b) => LADDER.indexOf(a) - LADDER.indexOf(b))
+          const first = efforts.find((effort) => effort !== 'none' && effort !== 'minimal') ?? efforts[0]
+          const middle = model.defaultEffort && efforts.includes(model.defaultEffort) ? model.defaultEffort : first
+          const last = efforts.at(-1)
+          return [...new Set(index === 0 ? [first, middle, last] : [middle, last])].map((effort) =>
+            step(model, effort ?? null),
+          )
+        })
+  const unique = new Map<string, ModelStep>()
+  for (const entry of [...preferred, ...all]) {
+    const key = JSON.stringify([entry.model, entry.effort])
+    if (!unique.has(key)) unique.set(key, entry)
+  }
+  const choices = [...unique.values()].slice(0, 5)
+  const defaultModel = ordered.find((model) => model.isDefault)
+  const defaultChoice =
+    defaultModel && all.find((entry) => entry.model === defaultModel.id && entry.effort === defaultModel.defaultEffort)
+  if (
+    defaultChoice &&
+    !choices.some((entry) => entry.model === defaultChoice.model && entry.effort === defaultChoice.effort)
+  )
+    choices.splice(Math.min(1, choices.length), choices.length >= 5 ? 1 : 0, defaultChoice)
+  return choices
 }
 
 const fingerprint = (set: ModelSet) =>
@@ -114,7 +178,9 @@ function codexSteps(models: AgentModel[]): ModelStep[] {
 }
 
 export function recommendedSets(catalogs: ProviderCatalog[]): ModelPreferences {
-  const generated = generatedFromCatalogs(catalogs)
+  const current = catalogs.map((catalog) => ({ ...catalog, models: catalog.models.filter((model) => !model.isLegacy) }))
+  // Prefer current choices; an all-legacy catalog still supplies usable choices instead of invented placeholders.
+  const generated = generatedFromCatalogs(current.some((catalog) => catalog.models.length) ? current : catalogs)
   if (generated) return generated
   // Before any usable catalog is known, retain the legacy placeholders. Clients validate availability before send.
   const step = (id: string, name: string, model: string, effort: ReasoningEffort): ModelStep => ({
@@ -139,7 +205,15 @@ export function recommendedSets(catalogs: ProviderCatalog[]): ModelPreferences {
   }
 }
 
-/** Refresh only proven generated content. An unavailable explicit default remains available for correction. */
+/** Only untouched generated sets follow catalogs; custom content remains user-owned. */
+export function isGeneratedModelSet(set: ModelSet): boolean {
+  return (
+    set.id === 'recommended' &&
+    (set.generated?.fingerprint === fingerprint(set) || fingerprint(set) === fingerprint(recommendedSets([]).sets[0]!))
+  )
+}
+
+/** Refresh proven generated content, replacing a default that no longer exists. */
 export function migrateModelDefaults(value: ModelPreferences, defaults: ModelPreferences): ModelPreferences {
   const old = value.sets.find((set) => set.id === 'recommended')
   const next = defaults.sets.find((set) => set.id === 'recommended')
@@ -170,9 +244,7 @@ export function migrateModelDefaults(value: ModelPreferences, defaults: ModelPre
   if (old.generated && !next.generated) return value
   const selectedHere = value.defaultSetId === old.id
   const selectedExists = next.steps.some((step) => step.id === value.defaultStepId)
-  const generatedDefault = old.generated?.defaultStepId ?? 'sol-light'
   const earlierDefault = !old.generated && value.defaultStepId === 'sol-medium'
-  if (selectedHere && !selectedExists && value.defaultStepId !== generatedDefault && !earlierDefault) return value
   const defaultStepId =
     selectedHere && (!selectedExists || earlierDefault) ? defaults.defaultStepId : value.defaultStepId
   if (

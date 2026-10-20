@@ -9,11 +9,15 @@ export const cursorAdapter = defineAdapter({
   executableNames: () => ['agent', 'cursor-agent'],
   accountEnv: (root) => ({
     CURSOR_CONFIG_DIR: root,
+    // Where this account's Cursor SDK login is saved, so it never shares the default login.
+    RAMU_CURSOR_SDK_DIR: join(root, 'sdk'),
     XDG_CONFIG_HOME: join(root, 'config'),
     XDG_DATA_HOME: join(root, 'data'),
     AGENT_CLI_CREDENTIAL_STORE: 'file',
   }),
   accountClearedEnv: ['CURSOR_API_KEY', 'CURSOR_AUTH_TOKEN'],
+  // Logins are saved in files, never the macOS Keychain, so Ramu never needs Keychain permission.
+  extendEnvironment: (env) => ({ AGENT_CLI_CREDENTIAL_STORE: 'file', ...env }),
   setup: () => ({
     docsUrl: 'https://cursor.com/docs/cli/installation',
     installCommand:
@@ -33,7 +37,10 @@ export const cursorAdapter = defineAdapter({
   async signInState(_binary, env) {
     if (env.CURSOR_API_KEY) return { signedIn: true, detail: 'API key' }
     try {
-      const status = await (await loadCursorSdk()).Cursor.auth.status()
+      const { Cursor, FileCredentialStore } = await loadCursorSdk()
+      const status = await Cursor.auth.status(
+        env.RAMU_CURSOR_SDK_DIR ? { store: new FileCredentialStore(join(env.RAMU_CURSOR_SDK_DIR, 'auth.json')) } : {},
+      )
       return status.status === 'logged-in'
         ? { signedIn: true, ...(status.email ? { detail: status.email, email: String(status.email) } : {}) }
         : { signedIn: false }
@@ -42,8 +49,12 @@ export const cursorAdapter = defineAdapter({
     }
   },
   loginArgs: null,
-  async signIn() {
-    await (await loadCursorSdk()).Cursor.auth.login()
+  // Each account saves its own login file; the default account uses the SDK's own location.
+  async signIn({ env }) {
+    const { Cursor, FileCredentialStore } = await loadCursorSdk()
+    await Cursor.auth.login(
+      env.RAMU_CURSOR_SDK_DIR ? { store: new FileCredentialStore(join(env.RAMU_CURSOR_SDK_DIR, 'auth.json')) } : {},
+    )
   },
   // The agent scans `<workspace>/.cursor/skills` (and follows folder links there); ACP has no option for another folder.
   skillsLaunch: (_exportDir, cwd) => ({ linkDirs: cwd ? [join(cwd, '.cursor', 'skills')] : [] }),

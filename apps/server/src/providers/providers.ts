@@ -189,6 +189,7 @@ export class ProviderService {
     await adapter.signIn({
       installed: !!findExecutable(providerBinary(provider, this.preferences().providerBinaries)),
       accountId,
+      env: providerEnvironment(provider, this.preferences().providerBinaries, accountId),
       acpSignIn,
     })
     this.statusCache = undefined
@@ -197,6 +198,7 @@ export class ProviderService {
   update(provider: AgentProvider): Promise<ProviderStatus> {
     const pending = this.updating.get(provider)
     if (pending) return pending
+    const controller = new AbortController()
     const update = async () => {
       const config = this.preferences().providerBinaries
       const plan = providerAdapter(provider).updatePlan({
@@ -205,7 +207,7 @@ export class ProviderService {
         findExecutable,
         runtimeHome: providerRuntimeHome(provider),
         installRuntime: async () => {
-          await installAntigravity()
+          await installAntigravity({ signal: controller.signal })
         },
       })
       this.updateErrors.delete(provider)
@@ -232,8 +234,18 @@ export class ProviderService {
       this.statusCache = undefined
       return (await this.status()).find((status) => status.provider === provider)!
     }
-    const work = (this.activity ? this.activity.run('Updating CLI', provider, update) : update())
+    const work = (
+      this.activity
+        ? this.activity.run(
+            'Updating CLI',
+            provider,
+            update,
+            provider === 'antigravity' ? () => controller.abort() : undefined,
+          )
+        : update()
+    )
       .catch((error) => {
+        if (controller.signal.aborted) throw new Error('CLI update cancelled.')
         this.updateErrors.set(provider, (error as Error).message)
         throw error
       })

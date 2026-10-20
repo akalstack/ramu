@@ -33,3 +33,44 @@ it('clears failed activity and preserves the original failure', async () => {
   ).rejects.toBe(error)
   expect(activity.status()).toEqual([])
 })
+
+it('lets the owner cancel a job and keeps it visible until its work settles', async () => {
+  const activity = new ActivityService(() => {})
+  const controller = new AbortController()
+  const work = activity.run(
+    'Updating CLI',
+    'antigravity',
+    () =>
+      new Promise<void>((_resolve, reject) => {
+        controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true })
+      }),
+    () => controller.abort(),
+  )
+  const item = activity.status()[0]!
+  expect(item.cancellable).toBe(true)
+  activity.cancel(item.id)
+  activity.cancel(item.id)
+  expect(activity.status()).toHaveLength(1)
+  await expect(work).rejects.toMatchObject({ name: 'AbortError' })
+  expect(activity.status()).toEqual([])
+  expect(() => activity.cancel(item.id)).toThrow('cannot be stopped')
+})
+
+it('does not offer cancellation for work without an owner cancellation hook', async () => {
+  const activity = new ActivityService(() => {})
+  let finish!: () => void
+  const work = activity.run(
+    'Committing changes',
+    undefined,
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+  )
+  const item = activity.status()[0]!
+  expect(item.cancellable).toBeUndefined()
+  expect(() => activity.cancel(item.id)).toThrow('cannot be stopped')
+  expect(activity.status()).toHaveLength(1)
+  finish()
+  await work
+})

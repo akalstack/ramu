@@ -39,9 +39,9 @@ export function resolveAntigravityAsset(
   return { version, archive }
 }
 
-async function downloadFile(url: string, file: string): Promise<void> {
+async function downloadFile(url: string, file: string, signal?: AbortSignal): Promise<void> {
   const response = await fetch(url, {
-    signal: AbortSignal.timeout(45 * 60_000),
+    signal: AbortSignal.any([AbortSignal.timeout(45 * 60_000), ...(signal ? [signal] : [])]),
     headers: { 'User-Agent': 'Ramu-provider-install' },
   })
   if (!response.ok || !response.body) throw new Error(`Download failed (HTTP ${response.status})`)
@@ -53,26 +53,43 @@ async function downloadFile(url: string, file: string): Promise<void> {
     received += chunk.length
     if (received > MAX_ARCHIVE_BYTES) body.destroy(new Error('The runtime download is larger than expected'))
   })
-  await pipeline(body, createWriteStream(file, { mode: 0o600 }))
+  await pipeline(body, createWriteStream(file, { mode: 0o600 }), { signal })
 }
 
-function extract(archive: string, into: string): Promise<void> {
+function extract(archive: string, into: string, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted()
   // bsdtar (Windows, macOS) and Info-ZIP unzip both refuse entries that climb out of the target directory.
   const [command, args] =
     process.platform === 'win32' ? ['tar', ['-xf', archive, '-C', into]] : ['unzip', ['-q', '-o', archive, '-d', into]]
   return new Promise((resolve, reject) => {
     const child = spawn(command!, args as string[], { stdio: 'ignore', windowsHide: true })
+    const abort = () => {
+      child.kill()
+      const kill = setTimeout(() => child.kill('SIGKILL'), 1000)
+      kill.unref()
+    }
+    signal?.addEventListener('abort', abort, { once: true })
+    child.once('close', () => signal?.removeEventListener('abort', abort))
+    if (signal?.aborted) abort()
     child.once('error', () =>
       reject(new Error(`Cannot unpack the runtime. Install ${command === 'unzip' ? 'unzip' : 'tar'} and try again.`)),
     )
-    child.once('exit', (code) =>
-      code === 0 ? resolve() : reject(new Error('The runtime archive could not be unpacked')),
-    )
+    child.once('close', (code) => {
+      if (signal?.aborted) reject(signal.reason)
+      else if (code === 0) resolve()
+      else reject(new Error('The runtime archive could not be unpacked'))
+    })
   })
 }
 
 /** Starts the runtime and waits for its ACP handshake, so a broken download never becomes the active version. */
-export function probeAntigravity(executable: string, harness: string, timeoutMs = 20_000): Promise<void> {
+export function probeAntigravity(
+  executable: string,
+  harness: string,
+  timeoutMs = 20_000,
+  signal?: AbortSignal,
+): Promise<void> {
+  signal?.throwIfAborted()
   return new Promise((resolve, reject) => {
     const child = spawn(executable, process.platform === 'linux' ? ['--uid='] : [], {
       cwd: join(executable, '..'),
@@ -87,6 +104,7 @@ export function probeAntigravity(executable: string, harness: string, timeoutMs 
     const finish = (error?: Error) => {
       if (settled) return
       settled = true
+      signal?.removeEventListener('abort', abort)
       clearTimeout(timer)
       lines.close()
       child.kill()
@@ -98,6 +116,9 @@ export function probeAntigravity(executable: string, harness: string, timeoutMs 
       () => finish(new Error('The downloaded runtime did not answer. It may not match this host.')),
       timeoutMs,
     )
+    const abort = () => finish(signal?.reason)
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) abort()
     child.once('error', () => finish(new Error('The downloaded runtime cannot start on this host.')))
     child.once('exit', () => finish(new Error('The downloaded runtime stopped before answering.')))
     lines.on('line', (line) => {
@@ -117,23 +138,27 @@ export function probeAntigravity(executable: string, harness: string, timeoutMs 
 }
 
 export interface AntigravityInstallOptions {
+  signal?: AbortSignal
   asset?: AntigravityAsset
-  download?: (url: string, file: string) => Promise<void>
+  download?: (url: string, file: string, signal?: AbortSignal) => Promise<void>
   probe?: (executable: string, harness: string) => Promise<void>
 }
 /** Installs the newest runtime under Ramu's own directory and makes it the active one. A same-version install that is already complete is left alone. */
 export async function installAntigravity(
   options: AntigravityInstallOptions = {},
 ): Promise<{ version: string; installed: boolean }> {
+  const { signal } = options
+  signal?.throwIfAborted()
   let asset = options.asset
   if (!asset) {
     const response = await fetch(ANTIGRAVITY_REGISTRY, {
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.any([AbortSignal.timeout(15_000), ...(signal ? [signal] : [])]),
       headers: { 'User-Agent': 'Ramu-provider-install' },
     })
     if (!response.ok) throw new Error(`Release source returned HTTP ${response.status}`)
     asset = resolveAntigravityAsset(await response.json()) ?? undefined
   }
+  signal?.throwIfAborted()
   if (!asset) throw new Error('Google does not publish the Antigravity runtime for this host.')
   const active = managedAntigravity()
   if (active?.version === asset.version) return { version: asset.version, installed: false }
@@ -145,14 +170,21 @@ export async function installAntigravity(
     const archive = join(stage, 'runtime.zip'),
       unpacked = join(stage, 'files')
     await mkdir(unpacked)
-    await (options.download ?? downloadFile)(asset.archive, archive)
-    await extract(archive, unpacked)
+    await (options.download ?? downloadFile)(asset.archive, archive, signal)
+    signal?.throwIfAborted()
+    await extract(archive, unpacked, signal)
+    signal?.throwIfAborted()
     for (const name of [names.executable, names.harness]) {
       const info = existsSync(join(unpacked, name)) ? lstatSync(join(unpacked, name)) : null
       if (!info?.isFile() || info.size <= 0) throw new Error(`The runtime archive is missing ${name}`)
       if (process.platform !== 'win32') await chmod(join(unpacked, name), 0o755)
     }
-    await (options.probe ?? probeAntigravity)(join(unpacked, names.executable), join(unpacked, names.harness))
+    const executable = join(unpacked, names.executable),
+      harness = join(unpacked, names.harness)
+    if (options.probe) await options.probe(executable, harness)
+    else await probeAntigravity(executable, harness, 20_000, signal)
+    // Cancellation is honored up to activation; the short atomic activation finishes once started.
+    signal?.throwIfAborted()
     const target = join(home, 'versions', asset.version)
     await mkdir(join(home, 'versions'), { recursive: true, mode: 0o700 })
     await rm(target, { recursive: true, force: true })

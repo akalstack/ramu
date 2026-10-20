@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { migrateModelDefaults, recommendedSets } from '../src/providers/modelDefaults'
+import { isGeneratedModelSet, migrateModelDefaults, recommendedSets } from '../src/providers/modelDefaults'
 import type { AgentProvider, ProviderCatalog } from '../src/types'
 
 describe('new-thread model defaults', () => {
@@ -161,7 +161,8 @@ describe('catalog refresh and mixed provider combinations', () => {
       }
       expect(steps.some((step) => step.id === prefs.defaultStepId)).toBe(true)
       expect(recommendedSets([...active].reverse())).toEqual(prefs)
-      expect(steps.length).toBeLessThanOrEqual(20)
+      expect(steps.length).toBe(Math.min(5, active.length * 3))
+      expect(new Set(steps.map((step) => `${step.provider}:${step.model}:${step.effort}`)).size).toBe(steps.length)
     },
   )
   it('does not invent missing Codex families, unsupported efforts or effort controls', () => {
@@ -198,14 +199,16 @@ describe('catalog refresh and mixed provider combinations', () => {
     expect(result.defaultBarMode).toBe('effort')
     expect(migrateModelDefaults(result, next)).toBe(result)
   })
-  it('preserves user edits and an unavailable explicit default for review', () => {
+  it('preserves user edits but replaces an unavailable default in an automatic set', () => {
     const initial = recommendedSets(catalogs)
     const next = recommendedSets([catalogs[0]!])
     const edited = structuredClone(initial)
     edited.sets[0]!.steps[0]!.effort = 'high'
     expect(migrateModelDefaults(edited, next)).toBe(edited)
     initial.defaultStepId = initial.sets[0]!.steps.find((step) => step.provider === 'cursor')!.id
-    expect(migrateModelDefaults(initial, next)).toBe(initial)
+    const migrated = migrateModelDefaults(initial, next)
+    expect(migrated.sets[0]).toEqual(next.sets[0])
+    expect(migrated.defaultStepId).toBe(next.defaultStepId)
   })
   it('does not treat an empty or failed catalog as provider removal', () => {
     const initial = recommendedSets(catalogs)
@@ -233,4 +236,224 @@ describe('catalog refresh and mixed provider combinations', () => {
       expect(migrateModelDefaults(initial, next)).toBe(initial)
     }
   })
+})
+
+describe('five-step allocations', () => {
+  const codex: ProviderCatalog = {
+    provider: 'codex',
+    models: [
+      {
+        provider: 'codex',
+        id: 'gpt-6-luna',
+        name: 'GPT-6 Luna',
+        efforts: ['high'],
+        defaultEffort: 'high',
+        isDefault: false,
+      },
+      {
+        provider: 'codex',
+        id: 'gpt-6.1-sol',
+        name: 'GPT-6.1 Sol',
+        efforts: ['low', 'medium'],
+        defaultEffort: 'medium',
+        isDefault: true,
+      },
+      {
+        provider: 'codex',
+        id: 'gpt-6-astra',
+        name: 'GPT-6 Astra',
+        efforts: ['low', 'medium'],
+        defaultEffort: 'medium',
+        isDefault: false,
+      },
+    ],
+  }
+  const claude: ProviderCatalog = {
+    provider: 'claude-code',
+    models: [
+      {
+        provider: 'claude-code',
+        id: 'sonnet',
+        name: 'Sonnet',
+        efforts: ['low', 'medium', 'high'],
+        defaultEffort: 'medium',
+        isDefault: false,
+      },
+      {
+        provider: 'claude-code',
+        id: 'opus',
+        name: 'Opus',
+        efforts: ['low', 'medium', 'high'],
+        defaultEffort: 'medium',
+        isDefault: true,
+      },
+    ],
+  }
+  const providers: AgentProvider[] = ['codex', 'claude-code', 'antigravity', 'cursor', 'opencode']
+  const catalogs: ProviderCatalog[] = [
+    codex,
+    claude,
+    ...providers.slice(2).map((provider) => ({
+      provider,
+      models: [
+        {
+          provider,
+          id: 'reported',
+          name: 'Reported model',
+          efforts: ['low', 'medium', 'high', 'xhigh', 'max'] as import('../src/types').ReasoningEffort[],
+          defaultEffort: 'medium' as const,
+          isDefault: true,
+        },
+      ],
+    })),
+  ]
+  it.each(Array.from({ length: 31 }, (_, i) => i + 1))('shares exactly five slots in combination %i', (mask) => {
+    const active = catalogs.filter((_, index) => mask & (1 << index))
+    const steps = recommendedSets(active).sets[0]!.steps
+    expect(steps).toHaveLength(5)
+    active.forEach((catalog, index) =>
+      expect(steps.filter((step) => step.provider === catalog.provider)).toHaveLength(
+        Math.floor(5 / active.length) + (index < 5 % active.length ? 1 : 0),
+      ),
+    )
+  })
+  it('keeps the existing five Codex presets when Codex is alone', () => {
+    expect(recommendedSets([codex]).sets[0]!.steps.map((step) => step.id)).toEqual(
+      recommendedSets([]).sets[0]!.steps.map((step) => step.id),
+    )
+  })
+  it('uses Luna High, Sol Low, Astra Medium and two Claude effort choices', () => {
+    const prefs = recommendedSets([codex, { ...claude, models: claude.models.slice(1) }])
+    expect(prefs.sets[0]!.steps.map(({ model, effort }) => [model, effort])).toEqual([
+      ['gpt-6-luna', 'high'],
+      ['gpt-6.1-sol', 'low'],
+      ['gpt-6-astra', 'medium'],
+      ['opus', 'low'],
+      ['opus', 'high'],
+    ])
+    expect(prefs.defaultStepId).toBe('sol-light')
+  })
+  it('uses the reported default model and effort with one slot per provider', () => {
+    const steps = recommendedSets(catalogs).sets[0]!.steps
+    expect(steps.map(({ model, effort }) => [model, effort])).toEqual([
+      ['gpt-6.1-sol', 'low'],
+      ['opus', 'medium'],
+      ['reported', 'medium'],
+      ['reported', 'medium'],
+      ['reported', 'medium'],
+    ])
+  })
+  it('redistributes an unfillable slot without duplicating choices', () => {
+    const prefs = recommendedSets([
+      codex,
+      {
+        provider: 'cursor',
+        models: [
+          {
+            provider: 'cursor',
+            id: 'auto',
+            name: 'Auto',
+            efforts: [],
+            defaultEffort: null,
+            isDefault: true,
+          },
+        ],
+      },
+    ])
+    expect(prefs.sets[0]!.steps.map((step) => step.provider)).toEqual(['codex', 'codex', 'codex', 'codex', 'cursor'])
+  })
+  it('recognizes only untouched automatic content as read-only', () => {
+    const set = recommendedSets([codex, claude]).sets[0]!
+    expect(isGeneratedModelSet(set)).toBe(true)
+    expect(isGeneratedModelSet({ ...set, name: 'My choices' })).toBe(false)
+    expect(isGeneratedModelSet(recommendedSets([]).sets[0]!)).toBe(true)
+    expect(isGeneratedModelSet({ id: 'custom', name: 'Custom', steps: set.steps })).toBe(false)
+  })
+})
+
+it('omits legacy choices from automatic defaults while preserving custom sets that use them', () => {
+  const catalog: ProviderCatalog = {
+    provider: 'codex',
+    models: [
+      {
+        provider: 'codex',
+        id: 'gpt-6-sol',
+        name: 'GPT-6 Sol',
+        efforts: ['low', 'medium'],
+        defaultEffort: 'medium',
+        isDefault: true,
+      },
+      {
+        provider: 'codex',
+        id: 'gpt-6.1-sol',
+        name: 'GPT-6.1 Sol',
+        efforts: ['low', 'medium'],
+        defaultEffort: 'medium',
+        isDefault: false,
+      },
+    ],
+  }
+  const before = recommendedSets([catalog])
+  before.sets.push({
+    id: 'custom-old',
+    name: 'Keep older Sol',
+    steps: [
+      {
+        id: 'older-sol',
+        name: 'Older Sol',
+        provider: 'codex',
+        model: 'gpt-6-sol',
+        effort: 'medium',
+      },
+    ],
+  })
+  const next = recommendedSets([
+    {
+      ...catalog,
+      models: catalog.models.map((model) => (model.id === 'gpt-6-sol' ? { ...model, isLegacy: true } : model)),
+    },
+  ])
+  expect(next.sets[0]!.steps.every((step) => step.model === 'gpt-6.1-sol')).toBe(true)
+  expect(migrateModelDefaults(before, next).sets[1]).toBe(before.sets[1])
+})
+
+it('uses actual catalog choices when only legacy models are reported', () => {
+  const prefs = recommendedSets([
+    {
+      provider: 'cursor',
+      models: [
+        {
+          provider: 'cursor',
+          id: 'old',
+          name: 'Old',
+          efforts: [],
+          defaultEffort: null,
+          isDefault: true,
+          isLegacy: true,
+        },
+      ],
+    },
+  ])
+  expect(prefs.sets[0]!.steps).toMatchObject([{ provider: 'cursor', model: 'old', effort: null }])
+})
+
+it('uses a custom Codex catalog default effort when Codex receives a single slot', () => {
+  const catalogs: ProviderCatalog[] = (
+    ['codex', 'claude-code', 'antigravity', 'cursor', 'opencode'] as AgentProvider[]
+  ).map((provider) => ({
+    provider,
+    models: [
+      {
+        provider,
+        id: 'reported-model',
+        name: 'Reported',
+        efforts: ['low', 'medium'],
+        defaultEffort: 'medium',
+        isDefault: true,
+      },
+    ],
+  }))
+  const steps = recommendedSets(catalogs).sets[0]!.steps
+  expect(steps).toHaveLength(5)
+  expect(steps[0]).toMatchObject({ provider: 'codex', model: 'reported-model', effort: 'medium' })
 })

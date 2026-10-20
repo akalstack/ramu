@@ -13,6 +13,8 @@ import {
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { providerAdapter } from '../src/providers/adapters'
+import { ActivityService } from '../src/background/activity'
+import * as antigravityInstall from '../src/providers/antigravityInstall'
 import type { ProviderStatus } from '@ramu/shared/providers/providers'
 
 let dir: string, bin: string, preferences: AppPreferences, store: Map<string, unknown>, service: ProviderService
@@ -52,7 +54,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   rmSync(dir, { recursive: true, force: true })
 })
-const create = () =>
+const create = (activity?: ActivityService) =>
   (service = new ProviderService(
     () => preferences,
     <T>(key: string, fallback: T) => (store.get(key) as T) ?? fallback,
@@ -60,6 +62,7 @@ const create = () =>
       store.set(key, structuredClone(value))
     },
     emit,
+    activity,
   ))
 const mockReleases = () => {
   const fetchMock = vi.fn(
@@ -277,4 +280,28 @@ it('does not substitute an automatic release check for cached login status', asy
   expect((await service.status(undefined, true, false))[0]?.signIn).toBeUndefined()
   expect(await service.status()).toBe(statuses)
   expect(statuses[0]?.signIn?.default?.signedIn).toBe(true)
+})
+
+it('routes managed runtime cancellation to the installer and lets the update be retried', async () => {
+  const activity = new ActivityService(() => {})
+  preferences.providerBinaries.antigravity = { binary: '' }
+  const install = vi.spyOn(antigravityInstall, 'installAntigravity').mockImplementation(async ({ signal } = {}) => {
+    await new Promise<void>((_resolve, reject) =>
+      signal!.addEventListener('abort', () => reject(signal!.reason), { once: true }),
+    )
+    return { version: '1.5.0', installed: true }
+  })
+  create(activity)
+  const work = service.update('antigravity')
+  expect(service.update('antigravity')).toBe(work)
+  const item = activity.status()[0]!
+  expect(item).toMatchObject({ label: 'Updating CLI', detail: 'antigravity', cancellable: true })
+  activity.cancel(item.id)
+  await expect(work).rejects.toThrow('CLI update cancelled.')
+  expect(activity.status()).toEqual([])
+  install.mockResolvedValue({ version: '1.5.0', installed: true })
+  const status = { provider: 'antigravity', binary: bin } as ProviderStatus
+  vi.spyOn(service, 'status').mockResolvedValue([status])
+  await expect(service.update('antigravity')).resolves.toEqual(status)
+  expect(install).toHaveBeenCalledTimes(2)
 })

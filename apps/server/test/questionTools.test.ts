@@ -183,3 +183,34 @@ it('keeps the question tools a chat launched with when the async setting changes
   await agents.stopAndWait(asyncChat)
   await agents.stopAndWait(blockingChat)
 })
+
+it.each([undefined, []])('waits for an explicit typed answer when options are %j', async (options) => {
+  const waiting = client.callTool({
+    name: 'ask_user',
+    arguments: {
+      blocking: true,
+      dependsOn: 'The user’s description of the problem',
+      questions: [
+        { id: 'details', question: 'What happened, and what did you expect?', ...(options ? { options } : {}) },
+      ],
+    },
+  })
+  for (let attempt = 0; agents.get(sessionId).state !== 'needs-input' && attempt < 50; attempt++)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  expect(agents.get(sessionId).state).toBe('needs-input')
+  const request = agents.events(sessionId).findLast((event) => event.kind === 'question')!
+  expect(request.questions[0]!.options).toEqual([])
+  const requestId = request.requestId
+  agents.saveQuestionDraft(sessionId, requestId, { details: 'Unsubmitted details' })
+  expect(() => agents.replyQuestion(sessionId, requestId, {})).toThrow('Answer an unanswered question')
+  expect(() => agents.replyQuestion(sessionId, requestId, { details: ' \n ' })).toThrow('Answer an unanswered question')
+  const pending = agents.questionStatus(sessionId, requestId)
+  expect(pending.answers).toEqual({})
+  expect(pending.outcome).toBeUndefined()
+  expect(pending.waiting).toBe(true)
+  expect(agents.get(sessionId).state).toBe('needs-input')
+  agents.replyQuestion(sessionId, requestId, { details: '  The app closed instead of saving.  ' })
+  const result = dataOf(await waiting)
+  expect(result).toMatchObject({ outcome: 'answered', answers: { details: 'The app closed instead of saving.' } })
+  expect(result).not.toHaveProperty('drafts')
+})

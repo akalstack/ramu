@@ -30,7 +30,7 @@ export const antigravityAdapter = defineAdapter({
   binaryEnvVar: 'RAMU_ANTIGRAVITY_BIN',
   executableNames: () => [process.platform === 'win32' ? 'agy_acp_server.exe' : 'agy_acp_server.par'],
   managedBinary: (runtimeHome) => managedAntigravityAt(runtimeHome)?.executable ?? null,
-  accountEnv: (root) => ({ GEMINI_HOME: root }),
+  accountEnv: (root) => ({ GEMINI_HOME: root, AGY_ACP_FORCE_FILE_STORAGE: '1' }),
   accountClearedEnv: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
   extendEnvironment(env, { overrides, binary, expand }) {
     const custom = overrides.antigravity?.harness?.trim()
@@ -41,7 +41,12 @@ export const antigravityAdapter = defineAdapter({
     const helper = custom
       ? expand(custom)
       : process.env.ANTIGRAVITY_HARNESS_PATH || (existsSync(sibling) ? sibling : undefined)
-    return { ...env, ...(helper ? { ANTIGRAVITY_HARNESS_PATH: helper } : {}) }
+    // The login is saved in a file, never the macOS Keychain, so Ramu never needs Keychain permission.
+    return {
+      ...env,
+      AGY_ACP_FORCE_FILE_STORAGE: env.AGY_ACP_FORCE_FILE_STORAGE ?? '1',
+      ...(helper ? { ANTIGRAVITY_HARNESS_PATH: helper } : {}),
+    }
   },
   setup: () => ({
     docsUrl: 'https://antigravity.google/docs/ide/extensions',

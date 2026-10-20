@@ -101,6 +101,8 @@ export interface ProviderAdapter {
   signIn?(ctx: {
     installed: boolean
     accountId: string
+    /** The account's provider environment, including where it keeps its own login. */
+    env: NodeJS.ProcessEnv
     acpSignIn: (provider: 'antigravity', methodId: string, accountId: string) => Promise<void>
   }): Promise<void>
   readonly native?: NativeFeatures

@@ -126,3 +126,55 @@ it.skipIf(process.env.RAMU_LIVE_INSTALL !== '1')(
   },
   15 * 60_000,
 )
+
+it('rejects an already cancelled install without downloading or creating staging files', async () => {
+  const controller = new AbortController()
+  controller.abort()
+  await expect(installAntigravity({ asset, signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+  expect(managedAntigravity()).toBeNull()
+  expect(existsSync(providerRuntimeHome('antigravity'))).toBe(false)
+})
+
+it('cancels an in-progress download and removes its staging files', async () => {
+  const controller = new AbortController()
+  let started!: () => void
+  const ready = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  const work = installAntigravity({
+    asset,
+    signal: controller.signal,
+    download: async (_url, file, signal) => {
+      writeFileSync(file, 'partial download')
+      started()
+      await new Promise<void>((_resolve, reject) =>
+        signal!.addEventListener('abort', () => reject(signal!.reason), { once: true }),
+      )
+    },
+  })
+  await ready
+  controller.abort()
+  await expect(work).rejects.toMatchObject({ name: 'AbortError' })
+  expect(managedAntigravity()).toBeNull()
+  expect(readdirSync(providerRuntimeHome('antigravity'))).toEqual([])
+})
+
+it.skipIf(!hasZip)('preserves the active runtime when cancelled before activation', async () => {
+  const names = antigravityFileNames(),
+    download = fakeArchive([names.executable, names.harness])
+  await installAntigravity({ asset, download, probe: async () => {} })
+  const controller = new AbortController()
+  await expect(
+    installAntigravity({
+      asset: { ...asset, version: '1.5.0' },
+      download,
+      signal: controller.signal,
+      probe: async () => {
+        controller.abort()
+      },
+    }),
+  ).rejects.toMatchObject({ name: 'AbortError' })
+  expect(managedAntigravity()?.version).toBe(asset.version)
+  expect(readdirSync(join(providerRuntimeHome('antigravity'), 'versions'))).toEqual([asset.version])
+  expect(readdirSync(providerRuntimeHome('antigravity')).filter((entry) => entry.startsWith('.stage-'))).toEqual([])
+})

@@ -1,5 +1,5 @@
 import { Button } from '@/components/desktop-button'
-import { FolderPlus, Plus } from 'lucide-react'
+import { CheckCheck, FolderClosed, FolderPlus, MessageCircle, Pin, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -49,7 +49,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div
-      className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] ${embedded ? 'p-0' : 'p-[2px_8px_16px]'} tasks-panel${folderOver ? ' folder-drop' : ''}`}
+      className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_.empty-tasks]:pl-[31px] [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] ${embedded ? 'p-0' : 'p-[2px_8px_16px]'} tasks-panel${folderOver ? ' folder-drop' : ''}`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -58,6 +58,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
         <>
           <SectionHead
             title={t('Pinned')}
+            icon={Pin}
             open={showPinned}
             onToggle={() => ws.setExpanded('section:pinned', !showPinned)}
             controls="pinned-chats"
@@ -77,6 +78,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
       {!embedded && (
         <SectionHead
           title={recentMode ? t('Recent threads') : t('Projects')}
+          icon={recentMode ? MessageCircle : FolderClosed}
           open={showProjects}
           onToggle={() => ws.setExpanded('section:projects', !showProjects)}
           controls="projects-list"
@@ -135,6 +137,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
         <>
           <SectionHead
             title={t('Threads')}
+            icon={MessageCircle}
             open={showChats}
             onToggle={() => ws.setExpanded('section:chats', !showChats)}
             controls="loose-chats"
@@ -159,7 +162,9 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
       {done.length > 0 && (
         <>
           <SectionHead
-            title={`${t('Done')} · ${done.length}`}
+            title={t('Done')}
+            icon={CheckCheck}
+            count={done.length}
             open={showDone}
             onToggle={() => ws.setExpanded('section:done', !showDone)}
             controls="done-chats"

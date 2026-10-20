@@ -161,8 +161,8 @@ export function EnvironmentSettings({
       <ToggleGroup
         size="sm"
         variant="outline"
-        spacing={0}
-        className="flex-wrap mb-3"
+        spacing={2}
+        className="flex-wrap gap-1.5 mb-3"
         aria-label={t('Applies to')}
         value={[scope]}
         onValueChange={(values) => values[0] && setScope(values[0] as EnvironmentScope)}
@@ -187,7 +187,9 @@ export function EnvironmentSettings({
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <ToggleGroup
               size="sm"
-              spacing={0}
+              variant="outline"
+              spacing={2}
+              className="gap-1.5"
               aria-label={t('Editor')}
               value={[text === null ? 'table' : 'text']}
               onValueChange={(values) => {

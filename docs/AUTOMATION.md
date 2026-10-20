@@ -55,6 +55,12 @@ Use **Undo** on a changed-file summary, or **Edit → Preview restore** on a sen
 
 Save or close unsaved buffers first. Restore previews expire after ten minutes and files are checked again before writing. Private recovery journals remain in the profile's `reviews/undo` directory. Interrupted restores require manual review.
 
+## Agent questions
+
+Ramu’s `ask_user` supports both suggested choices and free-text-only questions. For an open-ended question, omit `options` or send `options: []`; the user sees a text field and must explicitly submit a non-empty answer. Draft text and a blank response do not count as an answer.
+
+With async questions enabled, agents may continue independent work while a question is pending, but must wait before work that depends on the answer. `blocking: true` makes the tool wait immediately; disabling async questions makes every `ask_user` request wait. Dismissal or cancellation supplies no answer.
+
 ## Connector requests and live output
 
 Connector forms and browser-link requests appear in the thread with Submit, Decline, and Cancel controls. Links open only when clicked. Forms validate before sending; unsupported fields produce an explanation. Native requests wait for a protocol reply, even with async questions enabled.

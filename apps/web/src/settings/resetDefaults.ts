@@ -38,7 +38,6 @@ export function resetSection(current: AppPreferences, section: SettingsSection):
                 accountId: 'default',
                 autoUpdate: false,
                 enabled: true,
-                usageKeychain: false,
                 harness: '',
               },
             ]),

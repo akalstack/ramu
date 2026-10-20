@@ -1,9 +1,9 @@
 // Plan usage for providers whose runtimes do not report it, read from the same sources their own apps use.
-import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { UsageReading } from '@ramu/shared/types'
+import { storedCursorKey } from './cursorAuth'
 
 type Json = Record<string, any>
 const DEFAULT_CURSOR_ENDPOINT = 'https://api2.cursor.sh'
@@ -47,24 +47,13 @@ export function cursorUsageReadings(response: Json, now = Date.now()): UsageRead
     ]
   })
 }
-async function cursorToken(allowKeychain: boolean, env: NodeJS.ProcessEnv): Promise<string | undefined> {
+/** The Cursor login for usage, read from files only: an explicit token, the CLI's login file, or the SDK's saved key. */
+async function cursorToken(env: NodeJS.ProcessEnv): Promise<string | undefined> {
   const given = env.CURSOR_AUTH_TOKEN?.trim()
   if (given) return given
   // An explicit API key can belong to a different account than the stored login.
   if (env.CURSOR_API_KEY?.trim()) return undefined
-  const store = env.AGENT_CLI_CREDENTIAL_STORE
-  if (store === 'memory') return undefined
-  if (process.platform === 'darwin' && store !== 'file') {
-    if (!allowKeychain) return undefined
-    return await new Promise<string | undefined>((resolve) =>
-      execFile(
-        '/usr/bin/security',
-        ['find-generic-password', '-s', 'cursor-access-token', '-a', 'cursor-user', '-w'],
-        { timeout: 15_000, maxBuffer: 64 * 1024 },
-        (error, stdout) => resolve(error ? undefined : stdout.trim() || undefined),
-      ),
-    )
-  }
+  if (env.AGENT_CLI_CREDENTIAL_STORE === 'memory') return undefined
   const directory =
     env.CURSOR_CONFIG_DIR?.trim() ||
     (process.platform === 'win32'
@@ -74,19 +63,17 @@ async function cursorToken(allowKeychain: boolean, env: NodeJS.ProcessEnv): Prom
         : join(env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'cursor'))
   try {
     const token = JSON.parse(await readFile(join(directory, 'auth.json'), 'utf8')).accessToken
-    return typeof token === 'string' && token.trim() ? token.trim() : undefined
+    if (typeof token === 'string' && token.trim()) return token.trim()
   } catch {
-    return undefined
+    /* No CLI login file; try the SDK's. */
   }
+  return storedCursorKey(env)
 }
-export async function readCursorUsage(
-  allowKeychain: boolean,
-  env: NodeJS.ProcessEnv = process.env,
-): Promise<UsageReading[]> {
+export async function readCursorUsage(env: NodeJS.ProcessEnv = process.env): Promise<UsageReading[]> {
   const endpoint = (env.CURSOR_API_ENDPOINT?.trim() || DEFAULT_CURSOR_ENDPOINT).replace(/\/$/, '')
   // The login belongs to Cursor's own service; do not send it anywhere else.
   if (endpoint !== DEFAULT_CURSOR_ENDPOINT) return []
-  const token = await cursorToken(allowKeychain, env)
+  const token = await cursorToken(env)
   if (!token) return []
   return cursorUsageReadings(
     await json(`${endpoint}/aiserver.v1.DashboardService/GetCurrentPeriodUsage`, {
@@ -185,16 +172,23 @@ export function antigravityModelReadings(models: Json, now = Date.now()): UsageR
   }
   return [...readings.values()]
 }
-export async function readAntigravityUsage(env: NodeJS.ProcessEnv = process.env): Promise<UsageReading[]> {
-  // The runtime keeps its OAuth client and refresh token here when it stores credentials in a file.
-  let file: Json
+/** The runtime's login file. Ramu runs it with file storage, so the macOS Keychain is never read. */
+async function antigravityToken(env: NodeJS.ProcessEnv): Promise<Json | undefined> {
   try {
-    file = JSON.parse(
-      await readFile(join(env.GEMINI_HOME || join(homedir(), '.gemini'), 'antigravity-acp', 'acp_token.json'), 'utf8'),
+    const home = env.GEMINI_HOME || join(homedir(), '.gemini')
+    return JSON.parse(
+      await readFile(
+        join(home.startsWith('~/') ? join(homedir(), home.slice(2)) : home, 'antigravity-acp', 'acp_token.json'),
+        'utf8',
+      ),
     )
   } catch {
-    return []
+    return undefined
   }
+}
+export async function readAntigravityUsage(env: NodeJS.ProcessEnv = process.env): Promise<UsageReading[]> {
+  const file = await antigravityToken(env)
+  if (!file) return []
   if (![file.client_id, file.client_secret, file.refresh_token].every((value) => typeof value === 'string' && value))
     return []
   const refreshed = await json('https://oauth2.googleapis.com/token', {
@@ -229,15 +223,15 @@ export async function readAntigravityUsage(env: NodeJS.ProcessEnv = process.env)
   return summary.length ? summary : await ask('fetchAvailableModels', (response) => antigravityModelReadings(response))
 }
 
-/** Reads the extra providers' usage at most every five minutes each, skipping any the user turned off. */
+/** Reads Cursor's default login at most every five minutes when enabled. */
 export class ExtraUsageReader {
   private last = new Map<string, number>()
   constructor(
     private readonly update: (readings: UsageReading[]) => void,
-    private readonly settings: () => { cursor: boolean; antigravity: boolean; keychain: boolean },
+    private readonly settings: () => { cursor: boolean },
   ) {}
   async refresh(now = Date.now()): Promise<void> {
-    const { cursor, antigravity, keychain } = this.settings()
+    const { cursor } = this.settings()
     const run = async (name: string, enabled: boolean, read: () => Promise<UsageReading[]>) => {
       if (!enabled || now - (this.last.get(name) ?? 0) < 5 * 60_000) return
       this.last.set(name, now)
@@ -248,9 +242,6 @@ export class ExtraUsageReader {
         this.last.delete(name)
       }
     }
-    await Promise.all([
-      run('cursor', cursor, () => readCursorUsage(keychain)),
-      run('antigravity', antigravity, () => readAntigravityUsage()),
-    ])
+    await run('cursor', cursor, () => readCursorUsage())
   }
 }

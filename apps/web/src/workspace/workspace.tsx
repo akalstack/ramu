@@ -56,6 +56,7 @@ import { commitUnread, inboxUnread, loadUnread, statusUnread } from './unread'
 import { createUiPersistence } from './uiPersistence'
 import {
   EMPTY_TASK_UI,
+  activateWorkspaceContext,
   effectiveTaskUi,
   effectiveBindings,
   focus,
@@ -750,10 +751,8 @@ const HostWorkspace = memo(function HostWorkspace({
           // Same project: keep the open file or terminal beside New chat. Another project starts on New chat alone.
           if (target !== current) updateTaskUi(ctx, (state) => ({ ...state, activeViewId: null }))
           setUi((u) => ({
-            ...u,
+            ...activateWorkspaceContext(u, ctx),
             openTaskIds: [...new Set([...u.openTaskIds, ctx])],
-            activeTaskId: ctx,
-            sidebar: u.sidebar === 'schedules' || u.sidebar === 'inbox' ? 'projects' : u.sidebar,
           }))
           setComposing(target)
         }
@@ -765,9 +764,8 @@ const HostWorkspace = memo(function HostWorkspace({
         setComposing(null)
         void refreshBindings(ctx)
         setUi((u) => ({
-          ...u,
+          ...activateWorkspaceContext(u, ctx),
           openTaskIds: u.openTaskIds.includes(ctx) ? u.openTaskIds : [...u.openTaskIds, ctx],
-          activeTaskId: ctx,
         }))
       },
       titleOf(ctx) {
@@ -793,10 +791,8 @@ const HostWorkspace = memo(function HostWorkspace({
         // Opening a chat while the workspace shows only the editor would otherwise change nothing on screen.
         showChat(shared, storage)
         setUi((u) => ({
-          ...u,
+          ...activateWorkspaceContext(u, taskId),
           openTaskIds: [...new Set([...u.openTaskIds, shared, taskId])],
-          activeTaskId: taskId,
-          sidebar: u.sidebar === 'schedules' || u.sidebar === 'inbox' ? 'projects' : u.sidebar,
         }))
       },
       closeTask(taskId) {
@@ -828,7 +824,7 @@ const HostWorkspace = memo(function HostWorkspace({
       },
       activateTask: (taskId) => {
         setComposing(null)
-        setUi((u) => ({ ...u, activeTaskId: taskId }))
+        setUi((u) => activateWorkspaceContext(u, taskId))
       },
       consumeSourceNavigation,
       openView(taskId, view) {

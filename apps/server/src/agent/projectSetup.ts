@@ -239,11 +239,7 @@ function userConfigFiles(env: NodeJS.ProcessEnv, home: string) {
   }
 }
 
-function collect(
-  roots: { label: string; path: string }[],
-  env: NodeJS.ProcessEnv,
-  home: string,
-): Collected {
+function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEnv, home: string): Collected {
   const result: Collected = { servers: new Map(), diagnostics: [] }
   const display = (path: string) =>
     path === home || path.startsWith(home + '/') ? '~' + path.slice(home.length) : path
@@ -379,7 +375,8 @@ export function discoverProjectSetup(
       headerKeys: [...new Set(entry.declared.flatMap((d) => Object.keys(d.headers)))].sort(),
       providers: shared ? [...AGENT_PROVIDERS] : order(entry.providers),
       nativeProviders: order(entry.providers),
-      scope: entry.sources.some((s) => s.scope === 'project') ? 'project' : 'user',
+      // Anything in the person's own files is theirs everywhere, even when a project repeats it.
+      scope: entry.sources.some((s) => s.scope === 'user') ? 'user' : 'project',
       sources: entry.sources,
       nameConflict: false,
       shared,
@@ -403,8 +400,13 @@ export function discoverProjectSetup(
       .sort((a, b) => a.name.localeCompare(b.name)),
     skills: [...skillsFound.skills.values()]
       .map(({ digests, folders: _folders, providers, ...skill }): ProjectSkill => {
-        const shared = skillSharing[skill.name] === true
+        const blocked =
+          /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skill.name) && skill.name.length <= 64
+            ? undefined
+            : 'Its name must be lowercase words joined by hyphens.'
+        const shared = !blocked && skillSharing[skill.name] === true
         return {
+          ...(blocked ? { shareBlocked: blocked } : {}),
           ...skill,
           nativeProviders: order(providers),
           providers: shared ? [...AGENT_PROVIDERS] : order(providers),
@@ -600,7 +602,7 @@ function collectSkills(roots: { label: string; path: string }[], env: NodeJS.Pro
         skills.set(meta.name, entry)
         const enabled = !codexDisabled.has(file) || readers.size > 1
         entry.sources.push({ scope, label, file: `${prefix}${name}/SKILL.md`, enabled })
-        if (scope === 'project') entry.scope = 'project'
+        if (scope === 'user') entry.scope = 'user'
         entry.digests.add(createHash('sha256').update(raw).digest('hex'))
         entry.folders.push(realpathSync(join(path, name)))
         for (const provider of readers)

@@ -378,6 +378,8 @@ export interface RamuMethods {
   'mcp.checkCredentialStore'(): Promise<'available' | 'unavailable' | 'not-checked'>
   /** Give a declared server to every provider and account, or stop. Takes effect for new sessions. */
   'mcp.share'(key: string, shared: boolean): void
+  /** Copy a skill from the person's own provider folder to every provider and account. Applies to new threads. */
+  'skills.share'(name: string, shared: boolean): void
   'providers.loginCommand'(
     provider: ProviderStatus['provider'],
     configuration?: ProviderConfiguration,

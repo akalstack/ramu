@@ -48,6 +48,9 @@ export default defineConfig({
   renderer: {
     resolve: { alias: { '@': resolve(web, 'src') } },
     root: web,
+    // A second dev server on another port would share this one's dependency cache and invalidate it, which the
+    // window then reports as 504 "Outdated Optimize Dep". Fail instead, so only one dev server runs per checkout.
+    server: { strictPort: true },
     build: {
       outDir: resolve(__dirname, 'out/renderer'),
       emptyOutDir: true,

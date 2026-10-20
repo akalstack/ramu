@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { QuestionRequest, QuestionState } from '@ramu/shared/chat/questions'
-import { QuestionRow } from '../src/chat/QuestionCard'
+import { QuestionDock, QuestionRow } from '../src/chat/QuestionCard'
 
 vi.mock('../src/i18n', () => ({
   useLanguage: () => {},
@@ -108,3 +108,32 @@ it('keeps a custom answer visible while the offered options are collapsed', () =
   expect(html).not.toContain('Create under a Story')
   expect(html).not.toContain('Create a new Epic')
 })
+
+it.each(['', '   ', 'The app closed instead of saving.'])(
+  'renders a free-text-only question with explicit submission for draft %j',
+  (draft) => {
+    const freeText: QuestionRequest = {
+      ...request,
+      responseMode: 'ramu',
+      questions: [{ id: 'details', header: 'Details', question: 'What happened?', options: [], multiSelect: false }],
+    }
+    const html = renderToStaticMarkup(
+      createElement(QuestionDock, {
+        sessionId: 'session',
+        requests: [freeText],
+        states: new Map([[freeText.requestId, { answers: {}, drafts: { details: draft }, waiting: true }]]),
+        open: true,
+        onOpenChange() {},
+        focus: null,
+      }),
+    )
+    expect(html).toContain('The agent is waiting for your answer')
+    expect(html).toContain('placeholder="Type your answer"')
+    expect(html).toContain('aria-label="Answer: What happened?"')
+    expect(html).not.toMatch(/type="(?:radio|checkbox)"/)
+    expect(html).toContain('Send answer')
+    const sendButton = html.match(/<button[^>]*>Send answer<\/button>/)?.[0]
+    expect(sendButton).toBeDefined()
+    expect(/\sdisabled(?:=|\s|>)/.test(sendButton!)).toBe(!draft.trim())
+  },
+)

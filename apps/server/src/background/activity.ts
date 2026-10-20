@@ -2,18 +2,26 @@ import { randomUUID } from 'node:crypto'
 import type { BackgroundActivity } from '@ramu/shared/chat/activity'
 
 export class ActivityService {
+  private cancellations = new Map<string, () => void>()
   private active = new Map<string, BackgroundActivity>()
   constructor(private changed: (activities: BackgroundActivity[]) => void) {}
   status(): BackgroundActivity[] {
     return [...this.active.values()]
   }
-  async run<T>(label: string, detail: string | undefined, work: () => T | Promise<T>): Promise<T> {
+  cancel(id: string): void {
+    const cancel = this.cancellations.get(id)
+    if (!cancel) throw new Error('This background activity cannot be stopped.')
+    cancel()
+  }
+  async run<T>(label: string, detail: string | undefined, work: () => T | Promise<T>, cancel?: () => void): Promise<T> {
     const id = randomUUID()
-    this.active.set(id, { id, label, ...(detail ? { detail } : {}) })
+    this.active.set(id, { id, label, ...(detail ? { detail } : {}), ...(cancel ? { cancellable: true } : {}) })
+    if (cancel) this.cancellations.set(id, cancel)
     this.changed(this.status())
     try {
       return await work()
     } finally {
+      this.cancellations.delete(id)
       this.active.delete(id)
       this.changed(this.status())
     }

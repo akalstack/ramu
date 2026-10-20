@@ -138,7 +138,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
                   <span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis">
                     {r.name}
                   </span>
-                  <span className="muted text-muted-foreground">{t('Disconnect')}</span>
+                  <span className="muted ml-auto shrink-0 text-muted-foreground">{t('Disconnect')}</span>
                 </>
               ),
               onSelect: () => void act(() => host.invoke('repos.remove', r.id)),
@@ -229,7 +229,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
             />
           ) : (
             <FadeText
-              className="project-name font-normal overflow-hidden whitespace-nowrap flex-1 min-w-0"
+              className="project-name font-medium overflow-hidden whitespace-nowrap flex-1 min-w-0"
               text={project.name}
             />
           )}
@@ -277,9 +277,12 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
       </HoverCard>
       {error && <div className={ROW_ERROR_CLASS}>{error}</div>}
       {visible && (
-        <div ref={list} className="task-list flex flex-col gap-0.5 pt-0.5">
+        <div
+          ref={list}
+          className="task-list relative flex flex-col gap-0.5 pt-0.5 before:pointer-events-none before:absolute before:bottom-2 before:left-[15px] before:top-1 before:w-px before:bg-border before:content-['']"
+        >
           {tasks.length === 0 && (
-            <div className="muted text-muted-foreground small text-caption empty-tasks p-[2px_10px]">
+            <div className="muted text-muted-foreground small text-caption empty-tasks p-[4px_10px_4px_31px]">
               {t('No threads yet')}
             </div>
           )}

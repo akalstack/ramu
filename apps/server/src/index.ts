@@ -1,5 +1,13 @@
 import { LocalDiagnostics } from './background/diagnostics'
-import { configureMcpSharing, MCP_SHARING_KEY, type McpSharing } from './agent/projectSetup'
+import {
+  accountEnvironment,
+  configureMcpSharing,
+  MCP_SHARING_KEY,
+  SKILL_SHARING_KEY,
+  sharedSessionSkills,
+  type McpSharing,
+  type SkillSharing,
+} from './agent/projectSetup'
 import { MobileLiveActivities } from './remote/mobileLiveActivity'
 import { MobilePush } from './remote/mobilePush'
 import { DEFAULT_FALLBACK_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
@@ -258,6 +266,18 @@ const learning = new LearningService(
     ),
 )
 const externalSkills = new ExternalSkills(learning, workspace)
+// Skills a person shares from their own provider folders reach every provider and account through the same export.
+learning.sharedSkills = ({ projectId, provider, accountId, cwd }) => {
+  const sharing = workspace.getAppState<SkillSharing>(SKILL_SHARING_KEY, {})
+  if (!Object.values(sharing).some(Boolean)) return []
+  const project = projectId ? workspace.listProjects().find((entry) => entry.id === projectId) : undefined
+  const dirs = [
+    cwd,
+    ...(project?.root ? [project.root] : []),
+    ...(projectId ? workspace.listRepositories(projectId).map((repo) => repo.root) : []),
+  ]
+  return sharedSessionSkills([...new Set(dirs)], provider, accountEnvironment(provider, accountId), sharing)
+}
 const summaries = new SummaryService(db, workspace, agents, memory, learning, (created) =>
   send('summaries:changed', { created }),
 )
@@ -796,7 +816,9 @@ agents.toolConnection = (session) => {
           ...workspace.listBindings(session.taskId).map((binding) => workspace.getRepository(binding.repoId).root),
         ]
       : []
-  const skillsDir = review ? null : learning.exportDir(projectOf(session), session.provider, session.cwd)
+  const skillsDir = review
+    ? null
+    : learning.exportDir(projectOf(session), session.provider, session.cwd, session.settings.accountId ?? 'default')
   return {
     url: `http://127.0.0.1:${address.port}/mcp`,
     token,

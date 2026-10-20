@@ -42,7 +42,7 @@ rl.on('line', line => {
   if (m.method === 'initialize') send({id:m.id,result:{userAgent:'test'}});
   if (m.method === 'mcpServerStatus/list') send({id:m.id,result:{data:m.params.cursor ? [{name:'needs-login',runtimeStatus:'authenticationRequired',authStatus:'notLoggedIn',tools:{}}] : [{name:'connected',runtimeStatus:'connected',authStatus:'oAuth',tools:{jira:{name:'jira'}}},{name:'cached',runtimeStatus:null,authStatus:'oAuth',tools:{cachedTool:{name:'cached'}}}],nextCursor:m.params.cursor ? null : 'second-page'}});
   if (m.method === 'config/mcpServer/reload') send({id:m.id,result:{}});
-  if (m.method === 'model/list') send({id:m.id,result:{data:[{model:'codex-wire',displayName:'Codex wire',hidden:false,supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'high'}],defaultReasoningEffort:'low',isDefault:true}],nextCursor:null}});
+  if (m.method === 'model/list') send({id:m.id,result:{data:[{model:'codex-wire',displayName:'Codex wire',hidden:false,isLegacy:true,supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'high'}],defaultReasoningEffort:'low',isDefault:true}],nextCursor:null}});
   if (m.method === 'thread/start' || m.method === 'thread/resume') send({id:m.id,result:{thread:{id:'thread-1'},model:'codex-wire'}});
   if (m.method === 'thread/read') {
     const id = m.params.threadId;
@@ -204,6 +204,7 @@ describe('Codex app-server wire adapter', () => {
         provider: 'codex',
         id: 'codex-wire',
         name: 'Codex wire',
+        isLegacy: true,
         efforts: ['low', 'high'],
         defaultEffort: 'low',
         isDefault: true,

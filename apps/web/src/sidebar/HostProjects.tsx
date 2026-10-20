@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react'
-import { ChevronDown, ChevronRight, FolderOpen, FolderClosed, FolderPlus, Plus } from 'lucide-react'
+import {
+  CheckCheck,
+  MessageCircle,
+  Pin,
+  ChevronDown,
+  ChevronRight,
+  FolderOpen,
+  FolderClosed,
+  FolderPlus,
+  Plus,
+} from 'lucide-react'
 import { NO_PROJECT, type Computer, type Project, type Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { useComputers, StatusDot, activityText, statusText } from '../workspace/computers'
@@ -149,7 +159,14 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
     const open = chrome.isExpanded(key)
     return (
       <>
-        <SectionHead title={t(name)} open={open} onToggle={() => chrome.setExpanded(key, !open)} controls={key}>
+        <SectionHead
+          title={t(name)}
+          icon={name === 'Done' ? CheckCheck : name === 'Pinned' ? Pin : MessageCircle}
+          count={name === 'Done' ? tasks.length : undefined}
+          open={open}
+          onToggle={() => chrome.setExpanded(key, !open)}
+          controls={key}
+        >
           {action}
         </SectionHead>
         <Collapse id={key} open={open} className="flex flex-col gap-0.5">
@@ -188,6 +205,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
         {!embedded && (
           <SectionHead
             title={preferences.recentChatMode ? t('Recent threads') : t('Projects')}
+            icon={preferences.recentChatMode ? MessageCircle : FolderClosed}
             open={projectsOpen}
             onToggle={() => chrome.setExpanded(projectsKey, !projectsOpen)}
             controls={projectsKey}
@@ -285,7 +303,10 @@ function OtherHostProject({
         ) : (
           <FolderClosed size={15} className="flex-none text-muted-foreground" />
         )}
-        <FadeText text={project.name} className="project-name min-w-0 flex-1 overflow-hidden whitespace-nowrap" />
+        <FadeText
+          text={project.name}
+          className="project-name font-medium min-w-0 flex-1 overflow-hidden whitespace-nowrap"
+        />
         <span className={`${ROW_ACTIONS_CLASS} group-hover/project:opacity-100 group-focus-within/project:opacity-100`}>
           <Button
             variant="ghost"
@@ -317,12 +338,12 @@ function OtherHostProject({
         </span>
       </div>
       {open && (
-        <div className="task-list flex flex-col gap-0.5 pt-0.5">
+        <div className="task-list relative flex flex-col gap-0.5 pt-0.5 before:pointer-events-none before:absolute before:bottom-2 before:left-[15px] before:top-1 before:w-px before:bg-border before:content-['']">
           {tasks.map((task) => (
             <TaskRow key={task.id} task={task} nested />
           ))}
           {!tasks.length && (
-            <div className="muted text-muted-foreground small text-caption empty-tasks p-[2px_10px]">
+            <div className="muted text-muted-foreground small text-caption empty-tasks p-[4px_10px_4px_31px]">
               {t('No threads yet')}
             </div>
           )}

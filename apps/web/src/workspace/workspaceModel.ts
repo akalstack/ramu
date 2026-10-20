@@ -1,7 +1,7 @@
 // Pure workspace rules shared by every host's store: contexts, view identity and order, and how a chat's own views
 // combine with its workspace's shared ones. No React and no bridge, so the store's logic can be tested.
 import { NO_PROJECT } from '@ramu/shared/types'
-import type { RepositoryBinding, Task, TaskUiState, ViewDescriptor } from '@ramu/shared/types'
+import type { RepositoryBinding, Task, TaskUiState, ViewDescriptor, WorkspaceUiState } from '@ramu/shared/types'
 
 export type ViewInput = ViewDescriptor extends infer V ? (V extends ViewDescriptor ? Omit<V, 'id'> : never) : never
 
@@ -60,6 +60,15 @@ export const worktreeCtx = (id: string) => `worktree:${id}`
 export const isWorktreeCtx = (ctx: string) => ctx.startsWith('worktree:')
 export const isProjectCtx = (ctx: string) => ctx.startsWith('project:')
 export const isWorkspaceCtx = (ctx: string) => isProjectCtx(ctx) || isWorktreeCtx(ctx)
+
+/** Selecting workspace content leaves a full-page destination while preserving workspace tools and open tabs. */
+export function activateWorkspaceContext(ui: WorkspaceUiState, context: string): WorkspaceUiState {
+  return {
+    ...ui,
+    activeTaskId: context,
+    sidebar: ui.sidebar === 'inbox' || ui.sidebar === 'schedules' ? 'projects' : ui.sidebar,
+  }
+}
 
 export const EMPTY_TASK_UI: TaskUiState = { views: [], activeViewId: null }
 

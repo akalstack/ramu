@@ -112,29 +112,25 @@ export function ProviderSettings({
       }),
     })
   const login = async (provider: AgentProvider, accountId = config[provider]?.accountId || 'default') => {
-    if (provider === 'antigravity') {
-      // The runtime opens the browser itself; the call returns once Google sign-in completes.
-      setSigningIn(provider)
-      setError(null)
-      try {
-        await invoke('providers.signIn', provider, accountId)
-        void refresh()
-      } catch (reason) {
-        setError(errorText(reason))
-      } finally {
-        setSigningIn(null)
-      }
-      return
-    }
     const target =
       accountId === (config[provider]?.accountId || 'default')
         ? config
         : { ...config, [provider]: { binary: '', ...config[provider], accountId } }
+    setError(null)
     try {
       const command = await invoke('providers.loginCommand', provider, target)
       if (command) {
         loginPending.current = true
         runProviderCommand(`${providerName(provider)} · ${t('Login')}`, command)
+        return
+      }
+      // Cursor and Antigravity sign in inside Ramu: the browser opens, and the call returns once sign-in completes.
+      setSigningIn(provider)
+      try {
+        await invoke('providers.signIn', provider, accountId)
+        void refresh()
+      } finally {
+        setSigningIn(null)
       }
     } catch (reason) {
       setError(errorText(reason))
@@ -162,26 +158,21 @@ export function ProviderSettings({
         <span>
           <strong>{t('Check provider updates')}</strong>
           <span className="muted text-muted-foreground block block small text-caption">
-            {t('Checks run in the background service, including while Ramu is closed.')}
+            {t('Runs in the background, even while Ramu is closed.')}
           </span>
         </span>
-        <Switch
-          aria-label={t('Check provider updates')}
-          checked={value.providerUpdateChecks}
-          onCheckedChange={(checked) => onChange({ ...value, providerUpdateChecks: checked })}
-        />
+        <span className="flex flex-none items-center gap-2.5">
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => void refresh(true)}>
+            <RefreshCw size={14} className={busy ? 'spin [animation:spin_0.9s_linear_infinite]' : ''} />
+            {busy ? t('Checking providers…') : t('Check now')}
+          </Button>
+          <Switch
+            aria-label={t('Check provider updates')}
+            checked={value.providerUpdateChecks}
+            onCheckedChange={(checked) => onChange({ ...value, providerUpdateChecks: checked })}
+          />
+        </span>
       </SettingsRow>
-      <div className="provider-settings-actions flex items-center gap-2.5 flex-wrap">
-        <Button
-          variant="secondary"
-          className="bg-fill hover:bg-fill-hover"
-          disabled={busy}
-          onClick={() => void refresh(true)}
-        >
-          <RefreshCw size={14} className={busy ? 'spin [animation:spin_0.9s_linear_infinite]' : ''} />
-          {busy ? t('Checking providers…') : t('Check for updates')}
-        </Button>
-      </div>
       {error && (
         <p className="error text-bad small text-caption" role="alert">
           {error}

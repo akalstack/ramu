@@ -71,8 +71,8 @@ it('offers one switch per server and says who gets it now', () => {
     ],
   })
   expect(html).toContain('Share atlassian with every provider and account')
-  expect(html).toContain('Only Codex · From ~/.codex/config.toml')
-  expect(html).toContain('Every provider and account')
+  expect(html).toContain('Only in Codex · From ~/.codex/config.toml')
+  expect(html).toContain('Shared with every provider and account')
   expect(html).toContain('Available in Claude, Codex, OpenCode, Cursor, Antigravity')
   expect(html).not.toContain('X-Key')
 })
@@ -110,5 +110,24 @@ it('lists skills with where they come from', () => {
     ],
   })
   expect(html).toContain('review-pr')
+  expect(html).toContain('Share review-pr with every provider and account')
   expect(html).toContain('From agent-knowledge-workflow/.claude/skills/review-pr/SKILL.md')
+})
+
+it('separates your own settings from the project and names the project', () => {
+  const html = render({
+    mcp: [
+      server({ name: 'atlassian' }),
+      server({
+        name: 'local-db',
+        key: 'db',
+        scope: 'project',
+        sources: [{ scope: 'project', label: 'api', file: '.mcp.json', enabled: true }],
+      }),
+    ],
+  })
+  expect(html).toContain('Your settings')
+  expect(html).toContain('Lionparcel only')
+  expect(html.indexOf('atlassian')).toBeLessThan(html.indexOf('Lionparcel only'))
+  expect(html.indexOf('Lionparcel only')).toBeLessThan(html.indexOf('local-db'))
 })

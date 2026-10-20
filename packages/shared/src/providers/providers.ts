@@ -34,7 +34,6 @@ export type ProviderConfiguration = Partial<
       defaultAccountEnabled?: boolean
       autoUpdate?: boolean
       /** Off hides the provider everywhere and stops Ramu from starting it. Absent means on. */ enabled?: boolean
-      /** Cursor: allow reading its login from the macOS Keychain to show plan usage. */ usageKeychain?: boolean
     }
   >
 >

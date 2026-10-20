@@ -132,6 +132,8 @@ export interface ProjectSkill {
   nativeProviders: AgentProvider[]
   /** Ramu copies it to every provider and account that does not have it. Off unless turned on. */
   shared: boolean
+  /** Why it cannot be shared, when it cannot. */
+  shareBlocked?: string
   scope: 'user' | 'project'
   sources: ProjectSetupSource[]
   /** The same name has different content in different places. */
