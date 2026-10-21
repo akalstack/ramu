@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { MAX_COMPUTER_TEXT, type ComputerAction } from '@ramu/shared/computerBridge'
 import { MAIN_DISPLAY } from '../../computer/macos'
+import { ComputerRouter } from '../../computer/router'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
@@ -70,6 +71,7 @@ export const registerComputerHandlers: RegisterHandlers = ({ computer, host, wor
       run: () => ({
         enabled: enabled(),
         runtime: computer ? computer.status() : ({ available: false, reason: 'unsupported' } as const),
+        apps: computer?.backend instanceof ComputerRouter ? computer.backend.appStatus() : null,
       }),
     },
     'computer.setEnabled': {
@@ -80,18 +82,36 @@ export const registerComputerHandlers: RegisterHandlers = ({ computer, host, wor
         if (!value) for (const task of workspace.listTasks()) service.revoke(task.id)
       },
     },
+    'computer.apps': {
+      args: z.tuple([]),
+      run: async () => {
+        const backend = admin().backend
+        return backend instanceof ComputerRouter ? backend.listApps() : []
+      },
+    },
     'computer.grant': {
-      args: z.tuple([id, z.object({ observe: z.boolean(), input: z.boolean() })]),
-      run: (threadId: string, scope: { observe: boolean; input: boolean }) => {
+      args: z.tuple([
+        id,
+        z.object({ observe: z.boolean(), input: z.boolean(), app: z.string().min(1).max(200).optional() }),
+      ]),
+      run: async (threadId: string, scope: { observe: boolean; input: boolean; app?: string }) => {
         const service = admin()
         if (!enabled()) throw new Error('Turn on computer use in Settings first.')
-        const status = service.status()
-        if (!status.available) throw new Error(status.detail ?? 'Computer use is not available on this host.')
-        service.grant(thread(threadId), {
-          target: MAIN_DISPLAY,
-          observe: scope.observe,
-          input: scope.input && scope.observe,
-        })
+        const backend = service.backend
+        let target = MAIN_DISPLAY
+        if (scope.app !== undefined) {
+          if (!(backend instanceof ComputerRouter)) throw new Error('This host cannot limit access to one app.')
+          const status = backend.appStatus()
+          if (!status.available) throw new Error(status.detail ?? 'App control is not available on this host.')
+          // Only an app that is running or recently used can be granted, never an arbitrary string.
+          const known = await backend.listApps()
+          if (!known.includes(scope.app)) throw new Error(`${scope.app} is not a running or recently used app.`)
+          target = { id: `app:${scope.app}`, kind: 'app', name: scope.app }
+        } else {
+          const status = service.status()
+          if (!status.available) throw new Error(status.detail ?? 'Computer use is not available on this host.')
+        }
+        service.grant(thread(threadId), { target, observe: scope.observe, input: scope.input && scope.observe })
         return summary(threadId)
       },
     },

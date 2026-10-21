@@ -63,6 +63,8 @@ import { DesktopBrowserBroker } from './browser/desktopBroker'
 import { INTEGRATED_BROWSER_GUIDE, registerBrowserTools } from './browser/tools'
 import { HostBrowser } from './browser/hostBrowser'
 import { MacosComputerBackend } from './computer/macos'
+import { OcuBackend } from './computer/ocu'
+import { ComputerRouter } from './computer/router'
 import { ComputerService } from './computer/service'
 import { COMPUTER_GUIDE, registerComputerTools } from './computer/tools'
 import { TerminalService } from './workspace/pty'
@@ -210,7 +212,7 @@ const mobilePush = new MobilePush(
   fetch,
   (sessionId) => schedules.hasSession(sessionId),
 )
-const computer = new ComputerService(new MacosComputerBackend())
+const computer = new ComputerService(new ComputerRouter(new MacosComputerBackend(), new OcuBackend()))
 const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {

@@ -160,9 +160,12 @@ export interface RamuMethods {
   'computer.status'(): {
     enabled: boolean
     runtime: import('./computerBridge').ComputerRuntimeStatus
+    /** Whether a single app can be granted instead of the whole display; null on a host that cannot. */
+    apps: import('./computerBridge').ComputerRuntimeStatus | null
   }
+  'computer.apps'(): string[]
   'computer.setEnabled'(enabled: boolean): void
-  'computer.grant'(threadId: string, scope: { observe: boolean; input: boolean }): ComputerSessionSummary | null
+  'computer.grant'(threadId: string, scope: { observe: boolean; input: boolean; app?: string }): ComputerSessionSummary | null
   'computer.revoke'(threadId: string): void
   'computer.grantViewer'(threadId: string, deviceId: string, input: boolean): void
   'computer.revokeViewer'(threadId: string, deviceId: string): void

@@ -31,9 +31,9 @@ function setup(deviceId: string | undefined, admin: boolean) {
 describe('computer handlers', () => {
   it('requires the setting and the owning host before a grant', async () => {
     const owner = setup('local', true)
-    expect(() => owner.call('computer.grant', 't1', { observe: true, input: true })).toThrow(/Settings/)
+    await expect(owner.call('computer.grant', 't1', { observe: true, input: true })).rejects.toThrow(/Settings/)
     owner.call('computer.setEnabled', true)
-    expect(owner.call('computer.grant', 't1', { observe: true, input: true })).toMatchObject({ target: { id: 'display:main' } })
+    expect(await owner.call('computer.grant', 't1', { observe: true, input: true })).toMatchObject({ target: { id: 'display:main' } })
     const remote = setup('phone', false)
     expect(() => remote.call('computer.setEnabled', true)).toThrow(/owning host/)
   })
@@ -41,7 +41,7 @@ describe('computer handlers', () => {
   it('lets a paired device watch only after an explicit viewer grant, and drive only with input', async () => {
     const owner = setup('local', true)
     owner.call('computer.setEnabled', true)
-    owner.call('computer.grant', 't1', { observe: true, input: true })
+    await owner.call('computer.grant', 't1', { observe: true, input: true })
     const phone = setup('phone', false)
     // The phone talks to the same service in a real host; share it here.
     Object.assign(phone, {})
@@ -60,10 +60,10 @@ describe('computer handlers', () => {
     expect(run('computer.giveToAgent', 't1')).toMatchObject({ controller: { kind: 'agent', runId: 'run1' } })
   })
 
-  it('turns every thread’s access off when computer use is turned off', () => {
+  it('turns every thread’s access off when computer use is turned off', async () => {
     const owner = setup('local', true)
     owner.call('computer.setEnabled', true)
-    owner.call('computer.grant', 't1', { observe: true, input: false })
+    await owner.call('computer.grant', 't1', { observe: true, input: false })
     owner.call('computer.setEnabled', false)
     expect(owner.computer.session('t1')).toBeUndefined()
   })

@@ -12,6 +12,6 @@ it('names who controls the computer', () => {
 })
 
 it('explains why computer use is unavailable', () => {
-  expect(runtimeHelp({ enabled: false, runtime: { available: false, reason: 'permission-denied', detail: 'Allow Screen Recording.' } })).toBe('Allow Screen Recording.')
-  expect(runtimeHelp({ enabled: true, runtime: { available: true, computer: { id: 'local', name: 'Studio' } } })).toMatch(/Studio/)
+  expect(runtimeHelp({ enabled: false, runtime: { available: false, reason: 'permission-denied', detail: 'Allow Screen Recording.' }, apps: null })).toBe('Allow Screen Recording.')
+  expect(runtimeHelp({ enabled: true, runtime: { available: true, computer: { id: 'local', name: 'Studio' } }, apps: null })).toMatch(/Studio/)
 })
