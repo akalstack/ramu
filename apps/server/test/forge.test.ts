@@ -232,6 +232,17 @@ describe('pull request drafts', () => {
     const draft = await forge.pullRequestDraft(repo, null)
     expect(draft).toMatchObject({ title: 'fix(web): Retry the queue', base: 'main', branch: 'fix/retry-the-queue-2' })
   })
+
+  it('counts only commits missing from the base on a remote not named origin', async () => {
+    const remote = join(tmp, 'fork.git')
+    execFileSync('git', ['init', '-q', '--bare', '-b', 'main', remote])
+    sh('remote', 'add', 'fork', remote)
+    commit('pushed.txt', 'Already on the remote')
+    sh('push', '-q', 'fork', 'main')
+    commit('local.txt', 'Only here')
+    const draft = await forge.pullRequestDraft(repo, null)
+    expect(draft.title).toBe('Only here')
+  })
 })
 
 describe('publishing a repository', () => {

@@ -180,3 +180,42 @@ describe('commits not pushed yet', () => {
     expect((await git.history(repo)).map((commit) => commit.outgoing)).toEqual([true, false])
   })
 })
+
+describe('the remote a branch publishes to', () => {
+  const bare = (name: string) => {
+    const path = join(tmp, `${name}.git`)
+    sh(tmp, 'init', '-q', '--bare', path)
+    return path
+  }
+
+  it('uses origin, or the only remote', async () => {
+    sh(repo, 'remote', 'add', 'fork', bare('fork'))
+    expect(await git.publishRemote(repo, 'main')).toEqual({ remote: 'fork', remotes: ['fork'] })
+    sh(repo, 'remote', 'add', 'origin', bare('origin'))
+    expect((await git.publishRemote(repo, 'main')).remote).toBe('origin')
+  })
+
+  it('refuses to guess between several remotes with none named origin', async () => {
+    const fork = bare('fork')
+    sh(repo, 'remote', 'add', 'fork', fork)
+    sh(repo, 'remote', 'add', 'upstream', bare('upstream'))
+    expect(await git.publishRemote(repo, 'main')).toEqual({ remote: null, remotes: ['fork', 'upstream'] })
+    await expect(git.push(repo)).rejects.toThrow(/several remotes \(fork, upstream\).*remote\.pushDefault/)
+    expect(sh(tmp, '--git-dir', fork, 'branch', '--list')).toBe('')
+  })
+
+  it("follows the branch's pushRemote, then remote.pushDefault, and ignores names that are not remotes", async () => {
+    const fork = bare('fork')
+    sh(repo, 'remote', 'add', 'fork', fork)
+    sh(repo, 'remote', 'add', 'upstream', bare('upstream'))
+    sh(repo, 'config', 'remote.pushDefault', 'missing')
+    expect((await git.publishRemote(repo, 'main')).remote).toBeNull()
+    sh(repo, 'config', 'remote.pushDefault', 'upstream')
+    expect((await git.publishRemote(repo, 'main')).remote).toBe('upstream')
+    sh(repo, 'config', 'branch.main.pushRemote', 'fork')
+    expect((await git.publishRemote(repo, 'main')).remote).toBe('fork')
+    await git.push(repo)
+    expect(sh(repo, 'rev-parse', '--abbrev-ref', 'main@{upstream}')).toBe('fork/main')
+    expect(sh(tmp, '--git-dir', fork, 'rev-parse', 'main')).toBe(sh(repo, 'rev-parse', 'HEAD'))
+  })
+})
