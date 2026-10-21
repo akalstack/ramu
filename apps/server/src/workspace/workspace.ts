@@ -315,6 +315,7 @@ export class Workspace {
       )
       .run(t, id)
     this.db.prepare('DELETE FROM task_title_jobs WHERE task_id = ?').run(id)
+    this.db.prepare('DELETE FROM task_title_waits WHERE task_id = ?').run(id)
     return this.getTask(id)
   }
 
@@ -340,6 +341,11 @@ export class Workspace {
     this.db
       .prepare(
         'DELETE FROM task_title_jobs WHERE task_id = ? AND revision < (SELECT title_revision FROM tasks WHERE id = ?)',
+      )
+      .run(id, id)
+    this.db
+      .prepare(
+        'DELETE FROM task_title_waits WHERE task_id = ? AND revision < (SELECT title_revision FROM tasks WHERE id = ?)',
       )
       .run(id, id)
     return this.getTask(id)

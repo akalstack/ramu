@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { isWebLink, linkTargetFrom } from '../src/browserLinks'
+import { agentBrowserVisibilityFrom, isWebLink, linkTargetFrom } from '../src/browserLinks'
 
 it('only an explicit choice moves links into the integrated browser', () => {
   expect(linkTargetFrom('integrated')).toBe('integrated')
@@ -12,4 +12,10 @@ it('only http and https links are web links', () => {
   expect(isWebLink('HTTP://example.com')).toBe(true)
   for (const bad of ['file:///etc/passwd', 'ramu://pair', 'javascript:alert(1)', 'example.com', ''])
     expect(isWebLink(bad)).toBe(false)
+})
+
+it('keeps agent pages automatic unless the person explicitly chooses manual viewing', () => {
+  expect(agentBrowserVisibilityFrom('manual')).toBe('manual')
+  for (const value of [null, undefined, 'automatic', '', 'invalid'])
+    expect(agentBrowserVisibilityFrom(value)).toBe('automatic')
 })

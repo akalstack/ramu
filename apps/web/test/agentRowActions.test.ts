@@ -49,7 +49,7 @@ vi.mock('../src/sidebar/projects/ThreadHoverCard', () => ({
 vi.mock('../src/chat/Notifications', () => ({ notifyError: state.notifyError }))
 vi.mock('../src/Menu', () => ({ timeAgo: () => '' }))
 vi.mock('../src/models/ProviderWait', () => ({ ProviderWaitIcon: () => null }))
-vi.mock('../src/sidebar/projects/TaskStateIcon', () => ({ StateDot: () => null }))
+vi.mock('../src/sidebar/projects/TaskStateIcon', () => ({ StateDot: () => null, StatusMark: () => null }))
 vi.mock('../src/views/agent/hooks/useAgentStream', () => ({ useAgentStream: () => ({ events: [] }) }))
 vi.mock('../src/chat/QuestionCard', () => ({ QuestionDock: () => null }))
 vi.mock('../src/chat/ElicitationCard', () => ({ ElicitationCard: () => null }))

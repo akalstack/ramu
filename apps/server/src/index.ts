@@ -58,6 +58,8 @@ import { openDb } from './db'
 import { Workspace } from './workspace/workspace'
 import { AgentService } from './agent'
 import { ThreadTitles } from './agent/threadTitles'
+import { DesktopBrowserBroker } from './browser/desktopBroker'
+import { INTEGRATED_BROWSER_GUIDE, registerBrowserTools } from './browser/tools'
 import { TerminalService } from './workspace/pty'
 import { createDispatcher } from './ipc'
 import { ScheduleService, scheduleSchema } from './background/schedules'
@@ -153,6 +155,14 @@ try {
 const clients = new Set<ServerResponse>()
 // Only clients on the local socket can answer native dialogs; a remote client's folder picker would open on the wrong machine.
 const hostClients = new Set<ServerResponse>()
+const desktopClients = new Map<string, ServerResponse>()
+const browserBroker = new DesktopBrowserBroker((clientId, request) => {
+  const client = desktopClients.get(clientId)
+  if (!client || client.destroyed || client.writableLength > 1024 * 1024) return false
+  return (
+    client.write(`data: ${JSON.stringify({ channel: 'browser:operation', payload: request })}\n\n`) || !client.destroyed
+  )
+})
 const nativeRequests = new Map<
   string,
   { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
@@ -190,6 +200,11 @@ const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {
     send('agent:event', { sessionId, event, seq, revision })
+    if (event.kind === 'state' && ['idle', 'failed', 'stopped'].includes(event.state)) {
+      try {
+        browserBroker.endRun(agents.get(sessionId).taskId, sessionId)
+      } catch {}
+    }
     threadTitles?.observe(sessionId, event)
     queueMicrotask(() => {
       try {
@@ -449,11 +464,26 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' })
       res.write(': connected\n\n')
       clients.add(res)
-      if (!remote) hostClients.add(res)
-      else remoteStreams.set(res, req.headers.authorization)
+      const clientId =
+        !remote &&
+        typeof req.headers['x-ramu-desktop-client'] === 'string' &&
+        /^[a-zA-Z0-9-]{1,100}$/.test(req.headers['x-ramu-desktop-client'])
+          ? req.headers['x-ramu-desktop-client']
+          : null
+      if (!remote) {
+        hostClients.add(res)
+        if (clientId) {
+          if (desktopClients.has(clientId)) browserBroker.detach(clientId)
+          desktopClients.set(clientId, res)
+        }
+      } else remoteStreams.set(res, req.headers.authorization)
       res.on('close', () => {
         clients.delete(res)
         hostClients.delete(res)
+        if (clientId && desktopClients.get(clientId) === res) {
+          desktopClients.delete(clientId)
+          browserBroker.detach(clientId)
+        }
         remoteStreams.delete(res)
       })
       return
@@ -470,7 +500,23 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
       return
     }
     let value: unknown
-    if (method === 'host.reply') {
+    if (method === 'browser.bridge.attach') {
+      if (remote || typeof args?.[0] !== 'string' || !desktopClients.has(args[0]))
+        throw new Error('A local desktop event stream is required.')
+      value = browserBroker.attach(args[0])
+    } else if (method === 'browser.bridge.ready') {
+      if (remote || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string')
+        throw new Error('Invalid local browser connection.')
+      browserBroker.ready(args[0], args[1])
+    } else if (method === 'browser.bridge.reply') {
+      if (
+        remote ||
+        !Array.isArray(args) ||
+        !args.slice(0, 3).every((item) => typeof item === 'string' && item.length <= 100)
+      )
+        throw new Error('Invalid local browser response.')
+      browserBroker.reply(args[0], args[1], args[2], args[3], typeof args[4] === 'string' ? args[4] : undefined)
+    } else if (method === 'host.reply') {
       if (remote) throw new Error('Desktop actions are only available on this host')
       const request = nativeRequests.get(args?.[0])
       if (request) {
@@ -531,7 +577,11 @@ let remote: ReturnType<typeof createServer> | null = null
 let remoteError: string | null = null
 let remoteRetry: NodeJS.Timeout | undefined
 // Per-agent bearer credentials bind tool calls to their originating chat, including no-project chats.
-const sessions = new Map<string, { session: AgentSessionInfo; toolSearch: boolean }>()
+const browserTokens = new Map<string, string>()
+const sessions = new Map<
+  string,
+  { session: AgentSessionInfo; toolSearch: boolean; browser?: import('@ramu/shared/browser').AgentBrowserPreferences }
+>()
 const mcpHttp = createServer(async (req, res) => {
   const token = req.headers.authorization?.replace(/^Bearer /, '')
   const connection = token ? sessions.get(token) : undefined
@@ -557,6 +607,15 @@ const mcpHttp = createServer(async (req, res) => {
   const server = review ? withoutTools(registry.server) : registry.server
   if (!review) registerInteractiveTools(server, interactive, source.id)
   if (!review) registerBackgroundTerminalTools(server, terminals, source, () => agents.get(source.id))
+  if (!review)
+    registerBrowserTools(
+      server,
+      browserBroker,
+      source,
+      () => agents.get(source.id),
+      connection!.browser,
+      () => browserTokens.get(source.id) === token,
+    )
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
   // A chat keeps the settings it launched with, so its tools match its instructions until it relaunches. Turning a
@@ -804,8 +863,13 @@ await new Promise<void>((resolve, reject) => {
 const address = mcpHttp.address() as import('node:net').AddressInfo
 agents.toolConnection = (session) => {
   const token = randomBytes(32).toString('hex')
+  browserTokens.set(session.id, token)
+  const browserPreferences = structuredClone(
+    workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).agentBrowser,
+  )
   sessions.set(token, {
     session,
+    browser: browserPreferences,
     toolSearch:
       !summaries.isReviewChat(session.taskId) &&
       (workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence?.toolSearch ?? true),
@@ -827,6 +891,11 @@ agents.toolConnection = (session) => {
     url: `http://127.0.0.1:${address.port}/mcp`,
     token,
     ...(review ? { restricted: true } : {}),
+    ...(!review &&
+    !session.parentId &&
+    (browserPreferences?.providerOverrides[session.provider] ?? browserPreferences?.agentBrowser) === 'integrated'
+      ? { browserInstructions: INTEGRATED_BROWSER_GUIDE }
+      : {}),
     ...(mcpConfigDirs.length ? { mcpConfigDirs } : {}),
     ...(skillsDir ? { skillsDir } : {}),
   }

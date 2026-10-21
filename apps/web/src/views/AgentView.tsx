@@ -1,4 +1,5 @@
 import { McpStatusDialog } from './agent/components/McpStatusDialog'
+import { BrowserActivity, useBrowserActivity } from '../chat/BrowserActivity'
 import { BackgroundTerminalsSection, useBackgroundTerminals } from '../chat/BackgroundTerminals'
 import { ConfirmStopDialog } from '../chat/ConfirmStopDialog'
 import { helperActive, helperGroups } from '@ramu/shared/chat/helperPresentation'
@@ -228,6 +229,7 @@ export const AgentView = memo(function AgentView({
   }
   const backgroundTool = (toolUseId: string) =>
     void act(() => invoke('agent.backgroundTool', view.sessionId, toolUseId))
+  const browserActivity = useBrowserActivity(session && !session.parentId ? session.taskId : undefined, visible)
   const backgroundTerminals = useBackgroundTerminals(session?.taskId)
   const [stopping, setStopping] = useState<AgentTask | null>(null)
   const runStopTask = (task: AgentTask) => void act(() => invoke('agent.stopTask', view.sessionId, task.agentId))
@@ -242,6 +244,11 @@ export const AgentView = memo(function AgentView({
     visible,
     taskId: session?.taskId,
     events,
+    eventSequences,
+    onOpenQuestion: (requestId) => {
+      setQuestionDockOpen(true)
+      openQuestion(requestId)
+    },
     blocks,
     turns,
     scroller,
@@ -711,6 +718,7 @@ export const AgentView = memo(function AgentView({
               />
               {(hostOffline ||
                 backgroundTerminals.terminals.length > 0 ||
+                browserActivity.tabs.length > 0 ||
                 providerWait ||
                 liveGoal ||
                 queued.length > 0 ||
@@ -728,6 +736,7 @@ export const AgentView = memo(function AgentView({
                     />
                   )}
                   {hostOffline && <HostWaitNote name={hostName} />}
+                  {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
                   {backgroundTerminals.terminals.length > 0 && (
                     <BackgroundTerminalsSection state={backgroundTerminals} />
                   )}

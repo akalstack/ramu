@@ -12,12 +12,20 @@ describe('Home groups', () => {
   })
 
   it('does not treat a paused, blocked or capped goal, or a helper, as running', () => {
-    for (const status of ['paused', 'blocked', 'turn-limit']) expect(groupOf(session(), task(status))).toBe('Done')
+    for (const status of ['paused', 'blocked', 'turn-limit'])
+      expect(groupOf(session(), task(status))).toBe('Waiting for your input')
     expect(groupOf(session({ parentId: 'p' } as never), task('active'))).toBe('Done')
   })
 
   it('still puts a waiting request and a usage limit first', () => {
     expect(groupOf(session({ state: 'needs-input' }), task('active'))).toBe('Waiting for your input')
     expect(groupOf(session({ waitingUntil: 5 } as never), task('active'))).toBe('Limit reached')
+    expect(groupOf(session(), task('waiting-provider'))).toBe('Limit reached')
+    expect(
+      groupOf(session(), {
+        ...task('paused'),
+        goalState: { status: 'paused', pausedBy: 'provider-limit', objective: 'Continue' },
+      }),
+    ).toBe('Limit reached')
   })
 })

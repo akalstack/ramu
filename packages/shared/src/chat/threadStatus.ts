@@ -5,7 +5,17 @@ import { goalHold } from './goalHold'
 /** What a thread list shows for one thread. `short` and `full` are catalog keys, translated where they are shown. */
 export interface ThreadStatus {
   kind:
-    'working' | 'goal' | 'approval' | 'input' | 'limit' | 'failed' | 'paused' | 'blocked' | 'turn-limit' | 'finished'
+    | 'working'
+    | 'goal'
+    | 'approval'
+    | 'input'
+    | 'limit'
+    | 'failed'
+    | 'stopped'
+    | 'paused'
+    | 'blocked'
+    | 'turn-limit'
+    | 'finished'
   short: string
   full: string
 }
@@ -22,7 +32,7 @@ type GoalLike = Pick<ChatGoal, 'status' | 'pausedBy'>
  * callers qualify it rather than hiding it.
  */
 export function threadStatus(
-  task: Pick<Task, 'status' | 'waitingUntil' | 'inputSummary'>,
+  task: Pick<Task, 'status' | 'waitingUntil' | 'inputSummary' | 'executionState'>,
   unread: boolean,
   goal?: GoalLike | null,
 ): ThreadStatus | null {
@@ -46,6 +56,7 @@ export function threadStatus(
   if (unfinished?.status === 'blocked') return { kind: 'blocked', short: 'Needs input', full: 'Goal needs input' }
   if (unfinished?.status === 'turn-limit')
     return { kind: 'turn-limit', short: 'Turn limit', full: 'Goal turn limit reached' }
+  if (task.executionState === 'stopped') return { kind: 'stopped', short: 'Stopped', full: 'Agent stopped' }
   if (unread) return { kind: 'finished', short: 'Finished', full: 'Finished, not viewed yet' }
   return null
 }

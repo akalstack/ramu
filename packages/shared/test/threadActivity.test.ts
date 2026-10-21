@@ -9,7 +9,7 @@ import {
   helperIdentity,
   helperStatusLabel,
 } from '../src/chat/helperPresentation'
-import { threadActivity } from '../src/chat/threadActivity'
+import { goalActivityLabel, threadActivity } from '../src/chat/threadActivity'
 const task = (agentId: string, status: AgentTask['status'] = 'running', extra: Partial<AgentTask> = {}): AgentTask => ({
   agentId,
   name: agentId,
@@ -17,6 +17,22 @@ const task = (agentId: string, status: AgentTask['status'] = 'running', extra: P
   ...extra,
 })
 const event = (t: AgentTask): AgentEvent => ({ ...t, kind: 'agent' })
+it('preserves verification and turn-limit context without inventing an input request', () => {
+  const base = {
+    connected: true,
+    working: false,
+    helpers: [],
+    advisors: [],
+    requests: [],
+    providerWait: false,
+    queue: 0,
+  }
+  for (const goal of ['verifying', 'turn-limit'] as const) {
+    expect(threadActivity({ ...base, goal })).toMatchObject({ primary: 'goal', goalState: goal, requestIds: [] })
+  }
+  expect(goalActivityLabel('verifying')).toBe('Verifying goal')
+  expect(goalActivityLabel('turn-limit')).toBe('Goal turn limit reached')
+})
 it('keeps parent-idle helpers active, preserves stopped, and only permits reported capabilities on a connected host', () => {
   expect(effectiveStatus(task('a', 'running', { background: true }), false)).toBe('running')
   expect(helperCounts([task('a'), task('b', 'stopped'), task('c', 'failed'), task('d', 'completed')])).toMatchObject({

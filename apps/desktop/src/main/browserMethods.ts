@@ -18,7 +18,7 @@ const validBounds = (value: unknown): Bounds => {
  * it shows, the shell validates every argument, and tab identity, profile and control stay with the runtime. A window
  * can only act on tabs of the thread it names.
  */
-export function browserMethod(runtime: BrowserRuntime, method: string, args: unknown[]): unknown {
+export function browserMethod(runtime: BrowserRuntime, method: string, args: unknown[], activeRunId?: string): unknown {
   const owned = (hostId: string, threadId: string, tabId: string): TabInfo => {
     const tab = runtime.list({ hostId, threadId }).find((entry) => entry.id === tabId)
     if (!tab) throw new Error('That tab is closed.')
@@ -33,6 +33,23 @@ export function browserMethod(runtime: BrowserRuntime, method: string, args: unk
         text(args[2], 'address'),
         typeof args[3] === 'string' ? args[3] : undefined,
       )
+    case 'browser.dialog':
+    case 'browser.handleDialog': {
+      const [hostId, threadId, tabId] = [
+        text(args[0], 'host', 200),
+        text(args[1], 'thread', 200),
+        text(args[2], 'tab', 100),
+      ]
+      owned(hostId, threadId, tabId)
+      if (method === 'browser.dialog') return runtime.dialogForAgent(tabId, { hostId, threadId })
+      if (
+        typeof args[4] !== 'boolean' ||
+        (args[5] !== undefined && (typeof args[5] !== 'string' || args[5].length > 20000))
+      )
+        throw new Error('Invalid website dialog answer')
+      return runtime.handleDialogAsHuman(tabId, text(args[3], 'dialog', 100), args[4], args[5] as string | undefined)
+    }
+    case 'browser.changeProfile':
     case 'browser.navigate': {
       const [hostId, threadId, tabId] = [
         text(args[0], 'host', 200),
@@ -40,20 +57,27 @@ export function browserMethod(runtime: BrowserRuntime, method: string, args: unk
         text(args[2], 'tab', 100),
       ]
       owned(hostId, threadId, tabId)
-      return runtime.navigate(tabId, text(args[3], 'address'))
+      return method === 'browser.changeProfile'
+        ? runtime.changeProfile(tabId, text(args[3], 'profile', 64))
+        : runtime.navigate(tabId, text(args[3], 'address'))
     }
     case 'browser.back':
     case 'browser.forward':
     case 'browser.reload':
     case 'browser.close':
     case 'browser.hide':
-    case 'browser.takeControl': {
+    case 'browser.takeControl':
+    case 'browser.giveControl': {
       const [hostId, threadId, tabId] = [
         text(args[0], 'host', 200),
         text(args[1], 'thread', 200),
         text(args[2], 'tab', 100),
       ]
       owned(hostId, threadId, tabId)
+      if (method === 'browser.giveControl') {
+        if (!activeRunId) throw new Error('Start or resume the agent before returning control.')
+        return runtime.giveToAgent(tabId, 'local', activeRunId)
+      }
       if (method === 'browser.takeControl') return runtime.takeControl(tabId, 'local', { local: true })
       return runtime[method.slice('browser.'.length) as 'back' | 'forward' | 'reload' | 'close' | 'hide'](tabId)
     }

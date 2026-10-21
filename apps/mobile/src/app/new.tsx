@@ -9,6 +9,13 @@ import { useAgentDraft } from '../runtime/useAgentDraft'
 import { isMethodMissing } from '../runtime/goalVerify'
 import { newComposerKey } from '../runtime/composerDrafts'
 import { routingChoiceLabels } from '../runtime/routingChoices'
+import {
+  encodeRouteChoice,
+  readRouteChoice,
+  readRoutingSelection,
+  routingSelectionKey,
+  routingSnapshot,
+} from '../runtime/routingDraft'
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -88,14 +95,20 @@ export default function NewChat() {
   const offline = !isOnline(selected)
   const list = projects.filter((p) => p.computerId === selected)
   // A chat runs in a project's folders, so the project is chosen first rather than defaulted.
-  const [projectId, setProjectId] = useState<string | null>(params.project ?? null)
+  const initialSelection = () =>
+    readRoutingSelection(
+      store.drafts,
+      selected,
+      list.map((project) => project.id),
+      store.appPreferences[selected]?.autoProjectSelection !== false,
+    )
+  const [projectId, setProjectId] = useState<string | null>(params.project ?? initialSelection().projectId)
   // Auto picks the project from the first message; an explicit choice always wins for this draft.
-  const [auto, setAuto] = useState(
-    !params.project && store.appPreferences[store.selected]?.autoProjectSelection !== false,
-  )
+  const [auto, setAuto] = useState(!params.project && initialSelection().auto)
   const [choices, setChoices] = useState<{ projectId: string; reason: string }[] | null>(null)
   const pending = useRef<{ text: string; attachments: unknown; context: unknown } | null>(null)
   const routeRevision = useRef(0)
+  const routingStart = useRef(false)
   const activeScope = useRef({ host: selected, project: projectId })
   activeScope.current = { host: selected, project: projectId }
   const draftContext = params.computer === selected && params.project === projectId ? params.draftContext : undefined
@@ -182,11 +195,22 @@ export default function NewChat() {
   })
   const mode = resolution.mode
   const draftText = store.drafts[composerKey] ?? ''
+  const routeChoiceKey = `${composerKey}:routing-choice`
+  const routeSnapshot = routingSnapshot(store.drafts, composerKey)
   // A pending routing answer belongs to the exact message, destination and host it was asked for.
   useEffect(() => {
     routeRevision.current++
-    setChoices(null)
-  }, [draftText, projectId, auto, selected])
+    const restored =
+      auto && !projectId
+        ? readRouteChoice(
+            store.drafts[routeChoiceKey],
+            routeSnapshot,
+            list.map((project) => project.id.slice(project.id.indexOf(':') + 1)),
+          )
+        : null
+    pending.current = restored
+    setChoices(restored?.candidates ?? null)
+  }, [routeSnapshot, projectId, auto, selected])
   const branchTitle = draftText.split('\n')[0]!.slice(0, 60) || 'Discuss attachments'
   const namingIntent = {
     strategy: workspaceOptions?.branchNaming ?? workspaceDefaults?.worktreeBranchNaming ?? 'fixed',
@@ -198,6 +222,9 @@ export default function NewChat() {
   const reviewKey = JSON.stringify([selected, projectId, branchTitle, namingIntent, branchPrefix, branchChoice])
   const [reviewed, setReviewed] = useState<{ key: string; plan: WorktreePlanEntry[] } | null>(null)
   const [picker, setPicker] = useState<'project' | 'mode' | 'host' | 'choice' | null>(null)
+  useEffect(() => {
+    if (choices?.length) setPicker('choice')
+  }, [choices])
   // Starts on the computer's default model step (Settings › Models), like the desktop; a pick here overrides it.
   const preset = store.defaults[selected]
   const agentDraft = useAgentDraft(selected, projectId, composerKey, preset ?? DEFAULT_AGENT_SETTINGS, !!preset)
@@ -253,86 +280,110 @@ export default function NewChat() {
     attachments: Send[2],
     context: Send[3],
     destination?: string,
-  ): Promise<void> => {
-    if (offline) {
-      setAuto(false)
-      setPicker('project')
-      throw new Error('Choose a project to start while this host is offline.')
-    }
-    const revision = ++routeRevision.current
-    const verified = await agentDraft.verify()
-    let raw = destination
-    if (!raw) {
-      let outcome: Awaited<ReturnType<RamuMethods['projects.route']>>
-      try {
-        outcome = await storeRef.current.invoke(selected, 'projects.route', text, verified)
-      } catch (error) {
-        if (!isMethodMissing(error)) throw error
+  ): Promise<void | false> => {
+    if (routingStart.current) return false
+    routingStart.current = true
+    try {
+      if (offline) {
         setAuto(false)
         setPicker('project')
-        throw new Error('This host cannot choose a project automatically. Choose one.', { cause: error })
+        throw new Error('Choose a project to start while this host is offline.')
       }
+      const revision = ++routeRevision.current
+      const verified = await agentDraft.verify()
       if (revision !== routeRevision.current)
         throw new Error('The message changed while choosing a project. Send again.')
-      if (outcome.kind === 'resolved') raw = outcome.projectId
-      else {
-        pending.current = { text, attachments, context }
-        setChoices(
-          outcome.kind === 'ambiguous' ? outcome.candidates : list.map((p) => ({ projectId: rawId(p.id), reason: '' })),
-        )
-        setPicker('choice')
-        return
+      let raw = destination
+      if (!raw) {
+        let outcome: Awaited<ReturnType<RamuMethods['projects.route']>>
+        try {
+          outcome = await storeRef.current.invoke(selected, 'projects.route', text, verified)
+        } catch (error) {
+          if (!isMethodMissing(error)) throw error
+          setAuto(false)
+          setPicker('project')
+          throw new Error('This host cannot choose a project automatically. Choose one.', { cause: error })
+        }
+        if (revision !== routeRevision.current)
+          throw new Error('The message changed while choosing a project. Send again.')
+        if (outcome.kind === 'resolved') raw = outcome.projectId
+        else {
+          const candidates =
+            outcome.kind === 'ambiguous'
+              ? outcome.candidates
+              : list.map((p) => ({ projectId: rawId(p.id), reason: '' }))
+          pending.current = { text, attachments, context }
+          setChoices(candidates)
+          storeRef.current.setDraft(
+            routeChoiceKey,
+            encodeRouteChoice({
+              draft: routingSnapshot(storeRef.current.drafts, composerKey),
+              text,
+              attachments: attachments ?? [],
+              context: context ?? [],
+              candidates,
+            }),
+          )
+          setPicker('choice')
+          return false
+        }
       }
+      const destinationProject = list.find((p) => rawId(p.id) === raw)
+      if (!destinationProject) throw new Error('That project is no longer available. Choose a project.')
+      // The destination's repository model defaults apply as if the project had been picked by hand.
+      const base = preset ?? DEFAULT_AGENT_SETTINGS
+      const destinationDefaults = agentDraft.choice.selection
+        ? undefined
+        : await storeRef.current.invoke(selected, 'tasks.agentDefaults', raw, base.provider).catch((error) => {
+            if (isMethodMissing(error)) return undefined
+            throw error
+          })
+      const routed = routedAgentSettings(base, destinationDefaults, agentDraft.choice)
+      if (!routed) {
+        // Stay in Auto so the draft remains visible; a model chosen here then wins over the project default.
+        throw new Error(`${destinationProject.name}'s model default can't be used. Choose a model, then send again.`)
+      }
+      const sendModel = asModelChoice(routed)
+      const options = await storeRef.current.invoke(selected, 'tasks.workspaceOptions', raw)
+      const checkout = resolveCheckoutMode({
+        defaultMode: options.defaultCheckoutMode ?? 'current',
+        manual: null,
+        workspaceId: null,
+        projectFree: false,
+        worktreeUnavailable: options.worktreeUnavailable,
+      })
+      if (checkout.blocked) throw new Error(checkout.reason ?? 'Worktree unavailable')
+      const intent = {
+        strategy: options.branchNaming ?? 'fixed',
+        instructions: options.branchInstructions ?? '',
+        prompt: text.slice(0, 6000),
+      }
+      const branch = currentBranchChoice(undefined, text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments', intent)
+      if (checkout.mode === 'worktree' && branch && !validBranchName(branch.name)) throw new Error(t.branchNameInvalid)
+      if (revision !== routeRevision.current)
+        throw new Error('The message changed while choosing a project. Send again.')
+      const id = await createChat({
+        computerId: selected,
+        projectId: destinationProject.id,
+        text,
+        mode: checkout.mode,
+        // The project-free draft's workspace belongs to another scope; routed threads use the destination default.
+        workspaceId: undefined,
+        branchNaming: intent,
+        branchChoice: branch,
+        branchPrefix: options.branchPrefix ?? 'ramu/',
+        attachments,
+        context,
+        ...sendModel,
+      })
+      setChoices(null)
+      pending.current = null
+      storeRef.current.setDraft(routeChoiceKey, '')
+      if (storeRef.current.drafts[composerKey] === text) agentDraft.consume()
+      router.replace({ pathname: '/chat/[id]', params: { id } })
+    } finally {
+      routingStart.current = false
     }
-    const destinationProject = list.find((p) => rawId(p.id) === raw)
-    if (!destinationProject) throw new Error('That project is no longer available. Choose a project.')
-    // The destination's repository model defaults apply as if the project had been picked by hand.
-    const base = preset ?? DEFAULT_AGENT_SETTINGS
-    const destinationDefaults = agentDraft.choice.selection
-      ? undefined
-      : await storeRef.current.invoke(selected, 'tasks.agentDefaults', raw, base.provider).catch((error) => {
-          if (isMethodMissing(error)) return undefined
-          throw error
-        })
-    const routed = routedAgentSettings(base, destinationDefaults, agentDraft.choice)
-    if (!routed) {
-      // Stay in Auto so the draft remains visible; a model chosen here then wins over the project default.
-      throw new Error(`${destinationProject.name}'s model default can't be used. Choose a model, then send again.`)
-    }
-    const sendModel = asModelChoice(routed)
-    const options = await storeRef.current.invoke(selected, 'tasks.workspaceOptions', raw)
-    const checkout = resolveCheckoutMode({
-      defaultMode: options.defaultCheckoutMode ?? 'current',
-      manual: null,
-      workspaceId: null,
-      projectFree: false,
-      worktreeUnavailable: options.worktreeUnavailable,
-    })
-    if (checkout.blocked) throw new Error(checkout.reason ?? 'Worktree unavailable')
-    const intent = {
-      strategy: options.branchNaming ?? 'fixed',
-      instructions: options.branchInstructions ?? '',
-      prompt: text.slice(0, 6000),
-    }
-    const branch = currentBranchChoice(undefined, text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments', intent)
-    if (checkout.mode === 'worktree' && branch && !validBranchName(branch.name)) throw new Error(t.branchNameInvalid)
-    const id = await createChat({
-      computerId: selected,
-      projectId: destinationProject.id,
-      text,
-      mode: checkout.mode,
-      // The project-free draft's workspace belongs to another scope; routed threads use the destination default.
-      workspaceId: undefined,
-      branchNaming: intent,
-      branchChoice: branch,
-      branchPrefix: options.branchPrefix ?? 'ramu/',
-      attachments,
-      context,
-      ...sendModel,
-    })
-    setChoices(null)
-    if (storeRef.current.drafts[composerKey] === text) agentDraft.consume()
-    router.replace({ pathname: '/chat/[id]', params: { id } })
   }
   const pc = computers.find((x) => x.id === selected)
   const choiceLabels = routingChoiceLabels(
@@ -425,7 +476,7 @@ export default function NewChat() {
                   label={
                     project?.name ?? (projectId === STANDALONE ? 'Standalone' : auto ? 'Auto' : 'Choose a project')
                   }
-                  onPress={() => setPicker('project')}
+                  onPress={() => setPicker(choices?.length ? 'choice' : 'project')}
                 />
                 {project ? (
                   <TrayButton
@@ -542,8 +593,15 @@ export default function NewChat() {
             onPress={() => {
               if (computer.status === 'revoked') return
               if (computer.id !== selected) {
+                const choice = readRoutingSelection(
+                  store.drafts,
+                  computer.id,
+                  projects.filter((project) => project.computerId === computer.id).map((project) => project.id),
+                  store.appPreferences[computer.id]?.autoProjectSelection !== false,
+                )
                 setHost(computer.id)
-                setProjectId(null)
+                setProjectId(choice.projectId)
+                setAuto(choice.auto)
               }
               setPicker('project')
             }}
@@ -560,6 +618,7 @@ export default function NewChat() {
         ))}
       </Sheet>
       <Sheet open={picker === 'choice'} onClose={() => setPicker(null)} title="Choose a project">
+        <Button kind="ghost" title="Choose another project" onPress={() => setPicker('project')} />
         <T tone="muted">
           {choices?.some((choice) => choice.reason)
             ? 'More than one project could fit. Choose where to start.'
@@ -603,6 +662,7 @@ export default function NewChat() {
             onPress={() => {
               setProjectId(null)
               setAuto(true)
+              store.setDraft(routingSelectionKey(selected), JSON.stringify({ version: 1, auto: true, projectId: null }))
               setPicker(null)
             }}
           >
@@ -622,6 +682,10 @@ export default function NewChat() {
             onPress={() => {
               setProjectId(p.id)
               setAuto(false)
+              store.setDraft(
+                routingSelectionKey(selected),
+                JSON.stringify({ version: 1, auto: false, projectId: p.id }),
+              )
               setPicker(null)
             }}
           >
@@ -639,6 +703,10 @@ export default function NewChat() {
           onPress={() => {
             setProjectId(STANDALONE)
             setAuto(false)
+            store.setDraft(
+              routingSelectionKey(selected),
+              JSON.stringify({ version: 1, auto: false, projectId: STANDALONE }),
+            )
             setPicker(null)
           }}
         >

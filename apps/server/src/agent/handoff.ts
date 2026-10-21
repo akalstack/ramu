@@ -12,6 +12,8 @@ function renderLine(e: AgentEvent): string | null {
   if (e.kind === 'text') return `ASSISTANT: ${e.text}`
   if (e.kind === 'file-restore')
     return `FILES RESTORED: ${e.fileCount} selected files from user message ${e.userSeq} and later captured runs. The earlier tool results describe historical file states.`
+  if (e.kind === 'background-terminal-stop')
+    return `USER STOPPED BACKGROUND COMMAND ${e.terminalId}: ${JSON.stringify(e.command)}. Stop was requested; inspect its current state. Do not restart it without a new instruction.`
   if (e.kind === 'tool-use') return `TOOL ${e.name}: ${e.summary}`
   if (e.kind === 'tool-result') return `TOOL RESULT${e.isError ? ' (failed)' : ''}: ${e.summary}`
   if (e.kind === 'question') return `QUESTION ${e.requestId}: ${JSON.stringify(e.questions)}`
@@ -102,7 +104,16 @@ const kindOf = (e: AgentEvent): Kind =>
         : 'keep'
 
 /** Kinds kept as the user's own requirements and controls when a checkpoint stands in for the older conversation. */
-const CONTROL_KINDS = ['user', 'question', 'question-state', 'request-resolved', 'file-restore', 'settings', 'agent']
+const CONTROL_KINDS = [
+  'user',
+  'question',
+  'question-state',
+  'request-resolved',
+  'file-restore',
+  'background-terminal-stop',
+  'settings',
+  'agent',
+]
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 

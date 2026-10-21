@@ -168,3 +168,11 @@ test('mobile keeps a tool call input distinct from its output, including while o
   assert.equal(complete.input, 'pnpm test')
   assert.equal(complete.detail, 'Tests passed')
 })
+
+test('a human background stop remains visible without becoming a message or completion', () => {
+  const items = transcript([{ kind: 'background-terminal-stop', terminalId: 'command-1', command: 'pnpm dev', seq: 3 }])
+  assert.equal(items.length, 1)
+  assert.equal(items[0].kind, 'note')
+  assert.equal(items[0].title, 'Background command stop requested')
+  assert.equal(items[0].detail, 'pnpm dev')
+})

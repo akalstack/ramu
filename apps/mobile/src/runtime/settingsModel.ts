@@ -21,6 +21,7 @@ export type SettingsSection =
   | 'access'
   | 'workflows'
   | 'memory'
+  | 'rules'
   | 'system'
   | 'computers'
   | 'notifications'
@@ -45,6 +46,7 @@ export const SETTINGS_SECTIONS: { id: SettingsSection; group: SettingsGroup; sco
     { id: 'access', group: 'agents', scope: 'host', label: { en: 'Access & Fallback', id: 'Akses & Cadangan' } },
     { id: 'workflows', group: 'agents', scope: 'host', label: { en: 'Goals & delegation', id: 'Tujuan & delegasi' } },
     { id: 'memory', group: 'agents', scope: 'host', label: { en: 'Memory & skills', id: 'Memori & skill' } },
+    { id: 'rules', group: 'agents', scope: 'host', label: { en: 'Rules', id: 'Aturan' } },
     {
       id: 'system',
       group: 'system',
@@ -661,6 +663,7 @@ export function searchSettings(
           })),
       ),
     ),
+    { section: 'rules', title: 'Rules', words: 'instructions guidance agent setup history revisions aturan instruksi' },
     ...PHONE_ENTRIES,
   ]
   return candidates

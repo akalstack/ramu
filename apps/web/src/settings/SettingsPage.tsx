@@ -55,6 +55,11 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
   { section: 'browser', title: 'Open clicked links in', words: 'browser links system integrated web external' },
+  {
+    section: 'browser',
+    title: 'Agent browser',
+    words: 'browser provider override profile temporary default sessions control',
+  },
   { section: 'agent-setup', title: 'MCP servers', words: 'shared tools external service connection authentication' },
   { section: 'archived', title: 'Archived threads', words: 'history restore unarchive delete' },
   { section: 'system', title: 'Keep local crash reports', words: 'diagnostics privacy errors crash local export' },

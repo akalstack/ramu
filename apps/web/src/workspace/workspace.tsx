@@ -634,7 +634,7 @@ const HostWorkspace = memo(function HostWorkspace({
         ...state,
         views: state.views.map((view) => {
           if (view.id !== viewId || view.kind !== 'agent' || view.sourceRequestId !== requestId) return view
-          const { sourceSeq: _seq, sourceRequestId: _request, ...rest } = view
+          const { sourceSeq: _seq, sourceRequestId: _request, focusRequestId: _focus, ...rest } = view
           return rest
         }),
       }))
@@ -828,7 +828,8 @@ const HostWorkspace = memo(function HostWorkspace({
       },
       consumeSourceNavigation,
       openView(taskId, view) {
-        if (view.kind === 'agent') view = { ...view, sourceRequestId: view.sourceSeq ? crypto.randomUUID() : undefined }
+        if (view.kind === 'agent')
+          view = { ...view, sourceRequestId: view.sourceSeq || view.focusRequestId ? crypto.randomUUID() : undefined }
         const owner = view.kind === 'agent' ? taskId : workspaceOf(taskId)
         if (view.kind === 'agent') updateTaskUi(workspaceOf(taskId), (state) => ({ ...state, activeViewId: null }))
         const key = viewKey(view)
@@ -843,7 +844,12 @@ const HostWorkspace = memo(function HostWorkspace({
           previous?.kind === 'review' && view.kind === 'review'
             ? { ...previous, ...view }
             : previous?.kind === 'agent' && view.kind === 'agent'
-              ? { ...previous, sourceSeq: view.sourceSeq, sourceRequestId: view.sourceRequestId }
+              ? {
+                  ...previous,
+                  sourceSeq: view.sourceSeq,
+                  sourceRequestId: view.sourceRequestId,
+                  focusRequestId: view.focusRequestId,
+                }
               : previous && previous.kind === 'file' && view.kind === 'file'
                 ? {
                     ...previous,

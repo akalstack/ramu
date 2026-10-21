@@ -180,6 +180,8 @@ export function runtimeRenew(serverUrl: string, token: string): Promise<RenewRes
  * No requests are sent with no usable network. Loopback and local sockets remain usable offline.
  */
 export interface SubscribeOptions {
+  /** Local desktop identity used to bind private broker messages to this event stream. Never sent to a remote host. */
+  localClientId?: string
   retryMode?: 'events' | 'periodic'
   presencePort?: number
   watchWake?: (wake: () => void) => () => void
@@ -227,6 +229,8 @@ export function subscribeRuntime(
     connecting = true
     const extra: Record<string, string> =
       remote && policy.presencePort ? { 'X-Ramu-Presence-Port': String(policy.presencePort) } : {}
+    if (!remote && policy.localClientId && /^[a-zA-Z0-9-]{1,100}$/.test(policy.localClientId))
+      extra['X-Ramu-Desktop-Client'] = policy.localClientId
     const { options, send } = prepare(target, '/events', 'GET', extra)
     let finished = false,
       deadline: NodeJS.Timeout | undefined

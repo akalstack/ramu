@@ -387,6 +387,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
     return effort ? `${name} ${effort.charAt(0).toUpperCase()}${effort.slice(1)}` : name
   }
   let title = item.goalNote ? (strings.goalNotes[item.goalNote] ?? item.title) : item.title
+  if (item.title === 'Background command stop requested') title = translate(store.language, item.title)
   if (item.settings) {
     const next = item.settings,
       before = item.previous

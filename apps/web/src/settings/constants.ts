@@ -26,6 +26,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
   appearance: ['language', 'accent', 'fontFamily', 'fontSize', 'fontSmoothing', 'reduceMotion', 'sidebarWidth'],
   editor: ['defaultMarkdownView', 'previewTabs', 'editorFontSize', 'terminalFontSize', 'defaultTerminalDock'],
   access: ['defaultAccess'],
+  browser: ['agentBrowser'],
   models: ['defaultAutoFallback', 'fallback'],
   workflows: ['goals', 'subagents', 'advisor'],
   memory: ['memory'],

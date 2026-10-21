@@ -228,6 +228,8 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
         settings: e.settings,
         previous: e.previous,
       })
+    else if (e.kind === 'background-terminal-stop')
+      items.push({ kind: 'note', id, title: 'Background command stop requested', detail: e.command })
     else if (e.kind === 'recovery') items.push({ kind: 'note', id, title: 'Continued after restart' })
     else if (e.kind === 'compaction' && e.state !== 'started')
       items.push({

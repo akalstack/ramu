@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest'
 import { z } from 'zod'
 import { portableSettings, type SettingEdit, type SettingSchema } from '@ramu/shared/settingsCompatibility'
+import { appPreferences } from '../src/ipc/preferences'
+import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import { applySettingEdits, validateSettingModels } from '../src/sharedSettings'
 
 const validator = z.object({
@@ -113,4 +115,27 @@ it('rechecks model and effort choices while preserving existing unavailable conf
   )
   const old = { provider: 'codex', model: 'removed', effort: null }
   expect(() => validateSettingModels(change(old, old), catalog)).not.toThrow()
+})
+
+it('advertises individual optional browser overrides and clears one without replacing the host default or siblings', () => {
+  const validator = appPreferences
+  const schema = z.toJSONSchema(validator, { unrepresentable: 'any' }) as SettingSchema
+  const saved = validator.parse({
+    ...DEFAULT_APP_PREFERENCES,
+    agentBrowser: {
+      agentBrowser: 'integrated',
+      defaultProfileId: 'temporary',
+      providerOverrides: { codex: 'provider', cursor: 'integrated' },
+    },
+  })
+  const field = portableSettings(schema, saved).find((entry) => entry.path === 'agentBrowser.providerOverrides.codex')!
+  expect(field).toBeDefined()
+  const cleared = applySettingEdits(schema, validator, saved, [
+    { path: field.path, schema: field.schema, before: field.value, value: undefined },
+  ])
+  expect(cleared.agentBrowser).toEqual({
+    agentBrowser: 'integrated',
+    defaultProfileId: 'temporary',
+    providerOverrides: { cursor: 'integrated' },
+  })
 })

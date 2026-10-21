@@ -172,6 +172,7 @@ export class TerminalService {
     if (!e.exited && by === 'user' && bg.stoppedBy !== 'user') {
       bg.stoppedBy = 'user'
       this.checkpoint(e)
+      this.onChange(e.taskId)
     }
     if (e.exited || bg.forced || (bg.stopRequested && !force)) return backgroundInfo(e)
     if (force && !bg.stopRequested) throw new Error('Request graceful stop before force stop.')

@@ -25,6 +25,7 @@ export interface GuidanceSections {
   learning: string | undefined
   /** User-written rules, labelled as the user's own instructions. */
   rules?: string | undefined
+  browser?: string | undefined
 }
 
 /** The guidance appended to a chat's system prompt (or sent ahead of its first prompt) through the Ramu tool connection. */
@@ -45,6 +46,7 @@ export function sessionGuidance(sections: GuidanceSections): string {
   if (sections.toolSearch) instructions += `\n\n${INTERACTIVE_GUIDE}`
   if (sections.toolSearch) instructions += `\n\n${TOOL_DISCOVERY_INSTRUCTIONS}`
   if (sections.learning) instructions += `\n\n${sections.learning}`
+  if (sections.browser) instructions += `\n\n${sections.browser}`
   if (sections.rules) instructions += `\n\n${sections.rules}`
   return instructions
 }

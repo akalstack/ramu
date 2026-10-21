@@ -11,6 +11,8 @@ import * as terminalKeys from '../src/runtime/terminalKeys.ts'
 import * as workspaceDefaults from '../../../packages/shared/src/workspaceDefaults.ts'
 import * as workspaceChoices from '../src/runtime/workspaces.ts'
 import * as explorerScopes from '../../../packages/shared/src/workspace/explorer.ts'
+import * as explorerNavigation from '../src/runtime/explorerNavigation.ts'
+import * as routingDraft from '../src/runtime/routingDraft.ts'
 import * as explorerDrafts from '../src/runtime/composerDrafts.ts'
 import * as routingChoices from '../src/runtime/routingChoices.ts'
 import * as localCommitStorage from '../src/storage/localCommit.ts'
@@ -74,6 +76,10 @@ function load(file, os, overrides = {}, globals = {}) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
   }).outputText
   runInNewContext(code, {
+    setTimeout,
+    clearTimeout,
+    requestAnimationFrame: (callback) => setTimeout(callback, 0),
+    cancelAnimationFrame: clearTimeout,
     ...globals,
     exports: module.exports,
     require: (id) => {
@@ -102,6 +108,8 @@ function load(file, os, overrides = {}, globals = {}) {
         }
       if (id.endsWith('/composerDrafts')) return explorerDrafts
       if (id.endsWith('/routingChoices')) return routingChoices
+      if (id.endsWith('/explorerNavigation')) return explorerNavigation
+      if (id.endsWith('/routingDraft')) return routingDraft
       if (id === '@ramu/shared/chat/fileContext') return fileContextKeys
       if (id === '@ramu/shared/chat/composerTrigger') return composerTriggers
       if (id.endsWith('/theme')) return theme
@@ -117,6 +125,197 @@ function nodes(tree) {
 }
 function find(tree, type) {
   return nodes(tree).find((node) => node.type === type)
+}
+
+test('a destination clarification keeps the composer draft instead of acknowledging a send', async () => {
+  const hooks = hookHarness()
+  let cleared = 0,
+    sent = 0
+  const store = {
+    selected: 'a',
+    computers: [{ id: 'a', status: 'online' }],
+    projects: [],
+    chats: [],
+    missingMethods: {},
+    appPreferences: {},
+    drafts: { 'a:new:none': 'Fix login' },
+    isOnline: () => true,
+    setDraft: (key, value) => {
+      store.drafts[key] = value
+    },
+    clearComposerDraft: () => {
+      cleared++
+      return true
+    },
+  }
+  const { Composer } = load('components/Composer.tsx', 'ios', {
+    react: hooks.react,
+    './ui': new Proxy({}, { get: (_, key) => (key === 'tap' ? () => {} : String(key)) }),
+    '@ramu/shared/chat/composerDraft': {
+      composerDraft: (text) => ({ chips: [], segments: [{ kind: 'text', source: text }] }),
+    },
+    '../runtime/store': { useStore: () => store },
+    '../i18n': { useT: () => ({}) },
+    '../runtime/goalVerify': { offersVerify: () => false },
+    './ComposerSuggest': { useComposerSuggest: () => ({ visible: false }) },
+  })
+  const render = () =>
+    hooks.render(() =>
+      Composer({
+        computerId: 'a',
+        draftKey: 'a:new:none',
+        running: false,
+        model: { provider: 'claude-code', model: 'opus' },
+        onModel() {},
+        onSend: async () => {
+          sent++
+          return false
+        },
+      }),
+    )
+  const button = nodes(render()).find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Send')
+  button.props.onPress()
+  await settle()
+  assert.equal(sent, 1)
+  assert.equal(cleared, 0)
+  assert.equal(store.drafts['a:new:none'], 'Fix login')
+  hooks.dispose()
+})
+
+for (const os of ['ios', 'android']) {
+  test(`${os} rule edits retain failed text, enforce explicit scopes and save one revision on the owning host`, async () => {
+    const hooks = hookHarness()
+    const calls = []
+    let finish,
+      fail = true,
+      closed = 0
+    const store = {
+      language: 'en',
+      computers: [{ id: 'remote', access: 'owner' }],
+      projects: [{ id: 'remote:p', computerId: 'remote', name: 'Project' }],
+      isOnline: () => true,
+      invoke: async (...args) => {
+        calls.push(args)
+        await new Promise((resolve) => {
+          finish = resolve
+        })
+        if (fail) throw Error('Concurrent edit')
+      },
+    }
+    const { RuleEditor } = load('components/RulesSettings.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+      '@ramu/shared/types': { RULE_BODY_LIMIT: 8000, RULE_NAME_LIMIT: 120 },
+      '@ramu/shared/providers/providers': { AGENT_PROVIDERS: ['codex'], providerName: (id) => id },
+    })
+    const render = () =>
+      hooks.render(() =>
+        RuleEditor({
+          hostId: 'remote',
+          rule: null,
+          onClose: () => {
+            closed++
+          },
+          onSaved() {},
+        }),
+      )
+    const button = (title) => nodes(render()).find((node) => node.type === 'Button' && node.props.title === title)
+    const input = (label) =>
+      nodes(render()).find((node) => node.type === 'TextInput' && node.props.accessibilityLabel === label)
+    input('Rule name').props.onChangeText('Careful changes')
+    input('Rule text').props.onChangeText('Preserve user edits.')
+    assert.equal(button('Save').props.disabled, true)
+    button('Project').props.onPress()
+    const provider = () => nodes(render()).find((node) => node.type === 'ToggleRow' && node.props.title === 'codex')
+    provider().props.onChange(true)
+    assert.equal(button('Save').props.disabled, false)
+    provider().props.onChange(false)
+    assert.equal(button('Save').props.disabled, true) // Deselecting the last provider never means all providers.
+    provider().props.onChange(true)
+    const save = button('Save')
+    save.props.onPress()
+    save.props.onPress()
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0][0], 'remote')
+    assert.equal(calls[0][1], 'rules.save')
+    assert.deepEqual(JSON.parse(JSON.stringify(calls[0][2])), {
+      name: 'Careful changes',
+      body: 'Preserve user edits.',
+      projectId: 'p',
+      providers: ['codex'],
+      activation: 'always',
+      enabled: true,
+    })
+    finish()
+    await settle()
+    assert.equal(closed, 0)
+    assert.equal(input('Rule text').props.value, 'Preserve user edits.')
+    assert.ok(nodes(render()).some((node) => node.props.children === 'Concurrent edit'))
+    fail = false
+    button('Save').props.onPress()
+    finish()
+    await settle()
+    assert.equal(closed, 1)
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} routing metadata saves on its owner, preserves failed edits and blocks repeated saves`, async () => {
+    const hooks = hookHarness()
+    const calls = []
+    let finish,
+      closed = 0,
+      fail = true
+    const store = {
+      language: 'en',
+      computers: [{ id: 'remote', access: 'owner' }],
+      isOnline: () => true,
+      refresh: async () => {},
+      invoke: async (...args) => {
+        calls.push(args)
+        await new Promise((resolve) => {
+          finish = resolve
+        })
+        if (fail) throw new Error('Host unavailable')
+      },
+    }
+    const { ProjectRoutingSettings } = load('components/ProjectRoutingSettings.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+    })
+    const render = () =>
+      hooks.render(() =>
+        ProjectRoutingSettings({
+          project: { id: 'remote:project', computerId: 'remote', name: 'Store', aliases: ['Shop'] },
+          onClose: () => {
+            closed++
+          },
+        }),
+      )
+    const input = () =>
+      nodes(render()).find(
+        (node) => node.type === 'TextInput' && node.props.accessibilityLabel === 'Other names, separated by commas',
+      )
+    const save = () => nodes(render()).find((node) => node.type === 'Button' && node.props.title === 'Save')
+    input().props.onChangeText('Storefront, Payments')
+    const button = save()
+    button.props.onPress()
+    button.props.onPress()
+    assert.equal(calls.length, 1)
+    assert.deepEqual(calls[0], ['remote', 'projects.setRouting', 'project', ['Storefront', 'Payments'], ''])
+    finish()
+    await settle()
+    assert.equal(closed, 0)
+    assert.equal(input().props.value, 'Storefront, Payments')
+    assert.ok(nodes(render()).some((node) => node.props.children === 'Host unavailable'))
+    fail = false
+    save().props.onPress()
+    finish()
+    await settle()
+    assert.equal(closed, 1)
+    hooks.dispose()
+  })
 }
 
 for (const os of ['android', 'ios']) {
@@ -843,6 +1042,8 @@ for (const os of ['ios', 'android']) {
     const calls = [],
       destinations = []
     const store = {
+      drafts: {},
+      rememberExplorer() {},
       projects: [{ id: 'remote:p', computerId: 'remote', name: 'Project' }],
       computers: [{ id: 'remote', name: 'Server' }],
       isOnline: () => true,
@@ -1301,6 +1502,8 @@ for (const os of ['ios', 'android']) {
       'src/deep': [{ name: 'README.md', path: 'src/deep/README.md', kind: 'file' }],
     }
     const store = {
+      drafts: {},
+      rememberExplorer() {},
       projects: [],
       computers: [
         { id: 'a', name: 'Laptop' },
@@ -2631,6 +2834,8 @@ for (const os of ['ios', 'android']) {
     let params = { computer: 'a', ctx: 'project:p' }
     let finishPage
     const store = {
+      drafts: {},
+      rememberExplorer() {},
       projects: [],
       computers: [
         { id: 'a', name: 'Laptop' },

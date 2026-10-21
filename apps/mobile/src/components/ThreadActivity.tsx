@@ -40,6 +40,8 @@ export function ThreadActivity({ chat }: { chat: Chat }) {
       goal: id
         ? {
             active: 'Tujuan aktif',
+            verifying: 'Memverifikasi tujuan',
+            'turn-limit': 'Batas giliran tujuan tercapai',
             paused: 'Tujuan dijeda',
             provider: 'Tujuan menunggu penyedia',
             blocked: 'Tujuan terhambat',

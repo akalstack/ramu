@@ -22,6 +22,13 @@ interface Pending {
   resolve: (task: Task) => void
   reject: (error: unknown) => void
 }
+interface TitleWait {
+  taskId: string
+  sessionId: string
+  revision: number
+  settings: string
+  dueAt: number
+}
 
 /** Owns title scheduling and receipts; inference stays in the existing isolated analysis path. */
 export class ThreadTitles {
@@ -44,12 +51,65 @@ export class ThreadTitles {
 
   private readonly waits = new Map<string, NodeJS.Timeout>()
 
-  private wait(taskId: string, settings: AgentSettings, ms: number): void {
+  private clearWait(taskId: string): void {
     clearTimeout(this.waits.get(taskId))
-    const timer = setTimeout(() => {
-      this.waits.delete(taskId)
-      if (!this.stopping) void this.generate(taskId, settings).catch(() => {})
-    }, ms)
+    this.waits.delete(taskId)
+    this.db.prepare('DELETE FROM task_title_waits WHERE task_id = ?').run(taskId)
+  }
+
+  private wait(session: AgentSessionInfo, ms: number): void {
+    const state = this.db
+      .prepare(
+        "SELECT title_revision AS revision FROM tasks WHERE id = ? AND title_source = 'prompt' AND title_auto_attempted = 0",
+      )
+      .get(session.taskId) as { revision: number } | undefined
+    if (!state) return
+    const previous = this.db
+      .prepare(
+        'SELECT session_id AS sessionId, due_at AS dueAt FROM task_title_waits WHERE task_id = ? AND revision = ?',
+      )
+      .get(session.taskId, state.revision) as { sessionId: string; dueAt: number } | undefined
+    const dueAt = Math.min(Date.now() + ms, previous?.sessionId === session.id ? previous.dueAt : Infinity)
+    const wait: TitleWait = {
+      taskId: session.taskId,
+      sessionId: session.id,
+      revision: state.revision,
+      settings: JSON.stringify(session.settings),
+      dueAt,
+    }
+    this.db
+      .prepare(
+        `INSERT INTO task_title_waits(task_id, session_id, revision, settings, due_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(task_id) DO UPDATE SET session_id=excluded.session_id, revision=excluded.revision, settings=excluded.settings, due_at=excluded.due_at`,
+      )
+      .run(wait.taskId, wait.sessionId, wait.revision, wait.settings, wait.dueAt)
+    this.armWait(wait)
+  }
+
+  private armWait(wait: TitleWait): void {
+    const { taskId } = wait
+    clearTimeout(this.waits.get(taskId))
+    const timer = setTimeout(
+      () => {
+        this.waits.delete(taskId)
+        if (this.stopping) return
+        try {
+          const current = this.db
+            .prepare('SELECT 1 FROM tasks WHERE id = ? AND title_revision = ?')
+            .get(taskId, wait.revision)
+          const session = this.agents.get(wait.sessionId)
+          if (!current || session.taskId !== taskId || this.agents.list(taskId).at(-1)?.id !== wait.sessionId) {
+            this.clearWait(taskId)
+            return
+          }
+          // Request stores its generation receipt and removes the wait in the same transaction.
+          void this.generate(taskId, JSON.parse(wait.settings) as AgentSettings).catch(() => {})
+        } catch {
+          this.clearWait(taskId)
+        }
+      },
+      Math.max(0, Math.min(wait.dueAt - Date.now(), this.turnLimitMs)),
+    )
     timer.unref()
     this.waits.set(taskId, timer)
   }
@@ -72,8 +132,7 @@ export class ThreadTitles {
         .prepare('SELECT title_source AS source, title_needs_refinement AS refine FROM tasks WHERE id = ?')
         .get(session.taskId) as { source: string; refine: number } | undefined
       if (!state || state.source === 'manual' || (state.source !== 'prompt' && !state.refine)) return null
-      clearTimeout(this.waits.get(session.taskId))
-      this.waits.delete(session.taskId)
+      this.clearWait(session.taskId)
       const task = this.workspace.setGeneratedTitle(session.taskId, title, false, undefined, false, 'provider')
       this.db.prepare('UPDATE tasks SET title_auto_attempted = 1 WHERE id = ?').run(session.taskId)
       this.pending.get(session.taskId)?.controller.abort()
@@ -89,14 +148,14 @@ export class ThreadTitles {
     // Owned children have their own sessions but are absent from the task's top-level conversation list.
     try {
       const session = this.agents.get(sessionId)
-      if (!this.agents.list(session.taskId).some((s) => s.id === sessionId)) return
+      if (this.agents.list(session.taskId).at(-1)?.id !== sessionId) return
       if (event.kind === 'user') {
         if (this.suppliesTitles(session)) {
-          if (!this.waits.has(session.taskId)) this.wait(session.taskId, session.settings, this.turnLimitMs)
+          this.wait(session, this.turnLimitMs)
         } else void this.generate(session.taskId, session.settings).catch(() => {})
       } else if (event.kind === 'result') {
         // Failed or interrupted turns also end the wait so fallback is never blocked by a provider that stays silent.
-        if (this.waits.has(session.taskId)) this.wait(session.taskId, session.settings, this.graceMs)
+        if (this.waits.has(session.taskId)) this.wait(session, this.graceMs)
         if (!event.isError) this.refine(session.taskId, session.settings)
       }
     } catch {
@@ -106,8 +165,7 @@ export class ThreadTitles {
 
   rename(taskId: string, title: string): Task {
     const task = this.workspace.renameTask(taskId, title)
-    clearTimeout(this.waits.get(taskId))
-    this.waits.delete(taskId)
+    this.clearWait(taskId)
     this.pending.get(taskId)?.controller.abort()
     return task
   }
@@ -125,13 +183,16 @@ export class ThreadTitles {
       title_needs_refinement AS refine, title_refinement_attempted AS refined FROM tasks WHERE id = ?`,
       )
       .get(taskId) as { source: string; attempted: number; refine: number; refined: number }
-    if (kind === 'automatic' && (state.source !== 'prompt' || state.attempted))
+    if (kind === 'automatic' && (state.source !== 'prompt' || state.attempted)) {
+      this.clearWait(taskId)
       return this.pending.get(taskId)?.promise ?? Promise.resolve(current)
+    }
     if (kind === 'refinement' && (state.source !== 'ai' || !state.refine || state.refined))
       return Promise.resolve(current)
     this.db.exec('BEGIN')
     let revision: number
     try {
+      this.db.prepare('DELETE FROM task_title_waits WHERE task_id = ?').run(taskId)
       this.db
         .prepare(
           `UPDATE tasks SET title_revision = title_revision + 1, title_generation_state = 'pending',
@@ -154,6 +215,8 @@ export class ThreadTitles {
       this.db.exec('ROLLBACK')
       throw error
     }
+    clearTimeout(this.waits.get(taskId))
+    this.waits.delete(taskId)
     this.changed()
     return this.enqueue({ taskId, revision, kind, settings: JSON.stringify(settings), attempts: 0 })
   }
@@ -285,6 +348,34 @@ export class ThreadTitles {
 
   /** Retry interrupted work at most once across restarts; settled failures wait for an explicit action. */
   recover(): void {
+    if (this.stopping) return
+    const waits = this.db
+      .prepare(
+        `SELECT w.task_id AS taskId, w.session_id AS sessionId, w.revision, w.settings, w.due_at AS dueAt
+      FROM task_title_waits w JOIN tasks t ON t.id = w.task_id
+      WHERE t.title_revision = w.revision AND t.title_source = 'prompt' AND t.title_auto_attempted = 0`,
+      )
+      .all() as unknown as TitleWait[]
+    this.db
+      .prepare(
+        `DELETE FROM task_title_waits WHERE NOT EXISTS (SELECT 1 FROM tasks t
+      WHERE t.id = task_title_waits.task_id AND t.title_revision = task_title_waits.revision
+      AND t.title_source = 'prompt' AND t.title_auto_attempted = 0)`,
+      )
+      .run()
+    for (const wait of waits) {
+      if (this.waits.has(wait.taskId) || this.pending.has(wait.taskId)) continue
+      try {
+        const session = this.agents.get(wait.sessionId)
+        if (session.taskId !== wait.taskId || this.agents.list(wait.taskId).at(-1)?.id !== session.id) {
+          this.clearWait(wait.taskId)
+          continue
+        }
+        this.armWait({ ...wait, dueAt: this.suppliesTitles(session) ? wait.dueAt : Date.now() })
+      } catch {
+        this.clearWait(wait.taskId)
+      }
+    }
     const jobs = this.db
       .prepare(
         `SELECT j.task_id AS taskId, j.revision, j.kind, j.settings, j.attempts

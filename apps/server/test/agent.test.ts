@@ -141,6 +141,54 @@ beforeEach(() => {
 afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
 describe('AgentService', () => {
+  it('keeps native helper outcomes truthful and excludes advisors and recovered work from active overview rows', async () => {
+    const svc = new AgentService(db, () => {}, demoQuery)
+    const parent = svc.start('t', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
+    await until(() => svc.get(parent.id).state === 'idle')
+    const record = (task: AgentTask) =>
+      (svc as unknown as { record(id: string, event: AgentEvent): void }).record(parent.id, { kind: 'agent', ...task })
+    record({ agentId: 'stopped', name: 'Stopped', status: 'running' })
+    record({ agentId: 'stopped', name: 'Stopped', status: 'stopped' })
+    record({ agentId: 'stopped', name: 'Late progress', status: 'running', background: true })
+    record({ agentId: 'failed', name: 'Failed', status: 'failed' })
+    record({ agentId: 'advisor', name: 'Advisor', status: 'running', taskType: 'advisor' })
+    record({ agentId: 'recovered', name: 'Recovered', status: 'running', background: true, recovered: true })
+    const rows = svc.all().filter((session) => session.nativeTask)
+    expect(rows.find((session) => session.nativeTask?.agentId === 'stopped')?.state).toBe('stopped')
+    expect(rows.find((session) => session.nativeTask?.agentId === 'failed')?.state).toBe('failed')
+    expect(rows.find((session) => session.nativeTask?.agentId === 'recovered')?.state).toBe('idle')
+    expect(rows.some((session) => session.nativeTask?.taskType === 'advisor')).toBe(false)
+    svc.stopAll()
+    const restored = new AgentService(db, () => {}, demoQuery)
+    expect(
+      restored
+        .all()
+        .filter((session) => session.nativeTask)
+        .every((session) => session.state !== 'running'),
+    ).toBe(true)
+    restored.stopAll()
+  })
+
+  it('records one human background stop per session without waking idle work, including after restart', async () => {
+    const svc = new AgentService(db, (id, event) => events.push({ id, event }), demoQuery)
+    const session = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
+    await until(() => svc.get(session.id).state === 'idle')
+    const before = svc.events(session.id).length
+    svc.recordBackgroundTerminalStop('t2', 'other', 'other command')
+    expect(svc.events(session.id)).toHaveLength(before)
+    svc.recordBackgroundTerminalStop('t', 'terminal-1', 'pnpm dev')
+    svc.recordBackgroundTerminalStop('t', 'terminal-1', 'pnpm dev')
+    expect(svc.events(session.id).filter((e) => e.kind === 'background-terminal-stop')).toEqual([
+      expect.objectContaining({ terminalId: 'terminal-1', command: 'pnpm dev' }),
+    ])
+    expect(svc.get(session.id).state).toBe('idle')
+    svc.stopAll()
+    const restored = new AgentService(db, () => {}, demoQuery)
+    restored.recordBackgroundTerminalStop('t', 'terminal-1', 'pnpm dev')
+    expect(restored.events(session.id).filter((e) => e.kind === 'background-terminal-stop')).toHaveLength(1)
+    restored.stopAll()
+  })
+
   it.each(['stop', 'configure'] as const)('closes provider prompts when %s detaches their runner', async (action) => {
     let starts = 0
     const settings = { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' as const, access: 'auto' as const }

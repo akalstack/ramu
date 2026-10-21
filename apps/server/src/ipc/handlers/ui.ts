@@ -10,6 +10,8 @@ const viewSchema = z.discriminatedUnion('kind', [
     sessionId: id,
     repoId: id.optional(),
     sourceSeq: z.number().int().positive().optional(),
+    sourceRequestId: id.optional(),
+    focusRequestId: id.optional(),
   }),
   z.object({
     kind: z.literal('file'),
@@ -57,7 +59,16 @@ const viewSchema = z.discriminatedUnion('kind', [
     threadId: id.optional(),
     requestId: id.optional(),
   }),
-  z.object({ kind: z.literal('browser'), id, url: z.string().max(4000).optional() }),
+  z.object({
+    kind: z.literal('browser'),
+    id,
+    url: z.string().max(4000).optional(),
+    tabId: z.string().uuid().optional(),
+    profileId: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
+      .optional(),
+  }),
   z.object({ kind: z.literal('terminal'), id, repoId: id.optional(), backgroundId: z.string().uuid().optional() }),
 ])
 const taskUiSchema = z.object({

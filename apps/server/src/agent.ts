@@ -1,6 +1,7 @@
 // Structured agent service: the façade over the collaborators in ./agent/. Each owns one slice of the state (sessions,
 // queue, goals, routing, sub-agents, ...); this class builds them, wires their hosts and exposes the public API.
 import { mcpRequest, mcpServerDetails } from './agent/mcpStatus'
+import { latestTasks } from '@ramu/shared/chat/agentTasks'
 import { PermissionApprovals } from './agent/permissionApprovals'
 import { providerBinary } from './providers/providerBinaries'
 import { DEFAULT_RUNNERS, sameRunnerForAll } from './providers/runners'
@@ -11,7 +12,6 @@ import type {
   AgentMcpStatus,
   AppPreferences,
   AgentEvent,
-  AgentTask,
   AgentScope,
   AgentSessionInfo,
   AgentProvider,
@@ -333,6 +333,19 @@ export class AgentService {
     this.record(sessionId, { kind: 'schedule', schedule })
   }
 
+  /** Preserve a person's stop in the conversation without sending a new request or waking the agent. */
+  recordBackgroundTerminalStop(taskId: string, terminalId: string, command: string): void {
+    for (const session of this.list(taskId)) {
+      if (
+        this.events(session.id).some(
+          (event) => event.kind === 'background-terminal-stop' && event.terminalId === terminalId,
+        )
+      )
+        continue
+      this.record(session.id, { kind: 'background-terminal-stop', terminalId, command })
+    }
+  }
+
   recordFileRestore(id: string, userSeq: number, fileCount: number): void {
     this.record(id, { kind: 'file-restore', userSeq, fileCount })
   }
@@ -491,33 +504,57 @@ export class AgentService {
 
   all() {
     const sessions = this.parts.store.all()
-    const ids = new Set(sessions.map((session) => session.id))
+    const byId = new Map(sessions.map((session) => [session.id, session]))
     const native = this.db
-      .prepare("SELECT session_id, event FROM agent_events WHERE json_extract(event,'$.kind')='agent'")
+      .prepare("SELECT session_id, event FROM agent_events WHERE json_extract(event,'$.kind')='agent' ORDER BY seq")
       .all() as { session_id: string; event: string }[]
-    const rows = new Map<string, AgentSessionInfo>()
+    const byParent = new Map<string, AgentEvent[]>()
     for (const row of native) {
-      const task = JSON.parse(row.event) as AgentTask
-      const parent = sessions.find((s) => s.id === row.session_id && !s.parentId)
-      if (!parent || ids.has(task.agentId) || task.taskType === 'local_bash') continue
+      const events = byParent.get(row.session_id) ?? []
+      events.push(JSON.parse(row.event) as AgentEvent)
+      byParent.set(row.session_id, events)
+    }
+    const rows: AgentSessionInfo[] = []
+    for (const { parentId, task } of [...byParent].flatMap(([parentId, events]) =>
+      latestTasks(events).map((task) => ({ parentId, task })),
+    )) {
+      const parent = byId.get(parentId)
+      const child = byId.get(task.childSessionId ?? task.agentId)
+      if (
+        !parent ||
+        parent.parentId ||
+        child?.parentId === parent.id ||
+        task.taskType === 'local_bash' ||
+        task.taskType === 'advisor'
+      )
+        continue
+      const live = this.parts.registry.live.has(parent.id) || this.parts.registry.runners.has(parent.id)
       const running =
         task.status === 'running' &&
-        (['running', 'starting', 'needs-input'].includes(parent.state) || (parent.state === 'idle' && task.background))
-      rows.set(`${parent.id}:${task.agentId}`, {
+        !task.recovered &&
+        (['running', 'starting', 'needs-input'].includes(parent.state) ||
+          (parent.state === 'idle' && task.background && live))
+      rows.push({
         ...parent,
         id: `native:${parent.id}:${task.agentId}`,
         parentId: parent.id,
         title: task.name,
         provider: task.provider ?? parent.provider,
         settings: { ...parent.settings, model: task.model ?? parent.settings.model },
-        state: running ? 'running' : task.status === 'failed' ? 'failed' : 'idle',
+        state: running
+          ? 'running'
+          : task.status === 'failed'
+            ? 'failed'
+            : task.status === 'stopped'
+              ? 'stopped'
+              : 'idle',
         pendingInput: false,
         inputSummary: null,
         waitingUntil: null,
         nativeTask: task,
       })
     }
-    return [...sessions, ...rows.values()]
+    return [...sessions, ...rows]
   }
 
   get(...args: Parameters<SessionStore['get']>) {
