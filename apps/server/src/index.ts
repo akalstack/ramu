@@ -65,7 +65,10 @@ import { HostBrowser } from './browser/hostBrowser'
 import { MacosComputerBackend } from './computer/macos'
 import { OcuBackend } from './computer/ocu'
 import { SckDisplayBackend } from './computer/sck'
+import { KeepAwake } from './computer/awake'
 import { BrokerHub } from './computer/broker'
+import { RtcViewers } from './computer/rtc'
+import { VideoFeed } from './computer/video'
 import { ComputerRouter } from './computer/router'
 import { ComputerService } from './computer/service'
 import { COMPUTER_GUIDE, registerComputerTools } from './computer/tools'
@@ -165,20 +168,31 @@ const clients = new Set<ServerResponse>()
 // Only clients on the local socket can answer native dialogs; a remote client's folder picker would open on the wrong machine.
 const hostClients = new Set<ServerResponse>()
 const desktopClients = new Map<string, ServerResponse>()
-const hostBrowser = new HostBrowser(join(userData, 'host-browser'), () => {
-  for (const client of clients) if (!client.destroyed && client.writableLength < 1024 * 1024)
-    client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:changed', payload: {} })}\n\n`)
-}, tab => {
-  for (const client of clients) if (!client.destroyed && client.writableLength < 1024 * 1024)
-    client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:present', payload: tab })}\n\n`)
-})
-const browserBroker = new DesktopBrowserBroker((clientId, request) => {
-  const client = desktopClients.get(clientId)
-  if (!client || client.destroyed || client.writableLength > 1024 * 1024) return false
-  return (
-    client.write(`data: ${JSON.stringify({ channel: 'browser:operation', payload: request })}\n\n`) || !client.destroyed
-  )
-}, 30000, hostBrowser)
+const hostBrowser = new HostBrowser(
+  join(userData, 'host-browser'),
+  () => {
+    for (const client of clients)
+      if (!client.destroyed && client.writableLength < 1024 * 1024)
+        client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:changed', payload: {} })}\n\n`)
+  },
+  (tab) => {
+    for (const client of clients)
+      if (!client.destroyed && client.writableLength < 1024 * 1024)
+        client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:present', payload: tab })}\n\n`)
+  },
+)
+const browserBroker = new DesktopBrowserBroker(
+  (clientId, request) => {
+    const client = desktopClients.get(clientId)
+    if (!client || client.destroyed || client.writableLength > 1024 * 1024) return false
+    return (
+      client.write(`data: ${JSON.stringify({ channel: 'browser:operation', payload: request })}\n\n`) ||
+      !client.destroyed
+    )
+  },
+  30000,
+  hostBrowser,
+)
 const nativeRequests = new Map<
   string,
   { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
@@ -215,7 +229,16 @@ const mobilePush = new MobilePush(
   (sessionId) => schedules.hasSession(sessionId),
 )
 const computerBroker = new BrokerHub()
-const computer = new ComputerService(new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), new OcuBackend()))
+const computerVideo = new RtcViewers(new VideoFeed(), (threadId, deviceId) => {
+  const access = computer.viewerAccess(threadId, deviceId)
+  return access.observe && !!computer.session(threadId)
+})
+const keepAwake = new KeepAwake()
+const computer = new ComputerService(
+  new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), new OcuBackend()),
+  Date.now,
+  keepAwake,
+)
 const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {
@@ -357,8 +380,8 @@ const dispatcher = createDispatcher(
   {
     userData,
     canAdministerIntegrations: () => origin.getStore()?.network !== true,
-    browserDevice: () => origin.getStore()?.network ? origin.getStore()?.deviceId : 'local',
-    browserGrantEligible: id => devices.list().some(device => device.id === id && device.role !== 'viewer'),
+    browserDevice: () => (origin.getStore()?.network ? origin.getStore()?.deviceId : 'local'),
+    browserGrantEligible: (id) => devices.list().some((device) => device.id === id && device.role !== 'viewer'),
     send,
     native: (method, path) => {
       if (origin.getStore()?.network)
@@ -392,6 +415,7 @@ const dispatcher = createDispatcher(
     hostBrowser,
     computer,
     computerBroker,
+    computerVideo,
     terminals,
     agents,
     threadTitles,
@@ -422,6 +446,8 @@ async function stop(intentional = false) {
   if (!intentional) agents.prepareForRestart()
   reviews.stop()
   await threadTitles?.stop()
+  computerVideo.closeAll()
+  keepAwake.releaseAll()
   agents.stopAll(!intentional)
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))

@@ -404,3 +404,86 @@ describe('computer broker', () => {
     expect(hub.list()).toEqual([])
   })
 })
+
+describe('h264 packetizing', () => {
+  it('splits Annex-B into NAL units and fragments large ones with the marker on the last packet', async () => {
+    const { splitNalus, packetizeH264 } = await import('../src/computer/video')
+    const sps = Buffer.from([0x67, 1, 2, 3])
+    const idr = Buffer.concat([Buffer.from([0x65]), Buffer.alloc(3000, 7)])
+    const stream = Buffer.concat([Buffer.from([0, 0, 0, 1]), sps, Buffer.from([0, 0, 1]), idr])
+    const nalus = splitNalus(stream)
+    expect(nalus).toHaveLength(2)
+    expect(nalus[0]).toEqual(sps)
+    expect(nalus[1]).toEqual(idr)
+    const state = { sequence: 65534, ssrc: 1234, payloadType: 102 }
+    const packets = packetizeH264(nalus, 9000, state)
+    expect(packets[0]!.payload).toEqual(sps)
+    const fragments = packets.slice(1)
+    expect(fragments.length).toBeGreaterThan(2)
+    expect(fragments[0]!.payload[0]! & 0x1f).toBe(28)
+    expect(fragments[0]!.payload[1]! & 0x80).toBe(0x80)
+    expect(fragments.at(-1)!.payload[1]! & 0x40).toBe(0x40)
+    expect(packets.map((packet) => packet.header.marker)).toEqual([...packets.slice(0, -1).map(() => false), true])
+    expect(packets.map((packet) => packet.header.sequenceNumber).slice(0, 3)).toEqual([65534, 65535, 0])
+    // Reassembling the fragments restores the original NAL unit.
+    const rebuilt = Buffer.concat([
+      Buffer.from([(fragments[0]!.payload[0]! & 0xe0) | (fragments[0]!.payload[1]! & 0x1f)]),
+      ...fragments.map((packet) => packet.payload.subarray(2)),
+    ])
+    expect(rebuilt).toEqual(idr)
+  })
+
+  it('parses a key frame message from the helper', async () => {
+    const { FrameParser } = await import('../src/computer/sck')
+    const body = Buffer.concat([Buffer.from([1]), Buffer.from([0, 0, 0, 1, 0x65, 9])])
+    const header = Buffer.alloc(5)
+    header.writeUInt32BE(body.length + 1, 0)
+    header[4] = 3
+    expect(new FrameParser().push(Buffer.concat([header, body]))).toEqual([
+      { kind: 3, key: true, annexB: Buffer.from([0, 0, 0, 1, 0x65, 9]) },
+    ])
+  })
+})
+
+describe('keep awake', () => {
+  it('holds the Mac awake while any thread has access and lets go after the last one', async () => {
+    const { KeepAwake } = await import('../src/computer/awake')
+    const kills: number[] = []
+    const children: { kill(): void; once(): void }[] = []
+    const awake = new KeepAwake(
+      (() => {
+        const child = { kill: () => kills.push(1), once: () => {} }
+        children.push(child)
+        return child
+      }) as never,
+      'darwin',
+    )
+    awake.acquire('a')
+    awake.acquire('b')
+    expect(children).toHaveLength(1)
+    expect(awake.active).toBe(true)
+    awake.release('a')
+    expect(kills).toHaveLength(0)
+    awake.release('b')
+    expect(kills).toHaveLength(1)
+    expect(awake.active).toBe(false)
+    expect(
+      new KeepAwake(() => {
+        throw new Error('unused')
+      }, 'linux').acquire('a'),
+    ).toBeUndefined()
+  })
+
+  it('is held for the life of a grant', async () => {
+    const { KeepAwake } = await import('../src/computer/awake')
+    const acquire = vi.fn()
+    const release = vi.fn()
+    const service = new ComputerService(fake().backend, Date.now, { acquire, release } as unknown as InstanceType<
+      typeof KeepAwake
+    >)
+    service.grant('t', grant)
+    service.revoke('t')
+    expect(acquire).toHaveBeenCalledWith('t')
+    expect(release).toHaveBeenCalledWith('t')
+  })
+})

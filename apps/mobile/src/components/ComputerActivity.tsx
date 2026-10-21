@@ -9,6 +9,7 @@ import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
 import { Button, Sheet, T } from './ui'
+import { useComputerVideo, webrtc } from './useComputerVideo'
 
 type Frame = { uri: string; width: number; height: number; capturedAt: number; generation: number }
 
@@ -35,15 +36,22 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
   const [error, setError] = useState('')
   const [layout, setLayout] = useState({ width: 1, height: 1 })
   const [current, setCurrent] = useState(session)
-  const human = current.controller.kind === 'human' && !current.paused
   const taskId = chat.taskId!
+  const video = useComputerVideo(
+    chat.computerId,
+    taskId,
+    session.target.kind === 'display' && session.runtime.id === 'local',
+    active,
+  )
+  const live = video.status === 'live'
+  const human = current.controller.kind === 'human' && !current.paused
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => setActive(state === 'active'))
     return () => subscription.remove()
   }, [])
   // Frames stop and the last one is dropped when the app is backgrounded, so no screen lingers in the app switcher.
   useEffect(() => {
-    if (!active) {
+    if (!active || live) {
       setFrame(null)
       return
     }
@@ -85,8 +93,24 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
       clearTimeout(timer)
       void io.current.invoke(chat.computerId, 'computer.disconnect', taskId).catch(() => {})
     }
-  }, [active, chat.computerId, taskId])
-  const stale = !!frame && now - frame.capturedAt > COMPUTER_FRAME_STALE_MS
+  }, [active, live, chat.computerId, taskId])
+  // With video there is no frame to carry the control generation, so read the session once a second.
+  useEffect(() => {
+    if (!live || !active) return
+    let mounted = true
+    const read = () =>
+      void io.current.invoke(chat.computerId, 'computer.session', taskId).then(
+        (next) => mounted && next && setCurrent(next),
+        () => {},
+      )
+    read()
+    const timer = setInterval(read, 1000)
+    return () => {
+      mounted = false
+      clearInterval(timer)
+    }
+  }, [live, active, chat.computerId, taskId])
+  const stale = !live && !!frame && now - frame.capturedAt > COMPUTER_FRAME_STALE_MS
   const act = async (work: () => Promise<unknown>) => {
     try {
       await work()
@@ -96,12 +120,27 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
     }
   }
   const send = (action: ComputerAction) => {
+    if (live) {
+      if (human)
+        void act(() =>
+          io.current.invoke(chat.computerId, 'computer.input', taskId, current.generation, Date.now(), action),
+        )
+      return
+    }
     if (!frame || stale || !human) return
     void act(() =>
       io.current.invoke(chat.computerId, 'computer.input', taskId, frame.generation, frame.capturedAt, action),
     )
   }
-  const status = error ? error : !frame ? t('Connecting…') : stale ? t('Last frame') : t('Live')
+  const status = live
+    ? t('Live video')
+    : error
+      ? error
+      : !frame
+        ? t('Connecting…')
+        : stale
+          ? t('Last frame')
+          : t('Live')
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.canvas }}>
@@ -115,7 +154,38 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
           <T tone="muted" accessibilityLiveRegion="polite">
             {status}
           </T>
-          {frame ? (
+          {live && video.streamURL && webrtc() ? (
+            <Pressable
+              disabled={!human}
+              accessibilityRole="button"
+              accessibilityLabel={t('Computer screen')}
+              onLayout={(event) => setLayout(event.nativeEvent.layout)}
+              onPress={(event) =>
+                send({
+                  kind: 'click',
+                  x: Math.min(
+                    video.width - 1,
+                    Math.max(0, Math.round((event.nativeEvent.locationX / layout.width) * video.width)),
+                  ),
+                  y: Math.min(
+                    video.height - 1,
+                    Math.max(0, Math.round((event.nativeEvent.locationY / layout.height) * video.height)),
+                  ),
+                })
+              }
+            >
+              {(() => {
+                const { RTCView } = webrtc()!
+                return (
+                  <RTCView
+                    streamURL={video.streamURL}
+                    objectFit="contain"
+                    style={{ width: '100%', aspectRatio: video.width / video.height }}
+                  />
+                )
+              })()}
+            </Pressable>
+          ) : frame ? (
             <Pressable
               disabled={!human || stale}
               accessibilityRole="button"

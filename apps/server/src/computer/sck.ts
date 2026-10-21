@@ -12,7 +12,8 @@ import type {
 import SOURCE from '../../native/ramu-capture.swift?raw'
 import { ocuToolsDir } from './ocu'
 
-export type CaptureMessage = { kind: 1; json: Record<string, unknown> } | { kind: 2; jpeg: Buffer }
+export type CaptureMessage =
+  { kind: 1; json: Record<string, unknown> } | { kind: 2; jpeg: Buffer } | { kind: 3; key: boolean; annexB: Buffer }
 
 /** Splits the helper's stdout into messages: u32 big-endian length of (kind byte + payload), kind byte, payload. */
 export class FrameParser {
@@ -32,6 +33,8 @@ export class FrameParser {
       this.buffer = this.buffer.subarray(4 + length)
       if (kind === 1) out.push({ kind: 1, json: JSON.parse(payload.toString('utf8')) as Record<string, unknown> })
       else if (kind === 2) out.push({ kind: 2, jpeg: Buffer.from(payload) })
+      else if (kind === 3 && payload.length > 1)
+        out.push({ kind: 3, key: payload[0] === 1, annexB: Buffer.from(payload.subarray(1)) })
     }
     return out
   }
@@ -133,7 +136,7 @@ export class ScreenStream {
               height: Number(message.json.height),
               pointsWidth: Number(message.json.pointsWidth),
             }
-          else if (this.meta) {
+          else if (message.kind === 2 && this.meta) {
             const { width, height, pointsWidth } = this.meta
             this.latest = {
               data: message.jpeg.toString('base64'),

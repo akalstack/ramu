@@ -10,6 +10,7 @@ import { Input } from '@/components/desktop-input'
 import { Dropdown } from '../Menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { controllerLabel } from './computerLabels'
+import { useComputerVideo } from './useComputerVideo'
 import { ComputerSharing } from './ComputerSharing'
 import { ComposerTraySection } from '../composer/ComposerTraySection'
 
@@ -32,8 +33,30 @@ function Viewer({
   const [now, setNow] = useState(Date.now())
   const [text, setText] = useState('')
   const [error, setError] = useState('')
-  const human = session.controller.kind === 'human'
+  const video = useComputerVideo(taskId, session.target.kind === 'display' && session.runtime.id === 'local')
+  const live = video.status === 'live'
+  const [liveSession, setLiveSession] = useState(session)
+  const human = (live ? liveSession : session).controller.kind === 'human'
+  // With video there is no image to carry the control generation, so read it from the session once a second.
   useEffect(() => {
+    if (!live) return
+    let active = true
+    const read = () =>
+      void invoke('computer.session', taskId).then(
+        (next) => active && next && setLiveSession(next),
+        () => {},
+      )
+    read()
+    const timer = setInterval(read, 1000)
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [invoke, taskId, live])
+  // Closing the viewer ends human control's input even when the picture came as video.
+  useEffect(() => () => void invoke('computer.disconnect', taskId).catch(() => {}), [invoke, taskId])
+  useEffect(() => {
+    if (live) return
     let active = true
     let hash: string | undefined
     const tick = async () => {
@@ -64,12 +87,20 @@ function Viewer({
       // A human controller that closes the viewer pauses input rather than leaving it open unseen.
       void invoke('computer.disconnect', taskId).catch(() => {})
     }
-  }, [invoke, taskId])
-  const stale = !!frame && now - frame.capturedAt > COMPUTER_FRAME_STALE_MS
+  }, [invoke, taskId, live])
+  const stale = !live && !!frame && now - frame.capturedAt > COMPUTER_FRAME_STALE_MS
   const send = (action: ComputerAction) => {
+    if (live) {
+      void run(() => invoke('computer.input', taskId, liveSession.generation, Date.now(), action))
+      return
+    }
     if (!frame || stale) return
     void run(() => invoke('computer.input', taskId, frame.generation, frame.capturedAt, action))
   }
+  const videoElement = useRef<HTMLVideoElement>(null)
+  useEffect(() => {
+    if (videoElement.current) videoElement.current.srcObject = live ? video.stream : null
+  }, [live, video.stream])
   const image = useRef<HTMLImageElement>(null)
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -78,16 +109,43 @@ function Viewer({
           <DialogTitle>{session.target.name}</DialogTitle>
           <DialogDescription>
             {t(controllerLabel(session))} ·{' '}
-            {error
-              ? error
-              : !frame
-                ? t('Connecting…')
-                : stale
-                  ? t('Last frame · {0}', { 0: new Date(frame.capturedAt).toLocaleTimeString() })
-                  : t('Live')}
+            {live
+              ? t('Live video')
+              : error
+                ? error
+                : !frame
+                  ? t('Connecting…')
+                  : stale
+                    ? t('Last frame · {0}', { 0: new Date(frame.capturedAt).toLocaleTimeString() })
+                    : t('Live')}
           </DialogDescription>
         </DialogHeader>
-        {frame && (
+        {live && (
+          <video
+            ref={videoElement}
+            autoPlay
+            muted
+            playsInline
+            aria-label={t('Computer screen')}
+            className={human ? 'w-full cursor-crosshair rounded border' : 'w-full rounded border'}
+            onClick={(event) => {
+              if (!human || !videoElement.current || !video.width) return
+              const box = videoElement.current.getBoundingClientRect()
+              send({
+                kind: 'click',
+                x: Math.min(
+                  video.width - 1,
+                  Math.max(0, Math.round(((event.clientX - box.left) / box.width) * video.width)),
+                ),
+                y: Math.min(
+                  video.height - 1,
+                  Math.max(0, Math.round(((event.clientY - box.top) / box.height) * video.height)),
+                ),
+              })
+            }}
+          />
+        )}
+        {!live && frame && (
           <img
             ref={image}
             alt={t('Computer screen')}

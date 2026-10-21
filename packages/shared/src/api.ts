@@ -199,6 +199,13 @@ export interface RamuMethods {
     threadId: string,
     since?: string,
   ): ComputerFrameMeta & { id: string; hash: string } & ({ unchanged: true } | { unchanged?: undefined; mimeType: string; data: string })
+  /** Smooth video of the main display over WebRTC: send the viewer's offer, get the host's answer and the picture size. */
+  'computer.rtcOffer'(
+    threadId: string,
+    offer: string,
+  ): { id: string; sdp: string; width: number; height: number; scale: number }
+  'computer.rtcKeyFrame'(threadId: string, peerId: string): void
+  'computer.rtcClose'(threadId: string, peerId: string): void
   'computer.input'(threadId: string, generation: number, capturedAt: number, action: ComputerAction): void
   'computer.disconnect'(threadId: string): void
   'hostBrowser.status'(): { available: boolean; enabled?: boolean; location?: 'execution-host-chromium'; reason?: string }

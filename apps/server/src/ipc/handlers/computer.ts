@@ -48,6 +48,7 @@ const action = z.discriminatedUnion('kind', [
 export const registerComputerHandlers: RegisterHandlers = ({
   computer,
   computerBroker: broker,
+  computerVideo: video,
   host,
   workspace,
   agents,
@@ -321,6 +322,29 @@ export const registerComputerHandlers: RegisterHandlers = ({
         if (since === hash) return { ...meta, hash, unchanged: true as const }
         return { ...meta, hash, mimeType: capture.mimeType, data: capture.data }
       },
+    },
+    // Smooth video of the main display: the viewer's offer comes in, this host's answer goes back, and the stream is the
+    // shared hardware H.264 encode. Other targets, and viewers that cannot decode it, use the image frames above.
+    'computer.rtcOffer': {
+      args: z.tuple([id, z.string().min(20).max(60_000)]),
+      run: async (threadId: string, offer: string) => {
+        if (!video) throw new Error('Update this host for video.')
+        const session = viewer(threadId, false)
+        if (session.runtime.id !== 'local' || session.target.kind !== 'display')
+          throw new Error('Video is available for this computer’s main display. Use image frames for this target.')
+        return video.answer(threadId, device(), offer)
+      },
+    },
+    'computer.rtcKeyFrame': {
+      args: z.tuple([id, z.string().uuid()]),
+      run: (threadId: string, peerId: string) => {
+        viewer(threadId, false)
+        video?.keyFrame(peerId, device())
+      },
+    },
+    'computer.rtcClose': {
+      args: z.tuple([id, z.string().uuid()]),
+      run: (_threadId: string, peerId: string) => video?.closeFor(peerId, device()),
     },
     'computer.input': {
       args: z.tuple([id, z.number().int().min(0), z.number(), action]),
