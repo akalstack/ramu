@@ -8,6 +8,7 @@ import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
 import { readBuffer, readSelection } from '../editor/editorBuffers'
 import { buildComposerContext } from '@ramu/shared/chat/composerContext'
+import { acceptComposerTrigger, composerTrigger } from '@ramu/shared/chat/composerTrigger'
 import { notifyError } from '../chat/Notifications'
 import { useAppSettings } from '../settings/AppSettings'
 import { openReview } from '../git/reviews'
@@ -43,10 +44,9 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
   const [mentions, setMentions] = useState<{ file: { repoId: string; path: string }; insertion: string }[]>([])
   // Files dropped on the chat ride along as chips above the text, not as text in the box.
   const [pinned, setPinned] = useState<{ repoId: string; path: string }[]>([])
-  const prefix = value.slice(0, caret),
-    trigger = prefix.match(/(?:^|\s)([@/])([^\s]*)$/)
-  const mode = trigger?.[1],
-    query = trigger?.[2]?.toLowerCase() ?? ''
+  const trigger = composerTrigger(value, caret)
+  const mode = trigger?.mode,
+    query = trigger?.query.toLowerCase() ?? ''
   const signature = `${scope}:${caret}:${mode}:${query}`,
     visible = !!mode && dismissed !== signature
   useEffect(() => {
@@ -237,10 +237,10 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
             file,
           }))
         : [
-            ...commands,
+            ...(mode === '/' ? commands : []),
             ...skills.map((s): Choice => ({
               id: `skill:${s.path}`,
-              label: `/${s.name}`,
+              label: `${mode}${s.name}`,
               description: s.description,
               kind: 'Skill',
               insertion: `$${s.name} `,
@@ -300,7 +300,8 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
     setPinned((current) => current.filter((entry) => entry.repoId !== file.repoId || entry.path !== file.path))
   return {
     listId,
-    visible,
+    // `$` is ordinary text unless a skill matches, so it never shows an empty picker.
+    visible: visible && !(mode === '$' && !loading && choices.length === 0),
     choices,
     mention,
     pinned,
@@ -316,12 +317,11 @@ export function useComposerSuggestions(value: string, caret: number, scopeId?: s
     move: (delta: number) => setSelected((i) => (i + delta + choices.length) % Math.max(1, choices.length)),
     dismiss: () => setDismissed(signature),
     choose: (choice: Choice) => {
-      const start = prefix.length - (trigger?.[2]?.length ?? 0) - 1
       const insertion = choice.insertion ?? ''
       if (choice.file) setMentions((m) => [...m, { file: choice.file!, insertion }])
       choice.action?.()
       setDismissed(signature)
-      return { value: value.slice(0, start) + insertion + value.slice(caret), caret: start + insertion.length }
+      return trigger ? acceptComposerTrigger(value, caret, trigger, insertion) : { value, caret }
     },
   }
 }

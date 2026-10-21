@@ -86,6 +86,22 @@ it('loads slash skills without scanning files and keeps long skill text constrai
   expect(html).toContain('block truncate')
 })
 
+it('lists only skills after $ and inserts the skill reference', async () => {
+  state.invoke.mockResolvedValue([{ name: 'review', path: '/skill', description: 'Review changes' }])
+  const suggestions = await load('please $rev')
+  expect(state.invoke).toHaveBeenCalledExactlyOnceWith('skills.list', 'task')
+  expect(suggestions.visible).toBe(true)
+  expect(suggestions.choices.map((choice) => choice.label)).toEqual(['$review'])
+  expect(suggestions.choose(suggestions.choices[0]!).value).toBe('please $review ')
+})
+
+it('keeps $ as plain text when no skill matches', async () => {
+  state.invoke.mockResolvedValue([{ name: 'review', path: '/skill', description: 'Review changes' }])
+  expect((await load('costs $5')).visible).toBe(false)
+  expect(state.invoke).not.toHaveBeenCalled()
+  expect((await load('echo $HOME')).visible).toBe(false)
+})
+
 it('shows file loading failures and no stale file choices', async () => {
   state.invoke.mockRejectedValue(new Error('Host disconnected'))
   const suggestions = await load('@')

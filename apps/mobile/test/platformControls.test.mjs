@@ -14,6 +14,7 @@ import * as explorerScopes from '../../../packages/shared/src/workspace/explorer
 import * as explorerDrafts from '../src/runtime/composerDrafts.ts'
 import * as localCommitStorage from '../src/storage/localCommit.ts'
 import * as fileContextKeys from '../../../packages/shared/src/chat/fileContext.ts'
+import * as composerTriggers from '../../../packages/shared/src/chat/composerTrigger.ts'
 import * as agentDraftModel from '../../../packages/shared/src/workspace/agentDefaults.ts'
 
 const require = createRequire(import.meta.url)
@@ -100,6 +101,7 @@ function load(file, os, overrides = {}, globals = {}) {
         }
       if (id.endsWith('/composerDrafts')) return explorerDrafts
       if (id === '@ramu/shared/chat/fileContext') return fileContextKeys
+      if (id === '@ramu/shared/chat/composerTrigger') return composerTriggers
       if (id.endsWith('/theme')) return theme
       if (id === 'react' || id === 'react/jsx-runtime') return require(id)
       return components
