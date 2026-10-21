@@ -51,7 +51,7 @@ export function HostingAccounts() {
       <SettingsRow>
         <SettingsLabel title="GitHub" help={connectionHeadline(summary, failed)} />
         <span className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" disabled={busy} onClick={check}>
+          <Button variant="secondary" size="sm" aria-busy={busy} onClick={check}>
             {busy ? t('Checking…') : t('Check connection')}
           </Button>
           {summary && summary.accounts.length > 0 && (

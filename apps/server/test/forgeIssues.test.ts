@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,5 +29,16 @@ it('lists no issues for a folder that is not a Git repository, without running g
     dispatcher.close()
     list.mockRestore()
     rmSync(tmp, { recursive: true, force: true })
+  }
+})
+
+it('lists no issues, rather than failing, when the repository has no GitHub remote', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-issues-remote-'))
+  try {
+    execFileSync('git', ['init', '-q'], { cwd: dir })
+    execFileSync('git', ['remote', 'add', 'origin', 'https://example.invalid/team/repo.git'], { cwd: dir })
+    await expect(forge.listIssues(dir, '')).resolves.toEqual([])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 })

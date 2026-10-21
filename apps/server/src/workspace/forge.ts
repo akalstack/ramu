@@ -503,7 +503,13 @@ interface RawIssue {
 export async function listIssues(cwd: string, search: string): Promise<IssueSummary[]> {
   const args = ['issue', 'list', '--state', 'open', '--limit', '50', '--json', 'number,title,url,labels,updatedAt']
   if (search.trim()) args.push('--search', search.trim())
-  const raw = JSON.parse(await gh(cwd, args)) as RawIssue[]
+  // No GitHub remote, a signed-out CLI or no CLI means no issues, not a failure.
+  const output = await gh(cwd, args).catch((error) => {
+    if (error instanceof ForgeError && error.availability) return null
+    throw error
+  })
+  if (output === null) return []
+  const raw = JSON.parse(output) as RawIssue[]
   return raw.map((issue) => ({
     number: issue.number,
     title: issue.title,
