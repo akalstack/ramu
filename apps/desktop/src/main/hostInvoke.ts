@@ -20,6 +20,7 @@ const DOMAINS = new Set([
   'files',
   'git',
   'forge',
+  'computer',
   'reviews',
   'skills',
   'memory',
@@ -65,7 +66,7 @@ export const isHostInvokeAllowed = (method: unknown): method is string =>
 /** Operations the Settings window may run on a chosen host through `computers.settings.invoke`. */
 export const isSettingsActionAllowed = (operation: unknown): operation is string =>
   typeof operation === 'string' &&
-  /^(mcp\.|providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|rules\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.(list|setup)$|diagnostics\.(export|clear)$)/.test(
+  /^(mcp\.|providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|rules\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.(list|setup)$|forge\.connections$|computer\.(status|setEnabled)$|diagnostics\.(export|clear)$)/.test(
     operation,
   )
 

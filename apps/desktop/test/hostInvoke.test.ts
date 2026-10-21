@@ -146,6 +146,12 @@ describe('isSettingsActionAllowed', () => {
     ])
       expect(isSettingsActionAllowed(operation)).toBe(true)
   })
+  it('lets Settings check GitHub sign-in and computer use, and nothing else under forge or computer', () => {
+    for (const operation of ['forge.connections', 'computer.status', 'computer.setEnabled'])
+      expect(isSettingsActionAllowed(operation)).toBe(true)
+    for (const operation of ['forge.createPullRequest', 'computer.grant', 'computer.input'])
+      expect(isSettingsActionAllowed(operation)).toBe(false)
+  })
   it('keeps thread, file and unlisted project actions out', () => {
     for (const operation of ['agent.start', 'files.write', 'projects.remove', 'settings.permissions.add', 'rulesx', 42])
       expect(isSettingsActionAllowed(operation)).toBe(false)
