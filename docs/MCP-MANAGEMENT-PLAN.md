@@ -57,6 +57,8 @@ Bind the grant to the execution host, stable connection and upstream service-acc
 
 Plan usage decides when routing should consider another account; the saved account-setup option supplies consent for reusing existing Shared MCP access. Signing in with reuse turned off does not create that grant. Do not infer trust from similar emails, previous usage percentages or a matching display name. Disconnect/revoke and removing an account take effect for new invocations immediately; in-flight writes retain their outcome record.
 
+**Already in place:** Settings → Providers shows **Share MCP approvals** on each login of a provider with accounts (visible to the host's administrator only), a newly added backup account starts with it on, removing an account drops it from shared approvals (`mcp.account`, `mcp.removeAccount`), and the policy core already carries the account-to-grant sharing. Remaining: per-account readiness (Ready, Approval needed, Sign-in required, Unsupported, Not checked) with last-check time, destination checks before fallback and helper launch, and the chat notice with Review access.
+
 ### Existing services to extend
 
 - Extend the host-owned policy/gateway core with a connection lifecycle service and typed API for destination-account readiness, pending approval and effective-grant projections. Keep credentials and native-runtime trust inspection on the execution server. Wire account-setup consent to the existing policy operations; native sign-in and quota readings must not create grants.

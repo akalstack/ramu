@@ -12,6 +12,7 @@ import {
   Code,
   Cpu,
   GitBranch,
+  Globe,
   Keyboard,
   Layers,
   Palette,
@@ -35,6 +36,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'appearance', label: 'Appearance', Icon: Palette, group: 'Workspace' },
   { id: 'editor', label: 'Editor & Terminal', Icon: Code, group: 'Workspace' },
   { id: 'git', label: 'Git', Icon: GitBranch, group: 'Workspace' },
+  { id: 'browser', label: 'Browser', Icon: Globe, group: 'Workspace' },
   { id: 'shortcuts', label: 'Keyboard shortcuts', Icon: Keyboard, group: 'Workspace' },
   { id: 'archived', label: 'Archived threads', Icon: Archive, group: 'Workspace' },
   { id: 'chats', label: 'Threads', Icon: MessageSquare, group: 'Agents' },
@@ -52,6 +54,7 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
+  { section: 'browser', title: 'Open clicked links in', words: 'browser links system integrated web external' },
   { section: 'agent-setup', title: 'MCP servers', words: 'shared tools external service connection authentication' },
   { section: 'archived', title: 'Archived threads', words: 'history restore unarchive delete' },
   { section: 'system', title: 'Keep local crash reports', words: 'diagnostics privacy errors crash local export' },

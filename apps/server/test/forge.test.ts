@@ -258,3 +258,29 @@ describe('publishing a repository', () => {
     await expect(forge.publishRepository(dir, input)).rejects.toThrow('already has a remote')
   })
 })
+
+describe('detected GitHub sign-ins', () => {
+  const status = (text: string) => async () => text
+  it('reports no CLI, signed-out and signed-in without ever exposing a token', async () => {
+    expect(await forge.forgeConnections({ executable: null, now: 1 })).toEqual({
+      cli: 'no-cli',
+      accounts: [],
+      checkedAt: 1,
+    })
+    expect(
+      await forge.forgeConnections({ executable: '/gh', status: status('You are not logged in'), now: 2 }),
+    ).toMatchObject({
+      cli: 'signed-out',
+      accounts: [],
+    })
+    const signedIn = await forge.forgeConnections({
+      executable: '/gh',
+      status: status(
+        "github.com\n  ✓ Logged in to github.com account me (keyring)\n  - Active account: true\n  - Git operations protocol: https\n  - Token: gho_SECRET\n  - Token scopes: 'repo'\n",
+      ),
+      now: 3,
+    })
+    expect(signedIn).toMatchObject({ cli: 'signed-in', accounts: [{ login: 'me', host: 'github.com', state: 'ok' }] })
+    expect(JSON.stringify(signedIn)).not.toContain('SECRET')
+  })
+})

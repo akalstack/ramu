@@ -58,7 +58,7 @@ Home (desktop and mobile) starts in **Auto** while the Settings → Threads pref
 
 ## 2. Memory correctness and traceability
 
-- Keep this a priority alongside Auto selection. First evaluate current memory/learning behavior; add only missing source links, explicit supersession and conflict handling. Preserve confirmed notes, history, project scope and review-first behavior.
+- Explicit supersession is in place (`memory_save` `supersedes`; see [Memory](MEMORY.md)). Remaining: evaluate retrieval of the replacement from a fresh thread and another provider, and source links for unavailable sources, then add only demonstrated gaps in source links and conflict handling. Preserve confirmed notes, history, project scope and review-first behavior.
 - Use existing memory retrieval and learning jobs. A changed decision should retrieve the current decision with its source and identify the earlier one as superseded. Conflicting evidence without an explicit replacement stays visible; do not silently rewrite confirmed notes or choose by timestamp alone.
 - Prompt guidance distinguishes historical decisions from current observations and requires revalidation of changeable facts.
 - Acceptance: save a polling decision, record a later switch to webhooks, then ask from a fresh thread and another provider. Retrieve the replacement and source; keep unrelated projects isolated. Include unresolved contradictions, unavailable sources, exact identifiers and English/Indonesian phrasing in the held-out recall evaluation in [the roadmap](ROADMAP.md#learning-and-goal-evaluation).

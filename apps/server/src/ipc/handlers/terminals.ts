@@ -47,7 +47,8 @@ export const registerTerminalHandlers: RegisterHandlers = ({ workspace, terminal
   },
   'term.background.stop': {
     args: z.tuple([id, id, z.boolean().optional()]),
-    run: (taskId: string, termId: string, force?: boolean) => terminals.stopBackground(taskId, termId, force ?? false),
+    run: (taskId: string, termId: string, force?: boolean) =>
+      terminals.stopBackground(taskId, termId, force ?? false, 'user'),
   },
   'term.snapshot': { args: z.tuple([id]), run: (termId: string) => terminals.snapshot(termId) },
 })

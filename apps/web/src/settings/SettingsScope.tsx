@@ -348,7 +348,7 @@ export function useScopedInvoke(scope: SettingsScope | null): typeof invoke {
     return (async (method: string, ...args: unknown[]) => {
       if (method.startsWith('computers.')) return (invoke as any)(method, ...args)
       if (!scope.ready || scope.stale) throw new Error(t('Select a connected host.'))
-      const readOnly = /\.(get|list|status|history|catalog)$/.test(method) || method === 'advisor.claude'
+      const readOnly = /\.(get|list|status|history|catalog|connections)$/.test(method) || method === 'advisor.claude'
       if (scope.target === 'all' && scope.targets.length > 1 && !readOnly)
         throw new Error(t('Choose one host in the settings header for this action.'))
       const id = scope.primaryId

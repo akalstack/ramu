@@ -1,3 +1,4 @@
+import type { BrowserTabInfo } from './types/browser'
 import type { RoutingOutcome } from './workspace/projectRouting'
 import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
 import type { ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
@@ -38,6 +39,7 @@ import type {
   NetworkStatus,
   NetworkSettingsInput,
   PairingOffer,
+  PairingOfferStatus,
   Computers,
   Memory,
   MemoryInput,
@@ -75,6 +77,10 @@ import type {
   GitBranchInfo,
   CommitDraft,
   ForgeStatus,
+  Rule,
+  RuleInput,
+  RuleRevision,
+  ForgeConnectionSummary,
   PullRequestWatchStatus,
   IssueLink,
   IssueSummary,
@@ -117,6 +123,8 @@ export interface BackgroundTerminalInfo {
   endedAt: number | null
   exitCode: number | null
   cursor: number
+  /** Who asked it to stop. A command the person stopped must not be relaunched without a new instruction. */
+  stoppedBy?: 'user' | 'agent'
   capabilities: { inspect: true; stop: boolean; forceStop: boolean; input: boolean }
 }
 
@@ -141,6 +149,30 @@ export interface MobileLiveActivityRegistration {
 export interface RamuMethods {
   /** Local desktop-only document origin. Never forwarded to a remote host. */
   'app.content.mount'(html: string): string
+  /** Opens a web link in the person's own browser. Plain http(s) links only. */
+  'app.openExternal'(url: string): void
+  /** Integrated browser tabs of this computer's desktop app; every call names the host and thread it is for. */
+  'browser.list'(hostId: string, threadId: string): BrowserTabInfo[]
+  'browser.open'(
+    hostId: string,
+    threadId: string,
+    url: string,
+    profileId?: string,
+  ): { tab: BrowserTabInfo; profileFellBack: boolean }
+  'browser.navigate'(hostId: string, threadId: string, tabId: string, url: string): BrowserTabInfo
+  'browser.back'(hostId: string, threadId: string, tabId: string): void
+  'browser.forward'(hostId: string, threadId: string, tabId: string): void
+  'browser.reload'(hostId: string, threadId: string, tabId: string): void
+  'browser.close'(hostId: string, threadId: string, tabId: string): void
+  /** Places the tab over this rectangle of the window; `hide` takes it off screen. */
+  'browser.show'(
+    hostId: string,
+    threadId: string,
+    tabId: string,
+    bounds: { x: number; y: number; width: number; height: number },
+  ): void
+  'browser.hide'(hostId: string, threadId: string, tabId: string): void
+  'browser.takeControl'(hostId: string, threadId: string, tabId: string): BrowserTabInfo
   'app.content.release'(url: string): void
   'interactive.get'(sessionId: string, id: string, version: number): import('./interactive').InteractiveDocument
   'interactive.list'(sessionId: string): import('./interactive').InteractiveReference[]
@@ -234,7 +266,12 @@ export interface RamuMethods {
   /** Access from other devices. These run only for the local desktop app, never for a paired device. */
   'network.status'(): NetworkStatus
   'network.configure'(input: NetworkSettingsInput): NetworkStatus
-  'network.pair'(role?: 'owner' | 'viewer'): PairingOffer
+  /** A new one-time code. `owner` names the dialog that made it: its next offer replaces this one while unused. */
+  'network.pair'(role?: 'owner' | 'viewer', owner?: string): PairingOffer
+  /** Withdraws an unused offer; false when it was already used, expired or unknown. */
+  'network.cancelOffer'(offerId: string): boolean
+  /** What became of one offer: pending, redeemed by a device, cancelled or expired. */
+  'network.offer'(offerId: string): PairingOfferStatus
   'network.revoke'(deviceId: string): NetworkStatus
   /** Days an unused device stays paired (1 to 3650), `never`, or null for the server default. Host-only, like the rest of `network.*`. */
   'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus
@@ -378,6 +415,8 @@ export interface RamuMethods {
   'mcp.status'(): SharedMcpManagement & { canAdminister: boolean }
   'mcp.save'(input: Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>, connectionId?: string): SharedMcpConnection
   'mcp.account'(account: SharedMcpProviderAccount): void
+  /** Drops a provider account from shared approvals; its provider login is untouched. */
+  'mcp.removeAccount'(provider: SharedMcpProviderAccount['provider'], accountId: string): void
   'mcp.check'(connectionId: string, selection: SharedMcpSelection): Promise<SharedMcpInspection>
   'mcp.approve'(input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }): SharedMcpGrant
   'mcp.disconnect'(connectionId: string): Promise<void>
@@ -500,6 +539,13 @@ export interface RamuMethods {
   'forge.sendFeedback'(taskId: string, repoId: string, kind: PullRequestFeedbackKind): string | null
   'forge.pullRequestDraft'(taskId: string, repoId: string): PullRequestDraft
   /** Publishes the branch when needed, then opens the pull request. */
+  /** GitHub sign-ins this host already holds (read-only). Pass nothing; the host runs `gh auth status`. */
+  'forge.connections'(): ForgeConnectionSummary
+  'rules.list'(): Rule[]
+  'rules.save'(input: RuleInput): Rule
+  'rules.remove'(ruleId: string): void
+  'rules.history'(ruleId: string): RuleRevision[]
+  'rules.restore'(ruleId: string, revision: number): Rule
   'forge.publishRepository'(taskId: string, repoId: string, input: PublishRepositoryInput): void
   'forge.createPullRequest'(taskId: string, repoId: string, input: PullRequestInput): ForgeStatus
   /** An opening message that hands failing checks or open review comments to an agent. */
@@ -690,6 +736,7 @@ export type PushEvents = {
   'memory:changed': Record<string, never>
   /** `created` is the id of a summary that just became ready, so clients can raise one notification. */
   'summaries:changed': { created: string | null }
+  'rules:changed': Record<string, never>
   /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */
   'background:connection': { connected: boolean; rejected?: boolean }
   'computers:changed': Computers
@@ -707,6 +754,8 @@ export type PushEvents = {
     body: string
   }
   'notify:open': { sessionId: string; taskId: string }
+  /** A clicked link the person chose to open in the integrated browser; the window opens it in the active thread. */
+  'browser:open-link': { url: string }
   'agent:event': { sessionId: string; event: AgentEvent; seq?: number; revision?: number }
   /** The chat's transcript was cut back: events from `seq` on are gone. */
   'agent:rewound': { sessionId: string; seq: number }

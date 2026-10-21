@@ -14,6 +14,10 @@ Ramu already has GitHub PR discovery/creation, checks, review feedback, issues a
 
 [T3 Code's source-control guide](https://github.com/pingdotgg/t3code/blob/main/docs/user/source-control.md), checked on 2026-10-18, provides the reference: settings expose hosting connections, credentials belong to the server, and API access can differ from Git transport access. Adopt that discoverability and host ownership. Ramu's proposed improvements are explicit connection saves, visible credential selection, per-repository capability diagnostics and predictable recovery from incomplete operations. These are design goals, not a verified superiority claim.
 
+## Already in place
+
+Settings → Git starts with a **Hosting accounts** group: GitHub shows the host's detected `gh` sign-ins (`forge.connections`, read-only, never the token) with **Check connection** and per-account details, and GitLab, Bitbucket Cloud and Azure DevOps are informational **Coming soon** rows with no setup or backend activity. Remaining: saved credentials, per-repository access checks, multiple-account selection and overrides, deep links from Source Control, Settings search entries, replace/disconnect, and the adapter boundary.
+
 ## Settings and interaction
 
 - Add a **Hosting accounts** group near the top of Settings → Git. Keep existing Git preferences below it. Show four compact provider rows. GitHub expands to its connection summary, account/server identity and relevant actions; an unconfigured GitHub row stays collapsed. GitLab, Bitbucket Cloud and Azure DevOps show a visible **Coming soon** label and have no expand, connect, credential-entry or setup actions. Keep their names readable and the status accessible without relying on color or disabled-control tooltips. These placeholders must not trigger discovery, network calls, CLI checks or background work. Add Settings search entries for GitHub, GitLab, Bitbucket, Azure DevOps, accounts, tokens and merge requests.
@@ -54,14 +58,7 @@ Route existing GitHub watches through the adapter boundary with host/account/rep
 
 Cancellation and timeouts must distinguish failed from unknown outcomes. After a create request loses its response, reconcile against the intended repository and branch before offering retry; do not duplicate a PR or retry through another account. Preserve partial push/create/watch outcomes and existing Git locks. Enforce capabilities and authorization on the server as well as in UI.
 
-**Publish branch (next increment, GitHub only).** Source Control's Publish already pushes a branch to an existing remote and sets its upstream. Close the gaps the way VS Code does:
-
-- A repository with no remote shows **Publish to GitHub** in the same places as Publish branch (Source Control header, repository menu, commit box, Commit & Push). It opens a small dialog: repository name (defaults to the folder name, or `owner/name`), **Private** by default with a Public choice, and the remote name (`origin`); showing the signed-in account waits for the connection summary above. Confirming creates the repository with `gh repo create --source` and pushes the current branch with its upstream set. A repository without commits explains that a first commit is needed instead of failing.
-- Several remotes with none named `origin` still return the upstream error; a remote picker is a later option.
-- Missing or signed-out `gh` and non-GitHub remotes use the existing `forge` availability explanations with **Open Settings → Git**. Other hosts show nothing until their adapter lands; plain Git publish to any remote keeps working.
-- A repository created but not pushed (lost response, rejected push) is reconciled: retry pushes to the existing remote rather than recreating the repository.
-
-Tests cover no-remote publish, name/visibility arguments, no-commit and signed-out errors and retry after a partial publish, using a temporary repository and a fake `gh`.
+**Publish to GitHub (implemented).** A repository with no remote publishes through `forge.publishRepository` (private by default, `gh repo create --source --push`); a repository with a remote or no commits explains the next step, and a created-but-unpushed repository is finished by the ordinary Publish branch rather than recreated. Remaining: show the signed-in account in the dialog once the connection summary exists, and an optional remote picker when several remotes have none named `origin`.
 
 Then after the GitHub connection and existing flows work, add GitHub-backed repository search/clone and publish through the existing project/host-folder flow. Keep a pasted Git URL available. Clone destinations belong to the workspace host; cancelled/failed clones preserve inspectable state. Publishing previews account, destination, visibility (private by default), remote name and push scope before executing; a partial publish must be reconcilable without recreating the repository. Full review/merge dashboards, automatic merging, stacks, webhooks and cross-host credential brokering are deferred.
 

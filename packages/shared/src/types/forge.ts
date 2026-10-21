@@ -82,3 +82,23 @@ export interface IssueLink {
   title: string
   url: string
 }
+
+/** One sign-in the GitHub CLI already holds on the execution host. Never carries the token itself. */
+export interface ForgeCliAccount {
+  host: string
+  login: string
+  /** The account `gh` uses for this host when several are signed in. */
+  active: boolean
+  /** `ok` when the stored token works; `invalid` when `gh` reports it expired or revoked. */
+  state: 'ok' | 'invalid'
+  protocol: string | null
+  scopes: string[]
+}
+
+/** GitHub on one host, from its detected CLI sign-ins. Saved credentials and other providers are not here yet. */
+export interface ForgeConnectionSummary {
+  /** `no-cli`: `gh` is not installed. `signed-out`: installed with no account. */
+  cli: 'no-cli' | 'signed-out' | 'signed-in'
+  accounts: ForgeCliAccount[]
+  checkedAt: number
+}

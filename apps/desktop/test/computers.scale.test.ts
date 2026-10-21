@@ -52,6 +52,7 @@ it('keeps 100 remote connections independent and measures full-list broadcast ov
     },
     invoke: async () => ({ running: 0, needsInput: 0 }),
     pair: async () => ({ token: 'token' }),
+    renew: async () => null,
     ssh: {
       ensure: async () => {},
       connect: async () => {

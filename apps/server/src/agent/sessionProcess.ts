@@ -74,6 +74,7 @@ export interface SessionProcessHost
     Pick<AgentTasks, 'settleTasks' | 'updateTask'> {
   learningInstructions(): AgentService['learningInstructions']
   memoryInstructions(): AgentService['memoryInstructions']
+  rulesInstructions(): AgentService['rulesInstructions']
   preferences(): AppPreferences | undefined
   preferencesSource(): (() => AppPreferences) | undefined
   providerQuery: QueryFn
@@ -353,6 +354,7 @@ export class SessionProcess {
         memory: this.host.memoryInstructions()?.(s),
         toolSearch: this.host.preferences()?.intelligence?.toolSearch !== false,
         learning: this.host.learningInstructions()?.(s, { checkpoint: !carried?.built.includesCheckpoint }),
+        rules: this.host.rulesInstructions()?.(s),
       })
     }
     if (connection && this.host.nativeSubagentsOff(s)) connection.nativeSubagents = false

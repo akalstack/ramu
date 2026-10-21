@@ -44,7 +44,14 @@ export interface NetworkStatus {
   devices: NetworkDevice[]
   /** How long an unused paired device stays paired. `saved` is false while the server default applies. Absent on older hosts. */
   deviceLifetime?: { days: number | 'never'; saved: boolean }
+  /** Pairing offers not yet used, without their codes. Absent on older hosts. */
+  offers?: { id: string; role: 'owner' | 'viewer'; expiresAt: number }[]
 }
+/** What became of one pairing offer. */
+export type PairingOfferStatus =
+  | { state: 'pending'; expiresAt: number; role: 'owner' | 'viewer' }
+  | { state: 'redeemed'; device: NetworkDevice | null }
+  | { state: 'cancelled' | 'expired' | 'unknown' }
 export interface NetworkSettingsInput {
   enabled: boolean
   /** `0.0.0.0` / `::` for every network, or one of this computer's addresses. */
@@ -54,6 +61,8 @@ export interface NetworkSettingsInput {
   acceptUnencrypted: boolean
 }
 export interface PairingOffer {
+  /** Non-secret handle for cancelling this offer or asking what became of it. Absent on older hosts. */
+  offerId?: string
   code: string
   expiresAt: number
   urls: { url: string; interface: string }[]

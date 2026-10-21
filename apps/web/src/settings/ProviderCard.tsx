@@ -49,6 +49,8 @@ export function ProviderCard({
   onRename,
   onRemove,
   onAddAccount,
+  mcpSharing,
+  onMcpSharing,
   onUpdate,
   onBrowse,
 }: {
@@ -70,6 +72,9 @@ export function ProviderCard({
   onRename: (id: string, name: string) => void
   onRemove: (id: string) => void
   onAddAccount: () => void
+  /** Whether an account shares approved Shared MCP connections; undefined hides the control (not the host's administrator). */
+  mcpSharing?: (id: string) => boolean | undefined
+  onMcpSharing?: (id: string, on: boolean) => void
   onUpdate: () => void
   onBrowse: (key: 'binary' | 'harness') => void
 }) {
@@ -175,6 +180,11 @@ export function ProviderCard({
                           onToggleAccount={(on) => onToggleAccount(id, on)}
                           onRename={(name) => onRename(id, name)}
                           onRemove={() => onRemove(id)}
+                          mcpSharing={
+                            mcpSharing && accounts
+                              ? { value: mcpSharing(id), onChange: (on) => onMcpSharing?.(id, on) }
+                              : undefined
+                          }
                         />
                       )
                     })}

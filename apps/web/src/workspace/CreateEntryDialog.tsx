@@ -21,7 +21,7 @@ export function CreateEntryDialog() {
       const taskId = ws.ui.activeTaskId
       if (!taskId) return
       const view = ws.taskUi[taskId]?.views.find((entry) => entry.id === ws.taskUi[taskId]?.activeViewId)
-      setRepoId(view?.repoId ?? ws.bindings[taskId]?.[0]?.repoId ?? '')
+      setRepoId((view && 'repoId' in view ? view.repoId : undefined) ?? ws.bindings[taskId]?.[0]?.repoId ?? '')
       setPath('')
       setError(null)
       setRequest({ taskId, kind: (event as CustomEvent<{ kind: 'file' | 'dir' }>).detail.kind })

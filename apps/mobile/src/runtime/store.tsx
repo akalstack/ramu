@@ -30,7 +30,8 @@ import type {
   ProviderCatalog,
   UsageReading,
 } from '@ramu/shared/types'
-import { deleteToken, readLocal, readToken, saveToken, writeLocal } from '../storage'
+import { deleteToken, readLocal, readRenewedAt, readToken, saveRenewedAt, saveToken, writeLocal } from '../storage'
+import { renewalDue, renewCredential } from './tokenRenewal'
 import { HostClient, HostError, normalizeAddress } from './transport'
 import { transcript, visibleText } from './transcript'
 import type { Language } from './settingsModel'
@@ -766,6 +767,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }))
         if (info.protocol !== 1 || !info.capabilities?.includes('mobile-companion'))
           throw new HostError('Update Ramu on this host: its protocol is incompatible.', 426)
+        // Rotate the device token about monthly on hosts that support it; a failure only retries next connect.
+        if (info.capabilities?.includes('renewal'))
+          void readRenewedAt(computer.id)
+            .then((renewedAt) =>
+              renewalDue(Date.now(), renewedAt)
+                ? renewCredential(
+                    {
+                      address: connection.client.address,
+                      token: () => connection.client.currentToken(),
+                      useToken: (next) => connection.client.useToken(next),
+                    },
+                    connection.client.fetch,
+                    (next) => saveToken(computer.id, next),
+                    (at) => saveRenewedAt(computer.id, at),
+                  )
+                : false,
+            )
+            .catch(() => {})
         await connection.client.stream(
           (channel, payload) => {
             if (connections.current.get(computer.id) === connection) receive(computer.id, channel, payload)

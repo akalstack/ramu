@@ -123,3 +123,21 @@ it('reports the caller role for client action hiding, defaulting local and legac
   expect(accessOf(owner)).toBe('owner')
   expect(accessOf(undefined)).toBe('owner')
 })
+
+it('renews a device token over HTTP without a gap, and refuses renewal without a live device token', async () => {
+  const f = await fixture()
+  const paired = (await (await f.pair(f.devices.createCode(f.now()).code)).json()) as { token: string }
+  const renew = (token?: string) =>
+    f.request('/renew', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  expect((await renew()).status).toBe(401)
+  const response = await renew(paired.token)
+  expect(response.status).toBe(200)
+  expect(response.headers.get('cache-control')).toBe('no-store')
+  const renewed = (await response.json()) as { token: string }
+  const events = (token: string) => f.request('/events', { headers: { Authorization: `Bearer ${token}` } })
+  expect((await events(paired.token)).status).toBe(200)
+  expect((await events(renewed.token)).status).toBe(200)
+  f.advance(3 * 60_000)
+  expect((await events(paired.token)).status).toBe(401)
+  expect((await events(renewed.token)).status).toBe(200)
+})

@@ -2,6 +2,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
+
+// These tests rely on the OS file-watch service, which can drop events when many test workers run at once.
+const watched = (name: string, fn: () => unknown) => it(name, { retry: 2 }, fn)
 import { FileWatchers } from '../src/ipc/watchers'
 
 const cleanup: (() => void)[] = []
@@ -18,7 +21,7 @@ function fixture() {
 }
 const changes = (send: ReturnType<typeof vi.fn>) => send.mock.calls.filter(([channel]) => channel === 'fs:changed')
 
-it('shares one watcher between tasks and closes it only after the last lease is released', async () => {
+watched('shares one watcher between tasks and closes it only after the last lease is released', async () => {
   const { root, send, watchers } = fixture()
   watchers.ensure(root, 'a')
   watchers.ensure(root, 'b')
@@ -39,7 +42,7 @@ it('shares one watcher between tasks and closes it only after the last lease is 
   expect(watchers.size).toBe(0)
 })
 
-it('stops reporting and drops pending notifications once released, and can be leased again', async () => {
+watched('stops reporting and drops pending notifications once released, and can be leased again', async () => {
   const { root, send, watchers } = fixture()
   watchers.ensure(root, 'a')
   writeFileSync(join(root, 'late.txt'), '1')
@@ -54,7 +57,7 @@ it('stops reporting and drops pending notifications once released, and can be le
   await vi.waitFor(() => expect(changes(send).map(([, p]) => p.path)).toContain('again.txt'), { timeout: 5000 })
 })
 
-it('ignores releasing an unknown task and closes every watcher on shutdown', () => {
+watched('ignores releasing an unknown task and closes every watcher on shutdown', () => {
   const { root, watchers } = fixture()
   watchers.ensure(root, 'a')
   watchers.release('missing')

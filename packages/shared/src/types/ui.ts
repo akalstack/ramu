@@ -31,6 +31,8 @@ export type ViewDescriptor =
       threadId?: string
       requestId?: string
     }
+  /** An integrated-browser tab of this computer's desktop app. The page itself lives in the shell; `url` is where a restored tab reopens. */
+  | { kind: 'browser'; id: string; url?: string }
   /** Without a repoId the terminal starts where the task's agent runs (the workspace). */
   /** A project action's terminal carries its name and command; the command runs once, right after `runAt`, and not again when the view is restored. */
   | {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronDown, ChevronRight, File, Folder, RefreshCw, GitBranch, ListCollapse } from 'lucide-react-native'
@@ -15,10 +15,11 @@ import {
 } from '@ramu/shared/workspace/explorer'
 import { useStore } from '../runtime/store'
 import { useWorkspaces } from '../runtime/useWorkspaces'
-import { useT } from '../i18n'
+import { fill, useT } from '../i18n'
+import { explorerActions, parentFolder, planRename } from '../runtime/explorerActions'
 import { font, space, useTheme } from '../theme'
 import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen'
-import { Row, T } from '../components/ui'
+import { Row, Sheet, T } from '../components/ui'
 
 type ExplorerScope = { host: string; context: string; label?: string }
 
@@ -78,6 +79,33 @@ export default function Explorer() {
   const inFlight = useRef(new Set<string>())
   const [loadingDirs, setLoadingDirs] = useState<Set<string>>(new Set())
   const online = scope ? store.isOnline(scope.host) : false
+  const viewOnly = scope ? store.computers.find((computer) => computer.id === scope.host)?.access === 'viewer' : false
+  // The row whose actions are open, and its rename draft; closing the sheet changes nothing.
+  const [acting, setActing] = useState<{ repoId: string; entry: DirEntry } | null>(null)
+  const [renameDraft, setRenameDraft] = useState<string | null>(null)
+  const [actionError, setActionError] = useState('')
+  const [acted, setActed] = useState(false)
+  const closeActions = () => {
+    setActing(null)
+    setRenameDraft(null)
+    setActionError('')
+  }
+  /** Runs a change on the host, then reloads only the folder it touched. A failure keeps the sheet open to retry. */
+  const change = async (work: () => Promise<unknown>, folder: string, repoId: string) => {
+    if (!scope || acted) return
+    setActed(true)
+    setActionError('')
+    try {
+      await work()
+      closeActions()
+      const binding = bindingsRef.current.find((entry) => entry.repoId === repoId)
+      if (binding) void loadDirectory(binding, folder)
+    } catch (cause) {
+      setActionError(`${t.explorerActionFailed} ${String(cause instanceof Error ? cause.message : cause)}`)
+    } finally {
+      setActed(false)
+    }
+  }
   const scopeIdentity = scope ? JSON.stringify([scope.host, scope.context]) : ''
   const activeScope = useRef(scopeIdentity)
   activeScope.current = scopeIdentity
@@ -466,7 +494,7 @@ export default function Explorer() {
                       : { selected: selected?.repoId === row.repoId && selected.path === row.entry.path }
                   }
                   accessibilityHint={t.explorerCopyHint}
-                  onLongPress={() => void Clipboard.setStringAsync(row.entry.path)}
+                  onLongPress={() => setActing({ repoId: row.repoId, entry: row.entry })}
                   onPress={() => {
                     if (activeScope.current !== scopeIdentity) return
                     if (row.entry.kind === 'file') {
@@ -529,6 +557,99 @@ export default function Explorer() {
           />
         </>
       )}
+      <Sheet open={!!acting} onClose={closeActions} title={acting?.entry.name}>
+        {acting && scope && (
+          <>
+            {actionError ? <T tone="muted">{actionError}</T> : null}
+            {renameDraft === null ? (
+              <>
+                {explorerActions({ online, viewOnly }).includes('copy-path') && (
+                  <Row
+                    onPress={() => {
+                      void Clipboard.setStringAsync(acting.entry.path)
+                      closeActions()
+                    }}
+                  >
+                    <T>{t.explorerCopyPath}</T>
+                  </Row>
+                )}
+                {explorerActions({ online, viewOnly }).includes('rename') && (
+                  <Row onPress={() => setRenameDraft(acting.entry.name)}>
+                    <T>{t.explorerRename}</T>
+                  </Row>
+                )}
+                {explorerActions({ online, viewOnly }).includes('delete') && (
+                  <Row
+                    disabled={acted}
+                    onPress={() =>
+                      Alert.alert(t.explorerDelete, fill(t.explorerDeleteConfirm, acting.entry.path), [
+                        { text: t.cancel, style: 'cancel' },
+                        {
+                          text: t.explorerDelete,
+                          style: 'destructive',
+                          onPress: () =>
+                            void change(
+                              () =>
+                                store.invoke(
+                                  scope.host,
+                                  'files.delete',
+                                  scope.context,
+                                  acting.repoId,
+                                  acting.entry.path,
+                                ),
+                              parentFolder(acting.entry.path),
+                              acting.repoId,
+                            ),
+                        },
+                      ])
+                    }
+                  >
+                    <T>{t.explorerDelete}</T>
+                  </Row>
+                )}
+              </>
+            ) : (
+              <>
+                <TextInput
+                  autoFocus
+                  accessibilityLabel={t.explorerRenameTitle}
+                  value={renameDraft}
+                  onChangeText={setRenameDraft}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{ color: c.text, fontSize: font.body, paddingVertical: space.s, minHeight: 44 }}
+                />
+                <Row
+                  disabled={acted}
+                  onPress={() => {
+                    const plan = planRename(acting.entry.path, renameDraft)
+                    if (!plan.ok) {
+                      if (plan.reason === 'invalid') setActionError(t.explorerNameInvalid)
+                      else if (plan.reason === 'unchanged') closeActions()
+                      return
+                    }
+                    void change(
+                      () =>
+                        store.invoke(
+                          scope.host,
+                          'files.rename',
+                          scope.context,
+                          acting.repoId,
+                          acting.entry.path,
+                          plan.destination,
+                        ),
+                      parentFolder(acting.entry.path),
+                      acting.repoId,
+                    )
+                  }}
+                >
+                  <T>{t.explorerRename}</T>
+                </Row>
+              </>
+            )}
+          </>
+        )}
+      </Sheet>
     </Screen>
   )
 }

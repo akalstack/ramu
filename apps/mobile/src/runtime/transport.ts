@@ -74,6 +74,16 @@ export class HostClient {
     for (const controller of this.controllers) controller.abort()
     this.controllers.clear()
   }
+  /** The token requests use; renewal swaps it after the new one is saved. */
+  currentToken() {
+    return this.token
+  }
+  useToken(token: string) {
+    this.token = token
+  }
+  get fetch(): Fetcher {
+    return this.fetcher
+  }
   private headers() {
     return { Authorization: `Bearer ${this.token}`, [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) }
   }

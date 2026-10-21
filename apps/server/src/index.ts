@@ -66,6 +66,7 @@ import { runtimeBuild, runtimeVersion } from './build'
 import { ReviewService } from './review/reviews'
 import { RecapService } from './memory/recaps'
 import { MemoryService, registerMemoryTools } from './memory/memory'
+import { RuleStore } from './rules/rules'
 import { SummaryService, registerLibraryTools, withoutTools } from './memory/summaries'
 import { discoverSkills } from './context'
 import { NO_PROJECT, type AgentSessionInfo, type ScheduleInput } from '@ramu/shared/types'
@@ -298,6 +299,8 @@ const projectOf = (session: AgentSessionInfo) => {
   }
 }
 agents.memoryInstructions = (session) => memory.instructions(session, projectOf(session))
+const rules = new RuleStore(db)
+agents.rulesInstructions = (session) => rules.instructions(projectOf(session), session.provider)
 // Calls that arrive over the network are marked, so a desktop dialog is never opened on this computer for someone else.
 const origin = new AsyncLocalStorage<{ network: boolean }>()
 const interactive = new InteractiveStore(db, (session, ref) => agents.interactivePublished(session, ref))
@@ -357,6 +360,7 @@ const dispatcher = createDispatcher(
     externalSkills,
     diagnostics,
     summaries,
+    rules,
     notices: inbox,
   },
 )
@@ -419,7 +423,7 @@ const capabilities = (): Capability[] => [
   CAPABILITIES.mobileCompanion,
   CAPABILITIES.liveActivities,
   CAPABILITIES.hostRequests,
-  ...(network.enabled ? [CAPABILITIES.remote, CAPABILITIES.pairing] : []),
+  ...(network.enabled ? [CAPABILITIES.remote, CAPABILITIES.pairing, CAPABILITIES.renewal] : []),
 ]
 // Event streams of network clients stay open, so a revoked device must be cut off here, not only refused on its next request.
 const remoteStreams = new Map<ServerResponse, string | undefined>()
@@ -892,6 +896,7 @@ function networkStatus() {
     addresses: localAddresses(),
     devices: devices.list(),
     deviceLifetime: devices.lifetime(),
+    offers: devices.offers(),
   }
 }
 async function networkMethod(method: string, args: unknown[]) {
@@ -913,8 +918,17 @@ async function networkMethod(method: string, args: unknown[]) {
     if (!network.enabled) throw new Error('Turn on network access first')
     const role = args[0] ?? 'owner'
     if (role !== 'owner' && role !== 'viewer') throw new Error('Invalid device role')
-    const { code, expiresAt } = devices.createCode(Date.now(), role)
-    return { code, expiresAt, urls: candidateUrls(network.host, network.port, Boolean(config.tls)) }
+    const owner = typeof args[1] === 'string' && args[1].length > 0 && args[1].length <= 80 ? args[1] : undefined
+    const { code, expiresAt, offerId } = devices.createCode(Date.now(), role, owner)
+    return { offerId, code, expiresAt, urls: candidateUrls(network.host, network.port, Boolean(config.tls)) }
+  }
+  if (method === 'network.cancelOffer') {
+    if (typeof args[0] !== 'string') throw new Error('Invalid offer')
+    return devices.cancelOffer(args[0])
+  }
+  if (method === 'network.offer') {
+    if (typeof args[0] !== 'string') throw new Error('Invalid offer')
+    return devices.offerStatus(args[0])
   }
   if (method === 'network.setDeviceLifetime') {
     const days = args[0]

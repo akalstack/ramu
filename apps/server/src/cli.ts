@@ -20,6 +20,8 @@ Usage:
                                  --json prints { code, expiresAt, links, urls, listening } for scripts and SSH pairing.
   ramu devices                   List paired devices
   ramu devices revoke <id|all>   Revoke one paired device, or all of them
+  ramu devices offers            List unused pairing offers (never their codes)
+  ramu devices cancel <offer>    Withdraw an unused pairing offer
   ramu token [--rotate]          Print the shared access token; --rotate revokes it and every paired device
 
 Options:
@@ -151,13 +153,14 @@ if (command === 'start') {
   }
   const role = text('role') ?? 'owner'
   if (role !== 'owner' && role !== 'viewer') fail('Role must be owner or viewer')
-  const { code } = new DeviceStore(config.devicesPath, config.deviceLifetimeMs).createCode(Date.now(), role)
+  const { code, offerId } = new DeviceStore(config.devicesPath, config.deviceLifetimeMs).createCode(Date.now(), role)
   const expiresAt = Date.now() + PAIRING_TTL_MS
   const links = urls.map(({ url }) => encodePairLink({ url, code, expiresAt }))
   if (flags.has('json')) {
     const status = await runtimeInvoke(config.socketPath, 'background.status').catch(() => null)
     console.log(
       JSON.stringify({
+        offerId,
         code,
         expiresAt,
         urls: urls.map(({ url }) => url),
@@ -186,8 +189,19 @@ if (command === 'start') {
     }
     if (!revoked.length) fail(`No paired device matches "${positional[2]}". Run ramu devices.`)
     for (const device of revoked) console.log(`Revoked ${device.id}  ${device.name}`)
+  } else if (positional[1] === 'offers') {
+    const offers = store.offers()
+    if (!offers.length) console.log('No unused pairing offers.')
+    for (const offer of offers)
+      console.log(`${offer.id}  ${offer.role.padEnd(6)}  expires ${new Date(offer.expiresAt).toLocaleString()}`)
+  } else if (positional[1] === 'cancel') {
+    if (!positional[2]) fail('Usage: ramu devices cancel <offer>')
+    if (!store.cancelOffer(positional[2])) fail(`No unused pairing offer "${positional[2]}". Run ramu devices offers.`)
+    console.log(`Cancelled offer ${positional[2]}`)
   } else if (positional[1])
-    fail(`unknown devices command "${positional[1]}". Use ramu devices or ramu devices revoke <id|all>.`)
+    fail(
+      `unknown devices command "${positional[1]}". Use ramu devices, ramu devices revoke <id|all>, offers or cancel <offer>.`,
+    )
   else {
     const devices = store.list()
     if (!devices.length) console.log('No paired devices. Run ramu pair.')

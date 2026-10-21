@@ -386,3 +386,31 @@ it('refuses memory tool calls once shared memory is turned off, while the tools 
   expect(out.isError).toBe(true)
   expect(out.content[0].text).toContain('turned off')
 })
+
+it('retires a replaced decision with a link, keeps the replacement readable and leaves unrelated notes alone', () => {
+  const polling = memory.save(note('Sync method', 'Sync with the billing provider by polling every minute'), agent)
+  const unrelated = memory.save(note('Editor', 'Use tabs in the docs repository'), agent)
+  const webhooks = memory.save(
+    note('Billing sync switched', 'Billing provider events now arrive through signed webhooks, no polling'),
+    agent,
+  )
+  expect(memory.supersede(polling.memory.id, webhooks.memory.id, agent)).toBe('superseded')
+  expect(memory.get(polling.memory.id)).toMatchObject({
+    status: 'archived',
+    archivedReason: `superseded by ${webhooks.memory.id}`,
+  })
+  expect(memory.get(webhooks.memory.id).source.supersedes).toBe(polling.memory.id)
+  expect(memory.replaced(webhooks.memory.id).map((m) => m.id)).toEqual([polling.memory.id])
+  expect(memory.get(unrelated.memory.id).status).toBe('active')
+  // The archive is restorable, so a wrong replacement is recoverable.
+  expect(memory.restore(polling.memory.id).status).toBe('active')
+})
+
+it('never lets an agent retire a note the user wrote; both stay active', () => {
+  const user = memory.save(note('Sync method', 'Poll the billing provider every minute'), { actor: 'user' })
+  const newer = memory.save(note('Billing sync switched', 'Billing events arrive through signed webhooks'), agent)
+  expect(memory.supersede(user.memory.id, newer.memory.id, agent)).toBe('protected')
+  expect(memory.get(user.memory.id).status).toBe('active')
+  expect(memory.get(newer.memory.id).source.supersedes).toBeUndefined()
+  expect(memory.supersede(newer.memory.id, newer.memory.id, agent)).toBe('unchanged')
+})

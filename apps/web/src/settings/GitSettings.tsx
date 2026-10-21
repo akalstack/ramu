@@ -7,6 +7,7 @@ import { Dropdown } from '../Menu'
 import { modelStepName, useModelSets } from '../models/ModelSets'
 import { SETTINGS_FORM_CLASS } from './constants'
 import { ToggleRow, type DraftProps } from './ToggleRow'
+import { HostingAccounts } from './HostingAccounts'
 
 export function GitSettings({ draft, onChange, busy }: DraftProps) {
   const toggleProps = { draft, onChange, busy }
@@ -21,6 +22,7 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
     )?.id ?? ''
   return (
     <div className={SETTINGS_FORM_CLASS}>
+      <HostingAccounts />
       <SettingsGroupTitle>{t('New threads & worktrees')}</SettingsGroupTitle>
       <p className="m-0 text-caption text-muted-foreground">
         {t('Repository configuration can override these defaults. Each draft can override repository settings.')}

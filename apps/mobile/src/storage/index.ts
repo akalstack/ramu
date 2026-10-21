@@ -73,9 +73,25 @@ export async function saveToken(id: string, token: string) {
       keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
     })
 }
+const renewedKey = (id: string) => `ramu.renewed.${id}`
+/** When this phone last rotated its token for a host; absent means never. */
+export async function readRenewedAt(id: string): Promise<number | null> {
+  const value =
+    Platform.OS === 'web' ? localStorage.getItem(renewedKey(id)) : await SecureStore.getItemAsync(renewedKey(id))
+  return value && Number.isFinite(Number(value)) ? Number(value) : null
+}
+export async function saveRenewedAt(id: string, at: number) {
+  if (Platform.OS === 'web') localStorage.setItem(renewedKey(id), String(at))
+  else await SecureStore.setItemAsync(renewedKey(id), String(at))
+}
 export async function deleteToken(id: string) {
-  if (Platform.OS === 'web') localStorage.removeItem(tokenKey(id))
-  else await SecureStore.deleteItemAsync(tokenKey(id))
+  if (Platform.OS === 'web') {
+    localStorage.removeItem(tokenKey(id))
+    localStorage.removeItem(renewedKey(id))
+  } else {
+    await SecureStore.deleteItemAsync(tokenKey(id))
+    await SecureStore.deleteItemAsync(renewedKey(id))
+  }
 }
 const visitKey = 'ramu.mobile.last-visit'
 /** When the app was last left, for "since your last visit" in Inbox. */

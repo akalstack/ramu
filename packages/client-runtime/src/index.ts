@@ -13,11 +13,13 @@ import { createHash } from 'node:crypto'
 import {
   AUTH_SCHEME,
   PAIR_PATH,
+  RENEW_PATH,
   PROTOCOL_HEADER,
   PROTOCOL_VERSION,
   encodeInvoke,
   parseRemoteUrl,
   type PairResponse,
+  type RenewResponse,
   type RuntimeEndpoint,
 } from '@ramu/contracts'
 
@@ -137,6 +139,39 @@ export function runtimePair(serverUrl: string, code: string, name?: string): Pro
     req.on('error', reject)
     req.setTimeout(15000, () => req.destroy(new Error('Pairing request timed out')))
     req.end(JSON.stringify({ code, name }))
+  })
+}
+
+/** Asks a host to swap this device's token for a fresh one. Save the new token before using it; null when the host says no. */
+export function runtimeRenew(serverUrl: string, token: string): Promise<RenewResponse | null> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(parseRemoteUrl(serverUrl))
+    const req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(
+      {
+        hostname: url.hostname.replace(/^\[|\]$/g, ''),
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: RENEW_PATH,
+        method: 'POST',
+        headers: { [PROTOCOL_HEADER]: String(PROTOCOL_VERSION), Authorization: `${AUTH_SCHEME} ${token}` },
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c) => chunks.push(c))
+        res.on('error', reject)
+        res.on('end', () => {
+          if (res.statusCode !== 200) return resolve(null)
+          try {
+            const body = JSON.parse(Buffer.concat(chunks).toString())
+            resolve(typeof body.token === 'string' && /^[a-f0-9]{64}$/.test(body.token) ? body : null)
+          } catch {
+            resolve(null)
+          }
+        })
+      },
+    )
+    req.on('error', reject)
+    req.setTimeout(15000, () => req.destroy(new Error('Renewal request timed out')))
+    req.end()
   })
 }
 

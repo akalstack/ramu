@@ -265,6 +265,26 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     if (!columns.has('aliases')) db.exec("ALTER TABLE projects ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
     if (!columns.has('description')) db.exec("ALTER TABLE projects ADD COLUMN description TEXT NOT NULL DEFAULT ''")
   },
+  `CREATE TABLE IF NOT EXISTS rules (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    body TEXT NOT NULL,
+    project_id TEXT,
+    providers TEXT NOT NULL DEFAULT '[]',
+    activation TEXT NOT NULL DEFAULT 'always',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    revision INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS rule_revisions (
+    rule_id TEXT NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    body TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (rule_id, revision)
+  );`,
 ]
 
 export type Db = DatabaseSync

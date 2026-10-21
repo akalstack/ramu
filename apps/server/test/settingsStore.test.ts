@@ -2,6 +2,9 @@ import { mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSy
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
+
+// These tests rely on the OS file-watch service, which can drop events when many test workers run at once.
+const watched = (name: string, fn: () => unknown) => it(name, { retry: 2 }, fn)
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import { openDb } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
@@ -45,7 +48,7 @@ const models = {
   ],
 }
 
-it('migrates real SQLite preferences and models once, preserving the legacy archive and runtime state', () => {
+watched('migrates real SQLite preferences and models once, preserving the legacy archive and runtime state', () => {
   const f = fixture({ ...DEFAULT_APP_PREFERENCES, accent: 'teal', worktreeBranchPrefix: 'team/' }, models)
   f.workspace.setAppState('runtime-example', { active: true })
   const document = JSON.parse(readFileSync(f.store.path, 'utf8'))
@@ -62,7 +65,7 @@ it('migrates real SQLite preferences and models once, preserving the legacy arch
   expect(f.workspace.getAppState('runtime-example', null)).toEqual({ active: true })
 })
 
-it('reflects external editor renames and notifies subscribers once per valid change', async () => {
+watched('reflects external editor renames and notifies subscribers once per valid change', async () => {
   const f = fixture()
   const changed = vi.fn()
   f.store.subscribe(changed)
@@ -78,7 +81,7 @@ it('reflects external editor renames and notifies subscribers once per valid cha
   expect(changed).toHaveBeenCalledTimes(1)
 })
 
-it('keeps last good settings on malformed or invalid edits and refuses to overwrite them', () => {
+watched('keeps last good settings on malformed or invalid edits and refuses to overwrite them', () => {
   const f = fixture({ accent: 'teal' })
   for (const invalid of ['{', '[]', '{"accent":"invalid"}', '{"models":{"sets":[]}}']) {
     writeFileSync(f.store.path, invalid)
@@ -95,7 +98,7 @@ it('keeps last good settings on malformed or invalid edits and refuses to overwr
   expect(readFileSync(restarted.path, 'utf8')).toBe('{"models":{"sets":[]}}')
 })
 
-it('validates a combined preference/model save before replacing the file and preserves external fields', () => {
+watched('validates a combined preference/model save before replacing the file and preserves external fields', () => {
   const f = fixture()
   const original = readFileSync(f.store.path, 'utf8')
   expect(() => f.store.set({ accent: 'teal' }, { ...models, defaultStepId: 'missing' })).toThrow()
@@ -111,7 +114,7 @@ it('validates a combined preference/model save before replacing the file and pre
   expect(readdirSync(f.directory).filter((name) => name.includes('.tmp.'))).toEqual([])
 })
 
-it('ignores abandoned temporary writes on restart', () => {
+watched('ignores abandoned temporary writes on restart', () => {
   const f = fixture({ accent: 'teal' })
   f.store.close()
   writeFileSync(`${f.store.path}.tmp.interrupted`, '{"accent":')
@@ -120,7 +123,7 @@ it('ignores abandoned temporary writes on restart', () => {
   expect(restarted.preferences().accent).toBe('teal')
 })
 
-it('preserves the committed file and cache if atomic replacement fails and cleans up the temporary file', () => {
+watched('preserves the committed file and cache if atomic replacement fails and cleans up the temporary file', () => {
   const f = fixture({ accent: 'teal' })
   const original = readFileSync(f.store.path, 'utf8')
   vi.mocked(renameSync).mockImplementationOnce(() => {

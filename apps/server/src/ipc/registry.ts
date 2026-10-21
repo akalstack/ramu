@@ -15,6 +15,7 @@ import { registerReviewHandlers } from './handlers/reviews'
 import { registerScheduleHandlers } from './handlers/schedules'
 import { registerSearchHandlers } from './handlers/search'
 import { registerSettingsHandlers } from './handlers/settings'
+import { registerRuleHandlers } from './handlers/rules'
 import { registerSummaryHandlers } from './handlers/summaries'
 import { registerTerminalHandlers } from './handlers/terminals'
 import { registerUiHandlers } from './handlers/ui'
@@ -49,6 +50,7 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable =>
     registerTerminalHandlers(ctx),
     registerMemoryHandlers(ctx),
     registerSummaryHandlers(ctx),
+    registerRuleHandlers(ctx),
     registerSettingsHandlers(ctx),
     registerProviderHandlers(ctx),
     registerSharedMcpHandlers(ctx),

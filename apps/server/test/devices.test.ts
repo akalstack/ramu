@@ -2,7 +2,7 @@ import { afterEach, expect, it } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir, type NetworkInterfaceInfo, type networkInterfaces } from 'node:os'
 import { join } from 'node:path'
-import { DeviceStore, PAIRING_TTL_MS } from '../src/remote/devices'
+import { DeviceStore, PAIRING_TTL_MS, RENEWAL_OVERLAP_MS, RENEWAL_PENDING_MS } from '../src/remote/devices'
 import { candidateUrls } from '../src/remote/network'
 
 const dirs: string[] = []
@@ -169,4 +169,102 @@ it('rejects lifetimes outside 1 to 3650 days and ignores an invalid saved value'
     expect(() => devices.setLifetime(bad)).toThrow()
   writeFileSync(path, JSON.stringify({ devices: [], pending: [], lifetimeDays: 99999 }))
   expect(devices.lifetime()).toEqual({ days: 90, saved: false })
+})
+
+it('renews a token: the old one keeps working until the new one is used, then stops after a short overlap', () => {
+  const { devices } = store()
+  const paired = devices.redeem(devices.createCode().code, 'phone', 1000)!
+  const renewed = devices.renew(`Bearer ${paired.token}`, 2000)!
+  expect(renewed.token).not.toBe(paired.token)
+  // A lost response: the old token is still the credential and the unused new one has not replaced it.
+  expect(devices.authenticate(`Bearer ${paired.token}`, 3000)?.id).toBe(paired.device.id)
+  // First use of the new token proves it was saved.
+  expect(devices.authenticate(`Bearer ${renewed.token}`, 4000)?.id).toBe(paired.device.id)
+  expect(devices.authenticate(`Bearer ${paired.token}`, 4000 + RENEWAL_OVERLAP_MS - 1)).not.toBeNull()
+  expect(devices.authenticate(`Bearer ${paired.token}`, 4000 + RENEWAL_OVERLAP_MS + 1)).toBeNull()
+  expect(devices.authenticate(`Bearer ${renewed.token}`, 4000 + RENEWAL_OVERLAP_MS + 1)).not.toBeNull()
+})
+
+it('asking again before the new token is used replaces the unused one, and a replaced token cannot renew', () => {
+  const { devices } = store()
+  const paired = devices.redeem(devices.createCode().code, 'phone', 1000)!
+  const first = devices.renew(`Bearer ${paired.token}`, 2000)!
+  const second = devices.renew(`Bearer ${paired.token}`, 3000)!
+  expect(devices.authenticate(`Bearer ${first.token}`, 3500)).toBeNull()
+  expect(devices.authenticate(`Bearer ${second.token}`, 3500)).not.toBeNull()
+  // The promoted-away token is only a grace credential for in-flight requests; it cannot mint another.
+  expect(devices.renew(`Bearer ${paired.token}`, 3600)).toBeNull()
+  expect(devices.renew(`Bearer ${second.token}`, 3600)).not.toBeNull()
+})
+
+it('drops an unused renewed token after its window, and a revoked or expired device cannot renew', () => {
+  const { devices } = store()
+  const paired = devices.redeem(devices.createCode().code, 'phone', 1000)!
+  const renewed = devices.renew(`Bearer ${paired.token}`, 2000)!
+  expect(devices.authenticate(`Bearer ${renewed.token}`, 2000 + RENEWAL_PENDING_MS + 1)).toBeNull()
+  expect(devices.authenticate(`Bearer ${paired.token}`, 2000 + RENEWAL_PENDING_MS + 1)).not.toBeNull()
+  devices.revoke(paired.device.id)
+  expect(devices.renew(`Bearer ${paired.token}`, 5000)).toBeNull()
+  expect(devices.renew(undefined, 5000)).toBeNull()
+  const aging = store().devices
+  const old = aging.redeem(aging.createCode().code, 'old', 1000)!
+  expect(aging.renew(`Bearer ${old.token}`, 1000 + 91 * 24 * 60 * 60_000)).toBeNull()
+})
+
+it('lists unused offers without their codes, and cancelling one stops its code from pairing', () => {
+  const { devices } = store()
+  const first = devices.createCode(1000, 'owner', 'dialog-a')
+  const second = devices.createCode(1000, 'viewer')
+  expect(devices.offers(1000)).toEqual([
+    { id: first.offerId, role: 'owner', expiresAt: first.expiresAt },
+    { id: second.offerId, role: 'viewer', expiresAt: second.expiresAt },
+  ])
+  expect(JSON.stringify(devices.offers(1000))).not.toContain(first.code.replace('-', ''))
+  expect(devices.cancelOffer(first.offerId, 1500)).toBe(true)
+  expect(devices.redeem(first.code, 'late', 2000)).toBeNull()
+  expect(devices.offerStatus(first.offerId, 2000)).toEqual({ state: 'cancelled' })
+  expect(devices.cancelOffer(first.offerId, 2000)).toBe(false)
+  // The independent offer is untouched and keeps its own role.
+  expect(devices.redeem(second.code, 'tablet', 2000)?.device.role).toBe('viewer')
+})
+
+it("a dialog's next offer replaces its unused one, while other owners' offers keep their lifetime", () => {
+  const { devices } = store()
+  const a1 = devices.createCode(1000, 'owner', 'dialog-a')
+  const b = devices.createCode(1000, 'owner', 'dialog-b')
+  const a2 = devices.createCode(1000, 'viewer', 'dialog-a')
+  expect(devices.redeem(a1.code, 'x', 1100)).toBeNull()
+  expect(devices.offerStatus(a1.offerId, 1100)).toEqual({ state: 'cancelled' })
+  expect(devices.offers(1100).map((o) => o.id)).toEqual([b.offerId, a2.offerId])
+  // A role change is a new offer: the old code never changes its issued role.
+  expect(devices.redeem(a2.code, 'y', 1100)?.device.role).toBe('viewer')
+})
+
+it('reports the outcome of that offer, not of any new device', () => {
+  const { devices } = store()
+  const mine = devices.createCode(1000, 'owner', 'dialog-a')
+  const other = devices.createCode(1000, 'owner', 'dialog-b')
+  const stranger = devices.redeem(other.code, 'someone else', 1100)!
+  expect(devices.offerStatus(mine.offerId, 1100)).toMatchObject({ state: 'pending' })
+  expect(devices.offerStatus(other.offerId, 1100)).toMatchObject({
+    state: 'redeemed',
+    device: { id: stranger.device.id, name: 'someone else', role: 'owner' },
+  })
+  const paired = devices.redeem(mine.code, 'phone', 1200)!
+  expect(devices.offerStatus(mine.offerId, 1200)).toMatchObject({ state: 'redeemed', device: { id: paired.device.id } })
+  expect(devices.offerStatus('nope', 1200)).toEqual({ state: 'unknown' })
+  const expiring = devices.createCode(1000)
+  expect(devices.offerStatus(expiring.offerId, 1000 + PAIRING_TTL_MS + 1)).toEqual({ state: 'expired' })
+  // The offer status never leaks the token hash.
+  expect(JSON.stringify(devices.offerStatus(other.offerId, 1100))).not.toContain('tokenHash')
+})
+
+it('a code spent on one writer cannot also be cancelled by another', () => {
+  const { path, devices } = store()
+  const cli = new DeviceStore(path)
+  const offer = devices.createCode(1000)
+  expect(devices.redeem(offer.code, 'phone', 1100)).not.toBeNull()
+  expect(cli.cancelOffer(offer.offerId, 1200)).toBe(false)
+  expect(cli.offerStatus(offer.offerId, 1200)).toMatchObject({ state: 'redeemed' })
+  expect(cli.list()).toHaveLength(1)
 })

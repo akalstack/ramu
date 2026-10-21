@@ -30,6 +30,8 @@ import { useAppSettings } from './settings/AppSettings'
 import { useHostRuntime, useWorkspace } from './workspace/workspace'
 import { useHost } from './workspace/HostProvider'
 import { usePaged } from './settings/cards'
+import { useViewOnly } from './composer/useViewOnly'
+import { VIEW_ONLY_WRITE_NOTICE } from './composer/viewerAccess'
 import { notifyError } from './chat/Notifications'
 import {
   RULE_KINDS,
@@ -83,6 +85,7 @@ export function SchedulesPage({
   useLanguage()
   const ws = useWorkspace(),
     { schedules, runs, reload, loading } = useSchedules()
+  const viewOnly = useViewOnly()
   const [editing, setEditing] = useState<Schedule | 'new' | null>(null),
     [selected, setSelected] = useState<string | null>(null)
   const [busy, setBusy] = useState(false),
@@ -130,7 +133,13 @@ export function SchedulesPage({
               {t('Agents run in the background, even when Ramu is closed.')}
             </p>
           </div>
-          <Button variant="default" className={PRIMARY_ACTION_CLASS} onClick={() => setEditing('new')}>
+          <Button
+            variant="default"
+            className={PRIMARY_ACTION_CLASS}
+            disabled={viewOnly}
+            title={viewOnly ? t(VIEW_ONLY_WRITE_NOTICE) : undefined}
+            onClick={() => setEditing('new')}
+          >
             <Plus size={14} />
             {t('New schedule')}
           </Button>
@@ -162,7 +171,13 @@ export function SchedulesPage({
               <EmptyDescription>{t('Schedule a task once or at regular intervals.')}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setEditing('new')}>
+              <Button
+                variant="secondary"
+                className="bg-fill hover:bg-fill-hover"
+                disabled={viewOnly}
+                title={viewOnly ? t(VIEW_ONLY_WRITE_NOTICE) : undefined}
+                onClick={() => setEditing('new')}
+              >
                 {t('Create your first schedule')}
               </Button>
             </EmptyContent>
@@ -176,7 +191,7 @@ export function SchedulesPage({
                 schedule={s}
                 runs={runs.filter((r) => r.scheduleId === s.id)}
                 selected={selected === s.id}
-                busy={busy}
+                busy={busy || viewOnly}
                 onEdit={() => setEditing(s)}
                 onAct={act}
                 onOpenRun={(run) => void openRun(run)}

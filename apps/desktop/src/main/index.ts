@@ -4,6 +4,10 @@ import { HostNavigation } from './hostNavigation'
 import type { HostDestination } from '@ramu/shared/hostOverview'
 import { readHostOverview, HostOverviewQueue } from './hostOverview'
 import { isHostDestination } from '@ramu/shared/hostOverview'
+import { LINK_TARGET_KEY, isWebLink, linkTargetFrom } from '@ramu/shared/browserLinks'
+import { BrowserRuntime } from './browserRuntime'
+import { ElectronGuestFactory } from './electronGuest'
+import { browserMethod, isBrowserMethod } from './browserMethods'
 import { isHostInvokeAllowed, routeInvoke, routeTaskCommand, activityChannel } from './hostInvoke'
 import { DeviceState } from './deviceState'
 import { partitionHostEntries } from './partitionStorage'
@@ -44,6 +48,7 @@ import { createAgentNotifier } from './agentNotifier'
 import {
   runtimeInvoke,
   runtimePair,
+  runtimeRenew,
   subscribeRuntime,
   refreshRuntimeNetwork,
   runtimeNetwork,
@@ -327,7 +332,11 @@ async function main() {
       if (url !== contents.getURL()) e.preventDefault()
     })
     contents.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\//.test(url)) void shell.openExternal(url)
+      if (!isWebLink(url)) return { action: 'deny' }
+      // The person chooses, per device, whether clicked links use their own browser or the integrated one.
+      if (linkTargetFrom(deviceState.snapshot()[LINK_TARGET_KEY]) === 'integrated' && !win.isDestroyed())
+        win.webContents.send('browser:open-link', { url })
+      else void shell.openExternal(url)
       return { action: 'deny' }
     })
   }
@@ -438,6 +447,7 @@ async function main() {
       }),
     invoke: runtimeInvoke,
     pair: runtimePair,
+    renew: (url, token) => runtimeRenew(url, token),
     deliver: (id, channel, payload) => {
       observeHostActivity(id, channel, payload)
       sendTo(id, channel, payload)
@@ -536,6 +546,9 @@ async function main() {
     if (channel) observeHostActivity(id, channel, {})
     return result
   }
+  // The integrated browser's tabs live in this shell; every call names the host and thread it is for.
+  const browser = new BrowserRuntime(new ElectronGuestFactory(() => (win.isDestroyed() ? null : win)), () => [])
+  win.on('closed', () => browser.closeAll())
   ipcMain.handle('ramu:invoke', async (event, requestMethod: unknown, requestArgs: unknown, requestHost?: unknown) => {
     // Only our windows may invoke IPC. Normal calls reach their owning computer; explicit computer management validates its target below.
     const self = event.sender === win.webContents ? LOCAL : undefined
@@ -569,6 +582,14 @@ async function main() {
     const target = method.startsWith('computers.') ? runtime : computers.endpoint(settingsComputer)
     if (remote && computers.status(settingsComputer) === 'paused' && !method.startsWith('computers.'))
       throw new Error(t('This connection is paused. Resume it in Remote access.'))
+    if (isBrowserMethod(method)) {
+      if (remote) throw new Error('The integrated browser runs on this computer.')
+      return browserMethod(browser, method, args)
+    }
+    if (method === 'app.openExternal') {
+      if (remote || typeof args[0] !== 'string' || !isWebLink(args[0])) throw new Error('Only web links can be opened.')
+      return shell.openExternal(args[0])
+    }
     if (method === 'app.content.mount') return contentDocuments.mount(args[0])
     if (method === 'app.content.release') return contentDocuments.release(args[0])
     if (method === 'app.systemLanguages') {

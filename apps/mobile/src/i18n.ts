@@ -124,7 +124,14 @@ const en = {
   homeClearFilters: 'Clear filters',
   explorerTitle: 'Explorer',
   explorerEmptyFolder: 'Empty folder',
-  explorerCopyHint: 'Long press to copy the path',
+  explorerCopyHint: 'Long press for file actions',
+  explorerCopyPath: 'Copy path',
+  explorerRename: 'Rename',
+  explorerDelete: 'Delete',
+  explorerRenameTitle: 'Rename',
+  explorerDeleteConfirm: 'Delete {0}? This removes it from the checkout and cannot be undone here.',
+  explorerNameInvalid: 'Use a name without slashes, in the same folder.',
+  explorerActionFailed: 'The change was not applied.',
   fileDraftFull: 'This draft already has 30 file references. Remove a reference in the composer, then try again.',
   fileDraftFailed:
     'Could not add the file. Your draft is kept; check the host and available device storage, then try again.',
@@ -476,7 +483,14 @@ const id: typeof en = {
   homeClearFilters: 'Hapus saringan',
   explorerTitle: 'Penjelajah',
   explorerEmptyFolder: 'Folder kosong',
-  explorerCopyHint: 'Tekan lama untuk menyalin jalur',
+  explorerCopyHint: 'Tekan lama untuk tindakan berkas',
+  explorerCopyPath: 'Salin jalur',
+  explorerRename: 'Ubah nama',
+  explorerDelete: 'Hapus',
+  explorerRenameTitle: 'Ubah nama',
+  explorerDeleteConfirm: 'Hapus {0}? Ini menghapusnya dari checkout dan tidak bisa dibatalkan di sini.',
+  explorerNameInvalid: 'Gunakan nama tanpa garis miring, di folder yang sama.',
+  explorerActionFailed: 'Perubahan tidak diterapkan.',
   fileDraftFull: 'Draf ini sudah memiliki 30 referensi berkas. Hapus satu referensi di kotak pesan, lalu coba lagi.',
   fileDraftFailed:
     'Tidak dapat menambahkan berkas. Draf Anda tetap disimpan; periksa host dan ruang penyimpanan perangkat, lalu coba lagi.',
@@ -722,4 +736,3 @@ export function ago(at: number): string {
   if (h < 24) return `${h}h`
   return `${Math.round(h / 24)}d`
 }
-

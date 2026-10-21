@@ -8,6 +8,8 @@ import type { SshComputers } from './sshComputers'
 export const LOCAL = 'local'
 const COUNT_DELAY_MS = 800
 const SSH_RETRY_MS = 20_000
+/** Rotate a paired computer's token about monthly, well inside the host's default 90-day window. */
+export const RENEW_EVERY_MS = 30 * 24 * 60 * 60_000
 
 interface Live {
   status: ComputerStatus
@@ -35,6 +37,8 @@ export interface ComputerDeps {
     options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<any>
   pair(url: string, code: string, deviceName: string): Promise<{ token: string }>
+  /** Swaps a computer's token for a fresh one; null when it declines (an older host, or no longer paired). */
+  renew(url: string, token: string): Promise<{ token: string } | null>
   /** Computers reached over SSH keep a tunnel; the registry asks for it before connecting. */
   ssh: Pick<SshComputers, 'ensure' | 'connect' | 'close' | 'closeAll'>
   /** An event from a computer, for its window and its notifier. */
@@ -148,8 +152,10 @@ export class ComputerRegistry {
           live.status = payload.rejected ? 'rejected' : payload.connected ? 'connected' : 'offline'
           live.waiting = payload.waiting
           live.retryAt = payload.retryAt
-          if (payload.connected) this.countSoon(id)
-          else if (!payload.connected) {
+          if (payload.connected) {
+            this.countSoon(id)
+            void this.renewIfDue(id)
+          } else if (!payload.connected) {
             this.clearCount(id)
             live.running = 0
             live.needsInput = 0
@@ -160,6 +166,20 @@ export class ComputerRegistry {
       },
       { retryMode: saved?.retryMode ?? 'events' },
     )
+  }
+
+  /** Rotates the stored token when it is due. Any failure just retries at the next connection. */
+  private async renewIfDue(id: string, now = Date.now()) {
+    const renewedAt = this.deps.servers.renewedAt(id)
+    if (renewedAt !== null && renewedAt <= now && now - renewedAt < RENEW_EVERY_MS) return
+    const endpoint = this.deps.servers.endpoint(id)
+    if (!endpoint) return
+    try {
+      const renewed = await this.deps.renew(endpoint.url, endpoint.token)
+      if (renewed && !this.stopped && this.deps.servers.get(id)) this.deps.servers.rotate(id, renewed.token, now)
+    } catch {
+      // Offline or an older host: keep the current token.
+    }
   }
 
   /** Chats starting, finishing or asking something change what the switcher shows. */
@@ -287,8 +307,16 @@ export class ComputerRegistry {
     const { parseRemoteUrl } = await import('@ramu/contracts')
     const url = parseRemoteUrl(address)
     const { token } = await this.deps.pair(url, code.trim(), this.deps.deviceName)
-    const status = (await this.deps.invoke({ kind: 'http', url, token }, 'background.status')) as
-      { hostname?: string } | undefined
+    // The code is spent once the token exists. If the first request fails, keep the credential and let the normal
+    // connection retry reach the host, rather than discarding a valid grant the person cannot get again.
+    const status = (await this.deps
+      .invoke({ kind: 'http', url, token }, 'background.status')
+      .catch((error: unknown) => {
+        // A refused token is a real failure; an unreachable or slow host is not.
+        if (/rejected|revoked|unauthori[sz]ed/i.test(error instanceof Error ? error.message : String(error)))
+          throw error
+        return undefined
+      })) as { hostname?: string } | undefined
     // Like Tailscale and NetBird: unless you name it, a computer is called what it calls itself.
     const saved = this.deps.servers.add(url, label?.trim() || status?.hostname, token)
     // Pairing an address again replaces its entry under a new id.

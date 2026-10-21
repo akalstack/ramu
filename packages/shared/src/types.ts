@@ -3,6 +3,7 @@
 export * from './types/agent'
 export * from './types/fallback'
 export * from './types/forge'
+export * from './types/rules'
 export * from './types/git'
 export * from './types/goal'
 export * from './types/intelligence'

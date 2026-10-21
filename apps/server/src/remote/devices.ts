@@ -22,17 +22,47 @@ export interface DeviceInfo {
   expiresAt: number | null
   role: DeviceRole
 }
+/** A renewed token is accepted until the client first uses it; an unused one is dropped after this long. */
+export const RENEWAL_PENDING_MS = 7 * 24 * 60 * 60_000
+/** The replaced token keeps working briefly so requests already in flight finish. */
+export const RENEWAL_OVERLAP_MS = 2 * 60_000
 interface DeviceRecord extends DeviceInfo {
   tokenHash: string
+  /** Issued by `renew` and not used yet; promoted on its first authenticated request. */
+  nextTokenHash?: string
+  nextIssuedAt?: number
+  /** The token a promotion replaced, valid until `previousUntil`. */
+  previousTokenHash?: string
+  previousUntil?: number
 }
 interface PendingCode {
+  /** Non-secret handle for listing, cancelling and following one offer. Absent on offers made before ids existed. */
+  id?: string
+  /** Who created it (a dialog or the CLI); a new offer from the same owner replaces its previous unused one. */
+  owner?: string
   role?: DeviceRole
   codeHash: string
   expiresAt: number
 }
+/** How an offer ended, kept briefly so the host can show exactly which offer was used or cancelled. */
+interface SettledOffer {
+  id: string
+  state: 'redeemed' | 'cancelled'
+  at: number
+  deviceId?: string
+}
+const SETTLED_KEEP = 20
+const SETTLED_MS = 60 * 60_000
+export type OfferStatus =
+  | { state: 'pending'; expiresAt: number; role: DeviceRole }
+  | { state: 'redeemed'; device: DeviceInfo | null }
+  | { state: 'cancelled' }
+  | { state: 'expired' }
+  | { state: 'unknown' }
 interface DeviceFile {
   devices: DeviceRecord[]
   pending: PendingCode[]
+  settled?: SettledOffer[]
   /** Chosen on the host in Settings. Absent means the server default (`RAMU_DEVICE_TOKEN_DAYS`, else 90 days). */
   lifetimeDays?: number | 'never'
 }
@@ -68,6 +98,7 @@ export class DeviceStore {
       return {
         devices: Array.isArray(parsed.devices) ? parsed.devices : [],
         pending: Array.isArray(parsed.pending) ? parsed.pending : [],
+        ...(Array.isArray(parsed.settled) ? { settled: parsed.settled } : {}),
         ...(validLifetime(parsed.lifetimeDays) ? { lifetimeDays: parsed.lifetimeDays } : {}),
       }
     } catch {
@@ -108,17 +139,72 @@ export class DeviceStore {
   }
 
   /** A one-time code for a new device. The most recent few stay valid; older ones are dropped. */
-  createCode(now = Date.now(), role: DeviceRole = 'owner'): { code: string; expiresAt: number } {
+  createCode(
+    now = Date.now(),
+    role: DeviceRole = 'owner',
+    owner?: string,
+  ): { code: string; expiresAt: number; offerId: string } {
     if (role !== 'owner' && role !== 'viewer') throw new Error('Invalid device role')
     const file = this.read()
+    const offerId = randomUUID().slice(0, 8)
+    const replaced = owner ? file.pending.filter((p) => p.owner === owner) : []
+    file.settled = this.settle(file, replaced, 'cancelled', now)
+    if (owner) file.pending = file.pending.filter((p) => p.owner !== owner)
     const bytes = randomBytes(10)
     const raw = Array.from(bytes, (byte) => ALPHABET[byte % ALPHABET.length]).join('')
     const expiresAt = now + PAIRING_TTL_MS
-    file.pending = [...file.pending.filter((p) => p.expiresAt > now), { codeHash: sha256(raw), expiresAt, role }].slice(
-      -MAX_PENDING,
-    )
+    file.pending = [
+      ...file.pending.filter((p) => p.expiresAt > now),
+      { id: offerId, ...(owner ? { owner } : {}), codeHash: sha256(raw), expiresAt, role },
+    ].slice(-MAX_PENDING)
     this.write(file)
-    return { code: `${raw.slice(0, 5)}-${raw.slice(5)}`, expiresAt }
+    return { code: `${raw.slice(0, 5)}-${raw.slice(5)}`, expiresAt, offerId }
+  }
+
+  private settle(
+    file: DeviceFile,
+    offers: PendingCode[],
+    state: SettledOffer['state'],
+    now: number,
+    deviceId?: string,
+  ) {
+    const added = offers.flatMap((offer) =>
+      offer.id ? [{ id: offer.id, state, at: now, ...(deviceId ? { deviceId } : {}) }] : [],
+    )
+    return [...(file.settled ?? []).filter((entry) => now - entry.at < SETTLED_MS), ...added].slice(-SETTLED_KEEP)
+  }
+
+  /** Unused offers, without their codes. */
+  offers(now = Date.now()): { id: string; role: DeviceRole; expiresAt: number }[] {
+    return this.read().pending.flatMap((p) =>
+      p.id && p.expiresAt > now ? [{ id: p.id, role: p.role ?? 'owner', expiresAt: p.expiresAt }] : [],
+    )
+  }
+
+  /** Withdraws an unused offer. A used or expired one is left as it is. */
+  cancelOffer(id: string, now = Date.now()): boolean {
+    const file = this.read()
+    const match = file.pending.filter((p) => p.id === id)
+    if (!match.length) return false
+    file.settled = this.settle(file, match, 'cancelled', now)
+    file.pending = file.pending.filter((p) => p.id !== id)
+    this.write(file)
+    return true
+  }
+
+  /** What became of one offer, so the host reports that offer's own outcome rather than any new device. */
+  offerStatus(id: string, now = Date.now()): OfferStatus {
+    const file = this.read()
+    const pending = file.pending.find((p) => p.id === id)
+    if (pending)
+      return pending.expiresAt > now
+        ? { state: 'pending', expiresAt: pending.expiresAt, role: pending.role ?? 'owner' }
+        : { state: 'expired' }
+    const settled = file.settled?.find((entry) => entry.id === id)
+    if (!settled) return { state: 'unknown' }
+    if (settled.state === 'cancelled') return { state: 'cancelled' }
+    const device = file.devices.find((d) => d.id === settled.deviceId)
+    return { state: 'redeemed', device: device ? strip(device) : null }
   }
 
   /** Spends a code and creates the device in one write, so a code cannot be redeemed twice. Null when the code is wrong, used or expired. */
@@ -142,7 +228,12 @@ export class DeviceStore {
       role: match.role ?? 'owner',
       tokenHash: sha256(token),
     }
-    this.write({ ...file, devices: [...file.devices, record], pending: live.filter((p) => p !== match) })
+    this.write({
+      ...file,
+      devices: [...file.devices, record],
+      pending: live.filter((p) => p !== match),
+      settled: this.settle(file, [match], 'redeemed', now, record.id),
+    })
     return { device: strip(record), token }
   }
 
@@ -151,7 +242,12 @@ export class DeviceStore {
     if (!header?.startsWith(`${AUTH_SCHEME} `)) return null
     const hash = sha256(header.slice(AUTH_SCHEME.length + 1))
     const file = this.read(),
-      record = file.devices.find((d) => d.tokenHash === hash)
+      record = file.devices.find(
+        (d) =>
+          d.tokenHash === hash ||
+          (d.nextTokenHash === hash && now - (d.nextIssuedAt ?? 0) < RENEWAL_PENDING_MS) ||
+          (d.previousTokenHash === hash && (d.previousUntil ?? 0) > now),
+      )
     if (!record) return null
     const lifetime = this.lifetimeOf(file)
     // Older records get a bounded migration window based on their last use, never an immortal grant.
@@ -162,9 +258,18 @@ export class DeviceStore {
           : (record.lastSeenAt ?? record.createdAt) + lifetime
         : record.expiresAt
     if (expiry !== null && expiry <= now) return null
+    // The first request with a renewed token proves the client saved it: the old token stops after a short overlap.
+    const promote = record.nextTokenHash === hash
+    if (promote) {
+      record.previousTokenHash = record.tokenHash
+      record.previousUntil = now + RENEWAL_OVERLAP_MS
+      record.tokenHash = hash
+      delete record.nextTokenHash
+      delete record.nextIssuedAt
+    }
     // Remembered in memory and written rarely, so a busy client does not rewrite the file the CLI also edits.
     const lastWrite = this.seen.get(record.id) ?? 0
-    if (now - lastWrite >= LAST_SEEN_WRITE_MS || record.expiresAt === undefined) {
+    if (promote || now - lastWrite >= LAST_SEEN_WRITE_MS || record.expiresAt === undefined) {
       this.seen.set(record.id, now)
       record.lastSeenAt = now
       record.expiresAt = lifetime === null ? null : now + lifetime
@@ -172,6 +277,28 @@ export class DeviceStore {
       this.write(file)
     }
     return strip(record)
+  }
+
+  /**
+   * Issues a fresh token to the device that holds the current one. The current token keeps working until the new one
+   * is used once, so a lost response only means asking again (a repeat replaces the unused token). A replaced token
+   * is not accepted for renewal, and a revoked device cannot renew.
+   */
+  renew(header: string | undefined, now = Date.now()): { token: string; expiresAt: number | null } | null {
+    if (!header?.startsWith(`${AUTH_SCHEME} `)) return null
+    const hash = sha256(header.slice(AUTH_SCHEME.length + 1))
+    const file = this.read()
+    const record = file.devices.find((d) => d.tokenHash === hash)
+    if (!record) return null
+    const lifetime = this.lifetimeOf(file)
+    const expiry = record.expiresAt === undefined ? null : record.expiresAt
+    if (expiry !== null && expiry <= now) return null
+    const token = randomBytes(32).toString('hex')
+    record.nextTokenHash = sha256(token)
+    record.nextIssuedAt = now
+    record.expiresAt = lifetime === null ? null : now + lifetime
+    this.write(file)
+    return { token, expiresAt: record.expiresAt }
   }
 
   list(): DeviceInfo[] {

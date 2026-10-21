@@ -306,6 +306,18 @@ function Shell() {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [palette])
 
+  // A clicked link the person chose to open in the integrated browser opens as a tab in the thread on screen; with no
+  // thread open there is nowhere to put it, so it goes to their own browser instead of being lost.
+  useEffect(
+    () =>
+      ramu.on('browser:open-link', ({ url }) => {
+        const taskId = ws.ui.activeTaskId
+        if (taskId) ws.openView(taskId, { kind: 'browser', url })
+        else void ramu.invoke('app.openExternal', url).catch(() => {})
+      }),
+    [ws],
+  )
+
   // The start screen shows for New chat, and when nothing is open yet.
   const globalPage = ui.sidebar === 'schedules' || ui.sidebar === 'inbox'
   const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
@@ -841,7 +853,10 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
   useEffect(() => {
     setPicked(null)
   }, [taskId, view?.id])
-  const repoId = picked ?? view?.repoId ?? (taskId ? ws.bindings[taskId]?.[0]?.repoId : undefined)
+  const repoId =
+    picked ??
+    (view && 'repoId' in view ? view.repoId : undefined) ??
+    (taskId ? ws.bindings[taskId]?.[0]?.repoId : undefined)
   const candidate = taskId && repoId ? ws.binding(taskId, repoId) : undefined
   const binding = candidate?.folderOnly ? undefined : candidate
   const call = queryInvokerFor(host)

@@ -87,6 +87,12 @@ export class SharedMcpService {
     this.changed()
   }
 
+  /** Removing a provider account takes it out of shared approvals for every new invocation. */
+  removeAccount(provider: SharedMcpProviderAccount['provider'], accountId: string) {
+    this.policy.removeAccount(provider, accountId)
+    this.changed()
+  }
+
   async verifyCredentialStore() {
     try {
       await this.credentials.verify(this.storage.hostId)

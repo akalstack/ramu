@@ -17,6 +17,8 @@ interface StoredServer {
   pairedAt: number
   token: string
   sealed: boolean
+  /** When the token was last rotated; absent means never. */
+  renewedAt?: number
   enabled?: boolean
   retryMode?: 'events' | 'periodic'
   ssh?: SshRoute
@@ -188,6 +190,26 @@ export class RemoteServers {
       retryMode: 'events',
       ...(ssh ? { ssh } : {}),
     }
+  }
+
+  /** When this computer's token was last rotated, or null. */
+  renewedAt(id: string): number | null {
+    this.load()
+    return this.records.get(id)?.renewedAt ?? null
+  }
+
+  /**
+   * Stores a renewed token. The write completes before the token is ever used, so a crash leaves the previous token
+   * (which the host keeps until the new one's first use) working.
+   */
+  rotate(id: string, token: string, now = Date.now()) {
+    const file = this.read(),
+      server = file.servers.find((entry) => entry.id === id)
+    if (!server) return
+    server.sealed = this.sealer.available
+    server.token = server.sealed ? this.sealer.seal(token) : token
+    server.renewedAt = now
+    this.write(file)
   }
 
   /** A tunnel that could not reuse its last local port moves to a new one. */

@@ -38,6 +38,22 @@ export function ProviderSettings({
   const statusQuery = useQuery({ ...providerStatusQuery(host, config, status), enabled: false })
   const statuses = statusQuery.data ?? []
   const busy = statusQuery.isFetching || (!statusQuery.data && !statusQuery.isError)
+  const ready = !scope || (scope.ready && !scope.stale)
+  const mcp = useQuery({ queryKey: ['mcp-accounts', host], queryFn: () => invoke('mcp.status'), enabled: ready })
+  const canShare = mcp.data?.canAdminister === true
+  const refetchMcp = mcp.refetch
+  /** Account consent to reuse approved Shared MCP connections; absent until someone saves it. */
+  const sharing = (provider: AgentProvider, id: string) =>
+    mcp.data?.accounts.find((entry) => entry.provider === provider && entry.accountId === id)?.shareApprovals
+  const setSharing = async (provider: AgentProvider, id: string, shareApprovals: boolean) => {
+    setError(null)
+    try {
+      await invoke('mcp.account', { provider, accountId: id, shareApprovals })
+      await refetchMcp()
+    } catch (reason) {
+      setError(errorText(reason))
+    }
+  }
   const loginPending = useRef(false)
   const accountUsage = useAccountUsage()
   // Cache entries are host/configuration scoped, so reopening never shows another host’s logins.
@@ -97,12 +113,18 @@ export function ProviderSettings({
       (config[provider]?.accounts ?? []).map((account) => (account.id === id ? { ...account, enabled } : account)),
       id === 'default' ? enabled : undefined,
     )
-  const remove = (provider: AgentProvider, id: string) =>
+  const remove = (provider: AgentProvider, id: string) => {
+    if (canShare)
+      void invoke('mcp.removeAccount', provider, id).then(
+        () => refetchMcp(),
+        () => {},
+      )
     arrange(
       provider,
       providerAccountRows(config, provider).filter((item) => item !== id),
       (config[provider]?.accounts ?? []).filter((account) => account.id !== id),
     )
+  }
   const rename = (provider: AgentProvider, id: string, name: string) =>
     change(provider, {
       accounts: (config[provider]?.accounts ?? []).map((account) => {
@@ -151,6 +173,8 @@ export function ProviderSettings({
   const add = (provider: AgentProvider) => {
     const id = crypto.randomUUID()
     arrange(provider, [...providerAccountRows(config, provider), id], [...(config[provider]?.accounts ?? []), { id }])
+    // A backup account starts out sharing approved MCP connections; it stays editable in its row.
+    if (canShare) void setSharing(provider, id, true)
   }
   return (
     <div className="settings-form [&_p]:m-0 [&_p]:leading-[1.55] flex flex-col gap-3 provider-settings">
@@ -202,6 +226,8 @@ export function ProviderSettings({
             onRename={(id, label) => rename(provider, id, label)}
             onRemove={(id) => remove(provider, id)}
             onAddAccount={() => add(provider)}
+            mcpSharing={canShare ? (id) => sharing(provider, id) : undefined}
+            onMcpSharing={(id, on) => void setSharing(provider, id, on)}
             onUpdate={() => void update(provider)}
             onBrowse={(key) => void browse(provider, key)}
           />

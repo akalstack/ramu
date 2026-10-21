@@ -24,6 +24,9 @@ export function viewKey(v: ViewInput | ViewDescriptor): string {
       return `review:${v.taskId}`
     case 'agent':
       return `agent:${v.sessionId}`
+    case 'browser':
+      // Several tabs are allowed, like terminals.
+      return `browser:${crypto.randomUUID()}`
     case 'terminal':
       // Several terminals per repository are allowed.
       return `terminal:${crypto.randomUUID()}`

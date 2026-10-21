@@ -26,6 +26,7 @@ import { ArchivedThreads } from './ArchivedThreads'
 import { ChatsSettings } from './ChatsSettings'
 import { GHOST_BUTTON_CLASS, RESET_KEYS, SETTINGS_FORM_CLASS } from './constants'
 import { EditorSettings } from './EditorSettings'
+import { BrowserSettings } from './BrowserSettings'
 import { GitSettings } from './GitSettings'
 import { ModelSetsEditor } from './ModelSetsEditor'
 import { ResetDialog, type ResetTarget } from './ResetDialog'
@@ -183,6 +184,7 @@ export function SettingsPanel({
               <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />
             )}
             {page === 'editor' && <EditorSettings {...draftProps} />}
+            {page === 'browser' && <BrowserSettings />}
             {page === 'access' && <AccessSettings {...draftProps} />}
             {page === 'memory' && (
               <>

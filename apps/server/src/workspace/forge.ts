@@ -6,6 +6,7 @@ import type {
   ForgeAvailability,
   ForgeCheck,
   ForgeCheckState,
+  ForgeConnectionSummary,
   ForgeStatus,
   IssueLink,
   IssueSummary,
@@ -16,6 +17,7 @@ import type {
   PullRequestInput,
   PullRequestReviewDecision,
 } from '@ramu/shared/types'
+import { parseGhAuthStatus } from '@ramu/shared/forgeAccounts'
 import { findExecutable } from '../providers/providerBinaries'
 import { branchExists, commitBranchInfo, currentBranch, git, headOid } from './git'
 
@@ -76,6 +78,34 @@ export function gh(cwd: string, args: string[]): Promise<string> {
       },
     )
   })
+}
+
+/** `gh auth status` writes to stdout or stderr and exits non-zero when any sign-in is bad, so both are read. */
+function authStatusText(executable: string): Promise<string> {
+  return new Promise((resolve) => {
+    execFile(
+      executable,
+      ['auth', 'status'],
+      {
+        encoding: 'utf8',
+        timeout: 15_000,
+        maxBuffer: 1024 * 1024,
+        env: { ...process.env, GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' },
+      },
+      (_error, stdout, stderr) => resolve(`${stdout}\n${stderr}`),
+    )
+  })
+}
+
+/** The GitHub sign-ins already on this host. Read-only: nothing is saved, changed or sent anywhere but to `gh`. */
+export async function forgeConnections(
+  options: { executable?: string | null; status?: (executable: string) => Promise<string>; now?: number } = {},
+): Promise<ForgeConnectionSummary> {
+  const checkedAt = options.now ?? Date.now()
+  const executable = options.executable === undefined ? ghExecutable() : options.executable
+  if (!executable) return { cli: 'no-cli', accounts: [], checkedAt }
+  const accounts = parseGhAuthStatus(await (options.status ?? authStatusText)(executable))
+  return { cli: accounts.length ? 'signed-in' : 'signed-out', accounts, checkedAt }
 }
 
 // ---- Pull requests ----

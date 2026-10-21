@@ -8,6 +8,10 @@ A person controls an agent and terminal from desktop or phone, switches between 
 
 The first delivery is a capability-negotiated remote WebSocket path for existing typed calls and the agent/terminal subscriptions needed by that workflow, with bounded recovery and the existing HTTP/SSE path retained for compatibility. Ship it as the default only after the comparison below demonstrates a useful benefit. Keeping and improving HTTP/SSE is an acceptable outcome if WebSocket does not pass the gates. This is planned work; current transport remains documented in [Headless server](HEADLESS-SERVER.md#protocol).
 
+## Already in place
+
+Transport-independent building blocks exist and are tested but are not wired into any transport yet: resume planning by sequence cursor with server-run identity, bounded replay and snapshot fallback, a bounded live buffer that reports holes and overflow, and a terminal output acknowledgement window (`packages/shared/src/sync/streamSync.ts`), plus a scoped, payload-bound operation log for retrying mutations after a lost reply (`apps/server/src/ipc/operationLog.ts`). The baseline measurement, the WebSocket session, the comparison and the defaults decision are all unfinished.
+
 ## Existing Ramu behavior to preserve
 
 Follow [Architecture](ARCHITECTURE.md), [UI](UI.md) and the [root product/planning guidance](../AGENTS.md#product-design-and-architecture). Extend these boundaries:

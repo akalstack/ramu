@@ -18,6 +18,7 @@ import {
   FileDiff,
   FileText,
   GitBranch,
+  Globe,
   History,
   FileSearch,
   Plus,
@@ -40,6 +41,7 @@ import { ErrorBoundary } from '../ErrorBoundary'
 import { GitDetailsView } from '../views/GitDetailsView'
 import { DiffView } from '../views/DiffView'
 import { FileView } from '../views/FileView'
+import { BrowserView } from '../views/BrowserView'
 import { TerminalPanel } from './TerminalPanel'
 import { NewTask } from '../NewTask'
 import { FILE_DRAG_TYPE } from '../composer/ComposerSuggestions'
@@ -491,8 +493,9 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                   .filter((v) => v.kind !== 'agent' && v.kind !== 'terminal')
                   .map((v) => {
                     const shown = editorView?.id === v.id && visible
-                    const binding = v.repoId ? ws.binding(workspaceId, v.repoId) : undefined
-                    const ready = v.kind === 'review' || binding?.setupState === 'ready'
+                    const repoId = 'repoId' in v ? v.repoId : undefined
+                    const binding = repoId ? ws.binding(workspaceId, repoId) : undefined
+                    const ready = v.kind === 'review' || v.kind === 'browser' || binding?.setupState === 'ready'
                     return (
                       <div
                         key={v.id}
@@ -513,6 +516,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                                 <DiffView taskId={workspaceId} view={v} binding={binding} />
                               )}
                               {v.kind === 'review' && <ChangeReviewTab view={v} visible={shown} />}
+                              {v.kind === 'browser' && <BrowserView taskId={taskId} view={v} visible={shown} />}
                               {v.kind === 'git' && binding && (
                                 <GitDetailsView taskId={workspaceId} view={v} binding={binding} />
                               )}
@@ -850,6 +854,7 @@ function ViewIcon({ kind, path }: { kind: ViewDescriptor['kind']; path?: string 
   if (kind === 'review') return <FileDiff size={13} className="kind" />
   if (kind === 'diff') return <FileDiff size={13} className={path ? `kind file-kind ${fileStyle(path)[1]}` : 'kind'} />
   if (kind === 'terminal') return <SquareTerminal size={13} className="kind" />
+  if (kind === 'browser') return <Globe size={13} className="kind" />
   return path ? <FileIcon path={path} size={13} className="kind file-kind" /> : <FileText size={13} className="kind" />
 }
 
@@ -871,6 +876,7 @@ function ViewLabel({
   const ws = useWorkspace()
   if (v.kind === 'agent') return <>{t('Thread')}</>
   if (v.kind === 'terminal') return <>{v.title ?? repoName(v.repoId)}</>
+  if (v.kind === 'browser') return <>{t('Browser')}</>
   if (v.kind === 'review')
     return (
       <>

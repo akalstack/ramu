@@ -15,6 +15,7 @@ import { useWorkspace } from '../workspace/workspace'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { usePaged } from './cards'
 import { McpSettings } from './McpSettings'
+import { RulesSettings } from './RulesSettings'
 
 const CAPTION = 'm-0 text-caption text-muted-foreground'
 
@@ -301,6 +302,8 @@ export function AgentSetup() {
       )}
 
       <McpSettings />
+
+      <RulesSettings />
 
       <SettingsGroupTitle className="mt-8">{t('Skills')}</SettingsGroupTitle>
       <p className={`${CAPTION} mb-4`}>

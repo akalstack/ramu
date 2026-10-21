@@ -76,6 +76,20 @@ it.skipIf(!posix)('stop ends the whole process group, is repeatable, and keeps f
   expect(changes).toContain('a')
 })
 
+it.skipIf(!posix)("records who stopped a command, and a person's stop is the one that sticks", async () => {
+  const { service } = make()
+  const byAgent = service.launchBackground('a', null, tmpdir(), 'sleep 300')
+  expect(service.inspectBackground('a', byAgent.id).stoppedBy).toBeUndefined()
+  expect(service.stopBackground('a', byAgent.id).stoppedBy).toBe('agent')
+  await until(() => service.listBackground('a').find((t) => t.id === byAgent.id)!.state === 'exited')
+  const byUser = service.launchBackground('a', null, tmpdir(), 'sleep 301')
+  service.stopBackground('a', byUser.id)
+  expect(service.stopBackground('a', byUser.id, false, 'user').stoppedBy).toBe('user')
+  expect(service.stopBackground('a', byUser.id).stoppedBy).toBe('user')
+  await until(() => service.listBackground('a').find((t) => t.id === byUser.id)!.state === 'exited')
+  expect(service.inspectBackground('a', byUser.id).stoppedBy).toBe('user')
+})
+
 it.skipIf(!posix)('force stop ends a command that ignores the graceful signal', async () => {
   const { service } = make()
   const cmd = service.launchBackground('a', null, tmpdir(), "trap '' TERM; echo armed; while true; do sleep 1; done")

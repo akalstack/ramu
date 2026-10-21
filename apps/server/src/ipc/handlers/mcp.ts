@@ -34,6 +34,11 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([sharedMcpAccount]),
       run: (account: SharedMcpProviderAccount) => admin().saveAccount(account),
     },
+    'mcp.removeAccount': {
+      args: z.tuple([sharedMcpAccount.shape.provider, id]),
+      run: (provider: SharedMcpProviderAccount['provider'], accountId: string) =>
+        admin().removeAccount(provider, accountId),
+    },
     'mcp.check': {
       args: z.tuple([id, sharedMcpSelection]),
       run: (connectionId: string, selection: SharedMcpSelection) => admin().check(connectionId, selection),

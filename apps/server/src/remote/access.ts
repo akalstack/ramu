@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { PAIR_PATH, PROTOCOL_VERSION } from '@ramu/contracts'
+import { PAIR_PATH, PROTOCOL_VERSION, RENEW_PATH } from '@ramu/contracts'
 import { authorized } from './auth'
 import type { DeviceInfo, DeviceStore } from './devices'
 
@@ -168,6 +168,18 @@ export class RemoteAccess {
           expiresAt: paired.device.expiresAt,
         }),
       )
+      return
+    }
+    if (path === RENEW_PATH && req.method === 'POST') {
+      const renewed = this.options.devices.renew(req.headers.authorization, now)
+      if (!renewed) {
+        rejected()
+        return
+      }
+      this.failures.delete(peer)
+      res
+        .writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+        .end(JSON.stringify(renewed))
       return
     }
     const device = this.options.devices.authenticate(req.headers.authorization, now)

@@ -21,6 +21,7 @@ import type { ReviewService } from '../review/reviews'
 import type { RecapService } from '../memory/recaps'
 import type { MemoryService } from '../memory/memory'
 import type { SummaryService } from '../memory/summaries'
+import type { RuleStore } from '../rules/rules'
 import type { KeyedLock } from './keyedLock'
 import type { FileWatchers } from './watchers'
 
@@ -39,6 +40,7 @@ export interface Services {
   learning?: LearningService
   memory?: MemoryService
   summaries?: SummaryService
+  rules?: RuleStore
   reviews: ReviewService
   notices?: NoticeInbox
 }

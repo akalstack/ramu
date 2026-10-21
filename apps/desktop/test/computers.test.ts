@@ -49,6 +49,7 @@ function setup() {
       return { running: true }
     }),
     pair: vi.fn(async () => ({ token: 'tok' })),
+    renew: vi.fn(async (): Promise<{ token: string } | null> => null),
     ssh,
     deliver: (id, channel) => delivered.push([id, channel]),
     changed: vi.fn(),
@@ -145,6 +146,14 @@ it('does not save a host whose token fails the check', async () => {
   vi.mocked(deps.invoke).mockRejectedValueOnce(new Error('The server rejected the access token'))
   await expect(registry.pair('10.0.0.2:7788', 'ABCDE-FGHJK', 'Studio')).rejects.toThrow(/rejected/)
   expect(servers.list()).toEqual([])
+})
+
+it('keeps a spent pairing credential when the first request cannot reach the host, and names it after the address', async () => {
+  const { servers, deps, registry } = setup()
+  vi.mocked(deps.invoke).mockRejectedValueOnce(new Error('Background service request timed out'))
+  const paired = await registry.pair('10.0.0.2:7788', 'ABCDE-FGHJK', undefined)
+  expect(paired.name).toBe('10.0.0.2')
+  expect(servers.endpoint(paired.id)?.token).toBe('tok')
 })
 
 it('forgets a host and stops its connection, but never this host', () => {
@@ -329,4 +338,31 @@ it('defaults browsing to all hosts and shares the filter without changing worksp
   registry.setScope(remote.id)
   registry.forget(remote.id)
   expect(registry.list(LOCAL).scope).toBeNull()
+})
+
+it('rotates a host token after connecting, once a month, and keeps the old one when the host declines', async () => {
+  const flush = () => vi.advanceTimersByTimeAsync(0)
+  const { servers, streams, deps, registry } = setup()
+  const saved = servers.add('10.0.0.2:7788', 'Studio', 'old')
+  vi.mocked(deps.renew).mockResolvedValue({ token: 'n'.repeat(64) })
+  registry.start()
+  streams.get('http://10.0.0.2:7788')!('background:connection', { connected: true })
+  await flush()
+  expect(deps.renew).toHaveBeenCalledWith('http://10.0.0.2:7788', 'old')
+  expect(servers.endpoint(saved.id)?.token).toBe('n'.repeat(64))
+  expect(servers.renewedAt(saved.id)).not.toBeNull()
+  // Reconnecting soon after does not rotate again.
+  streams.get('http://10.0.0.2:7788')!('background:connection', { connected: true })
+  await flush()
+  expect(deps.renew).toHaveBeenCalledTimes(1)
+
+  const declined = setup()
+  const second = declined.servers.add('10.0.0.3:7788', 'Server', 'keep')
+  vi.mocked(declined.deps.renew).mockResolvedValueOnce(null)
+  declined.registry.start()
+  declined.streams.get('http://10.0.0.3:7788')!('background:connection', { connected: true })
+  await flush()
+  expect(declined.deps.renew).toHaveBeenCalledTimes(1)
+  expect(declined.servers.endpoint(second.id)?.token).toBe('keep')
+  expect(declined.servers.renewedAt(second.id)).toBeNull()
 })

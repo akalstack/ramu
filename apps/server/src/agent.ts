@@ -70,6 +70,8 @@ export class AgentService {
   toolConnection: ((session: AgentSessionInfo) => McpConnection) | undefined
   /** Shared-memory protocol and index for a session, the same for every provider. */
   memoryInstructions: ((session: AgentSessionInfo) => string) | undefined
+  /** The user's always-on rules for a session's project and provider, labelled as the user's own. */
+  rulesInstructions: ((session: AgentSessionInfo) => string | undefined) | undefined
   /** Guidance from the learning job. `checkpoint: false` leaves the progress summary out, when a handoff already carries it. */
   learningInstructions: ((session: AgentSessionInfo, options?: { checkpoint?: boolean }) => string) | undefined
   sessionCheckpoint: ((id: string) => { seq: number; summary: string } | null) | undefined
@@ -171,6 +173,7 @@ export class AgentService {
         return parts.registry.live
       },
       memoryInstructions: () => this.memoryInstructions,
+      rulesInstructions: () => this.rulesInstructions,
       mirrorChild: (...a) => parts.subagents.mirrorChild(...a),
       nativeSubagentsOff: (...a) => parts.subagents.nativeSubagentsOff(...a),
       noteRoute: (...a) => parts.router.noteRoute(...a),

@@ -19,6 +19,8 @@ export const CAPABILITIES = {
   remote: 'remote',
   /** POST /pair trades a one-time code for a per-device token that can be revoked on its own. */
   pairing: 'pairing',
+  /** POST /renew rotates this device's token with a bounded overlap. */
+  renewal: 'renewal',
 } as const
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES]
 
@@ -27,6 +29,12 @@ export type RuntimeEndpoint = { kind: 'socket'; path: string } | { kind: 'http';
 
 export const AUTH_SCHEME = 'Bearer'
 export const PAIR_PATH = '/pair'
+/** POST /renew (authenticated with the current device token) swaps it for a fresh one; see `DeviceStore.renew`. */
+export const RENEW_PATH = '/renew'
+export interface RenewResponse {
+  token: string
+  expiresAt: number | null
+}
 
 /** Body of `POST /pair`. The code comes from `ramu pair` on the server's computer; it works once and expires. */
 export interface PairRequest {
@@ -150,8 +158,7 @@ export function parsePairInput(input: string, now = Date.now()): PairInput {
     if (!url) throw new Error('This pairing link has no address')
     if (code && !PAIR_CODE.test(code)) throw new Error('This pairing link has an invalid code')
     const expiresAt = Number(link.searchParams.get('exp')) || undefined
-    if (expiresAt && expiresAt <= now)
-      throw new Error('This pairing link has expired. Create a new one on the host.')
+    if (expiresAt && expiresAt <= now) throw new Error('This pairing link has expired. Create a new one on the host.')
     return {
       url: parseRemoteUrl(url),
       ...(code ? { code } : {}),

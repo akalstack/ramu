@@ -200,6 +200,14 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       run: () => newTerminal(),
       when: hasTask,
     },
+    {
+      id: 'browser.new',
+      title: t('Open browser'),
+      category: t('View'),
+      // The integrated browser runs in the desktop shell, so it is offered only where that shell exists.
+      run: () => taskId && ws.openView(taskId, { kind: 'browser' }),
+      when: () => hasTask() && typeof window.ramu?.invoke === 'function',
+    },
     ...bindings.map((b) => ({
       id: `term.new.${b.repoId}`,
       title: t('New terminal in {0}', { '0': b.repoName }),

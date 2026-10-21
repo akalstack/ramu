@@ -9,3 +9,6 @@ export const VIEW_ONLY_NOTICE =
 
 export const VIEW_ONLY_TERMINAL_NOTICE =
   'This device is view-only, so it cannot open terminals. Ask the host owner to pair it with full access.'
+
+export const VIEW_ONLY_WRITE_NOTICE =
+  'This device is view-only, so it cannot change this. Ask the host owner to pair it with full access.'

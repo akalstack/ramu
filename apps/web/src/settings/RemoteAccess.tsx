@@ -364,12 +364,14 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
     [showOther, setShowOther] = useState(false)
   const [status] = useNetworkStatus(1500)
   const offerRequest = useRef(0)
+  // One owner per dialog: a new code (or a role change) replaces this dialog's unused one on the host.
+  const owner = useRef(crypto.randomUUID()).current
   const create = useCallback(() => {
     const request = ++offerRequest.current
     setError(null)
     setJoined(null)
     setOffer(null)
-    invoke('network.pair', role).then(
+    invoke('network.pair', role, owner).then(
       (next) => {
         if (request === offerRequest.current) setOffer(next)
       },
@@ -377,7 +379,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
         if (request === offerRequest.current) setError(errorText(e))
       },
     )
-  }, [invoke, role])
+  }, [invoke, role, owner])
   useEffect(() => {
     create()
     return () => {
@@ -388,10 +390,36 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
   }, [])
-  const arrived = status?.devices.find((device) => !known.includes(device.id))
+  // A host that knows offer ids reports exactly this offer's outcome; an older one falls back to any new device.
+  const offerId = offer?.offerId
+  const arrived = offerId ? undefined : status?.devices.find((device) => !known.includes(device.id))
   useEffect(() => {
     if (arrived) setJoined(arrived.name)
   }, [arrived])
+  useEffect(() => {
+    if (!offerId || joined) return
+    let live = true
+    const check = () =>
+      invoke('network.offer', offerId).then(
+        (result) => {
+          if (!live) return
+          if (result.state === 'redeemed' && result.device) setJoined(result.device.name)
+        },
+        () => {},
+      )
+    const id = window.setInterval(() => void check(), 1500)
+    return () => {
+      live = false
+      window.clearInterval(id)
+    }
+  }, [invoke, offerId, joined])
+  // Closing the dialog withdraws an unused code; a crash still relies on its expiry.
+  useEffect(() => {
+    if (!offerId) return
+    return () => {
+      void Promise.resolve(invoke('network.cancelOffer', offerId)).catch(() => {})
+    }
+  }, [invoke, offerId])
   const expired = !!offer && offer.expiresAt <= now
   // IPv4 first: they are shorter and what people type. Link-local and loopback are already left out.
   const sorted = offer ? [...offer.urls].sort((a, b) => Number(a.url.includes('[')) - Number(b.url.includes('['))) : []

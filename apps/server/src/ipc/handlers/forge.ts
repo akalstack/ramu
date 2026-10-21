@@ -84,6 +84,7 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         return forge.pullRequestDraft(cwd, linkedIssue(ctx, cwd, repoId))
       },
     },
+    'forge.connections': { args: z.tuple([]), run: () => forge.forgeConnections() },
     'forge.publishRepository': {
       args: z.tuple([id, id, publishInput]),
       run: (taskId: string, repoId: string, input: PublishRepositoryInput) =>

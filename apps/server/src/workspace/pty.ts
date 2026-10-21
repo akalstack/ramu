@@ -14,6 +14,7 @@ interface BackgroundMeta {
   exitCode: number | null
   stopRequested: boolean
   forced: boolean
+  stoppedBy?: 'user' | 'agent'
 }
 
 interface Entry extends TerminalInfo {
@@ -164,12 +165,18 @@ export class TerminalService {
    * Asks the command's own process group to end (SIGTERM; SIGKILL when `force`). Safe to repeat and safe after the
    * command already ended; the final output and exit outcome stay readable.
    */
-  stopBackground(taskId: string, id: string, force = false): BackgroundTerminalInfo {
+  stopBackground(taskId: string, id: string, force = false, by: 'user' | 'agent' = 'agent'): BackgroundTerminalInfo {
     const e = this.ownedBackground(taskId, id)
     const bg = e.bg!
+    // A person's stop is the one that sticks, even when the agent asked first or a stop is already in flight.
+    if (!e.exited && by === 'user' && bg.stoppedBy !== 'user') {
+      bg.stoppedBy = 'user'
+      this.checkpoint(e)
+    }
     if (e.exited || bg.forced || (bg.stopRequested && !force)) return backgroundInfo(e)
     if (force && !bg.stopRequested) throw new Error('Request graceful stop before force stop.')
     if (force && process.platform === 'win32') throw new Error('Force stop is unavailable on this host.')
+    bg.stoppedBy = bg.stoppedBy === 'user' ? 'user' : by
     bg.stopRequested = true
     bg.forced = force
     this.checkpoint(e)
@@ -406,6 +413,7 @@ function backgroundInfo(e: Entry): BackgroundTerminalInfo {
     endedAt: bg.endedAt,
     exitCode: bg.exitCode,
     cursor: e.cursor,
+    ...(bg.stoppedBy ? { stoppedBy: bg.stoppedBy } : {}),
     capabilities: {
       inspect: true,
       stop: !e.exited,
