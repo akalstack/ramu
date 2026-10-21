@@ -8,6 +8,7 @@ import { useWorkspaces } from '../runtime/useWorkspaces'
 import { useAgentDraft } from '../runtime/useAgentDraft'
 import { isMethodMissing } from '../runtime/goalVerify'
 import { newComposerKey } from '../runtime/composerDrafts'
+import { routingChoiceLabels } from '../runtime/routingChoices'
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -334,6 +335,9 @@ export default function NewChat() {
     router.replace({ pathname: '/chat/[id]', params: { id } })
   }
   const pc = computers.find((x) => x.id === selected)
+  const choiceLabels = routingChoiceLabels(
+    list.map((p) => ({ id: rawId(p.id), name: p.name, host: pc?.name ?? selected, root: p.root })),
+  )
   useEffect(() => {
     // Let the sheet finish presenting before the picker slides up over it.
     if (params.project || auto) return
@@ -564,6 +568,7 @@ export default function NewChat() {
         {choices?.map((choice) => {
           const match = list.find((p) => rawId(p.id) === choice.projectId)
           if (!match) return null
+          const label = choiceLabels.get(choice.projectId)
           return (
             <Row
               key={choice.projectId}
@@ -581,10 +586,12 @@ export default function NewChat() {
             >
               <Folder size={17} color={c.soft} />
               <View style={{ flex: 1 }}>
-                <T weight="500">{match.name}</T>
-                <T size={font.caption} tone="muted">
-                  {choice.reason || match.root}
-                </T>
+                <T weight="500">{label?.label ?? match.name}</T>
+                {choice.reason || !label?.showsRoot ? (
+                  <T size={font.caption} tone="muted">
+                    {choice.reason || match.root}
+                  </T>
+                ) : null}
               </View>
             </Row>
           )

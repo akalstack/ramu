@@ -12,6 +12,7 @@ import * as workspaceDefaults from '../../../packages/shared/src/workspaceDefaul
 import * as workspaceChoices from '../src/runtime/workspaces.ts'
 import * as explorerScopes from '../../../packages/shared/src/workspace/explorer.ts'
 import * as explorerDrafts from '../src/runtime/composerDrafts.ts'
+import * as routingChoices from '../src/runtime/routingChoices.ts'
 import * as localCommitStorage from '../src/storage/localCommit.ts'
 import * as fileContextKeys from '../../../packages/shared/src/chat/fileContext.ts'
 import * as composerTriggers from '../../../packages/shared/src/chat/composerTrigger.ts'
@@ -100,6 +101,7 @@ function load(file, os, overrides = {}, globals = {}) {
           }),
         }
       if (id.endsWith('/composerDrafts')) return explorerDrafts
+      if (id.endsWith('/routingChoices')) return routingChoices
       if (id === '@ramu/shared/chat/fileContext') return fileContextKeys
       if (id === '@ramu/shared/chat/composerTrigger') return composerTriggers
       if (id.endsWith('/theme')) return theme
