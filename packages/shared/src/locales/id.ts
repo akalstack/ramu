@@ -67,6 +67,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Web address': 'Alamat web',
   'Page': 'Halaman',
   'Search or enter a web address': 'Cari atau masukkan alamat web',
+  'The page returns when this dialog closes.': 'Halaman kembali saat dialog ini ditutup.',
   'Enter a web address.': 'Masukkan alamat web.',
   'The agent is controlling this page': 'Agen sedang mengendalikan halaman ini',
   'You are in control': 'Anda yang mengendalikan',

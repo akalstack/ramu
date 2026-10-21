@@ -8,6 +8,7 @@ import { t, useLanguage } from '../i18n'
 import { ramu } from '../ipc'
 import { errorText } from '../lib/errors'
 import { addressFrom } from './browserAddress'
+import { openOverlays, paneCovered } from './browserOverlay'
 import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
 
@@ -40,6 +41,8 @@ export function BrowserView({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const area = useRef<HTMLDivElement>(null)
+  const pane = useRef<HTMLDivElement>(null)
+  const [covered, setCovered] = useState(false)
   const tabId = tab?.id
 
   const run = useCallback(async <T,>(work: () => Promise<T>): Promise<T | undefined> => {
@@ -84,11 +87,38 @@ export function BrowserView({
     void open(view.url)
   }, [visible, tab, view.url, open])
 
+  // Dialogs, menus and popovers draw below the native page, so it steps aside while one reaches into the pane.
+  useEffect(() => {
+    const root = pane.current
+    const element = area.current
+    if (!visible || !tabId || !root || !element) return setCovered(false)
+    let frame = 0
+    const check = () => {
+      frame = 0
+      setCovered(paneCovered(element.getBoundingClientRect(), openOverlays(document, root)))
+    }
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(check)
+    }
+    check()
+    const observer = new MutationObserver(schedule)
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['role', 'aria-modal', 'hidden', 'style'],
+    })
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [visible, tabId])
+
   // Place the native page over the pane while it is visible; take it off screen when it is not.
   useEffect(() => {
     if (!tabId) return
     const element = area.current
-    if (!visible || !element) {
+    if (!visible || covered || !element) {
       void ramu.invoke('browser.hide', host, taskId, tabId).catch(() => {})
       return
     }
@@ -107,7 +137,7 @@ export function BrowserView({
       window.removeEventListener('resize', place)
       void ramu.invoke('browser.hide', host, taskId, tabId).catch(() => {})
     }
-  }, [visible, tabId, host, taskId])
+  }, [visible, covered, tabId, host, taskId])
 
   const call = (method: 'browser.back' | 'browser.forward' | 'browser.reload') =>
     tabId && void run(() => ramu.invoke(method, host, taskId, tabId))
@@ -122,7 +152,7 @@ export function BrowserView({
   }
 
   return (
-    <div className="browser-view flex min-h-0 min-w-0 flex-1 flex-col">
+    <div ref={pane} className="browser-view flex min-h-0 min-w-0 flex-1 flex-col">
       <form
         className="flex flex-none items-center gap-1 border-b border-(--line) px-2 py-1.5"
         onSubmit={(event) => {
@@ -193,6 +223,9 @@ export function BrowserView({
         </p>
       )}
       <div ref={area} className="min-h-0 flex-1" aria-label={t('Page')}>
+        {tab && covered && (
+          <p className="m-0 p-6 text-center text-muted-foreground">{t('The page returns when this dialog closes.')}</p>
+        )}
         {!tab && (
           <p className="m-0 p-6 text-center text-muted-foreground">
             {t('Enter an address to open a page. It opens in a profile of its own, separate from your threads.')}
