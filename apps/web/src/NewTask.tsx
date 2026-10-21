@@ -432,8 +432,13 @@ export function NewTask({
             })
         const routedSettings = routedAgentSettings(initialSettings, destinationDefaults, agentDraft.choice)
         if (!routedSettings) {
-          onProjectChange(destination)
-          throw new Error(t("Review this project's model before sending."))
+          // Stay in Auto so the draft remains visible; a model chosen here then wins over the project default.
+          setRouteNote(null)
+          throw new Error(
+            t("{name}'s model default can't be used. Choose a model, then send again.", {
+              name: ws.projects.find((p) => p.id === destination)?.name ?? '',
+            }),
+          )
         }
         sendSettings = routedSettings
         const destinationOptions = await host.invoke('tasks.workspaceOptions', destination)

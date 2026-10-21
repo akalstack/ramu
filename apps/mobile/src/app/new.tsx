@@ -295,9 +295,8 @@ export default function NewChat() {
         })
     const routed = routedAgentSettings(base, destinationDefaults, agentDraft.choice)
     if (!routed) {
-      setAuto(false)
-      setProjectId(destinationProject.id)
-      throw new Error("Review this project's model before sending.")
+      // Stay in Auto so the draft remains visible; a model chosen here then wins over the project default.
+      throw new Error(`${destinationProject.name}'s model default can't be used. Choose a model, then send again.`)
     }
     const sendModel = asModelChoice(routed)
     const options = await storeRef.current.invoke(selected, 'tasks.workspaceOptions', raw)

@@ -13,7 +13,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Could not choose a project automatically. Choose one to continue.': 'Proyek tidak bisa dipilih otomatis. Pilih satu untuk melanjutkan.',
   'Add a project first.': 'Tambahkan proyek terlebih dahulu.',
   'That project is no longer available. Choose a project.': 'Proyek itu tidak tersedia lagi. Pilih proyek.',
-  "Review this project's model before sending.": 'Tinjau model proyek ini sebelum mengirim.',
+  "{name}'s model default can't be used. Choose a model, then send again.":
+    'Model bawaan {name} tidak dapat dipakai. Pilih model, lalu kirim lagi.',
   'The message changed while choosing a project. Send again.': 'Pesan berubah saat memilih proyek. Kirim lagi.',
   'Choose the project automatically': 'Pilih proyek secara otomatis',
   'Home picks the project from your first message and asks when more than one fits. Turn off to always choose the project yourself.':
