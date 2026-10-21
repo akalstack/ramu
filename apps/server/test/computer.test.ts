@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ComputerAction, ComputerBackend, ComputerGrant } from '@ramu/shared/computerBridge'
 import { ComputerService } from '../src/computer/service'
 import { ComputerRefusal } from '../src/computer/session'
-import { actionScript, keyCode, pngSize } from '../src/computer/macos'
+import { actionScript, keyCode, parseSipsSize } from '../src/computer/macos'
 
 const grant: ComputerGrant = { target: { id: 'display:main', kind: 'display', name: 'Main' }, observe: true, input: true }
 
@@ -148,12 +148,8 @@ describe('macOS backend helpers', () => {
     expect(actionScript({ kind: 'click', x: 200, y: 100 }, 2)).toContain('{x:100,y:50}')
   })
 
-  it('reads PNG dimensions', () => {
-    const header = Buffer.alloc(24)
-    header.write('\x89PNG', 0, 'latin1')
-    header.writeUInt32BE(300, 16)
-    header.writeUInt32BE(150, 20)
-    expect(pngSize(header)).toEqual({ width: 300, height: 150 })
-    expect(() => pngSize(Buffer.alloc(30))).toThrow()
+  it('reads image dimensions from sips output', () => {
+    expect(parseSipsSize('/tmp/x.jpg\n  pixelWidth: 1600\n  pixelHeight: 900')).toEqual({ width: 1600, height: 900 })
+    expect(() => parseSipsSize('Error: not an image')).toThrow()
   })
 })

@@ -10,7 +10,9 @@ Implementation proposal, 2026-10-19. This planning change does not install a com
 
 - A mobile viewer (`apps/mobile/src/components/ComputerActivity.tsx`) and a desktop control for sharing a thread's screen with a paired device (watch or control); viewing another host's computer from desktop works through the same host-qualified calls.
 
-Not yet in place: a real macOS capture and action on a packaged build (this environment denies Screen Recording), app/window-scoped grants, an enrolled broker for a runtime owner that is not the execution host, a push frame subscription (viewers poll and share one capture at most four times a second), and per-provider image delivery checks.
+Checked on a development macOS 27 build through the real desktop app (2026-10-22): a 1600×900 JPEG frame of about 200 KB in about 0.5 s, and input at frame coordinates landed on the matching screen points. Still to check: a packaged build's own Screen Recording and Accessibility identity, Retina/external-display variations, IME text entry and the phone.
+
+Not yet in place: app/window-scoped grants, an enrolled broker for a runtime owner that is not the execution host, a push frame subscription (viewers poll and share one capture at most four times a second), and per-provider image delivery checks.
 
 ## Human need and delivery
 

@@ -142,12 +142,16 @@ export function actionScript(action: ComputerAction, scale: number): string {
   }
 }
 
-/** PNG screenshot size in pixels from its header. */
-export function pngSize(buffer: Buffer): { width: number; height: number } {
-  if (buffer.length < 24 || buffer.toString('ascii', 1, 4) !== 'PNG')
-    throw new Error('The screen capture was not an image.')
-  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) }
+/** Pixel size from `sips -g pixelWidth -g pixelHeight` output. */
+export function parseSipsSize(output: string): { width: number; height: number } {
+  const width = Number(/pixelWidth:\s*(\d+)/.exec(output)?.[1])
+  const height = Number(/pixelHeight:\s*(\d+)/.exec(output)?.[1])
+  if (!(width > 0 && height > 0)) throw new Error('The screen capture was not an image.')
+  return { width, height }
 }
+
+/** Frames are shrunk so a phone can poll them: the long edge is capped and the image is a mid-quality JPEG. */
+export const MAX_FRAME_EDGE = 1600
 
 /**
  * macOS local broker: `screencapture` for the display and Quartz events for input. Screen Recording and Accessibility
@@ -172,9 +176,10 @@ export class MacosComputerBackend implements ComputerBackend {
     if (this.platform !== 'darwin') throw new Error('Computer use currently supports macOS.')
     if (target.kind !== 'display') throw new Error('Only display capture is supported.')
     const dir = await mkdtemp(join(tmpdir(), 'ramu-screen-'))
-    const file = join(dir, 'screen.png')
+    const raw = join(dir, 'screen.png')
+    const small = join(dir, 'frame.jpg')
     try {
-      await this.exec('/usr/sbin/screencapture', ['-x', '-t', 'png', '-C', file]).catch((error) => {
+      await this.exec('/usr/sbin/screencapture', ['-x', '-t', 'png', '-C', raw]).catch((error) => {
         this.permission = {
           available: false,
           reason: 'permission-denied',
@@ -182,19 +187,36 @@ export class MacosComputerBackend implements ComputerBackend {
         }
         throw error
       })
-      const bytes = await readFile(file)
-      const { width, height } = pngSize(bytes)
+      const full = parseSipsSize(await this.exec('/usr/bin/sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', raw]))
+      await this.exec('/usr/bin/sips', [
+        '-Z',
+        String(MAX_FRAME_EDGE),
+        '-s',
+        'format',
+        'jpeg',
+        '-s',
+        'formatOptions',
+        '60',
+        raw,
+        '--out',
+        small,
+      ])
+      const { width, height } = parseSipsSize(
+        await this.exec('/usr/bin/sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', small]),
+      )
+      const bytes = await readFile(small)
       this.permission = null
-      // Retina captures are twice the point size; actions are in capture pixels, so `scale` maps them back to points.
-      const scale = await this.scale(width)
+      // Actions are in frame pixels; `scale` maps them back to screen points.
+      const points = await this.points()
+      const scale = points > 0 ? width / points : full.width / width
       this.lastScale = scale
-      return { mimeType: 'image/png', data: bytes.toString('base64'), width, height, scale }
+      return { mimeType: 'image/jpeg', data: bytes.toString('base64'), width, height, scale }
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
   }
 
-  private async scale(pixelWidth: number): Promise<number> {
+  private async points(): Promise<number> {
     try {
       const out = await this.exec('/usr/bin/osascript', [
         '-l',
@@ -202,10 +224,9 @@ export class MacosComputerBackend implements ComputerBackend {
         '-e',
         "ObjC.import('AppKit');$.NSScreen.mainScreen.frame.size.width",
       ])
-      const points = Number(out.trim())
-      return points > 0 ? pixelWidth / points : 1
+      return Number(out.trim())
     } catch {
-      return 1
+      return 0
     }
   }
 
