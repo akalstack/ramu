@@ -10,7 +10,6 @@ A person can see which repository supplies a default, correct invalid configurat
 
 ## Remaining implementation and acceptance
 
-- Align repository model defaults with [automatic project selection](ASSISTANT-WORKFLOW-PLAN.md#1-automatic-project-selection-default) once it lands, so an inferred project applies its defaults with the same draft precedence.
 - Complete desktop startup and watcher validation for repository model defaults in a supported environment. The restricted 2026-10-19 run built successfully, but Electron launch aborted with `SIGABRT`/`kill EPERM`, and an isolated `fs.watch` probe reported `EMFILE`. Re-run the existing desktop smoke and settings-watcher checks before treating this delivery as release-validated.
 - Verify Settings, repository model-default recovery and source/error indicators on desktop and physical iOS/Android, including keyboard shortcuts, screen readers, large text, same-named projects on different hosts and remote offline recovery. Verify external global settings edits update every connected client and background service in a running packaged app.
 - Extend migration/corruption acceptance to real upgraded profiles and abrupt process termination. Existing automated tests exercise real SQLite migration/archive retention, editor atomic renames, invalid files, combined validation, failed replacement and abandoned temporary writes; these do not establish power-loss behavior on every supported filesystem.

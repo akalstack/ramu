@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-nat
 import { useRouter } from 'expo-router'
 import { Command, FileText, Sparkles } from 'lucide-react-native'
 import type { SkillInfo } from '@ramu/shared/types'
+import { acceptComposerTrigger, composerTrigger } from '@ramu/shared/chat/composerTrigger'
 import { font, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { T, tap } from './ui'
@@ -47,10 +48,9 @@ export function useComposerSuggest({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
   const [dismissed, setDismissed] = useState<string | null>(null)
-  const prefix = text.slice(0, caret)
-  const trigger = prefix.match(/(?:^|\s)([@/])([^\s]*)$/)
-  const mode = trigger?.[1] as '@' | '/' | undefined
-  const query = (trigger?.[2] ?? '').toLowerCase()
+  const trigger = composerTrigger(text, caret)
+  const mode = trigger?.mode
+  const query = (trigger?.query ?? '').toLowerCase()
   const signature = `${caret}:${mode}:${query}`
   const visible = Boolean(mode) && dismissed !== signature
   const online = store.isOnline(computerId)
@@ -173,10 +173,10 @@ export function useComposerSuggest({
             file,
           }))
         : [
-            ...commands,
+            ...(mode === '/' ? commands : []),
             ...(data?.skills ?? []).map((s): Choice => ({
               id: `skill:${s.path}`,
-              label: `/${s.name}`,
+              label: `${mode}${s.name}`,
               description: s.description,
               kind: 'Skill',
               insertion: `$${s.name} `,
@@ -188,20 +188,21 @@ export function useComposerSuggest({
   }, [mode, query, data, chatId, computerId])
 
   return {
-    visible,
+    // `$` is ordinary text unless a skill matches, so it never shows an empty picker.
+    visible: visible && !(mode === '$' && !loading && choices.length === 0),
     choices,
     loading,
     error,
     dismiss: () => setDismissed(signature),
     /** Replaces the typed trigger with the choice; the caller stores the result. */
     choose(choice: Choice) {
-      const start = prefix.length - (trigger?.[2]?.length ?? 0) - 1
       const insertion = choice.insertion ?? ''
       choice.run?.()
       setDismissed(signature)
+      const next = trigger ? acceptComposerTrigger(text, caret, trigger, insertion) : { value: text, caret }
       return {
-        text: text.slice(0, start) + insertion + text.slice(caret),
-        caret: start + insertion.length,
+        text: next.value,
+        caret: next.caret,
         file: choice.file,
         insertion,
       }

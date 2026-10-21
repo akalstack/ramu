@@ -5,6 +5,7 @@ import {
   editAgentDraft,
   modelChoice,
   parseAgentDraft,
+  routedAgentSettings,
   type ProjectAgentDefaults,
 } from '../src/workspace/agentDefaults'
 const base: AgentSettings = {
@@ -74,4 +75,17 @@ it('validates versioned explicit choices without accepting repository authority 
     { ...value, credentials: 'secret' },
   ])
     expect(parseAgentDraft(invalid)).toBeNull()
+})
+it('applies a routed destination’s repository defaults unless the draft chose a model', () => {
+  const draft = { version: 1 as const, behavior: { access: 'full' as const, autoFallback: true } }
+  expect(routedAgentSettings(base, repository, draft)).toEqual(agentSettingsForDraft(base, repository, draft))
+  expect(routedAgentSettings(base, repository, draft)).toMatchObject({ model: 'repository-model', access: 'full' })
+  const explicit = { version: 1 as const, selection: modelChoice({ ...base, model: 'picked' }) }
+  expect(routedAgentSettings(base, repository, explicit)).toMatchObject({ provider: 'codex', model: 'picked' })
+  expect(routedAgentSettings(base, { status: 'none' }, { version: 1 })).toEqual(base)
+  expect(routedAgentSettings(base, undefined, { version: 1 })).toEqual(base)
+  for (const status of ['unavailable', 'invalid'] as const) {
+    expect(routedAgentSettings(base, { status, reason: 'model' }, { version: 1 })).toBeNull()
+    expect(routedAgentSettings(base, { status }, explicit)).toMatchObject({ model: 'picked' })
+  }
 })

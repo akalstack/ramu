@@ -1,4 +1,5 @@
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type WorktreePlanEntry } from '@ramu/shared/types'
+import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
 import type { RamuMethods } from '@ramu/shared/api'
 import { currentBranchChoice, validBranchName, resolveCheckoutMode } from '@ramu/shared/workspaceDefaults'
 import { projectWorkspaces } from '@ramu/shared/workspace/explorer'
@@ -259,7 +260,6 @@ export default function NewChat() {
     }
     const revision = ++routeRevision.current
     const verified = await agentDraft.verify()
-    const sendModel = asModelChoice(verified)
     let raw = destination
     if (!raw) {
       let outcome: Awaited<ReturnType<RamuMethods['projects.route']>>
@@ -285,6 +285,20 @@ export default function NewChat() {
     }
     const destinationProject = list.find((p) => rawId(p.id) === raw)
     if (!destinationProject) throw new Error('That project is no longer available. Choose a project.')
+    // The destination's repository model defaults apply as if the project had been picked by hand.
+    const base = preset ?? DEFAULT_AGENT_SETTINGS
+    const destinationDefaults = agentDraft.choice.selection
+      ? undefined
+      : await storeRef.current.invoke(selected, 'tasks.agentDefaults', raw, base.provider).catch((error) => {
+          if (isMethodMissing(error)) return undefined
+          throw error
+        })
+    const routed = routedAgentSettings(base, destinationDefaults, agentDraft.choice)
+    if (!routed) {
+      // Stay in Auto so the draft remains visible; a model chosen here then wins over the project default.
+      throw new Error(`${destinationProject.name}'s model default can't be used. Choose a model, then send again.`)
+    }
+    const sendModel = asModelChoice(routed)
     const options = await storeRef.current.invoke(selected, 'tasks.workspaceOptions', raw)
     const checkout = resolveCheckoutMode({
       defaultMode: options.defaultCheckoutMode ?? 'current',
@@ -306,7 +320,8 @@ export default function NewChat() {
       projectId: destinationProject.id,
       text,
       mode: checkout.mode,
-      workspaceId,
+      // The project-free draft's workspace belongs to another scope; routed threads use the destination default.
+      workspaceId: undefined,
       branchNaming: intent,
       branchChoice: branch,
       branchPrefix: options.branchPrefix ?? 'ramu/',

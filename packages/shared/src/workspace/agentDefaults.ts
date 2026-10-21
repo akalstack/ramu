@@ -91,6 +91,19 @@ export function agentSettingsForDraft(
     ...draft.behavior,
   }
 }
+/**
+ * Auto routing picks the project after the draft was composed, so the destination's repository defaults apply
+ * with the same precedence as a manual pick. `undefined` defaults means an older host without them. Null means
+ * the destination's defaults cannot be used and the person must review the model in that project first.
+ */
+export function routedAgentSettings(
+  base: AgentSettings,
+  defaults: ProjectAgentDefaults | undefined,
+  draft: AgentDraftChoice,
+): AgentSettings | null {
+  if (!draft.selection && (defaults?.status === 'unavailable' || defaults?.status === 'invalid')) return null
+  return agentSettingsForDraft(base, defaults, draft)
+}
 /** Behavior-only edits do not accidentally pin an inherited model. */
 export function editAgentDraft(
   previous: AgentDraftChoice,
