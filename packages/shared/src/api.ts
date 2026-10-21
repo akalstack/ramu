@@ -151,6 +151,14 @@ export interface ComputerSessionSummary {
   controller: import('./control/lease').Controller
   generation: number
   paused: boolean
+  /** The computer whose screen this is; `local` is the host itself. */
+  runtime: { id: string; name: string }
+}
+
+export interface ComputerRuntimeInfo {
+  id: string
+  name: string
+  online: boolean
 }
 
 type ComputerFrameMeta = import('./computerBridge').ComputerFrameMeta
@@ -165,9 +173,19 @@ export interface RamuMethods {
   }
   /** Installs the pinned Open Computer Use release for app-scoped access. Owning host only. */
   'computer.installApps'(): { version: string }
+  /** Computers whose screen a thread can use: this host and paired computers the owner allowed. */
+  'computer.runtimes'(): ComputerRuntimeInfo[]
+  /** Paired devices that registered as screen owners, with whether this host's owner allowed them. */
+  'computer.runtimeDevices'(): (ComputerRuntimeInfo & { deviceId: string; allowed: boolean })[]
+  'computer.allowRuntime'(deviceId: string, allow: boolean): void
+  'computerBroker.register'(name: string): void
+  'computerBroker.next'(waitMs: number): import('./computerBridge').BrokerCommand | null
+  'computerBroker.result'(id: string, outcome: { ok: true; value?: unknown } | { ok: false; error: string }): void
+  'computerBroker.unregister'(): void
+  'computer.brokerExec'(command: unknown): unknown
   'computer.apps'(): string[]
   'computer.setEnabled'(enabled: boolean): void
-  'computer.grant'(threadId: string, scope: { observe: boolean; input: boolean; app?: string }): ComputerSessionSummary | null
+  'computer.grant'(threadId: string, scope: { observe: boolean; input: boolean; app?: string; runtime?: string }): ComputerSessionSummary | null
   'computer.revoke'(threadId: string): void
   'computer.grantViewer'(threadId: string, deviceId: string, input: boolean): void
   'computer.revokeViewer'(threadId: string, deviceId: string): void
@@ -176,7 +194,11 @@ export interface RamuMethods {
   'computer.takeControl'(threadId: string): ComputerSessionSummary | null
   'computer.giveToAgent'(threadId: string): ComputerSessionSummary | null
   'computer.stop'(threadId: string): ComputerSessionSummary | null
-  'computer.frame'(threadId: string): ComputerFrameMeta & { id: string; mimeType: string; data: string }
+  /** With the hash of the frame already shown, an unchanged screen returns `unchanged` and no image. */
+  'computer.frame'(
+    threadId: string,
+    since?: string,
+  ): ComputerFrameMeta & { id: string; hash: string } & ({ unchanged: true } | { unchanged?: undefined; mimeType: string; data: string })
   'computer.input'(threadId: string, generation: number, capturedAt: number, action: ComputerAction): void
   'computer.disconnect'(threadId: string): void
   'hostBrowser.status'(): { available: boolean; enabled?: boolean; location?: 'execution-host-chromium'; reason?: string }

@@ -4,7 +4,11 @@ import { ComputerService } from '../src/computer/service'
 import { ComputerRefusal } from '../src/computer/session'
 import { actionScript, keyCode, parseSipsSize } from '../src/computer/macos'
 
-const grant: ComputerGrant = { target: { id: 'display:main', kind: 'display', name: 'Main' }, observe: true, input: true }
+const grant: ComputerGrant = {
+  target: { id: 'display:main', kind: 'display', name: 'Main' },
+  observe: true,
+  input: true,
+}
 
 function fake() {
   const performed: ComputerAction[] = []
@@ -71,11 +75,15 @@ describe('computer session', () => {
     const { session, performed } = await ready(() => time)
     session.takeControl('phone')
     const { generation } = session.state
-    await expect(session.humanInput('tablet', generation, { capturedAt: 1000 }, { kind: 'key', key: 'a' })).rejects.toThrow()
+    await expect(
+      session.humanInput('tablet', generation, { capturedAt: 1000 }, { kind: 'key', key: 'a' }),
+    ).rejects.toThrow()
     await session.humanInput('phone', generation, { capturedAt: 1000 }, { kind: 'type', text: 'hi' })
     expect(performed).toEqual([{ kind: 'type', text: 'hi' }])
     time = 7000
-    await expect(session.humanInput('phone', generation, { capturedAt: 1000 }, { kind: 'key', key: 'a' })).rejects.toThrow(/stale/)
+    await expect(
+      session.humanInput('phone', generation, { capturedAt: 1000 }, { kind: 'key', key: 'a' }),
+    ).rejects.toThrow(/stale/)
   })
 
   it('pauses on controller disconnect without handing control back, releasing held input', async () => {
@@ -90,7 +98,9 @@ describe('computer session', () => {
   it('reports an uncertain outcome without replaying the action', async () => {
     const { session, frame, backend } = await ready()
     vi.mocked(backend.perform).mockRejectedValueOnce(new Error('broker lost'))
-    await expect(session.act('run1', frame.id, { kind: 'click', x: 1, y: 1 })).rejects.toThrow(/may or may not have run/)
+    await expect(session.act('run1', frame.id, { kind: 'click', x: 1, y: 1 })).rejects.toThrow(
+      /may or may not have run/,
+    )
     expect(backend.perform).toHaveBeenCalledTimes(1)
   })
 
@@ -105,18 +115,19 @@ describe('computer session', () => {
 })
 
 describe('computer frame sharing', () => {
-  it('shares one capture between concurrent viewers and refreshes after the interval', async () => {
-    let time = 1000
+  it('shares one background capture between viewers and returns an unchanged screen without waiting for a new one', async () => {
     const { backend } = fake()
-    const service = new ComputerService(backend, () => time)
+    const service = new ComputerService(backend)
     const session = service.grant('t', grant)
     const [a, b] = await Promise.all([session.view(), session.view()])
     expect(a.id).toBe(b.id)
-    expect(await session.view()).toMatchObject({ id: a.id })
-    time += 300
-    const next = await session.view()
-    expect(next.id).not.toBe(a.id)
-    expect(next.sequence).toBeGreaterThan(a.sequence)
+    expect(a.hash).toBe(b.hash)
+    // The screen has not changed, so a viewer that already has this frame gets it back after the wait, not a new image.
+    const started = Date.now()
+    const again = await session.view(a.hash, 80)
+    expect(again.hash).toBe(a.hash)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(60)
+    service.revoke('t')
   })
 })
 
@@ -164,7 +175,10 @@ describe('open computer use backend', () => {
         callTool: async (request: { name: string; arguments: Record<string, unknown> }) => {
           calls.push(request)
           if (fail?.(request.name))
-            return { isError: true, content: [{ type: 'text', text: 'type_text requires a focused editable text element.' }] }
+            return {
+              isError: true,
+              content: [{ type: 'text', text: 'type_text requires a focused editable text element.' }],
+            }
           return { content: [{ type: 'text', text: 'ok' }] }
         },
         close: async () => {},
@@ -178,7 +192,10 @@ describe('open computer use backend', () => {
     expect(typingKeys('12*8+4')).toEqual(['1', '2', 'KP_Multiply', '8', 'KP_Add', '4'])
     expect(typingKeys('é')).toBeNull()
     const { calls, client } = fakeClient((name) => name === 'type_text')
-    const backend = new OcuBackend(() => '/bin/ocu', async () => client)
+    const backend = new OcuBackend(
+      () => '/bin/ocu',
+      async () => client,
+    )
     await backend.perform(target, { kind: 'type', text: '1+2' })
     expect(calls.map((call) => [call.name, call.arguments.key ?? call.arguments.text])).toEqual([
       ['type_text', '1+2'],
@@ -191,11 +208,17 @@ describe('open computer use backend', () => {
   it('names the app on every call and reports a missing install', async () => {
     const { OcuBackend, parseApps } = await import('../src/computer/ocu')
     const { calls, client } = fakeClient()
-    const backend = new OcuBackend(() => '/bin/ocu', async () => client)
+    const backend = new OcuBackend(
+      () => '/bin/ocu',
+      async () => client,
+    )
     await backend.perform(target, { kind: 'click', x: 5, y: 6, button: 'right' })
     expect(calls[0]).toEqual({ name: 'click', arguments: { app: 'Calculator', x: 5, y: 6, mouse_button: 'right' } })
     expect(new OcuBackend(() => null).status()).toMatchObject({ available: false, reason: 'not-installed' })
-    expect(parseApps('Calculator — com.apple.calculator [running]\nFinder — com.apple.finder')).toEqual(['Calculator', 'Finder'])
+    expect(parseApps('Calculator — com.apple.calculator [running]\nFinder — com.apple.finder')).toEqual([
+      'Calculator',
+      'Finder',
+    ])
   })
 })
 
@@ -212,5 +235,87 @@ describe('open computer use install', () => {
     expect(calls[0]).not.toContain('-g')
     await expect(installOcu(async () => '9.9.9\n', '/usr/bin/npm')).rejects.toThrow(/expected/)
     await expect(installOcu(async () => '', null)).rejects.toThrow(/npm/)
+  })
+})
+
+describe('screen stream', () => {
+  const message = (kind: number, payload: Buffer) => {
+    const header = Buffer.alloc(5)
+    header.writeUInt32BE(payload.length + 1, 0)
+    header[4] = kind
+    return Buffer.concat([header, payload])
+  }
+
+  it('splits the helper output into messages however it is chunked', async () => {
+    const { FrameParser } = await import('../src/computer/sck')
+    const meta = message(1, Buffer.from(JSON.stringify({ width: 800, height: 450, pointsWidth: 1280 })))
+    const jpeg = message(2, Buffer.from([1, 2, 3, 4]))
+    const all = Buffer.concat([meta, jpeg, jpeg])
+    const parser = new FrameParser()
+    const seen = [
+      ...parser.push(all.subarray(0, 7)),
+      ...parser.push(all.subarray(7, 30)),
+      ...parser.push(all.subarray(30)),
+    ]
+    expect(seen.map((entry) => entry.kind)).toEqual([1, 2, 2])
+    expect(() => new FrameParser().push(Buffer.from([0xff, 0xff, 0xff, 0xff, 1]))).toThrow(/malformed/)
+  })
+
+  it('returns the latest frame with the scale, and reports a helper that ends', async () => {
+    const { EventEmitter } = await import('node:events')
+    const { PassThrough } = await import('node:stream')
+    const { ScreenStream } = await import('../src/computer/sck')
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      stdin: new PassThrough(),
+      kill: vi.fn(),
+    })
+    const stream = new ScreenStream(async () => child as never, 60_000)
+    const pending = stream.frame()
+    child.stdout.write(message(1, Buffer.from(JSON.stringify({ width: 800, height: 450, pointsWidth: 1600 }))))
+    child.stdout.write(message(2, Buffer.from('jpegdata')))
+    expect(await pending).toEqual({
+      data: Buffer.from('jpegdata').toString('base64'),
+      width: 800,
+      height: 450,
+      scale: 0.5,
+    })
+    stream.stop()
+    const ended = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      stdin: new PassThrough(),
+      kill: vi.fn(),
+    })
+    const failing = new ScreenStream(async () => ended as never, 60_000)
+    const waiting = failing.frame()
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    ended.stderr.write('Screen Recording is not allowed for Ramu.')
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    ended.emit('exit', 2)
+    await expect(waiting).rejects.toThrow(/Screen Recording/)
+    failing.stop()
+  })
+
+  it('falls back to the one-shot capture when the helper cannot start', async () => {
+    const { SckDisplayBackend } = await import('../src/computer/sck')
+    const inner = {
+      ...fake().backend,
+      capture: vi.fn(async () => ({ mimeType: 'image/png' as const, data: 'AAAA', width: 10, height: 10, scale: 1 })),
+    }
+    const backend = new SckDisplayBackend(
+      inner,
+      async () => {
+        throw new Error('no swiftc')
+      },
+      () => {
+        throw new Error('unused')
+      },
+      'darwin',
+    )
+    expect((await backend.capture({ id: 'display:main', kind: 'display', name: 'Main' })).data).toBe('AAAA')
+    expect(inner.capture).toHaveBeenCalledTimes(1)
+    expect(backend.frameInterval({ id: 'display:main', kind: 'display', name: 'Main' })).toBe(250)
   })
 })

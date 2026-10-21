@@ -249,6 +249,11 @@ export class MacosComputerBackend implements ComputerBackend {
 
   private lastScale = 1
 
+  /** A streaming capture knows the frame size, so input maps frame pixels to screen points with its scale. */
+  useScale(scale: number): void {
+    if (scale > 0) this.lastScale = scale
+  }
+
   releaseInput(): void {
     // Actions are discrete press/release pairs, so nothing is held between calls.
   }

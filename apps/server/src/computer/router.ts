@@ -33,6 +33,14 @@ export class ComputerRouter implements ComputerBackend {
     return this.apps.apps()
   }
 
+  warm(): void {
+    this.display.warm?.()
+  }
+
+  frameInterval(target: ComputerTarget): number {
+    return this.pick(target).frameInterval?.(target) ?? 250
+  }
+
   capture(target: ComputerTarget): Promise<ComputerCapture> {
     return this.pick(target).capture(target)
   }

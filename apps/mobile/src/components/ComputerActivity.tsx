@@ -48,19 +48,26 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
       return
     }
     let mounted = true
+    let hash: string | undefined
     let timer: ReturnType<typeof setTimeout>
     const poll = async () => {
       try {
-        const next = await io.current.invoke(chat.computerId, 'computer.frame', taskId)
+        // The host holds the request until the screen changes, so an idle screen sends no image over the network.
+        const next = await io.current.invoke(chat.computerId, 'computer.frame', taskId, ...(hash ? [hash] : []))
+        hash = next.hash
         const summary = await io.current.invoke(chat.computerId, 'computer.session', taskId)
         if (!mounted) return
-        setFrame({
-          uri: `data:${next.mimeType};base64,${next.data}`,
-          width: next.width,
-          height: next.height,
-          capturedAt: next.capturedAt,
-          generation: next.generation,
-        })
+        setFrame((previous) =>
+          next.unchanged
+            ? previous && { ...previous, capturedAt: next.capturedAt, generation: next.generation }
+            : {
+                uri: `data:${next.mimeType};base64,${next.data}`,
+                width: next.width,
+                height: next.height,
+                capturedAt: next.capturedAt,
+                generation: next.generation,
+              },
+        )
         if (summary) setCurrent(summary)
         setError('')
       } catch (reason) {

@@ -35,11 +35,18 @@ function Viewer({
   const human = session.controller.kind === 'human'
   useEffect(() => {
     let active = true
+    let hash: string | undefined
     const tick = async () => {
       try {
-        const next = await invoke('computer.frame', taskId)
+        // The host holds the request until the screen changes (or briefly times out), so an idle screen sends no image.
+        const next = await invoke('computer.frame', taskId, ...(hash ? [hash] : []))
+        hash = next.hash
         if (active) {
-          setFrame(next)
+          setFrame((previous) =>
+            next.unchanged
+              ? previous && { ...previous, capturedAt: next.capturedAt, generation: next.generation }
+              : next,
+          )
           setError('')
         }
       } catch (reason) {

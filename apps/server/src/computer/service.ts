@@ -14,9 +14,15 @@ export class ComputerService {
   }
 
   /** Called from an approved person action (never from a tool). Replaces and revokes any earlier grant. */
-  grant(threadId: string, grant: ComputerGrant): ComputerSession {
+  grant(
+    threadId: string,
+    grant: ComputerGrant,
+    runtime?: { id: string; name: string; backend: ComputerBackend },
+  ): ComputerSession {
     this.sessions.get(threadId)?.revoke()
-    const session = new ComputerSession(grant, this.backend, this.now)
+    const session = runtime
+      ? new ComputerSession(grant, runtime.backend, this.now, { id: runtime.id, name: runtime.name })
+      : new ComputerSession(grant, this.backend, this.now)
     this.sessions.set(threadId, session)
     return session
   }
