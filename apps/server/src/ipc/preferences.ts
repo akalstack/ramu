@@ -176,6 +176,16 @@ export const appPreferences = z.object({
   includeTabContext: z.boolean().default(true),
   warnModelChange: z.boolean().default(true),
   autoProjectSelection: z.boolean().default(true),
+  agentBrowser: z
+    .object({
+      agentBrowser: z.enum(['integrated', 'provider']),
+      providerOverrides: z.partialRecord(providerId, z.enum(['integrated', 'provider'])).default({}),
+      defaultProfileId: z
+        .string()
+        .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
+        .default('default'),
+    })
+    .default({ agentBrowser: 'provider', providerOverrides: {}, defaultProfileId: 'default' }),
   sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH),
   messageBehaviorVersion: z.literal(4).default(4),
   favoriteModels: z.array(z.string().max(200)).max(100).default([]),

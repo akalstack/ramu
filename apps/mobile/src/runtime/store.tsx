@@ -1,6 +1,7 @@
 import { inputSummary } from '@ramu/shared/chat/inputSummary'
 import type { BranchNamingIntent, BranchChoice } from '@ramu/shared/workspaceDefaults'
 import { normalizeHelperGroups } from './threadActivity'
+import { rememberExplorerNavigation, type ExplorerNavigation } from './explorerNavigation'
 import { isCompacting } from '@ramu/shared/chat/compaction'
 import { newChatHost } from './newChatHost'
 import {
@@ -147,6 +148,7 @@ interface Store extends State {
   ): Promise<void>
   isOnline(id: string): boolean
   setDraft(key: string, text: string): void
+  rememberExplorer(host: string, context: string, navigation: Omit<ExplorerNavigation, 'at'>): void
   addExplorerFile(input: ExplorerFileInput): ExplorerDestination
   clearComposerDraft(key: string, expected: ComposerSnapshot): boolean
 
@@ -1329,6 +1331,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return next.destination
     },
     setDraft: (key, text) => change((s) => ({ ...s, drafts: { ...s.drafts, [key]: text } })),
+    rememberExplorer: (host, context, navigation) =>
+      change((s) => ({ ...s, drafts: rememberExplorerNavigation(s.drafts, host, context, navigation) })),
     dismissError: () => change((s) => ({ ...s, error: null })),
     dismissNotification: (index) => setNotifications((n) => n.filter((_, i) => i !== index)),
   }

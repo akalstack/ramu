@@ -207,6 +207,12 @@ export function EventRow({
           {translate('Agent failed')}
         </div>
       ) : null
+    case 'background-terminal-stop':
+      return (
+        <div className={TURN_END_CLASS} role="status">
+          {translate('You requested a stop for {0}', { 0: e.command })}
+        </div>
+      )
     case 'file-restore':
       return (
         <div className={TURN_END_CLASS} role="status">

@@ -3,7 +3,13 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { Task } from '@ramu/shared/types'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
-const state = vi.hoisted(() => ({ host: 'host-a', queries: [] as { queryKey: unknown[]; enabled: boolean }[] }))
+const state = vi.hoisted(() => ({
+  host: 'host-a',
+  queries: [] as { queryKey: unknown[]; enabled: boolean }[],
+  openTask: vi.fn(),
+  openView: vi.fn(),
+  buttons: [] as React.ComponentProps<'button'>[],
+}))
 vi.mock('../src/i18n', () => ({
   useLanguage() {},
   t: (text: string, params: Record<string, string | number> = {}) =>
@@ -13,6 +19,19 @@ vi.mock('../src/components/ui/hover-card', () => ({
   HoverCardContent: ({ children }: { children: React.ReactNode }) => children,
 }))
 vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ id: state.host }) }))
+vi.mock('../src/workspace/workspace', () => ({
+  useWorkspaceActions: () => ({ openTask: state.openTask, openView: state.openView }),
+}))
+vi.mock('@/components/desktop-button', () => ({
+  Button: ({
+    variant: _variant,
+    size: _size,
+    ...props
+  }: React.ComponentProps<'button'> & { variant?: string; size?: string }) => {
+    state.buttons.push(props)
+    return createElement('button', props)
+  },
+}))
 vi.mock('../src/dataQueries', () => ({ ipcQueryKeyOn: (...args: unknown[]) => args, cachedDataOn: () => undefined }))
 vi.mock('../src/git/hostQuery', () => ({
   queryInvokerFor: () => () => {
@@ -63,6 +82,20 @@ const render = (value = task, offline = false) =>
 beforeEach(() => {
   state.queries = []
   state.host = 'host-a'
+  state.buttons = []
+  state.openTask.mockClear()
+  state.openView.mockClear()
+})
+it('opens the exact forwarded request through the displayed host workspace without answering it', () => {
+  render()
+  const button = state.buttons.find((button) => String(button.children).includes('Run build'))!
+  button.onClick!({ stopPropagation() {} } as React.MouseEvent<HTMLButtonElement>)
+  expect(state.openTask).toHaveBeenCalledWith('thread')
+  expect(state.openView).toHaveBeenCalledWith('thread', {
+    kind: 'agent',
+    sessionId: 'main',
+    focusRequestId: 'forwarded',
+  })
 })
 it('shows approval, bounded request context and helper origin in the existing thread card', () => {
   const markup = render()
@@ -72,6 +105,15 @@ it('shows approval, bounded request context and helper origin in the existing th
   expect(markup).toContain('From Builder')
   expect(state.queries[0]!.queryKey).toContain('host-a')
   expect(state.queries[0]!.enabled).toBe(true)
+})
+it('distinguishes a pending verification from a failed latest check', () => {
+  const goalState = { status: 'active' as const, objective: 'Fix build', verifying: true, verificationFailed: true }
+  const pending = render({ ...task, goalState })
+  expect(pending).toContain('Verifying goal')
+  expect(pending).not.toContain('Verification failed')
+  const failed = render({ ...task, goalState: { ...goalState, verifying: false } })
+  expect(failed).toContain('Verification failed')
+  expect(failed).not.toContain('Verifying goal')
 })
 it('keeps offline details qualified and cannot fetch another host branch or invent old-host request context', () => {
   state.host = 'host-b'

@@ -12,6 +12,39 @@ const chat = (computerId: string, taskId = 'same'): InboxChat => ({
   sessionId: 'session',
 })
 
+it('keeps unfinished goals out of Completed between turns and offers held goals in Needs you', () => {
+  const states = ['active', 'waiting-provider', 'paused', 'blocked', 'turn-limit', 'completed'] as const
+  const chats: InboxChat[] = states.map((status) => ({
+    ...chat('host', status),
+    status: 'ready-for-review' as const,
+    goalState: { status },
+  }))
+  chats.push({
+    ...chat('host', 'limit'),
+    status: 'ready-for-review',
+    goalState: { status: 'paused', pausedBy: 'provider-limit' },
+  })
+  const result = buildInbox({ chats, recaps: [], summaries: [], now })
+  expect(result.running.map((item) => item.taskId)).toEqual(['active', 'waiting-provider', 'limit'])
+  expect(result.waiting.map((item) => item.taskId)).toEqual(['paused', 'blocked', 'turn-limit'])
+  expect(result.completed.map((item) => item.taskId)).toEqual(['completed'])
+})
+
+it('prefers a refreshed mobile goal over a stale task summary, including an explicitly cleared goal', () => {
+  const base = { ...chat('host'), status: 'idle' as const, goalState: { status: 'active' as const } }
+  const result = buildInbox({
+    chats: [
+      { ...base, id: 'cleared', goal: null },
+      { ...base, id: 'completed', goal: { status: 'completed' } },
+    ],
+    recaps: [],
+    summaries: [],
+    now,
+  })
+  expect(result.running).toEqual([])
+  expect(result.completed.map((item) => item.id)).toEqual(['cleared', 'completed'])
+})
+
 it('filters every inbox section and badge by the owning host even when resource IDs collide', () => {
   const chats = [chat('a'), chat('b')]
   const recaps = ['a', 'b'].map((computerId) => ({

@@ -21,6 +21,7 @@ const SHORT = {
   input: ['threadInput', 'threadInputFull'],
   limit: ['threadLimit', 'threadLimitFull'],
   failed: ['threadFailed', 'threadFailedFull'],
+  stopped: ['threadStopped', 'threadStoppedFull'],
   finished: ['threadFinished', 'threadFinishedFull'],
 } as const satisfies Record<string, readonly [keyof Strings, keyof Strings]>
 
@@ -102,7 +103,18 @@ export const ChatRow = memo(function ChatRow({
               </View>
             ) : (
               <StatusIcon
-                status={status?.kind === 'approval' || status?.kind === 'input' ? 'needs-input' : chat.status}
+                status={
+                  status?.kind === 'approval' ||
+                  status?.kind === 'input' ||
+                  status?.kind === 'blocked' ||
+                  status?.kind === 'turn-limit'
+                    ? 'needs-input'
+                    : status?.kind === 'goal' || status?.kind === 'working'
+                      ? 'running'
+                      : status?.kind === 'paused' || status?.kind === 'stopped' || status?.kind === 'limit'
+                        ? 'idle'
+                        : chat.status
+                }
               />
             )}
           </View>

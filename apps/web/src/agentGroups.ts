@@ -1,4 +1,5 @@
 import type { AgentSessionInfo, Task } from '@ramu/shared/types'
+import { isLimitHold } from '@ramu/shared/chat/goalHold'
 
 export type AgentGroup = 'Waiting for your input' | 'Running' | 'Limit reached' | 'Done'
 
@@ -9,8 +10,10 @@ export const goalActive = (session: AgentSessionInfo, task: Task | undefined) =>
 export const groupOf = (session: AgentSessionInfo, task?: Task): AgentGroup =>
   session.state === 'needs-input' || session.pendingInput
     ? 'Waiting for your input'
-    : session.waitingUntil
+    : session.waitingUntil || (!session.parentId && isLimitHold(task?.goalState))
       ? 'Limit reached'
       : ['running', 'starting'].includes(session.state) || goalActive(session, task)
         ? 'Running'
-        : 'Done'
+        : !session.parentId && task?.goalState && ['paused', 'blocked', 'turn-limit'].includes(task.goalState.status)
+          ? 'Waiting for your input'
+          : 'Done'

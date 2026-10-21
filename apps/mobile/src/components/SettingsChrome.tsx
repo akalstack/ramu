@@ -29,6 +29,7 @@ const icons: Record<SettingsSection, LucideIcon> = {
   access: ShieldCheck,
   workflows: Target,
   memory: Brain,
+  rules: ShieldCheck,
   system: CalendarClock,
   computers: Monitor,
   notifications: Bell,

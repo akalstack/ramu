@@ -315,6 +315,7 @@ type AgentEventBody =
   | { kind: 'queue'; messages: QueuedMessage[]; paused?: boolean }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
+  | { kind: 'background-terminal-stop'; terminalId: string; command: string }
   | {
       kind: 'init'
       model: string
@@ -444,6 +445,8 @@ export interface McpConnection {
   token: string
   nativeSubagents?: boolean
   instructions?: string
+  /** Frozen browser routing guidance from the execution host for this provider process. */
+  browserInstructions?: string
   /** Review chats about learned memories: Ramu memory and skill tools only, no built-in file, shell or Git tools. */
   restricted?: boolean
   /** Ramu's exported managed skills for this chat's scope, set only for providers that load them through their own skill system. */

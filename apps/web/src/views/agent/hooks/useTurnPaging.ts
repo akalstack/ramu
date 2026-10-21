@@ -5,6 +5,7 @@ import type { ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { useWorkspaceActions } from '../../../workspace/workspace'
 import { TURN_PAGE } from '../constants'
 import { turnsToKeep } from '../lib/paging'
+import { sourceEvent } from '../lib/sourceEvent'
 import type { AgentViewDesc, Turn } from '../types'
 
 /**
@@ -16,6 +17,8 @@ export function useTurnPaging({
   visible,
   taskId,
   events,
+  eventSequences,
+  onOpenQuestion,
   blocks,
   turns,
   scroller,
@@ -25,6 +28,8 @@ export function useTurnPaging({
   visible: boolean
   taskId: string | undefined
   events: AgentEvent[]
+  eventSequences: Map<AgentEvent, number>
+  onOpenQuestion: (requestId: string) => void
   blocks: Block[]
   turns: Turn[]
   scroller: RefObject<HTMLDivElement | null>
@@ -35,10 +40,10 @@ export function useTurnPaging({
   const [shownTurns, setShownTurns] = useState(TURN_PAGE)
   const handledSource = useRef<string | null>(null)
   useEffect(() => {
-    if (!visible || !view.sourceSeq || !events.length) return
-    const request = view.sourceRequestId ?? `${view.sessionId}:${view.sourceSeq}`
+    if (!visible || (!view.sourceSeq && !view.focusRequestId) || !events.length) return
+    const request = view.sourceRequestId ?? `${view.sessionId}:${view.sourceSeq}:${view.focusRequestId}`
     if (handledSource.current === request) return
-    const source = events[view.sourceSeq - 1]
+    const source = sourceEvent(events, eventSequences, view)
     const index = blocks.findIndex((b) =>
       b.kind === 'event'
         ? b.event === source
@@ -52,13 +57,14 @@ export function useTurnPaging({
     }
     if (node) {
       handledSource.current = request
+      if (source?.kind === 'question') onOpenQuestion(source.requestId)
       stick.current = false
       node.scrollIntoView({ block: 'center' })
       return highlightSource(node, () => {
         if (taskId) ws.consumeSourceNavigation(taskId, view.id, view.sourceRequestId)
       })
     }
-  }, [view.sourceSeq, view.sourceRequestId, events.length, visible, taskId, shownTurns])
+  }, [view.sourceSeq, view.sourceRequestId, view.focusRequestId, events, eventSequences, visible, taskId, shownTurns])
   // A long chat draws its latest turns first; "Earlier turns" brings back the previous page, keeping the reader where they were.
   const hiddenTurns = Math.max(0, turns.length - shownTurns)
   const pageTurns = hiddenTurns ? turns.slice(hiddenTurns) : turns

@@ -6,6 +6,11 @@ import { readHostOverview, HostOverviewQueue } from './hostOverview'
 import { isHostDestination } from '@ramu/shared/hostOverview'
 import { LINK_TARGET_KEY, isWebLink, linkTargetFrom } from '@ramu/shared/browserLinks'
 import { BrowserRuntime } from './browserRuntime'
+import { BrowserProfiles } from './browserProfiles'
+import { BrowserSignInWindows } from './browserSignIn'
+import { browserProfileMethod } from './browserProfileMethods'
+import { executeBrowserBridge } from './browserBridge'
+import { randomUUID } from 'node:crypto'
 import { ElectronGuestFactory } from './electronGuest'
 import { browserMethod, isBrowserMethod } from './browserMethods'
 import { isHostInvokeAllowed, routeInvoke, routeTaskCommand, activityChannel } from './hostInvoke'
@@ -482,56 +487,132 @@ async function main() {
       .clearStorageData()
       .catch(() => {})
   }
-  const unsubscribe = subscribeRuntime(runtime, (channel, payload) => {
-    observeHostActivity(LOCAL, channel, payload)
-    if (channel === 'background:connection') computers.setLocalStatus(payload.connected)
-    computers.observe(LOCAL, channel, payload)
-    if (channel === 'updates:changed') {
-      updateStatus = payload
-      void desktopUpdater.prepare(payload)
-      sendAll(channel, updateView(payload))
-      return
-    }
-    if (channel !== 'host:request') {
-      send(channel, payload)
-      notifierFor(LOCAL).observe(channel, payload)
-      return
-    }
-    void (async () => {
-      try {
-        let value: unknown
-        if (payload.method === 'pickDirectory') {
-          // Test runs answer the folder dialog through RAMU_TEST_PICK_DIRECTORY instead of a native sheet.
-          if (process.env.RAMU_TEST_PICK_DIRECTORY) value = process.env.RAMU_TEST_PICK_DIRECTORY
-          else {
+  // The integrated browser's tabs live in this shell; every call names the host and thread it is for.
+  const browserProfiles = new BrowserProfiles(join(userData, 'browser-profiles.json'))
+  const browserGuests = new ElectronGuestFactory(() => (win.isDestroyed() ? null : win))
+  const browser = new BrowserRuntime(
+    browserGuests,
+    () => browserProfiles.ids(),
+    () => {
+      if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+    },
+    (id) => !browserProfiles.isBusy(id),
+  )
+  const browserRuntimes = new Set([browser])
+  const browserSignIn = new BrowserSignInWindows(browserProfiles, browserRuntimes, () => {
+    if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+  })
+  win.on('closed', () => {
+    browserSignIn.closeAll()
+    browser.closeAll()
+  })
+  const browserClientId = randomUUID()
+  let browserToken: string | null = null
+  let browserConnection = 0
+  const unsubscribe = subscribeRuntime(
+    runtime,
+    (channel, payload) => {
+      if (channel === 'background:connection') {
+        const epoch = ++browserConnection
+        browserToken = null
+        if (!payload.connected) browser.pauseForDisconnect()
+        else
+          void runtimeInvoke(runtime, 'browser.bridge.attach', [browserClientId])
+            .then((result) => {
+              if (browserConnection !== epoch) return
+              browserToken = result.token
+              return runtimeInvoke(runtime, 'browser.bridge.ready', [browserClientId, result.token]).then(() => {
+                if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+              })
+            })
+            .catch(() => {
+              if (browserConnection === epoch) {
+                browserToken = null
+                if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+              }
+            })
+      }
+      if (channel === 'browser:operation') {
+        const token = browserToken
+        if (!token || payload.clientId !== browserClientId) return
+        void executeBrowserBridge(browser, LOCAL, payload, () => browserProfiles.catalog())
+          .then(
+            (result) => {
+              if (
+                payload.command.kind === 'open' &&
+                result &&
+                typeof result === 'object' &&
+                'tab' in result &&
+                !win.isDestroyed()
+              )
+                win.webContents.send('browser:agent-open', result.tab)
+              return runtimeInvoke(runtime, 'browser.bridge.reply', [browserClientId, token, payload.requestId, result])
+            },
+            (error) =>
+              runtimeInvoke(runtime, 'browser.bridge.reply', [
+                browserClientId,
+                token,
+                payload.requestId,
+                null,
+                error instanceof Error ? error.message : 'Browser operation failed',
+              ]),
+          )
+          .catch(() => {})
+        return
+      }
+
+      observeHostActivity(LOCAL, channel, payload)
+      if (channel === 'background:connection') computers.setLocalStatus(payload.connected)
+      computers.observe(LOCAL, channel, payload)
+      if (channel === 'updates:changed') {
+        updateStatus = payload
+        void desktopUpdater.prepare(payload)
+        sendAll(channel, updateView(payload))
+        return
+      }
+      if (channel !== 'host:request') {
+        send(channel, payload)
+        notifierFor(LOCAL).observe(channel, payload)
+        return
+      }
+      void (async () => {
+        try {
+          let value: unknown
+          if (payload.method === 'pickDirectory') {
+            // Test runs answer the folder dialog through RAMU_TEST_PICK_DIRECTORY instead of a native sheet.
+            if (process.env.RAMU_TEST_PICK_DIRECTORY) value = process.env.RAMU_TEST_PICK_DIRECTORY
+            else {
+              const result = await dialog.showOpenDialog(win, {
+                properties: ['openDirectory', 'createDirectory'],
+                title: payload.path === 'repository' ? t('Connect a repository') : t('Add project'),
+                buttonLabel: payload.path === 'repository' ? t('Connect') : t('Add project'),
+              })
+              value = result.canceled ? null : (result.filePaths[0] ?? null)
+            }
+          } else if (payload.method === 'pickExecutable') {
             const result = await dialog.showOpenDialog(win, {
-              properties: ['openDirectory', 'createDirectory'],
-              title: payload.path === 'repository' ? t('Connect a repository') : t('Add project'),
-              buttonLabel: payload.path === 'repository' ? t('Connect') : t('Add project'),
+              properties: ['openFile'],
+              title: t('Select provider binary'),
+              buttonLabel: t('Use binary'),
             })
             value = result.canceled ? null : (result.filePaths[0] ?? null)
-          }
-        } else if (payload.method === 'pickExecutable') {
-          const result = await dialog.showOpenDialog(win, {
-            properties: ['openFile'],
-            title: t('Select provider binary'),
-            buttonLabel: t('Use binary'),
-          })
-          value = result.canceled ? null : (result.filePaths[0] ?? null)
-        } else if (payload.method === 'pickAttachments') {
-          const result = await dialog.showOpenDialog(win, {
-            properties: ['openFile', 'multiSelections'],
-            title: t('Attach files'),
-          })
-          value = result.canceled ? [] : result.filePaths
-        } else if (payload.method === 'reveal') shell.showItemInFolder(payload.path)
-        else throw new Error('Unknown desktop action')
-        await runtimeInvoke(runtime, 'host.reply', [payload.requestId, value])
-      } catch (error) {
-        await runtimeInvoke(runtime, 'host.reply', [payload.requestId, null, String(error)]).catch(() => {})
-      }
-    })()
-  })
+          } else if (payload.method === 'pickAttachments') {
+            const result = await dialog.showOpenDialog(win, {
+              properties: ['openFile', 'multiSelections'],
+              title: t('Attach files'),
+            })
+            value = result.canceled ? [] : result.filePaths
+          } else if (payload.method === 'reveal') shell.showItemInFolder(payload.path)
+          else throw new Error('Unknown desktop action')
+          await runtimeInvoke(runtime, 'host.reply', [payload.requestId, value])
+        } catch (error) {
+          await runtimeInvoke(runtime, 'host.reply', [payload.requestId, null, String(error)]).catch(() => {})
+        }
+      })()
+    },
+    runtimeNetwork,
+    { localClientId: browserClientId },
+  )
   const attachment = attachmentActions(win, new AttachmentStore(join(userData, 'attachments')))
   const routing = (self: string) => ({
     self,
@@ -546,9 +627,6 @@ async function main() {
     if (channel) observeHostActivity(id, channel, {})
     return result
   }
-  // The integrated browser's tabs live in this shell; every call names the host and thread it is for.
-  const browser = new BrowserRuntime(new ElectronGuestFactory(() => (win.isDestroyed() ? null : win)), () => [])
-  win.on('closed', () => browser.closeAll())
   ipcMain.handle('ramu:invoke', async (event, requestMethod: unknown, requestArgs: unknown, requestHost?: unknown) => {
     // Only our windows may invoke IPC. Normal calls reach their owning computer; explicit computer management validates its target below.
     const self = event.sender === win.webContents ? LOCAL : undefined
@@ -583,7 +661,73 @@ async function main() {
     if (remote && computers.status(settingsComputer) === 'paused' && !method.startsWith('computers.'))
       throw new Error(t('This connection is paused. Resume it in Remote access.'))
     if (isBrowserMethod(method)) {
-      if (remote) throw new Error('The integrated browser runs on this computer.')
+      if (method === 'browser.runtimeStatus')
+        return args[0] === LOCAL && browserToken
+          ? { available: true, warning: browser.warning() }
+          : {
+              available: false,
+              reason:
+                args[0] !== LOCAL
+                  ? 'The selected execution host has no authorized browser bridge to this desktop.'
+                  : 'The desktop browser is not connected to the execution service.',
+            }
+      if (remote || args[0] !== LOCAL)
+        throw new Error('The selected execution host has no authorized browser bridge to this desktop.')
+      if (method === 'browser.profiles.signIn') {
+        if (typeof args[1] !== 'string' || typeof args[2] !== 'string' || args[2].length > 4000)
+          throw new Error('Invalid browser sign-in request')
+        return browserSignIn.open(args[1], args[2])
+      }
+      if (method.startsWith('browser.profiles.'))
+        return browserProfileMethod(
+          browserProfiles,
+          browser,
+          {
+            clearData: (id) => browserGuests.clearProfile(id),
+            runtimes: () => [...browserRuntimes],
+            async resetDefault(id) {
+              const snapshot = (await runtimeInvoke(
+                runtime,
+                'settings.app.snapshot',
+              )) as import('@ramu/shared/settingsCompatibility').SettingsSnapshot
+              const field = snapshot.settings.find((entry) => entry.path === 'agentBrowser.defaultProfileId')
+              if (field?.value === id)
+                await runtimeInvoke(runtime, 'settings.app.patch', [
+                  [{ path: field.path, schema: field.schema, before: id, value: 'default' }],
+                ])
+            },
+            async confirm({ name, deleteProfile, tabs }) {
+              const result = await dialog.showMessageBox(win, {
+                type: 'warning',
+                message: t(deleteProfile ? 'Delete browser profile {0}?' : 'Clear website data for {0}?', { 0: name }),
+                detail: t(
+                  'This closes {0} tabs and signs out websites in this profile. Deleting a selected profile restores Default. This cannot be undone.',
+                  { 0: tabs },
+                ),
+                buttons: [t('Cancel'), t(deleteProfile ? 'Delete profile' : 'Clear website data')],
+                defaultId: 0,
+                cancelId: 0,
+              })
+              return result.response === 1
+            },
+            changed() {
+              if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+            },
+          },
+          method,
+          args,
+        )
+
+      if (method === 'browser.giveControl') {
+        // Resolve the run through the local execution service; never trust a renderer-supplied session id.
+        browserMethod(browser, 'browser.list', args.slice(0, 2))
+        if (args[0] !== LOCAL) throw new Error('This browser belongs to the local execution host.')
+        const running = (await runtimeInvoke(runtime, 'agent.list', [
+          args[1],
+        ])) as import('@ramu/shared/types').AgentSessionInfo[]
+        const run = running.find((session) => !session.parentId && ['starting', 'running'].includes(session.state))
+        return browserMethod(browser, method, args, run?.id)
+      }
       return browserMethod(browser, method, args)
     }
     if (method === 'app.openExternal') {

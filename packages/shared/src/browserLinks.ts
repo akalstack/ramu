@@ -12,3 +12,8 @@ export function linkTargetFrom(value: string | null | undefined): LinkTarget {
 export function isWebLink(url: string): boolean {
   return /^https?:\/\//i.test(url)
 }
+
+/** Showing an agent page is a device presentation choice, independent of execution routing. */
+export const AGENT_BROWSER_VISIBILITY_KEY = 'ramu.browser.agentVisibility'
+export const agentBrowserVisibilityFrom = (value: string | null | undefined): 'automatic' | 'manual' =>
+  value === 'manual' ? 'manual' : 'automatic'

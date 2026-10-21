@@ -1,6 +1,7 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { Folder, GitBranch } from 'lucide-react'
 import { HoverCardContent } from '@/components/ui/hover-card'
+import { Button } from '@/components/desktop-button'
 import type { RepositoryBinding, Task } from '@ramu/shared/types'
 import type { ThreadStatus } from '@ramu/shared/chat/threadStatus'
 import { t, useLanguage } from '../../i18n'
@@ -9,6 +10,7 @@ import { ipcQueryKeyOn, cachedDataOn } from '../../dataQueries'
 import { queryInvokerFor } from '../../git/hostQuery'
 import { repositoryQueryKey } from '../../git/repositoryQueryKey'
 import { workspaceOfTask } from '../../workspace/workspaceModel'
+import { useWorkspaceActions } from '../../workspace/workspace'
 
 interface Place {
   binding: RepositoryBinding
@@ -56,7 +58,7 @@ const MAX_REPOSITORIES = 3
 
 /**
  * One thread's context, shown next to its row on hover or focus: what it is doing, where it works and on which
- * branch. Read-only: it never switches branches, resumes work or marks the thread read.
+ * branch. Explicit request actions open the owning thread; merely inspecting the card changes no thread state.
  */
 type CardProps = {
   task: Task
@@ -84,6 +86,7 @@ export function ThreadHoverCard(props: CardProps) {
 /** Mounted only while the card is open, so nothing is fetched for rows nobody is looking at. */
 function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace, offline }: CardProps) {
   useLanguage()
+  const ws = useWorkspaceActions()
   const places = useThreadPlaces(task, !offline)
   const worktree = task.mode === 'worktree'
   const list = places.data ?? []
@@ -105,9 +108,22 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
           <span className="text-muted-foreground">{t('{0} input requests', { 0: task.inputSummary.count })}</span>
           {task.inputSummary.requests.map((request) => (
             <div key={`${request.sessionId}:${request.requestId}`} className="text-soft [overflow-wrap:anywhere]">
-              <span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto min-h-8 w-full justify-start whitespace-normal px-1 text-left text-caption"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  ws.openTask(task.id)
+                  ws.openView(task.id, {
+                    kind: 'agent',
+                    sessionId: request.sessionId,
+                    focusRequestId: request.requestId,
+                  })
+                }}
+              >
                 {t(request.kind === 'approval' ? 'Approval needed' : 'Waiting for your input')}: {request.title}
-              </span>
+              </Button>
               {request.source && (
                 <span className="block text-muted-foreground">{t('From {0}', { 0: request.source.name })}</span>
               )}
@@ -120,6 +136,10 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
           <span className="text-soft [overflow-wrap:anywhere]">
             {t('Goal')}: {task.goalState.objective}
           </span>
+          {task.goalState.verifying && <span className="text-muted-foreground">{t('Verifying goal')}</span>}
+          {!task.goalState.verifying && task.goalState.verificationFailed && (
+            <span className="text-warn">{t('Verification failed')}</span>
+          )}
           {task.goalState.reason && task.goalState.status !== 'active' && (
             <span className="text-muted-foreground [overflow-wrap:anywhere]">{task.goalState.reason}</span>
           )}

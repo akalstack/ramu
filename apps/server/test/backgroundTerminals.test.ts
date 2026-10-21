@@ -77,14 +77,16 @@ it.skipIf(!posix)('stop ends the whole process group, is repeatable, and keeps f
 })
 
 it.skipIf(!posix)("records who stopped a command, and a person's stop is the one that sticks", async () => {
-  const { service } = make()
+  const { service, changes } = make()
   const byAgent = service.launchBackground('a', null, tmpdir(), 'sleep 300')
   expect(service.inspectBackground('a', byAgent.id).stoppedBy).toBeUndefined()
   expect(service.stopBackground('a', byAgent.id).stoppedBy).toBe('agent')
   await until(() => service.listBackground('a').find((t) => t.id === byAgent.id)!.state === 'exited')
   const byUser = service.launchBackground('a', null, tmpdir(), 'sleep 301')
   service.stopBackground('a', byUser.id)
+  const before = changes.length
   expect(service.stopBackground('a', byUser.id, false, 'user').stoppedBy).toBe('user')
+  expect(changes.length).toBeGreaterThan(before)
   expect(service.stopBackground('a', byUser.id).stoppedBy).toBe('user')
   await until(() => service.listBackground('a').find((t) => t.id === byUser.id)!.state === 'exited')
   expect(service.inspectBackground('a', byUser.id).stoppedBy).toBe('user')

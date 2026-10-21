@@ -25,6 +25,7 @@ import { useStore } from '../runtime/store'
 import { useT } from '../i18n'
 import { Button, Row, Sheet, T, type Icon } from './ui'
 import { ProjectCommandSettings } from './ProjectCommandSettings'
+import { ProjectRoutingSettings } from './ProjectRoutingSettings'
 
 /** Presents one review for the selected host; it never retries a deletion automatically. */
 export async function confirmChatDeletion(
@@ -339,11 +340,13 @@ export function ProjectActionsSheet({
   const t = useT()
   const router = useRouter()
   const [managingActions, setManagingActions] = useState(false)
+  const [routing, setRouting] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(project.name)
   useEffect(() => {
     if (open) {
       setManagingActions(false)
+      setRouting(false)
       setRenaming(false)
       setName(project.name)
     }
@@ -363,6 +366,11 @@ export function ProjectActionsSheet({
     setTimeout(fn, 300)
   }
   const items = [
+    {
+      icon: Sparkles,
+      label: translate(store.language, 'Names for Auto…'),
+      onPress: () => setRouting(true),
+    },
     {
       icon: SquareTerminal,
       label: t.manageProjectActions,
@@ -415,6 +423,8 @@ export function ProjectActionsSheet({
       },
     },
   ]
+  if (routing)
+    return <ProjectRoutingSettings key={`${project.computerId}:${raw}`} project={project} onClose={onClose} />
   if (managingActions)
     return (
       <ProjectCommandSettings

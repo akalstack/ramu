@@ -355,6 +355,7 @@ export class SessionProcess {
         toolSearch: this.host.preferences()?.intelligence?.toolSearch !== false,
         learning: this.host.learningInstructions()?.(s, { checkpoint: !carried?.built.includesCheckpoint }),
         rules: this.host.rulesInstructions()?.(s),
+        browser: connection.browserInstructions,
       })
     }
     if (connection && this.host.nativeSubagentsOff(s)) connection.nativeSubagents = false

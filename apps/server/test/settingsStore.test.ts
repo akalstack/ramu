@@ -134,3 +134,30 @@ watched('preserves the committed file and cache if atomic replacement fails and 
   expect(f.store.preferences().accent).toBe('teal')
   expect(readdirSync(f.directory).filter((name) => name.includes('.tmp.'))).toEqual([])
 })
+
+it('preserves provider browser setup on upgrade and persists explicit host browser routing independently', () => {
+  const { store } = fixture(DEFAULT_APP_PREFERENCES)
+  expect(store.preferences().agentBrowser).toEqual({
+    agentBrowser: 'provider',
+    providerOverrides: {},
+    defaultProfileId: 'default',
+  })
+  store.set({
+    ...store.preferences(),
+    agentBrowser: {
+      agentBrowser: 'integrated',
+      providerOverrides: { codex: 'provider' },
+      defaultProfileId: 'temporary',
+    },
+  })
+  expect(store.preferences().agentBrowser).toEqual({
+    agentBrowser: 'integrated',
+    providerOverrides: { codex: 'provider' },
+    defaultProfileId: 'temporary',
+  })
+  const previous = store.preferences()
+  expect(() =>
+    store.set({ ...previous, agentBrowser: { ...previous.agentBrowser, defaultProfileId: '../other-profile' } }),
+  ).toThrow()
+  expect(store.preferences().agentBrowser).toEqual(previous.agentBrowser)
+})

@@ -23,7 +23,7 @@ export function StatusMark({ task, status }: { task: Task; status: ThreadStatus 
     status.kind === 'turn-limit'
   )
     return <StateDot kind="dot warn text-warn" label={t(status.full)} />
-  if (status.kind === 'paused') return <StateDot kind="dot" label={t(status.full)} />
+  if (status.kind === 'paused' || status.kind === 'stopped') return <StateDot kind="dot" label={t(status.full)} />
   if (status.kind === 'limit')
     return task.waitingUntil ? (
       <ProviderWaitIcon retryAt={task.waitingUntil} />

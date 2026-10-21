@@ -361,3 +361,11 @@ describe('planning a switch to a login the thread used before', () => {
     expect(plan.built.info.mode).toBe('full')
   })
 })
+
+it('carries a human background-command stop as an instruction to inspect, never relaunch', () => {
+  const event: AgentEvent = { kind: 'background-terminal-stop', terminalId: 'command-1', command: 'pnpm dev' }
+  const text = transcriptOf([event])
+  expect(text).toContain('USER STOPPED BACKGROUND COMMAND command-1')
+  expect(text).toContain('Stop was requested; inspect its current state.')
+  expect(text).toContain('Do not restart it without a new instruction.')
+})

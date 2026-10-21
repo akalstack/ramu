@@ -67,3 +67,12 @@ Implemented behavior is covered by unit/integration tests and the desktop startu
 ## Security
 
 [Remote security](REMOTE-SECURITY-PLAN.md) still requires rotating credential renewal, token-lifetime UI, viewer-specific client controls, native mobile transport/certificate handling and paired-device acceptance. Server expiry, host-bound viewer pairing, an explicit RPC allowlist, pairing-route coverage and restricted browser origins are implemented; current policy is in [Security](../SECURITY.md#remote-access). Native transport and distribution prerequisites still apply.
+
+## Deferred implementation and acceptance blockers
+
+Implementation validation remains deferred until all implementation code is done, per the current task instruction. Unfinished functional work remains in the linked plans; source inspection and written tests are not passing-check evidence.
+
+- **Desktop browser checks deferred:** new local browser/profile/control code and its regression coverage are unrun. The earlier workspace typecheck failure still requires revalidation after implementation is finished. Native/provider acceptance and remaining browser delivery stay in the [browser plan](BROWSER-PLAN.md).
+- **Native and provider acceptance:** physical iOS/Android devices, signed/packaged desktop builds and opt-in authenticated provider sessions are still required for the device, permission, lifecycle and provider-boundary acceptance specified in the plans. Automated fake-provider checks do not satisfy those gates.
+- **Shared device preferences:** the all-device/mobile baseline requires an established profile/account or pairing synchronization mechanism before shared scope controls can promise propagation. Preserve local settings while resolving the transport prerequisite in [mobile settings](MOBILE-SETTINGS-PLAN.md).
+- **Native transport, capture and external accounts:** certificate enforcement across native fetch/SSE, verified local speech dependencies/model packaging, Cua Driver integration, distribution ownership/signing and Git-host credentials retain the prerequisites in their respective plans. They are deferred dependencies, not completed features.

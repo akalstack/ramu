@@ -164,15 +164,18 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           const main = sessions.at(-1)
           const inputSummary = mergeInputSummaries(sessions.map((session) => session.inputSummary))
           const goal = main ? agents.goalOf(main.id) : null
-          if (!goal || goal.status === 'completed') return { ...task, goalState: null, inputSummary }
+          const executionState = main?.state
+          if (!goal || goal.status === 'completed') return { ...task, goalState: null, inputSummary, executionState }
           return {
             ...task,
             inputSummary,
+            executionState,
             goalState: {
               status: goal.status,
               ...(goal.pausedBy ? { pausedBy: goal.pausedBy } : {}),
               objective: goal.objective.slice(0, 300),
               ...(goal.claim ? { verifying: true } : {}),
+              ...(goal.check && !goal.check.ok ? { verificationFailed: true } : {}),
               ...(goal.reason ? { reason: goal.reason.slice(0, 300) } : {}),
             },
           }

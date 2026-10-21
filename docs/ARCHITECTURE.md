@@ -44,6 +44,12 @@ The desktop has one shell renderer for every paired host. `HostSelectionProvider
 
 `invokeOn(host, method, ...args)` in `apps/web/src/ipc.ts` routes explicit host calls through `hostInvoke.ts` (known, connected host; server-only allow-list). Native menus, dialogs, clipboard and device lifecycle operations stay local. Queries use `['ipc', hostId, method, ...]`; content state lives under `host:<hostId>:`. `deviceState.ts` owns device-wide UI choices. Legacy remote storage partitions are imported once before the shell starts, without overwriting newer shell values, and then no remote renderer is retained. Notification clicks select their host and thread in the same shell. Remaining real-host measurements and migration acceptance are tracked in [the roadmap](ROADMAP.md#host-and-provider-acceptance).
 
+### Integrated browser boundary
+
+The execution server's browser broker attaches to one named local desktop event stream over the existing Unix-socket transport. An acknowledgement precedes readiness; replies require an opaque connection credential. Browser tool arguments cannot choose another thread, run or desktop. The backend/profile selection is frozen with the provider connection, obsolete connections are refused, and disconnect/run stop settles pending work without replaying mutations. Remote execution has no implicit bridge to the viewing desktop's localhost or website identities.
+
+Electron owns sandboxed, context-isolated guest contents, the non-secret local profile catalog, persistent/Temporary partitions, native input and user-only sign-in windows. Fixed isolated-world scripts handle DOM observations and element actions. Private fixed CDP operations provide named keys, bounded network metadata and live website-dialog handling; there is no general-purpose evaluation or public debugging endpoint. Website data never enters host preferences. Profile administration locks all owned contexts and waits for their destruction before clearing site data; failed metadata/data writes retain a retry path. The web pane receives metadata and explicit user actions through named desktop APIs. See [browser behavior](UI.md#integrated-browser) and [remaining delivery](BROWSER-PLAN.md).
+
 ## Server layout (`apps/server/src`)
 
 | Folder | Contents |
@@ -55,6 +61,7 @@ The desktop has one shell renderer for every paired host. `HostSelectionProvider
 | `memory/` | Shared memory notes, memory files, learning, recaps. |
 | `remote/` | Pairing, devices, network listener, presence announcements, mobile push, host folder browsing. |
 | `background/` | Schedules, activity, keep-awake, app update checks, notices. |
+| `browser/` | Private local-desktop browser broker and scoped provider tools; no Electron imports. |
 | `mcp/` | Host-owned Shared MCP management, policy, external gateway, SQLite metadata and isolated HTTP/stdio clients. Provider launch injection remains unfinished. |
 | `credentials/` | OS-backed host credential storage shared by integrations; only opaque references belong in ordinary storage. |
 | `ipc/` | Dispatcher, handler groups, shared context, schemas. |

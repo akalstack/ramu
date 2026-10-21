@@ -48,10 +48,14 @@ export function mobileThreadActivity(chat: Chat, connected: boolean) {
       : isLimitHold(chat.goal)
         ? 'provider'
         : chat.goal.status === 'active'
-          ? 'active'
+          ? chat.goal.claim
+            ? 'verifying'
+            : 'active'
           : chat.goal.status === 'paused'
             ? 'paused'
-            : 'blocked'
+            : chat.goal.status === 'turn-limit'
+              ? 'turn-limit'
+              : 'blocked'
   return {
     helpers,
     advisors,

@@ -75,6 +75,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   warnModelChange: boolean
   /** Home starts in Auto: Ramu picks the project from the first prompt and asks when it is unclear. */
   autoProjectSelection: boolean
+  /** Opt-in until integrated runtime/provider acceptance passes; website identities stay on the runtime's desktop. */
+  agentBrowser?: import('../browser').AgentBrowserPreferences
   /** Dragged width of the sidebar, in px. */
   sidebarWidth: number
   messageBehaviorVersion: 4

@@ -69,6 +69,7 @@ export function hostInboxInput(hosts: { id: string; data?: HostOverview }[]) {
                   ? ('running' as const)
                   : task.status,
           inputSummary: task.inputSummary,
+          goalState: task.goalState,
           lastActiveAt: task.lastActiveAt,
           sessionId: session?.nativeTask ? (session.parentId ?? null) : (session?.id ?? null),
           doneAt: task.doneAt,

@@ -8,6 +8,15 @@ const task = (patch: Partial<Parameters<typeof threadStatus>[0]> = {}) => ({
 })
 
 describe('threadStatus', () => {
+  it('distinguishes a stopped execution from failure and unread completion without changing older hosts', () => {
+    expect(threadStatus(task({ executionState: 'stopped' }), true)).toMatchObject({
+      kind: 'stopped',
+      full: 'Agent stopped',
+    })
+    expect(threadStatus(task({ status: 'failed', executionState: 'failed' }), true)?.kind).toBe('failed')
+    expect(threadStatus(task(), true)?.kind).toBe('finished')
+    expect(threadStatus(task({ status: 'running', executionState: 'stopped' }), true)?.kind).toBe('working')
+  })
   it('says nothing for a quiet, read thread', () => {
     expect(threadStatus(task(), false)).toBeNull()
   })

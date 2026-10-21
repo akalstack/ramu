@@ -6,7 +6,7 @@ import type { RegisterHandlers } from '../types'
 const dimension = z.number().int().min(2).max(1000)
 
 /** Terminals (pty sessions). */
-export const registerTerminalHandlers: RegisterHandlers = ({ workspace, terminals, cwdOf }) => ({
+export const registerTerminalHandlers: RegisterHandlers = ({ workspace, terminals, agents, cwdOf }) => ({
   'term.open': {
     args: z.tuple([id, id.nullable(), dimension, dimension]),
     run: (taskId: string, repoId: string | null, cols: number, rows: number) =>
@@ -47,8 +47,11 @@ export const registerTerminalHandlers: RegisterHandlers = ({ workspace, terminal
   },
   'term.background.stop': {
     args: z.tuple([id, id, z.boolean().optional()]),
-    run: (taskId: string, termId: string, force?: boolean) =>
-      terminals.stopBackground(taskId, termId, force ?? false, 'user'),
+    run: (taskId: string, termId: string, force?: boolean) => {
+      const terminal = terminals.stopBackground(taskId, termId, force ?? false, 'user')
+      if (terminal.stoppedBy === 'user') agents.recordBackgroundTerminalStop(taskId, termId, terminal.command)
+      return terminal
+    },
   },
   'term.snapshot': { args: z.tuple([id]), run: (termId: string) => terminals.snapshot(termId) },
 })

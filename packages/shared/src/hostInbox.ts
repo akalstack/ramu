@@ -1,4 +1,5 @@
-import type { LibrarySummary, RecapItem, TaskStatus, ThreadInputSummary } from './types'
+import type { ChatGoal, LibrarySummary, RecapItem, TaskStatus, ThreadInputSummary } from './types'
+import { goalContinues } from './chat/goalHold'
 
 // Shared desktop/mobile inbox: what needs you, what is running, recaps, learning, and finished work.
 // Keep derivation independent of rendering and apply host scope before limits or counts.
@@ -13,6 +14,9 @@ export interface InboxChat {
   computerId: string
   status: TaskStatus
   inputSummary?: ThreadInputSummary | null
+  /** Mobile has the live goal; desktop supplies the compact task summary. */
+  goal?: Pick<ChatGoal, 'status' | 'pausedBy'> | null
+  goalState?: Pick<ChatGoal, 'status' | 'pausedBy'> | null
   lastActiveAt: number
   sessionId: string | null
   doneAt?: number | null
@@ -89,10 +93,24 @@ export function buildInbox(input: {
   const live = input.chats.filter(
     (chat) => inScope(chat.computerId) && !chat.pending && !chat.doneAt && chat.status !== 'archived',
   )
-  const needsInput = (chat: InboxChat) => chat.status === 'needs-input' || !!chat.inputSummary?.count
+  const goalOf = (chat: InboxChat) => (chat.goal === undefined ? chat.goalState : chat.goal)
+  const unfinished = (chat: InboxChat) => {
+    const goal = goalOf(chat)
+    return !!goal && goal.status !== 'completed'
+  }
+  const needsInput = (chat: InboxChat) => {
+    const goal = goalOf(chat)
+    return (
+      chat.status === 'needs-input' ||
+      !!chat.inputSummary?.count ||
+      goal?.status === 'blocked' ||
+      goal?.status === 'turn-limit' ||
+      (goal?.status === 'paused' && !goalContinues(goal))
+    )
+  }
   const waiting = live.filter(needsInput).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   const running = live
-    .filter((chat) => chat.status === 'running' && !needsInput(chat))
+    .filter((chat) => (chat.status === 'running' || goalContinues(goalOf(chat))) && !needsInput(chat))
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   const enabled = input.recapsEnabled ?? (() => true)
   const recaps = splitRecaps(
@@ -112,6 +130,7 @@ export function buildInbox(input: {
       (chat) =>
         (chat.status === 'ready-for-review' || chat.status === 'idle' || chat.status === 'failed') &&
         !needsInput(chat) &&
+        !unfinished(chat) &&
         chat.sessionId,
     )
     .filter((chat) => chat.lastActiveAt >= since)

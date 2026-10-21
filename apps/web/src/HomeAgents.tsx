@@ -2,14 +2,14 @@ import { animateThreadListChange } from './workspace/threadListMotion'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { DateTime } from 'luxon'
-import type { AgentSessionInfo } from '@ramu/shared/types'
+import type { AgentSessionInfo, Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { ThreadHoverCard } from './sidebar/projects/ThreadHoverCard'
 import { Check, RotateCcw, Square } from 'lucide-react'
 import { FadeText } from './FadeText'
-import { StateDot } from './sidebar/projects/TaskStateIcon'
+import { StateDot, StatusMark } from './sidebar/projects/TaskStateIcon'
 import { ICON_BUTTON_CLASS } from './sidebar/projects/constants'
 import { ramu } from './ipc'
 import { ownHostId } from './hosts'
@@ -26,7 +26,7 @@ import { notifyError } from './chat/Notifications'
 import { errorText } from './lib/errors'
 import { ProviderWaitIcon } from './models/ProviderWait'
 import { timeAgo } from './Menu'
-import { goalActive, groupOf, type AgentGroup } from './agentGroups'
+import { groupOf, type AgentGroup } from './agentGroups'
 
 function PendingInput({ sessionId }: { sessionId: string }) {
   const { events } = useAgentStream(sessionId)
@@ -123,19 +123,22 @@ function AgentState({
   group,
   at,
   unread,
-  goal,
+  task,
 }: {
   session: AgentSessionInfo
   group: AgentGroup
   at?: number
   unread?: boolean
-  /** The thread's goal is what keeps it running. */
-  goal?: boolean
+  task?: Task
 }) {
+  if (task && !session.parentId) {
+    const status = threadStatus(task, !!unread, task.goalState)
+    if (status) return <StatusMark task={task} status={status} />
+  }
   if (group === 'Limit reached' && session.waitingUntil) return <ProviderWaitIcon retryAt={session.waitingUntil} />
   if (group === 'Waiting for your input')
     return <StateDot kind="dot warn text-warn" label={t('Waiting for your input')} />
-  if (group === 'Running') return <StateDot kind="spinner" label={t(goal ? 'Working toward goal' : 'Agent working')} />
+  if (group === 'Running') return <StateDot kind="spinner" label={t('Agent working')} />
   if (session.state === 'failed') return <StateDot kind="dot bad" label={t('Agent failed')} />
   return (
     <>
@@ -227,7 +230,7 @@ export function AgentRow({
             group={group}
             at={task?.lastActiveAt}
             unread={ws.unread.has(session.taskId)}
-            goal={goalActive(session, task)}
+            task={task}
           />
           {group === 'Done' && !helper && (
             <span className="row-actions hidden flex-none items-center gap-0.5">
@@ -249,24 +252,27 @@ export function AgentRow({
               </Button>
             </span>
           )}
-          {group !== 'Done' && (
-            <span className="row-actions hidden flex-none items-center gap-0.5">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className={ICON_BUTTON_CLASS}
-                aria-label={t('Stop')}
-                title={t('Stop')}
-                disabled={!!session.nativeTask && !session.nativeTask.canStop}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  stop()
-                }}
-              >
-                <Square size={11} />
-              </Button>
-            </span>
-          )}
+          {group !== 'Done' &&
+            (['running', 'starting', 'needs-input'].includes(session.state) ||
+              session.waitingUntil ||
+              task?.goalState?.status === 'active') && (
+              <span className="row-actions hidden flex-none items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className={ICON_BUTTON_CLASS}
+                  aria-label={t('Stop')}
+                  title={t('Stop')}
+                  disabled={!!session.nativeTask && !session.nativeTask.canStop}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    stop()
+                  }}
+                >
+                  <Square size={11} />
+                </Button>
+              </span>
+            )}
         </HoverCardTrigger>
         {task && !helper && (
           <ThreadHoverCard
@@ -283,7 +289,7 @@ export function AgentRow({
           />
         )}
       </HoverCard>
-      {group === 'Waiting for your input' && (
+      {group === 'Waiting for your input' && (session.state === 'needs-input' || session.pendingInput) && (
         <div className="px-2.5 pt-1 pb-3">
           <PendingInput sessionId={session.id} />
         </div>

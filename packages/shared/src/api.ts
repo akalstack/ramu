@@ -1,4 +1,4 @@
-import type { BrowserTabInfo } from './types/browser'
+import type { BrowserProfileCatalog, BrowserProfileInfo, BrowserTabInfo } from './types/browser'
 import type { RoutingOutcome } from './workspace/projectRouting'
 import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
 import type { ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
@@ -152,6 +152,14 @@ export interface RamuMethods {
   /** Opens a web link in the person's own browser. Plain http(s) links only. */
   'app.openExternal'(url: string): void
   /** Integrated browser tabs of this computer's desktop app; every call names the host and thread it is for. */
+  'browser.profiles.list'(hostId: string): BrowserProfileCatalog
+  'browser.profiles.create'(hostId: string, name: string): BrowserProfileInfo
+  'browser.profiles.signIn'(hostId: string, profileId: string, url: string): void
+  'browser.profiles.rename'(hostId: string, profileId: string, name: string): void
+  /** Native review closes affected tabs and explains sign-out before removing site data. */
+  'browser.profiles.clear'(hostId: string, profileId: string): { cancelled: boolean }
+  'browser.profiles.delete'(hostId: string, profileId: string): { cancelled: boolean }
+  'browser.runtimeStatus'(hostId: string): { available: boolean; reason?: string; warning?: string }
   'browser.list'(hostId: string, threadId: string): BrowserTabInfo[]
   'browser.open'(
     hostId: string,
@@ -159,6 +167,16 @@ export interface RamuMethods {
     url: string,
     profileId?: string,
   ): { tab: BrowserTabInfo; profileFellBack: boolean }
+  'browser.dialog'(hostId: string, threadId: string, tabId: string): import('./browserBridge').BrowserDialog | null
+  'browser.handleDialog'(
+    hostId: string,
+    threadId: string,
+    tabId: string,
+    dialogId: string,
+    accept: boolean,
+    text?: string,
+  ): void
+  'browser.changeProfile'(hostId: string, threadId: string, tabId: string, profileId: string): BrowserTabInfo
   'browser.navigate'(hostId: string, threadId: string, tabId: string, url: string): BrowserTabInfo
   'browser.back'(hostId: string, threadId: string, tabId: string): void
   'browser.forward'(hostId: string, threadId: string, tabId: string): void
@@ -173,6 +191,8 @@ export interface RamuMethods {
   ): void
   'browser.hide'(hostId: string, threadId: string, tabId: string): void
   'browser.takeControl'(hostId: string, threadId: string, tabId: string): BrowserTabInfo
+  /** The desktop resolves the active run from the execution server; the renderer never supplies a run identity. */
+  'browser.giveControl'(hostId: string, threadId: string, tabId: string): BrowserTabInfo
   'app.content.release'(url: string): void
   'interactive.get'(sessionId: string, id: string, version: number): import('./interactive').InteractiveDocument
   'interactive.list'(sessionId: string): import('./interactive').InteractiveReference[]
@@ -756,6 +776,9 @@ export type PushEvents = {
   'notify:open': { sessionId: string; taskId: string }
   /** A clicked link the person chose to open in the integrated browser; the window opens it in the active thread. */
   'browser:open-link': { url: string }
+  /** Native browser state changed on this desktop; clients refresh only their thread's tabs. */
+  'browser:changed': Record<string, never>
+  'browser:agent-open': BrowserTabInfo
   'agent:event': { sessionId: string; event: AgentEvent; seq?: number; revision?: number }
   /** The chat's transcript was cut back: events from `seq` on are gone. */
   'agent:rewound': { sessionId: string; seq: number }

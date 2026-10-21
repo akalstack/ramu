@@ -285,6 +285,13 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     at INTEGER NOT NULL,
     PRIMARY KEY (rule_id, revision)
   );`,
+  `CREATE TABLE IF NOT EXISTS task_title_waits (
+    task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    settings TEXT NOT NULL,
+    due_at INTEGER NOT NULL
+  );`,
 ]
 
 export type Db = DatabaseSync

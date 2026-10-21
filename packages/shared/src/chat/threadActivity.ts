@@ -1,6 +1,7 @@
 import type { AgentTask } from '../types'
 import { helperActive, helperCounts } from '@ramu/shared/chat/helperPresentation'
 export type ActivityKind = 'connection' | 'input' | 'provider' | 'working' | 'helpers' | 'goal' | 'advisor' | 'queue'
+export type GoalActivityState = 'active' | 'verifying' | 'paused' | 'blocked' | 'turn-limit' | 'provider'
 export interface ActivityRequest {
   id: string
   kind: 'permission' | 'question' | 'elicitation'
@@ -14,7 +15,7 @@ export function threadActivity(input: {
   requests: ActivityRequest[]
   providerWait: boolean
   queue: number
-  goal?: 'active' | 'paused' | 'blocked' | 'provider' | null
+  goal?: GoalActivityState | null
 }) {
   const counts = helperCounts(input.helpers)
   const kinds: ActivityKind[] = []
@@ -40,7 +41,9 @@ export function threadActivity(input: {
   }
 }
 
-export function goalActivityLabel(state: 'active' | 'paused' | 'blocked' | 'provider' | null): string {
+export function goalActivityLabel(state: GoalActivityState | null): string {
+  if (state === 'verifying') return 'Verifying goal'
+  if (state === 'turn-limit') return 'Goal turn limit reached'
   return state === 'active'
     ? 'Goal active'
     : state === 'provider'

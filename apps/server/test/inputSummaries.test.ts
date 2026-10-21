@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import type { AgentEvent } from '@ramu/shared/types'
+import type { AgentEvent, ChatGoal, Task } from '@ramu/shared/types'
 import { inputSummary } from '@ramu/shared/chat/inputSummary'
 import { openDb, type Db } from '../src/db'
 import { SessionStore } from '../src/agent/sessionStore'
@@ -86,6 +86,41 @@ it('returns bounded identity/origin summaries through agent lists and task RPC w
     dispatcher.close()
   }
 })
+it('exposes bounded verification context without leaking command output into task lists', async () => {
+  let goal: ChatGoal = {
+    id: 'goal',
+    status: 'active',
+    objective: 'x'.repeat(500),
+    updatedAt: 1,
+    turns: 0,
+    reason: '',
+    claim: { reason: 'private evidence', evidence: { checks: [], changedFiles: [] }, at: 1 },
+    check: {
+      command: 'private command',
+      ok: false,
+      code: 1,
+      timedOut: false,
+      output: 'private output',
+      at: 1,
+      delivered: true,
+    },
+  }
+  const dispatcher = createDispatcher({ userData: '/tmp/ramu-goal-summary', native: async () => null, send() {} }, {
+    workspace: { getAppState: (_key: string, fallback: unknown) => fallback, listTasks: () => [{ id: 't' }] },
+    agents: { list: (task: string) => store.list(task), goalOf: () => goal },
+  } as unknown as Services)
+  try {
+    const [task] = (await dispatcher.invoke('tasks.list', [])) as Task[]
+    expect(task?.goalState).toMatchObject({ status: 'active', verifying: true, verificationFailed: true })
+    expect(task?.goalState?.objective).toHaveLength(300)
+    expect(JSON.stringify(task)).not.toContain('private')
+    goal = { ...goal, status: 'completed' }
+    expect(((await dispatcher.invoke('tasks.list', [])) as Task[])[0]?.goalState).toBeNull()
+  } finally {
+    dispatcher.close()
+  }
+})
+
 it('matches the event fold for reused IDs, resolutions and unrelated helper events', () => {
   add('main', approval('reused'))
   add('main', { kind: 'request-resolved', requestId: 'reused', outcome: 'allowed' })

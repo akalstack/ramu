@@ -12,6 +12,7 @@ import { Header, Screen, PageScrollView as ScrollView } from '../../components/S
 import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
 import { Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
 import { ComputerScope } from '../../components/SettingsChrome'
+import { RulesSettings } from '../../components/RulesSettings'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
 import {
   emptyLayers,
@@ -269,6 +270,7 @@ export default function SettingsSectionPage() {
         {id === 'computers' ? <Computers /> : null}
         {id === 'about' ? <About /> : null}
         {id === 'providers' ? <Usage computer={selected} /> : null}
+        {id === 'rules' ? <RulesSettings key={selected} hostId={selected} /> : null}
         {section.scope === 'host' ? <HostGroups section={id} host={host} name={name} /> : null}
         {note ? <Hint>{note}</Hint> : null}
       </ScrollView>

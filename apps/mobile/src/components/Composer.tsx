@@ -532,7 +532,7 @@ export function Composer({
     mode: 'send' | 'queue' | 'steer',
     attachments?: string[],
     context?: FileContext[],
-  ) => Promise<void> | void
+  ) => Promise<void | false> | void | false
   onStop?: () => void
   goal?: ChatGoal | null
   queue?: QueuedMessage[]
@@ -784,12 +784,14 @@ export function Composer({
           throw new Error(t.savedAttachmentMissing)
         if (origin.current !== submittedOwner) return
       }
-      await onSend(
+      const accepted = await onSend(
         expanded,
         running ? mode : 'send',
         attachments.map((a) => a.id),
         merged,
       )
+      // Destination clarification is still composing; retain the reviewed draft and its attachments.
+      if (accepted === false) return
       if (origin.current !== submittedOwner) return
       if (draftKey && !store.clearComposerDraft(draftKey, submittedDraft)) return
       setText('')

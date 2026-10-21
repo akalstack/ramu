@@ -1,6 +1,6 @@
 import type { BranchChoice, BranchNamingIntent } from '../workspaceDefaults'
 import type { ChatGoal } from './goal'
-import type { ThreadInputSummary } from './agent'
+import type { AgentSessionState, ThreadInputSummary } from './agent'
 export type CheckoutMode = 'current' | 'worktree'
 
 export interface Project {
@@ -82,6 +82,7 @@ export interface TaskGoalSummary {
   objective: string
   /** A completion claim is waiting for, or running, the verification command. */
   verifying?: boolean
+  verificationFailed?: boolean
   reason?: string
 }
 
@@ -112,6 +113,8 @@ export interface Task {
   goalState?: TaskGoalSummary | null
   /** Unresolved requests from main sessions, including forwarded helper input. Older hosts omit this. */
   inputSummary?: ThreadInputSummary | null
+  /** Latest root execution outcome; absent when an older host cannot supply it. */
+  executionState?: AgentSessionState
   /** A chat started from a "What Ramu learned" summary; it shows a Review label under Chats. */
   kind?: 'library-review' | null
 }

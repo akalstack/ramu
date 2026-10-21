@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { BrowserProfiles } from '../src/main/browserProfiles'
+import { browserProfileMethod } from '../src/main/browserProfileMethods'
+import { executeBrowserBridge } from '../src/main/browserBridge'
 import {
   BrowserError,
   BrowserRuntime,
@@ -9,7 +12,7 @@ import {
   type GuestPage,
 } from '../src/main/browserRuntime'
 
-function setup(profiles: string[] = ['work']) {
+function setup(profiles: string[] = ['work'], available: (id: string) => boolean = () => true) {
   const created: {
     partition: string
     handlers: GuestHandlers
@@ -30,6 +33,15 @@ function setup(profiles: string[] = ['work']) {
         back: vi.fn(),
         forward: vi.fn(),
         reload: vi.fn(),
+        inspect: vi.fn(async () => ({
+          url: 'https://a.test/',
+          title: 'Page',
+          text: 'hello',
+          elements: [],
+          truncated: false,
+        })),
+        act: vi.fn(async () => ({ ok: true })),
+        setHumanInput: vi.fn(),
         show: vi.fn(),
         hide: vi.fn(),
         destroy() {
@@ -42,7 +54,7 @@ function setup(profiles: string[] = ['work']) {
     clearTemporary: (partition) => void cleared.push(partition),
   }
   const changed = vi.fn()
-  const runtime = new BrowserRuntime(factory, () => profiles, changed)
+  const runtime = new BrowserRuntime(factory, () => profiles, changed, available)
   return { runtime, created, cleared, changed }
 }
 const user = { hostId: 'h', threadId: 't' }
@@ -63,12 +75,12 @@ describe('opening tabs', () => {
     expect(created).toHaveLength(0)
   })
 
-  it('a person-opened tab is human-controlled and an agent-run tab waits for release', async () => {
+  it('a person-opened tab is human-controlled and an agent-run tab starts with agent control', async () => {
     const { runtime } = setup()
     const mine = await runtime.open(user, 'https://a.test')
     expect(mine.tab.controller).toBe('human')
     const agents = await runtime.open(run, 'https://b.test')
-    expect(agents.tab.controller).toBe('none')
+    expect(agents.tab.controller).toBe('agent')
   })
 
   it('shares one partition per persistent profile, and keeps temporary tabs private to their run', async () => {
@@ -227,4 +239,372 @@ describe('run end and shutdown', () => {
     expect(created[0]!.page.destroyed).toBe(true)
     await expect(runtime.open(user, 'https://b.test')).rejects.toMatchObject({ code: 'closed' })
   })
+})
+
+describe('page observations and native input', () => {
+  it('enables native input only for a human controller, after old agent work drains', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    const page = created[0]!.page
+    expect(page.setHumanInput).toHaveBeenLastCalledWith(false)
+    const observation = await runtime.inspectForAgent(tab.id, run.runId, user)
+    let finish!: (value: { ok: boolean }) => void
+    page.act = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const pending = runtime.actForAgent(tab.id, run.runId, user, {
+      kind: 'click',
+      ref: 1,
+      snapshot: observation.snapshot,
+    })
+    expect(runtime.takeControl(tab.id, 'local', { local: true })).toMatchObject({
+      controller: 'human',
+      inputReady: false,
+    })
+    expect(page.setHumanInput).toHaveBeenLastCalledWith(false)
+    expect(() => runtime.reload(tab.id)).toThrow('wait for the agent action')
+    finish({ ok: true })
+    await pending
+    expect(runtime.list()[0]!.inputReady).toBe(true)
+    expect(page.setHumanInput).toHaveBeenLastCalledWith(true)
+    runtime.controllerDisconnected('local')
+    expect(page.setHumanInput).toHaveBeenLastCalledWith(false)
+  })
+
+  it('consumes a snapshot once, even when the guest refuses the action', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    const snapshot = await runtime.inspectForAgent(tab.id, run.runId, user)
+    const action = { kind: 'click' as const, ref: 1, snapshot: snapshot.snapshot }
+    created[0]!.page.act = vi.fn(async () => ({ ok: false, reason: 'covered' }))
+    expect(await runtime.actForAgent(tab.id, run.runId, user, action)).toEqual({ ok: false, reason: 'covered' })
+    await expect(runtime.actForAgent(tab.id, run.runId, user, action)).rejects.toMatchObject({ code: 'stale-snapshot' })
+    expect(created[0]!.page.act).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses concurrent observation/action, then requires a new observation after navigation or handoff', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    let finish!: (value: Awaited<ReturnType<GuestPage['inspect']>>) => void
+    const result = { url: 'https://a.test/', title: 'A', text: 'read', elements: [], truncated: false }
+    created[0]!.page.inspect = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const reading = runtime.inspectForAgent(tab.id, run.runId, user)
+    await expect(runtime.inspectForAgent(tab.id, run.runId, user)).rejects.toMatchObject({ code: 'busy' })
+    runtime.takeControl(tab.id, 'local', { local: true })
+    finish(result)
+    await expect(reading).rejects.toMatchObject({ code: 'stale-snapshot' })
+    created[0]!.page.inspect = vi.fn(async () => result)
+    runtime.giveToAgent(tab.id, 'local', run.runId)
+    const fresh = await runtime.inspectForAgent(tab.id, run.runId, user)
+    created[0]!.handlers.onNavigate('https://b.test')
+    await expect(
+      runtime.actForAgent(tab.id, run.runId, user, { kind: 'click', ref: 1, snapshot: fresh.snapshot }),
+    ).rejects.toMatchObject({ code: 'stale-snapshot' })
+  })
+
+  it('never returns a closed tab observation or lets another owner inspect it', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    await expect(runtime.inspectForAgent(tab.id, run.runId, { ...user, hostId: 'other' })).rejects.toMatchObject({
+      code: 'wrong-owner',
+    })
+    expect(created[0]!.page.inspect).not.toHaveBeenCalled()
+    let finish!: (value: Awaited<ReturnType<GuestPage['inspect']>>) => void
+    created[0]!.page.inspect = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const pending = runtime.inspectForAgent(tab.id, run.runId, user)
+    runtime.close(tab.id)
+    finish({ url: 'https://a.test/', title: 'A', text: '', elements: [], truncated: false })
+    await expect(pending).rejects.toMatchObject({ code: 'closed' })
+  })
+})
+
+describe('private server browser bridge', () => {
+  it('refuses expired or wrong-thread requests before touching a guest', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    const request = {
+      requestId: 'request',
+      clientId: 'desktop',
+      threadId: 't',
+      runId: 'r1',
+      expiresAt: Date.now() - 1,
+      command: { kind: 'snapshot' as const, tabId: tab.id },
+    }
+    await expect(executeBrowserBridge(runtime, 'h', request)).rejects.toThrow('expired')
+    await expect(
+      executeBrowserBridge(runtime, 'h', { ...request, expiresAt: Date.now() + 10000, threadId: 'other' }),
+    ).rejects.toThrow('another thread')
+    expect(created[0]!.page.inspect).not.toHaveBeenCalled()
+  })
+
+  it('keeps human control authoritative and revokes agent control on disconnect', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    const request = {
+      requestId: 'request',
+      clientId: 'desktop',
+      threadId: 't',
+      runId: 'r1',
+      expiresAt: Date.now() + 10000,
+    }
+    const snapshot = await runtime.inspectForAgent(tab.id, 'r1', user)
+    runtime.takeControl(tab.id, 'local')
+    await expect(
+      executeBrowserBridge(runtime, 'h', {
+        ...request,
+        command: { kind: 'navigate', tabId: tab.id, url: 'https://b.test' },
+      }),
+    ).rejects.toMatchObject({ code: 'human-controlled' })
+    runtime.giveToAgent(tab.id, 'local', 'r1')
+    runtime.pauseForDisconnect()
+    await expect(
+      executeBrowserBridge(runtime, 'h', {
+        ...request,
+        command: { kind: 'click', tabId: tab.id, ref: 1, snapshot: snapshot.snapshot },
+      }),
+    ).rejects.toBeInstanceOf(BrowserError)
+    expect(created[0]!.page.act).not.toHaveBeenCalled()
+    expect(created[0]!.page.setHumanInput).toHaveBeenLastCalledWith(false)
+  })
+})
+
+it('keeps a human-controlled popup human-controlled from its first load', async () => {
+  const { runtime, created } = setup()
+  const { tab } = await runtime.open(run, 'https://a.test')
+  runtime.takeControl(tab.id, 'local')
+  created[0]!.handlers.onOpenWindow('https://login.test')
+  await vi.waitFor(() => expect(created).toHaveLength(2))
+  expect(created[1]!.page.setHumanInput).toHaveBeenNthCalledWith(1, true)
+  expect(runtime.list().find((entry) => entry.id !== tab.id)?.controller).toBe('human')
+})
+
+describe('profile administration and replacement', () => {
+  const catalog = () => new BrowserProfiles('profiles', { read: () => '{"version":1,"profiles":[]}', write() {} })
+  it('reviews exact tabs, clears every context before deleting metadata and keeps other profiles open', async () => {
+    const profiles = catalog(),
+      work = profiles.create('Work')
+    const first = setup([work.id], (id) => !profiles.isBusy(id)),
+      second = setup([work.id], (id) => !profiles.isBusy(id))
+    await first.runtime.open(user, 'https://a.test', work.id)
+    await second.runtime.open(user, 'https://signin.test', work.id)
+    await first.runtime.open(user, 'https://other.test', 'default')
+    let finish!: () => void
+    const clearing = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+    )
+    const resetting = vi.fn(async () => {})
+    const confirm = vi.fn(async () => true)
+    const pending = browserProfileMethod(
+      profiles,
+      first.runtime,
+      {
+        confirm,
+        clearData: clearing,
+        resetDefault: resetting,
+        runtimes: () => [first.runtime, second.runtime],
+        changed() {},
+      },
+      'browser.profiles.delete',
+      ['local', work.id],
+    )
+    await vi.waitFor(() => expect(clearing).toHaveBeenCalledWith(work.id))
+    expect(confirm).toHaveBeenCalledWith({ name: 'Work', deleteProfile: true, tabs: 2 })
+    expect(first.runtime.list().map((tab) => tab.url)).toEqual(['https://other.test/'])
+    expect(second.runtime.list()).toEqual([])
+    await expect(first.runtime.open(user, 'https://race.test', work.id)).rejects.toMatchObject({ code: 'busy' })
+    expect(profiles.ids()).toEqual([work.id])
+    finish()
+    await pending
+    expect(resetting).toHaveBeenCalledWith(work.id)
+    expect(profiles.ids()).toEqual([])
+  })
+
+  it('does not clear a cancelled or changed review, and retains metadata when data removal fails', async () => {
+    const profiles = catalog(),
+      work = profiles.create('Work')
+    const { runtime } = setup([work.id])
+    const clearData = vi.fn(async () => {
+      throw new Error('locked storage')
+    })
+    const actions = { clearData, resetDefault: vi.fn(async () => {}), changed() {}, confirm: vi.fn(async () => false) }
+    await runtime.open(user, 'https://a.test', work.id)
+    expect(
+      await browserProfileMethod(profiles, runtime, actions, 'browser.profiles.clear', ['local', work.id]),
+    ).toEqual({ cancelled: true })
+    expect(runtime.list()).toHaveLength(1)
+    const changed = {
+      ...actions,
+      confirm: async () => {
+        await runtime.open(user, 'https://new.test', work.id)
+        return true
+      },
+    }
+    await expect(
+      browserProfileMethod(profiles, runtime, changed, 'browser.profiles.clear', ['local', work.id]),
+    ).rejects.toThrow('tabs changed')
+    expect(clearData).not.toHaveBeenCalled()
+    await expect(
+      browserProfileMethod(profiles, runtime, { ...actions, confirm: async () => true }, 'browser.profiles.delete', [
+        'local',
+        work.id,
+      ]),
+    ).rejects.toThrow('locked storage')
+    expect(profiles.ids()).toEqual([work.id])
+    expect(actions.resetDefault).not.toHaveBeenCalled()
+  })
+
+  it('keeps the old page on replacement failure, and refuses unknown profiles without loading Default', async () => {
+    const { runtime, created } = setup()
+    const original = await runtime.open(user, 'https://a.test')
+    await expect(runtime.changeProfile(original.tab.id, 'deleted')).rejects.toThrow('no longer available')
+    expect(created).toHaveLength(1)
+    const factory = (runtime as unknown as { factory: GuestFactory }).factory
+    const make = factory.create.bind(factory)
+    factory.create = (partition, handlers) => {
+      const page = make(partition, handlers)
+      page.load = async () => {
+        throw new Error('network failed')
+      }
+      return page
+    }
+    await expect(runtime.changeProfile(original.tab.id, 'work')).rejects.toThrow('network failed')
+    expect(created[0]!.page.destroyed).toBe(false)
+    expect(created[1]!.page.destroyed).toBe(true)
+    expect(runtime.list()).toHaveLength(1)
+    expect(runtime.list()[0]).toMatchObject({ profileId: 'default', inputReady: true })
+  })
+})
+
+describe('extended browser operations', () => {
+  it('answers a website dialog without deadlocking the click it blocks', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    const observed = await runtime.inspectForAgent(tab.id, 'r1', user)
+    let finish!: (value: { ok: boolean }) => void
+    let dialog: import('@ramu/shared/browserBridge').BrowserDialog | null = {
+      id: 'dialog',
+      type: 'confirm',
+      message: 'Continue?',
+    }
+    const page = created[0]!.page
+    page.dialog = () => dialog
+    page.handleDialog = vi.fn(async () => {
+      dialog = null
+      finish({ ok: true })
+    })
+    page.act = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const click = runtime.actForAgent(tab.id, 'r1', user, { kind: 'click', ref: 1, snapshot: observed.snapshot })
+    await runtime.handleDialogForAgent(tab.id, 'r1', user, 'dialog', true)
+    await click
+    runtime.takeControl(tab.id, 'local')
+    expect(runtime.list()[0]!.inputReady).toBe(true)
+    await expect(runtime.handleDialogForAgent(tab.id, 'r1', user, 'dialog', true)).rejects.toMatchObject({
+      code: 'stale-snapshot',
+    })
+  })
+
+  it('lets a human answer while a taken-over click is draining, while refusing agent answers', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    const observed = await runtime.inspectForAgent(tab.id, 'r1', user)
+    let finish!: (value: { ok: boolean }) => void
+    let dialog: import('@ramu/shared/browserBridge').BrowserDialog | null = {
+      id: 'dialog',
+      type: 'confirm',
+      message: 'Continue?',
+    }
+    const page = created[0]!.page
+    page.dialog = () => dialog
+    page.handleDialog = vi.fn(async () => {
+      dialog = null
+      finish({ ok: true })
+    })
+    page.act = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const click = runtime.actForAgent(tab.id, 'r1', user, { kind: 'click', ref: 1, snapshot: observed.snapshot })
+    runtime.takeControl(tab.id, 'local')
+    expect(runtime.list()[0]!.inputReady).toBe(false)
+    await expect(runtime.handleDialogForAgent(tab.id, 'r1', user, 'dialog', true)).rejects.toMatchObject({
+      code: 'human-controlled',
+    })
+    await runtime.handleDialogAsHuman(tab.id, 'dialog', true)
+    await click
+    expect(runtime.list()[0]!.inputReady).toBe(true)
+  })
+
+  it('fences captures across takeover and uses bounded waits without replaying page actions', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    const page = created[0]!.page
+    let finish!: (image: import('@ramu/shared/browserBridge').BrowserScreenshot) => void
+    page.screenshot = () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    const capture = runtime.screenshotForAgent(tab.id, 'r1', user)
+    runtime.takeControl(tab.id, 'local')
+    finish({ mimeType: 'image/jpeg', data: 'image', width: 100, height: 100 })
+    await expect(capture).rejects.toMatchObject({ code: 'stale-snapshot' })
+    runtime.giveToAgent(tab.id, 'local', 'r1')
+    const missed = await runtime.waitForAgent(tab.id, 'r1', user, 'missing', 0)
+    expect(missed.matched).toBe(false)
+    const matched = await runtime.waitForAgent(tab.id, 'r1', user, 'hello', 0)
+    expect(matched.matched).toBe(true)
+    expect(page.act).not.toHaveBeenCalled()
+  })
+})
+
+it('never reuses a closed Temporary partition while its site-data cleanup is still pending', async () => {
+  const { runtime, created } = setup()
+  const factory = (runtime as unknown as { factory: GuestFactory }).factory
+  let finish!: () => void
+  factory.clearTemporary = () =>
+    new Promise<void>((resolve) => {
+      finish = resolve
+    })
+  const first = await runtime.open(run, 'https://a.test', 'temporary')
+  runtime.close(first.tab.id)
+  await runtime.open(run, 'https://next.test', 'temporary')
+  expect(created[1]!.partition).not.toBe(created[0]!.partition)
+  finish()
+})
+
+it('retains a human replacement page at run end and reports failed Temporary cleanup without reusing it', async () => {
+  const { runtime } = setup()
+  const original = await runtime.open(run, 'https://a.test')
+  runtime.takeControl(original.tab.id, 'local')
+  const replacement = await runtime.changeProfile(original.tab.id, 'temporary')
+  runtime.endRun(run)
+  expect(runtime.list()).toEqual([expect.objectContaining({ id: replacement.id, runId: null, controller: 'human' })])
+  const factory = (runtime as unknown as { factory: GuestFactory }).factory
+  factory.clearTemporary = async () => {
+    throw new Error('native storage locked')
+  }
+  runtime.close(replacement.id)
+  await vi.waitFor(() => expect(runtime.warning()).toContain('will not be reused'))
 })

@@ -184,7 +184,7 @@ export function SettingsPanel({
               <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />
             )}
             {page === 'editor' && <EditorSettings {...draftProps} />}
-            {page === 'browser' && <BrowserSettings />}
+            {page === 'browser' && <BrowserSettings {...draftProps} />}
             {page === 'access' && <AccessSettings {...draftProps} />}
             {page === 'memory' && (
               <>

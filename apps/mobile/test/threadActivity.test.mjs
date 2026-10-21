@@ -10,6 +10,18 @@ const helper = (agentId, status = 'running', extra = {}) => ({
   ...extra,
 })
 const chat = (items, extra = {}) => ({ items, queue: [], goal: null, status: 'idle', ...extra })
+test('goal activity distinguishes verification and turn limits from blocked input', () => {
+  for (const [goal, expected] of [
+    [{ status: 'turn-limit' }, 'turn-limit'],
+    [{ status: 'active', claim: { reason: 'done' } }, 'verifying'],
+    [{ status: 'active' }, 'active'],
+  ]) {
+    const activity = mobileThreadActivity(chat([], { goal }), true)
+    assert.equal(activity.model.primary, 'goal')
+    assert.equal(activity.model.goalState, expected)
+    assert.deepEqual(activity.model.requestIds, [])
+  }
+})
 test('parent-idle helpers stay discoverable and advisors never inflate the active helper count', () => {
   const c = chat([
     { kind: 'user', id: 'u' },

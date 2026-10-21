@@ -360,7 +360,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
       alive = false
     }
   }, [offer, qrUrl])
-  const [joined, setJoined] = useState<string | null>(null),
+  const [joined, setJoined] = useState<{ name: string; role: 'owner' | 'viewer' } | null>(null),
     [showOther, setShowOther] = useState(false)
   const [status] = useNetworkStatus(1500)
   const offerRequest = useRef(0)
@@ -394,7 +394,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
   const offerId = offer?.offerId
   const arrived = offerId ? undefined : status?.devices.find((device) => !known.includes(device.id))
   useEffect(() => {
-    if (arrived) setJoined(arrived.name)
+    if (arrived) setJoined({ name: arrived.name, role: arrived.role ?? 'owner' })
   }, [arrived])
   useEffect(() => {
     if (!offerId || joined) return
@@ -403,7 +403,8 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
       invoke('network.offer', offerId).then(
         (result) => {
           if (!live) return
-          if (result.state === 'redeemed' && result.device) setJoined(result.device.name)
+          if (result.state === 'redeemed' && result.device)
+            setJoined({ name: result.device.name, role: result.device.role ?? 'owner' })
         },
         () => {},
       )
@@ -436,7 +437,7 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
     >
       <DialogContent className="max-w-[520px]" aria-describedby={undefined}>
         <DialogHeader>
-          <DialogTitle>{joined ? t('{0} is paired', { 0: joined }) : t('Pair a device')}</DialogTitle>
+          <DialogTitle>{joined ? t('{0} is paired', { 0: joined.name }) : t('Pair a device')}</DialogTitle>
           {!joined && (
             <DialogDescription>
               {t(
@@ -463,6 +464,8 @@ function PairDialog({ known, onClose }: { known: string[]; onClose: () => void }
         )}
         {joined ? (
           <p className="muted text-muted-foreground">
+            {t(joined.role === 'viewer' ? 'View threads and answer requests' : 'Full access')}
+            {' · '}
             {t('It can now use this host. You can revoke it any time from Devices that can use this host.')}
           </p>
         ) : (

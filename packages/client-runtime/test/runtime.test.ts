@@ -117,3 +117,32 @@ it('retries a dropped network server with growing delays', async () => {
   expect(requests).toBeGreaterThanOrEqual(2)
   expect(requests).toBeLessThanOrEqual(3)
 })
+
+it('binds a private desktop identity only to its local event stream, never to a remote host', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-browser-stream-'))
+  dirs.push(dir)
+  const seen: (string | undefined)[] = []
+  const handler: Parameters<typeof createServer>[1] = (req, res) => {
+    seen.push(req.headers['x-ramu-desktop-client'] as string | undefined)
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+    res.write(': connected\n\n')
+  }
+  const socket = runtimeSocket(dir)
+  await listen(handler, socket)
+  const remote = await listen(handler, 0)
+  const localStop = subscribeRuntime(socket, () => {}, undefined, { localClientId: 'desktop-1' })
+  await expect.poll(() => seen.length).toBe(1)
+  const remoteStop = subscribeRuntime(
+    { kind: 'http', url: `http://127.0.0.1:${(remote.address() as AddressInfo).port}`, token: 'secret' },
+    () => {},
+    undefined,
+    { localClientId: 'desktop-1' },
+  )
+  try {
+    await expect.poll(() => seen.length).toBe(2)
+    expect(seen).toEqual(['desktop-1', undefined])
+  } finally {
+    localStop()
+    remoteStop()
+  }
+})

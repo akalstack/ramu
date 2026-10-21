@@ -38,7 +38,6 @@ Candidate references to investigate:
 ### Wire a verified provider
 
 - Verify one provider live, then make `suppliesTitles` true for it and call `acceptProviderTitle` from its runner/event boundary (normalize metadata before it reaches workspace code). Until then nothing calls it.
-- Persist and restore waiting across a server restart; today the wait is in memory and restart falls back to the existing recovery rules.
 - Native explicit regeneration remains unimplemented.
 
 ### Prefer an existing provider title (remaining parts)

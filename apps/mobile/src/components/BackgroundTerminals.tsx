@@ -242,6 +242,10 @@ export function BackgroundTerminals({
         command.state
       ] ?? 'Unknown',
     )
+  const stopLabel = (command: BackgroundTerminalInfo) =>
+    command.stoppedBy
+      ? ` · ${t(command.stoppedBy === 'user' ? 'Stop requested by you' : 'Stop requested by agent')}`
+      : ''
   const retry = () => {
     if (refresh.current?.scope === scope) void refresh.current.run()
     if (selected && inspect.current?.key === detailKey) void inspect.current.run()
@@ -292,7 +296,8 @@ export function BackgroundTerminals({
                     {shown.cwd}
                   </T>
                   <T size={font.caption} tone="muted">
-                    {stateLabel(shown)} ·{' '}
+                    {stateLabel(shown)}
+                    {stopLabel(shown)} ·{' '}
                     {new Date(shown.startedAt).toLocaleString(store.language === 'id' ? 'id-ID' : 'en-US')}
                     {shown.exitCode !== null ? ` · ${t('Exit code {0}', { 0: shown.exitCode })}` : ''}
                   </T>
@@ -347,7 +352,7 @@ export function BackgroundTerminals({
                 <Row
                   key={command.id}
                   accessibilityRole="button"
-                  accessibilityLabel={`${command.command} · ${stateLabel(command)}`}
+                  accessibilityLabel={`${command.command} · ${stateLabel(command)}${stopLabel(command)}`}
                   onPress={() => setSelection({ scope, id: command.id })}
                 >
                   <View style={{ flex: 1, gap: space.xs }}>
@@ -356,6 +361,7 @@ export function BackgroundTerminals({
                     </T>
                     <T size={font.caption} tone="muted">
                       {stateLabel(command)}
+                      {stopLabel(command)}
                     </T>
                   </View>
                 </Row>

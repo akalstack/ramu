@@ -17,6 +17,7 @@ import { useStore } from '../runtime/store'
 import { useWorkspaces } from '../runtime/useWorkspaces'
 import { fill, useT } from '../i18n'
 import { explorerActions, parentFolder, planRename } from '../runtime/explorerActions'
+import { readExplorerNavigation } from '../runtime/explorerNavigation'
 import { font, space, useTheme } from '../theme'
 import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen'
 import { Row, Sheet, T } from '../components/ui'
@@ -109,6 +110,26 @@ export default function Explorer() {
   const scopeIdentity = scope ? JSON.stringify([scope.host, scope.context]) : ''
   const activeScope = useRef(scopeIdentity)
   activeScope.current = scopeIdentity
+  const navigation = useRef({
+    identity: '',
+    host: '',
+    context: '',
+    expanded: [] as string[],
+    offset: 0,
+    restored: false,
+  })
+  const saveNavigation = () => {
+    const value = navigation.current
+    if (value.identity)
+      store.rememberExplorer(value.host, value.context, { expanded: value.expanded, offset: value.offset })
+  }
+  if (navigation.current.identity === scopeIdentity && !loading && !query) navigation.current.expanded = [...expanded]
+  useEffect(() => {
+    if (loading || query || navigation.current.identity !== scopeIdentity) return
+    const timer = setTimeout(saveNavigation, 350)
+    return () => clearTimeout(timer)
+  }, [expanded, loading, query, scopeIdentity])
+  useFocusEffect(useCallback(() => () => saveNavigation(), []))
   const loadDirectory = async (binding: RepositoryBinding, path: string, version = epoch.current, cursor?: string) => {
     if (!scope || binding.setupState !== 'ready' || activeScope.current !== scopeIdentity || version !== epoch.current)
       return
@@ -159,9 +180,23 @@ export default function Explorer() {
     const version = ++epoch.current
     const identity = JSON.stringify([scope?.host, scope?.context])
     if (lastScope.current !== identity || !online) {
+      if (navigation.current.identity !== scopeIdentity) {
+        saveNavigation()
+        const saved = scope
+          ? readExplorerNavigation(store.drafts, scope.host, scope.context)
+          : { expanded: [], offset: 0 }
+        navigation.current = {
+          identity: scopeIdentity,
+          host: scope?.host ?? '',
+          context: scope?.context ?? '',
+          expanded: saved.expanded,
+          offset: saved.offset,
+          restored: false,
+        }
+      }
       setBindings([])
       setDirectories({})
-      setExpanded(new Set())
+      setExpanded(new Set(navigation.current.expanded))
       setMatches([])
       setQuery('')
     }
@@ -185,6 +220,14 @@ export default function Explorer() {
             const refreshed = new Map<string, DirEntry[] | undefined>([['', rootEntries]])
             for (const path of Object.keys(directories[binding.repoId] ?? {}).filter(Boolean))
               refreshed.set(path, await loadDirectory(binding, path, version))
+            const savedPaths = navigation.current.expanded
+              .filter((key) => key.startsWith(`${binding.repoId}:`))
+              .map((key) => key.slice(binding.repoId.length + 1))
+              .sort((a, b) => a.split('/').length - b.split('/').length)
+            for (const path of savedPaths) {
+              if (version !== epoch.current) return
+              if (!refreshed.has(path)) refreshed.set(path, await loadDirectory(binding, path, version))
+            }
             if (selected?.repoId === binding.repoId && revealed.current !== revealKey) {
               const ancestors = explorerAncestors(selected.path)
               if (!ancestors.length) {
@@ -277,6 +320,16 @@ export default function Explorer() {
     )
     return () => cancelAnimationFrame(frame)
   }, [selected?.repoId, selected?.path, rows, query, loading])
+  useEffect(() => {
+    const value = navigation.current
+    if (selected || query || loading || !rows.length || value.identity !== scopeIdentity || value.restored) return
+    const frame = requestAnimationFrame(() => {
+      if (navigation.current !== value) return
+      list.current?.scrollToOffset({ offset: value.offset, animated: false })
+      value.restored = true
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [rows, loading, query, selected?.repoId, selected?.path, scopeIdentity])
   const open = (repoId: string, path: string) =>
     scope &&
     activeScope.current === scopeIdentity &&
@@ -429,6 +482,13 @@ export default function Explorer() {
           {loading ? <ActivityIndicator color={c.accent} /> : null}
           <PageFlatList
             ref={list}
+            onScroll={(event) => {
+              if (!query && navigation.current.identity === scopeIdentity)
+                navigation.current.offset = event.nativeEvent.contentOffset.y
+            }}
+            scrollEventThrottle={100}
+            onMomentumScrollEnd={saveNavigation}
+            onScrollEndDrag={saveNavigation}
             onScrollToIndexFailed={(info) =>
               list.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false })
             }
