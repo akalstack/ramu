@@ -16,6 +16,12 @@ A workspace does not need its own MCP configuration. Every provider merges `.mcp
 
 Claude gets up to 60 seconds for MCP startup and waits up to 60 seconds before its first turn for pending servers. Explicit host `MCP_TIMEOUT` and `CLAUDE_CODE_MCP_STARTUP_WAIT_MS` values are preserved. Imported Codex and OpenCode servers also get a 60-second startup budget unless their definition sets a different budget. Cursor and ACP retain their runtime connection policies. Pending connections remain distinct from failures in **/mcp**. Configuration changes apply to the next provider launch.
 
+## Rules
+
+**Settings → Agent setup → Rules** holds the person's own instructions for agents. Enabled **Always** rules reach each new thread in a separately labelled section that says they never grant permissions. The budget is 24,000 characters (names plus text) per scope: what one thread can receive, host-wide rules plus its project's. A save that would exceed it is refused, never trimmed; a host-wide rule is checked against every project. Settings shows each rule's estimated token cost and, per scope, the estimated cost against the budget (about four characters per token, ignoring provider choices, so an upper bound).
+
+Rules are additive. When two enabled rules could reach the same thread (overlapping project and provider) and have identical text, ignoring whitespace, or the same name, ignoring case, both rows and the editor show a warning naming the other rule. Ramu does not pick one or merge them.
+
 ## Thread titles
 
 A new thread immediately shows its opening-message title. The execution server schedules one isolated naming request after the first main-thread user message is recorded, including mobile and API starts; closing a client does not cancel it. Titles describe the durable task and intended outcome in the first message's language. User messages and relevant replies are bounded; helper/advisor output and tool results are excluded. The naming prompt forbids following links or invoking skills just to discover a subject; provider-boundary acceptance remains in the title plan.

@@ -55,6 +55,18 @@ it('validates names, text and size, and refuses rather than truncates', () => {
   expect(rules.save(input({ name: 'd', body: chunk, activation: 'manual' })).activation).toBe('manual')
 })
 
+it('checks a host-wide rule against every project it would join, and a project rule only against its own', () => {
+  const chunk = 'x'.repeat(RULE_BODY_LIMIT)
+  rules.save(input({ name: 'p-a', body: chunk, projectId: 'p1' }))
+  rules.save(input({ name: 'p-b', body: chunk, projectId: 'p1' }))
+  rules.save(input({ name: 'q-a', body: chunk, projectId: 'p2' }))
+  // Host-wide text that fits with p2 but not with p1 is refused for p1's sake.
+  expect(() => rules.save(input({ name: 'host', body: chunk }))).toThrow(/of 24000 characters/)
+  expect(rules.save(input({ name: 'host', body: 'x'.repeat(100) })).enabled).toBe(true)
+  // Two projects' rules never reach the same thread, so they do not add up.
+  expect(rules.save(input({ name: 'q-b', body: chunk, projectId: 'p2' })).projectId).toBe('p2')
+})
+
 it("delivers only enabled always-on rules for the session project and provider, labelled as the user's own", () => {
   rules.save(input({ name: 'Everywhere' }))
   rules.save(input({ name: 'Project only', projectId: 'p1' }))

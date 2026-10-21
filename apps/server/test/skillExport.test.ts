@@ -225,3 +225,58 @@ it('adds the export to OpenCode skills without dropping the user inline config',
     skills: [join('/x', 'skills')],
   })
 })
+
+it('removes a deleted project export and its owned links, leaving user files and other projects intact', async () => {
+  insert(skill('g', 'global-tip', null))
+  insert(skill('a', 'alpha', 'p'))
+  insert(skill('b', 'beta', 'q'))
+  const pWork = join(root, 'p-work'),
+    qWork = join(root, 'q-work')
+  mkdirSync(pWork)
+  mkdirSync(qWork)
+  const pExport = service.exportDir('p', 'cursor', pWork)!
+  service.exportDir('p', 'codex', pWork)
+  const qExport = service.exportDir('q', 'cursor', qWork)!
+  const globalExport = service.exportDir(null, 'claude-code', qWork)!
+  // The person's own skill, and a real folder that happens to use the Ramu prefix, are never touched.
+  mkdirSync(join(pWork, '.cursor', 'skills', 'my-own'))
+  mkdirSync(join(pWork, '.agents', 'skills', 'ramu-handmade'))
+  expect(readdirSync(join(pWork, '.cursor', 'skills')).sort()).toEqual(['my-own', 'ramu-alpha', 'ramu-global-tip'])
+
+  service.removeProject('p')
+
+  expect(existsSync(pExport)).toBe(false)
+  expect(readdirSync(join(pWork, '.cursor', 'skills'))).toEqual(['my-own'])
+  expect(readdirSync(join(pWork, '.agents', 'skills'))).toEqual(['ramu-handmade'])
+  expect(readdirSync(join(qWork, '.cursor', 'skills')).sort()).toEqual(['ramu-beta', 'ramu-global-tip'])
+  expect(existsSync(join(qExport, 'skills', 'ramu-beta'))).toBe(true)
+  expect(existsSync(join(globalExport, 'skills', 'ramu-global-tip'))).toBe(true)
+  // A later skill change refreshes the remaining exports without bringing the removed project's back.
+  insert(skill('g2', 'second-tip', null))
+  service.control('b', 'disable')
+  await nextTick()
+  expect(existsSync(pExport)).toBe(false)
+  expect(readdirSync(join(pWork, '.cursor', 'skills'))).toEqual(['my-own'])
+  expect(readdirSync(join(qWork, '.cursor', 'skills')).sort()).toEqual(['ramu-global-tip', 'ramu-second-tip'])
+})
+
+it('keeps the links of a concurrent session that re-linked the same folder to another project', () => {
+  insert(skill('a', 'alpha', 'p'))
+  insert(skill('b', 'beta', 'q'))
+  const shared = join(root, 'shared-work')
+  mkdirSync(shared)
+  // Cursor and Antigravity chats in project p, then Cursor and Codex chats in project q, all in one folder.
+  service.exportDir('p', 'cursor', shared)
+  service.exportDir('p', 'antigravity', shared)
+  const qExport = service.exportDir('q', 'cursor', shared)!
+  service.exportDir('q', 'codex', shared)
+  expect(readdirSync(join(shared, '.cursor', 'skills'))).toEqual(['ramu-beta'])
+
+  service.removeProject('p')
+
+  // Project p's Antigravity links go; the Cursor folder now belongs to project q's session and stays.
+  expect(readdirSync(join(shared, '.gemini', 'skills'))).toEqual([])
+  expect(readdirSync(join(shared, '.cursor', 'skills'))).toEqual(['ramu-beta'])
+  expect(readlinkSync(join(shared, '.cursor', 'skills', 'ramu-beta'))).toBe(join(qExport, 'skills', 'ramu-beta'))
+  expect(readdirSync(join(shared, '.agents', 'skills'))).toEqual(['ramu-beta'])
+})

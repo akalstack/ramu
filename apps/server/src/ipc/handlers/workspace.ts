@@ -58,6 +58,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   loadPreferences,
   threadTitles,
   rules,
+  learning,
 }) => {
   const pendingNames = new Map<string, AbortController>()
   const projectConfiguration = (projectId: string) => {
@@ -420,6 +421,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       run: (p: string) => {
         workspace.removeProject(p)
         rules?.removeForProject(p)
+        learning?.removeProject(p)
         watchers.projectConfigs.retain(workspace.listProjects().map((project) => project.id))
       },
     },

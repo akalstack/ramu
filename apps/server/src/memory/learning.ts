@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, join, sep } from 'node:path'
 import { z } from 'zod'
 import { toolResultLimit } from '../toolInputs'
 import { copySharedSkill, writeInstalledSkill } from './skillFiles'
@@ -270,12 +270,38 @@ export class LearningService {
    * Ramu-owned and never inside a user's skill folders: a local plugin whose `skills/ramu-<name>/SKILL.md` entries are the
    * active skills of one scope (project skills win over global ones). Skills that left the scope are removed.
    */
-  private syncExport({ projectId, provider, accountId, cwd }: ExportTarget & { cwd: string }): string {
-    const scopeDir = join(
+  private scopeDir(projectId: string | null) {
+    return join(
       this.root,
       'export',
       projectId === null ? 'global' : `project-${createHash('sha256').update(projectId).digest('hex').slice(0, 16)}`,
     )
+  }
+  /**
+   * Drops a removed project's skill exports: its provider-account folders stop being refreshed, the `ramu-` links they
+   * placed in provider skill folders are removed (only links Ramu owns; real files and other links stay), and the
+   * export folder is deleted. Exports and links of other projects, global chats and no-project chats are untouched,
+   * including a folder that a later chat re-linked to another export.
+   */
+  removeProject(projectId: string) {
+    if (projectId === NO_PROJECT) return
+    const scopeDir = this.scopeDir(projectId),
+      exportRoot = join(this.root, 'export')
+    for (const [key, target] of this.exported) if (target.projectId === projectId) this.exported.delete(key)
+    for (const [dir, { target, export: exportDir }] of this.linked) {
+      if (!exportDir.startsWith(`${scopeDir}${sep}`)) continue
+      this.linked.delete(dir)
+      try {
+        // A source that no longer exists wants nothing, so every Ramu link in the folder is removed.
+        reconcileSkillLinks(target, join(scopeDir, '.removed'), exportRoot)
+      } catch {
+        /* The folder is gone or unreadable; nothing of Ramu's is left to remove there. */
+      }
+    }
+    rmSync(scopeDir, { recursive: true, force: true })
+  }
+  private syncExport({ projectId, provider, accountId, cwd }: ExportTarget & { cwd: string }): string {
+    const scopeDir = this.scopeDir(projectId)
     // One export per provider account, since shared skills depend on what each one already loads itself.
     const dir = join(
       scopeDir,

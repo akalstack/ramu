@@ -3,12 +3,12 @@ import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import {
   RULE_BODY_LIMIT,
   RULE_NAME_LIMIT,
-  RULE_TOTAL_LIMIT,
   type AgentProvider,
   type Rule,
   type RuleInput,
   type RuleRevision,
 } from '@ramu/shared/types'
+import { ruleScopeCosts } from '@ramu/shared/rules'
 import type { Db } from '../db'
 
 type Row = {
@@ -182,21 +182,18 @@ export class RuleStore {
     return `${RULES_PREAMBLE}\n\n${rules.map((rule) => `### ${rule.name}\n${rule.body}`).join('\n\n')}`
   }
 
-  /** Delivery cost for one scope: refuse a save that would push enabled always-on text past the budget. */
+  /**
+   * Delivery cost for each scope the rule reaches: refuse a save that would push the enabled always-on text a thread can
+   * receive (host-wide plus its project's) past the budget. A host-wide rule is checked against every project.
+   */
   private assertBudget(next: Rule) {
     if (!next.enabled || next.activation !== 'always') return
-    const others = this.list().filter(
-      (rule) =>
-        rule.id !== next.id &&
-        rule.enabled &&
-        rule.activation === 'always' &&
-        (rule.projectId === null || next.projectId === null || rule.projectId === next.projectId),
-    )
-    const total =
-      others.reduce((sum, rule) => sum + rule.body.length + rule.name.length, 0) + next.body.length + next.name.length
-    if (total > RULE_TOTAL_LIMIT)
+    const over = ruleScopeCosts([...this.list().filter((rule) => rule.id !== next.id), next])
+      .filter((scope) => next.projectId === null || scope.projectId === next.projectId)
+      .find((scope) => scope.characters > scope.limit)
+    if (over)
       throw new Error(
-        `Enabled rules for this scope would use ${total} of ${RULE_TOTAL_LIMIT} characters. Turn one off or shorten it; Ramu never trims rules silently.`,
+        `Enabled rules for this scope would use ${over.characters} of ${over.limit} characters. Turn one off or shorten it; Ramu never trims rules silently.`,
       )
   }
 }
