@@ -19,7 +19,7 @@ import type {
 } from '@ramu/shared/types'
 import { parseGhAuthStatus } from '@ramu/shared/forgeAccounts'
 import { findExecutable } from '../providers/providerBinaries'
-import { branchExists, commitBranchInfo, currentBranch, git, headOid } from './git'
+import { branchExists, commitBranchInfo, currentBranch, git, headOid, publishRemote } from './git'
 
 export class ForgeError extends Error {
   constructor(
@@ -232,8 +232,9 @@ export async function pullRequestStatus(cwd: string, url?: string): Promise<Forg
 }
 
 /** The remote-tracking base when it exists, so commits already on the remote base are not counted. */
-async function baseRef(cwd: string, base: string): Promise<string> {
-  for (const ref of [`origin/${base}`, base])
+async function baseRef(cwd: string, branch: string, base: string): Promise<string> {
+  const { remote } = await publishRemote(cwd, branch)
+  for (const ref of [...(remote ? [`${remote}/${base}`] : []), base])
     if (
       await git(cwd, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).then(
         () => true,
@@ -250,7 +251,7 @@ export async function pullRequestDraft(cwd: string, issue: IssueLink | null): Pr
   if (!branch) throw new Error('Switch to a branch before opening a pull request.')
   const base = defaultBranch ?? 'main'
   const onBase = branch === base
-  const raw = await git(cwd, ['log', '--reverse', '--format=%s%x1f%b%x1e', `${await baseRef(cwd, base)}..HEAD`, '--'])
+  const raw = await git(cwd, ['log', '--reverse', '--format=%s%x1f%b%x1e', `${await baseRef(cwd, branch, base)}..HEAD`, '--'])
   const commits = raw
     .split('\x1e')
     .map((entry) => entry.trim())

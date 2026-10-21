@@ -372,11 +372,36 @@ export async function commit(
   return (await headOid(cwd)) ?? ''
 }
 
+async function configValue(cwd: string, key: string): Promise<string> {
+  return (await git(cwd, ['config', '--get', key]).catch(() => '')).trim()
+}
+
+/**
+ * The remote a branch publishes to, chosen the way Git itself would: the branch's `pushRemote`, then
+ * `remote.pushDefault`, then `origin`, then the only remote. `remote` is null when several remotes leave it ambiguous.
+ */
+export async function publishRemote(
+  cwd: string,
+  branch: string | null,
+): Promise<{ remote: string | null; remotes: string[] }> {
+  const remotes = (await git(cwd, ['remote'])).trim().split('\n').filter(Boolean)
+  const configured = [
+    branch ? await configValue(cwd, `branch.${branch}.pushRemote`) : '',
+    await configValue(cwd, 'remote.pushDefault'),
+  ].find((name) => name && remotes.includes(name))
+  const remote = configured ?? (remotes.includes('origin') ? 'origin' : remotes.length === 1 ? remotes[0]! : null)
+  return { remote, remotes }
+}
+
+/** Why a branch cannot be published when several remotes leave the destination ambiguous. */
+export function ambiguousRemoteMessage(remotes: string[]): string {
+  return `This repository has several remotes (${remotes.join(', ')}) and none is named origin. Choose one with git config remote.pushDefault <name>, then try again.`
+}
+
 /** Prefer the remote's recorded HEAD; common names cover repositories without one. No network request. */
 export async function commitBranchInfo(cwd: string): Promise<{ branch: string | null; defaultBranch: string | null }> {
   const branch = await currentBranch(cwd)
-  const remotes = (await git(cwd, ['remote'])).trim().split('\n').filter(Boolean)
-  const remote = remotes.includes('origin') ? 'origin' : remotes.length === 1 ? remotes[0] : null
+  const { remote } = await publishRemote(cwd, branch)
   if (remote) {
     const ref = (await git(cwd, ['symbolic-ref', '--quiet', `refs/remotes/${remote}/HEAD`]).catch(() => '')).trim()
     if (ref.startsWith(`refs/remotes/${remote}/`))
@@ -687,9 +712,13 @@ export async function push(cwd: string, expectedBranch?: string): Promise<void> 
     await git(cwd, ['push'])
     return
   }
-  const remotes = (await git(cwd, ['remote'])).trim().split('\n').filter(Boolean)
-  const remote = remotes.includes('origin') ? 'origin' : remotes.length === 1 ? remotes[0] : null
-  if (!remote) throw new Error('Configure a Git remote or upstream before publishing this branch')
+  const { remote, remotes } = await publishRemote(cwd, s.branch)
+  if (!remote)
+    throw new Error(
+      remotes.length
+        ? ambiguousRemoteMessage(remotes)
+        : 'Configure a Git remote or upstream before publishing this branch',
+    )
   await git(cwd, ['push', '--set-upstream', remote, s.branch])
 }
 export async function commitDetails(cwd: string, oid: string): Promise<string> {
