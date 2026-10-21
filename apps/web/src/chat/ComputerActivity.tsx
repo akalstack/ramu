@@ -9,6 +9,7 @@ import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { controllerLabel } from './computerLabels'
+import { ComputerSharing } from './ComputerSharing'
 import { ComposerTraySection } from '../composer/ComposerTraySection'
 
 type Frame = { data: string; mimeType: string; width: number; height: number; capturedAt: number; generation: number }

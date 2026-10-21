@@ -35,6 +35,10 @@ export class ComputerService {
     this.session(threadId)?.controllerDisconnected(deviceId)
   }
 
+  listViewers(threadId: string): { deviceId: string; input: boolean }[] {
+    return [...(this.viewers.get(threadId) ?? [])].map(([deviceId, { input }]) => ({ deviceId, input }))
+  }
+
   /** `observe` and `input` need an explicit grant for any device but the owning host (`local`). */
   viewerAccess(threadId: string, deviceId: string): { observe: boolean; input: boolean } {
     if (deviceId === 'local') return { observe: true, input: true }

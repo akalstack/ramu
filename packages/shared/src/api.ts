@@ -166,6 +166,7 @@ export interface RamuMethods {
   'computer.revoke'(threadId: string): void
   'computer.grantViewer'(threadId: string, deviceId: string, input: boolean): void
   'computer.revokeViewer'(threadId: string, deviceId: string): void
+  'computer.viewers'(threadId: string): { deviceId: string; input: boolean }[]
   'computer.session'(threadId: string): ComputerSessionSummary | null
   'computer.takeControl'(threadId: string): ComputerSessionSummary | null
   'computer.giveToAgent'(threadId: string): ComputerSessionSummary | null

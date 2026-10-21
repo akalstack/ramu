@@ -109,6 +109,7 @@ export const registerComputerHandlers: RegisterHandlers = ({ computer, host, wor
       args: z.tuple([id, id]),
       run: (threadId: string, deviceId: string) => admin().revokeViewer(thread(threadId), deviceId),
     },
+    'computer.viewers': { args: z.tuple([id]), run: (threadId: string) => admin().listViewers(thread(threadId)) },
     'computer.session': { args: z.tuple([id]), run: (threadId: string) => summary(thread(threadId)) },
     'computer.takeControl': {
       args: z.tuple([id]),

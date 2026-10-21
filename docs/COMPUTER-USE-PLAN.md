@@ -8,7 +8,9 @@ Implementation proposal, 2026-10-19. This planning change does not install a com
 - A local macOS backend (`computer/macos.ts`) using `screencapture` for the main display and Quartz events through `osascript` for input. It is a stand-in for the Cua Driver below and cannot confine capture or input to one app.
 - `computer.*` IPC handlers, the agent tool family (registered only while **Settings → Browser → Computer use** is on), a per-thread **Computer** tray with approve, take control, give control back, stop and revoke, and a polling viewer dialog with click, text and key input.
 
-Not yet in place: a real macOS capture and action on a packaged build (this environment denies Screen Recording), app/window-scoped grants, the mobile viewer, an enrolled remote broker so desktop B can drive computer A, a push frame subscription (viewers poll and share one capture at most four times a second), and per-provider image delivery checks.
+- A mobile viewer (`apps/mobile/src/components/ComputerActivity.tsx`) and a desktop control for sharing a thread's screen with a paired device (watch or control); viewing another host's computer from desktop works through the same host-qualified calls.
+
+Not yet in place: a real macOS capture and action on a packaged build (this environment denies Screen Recording), app/window-scoped grants, an enrolled broker for a runtime owner that is not the execution host, a push frame subscription (viewers poll and share one capture at most four times a second), and per-provider image delivery checks.
 
 ## Human need and delivery
 
