@@ -86,6 +86,14 @@ export function typingKeys(text: string): string[] | null {
   return keys
 }
 
+/** Element numbers of scroll areas in an app-state tree: lines like `4 scroll area ID: StandardResultView, …`. */
+export function scrollAreas(tree: string): string[] {
+  return tree
+    .split('\n')
+    .map((line) => /^\s*(\d+) scroll area\b/.exec(line)?.[1])
+    .filter((index): index is string => !!index)
+}
+
 export function parseApps(text: string): string[] {
   return text
     .split('\n')
@@ -209,8 +217,11 @@ export class OcuBackend implements ComputerBackend {
     return parseApps(result.content?.find((part) => part.type === 'text')?.text ?? '')
   }
 
+  private trees = new Map<string, string[]>()
+
   async capture(target: ComputerTarget): Promise<ComputerCapture> {
     const result = await this.call('get_app_state', { app: target.name })
+    this.trees.set(target.name, scrollAreas(result.content?.find((part) => part.type === 'text')?.text ?? ''))
     const image = result.content?.find((part) => part.type === 'image' && part.data)
     if (!image?.data) throw new Error(`${target.name} has no window to show.`)
     const { width, height } = pngSize(Buffer.from(image.data, 'base64'))
@@ -246,8 +257,20 @@ export class OcuBackend implements ComputerBackend {
         await this.call('drag', { app, from_x: action.fromX, from_y: action.fromY, to_x: action.toX, to_y: action.toY })
         return
       case 'scroll': {
-        // Scrolling by element needs an element index, which pixel coordinates do not give; page keys cover the common case.
-        if (action.dx !== 0 && action.dy === 0) throw new Error('Horizontal scrolling is not supported for apps.')
+        // Scroll the app's own scroll area, in either direction, when the last observation showed one.
+        const area = this.trees.get(app)?.[0]
+        const vertical = Math.abs(action.dy) >= Math.abs(action.dx)
+        const amount = Math.max(0.25, Math.min(10, Math.abs(vertical ? action.dy : action.dx) / 600))
+        const direction = vertical ? (action.dy > 0 ? 'down' : 'up') : action.dx > 0 ? 'right' : 'left'
+        if (area) {
+          try {
+            await this.call('scroll', { app, element_index: area, direction, pages: amount })
+            return
+          } catch (error) {
+            if (!vertical) throw error
+          }
+        }
+        if (!vertical) throw new Error('Horizontal scrolling needs a scroll area in the app.')
         const times = Math.max(1, Math.min(10, Math.round(Math.abs(action.dy) / 300)))
         for (let i = 0; i < times; i++)
           await this.call('press_key', { app, key: action.dy > 0 ? 'Page_Down' : 'Page_Up' })

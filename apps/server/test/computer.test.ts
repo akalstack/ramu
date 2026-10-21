@@ -508,3 +508,71 @@ describe('locked screen', () => {
     expect(locked.status()).toMatchObject({ available: false, reason: 'locked' })
   })
 })
+
+describe('app scrolling', () => {
+  const target = { id: 'app:Notes', kind: 'app' as const, name: 'Notes' }
+  const png = (width: number, height: number) => {
+    const bytes = Buffer.alloc(24)
+    bytes[0] = 0x89
+    bytes.write('PNG', 1, 'latin1')
+    bytes.writeUInt32BE(width, 16)
+    bytes.writeUInt32BE(height, 20)
+    return bytes.toString('base64')
+  }
+  const state =
+    '0 standard window Notes\n\t1 split group\n\t\t4 scroll area ID: Body, Secondary Actions: Scroll Up\n\t\t9 scroll area ID: Side'
+
+  it('finds scroll areas in the app tree', async () => {
+    const { scrollAreas } = await import('../src/computer/ocu')
+    expect(scrollAreas(state)).toEqual(['4', '9'])
+    expect(scrollAreas('1 button Delete')).toEqual([])
+  })
+
+  it('scrolls the area in either direction and falls back to page keys for vertical scrolls', async () => {
+    const { OcuBackend } = await import('../src/computer/ocu')
+    const calls: { name: string; arguments: Record<string, unknown> }[] = []
+    const client = {
+      callTool: async (request: { name: string; arguments: Record<string, unknown> }) => {
+        calls.push(request)
+        if (request.name === 'get_app_state')
+          return {
+            content: [
+              { type: 'text', text: state },
+              {
+                type: 'image',
+                data: png(5, 5),
+                mimeType: 'image/png',
+              },
+            ],
+          }
+        if (request.name === 'scroll' && request.arguments.direction === 'up')
+          return { isError: true, content: [{ type: 'text', text: 'no' }] }
+        return { content: [{ type: 'text', text: 'ok' }] }
+      },
+      close: async () => {},
+    }
+    const backend = new OcuBackend(
+      () => '/bin/ocu',
+      async () => client,
+    )
+    await backend.capture(target)
+    await backend.perform(target, { kind: 'scroll', x: 1, y: 1, dx: 0, dy: 600 })
+    await backend.perform(target, { kind: 'scroll', x: 1, y: 1, dx: 1200, dy: 0 })
+    await backend.perform(target, { kind: 'scroll', x: 1, y: 1, dx: 0, dy: -300 })
+    expect(
+      calls
+        .filter((call) => call.name !== 'get_app_state')
+        .map((call) => [
+          call.name,
+          call.arguments.element_index ?? call.arguments.key,
+          call.arguments.direction,
+          call.arguments.pages,
+        ]),
+    ).toEqual([
+      ['scroll', '4', 'down', 1],
+      ['scroll', '4', 'right', 2],
+      ['scroll', '4', 'up', 0.5],
+      ['press_key', 'Page_Up', undefined, undefined],
+    ])
+  })
+})
