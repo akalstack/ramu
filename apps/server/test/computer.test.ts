@@ -153,3 +153,48 @@ describe('macOS backend helpers', () => {
     expect(() => parseSipsSize('Error: not an image')).toThrow()
   })
 })
+
+describe('open computer use backend', () => {
+  const target = { id: 'app:Calculator', kind: 'app' as const, name: 'Calculator' }
+  const fakeClient = (fail?: (name: string) => boolean) => {
+    const calls: { name: string; arguments: Record<string, unknown> }[] = []
+    return {
+      calls,
+      client: {
+        callTool: async (request: { name: string; arguments: Record<string, unknown> }) => {
+          calls.push(request)
+          if (fail?.(request.name))
+            return { isError: true, content: [{ type: 'text', text: 'type_text requires a focused editable text element.' }] }
+          return { content: [{ type: 'text', text: 'ok' }] }
+        },
+        close: async () => {},
+      },
+    }
+  }
+
+  it('maps keys to xdotool syntax and types key by key when the app has no text field', async () => {
+    const { ocuKey, OcuBackend, typingKeys } = await import('../src/computer/ocu')
+    expect(ocuKey('Enter', ['Meta', 'Shift'])).toBe('super+shift+Return')
+    expect(typingKeys('12*8+4')).toEqual(['1', '2', 'KP_Multiply', '8', 'KP_Add', '4'])
+    expect(typingKeys('é')).toBeNull()
+    const { calls, client } = fakeClient((name) => name === 'type_text')
+    const backend = new OcuBackend(() => '/bin/ocu', async () => client)
+    await backend.perform(target, { kind: 'type', text: '1+2' })
+    expect(calls.map((call) => [call.name, call.arguments.key ?? call.arguments.text])).toEqual([
+      ['type_text', '1+2'],
+      ['press_key', '1'],
+      ['press_key', 'KP_Add'],
+      ['press_key', '2'],
+    ])
+  })
+
+  it('names the app on every call and reports a missing install', async () => {
+    const { OcuBackend, parseApps } = await import('../src/computer/ocu')
+    const { calls, client } = fakeClient()
+    const backend = new OcuBackend(() => '/bin/ocu', async () => client)
+    await backend.perform(target, { kind: 'click', x: 5, y: 6, button: 'right' })
+    expect(calls[0]).toEqual({ name: 'click', arguments: { app: 'Calculator', x: 5, y: 6, mouse_button: 'right' } })
+    expect(new OcuBackend(() => null).status()).toMatchObject({ available: false, reason: 'not-installed' })
+    expect(parseApps('Calculator — com.apple.calculator [running]\nFinder — com.apple.finder')).toEqual(['Calculator', 'Finder'])
+  })
+})

@@ -5,6 +5,7 @@ Implementation proposal, 2026-10-19. This planning change does not install a com
 ## Already in place
 
 - Shared control-lease rules (`packages/shared/src/control/lease.ts`) and the server session/service/tools (`apps/server/src/computer/`): one controller at a time, observation-gated agent actions, takeover that drops queued agent work, pause on controller disconnect, viewer grants per device. Covered by `apps/server/test/computer*.test.ts`.
+- App-scoped grants through Open Computer Use (`computer/ocu.ts`, MIT, installed separately with `npm i -g open-computer-use`): the agent or a viewing device acts on one named app through the Accessibility tree, in the background, without moving the person's cursor. Checked through the real desktop app on 2026-10-22: Calculator was granted by name, a bogus app name was refused, and `125*8+42` produced 1.042 with the real cursor unmoved. Scrolling uses Page Up/Down and horizontal scrolling is unsupported; a drag is posted to the app, so window moves and text selection do not work; capture is the app's key window only.
 - A local macOS backend (`computer/macos.ts`) using `screencapture` for the main display and Quartz events through `osascript` for input. It is a stand-in for the Cua Driver below and cannot confine capture or input to one app.
 - `computer.*` IPC handlers, the agent tool family (registered only while **Settings → Browser → Computer use** is on), a per-thread **Computer** tray with approve, take control, give control back, stop and revoke, and a polling viewer dialog with click, text and key input.
 
@@ -12,7 +13,7 @@ Implementation proposal, 2026-10-19. This planning change does not install a com
 
 Checked on a development macOS 27 build through the real desktop app (2026-10-22): a 1600×900 JPEG frame of about 200 KB in about 0.5 s, and input at frame coordinates landed on the matching screen points. Still to check: a packaged build's own Screen Recording and Accessibility identity, Retina/external-display variations, IME text entry and the phone.
 
-Not yet in place: app/window-scoped grants, an enrolled broker for a runtime owner that is not the execution host, a push frame subscription (viewers poll and share one capture at most four times a second), and per-provider image delivery checks.
+Not yet in place: an enrolled broker for a runtime owner that is not the execution host, a push frame subscription (viewers poll and share one capture at most four times a second), and per-provider image delivery checks.
 
 ## Human need and delivery
 

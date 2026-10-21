@@ -51,6 +51,40 @@ export function ocuKey(key: string, modifiers: ComputerModifier[] = []): string 
   return [...modifiers.map((modifier) => XDOTOOL_MODIFIERS[modifier]), XDOTOOL_KEYS[key] ?? key].join('+')
 }
 
+// Key names `press_key` accepts for punctuation: keypad keys and shifted digits.
+const KEYSYMS: Record<string, string> = {
+  '*': 'KP_Multiply',
+  '+': 'KP_Add',
+  '-': 'KP_Subtract',
+  '/': 'KP_Divide',
+  '=': 'KP_Equal',
+  '.': 'KP_Decimal',
+  '(': 'shift+9',
+  ')': 'shift+0',
+  '%': 'shift+5',
+  '!': 'shift+1',
+  '@': 'shift+2',
+  '#': 'shift+3',
+  $: 'shift+4',
+  '^': 'shift+6',
+  '&': 'shift+7',
+  ' ': 'space',
+  '\n': 'Return',
+  '\t': 'Tab',
+}
+
+/** Keys that type `text` one character at a time, for apps with no editable text field (a calculator, a game). */
+export function typingKeys(text: string): string[] | null {
+  const keys: string[] = []
+  for (const char of text) {
+    const key =
+      KEYSYMS[char] ?? (/^[a-z0-9]$/.test(char) ? char : /^[A-Z]$/.test(char) ? `shift+${char.toLowerCase()}` : null)
+    if (!key) return null
+    keys.push(key)
+  }
+  return keys
+}
+
 export function parseApps(text: string): string[] {
   return text
     .split('\n')
@@ -154,7 +188,14 @@ export class OcuBackend implements ComputerBackend {
         })
         return
       case 'type':
-        await this.call('type_text', { app, text: action.text })
+        try {
+          await this.call('type_text', { app, text: action.text })
+        } catch (error) {
+          // No focused text field: press the keys instead when every character has one.
+          const keys = /focused editable|text entry/i.test(String(error)) ? typingKeys(action.text) : null
+          if (!keys) throw error
+          for (const key of keys) await this.call('press_key', { app, key })
+        }
         return
       case 'key':
         await this.call('press_key', { app, key: ocuKey(action.key, action.modifiers) })

@@ -7,6 +7,7 @@ import { errorText } from '../lib/errors'
 import { useHost } from '../workspace/HostProvider'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
+import { Dropdown } from '../Menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { controllerLabel } from './computerLabels'
 import { ComputerSharing } from './ComputerSharing'
@@ -158,11 +159,17 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
   const [session, setSession] = useState<ComputerSessionSummary | null>(null)
   const [error, setError] = useState('')
   const [viewing, setViewing] = useState(false)
+  const [apps, setApps] = useState<string[]>([])
+  const [appHint, setAppHint] = useState('')
+  const [app, setApp] = useState('')
   const load = useCallback(async () => {
     if (!taskId) return
     const status = await invoke('computer.status').catch(() => null)
-    setEnabled(!!status?.enabled && status.runtime.available)
+    const appsReady = !!status?.apps?.available
+    setEnabled(!!status?.enabled && (status.runtime.available || appsReady))
+    setAppHint(status?.apps && !status.apps.available ? (status.apps.detail ?? '') : '')
     setSession(status?.enabled ? await invoke('computer.session', taskId).catch(() => null) : null)
+    if (status?.enabled && appsReady) setApps(await invoke('computer.apps').catch(() => []))
   }, [invoke, taskId])
   useEffect(() => {
     if (!taskId || !visible) return
@@ -218,14 +225,38 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
             <span className="text-caption text-muted-foreground">
               {t('Allow this thread to see and control your main display. Revoke it any time.')}
             </span>
-            <div>
+            <div className="flex flex-wrap items-center gap-2">
+              {apps.length > 0 && (
+                <>
+                  <Dropdown
+                    label={t('App')}
+                    value={app}
+                    options={[
+                      { value: '', label: t('Choose an app') },
+                      ...apps.map((name) => ({ value: name, label: name })),
+                    ]}
+                    onChange={setApp}
+                  />
+                  <Button
+                    size="sm"
+                    disabled={!app}
+                    onClick={() =>
+                      void run(() => invoke('computer.grant', taskId, { observe: true, input: true, app }))
+                    }
+                  >
+                    {t('Allow this app')}
+                  </Button>
+                </>
+              )}
               <Button
                 size="sm"
+                variant={apps.length ? 'secondary' : 'default'}
                 onClick={() => void run(() => invoke('computer.grant', taskId, { observe: true, input: true }))}
               >
                 {t('Allow main display')}
               </Button>
             </div>
+            {appHint && <span className="text-caption text-muted-foreground">{t(appHint)}</span>}
           </>
         )}
         {error && (
