@@ -23,3 +23,16 @@ it('leaves feature branches alone, even when they mention an environment', () =>
     expect(isProtectedBranch(name, 'main')).toBe(false)
   expect(isProtectedBranch(null)).toBe(false)
 })
+
+it('round-trips branch-specific sync approval through a transport error message and rejects malformed payloads', async () => {
+  const { readSyncConfirmation, syncConfirmationMessage } = await import('../src/protectedBranch')
+  const approval = { branch: 'feature', targetBranch: 'main', oid: 'a'.repeat(40) }
+  expect(readSyncConfirmation(new Error(syncConfirmationMessage(approval)))).toEqual(approval)
+  expect(readSyncConfirmation(`Error: ${syncConfirmationMessage(approval)}`)).toEqual(approval)
+  for (const message of [
+    'offline',
+    'Protected branch confirmation required: {}',
+    'Protected branch confirmation required: null',
+  ])
+    expect(readSyncConfirmation(message)).toBeNull()
+})

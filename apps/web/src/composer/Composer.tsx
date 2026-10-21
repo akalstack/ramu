@@ -3,7 +3,7 @@ import { ComposerInput, type ComposerInputHandle } from './ComposerInput'
 import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
 import { Button } from '@/components/ui/button'
-import { ArrowUp, FileText, Paperclip, Play, Square, X } from 'lucide-react'
+import { ArrowUp, CornerDownRight, FileText, ListEnd, Paperclip, Play, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Attachment, FileContext } from '@ramu/shared/types'
@@ -242,11 +242,27 @@ export function Composer({
   const alternate = () => {
     if (onAlternateSubmit) void send(onAlternateSubmit)
   }
+  const [modHeld, setModHeld] = useState(false)
+  const hasAlternate = !!onAlternateSubmit && !!alternateLabel
+  useEffect(() => {
+    if (!hasAlternate) return setModHeld(false)
+    const sync = (e: KeyboardEvent) => setModHeld(e.metaKey || e.ctrlKey)
+    const clear = () => setModHeld(false)
+    window.addEventListener('keydown', sync)
+    window.addEventListener('keyup', sync)
+    window.addEventListener('blur', clear)
+    return () => {
+      window.removeEventListener('keydown', sync)
+      window.removeEventListener('keyup', sync)
+      window.removeEventListener('blur', clear)
+    }
+  }, [hasAlternate])
   const hasPinned = suggestions.pinned.length > 0
   const hasContent = allowEmpty || hasPinned || value.trim().length > 0 || attachments.length > 0
   const canAlternate = !submitting && !alternateDisabled && !uploading && hasContent
   const showStop =
     !submitting && !allowEmpty && !hasPinned && !!stop?.active && !value.trim() && attachments.length === 0
+  const showAlternate = modHeld && hasAlternate
   const showResume =
     !submitting &&
     !allowEmpty &&
@@ -539,6 +555,7 @@ export function Composer({
             variant={showStop || showResume ? 'secondary' : 'default'}
             size="icon-sm"
             className={`send${showStop ? ' stop' : showResume ? ' resume' : ''}`}
+            data-alternate={showAlternate && !showStop && !showResume ? '' : undefined}
             aria-busy={submitting}
             aria-label={
               submitting
@@ -559,7 +576,9 @@ export function Composer({
                     : `${t(submitLabel)} (Enter)${onAlternateSubmit && alternateLabel ? ` · ${t(alternateLabel)} (⌘Enter / Ctrl+Enter)` : ''}`
             }
             disabled={showStop || showResume ? false : !canSend}
-            onClick={showStop ? stop!.onStop : showResume ? resume!.onResume : submit}
+            onClick={
+              showStop ? stop!.onStop : showResume ? resume!.onResume : showAlternate && canAlternate ? alternate : submit
+            }
           >
             {submitting ? (
               <Spinner aria-label={t('Sending')} />
@@ -567,8 +586,14 @@ export function Composer({
               <Square size={12} fill="currentColor" strokeWidth={0} />
             ) : showResume ? (
               <Play size={13} fill="currentColor" strokeWidth={0} />
+            ) : showAlternate ? (
+              alternateLabel === 'Queue' ? (
+                <ListEnd key="queue" className="send-icon" size={16} strokeWidth={2.25} />
+              ) : (
+                <CornerDownRight key="steer" className="send-icon" size={16} strokeWidth={2.25} />
+              )
             ) : (
-              <ArrowUp size={16} strokeWidth={2.25} />
+              <ArrowUp key="send" className="send-icon" size={16} strokeWidth={2.25} />
             )}
           </Button>
         </div>

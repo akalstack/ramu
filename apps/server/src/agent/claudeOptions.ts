@@ -93,6 +93,9 @@ export function claudeLaunchOptions({
     ...(s.settings.access === 'full' ? { allowDangerouslySkipPermissions: true } : {}),
     ...(s.settings.model ? { model: s.settings.model } : {}),
     ...(s.settings.effort ? { effort: s.settings.effort as Options['effort'] } : {}),
+    // Models with effort levels think adaptively but omit the text unless summaries are requested on the request itself;
+    // the setting above does not reach headless sessions, which left Claude chats without thinking rows.
+    ...(s.settings.effort ? { thinking: { type: 'adaptive' as const, display: 'summarized' as const } } : {}),
     ...(resume ? { resume } : {}),
     env: connection ? claudeMcpEnvironment(env) : env,
     ...(hooks ? { hooks } : {}),

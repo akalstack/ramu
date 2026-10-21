@@ -2,7 +2,7 @@
 
 Unfinished implementation plan, 2026-10-18. Add account setup and repository-host capabilities to **Settings → Git**, using Ramu's existing design and server architecture. Implement GitHub only for now. Show GitLab, Bitbucket Cloud and Azure DevOps Services as **Coming soon**; their integrations are deferred beyond this plan’s current implementation scope. This is a deliberately limited mainstream set, not a provider marketplace or a claim about measured market share.
 
-## Smallest usable delivery
+## Delivery
 
 A person opens an existing repository, sees which GitHub identity it uses, resolves missing access through Settings and returns to the existing PR/issue workflow. First preserve detected CLI sign-ins and deliver connection status/setup with verified credential handling; clone/publish is a later usable increment. Keep account/source/access diagnostics in details and advanced account overrides contextual. Coming soon rows remain informational. Validate one complete repository-to-setup-to-PR flow, including failed authentication, before expanding the adapter boundary. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

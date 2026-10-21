@@ -23,6 +23,7 @@ import {
   CornerDownRight,
   GripVertical,
   ListEnd,
+  ListOrdered,
   LoaderCircle,
   MoreHorizontal,
   Pencil,
@@ -305,7 +306,7 @@ export function QueuedMessages({
           <span className="text-muted-foreground tabular-nums">{queued.length + pending.length}</span>
         </>
       }
-      icon={<ListEnd />}
+      icon={<ListOrdered />}
       actions={
         paused && (
           <>

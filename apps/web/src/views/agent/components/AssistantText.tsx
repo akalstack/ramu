@@ -17,10 +17,10 @@ import { MSG_CLASS } from '../styles'
 
 // Only newly received words fade briefly. No stagger or typing queue: text is readable as soon as it arrives.
 // A message already this long when it first appears (a chat opened mid-stream) shows what it has and fades only what follows.
-const SETTLED_CHARS = 160
+export const SETTLED_CHARS = 160
 
 /** Which words arrived while this message was mounted. Their spans stay stable until streaming finishes. */
-interface WordPlan {
+export interface WordPlan {
   plan: boolean[]
   /** Index of the next word in this render. */
   next: number
@@ -28,7 +28,7 @@ interface WordPlan {
 }
 
 /** Previously rendered words stay settled; only new words get the brief fade. */
-function fadeIn(children: React.ReactNode, words: WordPlan): React.ReactNode {
+export function fadeIn(children: React.ReactNode, words: WordPlan): React.ReactNode {
   return Children.map(children, (child) =>
     typeof child === 'string'
       ? child.split(/(\s+)/).map((part, i) => {
@@ -46,7 +46,7 @@ function fadeIn(children: React.ReactNode, words: WordPlan): React.ReactNode {
       : child,
   )
 }
-const streaming = (words: WordPlan): Components => ({
+export const streaming = (words: WordPlan): Components => ({
   p: ({ children }) => <p>{fadeIn(children, words)}</p>,
   li: ({ children }) => <li>{fadeIn(children, words)}</li>,
   strong: ({ children }) => <strong>{fadeIn(children, words)}</strong>,

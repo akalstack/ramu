@@ -73,7 +73,7 @@ export function EventRow({
           className="compaction-separator my-4 flex items-center gap-3 text-control text-muted-foreground"
           role="status"
         >
-          <span className="h-px min-w-4 flex-1 bg-border" aria-hidden="true" />
+          <span className="h-px min-w-4 flex-1 bg-line" aria-hidden="true" />
           <span className="inline-flex min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
             <Minimize2 size={14} className="flex-none" aria-hidden="true" />
             {e.state === 'completed' ? translate('Context compacted') : compactionLabel(e)}
@@ -94,7 +94,7 @@ export function EventRow({
               </span>
             )}
           </span>
-          <span className="h-px min-w-4 flex-1 bg-border" aria-hidden="true" />
+          <span className="h-px min-w-4 flex-1 bg-line" aria-hidden="true" />
         </div>
       )
     }

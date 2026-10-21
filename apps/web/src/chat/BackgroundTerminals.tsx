@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BackgroundTerminalInfo } from '@ramu/shared/api'
 import { Button } from '@/components/desktop-button'
-import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
+import { SquareTerminal } from 'lucide-react'
+import { ComposerTraySection } from '../composer/ComposerTraySection'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
+import { ConfirmStopDialog } from './ConfirmStopDialog'
 import { canForceStop, isLiveTerminal, readBackgroundTerminals } from './backgroundTerminalState'
 
-/** Thread-scoped entry for persistent commands; quiet until the thread has some, and still there once the agent is idle. */
-export function BackgroundTerminals({ taskId }: { taskId: string }) {
+/** A thread's persistent commands, kept current from the host; the thread's tray shows them once there are some. */
+export function useBackgroundTerminals(taskId: string | undefined) {
   useLanguage()
   const { id: hostId, invoke, status } = useHost()
   const runtime = useHostRuntime()
   const ws = useWorkspace()
-  const scope = `${hostId}:${taskId}`
+  const scope = `${hostId}:${taskId ?? ''}`
   const [reading, setReading] = useState({ scope, terminals: [] as BackgroundTerminalInfo[], stale: false })
   const latest = useRef(reading)
   latest.current = reading
@@ -22,9 +24,11 @@ export function BackgroundTerminals({ taskId }: { taskId: string }) {
   const terminals = reading.scope === scope ? reading.terminals : []
   const stale = reading.scope !== scope || reading.stale || status !== 'connected'
   const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<{ terminal: BackgroundTerminalInfo; force: boolean } | null>(null)
 
   useEffect(() => {
     setError(null)
+    if (!taskId) return
     let active = true
     let revision = 0
     let previous = latest.current.scope === scope ? latest.current.terminals : []
@@ -46,20 +50,10 @@ export function BackgroundTerminals({ taskId }: { taskId: string }) {
     }
   }, [scope, taskId, runtime, invoke, status])
 
-  if (!terminals.length) return null
-  const live = terminals.filter(isLiveTerminal).length
-  const stateLabel = (terminal: BackgroundTerminalInfo) =>
-    ({
-      running: t('Running'),
-      stopping: t('Stopping'),
-      exited: t('Exited'),
-      failed: t('Failed'),
-      unknown: t('Unknown'),
-    })[terminal.state]
   const stop = async (terminal: BackgroundTerminalInfo, force: boolean) => {
     setError(null)
     try {
-      await invoke('term.background.stop', taskId, terminal.id, force)
+      await invoke('term.background.stop', taskId!, terminal.id, force)
     } catch (e) {
       setError(errorText(e))
     }
@@ -67,6 +61,7 @@ export function BackgroundTerminals({ taskId }: { taskId: string }) {
   }
   // Opens the existing terminal view for this command; closing that view later leaves the command running.
   const open = (terminal: BackgroundTerminalInfo) => {
+    if (!taskId) return
     const shown = ws.taskUi[taskId]?.views.find(
       (view) =>
         view.kind === 'terminal' &&
@@ -80,74 +75,102 @@ export function BackgroundTerminals({ taskId }: { taskId: string }) {
         ...(terminal.repoId ? { repoId: terminal.repoId } : {}),
       })
   }
+  return { terminals, stale, error, confirming, setConfirming, stop, open }
+}
 
+/** The thread's persistent commands as a tray section, quiet until it has some and still there once the agent is idle. */
+export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof useBackgroundTerminals> }) {
+  useLanguage()
+  const { terminals, stale, error, confirming, setConfirming, stop, open } = state
+  const live = terminals.filter(isLiveTerminal).length
+  const stateLabel = (terminal: BackgroundTerminalInfo) =>
+    ({
+      running: t('Running'),
+      stopping: t('Stopping'),
+      exited: t('Exited'),
+      failed: t('Failed'),
+      unknown: t('Unknown'),
+    })[terminal.state]
   return (
-    <Popover>
-      <PopoverTrigger
-        render={<Button variant="ghost" size="sm" className="composer-stack-activity justify-start text-caption" />}
+    <>
+      <ConfirmStopDialog
+        command={confirming?.terminal.command ?? null}
+        force={confirming?.force}
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => {
+          if (confirming) void stop(confirming.terminal, confirming.force)
+          setConfirming(null)
+        }}
+      />
+      <ComposerTraySection
+        aria-label={t('Background terminals')}
+        title={
+          <>
+            {t('Background terminals')}{' '}
+            <span className="text-muted-foreground tabular-nums">{live || terminals.length}</span>
+          </>
+        }
+        icon={<SquareTerminal />}
+        actions={
+          stale && <span className="text-muted-foreground text-caption">{t('Offline · last-known activity')}</span>
+        }
       >
-        {t('{0} background terminals', { 0: live || terminals.length })}
-      </PopoverTrigger>
-      <PopoverContent className="flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 p-2">
-        <PopoverHeader>
-          <PopoverTitle>{t('Background terminals')}</PopoverTitle>
-        </PopoverHeader>
-        {stale && <p className="text-caption text-muted-foreground">{t('Offline · last-known activity')}</p>}
         {error && (
-          <p role="alert" className="text-caption text-bad">
+          <p role="alert" className="m-0 px-2 pb-1 text-caption text-bad">
             {error}
           </p>
         )}
-        <ul className="flex flex-col gap-2">
+        <ul className="m-0 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
           {terminals.map((terminal) => (
-            <li key={terminal.id} className="flex flex-col gap-1 rounded-md border p-2">
-              <code className="truncate text-caption" title={terminal.command}>
-                {terminal.command}
-              </code>
-              <span className="text-caption text-muted-foreground">
-                {stateLabel(terminal)}
-                {terminal.exitCode !== null && terminal.state !== 'running'
-                  ? ` · ${t('Exit code {0}', { 0: terminal.exitCode })}`
-                  : ''}
-                {' · '}
-                {new Date(terminal.startedAt).toLocaleTimeString()}
-              </span>
-              {terminal.state === 'unknown' && (
-                <p className="text-caption text-muted-foreground">
-                  {t('Command status cannot be verified. Saved output is available.')}
-                </p>
-              )}
-              <div className="flex gap-1">
-                <Button variant="outline" size="sm" disabled={stale} onClick={() => open(terminal)}>
-                  {t('Open output')}
+            <li key={terminal.id} className="flex min-h-8 items-center gap-2 text-control">
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 cursor-pointer flex-col items-start border-0 bg-transparent p-0 text-left text-inherit disabled:cursor-default"
+                disabled={stale}
+                title={t('Open output')}
+                onClick={() => open(terminal)}
+              >
+                <code className="w-full truncate text-foreground" title={terminal.command}>
+                  {terminal.command}
+                </code>
+                <span className="text-caption text-muted-foreground">
+                  {stateLabel(terminal)}
+                  {terminal.exitCode !== null && terminal.state !== 'running'
+                    ? ` · ${t('Exit code {0}', { 0: terminal.exitCode })}`
+                    : ''}
+                  {terminal.state === 'unknown'
+                    ? ` · ${t('Command status cannot be verified. Saved output is available.')}`
+                    : ''}
+                </span>
+              </button>
+              {isLiveTerminal(terminal) && terminal.capabilities.stop && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-6 px-2 py-0 text-caption"
+                  disabled={stale || terminal.state === 'stopping'}
+                  aria-label={t('Stop {0}', { 0: terminal.command })}
+                  onClick={() => setConfirming({ terminal, force: false })}
+                >
+                  {t('Stop')}
                 </Button>
-                {isLiveTerminal(terminal) && terminal.capabilities.stop && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={stale || terminal.state === 'stopping'}
-                    aria-label={t('Stop {0}', { 0: terminal.command })}
-                    onClick={() => void stop(terminal, false)}
-                  >
-                    {t('Stop')}
-                  </Button>
-                )}
-                {canForceStop(terminal) && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    disabled={stale}
-                    title={t('Force stop ends the command immediately without letting it clean up.')}
-                    onClick={() => void stop(terminal, true)}
-                  >
-                    {t('Force stop')}
-                  </Button>
-                )}
-              </div>
+              )}
+              {canForceStop(terminal) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-6 px-2 py-0 text-caption text-bad"
+                  disabled={stale}
+                  title={t('Force stop ends the command immediately without letting it clean up.')}
+                  onClick={() => setConfirming({ terminal, force: true })}
+                >
+                  {t('Force stop')}
+                </Button>
+              )}
             </li>
           ))}
         </ul>
-      </PopoverContent>
-    </Popover>
+      </ComposerTraySection>
+    </>
   )
 }

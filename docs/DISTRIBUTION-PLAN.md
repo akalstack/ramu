@@ -2,7 +2,7 @@
 
 Audited on 2026-10-18. Focused schedule-form tests and the release docs-check checklist are complete and have been removed from this plan. Current release instructions are in [Releasing](RELEASING.md).
 
-## Smallest usable delivery
+## Delivery
 
 A person installs a supported packaged build, opens a thread and can obtain a verified update without configuring development tools. Deliver and validate each supported platform independently; signing, transport and native-device prerequisites remain mandatory for the affected release. Use existing installation/update messages with a specific recovery action. Broader platform availability is not a reason to add a second installer service or delay an otherwise validated platform. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

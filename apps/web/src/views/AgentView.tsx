@@ -1,8 +1,7 @@
 import { McpStatusDialog } from './agent/components/McpStatusDialog'
-import { ThreadActivitySummary } from '../chat/ThreadActivity'
-import { BackgroundTerminals } from '../chat/BackgroundTerminals'
+import { BackgroundTerminalsSection, useBackgroundTerminals } from '../chat/BackgroundTerminals'
+import { ConfirmStopDialog } from '../chat/ConfirmStopDialog'
 import { helperActive, helperGroups } from '@ramu/shared/chat/helperPresentation'
-import { threadActivity, goalActivityLabel, type ActivityKind } from '@ramu/shared/chat/threadActivity'
 import { isLimitHold } from '@ramu/shared/chat/goalHold'
 import { useDeferredRequests } from './agent/hooks/useDeferredRequests'
 import { HelperBreadcrumb } from '../HomeAgents'
@@ -230,7 +229,11 @@ export const AgentView = memo(function AgentView({
   }
   const backgroundTool = (toolUseId: string) =>
     void act(() => invoke('agent.backgroundTool', view.sessionId, toolUseId))
-  const stopTask = (task: AgentTask) => void act(() => invoke('agent.stopTask', view.sessionId, task.agentId))
+  const backgroundTerminals = useBackgroundTerminals(session?.taskId)
+  const [stopping, setStopping] = useState<AgentTask | null>(null)
+  const runStopTask = (task: AgentTask) => void act(() => invoke('agent.stopTask', view.sessionId, task.agentId))
+  // Background commands are processes, so ending one is confirmed; sub-agents stop at once.
+  const stopTask = (task: AgentTask) => (task.taskType === 'local_bash' ? setStopping(task) : runStopTask(task))
   const working = session?.state === 'running' || session?.state === 'starting'
   const compacting = session?.state !== 'stopped' && session?.state !== 'failed' && isCompacting(events)
   const activityLabel = compacting ? 'Compacting context…' : agentActivityLabel(session?.state, events)
@@ -300,68 +303,6 @@ export const AgentView = memo(function AgentView({
     (e): e is Extract<AgentEvent, { kind: 'permission-request' }> =>
       e.kind === 'permission-request' && !outcomes.has(e.requestId),
   )
-  const activity = threadActivity({
-    connected: !hostOffline,
-    working: live || busyAgent,
-    helpers: helperSelection.selected,
-    advisors: helperSelection.advisors,
-    requests: [...pendingPermissions, ...pendingQuestions].map((e) => ({
-      id: e.requestId,
-      kind: e.kind === 'permission-request' ? 'permission' : e.kind,
-    })),
-    providerWait: Boolean(providerWait),
-    queue: queued.length,
-    goal: !liveGoal
-      ? null
-      : isLimitHold(liveGoal)
-        ? 'provider'
-        : liveGoal.status === 'active'
-          ? 'active'
-          : liveGoal.status === 'paused'
-            ? 'paused'
-            : 'blocked',
-  })
-  const openActivity = (kind: ActivityKind) => {
-    if (kind === 'helpers') {
-      setOpenAgent('*')
-      return
-    }
-    if (kind === 'advisor') {
-      const advisor = helperSelection.advisors.find((task) => task.status === 'running')
-      if (advisor) setOpenAgent(advisor.agentId)
-      return
-    }
-    if (kind === 'input') {
-      const question = pendingQuestions.find((e) => e.kind === 'question')
-      if (!pendingPermissions.length && question) {
-        setQuestionDockOpen(true)
-        openQuestion(question.requestId)
-        return
-      }
-      const request = pendingPermissions[0] ?? pendingQuestions[0]
-      const node = [
-        ...(root.current?.querySelectorAll<HTMLElement>('[data-activity-request], [data-question-request]') ?? []),
-      ].find(
-        (element) =>
-          element.dataset.activityRequest === request?.requestId ||
-          element.dataset.questionRequest === request?.requestId,
-      )
-      node?.scrollIntoView({ block: 'center', behavior: preferences.reduceMotion ? 'instant' : 'smooth' })
-      node?.querySelector<HTMLElement>('button, input, textarea')?.focus({ preventScroll: true })
-      return
-    }
-    const selector = {
-      goal: '.goal-bar',
-      queue: '.message-queue',
-      provider: '.provider-wait',
-      connection: '.composer',
-      working: '.composer',
-    }[kind]
-    const node = root.current?.querySelector<HTMLElement>(selector)
-    node?.querySelector<HTMLButtonElement>('.composer-tray-trigger[aria-expanded="false"]')?.click()
-    node?.scrollIntoView({ block: 'center', behavior: 'auto' })
-  }
-
   const supportsSteering = !!session
   const action = supportsSteering ? preferences.busyMessageAction : 'queue'
   const opposite = action === 'queue' ? 'steer' : 'queue'
@@ -762,17 +703,19 @@ export const AgentView = memo(function AgentView({
               />
             </div>
           </MessageScrollerProvider>
-          <div className="composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(24px_+_var(--chat-scrollbar-width,_0px))_14px_24px]">
+          <div className="composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(16px_+_var(--chat-scrollbar-width,_0px))_10px_16px]">
             <ComposerStack>
               {error && <div className="error text-bad">{error}</div>}
-              {session?.taskId && <BackgroundTerminals taskId={session.taskId} />}
-              <ThreadActivitySummary
-                workingLabel={activityLabel ? translate(activityLabel) : undefined}
-                model={activity}
-                goalLabel={translate(goalActivityLabel(activity.goalState))}
-                onOpen={openActivity}
+              <ConfirmStopDialog
+                command={stopping ? stopping.name : null}
+                onCancel={() => setStopping(null)}
+                onConfirm={() => {
+                  if (stopping) runStopTask(stopping)
+                  setStopping(null)
+                }}
               />
               {(hostOffline ||
+                backgroundTerminals.terminals.length > 0 ||
                 providerWait ||
                 liveGoal ||
                 queued.length > 0 ||
@@ -790,6 +733,9 @@ export const AgentView = memo(function AgentView({
                     />
                   )}
                   {hostOffline && <HostWaitNote name={hostName} />}
+                  {backgroundTerminals.terminals.length > 0 && (
+                    <BackgroundTerminalsSection state={backgroundTerminals} />
+                  )}
                   {providerWait && <ProviderWaitNote retry={limitRetry} autoResume={autoResume} />}
                   {liveGoal && (
                     <GoalBar

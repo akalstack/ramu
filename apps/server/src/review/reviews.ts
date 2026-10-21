@@ -34,6 +34,8 @@ interface SnapshotFile {
   content: string
   binary: boolean
   mode?: number
+  /** Missing from a Git checkout's working tree although HEAD still has it. */
+  deleted?: true
 }
 interface ReviewData extends ChangeReview {
   roots: { repoId: string; repoName: string; cwd: string; checkout?: ReviewCheckout; targetBranch?: string | null }[]
@@ -66,6 +68,42 @@ const findingSchema = z.object({
     .max(20)
     .default([]),
 })
+const execBuffer = promisify(execFile) as unknown as (
+  file: string,
+  args: string[],
+  options: { cwd: string; maxBuffer: number; timeout: number; encoding?: 'buffer' },
+) => Promise<{ stdout: Buffer }>
+/** Paths in a Git checkout that differ from HEAD; undefined for non-Git folders. */
+async function dirtyPaths(root: { cwd: string }): Promise<{ paths: string[]; head: boolean } | undefined> {
+  if (!existsSync(join(root.cwd, '.git'))) return
+  const list = async (args: string[]) =>
+    (await exec('git', args, { cwd: root.cwd, maxBuffer: 16000000, timeout: 30000 })).stdout.split('\0').filter(Boolean)
+  try {
+    const [changed, others] = await Promise.all([
+      list(['diff', '-z', '--name-only', '--no-renames', 'HEAD', '--']),
+      list(['ls-files', '-z', '--others', '--exclude-standard']),
+    ])
+    return { paths: [...new Set([...changed, ...others])], head: true }
+  } catch {
+    // Before the first commit nothing is clean, so every file counts.
+    return { paths: await list(['ls-files', '-z', '--cached', '--others', '--exclude-standard']), head: false }
+  }
+}
+async function walkFolder(cwd: string): Promise<string[]> {
+  const paths: string[] = []
+  const walk = async (dir: string) => {
+    for (const entry of await readdir(join(cwd, dir), { withFileTypes: true })) {
+      if (['.git', 'node_modules', 'vendor', 'dist', 'build'].includes(entry.name) || entry.isSymbolicLink()) continue
+      const path = dir ? `${dir}/${entry.name}` : entry.name
+      if (paths.length >= 10000) throw new Error('Too many files to snapshot this run')
+      if (entry.isDirectory()) await walk(path)
+      else if (entry.isFile()) paths.push(path)
+    }
+  }
+  await walk('')
+  return paths
+}
+
 export class ReviewService {
   private undo: RunUndo
   private completing = new Map<string, Promise<void>>()
@@ -252,9 +290,45 @@ export class ReviewService {
             gunzipSync(readFileSync(join(this.root, `${review.id}.gz`))).toString(),
           ) as SnapshotFile[]
           const after = await this.snapshot(review.roots)
-          const key = (f: SnapshotFile) => `${f.repoId}\0${f.path}`
+          const key = (f: { repoId: string; path: string }) => `${f.repoId}\0${f.path}`
           const oldFiles = new Map(before.map((f) => [key(f), f])),
             newFiles = new Map(after.map((f) => [key(f), f]))
+          const budget = { total: 0 }
+          // Files that were clean at the start have no saved copy; the starting commit and the disk stand in for them.
+          for (const root of review.roots) {
+            const head = root.checkout?.head
+            if (!head || !(await dirtyPaths(root))?.head) continue
+            let moved: string[] = []
+            try {
+              moved = (
+                await exec('git', ['diff', '-z', '--name-only', '--no-renames', head, 'HEAD', '--'], {
+                  cwd: root.cwd,
+                  maxBuffer: 16000000,
+                  timeout: 30000,
+                })
+              ).stdout
+                .split('\0')
+                .filter(Boolean)
+            } catch {}
+            const candidates = new Set(
+              [...before, ...after]
+                .filter((f) => f.repoId === root.repoId)
+                .map((f) => f.path)
+                .concat(moved),
+            )
+            for (const path of candidates) {
+              const id = key({ repoId: root.repoId, path })
+              if (!oldFiles.has(id)) {
+                const old = await this.headEntry(root, head, path, budget)
+                if (old) oldFiles.set(id, old)
+              }
+              if (!newFiles.has(id)) {
+                const current = await this.readEntry(root, path, budget)
+                if (current) newFiles.set(id, current)
+              }
+            }
+          }
+          for (const files of [oldFiles, newFiles]) for (const [id, f] of files) if (f.deleted) files.delete(id)
           const changed: ChangeFile[] = []
           for (const id of new Set([...oldFiles.keys(), ...newFiles.keys()])) {
             const old = oldFiles.get(id),
@@ -298,76 +372,91 @@ export class ReviewService {
       this.completing.delete(sessionId)
     }
   }
+  /**
+   * A Git checkout records only what already differs from HEAD (everything, before the first commit). Anything else is
+   * clean, so its starting content is read back from the starting commit when a run changes it. Other folders are walked.
+   */
   private async snapshot(roots: ReviewData['roots']): Promise<SnapshotFile[]> {
     const result: SnapshotFile[] = []
-    let total = 0
+    const budget = { total: 0 }
     for (const root of roots) {
-      let paths: string[]
-      if (existsSync(join(root.cwd, '.git'))) {
-        const { stdout } = await exec('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
-          cwd: root.cwd,
-          maxBuffer: 16000000,
-          timeout: 30000,
-        })
-        paths = [...new Set(stdout.split('\0').filter(Boolean))]
-      } else {
-        paths = []
-        const walk = async (dir: string) => {
-          for (const entry of await readdir(join(root.cwd, dir), { withFileTypes: true })) {
-            if (['.git', 'node_modules', 'vendor', 'dist', 'build'].includes(entry.name) || entry.isSymbolicLink())
-              continue
-            const path = dir ? `${dir}/${entry.name}` : entry.name
-            if (paths.length >= 10000) throw new Error('Too many files to snapshot this run')
-            if (entry.isDirectory()) await walk(path)
-            else if (entry.isFile()) paths.push(path)
-          }
-        }
-        await walk('')
-      }
-      if (paths.length > 10000) throw new Error('Too many files to snapshot this run')
+      const dirty = await dirtyPaths(root)
+      const paths = dirty?.paths ?? (await walkFolder(root.cwd))
       for (const path of paths) {
-        let absolute: string
-        try {
-          absolute = await resolveInRoot(root.cwd, path)
-        } catch {
-          continue
-        }
-        let info: Awaited<ReturnType<typeof stat>>
-        try {
-          info = await stat(absolute)
-        } catch {
-          continue
-        }
-        if (!info.isFile()) continue
-        // Track large/binary files by digest; text diffs are bounded to 1 MB each.
-        if (info.size > 50000000) {
+        const entry = await this.readEntry(root, path, budget)
+        if (entry) result.push(entry)
+        else if (dirty)
           result.push({
             repoId: root.repoId,
             repoName: root.repoName,
             path,
-            hash: `${info.size}:${info.mtimeMs}`,
+            hash: '',
             content: '',
-            binary: true,
+            binary: false,
+            deleted: true,
           })
-          continue
-        }
-        const bytes = await readFile(absolute)
-        const binary = bytes.length > 1000000 || bytes.includes(0) || bytes.toString('utf8').includes('\ufffd')
-        const content = binary ? '' : bytes.toString('utf8')
-        total += content.length
-        if (total > 50000000) throw new Error('Review snapshot exceeds 50 MB of text')
-        result.push({
-          repoId: root.repoId,
-          repoName: root.repoName,
-          path,
-          hash: createHash('sha256').update(bytes).digest('hex'),
-          content,
-          binary,
-          mode: info.mode & 0o777,
-        })
       }
     }
     return result
+  }
+  private async readEntry(
+    root: ReviewData['roots'][number],
+    path: string,
+    budget: { total: number },
+  ): Promise<SnapshotFile | undefined> {
+    let absolute: string
+    try {
+      absolute = await resolveInRoot(root.cwd, path)
+    } catch {
+      return
+    }
+    let info: Awaited<ReturnType<typeof stat>>
+    try {
+      info = await stat(absolute)
+    } catch {
+      return
+    }
+    if (!info.isFile()) return
+    const base = { repoId: root.repoId, repoName: root.repoName, path }
+    // Track large/binary files by digest; text diffs are bounded to 1 MB each.
+    if (info.size > 50000000) return { ...base, hash: `${info.size}:${info.mtimeMs}`, content: '', binary: true }
+    return this.entryFromBytes(base, await readFile(absolute), budget, info.mode & 0o777)
+  }
+  private entryFromBytes(
+    base: Pick<SnapshotFile, 'repoId' | 'repoName' | 'path'>,
+    bytes: Buffer,
+    budget: { total: number },
+    mode?: number,
+  ): SnapshotFile {
+    const binary = bytes.length > 1000000 || bytes.includes(0) || bytes.toString('utf8').includes('\ufffd')
+    const content = binary ? '' : bytes.toString('utf8')
+    // Past the shared text budget a file is tracked by digest only, so one large repo can't drop review cards for the rest.
+    const overBudget = budget.total + content.length > 50000000
+    if (!overBudget) budget.total += content.length
+    return {
+      ...base,
+      hash: createHash('sha256').update(bytes).digest('hex'),
+      content: overBudget ? '' : content,
+      binary: binary || overBudget,
+      mode,
+    }
+  }
+  private async headEntry(
+    root: ReviewData['roots'][number],
+    head: string,
+    path: string,
+    budget: { total: number },
+  ): Promise<SnapshotFile | undefined> {
+    try {
+      const { stdout } = await execBuffer('git', ['show', `${head}:${path}`], {
+        cwd: root.cwd,
+        maxBuffer: 50000000,
+        timeout: 30000,
+      })
+      return this.entryFromBytes({ repoId: root.repoId, repoName: root.repoName, path }, stdout, budget)
+    } catch {
+      return
+    }
   }
   markReviewed(id: string, reviewed: boolean): ChangeReview {
     const review = this.get(id)

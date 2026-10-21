@@ -1,6 +1,6 @@
 # Agent setup: shared skills, rules and MCP
 
-## Smallest usable delivery
+## Delivery
 
 A person can find an existing skill in Settings, understand where it comes from, enable it for the intended project/provider and inspect its availability in a thread. Extend the current skill manager first; shared rules and MCP remain independently deliverable. Keep source paths, precedence and delivery diagnostics in details, with only name, scope, status and the next useful action in the ordinary list. Acceptance requires completing that setup without editing provider configuration files. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

@@ -2,7 +2,7 @@
 
 Implementation proposal, 2026-10-18. No browser runtime or settings in this document are implemented by this planning change. Remove work as it lands, document shipped behavior in the feature guides, and delete this plan when implementation and acceptance are finished.
 
-## Smallest usable delivery
+## Delivery
 
 A person asks an agent to check a local page, sees the correct browser and machine, takes control to interact or sign in, then returns control and receives the result in the same thread. Deliver the local desktop runtime, minimal pane, routing and ownership together as one usable increment; internal contract/runtime steps alone are not a user release. Keep provider overrides and profile administration in Settings/details. Session import, remote runtime and mobile control follow independently after this flow works. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

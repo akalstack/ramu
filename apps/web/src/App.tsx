@@ -2,7 +2,7 @@ import { animateThreadListChange } from './workspace/threadListMotion'
 import { Onboarding } from './Onboarding'
 import { offerPairLink } from './pairLink'
 import { BackgroundActivity } from './chat/BackgroundActivity'
-import { AppUpdateNotice } from './settings/AppUpdates'
+import { AppUpdateButton } from './settings/AppUpdates'
 import { animatePanelChange, cancelPanelMotion } from './workspace/panelMotion'
 import { errorText } from './lib/errors'
 import { useSidebarWidth } from './workspace/panelLayout'
@@ -40,7 +40,8 @@ import { copyText, invoke, ramu } from './ipc'
 import { useUnseenTerminalOutput } from './workspace/terminalActivity'
 import { useContextMenu } from './Menu'
 import { RepositoryPicker } from './git/RepositoryPicker'
-import { WorkspaceSyncDialog } from './WorkspaceSync'
+import { syncRepositories } from './git/syncRepositories'
+import { ProtectedSyncDialog } from './git/ProtectedSyncDialog'
 import { useQuery } from '@tanstack/react-query'
 import { repositoryQueryKey } from './git/repositoryQueryKey'
 import { queryInvokerFor } from './git/hostQuery'
@@ -668,11 +669,11 @@ function Shell() {
       )}
       {palette && <Palette ws={ws} commands={commands} mode={palette} onClose={() => setPalette(null)} />}
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
-      <AppUpdateNotice />
       <ProviderSetupTerminal />
       <Notifications />
       <SummaryHost />
       <CommitBranchDialog />
+      <ProtectedSyncDialog />
       <CommitDialog />
       <CreatePullRequestHost />
       <PublishRepositoryHost />
@@ -916,6 +917,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
       <footer className="status-bar [&_.strong]:text-soft [&_>_.strong]:flex-none [&_.status-branch]:max-w-[220px] [&_.status-branch]:[border:0] [&_.status-branch]:rounded-(--radius-s) [&_.status-branch]:bg-transparent [&_.status-branch]:text-caption [&_.status-branch]:leading-[18px] [&_.status-branch]:text-soft [&_.status-branch]:w-auto [&_.status-branch]:flex-initial [&_.status-branch]:gap-[5px] [&_.status-branch]:h-[22px] [&_.status-branch]:min-h-[22px] [&_.status-branch]:p-[0_6px] [&_.path]:min-w-0 [&_.path]:overflow-hidden [&_.path]:text-ellipsis [&_.path]:whitespace-nowrap [&_>_.status-project]:max-w-[220px] [&_>_.status-project]:min-w-0 [&_>_.status-project]:overflow-hidden [&_>_.status-project]:text-ellipsis [&_>_.status-project]:whitespace-nowrap [&_>_.status-project]:flex-none [&_>_.status-project]:inline-flex [&_>_.status-project]:items-center [&_>_.status-project]:h-[22px] [&_>_.status-project]:p-[0_6px] [&_>_.status-project]:leading-[18px] [&_[data-slot='select-trigger'].status-branch]:w-auto [&_[data-slot='select-trigger'].status-branch]:flex-initial [&_[data-slot='select-trigger'].status-branch]:gap-[5px] [&_[data-slot='select-trigger'].status-branch]:h-[22px] [&_[data-slot='select-trigger'].status-branch]:min-h-[22px] [&_[data-slot='select-trigger'].status-branch]:p-[0_6px] [&_.status-branch_[data-slot=select-value]]:flex-initial [&_.status-branch_>_svg:last-child]:ml-0 [&_.sync-button]:h-[22px] [&_.sync-button]:min-h-[22px] [&_.sync-button]:p-[0_6px] [&_.sync-button]:gap-[5px] [&_.sync-button]:rounded-(--radius-s) [&_.sync-button]:text-caption [&_.sync-button]:text-soft [&_.sync-button]:tabular-nums [&_.sync-button]:flex-none [&_.sync-button:hover:not(:disabled)]:text-foreground [&_.status-repo]:w-auto [&_.status-repo]:flex-initial [&_.status-repo]:h-[22px] [&_.status-repo]:min-h-[22px] [&_.status-repo]:p-[0_6px] [&_.status-repo]:gap-[5px] [&_.status-repo]:max-w-[240px] [&_.status-repo]:[border:0] [&_.status-repo]:rounded-(--radius-s) [&_.status-repo]:bg-transparent [&_.status-repo]:text-caption [&_.status-repo]:font-semibold [&_[data-slot='select-trigger'].status-repo]:w-auto [&_[data-slot='select-trigger'].status-repo]:flex-initial [&_[data-slot='select-trigger'].status-repo]:h-[22px] [&_[data-slot='select-trigger'].status-repo]:min-h-[22px] [&_[data-slot='select-trigger'].status-repo]:p-[0_6px] [&_[data-slot='select-trigger'].status-repo]:gap-[5px] [&_[data-slot='select-trigger'].status-repo]:max-w-[240px] [&_[data-slot='select-trigger'].status-repo]:[border:0] [&_[data-slot='select-trigger'].status-repo]:rounded-(--radius-s) [&_[data-slot='select-trigger'].status-repo]:bg-transparent [&_[data-slot='select-trigger'].status-repo]:text-caption [&_[data-slot='select-trigger'].status-repo]:font-semibold [&_.status-repo:hover]:bg-hover [&_.status-checkout]:inline-flex [&_.status-checkout]:items-center [&_.status-checkout]:h-[22px] [&_.status-checkout]:p-[0_6px] [&_.status-checkout]:leading-[18px] tabular-nums flex items-center text-caption flex-none text-muted-foreground min-w-0 h-7 bg-transparent gap-0.5 p-[0_6px] [border-top:1px_solid_var(--line)]">
         <span className="grow flex-1 min-w-0 text-left" />
         {usage}
+        <AppUpdateButton />
         <BackgroundActivity />
       </footer>
     )
@@ -941,8 +943,12 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
           value={binding.repoId}
           onChange={setPicked}
           pullMode={preferences.pullMode}
-          onSyncAll={() => setSyncAll(true)}
-          onSync={(repository) => void run(() => invoke('git.sync', taskId, repository.repoId), true, repository)}
+          syncing={syncAll}
+          onSyncAll={(repositories) => {
+            setSyncAll(true)
+            void run(() => syncRepositories(invoke, taskId, repositories), true).finally(() => setSyncAll(false))
+          }}
+          onSync={(repository) => void run(() => syncRepositories(invoke, taskId, [repository]), true, repository)}
           onPublishRepository={(repository) =>
             void openPublishRepository(taskId, repository.repoId, repository.repoName)
           }
@@ -970,17 +976,17 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
             busy={busy || !ready}
             pullMode={preferences.pullMode}
             className="status-sync"
-            onSync={() => void run(() => invoke('git.sync', taskId, binding.repoId), true)}
+            onSync={() => void run(() => syncRepositories(invoke, taskId, [binding]), true)}
             onPublishRepository={() => void openPublishRepository(taskId, binding.repoId, binding.repoName)}
           />
         </>
       )}
-      {syncAll && taskId && <WorkspaceSyncDialog taskId={taskId} bindings={repos} onClose={() => setSyncAll(false)} />}
       <span className="status-checkout flex-none text-muted-foreground p-[0_6px_2px]" title={binding.cwd}>
         {binding.mode === 'current' ? t('Current checkout') : t('Isolated worktree')}
       </span>
       <span className="grow flex-1 min-w-0 text-left" />
       {usage}
+      <AppUpdateButton />
       <BackgroundActivity />
     </footer>
   )

@@ -1,3 +1,4 @@
+import { syncRepositories } from './syncRepositories'
 import { applyCommitScope, chooseCommit } from './CommitDialog'
 import { withGitBusy } from './gitBusy'
 import { openCreatePullRequest } from './CreatePullRequestHost'
@@ -124,7 +125,7 @@ export async function commitAndPush(
     pushedTo = branchOptions.autoBranch
       ? ((await hostInvoke('git.commitBranchInfo', ctx, binding.repoId)).branch ?? status.branch!)
       : (branchOptions.newBranch ?? status.branch!)
-    if (plan.action === 'sync') await hostInvoke('git.sync', ctx, binding.repoId)
+    if (plan.action === 'sync') await syncRepositories(hostInvoke, ctx, [binding])
     else if (plan.action === 'push') await hostInvoke('git.push', ctx, binding.repoId, pushedTo)
     return draft.message.split('\n')[0]!
   }

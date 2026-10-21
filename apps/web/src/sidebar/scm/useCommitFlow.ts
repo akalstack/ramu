@@ -1,3 +1,4 @@
+import { syncRepositories } from '../../git/syncRepositories'
 import { useState } from 'react'
 import type { AgentSettings, CommitDraft, GitStatus, RepositoryBinding } from '@ramu/shared/types'
 import { errorText } from '../../workspace/TaskPane'
@@ -135,7 +136,7 @@ export function useCommitFlow({
         ? (await invoke('git.commitBranchInfo', taskId, binding.repoId)).branch
         : (branchOptions?.newBranch ?? branchOptions?.expectedBranch)
       if (action === 'push') await invoke('git.push', taskId, binding.repoId, target ?? undefined)
-      if (action === 'sync') await invoke('git.sync', taskId, binding.repoId)
+      if (action === 'sync') await syncRepositories(invoke, taskId, [binding])
     })
   }
   /**
@@ -167,7 +168,7 @@ export function useCommitFlow({
       setDraft(null)
       if (branch.autoBranch) pushedTo = (await invoke('git.commitBranchInfo', taskId, binding.repoId)).branch
       if (plan.action === 'push') await invoke('git.push', taskId, binding.repoId, pushedTo ?? undefined)
-      if (plan.action === 'sync') await invoke('git.sync', taskId, binding.repoId)
+      if (plan.action === 'sync') await syncRepositories(invoke, taskId, [binding])
       return text.split('\n')[0]!
     }).finally(() => window.dispatchEvent(new Event('ramu:git-updated')))
     void reportGitJob(work, {

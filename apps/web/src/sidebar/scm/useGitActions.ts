@@ -1,3 +1,4 @@
+import { syncRepositories } from '../../git/syncRepositories'
 import type { GitStash, PullMode, RepositoryBinding } from '@ramu/shared/types'
 import { errorText } from '../../workspace/TaskPane'
 import { withGitBusy } from '../../git/gitBusy'
@@ -40,7 +41,7 @@ export function useGitActions({
   const sync = () =>
     void run(async () => {
       requireSaved()
-      await invoke('git.sync', taskId, binding.repoId)
+      await syncRepositories(invoke, taskId, [binding])
     })
   const pull = (mode?: PullMode) =>
     void run(async () => {

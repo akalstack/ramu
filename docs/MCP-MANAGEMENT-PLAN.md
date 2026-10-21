@@ -1,6 +1,6 @@
 # MCP management and Shared MCP
 
-## Smallest usable delivery
+## Delivery
 
 A person connects one supported external service on the intended host, enables it for a project and two compatible providers, then uses an authorized tool from each thread with the expected service account. Deliver one verified service/transport path through Settings, authentication, authorization and invocation before broadening compatibility. Keep raw command/environment fields and the full provider matrix in advanced/details views. The next action should say Connect, Sign in or Enable for this project; users need not understand gateways or MCP namespaces. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

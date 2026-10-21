@@ -40,7 +40,7 @@ export const MSG_CLASS =
 
 /** A horizontal rule with a centred label. */
 export const CONVERSATION_SEPARATOR_CLASS =
-  "conversation-separator [&::before]:[content:''] [&::before]:h-px [&::before]:flex-1 [&::before]:min-w-4 [&::before]:[background:var(--line-strong)] [&::after]:[content:''] [&::after]:h-px [&::after]:flex-1 [&::after]:min-w-4 [&::after]:[background:var(--line-strong)] [&_small]:block [&_small]:text-muted-foreground [&_small]:text-caption [&_small]:mt-[3px] flex items-center gap-3 m-[20px_0] text-caption text-center text-muted-foreground"
+  "conversation-separator [&::before]:[content:''] [&::before]:h-px [&::before]:flex-1 [&::before]:min-w-4 [&::before]:[background:var(--line)] [&::after]:[content:''] [&::after]:h-px [&::after]:flex-1 [&::after]:min-w-4 [&::after]:[background:var(--line)] [&_small]:block [&_small]:text-muted-foreground [&_small]:text-caption [&_small]:mt-[3px] flex items-center gap-3 m-[20px_0] text-caption text-center text-muted-foreground"
 
 /** Header row of the sub-agent and aside panels. */
 export const PANEL_HEADER_CLASS =

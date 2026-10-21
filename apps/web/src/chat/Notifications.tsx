@@ -5,6 +5,7 @@ import { AppToaster, notify, type AppToastData } from '@/components/app-toaster'
 import { MessageCircleQuestion } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useAppSettings } from '../settings/AppSettings'
+import { errorText } from '../lib/errors'
 import { ramu, invokerFor } from '../ipc'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { useHostSelection } from '../workspace/HostSelection'
@@ -60,10 +61,24 @@ export function Notifications() {
         const title = `${providerName(status.provider)}${t(' update available')}`,
           description = `${status.version} → ${status.latestVersion}`
         const icon = <ProviderIcon provider={status.provider} size={18} />
-        const view = () => {
-          window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'providers' } }))
-          dismissProvider(status)
-          hide(id)
+        const name = providerName(status.provider)
+        const install = () => {
+          notify.update(id, { type: 'loading', title: t('Updating {0}…', { '0': name }), timeout: 0, actionProps: undefined })
+          void ramu
+            .invoke('providers.update', status.provider)
+            .then(() => {
+              hide(id)
+              notify.add({ type: 'success', title: t('{0} updated', { '0': name }), timeout: TOAST_MS.success })
+            })
+            .catch((reason) => {
+              notify.update(id, {
+                type: 'error',
+                title: t('Could not update {0}', { '0': name }),
+                description: errorText(reason),
+                timeout: TOAST_MS.error,
+                actionProps: { children: t('Update'), onClick: install },
+              })
+            })
         }
         // The toast leaves by itself; the update waits in the activity popover until it is viewed or dismissed.
         notify.add<AppToastData>({
@@ -78,9 +93,9 @@ export function Notifications() {
               notices.remove(id)
             },
           },
-          actionProps: { children: t('View update'), onClick: view },
+          actionProps: { children: t('Update'), onClick: install },
         })
-        notices.add({ id, title, description, type: 'info', icon, actionLabel: t('View update'), onAction: view })
+        notices.add({ id, title, description, type: 'info', icon, actionLabel: t('Update'), onAction: install })
       }
     }
     const off = ramu.on('providers:updates', (statuses) => {

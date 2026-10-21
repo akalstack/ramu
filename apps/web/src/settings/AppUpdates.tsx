@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { APP_AUTO_UPDATE, type AppUpdateStatus } from '@ramu/shared/updates'
 import type { AppPreferences, BackgroundStatus } from '@ramu/shared/types'
 import { ramu } from '../ipc'
+import { notifyError } from '../chat/Notifications'
 import { t, useLanguage } from '../i18n'
 
 export function AppUpdates({ value, onChange }: { value: AppPreferences; onChange: (value: AppPreferences) => void }) {
@@ -186,42 +187,70 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
   )
 }
 
-/** A downloaded update never takes over a session without a restart choice. */
-export function AppUpdateNotice() {
+/** One status-bar button for a newer release: Update downloads it, Restart applies it; threads keep running. */
+export function AppUpdateButton() {
   useLanguage()
   const [state, setState] = useState<AppUpdateStatus | null>(null),
-    [deferred, setDeferred] = useState(''),
-    [error, setError] = useState<string | null>(null)
+    [busy, setBusy] = useState(false)
   useEffect(() => {
     void ramu.invoke('updates.status').then(setState, () => {})
     return ramu.on('updates:changed', setState)
   }, [])
-  if (!state?.nativeReady || !state.release || deferred === state.release.version) return null
-  return (
-    <div
-      className="app-update-notice [&_>_span]:flex-1 [&_>_span]:text-control fixed right-5 bottom-[36px] max-w-[min(560px,_calc(100vw_-_40px))] z-40 flex items-center gap-2.5 p-[12px_16px] [background:var(--float-bg)] [backdrop-filter:var(--float-blur)] [border:1px_solid_var(--edge)] rounded-(--radius-l) [box-shadow:var(--shadow-float)]"
-      role="status"
-    >
-      <span>
-        {t('Ramu {0} is ready. Restart when you’re ready; threads stay running.', { '0': state.release.version })}
-      </span>
+  const release = state?.release
+  if (!release) return null
+  const run = async (method: 'updates.download' | 'updates.restart') => {
+    setBusy(true)
+    try {
+      const result = await ramu.invoke(method)
+      if (result && 'phase' in result) setState(result)
+    } catch (reason) {
+      notifyError(errorText(reason), 'Ramu')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const className = 'app-update-button h-[22px] min-h-[22px] gap-[5px] p-[0_6px] text-caption text-soft'
+  if (!APP_AUTO_UPDATE || state.supported === false)
+    return (
       <Button
-        variant="secondary"
-        size="sm"
-        className="bg-fill hover:bg-fill-hover small text-caption"
-        onClick={() => void ramu.invoke('updates.restart').catch((reason) => setError(errorText(reason)))}
-      >
-        {t('Restart app')}
-      </Button>
-      <Button
-        size="sm"
         variant="ghost"
-        className="small text-caption"
-        onClick={() => setDeferred(state.release!.version)}
+        size="sm"
+        className={className}
+        nativeButton={false}
+        render={
+          <a href={release.notesUrl} target="_blank" rel="noreferrer" title={t('Ramu {0}', { '0': release.version })} />
+        }
       >
-        {t('Later')}
+        <Download size={13} />
+        {t('Update')}
       </Button>
-      {error && <span className="error text-bad small text-caption">{error}</span>}
-    </div>
+    )
+  if (state.phase === 'ready')
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className={className}
+        disabled={!state.nativeReady || busy}
+        title={t('Ramu {0} is ready. Restart when you’re ready; threads stay running.', { '0': release.version })}
+        onClick={() => void run('updates.restart')}
+      >
+        <RefreshCw size={13} />
+        {state.nativeReady ? t('Restart to update') : t('Preparing update…')}
+      </Button>
+    )
+  const downloading = busy || state.phase === 'downloading'
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={className}
+      disabled={downloading}
+      title={t('Ramu {0}', { '0': release.version })}
+      onClick={() => void run('updates.download')}
+    >
+      <Download size={13} />
+      {downloading ? t('Downloading…') : t('Update')}
+    </Button>
   )
 }

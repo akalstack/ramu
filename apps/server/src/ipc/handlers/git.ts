@@ -1,4 +1,5 @@
 import { rm } from 'node:fs/promises'
+import type { SyncApproval } from '@ramu/shared/protectedBranch'
 import { z } from 'zod'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import type { AgentSettings, CommitBranchOptions, DiffContents, ModelPreferences, PullMode } from '@ramu/shared/types'
@@ -278,11 +279,11 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
         }),
     },
     'git.sync': {
-      args: z.tuple([id, id]),
-      run: (t: string, r: string) =>
+      args: z.tuple([id, id, z.object({ branch: branchName, oid: gitOid, targetBranch: branchName }).optional()]),
+      run: (t: string, r: string, approval?: SyncApproval) =>
         gitExclusive(ctx, t, r, async (cwd) => {
           assertNoActiveWriter(ctx, cwd, 'Stop the agent in this checkout before syncing.')
-          return git.sync(cwd, savedPullMode())
+          return git.sync(cwd, savedPullMode(), approval)
         }),
     },
     'git.continueOperation': {

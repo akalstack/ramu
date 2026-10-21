@@ -1,6 +1,6 @@
 # Provider compatibility
 
-## Human need and smallest delivery
+## Human need and delivery
 
 A person should know whether the provider on the selected execution host can run their thread with this Ramu release, and have a useful recovery action before an avoidable startup failure. Deliver compatibility status in the existing **Settings → Providers** cards and an actionable launch failure for a proven incompatible runtime. Start with Codex app-server, whose executable Ramu already probes, then cover the remaining runner boundaries with evidence. Keep providers without a verified policy usable as **Unverified**; do not invent minimum versions to fill a matrix.
 

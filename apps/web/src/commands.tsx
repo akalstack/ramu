@@ -1,3 +1,4 @@
+import { syncRepositories } from './git/syncRepositories'
 import { SETTINGS_SECTIONS } from './settings/SettingsPage'
 import { t, useLanguage } from './i18n'
 // Commands and keyboard shortcuts. The command palette lives in palette/.
@@ -329,9 +330,10 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
               )
               .map((entry) => entry.path)
             await hostInvoke(kind === 'stage' ? 'git.stage' : 'git.unstage', taskId, binding.repoId, paths)
-          } else
+          } else if (kind === 'sync') await syncRepositories(hostInvoke, taskId, [binding])
+          else
             await hostInvoke(
-              kind === 'sync' ? 'git.sync' : kind === 'fetch' ? 'git.fetch' : kind === 'pull' ? 'git.pull' : 'git.push',
+              kind === 'fetch' ? 'git.fetch' : kind === 'pull' ? 'git.pull' : 'git.push',
               taskId,
               binding.repoId,
             )

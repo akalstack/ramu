@@ -2,7 +2,7 @@
 
 The shared presentation model, mobile Threads summary/header target, shared host/account detail sheet, settings reuse and thread Usage chip are implemented. Desktop detail preserves all allowance windows and distinguishes notice-only holds. See [UI](UI.md#plan-usage-detail).
 
-## Smallest usable delivery
+## Delivery
 
 A person can tell whether the next message can run, inspect the correct account when needed and choose the existing limit action. Keep the ordinary composer to its current compact usage target; allowance windows and account diagnostics belong in the shared detail sheet. Deliver authoritative account/routing identity and truthful unknown states before adding more summaries. Validate that an old reading or unavailable account does not send the person to the wrong login or imply that a held thread is ready. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

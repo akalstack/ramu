@@ -2,7 +2,7 @@
 
 Status: partially implemented. Remaining summaries, recovery checks and acceptance work are listed below. Source inspection and synthetic/browser checks do not establish live-provider or native-device acceptance.
 
-## Human need and smallest usable delivery
+## Human need and delivery
 
 A person can identify what a thread is doing through its indicator and status information, with short visible labels on mobile and per-thread popover details on desktop. Keep Ramu's dots, spinners, clocks, row layouts, navigation and existing accurate labels. T3 is a reference, not a requirement to copy its sidebar or vocabulary. No desktop or mobile sidebar redesign is needed.
 

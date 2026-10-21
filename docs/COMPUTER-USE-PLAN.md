@@ -2,7 +2,7 @@
 
 Implementation proposal, 2026-10-19. This planning change does not install a computer-use runtime or implement screen viewing. Follow [Architecture](ARCHITECTURE.md), [UI](UI.md) and the [root planning guidance](../AGENTS.md#planning-docs). Remove work as it ships, document lasting behavior in feature guides and delete this plan when acceptance is finished.
 
-## Human need and smallest usable delivery
+## Human need and delivery
 
 A person asks their existing Ramu agent to complete a task in a native application on a selected computer. From a phone, they can watch that computer's current screen, take control with touch and keyboard, return control to the agent, answer requests and return later to the same thread. From desktop Ramu, they watch the actual application directly when using that same computer; when controlling another computer, Ramu shows its screen inside the thread.
 

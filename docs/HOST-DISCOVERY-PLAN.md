@@ -4,7 +4,7 @@ Proposal, 2026-10-18. All work below remains unfinished. Let desktop and mobile 
 
 Keep this plan limited to unfinished work. Move shipped behavior into the remote-access feature guide and [mobile guide](../apps/mobile/README.md), remove completed items, and delete this plan when finished.
 
-## Smallest usable delivery
+## Delivery
 
 A person opens Add host, recognizes a nearby machine, pairs through the existing code flow and opens its threads after authenticated connection verification. Deliver initial discovery and pairing without requiring route failover or automatic address migration. Keep QR/manual/SSH fallbacks immediately reachable as specified below; discovery permissions or failure must not become a setup dead end. Validate this flow on a supported device with both discoverable and multicast-blocked networks. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

@@ -2,7 +2,7 @@
 
 Audited on 2026-10-18. The companion implementation is present; completed bootstrap, pairing, host state, thread, Git, schedule and push implementation phases have been removed from this plan. [README](README.md) describes current behavior and setup. [Verification](VERIFICATION.md) tracks outstanding acceptance checks.
 
-## Smallest usable delivery
+## Delivery
 
 A person checks agent progress from their phone, answers a supported request and returns later with the same host, thread and draft intact. Prioritize the existing Threads/Inbox and native input/recovery gaps before adding more controls. Each linked feature ships as its own capability-aware flow within the four tabs; desktop parity and the entire roadmap are not prerequisites for a usable companion. Validate this core loop on physical devices, including background/reconnect and an unavailable host. Follow the [root product and planning guidance](../../AGENTS.md#product-design-and-architecture) for this and later increments.
 

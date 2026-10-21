@@ -2,9 +2,9 @@ import { expect, it } from 'vitest'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 import { claudeLaunchOptions } from '../src/agent/claudeOptions'
 
-const launch = (advisorModel: string | undefined) =>
+const launch = (advisorModel: string | undefined, effort?: string) =>
   claudeLaunchOptions({
-    session: { cwd: '/tmp', additionalDirs: [], settings: { access: 'edits' } } as unknown as AgentSessionInfo,
+    session: { cwd: '/tmp', additionalDirs: [], settings: { access: 'edits', effort } } as unknown as AgentSessionInfo,
     connection: undefined,
     advisorModel,
     abort: new AbortController(),
@@ -17,6 +17,11 @@ const launch = (advisorModel: string | undefined) =>
 it('asks Claude for thinking summaries so the chat has thinking text to show', () => {
   expect(launch(undefined).settings).toEqual({ showThinkingSummaries: true })
   expect(launch('').settings).toEqual({ showThinkingSummaries: true, advisorModel: '' })
+})
+
+it('requests summarized thinking on the request itself for models with effort levels', () => {
+  expect(launch(undefined, 'medium').thinking).toEqual({ type: 'adaptive', display: 'summarized' })
+  expect(launch(undefined).thinking).toBeUndefined()
 })
 
 it("turns off Claude's own AskUserQuestion only when Ramu's question tools replace it", () => {

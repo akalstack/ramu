@@ -1,6 +1,6 @@
 # Mobile settings preferences
 
-## Human need and smallest delivery
+## Human need and delivery
 
 People may want larger text, a different appearance, quieter notifications or simpler model controls on a phone while keeping familiar desktop preferences. Add reusable scope controls to suitable existing Settings rows, beginning with appearance, language, text size and model selection. Extend the same mechanism to the selected preferences below. This is shared settings work, not a model-picker-only feature.
 

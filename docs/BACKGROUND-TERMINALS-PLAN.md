@@ -1,6 +1,6 @@
 # Manage agent-started background terminals
 
-## Human need and smallest usable delivery
+## Human need and delivery
 
 An agent starts a development server, watcher or other persistent command, finishes its reply, and leaves the person unsure what is still running or how to stop it. A person must be able to find that work, identify its thread and execution host, read its output and stop it without asking another agent or finding a process ID.
 

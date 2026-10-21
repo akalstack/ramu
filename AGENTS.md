@@ -4,7 +4,7 @@ Guidance for coding agents. Human contributors: see [CONTRIBUTING.md](CONTRIBUTI
 
 ## Product design and architecture
 
-Build only what helps a person working with AI agents complete a concrete task. Start with the smallest usable flow, useful defaults and a clear next action. Keep advanced controls optional. Preserve accessibility, localization, drafts and the ability to review, correct, stop and recover agent work.
+Build only what helps a person working with AI agents complete a concrete task and makes their work easier: fewer steps, less to remember, less rework. Ship complete workflows with useful defaults and a clear next action, and remove effort wherever the app can infer, prefill or remember. Keep advanced controls optional. Preserve accessibility, localization, drafts and the ability to review, correct, stop and recover agent work.
 
 Follow [Architecture](docs/ARCHITECTURE.md) and [UI](docs/UI.md). Reuse existing navigation, components and services. Agents, files, Git and workspace state belong on the execution server behind the typed API; device interactions and preferences belong on the device. Preserve host isolation and provider boundaries. Add abstractions or settings only for demonstrated needs.
 
@@ -22,7 +22,7 @@ For desktop-facing changes, run `pnpm build` followed by `pnpm test:desktop-smok
 
 ## Planning docs
 
-Plans describe unfinished work: the human need, smallest usable delivery, existing services to extend and acceptance checks. Keep later options separate. Validate usefulness with a representative task.
+Plans describe unfinished work: the human need and how the delivery makes that person's work easier (steps removed, context carried over, mistakes prevented), the full intended delivery, existing services to extend and acceptance checks. Keep later options separate. Validate with a representative task: the person finishes it with less effort than before.
 
 Remove completed items and delete finished plans. Put lasting behavior in feature guides, remaining checks or blockers in [the roadmap](docs/ROADMAP.md) or an active plan, and update links. Do not keep completed-plan ledgers.
 

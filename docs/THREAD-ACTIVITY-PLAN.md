@@ -2,7 +2,7 @@
 
 Shared helper selection, separate advisor/history membership, mobile helper fidelity, activity controls on both clients, capability-aware helper actions, request-origin metadata and Inbox inline answers are implemented. Current behavior belongs in [Agents](AGENTS.md#thread-activity-and-helper-controls) and the [mobile guide](../apps/mobile/README.md#thread-activity-and-inbox-answers).
 
-## Smallest usable delivery
+## Delivery
 
 A person sees what an agent is doing, recognizes when their input is needed, opens the relevant request/helper and acts once in the correct thread. Keep one compact activity row and the existing detail surfaces. Prioritize truthful waiting state, supported child navigation and restored state; extra counts or unread-advice controls require a demonstrated decision they help the person make. Validate the flow with concurrent helpers, a pending question and a reconnect, without requiring the user to interpret provider events. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

@@ -476,7 +476,7 @@ export interface RamuMethods {
   'git.fetch'(taskId: string, repoId: string): void
   'git.pull'(taskId: string, repoId: string, mode?: PullMode): void
   'git.autoPull'(taskId: string, repoId: string): boolean
-  'git.sync'(taskId: string, repoId: string): void
+  'git.sync'(taskId: string, repoId: string, approval?: import('./protectedBranch').SyncApproval): void
   'git.continueOperation'(taskId: string, repoId: string): void
   'git.abortOperation'(taskId: string, repoId: string): void
   'git.push'(taskId: string, repoId: string, expectedBranch?: string): void

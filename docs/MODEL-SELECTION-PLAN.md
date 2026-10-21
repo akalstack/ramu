@@ -2,7 +2,7 @@
 
 Current generated sets and selection controls are documented in [UI](UI.md#new-thread-model-defaults). Follow [Architecture](ARCHITECTURE.md), [UI](UI.md) and the [root product and planning guidance](../AGENTS.md#product-design-and-architecture). Extend `ModelPreferences`, the existing host-owned catalog/settings API and desktop/mobile controls; preserve drafts and explicit settings.
 
-## Smallest remaining delivery
+## Remaining delivery
 
 A person with a desktop and two phones can choose a selection flow for all devices, all mobile devices or one phone, see where the effective choice comes from, and clear an override. Deliver the shared preference transport and scope controls through the [mobile settings preferences plan](MOBILE-SETTINGS-PLAN.md). The current setting belongs to one execution host and affects clients using that host; it is not an account-wide or mobile-only preference.
 

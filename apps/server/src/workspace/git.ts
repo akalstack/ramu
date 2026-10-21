@@ -1,6 +1,7 @@
 // Git CLI wrapper. Every call uses an argument array (never a shell string)
 // and an explicit, canonical working directory.
 import { createHash } from 'node:crypto'
+import { isProtectedBranch, syncConfirmationMessage, type SyncApproval } from '@ramu/shared/protectedBranch'
 import { existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -625,15 +626,47 @@ export async function pull(cwd: string, mode: PullMode = 'rebase'): Promise<void
   }
 }
 /** VS Code's Sync: publish a branch without an upstream; otherwise pull, then push only if still ahead. A failed pull never pushes. */
-export async function sync(cwd: string, mode: PullMode = 'rebase'): Promise<void> {
+export async function sync(cwd: string, mode: PullMode = 'rebase', approval?: SyncApproval): Promise<void> {
   const before = await status(cwd)
   if (before.operation)
     throw new Error(`A ${before.operation} is in progress. Continue or abort it in Source Control first.`)
   if (!before.branch) throw new Error('Switch to a branch before syncing')
-  if (!before.upstream) return push(cwd)
-  await git(cwd, ['fetch'])
-  if ((await status(cwd)).behind) await pull(cwd, mode)
-  if ((await status(cwd)).ahead) await git(cwd, ['push'])
+  // Refresh tracking refs before deciding whether this operation would push.
+  if (before.upstream) await git(cwd, ['fetch'])
+  const current = await status(cwd)
+  if (current.branch !== before.branch) throw new Error('The branch changed. Review it before syncing.')
+  const { defaultBranch } = await commitBranchInfo(cwd)
+  const mergeRef = current.upstream
+    ? (await git(cwd, ['config', '--get', `branch.${current.branch}.merge`])).trim()
+    : ''
+  const targetBranch = mergeRef.startsWith('refs/heads/') ? mergeRef.slice('refs/heads/'.length) : current.branch!
+  const protectedBranch =
+    isProtectedBranch(current.branch, defaultBranch) || isProtectedBranch(targetBranch, defaultBranch)
+  const approved =
+    !!approval &&
+    approval.branch === current.branch &&
+    approval.oid === current.oid &&
+    approval.targetBranch === targetBranch
+  const requireApproval = () => {
+    if (protectedBranch && !approved && current.branch && current.oid)
+      throw new Error(syncConfirmationMessage({ branch: current.branch, oid: current.oid, targetBranch }))
+  }
+  if (!current.upstream) {
+    requireApproval()
+    return push(cwd, before.branch)
+  }
+  if (current.ahead) requireApproval()
+  if (current.behind) await pull(cwd, mode)
+  const after = await status(cwd)
+  if (after.branch !== before.branch)
+    throw new Error('The branch changed. Nothing was pushed. Review it before syncing.')
+  if (after.ahead) {
+    requireApproval()
+    // Limit Sync to this branch's upstream even with push.default=matching or custom push refspecs.
+    const remote = (await git(cwd, ['config', '--get', `branch.${before.branch}.remote`])).trim()
+    if (!remote || !mergeRef.startsWith('refs/heads/')) throw new Error('Configure an upstream before syncing.')
+    await git(cwd, ['push', '--', remote, `${after.oid}:${mergeRef}`])
+  }
 }
 export async function continueOperation(cwd: string): Promise<void> {
   const op = await operation(cwd)

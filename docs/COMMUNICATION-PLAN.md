@@ -1,6 +1,6 @@
 # Client–server communication
 
-## Human need and smallest usable delivery
+## Human need and delivery
 
 A person controls an agent and terminal from desktop or phone, switches between hosts, loses connectivity, then returns to the same work without missing output or accidentally repeating an action. A busy terminal must not delay Stop, approval answers or another host's updates. Improve that complete workflow before expanding transport scope.
 
@@ -33,7 +33,7 @@ Inspected upstream main at [`3ff5b3c82a62baddc0c2b1b227e9d3a06190c426`](https://
 
 Start with a hybrid candidate: WebSocket for interactive RPC/events, HTTP for pairing/health and existing suitable transfers, and the current local Unix-socket transport. Keep HTTP/SSE during migration. Ramu currently carries some file/attachment operations through RPC; identify large payloads before adding any dedicated transfer endpoints, and reuse file authorization if separation proves useful.
 
-Compare three options using the same task, environment and payloads: improved current HTTP/SSE, WebSocket for agent/terminal interaction with ordinary RPC retained on HTTP, and all interactive RPC/subscriptions on WebSocket. Each option must share handler authorization and recovery semantics. Default to the smallest option that meets the gates. Do not maintain duplicate active event streams or execute a mutation through both paths.
+Compare three options using the same task, environment and payloads: improved current HTTP/SSE, WebSocket for agent/terminal interaction with ordinary RPC retained on HTTP, and all interactive RPC/subscriptions on WebSocket. Each option must share handler authorization and recovery semantics. Choose the option that best meets the gates. Do not maintain duplicate active event streams or execute a mutation through both paths.
 
 Move all interactive RPC to WebSocket only if it brings measurable responsiveness or resource benefits, or materially simplifies a proven lifecycle problem without increasing recovery complexity. Retire legacy HTTP invocation/SSE only after a documented compatibility window and independently upgraded desktop/mobile/headless clients pass acceptance. Retain HTTP bootstrap/health and justified transfers. Change the local socket path only if its own measurements justify the cost. Video/audio media transport is a separate browser/computer-use decision.
 

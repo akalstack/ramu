@@ -2,7 +2,7 @@
 
 Current storage, migration, repository actions and workspace/commit defaults are documented in [Configuration files](CONFIGURATION.md). Follow [Architecture](ARCHITECTURE.md), [UI](UI.md) and the [root planning guidance](../AGENTS.md#planning-docs). Extend the existing host-owned settings store, project loader, named API and Settings/action/composer surfaces.
 
-## Smallest remaining delivery
+## Remaining delivery
 
 A person can see which repository supplies a default, correct invalid configuration and choose a provider/model for a new thread without granting repository content additional authority. Preserve explicit draft/session choices and intact drafts on unavailable providers or invalid configuration.
 

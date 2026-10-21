@@ -2,7 +2,7 @@
 
 This plan covers unfinished, incremental improvements to project selection, memory, verification/recovery, Inbox and existing PR automation. Existing behavior remains documented in feature guides; the additions below are not implemented yet. Remove completed items as they land, move lasting behavior into feature guides, and delete this plan when finished.
 
-## Smallest usable delivery
+## Delivery
 
 A person describes work from Home, sees the selected project, corrects it if necessary and starts one thread with the original draft intact. Deliver Auto/manual selection independently of memory and recovery audits. Use one project dropdown and contextual clarification, keeping routing diagnostics in details. Validate clear, ambiguous and unavailable destinations with representative prompts; add recovery, Inbox or PR controls only where the audits demonstrate a missing next action. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

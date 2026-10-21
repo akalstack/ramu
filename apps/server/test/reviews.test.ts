@@ -65,6 +65,31 @@ const human = (text = 'Fix this line') =>
     text,
   })
 describe('saved reviews and live workspaces', () => {
+  it('captures a run in a Git checkout from its dirty files and starting commit', async () => {
+    const git = (...args: string[]) => execFileSync('git', args, { cwd, stdio: 'ignore' })
+    git('init', '-q')
+    for (let i = 0; i < 300; i++) writeFileSync(join(cwd, `f${i}.txt`), `${i}\n`)
+    git('add', '-A')
+    git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'base')
+    writeFileSync(join(cwd, 'f5.txt'), 'local edit\n')
+    const id = await service.begin(review.taskId, { cwd } as never)
+    service.bind(id, 'session')
+    writeFileSync(join(cwd, 'f1.txt'), 'edited\n')
+    rmSync(join(cwd, 'f2.txt'))
+    writeFileSync(join(cwd, 'f5.txt'), '5\n')
+    writeFileSync(join(cwd, 'new.txt'), 'new\n')
+    await service.complete('session')
+    const files = service.get(id).files
+    expect(service.get(id).state).toBe('ready')
+    expect(files.map((f) => `${f.path}:${f.status}`).sort()).toEqual([
+      'f1.txt:modified',
+      'f2.txt:deleted',
+      'f5.txt:modified',
+      'new.txt:added',
+    ])
+    expect(files.find((f) => f.path === 'f1.txt')).toMatchObject({ oldContent: '1\n', newContent: 'edited\n' })
+    expect(files.find((f) => f.path === 'f5.txt')).toMatchObject({ oldContent: 'local edit\n', newContent: '5\n' })
+  }, 60_000)
   it('records added and removed line counts from the run, independent of current edits', async () => {
     expect(review.files.find((f) => f.path === 'changed.txt')).toMatchObject({ addedLines: 1, removedLines: 1 })
     expect(review.files.find((f) => f.path === 'added.txt')).toMatchObject({ addedLines: 1, removedLines: 0 })

@@ -2,7 +2,7 @@
 
 Audited against the checkout on 2026-10-18. This lists unfinished work only. Completed implementation plans are deleted; current behavior belongs in the feature guides. Remove an item when it is finished, and delete a plan when nothing remains in it.
 
-Each plan follows the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) and names its smallest usable delivery. Implement complete human workflows through existing Ramu surfaces and services; later phases are separate increments, not a requirement to build every listed capability before shipping. Keep mandatory security, accessibility and correctness checks for each delivered flow.
+Each plan follows the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) and is implemented in full. Build complete human workflows through existing Ramu surfaces and services, so each one makes the person's work easier. Keep mandatory security, accessibility and correctness checks for each delivered flow.
 
 ## Feature work
 

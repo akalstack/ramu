@@ -1,6 +1,6 @@
 # Provider-aware thread titles
 
-## Human need and smallest delivery
+## Human need and delivery
 
 People need to recognize a thread later without paying for duplicate title generation or losing a name they chose. Prefer a useful title already supplied by the active provider, then use Ramu's isolated generation when no title is available. Keep the opening-message title as an immediate placeholder and preserve the existing Rename and Regenerate title actions on desktop and mobile.
 

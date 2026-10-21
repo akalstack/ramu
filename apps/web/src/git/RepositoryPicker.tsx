@@ -22,6 +22,7 @@ export function RepositoryPicker({
   onSyncAll,
   onPublishRepository,
   pullMode,
+  syncing = false,
 }: {
   taskId: string
   bindings: RepositoryBinding[]
@@ -29,9 +30,10 @@ export function RepositoryPicker({
   onChange: (repoId: string) => void
   onBranchChange: (binding: RepositoryBinding, branch: string) => void
   onSync: (binding: RepositoryBinding) => void
-  onSyncAll: () => void
+  onSyncAll: (bindings: RepositoryBinding[]) => void
   onPublishRepository: (binding: RepositoryBinding) => void
   pullMode: PullMode
+  syncing?: boolean
 }) {
   useLanguage()
   const [open, setOpen] = useState(false)
@@ -51,6 +53,10 @@ export function RepositoryPicker({
       enabled: open,
     })),
   })
+  const syncable = bindings.filter((_binding, index) => {
+    const status = statuses[index]?.data
+    return status?.branch && status.remote && !status.detached && !status.operation
+  })
   const selected = bindings.find((binding) => binding.repoId === value)
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -69,12 +75,15 @@ export function RepositoryPicker({
           <Button
             variant="ghost"
             className="min-h-6 gap-1.5 px-1.5 py-0 text-caption!"
+            disabled={syncing || !syncable.length}
             onClick={() => {
-              setOpen(false)
-              onSyncAll()
+              onSyncAll(syncable)
             }}
           >
-            <RefreshCcw data-icon="inline-start" />
+            <RefreshCcw
+              data-icon="inline-start"
+              className={syncing ? 'animate-spin motion-reduce:animate-none' : undefined}
+            />
             {t('Sync all')}
           </Button>
         </div>
@@ -90,6 +99,7 @@ export function RepositoryPicker({
                   className="min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-caption!"
                   aria-pressed={binding.repoId === value}
                   title={binding.cwd}
+                  disabled={syncing}
                   onClick={() => onChange(binding.repoId)}
                 >
                   <Check className={binding.repoId === value ? 'shrink-0' : 'invisible shrink-0'} aria-hidden="true" />
@@ -99,6 +109,7 @@ export function RepositoryPicker({
                   {result.data ? (
                     <RepositoryBranchControl
                       taskId={taskId}
+                      syncing={syncing}
                       binding={binding}
                       status={result.data}
                       branches={branchResult.data ?? []}
@@ -127,9 +138,11 @@ export function RepositoryPicker({
 
 function RepositoryBranchControl({
   taskId,
+  syncing,
   ...props
 }: {
   taskId: string
+  syncing: boolean
   binding: RepositoryBinding
   status: GitStatus
   branches: GitBranchInfo[]
@@ -138,7 +151,8 @@ function RepositoryBranchControl({
   onPublishRepository: () => void
   pullMode: PullMode
 }) {
-  const busy = useGitBusy(taskId, props.binding.repoId)
+  const repoBusy = useGitBusy(taskId, props.binding.repoId)
+  const busy = repoBusy || syncing
   return (
     <div className="flex min-w-0 items-center gap-1">
       <BranchPicker {...props} busy={busy} className="min-w-0 flex-1 text-caption!" />

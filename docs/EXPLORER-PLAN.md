@@ -2,7 +2,7 @@
 
 Mobile now has a Home/project Browse files action, a visible thread Explorer action, lazy scoped tree, bounded directory API and shared file viewer. Home browsing creates no conversation/worktree, and standalone browsing creates no working folder. Current behavior is in [UI](UI.md#mobile-explorer).
 
-## Smallest usable delivery
+## Delivery
 
 A person opens files from Home or a thread, recognizes the host and checkout, reads the intended file and adds it to an agent message without sending it. Prioritize correct scope, existing-workspace selection and return to the intact draft. File management and additional preview formats are later increments; basic browsing must work without them. Reuse the current tree/viewer and verify the full browse-to-draft flow with duplicate filenames and an unavailable host. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

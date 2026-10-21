@@ -2,7 +2,7 @@
 
 Remaining work after the server access-boundary changes. Current policy and configuration are documented in [Security](../SECURITY.md#remote-access).
 
-## Smallest usable delivery
+## Delivery
 
 A person pairs a device with a clear access role, uses its permitted thread actions, and can recover an expired or changed connection through existing host/device settings. Deliver renewal, viewer controls and native transport independently where their prerequisites permit; transport protections remain release gates. Explain connection/access problems with a concrete next action rather than proof/token terminology. Optional client-key evaluation must demonstrate a benefit before becoming implementation scope or adding user controls. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

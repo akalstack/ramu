@@ -4,7 +4,7 @@ Current behavior is in [UI](UI.md#workspace-defaults-and-branch-names).
 
 Default automatic project selection, the retained Auto/manual project dropdown, Settings control, ambiguity handling and pre-thread routing are planned in [Assistant workflow](ASSISTANT-WORKFLOW-PLAN.md#1-automatic-project-selection-default). Resolve the project before applying workspace defaults; explicit project and draft choices take precedence over routing and global defaults.
 
-## Smallest usable delivery
+## Delivery
 
 A person starts a thread with the host default or chooses an existing workspace, sees where the agent will work and can correct the choice before creation. Prioritize preserved draft/outbox intent and scope; manual/generated branch controls remain optional details and never a prerequisite for starting work with a valid default. Validate creation and reconnect from both Home and a scoped entry point, with the displayed checkout matching files, terminal and agent execution. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 

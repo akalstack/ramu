@@ -1,3 +1,4 @@
+import { readSyncConfirmation } from '@ramu/shared/protectedBranch'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -352,8 +353,29 @@ export default function SourceControl() {
         ],
       )
     }, 'Review discard preview')
-  const sync = () =>
-    void run(() => store.invoke(chat!.computerId, 'git.sync', chat!.taskId, binding!.repoId), 'Synced changes')
+  const syncRepo = async () => {
+    if (!chat || !binding) throw new Error('Select a repository first.')
+    try {
+      await store.invoke(chat.computerId, 'git.sync', chat.taskId, binding.repoId)
+    } catch (error) {
+      const approval = readSyncConfirmation(error)
+      if (!approval) throw error
+      const approved = await new Promise<boolean>((resolve) =>
+        Alert.alert(
+          'Push to a protected branch?',
+          `${binding.repoName} · ${approval.branch} → ${approval.targetBranch}`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Sync anyway', onPress: () => resolve(true) },
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) },
+        ),
+      )
+      if (!approved) throw new Error('Sync cancelled. Nothing was pushed.')
+      await store.invoke(chat.computerId, 'git.sync', chat.taskId, binding.repoId, approval)
+    }
+  }
+  const sync = () => void run(syncRepo, 'Synced changes')
   const generate = async () => {
     if (hasConflicts) throw new Error('Resolve conflicts before committing.')
     if (!chat || !binding) throw new Error('Select a repository first.')
@@ -399,7 +421,8 @@ export default function SourceControl() {
       setMessage('')
       setDraft(null)
       if (action === 'push' || action === 'sync')
-        await store.invoke(chat.computerId, action === 'push' ? 'git.push' : 'git.sync', chat.taskId, binding.repoId)
+        if (action === 'push') await store.invoke(chat.computerId, 'git.push', chat.taskId, binding.repoId)
+        else await syncRepo()
     }, 'Commit completed')
   const label = ACTIONS.find((a) => a.key === action)!.label
   const gitAction = (

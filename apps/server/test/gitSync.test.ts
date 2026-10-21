@@ -41,7 +41,7 @@ describe('Sync and pull modes', () => {
     commit(theirs, 'theirs.txt', 'theirs\n', 'Theirs')
     sh(theirs, 'push', '-q')
     commit(mine, 'mine.txt', 'mine\n', 'Mine')
-    await git.sync(mine, 'rebase')
+    await git.sync(mine, 'rebase', { branch: 'main', oid: sh(mine, 'rev-parse', 'HEAD'), targetBranch: 'main' })
     expect(parents(mine)).toBe(1)
     expect(sh(mine, 'log', '--format=%s')).toBe('Mine\nTheirs\nBase')
     expect(sh(remote, 'log', '-1', '--format=%s', 'main')).toBe('Mine')
@@ -67,9 +67,13 @@ describe('Sync and pull modes', () => {
     sh(theirs, 'push', '-q')
     commit(mine, 'shared.txt', 'mine\n', 'My edit')
     const head = sh(mine, 'rev-parse', 'HEAD')
-    await expect(git.sync(mine, 'rebase')).rejects.toThrow(/conflict in 1 file.*Abort the rebase. Nothing was pushed/)
+    await expect(
+      git.sync(mine, 'rebase', { branch: 'main', oid: sh(mine, 'rev-parse', 'HEAD'), targetBranch: 'main' }),
+    ).rejects.toThrow(/conflict in 1 file.*Abort the rebase. Nothing was pushed/)
     expect((await git.status(mine)).operation).toBe('rebase')
-    await expect(git.sync(mine, 'rebase')).rejects.toThrow(/rebase is in progress/)
+    await expect(
+      git.sync(mine, 'rebase', { branch: 'main', oid: sh(mine, 'rev-parse', 'HEAD'), targetBranch: 'main' }),
+    ).rejects.toThrow(/rebase is in progress/)
     await expect(git.continueOperation(mine)).rejects.toThrow(/Resolve and stage/)
     expect(sh(remote, 'log', '-1', '--format=%s', 'main')).toBe('Theirs edit') // nothing pushed after the failed pull
     await git.abortOperation(mine)
@@ -106,7 +110,7 @@ describe('Sync and pull modes', () => {
   it('publishes a branch without an upstream', async () => {
     sh(mine, 'switch', '-q', '-c', 'topic')
     commit(mine, 'topic.txt', 'topic\n', 'Topic')
-    await git.sync(mine, 'rebase')
+    await git.sync(mine, 'rebase', { branch: 'main', oid: sh(mine, 'rev-parse', 'HEAD'), targetBranch: 'main' })
     expect(sh(remote, 'log', '-1', '--format=%s', 'topic')).toBe('Topic')
   })
   it.each(['rebase', 'merge', 'ff-only'] as const)('%s Pull autostashes and restores working changes', async (mode) => {
@@ -130,7 +134,7 @@ describe('Sync and pull modes', () => {
       if (staged) sh(mine, 'add', 'shared.txt')
       writeFileSync(join(mine, 'untracked.txt'), 'keep this\n')
       sh(mine, 'config', 'rebase.autoStash', 'false')
-      await git.sync(mine, 'rebase')
+      await git.sync(mine, 'rebase', { branch: 'main', oid: sh(mine, 'rev-parse', 'HEAD'), targetBranch: 'main' })
       expect(readFileSync(join(mine, 'shared.txt'), 'utf8')).toBe('working edit\n')
       expect(readFileSync(join(mine, 'untracked.txt'), 'utf8')).toBe('keep this\n')
       expect(sh(mine, 'log', '--format=%s')).toBe('Local\nRemote\nBase')
@@ -143,7 +147,9 @@ describe('Sync and pull modes', () => {
     sh(theirs, 'push', '-q')
     commit(mine, 'mine.txt', 'local\n', 'Local')
     writeFileSync(join(mine, 'shared.txt'), 'working edit\n')
-    await expect(git.sync(mine, 'rebase')).rejects.toThrow(/autostashed changes caused conflicts.*Nothing was pushed/)
+    await expect(
+      git.sync(mine, 'rebase', { branch: 'main', oid: sh(mine, 'rev-parse', 'HEAD'), targetBranch: 'main' }),
+    ).rejects.toThrow(/autostashed changes caused conflicts.*Nothing was pushed/)
     expect(sh(remote, 'log', '-1', '--format=%s', 'main')).toBe('Remote')
     expect((await git.status(mine)).entries.some((entry) => entry.staged === 'unmerged')).toBe(true)
     expect(await git.stashes(mine)).toHaveLength(1)
@@ -363,4 +369,43 @@ it('does not push a different branch after committing', async () => {
   sh(mine, 'switch', '-q', 'main')
   await expect(git.push(mine, 'feature/original')).rejects.toThrow(/Nothing was pushed/)
   expect(sh(remote, 'log', '-1', '--format=%s', 'main')).toBe('Base')
+})
+
+describe('protected branch sync', () => {
+  it('pulls a protected branch without confirmation when there is nothing to push', async () => {
+    commit(theirs, 'remote.txt', 'remote\n', 'Remote update')
+    sh(theirs, 'push', '-q')
+    await git.sync(mine)
+    expect(sh(mine, 'rev-parse', 'HEAD')).toBe(sh(remote, 'rev-parse', 'main'))
+  })
+  it('requires confirmation before pushing, and leaves the remote unchanged when approval is absent or stale', async () => {
+    const original = sh(remote, 'rev-parse', 'main')
+    commit(mine, 'local.txt', 'local\n', 'Local update')
+    await expect(git.sync(mine)).rejects.toThrow('Protected branch confirmation required:')
+    await expect(git.sync(mine, 'rebase', { branch: 'main', oid: original, targetBranch: 'main' })).rejects.toThrow(
+      'Protected branch confirmation required:',
+    )
+    expect(sh(remote, 'rev-parse', 'main')).toBe(original)
+    await git.sync(mine, 'rebase', { branch: 'main', oid: sh(mine, 'rev-parse', 'HEAD'), targetBranch: 'main' })
+    expect(sh(remote, 'rev-parse', 'main')).toBe(sh(mine, 'rev-parse', 'HEAD'))
+  })
+  it('protects publishing a branch without an upstream even though its ahead count is zero', async () => {
+    sh(mine, 'checkout', '-qb', 'staging')
+    expect((await git.status(mine)).ahead).toBe(0)
+    await expect(git.sync(mine)).rejects.toThrow('Protected branch confirmation required:')
+    expect(sh(remote, 'branch', '--list', 'staging')).toBe('')
+  })
+  it('protects a feature branch that pushes to a protected upstream', async () => {
+    sh(mine, 'checkout', '-qb', 'feature')
+    sh(mine, 'branch', '--set-upstream-to=origin/main')
+    commit(mine, 'local.txt', 'local\n', 'Local update')
+    await expect(git.sync(mine)).rejects.toThrow('"targetBranch":"main"')
+    expect(sh(remote, 'log', '-1', '--format=%s', 'main')).toBe('Base')
+  })
+  it('allows a feature branch to sync without confirmation', async () => {
+    sh(mine, 'checkout', '-qb', 'feature')
+    commit(mine, 'local.txt', 'local\n', 'Feature update')
+    await git.sync(mine)
+    expect(sh(remote, 'rev-parse', 'feature')).toBe(sh(mine, 'rev-parse', 'HEAD'))
+  })
 })
