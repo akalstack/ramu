@@ -29,7 +29,7 @@ export type ComputerAction =
   | { kind: 'drag'; fromX: number; fromY: number; toX: number; toY: number }
 
 export interface ComputerCapture {
-  mimeType: 'image/jpeg' | 'image/webp'
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp'
   /** Base64 image data. Never stored in transcript events. */
   data: string
   width: number

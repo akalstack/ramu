@@ -26,6 +26,7 @@ import type { KeyedLock } from './keyedLock'
 import type { FileWatchers } from './watchers'
 
 export interface Services {
+  computer?: import('../computer/service').ComputerService
   hostBrowser?: import('../browser/hostBrowser').HostBrowser
   browser?: import('../browser/desktopBroker').DesktopBrowserBroker
   getSharedMcp?: () => import('../mcp/service').SharedMcpService

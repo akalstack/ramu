@@ -62,6 +62,9 @@ import { ThreadTitles } from './agent/threadTitles'
 import { DesktopBrowserBroker } from './browser/desktopBroker'
 import { INTEGRATED_BROWSER_GUIDE, registerBrowserTools } from './browser/tools'
 import { HostBrowser } from './browser/hostBrowser'
+import { MacosComputerBackend } from './computer/macos'
+import { ComputerService } from './computer/service'
+import { COMPUTER_GUIDE, registerComputerTools } from './computer/tools'
 import { TerminalService } from './workspace/pty'
 import { createDispatcher } from './ipc'
 import { ScheduleService, scheduleSchema } from './background/schedules'
@@ -207,6 +210,7 @@ const mobilePush = new MobilePush(
   fetch,
   (sessionId) => schedules.hasSession(sessionId),
 )
+const computer = new ComputerService(new MacosComputerBackend())
 const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {
@@ -215,6 +219,9 @@ const agents = new AgentService(
       browserAccessEpochs.set(sessionId, (browserAccessEpochs.get(sessionId) ?? 0) + 1)
       try {
         browserBroker.endRun(agents.get(sessionId).taskId, sessionId)
+      } catch {}
+      try {
+        computer.endRun(agents.get(sessionId).taskId, sessionId)
       } catch {}
     }
     threadTitles?.observe(sessionId, event)
@@ -378,6 +385,7 @@ const dispatcher = createDispatcher(
     getSharedMcp,
     browser: browserBroker,
     hostBrowser,
+    computer,
     terminals,
     agents,
     threadTitles,
@@ -638,6 +646,14 @@ const mcpHttp = createServer(async (req, res) => {
       () => browserTokens.get(source.id) === token,
       (detail, signal) => agents.requestPermission(source.id, 'Ramu integrated browser', detail, signal),
       () => browserAccessEpochs.get(source.id) ?? 0,
+    )
+  if (!review && workspace.getAppState<boolean>('computer:enabled', false) === true)
+    registerComputerTools(
+      server,
+      computer,
+      source,
+      () => agents.get(source.id),
+      () => browserTokens.get(source.id) === token,
     )
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
@@ -915,10 +931,14 @@ agents.toolConnection = (session) => {
     url: `http://127.0.0.1:${address.port}/mcp`,
     token,
     ...(review ? { restricted: true } : {}),
-    ...(!review &&
-    (browserPreferences?.providerOverrides[session.provider] ?? browserPreferences?.agentBrowser) === 'integrated'
-      ? { browserInstructions: INTEGRATED_BROWSER_GUIDE }
-      : {}),
+    ...(() => {
+      if (review) return {}
+      const integrated =
+        (browserPreferences?.providerOverrides[session.provider] ?? browserPreferences?.agentBrowser) === 'integrated'
+      const computerOn = workspace.getAppState<boolean>('computer:enabled', false) === true
+      const parts = [...(integrated ? [INTEGRATED_BROWSER_GUIDE] : []), ...(computerOn ? [COMPUTER_GUIDE] : [])]
+      return parts.length ? { browserInstructions: parts.join('\n\n') } : {}
+    })(),
     ...(mcpConfigDirs.length ? { mcpConfigDirs } : {}),
     ...(skillsDir ? { skillsDir } : {}),
   }

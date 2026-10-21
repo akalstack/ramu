@@ -4,7 +4,11 @@ Implementation proposal, 2026-10-19. This planning change does not install a com
 
 ## Already in place
 
-The shared control-lease rules for human takeover (`packages/shared/src/control/lease.ts`) are in place and tested: one controller at a time, an ownership generation that advances on every change, queued agent work refused during human control, input that waits for earlier in-flight work to settle, pause on controller disconnect without handing control back, and a required fresh observation after release. Nothing uses them yet.
+- Shared control-lease rules (`packages/shared/src/control/lease.ts`) and the server session/service/tools (`apps/server/src/computer/`): one controller at a time, observation-gated agent actions, takeover that drops queued agent work, pause on controller disconnect, viewer grants per device. Covered by `apps/server/test/computer*.test.ts`.
+- A local macOS backend (`computer/macos.ts`) using `screencapture` for the main display and Quartz events through `osascript` for input. It is a stand-in for the Cua Driver below and cannot confine capture or input to one app.
+- `computer.*` IPC handlers, the agent tool family (registered only while **Settings → Browser → Computer use** is on), a per-thread **Computer** tray with approve, take control, give control back, stop and revoke, and a polling viewer dialog with click, text and key input.
+
+Not yet in place: a real macOS capture and action on a packaged build (this environment denies Screen Recording), app/window-scoped grants, the mobile viewer, an enrolled remote broker so desktop B can drive computer A, frame subscription with backpressure, and per-provider image delivery checks.
 
 ## Human need and delivery
 
@@ -71,7 +75,7 @@ Show **Connecting**, **Live**, **Last frame · time**, **Disconnected** and **Co
 
 ## Ordered implementation and acceptance
 
-Deferred native prerequisite (2026-10-21): `command -v cua-driver` found no installed Driver. The pinned TypeScript package declares version 0.36.0 and MIT; its README describes supported embedded/standalone permission ownership. Installation, packaged macOS identity, Screen Recording/Accessibility grants and a representative native capture/action still need explicit setup and acceptance. No computer runtime has been enabled, and source inspection is not backend proof. Browser delivery remains the current implementation priority.
+Native prerequisite (2026-10-21): `command -v cua-driver` found no installed Driver, so the shipped backend is the macOS-native stand-in above. Packaged identity, Screen Recording and Accessibility grants and a representative capture and action still need explicit acceptance on a real machine.
 
 1. **Prove the backend boundary.** On the supported macOS version, use a pinned Cua Driver build through a supported grant-owning host. Verify app/window capture, bounded actions, image delivery through one existing provider, cancellation and packaged identity/permissions. Confirm that the authorized capture supports mobile-friendly refresh without FSL dependencies. If this fails, evaluate UI-TARS operator components against the same gates and update the decision before expanding architecture.
 2. **Ship the complete first flow.** Implement contracts, broker/service, thread tools/activity, explicit setup/grants, mobile viewer and remote-desktop pane with human takeover together. Unit/integration checks cover roles/grants, cross-host denial, local-versus-remote identity, unsupported/old hosts/providers, stale observations, frame bounds, human/agent ownership, Stop/revocation and reconnect. Use fake brokers/providers for deterministic checks.

@@ -146,7 +146,33 @@ export interface MobileLiveActivityRegistration {
   environment: 'sandbox' | 'production'
 }
 
+export interface ComputerSessionSummary {
+  target: import('./computerBridge').ComputerTarget
+  controller: import('./control/lease').Controller
+  generation: number
+  paused: boolean
+}
+
+type ComputerFrameMeta = import('./computerBridge').ComputerFrameMeta
+type ComputerAction = import('./computerBridge').ComputerAction
+
 export interface RamuMethods {
+  'computer.status'(): {
+    enabled: boolean
+    runtime: import('./computerBridge').ComputerRuntimeStatus
+  }
+  'computer.setEnabled'(enabled: boolean): void
+  'computer.grant'(threadId: string, scope: { observe: boolean; input: boolean }): ComputerSessionSummary | null
+  'computer.revoke'(threadId: string): void
+  'computer.grantViewer'(threadId: string, deviceId: string, input: boolean): void
+  'computer.revokeViewer'(threadId: string, deviceId: string): void
+  'computer.session'(threadId: string): ComputerSessionSummary | null
+  'computer.takeControl'(threadId: string): ComputerSessionSummary | null
+  'computer.giveToAgent'(threadId: string): ComputerSessionSummary | null
+  'computer.stop'(threadId: string): ComputerSessionSummary | null
+  'computer.frame'(threadId: string): ComputerFrameMeta & { id: string; mimeType: string; data: string }
+  'computer.input'(threadId: string, generation: number, capturedAt: number, action: ComputerAction): void
+  'computer.disconnect'(threadId: string): void
   'hostBrowser.status'(): { available: boolean; enabled?: boolean; location?: 'execution-host-chromium'; reason?: string }
   'hostBrowser.setup'(): void
   'hostBrowser.profiles'(): BrowserProfileCatalog

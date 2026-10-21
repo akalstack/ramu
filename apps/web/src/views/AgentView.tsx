@@ -1,4 +1,5 @@
 import { McpStatusDialog } from './agent/components/McpStatusDialog'
+import { ComputerActivity } from '../chat/ComputerActivity'
 import { BrowserActivity, OpenBrowserButton, useBrowserActivity } from '../chat/BrowserActivity'
 import { BackgroundTerminalsSection, useBackgroundTerminals } from '../chat/BackgroundTerminals'
 import { ConfirmStopDialog } from '../chat/ConfirmStopDialog'
@@ -756,6 +757,7 @@ export const AgentView = memo(function AgentView({
                   )}
                   {hostOffline && <HostWaitNote name={hostName} />}
                   {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
+                  <ComputerActivity taskId={session && !session.parentId ? session.taskId : undefined} visible={visible} />
                   {backgroundTerminals.terminals.length > 0 && (
                     <BackgroundTerminalsSection state={backgroundTerminals} />
                   )}

@@ -21,6 +21,27 @@ export class ComputerService {
     return session
   }
 
+  /** Devices the owner allowed to watch (and optionally drive) a thread's computer. The owning host is always allowed. */
+  private viewers = new Map<string, Map<string, { input: boolean }>>()
+
+  grantViewer(threadId: string, deviceId: string, input: boolean) {
+    const devices = this.viewers.get(threadId) ?? new Map()
+    devices.set(deviceId, { input })
+    this.viewers.set(threadId, devices)
+  }
+
+  revokeViewer(threadId: string, deviceId: string) {
+    this.viewers.get(threadId)?.delete(deviceId)
+    this.session(threadId)?.controllerDisconnected(deviceId)
+  }
+
+  /** `observe` and `input` need an explicit grant for any device but the owning host (`local`). */
+  viewerAccess(threadId: string, deviceId: string): { observe: boolean; input: boolean } {
+    if (deviceId === 'local') return { observe: true, input: true }
+    const entry = this.viewers.get(threadId)?.get(deviceId)
+    return { observe: !!entry, input: !!entry?.input }
+  }
+
   session(threadId: string): ComputerSession | undefined {
     return this.sessions.get(threadId)
   }
@@ -28,6 +49,7 @@ export class ComputerService {
   revoke(threadId: string) {
     this.sessions.get(threadId)?.revoke()
     this.sessions.delete(threadId)
+    this.viewers.delete(threadId)
   }
 
   /** The run exited or Stop was pressed: revoke its lease and queued actions; the grant stays for the next run. */
