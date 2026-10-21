@@ -128,6 +128,7 @@ export class AgentService {
       get capturing() {
         return parts.dispatcher.capturing
       },
+      cancelPendingStarts: (...a) => parts.subagents.cancelPendingStarts(...a),
       catalog: (...a) => this.catalog(...a),
       get childRequests() {
         return parts.requests.childRequests

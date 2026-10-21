@@ -153,8 +153,10 @@ describe('AgentService', () => {
   it('repairs an older shutdown stop after a successful result but retains genuinely interrupted work', async () => {
     const svc = new AgentService(db, () => {}, demoQuery)
     const finished = svc.start('t', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
+    // A second writer in the same checkout is refused while the first is working.
+    await until(() => svc.get(finished.id).state === 'idle')
     const interrupted = svc.start('t2', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
-    await until(() => svc.get(finished.id).state === 'idle' && svc.get(interrupted.id).state === 'idle')
+    await until(() => svc.get(interrupted.id).state === 'idle')
     svc.stopAll()
     const record = (id: string, event: AgentEvent) =>
       (svc as unknown as { record(id: string, event: AgentEvent): void }).record(id, event)
@@ -184,9 +186,16 @@ describe('AgentService', () => {
     await until(() => svc.get(parent.id).state === 'idle')
     const record = (task: AgentTask) =>
       (svc as unknown as { record(id: string, event: AgentEvent): void }).record(parent.id, { kind: 'agent', ...task })
-    record({ agentId: 'stopped', name: 'Stopped', status: 'running' })
-    record({ agentId: 'stopped', name: 'Stopped', status: 'stopped' })
-    record({ agentId: 'stopped', name: 'Late progress', status: 'running', background: true })
+    // Late progress goes through the service, which refuses to revive a stopped helper.
+    const update = (agentId: string, patch: Partial<AgentTask>) =>
+      (svc as unknown as { updateTask(id: string, agentId: string, patch: Partial<AgentTask>): void }).updateTask(
+        parent.id,
+        agentId,
+        patch,
+      )
+    update('stopped', { name: 'Stopped', status: 'running' })
+    update('stopped', { name: 'Stopped', status: 'stopped' })
+    update('stopped', { name: 'Late progress', status: 'running', background: true })
     record({ agentId: 'failed', name: 'Failed', status: 'failed' })
     record({ agentId: 'advisor', name: 'Advisor', status: 'running', taskType: 'advisor' })
     record({ agentId: 'recovered', name: 'Recovered', status: 'running', background: true, recovered: true })
@@ -798,15 +807,13 @@ describe('AgentService', () => {
 
     await svc.send(s.id, 'again')
     await until(() => svc.events(s.id).some((e) => e.kind === 'text' && e.text === 'echo:again'))
+    await until(() => svc.get(s.id).state === 'idle')
+    // Stopping a finished chat is not an interruption: it stays finished rather than reading as stopped.
     svc.stop(s.id)
-    expect(svc.get(s.id).state).toBe('stopped')
-    expect(svc.events(s.id).findLast((event) => event.kind === 'state')).toMatchObject({
-      kind: 'state',
-      state: 'stopped',
-      at: expect.any(Number),
-    })
+    expect(svc.get(s.id).state).toBe('idle')
+    expect(svc.events(s.id).findLast((event) => event.kind === 'state')).not.toMatchObject({ state: 'stopped' })
     svc.stop(s.id)
-    expect(svc.events(s.id).filter((event) => event.kind === 'state' && event.state === 'stopped')).toHaveLength(1)
+    expect(svc.events(s.id).filter((event) => event.kind === 'state' && event.state === 'stopped')).toHaveLength(0)
   })
 
   it('tracks Claude sub-agents that outlive the turn, keeps their output apart, and relays messages and stops', async () => {

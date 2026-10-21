@@ -132,6 +132,12 @@ export class SubagentRunner {
   }
 
   private readonly pendingStarts = new Map<symbol, string>()
+  private readonly cancelledStarts = new Set<symbol>()
+
+  /** Stopping a thread cancels the sub-agents it was still choosing a model for, even when the thread itself had finished. */
+  cancelPendingStarts(parentId: string): void {
+    for (const [reservation, id] of this.pendingStarts) if (id === parentId) this.cancelledStarts.add(reservation)
+  }
 
   async spawnSubagent(
     parentId: string,
@@ -150,6 +156,7 @@ export class SubagentRunner {
       return await this.startSubagent(parentId, input, signal, forced, reservation)
     } finally {
       this.pendingStarts.delete(reservation)
+      this.cancelledStarts.delete(reservation)
     }
   }
 
@@ -195,7 +202,12 @@ export class SubagentRunner {
         target.reason = [target.reason, selection.note].filter(Boolean).join('; ')
       } else target.settings = capSubagentEffort(target.settings, selectionPrefs, catalogs)
     }
-    if (signal?.aborted || this.host.shutdown() || this.host.get(parentId).state === 'stopped')
+    if (
+      signal?.aborted ||
+      this.cancelledStarts.has(reservation) ||
+      this.host.shutdown() ||
+      this.host.get(parentId).state === 'stopped'
+    )
       throw new Error('Sub-agent start was cancelled.')
     await this.host.validateSettings(target.settings)
     const name = clipText(input.name?.trim() || input.description.trim() || 'Sub-agent', 80)
