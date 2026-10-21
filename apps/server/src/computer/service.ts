@@ -1,5 +1,4 @@
 import type { ComputerBackend, ComputerGrant } from '@ramu/shared/computerBridge'
-import type { KeepAwake } from './awake'
 import { ComputerSession } from './session'
 
 /** Sessions keyed by thread. A grant is bound to one target; a different target needs a new matching grant. */
@@ -8,7 +7,6 @@ export class ComputerService {
   constructor(
     readonly backend: ComputerBackend,
     private readonly now: () => number = Date.now,
-    private readonly awake?: KeepAwake,
   ) {}
 
   status() {
@@ -26,7 +24,6 @@ export class ComputerService {
       ? new ComputerSession(grant, runtime.backend, this.now, { id: runtime.id, name: runtime.name })
       : new ComputerSession(grant, this.backend, this.now)
     this.sessions.set(threadId, session)
-    this.awake?.acquire(threadId)
     return session
   }
 
@@ -63,7 +60,6 @@ export class ComputerService {
     this.sessions.get(threadId)?.revoke()
     this.sessions.delete(threadId)
     this.viewers.delete(threadId)
-    this.awake?.release(threadId)
   }
 
   /** The run exited or Stop was pressed: revoke its lease and queued actions; the grant stays for the next run. */

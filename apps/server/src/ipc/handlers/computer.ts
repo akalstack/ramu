@@ -49,6 +49,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
   computer,
   computerBroker: broker,
   computerVideo: video,
+  awake,
   host,
   workspace,
   agents,
@@ -100,6 +101,8 @@ export const registerComputerHandlers: RegisterHandlers = ({
         enabled: enabled(),
         runtime: computer ? computer.status() : ({ available: false, reason: 'unsupported' } as const),
         apps: computer?.backend instanceof ComputerRouter ? computer.backend.appStatus() : null,
+        // The host's own Keep awake setting decides whether it can sleep while an agent works on it.
+        keepAwake: awake.status().active,
       }),
     },
     'computer.setEnabled': {

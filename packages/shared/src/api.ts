@@ -170,6 +170,8 @@ export interface RamuMethods {
     runtime: import('./computerBridge').ComputerRuntimeStatus
     /** Whether a single app can be granted instead of the whole display; null on a host that cannot. */
     apps: import('./computerBridge').ComputerRuntimeStatus | null
+    /** Whether the host's Keep awake setting is holding it awake right now. */
+    keepAwake: boolean
   }
   /** Installs the pinned Open Computer Use release for app-scoped access. Owning host only. */
   'computer.installApps'(): { version: string }

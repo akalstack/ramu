@@ -33,6 +33,7 @@ import { Button, Card, Sheet, T, tap, type Icon } from './ui'
 import { formatDuration } from '../runtime/turns'
 import { Arrive, Breathe, Collapse, Disclosure } from './Motion'
 import { InteractiveVisibility } from './InteractiveVisibility'
+import { ProviderIcon } from './Logos'
 
 const toolIcons: Record<ToolKind, Icon> = {
   read: FileCode2,
@@ -46,6 +47,9 @@ const toolIcons: Record<ToolKind, Icon> = {
 
 /** Called before a row expands or collapses by hand; the screen keeps its scroll position instead of following the end. */
 export const RowToggle = createContext<() => void>(() => {})
+
+/** Drops the model change waiting for the next send; set by the chat screen that holds it. */
+export const CancelPendingSettings = createContext<() => void>(() => {})
 
 /** Gives every badge in a chat the chat's file opener. */
 export function ChatReferences({ chat, children }: { chat: Chat; children: ReactNode }) {
@@ -362,9 +366,10 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
   const store = useStore()
   const strings = useT()
   const [undoing, setUndoing] = useState(false)
+  const cancelPending = useContext(CancelPendingSettings)
   // As on the desktop: a settings change can be undone, restoring the previous settings for the next message.
   const undo =
-    item.previous && chat.sessionId
+    item.previous && chat.sessionId && !item.pending
       ? () => {
           tap()
           setUndoing(true)
@@ -388,20 +393,45 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
   }
   let title = item.goalNote ? (strings.goalNotes[item.goalNote] ?? item.title) : item.title
   if (item.title === 'Background command stop requested') title = translate(store.language, item.title)
+  // As on the desktop, each model carries its provider's mark: "[Claude] Opus Medium → [Codex] GPT-5.5 High".
+  let change: ReactNode = null
   if (item.settings) {
     const next = item.settings,
       before = item.previous
-    const changes = before
-      ? (
-          [
-            [label(before), label(next)],
-            [ACCESS[before.access], ACCESS[next.access]],
-          ] as const
-        )
-          .filter(([a, b]) => a !== b)
-          .map(([a, b]) => `${a} → ${b}`)
-      : []
-    title = changes.length ? changes.join(' · ') : before ? label(next) : [label(next), ACCESS[next.access]].join(' · ')
+    const model = (s: import('@ramu/shared/types').AgentSettings) => (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        <ProviderIcon provider={s.provider} size={13} />
+        <T size={font.caption} tone="muted">
+          {label(s)}
+        </T>
+      </View>
+    )
+    const modelChanged = !!before && (before.provider !== next.provider || label(before) !== label(next))
+    const others = (
+      before
+        ? ([[ACCESS[before.access], ACCESS[next.access]]] as const)
+            .filter(([a, b]) => a !== b)
+            .map(([a, b]) => `${a} → ${b}`)
+        : [ACCESS[next.access]]
+    ).join(' · ')
+    change = (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        {modelChanged ? (
+          <>
+            {model(before!)}
+            <T size={font.caption} tone="muted">
+              →
+            </T>
+          </>
+        ) : null}
+        {model(next)}
+        {others ? (
+          <T size={font.caption} tone="muted">
+            · {others}
+          </T>
+        ) : null}
+      </View>
+    )
   }
   return (
     <View
@@ -411,13 +441,31 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
     >
       <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: c.lineStrong }} />
       <View style={{ maxWidth: '78%', alignItems: 'center', gap: 2 }}>
-        <T size={font.caption} tone={item.failed ? 'bad' : 'muted'} style={{ textAlign: 'center' }}>
-          {title}
-        </T>
+        {change ?? (
+          <T size={font.caption} tone={item.failed ? 'bad' : 'muted'} style={{ textAlign: 'center' }}>
+            {title}
+          </T>
+        )}
         {item.detail ? (
           <T size={font.caption} tone="placeholder" style={{ textAlign: 'center' }}>
             {item.detail}
           </T>
+        ) : null}
+        {item.pending ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cancel the model change"
+            onPress={() => {
+              tap()
+              cancelPending()
+            }}
+            hitSlop={8}
+            style={{ marginTop: 2 }}
+          >
+            <T size={font.caption} weight="600" tone="accent">
+              {item.previous ? `Cancel · stay on ${label(item.previous)}` : 'Cancel'}
+            </T>
+          </Pressable>
         ) : null}
         {undo ? (
           <Pressable

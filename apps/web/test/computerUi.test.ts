@@ -23,9 +23,10 @@ it('explains why computer use is unavailable', () => {
       enabled: false,
       runtime: { available: false, reason: 'permission-denied', detail: 'Allow Screen Recording.' },
       apps: null,
+      keepAwake: true,
     }),
   ).toBe('Allow Screen Recording.')
   expect(
-    runtimeHelp({ enabled: true, runtime: { available: true, computer: { id: 'local', name: 'Studio' } }, apps: null }),
+    runtimeHelp({ enabled: true, runtime: { available: true, computer: { id: 'local', name: 'Studio' } }, apps: null, keepAwake: true }),
   ).toMatch(/Studio/)
 })

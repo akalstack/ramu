@@ -23,6 +23,7 @@ function setup(deviceId: string | undefined, admin: boolean) {
       setAppState: (key: string, value: unknown) => state.set(key, value),
     },
     agents: { list: () => [{ id: 'run1', state: 'running' }] },
+    awake: { status: () => ({ active: true }) },
   } as unknown as HandlerContext)
   const call = (name: string, ...args: unknown[]) => methods[name]!.run(...(methods[name]!.args.parse(args) as unknown[]))
   return { call, computer }

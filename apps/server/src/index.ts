@@ -65,7 +65,6 @@ import { HostBrowser } from './browser/hostBrowser'
 import { MacosComputerBackend } from './computer/macos'
 import { OcuBackend } from './computer/ocu'
 import { SckDisplayBackend } from './computer/sck'
-import { KeepAwake } from './computer/awake'
 import { BrokerHub } from './computer/broker'
 import { RtcViewers } from './computer/rtc'
 import { VideoFeed } from './computer/video'
@@ -233,11 +232,8 @@ const computerVideo = new RtcViewers(new VideoFeed(), (threadId, deviceId) => {
   const access = computer.viewerAccess(threadId, deviceId)
   return access.observe && !!computer.session(threadId)
 })
-const keepAwake = new KeepAwake()
 const computer = new ComputerService(
   new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), new OcuBackend()),
-  Date.now,
-  keepAwake,
 )
 const agents = new AgentService(
   db,
@@ -447,7 +443,6 @@ async function stop(intentional = false) {
   reviews.stop()
   await threadTitles?.stop()
   computerVideo.closeAll()
-  keepAwake.releaseAll()
   agents.stopAll(!intentional)
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))

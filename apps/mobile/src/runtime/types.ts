@@ -93,6 +93,8 @@ export type TranscriptItem = (
       limit?: { retryAt: number; guessed: boolean; provider?: import('@ramu/shared/types').AgentProvider }
       settings?: import('@ramu/shared/types').AgentSettings
       previous?: import('@ramu/shared/types').AgentSettings
+      /** A model change waiting for the next send: shown at the end of the chat, with no switch-back action. */
+      pending?: boolean
     }
   /** A finished turn's routine steps folded under "Worked for 12m 48s". */
   | { kind: 'summary'; id: string; label: string; items: TranscriptItem[] }

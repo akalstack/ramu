@@ -65,6 +65,8 @@ import { useSidePanels } from './agent/hooks/useSidePanels'
 import { useTurnPaging } from './agent/hooks/useTurnPaging'
 import { useContinueInNewChat } from './agent/hooks/useContinueInNewChat'
 import { useModelChange } from './agent/hooks/useModelChange'
+import { useJsonDraft } from '../composer/useJsonDraft'
+import { settingsMatch } from './agent/settingsMatch'
 import { useElapsed } from './agent/hooks/useElapsed'
 import { toBlocks } from './agent/lib/blocks'
 import { toTurns } from './agent/lib/turns'
@@ -99,6 +101,7 @@ import { SelectionActions } from './agent/components/SelectionActions'
 import { EditFromHereDialog } from './agent/components/EditFromHereDialog'
 import { MESSAGE_ACTION_EVENT, type MessageActionDetail } from './agent/components/MessageQuoteActions'
 import { WORKING_CLASS } from './agent/styles'
+import { PendingSettingsChange } from './agent/components/PendingSettingsChange'
 import { PendingSubmission } from './agent/components/PendingSubmission'
 import { pendingSubmissionVisible, type PendingSubmission as Submission } from './agent/lib/pendingSubmission'
 
@@ -130,8 +133,13 @@ export const AgentView = memo(function AgentView({
     error,
     setError,
   } = useAgentStream(view.sessionId)
-  const [attachments, setAttachments] = useState<Attachment[]>(
-    () => savedChat(view.sessionId, host.id)?.attachments ?? [],
+  // Uploaded files wait with the text for the next send, across chat switches and restarts.
+  const [attachments, setAttachments] = useJsonDraft<Attachment[]>(
+    `files:${view.sessionId}`,
+    host.id,
+    [],
+    (value): value is Attachment[] => Array.isArray(value) && value.every((file) => typeof file?.id === 'string'),
+    (files) => files.length === 0,
   )
   const [mcpOpen, setMcpOpen] = useState(false)
   useEffect(() => {
@@ -374,8 +382,13 @@ export const AgentView = memo(function AgentView({
     return () => el?.removeEventListener(MESSAGE_ACTION_EVENT, listener)
   }, [])
   /** Interactive Content from "Ask about this" waits as a chip and goes out as hidden context with the next message. */
-  const [contentAttachments, setContentAttachments] = useState<InteractiveAttachment[]>([])
-  useEffect(() => setContentAttachments([]), [host.id, view.sessionId])
+  const [contentAttachments, setContentAttachments] = useJsonDraft<InteractiveAttachment[]>(
+    `interactive:${view.sessionId}`,
+    host.id,
+    [],
+    (value): value is InteractiveAttachment[] => Array.isArray(value),
+    (items) => items.length === 0,
+  )
   useEffect(() => {
     const receive = (event: Event) => {
       const detail = (event as CustomEvent<InteractiveFollowupDetail>).detail
@@ -698,6 +711,15 @@ export const AgentView = memo(function AgentView({
                         />
                       </MessageScrollerItem>
                     ))}
+                    {pendingSettings && session && !busyAgent && !settingsMatch(pendingSettings, session.settings) && (
+                      <MessageScrollerItem messageId="pending-settings">
+                        <PendingSettingsChange
+                          next={pendingSettings}
+                          previous={session.settings}
+                          onCancel={() => setPendingSettings(null)}
+                        />
+                      </MessageScrollerItem>
+                    )}
                     {showingSubmission && pendingSubmission && (
                       <MessageScrollerItem messageId="pending-submission">
                         <PendingSubmission submission={pendingSubmission} />
@@ -757,7 +779,10 @@ export const AgentView = memo(function AgentView({
                   )}
                   {hostOffline && <HostWaitNote name={hostName} />}
                   {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
-                  <ComputerActivity taskId={session && !session.parentId ? session.taskId : undefined} visible={visible} />
+                  <ComputerActivity
+                    taskId={session && !session.parentId ? session.taskId : undefined}
+                    visible={visible}
+                  />
                   {backgroundTerminals.terminals.length > 0 && (
                     <BackgroundTerminalsSection state={backgroundTerminals} />
                   )}

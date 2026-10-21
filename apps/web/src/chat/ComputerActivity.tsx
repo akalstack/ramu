@@ -226,6 +226,7 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
   const [viewing, setViewing] = useState(false)
   const [apps, setApps] = useState<string[]>([])
   const [appHint, setAppHint] = useState('')
+  const [keepAwake, setKeepAwake] = useState(true)
   const [app, setApp] = useState('')
   const [runtimes, setRuntimes] = useState<{ id: string; name: string; online: boolean }[]>([])
   const [runtime, setRuntime] = useState('local')
@@ -234,6 +235,7 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
     const status = await invoke('computer.status').catch(() => null)
     const appsReady = !!status?.apps?.available
     setEnabled(!!status?.enabled && (status.runtime.available || appsReady))
+    setKeepAwake(status?.keepAwake ?? true)
     setAppHint(status?.apps && !status.apps.available ? (status.apps.detail ?? '') : '')
     setSession(status?.enabled ? await invoke('computer.session', taskId).catch(() => null) : null)
     if (status?.enabled && (appsReady || runtime !== 'local'))
@@ -342,6 +344,12 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
             {appHint && <span className="text-caption text-muted-foreground">{t(appHint)}</span>}
           </>
         )}
+        {session && !keepAwake && (
+          <span className="text-caption text-muted-foreground">
+            {t('This Mac may sleep when idle and stop the agent. Turn on Keep awake in Settings → System.')}
+          </span>
+        )}
+        {session && <ComputerSharing taskId={taskId} />}
         {error && (
           <span role="alert" className="text-caption text-destructive">
             {error}
