@@ -1,9 +1,10 @@
-/** At most one generated document executes in each application renderer. */
-let owner: (() => void) | undefined
-export function claimInteractive(stop: () => void): () => void {
-  owner?.()
-  owner = stop
+/** Bounds how many generated documents execute at once in each application renderer; the oldest claim stops first. */
+let owners: (() => void)[] = []
+export function claimInteractive(stop: () => void, limit = 1): () => void {
+  owners = owners.filter((owner) => owner !== stop)
+  owners.push(stop)
+  while (owners.length > Math.max(1, limit)) owners.shift()!()
   return () => {
-    if (owner === stop) owner = undefined
+    owners = owners.filter((owner) => owner !== stop)
   }
 }

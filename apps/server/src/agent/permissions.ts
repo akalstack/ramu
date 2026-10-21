@@ -30,6 +30,15 @@ export function createCanUseTool({ settings, pending, record, setState, restrict
       // Their handlers still enforce session scope and any tool-specific checks.
       if (settings.access === 'auto' && /^mcp__ramu__/.test(toolName))
         return resolve({ behavior: 'allow', updatedInput: toolInput })
+      // Browser handlers enforce their own run-scoped approval, including deferred calls. Asking twice would grant
+      // nothing extra; the browser approval never authorizes another app tool or a native provider browser.
+      if (
+        /^mcp__ramu__browser_/.test(toolName) ||
+        (toolName === 'mcp__ramu__tool_invoke' &&
+          typeof toolInput.name === 'string' &&
+          /^browser_/.test(toolInput.name))
+      )
+        return resolve({ behavior: 'allow', updatedInput: toolInput })
       // These scoped tools only manage questions; they never authorize file or command access.
       if (
         /^mcp__ramu__(ask_user|question_status|wait_for_answer|close_question|advisor|wait_for_advice|set_goal|get_goal|update_goal|tool_search|tool_result_read|memory_read|session_recall|session_search)$/.test(

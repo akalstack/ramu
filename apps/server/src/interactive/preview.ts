@@ -1,25 +1,12 @@
-import { existsSync } from 'node:fs'
 import { chromium } from 'playwright-core'
 import type { InteractiveCheck, InteractivePreview } from '@ramu/shared/interactive'
 import { interactiveHtml, INTERACTIVE_CSP } from '@ramu/shared/interactive'
 
-export function interactiveBrowserPath(): string | undefined {
-  return [
-    process.env.RAMU_INTERACTIVE_BROWSER,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/google-chrome',
-    ...(process.platform === 'win32'
-      ? [
-          `${process.env.PROGRAMFILES}\\Google\\Chrome\\Application\\chrome.exe`,
-          `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
-        ]
-      : []),
-  ].find((path) => path && existsSync(path))
-}
+import { ensureInteractiveBrowser } from './browser'
+export { interactiveBrowserPath } from './browser'
+
 let running = 0
-/** Isolated temporary browser, no saved profile, no network/assets outside the submitted bundle. */
+/** Isolated temporary browser with no saved profile. Only the document itself and https subresources load. */
 export async function previewInteractive(
   html: string,
   checks: InteractiveCheck[],
@@ -27,11 +14,6 @@ export async function previewInteractive(
 ): Promise<Omit<InteractivePreview, 'id' | 'digest' | 'createdAt'>> {
   if (signal?.aborted) throw new Error('Preview cancelled')
   if (running >= 2) throw new Error('Two previews are already running. Try again shortly.')
-  const executablePath = interactiveBrowserPath()
-  if (!executablePath)
-    throw new Error(
-      'Install Chromium/Chrome on the host or set RAMU_INTERACTIVE_BROWSER to its executable. No preview was validated.',
-    )
   running++
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -39,10 +21,11 @@ export async function previewInteractive(
     void browser?.close().catch(() => {})
   }
   try {
+    const executablePath = await ensureInteractiveBrowser(signal)
     browser = await chromium.launch({ executablePath, headless: true, chromiumSandbox: true, timeout: 10_000 })
     signal?.addEventListener('abort', close, { once: true })
     if (signal?.aborted) throw new Error('Preview cancelled')
-    timer = setTimeout(close, 20_000)
+    timer = setTimeout(close, 45_000)
     const context = await browser.newContext({
       viewport: { width: 390, height: 740 },
       serviceWorkers: 'block',
@@ -50,17 +33,21 @@ export async function previewInteractive(
       reducedMotion: 'reduce',
     })
     const source = interactiveHtml(html, 'preview')
-    await context.route('**/*', (route) =>
-      route.request().isNavigationRequest() &&
-      route.request().url() === 'https://ramu-content.invalid/' &&
-      route.request().frame() === page.mainFrame()
-        ? route.fulfill({
-            body: source,
-            contentType: 'text/html',
-            headers: { 'Content-Security-Policy': `${INTERACTIVE_CSP}; sandbox allow-scripts` },
-          })
-        : route.abort('blockedbyclient'),
-    )
+    await context.route('**/*', (route) => {
+      const request = route.request()
+      if (request.isNavigationRequest())
+        return request.url() === 'https://ramu-content.invalid/' && request.frame() === page.mainFrame()
+          ? route.fulfill({
+              body: source,
+              contentType: 'text/html',
+              headers: { 'Content-Security-Policy': `${INTERACTIVE_CSP}; sandbox allow-scripts` },
+            })
+          : route.abort('blockedbyclient')
+      // Same rule as the renderers' policy: remote https subresources load, anything else (http, local) does not.
+      return /^https:\/\//i.test(request.url()) && !request.url().startsWith('https://ramu-content.invalid/')
+        ? route.continue()
+        : route.abort('blockedbyclient')
+    })
     await context.routeWebSocket('**/*', (socket) => socket.close())
     const page = await context.newPage()
     page.setDefaultTimeout(2000)
@@ -68,13 +55,28 @@ export async function previewInteractive(
       void dialog.dismiss()
     })
     const errors: string[] = []
+    const logs: string[] = []
+    const failedRequests: string[] = []
     page.on('pageerror', (error) => {
       if (errors.length < 20) errors.push(error.message.slice(0, 1000))
     })
     page.on('console', (message) => {
-      if (message.type() === 'error' && errors.length < 20) errors.push(message.text().slice(0, 1000))
+      const type = message.type()
+      if (type === 'error') {
+        if (errors.length < 20) errors.push(message.text().slice(0, 1000))
+      } else if (['log', 'info', 'warning'].includes(type) && logs.length < 50)
+        logs.push(`${type === 'warning' ? 'warn' : type}: ${message.text().slice(0, 500)}`)
     })
-    await page.goto('https://ramu-content.invalid/', { waitUntil: 'load', timeout: 5000 })
+    const failed = (url: string, reason: string) => {
+      if (url.startsWith('https://ramu-content.invalid/') || failedRequests.length >= 20) return
+      failedRequests.push(`${url.slice(0, 300)} (${reason})`)
+    }
+    page.on('requestfailed', (request) => failed(request.url(), request.failure()?.errorText ?? 'failed'))
+    page.on('response', (response) => {
+      if (response.status() >= 400) failed(response.url(), `HTTP ${response.status()}`)
+    })
+    // Remote libraries need time to arrive; the document's own bytes are local.
+    await page.goto('https://ramu-content.invalid/', { waitUntil: 'load', timeout: 20_000 })
     const results: InteractivePreview['checks'] = []
     for (const check of checks) {
       try {
@@ -114,9 +116,9 @@ export async function previewInteractive(
     const screenshot = `data:image/png;base64,${(await page.screenshot({ timeout: 3000 })).toString('base64')}`
     // Report actual overflow at both widths; this is browser evidence, not native-device validation.
     await page.setViewportSize({ width: 900, height: 740 })
-    await page.screenshot({ timeout: 3000 })
+    const wideScreenshot = `data:image/png;base64,${(await page.screenshot({ timeout: 3000 })).toString('base64')}`
     await measure()
-    return { screenshot, height, checks: results, errors, layouts }
+    return { screenshot, wideScreenshot, height, checks: results, errors, logs, failedRequests, layouts }
   } finally {
     clearTimeout(timer)
     signal?.removeEventListener('abort', close)

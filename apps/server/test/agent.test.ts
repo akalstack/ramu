@@ -141,6 +141,43 @@ beforeEach(() => {
 afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
 describe('AgentService', () => {
+  it('keeps a completed turn idle when its attached provider is stopped during shutdown', async () => {
+    const svc = new AgentService(db, () => {}, demoQuery)
+    const session = svc.start('t', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
+    await until(() => svc.get(session.id).state === 'idle')
+    svc.stopAll()
+    expect(svc.get(session.id).state).toBe('idle')
+    expect(svc.events(session.id).at(-1)).not.toMatchObject({ kind: 'state', state: 'stopped' })
+  })
+
+  it('repairs an older shutdown stop after a successful result but retains genuinely interrupted work', async () => {
+    const svc = new AgentService(db, () => {}, demoQuery)
+    const finished = svc.start('t', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
+    const interrupted = svc.start('t2', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
+    await until(() => svc.get(finished.id).state === 'idle' && svc.get(interrupted.id).state === 'idle')
+    svc.stopAll()
+    const record = (id: string, event: AgentEvent) =>
+      (svc as unknown as { record(id: string, event: AgentEvent): void }).record(id, event)
+    record(finished.id, { kind: 'state', state: 'stopped' })
+    record(interrupted.id, { kind: 'user', text: 'Unfinished next turn' })
+    record(interrupted.id, { kind: 'state', state: 'stopped' })
+    db.prepare("UPDATE agent_sessions SET state='stopped' WHERE id IN (?,?)").run(finished.id, interrupted.id)
+    const restored = new AgentService(db, () => {}, demoQuery)
+    restored.markRestoredOnBoot()
+    expect(restored.get(finished.id).state).toBe('restored')
+    expect(restored.events(finished.id).at(-1)).toMatchObject({ kind: 'state', state: 'restored' })
+    expect(restored.get(interrupted.id).state).toBe('stopped')
+    restored.stopAll()
+  })
+
+  it('does not replace a failed outcome with stopped during provider cleanup', async () => {
+    const svc = new AgentService(db, () => {}, demoQuery)
+    const session = svc.start('t', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
+    await until(() => svc.get(session.id).state === 'idle')
+    db.prepare("UPDATE agent_sessions SET state='failed' WHERE id=?").run(session.id)
+    svc.stopAll()
+    expect(svc.get(session.id).state).toBe('failed')
+  })
   it('keeps native helper outcomes truthful and excludes advisors and recovered work from active overview rows', async () => {
     const svc = new AgentService(db, () => {}, demoQuery)
     const parent = svc.start('t', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)

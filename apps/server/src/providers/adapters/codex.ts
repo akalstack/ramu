@@ -16,6 +16,7 @@ function codexEmail(env: NodeJS.ProcessEnv): string | undefined {
 
 export const codexAdapter = defineAdapter({
   id: 'codex',
+  browser: { integratedTools: true, providerBrowser: true, canSuppressNative: false },
   selectionTransition: { type: 'restart-and-resume' },
   binaryEnvVar: 'RAMU_CODEX_BIN',
   executableNames: () => ['codex'],

@@ -61,6 +61,26 @@ const user = { hostId: 'h', threadId: 't' }
 const run = { hostId: 'h', threadId: 't', runId: 'r1' }
 
 describe('urls', () => {
+  it('dispatches hover and drag to the snapshot-bound page actions', async () => {
+    const { runtime, created } = setup()
+    const opened = await runtime.open(run, 'https://a.test')
+    for (const kind of ['hover', 'drag'] as const) {
+      const snapshot = await runtime.inspectForAgent(opened.tab.id, run.runId, run)
+      await executeBrowserBridge(runtime, run.hostId, {
+        requestId: 'request',
+        clientId: 'desktop',
+        threadId: run.threadId,
+        runId: run.runId,
+        expiresAt: Date.now() + 1000,
+        command:
+          kind === 'drag'
+            ? { kind, tabId: opened.tab.id, snapshot: snapshot.snapshot, ref: 1, toRef: 2 }
+            : { kind, tabId: opened.tab.id, snapshot: snapshot.snapshot, ref: 1 },
+      })
+      expect(created[0]!.page.act).toHaveBeenLastCalledWith(expect.objectContaining({ kind }))
+    }
+    runtime.closeAll()
+  })
   it('allows only http(s) without embedded credentials', () => {
     expect(allowedGuestUrl('https://example.com/a?b=1')?.hostname).toBe('example.com')
     for (const bad of ['file:///etc/passwd', 'ramu://x', 'javascript:alert(1)', 'https://u:p@example.com', 'nope', ''])
@@ -348,6 +368,48 @@ describe('page observations and native input', () => {
 })
 
 describe('private server browser bridge', () => {
+  it('applies a staged upload to one fresh file-input reference and clears it on takeover', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    const snapshot = await runtime.inspectForAgent(tab.id, run.runId, user)
+    const { uploadId } = runtime.beginUpload(tab.id, run.runId, user, 'report.txt', 5)
+    runtime.uploadChunk(tab.id, run.runId, user, uploadId, 0, 'aGVsbG8=')
+    await runtime.uploadForAgent(tab.id, run.runId, user, uploadId, snapshot.snapshot, 1)
+    expect(created[0]!.page.act).toHaveBeenCalledWith({
+      kind: 'upload',
+      snapshot: snapshot.snapshot,
+      ref: 1,
+      name: 'report.txt',
+      data: 'aGVsbG8=',
+    })
+    const next = await runtime.inspectForAgent(tab.id, run.runId, user)
+    const staged = runtime.beginUpload(tab.id, run.runId, user, 'empty.txt', 0)
+    runtime.takeControl(tab.id, 'person', { local: true })
+    await expect(runtime.uploadForAgent(tab.id, run.runId, user, staged.uploadId, next.snapshot, 1)).rejects.toThrow()
+    expect(created[0]!.page.act).toHaveBeenCalledTimes(1)
+    runtime.closeAll()
+  })
+  it('presents only an owned existing tab without navigating, reloading or transferring control', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    runtime.takeControl(tab.id, 'person', { local: true })
+    const request = {
+      requestId: 'present',
+      clientId: 'desktop',
+      threadId: 't',
+      runId: 'r1',
+      expiresAt: Date.now() + 10000,
+      command: { kind: 'present' as const, tabId: tab.id },
+    }
+    const presented = await executeBrowserBridge(runtime, 'h', request)
+    expect(presented).toMatchObject({ id: tab.id, controller: 'human' })
+    expect(created[0]!.page.load).toHaveBeenCalledTimes(1)
+    expect(created[0]!.page.reload).not.toHaveBeenCalled()
+    expect(created[0]!.page.show).not.toHaveBeenCalled()
+    await expect(executeBrowserBridge(runtime, 'h', { ...request, threadId: 'other' })).rejects.toThrow(
+      'another thread',
+    )
+  })
   it('refuses expired or wrong-thread requests before touching a guest', async () => {
     const { runtime, created } = setup()
     const { tab } = await runtime.open(run, 'https://a.test')

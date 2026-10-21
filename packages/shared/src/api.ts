@@ -147,12 +147,44 @@ export interface MobileLiveActivityRegistration {
 }
 
 export interface RamuMethods {
+  'hostBrowser.status'(): { available: boolean; enabled?: boolean; location?: 'execution-host-chromium'; reason?: string }
+  'hostBrowser.setup'(): void
+  'hostBrowser.profiles'(): BrowserProfileCatalog
+  'hostBrowser.profileCreate'(name: string): BrowserProfileInfo
+  'hostBrowser.profileRename'(id: string, name: string): void
+  'hostBrowser.profileReview'(id: string, remove: boolean): { token: string; id: string; name: string; tabs: number; remove: boolean }
+  'hostBrowser.profileConfirm'(token: string): void
+  'hostBrowser.disable'(): void
+  'hostBrowser.grants'(): { device: string; thread: string; expires: number }[]
+  'hostBrowser.grant'(deviceId: string, taskId: string): void
+  'hostBrowser.revoke'(deviceId: string, taskId: string): void
+  'hostBrowser.list'(taskId: string): BrowserTabInfo[]
+  'hostBrowser.open'(taskId: string, url: string, profileId?: string): { tab: BrowserTabInfo; profileFellBack: boolean }
+  'hostBrowser.close'(taskId: string, tabId: string): void
+  'hostBrowser.history'(taskId: string, tabId: string, direction: 'back' | 'forward' | 'reload'): void
+  'hostBrowser.dialog'(taskId: string, tabId: string): import('./browserBridge').BrowserDialog | null
+  'hostBrowser.answerDialog'(taskId: string, tabId: string, dialogId: string, accept: boolean, text?: string): void
+  'hostBrowser.frame'(taskId: string, tabId: string): import('./browserBridge').BrowserScreenshot
+  'hostBrowser.read'(taskId: string, tabId: string): import('./browserBridge').BrowserPageSnapshot
+  'hostBrowser.upload'(taskId: string, tabId: string, generation: number, snapshot: number, ref: number, path: string, workspaceRoot?: number): { ok: boolean; reason?: string }
+  'hostBrowser.downloads'(taskId: string): import('./browserBridge').BrowserDownloadInfo[]
+  'hostBrowser.allowDownload'(taskId: string, tabId: string): void
+  'hostBrowser.cancelDownload'(taskId: string, downloadId: string): void
+  'hostBrowser.saveDownload'(taskId: string, downloadId: string, path: string, workspaceRoot?: number): { path: string; workspaceRoot: number; bytes: number }
+  'hostBrowser.take'(taskId: string, tabId: string): BrowserTabInfo
+  'hostBrowser.release'(taskId: string, tabId: string): BrowserTabInfo
+  'hostBrowser.input'(taskId: string, tabId: string, generation: number, input: import('./browserBridge').BrowserHumanInput): void
+  'hostBrowser.navigate'(taskId: string, tabId: string, url: string): BrowserTabInfo
+  'hostBrowser.disconnect'(): void
+  /** Host-owned tab metadata only; no frame, profile credentials or control grant. */
+  'browser.activity'(taskId: string): { available: boolean; tabs: BrowserTabInfo[]; externalURLs?: string[] }
   /** Local desktop-only document origin. Never forwarded to a remote host. */
   'app.content.mount'(html: string): string
   /** Opens a web link in the person's own browser. Plain http(s) links only. */
   'app.openExternal'(url: string): void
   /** Integrated browser tabs of this computer's desktop app; every call names the host and thread it is for. */
   'browser.profiles.list'(hostId: string): BrowserProfileCatalog
+  'browser.profiles.importSources'(hostId: string): import('./types/browser').BrowserImportSource[]
   'browser.profiles.create'(hostId: string, name: string): BrowserProfileInfo
   'browser.profiles.signIn'(hostId: string, profileId: string, url: string): void
   'browser.profiles.rename'(hostId: string, profileId: string, name: string): void
@@ -161,6 +193,10 @@ export interface RamuMethods {
   'browser.profiles.delete'(hostId: string, profileId: string): { cancelled: boolean }
   'browser.runtimeStatus'(hostId: string): { available: boolean; reason?: string; warning?: string }
   'browser.list'(hostId: string, threadId: string): BrowserTabInfo[]
+  'browser.downloads'(hostId: string, threadId: string): import('./browserBridge').BrowserDownloadInfo[]
+  'browser.allowDownload'(hostId: string, threadId: string, tabId: string): void
+  'browser.cancelDownload'(hostId: string, threadId: string, downloadId: string): void
+  'browser.saveDownload'(hostId: string, threadId: string, downloadId: string): { cancelled: boolean }
   'browser.open'(
     hostId: string,
     threadId: string,
@@ -778,7 +814,10 @@ export type PushEvents = {
   'browser:open-link': { url: string }
   /** Native browser state changed on this desktop; clients refresh only their thread's tabs. */
   'browser:changed': Record<string, never>
-  'browser:agent-open': BrowserTabInfo
+  'hostBrowser:changed': Record<string, never>
+  'hostBrowser:present': BrowserTabInfo
+  /** Explicit agent presentation request; never navigates or activates another host/thread. */
+  'browser:present': BrowserTabInfo
   'agent:event': { sessionId: string; event: AgentEvent; seq?: number; revision?: number }
   /** The chat's transcript was cut back: events from `seq` on are gone. */
   'agent:rewound': { sessionId: string; seq: number }

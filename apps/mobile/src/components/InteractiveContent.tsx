@@ -9,6 +9,7 @@ import { Image, Modal, ScrollView, TextInput, View } from 'react-native'
 import type { InteractiveDocument, InteractiveReference, InteractiveState } from '@ramu/shared/interactive'
 import { interactiveFollowup, interactiveHtml, readInteractiveState } from '@ramu/shared/interactive'
 import { interactiveStorage } from '@ramu/shared/interactiveStorage'
+import { interactiveThemeVariables } from '@ramu/shared/interactiveTheme'
 import { claimInteractive } from '@ramu/shared/interactiveLease'
 import { contentStorage } from '../storage'
 import { useStore } from '../runtime/store'
@@ -33,13 +34,22 @@ function InteractiveDocumentCard({
   const t = useCallback((text: string) => translate(store.language, text), [store.language])
   const { c, scheme } = useTheme()
   const theme = useMemo(
-    () => ({
-      '--scheme': scheme,
-      '--background': c.canvas,
-      '--foreground': c.text,
-      '--primary': c.accent,
-      '--muted': c.muted,
-    }),
+    () =>
+      interactiveThemeVariables({
+        scheme,
+        background: c.canvas,
+        foreground: c.text,
+        muted: c.muted,
+        primary: c.accent,
+        surface: c.raised2,
+        surfaceRaised: c.bubble,
+        codeBackground: c.code,
+        button: c.primary,
+        buttonForeground: c.primaryInk,
+        success: c.ok,
+        warning: c.warn,
+        danger: c.bad,
+      }),
     [c, scheme],
   )
   const cache = useMemo(() => interactiveStorage(contentStorage, chat.computerId), [chat.computerId])
@@ -150,7 +160,7 @@ function InteractiveDocumentCard({
     const run = () => {
       if (!document || sharing) return
       setSharing(true)
-      void shareInteractive(document, state.current, raw)
+      void shareInteractive(document, state.current, raw, theme)
         .catch(() => setError(t('Could not share this content. Try again.')))
         .finally(() => setSharing(false))
     }

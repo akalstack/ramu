@@ -5,14 +5,15 @@ import { ramu } from '../ipc'
 import { ownHostId } from '../hosts'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
-import { useWorkspace } from '../workspace/workspace'
+import { useWorkspace, useHostRuntime } from '../workspace/workspace'
 import { Button } from '@/components/desktop-button'
 import { openBrowser } from '../views/browserPane'
 import { ComposerTraySection } from '../composer/ComposerTraySection'
 
 /** Native tabs remain discoverable after an agent turn, without activating background threads or hosts. */
 export function useBrowserActivity(taskId: string | undefined, visible: boolean) {
-  const { id: host } = useHost()
+  const { id: host, invoke } = useHost()
+  const events = useHostRuntime()
   const scope = `${host}:${taskId ?? ''}`
   const [reading, setReading] = useState<{ scope: string; tabs: BrowserTabInfo[]; stale: boolean }>({
     scope,
@@ -20,13 +21,16 @@ export function useBrowserActivity(taskId: string | undefined, visible: boolean)
     stale: false,
   })
   useEffect(() => {
-    if (!taskId || !visible || host !== ownHostId()) return
+    if (!taskId || !visible) return
     let active = true,
       revision = 0
     const load = async () => {
       const mine = ++revision
       try {
-        const tabs = await ramu.invoke('browser.list', host, taskId)
+        const status = await invoke('hostBrowser.status').catch(() => null)
+        const tabs = status?.enabled
+          ? (await invoke('hostBrowser.list', taskId)).map(tab => ({ ...tab, hostId: host }))
+          : host === ownHostId() ? await ramu.invoke('browser.list', host, taskId) : []
         if (active && mine === revision) setReading({ scope, tabs, stale: false })
       } catch {
         if (active && mine === revision)
@@ -39,14 +43,16 @@ export function useBrowserActivity(taskId: string | undefined, visible: boolean)
     const off = ramu.on('browser:changed', () => {
       void load()
     })
+    const offHost = events.on('hostBrowser:changed', () => void load())
     return () => {
       active = false
       off()
+      offHost()
     }
-  }, [scope, host, taskId, visible])
+  }, [scope, host, taskId, visible, invoke, events])
   return {
     taskId,
-    tabs: host === ownHostId() && reading.scope === scope ? reading.tabs : [],
+    tabs: reading.scope === scope ? reading.tabs : [],
     stale: reading.scope !== scope || reading.stale,
   }
 }
@@ -119,9 +125,8 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
 /** Opens the thread's browser from the composer, whether or not it has a tab yet. The browser exists only in the desktop shell. */
 export function OpenBrowserButton({ state }: { state: ReturnType<typeof useBrowserActivity> }) {
   useLanguage()
-  const { id: host } = useHost()
   const ws = useWorkspace()
-  if (!state.taskId || typeof window.ramu?.invoke !== 'function' || host !== ownHostId()) return null
+  if (!state.taskId || typeof window.ramu?.invoke !== 'function') return null
   const taskId = state.taskId
   const first = state.tabs[0]
   return (

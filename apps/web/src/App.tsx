@@ -1,7 +1,5 @@
 import { ownHostId } from './hosts'
-import { openBrowser } from './views/browserPane'
-import { deviceStorage } from './deviceStorage'
-import { AGENT_BROWSER_VISIBILITY_KEY, agentBrowserVisibilityFrom } from '@ramu/shared/browserLinks'
+import { openBrowser, presentBrowser } from './views/browserPane'
 import { animateThreadListChange } from './workspace/threadListMotion'
 import { Onboarding } from './Onboarding'
 import { offerPairLink } from './pairLink'
@@ -142,6 +140,7 @@ function Shell() {
 
   const ws = useWorkspace()
   const computers = useComputers()
+  const hostEvents = useHostRuntime()
   const { activeHost, select } = useHostSelection()
   const { invoke: hostInvoke } = useHost()
   const { ui } = ws
@@ -311,31 +310,16 @@ function Shell() {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [palette])
 
-  const shownBrowserRuns = useRef(new Set<string>())
   useEffect(
     () =>
-      ramu.on('agent:event', ({ sessionId, event }) => {
-        if (event.kind === 'user')
-          for (const key of shownBrowserRuns.current)
-            if (key.endsWith(`:${sessionId}`)) shownBrowserRuns.current.delete(key)
-      }),
-    [],
-  )
-  useEffect(
-    () =>
-      ramu.on('browser:agent-open', (tab) => {
-        // Background work never switches host or thread. A dismissed pane stays dismissed for this run.
-        if (agentBrowserVisibilityFrom(deviceStorage.getItem(AGENT_BROWSER_VISIBILITY_KEY)) === 'manual') return
-        if (activeHost !== tab.hostId || ws.ui.activeTaskId !== tab.threadId || !tab.runId) return
-        const key = `${tab.hostId}:${tab.threadId}:${tab.runId}`
-        if (shownBrowserRuns.current.has(key)) return
-        if (shownBrowserRuns.current.size >= 200)
-          shownBrowserRuns.current.delete(shownBrowserRuns.current.values().next().value!)
-        shownBrowserRuns.current.add(key)
-        openBrowser(ws, tab.threadId, tab)
+      ramu.on('browser:present', (tab) => {
+        presentBrowser(ws, activeHost, tab)
       }),
     [activeHost, ws],
   )
+  useEffect(() => hostEvents.on('hostBrowser:present', tab => {
+    presentBrowser(ws, activeHost, { ...tab, hostId: activeHost })
+  }), [hostEvents, activeHost, ws])
 
   // A clicked link the person chose to open in the integrated browser opens as a tab in the thread on screen; with no
   // thread open there is nowhere to put it, so it goes to their own browser instead of being lost.

@@ -26,6 +26,7 @@ export function managedAntigravityAt(home: string): { executable: string; harnes
 
 export const antigravityAdapter = defineAdapter({
   id: 'antigravity',
+  browser: { integratedTools: true, providerBrowser: true, canSuppressNative: false },
   selectionTransition: { type: 'restart-and-resume' },
   binaryEnvVar: 'RAMU_ANTIGRAVITY_BIN',
   executableNames: () => [process.platform === 'win32' ? 'agy_acp_server.exe' : 'agy_acp_server.par'],

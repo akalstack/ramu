@@ -18,7 +18,8 @@ async function fakeTools(text: string, connection?: McpConnection): Promise<void
       !text.includes('[ramu-agent') &&
       !text.includes('[questions') &&
       !text.includes('[advisor') &&
-      !text.includes('[goal tool]'))
+      !text.includes('[goal tool]') &&
+      !text.includes('[interactive tool]'))
   )
     return
   const client = new Client({ name: 'ramu-smoke', version: '1' })
@@ -95,6 +96,24 @@ async function fakeTools(text: string, connection?: McpConnection): Promise<void
         arguments: { focus: 'Is the plan sound?', wait: !text.includes('[advisor async]') },
       })
       if (reply.isError) throw new Error(JSON.stringify(reply.content))
+    }
+    if (text.includes('[interactive tool]')) {
+      const preview = await call({
+        name: 'preview_interactive',
+        arguments: {
+          title: 'Deploy health',
+          summary: 'Latency and service status with a responsive layout.',
+          html: '<link rel="stylesheet" href="ramu:kit"><div class="stack"><div class="row"><h2 style="margin:0">Deploy health</h2><span class="spacer"></span><span class="badge" data-tone="success"><svg data-icon="circle-check"></svg>Passing</span></div><div class="grid"><div class="card stat"><span class="stat-label">p95 latency</span><span class="stat-value">182 ms</span></div><div class="card stat"><span class="stat-label">Error rate</span><span class="stat-value">0.4%</span></div><div class="card stat"><span class="stat-label">Build</span><span class="stat-value">3m 12s</span></div></div><label class="field">Window<select aria-label="Window"><option>24h</option><option>7d</option></select></label><p id="out" class="muted">Showing 24h</p></div><script>document.querySelector("select").addEventListener("change",e=>{document.getElementById("out").textContent="Showing "+e.target.value})</script>',
+          checks: [{ label: 'Window', action: 'select', value: '7d', expect: 'Showing 7d' }],
+        },
+      })
+      if (preview.isError) throw new Error(JSON.stringify(preview.content))
+      const { id } = JSON.parse((preview.content as { text: string }[])[0]!.text)
+      const published = await call({
+        name: 'publish_interactive',
+        arguments: { previewId: id, requestId: `fixture-${id}` },
+      })
+      if (published.isError) throw new Error(JSON.stringify(published.content))
     }
     if (text.includes('[schedule tool]')) {
       const context = await call({ name: 'schedule_context', arguments: {} })

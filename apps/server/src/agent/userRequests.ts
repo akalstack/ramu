@@ -41,6 +41,50 @@ export class UserRequests {
   ) {}
 
   private questionWaiters = new Map<string, Set<(cancel?: boolean) => void>>()
+  private appPermissions = new Map<
+    string,
+    { sessionId: string; finish: (allow: boolean, cancelled?: boolean) => void }
+  >()
+
+  /** App-owned capabilities use the same durable approval UI for every provider, without borrowing its runner. */
+  requestPermission(id: string, toolName: string, detail: string, signal?: AbortSignal): Promise<boolean> {
+    if (signal?.aborted || this.host.shutdown() || !['starting', 'running'].includes(this.host.get(id).state))
+      return Promise.reject(new Error('This permission request is no longer active.'))
+    const requestId = randomUUID()
+    return new Promise((resolve, reject) => {
+      const abort = () => finish(false, true)
+      const finish = (allow: boolean, cancelled = false) => {
+        if (!this.appPermissions.delete(requestId)) return
+        signal?.removeEventListener('abort', abort)
+        this.host.record(id, {
+          kind: 'request-resolved',
+          requestId,
+          outcome: cancelled ? 'cancelled' : allow ? 'allowed' : 'denied',
+        })
+        if (
+          this.host.get(id).state === 'needs-input' &&
+          ![...this.appPermissions.values()].some((entry) => entry.sessionId === id) &&
+          !this.hasBlockingQuestions(id) &&
+          !this.host.live.get(id)?.pending.size
+        )
+          this.host.setState(id, 'running')
+        if (cancelled) reject(new Error('Permission request was cancelled.'))
+        else resolve(allow)
+      }
+      this.appPermissions.set(requestId, { sessionId: id, finish })
+      this.host.record(id, {
+        kind: 'permission-request',
+        requestId,
+        toolName,
+        title: `Allow ${toolName}?`,
+        detail,
+        approvalOnceOnly: true,
+      })
+      this.host.setState(id, 'needs-input')
+      signal?.addEventListener('abort', abort, { once: true })
+      if (signal?.aborted) abort()
+    })
+  }
 
   /** A child's pending approval or question, by request id: the parent's chat shows it and replies go to the child. */
   readonly childRequests = new Map<string, ForwardedRequest>()
@@ -231,6 +275,12 @@ export class UserRequests {
     if (scope !== 'once' && (!allow || !request.approvalKey)) throw new Error('This request can only be approved once.')
     if (pattern && (scope === 'once' || !matchesCommand(pattern, request.approvalCommand)))
       throw new Error('Choose an offered command pattern.')
+    const appPermission = this.appPermissions.get(requestId)
+    if (appPermission) {
+      if (appPermission.sessionId !== id) throw new Error('This approval belongs to another thread.')
+      appPermission.finish(allow)
+      return
+    }
     const session = this.host.get(id)
     const approvals = new PermissionApprovals(this.db)
     const project = approvals.project(session.taskId)
@@ -418,6 +468,8 @@ export class UserRequests {
 
   /** Cancels every wait on this chat's questions. */
   cancelWaiters(id: string): void {
+    for (const permission of [...this.appPermissions.values()])
+      if (permission.sessionId === id) permission.finish(false, true)
     for (const [key, callbacks] of this.questionWaiters)
       if (key.startsWith(`${id}:`)) for (const cancel of [...callbacks]) cancel(true)
   }

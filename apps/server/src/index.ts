@@ -61,6 +61,7 @@ import { AgentService } from './agent'
 import { ThreadTitles } from './agent/threadTitles'
 import { DesktopBrowserBroker } from './browser/desktopBroker'
 import { INTEGRATED_BROWSER_GUIDE, registerBrowserTools } from './browser/tools'
+import { HostBrowser } from './browser/hostBrowser'
 import { TerminalService } from './workspace/pty'
 import { createDispatcher } from './ipc'
 import { ScheduleService, scheduleSchema } from './background/schedules'
@@ -157,13 +158,20 @@ const clients = new Set<ServerResponse>()
 // Only clients on the local socket can answer native dialogs; a remote client's folder picker would open on the wrong machine.
 const hostClients = new Set<ServerResponse>()
 const desktopClients = new Map<string, ServerResponse>()
+const hostBrowser = new HostBrowser(join(userData, 'host-browser'), () => {
+  for (const client of clients) if (!client.destroyed && client.writableLength < 1024 * 1024)
+    client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:changed', payload: {} })}\n\n`)
+}, tab => {
+  for (const client of clients) if (!client.destroyed && client.writableLength < 1024 * 1024)
+    client.write(`data: ${JSON.stringify({ channel: 'hostBrowser:present', payload: tab })}\n\n`)
+})
 const browserBroker = new DesktopBrowserBroker((clientId, request) => {
   const client = desktopClients.get(clientId)
   if (!client || client.destroyed || client.writableLength > 1024 * 1024) return false
   return (
     client.write(`data: ${JSON.stringify({ channel: 'browser:operation', payload: request })}\n\n`) || !client.destroyed
   )
-})
+}, 30000, hostBrowser)
 const nativeRequests = new Map<
   string,
   { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
@@ -190,6 +198,8 @@ workspace.settingsStore = new SettingsStore(userData, {
   models: workspace.getAppState('model-preferences', null),
 })
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./providers/fakeAgent') : null
+void hostBrowser.restore()
+const browserAccessEpochs = new Map<string, number>()
 let reviews!: ReviewService
 const mobilePush = new MobilePush(
   join(userData, 'mobile-push.json'),
@@ -202,6 +212,7 @@ const agents = new AgentService(
   (sessionId, event, seq, revision) => {
     send('agent:event', { sessionId, event, seq, revision })
     if (event.kind === 'state' && ['idle', 'failed', 'stopped'].includes(event.state)) {
+      browserAccessEpochs.set(sessionId, (browserAccessEpochs.get(sessionId) ?? 0) + 1)
       try {
         browserBroker.endRun(agents.get(sessionId).taskId, sessionId)
       } catch {}
@@ -318,7 +329,7 @@ agents.memoryInstructions = (session) => memory.instructions(session, projectOf(
 const rules = new RuleStore(db)
 agents.rulesInstructions = (session) => rules.instructions(projectOf(session), session.provider)
 // Calls that arrive over the network are marked, so a desktop dialog is never opened on this computer for someone else.
-const origin = new AsyncLocalStorage<{ network: boolean }>()
+const origin = new AsyncLocalStorage<{ network: boolean; deviceId?: string }>()
 const interactive = new InteractiveStore(db, (session, ref) => agents.interactivePublished(session, ref))
 let sharedMcp: SharedMcpService | undefined
 const getSharedMcp = () => {
@@ -334,6 +345,8 @@ const dispatcher = createDispatcher(
   {
     userData,
     canAdministerIntegrations: () => origin.getStore()?.network !== true,
+    browserDevice: () => origin.getStore()?.network ? origin.getStore()?.deviceId : 'local',
+    browserGrantEligible: id => devices.list().some(device => device.id === id && device.role !== 'viewer'),
     send,
     native: (method, path) => {
       if (origin.getStore()?.network)
@@ -363,6 +376,8 @@ const dispatcher = createDispatcher(
   {
     workspace,
     getSharedMcp,
+    browser: browserBroker,
+    hostBrowser,
     terminals,
     agents,
     threadTitles,
@@ -399,6 +414,7 @@ async function stop(intentional = false) {
   await Promise.all([recaps.settle(), reviews.settle(), memory.settle(), learning.settle(), summaries.settle()])
   terminals.closeAll()
   await sharedMcp?.close()
+  await hostBrowser.close()
   dispatcher.close()
   for (const c of clients) c.end()
   for (const r of nativeRequests.values()) {
@@ -438,6 +454,7 @@ const capabilities = (): Capability[] => [
   CAPABILITIES.events,
   CAPABILITIES.mobileCompanion,
   CAPABILITIES.liveActivities,
+  CAPABILITIES.hostBrowser,
   CAPABILITIES.hostRequests,
   ...(network.enabled ? [CAPABILITIES.remote, CAPABILITIES.pairing, CAPABILITIES.renewal] : []),
 ]
@@ -569,7 +586,7 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
       res.writeHead(200, json).end('{}')
       void stop()
       return
-    } else value = await origin.run({ network: remote }, () => dispatcher.invoke(method, args))
+    } else value = await origin.run({ network: remote, deviceId }, () => dispatcher.invoke(method, args))
     res.writeHead(200, json).end(JSON.stringify({ value }))
   } catch (error) {
     if (!res.headersSent) res.writeHead(400, json)
@@ -619,6 +636,8 @@ const mcpHttp = createServer(async (req, res) => {
       () => agents.get(source.id),
       connection!.browser,
       () => browserTokens.get(source.id) === token,
+      (detail, signal) => agents.requestPermission(source.id, 'Ramu integrated browser', detail, signal),
+      () => browserAccessEpochs.get(source.id) ?? 0,
     )
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
@@ -897,7 +916,6 @@ agents.toolConnection = (session) => {
     token,
     ...(review ? { restricted: true } : {}),
     ...(!review &&
-    !session.parentId &&
     (browserPreferences?.providerOverrides[session.provider] ?? browserPreferences?.agentBrowser) === 'integrated'
       ? { browserInstructions: INTEGRATED_BROWSER_GUIDE }
       : {}),

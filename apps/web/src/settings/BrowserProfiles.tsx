@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { BrowserProfileCatalog, BrowserProfileInfo } from '@ramu/shared/types/browser'
+import type { BrowserProfileCatalog, BrowserProfileInfo, BrowserImportSource } from '@ramu/shared/types/browser'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -27,6 +27,7 @@ export function BrowserProfilesSettings({
   const [error, setError] = useState<string | null>(null)
   const [signIn, setSignIn] = useState<BrowserProfileInfo | null>(null)
   const [address, setAddress] = useState('')
+  const [sources, setSources] = useState<BrowserImportSource[] | null>(null)
   const scope = useRef({ hostId, epoch: 0 })
   const acting = useRef(false)
   if (scope.current.hostId !== hostId) {
@@ -38,6 +39,7 @@ export function BrowserProfilesSettings({
     setError(null)
     setSignIn(null)
     setBusy(false)
+    setSources(null)
   }, [hostId])
   const run = async (operation: (valid: () => boolean) => Promise<void>) => {
     if (acting.current) return
@@ -134,6 +136,18 @@ export function BrowserProfilesSettings({
           </Button>
         </div>
       )}
+      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void run(async valid => {
+        const sources = await ramu.invoke('browser.profiles.importSources', hostId)
+        if (valid()) setSources(sources)
+      })}>{t('Import signed-in sessions')}</Button>
+      {sources && <div className="space-y-2 text-caption">
+        <p className="text-muted-foreground">{t('Session import is optional and unavailable for these sources. No cookies or passwords have been read or copied.')}</p>
+        {sources.map(source => <p key={source.id}>{source.name} · {t(source.installed ? 'Installed' : 'Not installed')} · {t(source.reason ?? 'Unavailable')}</p>)}
+        <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => {
+          const profile = catalog?.profiles.find(profile => profile.id === 'default')
+          if (profile) { setSignIn(profile); setAddress('') }
+        }}>{t('Sign in instead')}</Button>
+      </div>}
       <Dialog
         open={!!signIn}
         onOpenChange={(open) => {

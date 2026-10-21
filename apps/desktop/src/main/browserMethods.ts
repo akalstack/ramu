@@ -36,6 +36,17 @@ export function browserMethod(runtime: BrowserRuntime, method: string, args: unk
       return null
   }
   switch (method) {
+    case 'browser.downloads':
+      return runtime.listDownloads({ hostId: text(args[0], 'host', 200), threadId: text(args[1], 'thread', 200) })
+    case 'browser.allowDownload': {
+      const owner = { hostId: text(args[0], 'host', 200), threadId: text(args[1], 'thread', 200) }
+      return runtime.prepareHumanDownload(text(args[2], 'tab', 100), owner)
+    }
+    case 'browser.cancelDownload':
+      return runtime.cancelDownload(text(args[2], 'download', 100), {
+        hostId: text(args[0], 'host', 200),
+        threadId: text(args[1], 'thread', 200),
+      })
     case 'browser.list':
       return runtime.list({ hostId: text(args[0], 'host', 200), threadId: text(args[1], 'thread', 200) })
     case 'browser.open':

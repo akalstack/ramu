@@ -75,7 +75,14 @@ import {
   toolResultsOf,
   turnDatesOf,
 } from './agent/lib/derive'
-import { outboxFullError, quoteLines, visibleText } from './agent/lib/messages'
+import { CONTEXT_MARKER, outboxFullError, quoteLines, visibleText } from './agent/lib/messages'
+import { interactiveAttachmentBlock, type InteractiveAttachment } from '@ramu/shared/interactive'
+import {
+  addInteractiveAttachment,
+  INTERACTIVE_FOLLOWUP_EVENT,
+  type InteractiveFollowupDetail,
+} from '../interactive/followup'
+import { InteractiveAttachmentChip } from '../interactive/InteractiveAttachmentChip'
 import type { AgentViewDesc, MessageEdit, TranscriptContext } from './agent/types'
 import { AgentHeader } from './agent/components/AgentHeader'
 import { ContinueChatDialog } from './agent/components/ContinueChatDialog'
@@ -365,16 +372,19 @@ export const AgentView = memo(function AgentView({
     el?.addEventListener(MESSAGE_ACTION_EVENT, listener)
     return () => el?.removeEventListener(MESSAGE_ACTION_EVENT, listener)
   }, [])
-  /** Moves a queued message back into the message box. */
+  /** Interactive Content from "Ask about this" waits as a chip and goes out as hidden context with the next message. */
+  const [contentAttachments, setContentAttachments] = useState<InteractiveAttachment[]>([])
+  useEffect(() => setContentAttachments([]), [host.id, view.sessionId])
   useEffect(() => {
     const receive = (event: Event) => {
-      const detail = (event as CustomEvent<{ host: string; session: string; text: string }>).detail
+      const detail = (event as CustomEvent<InteractiveFollowupDetail>).detail
       if (detail?.host === host.id && detail.session === view.sessionId) {
-        setDraft((current) => `${current.trim() ? current + '\n\n' : ''}${detail.text}`)
+        setContentAttachments((current) => addInteractiveAttachment(current, detail.attachment))
+        requestAnimationFrame(() => focusComposer(root.current, Number.MAX_SAFE_INTEGER))
       }
     }
-    window.addEventListener('ramu:interactive-followup', receive)
-    return () => window.removeEventListener('ramu:interactive-followup', receive)
+    window.addEventListener(INTERACTIVE_FOLLOWUP_EVENT, receive)
+    return () => window.removeEventListener(INTERACTIVE_FOLLOWUP_EVENT, receive)
   }, [host.id, view.sessionId])
 
   const recallIntoComposer = (files: Attachment[], text: string) => {
@@ -430,17 +440,26 @@ export const AgentView = memo(function AgentView({
       return
     }
     const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(draft.trim())
-    return side && !attachments.length && !attached.length ? askAside(side[1]!.trim()) : sendToAgent(mode, context)
+    return side && !attachments.length && !attached.length && !contentAttachments.length
+      ? askAside(side[1]!.trim())
+      : sendToAgent(mode, context)
   }
   const sendToAgent = (mode: 'queue' | 'steer', context: FileContext[]) =>
     act(async () => {
       const submitted = draft
       const submittedFiles = attachments
+      const submittedContent = contentAttachments
+      const outgoing = submittedContent.length
+        ? `${submitted}${CONTEXT_MARKER}${interactiveAttachmentBlock(submittedContent)}\n</ramu-context>`
+        : submitted
+      const clearContent = () =>
+        setContentAttachments((current) => current.filter((item) => !submittedContent.includes(item)))
       // Review comments live on the host, so a message carrying them waits for the connection rather than the outbox.
       if (hostOffline && attached.length)
         throw new Error(translate('Review comments send once {0} is back. Your message is kept.', { 0: hostName }))
       if (hostOffline) {
-        if (!outbox(host.id).add(view.sessionId, submitted, submittedFiles, context)) throw outboxFullError(hostName)
+        if (!outbox(host.id).add(view.sessionId, outgoing, submittedFiles, context)) throw outboxFullError(hostName)
+        clearContent()
         const consumed = consumeDraft()
         if (!consumed.persisted)
           notifyError(translate('Message queued, but the local draft could not be cleared.'), 'Draft')
@@ -449,11 +468,10 @@ export const AgentView = memo(function AgentView({
         stick.current = true
         return
       }
-      const outgoing = submitted
       stick.current = true
       scrollToEnd.current?.()
       setPendingSubmission({
-        text: outgoing,
+        text: submitted,
         attachments: submittedFiles,
         afterEvent: sourceEvents.length,
         queuedIds: queued.map((message) => message.id),
@@ -486,6 +504,7 @@ export const AgentView = memo(function AgentView({
           notifyError(translate('Message sent, but the local draft could not be cleared.'), 'Draft')
         if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
         setAttachments((current) => current.filter((file) => !submittedFiles.some((sent) => sent.id === file.id)))
+        clearContent()
         stick.current = true
       } finally {
         setPendingSubmission(null)
@@ -807,6 +826,15 @@ export const AgentView = memo(function AgentView({
                         onSession={setSession}
                       />
                     )}
+                    {contentAttachments.map((attachment) => (
+                      <InteractiveAttachmentChip
+                        key={`${attachment.id}:${attachment.version}`}
+                        attachment={attachment}
+                        onRemove={() =>
+                          setContentAttachments((current) => current.filter((item) => item !== attachment))
+                        }
+                      />
+                    ))}
                     {attached.length > 0 && (
                       <CommentsChip
                         groups={attached}

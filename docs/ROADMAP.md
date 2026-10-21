@@ -41,7 +41,8 @@ The [implemented contract](INTERACTIVE-CONTENT.md) covers publication, immutable
 - Run representative calculators, branching walkthroughs, comparisons and a new subject through live provider sessions on desktop, iOS and Android; include reconnect/restart and offline cached reopening. Direct/deferred MCP publication and synthetic desktop interaction already have automated evidence; they do not replace live-provider/native acceptance.
 - On real iOS/Android devices, verify gestures versus feed scrolling, expansion/close, offscreen and screen-focus lifecycle, selection/keyboard, VoiceOver/TalkBack, Android back, large text, appearance, reduced motion, scenario copies and HTML/source sharing.
 - Verify native WebView navigation, private-address/redirect egress denial, credential isolation, stale/forged bridge messages and renderer process termination. The browser companion deliberately keeps static viewing until an independent document origin is available.
-- Observe script loops and platform CPU/memory behavior. One active isolated frame and bounded persisted state are not hard CPU quotas; determine additional containment from actual platform evidence.
+- Bring desktop's always-open card to native mobile: open on screen without **Open**/**Pause**, the compact header and menu, and the **Code** view for multi-file projects. Mobile **Share source** sends the bundled document for projects until it can share the files.
+- Observe script loops and platform CPU/memory behavior. Up to three isolated desktop frames and bounded persisted state are not hard CPU quotas; determine additional containment from actual platform evidence.
 - Compare matched tasks before claiming an advantage over another application. Record environment, task, output and failures; source inspection or a single successful demo does not establish general superiority.
 
 ## Release and mobile

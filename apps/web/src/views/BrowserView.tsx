@@ -6,12 +6,15 @@ import type { ViewDescriptor } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { t, useLanguage } from '../i18n'
-import { ramu } from '../ipc'
+import { ramu, bridge } from '../ipc'
 import { errorText } from '../lib/errors'
 import { addressFrom } from './browserAddress'
 import { openOverlays, paneCovered } from './browserOverlay'
 import { NEW_TAB, onWantedTab, takeWantedTab } from './browserPane'
+import { onBrowserNavigation, takeBrowserNavigation } from './browserNavigation'
 import { BrowserTabChip, type BrowserTabActions } from './BrowserTabChip'
+import { BrowserDownloads } from './BrowserDownloads'
+import { HostBrowserView } from './HostBrowserView'
 import { useSearchEngine } from './searchEngine'
 import { useAppSettings } from '../settings/AppSettings'
 import { useHost } from '../workspace/HostProvider'
@@ -24,15 +27,25 @@ const controllerText = (controller: BrowserTabInfo['controller']) =>
       ? t('You are in control')
       : ''
 
-/** Panes whose saved address was already reopened in this session. */
-const restored = new Set<string>()
-
 /**
  * One integrated-browser tab for this thread. The page itself is a native view the desktop shell places over this
  * pane's rectangle; this component owns the address bar and reports where the pane is. Hiding or closing the pane
  * never destroys the page: only the tab's own close does.
  */
-export function BrowserView({
+export function BrowserView(props: { taskId: string; view: Extract<ViewDescriptor, { kind: 'browser' }>; visible: boolean }) {
+  const host = useHost()
+  const [hosted, setHosted] = useState(!host.isLocal)
+  useEffect(() => {
+    let active = true
+    const refresh = () => { void host.invoke('hostBrowser.status').then(status => { if (active) setHosted(!host.isLocal || !!status.enabled) }).catch(() => {}) }
+    refresh()
+    const off = bridge.on('hostBrowser:changed', (_payload, from) => { if (from === host.id || (!from && host.isLocal)) refresh() })
+    return () => { active = false; off() }
+  }, [host])
+  return hosted ? <HostBrowserView key={`${host.id}:${props.taskId}`} {...props}/> : <LocalBrowserView {...props}/>
+}
+
+export function LocalBrowserView({
   taskId,
   view,
   visible,
@@ -65,6 +78,7 @@ export function BrowserView({
   // The tab the person last chose, readable by a list refresh that began before the choice and ends after it, so a
   // slow refresh never switches the pane back to the tab it was on.
   const chosen = useRef<string | undefined>(undefined)
+  const navigationGeneration = useRef(0)
   const setTab = useCallback((next: BrowserTabInfo | null) => {
     chosen.current = next?.id
     setTabState(next)
@@ -154,16 +168,24 @@ export function BrowserView({
         setThreadTabs(tabs)
         setListed(true)
         setListError(null)
+        const requestedURL = takeBrowserNavigation(view.id, taskId)
+        if (requestedURL) {
+          const generation = ++navigationGeneration.current
+          const opened = await run(() => ramu.invoke('browser.open', host, taskId, requestedURL, profile))
+          if (active && generation === navigationGeneration.current && opened) {
+            setTab(opened.tab)
+            setAddress(opened.tab.url)
+          }
+          return
+        }
         const want = takeWantedTab(view.id)
         if (want === NEW_TAB) {
-          reopened.current = true
-          restored.add(view.id)
           void newTabRef.current()
           return
         }
         const current =
           (want ? tabs.find((candidate) => candidate.id === want) : undefined) ??
-          tabs.find((candidate) => candidate.id === (chosen.current ?? tabId)) ??
+          tabs.find((candidate) => candidate.id === (chosen.current ?? tabId ?? view.tabId)) ??
           (!tabId && !view.tabId && !view.url && !startingNew.current ? tabs[0] : undefined)
         setTab(current ?? null)
         if (!current) setWebsiteDialog(null)
@@ -174,8 +196,6 @@ export function BrowserView({
           setWebsiteDialog(dialog)
         }
         if (current) {
-          reopened.current = true
-          restored.add(view.id)
           if (!editingAddress.current) setAddress(current.url)
         }
       } catch (reason) {
@@ -186,42 +206,17 @@ export function BrowserView({
       void refresh()
     })
     const offWanted = onWantedTab(() => void refresh())
+    const offNavigation = onBrowserNavigation(() => void refresh())
     void refresh()
     return () => {
       active = false
       off()
       offWanted()
+      offNavigation()
     }
-  }, [host, taskId, tabId, visible, view.id, view.tabId, view.url])
+  }, [host, taskId, tabId, visible, view.id, view.tabId, view.url, profile, run])
 
-  // An agent-created pane adopts the actual native tab instead of opening a duplicate page.
-  const [adopted, setAdopted] = useState(!view.tabId)
-  useEffect(() => {
-    if (!view.tabId || !visible) return
-    let active = true
-    void ramu
-      .invoke('browser.list', host, taskId)
-      .then((tabs) => {
-        if (!active) return
-        const existing = tabs.find((candidate) => candidate.id === view.tabId)
-        if (existing) {
-          reopened.current = true
-          restored.add(view.id)
-          setTab(existing)
-          setAddress(existing.url)
-        }
-        setAdopted(true)
-      })
-      .catch((reason) => {
-        if (active) setError(t(errorText(reason)))
-      })
-    return () => {
-      active = false
-    }
-  }, [view.tabId, visible, host, taskId])
-
-  // A restored view reopens its last address once it is shown; nothing loads while the pane is hidden.
-  const reopened = useRef(false)
+  // Restored panes retain their address without loading a website.
   useEffect(() => {
     setTab(null)
     setThreadTabs([])
@@ -233,25 +228,7 @@ export function BrowserView({
     setAddress(view.url ?? '')
     setError(null)
     setBusy(false)
-    setAdopted(!view.tabId)
-    reopened.current = false
   }, [scope])
-  const opening = useRef('')
-  useEffect(() => {
-    if (!visible || !adopted || !listed || tab || threadTabs.length || view.url || startingNew.current) return
-    if (opening.current === scope) return
-    opening.current = scope
-    void newTabRef.current()
-  }, [visible, adopted, listed, tab, threadTabs.length, view.url, scope])
-  useEffect(() => {
-    if (!visible || !adopted || reopened.current || tab || !view.url || restored.has(view.id)) return
-    reopened.current = true
-    // A pane is shared by the workspace's chats: restoring its address once per session reopens the page after a
-    // restart, instead of adding the same page to every chat the person switches to.
-    restored.add(view.id)
-    void open(view.url)
-  }, [visible, adopted, tab, view.url, open])
-
   // Dialogs, menus and popovers draw below the native page, so it steps aside while one reaches into the pane.
   useEffect(() => {
     const root = pane.current
@@ -322,8 +299,8 @@ export function BrowserView({
   }
 
   const select = (entry: BrowserTabInfo) => {
+    navigationGeneration.current++
     startingNew.current = false
-    reopened.current = true
     setTab(entry)
     setAddress(entry.url)
     setError(null)
@@ -564,13 +541,20 @@ export function BrowserView({
                       : '')}
         </p>
       )}
+      <BrowserDownloads
+        key={`${host}:${taskId}`}
+        host={host}
+        taskId={taskId}
+        tabId={tabId}
+        human={tab?.controller === 'human' && !!tab.inputReady}
+      />
       <div ref={area} className="min-h-0 flex-1" aria-label={t('Page')}>
         {tab && covered && (
           <p className="m-0 p-6 text-center text-muted-foreground">{t('The page returns when this dialog closes.')}</p>
         )}
         {!tab && (
           <p className="m-0 p-6 text-center text-muted-foreground">
-            {listed ? t('Opening the browser…') : t('Loading…')}
+            {listed ? t('Choose a tab or enter an address to open a page.') : t('Loading…')}
           </p>
         )}
       </div>

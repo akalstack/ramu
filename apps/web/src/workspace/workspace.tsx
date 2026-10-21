@@ -1,4 +1,5 @@
 import { changesThreadSummary } from '@ramu/shared/chat/inputSummary'
+import { requestBrowserNavigation } from '../views/browserNavigation'
 import { closingPanel } from '@ramu/shared/workspace/panelClose'
 import { showChat } from './layoutPrefs'
 import { persistentTaskUi } from '@ramu/shared/workspace/sourceNavigation'
@@ -864,6 +865,8 @@ const HostWorkspace = memo(function HostWorkspace({
                       ...(isPreviewable(view) ? { preview } : {}),
                       id: crypto.randomUUID(),
                     } as ViewDescriptor))
+        if (desc.kind === 'browser' && view.kind === 'browser' && view.url && !view.tabId)
+          requestBrowserNavigation(desc.id, taskId, view.url)
         if (owner !== taskId && desc.kind !== 'terminal')
           updateTaskUi(taskId, (own) => ({ ...own, activeViewId: desc.id }))
         updateTaskUi(owner, (s) => {

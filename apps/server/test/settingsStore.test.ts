@@ -47,6 +47,19 @@ const models = {
     },
   ],
 }
+watched('defaults new browser installs to integrated and preserves legacy and explicit provider choices', () => {
+  expect(fixture().store.preferences().agentBrowser?.agentBrowser).toBe('integrated')
+  expect(fixture({ accent: 'teal' }).store.preferences().agentBrowser?.agentBrowser).toBe('provider')
+  expect(
+    fixture({
+      agentBrowser: {
+        agentBrowser: 'integrated',
+        providerOverrides: { codex: 'provider' },
+        defaultProfileId: 'default',
+      },
+    }).store.preferences().agentBrowser,
+  ).toMatchObject({ agentBrowser: 'integrated', providerOverrides: { codex: 'provider' } })
+})
 
 watched('migrates real SQLite preferences and models once, preserving the legacy archive and runtime state', () => {
   const f = fixture({ ...DEFAULT_APP_PREFERENCES, accent: 'teal', worktreeBranchPrefix: 'team/' }, models)

@@ -13,6 +13,7 @@ import * as workspaceChoices from '../src/runtime/workspaces.ts'
 import * as explorerScopes from '../../../packages/shared/src/workspace/explorer.ts'
 import * as explorerNavigation from '../src/runtime/explorerNavigation.ts'
 import * as routingDraft from '../src/runtime/routingDraft.ts'
+import * as browserLinks from '../../../packages/shared/src/browserLinks.ts'
 import * as explorerDrafts from '../src/runtime/composerDrafts.ts'
 import * as routingChoices from '../src/runtime/routingChoices.ts'
 import * as localCommitStorage from '../src/storage/localCommit.ts'
@@ -125,6 +126,64 @@ function nodes(tree) {
 }
 function find(tree, type) {
   return nodes(tree).find((node) => node.type === type)
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} mobile browser status reads its host and opens only deliberately selected public websites`, async () => {
+    const hooks = hookHarness(),
+      calls = [],
+      opened = []
+    const store = {
+      language: 'en',
+      computers: [{ id: 'a', name: 'Laptop' }],
+      isOnline: () => true,
+      invoke: async (...args) => {
+        calls.push(args)
+        return {
+          available: true,
+          tabs: [
+            { id: 'public', title: 'Public', url: 'https://www.example.com', controller: 'agent' },
+            { id: 'local', title: 'Local', url: 'http://localhost:3000', controller: 'agent' },
+          ],
+          externalURLs: ['https://www.example.com'],
+        }
+      },
+    }
+    const { BrowserActivity } = load('components/BrowserActivity.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+      '@ramu/shared/browserLinks': browserLinks,
+      'react-native': {
+        Linking: {
+          openURL: async (url) => {
+            opened.push(url)
+          },
+        },
+      },
+    })
+    const render = () => hooks.render(() => BrowserActivity({ chat: { computerId: 'a', taskId: 'thread' } }))
+    const button = (title) => nodes(render()).find((node) => node.type === 'Button' && node.props.title === title)
+    render()
+    assert.equal(calls.length, 0)
+    button('Browser').props.onPress()
+    render()
+    await settle()
+    assert.deepEqual(calls, [['a', 'browser.activity', 'thread']])
+    const external = nodes(render()).filter(
+      (node) => node.type === 'Button' && node.props.title === 'Open in system browser',
+    )
+    assert.equal(external.length, 1)
+    assert.deepEqual(opened, [])
+    external[0].props.onPress()
+    await settle()
+    assert.deepEqual(opened, ['https://www.example.com'])
+    assert.ok(
+      nodes(render()).some(
+        (node) => node.props.children === 'Open this local or private address on its owning computer.',
+      ),
+    )
+    hooks.dispose()
+  })
 }
 
 test('a destination clarification keeps the composer draft instead of acknowledging a send', async () => {

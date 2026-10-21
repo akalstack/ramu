@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { useWorkspace } from '../src/workspace/workspace'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { BrowserActivity, showBrowserTab } from '../src/chat/BrowserActivity'
+import { presentBrowser } from '../src/views/browserPane'
 
 const fixture = vi.hoisted(() => ({
   openView: vi.fn(),
@@ -60,4 +61,15 @@ it('lists each tab with who controls it, qualifies stale activity and hides when
   expect(stale).toContain('Last-known activity')
   expect(stale).not.toContain('New browser tab')
   expect(BrowserActivity({ state: { taskId: 'thread', tabs: [], stale: false } })).toBeNull()
+})
+
+it('reveals a deliberate agent presentation only in the active thread and host', () => {
+  fixture.existing = null
+  fixture.openView.mockClear()
+  const workspace = { ...useWorkspace(), ui: { activeTaskId: 'thread' } }
+  expect(presentBrowser(workspace, 'another-host', tab)).toBe(false)
+  expect(presentBrowser({ ...workspace, ui: { activeTaskId: 'other' } }, 'local', tab)).toBe(false)
+  expect(fixture.openView).not.toHaveBeenCalled()
+  expect(presentBrowser(workspace, 'local', tab)).toBe(true)
+  expect(fixture.openView).toHaveBeenCalledWith('thread', { kind: 'browser', tabId: 'tab', url: 'https://a.test' })
 })

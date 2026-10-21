@@ -28,6 +28,7 @@ import { STANDALONE } from '../../../runtime/types'
 import { Header, HeaderButton, Screen, PageFlatList, nativeScrollEdge } from '../../../components/Screen'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
+import { BrowserActivity } from '../../../components/BrowserActivity'
 import { translate } from '@ramu/shared/i18n'
 import { Composer } from '../../../components/Composer'
 import type { TranscriptItem } from '../../../runtime/types'
@@ -781,6 +782,7 @@ export default function ChatScreen() {
                 activity={
                   <>
                     <ThreadActivity chat={chat} />
+                    <BrowserActivity key={`browser:${chat.computerId}:${chat.taskId}`} chat={chat} />
                     <BackgroundTerminals
                       key={`${chat.computerId}:${chat.taskId}`}
                       chat={chat}

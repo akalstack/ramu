@@ -43,6 +43,8 @@ export const providerEnabled = (config: ProviderConfiguration | undefined, provi
 /** Only expose isolated account profiles for CLIs with a supported credential directory. */
 export const supportsProviderAccounts = (_provider: AgentProvider) => true
 export interface ProviderStatus {
+  /** Adapter integration support; runtime MCP negotiation and desktop readiness are checked separately. */
+  browser?: import('../browser').ProviderBrowserCapability
   provider: AgentProvider
   binary: string
   installed: boolean

@@ -4,6 +4,8 @@ import { registerAgentHandlers } from './handlers/agent'
 import { registerAsideHandlers } from './handlers/aside'
 import { registerThemeHandlers } from './handlers/theme'
 import { registerBackgroundHandlers } from './handlers/background'
+import { registerBrowserActivityHandlers } from './handlers/browserActivity'
+import { registerHostBrowserHandlers } from './handlers/hostBrowser'
 import { registerFileHandlers } from './handlers/files'
 import { registerForgeHandlers } from './handlers/forge'
 import { registerGitHandlers } from './handlers/git'
@@ -57,5 +59,7 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable =>
     registerProjectSetupHandlers(ctx),
     registerUiHandlers(ctx),
     registerBackgroundHandlers(ctx),
+    registerBrowserActivityHandlers(ctx),
+    registerHostBrowserHandlers(ctx),
     registerScheduleHandlers(ctx),
   )

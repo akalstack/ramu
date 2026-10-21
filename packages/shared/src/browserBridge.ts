@@ -1,10 +1,27 @@
 import type { BrowserTabInfo } from './types/browser'
+export const MAX_BROWSER_UPLOAD_BYTES = 8 * 1024 * 1024
+export const BROWSER_UPLOAD_CHUNK_BYTES = 64 * 1024
+export interface BrowserDownloadInfo {
+  id: string
+  tabId: string
+  name: string
+  state: 'progressing' | 'completed' | 'cancelled' | 'interrupted'
+  received: number
+  total: number
+}
+/** Private authenticated human input. Never exposed as an agent tool. Positions are normalized to the captured viewport. */
+export type BrowserHumanInput =
+  | { kind: 'click'; x: number; y: number; button: BrowserMouseButton; clickCount: 1 | 2 }
+  | { kind: 'scroll'; x: number; y: number }
+  | { kind: 'text'; text: string }
+  | { kind: 'key'; key: string }
 
 /** A named key, a single printable character, or F1–F12. */
 export type BrowserKey = string
 export type BrowserModifier = 'Alt' | 'Control' | 'Meta' | 'Shift'
 export type BrowserMouseButton = 'left' | 'right' | 'middle'
 export type BrowserPageAction =
+  | { kind: 'upload'; snapshot: number; ref: number; name: string; data: string }
   | { kind: 'click'; snapshot: number; ref: number; button?: BrowserMouseButton; clickCount?: 1 | 2 | 3 }
   | { kind: 'hover'; snapshot: number; ref: number }
   | { kind: 'drag'; snapshot: number; ref: number; toRef: number }
@@ -31,12 +48,21 @@ export interface BrowserDiagnostics {
 
 /** Private local-desktop broker messages. The execution server supplies thread/run identity. */
 export type BrowserBridgeCommand =
+  | { kind: 'download-prepare'; tabId: string }
+  | { kind: 'downloads'; tabId: string }
+  | { kind: 'download-read'; tabId: string; downloadId: string; offset: number }
+  | { kind: 'download-cancel'; tabId: string; downloadId: string }
+  | { kind: 'upload-begin'; tabId: string; name: string; size: number }
+  | { kind: 'upload-chunk'; tabId: string; uploadId: string; offset: number; data: string }
+  | { kind: 'upload-cancel'; tabId: string; uploadId: string }
+  | { kind: 'upload'; tabId: string; uploadId: string; snapshot: number; ref: number }
   | { kind: 'list' }
   | { kind: 'profiles' }
-  | { kind: 'open'; url: string; profileId?: string }
+  | { kind: 'open'; url: string; profileId?: string; presentation?: 'background' | 'foreground' }
+  | { kind: 'present'; tabId: string }
   | { kind: 'snapshot'; tabId: string }
   | { kind: 'navigate'; tabId: string; url: string }
-  | (BrowserPageAction & { tabId: string })
+  | (Exclude<BrowserPageAction, { kind: 'upload' }> & { tabId: string })
   | { kind: 'screenshot'; tabId: string }
   | { kind: 'diagnostics'; tabId: string }
   | { kind: 'dialog'; tabId: string }

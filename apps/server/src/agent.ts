@@ -438,6 +438,9 @@ export class AgentService {
   askQuestion(...args: Parameters<UserRequests['askQuestion']>) {
     return this.parts.requests.askQuestion(...args)
   }
+  requestPermission(...args: Parameters<UserRequests['requestPermission']>) {
+    return this.parts.requests.requestPermission(...args)
+  }
 
   waitForAnswer(...args: Parameters<UserRequests['waitForAnswer']>) {
     return this.parts.requests.waitForAnswer(...args)

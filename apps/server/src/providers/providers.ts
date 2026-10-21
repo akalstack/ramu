@@ -368,6 +368,7 @@ export class ProviderService {
         setup.updateCommand = useBinary(setup.updateCommand)
         return {
           provider,
+          browser: providerAdapter(provider).browser,
           binary,
           installed,
           version,

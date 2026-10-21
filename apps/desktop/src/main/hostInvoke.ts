@@ -8,6 +8,7 @@ import { isHostTaskCommand } from '@ramu/shared/hostOverview'
  * machine (dialogs, menus, clipboard, the background service, app updates, pairing) stays out.
  */
 const DOMAINS = new Set([
+  'hostBrowser',
   'interactive',
   'tasks',
   'projects',
@@ -51,10 +52,22 @@ const NATIVE = new Set([
 export const isHostInvokeAllowed = (method: unknown): method is string =>
   typeof method === 'string' &&
   !NATIVE.has(method) &&
-  (['mcp.status', 'settings.app.get', 'settings.app.set', 'settings.models.get', 'settings.models.set'].includes(
-    method,
-  ) ||
+  ([
+    'providers.status',
+    'mcp.status',
+    'settings.app.get',
+    'settings.app.set',
+    'settings.models.get',
+    'settings.models.set',
+  ].includes(method) ||
     (DOMAINS.has(method.split('.')[0]!) && method.includes('.')))
+
+/** Operations the Settings window may run on a chosen host through `computers.settings.invoke`. */
+export const isSettingsActionAllowed = (operation: unknown): operation is string =>
+  typeof operation === 'string' &&
+  /^(mcp\.|providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|rules\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.(list|setup)$|diagnostics\.(export|clear)$)/.test(
+    operation,
+  )
 
 export interface HostRouting {
   /** The window that sent the call. */

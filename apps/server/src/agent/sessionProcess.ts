@@ -508,7 +508,7 @@ export class SessionProcess {
     if (codex) {
       this.host.runners.delete(id)
       this.host.trackDrain(id, codex.stop())
-      if (this.host.get(id).state !== 'idle') this.host.setState(id, 'stopped')
+      if (['starting', 'running', 'needs-input'].includes(this.host.get(id).state)) this.host.setState(id, 'stopped')
     }
     const live = this.host.live.get(id)
     if (!live) return
@@ -522,10 +522,17 @@ export class SessionProcess {
     live.query.close?.()
     this.host.trackDrain(id, live.done ?? Promise.resolve())
     this.host.live.delete(id)
-    if (this.host.get(id).state !== 'idle') this.host.setState(id, 'stopped')
+    if (['starting', 'running', 'needs-input'].includes(this.host.get(id).state)) this.host.setState(id, 'stopped')
   }
 
   stop(id: string): void {
+    // A live provider process can remain attached after its turn finishes. Closing that process is cleanup,
+    // not an interrupted turn, including during application shutdown.
+    const interrupted =
+      ['starting', 'running', 'needs-input'].includes(this.host.get(id).state) ||
+      this.host.isRecoveryPending(id) ||
+      this.host.transitioning.has(id) ||
+      this.host.hasRunningTasks(id)
     if (!this.host.shutdown()) this.host.clearProviderWait(id)
     if (!this.host.shutdown() && this.host.getGoal(id) && this.host.getGoal(id)?.status !== 'completed')
       this.host.controlGoal(id, 'pause')
@@ -537,8 +544,7 @@ export class SessionProcess {
     this.host.pauseQueue(id)
     this.host.revisions.set(id, (this.host.revisions.get(id) ?? 0) + 1)
     this.halt(id)
-    if (!this.host.live.has(id) && !this.host.runners.has(id)) this.host.setState(id, 'stopped')
-    if (this.host.transitioning.has(id)) this.host.setState(id, 'stopped')
+    if (interrupted && !['failed', 'stopped'].includes(this.host.get(id).state)) this.host.setState(id, 'stopped')
   }
 
   async stopAndWait(id: string): Promise<void> {

@@ -1,8 +1,10 @@
-import { WebContentsView, session, type BrowserWindow, type Session } from 'electron'
+import { WebContentsView, session, shell, Menu, type BrowserWindow, type Session, type WebContents } from 'electron'
 import type { GuestFactory, GuestHandlers, GuestPage, PageSnapshot } from './browserRuntime'
 import { BrowserDebugger } from './browserDebugger'
 import type { BrowserDiagnostics, BrowserScreenshot } from '@ramu/shared/browserBridge'
 import { browserGuestScript } from './browserGuestScript'
+import { browserFaviconFrom } from '@ramu/shared/browserLinks'
+import { t } from './localization'
 
 const PARKED = { x: -20000, y: -20000, width: 1280, height: 800 }
 const SHORTCUT_KEYS = new Set(['`', 'j', 'b', 'l', 'p'])
@@ -21,11 +23,12 @@ const appShortcut = (input: { key: string; control: boolean; meta: boolean; alt:
 /**
  * Guest pages over Electron web contents. Each page is sandboxed with context isolation and no Node access, in the
  * partition its profile names, with no preload: a website never sees the app's bridge. Camera, microphone, location,
- * notifications and downloads stay denied until a later flow grants them per origin and profile.
+ * notifications stay denied. Downloads require an explicit, bounded one-use grant from the current controller.
  */
 export class ElectronGuestFactory implements GuestFactory {
   private static readonly closing = new Map<string, Set<Promise<void>>>()
   private static readonly guarded = new WeakSet<Session>()
+  private static readonly downloadHandlers = new WeakMap<WebContents, GuestHandlers>()
   constructor(private readonly window: () => BrowserWindow | null) {}
 
   private guard(partition: string) {
@@ -34,7 +37,22 @@ export class ElectronGuestFactory implements GuestFactory {
     ElectronGuestFactory.guarded.add(guest)
     guest.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
     guest.setPermissionCheckHandler(() => false)
-    guest.on('will-download', (event) => event.preventDefault())
+    guest.on('will-download', (event, item, contents) => {
+      const accepted = ElectronGuestFactory.downloadHandlers.get(contents)?.onDownload?.({
+        name: () => item.getFilename(),
+        total: () => item.getTotalBytes(),
+        received: () => item.getReceivedBytes(),
+        saveTo: (path) => item.setSavePath(path),
+        cancel: () => item.cancel(),
+        updated: (callback) => {
+          item.on('updated', callback)
+        },
+        done: (callback) => {
+          item.once('done', (_event, state) => callback(state))
+        },
+      })
+      if (!accepted) event.preventDefault()
+    })
   }
 
   create(partition: string, handlers: GuestHandlers): GuestPage {
@@ -49,6 +67,12 @@ export class ElectronGuestFactory implements GuestFactory {
       },
     })
     const contents = view.webContents
+    ElectronGuestFactory.downloadHandlers.set(contents, handlers)
+    let favicon: string | null = null
+    contents.on('page-favicon-updated', (_event, icons) => {
+      favicon = icons.map((icon) => browserFaviconFrom(contents.getURL(), icon)).find((icon) => !!icon) ?? null
+      handlers.onChanged?.()
+    })
     const window = this.window
     let driver: BrowserDebugger | undefined
     const debuggerForPage = () => (driver ??= new BrowserDebugger(contents, () => handlers.onChanged?.()))
@@ -62,6 +86,32 @@ export class ElectronGuestFactory implements GuestFactory {
       consoleEntries.push({ level: details.level, message: details.message.slice(0, 500) })
     })
     let humanInput = false
+    contents.on('context-menu', (_event, params) => {
+      if (!humanInput) return
+      let url: URL
+      try {
+        url = new URL(params.linkURL)
+      } catch {
+        return
+      }
+      if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return
+      const win = window()
+      if (!win || win.isDestroyed()) return
+      Menu.buildFromTemplate([
+        {
+          label: t('Open in Ramu browser'),
+          click: () => {
+            if (humanInput) handlers.onOpenWindow(url.href)
+          },
+        },
+        {
+          label: t('Open in system browser'),
+          click: () => {
+            if (humanInput) void shell.openExternal(url.href)
+          },
+        },
+      ]).popup({ window: win })
+    })
     // The page is its own native view, so while it has focus the app's shortcuts never reach the renderer. Hand the
     // layout shortcuts back to the app window; everything else, including copy and paste, stays with the page.
     contents.on('before-input-event', (event, input) => {
@@ -88,7 +138,10 @@ export class ElectronGuestFactory implements GuestFactory {
     }
     contents.on('will-navigate', check)
     contents.on('will-redirect', check)
-    contents.on('did-navigate', () => handlers.onChanged?.())
+    contents.on('did-navigate', () => {
+      favicon = null
+      handlers.onChanged?.()
+    })
     contents.on('did-navigate-in-page', () => handlers.onChanged?.())
     contents.on('page-title-updated', () => handlers.onChanged?.())
     contents.on('unresponsive', () => handlers.onCrash())
@@ -106,6 +159,28 @@ export class ElectronGuestFactory implements GuestFactory {
       attached = true
       view.setBounds(PARKED)
     }
+    const history = (direction: 'back' | 'forward' | 'reload'): Promise<void> => {
+      if (direction === 'back' && !contents.navigationHistory.canGoBack()) return Promise.resolve()
+      if (direction === 'forward' && !contents.navigationHistory.canGoForward()) return Promise.resolve()
+      return new Promise((resolve, reject) => {
+        const finish = (error?: Error) => {
+          clearTimeout(timer)
+          contents.removeListener('did-stop-loading', loaded)
+          contents.removeListener('destroyed', closed)
+          if (error) reject(error); else resolve()
+        }
+        const loaded = () => finish()
+        const closed = () => finish(new Error('The browser tab closed during navigation.'))
+        const timer = setTimeout(() => finish(new Error('Browser navigation timed out. Inspect the page before continuing.')), 15_000)
+        contents.once('did-stop-loading', loaded)
+        contents.once('destroyed', closed)
+        try {
+          if (direction === 'reload') contents.reload()
+          else if (direction === 'back') contents.navigationHistory.goBack()
+          else contents.navigationHistory.goForward()
+        } catch { finish(new Error('Browser navigation could not start. Inspect the page before continuing.')) }
+      })
+    }
     return {
       load: async (url) => {
         ensureAttached()
@@ -117,9 +192,10 @@ export class ElectronGuestFactory implements GuestFactory {
       },
       url: () => contents.getURL(),
       title: () => contents.getTitle(),
-      back: () => contents.navigationHistory.goBack(),
-      forward: () => contents.navigationHistory.goForward(),
-      reload: () => contents.reload(),
+      favicon: () => browserFaviconFrom(contents.getURL(), favicon),
+      back: () => history('back'),
+      forward: () => history('forward'),
+      reload: () => history('reload'),
       inspect: () => isolated<PageSnapshot>('inspect'),
       act: async (action) => {
         const result = await isolated<{ ok: boolean; reason?: string; points?: { x: number; y: number }[] }>(
@@ -180,8 +256,11 @@ export class ElectronGuestFactory implements GuestFactory {
       },
       hide() {
         if (attached) view.setBounds(PARKED)
+        const win = window()
+        if (win && !win.isDestroyed() && contents.isFocused()) win.webContents.focus()
       },
       destroy() {
+        ElectronGuestFactory.downloadHandlers.delete(contents)
         driver?.dispose()
         const win = window()
         if (win && attached) win.contentView.removeChildView(view)

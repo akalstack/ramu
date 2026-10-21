@@ -5,6 +5,8 @@ import type { PushEvents } from './api'
  * Every event on these carries the host it belongs to, and a window that shows several hosts routes them by that host.
  */
 export const HOST_PUSH_CHANNELS = [
+  'hostBrowser:changed',
+  'hostBrowser:present',
   'agent:event',
   'agent:rewound',
   'term:data',
@@ -26,7 +28,6 @@ export const HOST_PUSH_CHANNELS = [
   'providers:updates',
   'mcp:changed',
   'background:connection',
-  'browser:agent-open',
 ] as const satisfies readonly (keyof PushEvents)[]
 export type HostPushChannel = (typeof HOST_PUSH_CHANNELS)[number]
 
@@ -42,6 +43,7 @@ export const WINDOW_PUSH_CHANNELS = [
   'notify:open',
   'browser:open-link',
   'browser:changed',
+  'browser:present',
   'computers:changed',
   'computers:navigate',
   'computers:activity',

@@ -1,5 +1,5 @@
 import { t as translate, useLanguage, currentLanguage, formatLocale } from '../../../i18n'
-import { foldChatTurn as foldTurn, type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
+import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { formatChatDate } from '@ramu/shared/chat/chatDates'
 import type { ChatGoal } from '@ramu/shared/types'
 import { GoalDone, GoalNote } from '../../../chat/GoalBar'
@@ -14,6 +14,9 @@ import { EventRow } from './EventRow'
 import { ToolGroup } from './ToolGroup'
 import { Marker, MarkerContent } from '@/components/ui/marker'
 import { TurnSummary } from './TurnSummary'
+import { ThinkingRow } from './ThinkingRow'
+import { turnThinking } from '../lib/turnThinking'
+import { groupToolThinking, type ToolEntry } from '../lib/toolThinking'
 import { useLayoutEffect, useRef } from 'react'
 import { reducedMotion } from '../../../workspace/panelMotion'
 
@@ -27,6 +30,7 @@ function TranscriptBlock({
   finished,
   assistantActions,
   latest = false,
+  toolEntries,
 }: {
   block: Block
   ctx: TranscriptContext
@@ -35,6 +39,7 @@ function TranscriptBlock({
   finished: boolean
   assistantActions: boolean
   latest?: boolean
+  toolEntries?: ToolEntry[]
 }) {
   const index = blockIndex(b, ctx.blocks)
   const row = useRef<HTMLDivElement>(null)
@@ -49,10 +54,16 @@ function TranscriptBlock({
       {b.kind === 'tools' ? (
         <ToolGroup
           tools={b.tools}
+          entries={toolEntries}
           results={ctx.results}
           cwd={ctx.cwd}
           active={ctx.busyAgent && !finished}
-          activity={b === ctx.statusGroup ? translate(ctx.activityLabel ?? 'Working') : undefined}
+          activity={
+            b === ctx.statusGroup ||
+            (ctx.statusGroup?.kind === 'tools' && ctx.statusGroup.tools.some((tool) => b.tools.includes(tool)))
+              ? translate(ctx.activityLabel ?? 'Working')
+              : undefined
+          }
           taskId={ctx.taskId}
           onBackground={ctx.onBackground}
         />
@@ -127,13 +138,12 @@ export function TranscriptTurn({
   const { blocks, working, needsInput } = ctx
   // A turn is done when the agent reported a result, a later message exists, or nothing is running any more.
   const finished = turn.ended || !isLast || (!working && !needsInput)
-  const { folded, kept, answer } = finished
-    ? foldTurn(turn.items, ctx.outcomes, ctx.results)
-    : { folded: [] as Block[], kept: turn.items, answer: [] as Block[] }
-  const renderBlock = (b: Block, latest = false) => (
+  const { folded, kept, answer, thinking } = turnThinking(turn.items, finished, ctx.outcomes, ctx.results)
+  const renderBlock = (b: Block, latest = false, toolEntries?: ToolEntry[]) => (
     <TranscriptBlock
       key={blockIndex(b, blocks)}
       block={b}
+      toolEntries={toolEntries}
       ctx={ctx}
       turn={turn}
       finished={finished}
@@ -143,11 +153,13 @@ export function TranscriptTurn({
   )
   // Several sub-agents in a row read as one line with a summary, expanding to their cards.
   const renderList = (list: Block[]) =>
-    groupAgentRuns(list).map((item) =>
+    groupToolThinking(groupAgentRuns(list)).map((item) =>
       Array.isArray(item) ? (
         <div key={blockIndex(item[0]!, blocks)} data-block-index={blockIndex(item[0]!, blocks)}>
           <AgentGroup tasks={item.map(agentOf)} live={ctx.live} onOpen={ctx.onOpenAgent} onStop={ctx.onStopTask} />
         </div>
+      ) : item.kind === 'work' ? (
+        renderBlock(item.block, false, item.entries)
       ) : (
         renderBlock(item)
       ),
@@ -173,7 +185,7 @@ export function TranscriptTurn({
         </Marker>
       )}
       {turn.user && renderBlock(turn.user, isLast && !answer.length && !kept.length && !folded.length)}
-      {((!finished && isLast && (working || needsInput)) ||
+      {((!finished && isLast && (working || needsInput) && !folded.length) ||
         (finished && (!turn.ended || turn.interrupted) && !folded.length)) && (
         <div className="turn-working text-muted-foreground tabular-nums" role="status">
           <span>
@@ -188,10 +200,14 @@ export function TranscriptTurn({
           label={
             duration !== undefined
               ? translate(
-                  turn.ended && !turn.interrupted && !(isLast && ctx.stopped) ? 'Worked for {0}' : 'Working for {0}',
+                  finished && turn.ended && !turn.interrupted && !(isLast && ctx.stopped)
+                    ? 'Worked for {0}'
+                    : 'Working for {0}',
                   { '0': formatDuration(duration) },
                 )
-              : translate(turn.ended && !turn.interrupted && !(isLast && ctx.stopped) ? 'Worked' : 'Working')
+              : translate(
+                  finished && turn.ended && !turn.interrupted && !(isLast && ctx.stopped) ? 'Worked' : 'Working',
+                )
           }
           sourceIndex={ctx.hasSourceSeq ? blockIndex(folded[0]!, blocks) : undefined}
         >
@@ -206,6 +222,20 @@ export function TranscriptTurn({
       {completedGoals?.map((done) => (
         <GoalDone key={done.id} goal={done} />
       ))}
+      {/* The latest thought closes the turn, beside the composer, so what the agent is doing now is what you see. */}
+      {thinking && (
+        <ThinkingRow
+          preview
+          text={thinking.text}
+          active={
+            !finished &&
+            working &&
+            turn.items.some(
+              (block) => block === turn.items.at(-1) && block.kind === 'event' && block.event === thinking,
+            )
+          }
+        />
+      )}
     </div>
   )
 }

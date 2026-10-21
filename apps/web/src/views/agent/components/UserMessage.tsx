@@ -1,7 +1,8 @@
 import { ReferenceText } from '../../../chat/ChatReferences'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { Bot, ChevronRight, Lightbulb, Pencil, ShieldQuestion, Square } from 'lucide-react'
+import { AppWindow, Bot, ChevronRight, Lightbulb, Pencil, ShieldQuestion, Square } from 'lucide-react'
+import { sentInteractiveAttachments } from '@ramu/shared/interactive'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { AgentEvent, Attachment } from '@ramu/shared/types'
@@ -133,7 +134,8 @@ export function UserMessage({
   useLanguage()
   const text = visibleText(e.text)
   const comments = sentComments(e.text)
-  if (!text && !e.attachments?.length && !comments.length) return null
+  const content = sentInteractiveAttachments(e.text)
+  if (!text && !e.attachments?.length && !comments.length && !content.length) return null
   // A sub-agent's report comes back as a message, shown as a report and not as something you typed.
   const report = parseTaskReport(e.text)
   // Advice delivered after the advisor answered: the card holds the advice, this marks where the agent received it.
@@ -229,6 +231,20 @@ export function UserMessage({
         </UserBubble>
       ) : null}
       {comments.length > 0 && <SentComments comments={comments} />}
+      {content.length > 0 && (
+        <div className="mt-1 flex flex-wrap justify-end gap-1 self-end">
+          {content.map((item) => (
+            <span
+              key={`${item.id}:${item.version}`}
+              className="inline-flex h-6 max-w-[260px] items-center gap-1.5 rounded-(--radius-s) bg-raised px-2 text-caption text-muted-foreground"
+              title={translate('Asked about {0}', { '0': item.title })}
+            >
+              <AppWindow size={12} className="flex-none" aria-hidden />
+              <span className="min-w-0 truncate text-foreground">{item.title}</span>v{item.version}
+            </span>
+          ))}
+        </div>
+      )}
       <UserMessageActions event={e} text={text} latest={latest} onEdit={onEdit} />
     </UserShell>
   )

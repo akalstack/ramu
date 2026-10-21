@@ -1,4 +1,6 @@
-import { Copy, CopyPlus, ExternalLink, Plus, RotateCw, X, XCircle } from 'lucide-react'
+import { Copy, CopyPlus, ExternalLink, Globe, Plus, RotateCw, X, XCircle } from 'lucide-react'
+import { useState } from 'react'
+import { browserFaviconFrom } from '@ramu/shared/browserLinks'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { t, useLanguage } from '../i18n'
 import { copyText } from '../ipc'
@@ -114,6 +116,8 @@ export function BrowserTabChip({
   ]
   const menu = useContextMenu(`${tab.title || tab.url} actions`, items)
   const title = tab.title || tab.url
+  const icon = browserFaviconFrom(tab.url, tab.faviconUrl)
+  const [failedIcon, setFailedIcon] = useState<string | null>(null)
   return (
     <div
       className={`flex min-w-0 max-w-44 flex-none items-center rounded-(--radius-s) text-caption ${active ? 'bg-hover text-foreground' : 'text-muted-foreground hover:bg-hover'}`}
@@ -135,10 +139,24 @@ export function BrowserTabChip({
         aria-selected={active}
         disabled={disabled}
         title={title}
-        className="min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent px-2 py-1 text-left text-inherit"
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 border-0 bg-transparent px-2 py-1 text-left text-inherit"
         onClick={() => actions.select(tab)}
       >
-        {title}
+        {icon && failedIcon !== icon ? (
+          <img
+            src={icon}
+            alt=""
+            aria-hidden="true"
+            width={14}
+            height={14}
+            className="size-3.5 flex-none object-contain"
+            referrerPolicy="no-referrer"
+            onError={() => setFailedIcon(icon)}
+          />
+        ) : (
+          <Globe size={14} className="flex-none" aria-hidden="true" />
+        )}
+        <span className="min-w-0 truncate">{title}</span>
       </button>
       <button
         type="button"

@@ -32,3 +32,14 @@ export function openBrowser(ws: Workspace, taskId: string, tab?: BrowserTabInfo 
   ws.activateView(taskId, existing.id)
   for (const listener of listeners) listener()
 }
+
+/** A deliberate agent handoff can reveal its page, but cannot take the person to another conversation. */
+export function presentBrowser(
+  ws: Workspace & { ui: { activeTaskId: string | null } },
+  activeHost: string,
+  tab: BrowserTabInfo,
+): boolean {
+  if (activeHost !== tab.hostId || ws.ui.activeTaskId !== tab.threadId) return false
+  openBrowser(ws, tab.threadId, tab)
+  return true
+}

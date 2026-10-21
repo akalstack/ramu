@@ -26,6 +26,8 @@ import type { KeyedLock } from './keyedLock'
 import type { FileWatchers } from './watchers'
 
 export interface Services {
+  hostBrowser?: import('../browser/hostBrowser').HostBrowser
+  browser?: import('../browser/desktopBroker').DesktopBrowserBroker
   getSharedMcp?: () => import('../mcp/service').SharedMcpService
   threadTitles?: import('../agent/threadTitles').ThreadTitles
   interactive?: import('../interactive/store').InteractiveStore
@@ -45,6 +47,8 @@ export interface Services {
   notices?: NoticeInbox
 }
 export interface RuntimeHost {
+  browserDevice?(): string | undefined
+  browserGrantEligible?(deviceId: string): boolean
   userData: string
   /** Initial integration/credential administration is local to the execution host. */
   canAdministerIntegrations?(): boolean

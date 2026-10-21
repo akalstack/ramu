@@ -6,6 +6,8 @@ import { readHostOverview, HostOverviewQueue } from './hostOverview'
 import { isHostDestination } from '@ramu/shared/hostOverview'
 import { LINK_TARGET_KEY, isWebLink, linkTargetFrom } from '@ramu/shared/browserLinks'
 import { BrowserRuntime } from './browserRuntime'
+import { BrowserDownloads } from './browserDownloads'
+import { browserImportSources } from './browserImportSources'
 import { BrowserProfiles } from './browserProfiles'
 import { BrowserSignInWindows } from './browserSignIn'
 import { browserProfileMethod } from './browserProfileMethods'
@@ -13,7 +15,7 @@ import { executeBrowserBridge } from './browserBridge'
 import { randomUUID } from 'node:crypto'
 import { ElectronGuestFactory } from './electronGuest'
 import { browserMethod, isBrowserMethod } from './browserMethods'
-import { isHostInvokeAllowed, routeInvoke, routeTaskCommand, activityChannel } from './hostInvoke'
+import { isHostInvokeAllowed, isSettingsActionAllowed, routeInvoke, routeTaskCommand, activityChannel } from './hostInvoke'
 import { DeviceState } from './deviceState'
 import { partitionHostEntries } from './partitionStorage'
 import { newerVersion } from '@ramu/shared/version'
@@ -322,6 +324,22 @@ async function main() {
     })
     contents.on('context-menu', (_event, params) => {
       const items = editMenuItems(params)
+      if (isWebLink(params.linkURL))
+        items.unshift(
+          {
+            label: t('Open in system browser'),
+            click: () => {
+              void shell.openExternal(params.linkURL)
+            },
+          },
+          {
+            label: t('Open in Ramu browser'),
+            click: () => {
+              if (!win.isDestroyed()) win.webContents.send('browser:open-link', { url: params.linkURL })
+            },
+          },
+          ...(items.length ? [{ type: 'separator' as const }] : []),
+        )
       if (items.length)
         Menu.buildFromTemplate(items).popup({ window: win, ...(params.frame ? { frame: params.frame } : {}) })
     })
@@ -497,6 +515,9 @@ async function main() {
       if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
     },
     (id) => !browserProfiles.isBusy(id),
+    new BrowserDownloads(join(userData, 'browser-downloads'), () => {
+      if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+    }),
   )
   const browserRuntimes = new Set([browser])
   const browserSignIn = new BrowserSignInWindows(browserProfiles, browserRuntimes, () => {
@@ -544,14 +565,16 @@ async function main() {
         void executeBrowserBridge(browser, LOCAL, payload, () => browserProfiles.catalog())
           .then(
             (result) => {
-              if (
-                payload.command.kind === 'open' &&
-                result &&
-                typeof result === 'object' &&
-                'tab' in result &&
-                !win.isDestroyed()
-              )
-                win.webContents.send('browser:agent-open', result.tab)
+              if (!win.isDestroyed() && result && typeof result === 'object') {
+                if (payload.command.kind === 'present' && 'id' in result)
+                  win.webContents.send('browser:present', result)
+                else if (
+                  payload.command.kind === 'open' &&
+                  payload.command.presentation === 'foreground' &&
+                  'tab' in result
+                )
+                  win.webContents.send('browser:present', result.tab)
+              }
               return runtimeInvoke(runtime, 'browser.bridge.reply', [browserClientId, token, payload.requestId, result])
             },
             (error) =>
@@ -648,14 +671,7 @@ async function main() {
       const [id, operation, parameters] = args
       if (typeof id !== 'string' || !computers.exists(id) || computers.status(id) !== 'connected')
         throw new Error('That host is not connected')
-      if (
-        typeof operation !== 'string' ||
-        !/^(mcp\.|providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.(list|setup)$|diagnostics\.(export|clear)$)/.test(
-          operation,
-        ) ||
-        !Array.isArray(parameters)
-      )
-        throw new Error('Invalid settings action')
+      if (!isSettingsActionAllowed(operation) || !Array.isArray(parameters)) throw new Error('Invalid settings action')
       if (id !== self && operation === 'providers.pickBinary')
         throw new Error('Enter the binary path on the selected host')
       settingsComputer = id
@@ -679,6 +695,18 @@ async function main() {
             }
       if (remote || args[0] !== LOCAL)
         throw new Error('The selected execution host has no authorized browser bridge to this desktop.')
+      if (method === 'browser.saveDownload') {
+        const [hostId, threadId, downloadId] = args
+        if (typeof hostId !== 'string' || typeof threadId !== 'string' || typeof downloadId !== 'string')
+          throw new Error('Invalid browser download')
+        const download = browser.listDownloads({ hostId, threadId }).find((entry) => entry.id === downloadId)
+        if (!download || download.state !== 'completed') throw new Error('That download is not ready or has expired.')
+        // Website suggestions are filenames only. The native dialog grants the destination path.
+        const result = await dialog.showSaveDialog(win, { defaultPath: download.name })
+        if (!result.canceled && result.filePath) browser.saveDownload(downloadId, { hostId, threadId }, result.filePath)
+        return { cancelled: result.canceled }
+      }
+      if (method === 'browser.profiles.importSources') return browserImportSources()
       if (method === 'browser.profiles.signIn') {
         if (typeof args[1] !== 'string' || typeof args[2] !== 'string' || args[2].length > 4000)
           throw new Error('Invalid browser sign-in request')

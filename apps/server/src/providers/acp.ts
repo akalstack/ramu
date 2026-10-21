@@ -448,7 +448,7 @@ class AcpSession implements AgentRunner {
     if (this.connection && !tools)
       this.emit({
         kind: 'error',
-        message: `${providerName(provider)} cannot connect to Ramu's tools over HTTP, so questions, helpers and advice are unavailable in this thread.`,
+        message: `${providerName(provider)} cannot connect to Ramu's tools over HTTP, so the integrated browser, questions, helpers and advice are unavailable in this thread.`,
       })
     this.sessionId = resume ?? ''
     this.loading = true

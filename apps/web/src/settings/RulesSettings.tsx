@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
 import { RULE_BODY_LIMIT, RULE_NAME_LIMIT, type AgentProvider, type Rule, type RuleRevision } from '@ramu/shared/types'
@@ -7,6 +7,7 @@ import { Input } from '@/components/desktop-input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dialog, Dropdown, timeAgo } from '../Menu'
 import { t, useLanguage } from '../i18n'
@@ -15,7 +16,6 @@ import { SettingsCard, SettingsCardList } from './cards'
 import { ruleCharacters, ruleDuplicates, ruleScopeCosts } from '@ramu/shared/rules'
 import { duplicateNote, ruleReach, ruleTokens, scopeCostLine } from './rulesView'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
-import { useContext } from 'react'
 
 const CAPTION = 'm-0 text-caption text-muted-foreground'
 const ALL = ''
@@ -45,6 +45,8 @@ function RuleEditor({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const pending = useRef(false)
+  const form = useRef<HTMLFormElement>(null)
+  const id = useId()
   const history = useQuery({
     queryKey: ['rule-history', rule?.id, rule?.revision],
     queryFn: () => invoke('rules.history', rule!.id),
@@ -111,67 +113,95 @@ function RuleEditor({
       confirmDisabled={invalid}
       busy={busy}
       error={error}
-      onConfirm={() => void save()}
+      onConfirm={() => form.current?.requestSubmit()}
       onCancel={() => {
         if (!pending.current) onClose()
       }}
     >
-      <p>
-        {t('Rules are instructions for how agents work. They never grant permissions; use Permissions for access.')}
-      </p>
-      <Input
-        autoFocus
-        aria-label={t('Rule name')}
-        placeholder={t('Rule name')}
-        value={name}
-        maxLength={RULE_NAME_LIMIT}
-        disabled={busy}
-        onChange={(event) => setName(event.target.value)}
-      />
-      <Textarea
-        aria-label={t('Rule text')}
-        placeholder={t('What should agents do?')}
-        value={body}
-        rows={8}
-        disabled={busy}
-        onChange={(event) => setBody(event.target.value)}
-      />
-      <p className={CAPTION}>
-        {`${body.length} / ${RULE_BODY_LIMIT}`} · {ruleTokens(ruleCharacters({ name: name.trim(), body }))}
-      </p>
-      <Dropdown
-        label={t('Applies to')}
-        value={projectId}
-        options={[{ value: ALL, label: t('Every project') }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
-        onChange={setProjectId}
-      />
-      <Dropdown
-        label={t('Provider')}
-        value={provider}
-        options={[
-          { value: ALL, label: t('Every provider') },
-          ...AGENT_PROVIDERS.map((p) => ({ value: p, label: providerName(p) })),
-        ]}
-        onChange={setProvider}
-      />
-      <Dropdown
-        label={t('When')}
-        value={activation}
-        options={[
-          { value: 'always', label: t('Always, at the start of a thread') },
-          { value: 'manual', label: t('Manual: kept here, not sent on its own') },
-        ]}
-        onChange={(value) => setActivation(value === 'manual' ? 'manual' : 'always')}
-      />
-      {duplicate && (
-        <p role="note" className="m-0 text-caption text-foreground">
-          {duplicateNote(duplicate, rules)}
+      <form
+        ref={form}
+        onSubmit={(event) => {
+          event.preventDefault()
+          void save()
+        }}
+      >
+        <p>
+          {t('Rules are instructions for how agents work. They never grant permissions; use Permissions for access.')}
         </p>
-      )}
-      <label className="flex items-center gap-2 text-control">
-        <Switch aria-label={t('Rule enabled')} checked={enabled} disabled={busy} onCheckedChange={setEnabled} />
-        {t('Enabled')}
-      </label>
+        <fieldset disabled={busy} className="m-0 flex flex-col gap-4 border-0 p-0">
+          <Field>
+            <FieldLabel htmlFor={`${id}-name`}>{t('Name')}</FieldLabel>
+            <Input
+              id={`${id}-name`}
+              autoFocus
+              placeholder={t('For example: Test before committing')}
+              value={name}
+              maxLength={RULE_NAME_LIMIT}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${id}-body`}>{t('Instructions')}</FieldLabel>
+            <Textarea
+              id={`${id}-body`}
+              placeholder={t('What should agents do?')}
+              value={body}
+              rows={8}
+              onChange={(event) => setBody(event.target.value)}
+            />
+            <p className={`${CAPTION} tabular-nums`}>
+              {`${body.length} / ${RULE_BODY_LIMIT}`} · {ruleTokens(ruleCharacters({ name: name.trim(), body }))}
+            </p>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <FieldLabel className="flex-col items-stretch">
+              {t('Project')}
+              <Dropdown
+                label={t('Project')}
+                value={projectId}
+                options={[
+                  { value: ALL, label: t('Every project') },
+                  ...projects.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+                onChange={setProjectId}
+              />
+            </FieldLabel>
+            <FieldLabel className="flex-col items-stretch">
+              {t('Provider')}
+              <Dropdown
+                label={t('Provider')}
+                value={provider}
+                options={[
+                  { value: ALL, label: t('Every provider') },
+                  ...AGENT_PROVIDERS.map((p) => ({ value: p, label: providerName(p) })),
+                ]}
+                onChange={setProvider}
+              />
+            </FieldLabel>
+          </div>
+          <FieldLabel className="flex-col items-stretch">
+            {t('When')}
+            <Dropdown
+              label={t('When')}
+              value={activation}
+              options={[
+                { value: 'always', label: t('Always, at the start of a thread') },
+                { value: 'manual', label: t('Manual: kept here, not sent on its own') },
+              ]}
+              onChange={(value) => setActivation(value === 'manual' ? 'manual' : 'always')}
+            />
+          </FieldLabel>
+          {duplicate && (
+            <Alert>
+              <AlertDescription>{duplicateNote(duplicate, rules)}</AlertDescription>
+            </Alert>
+          )}
+          <Field orientation="horizontal">
+            <Switch id={`${id}-enabled`} checked={enabled} onCheckedChange={setEnabled} />
+            <FieldLabel htmlFor={`${id}-enabled`}>{t('Enabled')}</FieldLabel>
+          </Field>
+        </fieldset>
+      </form>
       {rule && (history.data?.length ?? 0) > 1 && (
         <details className={CAPTION}>
           <summary className="cursor-pointer select-none">{t('History')}</summary>

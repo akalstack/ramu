@@ -7,6 +7,7 @@ export interface BrowserTabInfo {
   profileId: string
   url: string
   title: string
+  faviconUrl?: string
   /** Who may drive the page now. The agent acts only after the person releases it. */
   controller: 'human' | 'agent' | 'none'
   generation: number
@@ -30,4 +31,11 @@ export interface BrowserProfileInfo {
 export interface BrowserProfileCatalog {
   profiles: BrowserProfileInfo[]
   error?: string
+}
+export interface BrowserImportSource {
+  id: string
+  name: string
+  installed: boolean
+  supported: boolean
+  reason?: string
 }

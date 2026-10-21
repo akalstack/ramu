@@ -8,12 +8,17 @@ export interface InteractiveShareAdapter {
 /** Serialize access to a single cache file until the native share sheet closes; failures always release it. */
 export function createInteractiveSharer(adapter: InteractiveShareAdapter) {
   let sharing = false
-  return async (document: InteractiveDocument, state: InteractiveState | null, raw = false): Promise<void> => {
+  return async (
+    document: InteractiveDocument,
+    state: InteractiveState | null,
+    raw = false,
+    theme?: Record<string, string>,
+  ): Promise<void> => {
     if (sharing) throw new Error('Another share is open.')
     sharing = true
     try {
       if (!(await adapter.available())) throw new Error('Sharing is unavailable on this device.')
-      const exported = interactiveExport(document, state, raw)
+      const exported = interactiveExport(document, state, raw, theme)
       const uri = await adapter.write(exported.html)
       await adapter.share(uri, exported)
     } finally {

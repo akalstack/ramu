@@ -133,3 +133,20 @@ Use the **Apply settings to** selector in the Settings header. **All environment
 Each host reports its current settings and constraints. Controls offer common choices, show **Mixed** when values differ, and disable incompatible settings. Structured lists can be shared when their formats match. Model pickers use models and reasoning efforts available on every selected host. **Use this value for all** explicitly applies the displayed value or list when targets differ.
 
 Saving patches only changed settings, checks for concurrent edits and changed options, and reports failures per host. Successful saves remain saved if another host fails. Reloading discards pending changes and reads current settings. Provider sign-in, service management, pairing and other machine actions require selecting a single host in the header.
+
+
+## Host browser
+
+Run `ramu browser setup` on the owning host (or use Settings → Browser there). Setup downloads compatible Chromium when needed and checks it with the sandbox enabled. An administrator can set `RAMU_BROWSER_EXECUTABLE` to an installed Chromium executable instead. Missing system dependencies or sandbox support are reported; Ramu never adds `--no-sandbox` to bypass them. Website profiles stay on this host, separate from desktop Electron profiles. Enabling the host runtime affects new browser turns; an existing turn keeps its selected runtime.
+
+`ramu browser status` reports readiness, `ramu browser threads` lists thread IDs, and `ramu devices` lists paired devices. Explicitly grant an owner device one hour of browser viewing, control and scoped file transfers for a single thread:
+
+```sh
+ramu browser grant <device-id> <thread-id>
+ramu browser grants
+ramu browser revoke <device-id> <thread-id>
+```
+
+Pairing alone grants no browser viewer access. Viewer-role devices cannot receive browser grants. Setup/profile administration and grants remain local to the owning host. Grants are memory-only and must be renewed after expiry or restart. Desktop and mobile view bounded JPEG frames through authenticated RPC; they never receive cookies or a public debug endpoint. Hidden/background viewers stop capturing. A missing heartbeat pauses human control after five seconds without returning it to the agent. The owning host can explicitly take control to recover a disconnected device.
+
+`ramu browser stop` cancels work, closes host tabs and revokes grants. Persistent website profiles remain; Temporary profiles are isolated and removed when their run/tabs end. Completed downloads expire after an hour and are never opened automatically. Human and agent file transfers use relative paths within the thread's authorized workspace, with bounds and no download overwrites. See [browser behavior](UI.md#integrated-browser) for ownership and transfer details.

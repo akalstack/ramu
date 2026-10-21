@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import type { BrowserBridgeCommand, BrowserBridgeRequest } from '@ramu/shared/browserBridge'
+import type { HostedBrowserBackend } from './hostBrowser'
 
 /** One explicitly attached local desktop. Disconnects fail pending work; operations are never replayed. */
 export class DesktopBrowserBroker {
+  private readonly routes = new Map<string, 'host' | 'desktop'>()
   private attachment: { clientId: string; token: string; ready: boolean } | null = null
   private pending = new Map<
     string,
@@ -18,6 +20,7 @@ export class DesktopBrowserBroker {
   constructor(
     private readonly send: (clientId: string, request: BrowserBridgeRequest) => boolean,
     private readonly timeoutMs = 30000,
+    private readonly hosted?: HostedBrowserBackend,
   ) {}
 
   /** The desktop currently attached, so a caller can tell whether it is still connected. */
@@ -43,6 +46,7 @@ export class DesktopBrowserBroker {
   }
 
   status() {
+    if (this.hosted?.selected()) return this.hosted.status()
     return { available: this.attachment?.ready === true, location: 'execution-host-desktop' as const }
   }
 
@@ -61,6 +65,10 @@ export class DesktopBrowserBroker {
   }
 
   request(threadId: string, runId: string, command: BrowserBridgeCommand): Promise<unknown> {
+    const key = JSON.stringify([threadId, runId])
+    const route = this.routes.get(key) ?? (this.hosted?.selected() ? 'host' : 'desktop')
+    this.routes.set(key, route)
+    if (route === 'host') return this.hosted!.request(threadId, runId, command)
     const attachment = this.attachment
     if (!attachment?.ready)
       return Promise.reject(new Error('Open Ramu on the execution host to use its integrated browser.'))
@@ -95,6 +103,8 @@ export class DesktopBrowserBroker {
   }
 
   endRun(threadId: string, runId: string) {
+    this.routes.delete(JSON.stringify([threadId, runId]))
+    this.hosted?.endRun(threadId, runId)
     for (const [id, operation] of this.pending) {
       if (operation.threadId !== threadId || operation.runId !== runId) continue
       clearTimeout(operation.timer)

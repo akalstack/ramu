@@ -22,6 +22,7 @@ vi.mock('electron', () => ({
       mock.preferences = options.webPreferences
     }
     webContents = {
+      getURL: () => 'https://www.youtube.com/watch?v=example',
       setWindowOpenHandler() {},
       on: (event: string, listener: (...args: any[]) => void) => mock.listeners.set(event, listener),
       executeJavaScriptInIsolatedWorld: mock.execute,
@@ -39,6 +40,17 @@ const create = () =>
     onOpenWindow() {},
     onCrash() {},
   })
+
+it('tracks a site favicon, rejects another origin and clears the icon on navigation', () => {
+  const page = create()
+  mock.listeners.get('page-favicon-updated')!({}, [
+    'https://tracking.test/icon.png',
+    'https://www.youtube.com/favicon.ico',
+  ])
+  expect(page.favicon?.()).toBe('https://www.youtube.com/favicon.ico')
+  mock.listeners.get('did-navigate')!()
+  expect(page.favicon?.()).toBeNull()
+})
 
 it('keeps the page sandboxed without a preload and denies permissions and downloads', () => {
   create()

@@ -292,6 +292,8 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     settings TEXT NOT NULL,
     due_at INTEGER NOT NULL
   );`,
+  // Multi-file Interactive Content keeps its exact sources beside the bundled runnable document.
+  `ALTER TABLE interactive_versions ADD COLUMN files TEXT;`,
 ]
 
 export type Db = DatabaseSync

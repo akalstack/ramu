@@ -91,7 +91,7 @@ it('publishes through the portable provider wrapper using the same canonical cal
 it.skipIf(!interactiveBrowserPath())(
   'uses an isolated real preview browser to observe a working control and diagnose broken behavior',
   async () => {
-    const result = await previewInteractive(input.html, input.checks)
+    const result = await previewInteractive(input.html!, input.checks)
     expect(result.errors).toEqual([])
     expect(result.checks[0]?.passed).toBe(true)
     expect(result.layouts).toEqual([
@@ -100,12 +100,14 @@ it.skipIf(!interactiveBrowserPath())(
     ])
     expect(result.screenshot).toMatch(/^data:image\/png;base64,/)
     const blocked = await previewInteractive(
-      '<script>fetch("https://example.com/private").catch(()=>{});throw new Error("broken fixture")</script><p style="width:1200px">Fallback</p>',
+      '<script>fetch("http://example.com/private").catch(()=>{});console.log("checked");throw new Error("broken fixture")</script><p style="width:1200px">Fallback</p>',
       [],
     )
     expect(blocked.layouts?.every((layout) => layout.overflow)).toBe(true)
     expect(blocked.errors.join(' ')).toContain('broken fixture')
     expect(blocked.errors.join(' ')).toMatch(/Content Security Policy|connect-src|violates/)
+    expect(blocked.logs).toContain('log: checked')
+    expect(blocked.wideScreenshot).toMatch(/^data:image\/png;base64,/)
   },
   30_000,
 )

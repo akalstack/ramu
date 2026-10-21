@@ -63,9 +63,16 @@ export class SettingsStore {
   private validate(value: unknown): Document {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid settings document')
     const raw = value as Document
+    // Existing provider setups may live in external CLI configuration. Preserve them conservatively; new empty
+    // installations get the integrated default. An explicit saved choice always wins.
+    const legacyBrowser =
+      raw.agentBrowser === undefined && Object.keys(raw).some((key) => key !== 'models')
+        ? { agentBrowser: { agentBrowser: 'provider', providerOverrides: {}, defaultProfileId: 'default' } }
+        : {}
     const preferences = appPreferences.parse({
       ...DEFAULT_APP_PREFERENCES,
       ...raw,
+      ...legacyBrowser,
       ...(raw.messageBehaviorVersion === 4 ? {} : { busyMessageAction: 'steer', messageBehaviorVersion: 4 }),
     })
     const models = raw.models == null ? null : modelPreferences.parse(raw.models)

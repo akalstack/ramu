@@ -2,12 +2,26 @@ import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { Db } from '../db'
 import type { InteractiveDocument, InteractivePreview, InteractiveReference } from '@ramu/shared/interactive'
-import { INTERACTIVE_MAX_HTML } from '@ramu/shared/interactive'
+import { INTERACTIVE_MAX_FILES, INTERACTIVE_MAX_HTML } from '@ramu/shared/interactive'
 import { previewInteractive } from './preview'
+import { bundleInteractive } from './bundle'
+import { resolveInteractiveKit } from './kit'
 
 export const interactiveInput = z.object({
   stateSchema: z.string().trim().min(1).max(80).optional(),
-  html: z.string().min(1).max(INTERACTIVE_MAX_HTML),
+  html: z.string().min(1).max(INTERACTIVE_MAX_HTML).optional(),
+  files: z
+    .array(
+      z.object({
+        path: z.string().min(1).max(200),
+        content: z.string().max(INTERACTIVE_MAX_HTML),
+        encoding: z.enum(['utf8', 'base64']).optional(),
+      }),
+    )
+    .min(1)
+    .max(INTERACTIVE_MAX_FILES)
+    .optional(),
+  entry: z.string().min(1).max(200).optional(),
   title: z.string().trim().min(1).max(160),
   summary: z.string().trim().min(1).max(3000),
   checks: z
@@ -23,8 +37,41 @@ export const interactiveInput = z.object({
     .default([]),
 })
 export type InteractiveInput = z.infer<typeof interactiveInput>
+/** Exactly one of a single document or a project; the runnable document is always one bundled HTML string. */
+export function interactiveDocumentHtml(input: InteractiveInput): string {
+  if (!input.html === !input.files) throw new Error('Provide either html or files, not both.')
+  if (input.files) {
+    const bytes = input.files.reduce((total, file) => total + Buffer.byteLength(file.content), 0)
+    if (bytes > INTERACTIVE_MAX_HTML) throw new Error('Interactive project files exceed 512 KB in total')
+  }
+  const html = resolveInteractiveKit(
+    input.files ? bundleInteractive(input.files, input.entry ?? 'index.html') : input.html!,
+  )
+  if (Buffer.byteLength(html) > INTERACTIVE_MAX_HTML) throw new Error('Interactive document exceeds 512 KB')
+  rejectViewportHeights(html)
+  return html
+}
+/**
+ * The frame grows to fit the document, so a height that follows the viewport grows it again on every measurement.
+ * Only stylesheet text and style attributes are checked; script text and prose are left alone.
+ */
+function rejectViewportHeights(html: string) {
+  const css = [
+    ...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi),
+    ...html.matchAll(/\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gi),
+  ].map((match) => match.slice(1).find((part) => part !== undefined) ?? '')
+  const unit = css.join('\n').match(/\d(?:[sld]?vh|vb)\b/i)
+  if (unit)
+    throw new Error(
+      `Viewport height units (${unit[0].slice(1)}) make the frame grow without end. Use fixed pixel heights or let content set the height.`,
+    )
+}
 export const interactiveDigest = (input: InteractiveInput) =>
   createHash('sha256').update(JSON.stringify(input)).digest('hex')
+const entryFirst = <T extends { path: string }>(files: T[], entry = 'index.html') => [
+  ...files.filter((file) => file.path === entry),
+  ...files.filter((file) => file.path !== entry),
+]
 export class InteractiveStore {
   constructor(
     private readonly db: Db,
@@ -38,8 +85,8 @@ export class InteractiveStore {
   async preview(session: string, value: InteractiveInput, signal?: AbortSignal): Promise<InteractivePreview> {
     this.session(session)
     const input = interactiveInput.parse(value)
-    if (Buffer.byteLength(input.html) > INTERACTIVE_MAX_HTML) throw new Error('Interactive document exceeds 512 KB')
-    const output = await this.previewer(input.html, input.checks, signal)
+    const html = interactiveDocumentHtml(input)
+    const output = await this.previewer(html, input.checks, signal)
     if (signal?.aborted) throw new Error('Preview cancelled')
     const result: InteractivePreview = {
       ...output,
@@ -111,15 +158,26 @@ export class InteractiveStore {
       createdAt: Date.now(),
       checked: preview.checks.length > 0,
       ...(input.stateSchema ? { stateSchema: input.stateSchema } : {}),
+      ...(input.files ? { files: entryFirst(input.files, input.entry).map((file) => file.path) } : {}),
     }
     // The immutable version and its canonical event commit together. Reopening never resurrects a deliberately rewound event.
     this.db.exec('SAVEPOINT publish_interactive')
     try {
       this.db
         .prepare(
-          'INSERT INTO interactive_versions(id,version,session_id,request_id,request_signature,reference,html,preview) VALUES(?,?,?,?,?,?,?,?)',
+          'INSERT INTO interactive_versions(id,version,session_id,request_id,request_signature,reference,html,preview,files) VALUES(?,?,?,?,?,?,?,?,?)',
         )
-        .run(id, version, session, requestId, signature, JSON.stringify(reference), input.html, preview.screenshot)
+        .run(
+          id,
+          version,
+          session,
+          requestId,
+          signature,
+          JSON.stringify(reference),
+          interactiveDocumentHtml(input),
+          preview.screenshot,
+          input.files ? JSON.stringify(entryFirst(input.files, input.entry)) : null,
+        )
       this.record(session, reference)
       this.db.exec('RELEASE publish_interactive')
     } catch (error) {
@@ -130,10 +188,18 @@ export class InteractiveStore {
   }
   get(session: string, id: string, version: number): InteractiveDocument {
     const row = this.db
-      .prepare('SELECT reference,html,preview FROM interactive_versions WHERE session_id=? AND id=? AND version=?')
-      .get(session, id, version) as { reference: string; html: string; preview: string } | undefined
+      .prepare(
+        'SELECT reference,html,preview,files FROM interactive_versions WHERE session_id=? AND id=? AND version=?',
+      )
+      .get(session, id, version) as
+      { reference: string; html: string; preview: string; files: string | null } | undefined
     if (!row) throw new Error('Interactive content not found in this session')
-    return { reference: JSON.parse(row.reference), html: row.html, preview: row.preview }
+    return {
+      reference: JSON.parse(row.reference),
+      html: row.html,
+      preview: row.preview,
+      ...(row.files ? { files: JSON.parse(row.files) } : {}),
+    }
   }
   list(session: string): InteractiveReference[] {
     return (

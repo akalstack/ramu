@@ -17,9 +17,17 @@ import { CARET_CLASS, TOOL_DISCLOSURE_PANEL_CLASS, TOOL_ICON_CLASS, TOOL_SUMMARY
  * Reasoning the provider shared. While it streams, the latest lines show inline above the tool rows, rendered as
  * markdown with new words fading in; once the agent moves on it folds to "Thought for 4s" and opens on demand.
  */
-export function ThinkingRow({ text, active = false }: { text: string; active?: boolean }) {
+export function ThinkingRow({
+  text,
+  active = false,
+  preview = false,
+}: {
+  text: string
+  active?: boolean
+  preview?: boolean
+}) {
   useLanguage()
-  const [open, setOpen] = useState(active)
+  const [open, setOpen] = useState(active || preview)
   const chosen = useRef(false)
   const startedAt = useRef<number | null>(active ? Date.now() : null)
   const [took, setTook] = useState<number | null>(null)
@@ -36,8 +44,8 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
       setTook(Date.now() - startedAt.current)
       startedAt.current = null
     }
-    if (!chosen.current) setOpen(active)
-  }, [active])
+    if (!chosen.current) setOpen(active || preview)
+  }, [active, preview])
   // Follow the newest line while thinking streams.
   useLayoutEffect(() => {
     const el = body.current
@@ -57,10 +65,7 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
       className="thinking tool-group [&_>_[data-slot='collapsible-trigger']]:cursor-pointer [&_>_[data-slot='collapsible-trigger']]:[list-style:none] [&_>_[data-slot='collapsible-trigger']]:font-normal [&_>_[data-slot='collapsible-trigger']]:[transition:background_0.12s_var(--ease),_border-color_0.12s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:flex [&_>_[data-slot='collapsible-trigger']]:items-center [&_>_[data-slot='collapsible-trigger']]:justify-start [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:h-auto [&_>_[data-slot='collapsible-trigger']]:min-h-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border:0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:bg-transparent [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:[border:0] [&_>_[data-slot='collapsible-trigger']:hover]:text-soft [&[data-open]_>_summary_.caret]:[transform:rotate(90deg)] [&[data-open]_>_summary]:bg-transparent [&[data-open]_>_summary]:[border:0] [&[data-open]_>_summary]:text-soft [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] text-control text-muted-foreground"
     >
       <CollapsibleTrigger render={<Button variant="ghost" />}>
-        <Brain
-          size={14}
-          className={`${TOOL_ICON_CLASS}${active ? ' running' : ''}`}
-        />
+        <Brain size={14} className={`${TOOL_ICON_CLASS}${active ? ' running' : ''}`} />
         <span className={TOOL_SUMMARY_CLASS}>
           {active ? (
             <WorkingText>{translate('Thinking')}</WorkingText>
@@ -75,7 +80,7 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
       <CollapsibleContent className={TOOL_DISCLOSURE_PANEL_CLASS}>
         <div
           ref={body}
-          className={`thinking-body fade-scroll [--fade-top:0px] [--fade-bottom:0px] [mask-image:linear-gradient(to_bottom,_transparent_0,_#000_var(--fade-top),_#000_calc(100%_-_var(--fade-bottom)),_transparent_100%)] [transition:--fade-top_0.14s_ease-out,_--fade-bottom_0.14s_ease-out] m-[2px_0_4px_20px] pl-2.5 [border-left:2px_solid_var(--line-strong)] text-muted-foreground text-control leading-[1.55] [overflow-wrap:anywhere] overflow-y-auto [&_p]:m-[0_0_6px] [&_p:last-child]:mb-0 [&_ul]:m-[0_0_6px] [&_ul]:pl-5 [&_ol]:m-[0_0_6px] [&_ol]:pl-5 [&_li]:m-[2px_0] [&_strong]:font-semibold [&_strong]:text-soft [&_:is(h1,_h2,_h3,_h4)]:m-[6px_0_4px] [&_:is(h1,_h2,_h3,_h4)]:text-[length:1em] [&_:is(h1,_h2,_h3,_h4)]:font-semibold [&_:not(pre)>code]:rounded-(--radius-xs) [&_:not(pre)>code]:bg-fill [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:text-[length:0.9em] ${active ? 'max-h-[6.2em]' : 'max-h-[260px]'}`}
+          className={`thinking-body fade-scroll [--fade-top:0px] [--fade-bottom:0px] [mask-image:linear-gradient(to_bottom,_transparent_0,_#000_var(--fade-top),_#000_calc(100%_-_var(--fade-bottom)),_transparent_100%)] [transition:--fade-top_0.14s_ease-out,_--fade-bottom_0.14s_ease-out] m-[2px_0_4px_20px] pl-2.5 [border-left:2px_solid_var(--line-strong)] text-muted-foreground text-control leading-[1.55] [overflow-wrap:anywhere] overflow-y-auto [&_p]:m-[0_0_6px] [&_p:last-child]:mb-0 [&_ul]:m-[0_0_6px] [&_ul]:pl-5 [&_ol]:m-[0_0_6px] [&_ol]:pl-5 [&_li]:m-[2px_0] [&_strong]:font-semibold [&_strong]:text-soft [&_:is(h1,_h2,_h3,_h4)]:m-[6px_0_4px] [&_:is(h1,_h2,_h3,_h4)]:text-[length:1em] [&_:is(h1,_h2,_h3,_h4)]:font-semibold [&_:not(pre)>code]:rounded-(--radius-xs) [&_:not(pre)>code]:bg-fill [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:text-[length:0.9em] ${active || preview ? 'max-h-[6.2em]' : 'max-h-[260px]'}`}
         >
           <Markdown remarkPlugins={[remarkGfm]} components={components}>
             {text}

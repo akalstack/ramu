@@ -346,6 +346,9 @@ importers:
       editorconfig:
         specifier: ^3.0.2
         version: 3.0.2
+      lucide:
+        specifier: 1.54.0
+        version: 1.54.0
       luxon:
         specifier: 'catalog:'
         version: 3.7.2
@@ -5692,6 +5695,9 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
+
+  lucide@1.54.0:
+    resolution: {integrity: sha512-2N2brA+7NYLDlxG2QNcmGej5Qhw3pYMPN9MLktTNkQfs7Sk/2g2e8s0CUWibLz5lPVKMYesxm+k/ndDB7E1JjQ==}
 
   luxon@3.7.2:
     resolution: {integrity: sha512-vtEhXh/gNjI9Yg1u4jX/0YVPMvxzHuGgCm6tC5kZyb08yjGWGnqAjGJvcXbqQR2P3MyMEFnRbpcdFS6PBcLqew==}
@@ -13527,6 +13533,8 @@ snapshots:
       react: 19.3.0
     optionalDependencies:
       '@types/react': 19.3.0
+
+  lucide@1.54.0: {}
 
   luxon@3.7.2: {}
 

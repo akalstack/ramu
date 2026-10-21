@@ -30,7 +30,7 @@ it('keeps a share in progress from overwriting its file and releases the lock af
   await vi.waitFor(() => expect(share).toHaveBeenCalledTimes(1))
   await expect(action(document, null)).rejects.toThrow('Another share')
   expect(write).toHaveBeenCalledTimes(1)
-  expect(write).toHaveBeenCalledWith(document.html)
+  expect(write).toHaveBeenCalledWith(expect.stringContaining(`<body>${document.html}</body>`))
   rejectSheet(new Error('Share failed'))
   await expect(first).rejects.toThrow('Share failed')
   await expect(action(document, null)).resolves.toBeUndefined()

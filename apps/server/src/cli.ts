@@ -15,6 +15,12 @@ Usage:
   ramu status                    Show whether a server is running for this data directory
   ramu stop                      Stop the running server (unfinished threads are not resumed on next start)
   ramu restart                   Restart the running server (unfinished threads resume)
+  ramu browser status|setup|stop  Inspect, provision or stop the host browser on this computer
+  ramu browser threads|grants     List thread IDs or current browser device grants
+  ramu browser grant <device> <thread>
+                                 Grant a paired owner device one hour of browser viewing/control and scoped transfers
+  ramu browser revoke <device> <thread>
+                                 Revoke that device/thread grant and pause its control
   ramu pair [--url <address>] [--role owner|viewer] [--json]
                                  Create a one-time code and link to pair another device (valid 10 minutes, works once).
                                  --json prints { code, expiresAt, links, urls, listening } for scripts and SSH pairing.
@@ -38,7 +44,8 @@ Options:
 
 Environment: RAMU_USER_DATA, RAMU_SOCKET, RAMU_LISTEN, RAMU_TOKEN_FILE, RAMU_DEVICES_FILE, RAMU_WORKTREES,
              RAMU_ALLOW_PLAINTEXT_REMOTE, RAMU_TLS_CERT, RAMU_TLS_KEY, RAMU_DEVICE_TOKEN_DAYS (90 or never),
-             RAMU_ALLOW_LEGACY_TOKEN (1 to opt in), RAMU_BROWSER_ORIGINS (comma-separated exact origins).
+             RAMU_ALLOW_LEGACY_TOKEN (1 to opt in), RAMU_BROWSER_ORIGINS (comma-separated exact origins),
+             RAMU_BROWSER_EXECUTABLE (optional host Chromium executable; Setup checks its sandbox).
 A paired device has the same control as the desktop app, including shell access. Pair only devices you own.`
 
 function fail(message: string): never {
@@ -177,6 +184,24 @@ if (command === 'start') {
   console.log(
     `\nOn that device, send the code to <address>/pair, which returns its own token:\n  curl -s -X POST <address>/pair -H 'Content-Type: application/json' -d '{"code":"${code}","name":"My laptop"}'`,
   )
+} else if (command === 'browser') {
+  const action = positional[1] ?? 'status'
+  try {
+    if (action === 'status') console.log(JSON.stringify(await runtimeInvoke(config.socketPath, 'hostBrowser.status'), null, 2))
+    else if (action === 'setup') {
+      console.log('Setting up sandboxed Chromium on this host. A compatible runtime is downloaded if needed.')
+      await runtimeInvoke(config.socketPath, 'hostBrowser.setup')
+      console.log('Host browser ready. No website was opened. Use browser grant <device> <thread> for remote viewing.')
+    } else if (action === 'stop') { await runtimeInvoke(config.socketPath, 'hostBrowser.disable'); console.log('Host browser stopped; device grants revoked.') }
+    else if (action === 'threads') for (const task of await runtimeInvoke(config.socketPath, 'tasks.list')) console.log(`${task.id}  ${task.title}`)
+    else if (action === 'grants') console.log(JSON.stringify(await runtimeInvoke(config.socketPath, 'hostBrowser.grants'), null, 2))
+    else if (action === 'grant' || action === 'revoke') {
+      const device = positional[2], task = positional[3]
+      if (!device || !task) fail(`Usage: ramu browser ${action} <device> <thread>`)
+      await runtimeInvoke(config.socketPath, action === 'grant' ? 'hostBrowser.grant' : 'hostBrowser.revoke', [device, task])
+      console.log(action === 'grant' ? 'Browser access granted for one hour to this device/thread only.' : 'Browser access revoked.')
+    } else fail(`Unknown browser command ${action}. Run ramu --help.`)
+  } catch (error) { fail(error instanceof Error ? error.message : String(error)) }
 } else if (command === 'devices') {
   const store = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
   if (positional[1] === 'revoke') {

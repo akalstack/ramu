@@ -3,6 +3,7 @@ import { defineAdapter, npmLatest, runCli, selfUpdate } from '../adapter'
 
 export const opencodeAdapter = defineAdapter({
   id: 'opencode',
+  browser: { integratedTools: true, providerBrowser: true, canSuppressNative: false },
   selectionTransition: { type: 'restart-and-resume' },
   binaryEnvVar: 'RAMU_OPENCODE_BIN',
   executableNames: () => ['opencode'],

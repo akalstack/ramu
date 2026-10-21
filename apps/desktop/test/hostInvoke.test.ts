@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { ComputerStatus } from '@ramu/shared/types'
-import { activityChannel, isHostInvokeAllowed, routeInvoke, routeTaskCommand } from '../src/main/hostInvoke'
+import {
+  activityChannel,
+  isHostInvokeAllowed,
+  isSettingsActionAllowed,
+  routeInvoke,
+  routeTaskCommand,
+} from '../src/main/hostInvoke'
 
 const hosts: Record<string, ComputerStatus> = {
   local: 'connected',
@@ -125,4 +131,23 @@ it('routes only the settings reads and writes required by a host workspace', () 
   for (const method of ['settings.app.get', 'settings.app.set', 'settings.models.get', 'settings.models.set'])
     expect(isHostInvokeAllowed(method)).toBe(true)
   expect(isHostInvokeAllowed('settings.permissions.clear')).toBe(false)
+})
+
+describe('isSettingsActionAllowed', () => {
+  it('lets Settings manage rules, skills and MCP on the chosen host', () => {
+    for (const operation of [
+      'rules.list',
+      'rules.save',
+      'rules.history',
+      'rules.restore',
+      'rules.remove',
+      'skills.list',
+      'mcp.status',
+    ])
+      expect(isSettingsActionAllowed(operation)).toBe(true)
+  })
+  it('keeps thread, file and unlisted project actions out', () => {
+    for (const operation of ['agent.start', 'files.write', 'projects.remove', 'settings.permissions.add', 'rulesx', 42])
+      expect(isSettingsActionAllowed(operation)).toBe(false)
+  })
 })

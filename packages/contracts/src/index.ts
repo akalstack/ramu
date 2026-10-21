@@ -11,6 +11,8 @@ export const CAPABILITIES = {
   /** Sequenced snapshots, terminal recovery and remote folder browsing. */
   mobileCompanion: 'mobile-companion',
   liveActivities: 'mobile-live-activities',
+  /** Host-owned browser readiness, explicit per-device/thread grants and bounded authenticated viewing. */
+  hostBrowser: 'host-browser',
   /** GET /events server-sent events carrying { channel, payload }. */
   events: 'events',
   /** The server can ask a local client to run native dialogs (folder picker, reveal in Finder). */

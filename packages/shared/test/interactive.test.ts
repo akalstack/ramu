@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest'
-import { interactiveFollowup, readInteractiveState, type InteractiveReference } from '../src/interactive'
+import {
+  interactiveFollowup,
+  interactiveHtml,
+  readInteractiveState,
+  type InteractiveReference,
+} from '../src/interactive'
+import { interactivePaletteFromVariant, interactiveThemeVariables } from '../src/interactiveTheme'
+import { DEFAULT_DARK, DEFAULT_LIGHT } from '../src/theme'
 import { interactiveStorage } from '../src/interactiveStorage'
 import { claimInteractive } from '../src/interactiveLease'
 it('rejects malformed, cyclic and oversized state without trusting generated messages', () => {
@@ -149,4 +156,32 @@ it('stages only explicitly selected captured values with their exact source refe
   expect(selected).not.toContain('omit custom')
   expect(selected).toContain('captured scenario')
   expect(interactiveSelectedFollowup(ref, state, [], true)).toContain('omit custom')
+})
+
+it('gives documents the full theme token set and live updates for numbered tokens', () => {
+  const variables = interactiveThemeVariables(interactivePaletteFromVariant(DEFAULT_LIGHT, 'light'))
+  expect(variables).toMatchObject({
+    '--scheme': 'light',
+    '--background': DEFAULT_LIGHT.colors.canvas,
+    '--primary': DEFAULT_LIGHT.colors.accent,
+    '--button': DEFAULT_LIGHT.colors.primary,
+    '--chart-1': DEFAULT_LIGHT.colors.accent,
+  })
+  expect(Object.keys(variables)).toContain('--chart-6')
+  const html = interactiveHtml('<p>x</p>', 'i')
+  expect(html).toContain(`--surface:${DEFAULT_DARK.colors.raised}`)
+  expect(html).toContain('@media(prefers-color-scheme:light)')
+  expect(html).toContain('/^--[a-z0-9-]+$/')
+})
+
+it('round-trips attached Interactive Content so a sent message can show what it carried', async () => {
+  const { interactiveAttachmentBlock, sentInteractiveAttachments } = await import('../src/interactive')
+  const block = interactiveAttachmentBlock([
+    { id: 'a1', version: 2, title: 'Plan "B" <draft>', detail: 'Current scenario', text: 'About it\n\n' },
+  ])
+  expect(block).toContain('About it\n</interactive-content>')
+  expect(sentInteractiveAttachments(`Why?\n\n<ramu-context>\n${block}\n</ramu-context>`)).toEqual([
+    { id: 'a1', version: 2, title: 'Plan "B" <draft>' },
+  ])
+  expect(sentInteractiveAttachments('<interactive-content id="x" version="1" title=not-json>')).toEqual([])
 })

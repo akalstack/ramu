@@ -7,7 +7,17 @@ it('serves only bounded mounted documents with their own restrictive response po
   const response = documents.response(url)
   expect(await response.text()).toBe('<p>Saved</p>')
   expect(response.headers.get('content-security-policy')).toContain('sandbox allow-scripts')
-  expect(response.headers.get('content-security-policy')).toContain("connect-src 'none'")
+  const policy = response.headers.get('content-security-policy')!
+  // Remote https libraries and data load; frames, plugins, forms and plain http do not.
+  for (const directive of [
+    'connect-src https:',
+    'script-src',
+    "frame-src 'none'",
+    "object-src 'none'",
+    "form-action 'none'",
+  ])
+    expect(policy).toContain(directive)
+  expect(policy).not.toMatch(/http:(?!\/)|\*/)
   expect(documents.response(url + '?path=/etc/passwd').status).toBe(404)
   documents.release(url)
   expect(documents.response(url).status).toBe(404)

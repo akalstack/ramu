@@ -97,7 +97,7 @@ export class ClaudeStreamPump {
         this.host.settleTasks(id)
         this.host.live.delete(id)
         // A finished turn stays idle when its process closes; only interrupted work reads as stopped.
-        if (this.host.get(id).state !== 'idle') this.host.setState(id, 'stopped')
+        if (['starting', 'running', 'needs-input'].includes(this.host.get(id).state)) this.host.setState(id, 'stopped')
       }
     } catch (err) {
       if (this.host.live.get(id)?.query !== query) return // stopped or replaced

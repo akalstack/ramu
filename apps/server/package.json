@@ -10,7 +10,12 @@
   },
   "exports": {
     "./build": "./src/build.ts",
-    "./attachments": "./src/attachments.ts"
+    "./attachments": "./src/attachments.ts",
+    "./browserRuntime": "./src/browser/browserRuntime.ts",
+    "./browserUploads": "./src/browser/browserUploads.ts",
+    "./browserDownloads": "./src/browser/browserDownloads.ts",
+    "./browserBridge": "./src/browser/browserBridge.ts",
+    "./browserProfiles": "./src/browser/browserProfiles.ts"
   },
   "engines": {
     "node": ">=24 <25"
@@ -29,6 +34,7 @@
     "@napi-rs/keyring": "2.1.1",
     "@opencode/client": "2.0.30",
     "editorconfig": "^3.0.2",
+    "lucide": "1.54.0",
     "luxon": "catalog:",
     "node-pty": "catalog:",
     "playwright-core": "^1.64.0",

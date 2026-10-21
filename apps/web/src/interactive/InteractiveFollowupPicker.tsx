@@ -49,7 +49,7 @@ export function InteractiveFollowupPicker({
             onClose()
           }}
         >
-          {t('Add selected values to draft')}
+          {t('Add to message')}
         </Button>
         <Button onClick={onClose}>{t('Cancel')}</Button>
       </div>

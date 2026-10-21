@@ -13,10 +13,40 @@ export function isWebLink(url: string): boolean {
   return /^https?:\/\//i.test(url)
 }
 
-/** Showing an agent page is a device presentation choice, independent of execution routing. */
-export const AGENT_BROWSER_VISIBILITY_KEY = 'ramu.browser.agentVisibility'
-export const agentBrowserVisibilityFrom = (value: string | null | undefined): 'automatic' | 'manual' =>
-  value === 'manual' ? 'manual' : 'automatic'
+/** Site-provided icon only; never let page metadata load file/app URLs or another origin in the app shell. */
+export function browserFaviconFrom(page: string, icon: string | null | undefined): string | null {
+  if (!icon || icon.length > 4000) return null
+  try {
+    const url = new URL(icon)
+    return ['http:', 'https:'].includes(url.protocol) &&
+      !url.username &&
+      !url.password &&
+      url.origin === new URL(page).origin
+      ? url.href
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** A phone must never reinterpret the execution host's loopback/private address as its own. */
+export function canOpenBrowserLinkOnDevice(value: string): boolean {
+  try {
+    const url = new URL(value)
+    const host = url.hostname.toLowerCase()
+    return (
+      ['http:', 'https:'].includes(url.protocol) &&
+      !url.username &&
+      !url.password &&
+      host.includes('.') &&
+      !host.startsWith('[') &&
+      !/^\d+(\.\d+){3}$/.test(host) &&
+      !/(^|\.)(localhost|local|internal|test|invalid|example)$/.test(host)
+    )
+  } catch {
+    return false
+  }
+}
 
 /** Device-state keys for what the address box searches with when typed text is not an address. */
 export const SEARCH_ENGINE_KEY = 'ramu.browser.searchEngine'
