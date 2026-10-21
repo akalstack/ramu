@@ -301,7 +301,7 @@ describe('page observations and native input', () => {
       inputReady: false,
     })
     expect(page.setHumanInput).toHaveBeenLastCalledWith(false)
-    expect(() => runtime.reload(tab.id)).toThrow('wait for the agent action')
+    await expect(runtime.reload(tab.id)).rejects.toThrow('wait for the agent action')
     finish({ ok: true })
     await pending
     expect(runtime.list()[0]!.inputReady).toBe(true)
