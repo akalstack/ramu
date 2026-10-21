@@ -198,3 +198,19 @@ describe('open computer use backend', () => {
     expect(parseApps('Calculator — com.apple.calculator [running]\nFinder — com.apple.finder')).toEqual(['Calculator', 'Finder'])
   })
 })
+
+describe('open computer use install', () => {
+  it('installs the pinned release into Ramu’s tools folder and verifies its version', async () => {
+    const { installOcu, OCU_VERSION } = await import('../src/computer/ocu')
+    const calls: string[][] = []
+    const version = await installOcu(async (file, args) => {
+      calls.push([file, ...args])
+      return args[0] === '--version' ? `${OCU_VERSION}\n` : ''
+    }, '/usr/bin/npm')
+    expect(version).toBe(OCU_VERSION)
+    expect(calls[0]).toEqual(expect.arrayContaining(['install', '--prefix', `open-computer-use@${OCU_VERSION}`]))
+    expect(calls[0]).not.toContain('-g')
+    await expect(installOcu(async () => '9.9.9\n', '/usr/bin/npm')).rejects.toThrow(/expected/)
+    await expect(installOcu(async () => '', null)).rejects.toThrow(/npm/)
+  })
+})

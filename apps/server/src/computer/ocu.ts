@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -98,13 +99,38 @@ export function pngSize(bytes: Buffer): { width: number; height: number } {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
 }
 
+/** The release Ramu installs and has been checked against. */
+export const OCU_VERSION = '1.1.2'
+
+export const ocuToolsDir = () => process.env.RAMU_TOOLS_DIR ?? join(homedir(), '.ramu/tools')
+
+type Exec = (file: string, args: string[]) => Promise<string>
+const execute: Exec = (file, args) =>
+  new Promise((resolve, reject) =>
+    execFile(file, args, { timeout: 300_000, maxBuffer: 8 * 1024 * 1024, encoding: 'utf8' }, (error, stdout, stderr) =>
+      error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout),
+    ),
+  )
+
+/** Installs the pinned release under Ramu's own tools folder, never globally and never as an unpinned latest. */
+export async function installOcu(exec: Exec = execute, npm: string | null = findExecutable('npm')): Promise<string> {
+  if (process.platform !== 'darwin') throw new Error('App-scoped computer use currently supports macOS.')
+  if (!npm) throw new Error('Install Node.js (npm) first, then try again.')
+  const dir = ocuToolsDir()
+  await exec(npm, ['install', '--prefix', dir, '--no-audit', '--no-fund', `open-computer-use@${OCU_VERSION}`])
+  const installed = join(dir, 'node_modules/.bin/ocu')
+  const version = (await exec(installed, ['--version'])).trim()
+  if (version !== OCU_VERSION) throw new Error(`Installed Open Computer Use ${version}, expected ${OCU_VERSION}.`)
+  return version
+}
+
 export function ocuExecutable(): string | null {
   const configured = process.env.RAMU_OCU_PATH
   if (configured) return findExecutable(configured)
   return (
     findExecutable('ocu') ??
     findExecutable('open-computer-use') ??
-    [join(homedir(), '.ramu/tools/node_modules/.bin/ocu'), '/opt/homebrew/bin/ocu', '/usr/local/bin/ocu']
+    [join(ocuToolsDir(), 'node_modules/.bin/ocu'), '/opt/homebrew/bin/ocu', '/usr/local/bin/ocu']
       .map((path) => findExecutable(path))
       .find(Boolean) ??
     null
@@ -133,7 +159,7 @@ export class OcuBackend implements ComputerBackend {
       return {
         available: false,
         reason: 'not-installed',
-        detail: 'Install Open Computer Use (npm i -g open-computer-use) to let agents use one app in the background.',
+        detail: 'Install Open Computer Use to let agents use one app in the background.',
       }
     return { available: true, computer: { id: 'local', name: 'This computer' } }
   }

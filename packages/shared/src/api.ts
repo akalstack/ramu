@@ -163,6 +163,8 @@ export interface RamuMethods {
     /** Whether a single app can be granted instead of the whole display; null on a host that cannot. */
     apps: import('./computerBridge').ComputerRuntimeStatus | null
   }
+  /** Installs the pinned Open Computer Use release for app-scoped access. Owning host only. */
+  'computer.installApps'(): { version: string }
   'computer.apps'(): string[]
   'computer.setEnabled'(enabled: boolean): void
   'computer.grant'(threadId: string, scope: { observe: boolean; input: boolean; app?: string }): ComputerSessionSummary | null

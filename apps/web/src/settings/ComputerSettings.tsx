@@ -39,6 +39,18 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
       setBusy(false)
     }
   }
+  const install = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await invokeOn(hostId, 'computer.installApps')
+      await refresh()
+    } catch (reason) {
+      setError(t(errorText(reason)))
+    } finally {
+      setBusy(false)
+    }
+  }
   return (
     <>
       <SettingsGroupTitle>{t('Computer use')}</SettingsGroupTitle>
@@ -53,6 +65,23 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
           {status?.enabled ? t('Turn off') : t('Turn on')}
         </Button>
       </SettingsRow>
+      {status?.enabled && status.apps && (
+        <SettingsRow>
+          <SettingsLabel
+            title={t('Limit access to one app')}
+            help={t(
+              status.apps.available
+                ? 'Ready. Choose an app in a thread; it works in the background without moving your cursor.'
+                : (status.apps.detail ?? 'App control is not available on this host.'),
+            )}
+          />
+          {!status.apps.available && status.apps.reason === 'not-installed' && (
+            <Button size="sm" disabled={busy} onClick={() => void install()}>
+              {busy ? t('Installing…') : t('Install')}
+            </Button>
+          )}
+        </SettingsRow>
+      )}
       <p className="m-0 text-caption text-muted-foreground">
         {t(
           'macOS asks for Screen Recording and Accessibility the first time. Turning this off ends every thread’s access.',

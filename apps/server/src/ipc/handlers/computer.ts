@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { MAX_COMPUTER_TEXT, type ComputerAction } from '@ramu/shared/computerBridge'
 import { MAIN_DISPLAY } from '../../computer/macos'
 import { ComputerRouter } from '../../computer/router'
+import { installOcu } from '../../computer/ocu'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
@@ -80,6 +81,13 @@ export const registerComputerHandlers: RegisterHandlers = ({ computer, host, wor
         const service = admin()
         workspace.setAppState('computer:enabled', value)
         if (!value) for (const task of workspace.listTasks()) service.revoke(task.id)
+      },
+    },
+    'computer.installApps': {
+      args: z.tuple([]),
+      run: async () => {
+        admin()
+        return { version: await installOcu() }
       },
     },
     'computer.apps': {
