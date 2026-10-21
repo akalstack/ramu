@@ -444,3 +444,40 @@ describe('h264 packetizing', () => {
     ])
   })
 })
+
+describe('locked use', () => {
+  it('reads Open Computer Use’s status and starts the installer without waiting for it', async () => {
+    const { LockedUse, parseLockedUse } = await import('../src/computer/lockedUse')
+    const status = JSON.stringify({
+      enabled: false,
+      available: false,
+      stage: 'not-installed',
+      clientApproved: false,
+      session: { state: 'unlocked' },
+      blockers: ['Run ocu locked-use enable'],
+    })
+    expect(parseLockedUse(status)).toMatchObject({
+      installed: true,
+      enabled: false,
+      session: 'unlocked',
+      blockers: ['Run ocu locked-use enable'],
+    })
+    const started: string[][] = []
+    const lock = new LockedUse(
+      () => '/bin/ocu',
+      async () => status,
+      (file, args) => started.push([file, ...args]),
+    )
+    expect((await lock.enable()).stage).toBe('not-installed')
+    expect(started).toEqual([['/bin/ocu', 'locked-use', 'enable']])
+    expect(await new LockedUse(() => null).status()).toMatchObject({ installed: false })
+    await expect(new LockedUse(() => null).enable()).rejects.toThrow(/Install Open Computer Use/)
+    const broken = new LockedUse(
+      () => '/bin/ocu',
+      async () => {
+        throw new Error('boom')
+      },
+    )
+    expect(await broken.status()).toMatchObject({ installed: true, available: false, blockers: ['boom'] })
+  })
+})

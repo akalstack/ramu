@@ -83,6 +83,7 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
           )}
         </SettingsRow>
       )}
+      <LockedUseRow hostId={hostId} visible={!!status?.enabled && !!status.apps?.available} />
       <ScreenSharing hostId={hostId} enabled={!!status?.enabled} />
       <p className="m-0 text-caption text-muted-foreground">
         {t(
@@ -162,6 +163,118 @@ function ScreenSharing({ hostId, enabled }: { hostId: string; enabled: boolean }
           </Button>
         </SettingsRow>
       ))}
+      {error && (
+        <p role="alert" className="m-0 text-caption text-destructive">
+          {error}
+        </p>
+      )}
+    </>
+  )
+}
+
+type LockedUse = ReturnType<RamuMethods['computer.lockedUse']>
+
+/**
+ * Working through a locked screen. It installs signed components into macOS sign-in and needs an administrator password
+ * at the Mac, so it is a two-step choice that explains that first, and it can be turned off again here.
+ */
+function LockedUseRow({ hostId, visible }: { hostId: string; visible: boolean }) {
+  useLanguage()
+  const [state, setState] = useState<LockedUse | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [waiting, setWaiting] = useState(false)
+  const [error, setError] = useState('')
+  const read = useCallback(async () => {
+    try {
+      const next = await invokeOn(hostId, 'computer.lockedUse')
+      setState(next)
+      if (next.enabled) setWaiting(false)
+    } catch (reason) {
+      setError(t(errorText(reason)))
+    }
+  }, [hostId])
+  useEffect(() => {
+    if (visible) void read()
+  }, [visible, read])
+  // The installer waits for the person at the Mac, so look again until it finishes or they stop waiting.
+  useEffect(() => {
+    if (!waiting) return
+    const timer = setInterval(() => void read(), 3000)
+    const stop = setTimeout(() => setWaiting(false), 10 * 60_000)
+    return () => {
+      clearInterval(timer)
+      clearTimeout(stop)
+    }
+  }, [waiting, read])
+  if (!visible || !state) return null
+  const act = async (work: () => Promise<LockedUse>, after?: () => void) => {
+    setError('')
+    try {
+      setState(await work())
+      after?.()
+    } catch (reason) {
+      setError(t(errorText(reason)))
+    }
+  }
+  const help = state.enabled
+    ? state.available
+      ? t('On. The agent can keep working while this Mac is locked.')
+      : t('On, but not ready: {0}', { 0: state.blockers[0] ?? state.stage })
+    : waiting
+      ? t('Finish the permission and password prompts on this Mac…')
+      : t('Off. The agent stops at the lock screen.')
+  return (
+    <>
+      <SettingsRow>
+        <SettingsLabel title={t('Keep working while the screen is locked')} help={help} />
+        {state.enabled ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void act(() => invokeOn(hostId, 'computer.lockedUseDisable'))}
+          >
+            {t('Turn off')}
+          </Button>
+        ) : (
+          !waiting && (
+            <Button size="sm" onClick={() => setConfirming(true)}>
+              {t('Set up…')}
+            </Button>
+          )
+        )}
+      </SettingsRow>
+      {confirming && !state.enabled && (
+        <div
+          className="flex flex-col gap-2 rounded border p-3 text-caption"
+          role="group"
+          aria-label={t('Locked screen setup')}
+        >
+          <p className="m-0">
+            {t(
+              'This installs signed Open Computer Use components into macOS sign-in. macOS will ask for your administrator password and for Accessibility, Screen Recording and Input Monitoring on this Mac. Only Ramu’s approved client can use it, and you can turn it off here at any time. Anyone who controls Ramu on this Mac could then act while it is locked.',
+            )}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() =>
+                void act(
+                  () => invokeOn(hostId, 'computer.lockedUseEnable'),
+                  () => {
+                    setConfirming(false)
+                    setWaiting(true)
+                  },
+                )
+              }
+            >
+              {t('Continue on this Mac')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+              {t('Cancel')}
+            </Button>
+          </div>
+        </div>
+      )}
       {error && (
         <p role="alert" className="m-0 text-caption text-destructive">
           {error}

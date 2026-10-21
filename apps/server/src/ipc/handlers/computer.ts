@@ -10,6 +10,7 @@ import {
 import { MAIN_DISPLAY } from '../../computer/macos'
 import { ComputerRouter } from '../../computer/router'
 import { installOcu } from '../../computer/ocu'
+import { LockedUse } from '../../computer/lockedUse'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
@@ -45,6 +46,8 @@ const action = z.discriminatedUnion('kind', [
 ])
 
 /** Computer use on this host. Setup and grants stay on the owning host; viewing devices need an explicit viewer grant. */
+const lockedUse = new LockedUse()
+
 export const registerComputerHandlers: RegisterHandlers = ({
   computer,
   computerBroker: broker,
@@ -114,6 +117,10 @@ export const registerComputerHandlers: RegisterHandlers = ({
         if (!value) for (const task of workspace.listTasks()) service.revoke(task.id)
       },
     },
+    // Working through a locked screen installs macOS sign-in components, so it is reviewed and started on the owning host.
+    'computer.lockedUse': { args: z.tuple([]), run: () => (admin(), lockedUse.status()) },
+    'computer.lockedUseEnable': { args: z.tuple([]), run: () => (admin(), lockedUse.enable()) },
+    'computer.lockedUseDisable': { args: z.tuple([]), run: () => (admin(), lockedUse.disable()) },
     'computer.installApps': {
       args: z.tuple([]),
       run: async () => {

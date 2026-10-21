@@ -155,6 +155,16 @@ export interface ComputerSessionSummary {
   runtime: { id: string; name: string }
 }
 
+export interface ComputerLockedUse {
+  installed: boolean
+  enabled: boolean
+  available: boolean
+  stage: string
+  session: string
+  clientApproved: boolean
+  blockers: string[]
+}
+
 export interface ComputerRuntimeInfo {
   id: string
   name: string
@@ -174,6 +184,11 @@ export interface RamuMethods {
     keepAwake: boolean
   }
   /** Installs the pinned Open Computer Use release for app-scoped access. Owning host only. */
+  /** Whether the agent can keep working while the Mac is locked (Open Computer Use's Locked Use). */
+  'computer.lockedUse'(): ComputerLockedUse
+  /** Starts the macOS installer and permission prompts on the host. Owning host only. */
+  'computer.lockedUseEnable'(): ComputerLockedUse
+  'computer.lockedUseDisable'(): ComputerLockedUse
   'computer.installApps'(): { version: string }
   /** Computers whose screen a thread can use: this host and paired computers the owner allowed. */
   'computer.runtimes'(): ComputerRuntimeInfo[]

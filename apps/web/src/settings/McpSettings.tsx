@@ -419,8 +419,8 @@ export function McpSettings() {
                     .filter((tool) => approvedTools.includes(tool.name))
                     .map((tool) => ({
                       name: tool.name,
-                      action: 'write',
-                      approval: 'always',
+                      action: 'write' as const,
+                      approval: 'always' as const,
                     })),
                 }),
               () => setReview(null),
