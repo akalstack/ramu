@@ -118,10 +118,15 @@ export const registerComputerHandlers: RegisterHandlers = ({
       },
     },
     'computer.apps': {
-      args: z.tuple([]),
-      run: async () => {
-        const backend = admin().backend
-        return backend instanceof ComputerRouter ? backend.listApps() : []
+      args: z.union([z.tuple([]), z.tuple([id])]),
+      run: async (runtime?: string) => {
+        const service = admin()
+        if (runtime && runtime !== 'local') {
+          if (!allowedRuntimes().includes(runtime) || !broker)
+            throw new Error('That computer is not allowed to share its screen.')
+          return broker.backendFor(runtime).apps()
+        }
+        return service.backend instanceof ComputerRouter ? service.backend.listApps() : []
       },
     },
     'computer.grant': {

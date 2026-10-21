@@ -65,6 +65,7 @@ import { SshComputers } from './sshComputers'
 import { RemoteServers } from './remoteServers'
 import { ComputerBroadcaster } from './computerBroadcast'
 import { ComputerRegistry, LOCAL } from './computers'
+import { ScreenSharing } from './screenSharing'
 import { ensureRuntime, loginService, loginEnabled, loginPreferred } from './runtimeLauncher'
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'ramu-content', privileges: { standard: true, secure: true } }])
@@ -99,6 +100,7 @@ const CSP = [
 const PAIR_LINK = /^ramu:\/\/pair(?:[/?]|$)/i
 const queuedPairLinks: string[] = []
 let showPairLink: ((link: string) => void) | null = null
+let screenSharingRef: ScreenSharing | null = null
 const receivePairLink = (link: string) => {
   if (link.length > 4096 || !PAIR_LINK.test(link)) return
   if (showPairLink) showPairLink(link)
@@ -940,8 +942,15 @@ async function main() {
     if (method === 'computers.forget') {
       if (typeof args[0] !== 'string') throw new Error('Invalid host')
       computers.forget(args[0])
+      screenSharingRef?.set(args[0], false)
       await closeComputer(args[0])
       return computers.list(self === args[0] ? LOCAL : self)
+    }
+    if (method === 'computers.screenSharing') return screenSharingRef?.list() ?? []
+    if (method === 'computers.setScreenSharing') {
+      if (typeof args[0] !== 'string' || args[0] === LOCAL || !computers.exists(args[0]) || typeof args[1] !== 'boolean')
+        throw new Error('Invalid host')
+      return screenSharingRef?.set(args[0], args[1]) ?? []
     }
     if (method === 'computers.retry') {
       if (typeof args[0] !== 'string') throw new Error('Invalid host')
@@ -1102,6 +1111,14 @@ async function main() {
     await win.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else await win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
 
+  const screenSharing = new ScreenSharing(join(userData, 'screen-sharing.json'), {
+    invoke: (target, method, args, policy) => runtimeInvoke(target as never, method, args, policy),
+    endpoint: (id) => computers.endpoint(id),
+    local: runtime,
+    connected: (id) => id !== LOCAL && computers.exists(id) && computers.status(id) === 'connected',
+  })
+  screenSharingRef = screenSharing
+  screenSharing.start()
   computers.start()
   const networkWake = () => refreshRuntimeNetwork(true)
   powerMonitor.on('resume', networkWake)
@@ -1110,6 +1127,7 @@ async function main() {
     desktopUpdater.close()
     deviceState.flush()
     computers.stop()
+    screenSharing.stop()
     broadcaster.close()
     clearTimeout(activityTimer)
     presence.close()

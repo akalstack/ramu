@@ -183,7 +183,7 @@ export interface RamuMethods {
   'computerBroker.result'(id: string, outcome: { ok: true; value?: unknown } | { ok: false; error: string }): void
   'computerBroker.unregister'(): void
   'computer.brokerExec'(command: unknown): unknown
-  'computer.apps'(): string[]
+  'computer.apps'(runtime?: string): string[]
   'computer.setEnabled'(enabled: boolean): void
   'computer.grant'(threadId: string, scope: { observe: boolean; input: boolean; app?: string; runtime?: string }): ComputerSessionSummary | null
   'computer.revoke'(threadId: string): void
@@ -414,6 +414,9 @@ export interface RamuMethods {
   'computers.sshHosts'(): string[]
   /** Adds a computer over SSH: `target` is user@host or an alias from ~/.ssh/config. */
   'computers.pairSsh'(target: string, name?: string): Computers
+  /** Paired computers this computer lets use its screen (opt-in per host). */
+  'computers.screenSharing'(): string[]
+  'computers.setScreenSharing'(id: string, enabled: boolean): string[]
   'computers.forget'(id: string): Computers
   'computers.retry'(id: string): Computers
   'computers.update'(

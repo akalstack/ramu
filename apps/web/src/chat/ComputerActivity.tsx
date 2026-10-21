@@ -169,6 +169,8 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
   const [apps, setApps] = useState<string[]>([])
   const [appHint, setAppHint] = useState('')
   const [app, setApp] = useState('')
+  const [runtimes, setRuntimes] = useState<{ id: string; name: string; online: boolean }[]>([])
+  const [runtime, setRuntime] = useState('local')
   const load = useCallback(async () => {
     if (!taskId) return
     const status = await invoke('computer.status').catch(() => null)
@@ -176,8 +178,11 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
     setEnabled(!!status?.enabled && (status.runtime.available || appsReady))
     setAppHint(status?.apps && !status.apps.available ? (status.apps.detail ?? '') : '')
     setSession(status?.enabled ? await invoke('computer.session', taskId).catch(() => null) : null)
-    if (status?.enabled && appsReady) setApps(await invoke('computer.apps').catch(() => []))
-  }, [invoke, taskId])
+    if (status?.enabled && (appsReady || runtime !== 'local'))
+      setApps(await invoke('computer.apps', ...(runtime === 'local' ? [] : [runtime])).catch(() => []))
+    else setApps([])
+    if (status?.enabled) setRuntimes(await invoke('computer.runtimes').catch(() => []))
+  }, [invoke, taskId, runtime])
   useEffect(() => {
     if (!taskId || !visible) return
     void load()
@@ -232,6 +237,17 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
             <span className="text-caption text-muted-foreground">
               {t('Allow this thread to see and control your main display. Revoke it any time.')}
             </span>
+            {runtimes.length > 1 && (
+              <Dropdown
+                label={t('Computer')}
+                value={runtime}
+                options={runtimes.map((entry) => ({
+                  value: entry.id,
+                  label: entry.online ? entry.name : `${entry.name} · ${t('Offline')}`,
+                }))}
+                onChange={setRuntime}
+              />
+            )}
             <div className="flex flex-wrap items-center gap-2">
               {apps.length > 0 && (
                 <>
@@ -248,7 +264,7 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
                     size="sm"
                     disabled={!app}
                     onClick={() =>
-                      void run(() => invoke('computer.grant', taskId, { observe: true, input: true, app }))
+                      void run(() => invoke('computer.grant', taskId, { observe: true, input: true, app, runtime }))
                     }
                   >
                     {t('Allow this app')}
@@ -258,7 +274,9 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
               <Button
                 size="sm"
                 variant={apps.length ? 'secondary' : 'default'}
-                onClick={() => void run(() => invoke('computer.grant', taskId, { observe: true, input: true }))}
+                onClick={() =>
+                  void run(() => invoke('computer.grant', taskId, { observe: true, input: true, runtime }))
+                }
               >
                 {t('Allow main display')}
               </Button>

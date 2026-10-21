@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { RamuMethods } from '@ramu/shared/api'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
-import { invokeOn } from '../ipc'
+import { invokeOn, ramu } from '../ipc'
+import { useComputers } from '../workspace/computers'
 import { t, useLanguage } from '../i18n'
 import { runtimeHelp } from './computerStatus'
 import { errorText } from '../lib/errors'
@@ -82,11 +83,85 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
           )}
         </SettingsRow>
       )}
+      <ScreenSharing hostId={hostId} enabled={!!status?.enabled} />
       <p className="m-0 text-caption text-muted-foreground">
         {t(
           'macOS asks for Screen Recording and Accessibility the first time. Turning this off ends every thread’s access.',
         )}
       </p>
+      {error && (
+        <p role="alert" className="m-0 text-caption text-destructive">
+          {error}
+        </p>
+      )}
+    </>
+  )
+}
+
+/** Both sides of using another computer's screen: this computer opts in per host, and this host's owner allows devices. */
+function ScreenSharing({ hostId, enabled }: { hostId: string; enabled: boolean }) {
+  useLanguage()
+  const computers = useComputers()
+  const [shared, setShared] = useState<string[]>([])
+  const [devices, setDevices] = useState<ReturnType<RamuMethods['computer.runtimeDevices']>>([])
+  const [error, setError] = useState('')
+  const load = useCallback(async () => {
+    try {
+      setShared(await ramu.invoke('computers.screenSharing'))
+      setDevices(enabled ? await invokeOn(hostId, 'computer.runtimeDevices') : [])
+    } catch (reason) {
+      setError(t(errorText(reason)))
+    }
+  }, [hostId, enabled])
+  useEffect(() => {
+    void load()
+  }, [load])
+  const act = async (work: () => Promise<unknown>) => {
+    setError('')
+    try {
+      await work()
+    } catch (reason) {
+      setError(t(errorText(reason)))
+    }
+    await load()
+  }
+  const paired = (computers?.computers ?? []).filter(
+    (computer) => computer.id !== computers?.current && computer.id !== 'local',
+  )
+  return (
+    <>
+      {paired.map((computer) => (
+        <SettingsRow key={computer.id}>
+          <SettingsLabel
+            title={t('Let {0} use this computer’s screen', { 0: computer.name })}
+            help={t('Off by default. That host’s owner must also allow this computer, and can revoke it at any time.')}
+          />
+          <Button
+            size="sm"
+            variant={shared.includes(computer.id) ? 'secondary' : 'default'}
+            onClick={() =>
+              void act(() => ramu.invoke('computers.setScreenSharing', computer.id, !shared.includes(computer.id)))
+            }
+          >
+            {shared.includes(computer.id) ? t('Turn off') : t('Turn on')}
+          </Button>
+        </SettingsRow>
+      ))}
+      {devices.map((device) => (
+        <SettingsRow key={device.deviceId}>
+          <SettingsLabel
+            title={t('{0} shares its screen with this host', { 0: device.name })}
+            help={device.online ? t('Online') : t('Offline')}
+          />
+          <Button
+            size="sm"
+            variant={device.allowed ? 'secondary' : 'default'}
+            onClick={() => void act(() => invokeOn(hostId, 'computer.allowRuntime', device.deviceId, !device.allowed))}
+          >
+            {device.allowed ? t('Block') : t('Allow')}
+          </Button>
+        </SettingsRow>
+      ))}
       {error && (
         <p role="alert" className="m-0 text-caption text-destructive">
           {error}
