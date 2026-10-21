@@ -76,3 +76,6 @@ export type BrokerCommand =
   | { id: string; kind: 'apps' }
 
 export type BrokerOutcome = { ok: true; value?: unknown } | { ok: false; error: string }
+
+/** A backend refused before doing anything (for example the screen is locked), so the action certainly did not run. */
+export class ComputerNotRun extends Error {}

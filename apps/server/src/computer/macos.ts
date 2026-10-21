@@ -2,8 +2,9 @@ import { execFile } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type {
-  ComputerAction,
+import {
+  ComputerNotRun,
+  type ComputerAction,
   ComputerBackend,
   ComputerCapture,
   ComputerRuntimeStatus,
@@ -18,6 +19,14 @@ const run: Run = (file, args) =>
       error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout),
     ),
   )
+
+/** Whether the Mac's screen is locked. The flag is in the system registry, readable without any permission. */
+export function parseScreenLocked(registry: string): boolean {
+  return /<key>CGSSessionScreenIsLocked<\/key>\s*<true\/>/.test(registry)
+}
+
+export const LOCKED_MESSAGE =
+  'The computer is locked. Unlock it, or turn on “Keep working while the screen is locked” in Settings → Browser → Computer use.'
 
 /** The main display. App- and window-scoped confinement needs a driver that can enforce it, so it is not claimed. */
 export const MAIN_DISPLAY: ComputerTarget = { id: 'display:main', kind: 'display', name: 'Main display' }
@@ -165,7 +174,27 @@ export class MacosComputerBackend implements ComputerBackend {
     private readonly name: () => string = hostname,
   ) {}
 
+  private lock: { locked: boolean; at: number } = { locked: false, at: 0 }
+
+  /** Cached for two seconds so a viewer polling every few milliseconds does not shell out every time. */
+  async locked(): Promise<boolean> {
+    if (this.platform !== 'darwin') return false
+    if (Date.now() - this.lock.at < 2000) return this.lock.locked
+    try {
+      this.lock = {
+        locked: parseScreenLocked(await this.exec('/usr/sbin/ioreg', ['-n', 'Root', '-d1', '-a'])),
+        at: Date.now(),
+      }
+    } catch {
+      this.lock = { locked: false, at: Date.now() }
+    }
+    return this.lock.locked
+  }
+
   status(): ComputerRuntimeStatus {
+    // The last known lock state; capture and input look again before they act.
+    if (this.platform === 'darwin' && this.lock.locked)
+      return { available: false, reason: 'locked', detail: LOCKED_MESSAGE }
     if (this.platform !== 'darwin')
       return { available: false, reason: 'unsupported', detail: 'Computer use currently supports macOS.' }
     if (this.permission) return this.permission
@@ -174,6 +203,7 @@ export class MacosComputerBackend implements ComputerBackend {
 
   async capture(target: ComputerTarget): Promise<ComputerCapture> {
     if (this.platform !== 'darwin') throw new Error('Computer use currently supports macOS.')
+    if (await this.locked()) throw new ComputerNotRun(LOCKED_MESSAGE)
     if (target.kind !== 'display') throw new Error('Only display capture is supported.')
     const dir = await mkdtemp(join(tmpdir(), 'ramu-screen-'))
     const raw = join(dir, 'screen.png')
@@ -232,6 +262,7 @@ export class MacosComputerBackend implements ComputerBackend {
 
   async perform(target: ComputerTarget, action: ComputerAction): Promise<void> {
     if (this.platform !== 'darwin') throw new Error('Computer use currently supports macOS.')
+    if (await this.locked()) throw new ComputerNotRun(LOCKED_MESSAGE)
     void target
     const scale = this.lastScale
     try {

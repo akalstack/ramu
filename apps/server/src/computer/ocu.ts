@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -124,17 +124,33 @@ export async function installOcu(exec: Exec = execute, npm: string | null = find
   return version
 }
 
+const versions = new Map<string, string | null>()
+
+/** The version a copy reports, remembered per path: an old copy has a different tool set and must not be used. */
+function versionOf(path: string): string | null {
+  if (!versions.has(path)) {
+    try {
+      versions.set(path, execFileSync(path, ['--version'], { timeout: 8000, encoding: 'utf8' }).trim())
+    } catch {
+      versions.set(path, null)
+    }
+  }
+  return versions.get(path) ?? null
+}
+
+/** Ramu's own pinned install first; any other copy only when it is exactly the release Ramu was checked against. */
 export function ocuExecutable(): string | null {
   const configured = process.env.RAMU_OCU_PATH
+  const pinned = findExecutable(join(ocuToolsDir(), 'node_modules/.bin/ocu'))
   if (configured) return findExecutable(configured)
-  return (
-    findExecutable('ocu') ??
-    findExecutable('open-computer-use') ??
-    [join(ocuToolsDir(), 'node_modules/.bin/ocu'), '/opt/homebrew/bin/ocu', '/usr/local/bin/ocu']
-      .map((path) => findExecutable(path))
-      .find(Boolean) ??
-    null
-  )
+  if (pinned) return pinned
+  const others = [
+    findExecutable('ocu'),
+    findExecutable('open-computer-use'),
+    findExecutable('/opt/homebrew/bin/ocu'),
+    findExecutable('/usr/local/bin/ocu'),
+  ]
+  return others.find((path): path is string => !!path && versionOf(path) === OCU_VERSION) ?? null
 }
 
 /**

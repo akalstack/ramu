@@ -21,7 +21,9 @@ export class ComputerRouter implements ComputerBackend {
 
   status(): ComputerRuntimeStatus {
     const display = this.display.status()
-    return display.available ? display : this.apps.status()
+    // A locked screen is the reason to show, not the app backend's separate state.
+    if (display.available || display.reason === 'locked') return display
+    return this.apps.status()
   }
 
   /** What an app grant can use: the display runtime's status is separate from whether app control is installed. */

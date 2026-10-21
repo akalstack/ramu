@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import {
   COMPUTER_FRAME_STALE_MS,
+  ComputerNotRun,
   MAX_COMPUTER_TEXT,
   type ComputerAction,
   type ComputerBackend,
@@ -213,6 +214,7 @@ export class ComputerSession {
       try {
         await this.backend.perform(this.grant.target, action)
       } catch (error) {
+        if (error instanceof ComputerNotRun) throw new ComputerRefusal(error.message)
         throw new ComputerRefusal(
           `The action may or may not have run (${error instanceof Error ? error.message : 'failed'}). Observe the screen before deciding what to do.`,
         )
@@ -260,6 +262,7 @@ export class ComputerSession {
     try {
       await this.backend.perform(this.grant.target, action)
     } catch (error) {
+      if (error instanceof ComputerNotRun) throw new ComputerRefusal(error.message)
       throw new ComputerRefusal(
         `The input may or may not have run (${error instanceof Error ? error.message : 'failed'}).`,
       )

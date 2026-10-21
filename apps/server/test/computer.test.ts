@@ -481,3 +481,30 @@ describe('locked use', () => {
     expect(await broken.status()).toMatchObject({ installed: true, available: false, blockers: ['boom'] })
   })
 })
+
+describe('locked screen through a session', () => {
+  it('tells the person nothing ran when the screen is locked', async () => {
+    const { ComputerNotRun } = await import('@ramu/shared/computerBridge')
+    const { backend } = fake()
+    vi.mocked(backend.perform).mockRejectedValueOnce(new ComputerNotRun('The computer is locked.'))
+    const service = new ComputerService(backend)
+    const session = service.grant('t', grant)
+    session.open('run1')
+    const frame = await session.observe('run1')
+    await expect(session.act('run1', frame.id, { kind: 'key', key: 'a' })).rejects.toThrow(/^The computer is locked\.$/)
+  })
+})
+
+describe('locked screen', () => {
+  it('reads the lock flag from the registry output', async () => {
+    const { parseScreenLocked, MacosComputerBackend, LOCKED_MESSAGE } = await import('../src/computer/macos')
+    expect(parseScreenLocked('<key>CGSSessionScreenIsLocked</key>\n\t\t\t<true/>')).toBe(true)
+    expect(parseScreenLocked('<key>kCGSSessionOnConsoleKey</key><true/>')).toBe(false)
+    const locked = new MacosComputerBackend(async () => '<key>CGSSessionScreenIsLocked</key><true/>', 'darwin')
+    await expect(locked.capture({ id: 'display:main', kind: 'display', name: 'Main' })).rejects.toThrow(LOCKED_MESSAGE)
+    await expect(
+      locked.perform({ id: 'display:main', kind: 'display', name: 'Main' }, { kind: 'key', key: 'a' }),
+    ).rejects.toThrow(/locked/)
+    expect(locked.status()).toMatchObject({ available: false, reason: 'locked' })
+  })
+})

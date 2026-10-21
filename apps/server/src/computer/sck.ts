@@ -2,14 +2,16 @@ import { spawn, execFile, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type {
-  ComputerAction,
+import {
+  ComputerNotRun,
+  type ComputerAction,
   ComputerBackend,
   ComputerCapture,
   ComputerRuntimeStatus,
   ComputerTarget,
 } from '@ramu/shared/computerBridge'
 import SOURCE from '../../native/ramu-capture.swift?raw'
+import { LOCKED_MESSAGE } from './macos'
 import { ocuToolsDir } from './ocu'
 
 export type CaptureMessage =
@@ -193,7 +195,7 @@ export class SckDisplayBackend implements ComputerBackend {
   private stream: ScreenStream | null = null
   private broken = false
   constructor(
-    private readonly inner: ComputerBackend & { useScale?(scale: number): void },
+    private readonly inner: ComputerBackend & { useScale?(scale: number): void; locked?(): Promise<boolean> },
     private readonly build: () => Promise<string> = () => ensureHelper(),
     private readonly launch: (path: string) => ChildProcess = (path) =>
       spawn(path, ['--max-edge', '1600', '--fps', '15', '--quality', '0.6'], { stdio: ['pipe', 'pipe', 'pipe'] }),
@@ -215,6 +217,8 @@ export class SckDisplayBackend implements ComputerBackend {
   }
 
   async capture(target: ComputerTarget): Promise<ComputerCapture> {
+    // The stream would show the lock screen; say so instead of presenting it as the person's desktop.
+    if (await this.inner.locked?.()) throw new ComputerNotRun(LOCKED_MESSAGE)
     if (this.broken || this.platform !== 'darwin' || target.kind !== 'display') return this.inner.capture(target)
     this.stream ??= new ScreenStream(async () => this.launch(await this.build()))
     try {
