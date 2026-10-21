@@ -185,7 +185,7 @@ export const appPreferences = z.object({
         .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
         .default('default'),
     })
-    .default({ agentBrowser: 'provider', providerOverrides: {}, defaultProfileId: 'default' }),
+    .default({ agentBrowser: 'integrated', providerOverrides: {}, defaultProfileId: 'default' }),
   sidebarWidth: z.number().int().min(SIDEBAR_WIDTH_RANGE[0]).max(SIDEBAR_WIDTH_RANGE[1]).default(DEFAULT_SIDEBAR_WIDTH),
   messageBehaviorVersion: z.literal(4).default(4),
   favoriteModels: z.array(z.string().max(200)).max(100).default([]),

@@ -1,3 +1,4 @@
+import { NEW_TAB, openBrowser } from './views/browserPane'
 import { syncRepositories } from './git/syncRepositories'
 import { SETTINGS_SECTIONS } from './settings/SettingsPage'
 import { t, useLanguage } from './i18n'
@@ -204,8 +205,9 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       id: 'browser.new',
       title: t('Open browser'),
       category: t('View'),
+      keys: 'mod+shift+l',
       // The integrated browser runs in the desktop shell, so it is offered only where that shell exists.
-      run: () => taskId && ws.openView(taskId, { kind: 'browser' }),
+      run: () => taskId && openBrowser(ws, taskId, NEW_TAB),
       when: () => hasTask() && typeof window.ramu?.invoke === 'function',
     },
     ...bindings.map((b) => ({

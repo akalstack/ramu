@@ -457,8 +457,11 @@ export function Dropdown({
   disabled = false,
   title,
   settingNavigation = false,
+  keepOptions = false,
 }: {
   settingNavigation?: boolean
+  /** Offer every option even when the setting's schema lists fewer, for a choice such as "Use default" that unsets it. */
+  keepOptions?: boolean
   label: string
   value: string
   options: { value: string; label: string; disabled?: boolean }[]
@@ -481,7 +484,7 @@ export function Dropdown({
       ))
   const scalar = field && !structured
   const mixed = scalar && field.mixed
-  if (scalar && field.schema?.enum)
+  if (scalar && !keepOptions && field.schema?.enum)
     options = options.filter((option) => field.schema!.enum!.some((value) => String(value) === option.value))
   if (scalar && ['number', 'integer'].includes(field.schema?.type ?? ''))
     options = options.filter(

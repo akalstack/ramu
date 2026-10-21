@@ -1,3 +1,4 @@
+import { DEFAULT_AGENT_BROWSER_PREFERENCES } from '@ramu/shared/browser'
 import { LocalDiagnostics } from './background/diagnostics'
 import {
   accountEnvironment,
@@ -503,6 +504,9 @@ const handle = (remote: boolean) => async (req: import('node:http').IncomingMess
     if (method === 'browser.bridge.attach') {
       if (remote || typeof args?.[0] !== 'string' || !desktopClients.has(args[0]))
         throw new Error('A local desktop event stream is required.')
+      // A desktop that is gone (quit, crashed) must not keep the browser from a new one that is connected.
+      const owner = browserBroker.owner()
+      if (owner && owner !== args[0] && !desktopClients.has(owner)) browserBroker.detach(owner)
       value = browserBroker.attach(args[0])
     } else if (method === 'browser.bridge.ready') {
       if (remote || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string')
@@ -865,7 +869,8 @@ agents.toolConnection = (session) => {
   const token = randomBytes(32).toString('hex')
   browserTokens.set(session.id, token)
   const browserPreferences = structuredClone(
-    workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).agentBrowser,
+    workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).agentBrowser ??
+      DEFAULT_AGENT_BROWSER_PREFERENCES,
   )
   sessions.set(token, {
     session,

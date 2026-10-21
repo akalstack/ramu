@@ -34,6 +34,8 @@ import { TaskStateIcon } from './TaskStateIcon'
 import { ThreadHoverCard } from './ThreadHoverCard'
 import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
+import { threadSelection, useThreadSelection } from './threadSelection'
+import { useBulkActionsContext } from './ThreadSelectionBar'
 
 /**
  * One thread in the sidebar, on whichever host it lives: the host comes from the nearest `HostScope` (or the store on
@@ -66,6 +68,11 @@ export function TaskRow({
     (projectName || merged) && computers && computers.computers.length > 1
       ? computers.computers.find((c) => c.id === host.id)?.name
       : undefined
+  // Threads of the host on screen can be picked together for a bulk action, where the list offers one.
+  const bulk = useBulkActionsContext()
+  const picked = useThreadSelection()
+  const selectable = !!bulk && onScreen && !unavailable
+  const selected = selectable && picked.has(task.id)
   const refresh = () => ws?.refresh() ?? Promise.resolve()
   const forget = () => ws?.forgetTask(task.id)
   const open = () => {
@@ -108,7 +115,78 @@ export function TaskRow({
     }
   }
 
+  const group = selected && picked.size > 1 && bulk ? bulk.pick(picked) : null
+  const groupItems: MenuEntry[] = group
+    ? [
+        { key: 'count', heading: t('{0} selected', { 0: group.length }) },
+        {
+          key: 'g-pin',
+          label: (
+            <>
+              {group.every((entry) => entry.pinnedAt) ? <PinOff size={14} /> : <Pin size={14} />}{' '}
+              {group.every((entry) => entry.pinnedAt) ? t('Unpin selected') : t('Pin selected')}
+            </>
+          ),
+          onSelect: () => bulk!.pin(group),
+        },
+        {
+          key: 'g-done',
+          label: (
+            <>
+              <Check size={14} />{' '}
+              {group.every((entry) => entry.doneAt) ? t('Reopen selected') : t('Mark selected done')}
+            </>
+          ),
+          onSelect: () => bulk!.done(group),
+        },
+        {
+          key: 'g-archive',
+          label: (
+            <>
+              <Archive size={14} /> {t('Archive selected')}
+            </>
+          ),
+          onSelect: () => bulk!.archive(group),
+        },
+        { key: 'g-sep', separator: true },
+        {
+          key: 'g-delete',
+          label: (
+            <>
+              <Trash2 size={14} /> {t('Delete selected…')}
+            </>
+          ),
+          danger: true,
+          onSelect: () => bulk!.requestDelete(group),
+        },
+        { key: 'g-sep2', separator: true },
+        {
+          key: 'g-clear',
+          label: (
+            <>
+              <X size={14} /> {t('Clear selection')}
+            </>
+          ),
+          onSelect: () => threadSelection.clear(),
+        },
+      ]
+    : []
   const items: MenuEntry[] = [
+    ...(selectable && !group
+      ? [
+          {
+            key: 'select',
+            label: (
+              <>
+                <Check size={14} /> {t('Select')}
+              </>
+            ),
+            title: t('Pick several threads to act on together. Cmd/Ctrl-click or Shift-click also select.'),
+            onSelect: () => threadSelection.toggle(task.id),
+          },
+          { key: 'select-sep', separator: true as const },
+        ]
+      : []),
     {
       key: 'copy-id',
       label: t('Copy thread ID'),
@@ -232,7 +310,7 @@ export function TaskRow({
     },
   ]
 
-  const contextMenu = useContextMenu(`${task.title} actions`, items)
+  const contextMenu = useContextMenu(`${task.title} actions`, group ? groupItems : items)
 
   const status = threadStatus(task, onScreen && !!ws?.unread.has(task.id), task.goalState)
   return (
@@ -243,6 +321,9 @@ export function TaskRow({
           closeDelay={120}
           render={<div />}
           data-thread-motion-row=""
+          data-task-row=""
+          data-task-id={task.id}
+          aria-selected={selectable ? selected : undefined}
           onContextMenu={
             unavailable
               ? undefined
@@ -251,11 +332,25 @@ export function TaskRow({
                   contextMenu.onContextMenu(e)
                 }
           }
-          className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 ${projectName || hostName ? 'min-h-11' : 'min-h-[30px]'} rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${archived ? ' archived' : ''}${nested ? ' pl-[31px]' : ''}`}
+          className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-0.5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-state]:hidden [&:focus-within_.task-state]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] [&:has(.task-project)]:gap-1 flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 ${projectName || hostName ? 'min-h-11' : 'min-h-[30px]'} rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${selected ? ' selected bg-accent [box-shadow:inset_2px_0_0_var(--primary)]' : ''}${archived ? ' archived' : ''}${nested ? ' pl-[31px]' : ''}`}
           role="button"
           tabIndex={0}
           aria-disabled={unavailable || undefined}
-          onClick={() => !renaming && open()}
+          onClick={(e: React.MouseEvent<HTMLElement>) => {
+            if (renaming) return
+            if (selectable && (e.metaKey || e.ctrlKey)) return threadSelection.toggle(task.id)
+            if (selectable && e.shiftKey) {
+              const ordered = [
+                ...new Set(
+                  [...document.querySelectorAll<HTMLElement>('[data-task-row]')].map((row) => row.dataset.taskId!),
+                ),
+              ]
+              return threadSelection.range(task.id, ordered)
+            }
+            // A plain click leaves selection mode and opens the thread, as in a file list.
+            if (picked.size) threadSelection.clear()
+            open()
+          }}
           onDoubleClick={() => {
             if (!unavailable) setRenaming(true)
           }}

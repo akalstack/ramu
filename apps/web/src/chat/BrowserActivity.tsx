@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Globe } from 'lucide-react'
+import { Globe, Plus } from 'lucide-react'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { ramu } from '../ipc'
 import { ownHostId } from '../hosts'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
-import { ChatActivityButton } from './ChatActivity'
+import { Button } from '@/components/desktop-button'
+import { openBrowser } from '../views/browserPane'
+import { ComposerTraySection } from '../composer/ComposerTraySection'
 
 /** Native tabs remain discoverable after an agent turn, without activating background threads or hosts. */
 export function useBrowserActivity(taskId: string | undefined, visible: boolean) {
@@ -49,37 +51,89 @@ export function useBrowserActivity(taskId: string | undefined, visible: boolean)
   }
 }
 
+/** Shows a tab in the thread's browser pane, reusing the pane that already holds it. */
+export const showBrowserTab = openBrowser
+
+const controllerLabel = (tab: BrowserTabInfo) =>
+  tab.paused
+    ? 'Control disconnected'
+    : tab.controller === 'agent'
+      ? 'Agent control'
+      : tab.controller === 'human'
+        ? 'You are in control'
+        : 'Open browser'
+
 export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowserActivity> }) {
   useLanguage()
   const ws = useWorkspace()
   if (!state.taskId || !state.tabs.length) return null
   const taskId = state.taskId
   return (
-    <ChatActivityButton
-      type="button"
-      disabled={state.stale}
-      onClick={() => {
-        const first = state.tabs[0]!
-        const view = ws.taskUi[ws.workspaceOf(taskId)]?.views.find(
-          (view) => view.kind === 'browser' && view.tabId === first.id,
+    <ComposerTraySection
+      aria-label={t('Browser')}
+      title={
+        <>
+          {t('Browser')} <span className="text-muted-foreground tabular-nums">{state.tabs.length}</span>
+        </>
+      }
+      icon={<Globe />}
+      actions={
+        state.stale ? (
+          <span className="text-muted-foreground text-caption">{t('Last-known activity')}</span>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="icon small-icon"
+            aria-label={t('New browser tab')}
+            title={t('New browser tab')}
+            onClick={() => openBrowser(ws, taskId, 'new')}
+          >
+            <Plus size={14} />
+          </Button>
         )
-        if (view) ws.activateView(taskId, view.id)
-        else ws.openView(taskId, { kind: 'browser', tabId: first.id, url: first.url })
-      }}
+      }
     >
-      <Globe size={14} aria-hidden="true" />
-      {t('{0} browser tabs', { 0: state.tabs.length })}
-      <span className="text-muted-foreground">
-        {' '}
-        ·{' '}
-        {t(
-          state.stale
-            ? 'Last-known activity'
-            : state.tabs.some((tab) => tab.controller === 'agent')
-              ? 'Agent control'
-              : 'Open browser',
-        )}
-      </span>
-    </ChatActivityButton>
+      <ul className="m-0 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
+        {state.tabs.map((tab) => (
+          <li key={tab.id} className="flex items-center gap-2 text-control">
+            <button
+              type="button"
+              className="flex h-auto min-h-8 min-w-0 flex-1 cursor-pointer flex-col items-start justify-center gap-0 border-0 bg-transparent px-0 py-1 text-left leading-snug text-inherit disabled:cursor-default"
+              disabled={state.stale}
+              title={t('Open browser')}
+              onClick={() => showBrowserTab(ws, taskId, tab)}
+            >
+              <span className="w-full truncate text-foreground">{tab.title || tab.url}</span>
+              <span className="w-full truncate text-caption text-muted-foreground">
+                {t(controllerLabel(tab))} · {tab.url}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </ComposerTraySection>
+  )
+}
+
+/** Opens the thread's browser from the composer, whether or not it has a tab yet. The browser exists only in the desktop shell. */
+export function OpenBrowserButton({ state }: { state: ReturnType<typeof useBrowserActivity> }) {
+  useLanguage()
+  const { id: host } = useHost()
+  const ws = useWorkspace()
+  if (!state.taskId || typeof window.ramu?.invoke !== 'function' || host !== ownHostId()) return null
+  const taskId = state.taskId
+  const first = state.tabs[0]
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="icon small-icon"
+      aria-label={t('Open browser')}
+      title={t('Open browser')}
+      onClick={() => openBrowser(ws, taskId, first)}
+    >
+      <Globe size={15} />
+    </Button>
   )
 }

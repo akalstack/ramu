@@ -20,6 +20,11 @@ export class DesktopBrowserBroker {
     private readonly timeoutMs = 30000,
   ) {}
 
+  /** The desktop currently attached, so a caller can tell whether it is still connected. */
+  owner(): string | null {
+    return this.attachment?.clientId ?? null
+  }
+
   attach(clientId: string): { token: string } {
     if (this.attachment) {
       if (this.attachment.clientId !== clientId)

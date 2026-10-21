@@ -36,6 +36,8 @@ import { Composer } from '../composer/Composer'
 import { Menu, useContextMenu } from '../Menu'
 import { copyText } from '../ipc'
 import { useHost } from './HostProvider'
+import { ownHostId } from '../hosts'
+import { NEW_TAB, openBrowser } from '../views/browserPane'
 import { AgentView } from '../views/AgentView'
 import { ErrorBoundary } from '../ErrorBoundary'
 import { GitDetailsView } from '../views/GitDetailsView'
@@ -455,6 +457,21 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                         ws.openView(taskId, { kind: 'terminal' })
                       },
                     },
+                    ...(typeof window.ramu?.invoke === 'function' && host === ownHostId()
+                      ? [
+                          {
+                            key: 'browser',
+                            label: (
+                              <>
+                                <Globe data-icon="inline-start" />
+                                {t('Open browser')}
+                                <span className="ml-auto text-muted-foreground">{formatKeys('mod+shift+l')}</span>
+                              </>
+                            ),
+                            onSelect: () => openBrowser(ws, taskId, NEW_TAB),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
                 <div className="flex-1 min-w-0" />
@@ -483,7 +500,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                     )}
                   </Button>
                 )}
-                <HideWorkspaceButton onHide={() => ws.hideWorkspace(taskId)} />
+                <HideWorkspaceButton onHide={() => ws.toggleRightPanel(taskId)} />
               </div>
               <div
                 className="editor-area flex-1 min-h-0 min-w-0 flex flex-col"

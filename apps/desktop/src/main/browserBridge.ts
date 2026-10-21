@@ -17,6 +17,7 @@ export async function executeBrowserBridge(
   const tabId = 'tabId' in command ? command.tabId : null
   if (tabId && !runtime.list(owner).some((tab) => tab.id === tabId))
     throw new Error('That tab belongs to another thread or is closed.')
+  if (tabId) runtime.adoptReleased(tabId, runId, owner)
   switch (command.kind) {
     case 'profiles':
       return profiles?.() ?? { profiles: [] }
@@ -49,9 +50,13 @@ export async function executeBrowserBridge(
         command.promptText,
       )
     case 'wait':
-      return runtime.waitForAgent(command.tabId, runId, owner, command.text, command.timeoutMs)
+      return runtime.waitForAgent(command.tabId, runId, owner, command.text, command.timeoutMs, command.urlIncludes)
     case 'navigate':
       return runtime.navigateForAgent(command.tabId, runId, owner, command.url)
+    case 'back':
+    case 'forward':
+    case 'reload':
+      return runtime.historyForAgent(command.tabId, runId, owner, command.kind)
     case 'close':
       return runtime.closeForAgent(command.tabId, runId, owner)
     case 'end':

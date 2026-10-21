@@ -30,6 +30,11 @@ vi.mock('../src/workspace/workspace', () => ({
 vi.mock('../src/models/ModelSets', () => ({
   useModelSets: () => ({ initialSettings: { provider: 'codex', model: 'chosen' } }),
 }))
+vi.mock('../src/sidebar/projects/ThreadSelectionBar', () => ({ useBulkActionsContext: () => null }))
+vi.mock('../src/sidebar/projects/threadSelection', () => ({
+  threadSelection: { toggle: vi.fn(), range: vi.fn(), clear: vi.fn() },
+  useThreadSelection: () => new Set<string>(),
+}))
 vi.mock('../src/i18n', () => ({ useLanguage() {}, t: (text: string) => text }))
 vi.mock('../src/Menu', () => ({
   Dialog: () => null,

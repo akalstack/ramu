@@ -17,3 +17,25 @@ export function isWebLink(url: string): boolean {
 export const AGENT_BROWSER_VISIBILITY_KEY = 'ramu.browser.agentVisibility'
 export const agentBrowserVisibilityFrom = (value: string | null | undefined): 'automatic' | 'manual' =>
   value === 'manual' ? 'manual' : 'automatic'
+
+/** Device-state keys for what the address box searches with when typed text is not an address. */
+export const SEARCH_ENGINE_KEY = 'ramu.browser.searchEngine'
+export const SEARCH_CUSTOM_KEY = 'ramu.browser.searchCustom'
+/** `%s` stands for the typed words. */
+export const SEARCH_ENGINES = [
+  { id: 'duckduckgo', name: 'DuckDuckGo', template: 'https://duckduckgo.com/?q=%s' },
+  { id: 'google', name: 'Google', template: 'https://www.google.com/search?q=%s' },
+  { id: 'bing', name: 'Bing', template: 'https://www.bing.com/search?q=%s' },
+  { id: 'brave', name: 'Brave Search', template: 'https://search.brave.com/search?q=%s' },
+  { id: 'ecosia', name: 'Ecosia', template: 'https://www.ecosia.org/search?q=%s' },
+] as const
+export const CUSTOM_SEARCH = 'custom'
+
+export const validSearchTemplate = (value: string | null | undefined): value is string =>
+  !!value && /^https?:\/\/\S+$/i.test(value) && value.includes('%s')
+
+/** The chosen engine's address template; an unknown choice or an unusable custom address falls back to DuckDuckGo. */
+export function searchTemplateFrom(engine: string | null | undefined, custom: string | null | undefined): string {
+  if (engine === CUSTOM_SEARCH && validSearchTemplate(custom)) return custom
+  return (SEARCH_ENGINES.find((entry) => entry.id === engine) ?? SEARCH_ENGINES[0]).template
+}

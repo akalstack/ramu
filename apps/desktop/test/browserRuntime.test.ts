@@ -170,6 +170,22 @@ describe('ownership and agent actions', () => {
     )
   })
 
+  it("a tab handed back with no run active is taken over by the thread's next run, not lost", async () => {
+    const { runtime } = setup()
+    const { tab } = await runtime.open(user, 'https://a.test')
+    runtime.takeControl(tab.id, 'local', { local: true })
+    const handed = runtime.releaseForNextRun(tab.id, 'local')
+    expect(handed).toMatchObject({ controller: 'none', released: true })
+    // Another thread's run cannot claim it.
+    expect(() => runtime.adoptReleased(tab.id, 'r2', { hostId: 'h', threadId: 'another' })).toThrow(BrowserError)
+    runtime.adoptReleased(tab.id, 'r2', user)
+    const adopted = runtime.list(user)[0]!
+    expect(adopted.controller).toBe('agent')
+    expect(adopted.released).toBeUndefined()
+    runtime.observeForAgent(tab.id, 'r2')
+    await expect(runtime.agentAction(tab.id, 'r2', adopted.generation, user, async () => 'ok')).resolves.toBe('ok')
+  })
+
   it('human takeover refuses the agent and waits for in-flight work, even when the action throws', async () => {
     const { runtime } = setup()
     const { tab } = await runtime.open(user, 'https://a.test')

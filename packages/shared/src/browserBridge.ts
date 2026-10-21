@@ -1,25 +1,16 @@
 import type { BrowserTabInfo } from './types/browser'
 
-export type BrowserKey =
-  | 'Enter'
-  | 'Escape'
-  | 'Tab'
-  | 'ArrowUp'
-  | 'ArrowDown'
-  | 'ArrowLeft'
-  | 'ArrowRight'
-  | 'Backspace'
-  | 'Delete'
-  | 'Space'
-  | 'Home'
-  | 'End'
-  | 'PageUp'
-  | 'PageDown'
+/** A named key, a single printable character, or F1–F12. */
+export type BrowserKey = string
+export type BrowserModifier = 'Alt' | 'Control' | 'Meta' | 'Shift'
+export type BrowserMouseButton = 'left' | 'right' | 'middle'
 export type BrowserPageAction =
-  | { kind: 'click'; snapshot: number; ref: number }
+  | { kind: 'click'; snapshot: number; ref: number; button?: BrowserMouseButton; clickCount?: 1 | 2 | 3 }
+  | { kind: 'hover'; snapshot: number; ref: number }
+  | { kind: 'drag'; snapshot: number; ref: number; toRef: number }
   | { kind: 'type'; snapshot: number; ref: number; text: string; submit: boolean }
   | { kind: 'select'; snapshot: number; ref: number; labels: string[] }
-  | { kind: 'press'; snapshot: number; ref: number; key: BrowserKey; shift: boolean }
+  | { kind: 'press'; snapshot: number; ref: number; key: BrowserKey; shift: boolean; modifiers?: BrowserModifier[] }
   | { kind: 'scroll'; snapshot: number; ref?: number; x: number; y: number }
 export interface BrowserScreenshot {
   mimeType: 'image/jpeg'
@@ -50,7 +41,8 @@ export type BrowserBridgeCommand =
   | { kind: 'diagnostics'; tabId: string }
   | { kind: 'dialog'; tabId: string }
   | { kind: 'handle-dialog'; tabId: string; dialogId: string; accept: boolean; promptText?: string }
-  | { kind: 'wait'; tabId: string; text: string; timeoutMs: number }
+  | { kind: 'wait'; tabId: string; text?: string; urlIncludes?: string; timeoutMs: number }
+  | { kind: 'back' | 'forward' | 'reload'; tabId: string }
   | { kind: 'close'; tabId: string }
   | { kind: 'end' }
 

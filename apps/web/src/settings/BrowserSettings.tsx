@@ -9,6 +9,7 @@ import type { AgentBrowserPreferences, LinkTarget } from '@ramu/shared/browser'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { deviceStorage } from '../deviceStorage'
 import { Dropdown } from '../Menu'
+import { SearchEnginePicker } from '../views/searchEngine'
 import { t, useLanguage } from '../i18n'
 import type { DraftProps } from './ToggleRow'
 import type { AgentProvider } from '@ramu/shared/types'
@@ -99,7 +100,7 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
     }
   }, [selectedHost])
   const browser: AgentBrowserPreferences = draft.agentBrowser ?? {
-    agentBrowser: 'provider' as const,
+    agentBrowser: 'integrated' as const,
     providerOverrides: {},
     defaultProfileId: 'default',
   }
@@ -180,6 +181,7 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
           <SettingsLabel title={name} />
           <Dropdown
             label={name}
+            keepOptions
             value={browser.providerOverrides[provider] ?? 'default'}
             disabled={busy}
             options={[
@@ -251,6 +253,15 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
           ]}
           onChange={(value) => deviceStorage.setItem(LINK_TARGET_KEY, linkTargetFrom(value))}
         />
+      </SettingsRow>
+      <SettingsRow>
+        <SettingsLabel
+          title={t('Search engine')}
+          help={t(
+            'Applies to this device only. The address box searches with it when you type words instead of an address.',
+          )}
+        />
+        <SearchEnginePicker label={t('Search engine')} />
       </SettingsRow>
       <p className="m-0 text-caption text-muted-foreground">
         {t('The Ramu browser keeps its own sign-ins, separate from your system browser and from your threads.')}

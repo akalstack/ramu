@@ -14,6 +14,7 @@ import { useProjectsDragDrop } from './projects/dnd'
 import { ProjectGroup } from './projects/ProjectGroup'
 import { SectionHead } from './projects/SectionHead'
 import { TaskRow } from './projects/TaskRow'
+import { BulkThreadActionsContext, ThreadSelectionBar, useBulkThreadActions } from './projects/ThreadSelectionBar'
 import { sidebarThreads } from './projects/threadLists'
 
 export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
@@ -38,6 +39,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
   // Recent mode: every chat in one list by activity, each led by its project's name.
   const recentMode = preferences.recentChatMode
   const latest = recentMode ? active.filter((t) => !t.pinnedAt).sort((a, b) => b.lastActiveAt - a.lastActiveAt) : []
+  const bulk = useBulkThreadActions()
   const { reorder, folderOver, onDragOver, onDragLeave, onDrop } = useProjectsDragDrop()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const projectIds = ws.projects.map((project) => project.id)
@@ -48,138 +50,141 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
   }
 
   return (
-    <div
-      className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_.empty-tasks]:pl-[31px] [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] ${embedded ? 'p-0' : 'p-[2px_8px_16px]'} tasks-panel${folderOver ? ' folder-drop' : ''}`}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
-      {pinned.length > 0 && (
-        <>
-          <SectionHead
-            title={t('Pinned')}
-            icon={Pin}
-            open={showPinned}
-            onToggle={() => ws.setExpanded('section:pinned', !showPinned)}
-            controls="pinned-chats"
-          />
-          <Collapse open={showPinned} id="pinned-chats" className="task-list flex flex-col gap-0.5">
-            {pinned.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                hidePin
-                projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
-              />
-            ))}
-          </Collapse>
-        </>
-      )}
-      {!embedded && (
-        <SectionHead
-          title={recentMode ? t('Recent threads') : t('Projects')}
-          icon={recentMode ? MessageCircle : FolderClosed}
-          open={showProjects}
-          onToggle={() => ws.setExpanded('section:projects', !showProjects)}
-          controls="projects-list"
-        >
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className={ICON_BUTTON_CLASS}
-            aria-label={t('Add project')}
-            title={t('Add project…')}
-            disabled={addProject.busy}
-            onClick={() => void addProject.add()}
-          >
-            <FolderPlus size={14} />
-          </Button>
-        </SectionHead>
-      )}
-      <Collapse open={showProjects} id="projects-list">
-        {recentMode && (
-          <div className="flex flex-col gap-0.5">
-            {latest.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
-              />
-            ))}
-          </div>
-        )}
-        {!recentMode && ws.projects.length === 0 && (
-          <div className="add-project [&_.hint]:m-[6px_0_14px] [&_.hint]:leading-[1.55] p-[2px_8px_4px]">
-            <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">
-              {t('Choose a repository or a folder containing repositories.')}
-            </p>
-            <Button
-              variant="secondary"
-              className="bg-fill hover:bg-fill-hover add-project-btn [&:hover:not(:disabled)]:[background:var(--fill-hover)] w-full min-h-[30px] rounded-(--radius-s) bg-fill [border-color:transparent] text-foreground justify-start"
-              disabled={addProject.busy}
-              onClick={() => void addProject.add()}
-            >
-              <FolderPlus size={14} /> {t(' Add project…')}
-            </Button>
-          </div>
-        )}
-        {!recentMode && (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropProject}>
-            <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
-              {ws.projects.map((p) => (
-                <ProjectGroup key={p.id} project={p} previewLimit={embedded ? 5 : undefined} />
+    <BulkThreadActionsContext.Provider value={bulk}>
+      <div
+        className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_:is(.scm-empty,_.empty-tasks)]:m-[8px_0] [&_:is(.scm-empty,_.empty-tasks)]:p-2 [&_.empty-tasks]:pl-[31px] [&_:is(.scm-empty,_.empty-tasks)]:leading-[1.5] [&_:is(.scm-empty,_.empty-tasks)]:[overflow-wrap:anywhere] ${embedded ? 'p-0' : 'p-[2px_8px_16px]'} tasks-panel${folderOver ? ' folder-drop' : ''}`}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        <ThreadSelectionBar actions={bulk} />
+        {pinned.length > 0 && (
+          <>
+            <SectionHead
+              title={t('Pinned')}
+              icon={Pin}
+              open={showPinned}
+              onToggle={() => ws.setExpanded('section:pinned', !showPinned)}
+              controls="pinned-chats"
+            />
+            <Collapse open={showPinned} id="pinned-chats" className="task-list flex flex-col gap-0.5">
+              {pinned.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  hidePin
+                  projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
+                />
               ))}
-            </SortableContext>
-          </DndContext>
+            </Collapse>
+          </>
         )}
-      </Collapse>
-      {!recentMode && (!embedded || looseChats.length > 0) && (
-        <>
+        {!embedded && (
           <SectionHead
-            title={t('Threads')}
-            icon={MessageCircle}
-            open={showChats}
-            onToggle={() => ws.setExpanded('section:chats', !showChats)}
-            controls="loose-chats"
+            title={recentMode ? t('Recent threads') : t('Projects')}
+            icon={recentMode ? MessageCircle : FolderClosed}
+            open={showProjects}
+            onToggle={() => ws.setExpanded('section:projects', !showProjects)}
+            controls="projects-list"
           >
             <Button
               variant="ghost"
               size="icon-xs"
               className={ICON_BUTTON_CLASS}
-              aria-label={t('New thread without a project')}
-              onClick={() => ws.newTask(NO_PROJECT)}
+              aria-label={t('Add project')}
+              title={t('Add project…')}
+              disabled={addProject.busy}
+              onClick={() => void addProject.add()}
             >
-              <Plus size={14} />
+              <FolderPlus size={14} />
             </Button>
           </SectionHead>
-          <Collapse open={showChats} id="loose-chats" className="flex flex-col gap-0.5">
-            {looseChats.map((t) => (
-              <TaskRow key={t.id} task={t} />
-            ))}
-          </Collapse>
-        </>
-      )}
-      {done.length > 0 && (
-        <>
-          <SectionHead
-            title={t('Done')}
-            icon={CheckCheck}
-            count={done.length}
-            open={showDone}
-            onToggle={() => ws.setExpanded('section:done', !showDone)}
-            controls="done-chats"
-          />
-          <Collapse open={showDone} id="done-chats" className="task-list flex flex-col gap-0.5">
-            {done.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
-              />
-            ))}
-          </Collapse>
-        </>
-      )}
-    </div>
+        )}
+        <Collapse open={showProjects} id="projects-list">
+          {recentMode && (
+            <div className="flex flex-col gap-0.5">
+              {latest.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
+                />
+              ))}
+            </div>
+          )}
+          {!recentMode && ws.projects.length === 0 && (
+            <div className="add-project [&_.hint]:m-[6px_0_14px] [&_.hint]:leading-[1.55] p-[2px_8px_4px]">
+              <p className="muted text-muted-foreground hint m-[4px_0_8px] text-control leading-[1.5]">
+                {t('Choose a repository or a folder containing repositories.')}
+              </p>
+              <Button
+                variant="secondary"
+                className="bg-fill hover:bg-fill-hover add-project-btn [&:hover:not(:disabled)]:[background:var(--fill-hover)] w-full min-h-[30px] rounded-(--radius-s) bg-fill [border-color:transparent] text-foreground justify-start"
+                disabled={addProject.busy}
+                onClick={() => void addProject.add()}
+              >
+                <FolderPlus size={14} /> {t(' Add project…')}
+              </Button>
+            </div>
+          )}
+          {!recentMode && (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropProject}>
+              <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
+                {ws.projects.map((p) => (
+                  <ProjectGroup key={p.id} project={p} previewLimit={embedded ? 5 : undefined} />
+                ))}
+              </SortableContext>
+            </DndContext>
+          )}
+        </Collapse>
+        {!recentMode && (!embedded || looseChats.length > 0) && (
+          <>
+            <SectionHead
+              title={t('Threads')}
+              icon={MessageCircle}
+              open={showChats}
+              onToggle={() => ws.setExpanded('section:chats', !showChats)}
+              controls="loose-chats"
+            >
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={ICON_BUTTON_CLASS}
+                aria-label={t('New thread without a project')}
+                onClick={() => ws.newTask(NO_PROJECT)}
+              >
+                <Plus size={14} />
+              </Button>
+            </SectionHead>
+            <Collapse open={showChats} id="loose-chats" className="flex flex-col gap-0.5">
+              {looseChats.map((t) => (
+                <TaskRow key={t.id} task={t} />
+              ))}
+            </Collapse>
+          </>
+        )}
+        {done.length > 0 && (
+          <>
+            <SectionHead
+              title={t('Done')}
+              icon={CheckCheck}
+              count={done.length}
+              open={showDone}
+              onToggle={() => ws.setExpanded('section:done', !showDone)}
+              controls="done-chats"
+            />
+            <Collapse open={showDone} id="done-chats" className="task-list flex flex-col gap-0.5">
+              {done.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
+                />
+              ))}
+            </Collapse>
+          </>
+        )}
+      </div>
+    </BulkThreadActionsContext.Provider>
   )
 }

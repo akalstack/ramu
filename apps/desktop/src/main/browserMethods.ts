@@ -24,6 +24,17 @@ export function browserMethod(runtime: BrowserRuntime, method: string, args: unk
     if (!tab) throw new Error('That tab is closed.')
     return tab
   }
+  // A pane that closed a tab can still ask about it a moment later; presenting calls then have nothing to do.
+  if (['browser.hide', 'browser.show', 'browser.dialog'].includes(method)) {
+    const [hostId, threadId, tabId] = [args[0], args[1], args[2]]
+    if (
+      typeof hostId === 'string' &&
+      typeof threadId === 'string' &&
+      typeof tabId === 'string' &&
+      !runtime.list({ hostId, threadId }).some((entry) => entry.id === tabId)
+    )
+      return null
+  }
   switch (method) {
     case 'browser.list':
       return runtime.list({ hostId: text(args[0], 'host', 200), threadId: text(args[1], 'thread', 200) })
@@ -75,7 +86,7 @@ export function browserMethod(runtime: BrowserRuntime, method: string, args: unk
       ]
       owned(hostId, threadId, tabId)
       if (method === 'browser.giveControl') {
-        if (!activeRunId) throw new Error('Start or resume the agent before returning control.')
+        if (!activeRunId) return runtime.releaseForNextRun(tabId, 'local')
         return runtime.giveToAgent(tabId, 'local', activeRunId)
       }
       if (method === 'browser.takeControl') return runtime.takeControl(tabId, 'local', { local: true })

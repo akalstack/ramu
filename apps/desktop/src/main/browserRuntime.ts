@@ -38,7 +38,7 @@ export interface GuestPage {
   /** Reads the page for the agent: visible text and numbered interactive elements. Internal scripts only. */
   inspect(): Promise<PageSnapshot>
   /** Clicks or types into an element of the last inspection. `ok: false` says why the page refused. */
-  act(action: PageAction): Promise<{ ok: boolean; reason?: string }>
+  act(action: PageAction): Promise<{ ok: boolean; reason?: string; points?: { x: number; y: number }[] }>
   /** Native input is blocked until the controlling human can safely drive the page. */
   setHumanInput(enabled: boolean): void
   screenshot?(): Promise<BrowserScreenshot>
@@ -114,6 +114,8 @@ export class BrowserError extends Error {
   }
 }
 
+const RELEASED_RUN = 'released-for-next-run'
+
 interface Tab {
   id: string
   owner: BrowserOwner
@@ -127,6 +129,7 @@ interface Tab {
   observing: boolean
   replacing: boolean
   respondingDialog: boolean
+  released?: boolean
 }
 
 export class BrowserRuntime {
@@ -172,6 +175,7 @@ export class BrowserRuntime {
       crashed: tab.crashed,
       inputReady: humanInputReady(tab.lease) && !tab.replacing && !tab.respondingDialog,
       paused: tab.lease.paused,
+      ...(tab.released ? { released: true } : {}),
     }
   }
 
@@ -443,6 +447,7 @@ export class BrowserRuntime {
     const result = giveToAgent(tab.lease, deviceId, runId)
     if (!result.ok) throw new BrowserError(result.refused, 'This tab is controlled by another device.')
     tab.lease = result.state
+    tab.released = false
     tab.owner = { ...tab.owner, runId }
     this.invalidate(tab)
     this.syncInput(tab)
@@ -450,11 +455,38 @@ export class BrowserRuntime {
     return this.info(tab)
   }
 
+  /**
+   * The person hands a tab back while no agent run is active. Nobody drives it meanwhile; the thread's next run takes
+   * it over at its first browser command, so the release is not lost when the agent is not running yet.
+   */
+  releaseForNextRun(id: string, deviceId: string): TabInfo {
+    const tab = this.tab(id)
+    const handed = giveToAgent(tab.lease, deviceId, RELEASED_RUN)
+    if (!handed.ok) throw new BrowserError(handed.refused, 'This tab is controlled by another device.')
+    tab.lease = revokeAgent(handed.state, RELEASED_RUN)
+    tab.released = true
+    this.invalidate(tab)
+    this.syncInput(tab)
+    this.changed()
+    return this.info(tab)
+  }
+
+  /** A run's first command on a tab the person released for it makes the run its controller. */
+  adoptReleased(id: string, runId: string, owner: Pick<BrowserOwner, 'hostId' | 'threadId'>): void {
+    const tab = this.tabs.get(id)
+    // Nobody holds the tab (an earlier run ended, or the person handed it back), so this thread's run may take it.
+    // A tab the person is controlling, or whose controller disconnected, is never taken.
+    if (!tab || tab.lease.controller.kind !== 'none' || tab.lease.paused) return
+    this.assertOwner(tab, owner)
+    this.giveToAgent(id, 'local', runId)
+  }
+
   takeControl(id: string, deviceId: string, options: { local?: boolean } = {}): TabInfo {
     const tab = this.tab(id)
     const result = takeControl(tab.lease, deviceId, options)
     if (!result.ok) throw new BrowserError(result.refused, 'Another device controls this tab. Ask it to hand over.')
     tab.lease = result.state
+    tab.released = false
     this.invalidate(tab)
     this.syncInput(tab)
     this.changed()
@@ -632,8 +664,9 @@ export class BrowserRuntime {
     id: string,
     runId: string,
     owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
-    text: string,
+    text: string | undefined,
     timeoutMs: number,
+    urlIncludes?: string,
   ): Promise<BrowserPageSnapshot & { matched: boolean }> {
     const tab = this.tab(id)
     this.assertOwner(tab, owner)
@@ -648,7 +681,9 @@ export class BrowserRuntime {
       )
         throw new BrowserError('stale-generation', 'Browser control changed while waiting. Inspect the page again.')
       const snapshot = await this.inspectForAgent(id, runId, owner)
-      const matched = snapshot.text.includes(text)
+      const matched =
+        (text === undefined || snapshot.text.includes(text)) &&
+        (urlIncludes === undefined || snapshot.url.includes(urlIncludes))
       if (matched || Date.now() >= deadline) return { ...snapshot, matched }
       await new Promise((resolve) => setTimeout(resolve, Math.min(250, Math.max(1, deadline - Date.now()))))
     }
@@ -664,9 +699,28 @@ export class BrowserRuntime {
     this.assertOwner(tab, owner)
     const url = allowedGuestUrl(raw)
     if (!url) throw new BrowserError('bad-url', 'Only http and https pages can be opened.')
+    // Going to an address needs no element reference, so the run need not have read the page first.
+    tab.lease = observed(tab.lease, runId)
     return this.agentAction(id, runId, tab.lease.generation, owner, async (page) => {
       this.invalidate(tab)
       await page.load(url.toString())
+      return this.info(tab)
+    })
+  }
+
+  /** Back, forward or reload for the run that controls the tab, as the person would from the toolbar. */
+  async historyForAgent(
+    id: string,
+    runId: string,
+    owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
+    move: 'back' | 'forward' | 'reload',
+  ): Promise<TabInfo> {
+    const tab = this.tab(id)
+    this.assertOwner(tab, owner)
+    tab.lease = observed(tab.lease, runId)
+    return this.agentAction(id, runId, tab.lease.generation, owner, async (page) => {
+      this.invalidate(tab)
+      page[move]()
       return this.info(tab)
     })
   }

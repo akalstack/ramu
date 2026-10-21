@@ -113,10 +113,11 @@ export const registerSettingsHandlers: RegisterHandlers = ({
                 defaultBarMode: selectionMode.parse(modeEdit.value),
               })
             : undefined
+        const stored = loadPreferences()
         const preferences = applySettingEdits(
           sharedSettingsSchema,
           appPreferences,
-          loadPreferences(),
+          { ...stored, agentBrowser: stored.agentBrowser ?? appPreferences.shape.agentBrowser.parse(undefined) },
           edits.filter((edit) => edit.path !== '$models' && edit.path !== '$models.defaultBarMode'),
         )
         for (const edit of edits) {

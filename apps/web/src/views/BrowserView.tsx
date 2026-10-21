@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, ArrowUpRight, Hand, RotateCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ArrowUpRight, Hand, Plus, RotateCw, X } from 'lucide-react'
 import type { BrowserDialog } from '@ramu/shared/browserBridge'
-import type { BrowserProfileCatalog, BrowserTabInfo } from '@ramu/shared/types/browser'
+import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import type { ViewDescriptor } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { t, useLanguage } from '../i18n'
 import { ramu } from '../ipc'
-import { Dialog as ConfirmDialog, Dropdown } from '../Menu'
 import { errorText } from '../lib/errors'
 import { addressFrom } from './browserAddress'
 import { openOverlays, paneCovered } from './browserOverlay'
+import { NEW_TAB, onWantedTab, takeWantedTab } from './browserPane'
+import { BrowserTabChip, type BrowserTabActions } from './BrowserTabChip'
+import { useSearchEngine } from './searchEngine'
+import { useAppSettings } from '../settings/AppSettings'
 import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
 
@@ -20,6 +23,9 @@ const controllerText = (controller: BrowserTabInfo['controller']) =>
     : controller === 'human'
       ? t('You are in control')
       : ''
+
+/** Panes whose saved address was already reopened in this session. */
+const restored = new Set<string>()
 
 /**
  * One integrated-browser tab for this thread. The page itself is a native view the desktop shell places over this
@@ -45,17 +51,24 @@ export function BrowserView({
     latestScope.current = scope
     viewEpoch.current += 1
   }
-  const [profile, setProfile] = useState(view.profileId ?? 'default')
-  const [profiles, setProfiles] = useState<BrowserProfileCatalog | null>(null)
+  // New tabs follow the profile chosen in Settings → Browser; it is not picked per tab here.
+  const { preferences } = useAppSettings()
+  const profile = view.profileId ?? preferences.agentBrowser?.defaultProfileId ?? 'default'
+  const [listed, setListed] = useState(false)
   const [websiteDialog, setWebsiteDialog] = useState<BrowserDialog | null>(null)
   const dialogRef = useRef(websiteDialog)
   dialogRef.current = websiteDialog
   const [dialogText, setDialogText] = useState('')
   const [dialogBusy, setDialogBusy] = useState(false)
-  const [changingProfile, setChangingProfile] = useState<{ tabId: string; profileId: string; scope: string } | null>(
-    null,
-  )
-  const [tab, setTab] = useState<BrowserTabInfo | null>(null)
+  const search = useSearchEngine()
+  const [tab, setTabState] = useState<BrowserTabInfo | null>(null)
+  // The tab the person last chose, readable by a list refresh that began before the choice and ends after it, so a
+  // slow refresh never switches the pane back to the tab it was on.
+  const chosen = useRef<string | undefined>(undefined)
+  const setTab = useCallback((next: BrowserTabInfo | null) => {
+    chosen.current = next?.id
+    setTabState(next)
+  }, [])
   const editingAddress = useRef(false)
   const startingNew = useRef(false)
   const [threadTabs, setThreadTabs] = useState<BrowserTabInfo[]>([])
@@ -88,8 +101,8 @@ export function BrowserView({
 
   const open = useCallback(
     async (raw: string) => {
-      const url = addressFrom(raw)
-      if (!url) return setError(t('Enter a web address.'))
+      const url = addressFrom(raw, search.template)
+      if (!url) return setError(t('Enter a web address or something to search for.'))
       if (tabId) {
         const next = await run(() => ramu.invoke('browser.navigate', host, taskId, tabId, url))
         if (next) {
@@ -103,13 +116,30 @@ export function BrowserView({
         startingNew.current = false
         setTab(opened.tab)
         setAddress(opened.tab.url)
-        setProfile(opened.tab.profileId)
         if (opened.profileFellBack)
           setError(t('The selected profile is no longer available. This tab opened in Default.'))
       }
     },
-    [host, taskId, tabId, run, profile],
+    [host, taskId, tabId, run, profile, search.template],
   )
+
+  // A new tab opens the search engine's own page, ready to search from, rather than an empty pane.
+  const newTab = useCallback(async () => {
+    let home: string
+    try {
+      home = new URL(search.template).origin
+    } catch {
+      home = 'https://duckduckgo.com'
+    }
+    startingNew.current = false
+    const opened = await run(() => ramu.invoke('browser.open', host, taskId, home, profile))
+    if (!opened) return
+    setTab(opened.tab)
+    setAddress('')
+    editingAddress.current = false
+  }, [host, taskId, profile, run, search.template])
+  const newTabRef = useRef(newTab)
+  newTabRef.current = newTab
 
   // Read native ownership/navigation changes. Fence late reads when this pane changes host or thread.
   useEffect(() => {
@@ -119,18 +149,21 @@ export function BrowserView({
     const refresh = async () => {
       const mine = ++revision
       try {
-        const [tabResult, profileResult] = await Promise.allSettled([
-          ramu.invoke('browser.list', host, taskId),
-          ramu.invoke('browser.profiles.list', host),
-        ])
+        const tabs = await ramu.invoke('browser.list', host, taskId)
         if (!active || mine !== revision) return
-        if (tabResult.status === 'rejected') throw tabResult.reason
-        const tabs = tabResult.value
-        setProfiles(profileResult.status === 'fulfilled' ? profileResult.value : null)
         setThreadTabs(tabs)
+        setListed(true)
         setListError(null)
+        const want = takeWantedTab(view.id)
+        if (want === NEW_TAB) {
+          reopened.current = true
+          restored.add(view.id)
+          void newTabRef.current()
+          return
+        }
         const current =
-          tabs.find((candidate) => candidate.id === tabId) ??
+          (want ? tabs.find((candidate) => candidate.id === want) : undefined) ??
+          tabs.find((candidate) => candidate.id === (chosen.current ?? tabId)) ??
           (!tabId && !view.tabId && !view.url && !startingNew.current ? tabs[0] : undefined)
         setTab(current ?? null)
         if (!current) setWebsiteDialog(null)
@@ -142,6 +175,7 @@ export function BrowserView({
         }
         if (current) {
           reopened.current = true
+          restored.add(view.id)
           if (!editingAddress.current) setAddress(current.url)
         }
       } catch (reason) {
@@ -151,12 +185,14 @@ export function BrowserView({
     const off = ramu.on('browser:changed', () => {
       void refresh()
     })
+    const offWanted = onWantedTab(() => void refresh())
     void refresh()
     return () => {
       active = false
       off()
+      offWanted()
     }
-  }, [host, taskId, tabId, visible, view.tabId, view.url])
+  }, [host, taskId, tabId, visible, view.id, view.tabId, view.url])
 
   // An agent-created pane adopts the actual native tab instead of opening a duplicate page.
   const [adopted, setAdopted] = useState(!view.tabId)
@@ -170,6 +206,7 @@ export function BrowserView({
         const existing = tabs.find((candidate) => candidate.id === view.tabId)
         if (existing) {
           reopened.current = true
+          restored.add(view.id)
           setTab(existing)
           setAddress(existing.url)
         }
@@ -188,9 +225,7 @@ export function BrowserView({
   useEffect(() => {
     setTab(null)
     setThreadTabs([])
-    setProfile(view.profileId ?? 'default')
-    setProfiles(null)
-    setChangingProfile(null)
+    setListed(false)
     setWebsiteDialog(null)
     setDialogBusy(false)
     setListError(null)
@@ -201,9 +236,19 @@ export function BrowserView({
     setAdopted(!view.tabId)
     reopened.current = false
   }, [scope])
+  const opening = useRef('')
   useEffect(() => {
-    if (!visible || !adopted || reopened.current || tab || !view.url) return
+    if (!visible || !adopted || !listed || tab || threadTabs.length || view.url || startingNew.current) return
+    if (opening.current === scope) return
+    opening.current = scope
+    void newTabRef.current()
+  }, [visible, adopted, listed, tab, threadTabs.length, view.url, scope])
+  useEffect(() => {
+    if (!visible || !adopted || reopened.current || tab || !view.url || restored.has(view.id)) return
     reopened.current = true
+    // A pane is shared by the workspace's chats: restoring its address once per session reopens the page after a
+    // restart, instead of adding the same page to every chat the person switches to.
+    restored.add(view.id)
     void open(view.url)
   }, [visible, adopted, tab, view.url, open])
 
@@ -261,9 +306,54 @@ export function BrowserView({
 
   const call = (method: 'browser.back' | 'browser.forward' | 'browser.reload') =>
     tabId && void run(() => ramu.invoke(method, host, taskId, tabId))
+  // Closing a tab keeps the pane while the thread has other tabs; the last one closes the pane too.
+  const closeOther = async (entry: BrowserTabInfo) => {
+    await run(() => ramu.invoke('browser.close', host, taskId, entry.id))
+    const rest = threadTabs.filter((candidate) => candidate.id !== entry.id)
+    if (entry.id !== tabId) return
+    if (!rest.length) return ws.closeView(taskId, view.id)
+    startingNew.current = false
+    setTab(rest[0]!)
+    setAddress(rest[0]!.url)
+  }
   const closeTab = async () => {
-    if (tabId) await run(() => ramu.invoke('browser.close', host, taskId, tabId))
-    ws.closeView(taskId, view.id)
+    if (tab) await closeOther(tab)
+    else ws.closeView(taskId, view.id)
+  }
+
+  const select = (entry: BrowserTabInfo) => {
+    startingNew.current = false
+    reopened.current = true
+    setTab(entry)
+    setAddress(entry.url)
+    setError(null)
+  }
+  const closeMany = async (doomed: BrowserTabInfo[], keep: BrowserTabInfo) => {
+    await run(async () => {
+      for (const entry of doomed) await ramu.invoke('browser.close', host, taskId, entry.id)
+    })
+    if (doomed.some((entry) => entry.id === tabId)) select(keep)
+  }
+  const tabActions: BrowserTabActions = {
+    select,
+    close: (entry) => void closeOther(entry),
+    closeOthers: (entry) =>
+      void closeMany(
+        threadTabs.filter((other) => other.id !== entry.id),
+        entry,
+      ),
+    closeToRight: (entry) =>
+      void closeMany(threadTabs.slice(threadTabs.findIndex((other) => other.id === entry.id) + 1), entry),
+    duplicate: (entry) =>
+      void run(() => ramu.invoke('browser.open', host, taskId, entry.url, entry.profileId)).then((opened) => {
+        if (opened) select(opened.tab)
+      }),
+    reload: (entry) => {
+      if (entry.id !== tabId) select(entry)
+      void run(() => ramu.invoke('browser.reload', host, taskId, entry.id))
+    },
+    openExternal: (entry) => void run(() => ramu.invoke('app.openExternal', entry.url)),
+    newTab: () => void newTab(),
   }
   const take = async () => {
     if (!tabId) return
@@ -300,82 +390,37 @@ export function BrowserView({
     }
   }
 
-  const profileOptions = (
-    profiles?.profiles ?? [
-      { id: 'default', name: 'Default', builtin: true },
-      { id: 'temporary', name: 'Temporary', builtin: true },
-    ]
-  ).map((entry) => ({ value: entry.id, label: entry.builtin ? t(entry.name) : entry.name }))
-  const selectedProfile = tab?.profileId ?? profile
-  if (!profileOptions.some((entry) => entry.value === selectedProfile))
-    profileOptions.push({ value: selectedProfile, label: t('Unavailable profile ({0})', { 0: selectedProfile }) })
-
   return (
     <div ref={pane} className="browser-view flex min-h-0 min-w-0 flex-1 flex-col">
       {threadTabs.length > 0 && (
-        <div className="flex flex-none items-center gap-2 border-b border-(--line) px-2 py-1 text-caption text-muted-foreground">
-          <Dropdown
-            label={t('Browser tabs')}
-            value={tabId ?? 'new'}
-            disabled={busy}
-            options={[
-              ...threadTabs.map((entry) => ({ value: entry.id, label: (entry.title || entry.url).slice(0, 120) })),
-              { value: 'new', label: t('New browser tab') },
-            ]}
-            onChange={(id) => {
-              const chosen = threadTabs.find((entry) => entry.id === id)
-              startingNew.current = !chosen
-              reopened.current = true
-              setTab(chosen ?? null)
-              setAddress(chosen?.url ?? '')
-              setError(null)
-            }}
-          />
-          <span>
-            {tab?.profileId === 'temporary' ? t('Temporary') : t('Shared profile')} · {t('This computer')}
-          </span>
-        </div>
-      )}
-      <div className="flex flex-none items-center gap-2 border-b border-(--line) px-2 py-1 text-caption text-muted-foreground">
-        <Dropdown
-          label={t('Browser profile')}
-          value={selectedProfile}
-          options={profileOptions}
-          disabled={busy || (!!tab && !tab.inputReady) || !!profiles?.error}
-          onChange={(id) => {
-            if (!tab) setProfile(id)
-            else if (id !== tab.profileId) setChangingProfile({ tabId: tab.id, profileId: id, scope })
-          }}
-        />
-        <span>{t(selectedProfile === 'temporary' ? 'Separate for each run' : 'Shared profile')}</span>
-      </div>
-      {changingProfile && (
-        <ConfirmDialog
-          title={t('Change browser profile?')}
-          confirmLabel={t('Open in selected profile')}
-          busy={busy}
-          onCancel={() => setChangingProfile(null)}
-          onConfirm={() => {
-            const intent = changingProfile
-            setChangingProfile(null)
-            if (intent.scope !== latestScope.current || intent.tabId !== tabId) return
-            void run(() => ramu.invoke('browser.changeProfile', host, taskId, intent.tabId, intent.profileId)).then(
-              (next) => {
-                if (next) {
-                  setTab(next)
-                  setAddress(next.url)
-                  setProfile(next.profileId)
-                }
-              },
-            )
-          }}
+        <div
+          role="tablist"
+          aria-label={t('Browser tabs')}
+          className="flex flex-none items-center gap-1 overflow-x-auto border-b border-(--line) px-2 py-1"
         >
-          <p>
-            {t(
-              'This reloads the current address in a separate website identity. The old page closes only after the new page loads. Unsaved page input does not transfer.',
-            )}
-          </p>
-        </ConfirmDialog>
+          {threadTabs.map((entry, index) => (
+            <BrowserTabChip
+              key={entry.id}
+              tab={entry}
+              index={index}
+              count={threadTabs.length}
+              active={entry.id === tabId}
+              disabled={busy}
+              actions={tabActions}
+            />
+          ))}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t('New browser tab')}
+            title={t('New browser tab')}
+            disabled={busy}
+            onClick={() => void newTab()}
+          >
+            <Plus size={14} />
+          </Button>
+        </div>
       )}
       {websiteDialog && (
         <div className="flex flex-none flex-col gap-2 border-b border-(--line) bg-fill p-3" role="alert">
@@ -499,7 +544,7 @@ export function BrowserView({
           <X size={14} />
         </Button>
       </form>
-      {(error || listError || tab?.crashed || (tab && controllerText(tab.controller))) && (
+      {(error || listError || tab?.crashed || (tab && (tab.released || controllerText(tab.controller)))) && (
         <p
           className="m-0 px-3 py-1 text-caption text-muted-foreground"
           role={error || listError || tab?.crashed ? 'alert' : 'status'}
@@ -508,13 +553,15 @@ export function BrowserView({
             listError ??
             (tab?.paused
               ? t('Control disconnected. Take control to continue.')
-              : tab?.crashed
-                ? t('This page stopped working. Reload it.')
-                : tab?.controller === 'human' && !tab.inputReady
-                  ? t('Waiting for the current browser action to finish')
-                  : tab
-                    ? controllerText(tab.controller)
-                    : '')}
+              : tab?.released
+                ? t('Handed back. The agent takes over on its next run.')
+                : tab?.crashed
+                  ? t('This page stopped working. Reload it.')
+                  : tab?.controller === 'human' && !tab.inputReady
+                    ? t('Waiting for the current browser action to finish')
+                    : tab
+                      ? controllerText(tab.controller)
+                      : '')}
         </p>
       )}
       <div ref={area} className="min-h-0 flex-1" aria-label={t('Page')}>
@@ -523,7 +570,7 @@ export function BrowserView({
         )}
         {!tab && (
           <p className="m-0 p-6 text-center text-muted-foreground">
-            {t('Enter an address to open a page. It opens in a profile of its own, separate from your threads.')}
+            {listed ? t('Opening the browser…') : t('Loading…')}
           </p>
         )}
       </div>

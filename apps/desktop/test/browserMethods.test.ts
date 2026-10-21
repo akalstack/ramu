@@ -34,6 +34,18 @@ function runtime() {
 }
 
 describe('browser methods', () => {
+  it('lets a pane show, hide or ask about a tab that has just closed without an error', async () => {
+    const { runtime: r } = runtime()
+    const { tab } = (await browserMethod(r, 'browser.open', ['h', 't', 'https://a.test'])) as { tab: { id: string } }
+    browserMethod(r, 'browser.close', ['h', 't', tab.id])
+    const bounds = { x: 0, y: 0, width: 10, height: 10 }
+    expect(browserMethod(r, 'browser.show', ['h', 't', tab.id, bounds])).toBeNull()
+    expect(browserMethod(r, 'browser.hide', ['h', 't', tab.id])).toBeNull()
+    expect(browserMethod(r, 'browser.dialog', ['h', 't', tab.id])).toBeNull()
+    // Acting on it still says why.
+    expect(() => browserMethod(r, 'browser.reload', ['h', 't', tab.id])).toThrow('closed')
+  })
+
   it('opens, lists and closes tabs for the thread the window names', async () => {
     const { runtime: r } = runtime()
     const { tab } = (await browserMethod(r, 'browser.open', ['h', 't', 'https://a.test'])) as { tab: { id: string } }
@@ -46,8 +58,10 @@ describe('browser methods', () => {
   it("a window cannot act on another thread or host's tab", async () => {
     const { runtime: r } = runtime()
     const { tab } = (await browserMethod(r, 'browser.open', ['h', 't', 'https://a.test'])) as { tab: { id: string } }
-    for (const method of ['browser.close', 'browser.reload', 'browser.hide', 'browser.takeControl'])
+    for (const method of ['browser.close', 'browser.reload', 'browser.takeControl'])
       expect(() => browserMethod(r, method, ['h', 'other', tab.id])).toThrow('closed')
+    // Presenting calls for a tab the window does not own do nothing, and say nothing about it.
+    expect(browserMethod(r, 'browser.hide', ['h', 'other', tab.id])).toBeNull()
     expect(() => browserMethod(r, 'browser.close', ['other-host', 't', tab.id])).toThrow('closed')
     expect(() => browserMethod(r, 'browser.navigate', ['h', 'other', tab.id, 'https://b.test'])).toThrow('closed')
     expect(browserMethod(r, 'browser.list', ['h', 't'])).toHaveLength(1)

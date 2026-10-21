@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { WebContents } from 'electron'
-import type { BrowserDialog, BrowserDiagnostics, BrowserKey } from '@ramu/shared/browserBridge'
+import type { BrowserDialog, BrowserDiagnostics, BrowserKey, BrowserModifier } from '@ramu/shared/browserBridge'
 
 const keys: Record<BrowserKey, { key: string; code: string; virtual: number; text?: string }> = {
   Enter: { key: 'Enter', code: 'Enter', virtual: 13, text: '\r' },
@@ -17,6 +17,15 @@ const keys: Record<BrowserKey, { key: string; code: string; virtual: number; tex
   End: { key: 'End', code: 'End', virtual: 35 },
   PageUp: { key: 'PageUp', code: 'PageUp', virtual: 33 },
   PageDown: { key: 'PageDown', code: 'PageDown', virtual: 34 },
+}
+const SHORTCUT_COMMANDS: Record<string, string[]> = {
+  a: ['selectAll'],
+  c: ['copy'],
+  v: ['paste'],
+  x: ['cut'],
+  z: ['undo'],
+  y: ['redo'],
+  'z+shift': ['redo'],
 }
 const originOf = (value: unknown) => {
   try {
@@ -132,19 +141,80 @@ export class BrowserDebugger {
   dialog(): BrowserDialog | null {
     return this.pendingDialog ? { ...this.pendingDialog } : null
   }
-  async key(name: BrowserKey, shift: boolean): Promise<void> {
-    const key = Object.hasOwn(keys, name) ? keys[name] : undefined
+  /** Presses one key through Chromium input: a named key, one printable character or F1–F12, with modifiers held. */
+  async key(name: BrowserKey, shift: boolean, modifiers: readonly BrowserModifier[] = []): Promise<void> {
+    const named = Object.hasOwn(keys, name) ? keys[name] : undefined
+    const fn = /^F([1-9]|1[0-2])$/.exec(name)
+    const char = name.length === 1 ? name : undefined
+    let key: { key: string; code: string; virtual: number; text?: string } | undefined = named
+    if (!key && fn) key = { key: name, code: name, virtual: 111 + Number(fn[1]) }
+    if (!key && char && /^[\x20-\x7e]$/.test(char)) {
+      const upper = char.toUpperCase()
+      const letter = /^[a-z]$/i.test(char)
+      const digit = /^[0-9]$/.test(char)
+      key = {
+        key: char,
+        code: letter ? `Key${upper}` : digit ? `Digit${char}` : char === ' ' ? 'Space' : '',
+        virtual: upper.charCodeAt(0),
+        text: char,
+      }
+    }
     if (!key) throw new Error('This key is not supported by the browser tool.')
     await this.ensure()
-    const event = { key: key.key, code: key.code, windowsVirtualKeyCode: key.virtual, modifiers: shift ? 8 : 0 }
+    const held = new Set(modifiers)
+    if (shift) held.add('Shift')
+    const mask =
+      (held.has('Alt') ? 1 : 0) |
+      (held.has('Control') ? 2 : 0) |
+      (held.has('Meta') ? 4 : 0) |
+      (held.has('Shift') ? 8 : 0)
+    // A shortcut chord is not text; Chromium's editing commands do the work for the common ones.
+    const chord = held.has('Control') || held.has('Meta') || held.has('Alt')
+    const commands =
+      chord && char ? SHORTCUT_COMMANDS[char.toLowerCase() + (held.has('Shift') ? '+shift' : '')] : undefined
+    const event = { key: key.key, code: key.code, windowsVirtualKeyCode: key.virtual, modifiers: mask }
+    const text = key.text && !chord ? (held.has('Shift') ? key.text.toUpperCase() : key.text) : undefined
     try {
       await this.contents.debugger.sendCommand('Input.dispatchKeyEvent', {
         ...event,
-        type: key.text ? 'keyDown' : 'rawKeyDown',
-        ...(key.text ? { text: key.text } : {}),
+        type: text ? 'keyDown' : 'rawKeyDown',
+        ...(text ? { text } : {}),
+        ...(commands ? { commands } : {}),
       })
     } finally {
       await this.contents.debugger.sendCommand('Input.dispatchKeyEvent', { ...event, type: 'keyUp' }).catch(() => {})
+    }
+  }
+  /** Real pointer input at viewport coordinates: moves first so hover menus open, then presses and releases. */
+  async mouse(
+    points: readonly { x: number; y: number }[],
+    action: { kind: 'click' | 'hover' | 'drag'; button?: 'left' | 'right' | 'middle'; clickCount?: number },
+  ): Promise<void> {
+    await this.ensure()
+    const send = (params: Record<string, unknown>) =>
+      this.contents.debugger.sendCommand('Input.dispatchMouseEvent', { pointerType: 'mouse', ...params })
+    const [from, to] = [points[0]!, points[1] ?? points[0]!]
+    const button = action.button ?? 'left'
+    const buttons = button === 'left' ? 1 : button === 'right' ? 2 : 4
+    await send({ type: 'mouseMoved', x: from.x, y: from.y, button: 'none', buttons: 0 })
+    if (action.kind === 'hover') return
+    if (action.kind === 'drag') {
+      await send({ type: 'mousePressed', x: from.x, y: from.y, button, buttons, clickCount: 1 })
+      for (const step of [0.25, 0.5, 0.75, 1])
+        await send({
+          type: 'mouseMoved',
+          x: from.x + (to.x - from.x) * step,
+          y: from.y + (to.y - from.y) * step,
+          button,
+          buttons,
+        })
+      await send({ type: 'mouseReleased', x: to.x, y: to.y, button, buttons: 0, clickCount: 1 })
+      return
+    }
+    const count = Math.min(3, Math.max(1, action.clickCount ?? 1))
+    for (let click = 1; click <= count; click++) {
+      await send({ type: 'mousePressed', x: from.x, y: from.y, button, buttons, clickCount: click })
+      await send({ type: 'mouseReleased', x: from.x, y: from.y, button, buttons: 0, clickCount: click })
     }
   }
   async handleDialog(id: string, accept: boolean, text?: string): Promise<void> {

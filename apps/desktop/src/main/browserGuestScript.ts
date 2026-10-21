@@ -4,7 +4,7 @@ import type { PageAction, PageSnapshot } from './browserRuntime'
 function guestOperation(
   operation: 'inspect' | 'act' | 'invalidate',
   action?: PageAction,
-): PageSnapshot | { ok: boolean; reason?: string } {
+): PageSnapshot | { ok: boolean; reason?: string; points?: { x: number; y: number }[] } {
   type Record = { element: HTMLElement; signature: string }
   type State = { records: Record[]; observer: MutationObserver; dirty: boolean }
   const world = globalThis as typeof globalThis & { __ramuBrowserObservation?: State }
@@ -119,7 +119,16 @@ function guestOperation(
         name: name(node),
         ...(node instanceof HTMLInputElement ? { type: node.type } : {}),
         ...(node instanceof HTMLAnchorElement ? { href: node.href.slice(0, 4000) } : {}),
-        ...(node instanceof HTMLSelectElement ? { options: Array.from(node.options).slice(0, 40).map((option) => ({ label: clean(option.label), disabled: option.disabled || !!option.closest('optgroup:disabled') })) } : {}),
+        ...(node instanceof HTMLSelectElement
+          ? {
+              options: Array.from(node.options)
+                .slice(0, 40)
+                .map((option) => ({
+                  label: clean(option.label),
+                  disabled: option.disabled || !!option.closest('optgroup:disabled'),
+                })),
+            }
+          : {}),
       })
     }
     state.observer.observe(document, { subtree: true, childList: true, attributes: true, characterData: true })
@@ -137,7 +146,11 @@ function guestOperation(
   if (action.kind === 'scroll' && action.ref === undefined) {
     old.observer.disconnect()
     delete world.__ramuBrowserObservation
-    window.scrollBy({ left: Math.max(-2000, Math.min(2000, action.x)), top: Math.max(-2000, Math.min(2000, action.y)), behavior: 'instant' })
+    window.scrollBy({
+      left: Math.max(-2000, Math.min(2000, action.x)),
+      top: Math.max(-2000, Math.min(2000, action.y)),
+      behavior: 'instant',
+    })
     return { ok: true }
   }
   const record = old.records[action.ref! - 1]
@@ -155,18 +168,26 @@ function guestOperation(
       return refuse('Another element covers this target. Take a new snapshot first.')
     if (old.dirty || old.observer.takeRecords().length || signature(element) !== record.signature)
       return refuse('The page changed while locating the target. Take a new snapshot first.')
-    if (element instanceof HTMLInputElement && element.type === 'file') return refuse('File selection requires an explicit upload handle or human control.')
+    if (element instanceof HTMLInputElement && element.type === 'file')
+      return refuse('File selection requires an explicit upload handle or human control.')
     if (action.kind === 'scroll') {
-      element.scrollBy({ left: Math.max(-2000, Math.min(2000, action.x)), top: Math.max(-2000, Math.min(2000, action.y)), behavior: 'instant' })
+      element.scrollBy({
+        left: Math.max(-2000, Math.min(2000, action.x)),
+        top: Math.max(-2000, Math.min(2000, action.y)),
+        behavior: 'instant',
+      })
       return { ok: true }
     }
     if (action.kind === 'select') {
-      if (!(element instanceof HTMLSelectElement)) return refuse('This target is not a native select control. Use its visible buttons or human control.')
-      if (action.labels.length > 20 || (!element.multiple && action.labels.length !== 1)) return refuse('Choose one option for a single-select control.')
+      if (!(element instanceof HTMLSelectElement))
+        return refuse('This target is not a native select control. Use its visible buttons or human control.')
+      if (action.labels.length > 20 || (!element.multiple && action.labels.length !== 1))
+        return refuse('Choose one option for a single-select control.')
       const choices: HTMLOptionElement[] = []
       for (const label of action.labels) {
         const matches = Array.from(element.options).filter((option) => clean(option.label) === label)
-        if (matches.length !== 1 || matches[0]!.disabled || matches[0]!.closest('optgroup:disabled')) return refuse('An option is missing, ambiguous or disabled. Take a new snapshot first.')
+        if (matches.length !== 1 || matches[0]!.disabled || matches[0]!.closest('optgroup:disabled'))
+          return refuse('An option is missing, ambiguous or disabled. Take a new snapshot first.')
         choices.push(matches[0]!)
       }
       for (const option of Array.from(element.options)) option.selected = choices.includes(option)
@@ -175,15 +196,32 @@ function guestOperation(
       return { ok: true }
     }
     if (action.kind === 'press') {
-      if (element instanceof HTMLInputElement && element.type === 'password') return refuse('Use human control for password fields.')
+      if (element instanceof HTMLInputElement && element.type === 'password')
+        return refuse('Use human control for password fields.')
       element.focus()
-      if (document.activeElement !== element || old.dirty || old.observer.takeRecords().length || signature(element) !== record.signature) return refuse('The target changed while focusing. Take a new snapshot first.')
+      if (
+        document.activeElement !== element ||
+        old.dirty ||
+        old.observer.takeRecords().length ||
+        signature(element) !== record.signature
+      )
+        return refuse('The target changed while focusing. Take a new snapshot first.')
       // Main dispatches the fixed named key through Chromium after this snapshot-bound focus check.
       return { ok: true }
     }
-    if (action.kind === 'click') {
-      element.click()
-      return { ok: true }
+    if (action.kind === 'click' || action.kind === 'hover' || action.kind === 'drag') {
+      // Pointer input is real Chromium input sent by main at these viewport points, after the checks above.
+      const center = (box: DOMRect) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 })
+      if (action.kind !== 'drag') return { ok: true, points: [center(rect)] }
+      const destination = old.records[action.toRef - 1]
+      if (!destination || !visible(destination.element) || signature(destination.element) !== destination.signature)
+        return refuse('The drop target changed or is no longer visible. Take a new snapshot first.')
+      destination.element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' })
+      const from = element.getBoundingClientRect()
+      const to = destination.element.getBoundingClientRect()
+      const inside = (box: DOMRect) => box.bottom > 0 && box.right > 0 && box.top < innerHeight && box.left < innerWidth
+      if (!inside(from) || !inside(to)) return refuse('The two elements are too far apart to drag in one view.')
+      return { ok: true, points: [center(from), center(to)] }
     }
     if (action.text.length > 20000) return refuse('Text is too long.')
     if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement))

@@ -13,6 +13,8 @@ export interface BrowserTabInfo {
   /** Human input waits for an old agent action to settle after takeover. */
   inputReady: boolean
   paused: boolean
+  /** The person handed this tab back while no agent run was active; the thread's next run takes it over. */
+  released?: boolean
   crashed: boolean
 }
 

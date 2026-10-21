@@ -1,3 +1,5 @@
+import { ownHostId } from './hosts'
+import { openBrowser } from './views/browserPane'
 import { deviceStorage } from './deviceStorage'
 import { AGENT_BROWSER_VISIBILITY_KEY, agentBrowserVisibilityFrom } from '@ramu/shared/browserLinks'
 import { animateThreadListChange } from './workspace/threadListMotion'
@@ -31,6 +33,7 @@ import {
   PanelLeftOpen,
   PanelRight,
   SquareTerminal,
+  Globe,
   Search,
 } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -329,7 +332,7 @@ function Shell() {
         if (shownBrowserRuns.current.size >= 200)
           shownBrowserRuns.current.delete(shownBrowserRuns.current.values().next().value!)
         shownBrowserRuns.current.add(key)
-        ws.openView(tab.threadId, { kind: 'browser', tabId: tab.id, url: tab.url })
+        openBrowser(ws, tab.threadId, tab)
       }),
     [activeHost, ws],
   )
@@ -378,6 +381,13 @@ function Shell() {
     (activePanelState.terminalOpen ?? true) &&
     ((activePanelState.terminalDock ?? preferences.defaultTerminalDock) === 'bottom' ||
       activePanelState.views.some((view) => view.id === activePanelState.activeViewId && view.kind === 'terminal'))
+  const browserShown =
+    !globalPage &&
+    !landing &&
+    !startProject &&
+    !!ui.activeTaskId &&
+    ws.workspaceVisible(ui.activeTaskId) &&
+    !!activePanelState?.views.some((view) => view.id === activePanelState.activeViewId && view.kind === 'browser')
   const unsavedFiles = new Set(
     [...(ws.taskUi[ui.activeTaskId ?? '']?.views ?? []), ...(ws.taskUi[activeWorkspace ?? '']?.views ?? [])]
       .filter((view) => view.kind === 'file' && ws.dirty[view.id])
@@ -483,6 +493,25 @@ function Shell() {
           />
         )}
       </Button>
+      {typeof window.ramu?.invoke === 'function' && activeHost === ownHostId() && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
+          aria-label={t('Browser')}
+          aria-pressed={browserShown}
+          title={browserShown ? t('Hide browser') : t('Show browser')}
+          disabled={!ui.activeTaskId}
+          onClick={() => {
+            const id = ui.activeTaskId
+            if (!id) return
+            if (browserShown) ws.hideWorkspace(id)
+            else openBrowser(ws, id)
+          }}
+        >
+          <Globe data-icon="inline-start" />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon-sm"

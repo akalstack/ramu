@@ -4,6 +4,20 @@ import { BrowserDebugger } from './browserDebugger'
 import type { BrowserDiagnostics, BrowserScreenshot } from '@ramu/shared/browserBridge'
 import { browserGuestScript } from './browserGuestScript'
 
+const PARKED = { x: -20000, y: -20000, width: 1280, height: 800 }
+const SHORTCUT_KEYS = new Set(['`', 'j', 'b', 'l', 'p'])
+/** The terminal, panel, browser and file shortcuts, which must work wherever focus is. */
+const appShortcut = (input: { key: string; control: boolean; meta: boolean; alt: boolean; shift: boolean }) => {
+  const key = input.key.toLowerCase()
+  if (!SHORTCUT_KEYS.has(key)) return false
+  if (key === '`') return input.control && !input.meta && !input.alt
+  const mod = process.platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta
+  if (!mod) return false
+  if (key === 'j' || key === 'p') return !input.alt && !input.shift
+  if (key === 'b') return input.alt && !input.shift
+  return input.shift && !input.alt
+}
+
 /**
  * Guest pages over Electron web contents. Each page is sandboxed with context isolation and no Node access, in the
  * partition its profile names, with no preload: a website never sees the app's bridge. Camera, microphone, location,
@@ -35,6 +49,7 @@ export class ElectronGuestFactory implements GuestFactory {
       },
     })
     const contents = view.webContents
+    const window = this.window
     let driver: BrowserDebugger | undefined
     const debuggerForPage = () => (driver ??= new BrowserDebugger(contents, () => handlers.onChanged?.()))
     const consoleEntries: BrowserDiagnostics['console'] = []
@@ -47,6 +62,18 @@ export class ElectronGuestFactory implements GuestFactory {
       consoleEntries.push({ level: details.level, message: details.message.slice(0, 500) })
     })
     let humanInput = false
+    // The page is its own native view, so while it has focus the app's shortcuts never reach the renderer. Hand the
+    // layout shortcuts back to the app window; everything else, including copy and paste, stays with the page.
+    contents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown' || !appShortcut(input)) return
+      const host = window()
+      if (!host || host.isDestroyed()) return
+      event.preventDefault()
+      host.webContents.focus()
+      const modifiers = (['control', 'meta', 'alt', 'shift'] as const).filter((name) => input[name])
+      host.webContents.sendInputEvent({ type: 'keyDown', keyCode: input.key, modifiers })
+      host.webContents.sendInputEvent({ type: 'keyUp', keyCode: input.key, modifiers })
+    })
     const inputGuard = (event: { preventDefault(): void }) => {
       if (!humanInput) event.preventDefault()
     }
@@ -69,12 +96,24 @@ export class ElectronGuestFactory implements GuestFactory {
     // World 999 has its own JavaScript globals/prototypes. Website scripts never receive the observation map.
     const isolated = <T>(operation: 'inspect' | 'act' | 'invalidate', action?: Parameters<GuestPage['act']>[0]) =>
       contents.executeJavaScriptInIsolatedWorld(999, [{ code: browserGuestScript(operation, action) }]) as Promise<T>
-    const window = this.window
     let attached = false
+    // A page needs a real viewport and a place in the window to lay out and take pointer input, so every page stays
+    // attached to the window and is parked off screen while its pane is hidden.
+    const ensureAttached = () => {
+      const win = window()
+      if (!win || win.isDestroyed() || attached) return
+      win.contentView.addChildView(view)
+      attached = true
+      view.setBounds(PARKED)
+    }
     return {
       load: async (url) => {
+        ensureAttached()
+        // Attaching before the first navigation never settles on a page that has not loaded anything yet.
+        const loaded = contents.loadURL(url)
+        loaded.catch(() => {})
         await debuggerForPage().ensure()
-        await contents.loadURL(url)
+        await loaded
       },
       url: () => contents.getURL(),
       title: () => contents.getTitle(),
@@ -83,9 +122,21 @@ export class ElectronGuestFactory implements GuestFactory {
       reload: () => contents.reload(),
       inspect: () => isolated<PageSnapshot>('inspect'),
       act: async (action) => {
-        const result = await isolated<{ ok: boolean; reason?: string }>('act', action)
-        if (result.ok && action.kind === 'press') await debuggerForPage().key(action.key, action.shift)
-        return result
+        const result = await isolated<{ ok: boolean; reason?: string; points?: { x: number; y: number }[] }>(
+          'act',
+          action,
+        )
+        if (!result.ok) return result
+        if (action.kind === 'press') await debuggerForPage().key(action.key, action.shift, action.modifiers)
+        else if (
+          (action.kind === 'click' || action.kind === 'hover' || action.kind === 'drag') &&
+          result.points?.length
+        )
+          await debuggerForPage().mouse(result.points, {
+            kind: action.kind,
+            ...(action.kind === 'click' ? { button: action.button, clickCount: action.clickCount } : {}),
+          })
+        return { ok: true }
       },
       screenshot: async (): Promise<BrowserScreenshot> => {
         const capture = await contents.capturePage(undefined, { stayHidden: true, stayAwake: false })
@@ -118,12 +169,8 @@ export class ElectronGuestFactory implements GuestFactory {
         humanInput = enabled
       },
       show(bounds) {
-        const win = window()
-        if (!win) return
-        if (!attached) {
-          win.contentView.addChildView(view)
-          attached = true
-        }
+        ensureAttached()
+        if (!attached) return
         view.setBounds({
           x: Math.round(bounds.x),
           y: Math.round(bounds.y),
@@ -132,9 +179,7 @@ export class ElectronGuestFactory implements GuestFactory {
         })
       },
       hide() {
-        const win = window()
-        if (win && attached) win.contentView.removeChildView(view)
-        attached = false
+        if (attached) view.setBounds(PARKED)
       },
       destroy() {
         driver?.dispose()

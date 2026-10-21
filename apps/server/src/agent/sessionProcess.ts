@@ -508,7 +508,7 @@ export class SessionProcess {
     if (codex) {
       this.host.runners.delete(id)
       this.host.trackDrain(id, codex.stop())
-      this.host.setState(id, 'stopped')
+      if (this.host.get(id).state !== 'idle') this.host.setState(id, 'stopped')
     }
     const live = this.host.live.get(id)
     if (!live) return
@@ -522,7 +522,7 @@ export class SessionProcess {
     live.query.close?.()
     this.host.trackDrain(id, live.done ?? Promise.resolve())
     this.host.live.delete(id)
-    this.host.setState(id, 'stopped')
+    if (this.host.get(id).state !== 'idle') this.host.setState(id, 'stopped')
   }
 
   stop(id: string): void {

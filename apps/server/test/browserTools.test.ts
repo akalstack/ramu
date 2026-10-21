@@ -78,7 +78,8 @@ async function setup(options: { integrated?: boolean; helper?: boolean } = {}) {
 it('registers only the selected toolset and never lends parent browser access to helpers', async () => {
   for (const options of [{ integrated: false }, { helper: true }]) {
     const { client } = await setup(options)
-    expect((await client.listTools()).tools).toHaveLength(0)
+    // With nothing registered the server does not advertise tools at all, which the client reports as a missing method.
+    await expect(client.listTools()).rejects.toThrow(/Method not found/)
   }
 })
 

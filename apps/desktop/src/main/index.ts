@@ -517,20 +517,26 @@ async function main() {
         browserToken = null
         if (!payload.connected) browser.pauseForDisconnect()
         else
-          void runtimeInvoke(runtime, 'browser.bridge.attach', [browserClientId])
-            .then((result) => {
+          void (async () => {
+            // The connection can race the event stream registering, so a failed attach is retried briefly.
+            for (let attempt = 0; attempt < 5; attempt++) {
               if (browserConnection !== epoch) return
-              browserToken = result.token
-              return runtimeInvoke(runtime, 'browser.bridge.ready', [browserClientId, result.token]).then(() => {
+              try {
+                const result = await runtimeInvoke(runtime, 'browser.bridge.attach', [browserClientId])
+                if (browserConnection !== epoch) return
+                browserToken = result.token
+                await runtimeInvoke(runtime, 'browser.bridge.ready', [browserClientId, result.token])
                 if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
-              })
-            })
-            .catch(() => {
-              if (browserConnection === epoch) {
-                browserToken = null
-                if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+                return
+              } catch {
+                await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt))
               }
-            })
+            }
+            if (browserConnection === epoch) {
+              browserToken = null
+              if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
+            }
+          })()
       }
       if (channel === 'browser:operation') {
         const token = browserToken

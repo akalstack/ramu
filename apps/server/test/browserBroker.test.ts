@@ -86,3 +86,13 @@ it('bounds pending operations and refuses oversized or unserializable replies', 
   const outcomes = await settled
   expect(outcomes.every((outcome) => outcome.status === 'rejected')).toBe(true)
 })
+
+it('reports its owner so a new desktop can replace one that is gone', () => {
+  const { broker } = setup()
+  expect(broker.owner()).toBe('desktop')
+  broker.detach('desktop')
+  expect(broker.owner()).toBeNull()
+  const { token } = broker.attach('replacement')
+  broker.ready('replacement', token)
+  expect(broker.status().available).toBe(true)
+})
