@@ -66,6 +66,11 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'git', title: 'Worktree branch naming', words: 'semantic custom fixed naming generation' },
   { section: 'git', title: 'Branch naming instructions', words: 'ticket team custom branch' },
   { section: 'git', title: 'Branch prefix', words: 'worktree branch namespace naming' },
+  { section: 'git', title: 'Hosting accounts', words: 'github accounts tokens sign in gh connection credentials' },
+  { section: 'git', title: 'GitHub', words: 'github gh account pull requests issues hosting' },
+  { section: 'git', title: 'GitLab', words: 'gitlab merge requests hosting coming soon' },
+  { section: 'git', title: 'Bitbucket Cloud', words: 'bitbucket pull requests hosting coming soon' },
+  { section: 'git', title: 'Azure DevOps', words: 'azure devops repos pull requests hosting coming soon' },
   { section: 'git', title: 'Automatic pull', words: 'git auto fetch remote fast-forward background sync' },
   {
     section: 'git',

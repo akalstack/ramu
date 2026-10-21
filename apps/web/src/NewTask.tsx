@@ -49,6 +49,7 @@ import { StatusDot, useComputers } from './workspace/computers'
 import { defaultStartProject, lastStartProject, rememberStartProject } from './startProject'
 import { useAppSettings } from './settings/AppSettings'
 import { routingLabels } from '@ramu/shared/workspace/projectRouting'
+import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
 
 /** A task's title is the first line of what you asked for. */
 export function titleFrom(prompt: string): string {
@@ -390,7 +391,7 @@ export function NewTask({
       branch: branchChoice,
     }
     try {
-      const sendSettings = await agentDraft.verify()
+      let sendSettings = await agentDraft.verify()
       if (auto) {
         const revision = ++routeRevision.current
         let destination = chosen
@@ -422,6 +423,19 @@ export function NewTask({
         if (!ws.projects.some((p) => p.id === destination))
           throw new Error(t('That project is no longer available. Choose a project.'))
         if (!(ws.repos[destination] ?? []).length) throw new Error(t('Add a repository to this project first'))
+        // The destination's repository model defaults apply as if the project had been picked by hand.
+        const destinationDefaults = agentDraft.choice.selection
+          ? undefined
+          : await host.invoke('tasks.agentDefaults', destination, initialSettings.provider).catch((error) => {
+              if (/Unknown method tasks\.agentDefaults/.test(errorText(error))) return undefined
+              throw error
+            })
+        const routedSettings = routedAgentSettings(initialSettings, destinationDefaults, agentDraft.choice)
+        if (!routedSettings) {
+          onProjectChange(destination)
+          throw new Error(t("Review this project's model before sending."))
+        }
+        sendSettings = routedSettings
         const destinationOptions = await host.invoke('tasks.workspaceOptions', destination)
         const checkout = resolveCheckoutMode({
           defaultMode: destinationOptions.defaultCheckoutMode ?? 'current',
