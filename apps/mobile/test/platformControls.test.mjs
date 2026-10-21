@@ -168,7 +168,10 @@ for (const os of ['ios', 'android']) {
     button('Browser').props.onPress()
     render()
     await settle()
-    assert.deepEqual(calls, [['a', 'browser.activity', 'thread']])
+    assert.deepEqual(calls, [
+      ['a', 'hostBrowser.status'],
+      ['a', 'browser.activity', 'thread'],
+    ])
     const external = nodes(render()).filter(
       (node) => node.type === 'Button' && node.props.title === 'Open in system browser',
     )
@@ -309,7 +312,7 @@ for (const os of ['ios', 'android']) {
     await settle()
     assert.equal(closed, 0)
     assert.equal(input('Rule text').props.value, 'Preserve user edits.')
-    assert.ok(nodes(render()).some((node) => node.props.children === 'Concurrent edit'))
+    assert.ok(nodes(render()).some((node) => node.props.children === 'Error: Concurrent edit'))
     fail = false
     button('Save').props.onPress()
     finish()
@@ -362,12 +365,18 @@ for (const os of ['ios', 'android']) {
     button.props.onPress()
     button.props.onPress()
     assert.equal(calls.length, 1)
-    assert.deepEqual(calls[0], ['remote', 'projects.setRouting', 'project', ['Storefront', 'Payments'], ''])
+    assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), [
+      'remote',
+      'projects.setRouting',
+      'project',
+      ['Storefront', 'Payments'],
+      '',
+    ])
     finish()
     await settle()
     assert.equal(closed, 0)
     assert.equal(input().props.value, 'Storefront, Payments')
-    assert.ok(nodes(render()).some((node) => node.props.children === 'Host unavailable'))
+    assert.ok(nodes(render()).some((node) => node.props.children === 'Error: Host unavailable'))
     fail = false
     save().props.onPress()
     finish()
