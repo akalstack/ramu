@@ -23,6 +23,9 @@ import {
   type LeaseState,
 } from '@ramu/shared/control/lease'
 
+/** Viewers refresh at most about four times a second however many are watching. */
+const VIEW_MIN_INTERVAL_MS = 250
+
 const REFUSALS: Record<LeaseRefusal, string> = {
   'human-controlled': 'The person is controlling this computer. Wait for them to give control back.',
   'agent-controlled': 'Another run controls this computer session.',
@@ -93,8 +96,28 @@ export class ComputerSession {
   async view(): Promise<ComputerObservation> {
     this.alive()
     if (!this.grant.observe) refuse('Screen observation is not granted for this computer.')
-    return this.frame()
+    // Viewers share one capture: a frame newer than the minimum interval is reused, and concurrent requests join the
+    // capture already running instead of starting another.
+    const cached = this.shared
+    if (
+      cached &&
+      cached.generation === this.lease.generation &&
+      this.now() - cached.frame.capturedAt < VIEW_MIN_INTERVAL_MS
+    )
+      return cached.frame
+    if (this.capturing) return this.capturing
+    const generation = this.lease.generation
+    const capturing = this.frame().then((frame) => {
+      this.shared = { frame, generation }
+      return frame
+    })
+    this.capturing = capturing
+    return capturing.finally(() => {
+      if (this.capturing === capturing) this.capturing = null
+    })
   }
+  private shared: { frame: ComputerObservation; generation: number } | null = null
+  private capturing: Promise<ComputerObservation> | null = null
 
   private async frame(runId?: string): Promise<ComputerObservation> {
     const generation = this.lease.generation
@@ -181,7 +204,9 @@ export class ComputerSession {
     try {
       await this.backend.perform(this.grant.target, action)
     } catch (error) {
-      throw new ComputerRefusal(`The input may or may not have run (${error instanceof Error ? error.message : 'failed'}).`)
+      throw new ComputerRefusal(
+        `The input may or may not have run (${error instanceof Error ? error.message : 'failed'}).`,
+      )
     }
   }
 

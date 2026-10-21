@@ -104,6 +104,22 @@ describe('computer session', () => {
   })
 })
 
+describe('computer frame sharing', () => {
+  it('shares one capture between concurrent viewers and refreshes after the interval', async () => {
+    let time = 1000
+    const { backend } = fake()
+    const service = new ComputerService(backend, () => time)
+    const session = service.grant('t', grant)
+    const [a, b] = await Promise.all([session.view(), session.view()])
+    expect(a.id).toBe(b.id)
+    expect(await session.view()).toMatchObject({ id: a.id })
+    time += 300
+    const next = await session.view()
+    expect(next.id).not.toBe(a.id)
+    expect(next.sequence).toBeGreaterThan(a.sequence)
+  })
+})
+
 describe('computer viewers', () => {
   it('lets the owning host in and others only with an explicit grant', () => {
     const service = new ComputerService(fake().backend)
