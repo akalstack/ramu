@@ -6,6 +6,8 @@ Status: phase 1 is working on desktop (19 October 2026): Settings → Appearance
 
 A person can choose System, Light or Dark and comfortably read a thread, code changes and approval controls without a model call or token knowledge. Deliver this foundation before the custom-theme editor, AI refinement and sharing. Keep the initial Appearance view focused on the current appearance/theme; reveal exact tokens and revision details in advanced controls. Validate readability and Keep/Revert with real app components during an ordinary agent task, alongside the accessibility checks below. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** The person picks a look in one step and never needs to learn tokens; Keep/Revert makes trying a theme risk-free.
+
 ## Product decision
 
 Keep **System / Light / Dark** as immediate, deterministic appearance choices. Offer both **Create/refine with AI** and an **Advanced color/token editor**, following the user's updated request. Users can select, edit, import, share, reset and remove themes without an AI call. AI and manual editing use the same draft, token schema, validation, preview and version history; neither maintains a separate kind of theme.

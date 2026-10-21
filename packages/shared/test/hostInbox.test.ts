@@ -164,7 +164,7 @@ it('puts async questions and approvals in Waiting even when execution continues,
   const result = buildInbox({ chats, recaps: [], summaries: [] })
   expect(result.waiting.map((chat) => chat.id)).toEqual(['live', 'idle'])
   expect(result.running).toEqual([])
-  expect(result.completed.flatMap((day) => day.items)).toEqual([])
+  expect(result.days.flatMap((day) => day.items)).toEqual([])
   const cleared = buildInbox({
     chats: chats.map((chat) => ({ ...chat, inputSummary: null })),
     recaps: [],

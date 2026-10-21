@@ -3,7 +3,7 @@ import { Pressable, View, useWindowDimensions } from 'react-native'
 import { Gauge } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { isMethodMissing } from '../runtime/goalVerify'
-import type { AgentProvider, UsageReading } from '@ramu/shared/types'
+import type { AgentProvider, NextMessageRoute, UsageReading } from '@ramu/shared/types'
 import { providerEnabled } from '@ramu/shared/providers/providers'
 import {
   relevantUsage,
@@ -13,6 +13,7 @@ import {
   usageTone,
   usageWindow,
   usageScopeHint,
+  groupUsageByProvider,
 } from '@ramu/shared/usage/presentation'
 import { useStore } from '../runtime/store'
 import { providerNames } from '../runtime/types'
@@ -245,12 +246,25 @@ export function PlanUsageSheet({
                   {store.language === 'id' ? 'Tidak dilaporkan' : 'Not reported'}
                 </T>
               ) : (
-                rows.map((r) => (
-                  <PlanUsageReading
-                    key={`${id}:${r.provider}:${r.accountId ?? 'default'}:${r.window}:${r.scope ?? ''}`}
-                    reading={r}
-                    offline={!store.isOnline(id)}
-                  />
+                groupUsageByProvider(rows).map((group) => (
+                  <View key={`${id}:${group.provider}`}>
+                    {provider ? null : (
+                      <T tone="muted" size={font.caption} style={{ paddingHorizontal: space.m, paddingTop: space.s }}>
+                        {providerNames[group.provider]} · {group.readings.length}{' '}
+                        {store.language === 'id' ? 'jendela' : group.readings.length === 1 ? 'window' : 'windows'}
+                        {group.attention
+                          ? ` · ${group.attention} ${store.language === 'id' ? 'perlu perhatian' : 'need attention'}`
+                          : ''}
+                      </T>
+                    )}
+                    {group.readings.map((r) => (
+                      <PlanUsageReading
+                        key={`${id}:${r.provider}:${r.accountId ?? 'default'}:${r.window}:${r.scope ?? ''}`}
+                        reading={r}
+                        offline={!store.isOnline(id)}
+                      />
+                    ))}
+                  </View>
                 ))
               )}
             </View>
@@ -315,6 +329,10 @@ export function PlanUsageSummary({ hostIds, actionOnly = false }: { hostIds: str
         style={{
           paddingHorizontal: actionOnly ? space.s : space.l,
           paddingVertical: space.s,
+          // As a header action it is an icon only, so large text can never push other actions off the row.
+          minWidth: actionOnly ? 44 : undefined,
+          minHeight: actionOnly ? 44 : undefined,
+          justifyContent: actionOnly ? 'center' : undefined,
           flexDirection: 'row',
           alignItems: 'center',
           gap: space.s,
@@ -322,10 +340,11 @@ export function PlanUsageSummary({ hostIds, actionOnly = false }: { hostIds: str
         }}
       >
         <Gauge size={16} color={c.soft} />
-        <T size={font.caption} style={{ flexShrink: 1 }}>
-          {label}
-          {actionOnly ? '' : ` · ${value}`}
-        </T>
+        {actionOnly ? null : (
+          <T size={font.caption} style={{ flexShrink: 1 }}>
+            {label} · {value}
+          </T>
+        )}
       </Pressable>
       <PlanUsageSheet hosts={hostIds} open={open} onClose={() => setOpen(false)} />
     </>
@@ -333,18 +352,40 @@ export function PlanUsageSummary({ hostIds, actionOnly = false }: { hostIds: str
 }
 export function ThreadUsageChip({
   hostId,
-  provider,
-  accountId,
-  model,
+  provider: selectedProvider,
+  accountId: selectedAccountId,
+  model: selectedModel,
+  sessionId,
 }: {
   hostId: string
   provider: AgentProvider
   accountId?: string
   model: string
+  /** The thread whose next message is previewed; without one the chip describes the selection. */
+  sessionId?: string | null
 }) {
   const store = useStore()
   const [open, setOpen] = useState(false)
   const { width } = useWindowDimensions()
+  // The host's own answer for where the next message runs. Older hosts lack it, so the selection stays shown.
+  const [route, setRoute] = useState<NextMessageRoute | null>(null)
+  const usageKey = JSON.stringify(store.usage[hostId] ?? [])
+  useEffect(() => {
+    if (!sessionId) return setRoute(null)
+    let current = true
+    store.invoke(hostId, 'agent.nextRoute', sessionId).then(
+      (next) => current && setRoute(next.state === 'unknown' ? null : next),
+      () => current && setRoute(null),
+    )
+    return () => {
+      current = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hostId, sessionId, selectedProvider, selectedModel, selectedAccountId, usageKey, store.isOnline(hostId)])
+  const target = route?.state === 'switch' && !route.held ? route : null
+  const provider = target?.provider ?? selectedProvider
+  const model = target?.model ?? selectedModel
+  const accountId = target ? target.accountId : selectedAccountId
   if (store.appPreferences[hostId]?.showUsageLimits === false) return null
   const reading = relevantUsage(store.usage[hostId] ?? [], { provider, accountId, model })
   const percent = reading ? usagePercent(reading) : null

@@ -4,6 +4,8 @@
 
 A person connects one supported external service on the intended host, enables it for a project and two compatible providers, then uses an authorized tool from each thread with the expected service account. Deliver one verified service/transport path through Settings, authentication, authorization and invocation before broadening compatibility. Keep raw command/environment fields and the full provider matrix in advanced/details views. The next action should say Connect, Sign in or Enable for this project; users need not understand gateways or MCP namespaces. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** Connect a service once, then enable it per project and provider from one place instead of editing each provider's config.
+
 ## Goal and scope
 
 Add **Settings → Agent setup → MCP servers** to manage external MCP servers, authentication, accounts, availability and diagnostics across Ramu's providers. Call the cross-provider feature **Shared MCP**: connect a server through Ramu once and make its permitted tools available to compatible provider sessions on the same workspace host. Follow the [Agent setup plan](AGENT-SETUP-PLAN.md) for Ramu-native Settings integration, existing skill management, shared rules, provenance, scope conventions and effective-session inspection. Keep MCP lifecycle and authorization in the boundaries defined here.

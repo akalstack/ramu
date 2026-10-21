@@ -259,6 +259,12 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     data TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS background_terminals_task ON background_terminals(task_id);`,
+  // Names people call a project and a short description, used only to choose a destination for a first message.
+  (db) => {
+    const columns = new Set((db.prepare('PRAGMA table_info(projects)').all() as { name: string }[]).map((c) => c.name))
+    if (!columns.has('aliases')) db.exec("ALTER TABLE projects ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'")
+    if (!columns.has('description')) db.exec("ALTER TABLE projects ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+  },
 ]
 
 export type Db = DatabaseSync

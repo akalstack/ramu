@@ -240,6 +240,24 @@ export function ProviderCard({
               {t('Provider website ↗')}
             </a>
           )}
+          {status?.compatibility && status.installed && (
+            <p
+              className={`small text-caption ${status.compatibility.status === 'incompatible' ? 'text-bad' : 'muted text-muted-foreground'}`}
+              role={status.compatibility.status === 'incompatible' ? 'alert' : 'status'}
+            >
+              {status.compatibility.status === 'supported'
+                ? t('Compatible with this Ramu release.')
+                : status.compatibility.status === 'unverified'
+                  ? t('Unverified: no compatibility rule covers this version. It can still be used.')
+                  : status.compatibility.status === 'limited'
+                    ? t('Limited: some features are unavailable with this version.')
+                    : t('Incompatible with this Ramu release.')}
+              {status.compatibility.affects?.length ? ` ${status.compatibility.affects.join(', ')}.` : ''}
+              {status.compatibility.recommend
+                ? ` ${t('Recommended version: {0}', { '0': status.compatibility.recommend })}`
+                : ''}
+            </p>
+          )}
           {[status?.versionError, status?.error, status?.updateError].filter(Boolean).map((message) => (
             <p key={message} className="error text-bad small text-caption" role="alert">
               {message}

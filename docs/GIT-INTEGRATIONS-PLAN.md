@@ -6,6 +6,8 @@ Unfinished implementation plan, 2026-10-18. Add account setup and repository-hos
 
 A person opens an existing repository, sees which GitHub identity it uses, resolves missing access through Settings and returns to the existing PR/issue workflow. First preserve detected CLI sign-ins and deliver connection status/setup with verified credential handling; clone/publish is a later usable increment. Keep account/source/access diagnostics in details and advanced account overrides contextual. Coming soon rows remain informational. Validate one complete repository-to-setup-to-PR flow, including failed authentication, before expanding the adapter boundary. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** Existing CLI sign-ins are reused and a missing permission is fixed in place, so the person does not repeat setup per repository.
+
 ## Starting point and reference
 
 Ramu already has GitHub PR discovery/creation, checks, review feedback, issues and background watches through `gh` in `apps/server/src/workspace/forge.ts`, `ipc/handlers/forge.ts` and `background/pullRequestWatches.ts`. Shared `forge.*` methods, Source Control UI and `apps/server/test/forge.test.ts` are the migration boundary. `GitSettings.tsx` currently contains workspace, sync, PR and commit preferences but no account management. Preserve those working flows and existing CLI sign-ins.

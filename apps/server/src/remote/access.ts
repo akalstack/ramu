@@ -19,6 +19,7 @@ const viewerMethods = new Set([
   'agent.scope',
   'agent.catalog',
   'agent.providerHold',
+  'agent.nextRoute',
   'agent.mcpStatus',
   'mcp.status',
   'projects.setup',

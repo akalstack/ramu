@@ -33,7 +33,13 @@ interface PendingCode {
 interface DeviceFile {
   devices: DeviceRecord[]
   pending: PendingCode[]
+  /** Chosen on the host in Settings. Absent means the server default (`RAMU_DEVICE_TOKEN_DAYS`, else 90 days). */
+  lifetimeDays?: number | 'never'
 }
+export const MAX_LIFETIME_DAYS = 3650
+export type DeviceLifetime = number | 'never'
+export const validLifetime = (value: unknown): value is DeviceLifetime =>
+  value === 'never' || (Number.isInteger(value) && (value as number) >= 1 && (value as number) <= MAX_LIFETIME_DAYS)
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
 /** "k7qm2-x9rtd" and "K7QM2X9RTD" are the same code. */
@@ -62,10 +68,35 @@ export class DeviceStore {
       return {
         devices: Array.isArray(parsed.devices) ? parsed.devices : [],
         pending: Array.isArray(parsed.pending) ? parsed.pending : [],
+        ...(validLifetime(parsed.lifetimeDays) ? { lifetimeDays: parsed.lifetimeDays } : {}),
       }
     } catch {
       return { devices: [], pending: [] }
     }
+  }
+
+  /** How long an unused device stays paired: the host's saved choice, else the server default. */
+  private lifetimeOf(file: DeviceFile): number | null {
+    if (file.lifetimeDays === undefined) return this.lifetimeMs
+    return file.lifetimeDays === 'never' ? null : file.lifetimeDays * 86_400_000
+  }
+
+  /** The saved choice and the default it overrides, for Settings. */
+  lifetime(): { days: DeviceLifetime; saved: boolean } {
+    const file = this.read()
+    if (file.lifetimeDays !== undefined) return { days: file.lifetimeDays, saved: true }
+    return { days: this.lifetimeMs === null ? 'never' : Math.round(this.lifetimeMs / 86_400_000), saved: false }
+  }
+
+  /**
+   * Changes how long devices stay paired. Each paired device picks it up the next time it connects (its expiry slides
+   * with use); a device that is already expired stays expired. `null` goes back to the server default.
+   */
+  setLifetime(days: DeviceLifetime | null): void {
+    if (days !== null && !validLifetime(days))
+      throw new Error(`Lifetime must be 1 to ${MAX_LIFETIME_DAYS} days, or never`)
+    const { lifetimeDays: _previous, ...rest } = this.read()
+    this.write(days === null ? rest : { ...rest, lifetimeDays: days })
   }
 
   private write(file: DeviceFile) {
@@ -101,16 +132,17 @@ export class DeviceStore {
       return null
     }
     const token = randomBytes(32).toString('hex')
+    const lifetime = this.lifetimeOf(file)
     const record: DeviceRecord = {
       id: randomUUID().slice(0, 8),
       name: cleanName(name),
       createdAt: now,
       lastSeenAt: now,
-      expiresAt: this.lifetimeMs === null ? null : now + this.lifetimeMs,
+      expiresAt: lifetime === null ? null : now + lifetime,
       role: match.role ?? 'owner',
       tokenHash: sha256(token),
     }
-    this.write({ devices: [...file.devices, record], pending: live.filter((p) => p !== match) })
+    this.write({ ...file, devices: [...file.devices, record], pending: live.filter((p) => p !== match) })
     return { device: strip(record), token }
   }
 
@@ -121,12 +153,13 @@ export class DeviceStore {
     const file = this.read(),
       record = file.devices.find((d) => d.tokenHash === hash)
     if (!record) return null
+    const lifetime = this.lifetimeOf(file)
     // Older records get a bounded migration window based on their last use, never an immortal grant.
     const expiry =
       record.expiresAt === undefined
-        ? this.lifetimeMs === null
+        ? lifetime === null
           ? null
-          : (record.lastSeenAt ?? record.createdAt) + this.lifetimeMs
+          : (record.lastSeenAt ?? record.createdAt) + lifetime
         : record.expiresAt
     if (expiry !== null && expiry <= now) return null
     // Remembered in memory and written rarely, so a busy client does not rewrite the file the CLI also edits.
@@ -134,7 +167,7 @@ export class DeviceStore {
     if (now - lastWrite >= LAST_SEEN_WRITE_MS || record.expiresAt === undefined) {
       this.seen.set(record.id, now)
       record.lastSeenAt = now
-      record.expiresAt = this.lifetimeMs === null ? null : now + this.lifetimeMs
+      record.expiresAt = lifetime === null ? null : now + lifetime
       record.role ??= 'owner'
       this.write(file)
     }
@@ -142,14 +175,16 @@ export class DeviceStore {
   }
 
   list(): DeviceInfo[] {
-    return this.read().devices.map((record) =>
+    const file = this.read()
+    const lifetime = this.lifetimeOf(file)
+    return file.devices.map((record) =>
       strip({
         ...record,
         expiresAt:
           record.expiresAt === undefined
-            ? this.lifetimeMs === null
+            ? lifetime === null
               ? null
-              : (record.lastSeenAt ?? record.createdAt) + this.lifetimeMs
+              : (record.lastSeenAt ?? record.createdAt) + lifetime
             : record.expiresAt,
       }),
     )

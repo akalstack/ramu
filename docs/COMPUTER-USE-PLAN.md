@@ -6,6 +6,8 @@ Implementation proposal, 2026-10-19. This planning change does not install a com
 
 A person asks their existing Ramu agent to complete a task in a native application on a selected computer. From a phone, they can watch that computer's current screen, take control with touch and keyboard, return control to the agent, answer requests and return later to the same thread. From desktop Ramu, they watch the actual application directly when using that same computer; when controlling another computer, Ramu shows its screen inside the thread.
 
+**Easier for the person:** The person watches and steps in from wherever they are, instead of walking back to the computer to unblock the agent.
+
 Deliver one complete macOS flow first: explicit runtime setup and OS permissions, scoped agent actions, local activity/stop controls, and an authenticated screen viewer on mobile and on a different desktop. Viewing and human takeover on both mobile and desktop are part of the first usable delivery. Include touch/pointer input, text entry, essential keys and explicit human/agent handoff. Preserve existing drafts, navigation and provider selection.
 
 ## Framework decision and evidence

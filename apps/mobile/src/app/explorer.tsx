@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, TextInput, View } from 'react-native'
+import * as Clipboard from 'expo-clipboard'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronDown, ChevronRight, File, Folder, RefreshCw, GitBranch, ListCollapse } from 'lucide-react-native'
 import type { DirEntry, RepositoryBinding } from '@ramu/shared/types'
 import {
   explorerKey,
+  EXPLORER_SEARCH_LIMIT,
   flattenExplorer,
+  searchExplorerFiles,
   projectExplorerContext,
   projectWorkspaces,
   explorerAncestors,
@@ -73,6 +76,7 @@ export default function Explorer() {
   const bindingsRef = useRef(bindings)
   bindingsRef.current = bindings
   const inFlight = useRef(new Set<string>())
+  const [loadingDirs, setLoadingDirs] = useState<Set<string>>(new Set())
   const online = scope ? store.isOnline(scope.host) : false
   const scopeIdentity = scope ? JSON.stringify([scope.host, scope.context]) : ''
   const activeScope = useRef(scopeIdentity)
@@ -83,6 +87,8 @@ export default function Explorer() {
     const key = `${version}:${explorerKey(scope.host, scope.context, binding.repoId, path)}`
     if (inFlight.current.has(key)) return
     inFlight.current.add(key)
+    const loadingKey = `${binding.repoId}:${path}`
+    setLoadingDirs((all) => new Set(all).add(loadingKey))
     const directoryKey = explorerKey(scope.host, scope.context, binding.repoId, path)
     if (cursor)
       setContinuations((all) => ({ ...all, [directoryKey]: { repoId: binding.repoId, path, cursor, loading: true } }))
@@ -114,6 +120,11 @@ export default function Explorer() {
       }
     } finally {
       inFlight.current.delete(key)
+      setLoadingDirs((all) => {
+        const next = new Set(all)
+        next.delete(loadingKey)
+        return next
+      })
     }
   }
   useEffect(() => {
@@ -206,8 +217,7 @@ export default function Explorer() {
     const timer = setTimeout(() => {
       void store.invoke(scope.host, 'files.all', scope.context).then(
         (all) => {
-          if (alive)
-            setMatches(all.filter((entry) => entry.path.toLowerCase().includes(query.toLowerCase())).slice(0, 201))
+          if (alive) setMatches(searchExplorerFiles(all, query, EXPLORER_SEARCH_LIMIT + 1))
         },
         (cause) => {
           if (alive) setError(String(cause))
@@ -222,7 +232,7 @@ export default function Explorer() {
   const rows = useMemo(
     () =>
       query.trim()
-        ? matches.slice(0, 200).map((entry) => ({
+        ? matches.slice(0, EXPLORER_SEARCH_LIMIT).map((entry) => ({
             repoId: entry.repoId,
             entry: { name: entry.path, path: entry.path, kind: 'file' as const },
             depth: 0,
@@ -260,7 +270,7 @@ export default function Explorer() {
   return (
     <Screen>
       <Header
-        title="Explorer"
+        title={t.explorerTitle}
         subtitle={
           <T size={font.caption} tone="muted">
             {scope
@@ -383,7 +393,7 @@ export default function Explorer() {
               {error}
             </T>
           ) : null}
-          {matches.length > 200 ? (
+          {matches.length > EXPLORER_SEARCH_LIMIT ? (
             <T tone="muted" style={{ padding: space.m }}>
               {t.explorerMoreMatches}
             </T>
@@ -455,6 +465,8 @@ export default function Explorer() {
                       ? { expanded: isOpen }
                       : { selected: selected?.repoId === row.repoId && selected.path === row.entry.path }
                   }
+                  accessibilityHint={t.explorerCopyHint}
+                  onLongPress={() => void Clipboard.setStringAsync(row.entry.path)}
                   onPress={() => {
                     if (activeScope.current !== scopeIdentity) return
                     if (row.entry.kind === 'file') {
@@ -497,7 +509,13 @@ export default function Explorer() {
                         {binding?.repoName}
                       </T>
                     ) : null}
+                    {row.entry.kind === 'dir' && isOpen && directories[row.repoId]?.[row.entry.path]?.length === 0 ? (
+                      <T size={font.caption} tone="muted">
+                        {t.explorerEmptyFolder}
+                      </T>
+                    ) : null}
                   </View>
+                  {row.entry.kind === 'dir' && loadingDirs.has(key) ? <ActivityIndicator color={c.accent} /> : null}
                 </Pressable>
               )
             }}

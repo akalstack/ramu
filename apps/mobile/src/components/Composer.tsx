@@ -743,8 +743,9 @@ export function Composer({
     if (restore) setText(restore.text)
   }, [restore])
   const has = text.trim().length > 0 || attachments.length > 0 || context.length > 0
+  const viewOnly = store.computers?.find((computer) => computer.id === pc)?.access === 'viewer'
   const submit = async () => {
-    if (!has || sending.current || uploading) return
+    if (!has || viewOnly || sending.current || uploading) return
     sending.current = true
     setBusy(true)
     const submittedOwner = origin.current
@@ -903,6 +904,13 @@ export function Composer({
       {suggest.visible ? (
         <SuggestionList choices={suggest.choices} loading={suggest.loading} error={suggest.error} onChoose={pick} />
       ) : null}
+      {viewOnly ? (
+        <T tone="muted" size={font.caption} style={{ paddingTop: space.s }} accessibilityRole="alert">
+          {store.language === 'id'
+            ? 'Perangkat ini hanya bisa melihat thread dan menjawab permintaan, tidak mengirim pesan. Minta pemilik host memasangkannya dengan akses penuh.'
+            : 'This phone can view threads and answer requests, but not send messages. Ask the host owner to pair it with full access.'}
+        </T>
+      ) : null}
       <View style={{ paddingTop: space.s }}>
         <TextInput
           onChangeText={(value) => {
@@ -972,6 +980,7 @@ export function Composer({
               provider={model.provider}
               model={model.model}
               accountId={model.settings?.accountId}
+              sessionId={limitChat?.sessionId}
             />
           ) : null}
           {meter}
@@ -1041,7 +1050,7 @@ export function Composer({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={offline ? 'Add to outbox' : limited ? t.queue : 'Send'}
-              disabled={!has || busy || uploading}
+              disabled={!has || viewOnly || busy || uploading}
               onPress={() => {
                 tap()
                 submit()

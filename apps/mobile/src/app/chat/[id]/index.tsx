@@ -233,30 +233,12 @@ export default function ChatScreen() {
     () => foldTurns(chat?.items ?? [], chat?.status === 'running', chat?.status === 'needs-input'),
     [chat?.items, chat?.status],
   )
-  const arrivals = useRef({
-    chatId: id,
-    initialized: false,
-    known: new Set<string>(),
-    rows: null as typeof rows | null,
-    fresh: new Set<string>(),
-  })
-  const freshIds = useMemo(() => {
-    if (arrivals.current.chatId !== id) {
-      arrivals.current = { chatId: id, initialized: false, known: new Set(), rows: null, fresh: new Set() }
-      seen.current.clear()
-      openedAt.current = Date.now()
-    }
-    const state = arrivals.current
-    if (state.rows === rows) return state.fresh
-    const fresh = new Set<string>()
-    if (state.initialized && Date.now() - openedAt.current > 800)
-      for (const row of rows) if (!state.known.has(row.id)) fresh.add(row.id)
-    for (const row of rows) state.known.add(row.id)
-    if (rows.length) state.initialized = true
-    state.rows = rows
-    state.fresh = fresh
-    return fresh
-  }, [rows, id])
+  const arrivalChat = useRef(id)
+  if (arrivalChat.current !== id) {
+    arrivalChat.current = id
+    seen.current.clear()
+    openedAt.current = Date.now()
+  }
   // A long chat draws its latest turns; "Earlier turns" brings back the previous page without moving what you are reading.
   const [turnsShown, setTurnsShown] = useState(TURN_PAGE)
   const [pagedBack, setPagedBack] = useState(false)

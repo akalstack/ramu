@@ -87,3 +87,23 @@ export function summaryUsage(
         a.reading.provider.localeCompare(b.reading.provider),
     )[0]
 }
+
+export interface ProviderUsageGroup {
+  provider: UsageReading['provider']
+  readings: UsageReading[]
+  /** Readings that are limited or at/over `warnAt` percent, so a collapsed group can still show trouble. */
+  attention: number
+}
+
+/** Groups readings by provider in first-seen order, counting those that need attention. Missing data never counts as fine. */
+export function groupUsageByProvider(readings: UsageReading[], warnAt = 80): ProviderUsageGroup[] {
+  const groups = new Map<string, ProviderUsageGroup>()
+  for (const reading of readings) {
+    const group = groups.get(reading.provider) ?? { provider: reading.provider, readings: [], attention: 0 }
+    group.readings.push(reading)
+    const percent = usagePercent(reading)
+    if (reading.status === 'limited' || (percent !== null && percent >= warnAt)) group.attention++
+    groups.set(reading.provider, group)
+  }
+  return [...groups.values()]
+}

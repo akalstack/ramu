@@ -5,7 +5,7 @@ import type { BackgroundTerminalHistory, BackgroundTerminalRecord } from './back
 import { removalCommands, type TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
 
 import type { TerminalInfo, BackgroundTerminalInfo, BackgroundTerminalState } from '@ramu/shared/api'
-export type { TerminalInfo, BackgroundTerminalInfo, BackgroundTerminalState } from '@ramu/shared/api'
+export type { TerminalInfo, BackgroundTerminalInfo } from '@ramu/shared/api'
 
 interface BackgroundMeta {
   command: string

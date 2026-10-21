@@ -8,6 +8,8 @@ Keep this plan limited to unfinished work. Move shipped behavior into the remote
 
 A person opens Add host, recognizes a nearby machine, pairs through the existing code flow and opens its threads after authenticated connection verification. Deliver initial discovery and pairing without requiring route failover or automatic address migration. Keep QR/manual/SSH fallbacks immediately reachable as specified below; discovery permissions or failure must not become a setup dead end. Validate this flow on a supported device with both discoverable and multicast-blocked networks. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** Nearby machines appear on their own, so the person recognizes and pairs instead of typing addresses.
+
 ## Scope and existing behavior
 
 - Discover hosts on the same local network, then use the existing pairing flow. Finding a host does not grant access or create a pairing code.

@@ -16,6 +16,7 @@ import {
 } from '@ramu/shared/workspaceDefaults'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AUTO_PROJECT,
   NO_PROJECT,
   type FileContext,
   type Attachment,
@@ -46,6 +47,8 @@ import { useAddProject } from './workspace/addProject'
 import { useHostSelection } from './workspace/HostSelection'
 import { StatusDot, useComputers } from './workspace/computers'
 import { defaultStartProject, lastStartProject, rememberStartProject } from './startProject'
+import { useAppSettings } from './settings/AppSettings'
+import { routingLabels } from '@ramu/shared/workspace/projectRouting'
 
 /** A task's title is the first line of what you asked for. */
 export function titleFrom(prompt: string): string {
@@ -202,8 +205,14 @@ export function HomePage() {
   const ws = useWorkspace()
   const host = useHost()
   // With no explicit choice, the box starts in the project you last started a thread in.
-  const projectId = ws.composing ?? defaultStartProject(lastStartProject(hostStorageFor(host.id)), ws.projects)
-  return <NewTask projectId={projectId} onProjectChange={(id) => ws.newTask(id)} />
+  const { preferences } = useAppSettings()
+  // Auto is the default while the preference is on; an explicit project choice always wins for the draft.
+  const projectId =
+    ws.composing ??
+    (preferences.autoProjectSelection && ws.projects.length > 0
+      ? AUTO_PROJECT
+      : defaultStartProject(lastStartProject(hostStorageFor(host.id)), ws.projects))
+  return <NewTask projectId={projectId} onProjectChange={(id) => ws.newTask(id)} allowAuto />
 }
 
 /**
@@ -215,10 +224,13 @@ export function NewTask({
   projectId,
   onProjectChange,
   feed = true,
+  allowAuto = false,
 }: {
   projectId: string
   onProjectChange: (id: string) => void
   feed?: boolean
+  /** Only Home offers Auto: it has no project pane to open before a destination exists. */
+  allowAuto?: boolean
 }) {
   useLanguage()
   const ws = useWorkspace()
@@ -226,11 +238,18 @@ export function NewTask({
   const runtime = useHostRuntime()
   const addProject = useAddProject()
   const [folderOver, setFolderOver] = useState(false)
-  const general = projectId === NO_PROJECT
+  const { preferences } = useAppSettings()
+  const auto = projectId === AUTO_PROJECT
+  const general = projectId === NO_PROJECT || auto
+  // Auto drafts share the project-free model and workspace scope until a destination is resolved.
+  const scopeProject = auto ? NO_PROJECT : projectId
+  const [choices, setChoices] = useState<{ projectId: string; reason: string }[] | null>(null)
+  const [routeNote, setRouteNote] = useState<string | null>(null)
+  const routeRevision = useRef(0)
   const repos = ws.repos[projectId] ?? []
   const project = ws.projects.find((p) => p.id === projectId)
   const { initialSettings } = useModelSets()
-  const agentDraft = useAgentDraft(projectId, initialSettings)
+  const agentDraft = useAgentDraft(scopeProject, initialSettings)
   const settings = agentDraft.settings
   const modelNotice = agentDraft.choice.selection
     ? t('Model chosen for this draft')
@@ -249,7 +268,7 @@ export function NewTask({
                 : agentDraft.error || agentDraft.defaults?.reason === 'catalog'
                   ? t("Could not load the project's model catalog.")
                   : t('Project model default')
-  const workspaceDraft = useWorkspaceDraft(host.id, projectId, general ? null : ws.composingWorkspace)
+  const workspaceDraft = useWorkspaceDraft(host.id, scopeProject, general ? null : ws.composingWorkspace)
   const workspaceId = general ? null : (workspaceDraft.choice.workspaceId ?? null)
   const manualMode = general ? null : workspaceDraft.choice.mode
   const queryClient = useQueryClient()
@@ -314,6 +333,13 @@ export function NewTask({
     setIssue(null)
   }, [host.id, projectId, ws.composing, ws.composingWorkspace])
 
+  // A pending routing answer belongs to the exact prompt, destination and host it was asked for.
+  useEffect(() => {
+    routeRevision.current++
+    setChoices(null)
+    setRouteNote(null)
+  }, [prompt, projectId, host.id])
+
   const title = titleFrom(prompt) || (attachments.length ? `Discuss ${attachments[0]!.name}` : '')
   const namingIntent: BranchNamingIntent = {
     strategy: options.data?.branchNaming ?? 'fixed',
@@ -329,7 +355,7 @@ export function NewTask({
   // `busy` is state and lags a frame; a double Enter must not create two chats.
   const sending = useRef(false)
   const creationRequest = useRef<{ fingerprint: string; id: string } | null>(null)
-  const send = async (context: FileContext[] = []) => {
+  const send = async (context: FileContext[] = [], chosen?: string) => {
     if (sending.current) throw new Error(t('A message is already being sent.'))
     if (!general && !repos.length) throw new Error(t('Add a repository to this project first'))
     const messageTitle =
@@ -355,34 +381,97 @@ export function NewTask({
     setError(null)
     setBusy(true)
     let created: string | null = null
+    let target = {
+      projectId,
+      mode,
+      workspaceId: workspaceId ?? undefined,
+      branchPrefix: options.data?.branchPrefix,
+      naming: namingIntent,
+      branch: branchChoice,
+    }
     try {
       const sendSettings = await agentDraft.verify()
+      if (auto) {
+        const revision = ++routeRevision.current
+        let destination = chosen
+        if (!destination) {
+          const outcome = await host.invoke('projects.route', prompt || messageTitle, sendSettings)
+          if (revision !== routeRevision.current)
+            throw new Error(t('The message changed while choosing a project. Send again.'))
+          if (outcome.kind === 'resolved') {
+            destination = outcome.projectId
+            setRouteNote(
+              `${t('Starting in')} ${ws.projects.find((p) => p.id === destination)?.name ?? ''} — ${outcome.reason}`,
+            )
+          } else if (outcome.kind === 'ambiguous') {
+            setChoices(outcome.candidates.filter((c) => ws.projects.some((p) => p.id === c.projectId)))
+            return
+          } else if (outcome.kind === 'unknown') {
+            setChoices(ws.projects.map((p) => ({ projectId: p.id, reason: '' })))
+            return
+          } else {
+            setChoices(ws.projects.map((p) => ({ projectId: p.id, reason: '' })))
+            setError(
+              outcome.reason === 'no-projects'
+                ? t('Add a project first.')
+                : t('Could not choose a project automatically. Choose one to continue.'),
+            )
+            return
+          }
+        }
+        if (!ws.projects.some((p) => p.id === destination))
+          throw new Error(t('That project is no longer available. Choose a project.'))
+        if (!(ws.repos[destination] ?? []).length) throw new Error(t('Add a repository to this project first'))
+        const destinationOptions = await host.invoke('tasks.workspaceOptions', destination)
+        const checkout = resolveCheckoutMode({
+          defaultMode: destinationOptions.defaultCheckoutMode ?? 'current',
+          manual: null,
+          workspaceId: null,
+          projectFree: false,
+          worktreeUnavailable: destinationOptions.worktreeUnavailable,
+        })
+        if (checkout.blocked) throw new Error(checkout.reason ?? t('Workspace unavailable'))
+        const naming: BranchNamingIntent = {
+          strategy: destinationOptions.branchNaming ?? 'fixed',
+          instructions: destinationOptions.branchInstructions ?? '',
+          prompt: prompt.slice(0, 6000),
+        }
+        target = {
+          projectId: destination,
+          mode: checkout.mode,
+          workspaceId: undefined,
+          branchPrefix: destinationOptions.branchPrefix,
+          naming,
+          branch: checkout.mode === 'worktree' ? currentBranchChoice(undefined, title, naming) : undefined,
+        }
+        setChoices(null)
+      }
       const fingerprint = JSON.stringify([
         host.id,
-        projectId,
+        target.projectId,
         messageTitle,
         prompt,
-        mode,
-        workspaceId,
-        options.data?.branchPrefix,
-        namingIntent,
-        branchChoice,
+        target.mode,
+        target.workspaceId,
+        target.branchPrefix,
+        target.naming,
+        target.branch,
         attachments.map((file) => file.id),
       ])
       if (creationRequest.current?.fingerprint !== fingerprint)
         creationRequest.current = { fingerprint, id: crypto.randomUUID() }
       const task = await host.invoke('tasks.create', {
-        projectId,
+        projectId: target.projectId,
         title: messageTitle,
-        mode,
-        workspaceId: workspaceId ?? undefined,
-        branchPrefix: options.data?.branchPrefix,
-        branchNaming: namingIntent,
-        branchChoice,
+        mode: target.mode,
+        workspaceId: target.workspaceId,
+        branchPrefix: target.branchPrefix,
+        branchNaming: target.naming,
+        branchChoice: target.branch,
         requestId: creationRequest.current.id,
       })
       created = task.id
-      const bindings = mode === 'worktree' ? await host.invoke('tasks.setup', task.id) : []
+      const bindings = target.mode === 'worktree' ? await host.invoke('tasks.setup', task.id) : []
       await ws.refresh()
       // Half-built worktrees keep the chat so "Retry setup" can finish it.
       if (bindings.some((b) => b.setupState !== 'ready')) {
@@ -401,14 +490,14 @@ export function NewTask({
       )
       created = null
       creationRequest.current = null
-      rememberStartProject(projectId, hostStorageFor(host.id))
+      if (!auto) rememberStartProject(projectId, hostStorageFor(host.id))
       // The link lets this chat's pull request close the issue; losing it only loses that line.
       if (issue) void host.invoke('forge.linkIssue', task.id, issue).catch(() => {})
       setIssue(null)
       const consumed = consumeDraft()
       if (!consumed.persisted) notifyError(t('Message sent, but the local draft could not be cleared.'), 'Draft')
       if (consumed.unchanged && consumed.persisted) {
-        clearWorkspaceDraft(projectId, draftStore(host.id), workspaceDraft.choice)
+        if (!auto) clearWorkspaceDraft(projectId, draftStore(host.id), workspaceDraft.choice)
         agentDraft.consume()
       }
       ws.openTask(task.id)
@@ -417,7 +506,7 @@ export function NewTask({
     } catch (e) {
       // A chat exists only with its first message: don't leave an empty one behind (and a retry a duplicate).
       if (created) {
-        await host.invoke('tasks.delete', created, mode === 'worktree' && !workspaceId).then(
+        await host.invoke('tasks.delete', created, target.mode === 'worktree' && !target.workspaceId).then(
           () => {
             creationRequest.current = null
           },
@@ -433,9 +522,11 @@ export function NewTask({
   }
 
   const projectOptions = [
+    ...((allowAuto && preferences.autoProjectSelection) || auto ? [{ value: AUTO_PROJECT, label: t('Auto') }] : []),
     { value: NO_PROJECT, label: t('No project') },
     ...ws.projects.map((p) => ({ value: p.id, label: p.name })),
   ]
+  const choiceLabels = routingLabels(ws.projects.map((p) => ({ id: p.id, name: p.name })))
   const computers = useComputers()
   const { activeHost, select } = useHostSelection()
   useEffect(() => {
@@ -619,7 +710,7 @@ export function NewTask({
               <Combobox
                 label={t('Project')}
                 searchPlaceholder={t('Search projects…')}
-                value={project?.id ?? NO_PROJECT}
+                value={auto ? AUTO_PROJECT : (project?.id ?? NO_PROJECT)}
                 icon={<FolderClosed size={13} />}
                 bare
                 className={`${CHIP} max-w-[220px]`}
@@ -745,6 +836,38 @@ export function NewTask({
             submitLabel={t('Start thread')}
           />
         </ComposerStack>
+        {routeNote && (
+          <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
+            {routeNote}
+          </p>
+        )}
+        {choices && (
+          <div className="flex flex-col gap-1 px-2 py-1.5" role="group" aria-label={t('Choose a project')}>
+            <p className="m-0 text-caption text-muted-foreground">
+              {choices.length === 1 || choices.some((c) => c.reason)
+                ? t('More than one project could fit. Choose where to start.')
+                : t('No project matched. Choose where to start.')}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {choices.map((choice) => (
+                <Button
+                  key={choice.projectId}
+                  variant="secondary"
+                  size="xs"
+                  title={choice.reason || undefined}
+                  disabled={busy}
+                  onClick={() => void send([], choice.projectId).catch((e) => setError(errorText(e)))}
+                >
+                  {choiceLabels.get(choice.projectId) ?? choice.projectId}
+                  {choice.reason ? <span className="text-muted-foreground"> · {choice.reason}</span> : null}
+                </Button>
+              ))}
+              <Button variant="ghost" size="xs" disabled={busy} onClick={() => setChoices(null)}>
+                {t('Cancel')}
+              </Button>
+            </div>
+          </div>
+        )}
         {error && <div className="error text-bad start-error p-[6px_8px_0] text-control">{error}</div>}
         {renamingWorkspace?.host === host.id &&
           renamingWorkspace.project === projectId &&

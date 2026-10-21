@@ -13,6 +13,35 @@ import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
 import { Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
 import { ComputerScope } from '../../components/SettingsChrome'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
+import {
+  emptyLayers,
+  offeredScopes,
+  resolvePreference,
+  scopeLabel,
+  setOverride,
+  sourceLabel,
+  type DeviceKind,
+} from '@ramu/shared/preferenceScopes'
+
+const deviceKind = (): DeviceKind =>
+  Platform.OS === 'web' ? 'unknown' : Platform.OS === 'ios' && Platform.isPad ? 'tablet' : 'phone'
+
+/** Where a preference applies and where its value comes from. Shared scopes stay unavailable until a sync transport exists. */
+function ScopeNote({ field, explicit }: { field: string; explicit: boolean }) {
+  const kind = deviceKind()
+  const layers = explicit ? setOverride(emptyLayers(), 'device', field, true, 'this-device', 0) : emptyLayers()
+  const { source } = resolvePreference(layers, field)
+  const unavailable = offeredScopes(field, kind, { shared: false }).filter((o) => !o.enabled)
+  return (
+    <Hint>
+      {`Apply to: ${scopeLabel('device', kind)}. ${sourceLabel(source === 'default' ? 'default' : source, kind)}.${
+        unavailable.length
+          ? ` ${unavailable.map((o) => scopeLabel(o.scope, kind)).join(' and ')} need a paired device or account that syncs preferences.`
+          : ''
+      }`}
+    </Hint>
+  )
+}
 
 function AppearancePage() {
   const { appearance, setAppearance } = useTheme()
@@ -32,6 +61,7 @@ function AppearancePage() {
           ]}
         />
       </Card>
+      <ScopeNote field="appearance" explicit={appearance !== 'system'} />
       <SectionLabel>Language</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <Segmented<Language>

@@ -387,10 +387,6 @@ export async function commitBranchInfo(cwd: string): Promise<{ branch: string | 
   return { branch, defaultBranch: null }
 }
 
-export async function worktreeAdd(repoRoot: string, path: string, branch: string, baseRef: string): Promise<void> {
-  await git(repoRoot, ['worktree', 'add', '-b', branch, '--', path, baseRef])
-}
-
 export async function worktreeAddExistingBranch(repoRoot: string, path: string, branch: string): Promise<void> {
   await git(repoRoot, ['worktree', 'add', '--', path, branch])
 }

@@ -6,6 +6,8 @@ Status: partially implemented. Remaining summaries, recovery checks and acceptan
 
 A person can identify what a thread is doing through its indicator and status information, with short visible labels on mobile and per-thread popover details on desktop. Keep Ramu's dots, spinners, clocks, row layouts, navigation and existing accurate labels. T3 is a reference, not a requirement to copy its sidebar or vocabulary. No desktop or mobile sidebar redesign is needed.
 
+**Easier for the person:** A glance or hover answers what a thread is doing without opening it.
+
 Start with one shared presentation mapping and platform-specific presentation. Desktop keeps its existing dots, spinners, clocks and quiet age rows, with no permanent text label added to each row. Expose a thread details popover from the individual thread row/indicator, reachable by hover and keyboard focus, with click/keyboard activation for interaction. Include a short status label inside the popover alongside useful branch and checkout context. Thread status must not require hovering the project. Mobile keeps its icons and adds a short visible label in existing row metadata where useful, because hover is unavailable. Reuse existing text when it matches the meaning; shorten only for space. Keep titles readable, preserve actions and leave full request/goal details in their existing surfaces. Do not add a display-mode setting for this first delivery.
 
 ## Comparison and evidence

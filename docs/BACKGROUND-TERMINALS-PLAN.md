@@ -4,6 +4,8 @@
 
 An agent starts a development server, watcher or other persistent command, finishes its reply, and leaves the person unsure what is still running or how to stop it. A person must be able to find that work, identify its thread and execution host, read its output and stop it without asking another agent or finding a process ID.
 
+**Easier for the person:** Finding and stopping a forgotten server becomes one click from the thread instead of a hunt through process lists.
+
 The first delivery is a thread-scoped **Background terminals** entry in the existing thread activity/detail surfaces, opening the existing terminal area. List agent-started persistent commands with their current state, output and supported stop control. Keep access after the agent becomes idle, without configuration or a separate management page. Validate with a real development server started by an agent, then inspected and stopped by a person after the turn ends.
 
 ## Ramu design and architecture

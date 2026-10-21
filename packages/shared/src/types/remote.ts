@@ -42,6 +42,8 @@ export interface NetworkStatus {
   error: string | null
   addresses: NetworkAddress[]
   devices: NetworkDevice[]
+  /** How long an unused paired device stays paired. `saved` is false while the server default applies. Absent on older hosts. */
+  deviceLifetime?: { days: number | 'never'; saved: boolean }
 }
 export interface NetworkSettingsInput {
   enabled: boolean

@@ -57,6 +57,7 @@ const extraDataQueries = new Set<string>([
   'agent.continuationPrompt',
   'agent.context',
   'agent.providerHold',
+  'agent.nextRoute',
   'attachments.text',
   'advisor.claude',
   'reviews.compareCurrent',

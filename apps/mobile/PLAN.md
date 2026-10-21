@@ -6,6 +6,8 @@ Audited on 2026-10-18. The companion implementation is present; completed bootst
 
 A person checks agent progress from their phone, answers a supported request and returns later with the same host, thread and draft intact. Prioritize the existing Threads/Inbox and native input/recovery gaps before adding more controls. Each linked feature ships as its own capability-aware flow within the four tabs; desktop parity and the entire roadmap are not prerequisites for a usable companion. Validate this core loop on physical devices, including background/reconnect and an unavailable host. Follow the [root product and planning guidance](../../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** The person answers from the phone without opening the laptop and picks up exactly where they left off.
+
 ## Ramu design and architecture
 
 Follow [Architecture](../../docs/ARCHITECTURE.md) and [UI](../../docs/UI.md). Preserve the existing four-tab navigation, native sheets/rows, shared mobile controls and theme/accessibility conventions; add feature entry points within their current surfaces. Pure domain projections belong in `packages/shared`, while camera, microphone, discovery, transport and OS permissions use device-native adapters. Files, Git, agents, credentials and workspace mutations stay on the selected server through the existing authenticated mobile host API and advertised capabilities. Keep per-host caches/events isolated, preserve device-local preferences and offline drafts, and never introduce a mobile database or provider runtime as an alternative authority. Remaining Agent setup work follows its [shared plan](../../docs/AGENT-SETUP-PLAN.md), including explicit host-administration limits.

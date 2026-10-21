@@ -1,3 +1,4 @@
+import type { RoutingOutcome } from './workspace/projectRouting'
 import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
 import type { ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
@@ -49,6 +50,7 @@ import type {
   UsageReading,
   ContextUsage,
   AgentMcpStatus,
+  NextMessageRoute,
   Aside,
   AgentEvent,
   Attachment,
@@ -234,6 +236,8 @@ export interface RamuMethods {
   'network.configure'(input: NetworkSettingsInput): NetworkStatus
   'network.pair'(role?: 'owner' | 'viewer'): PairingOffer
   'network.revoke'(deviceId: string): NetworkStatus
+  /** Days an unused device stays paired (1 to 3650), `never`, or null for the server default. Host-only, like the rest of `network.*`. */
+  'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus
   /** Computers this app is connected to, all at once. Handled by the desktop app itself. */
   'computers.settings.invoke'(id: string, method: string, args: unknown[]): unknown
   'computers.settings.get'(id: string): SettingsSnapshot
@@ -302,6 +306,8 @@ export interface RamuMethods {
   'folders.clone'(parent: string, name: string, url: string): string
   'folders.addProject'(path: string): { project: Project; repositories: Repository[] }
   'projects.list'(): Project[]
+  /** Picks the destination project for a first prompt before any thread exists; ambiguous or unknown asks the person. */
+  'projects.route'(prompt: string, settings: AgentSettings): RoutingOutcome
   'projects.setup'(projectId: string): ProjectSetup
   'projects.create'(name: string): Project
   'projects.inspect'(dir: string): FolderInspection
@@ -349,6 +355,7 @@ export interface RamuMethods {
     review?: import('./chat/taskRemoval').TaskRemovalReview,
   ): void
   'projects.rename'(projectId: string, name: string): Project
+  'projects.setRouting'(projectId: string, aliases: string[], description: string): Project
   'projects.reorder'(projectIds: string[]): Project[]
   'projects.remove'(projectId: string): void
   'projects.reveal'(projectId: string): void
@@ -641,6 +648,8 @@ export interface RamuMethods {
   'agent.reloadMcp'(sessionId: string): Promise<void>
   'agent.reconnectMcp'(sessionId: string, name: string): Promise<void>
   'agent.providerHold'(sessionId: string): 'message' | 'chat' | 'picked' | null
+  /** Where the thread's next message would run under the host's routing, without changing anything. */
+  'agent.nextRoute'(sessionId: string): Promise<NextMessageRoute>
   /** Moves one running command to the background so the agent can carry on (Claude only). False when it already finished. */
   'agent.backgroundTool'(sessionId: string, toolUseId: string): boolean
   /** Stops one sub-agent or background task; the main agent keeps going. */

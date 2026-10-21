@@ -259,3 +259,54 @@ it('retries a held thread when another account gains capacity, while its current
   expect(service.get(s.id).settings.accountId).toBe('b')
   expect(runs).toEqual(['default', 'b'])
 })
+
+it('previews the next message route without switching, fetching or clearing a hold', async () => {
+  const factory: AgentRunnerFactory = (_scope, _current, emit) => ({
+    start: async () => {
+      emit({ kind: 'result', text: 'Done', isError: false, costUsd: null })
+    },
+    send: async () => {},
+    steer: async () => {},
+    interrupt: async () => {},
+    stop: async () => {},
+    replyPermission() {},
+    replyQuestion() {},
+  })
+  service = new AgentService(
+    db,
+    () => {},
+    () => {
+      throw new Error('Unexpected Claude query')
+    },
+    { cursor: factory },
+  )
+  vi.spyOn(service, 'catalog').mockResolvedValue(catalogs)
+  const s = await service.startReviewed('t', { cwd, additionalDirs: [], covers: [cwd] }, 'Start', settings('cursor'))
+  // Before preferences exist the host cannot say where the message would run.
+  expect(await service.nextRoute(s.id)).toEqual({ state: 'unknown' })
+
+  service.preferences = () => prefs
+  const usage = new UsageService(
+    () => [],
+    () => {},
+    () => {},
+  )
+  service.usage = usage
+  const refresh = vi.fn(async () => {})
+  service.refreshAccountUsage = refresh
+  expect(await service.nextRoute(s.id)).toEqual({ state: 'stays' })
+
+  usage.update([reading('cursor'), reading('cursor', 'b', 3)])
+  expect(await service.nextRoute(s.id)).toMatchObject({
+    state: 'switch',
+    provider: 'cursor',
+    accountId: 'b',
+    held: null,
+  })
+
+  service.holdProvider(s.id, 'message')
+  expect(await service.nextRoute(s.id)).toMatchObject({ state: 'switch', accountId: 'b', held: 'message' })
+  expect(service.providerHold(s.id)).toBe('message')
+  expect(service.get(s.id).settings.accountId).toBe('default')
+  expect(refresh).not.toHaveBeenCalled()
+})

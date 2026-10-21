@@ -2,7 +2,6 @@ import { McpStatusDialog } from './agent/components/McpStatusDialog'
 import { BackgroundTerminalsSection, useBackgroundTerminals } from '../chat/BackgroundTerminals'
 import { ConfirmStopDialog } from '../chat/ConfirmStopDialog'
 import { helperActive, helperGroups } from '@ramu/shared/chat/helperPresentation'
-import { isLimitHold } from '@ramu/shared/chat/goalHold'
 import { useDeferredRequests } from './agent/hooks/useDeferredRequests'
 import { HelperBreadcrumb } from '../HomeAgents'
 import { NO_PROJECT } from '@ramu/shared/types'
@@ -299,10 +298,6 @@ export const AgentView = memo(function AgentView({
   const ws = useWorkspaceActions()
   const { offline: hostOffline, name: hostName } = useHostConnection()
   const pending = useOutbox(view.sessionId, host.id)
-  const pendingPermissions = events.filter(
-    (e): e is Extract<AgentEvent, { kind: 'permission-request' }> =>
-      e.kind === 'permission-request' && !outcomes.has(e.requestId),
-  )
   const supportsSteering = !!session
   const action = supportsSteering ? preferences.busyMessageAction : 'queue'
   const opposite = action === 'queue' ? 'steer' : 'queue'

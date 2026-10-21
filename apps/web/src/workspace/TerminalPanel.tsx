@@ -12,6 +12,8 @@ import { useTabScroll } from '../lib/useTabScroll'
 import { TerminalView } from '../views/TerminalView'
 import { useHostRuntime, useWorkspace } from './workspace'
 import { useHost } from './HostProvider'
+import { useViewOnly } from '../composer/useViewOnly'
+import { VIEW_ONLY_TERMINAL_NOTICE } from '../composer/viewerAccess'
 import { beginDrag, setActiveDrag, TERMINAL_DRAG_TYPE } from '../lib/dragState'
 
 /** Each tab owns a group of panes. All shells stay mounted while other groups are hidden. */
@@ -30,6 +32,7 @@ export function TerminalPanel({
   const ws = useWorkspace()
   const runtime = useHostRuntime()
   const { invoke } = useHost()
+  const viewOnly = useViewOnly()
   const { forgetTerminal, isOpening, queueAdopt, shellOf, adoptQueued } = runtime.terminals
   const { preferences } = useAppSettings()
   const panel = useRef<HTMLElement>(null)
@@ -154,9 +157,20 @@ export function TerminalPanel({
         {dock === 'right' ? null : position === 'top' ? (
           tabList
         ) : (
-          <span className="terminal-panel-title pl-2 text-control font-medium text-soft">Terminal</span>
+          <span className="terminal-panel-title pl-2 text-control font-medium text-soft">{t('Terminal')}</span>
         )}
-        {ready.length < 2 ? (
+        {viewOnly ? (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="ghost bg-transparent border-transparent text-muted-foreground icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) terminal-add"
+            aria-label={t('New terminal')}
+            title={t(VIEW_ONLY_TERMINAL_NOTICE)}
+            disabled
+          >
+            <Plus size={15} />
+          </Button>
+        ) : ready.length < 2 ? (
           <Button
             variant="ghost"
             size="icon-xs"

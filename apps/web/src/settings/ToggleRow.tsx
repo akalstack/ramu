@@ -10,6 +10,7 @@ export type ToggleKey =
   | 'autoWatchPullRequests'
   | 'includeTabContext'
   | 'warnModelChange'
+  | 'autoProjectSelection'
   | 'recapsEnabled'
   | 'notifyAgentDone'
   | 'resumeChatsOnRestart'

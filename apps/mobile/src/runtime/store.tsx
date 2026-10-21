@@ -757,6 +757,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               c.id === computer.id
                 ? {
                     ...c,
+                    access: info.access,
                     os: info.platform === 'darwin' ? 'macos' : info.platform === 'win32' ? 'windows' : 'linux',
                     ...(c.auto && info.hostname ? { name: info.hostname, auto: false } : {}),
                   }

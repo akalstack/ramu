@@ -483,9 +483,9 @@ function ScheduleEditor({
           </label>
           {input.projectId !== NO_PROJECT && (
             <label>
-              Checkout
+              {t('Checkout')}
               <Dropdown
-                label="Checkout"
+                label={t('Checkout')}
                 value={input.workspaceId ?? ''}
                 onChange={(workspaceId) => setInput({ ...input, workspaceId: workspaceId || null })}
                 options={[

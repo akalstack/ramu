@@ -6,17 +6,18 @@ The shared presentation model, mobile Threads summary/header target, shared host
 
 A person can tell whether the next message can run, inspect the correct account when needed and choose the existing limit action. Keep the ordinary composer to its current compact usage target; allowance windows and account diagnostics belong in the shared detail sheet. Deliver authoritative account/routing identity and truthful unknown states before adding more summaries. Validate that an old reading or unavailable account does not send the person to the wrong login or imply that a held thread is ready. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** The person learns before sending whether the message can run and which action unblocks it, instead of discovering it after a failure.
+
 ## Ramu design and architecture
 
 Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend the current usage chip, shared account sheet and the fallback controls in Settings → Models, using composed desktop controls outside `components/ui/` and existing native mobile components/tokens. Derive next-message identity from the existing server routing/usage collaborators through validated named methods; do not predict it independently in a client or add another polling/fallback engine. Preserve host/account-qualified queries and event invalidation, old-host capability handling and the separation between device visibility preferences and host routing policy.
 
 ## Remaining implementation
 
-- Connect the thread label to an authoritative effective next-message routing/account projection when available. The current chip names current/staged selection and leaves ambiguous accounts unselected; it does not predict fallback.
-- Verify short/full window-label, scope-explanation and reset-date localization across clients. Routing and presentation now share provider-aware model-scope applicability; validate additional provider model identities with live evidence.
+- Window labels and scope explanations are covered by shared English/Indonesian tests, and desktop and mobile both localize reset text. Routing and presentation share provider-aware model-scope applicability; validate additional provider model identities with live evidence.
 - Validate account detail event refresh and old-host handling against real paired hosts. Physical network-loss and upgrade acceptance remain.
-- Improve narrow/large-text header action overflow and per-provider summary expansion/counts. Verify the Access & Fallback link preserves the selected host and localized offline wording on native devices.
-- Extend focused native component tests to effective next-message account identity; run physical iOS/Android accessibility and composer/keyboard acceptance. Current-account filtering tests do not establish the pending server routing projection or native-device acceptance.
+- Verify on native devices that the icon-only header action and per-provider window counts fit at large text, and that the Access & Fallback link preserves the selected host and localized offline wording.
+- Extend focused native component tests to effective next-message account identity; run physical iOS/Android accessibility and composer/keyboard acceptance. The host's `agent.nextRoute` projection feeds the desktop and mobile thread labels (older hosts keep the local estimate/selection) and is covered by a server test; native component tests of the mobile label and device acceptance remain.
 
 ## Acceptance and verification
 

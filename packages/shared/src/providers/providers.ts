@@ -1,4 +1,5 @@
 import type { AgentProvider } from '../types'
+import type { CompatibilityResult } from './compatibility'
 
 export const AGENT_PROVIDERS = ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as const
 export const providerName = (provider: AgentProvider): string =>
@@ -64,6 +65,8 @@ export interface ProviderStatus {
   enabled: boolean
   /** Whether the CLI already has a login, per account ID ('default' is the system profile). Absent when it was not checked. */
   signIn?: Record<string, ProviderSignIn>
+  /** Runtime compatibility for this host, apart from install, sign-in and update state. Absent on older hosts. */
+  compatibility?: CompatibilityResult
 }
 
 /**

@@ -51,3 +51,22 @@ export function explorerAncestors(path: string): string[] {
   if (parts.length > 81 || parts.some((part) => !part || part === '.' || part === '..')) return []
   return ['', ...parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join('/'))]
 }
+
+export const EXPLORER_SEARCH_LIMIT = 200
+
+/** Case-insensitive path match over the bounded quick-open index. Same-named files in different repositories stay distinct; the result never exceeds the limit. */
+export function searchExplorerFiles<T extends { repoId: string; path: string }>(
+  files: T[],
+  query: string,
+  limit = EXPLORER_SEARCH_LIMIT,
+): T[] {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return []
+  const matches: T[] = []
+  for (const file of files) {
+    if (!file.path.toLowerCase().includes(needle)) continue
+    matches.push(file)
+    if (matches.length >= limit) break
+  }
+  return matches
+}

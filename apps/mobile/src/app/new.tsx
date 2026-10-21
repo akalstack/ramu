@@ -87,6 +87,13 @@ export default function NewChat() {
   const list = projects.filter((p) => p.computerId === selected)
   // A chat runs in a project's folders, so the project is chosen first rather than defaulted.
   const [projectId, setProjectId] = useState<string | null>(params.project ?? null)
+  // Auto picks the project from the first message; an explicit choice always wins for this draft.
+  const [auto, setAuto] = useState(
+    !params.project && store.appPreferences[store.selected]?.autoProjectSelection !== false,
+  )
+  const [choices, setChoices] = useState<{ projectId: string; reason: string }[] | null>(null)
+  const pending = useRef<{ text: string; attachments: unknown; context: unknown } | null>(null)
+  const routeRevision = useRef(0)
   const activeScope = useRef({ host: selected, project: projectId })
   activeScope.current = { host: selected, project: projectId }
   const draftContext = params.computer === selected && params.project === projectId ? params.draftContext : undefined
@@ -173,6 +180,11 @@ export default function NewChat() {
   })
   const mode = resolution.mode
   const draftText = store.drafts[composerKey] ?? ''
+  // A pending routing answer belongs to the exact message, destination and host it was asked for.
+  useEffect(() => {
+    routeRevision.current++
+    setChoices(null)
+  }, [draftText, projectId, auto, selected])
   const branchTitle = draftText.split('\n')[0]!.slice(0, 60) || 'Discuss attachments'
   const namingIntent = {
     strategy: workspaceOptions?.branchNaming ?? workspaceDefaults?.worktreeBranchNaming ?? 'fixed',
@@ -183,7 +195,7 @@ export default function NewChat() {
   const branchChoice = currentBranchChoice(choice.branch, branchTitle, namingIntent)
   const reviewKey = JSON.stringify([selected, projectId, branchTitle, namingIntent, branchPrefix, branchChoice])
   const [reviewed, setReviewed] = useState<{ key: string; plan: WorktreePlanEntry[] } | null>(null)
-  const [picker, setPicker] = useState<'project' | 'mode' | 'host' | null>(null)
+  const [picker, setPicker] = useState<'project' | 'mode' | 'host' | 'choice' | null>(null)
   // Starts on the computer's default model step (Settings › Models), like the desktop; a pick here overrides it.
   const preset = store.defaults[selected]
   const agentDraft = useAgentDraft(selected, projectId, composerKey, preset ?? DEFAULT_AGENT_SETTINGS, !!preset)
@@ -231,13 +243,88 @@ export default function NewChat() {
       ...(next.provider !== model.provider ? { accountId: undefined, serviceTier: 'standard' as const } : {}),
     })
   const project = list.find((p) => p.id === projectId)
+  const rawId = (id: string) => id.slice(id.indexOf(':') + 1)
+  type Send = Parameters<NonNullable<React.ComponentProps<typeof Composer>['onSend']>>
+  /** Routes the first message, then starts the thread in the chosen project, or asks when no single project fits. */
+  const startInAuto = async (
+    text: string,
+    attachments: Send[2],
+    context: Send[3],
+    destination?: string,
+  ): Promise<void> => {
+    if (offline) {
+      setAuto(false)
+      setPicker('project')
+      throw new Error('Choose a project to start while this host is offline.')
+    }
+    const revision = ++routeRevision.current
+    const verified = await agentDraft.verify()
+    const sendModel = asModelChoice(verified)
+    let raw = destination
+    if (!raw) {
+      let outcome: Awaited<ReturnType<RamuMethods['projects.route']>>
+      try {
+        outcome = await storeRef.current.invoke(selected, 'projects.route', text, verified)
+      } catch (error) {
+        if (!isMethodMissing(error)) throw error
+        setAuto(false)
+        setPicker('project')
+        throw new Error('This host cannot choose a project automatically. Choose one.', { cause: error })
+      }
+      if (revision !== routeRevision.current)
+        throw new Error('The message changed while choosing a project. Send again.')
+      if (outcome.kind === 'resolved') raw = outcome.projectId
+      else {
+        pending.current = { text, attachments, context }
+        setChoices(
+          outcome.kind === 'ambiguous' ? outcome.candidates : list.map((p) => ({ projectId: rawId(p.id), reason: '' })),
+        )
+        setPicker('choice')
+        return
+      }
+    }
+    const destinationProject = list.find((p) => rawId(p.id) === raw)
+    if (!destinationProject) throw new Error('That project is no longer available. Choose a project.')
+    const options = await storeRef.current.invoke(selected, 'tasks.workspaceOptions', raw)
+    const checkout = resolveCheckoutMode({
+      defaultMode: options.defaultCheckoutMode ?? 'current',
+      manual: null,
+      workspaceId: null,
+      projectFree: false,
+      worktreeUnavailable: options.worktreeUnavailable,
+    })
+    if (checkout.blocked) throw new Error(checkout.reason ?? 'Worktree unavailable')
+    const intent = {
+      strategy: options.branchNaming ?? 'fixed',
+      instructions: options.branchInstructions ?? '',
+      prompt: text.slice(0, 6000),
+    }
+    const branch = currentBranchChoice(undefined, text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments', intent)
+    if (checkout.mode === 'worktree' && branch && !validBranchName(branch.name)) throw new Error(t.branchNameInvalid)
+    const id = await createChat({
+      computerId: selected,
+      projectId: destinationProject.id,
+      text,
+      mode: checkout.mode,
+      workspaceId,
+      branchNaming: intent,
+      branchChoice: branch,
+      branchPrefix: options.branchPrefix ?? 'ramu/',
+      attachments,
+      context,
+      ...sendModel,
+    })
+    setChoices(null)
+    if (storeRef.current.drafts[composerKey] === text) agentDraft.consume()
+    router.replace({ pathname: '/chat/[id]', params: { id } })
+  }
   const pc = computers.find((x) => x.id === selected)
   useEffect(() => {
     // Let the sheet finish presenting before the picker slides up over it.
-    if (params.project) return
+    if (params.project || auto) return
     const timer = setTimeout(() => setPicker('project'), 450)
     return () => clearTimeout(timer)
-  }, [params.project])
+  }, [params.project, auto])
 
   return (
     <Screen bg="canvas" scrollable={false}>
@@ -299,14 +386,14 @@ export default function NewChat() {
                   }
                 : undefined
             }
-            autoFocus={projectId !== null}
+            autoFocus={projectId !== null || auto}
             header={
               <>
                 {computers.length > 1 && (
                   <TrayButton icon={Monitor} label={pc?.name ?? t.computers} onPress={() => setPicker('host')} />
                 )}
                 <TrayButton
-                  prompt={projectId === null}
+                  prompt={projectId === null && !auto}
                   icon={
                     project
                       ? project.kind === 'workspace'
@@ -316,7 +403,9 @@ export default function NewChat() {
                         ? MessageCircle
                         : Folder
                   }
-                  label={project?.name ?? (projectId === STANDALONE ? 'Standalone' : 'Choose a project')}
+                  label={
+                    project?.name ?? (projectId === STANDALONE ? 'Standalone' : auto ? 'Auto' : 'Choose a project')
+                  }
                   onPress={() => setPicker('project')}
                 />
                 {project ? (
@@ -369,6 +458,7 @@ export default function NewChat() {
             model={model}
             onModel={chooseModel}
             onSend={async (text, _mode, attachments, context) => {
+              if (projectId === null && auto) return startInAuto(text, attachments, context)
               if (projectId === null) {
                 setPicker('project')
                 throw new Error('Choose a project first.')
@@ -450,12 +540,66 @@ export default function NewChat() {
           </Row>
         ))}
       </Sheet>
+      <Sheet open={picker === 'choice'} onClose={() => setPicker(null)} title="Choose a project">
+        <T tone="muted">
+          {choices?.some((choice) => choice.reason)
+            ? 'More than one project could fit. Choose where to start.'
+            : 'No project matched. Choose where to start.'}
+        </T>
+        {choices?.map((choice) => {
+          const match = list.find((p) => rawId(p.id) === choice.projectId)
+          if (!match) return null
+          return (
+            <Row
+              key={choice.projectId}
+              onPress={() => {
+                const request = pending.current
+                setPicker(null)
+                if (request)
+                  void startInAuto(
+                    request.text,
+                    request.attachments as Send[2],
+                    request.context as Send[3],
+                    choice.projectId,
+                  ).catch(() => setPicker('choice'))
+              }}
+            >
+              <Folder size={17} color={c.soft} />
+              <View style={{ flex: 1 }}>
+                <T weight="500">{match.name}</T>
+                <T size={font.caption} tone="muted">
+                  {choice.reason || match.root}
+                </T>
+              </View>
+            </Row>
+          )
+        })}
+      </Sheet>
       <Sheet open={picker === 'project'} onClose={() => setPicker(null)} title="Project">
+        {store.appPreferences[selected]?.autoProjectSelection !== false ? (
+          <Row
+            onPress={() => {
+              setProjectId(null)
+              setAuto(true)
+              setPicker(null)
+            }}
+          >
+            <Folder size={17} color={c.soft} />
+            <View style={{ flex: 1 }}>
+              <T weight="500">Auto</T>
+              <T size={font.caption} tone="muted">
+                Pick the project from your first message
+              </T>
+            </View>
+            {auto && projectId === null ? <Check size={16} color={c.accent} /> : null}
+          </Row>
+        ) : null}
         {list.map((p) => (
           <Row
             key={p.id}
             onPress={() => {
               setProjectId(p.id)
+              setAuto(false)
               setPicker(null)
             }}
           >
@@ -472,6 +616,7 @@ export default function NewChat() {
         <Row
           onPress={() => {
             setProjectId(STANDALONE)
+            setAuto(false)
             setPicker(null)
           }}
         >

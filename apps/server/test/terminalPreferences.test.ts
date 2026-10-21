@@ -10,7 +10,8 @@ it('loads older preferences and persists terminal docking separately from tab la
     {
       workspace: {
         getAppState: (key: string, fallback: unknown) => (key === 'app-preferences' ? saved : fallback),
-        setAppState: (_key: string, value: unknown) => {
+        setAppState: (key: string, value: unknown) => {
+          if (key !== 'app-preferences') return
           saved = value
         },
       },

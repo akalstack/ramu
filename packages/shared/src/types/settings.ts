@@ -73,6 +73,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   includeTabContext: boolean
   /** Ask before changing a chat's model mid-conversation: the new model has no cache of it, so the next message costs more. */
   warnModelChange: boolean
+  /** Home starts in Auto: Ramu picks the project from the first prompt and asks when it is unclear. */
+  autoProjectSelection: boolean
   /** Dragged width of the sidebar, in px. */
   sidebarWidth: number
   messageBehaviorVersion: 4
@@ -159,6 +161,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   intelligence: DEFAULT_INTELLIGENCE_PREFERENCES,
   includeTabContext: true,
   warnModelChange: true,
+  autoProjectSelection: true,
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
   busyMessageAction: 'steer',
   messageBehaviorVersion: 4,

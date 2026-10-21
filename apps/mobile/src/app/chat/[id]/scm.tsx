@@ -371,7 +371,7 @@ export default function SourceControl() {
           { cancelable: true, onDismiss: () => resolve(false) },
         ),
       )
-      if (!approved) throw new Error('Sync cancelled. Nothing was pushed.')
+      if (!approved) throw new Error('Sync cancelled. Nothing was pushed.', { cause: error })
       await store.invoke(chat.computerId, 'git.sync', chat.taskId, binding.repoId, approval)
     }
   }

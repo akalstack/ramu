@@ -4,6 +4,8 @@
 
 People need to recognize a thread later without paying for duplicate title generation or losing a name they chose. Prefer a useful title already supplied by the active provider, then use Ramu's isolated generation when no title is available. Keep the opening-message title as an immediate placeholder and preserve the existing Rename and Regenerate title actions on desktop and mobile.
 
+**Easier for the person:** Threads are findable by a useful name with no manual renaming, and chosen names are never overwritten.
+
 Ship one verified provider title integration together with the shared server policy and fallback. Unsupported providers must keep working through Ramu's existing generator. Do not require every adapter to support native titles before shipping.
 
 ## Existing services to extend

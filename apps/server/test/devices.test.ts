@@ -138,3 +138,35 @@ it('bounds old device records by their last recorded use', () => {
   expect(migrated.list()[0]?.expiresAt).toBe(601_000)
   expect(migrated.authenticate(`Bearer ${paired.token}`, 601_000)).toBeNull()
 })
+
+it('lets the host choose how long devices stay paired, keeps the choice across pairings, and can return to the default', () => {
+  const { devices, path } = store()
+  const day = 86_400_000
+  expect(devices.lifetime()).toEqual({ days: 90, saved: false })
+  devices.setLifetime(7)
+  expect(devices.lifetime()).toEqual({ days: 7, saved: true })
+  const now = Date.now()
+  const { code } = devices.createCode(now)
+  const paired = devices.redeem(code, 'Phone', now)!
+  expect(paired.device.expiresAt).toBe(now + 7 * day)
+  // The choice survives later writes (new codes, revocation) and a fresh store reading the same file.
+  devices.createCode(now)
+  expect(new DeviceStore(path).lifetime()).toEqual({ days: 7, saved: true })
+  expect(devices.authenticate(`Bearer ${paired.token}`, now + 8 * day)).toBeNull()
+
+  devices.setLifetime('never')
+  const second = devices.redeem(devices.createCode(now).code, 'Tablet', now)!
+  expect(second.device.expiresAt).toBeNull()
+  expect(devices.authenticate(`Bearer ${second.token}`, now + 3650 * day)?.id).toBe(second.device.id)
+
+  devices.setLifetime(null)
+  expect(devices.lifetime()).toEqual({ days: 90, saved: false })
+})
+
+it('rejects lifetimes outside 1 to 3650 days and ignores an invalid saved value', () => {
+  const { devices, path } = store()
+  for (const bad of [0, -1, 1.5, 3651, Number.NaN, '30' as unknown as number])
+    expect(() => devices.setLifetime(bad)).toThrow()
+  writeFileSync(path, JSON.stringify({ devices: [], pending: [], lifetimeDays: 99999 }))
+  expect(devices.lifetime()).toEqual({ days: 90, saved: false })
+})

@@ -1,7 +1,7 @@
 import { t, useLanguage } from '../i18n'
 import { ArrowRight, Gauge } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { AgentSessionInfo, AgentSettings, FallbackStep } from '@ramu/shared/types'
+import type { AgentSessionInfo, AgentSettings, FallbackStep, NextMessageRoute } from '@ramu/shared/types'
 import { providerName, providerAccountOrder, accountDisplayName } from '@ramu/shared/providers/providers'
 import { useAppSettings } from '../settings/AppSettings'
 import { useHost } from '../workspace/HostProvider'
@@ -54,6 +54,21 @@ export function ProviderRouteChip({
   useEffect(() => {
     void invoke('agent.providerHold', sessionId).then(setHold, () => {})
   }, [sessionId, settings.provider, settings.model, invoke])
+  // The host's own answer for the next message. Older hosts lack the method and keep the local estimate below.
+  const [hosted, setHosted] = useState<NextMessageRoute | null>(null)
+  const usageKey = usage
+    .map((r) => `${r.provider}:${r.accountId ?? ''}:${r.window}:${r.usedPercent}:${r.status}`)
+    .join()
+  useEffect(() => {
+    let current = true
+    void invoke('agent.nextRoute', sessionId).then(
+      (projection) => current && setHosted(projection.state === 'unknown' ? null : projection),
+      () => current && setHosted(null),
+    )
+    return () => {
+      current = false
+    }
+  }, [sessionId, settings.provider, settings.model, settings.accountId, settings.autoFallback, usageKey, hold, invoke])
   const now = Date.now()
   // Readings count only until their window resets, exactly as the main process sees them.
   const accountId =
@@ -68,13 +83,18 @@ export function ProviderRouteChip({
   const warn = preferences.showUsageLimits && !!peak && (peak.usedPercent >= WARN_AT || peak.status === 'limited')
   const order = preferences.fallback.order ?? defaultOrder(catalogs)
   // The chat's own flag decides: the global default only seeds it when a chat starts.
-  const route = planRoute(settings, order, {
+  const estimate = planRoute(settings, order, {
     usage: ownUsage,
     accounts: { configuration: preferences.providerBinaries, usage },
     catalogs,
     switchAt: preferences.fallback.switchAt,
     now,
   })
+  const route = hosted
+    ? hosted.state === 'switch'
+      ? { step: { id: '', provider: hosted.provider, model: hosted.model, effort: null, accountId: hosted.accountId } }
+      : null
+    : estimate
   const settingsItem = {
     key: 'settings',
     label: t('Fallback settings…'),
@@ -99,7 +119,7 @@ export function ProviderRouteChip({
     )
   }
   const next = route?.step
-  const held = hold === 'message' || hold === 'chat'
+  const held = hold === 'message' || hold === 'chat' || (hosted?.state === 'switch' && !!hosted.held)
   const switching = !!route && !held
   const reason = peak
     ? `${providerName(settings.provider)} ${windowLabel(peak, true)} ${peak.status === 'limited' ? t('limited') : `${peak.usedPercent}%`}`

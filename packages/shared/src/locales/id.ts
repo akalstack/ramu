@@ -1,6 +1,29 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  'Compatible with this Ramu release.': 'Kompatibel dengan rilis Ramu ini.',
+  'Unverified: no compatibility rule covers this version. It can still be used.':
+    'Belum terverifikasi: tidak ada aturan kompatibilitas untuk versi ini. Versi ini tetap bisa dipakai.',
+  'Limited: some features are unavailable with this version.': 'Terbatas: beberapa fitur tidak tersedia di versi ini.',
+  'Incompatible with this Ramu release.': 'Tidak kompatibel dengan rilis Ramu ini.',
+  'Recommended version: {0}': 'Versi yang disarankan: {0}',
+  'Starting in': 'Dimulai di',
+  'More than one project could fit. Choose where to start.': 'Lebih dari satu proyek yang cocok. Pilih tempat memulai.',
+  'No project matched. Choose where to start.': 'Tidak ada proyek yang cocok. Pilih tempat memulai.',
+  'Could not choose a project automatically. Choose one to continue.': 'Proyek tidak bisa dipilih otomatis. Pilih satu untuk melanjutkan.',
+  'Add a project first.': 'Tambahkan proyek terlebih dahulu.',
+  'That project is no longer available. Choose a project.': 'Proyek itu tidak tersedia lagi. Pilih proyek.',
+  'The message changed while choosing a project. Send again.': 'Pesan berubah saat memilih proyek. Kirim lagi.',
+  'Choose the project automatically': 'Pilih proyek secara otomatis',
+  'Home picks the project from your first message and asks when more than one fits. Turn off to always choose the project yourself.':
+    'Beranda memilih proyek dari pesan pertama Anda dan bertanya jika lebih dari satu cocok. Matikan untuk selalu memilih proyek sendiri.',
+  ' Names for Auto…': ' Nama untuk Otomatis…',
+  'Help Auto find {0}': 'Bantu Otomatis menemukan {0}',
+  'Auto matches these names in your first message. The description is shared with the model that chooses.':
+    'Otomatis mencocokkan nama ini dalam pesan pertama Anda. Deskripsi dibagikan ke model yang memilih.',
+  'Other names, separated by commas': 'Nama lain, dipisahkan koma',
+  'What this project is': 'Proyek ini tentang apa',
+  'Update this host to name projects for Auto.': 'Perbarui host ini untuk memberi nama proyek bagi Otomatis.',
   'Legacy': 'Legacy',
   'Show legacy models': 'Tampilkan model legacy',
   'Hide legacy models': 'Sembunyikan model legacy',
@@ -1028,6 +1051,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Previous (⇧Enter)": "Sebelumnya (⇧Enter)",
   "Escape to close": "Esc untuk tutup",
   "Terminal": "Terminal",
+  "Replacement preview unavailable for this expression or truncated match": "Pratinjau pengganti tidak tersedia untuk ekspresi atau kecocokan yang terpotong ini",
+  "Keep devices paired": "Pertahankan perangkat tetap terhubung",
+  "A device that is not used for this long must be paired again. Using it renews the time. Changes apply the next time each device connects.": "Perangkat yang tidak dipakai selama ini harus dipasangkan lagi. Memakainya memperpanjang waktunya. Perubahan berlaku saat setiap perangkat terhubung berikutnya.",
+  "Never expire": "Tidak pernah kedaluwarsa",
+  "Use the server default": "Gunakan bawaan server",
+  "This device is view-only, so it cannot open terminals. Ask the host owner to pair it with full access.": "Perangkat ini hanya bisa melihat, jadi tidak bisa membuka terminal. Minta pemilik host memasangkannya dengan akses penuh.",
   "Terminal panel": "Panel terminal",
   "Terminal groups": "Kelompok terminal",
   "Terminal layout": "Tata letak terminal",

@@ -14,6 +14,8 @@ export interface Computer {
   status: ComputerStatus
   lastSeen: number
   error?: string
+  /** This phone's role on the host, as the host last reported it. Absent means full access. Advisory: the host enforces it. */
+  access?: 'owner' | 'viewer'
 }
 
 export type ToolKind = 'read' | 'edit' | 'search' | 'execute' | 'think' | 'fetch' | 'other'

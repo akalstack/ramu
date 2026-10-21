@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { SearchMatch, SearchOptions } from '@ramu/shared/types'
 import { searchReplacementPreview } from '@ramu/shared/search/searchReplacementPreview'
+import { t } from '../i18n'
 import { searchSnippet } from '@ramu/shared/search/searchSnippet'
 
 /** Match-centered snippets adapt to sidebar resizing and the user's chosen font. */
@@ -68,7 +69,7 @@ export function SearchMatchPreview({
           {preview === null ? (
             <span
               className="text-muted-foreground ml-1"
-              title="Replacement preview unavailable for this expression or truncated match"
+              title={t('Replacement preview unavailable for this expression or truncated match')}
             >
               …
             </span>

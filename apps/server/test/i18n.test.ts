@@ -51,7 +51,8 @@ describe('app languages', () => {
     const dispatcher = createDispatcher({ userData: '/tmp/ramu-i18n-test', send: () => {}, native: async () => null }, {
       workspace: {
         getAppState: (key: string, fallback: unknown) => (key === 'app-preferences' ? saved : fallback),
-        setAppState: (_key: string, value: unknown) => {
+        setAppState: (key: string, value: unknown) => {
+          if (key !== 'app-preferences') return
           saved = value
         },
       },

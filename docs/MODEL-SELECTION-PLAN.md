@@ -6,6 +6,8 @@ Current generated sets and selection controls are documented in [UI](UI.md#new-t
 
 A person with a desktop and two phones can choose a selection flow for all devices, all mobile devices or one phone, see where the effective choice comes from, and clear an override. Deliver the shared preference transport and scope controls through the [mobile settings preferences plan](MOBILE-SETTINGS-PLAN.md). The current setting belongs to one execution host and affects clients using that host; it is not an account-wide or mobile-only preference.
 
+**Easier for the person:** One choice can cover every device, with a one-click clear for the exceptions, so the person does not reconfigure each phone.
+
 Keep provider availability and execution configuration on the selected host. Reuse device storage for phone identity and local overrides. Define a suitable profile/account or pairing mechanism for a shared baseline before promising cross-device propagation. If unavailable, show that prerequisite explicitly. Do not copy provider credentials or workspace state into device preferences.
 
 Version the shared preference contract, preserve older-host compatibility and discard stale host/device responses. Offline phone overrides remain usable; shared saves need visible pending/error states and safe retry. Reuse the existing Settings patch concurrency checks rather than replacing whole model sets to change a presentation preference.

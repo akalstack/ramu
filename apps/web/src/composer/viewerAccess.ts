@@ -6,3 +6,6 @@ export const isViewOnly = (status: Pick<BackgroundStatus, 'access'> | null | und
 
 export const VIEW_ONLY_NOTICE =
   'This device can view threads and answer requests, but not send messages. Ask the host owner to pair it with full access.'
+
+export const VIEW_ONLY_TERMINAL_NOTICE =
+  'This device is view-only, so it cannot open terminals. Ask the host owner to pair it with full access.'

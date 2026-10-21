@@ -2,11 +2,18 @@ import type { BranchChoice, WorkspaceChoice } from '@ramu/shared/workspaceDefaul
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { DEFAULT_AGENT_SETTINGS, NO_PROJECT, type FileContext, type AgentSettings } from '@ramu/shared/types'
+import {
+  AUTO_PROJECT,
+  DEFAULT_AGENT_SETTINGS,
+  NO_PROJECT,
+  type FileContext,
+  type AgentSettings,
+} from '@ramu/shared/types'
 
 const state = vi.hoisted(() => ({
   prompt: 'Fix login',
   failMethod: '',
+  route: { kind: 'unknown' } as Record<string, unknown>,
   setupFailed: false,
   consumed: 0,
   draftUnchanged: true,
@@ -35,6 +42,9 @@ vi.mock('../src/i18n', () => ({
   t: (value: string, args: Record<string, string> = {}) =>
     value.replace(/\{(\w+)\}/g, (_, key: string) => args[key] ?? `{${key}}`),
 }))
+vi.mock('../src/settings/AppSettings', () => ({
+  useAppSettings: () => ({ preferences: { autoProjectSelection: true } }),
+}))
 vi.mock('../src/models/ModelSets', () => ({ useModelSets: () => ({ initialSettings: DEFAULT_AGENT_SETTINGS }) }))
 vi.mock('../src/workspace/workspace', () => ({
   useHostRuntime: () => ({ on: () => () => {} }),
@@ -56,6 +66,15 @@ vi.mock('../src/workspace/HostProvider', () => ({
     invoke: async (method: string, ...args: unknown[]) => {
       state.calls.push({ method, args })
       if (method === state.failMethod) throw new Error('Delivery rejected')
+      if (method === 'projects.route') return state.route
+      if (method === 'tasks.workspaceOptions')
+        return {
+          defaultCheckoutMode: 'current',
+          branchPrefix: 'ramu/',
+          branchNaming: 'fixed',
+          branchInstructions: '',
+          worktreeUnavailable: null,
+        }
       if (method === 'tasks.setup' && state.setupFailed) return [{ setupState: 'failed' }]
       return method === 'tasks.setup' ? [] : { id: method === 'agent.start' ? 'session' : 'created' }
     },
@@ -133,6 +152,7 @@ import { NewTask } from '../src/NewTask'
 beforeEach(() => {
   state.prompt = 'Fix login'
   state.failMethod = ''
+  state.route = { kind: 'unknown' }
   state.setupFailed = false
   state.consumed = 0
   state.draftUnchanged = true
@@ -305,4 +325,40 @@ it('retains model intent when newer text survives a send acknowledgement or text
   render()
   await state.composer!.onSubmit([])
   expect(state.modelConsumed).toBe(0)
+})
+
+it('Auto creates the thread in the project the router resolved, without a speculative thread first', async () => {
+  state.route = { kind: 'resolved', projectId: 'p', reason: 'Mentions “Project”', via: 'name' }
+  render(AUTO_PROJECT)
+  await state.composer!.onSubmit([])
+  const methods = state.calls.map((call) => call.method)
+  expect(methods.indexOf('projects.route')).toBeLessThan(methods.indexOf('tasks.create'))
+  expect(state.calls.find((call) => call.method === 'tasks.create')?.args[0]).toMatchObject({
+    projectId: 'p',
+    mode: 'current',
+  })
+  expect(methods).toContain('agent.start')
+})
+
+it('Auto creates nothing and keeps the draft when the router cannot pick one project', async () => {
+  for (const route of [
+    { kind: 'ambiguous', candidates: [{ projectId: 'p', reason: 'x' }] },
+    { kind: 'unknown' },
+    { kind: 'unavailable', reason: 'ai-failed' },
+  ]) {
+    state.calls = []
+    state.consumed = 0
+    state.route = route
+    render(AUTO_PROJECT)
+    await state.composer!.onSubmit([])
+    expect(state.calls.map((call) => call.method)).toEqual(['projects.route'])
+    expect(state.consumed).toBe(0)
+  }
+})
+
+it('Auto never sends a stale or missing destination to the server', async () => {
+  state.route = { kind: 'resolved', projectId: 'gone', reason: 'Mentions “Gone”', via: 'name' }
+  render(AUTO_PROJECT)
+  await expect(state.composer!.onSubmit([])).rejects.toThrow('no longer available')
+  expect(state.calls.some((call) => call.method === 'tasks.create')).toBe(false)
 })

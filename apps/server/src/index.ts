@@ -44,7 +44,7 @@ import { HostPresence } from './remote/presence'
 import { CAPABILITIES, MAX_REQUEST_BYTES, PROTOCOL_VERSION, decodeInvoke, type Capability } from '@ramu/contracts'
 import { loadConfig } from './config'
 import { TokenStore } from './remote/auth'
-import { DeviceStore, type DeviceInfo } from './remote/devices'
+import { DeviceStore, validLifetime, type DeviceInfo } from './remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
 import {
   candidateUrls,
@@ -891,6 +891,7 @@ function networkStatus() {
     error: remoteError,
     addresses: localAddresses(),
     devices: devices.list(),
+    deviceLifetime: devices.lifetime(),
   }
 }
 async function networkMethod(method: string, args: unknown[]) {
@@ -914,6 +915,12 @@ async function networkMethod(method: string, args: unknown[]) {
     if (role !== 'owner' && role !== 'viewer') throw new Error('Invalid device role')
     const { code, expiresAt } = devices.createCode(Date.now(), role)
     return { code, expiresAt, urls: candidateUrls(network.host, network.port, Boolean(config.tls)) }
+  }
+  if (method === 'network.setDeviceLifetime') {
+    const days = args[0]
+    if (days !== null && !validLifetime(days)) throw new Error('Choose 1 to 3650 days, or never')
+    devices.setLifetime(days)
+    return networkStatus()
   }
   if (method === 'network.revoke') {
     if (typeof args[0] !== 'string') throw new Error('Invalid device')

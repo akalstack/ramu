@@ -6,6 +6,8 @@ This plan covers unfinished, incremental improvements to project selection, memo
 
 A person describes work from Home, sees the selected project, corrects it if necessary and starts one thread with the original draft intact. Deliver Auto/manual selection independently of memory and recovery audits. Use one project dropdown and contextual clarification, keeping routing diagnostics in details. Validate clear, ambiguous and unavailable destinations with representative prompts; add recovery, Inbox or PR controls only where the audits demonstrate a missing next action. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** The person types the work once; Ramu picks the project and the person only corrects it when it is wrong, without retyping.
+
 ## Ramu design and architecture
 
 Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend the existing Home composer/project picker, Memory & skills, thread status, Inbox and Source Control surfaces; compose shared app controls outside `components/ui/` with existing tokens, focus behavior and English/Indonesian copy. Keep routing, memory and recovery in their existing server collaborators behind the named shared API, validated handler registry and dispatcher; `AgentService` remains a wiring façade. Use the selected host's catalog and host-qualified queries/events, with device drafts kept separate from host settings. Do not add a parallel routing UI, RPC transport, recovery engine or agent-wakeup loop.
@@ -15,6 +17,10 @@ Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend the existing Home
 Users can describe work before choosing a project, trust saved decisions and completion reports, resume interrupted work, and see when their input is required. Keep the current project/thread/goal model and existing controls. Make small changes through existing services.
 
 ## 1. Automatic project selection (default)
+
+### Already in place
+
+Home (desktop and mobile) starts in **Auto** while the Settings → Threads preference is on. The server resolver (`projects.route`) checks names and user-editable aliases (Names for Auto… in the project menu) with word boundaries, then makes one bounded tool-free classification whose answer is validated against the catalog. A resolved project starts the thread; ambiguous, unknown or failed routing keeps the draft and asks the person to choose, and a stale answer is discarded when the message, destination or host changes. Remaining: mobile editing of aliases/descriptions, persisting Auto-versus-explicit choice and the pending candidate list with drafts/outbox across restart, idempotent creation across a lost acknowledgement for routed starts on mobile, host labels in the choice list for projects with the same name on different hosts, and device acceptance.
 
 ### Interaction contract
 

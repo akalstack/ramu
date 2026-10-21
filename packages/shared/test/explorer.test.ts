@@ -1,5 +1,11 @@
 import { expect, it } from 'vitest'
-import { explorerKey, flattenExplorer, projectExplorerContext, projectWorkspaces } from '../src/workspace/explorer'
+import {
+  explorerKey,
+  flattenExplorer,
+  searchExplorerFiles,
+  projectExplorerContext,
+  projectWorkspaces,
+} from '../src/workspace/explorer'
 it('qualifies identity by host, checkout, repository and path without delimiter collisions', () => {
   expect(explorerKey('a', 'project:p', 'r', 'x')).not.toBe(explorerKey('b', 'project:p', 'r', 'x'))
   expect(explorerKey('a', 'worktree:w', 'r', 'x')).not.toBe(explorerKey('a', 'project:p', 'r', 'x'))
@@ -49,4 +55,16 @@ it('finds only strict relative ancestors and rejects escape or excessive-depth d
     `${'a/'.repeat(81)}file`,
   ])
     expect(explorerAncestors(path)).toEqual([])
+})
+
+it('searches paths case-insensitively, keeps same-named files in different repositories and bounds results', () => {
+  const files = [
+    { repoId: 'a', path: 'src/Index.ts' },
+    { repoId: 'b', path: 'src/index.ts' },
+    { repoId: 'a', path: 'README.md' },
+  ]
+  expect(searchExplorerFiles(files, ' INDEX ')).toEqual([files[0], files[1]])
+  expect(searchExplorerFiles(files, '   ')).toEqual([])
+  expect(searchExplorerFiles(files, 'missing')).toEqual([])
+  expect(searchExplorerFiles(files, 'src', 1)).toEqual([files[0]])
 })

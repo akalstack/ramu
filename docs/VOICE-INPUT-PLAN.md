@@ -6,6 +6,8 @@ Proposal, 2026-10-18. All implementation and acceptance below remain unfinished.
 
 A person taps the microphone in the existing composer, dictates, reviews the inserted text and sends through the normal action. Ship this complete flow on each verified local platform without waiting for every adapter or contextual-picker improvement. Keep system language/input defaults and contextual readiness/setup actions; model assets and input-device selection stay in details. Verify draft preservation and cancellation during a real composing task. Ordinary typing and system keyboard assistance remain usable when local recognition is unavailable. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** Speaking replaces typing in the same composer, with the draft kept and one tap to cancel.
+
 ## What the autocomplete actually is
 
 Without the exact screen/recording, the observed effect cannot be identified conclusively. Distinguish these cases:

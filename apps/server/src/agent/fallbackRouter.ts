@@ -10,6 +10,7 @@ import {
   type AgentSettings,
   type AgentProvider,
   type ProviderCatalog,
+  type NextMessageRoute,
 } from '@ramu/shared/types'
 import {
   capSubagentEffort,
@@ -166,6 +167,33 @@ export class FallbackRouter {
 
   providerHold(id: string): 'message' | 'chat' | null {
     return this.holds.get(id) ?? null
+  }
+
+  /** Where the next message would run, using the routing a send applies. Reads only: it changes nothing and fetches nothing. */
+  async nextRoute(id: string): Promise<NextMessageRoute> {
+    const s = this.host.get(id)
+    const routing = this.routing(s.settings)
+    if (!routing) return { state: 'unknown' }
+    const catalogs = await this.host.catalog()
+    const policy = this.policyOf(s, catalogs, routing.prefs)
+    const decision = planRoute(s.settings, policy.order, {
+      usage: routing.usage,
+      accounts: routing.accounts,
+      catalogs,
+      switchAt: policy.switchAt,
+      now: Date.now(),
+      attemptedAccounts: this.attemptedAccounts.get(id),
+    })
+    if (!decision) return { state: 'stays' }
+    const { provider, model, accountId } = decision.step
+    return {
+      state: 'switch',
+      provider,
+      model,
+      ...(accountId ? { accountId } : {}),
+      reason: decision.reason,
+      held: this.holds.get(id) ?? null,
+    }
   }
 
   /** Preferences and usage, once the app has provided them; tests run without. */

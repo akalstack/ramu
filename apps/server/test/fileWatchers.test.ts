@@ -26,10 +26,15 @@ it('shares one watcher between tasks and closes it only after the last lease is 
   expect(watchers.size).toBe(1)
   watchers.release('a')
   expect(watchers.size).toBe(1)
-  writeFileSync(join(root, 'one.txt'), '1')
-  await vi.waitFor(() => expect(changes(send).map(([, p]) => p)).toContainEqual({ cwd: root, path: 'one.txt' }), {
-    timeout: 5000,
-  })
+  // A watcher can still be registering with the OS when the first write lands, so keep writing until it is seen.
+  let writes = 0
+  await vi.waitFor(
+    () => {
+      writeFileSync(join(root, 'one.txt'), String(writes++))
+      expect(changes(send).map(([, p]) => p)).toContainEqual({ cwd: root, path: 'one.txt' })
+    },
+    { timeout: 5000, interval: 100 },
+  )
   watchers.release('b')
   expect(watchers.size).toBe(0)
 })

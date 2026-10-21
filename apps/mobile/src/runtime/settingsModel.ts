@@ -241,6 +241,13 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         },
         {
           kind: 'toggle',
+          path: 'autoProjectSelection',
+          title: 'Choose the project automatically',
+          help: 'Home picks the project from your first message and asks when more than one fits. Turn off to always choose the project yourself.',
+          words: 'project auto routing home',
+        },
+        {
+          kind: 'toggle',
           path: 'warnModelChange',
           title: 'Warn before changing model',
           help: "A new model can't reuse the cache of a conversation in progress, so the first message after switching uses more of your usage.",

@@ -74,6 +74,21 @@ export function slugify(s: string): string {
   )
 }
 
+type ProjectRow = Omit<Project, 'aliases' | 'description'> & { aliases: string; description: string }
+
+/** Aliases are stored as JSON; omit empty routing fields so older clients see the original shape. */
+function projectOf(row: ProjectRow): Project {
+  let aliases: string[] = []
+  try {
+    const parsed: unknown = JSON.parse(row.aliases)
+    if (Array.isArray(parsed)) aliases = parsed.filter((alias): alias is string => typeof alias === 'string')
+  } catch {
+    // A damaged value only loses routing hints; the project itself is untouched.
+  }
+  const { aliases: _a, description, ...project } = row
+  return { ...project, ...(aliases.length ? { aliases } : {}), ...(description ? { description } : {}) }
+}
+
 export class Workspace {
   settingsStore?: SettingsStore
   private readonly allocation = new KeyedLock()
@@ -92,9 +107,10 @@ export class Workspace {
   listProjects(): Project[] {
     return this.db
       .prepare(
-        "SELECT id, name, root, created_at AS createdAt FROM projects WHERE id != 'no-project' ORDER BY position IS NULL, position, created_at",
+        "SELECT id, name, root, created_at AS createdAt, aliases, description FROM projects WHERE id != 'no-project' ORDER BY position IS NULL, position, created_at",
       )
-      .all() as unknown as Project[]
+      .all()
+      .map((row) => projectOf(row as unknown as ProjectRow))
   }
 
   /** Saves a drag-and-drop order. Ids not listed keep their relative order after the listed ones. */
@@ -232,10 +248,10 @@ export class Workspace {
 
   private getProject(id: string): Project {
     const p = this.db
-      .prepare('SELECT id, name, root, created_at AS createdAt FROM projects WHERE id = ?')
-      .get(id) as unknown as Project | undefined
+      .prepare('SELECT id, name, root, created_at AS createdAt, aliases, description FROM projects WHERE id = ?')
+      .get(id) as unknown as ProjectRow | undefined
     if (!p) throw new Error(`Unknown project ${id}`)
-    return p
+    return projectOf(p)
   }
 
   listWorkspaces(projectId?: string): WorktreeWorkspace[] {
@@ -413,6 +429,16 @@ export class Workspace {
     if (!n) throw new Error('Project name is required')
     this.getProject(id)
     this.db.prepare('UPDATE projects SET name = ? WHERE id = ?').run(n, id)
+    return this.getProject(id)
+  }
+
+  /** Aliases and a description help Auto choose this project; blank values are dropped and lengths are bounded. */
+  setProjectRouting(id: string, aliases: string[], description: string): Project {
+    this.getProject(id)
+    const clean = [...new Set(aliases.map(cleanLabel).filter(Boolean))].slice(0, 8)
+    this.db
+      .prepare('UPDATE projects SET aliases = ?, description = ? WHERE id = ?')
+      .run(JSON.stringify(clean), description.trim().slice(0, 280), id)
     return this.getProject(id)
   }
 

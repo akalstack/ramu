@@ -6,6 +6,8 @@ Shared helper selection, separate advisor/history membership, mobile helper fide
 
 A person sees what an agent is doing, recognizes when their input is needed, opens the relevant request/helper and acts once in the correct thread. Keep one compact activity row and the existing detail surfaces. Prioritize truthful waiting state, supported child navigation and restored state; extra counts or unread-advice controls require a demonstrated decision they help the person make. Validate the flow with concurrent helpers, a pending question and a reconnect, without requiring the user to interpret provider events. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** The thread says when it needs the person and takes them straight to the request, so nothing waits unnoticed.
+
 ## Ramu design and architecture
 
 Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend the existing compact activity row, helper cards, request cards and native sheets instead of adding another status model or approval route. Shared pure event folds remain authoritative across clients; server collaborators own lifecycle, capabilities and command validation behind existing named methods. Use host-qualified identities/queries and host-tagged events, retaining the current workspace stores and device draft ownership. Compose desktop controls outside `components/ui/` and reuse mobile controls, tokens and focus/accessibility patterns; provider-owned data is exposed through current adapters only when supported.

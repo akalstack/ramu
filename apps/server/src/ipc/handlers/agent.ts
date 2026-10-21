@@ -163,6 +163,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       run: (s: string, scope: 'message' | 'chat' | null) => agents.holdProvider(s, scope),
     },
     'agent.providerHold': { args: z.tuple([id]), run: (s: string) => agents.providerHold(s) },
+    'agent.nextRoute': { args: z.tuple([id]), run: (s: string) => agents.nextRoute(s) },
     'agent.backgroundTool': {
       args: z.tuple([id, z.string().min(1).max(300)]),
       run: (s: string, toolUseId: string) => agents.backgroundTool(s, toolUseId),

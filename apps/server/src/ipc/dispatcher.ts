@@ -6,7 +6,7 @@ import type { RuntimeHost, Services } from './types'
 
 /** Methods that change which projects, chats or sessions exist, or how the sidebar shows them. */
 const WORKSPACE_MUTATIONS =
-  /^(projects\.(create|addFolder|rename|remove|reorder|setActions|setActionVisibility|resetActionOrder|reorderActions)|folders\.(addProject|clone)|repos\.(add|remove)|workspaces\.rename|tasks\.(create|rename|pin|done|archive|delete|setup|generateTitle)|agent\.(start|delete|submit|send|sendQueuedNow)|summaries\.discuss)$/
+  /^(projects\.(create|addFolder|rename|setRouting|remove|reorder|setActions|setActionVisibility|resetActionOrder|reorderActions)|folders\.(addProject|clone)|repos\.(add|remove)|workspaces\.rename|tasks\.(create|rename|pin|done|archive|delete|setup|generateTitle)|agent\.(start|delete|submit|send|sendQueuedNow)|summaries\.discuss)$/
 
 export function createDispatcher(host: RuntimeHost, services: Services) {
   const { workspace } = services

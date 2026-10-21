@@ -17,6 +17,7 @@ import {
   type BranchChoice,
   type BranchNamingIntent,
 } from '@ramu/shared/workspaceDefaults'
+import { routeProject } from '../../workspace/projectRouter'
 import { agentSettings, id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 import type { TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
@@ -102,6 +103,21 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   }
   return {
     'projects.list': { args: z.tuple([]), run: () => workspace.listProjects() },
+    'projects.route': {
+      args: z.tuple([z.string().min(1).max(20_000), agentSettings]),
+      run: (prompt: string, settings: AgentSettings) =>
+        routeProject(
+          prompt,
+          settings,
+          workspace.listProjects().map((project) => ({
+            id: project.id,
+            name: project.name,
+            aliases: project.aliases,
+            description: project.description,
+          })),
+          (...args) => agents.analyze(...args),
+        ),
+    },
     'projects.create': { args: z.tuple([z.string().max(200)]), run: (name: string) => workspace.createProject(name) },
     'folders.roots': { args: z.tuple([]), run: () => hostFolders.roots() },
     'folders.list': { args: z.tuple([z.string().max(4096)]), run: (path: string) => hostFolders.list(path) },
@@ -389,6 +405,10 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     'projects.reorder': {
       args: z.tuple([z.array(id).max(500)]),
       run: (ids: string[]) => workspace.reorderProjects(ids),
+    },
+    'projects.setRouting': {
+      args: z.tuple([id, z.array(z.string().max(80)).max(16), z.string().max(1000)]),
+      run: (p: string, aliases: string[], description: string) => workspace.setProjectRouting(p, aliases, description),
     },
     'projects.rename': {
       args: z.tuple([id, z.string().max(200)]),

@@ -110,6 +110,21 @@ const en = {
   newThreadWithFile: 'New thread with file',
   showInExplorer: 'Show in Explorer',
   copyPath: 'Copy path',
+  homeAll: 'All',
+  homeRunning: 'Running',
+  homeWaiting: 'Waiting',
+  homeFailed: 'Failed',
+  homeArchived: 'Archived',
+  homeWorkspace: 'Workspace',
+  homeAllWorkspaces: 'All workspaces',
+  homeFilterHost: 'Filter by host',
+  homeFilterWorkspace: 'Filter by workspace',
+  homeHost: 'Host',
+  homeNoMatch: 'No threads match.',
+  homeClearFilters: 'Clear filters',
+  explorerTitle: 'Explorer',
+  explorerEmptyFolder: 'Empty folder',
+  explorerCopyHint: 'Long press to copy the path',
   fileDraftFull: 'This draft already has 30 file references. Remove a reference in the composer, then try again.',
   fileDraftFailed:
     'Could not add the file. Your draft is kept; check the host and available device storage, then try again.',
@@ -447,6 +462,21 @@ const id: typeof en = {
   newThreadWithFile: 'Thread baru dengan berkas',
   showInExplorer: 'Tampilkan di Explorer',
   copyPath: 'Salin jalur',
+  homeAll: 'Semua',
+  homeRunning: 'Berjalan',
+  homeWaiting: 'Menunggu',
+  homeFailed: 'Gagal',
+  homeArchived: 'Diarsipkan',
+  homeWorkspace: 'Ruang kerja',
+  homeAllWorkspaces: 'Semua ruang kerja',
+  homeFilterHost: 'Saring menurut host',
+  homeFilterWorkspace: 'Saring menurut ruang kerja',
+  homeHost: 'Host',
+  homeNoMatch: 'Tidak ada thread yang cocok.',
+  homeClearFilters: 'Hapus saringan',
+  explorerTitle: 'Penjelajah',
+  explorerEmptyFolder: 'Folder kosong',
+  explorerCopyHint: 'Tekan lama untuk menyalin jalur',
   fileDraftFull: 'Draf ini sudah memiliki 30 referensi berkas. Hapus satu referensi di kotak pesan, lalu coba lagi.',
   fileDraftFailed:
     'Tidak dapat menambahkan berkas. Draf Anda tetap disimpan; periksa host dan ruang penyimpanan perangkat, lalu coba lagi.',
@@ -693,10 +723,3 @@ export function ago(at: number): string {
   return `${Math.round(h / 24)}d`
 }
 
-export function until(at: number): string {
-  const m = Math.max(0, Math.round((at - Date.now()) / 60_000))
-  if (m < 60) return `${m}m`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ${m % 60}m`
-  return `${Math.round(h / 24)}d`
-}

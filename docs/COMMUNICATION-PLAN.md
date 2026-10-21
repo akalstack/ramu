@@ -4,6 +4,8 @@
 
 A person controls an agent and terminal from desktop or phone, switches between hosts, loses connectivity, then returns to the same work without missing output or accidentally repeating an action. A busy terminal must not delay Stop, approval answers or another host's updates. Improve that complete workflow before expanding transport scope.
 
+**Easier for the person:** Reconnecting resumes the same work without re-checking what ran, so nothing is repeated or missed by hand.
+
 The first delivery is a capability-negotiated remote WebSocket path for existing typed calls and the agent/terminal subscriptions needed by that workflow, with bounded recovery and the existing HTTP/SSE path retained for compatibility. Ship it as the default only after the comparison below demonstrates a useful benefit. Keeping and improving HTTP/SSE is an acceptable outcome if WebSocket does not pass the gates. This is planned work; current transport remains documented in [Headless server](HEADLESS-SERVER.md#protocol).
 
 ## Existing Ramu behavior to preserve

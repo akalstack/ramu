@@ -32,6 +32,8 @@ export interface Memory {
     taskId?: string
     confirmed?: boolean
     eventSeq?: number
+    /** The earlier memory this one replaced; that note is archived as superseded and stays restorable. */
+    supersedes?: string
   }
   createdAt: number
   updatedAt: number

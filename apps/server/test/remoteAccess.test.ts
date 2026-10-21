@@ -86,7 +86,7 @@ it('binds the role to the host-issued code and denies viewer execution', async (
   const headers = { Authorization: `Bearer ${paired.token}` }
   expect((await f.request('/invoke', { method: 'POST', headers })).status).toBe(403)
   const device = f.devices.authenticate(headers.Authorization)!
-  for (const method of ['agent.get', 'agent.replyPermission', 'agent.replyQuestion'])
+  for (const method of ['agent.get', 'agent.nextRoute', 'agent.replyPermission', 'agent.replyQuestion'])
     expect(deviceMayInvoke(device, method)).toBe(true)
   for (const method of [
     'term.open',

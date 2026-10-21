@@ -4,6 +4,8 @@
 
 A person can find an existing skill in Settings, understand where it comes from, enable it for the intended project/provider and inspect its availability in a thread. Extend the current skill manager first; shared rules and MCP remain independently deliverable. Keep source paths, precedence and delivery diagnostics in details, with only name, scope, status and the next useful action in the ordinary list. Acceptance requires completing that setup without editing provider configuration files. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** One list replaces hand-editing provider config files, and the next useful action is offered where the problem appears.
+
 ## Goal and design boundary
 
 Give users one place to inspect and manage the setup available to Ramu agents across providers: **MCP servers**, **Skills** and **Rules**. Use **Agent setup** as the product grouping; retain **Shared MCP** for shared external connections. Extend Ramu's working services and settings rather than introducing a replacement configuration framework, independent dashboard or copied competitor layout.

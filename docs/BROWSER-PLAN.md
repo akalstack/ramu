@@ -6,6 +6,8 @@ Implementation proposal, 2026-10-18. No browser runtime or settings in this docu
 
 A person asks an agent to check a local page, sees the correct browser and machine, takes control to interact or sign in, then returns control and receives the result in the same thread. Deliver the local desktop runtime, minimal pane, routing and ownership together as one usable increment; internal contract/runtime steps alone are not a user release. Keep provider overrides and profile administration in Settings/details. Session import, remote runtime and mobile control follow independently after this flow works. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** The person no longer copies pages, logins or results between a browser and the thread; handoff to and from the agent is one action.
+
 ## Product decisions and defaults
 
 Treat **which browser agents control** and **where the user's clicked links open** as independent settings. A provider is a runtime such as Claude Code or Codex; a browser profile is a website login identity such as Work or Personal. Neither should be coupled to provider account rotation.

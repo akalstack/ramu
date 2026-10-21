@@ -36,6 +36,12 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
       />
       <ToggleRow
         {...toggleProps}
+        setting="autoProjectSelection"
+        title="Choose the project automatically"
+        description="Home picks the project from your first message and asks when more than one fits. Turn off to always choose the project yourself."
+      />
+      <ToggleRow
+        {...toggleProps}
         setting="includeTabContext"
         title="Include open tabs as context"
         description="Send the active file or selection with each message, plus the paths of other open tabs. Unsaved edits are included."

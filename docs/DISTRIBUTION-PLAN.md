@@ -6,6 +6,8 @@ Audited on 2026-10-18. Focused schedule-form tests and the release docs-check ch
 
 A person installs a supported packaged build, opens a thread and can obtain a verified update without configuring development tools. Deliver and validate each supported platform independently; signing, transport and native-device prerequisites remain mandatory for the affected release. Use existing installation/update messages with a specific recovery action. Broader platform availability is not a reason to add a second installer service or delay an otherwise validated platform. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** Install and update need no tooling knowledge, and failures name the single action that recovers them.
+
 ## Ramu architecture boundary
 
 Follow [Architecture](ARCHITECTURE.md) and the existing [release workflow](RELEASING.md). Extend current Forge/CI/update and Expo/native packaging paths; desktop remains a thin shell around the same independently runnable server. Keep signing secrets in release infrastructure and device-native dependencies in their owning packages. Packaging must not introduce a separate backend, change RPC authorization or enable host administration. Any setup/update UI uses existing Settings/dialogs and app-composed controls under [UI](UI.md), without changing registry primitives. Reuse the single smoke script for packaged startup validation.

@@ -12,7 +12,8 @@ import { ComposerSuggestions, FILE_DRAG_TYPE, MAX_PINNED_FILES, useComposerSugge
 import { Attachments } from './Attachments'
 import { registerWorkspaceCheckpoint } from '../workspace/workspaceCheckpoint'
 import { useHost } from '../workspace/HostProvider'
-import { VIEW_ONLY_NOTICE, isViewOnly } from './viewerAccess'
+import { VIEW_ONLY_NOTICE } from './viewerAccess'
+import { useViewOnly } from './useViewOnly'
 
 const CHIPS_SHOWN = 4
 // Keep long documents out of the prompt box while leaving ordinary pastes inline.
@@ -99,18 +100,7 @@ export function Composer({
   pinnedCount.current = suggestions.pinned.length
   // Attachments upload to the host the composer sends to; the native picker runs on this window's own host.
   const { id: checkpointHost, isLocal, invoke } = useHost()
-  const [viewOnly, setViewOnly] = useState(false)
-  useEffect(() => {
-    if (isLocal) return setViewOnly(false)
-    let live = true
-    Promise.resolve(invoke('background.status')).then(
-      (status) => live && setViewOnly(isViewOnly(status)),
-      () => {},
-    )
-    return () => {
-      live = false
-    }
-  }, [isLocal, invoke])
+  const viewOnly = useViewOnly()
   const scopeKey = JSON.stringify([checkpointHost, suggestions.scope])
   const [submissionFailure, setSubmissionFailure] = useState<{ scope: string; message: string } | null>(null)
   const currentScope = useRef({ host: checkpointHost, scope: suggestions.scope })
@@ -577,7 +567,13 @@ export function Composer({
             }
             disabled={showStop || showResume ? false : !canSend}
             onClick={
-              showStop ? stop!.onStop : showResume ? resume!.onResume : showAlternate && canAlternate ? alternate : submit
+              showStop
+                ? stop!.onStop
+                : showResume
+                  ? resume!.onResume
+                  : showAlternate && canAlternate
+                    ? alternate
+                    : submit
             }
           >
             {submitting ? (

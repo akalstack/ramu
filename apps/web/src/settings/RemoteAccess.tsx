@@ -147,6 +147,18 @@ function ThisComputer() {
       notifyError(errorText(error), t('Remote access'))
     }
   }
+  const setLifetime = async (value: string) => {
+    try {
+      setStatus(
+        await invoke(
+          'network.setDeviceLifetime',
+          value === 'default' ? null : value === 'never' ? 'never' : Number(value),
+        ),
+      )
+    } catch (error) {
+      notifyError(errorText(error), t('Remote access'))
+    }
+  }
   const listening = status.listening ? `${status.tls ? 'https' : 'http'}://${status.host}:${status.port}` : null
   return (
     <>
@@ -240,6 +252,22 @@ function ThisComputer() {
           {t('Pair a device…')}
         </Button>
       </SettingsRow>
+      {status.deviceLifetime && (
+        <SettingsRow>
+          <SettingsLabel
+            title={t('Keep devices paired')}
+            help={t(
+              'A device that is not used for this long must be paired again. Using it renews the time. Changes apply the next time each device connects.',
+            )}
+          />
+          <Dropdown
+            label={t('Keep devices paired')}
+            value={String(status.deviceLifetime.days)}
+            options={lifetimeOptions(status.deviceLifetime.days, status.deviceLifetime.saved)}
+            onChange={(value) => void setLifetime(value)}
+          />
+        </SettingsRow>
+      )}
       {status.devices.map((device) => (
         <SettingsRow key={device.id}>
           <SettingsLabel
@@ -1006,5 +1034,20 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** The usual choices, plus the current value when it is something else (set from the command line or an older release). */
+function lifetimeOptions(current: number | 'never', saved: boolean) {
+  const days = [30, 90, 180, 365]
+  const options = days.map((value) => ({ value: String(value), label: t('{0} days', { 0: value }) }))
+  if (typeof current === 'number' && !days.includes(current))
+    options.push({ value: String(current), label: t('{0} days', { 0: current }) })
+  options.push({ value: 'never', label: t('Never expire') })
+  if (saved) options.push({ value: 'default', label: t('Use the server default') })
+  return options.sort(
+    (a, b) =>
+      Number(a.value === 'never' || a.value === 'default') - Number(b.value === 'never' || b.value === 'default') ||
+      Number(a.value) - Number(b.value),
   )
 }

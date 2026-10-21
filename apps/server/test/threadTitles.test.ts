@@ -317,6 +317,7 @@ it('routes actual session recording into automatic naming without a client title
     replyPermission() {},
     replyQuestion() {},
   })
+  // eslint-disable-next-line prefer-const -- the observer closes over `owner` before it can be constructed
   let owner: ThreadTitles | undefined
   const service = new AgentService(db, (id, event) => owner?.observe(id, event), noQuery, factory)
   vi.spyOn(service, 'catalog').mockResolvedValue([

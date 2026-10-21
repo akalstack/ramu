@@ -6,6 +6,8 @@ Current storage, migration, repository actions and workspace/commit defaults are
 
 A person can see which repository supplies a default, correct invalid configuration and choose a provider/model for a new thread without granting repository content additional authority. Preserve explicit draft/session choices and intact drafts on unavailable providers or invalid configuration.
 
+**Easier for the person:** New threads start with the right provider and model, and invalid configuration points to its own fix instead of a silent failure.
+
 ## Remaining implementation and acceptance
 
 - Align repository model defaults with [automatic project selection](ASSISTANT-WORKFLOW-PLAN.md#1-automatic-project-selection-default) once it lands, so an inferred project applies its defaults with the same draft precedence.

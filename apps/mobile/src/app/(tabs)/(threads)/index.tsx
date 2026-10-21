@@ -105,14 +105,14 @@ export default function Threads() {
     .sort((a, b) => b.pinnedAt! - a.pinnedAt!)
   const unpinned = mine.filter((x) => !pinned.includes(x))
   const standalone = unpinned.filter((x) => x.projectId === STANDALONE)
-  const scopeName = scope ? (nameOf(scope) ?? 'Workspace') : 'All workspaces'
+  const scopeName = scope ? (nameOf(scope) ?? t.homeWorkspace) : t.homeAllWorkspaces
   const live = scoped.filter((x) => x.status !== 'archived')
   const chips: { key: StatusFilter; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: live.length },
-    { key: 'running', label: 'Running', count: live.filter((x) => x.status === 'running').length },
-    { key: 'needs-input', label: 'Waiting', count: live.filter((x) => x.status === 'needs-input').length },
-    { key: 'failed', label: 'Failed', count: live.filter((x) => x.status === 'failed').length },
-    { key: 'archived', label: 'Archived', count: scoped.filter((x) => x.status === 'archived').length },
+    { key: 'all', label: t.homeAll, count: live.length },
+    { key: 'running', label: t.homeRunning, count: live.filter((x) => x.status === 'running').length },
+    { key: 'needs-input', label: t.homeWaiting, count: live.filter((x) => x.status === 'needs-input').length },
+    { key: 'failed', label: t.homeFailed, count: live.filter((x) => x.status === 'failed').length },
+    { key: 'archived', label: t.homeArchived, count: scoped.filter((x) => x.status === 'archived').length },
   ]
 
   // One flat, virtualized list: labels, outbox items, chats and project headers are each a row, drawn as rounded groups.
@@ -249,7 +249,7 @@ export default function Threads() {
               </View>
               <IconButton
                 icon={X}
-                label="Cancel"
+                label={t.cancel}
                 size={32}
                 tone="muted"
                 onPress={() => confirmCancel(row.o, undefined, cancelOutbox)}
@@ -400,7 +400,7 @@ export default function Threads() {
               {multi ? (
                 <Chip
                   label={merged ? t.allHosts : (pc?.name ?? t.allHosts)}
-                  accessibilityLabel="Filter by host"
+                  accessibilityLabel={t.homeFilterHost}
                   icon={Network}
                   chevron
                   selected={!merged}
@@ -411,7 +411,7 @@ export default function Threads() {
               {merged ? null : (
                 <Chip
                   label={scopeName}
-                  accessibilityLabel="Filter by workspace"
+                  accessibilityLabel={t.homeFilterWorkspace}
                   icon={Folder}
                   chevron
                   selected={scope !== null}
@@ -438,7 +438,7 @@ export default function Threads() {
             {filtering && !mine.length ? (
               <View style={{ alignItems: 'center', padding: space.xl * 2, gap: space.m }}>
                 <Search size={26} color={c.placeholder} />
-                <T tone="muted">No threads match.</T>
+                <T tone="muted">{t.homeNoMatch}</T>
                 <Pressable
                   onPress={() => {
                     tap()
@@ -447,7 +447,7 @@ export default function Threads() {
                   }}
                 >
                   <T tone="accent" weight="500">
-                    Clear filters
+                    {t.homeClearFilters}
                   </T>
                 </Pressable>
               </View>
@@ -464,7 +464,7 @@ export default function Threads() {
 
       {nativeScrollEdge ? null : <TopFade visible={edge.scrolled} />}
       {projectMenu ? <ProjectActionsSheet project={projectMenu} open onClose={() => setProjectMenu(null)} /> : null}
-      <Sheet open={hostSheet} onClose={() => setHostSheet(false)} title="Host">
+      <Sheet open={hostSheet} onClose={() => setHostSheet(false)} title={t.homeHost}>
         {[
           { id: null as string | null, name: t.allHosts },
           ...computers.map((x) => ({ id: x.id as string | null, name: x.name })),
@@ -506,11 +506,11 @@ export default function Threads() {
           <T style={{ flex: 1 }}>{t.pair}</T>
         </Row>
       </Sheet>
-      <Sheet open={scopeSheet} onClose={() => setScopeSheet(false)} title="Workspace">
+      <Sheet open={scopeSheet} onClose={() => setScopeSheet(false)} title={t.homeWorkspace}>
         {[
           {
             id: null as string | null,
-            name: 'All workspaces',
+            name: t.homeAllWorkspaces,
             n: chats.filter((x) => x.computerId === selected && x.status !== 'archived').length,
           },
           ...projectList.map((p) => ({

@@ -4,6 +4,8 @@
 
 A person should know whether the provider on the selected execution host can run their thread with this Ramu release, and have a useful recovery action before an avoidable startup failure. Deliver compatibility status in the existing **Settings → Providers** cards and an actionable launch failure for a proven incompatible runtime. Start with Codex app-server, whose executable Ramu already probes, then cover the remaining runner boundaries with evidence. Keep providers without a verified policy usable as **Unverified**; do not invent minimum versions to fill a matrix.
 
+**Easier for the person:** An incompatible runtime is flagged with its fix before the thread fails, and the draft survives the repair.
+
 Representative task: select an old, known incompatible Codex executable on a paired host, see the affected feature and recommended version, update or correct its path through existing controls, refresh, and send the preserved draft successfully. Repeat offline with an unlisted version: report uncertainty without treating it as a known failure or contacting another host.
 
 Follow [Architecture](ARCHITECTURE.md), [UI](UI.md) and the [root product guidance](../AGENTS.md#product-design-and-architecture). This is planned behavior; current setup and runtime checks remain documented in [Providers](PROVIDERS.md).
@@ -48,7 +50,7 @@ All observations, policy decisions and mutations belong to the execution host. R
 
 ## Delivery and acceptance
 
-1. Audit actual runtime identities, existing probes and launch paths; reproduce at least one Codex mismatch and working version without paid calls where possible. Add the bundled policy, deterministic evaluator, additive status contract and Codex rules with evidence. Leave other integrations Unverified until audited.
+1. Already in place: the bundled policy (`apps/server/src/providers/compatibilityPolicy.ts`), the deterministic evaluator and validator (`packages/shared/src/providers/compatibility.ts`), the additive `ProviderStatus.compatibility` field and a status line in the Codex provider card. Codex has no rules yet, so it reports Unverified. Remaining: reproduce at least one Codex mismatch and a working version without paid calls and add those rules with evidence; leave other integrations Unverified until audited.
 2. Deliver the representative task through existing provider cards, recovery controls and the shared launch guard. Include target compatibility in update recommendations and auto-update decisions. Preserve old-host rendering and offline cached status.
 3. Extend policies to Claude SDK/executable, Cursor SDK, both OpenCode runners and Antigravity only after targeted protocol/SDK checks. Apply the same decision to all background/helper/fallback entry points and verify remote/mobile status and recovery.
 4. Document shipped behavior in Providers, remove delivered work from this plan and the roadmap, and delete the plan when no work remains.

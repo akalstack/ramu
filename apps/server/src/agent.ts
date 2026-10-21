@@ -657,6 +657,10 @@ export class AgentService {
     return this.parts.router.holdProvider(...args)
   }
 
+  nextRoute(...args: Parameters<FallbackRouter['nextRoute']>) {
+    return this.parts.router.nextRoute(...args)
+  }
+
   providerHold(...args: Parameters<FallbackRouter['providerHold']>) {
     return this.parts.router.providerHold(...args)
   }

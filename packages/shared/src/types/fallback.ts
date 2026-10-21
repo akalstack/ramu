@@ -82,3 +82,20 @@ export const DEFAULT_SUBAGENT_PREFERENCES: SubagentPreferences = {
   maxConcurrent: 3,
   shareContext: false,
 }
+
+/**
+ * Where a thread's next message would run, derived by the host from the same routing the send uses.
+ * `unknown` means routing cannot be determined (no preferences or readings yet); clients must not guess.
+ */
+export type NextMessageRoute =
+  | { state: 'unknown' }
+  | { state: 'stays' }
+  | {
+      state: 'switch'
+      provider: AgentProvider
+      model: string
+      accountId?: string
+      reason: string
+      /** The person chose to keep the current provider, so the switch will not happen until released. */
+      held: 'message' | 'chat' | null
+    }

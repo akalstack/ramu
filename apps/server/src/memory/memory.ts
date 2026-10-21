@@ -651,6 +651,31 @@ export class MemoryService {
     return { action: 'added', memory: this.get(newId), related }
   }
 
+  /**
+   * Records that `replacement` takes the place of `older`: the older note is archived with a pointer to its
+   * replacement and the replacement remembers what it replaced. A note the user wrote or marked essential is never
+   * retired by an agent; both stay visible so the conflict is the user's to resolve.
+   */
+  supersede(olderId: string, replacementId: string, actor: Actor): 'superseded' | 'protected' | 'unchanged' {
+    if (olderId === replacementId) return 'unchanged'
+    const older = this.get(olderId)
+    const replacement = this.get(replacementId)
+    if (older.projectId !== replacement.projectId && older.projectId !== null) throw new Error('Scopes differ')
+    if (actor.actor !== 'user' && (confirmed(older) || older.importance >= ESSENTIAL)) return 'protected'
+    this.db
+      .prepare('UPDATE memories SET source = ? WHERE id = ?')
+      .run(JSON.stringify({ ...replacement.source, supersedes: olderId }), replacementId)
+    this.archive(olderId, actor, `superseded by ${replacementId}`)
+    return 'superseded'
+  }
+  /** Earlier notes this one replaced, still readable in the archive. */
+  replaced(id: string): Memory[] {
+    return (
+      this.db
+        .prepare("SELECT * FROM memories WHERE status = 'archived' AND archived_reason = ?")
+        .all(`superseded by ${id}`) as Row[]
+    ).map(fromRow)
+  }
   archive(id: string, actor: Actor, reason: string, userRequest?: string): Memory {
     const m = this.get(id)
     if (actor.actor !== 'user' && !userRequest && (confirmed(m) || m.importance >= ESSENTIAL))
@@ -1110,6 +1135,7 @@ export function registerMemoryTools(
     tags: m.tags,
     importance: m.importance,
     updated: new Date(m.updatedAt).toISOString().slice(0, 10),
+    ...(m.source.supersedes ? { supersedes: m.source.supersedes } : {}),
   })
   const result = (operation: () => unknown) => {
     try {
@@ -1161,7 +1187,7 @@ export function registerMemoryTools(
     'memory_search',
     {
       description:
-        'Search the long-term memory shared by every provider and thread, for this project plus global memories. Results are ranked by relevance, importance and recent use. Use it before substantial work and when the user refers to earlier decisions or preferences.',
+        'Search the long-term memory shared by every provider and thread, for this project plus global memories. Results are ranked by relevance, importance and recent use. A replaced decision is archived and absent here; memory_read on its replacement shows what it replaced. Use it before substantial work and when the user refers to earlier decisions or preferences.',
       inputSchema: {
         query: toolQuery.describe(
           'Keywords for the topic, at most 4,000 characters. Empty lists the strongest memories.',
@@ -1200,14 +1226,22 @@ export function registerMemoryTools(
     ({ id }) =>
       result(() => {
         const m = owned(id)
-        return { ...brief(m), source: m.source, confirmed: confirmed(m) }
+        const replaced = memory.replaced(m.id)
+        return {
+          ...brief(m),
+          source: m.source,
+          confirmed: confirmed(m),
+          ...(replaced.length
+            ? { replaces: replaced.map((old) => ({ id: old.id, title: old.title, content: old.content })) }
+            : {}),
+        }
       }),
   )
   server.registerTool(
     'memory_save',
     {
       description:
-        'Save a durable, non-obvious fact for future conversations with any provider. A near-duplicate in the same scope is updated instead of added. The response lists related memories; merge overlapping ones with memory_update and memory_forget. Never save secrets.',
+        'Save a durable, non-obvious fact for future conversations with any provider. A near-duplicate in the same scope is updated instead of added. The response lists related memories; merge overlapping ones with memory_update and memory_forget. When this decision replaces an earlier one, pass its ID as supersedes so the old note is retired with a link instead of contradicting the new one; a note the user wrote is kept and both stay visible. Never save secrets. Memories record what was true when saved: treat them as history, and re-check anything that changes (versions, file locations, current state) before relying on it.',
       inputSchema: {
         kind: z
           .enum(MEMORY_KINDS)
@@ -1226,9 +1260,10 @@ export function registerMemoryTools(
           .max(3650)
           .optional()
           .describe('Integer 1 to 3650. For facts with a known end, like a code freeze or a temporary workaround.'),
+        supersedes: field.id.optional().describe('ID of the earlier memory this one replaces.'),
       },
     },
-    ({ kind, title, content, scope, tags, importance, expiresInDays }) =>
+    ({ kind, title, content, scope, tags, importance, expiresInDays, supersedes }) =>
       result(() => {
         const saved = memory.save(
           {
@@ -1242,7 +1277,15 @@ export function registerMemoryTools(
           },
           actor,
         )
-        return { action: saved.action, memory: brief(saved.memory), related: saved.related.map(brief) }
+        const replacement = supersedes
+          ? (owned(supersedes), memory.supersede(supersedes, saved.memory.id, actor))
+          : null
+        return {
+          action: saved.action,
+          memory: brief(memory.get(saved.memory.id)),
+          related: saved.related.map(brief),
+          ...(replacement ? { supersedes: replacement } : {}),
+        }
       }),
   )
   server.registerTool(

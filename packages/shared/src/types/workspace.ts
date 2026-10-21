@@ -9,6 +9,10 @@ export interface Project {
   /** Workspace folder the project was added from; agents run here. Null for legacy projects. */
   root: string | null
   createdAt: number
+  /** Other names people use for the project; Auto matches them as whole words. */
+  aliases?: string[]
+  /** One short line about what the project is, shared with Auto's routing model call. */
+  description?: string
 }
 
 /** A saved command for a project, run from the window bar in a new terminal at the chat's workspace. */
@@ -183,6 +187,8 @@ export type SaveResult = { ok: true; hash: string } | { ok: false; reason: 'chan
 
 /** Internal scope ID; omitted from the user project list. */
 export const NO_PROJECT = 'no-project'
+/** Home's Auto choice: no project yet; the first prompt picks one. Never stored on a thread. */
+export const AUTO_PROJECT = 'auto-project'
 export interface SkillInfo {
   name: string
   description: string

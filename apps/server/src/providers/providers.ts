@@ -28,6 +28,8 @@ type Release = { version: string; checkedAt: string; downloadUrl?: string }
 type Cache = Partial<Record<AgentProvider, Release>>
 export { parseProviderVersion }
 import { newerVersion } from '@ramu/shared/version'
+import { evaluateCompatibility } from '@ramu/shared/providers/compatibility'
+import { COMPATIBILITY_POLICY, COMPATIBILITY_RUNTIME } from './compatibilityPolicy'
 import { installAntigravity } from './antigravityInstall'
 export { newerVersion }
 export function providerSetup(
@@ -371,6 +373,16 @@ export class ProviderService {
           version,
           enabled: providerEnabled(config, provider),
           ...(signIn ? { signIn } : {}),
+          ...(installed && COMPATIBILITY_RUNTIME[provider]
+            ? {
+                compatibility: evaluateCompatibility(
+                  COMPATIBILITY_POLICY,
+                  provider,
+                  COMPATIBILITY_RUNTIME[provider],
+                  version,
+                ),
+              }
+            : {}),
           accountsSupported: supportsProviderAccounts(provider),
           updating: this.updating.has(provider),
           ...(this.updateErrors.has(provider) ? { updateError: this.updateErrors.get(provider) } : {}),

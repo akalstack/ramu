@@ -29,7 +29,6 @@ import {
   PanelLeftOpen,
   PanelRight,
   SquareTerminal,
-  RefreshCcw,
   Search,
 } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -60,7 +59,7 @@ import type { SettingsSection } from './settings/SettingsPage'
 import { SchedulesPage } from './Automation'
 import { InboxPage } from './inbox/InboxPage'
 import { useRecaps } from './inbox/recaps'
-import { DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
+import { AUTO_PROJECT, DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
 import { SettingsPanel } from './settings/SettingsPanel'
 import { UsageFooter, UsageRings } from './settings/Usage'
 import { ProjectSwitcher } from './workspace/ProjectSwitcher'
@@ -312,7 +311,9 @@ function Shell() {
   const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
   // Chats with nothing open is the home page: the start box, background chats and recaps. New chat without a project lands here too.
   const landing = ui.sidebar === 'projects' && !ui.activeTaskId
-  const startProject = globalPage || landing ? null : (ws.composing ?? (!ui.activeTaskId ? NO_PROJECT : null))
+  // Auto exists only on the home page; a project pane never opens for it.
+  const composingProject = ws.composing === AUTO_PROJECT ? NO_PROJECT : ws.composing
+  const startProject = globalPage || landing ? null : (composingProject ?? (!ui.activeTaskId ? NO_PROJECT : null))
   const panes = new Map<string, string>()
   for (const id of ui.openTaskIds) {
     const workspace = ws.workspaceOf(id)

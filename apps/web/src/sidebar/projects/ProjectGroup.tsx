@@ -10,6 +10,7 @@ import {
   GitBranch,
   Link2,
   Pencil,
+  Route,
   Plus,
   SquarePen,
   X,
@@ -30,6 +31,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { InlineEdit } from './InlineEdit'
 import { ProjectHoverCard } from './ProjectHoverCard'
+import { ProjectRoutingDialog } from './ProjectRoutingDialog'
 import { TaskRow } from './TaskRow'
 import { projectThreadPreview } from './threadLists'
 import { useSlideMount } from './useSlideMount'
@@ -51,6 +53,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   // The chat list stays mounted while it slides closed, and slides open once it is mounted.
   const { ref: list, visible } = useSlideMount(open)
   const [renaming, setRenaming] = useState(false)
+  const [routing, setRouting] = useState(false)
   const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.id,
     disabled: renaming,
@@ -101,6 +104,15 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
         </>
       ),
       onSelect: () => setRenaming(true),
+    },
+    {
+      key: 'routing',
+      label: (
+        <>
+          <Route size={14} /> {t(' Names for Auto…')}
+        </>
+      ),
+      onSelect: () => setRouting(true),
     },
     { key: 'sep1', separator: true },
     {
@@ -275,6 +287,16 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
           chats={all.filter((t) => t.status !== 'archived').length}
         />
       </HoverCard>
+      {routing && (
+        <ProjectRoutingDialog
+          project={project}
+          onSave={async (aliases, description) => {
+            await host.invoke('projects.setRouting', project.id, aliases, description)
+            await ws.refresh()
+          }}
+          onClose={() => setRouting(false)}
+        />
+      )}
       {error && <div className={ROW_ERROR_CLASS}>{error}</div>}
       {visible && (
         <div

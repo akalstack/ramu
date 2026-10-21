@@ -6,6 +6,8 @@ Mobile now has a Home/project Browse files action, a visible thread Explorer act
 
 A person opens files from Home or a thread, recognizes the host and checkout, reads the intended file and adds it to an agent message without sending it. Prioritize correct scope, existing-workspace selection and return to the intact draft. File management and additional preview formats are later increments; basic browsing must work without them. Reuse the current tree/viewer and verify the full browse-to-draft flow with duplicate filenames and an unavailable host. Follow the [root product and planning guidance](../AGENTS.md#product-design-and-architecture) for this and later increments.
 
+**Easier for the person:** Attaching a file to a message is a few clicks from where the person is reading, with no path copying.
+
 ## Ramu design and architecture
 
 Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend the existing Explorer rail, scope picker, file viewer, editor and composer insertion flow. Use shared desktop app controls outside `components/ui/` and existing native mobile rows/sheets; keep interaction states and tokens in reusable components. All filesystem/Git operations run on the selected workspace server through the existing named API and validated handlers, using current workspace bindings and keyed locks for mutations. Native reveal/save/share stays on the viewing device and must distinguish a remote path from a downloaded file. Host-qualified queries/events and bounded navigation state must not leak across hosts or introduce a second file browser/store.

@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import type { UsageReading } from '../src/types'
 import {
+  groupUsageByProvider,
   relevantUsage,
   summaryUsage,
   usagePercent,
@@ -103,4 +104,18 @@ it('explains reported provider pools consistently and keeps unknown scopes unexp
   expect(usageScopeHint(reading({ provider: 'cursor', window: 'quota' }))).toBeUndefined()
   expect(usageScopeHint(reading({ provider: 'cursor', scope: 'Future pool' }))).toBeUndefined()
   expect(usageScopeHint(reading({ provider: 'codex', scope: 'GPT' }))).toBeUndefined()
+})
+
+it('groups readings by provider and counts limited or high windows', () => {
+  const groups = groupUsageByProvider([
+    reading({ window: 'five_hour', usedPercent: 10 }),
+    reading({ provider: 'codex', usedPercent: 90 }),
+    reading({ window: 'weekly', status: 'limited', usedPercent: 100 }),
+    reading({ provider: 'codex', source: 'notice', usedPercent: 100 }),
+  ])
+  expect(groups.map((g) => [g.provider, g.readings.length, g.attention])).toEqual([
+    ['claude-code', 2, 1],
+    ['codex', 2, 1],
+  ])
+  expect(groupUsageByProvider([])).toEqual([])
 })
