@@ -25,6 +25,7 @@ export interface SessionRecorderHost
     Pick<AgentTasks, 'updateTask'> {
   preferences(): AppPreferences | undefined
   reviewHooks(): AgentService['reviewHooks']
+  idleStateChanged(id: string, state: AgentSessionState): void
 }
 
 /** Persists events and state transitions: appends or updates log entries, tracks running tools, and reacts to a session changing state. */
@@ -273,6 +274,7 @@ export class SessionRecorder {
     } else if (child && (state === 'running' || state === 'starting')) {
       this.host.updateTask(child.parentId, id, { waitingFor: null })
     } else if (child) this.host.settleChild(id)
+    this.host.idleStateChanged(id, state)
     if (state === 'running')
       queueMicrotask(() => {
         void this.host.dispatchSteering(id)

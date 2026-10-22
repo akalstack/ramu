@@ -87,6 +87,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   /** Resume interrupted chats when the background service starts again. */
   resumeChatsOnRestart: boolean
   asyncQuestions: boolean
+  /** Beta: shrink a long Claude thread's context just before its prompt cache expires, so the next message re-reads less. */
+  idleCompaction: boolean
   /** Seconds a Claude command may run in the foreground before Ramu moves it to the background; 0 leaves it to the agent. */
   autoBackgroundSeconds: number
   providerBinaries: ProviderConfiguration
@@ -148,6 +150,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   notifyAgentDone: true,
   resumeChatsOnRestart: true,
   asyncQuestions: true,
+  idleCompaction: false,
   autoBackgroundSeconds: 60,
   providerBinaries: {},
   providerUpdateChecks: true,

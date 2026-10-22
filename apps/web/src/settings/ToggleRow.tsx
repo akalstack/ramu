@@ -15,6 +15,7 @@ export type ToggleKey =
   | 'notifyAgentDone'
   | 'resumeChatsOnRestart'
   | 'asyncQuestions'
+  | 'idleCompaction'
   | 'showUsageLimits'
   | 'keepAwake'
   | 'fontSmoothing'

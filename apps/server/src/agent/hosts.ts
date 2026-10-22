@@ -16,6 +16,7 @@ import type { ClaudeStreamPump, ClaudeStreamPumpHost } from './claudeStreamPump'
 import type { SessionStarter, SessionStarterHost } from './sessionStarter'
 import type { RestartRecovery, RestartRecoveryHost } from './restartRecovery'
 import type { ContextUsageTracker, ContextUsageTrackerHost } from './contextUsage'
+import type { IdleCompactor, IdleCompactorHost } from './idleCompactor'
 
 /** Every collaborator's host in one type: the service builds one object that satisfies all of them. */
 export type AgentHost = SessionStoreHost &
@@ -35,7 +36,8 @@ export type AgentHost = SessionStoreHost &
   ClaudeStreamPumpHost &
   SessionStarterHost &
   RestartRecoveryHost &
-  ContextUsageTrackerHost
+  ContextUsageTrackerHost &
+  IdleCompactorHost
 
 /** The collaborators, by the name the service and their hosts know them by. */
 export interface Collaborators {
@@ -57,4 +59,5 @@ export interface Collaborators {
   starter: SessionStarter
   recovery: RestartRecovery
   contexts: ContextUsageTracker
+  idle: IdleCompactor
 }

@@ -275,6 +275,13 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           words: 'async asynchronous optional blocking related grouped answers pending input',
         },
         {
+          kind: 'toggle',
+          path: 'idleCompaction',
+          title: 'Trim long Claude threads before they go cold (beta)',
+          help: 'When a long Claude thread sits idle and its prompt cache is about to lapse, summarize it so the next message is cheaper to resume. Costs one summary turn.',
+          words: 'compact compaction idle prompt cache expire summarize context tokens cost',
+        },
+        {
           kind: 'choice',
           path: 'autoBackgroundSeconds',
           title: 'Move slow commands to background',

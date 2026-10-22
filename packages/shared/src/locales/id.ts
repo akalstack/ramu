@@ -1358,6 +1358,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Agent notifications": "Notifikasi agen",
   "Continue threads after restart": "Lanjutkan thread setelah mulai ulang",
   "Keep working while asking questions": "Tetap bekerja sambil bertanya",
+  "Trim long Claude threads before they go cold (beta)": "Ringkas thread Claude yang panjang sebelum dingin (beta)",
+  "When a long Claude thread sits idle and its prompt cache is about to lapse, summarize it so the next message is cheaper to resume. Costs one summary turn.": "Saat thread Claude yang panjang diam dan cache prompt-nya hampir habis, ringkas agar pesan berikutnya lebih murah dilanjutkan. Memakai satu giliran ringkasan.",
   "Keep working while commands run": "Tetap bekerja selagi perintah berjalan",
   "Run in background": "Jalankan di latar belakang",
   "Move long-running Claude commands to the background after this delay. Off leaves this to Run in background.": "Pindahkan perintah Claude yang berjalan lama ke background setelah jeda ini. Jika mati, gunakan Run in background.",
