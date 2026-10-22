@@ -1452,6 +1452,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "You already paired {0}, which is saved at {1}. This is a different address.": "Anda sudah memasangkan {0}, yang tersimpan di {1}. Ini alamat yang berbeda.",
   "You already paired {0}.": "Anda sudah memasangkan {0}.",
   "Use this address for {0}": "Pakai alamat ini untuk {0}",
+  "That address is not encrypted, and {0} was paired over an encrypted connection. Pair it again to use it.": "Alamat itu tidak terenkripsi, sedangkan {0} dipasangkan lewat koneksi terenkripsi. Pasangkan lagi untuk memakainya.",
   "Keep working while asking questions": "Tetap bekerja sambil bertanya",
   "Trim long Claude threads before they go cold": "Ringkas thread Claude yang panjang sebelum dingin",
   "When a long Claude thread sits idle and its prompt cache is about to lapse, summarize it so the next message is cheaper to resume. Costs one summary turn.": "Saat thread Claude yang panjang diam dan cache prompt-nya hampir habis, ringkas agar pesan berikutnya lebih murah dilanjutkan. Memakai satu giliran ringkasan.",

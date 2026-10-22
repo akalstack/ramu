@@ -193,7 +193,7 @@ type ComputerFrameMeta = import('./computerBridge').ComputerFrameMeta
 type ComputerAction = import('./computerBridge').ComputerAction
 
 /** Why a changed address was or was not adopted: only `moved` changes anything. */
-export type ReviewAddressResult = 'moved' | 'unchanged' | 'mismatch' | 'unsupported' | 'unreachable'
+export type ReviewAddressResult = 'moved' | 'unchanged' | 'mismatch' | 'unsupported' | 'unreachable' | 'insecure'
 
 export interface RamuMethods {
   'computer.status'(): {

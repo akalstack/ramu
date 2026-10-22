@@ -16,6 +16,9 @@ export interface Computer {
   error?: string
   /** This phone's role on the host, as the host last reported it. Absent means full access. Advisory: the host enforces it. */
   access?: 'owner' | 'viewer'
+  /** What pairing bound: this phone's id on the host and the host's durable id. Absent for older pairings. */
+  deviceId?: string
+  hostId?: string
 }
 
 export type ToolKind = 'read' | 'edit' | 'search' | 'execute' | 'think' | 'fetch' | 'other'

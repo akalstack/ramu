@@ -409,6 +409,11 @@ it('keeps the working address when the new one is another host, or the pairing p
   expect(await registry.reviewAddress(old.id, '10.0.0.8:7788')).toBe('unsupported')
   expect(servers.get(old.id)?.url).toBe('http://10.0.0.3:7788')
   expect(await registry.reviewAddress(saved.id, '10.0.0.2:7788')).toBe('unchanged')
+  const secure = servers.add('https://studio.example', 'Secure', 'tok', Date.now(), undefined, {
+    deviceId: 'dev2',
+    hostId: HOST,
+  })
+  expect(await registry.reviewAddress(secure.id, 'http://10.0.0.5:7788')).toBe('insecure')
   vi.unstubAllGlobals()
 })
 

@@ -16,7 +16,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { AppState } from 'react-native'
 import { fetch as expoFetch } from 'expo/fetch'
 import * as Device from 'expo-device'
-import type { PushEvents, RamuMethods } from '@ramu/shared/api'
+import type { PushEvents, RamuMethods, ReviewAddressResult } from '@ramu/shared/api'
 import type { BackgroundActivity } from '@ramu/shared/chat/activity'
 import { isUserPaused } from '@ramu/shared/chat/goalHold'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
@@ -33,7 +33,8 @@ import type {
 } from '@ramu/shared/types'
 import { deleteToken, readLocal, readRenewedAt, readToken, saveRenewedAt, saveToken, writeLocal } from '../storage'
 import { renewalDue, renewCredential } from './tokenRenewal'
-import { HostClient, HostError, normalizeAddress } from './transport'
+import { HostClient, HostError, normalizeAddress, operationKey } from './transport'
+import { verifyHost } from '@ramu/shared/hostProof'
 import { transcript, visibleText } from './transcript'
 import { isOutdated, type Language } from './settingsModel'
 import { PUSH_MUTED_KEY, registerCategories, type PushCategory, withCategory } from './pushCategories'
@@ -82,6 +83,8 @@ interface Store extends State {
   select(id: string): void
   setLanguage(language: Language): void
   pair(name: string, address: string, code: string, allowHttp: boolean): Promise<string>
+  /** Moves a saved host to a new address only after that address proves it is the host this phone paired with. */
+  reviewAddress(id: string, address: string): Promise<ReviewAddressResult>
   forget(id: string): Promise<void>
   retry(id: string): void
   invoke<M extends keyof RamuMethods>(
@@ -992,6 +995,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           os: 'linux',
           status: 'connecting',
           lastSeen: 0,
+          deviceId: result.deviceId,
+          ...(typeof result.hostId === 'string' ? { hostId: result.hostId } : {}),
         }
         change((s) => ({ ...s, selected: id, computers: [...s.computers.filter((c) => c.id !== id), computer] }))
         void connect(computer).catch(report)
@@ -999,6 +1004,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } finally {
         clearTimeout(timer)
       }
+    },
+    reviewAddress: async (id, address) => {
+      const computer = ref.current.computers.find((c) => c.id === id)
+      if (!computer) throw new Error('That host is no longer saved')
+      const url = normalizeAddress(address, true)
+      if (url === computer.address) return 'unchanged'
+      if (!computer.hostId || !computer.deviceId) return 'unsupported'
+      // A credential issued over HTTPS never moves to plain HTTP on its own.
+      if (computer.address.startsWith('https:') && url.startsWith('http:')) return 'insecure'
+      const token = await readToken(id)
+      if (!token) return 'unsupported'
+      const result = await verifyHost({
+        fetch: (target, init) => expoFetch(target, init) as ReturnType<Parameters<typeof verifyHost>[0]['fetch']>,
+        baseUrl: url,
+        deviceId: computer.deviceId,
+        token,
+        expectedHostId: computer.hostId,
+        challenge: operationKey(),
+        signal: AbortSignal.timeout(8000),
+      })
+      if (result.state !== 'verified') return result.state
+      const moved: Computer = { ...computer, address: url, status: 'connecting', error: undefined }
+      change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === id ? moved : c)) }))
+      void connect(moved).catch(report)
+      return 'moved'
     },
     forget: async (id) => {
       await invoke(id, 'notifications.unregister').catch(() => {})

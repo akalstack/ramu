@@ -24,6 +24,7 @@ import { animateLayout } from '../components/Motion'
 import { fill, useT } from '../i18n'
 import { reviewSelection } from '@ramu/shared/discovery/tracker'
 import { useNearbyHosts } from '../runtime/nearby'
+import type { ReviewAddressResult } from '@ramu/shared/api'
 import {
   availableMethods,
   browsingActive,
@@ -39,7 +40,8 @@ export default function Pair() {
   const keyboardOffset = useSheetKeyboardOffset()
   const { c } = useTheme()
   const router = useRouter()
-  const { pair } = useStore()
+  const { pair, reviewAddress, computers } = useStore()
+  const [moved, setMoved] = useState<ReviewAddressResult | 'checking' | null>(null)
   const params = useLocalSearchParams<{ url?: string; code?: string; exp?: string; name?: string }>()
   const [address, setAddress] = useState('')
   const [name, setName] = useState('')
@@ -67,7 +69,10 @@ export default function Pair() {
     asked.current = true
     void requestPermission()
   }, [camera, permission, requestPermission])
-  const nearby = useNearbyHosts(browsingActive(method, foreground))
+  const nearby = useNearbyHosts(
+    browsingActive(method, foreground),
+    (hostId) => computers.find((computer) => computer.hostId === hostId)?.id ?? null,
+  )
   const choose = (next: PairMethod) => {
     tap()
     animateLayout()
@@ -103,6 +108,24 @@ export default function Pair() {
   const label: Record<PairMethod, string> = { nearby: t.pairNearby, qr: t.pairScanQr, manual: t.pairManual }
   const current = nearby.state.hosts.find((host) => host.key === selected?.key)
   const review = reviewSelection(nearby.state.hosts, selected?.key ?? null, selected?.url ?? null)
+  // A result matching a saved pairing but advertised at an address that host does not use.
+  const savedHost = current?.pairedHostId
+    ? computers.find((computer) => computer.id === current.pairedHostId)
+    : undefined
+  const newAddress =
+    !!savedHost &&
+    !!selected &&
+    savedHost.address.replace(/^https?:\/\//, '') !== selected.url.replace(/^https?:\/\//, '')
+  useEffect(() => setMoved(null), [selected?.key, selected?.url])
+  const useAddress = async () => {
+    if (!savedHost || !selected) return
+    setMoved('checking')
+    try {
+      setMoved(await reviewAddress(savedHost.id, selected.url))
+    } catch {
+      setMoved('unreachable')
+    }
+  }
   const field = {
     color: c.text,
     fontSize: font.body,
@@ -240,6 +263,30 @@ export default function Pair() {
                         </Pressable>
                       ))
                     : null}
+                  {savedHost ? (
+                    <T size={font.control} tone="muted" accessibilityRole="alert">
+                      {moved === 'moved'
+                        ? fill(t.nearbyMoved, savedHost.name)
+                        : moved === 'mismatch'
+                          ? fill(t.nearbyMismatch, savedHost.name)
+                          : moved === 'unsupported'
+                            ? fill(t.nearbyUnsupported, savedHost.name)
+                            : moved === 'insecure'
+                              ? fill(t.nearbyInsecure, savedHost.name)
+                              : moved === 'unreachable'
+                                ? t.nearbyUnreachable
+                                : newAddress
+                                  ? fill(t.nearbyNewAddress, savedHost.name)
+                                  : fill(t.nearbyAlready, savedHost.name)}
+                    </T>
+                  ) : null}
+                  {newAddress && moved !== 'moved' ? (
+                    <GlassButton
+                      title={moved === 'checking' ? t.nearbyChecking : fill(t.nearbyUseAddress, savedHost!.name)}
+                      disabled={moved === 'checking'}
+                      onPress={() => void useAddress()}
+                    />
+                  ) : null}
                   <GlassButton
                     primary
                     title={fill(t.nearbyContinue, current.label)}

@@ -2,7 +2,7 @@
 // Android). Expo Go and web have no such module, so discovery reports unavailable and QR or manual entry carry on.
 // Browsing runs on this phone, not on a paired host. It starts only while the caller says so and stops on cleanup, so
 // leaving the screen, changing method or backgrounding the app ends it. It lists hosts and never pairs.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Platform } from 'react-native'
 import { requireOptionalNativeModule } from 'expo'
 import { DISCOVERY_SERVICE, MAX_BROWSE_MS } from '@ramu/shared/discovery/contract'
@@ -28,7 +28,13 @@ export const nearbySupported = () => nativeModule() !== null
 
 const IDLE: NearbyHostsState = { status: 'idle', hosts: [], timedOut: false }
 
-export function useNearbyHosts(active: boolean): { state: NearbyHostsState; retry: () => void } {
+export function useNearbyHosts(
+  active: boolean,
+  /** The saved host a pairing bound to an advertised id; a recognition hint, never a credential decision. */
+  verifiedHost?: (hostId: string) => string | null,
+): { state: NearbyHostsState; retry: () => void } {
+  const lookup = useRef(verifiedHost)
+  lookup.current = verifiedHost
   const [state, setState] = useState<NearbyHostsState>(IDLE)
   const [attempt, setAttempt] = useState(0)
   const retry = useCallback(() => setAttempt((value) => value + 1), [])
@@ -43,7 +49,7 @@ export function useNearbyHosts(active: boolean): { state: NearbyHostsState; retr
       setState({ status: 'unavailable', hosts: [], timedOut: false })
       return
     }
-    const tracker = new DiscoveryTracker()
+    const tracker = new DiscoveryTracker({ verifiedHost: (hostId) => lookup.current?.(hostId) ?? null })
     const session = tracker.begin()
     const publish = (status: NearbyHostsState['status'], timedOut = false) =>
       setState({ status, hosts: tracker.accepts(session) ? tracker.hosts() : [], timedOut })

@@ -397,7 +397,7 @@ export class ComputerRegistry {
   async reviewAddress(
     id: string,
     address: string,
-  ): Promise<'moved' | 'unchanged' | 'mismatch' | 'unsupported' | 'unreachable'> {
+  ): Promise<'moved' | 'unchanged' | 'mismatch' | 'unsupported' | 'unreachable' | 'insecure'> {
     if (id === LOCAL) throw new Error('This host has no address to review')
     const saved = this.deps.servers.get(id)
     const endpoint = this.deps.servers.endpoint(id)
@@ -407,6 +407,8 @@ export class ComputerRegistry {
     const url = parseRemoteUrl(address)
     if (url === saved.url) return 'unchanged'
     if (!saved.hostId || !deviceId) return 'unsupported'
+    // A credential issued over HTTPS never moves to plain HTTP on its own: the person pairs that address explicitly.
+    if (saved.url.startsWith('https:') && url.startsWith('http:')) return 'insecure'
     const { verifyHost } = await import('@ramu/shared/hostProof')
     const { randomBytes } = await import('node:crypto')
     const result = await verifyHost({

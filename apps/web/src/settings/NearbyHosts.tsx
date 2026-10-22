@@ -185,14 +185,21 @@ export function NearbyHosts({
                     ? t('{0} was paired before Ramu could check hosts. Pair it again to use this address.', {
                         0: paired.name,
                       })
-                    : moved === 'unreachable'
-                      ? t('Could not reach that address to check it. Nothing changed.')
-                      : newAddress
-                        ? t('You already paired {0}, which is saved at {1}. This is a different address.', {
+                    : moved === 'insecure'
+                      ? t(
+                          'That address is not encrypted, and {0} was paired over an encrypted connection. Pair it again to use it.',
+                          {
                             0: paired.name,
-                            1: shown(paired.url ?? ''),
-                          })
-                        : t('You already paired {0}.', { 0: paired.name })}
+                          },
+                        )
+                      : moved === 'unreachable'
+                        ? t('Could not reach that address to check it. Nothing changed.')
+                        : newAddress
+                          ? t('You already paired {0}, which is saved at {1}. This is a different address.', {
+                              0: paired.name,
+                              1: shown(paired.url ?? ''),
+                            })
+                          : t('You already paired {0}.', { 0: paired.name })}
             </p>
           )}
           {routeOptions.length > 1 && (
