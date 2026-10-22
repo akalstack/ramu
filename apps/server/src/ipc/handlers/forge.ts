@@ -1,7 +1,13 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import type { IssueLink, PublishRepositoryInput, PullRequestFeedbackKind, PullRequestInput } from '@ramu/shared/types'
+import type {
+  ForgeSaveConnectionInput,
+  IssueLink,
+  PublishRepositoryInput,
+  PullRequestFeedbackKind,
+  PullRequestInput,
+} from '@ramu/shared/types'
 import * as forge from '../../workspace/forge'
 import * as git from '../../workspace/git'
 import { gitExclusive } from '../helpers'
@@ -25,6 +31,14 @@ const pullRequestInput = z.object({
   base: z.string().min(1).max(200),
   draft: z.boolean(),
   branch: z.string().min(1).max(200).optional(),
+})
+
+const origin = z.string().min(1).max(260)
+const account = z.string().min(1).max(100)
+const saveInput = z.object({
+  origin,
+  token: z.string().min(1).max(4096),
+  replaceId: id.optional(),
 })
 
 const issueKey = (taskId: string) => `issue:${taskId}`
@@ -52,7 +66,19 @@ function linkedIssue(ctx: HandlerContext, cwd: string, repoId: string): IssueLin
 
 /** Pull requests for a checkout's branch and issues for a repository, through the GitHub CLI. */
 export const registerForgeHandlers: RegisterHandlers = (ctx) => {
-  const { workspace, gitCwdOf } = ctx
+  const { workspace, gitCwdOf, forgeAccounts } = ctx
+  const administrator = () => ctx.host.canAdministerIntegrations?.() === true
+  const administrate = () => {
+    if (!administrator()) throw new Error('Change GitHub connections on the host running Ramu')
+  }
+  /** Provider and store errors reach the client only after secrets are stripped. */
+  const redacted = async <T,>(work: () => Promise<T>): Promise<T> => {
+    try {
+      return await work()
+    } catch (error) {
+      throw new Error(forgeAccounts.describe(error))
+    }
+  }
   const repoRoot = (repoId: string) => workspace.getRepository(repoId).root
 
   return {
@@ -84,7 +110,59 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         return forge.pullRequestDraft(cwd, linkedIssue(ctx, cwd, repoId))
       },
     },
-    'forge.connections': { args: z.tuple([]), run: () => forge.forgeConnections() },
+    'forge.connections': {
+      args: z.tuple([]),
+      run: () => forge.connectionSummary(administrator()),
+    },
+    // Credentials change only from the machine running the host: never from a paired client, an agent tool or a viewer.
+    'forge.saveConnection': {
+      args: z.tuple([saveInput]),
+      run: async (input: ForgeSaveConnectionInput) => {
+        administrate()
+        return redacted(() => forgeAccounts.save(input))
+      },
+    },
+    'forge.checkConnection': {
+      args: z.tuple([id]),
+      run: async (connectionId: string) => {
+        administrate()
+        return redacted(() => forgeAccounts.check(connectionId))
+      },
+    },
+    'forge.setConnectionEnabled': {
+      args: z.tuple([id, z.boolean()]),
+      run: (connectionId: string, enabled: boolean) => {
+        administrate()
+        forgeAccounts.setEnabled(connectionId, enabled)
+      },
+    },
+    'forge.removeConnection': {
+      args: z.tuple([id]),
+      run: async (connectionId: string) => {
+        administrate()
+        await redacted(() => forgeAccounts.remove(connectionId))
+      },
+    },
+    'forge.selectAccount': {
+      args: z.tuple([origin, account]),
+      run: (originName: string, accountId: string) => {
+        administrate()
+        forgeAccounts.select(originName, accountId)
+      },
+    },
+    'forge.setRepositoryAccount': {
+      args: z.tuple([id, id, account.nullable()]),
+      run: async (taskId: string, repoId: string, accountId: string | null) => {
+        administrate()
+        const remote = await forge.forgeRemoteOf(gitCwdOf(taskId, repoId))
+        if (!remote) throw new Error('This repository has no GitHub remote.')
+        forgeAccounts.setRepositoryAccount(remote.origin, remote.owner, remote.repo, accountId)
+      },
+    },
+    'forge.checkAccess': {
+      args: z.tuple([id, id]),
+      run: (taskId: string, repoId: string) => forge.checkAccess(gitCwdOf(taskId, repoId)),
+    },
     'forge.publishRepository': {
       args: z.tuple([id, id, publishInput]),
       run: (taskId: string, repoId: string, input: PublishRepositoryInput) =>

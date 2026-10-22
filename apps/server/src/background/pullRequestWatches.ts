@@ -9,13 +9,14 @@ import type { Db } from '../db'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
 import { currentBranch } from '../workspace/git'
-import { pullRequestFeedback, pullRequestStatus } from '../workspace/forge'
+import { pullRequestFeedback, pullRequestStatus, resolvedConnectionId } from '../workspace/forge'
 import { fingerprint } from './inputGate'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
 const KEY = 'pull-request-watches'
 const INTERVAL = 60_000
+const RATE_LIMIT_PAUSE = 10 * 60_000
 interface Watch {
   id: string
   cwd: string
@@ -23,6 +24,8 @@ interface Watch {
   branch: string
   url: string
   sessionId: string
+  /** The saved connection this watch reads with, so disconnecting it ends the watch. Absent for the detected CLI. */
+  connectionId?: string | null
   delivered: Partial<Record<PullRequestFeedbackKind, string>>
 }
 
@@ -126,7 +129,8 @@ export class PullRequestWatchService {
       throw new Error('This branch no longer has that open pull request. Refresh and try again.')
     const existing = this.list().find((watch) => watch.cwd === cwd && watch.url === url)
     if (existing?.sessionId === sessionId) return
-    const watch: Watch = { id: randomUUID(), cwd, repoId, branch, url, sessionId, delivered: {} }
+    const connectionId = await resolvedConnectionId(cwd)
+    const watch: Watch = { id: randomUUID(), cwd, repoId, branch, url, sessionId, connectionId, delivered: {} }
     this.workspace.setAppState(KEY, [...this.list().filter((w) => w.cwd !== cwd || w.url !== url), watch])
     this.changed()
     this.nextPoll = 0
@@ -157,7 +161,17 @@ export class PullRequestWatchService {
     if (!branch || !enabled() || this.stopping) return
     // Preserve any explicit watch choice already made for this PR.
     if (this.list().some((watch) => watch.cwd === cwd && watch.url === pr.url)) return
-    const watch: Watch = { id: randomUUID(), cwd, repoId, branch, url: pr.url, sessionId: session.id, delivered: {} }
+    const connectionId = await resolvedConnectionId(cwd)
+    const watch: Watch = {
+      id: randomUUID(),
+      cwd,
+      repoId,
+      branch,
+      url: pr.url,
+      sessionId: session.id,
+      connectionId,
+      delivered: {},
+    }
     if (!this.valid(watch)) return
     this.workspace.setAppState(KEY, [...this.list(), watch])
     this.nextPoll = 0
@@ -166,6 +180,11 @@ export class PullRequestWatchService {
 
   stopForSession(sessionId: string): void {
     this.remove((watch) => watch.sessionId === sessionId)
+  }
+
+  /** Disconnecting or disabling an account ends the watches that read with it. Reconnecting does not restart them. */
+  stopForConnection(connectionId: string): void {
+    this.remove((watch) => watch.connectionId === connectionId)
   }
 
   /** Both automatic and manual feedback use the watched thread's ordinary durable input queue. */
@@ -296,6 +315,10 @@ export class PullRequestWatchService {
       } catch (error) {
         // Authentication, connectivity and log failures are retried on the next poll, independently per watch.
         console.error('Pull request watch:', watch.url, error)
+        // A rate limit pauses every watch for a while instead of retrying each one every minute.
+        if (/rate limit|HTTP 429|secondary rate/i.test(error instanceof Error ? error.message : ''))
+          this.nextPoll = Date.now() + RATE_LIMIT_PAUSE
+        if (this.nextPoll > Date.now() + INTERVAL) return
       }
     }
   }

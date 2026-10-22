@@ -146,8 +146,17 @@ describe('isSettingsActionAllowed', () => {
     ])
       expect(isSettingsActionAllowed(operation)).toBe(true)
   })
-  it('lets Settings check GitHub sign-in and computer use, and nothing else under forge or computer', () => {
-    for (const operation of ['forge.connections', 'computer.status', 'computer.setEnabled'])
+  it('lets Settings manage GitHub connections and computer use, and nothing else under forge or computer', () => {
+    for (const operation of [
+      'forge.connections',
+      'forge.saveConnection',
+      'forge.checkConnection',
+      'forge.setConnectionEnabled',
+      'forge.removeConnection',
+      'forge.selectAccount',
+      'computer.status',
+      'computer.setEnabled',
+    ])
       expect(isSettingsActionAllowed(operation)).toBe(true)
     for (const operation of ['forge.createPullRequest', 'computer.grant', 'computer.input'])
       expect(isSettingsActionAllowed(operation)).toBe(false)
