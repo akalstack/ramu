@@ -118,7 +118,7 @@ export class ComputerSession {
   }
 
   /** Queued per session; the generation is fixed when the call is made, so a takeover cancels everything waiting. */
-  act(runId: string, observationId: string, action: ComputerAction): Promise<void> {
+  async act(runId: string, observationId: string, action: ComputerAction): Promise<void> {
     this.alive()
     if (!this.grant.input) refuse('Input is not granted for this computer.')
     const generation = this.lease.generation
