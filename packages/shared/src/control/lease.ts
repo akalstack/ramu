@@ -67,6 +67,15 @@ export function takeControl(state: LeaseState, deviceId: string, options: { loca
   return { ok: true, state: advance(state, { kind: 'human', deviceId }) }
 }
 
+/**
+ * The controlling human device hands the target to another device after that device asked for it. Only the current
+ * controller can do this; the new owner starts at a new generation, with nothing carried over.
+ */
+export function handOff(state: LeaseState, fromDeviceId: string, toDeviceId: string): LeaseResult {
+  if (state.controller.kind !== 'human' || state.controller.deviceId !== fromDeviceId) return refuse('not-controller')
+  return { ok: true, state: advance(state, { kind: 'human', deviceId: toDeviceId }) }
+}
+
 /** The human controller disconnected: input pauses. Control is never handed back to the agent automatically. */
 export function controllerDisconnected(state: LeaseState, deviceId: string): LeaseState {
   if (state.controller.kind !== 'human' || state.controller.deviceId !== deviceId) return state

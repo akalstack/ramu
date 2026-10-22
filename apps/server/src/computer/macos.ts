@@ -151,6 +151,32 @@ export function actionScript(action: ComputerAction, scale: number): string {
   }
 }
 
+/** Milliseconds since the last real or synthetic HID event, from `ioreg -c IOHIDSystem` (nanoseconds). Null when unreadable. */
+export function parseHidIdleMs(registry: string): number | null {
+  const match = /"HIDIdleTime"\s*=\s*(\d+)/.exec(registry)
+  return match ? Number(match[1]) / 1_000_000 : null
+}
+
+/** The person counts as using the computer when a HID event arrived within this long. */
+export const LOCAL_INPUT_WINDOW_MS = 2000
+/** Events this soon after Ramu's own injection finished are taken to be Ramu's, not the person's. */
+export const INJECTION_SLACK_MS = 400
+
+/** Releases anything an interrupted action left held: the mouse buttons at the pointer and the modifier keys. */
+export function releaseScript(): string {
+  const post = (event: string) => `$.CGEventPost($.kCGHIDEventTap, ${event});`
+  let body = "ObjC.import('ApplicationServices');var p=$.CGEventGetLocation($.CGEventCreate(null));"
+  for (const [type, button] of [
+    ['kCGEventLeftMouseUp', 0],
+    ['kCGEventRightMouseUp', 1],
+    ['kCGEventOtherMouseUp', 2],
+  ] as const)
+    body += `var m=$.CGEventCreateMouseEvent(null,$.${type},p,${button});${post('m')}`
+  for (const code of [56, 59, 58, 55])
+    body += `var k=$.CGEventCreateKeyboardEvent(null,${code},false);$.CGEventSetFlags(k,0);${post('k')}`
+  return body
+}
+
 /** Pixel size from `sips -g pixelWidth -g pixelHeight` output. */
 export function parseSipsSize(output: string): { width: number; height: number } {
   const width = Number(/pixelWidth:\s*(\d+)/.exec(output)?.[1])
@@ -260,11 +286,31 @@ export class MacosComputerBackend implements ComputerBackend {
     }
   }
 
+  private injecting = 0
+  private lastInjectionEnd = 0
+  private releaseAfter = false
+
+  /**
+   * Whether the person is using the real mouse or keyboard. The HID idle time also resets for events Ramu posts, so
+   * anything within a short slack of Ramu's own last injection is ignored, and nothing is judged while one runs.
+   */
+  async localInputActive(): Promise<boolean> {
+    if (this.platform !== 'darwin' || this.injecting > 0) return false
+    try {
+      const idle = parseHidIdleMs(await this.exec('/usr/sbin/ioreg', ['-r', '-d', '1', '-c', 'IOHIDSystem']))
+      if (idle === null || idle >= LOCAL_INPUT_WINDOW_MS) return false
+      return Date.now() - idle > this.lastInjectionEnd + INJECTION_SLACK_MS
+    } catch {
+      return false
+    }
+  }
+
   async perform(target: ComputerTarget, action: ComputerAction): Promise<void> {
     if (this.platform !== 'darwin') throw new Error('Computer use currently supports macOS.')
     if (await this.locked()) throw new ComputerNotRun(LOCKED_MESSAGE)
     void target
     const scale = this.lastScale
+    this.injecting++
     try {
       await this.exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', actionScript(action, scale)])
     } catch (error) {
@@ -274,8 +320,21 @@ export class MacosComputerBackend implements ComputerBackend {
         detail: 'Allow Accessibility for Ramu in System Settings → Privacy & Security.',
       }
       throw error
+    } finally {
+      this.injecting--
+      this.lastInjectionEnd = Date.now()
+      if (this.releaseAfter && this.injecting === 0) this.releaseHeld()
     }
     this.permission = null
+  }
+
+  private releaseHeld() {
+    this.releaseAfter = false
+    void this.exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', releaseScript()])
+      .catch(() => {})
+      .finally(() => {
+        this.lastInjectionEnd = Date.now()
+      })
   }
 
   private lastScale = 1
@@ -286,6 +345,9 @@ export class MacosComputerBackend implements ComputerBackend {
   }
 
   releaseInput(): void {
-    // Actions are discrete press/release pairs, so nothing is held between calls.
+    // Actions are discrete press/release pairs, so nothing is held between calls. One cut short mid-drag or mid-key
+    // is released as soon as it settles.
+    if (this.platform !== 'darwin') return
+    if (this.injecting > 0) this.releaseAfter = true
   }
 }

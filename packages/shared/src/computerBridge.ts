@@ -66,6 +66,11 @@ export interface ComputerBackend {
   perform(target: ComputerTarget, action: ComputerAction): Promise<void>
   /** Release held keys and buttons after cancellation, an ownership change or connection loss. */
   releaseInput(target: ComputerTarget): void
+  /**
+   * Whether the person is using this computer's real mouse or keyboard right now, ignoring input Ramu injected. A
+   * backend without it cannot pause the agent by itself, so the person has to take control explicitly.
+   */
+  localInputActive?(target: ComputerTarget): Promise<boolean>
   /** How often a watched target is worth capturing, in milliseconds. Cheap streaming backends return less than the default. */
   frameInterval?(target: ComputerTarget): number
   /** Prepares slow one-time setup (for example building a native helper) before the first capture needs it. */
@@ -78,6 +83,7 @@ export type BrokerCommand =
   | { id: string; kind: 'perform'; target: ComputerTarget; action: ComputerAction }
   | { id: string; kind: 'release'; target: ComputerTarget }
   | { id: string; kind: 'apps' }
+  | { id: string; kind: 'localInput'; target: ComputerTarget }
 
 export type BrokerOutcome = { ok: true; value?: unknown } | { ok: false; error: string }
 

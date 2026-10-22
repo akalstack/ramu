@@ -35,6 +35,13 @@ export class ComputerRouter implements ComputerBackend {
     return this.apps.apps()
   }
 
+  /** Only the display backend moves the real pointer, so only it can conflict with the person's own input. */
+  localInputActive(target: ComputerTarget): Promise<boolean> {
+    return target.kind === 'display'
+      ? (this.display.localInputActive?.(target) ?? Promise.resolve(false))
+      : Promise.resolve(false)
+  }
+
   warm(): void {
     this.display.warm?.()
   }

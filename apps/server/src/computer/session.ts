@@ -14,6 +14,7 @@ import {
   admitHumanInput,
   controllerDisconnected,
   giveToAgent,
+  handOff,
   humanInputReady,
   initialLease,
   observed,
@@ -39,6 +40,11 @@ const REFUSALS: Record<LeaseRefusal, string> = {
   paused: 'Computer input is paused until the person explicitly resumes control.',
   'handoff-required': 'Another device controls this computer. Request an explicit handoff.',
 }
+
+/** How long a device's request for control stays open for the current controller to answer. */
+export const HANDOFF_REQUEST_MS = 120_000
+const LOCAL_INPUT_MESSAGE =
+  'Someone is using this computer’s mouse or keyboard, so computer use paused. Give control back when they are done.'
 
 export class ComputerRefusal extends Error {}
 const refuse = (message: string): never => {
@@ -72,6 +78,76 @@ export class ComputerSession {
 
   get target() {
     return this.grant.target
+  }
+
+  private interrupted: { generation: number } | null = null
+  private handoff: { deviceId: string; generation: number; at: number } | null = null
+
+  /** Control was taken by local mouse or keyboard use at the current generation. Cleared by the next change of owner. */
+  get interruption(): 'local-input' | null {
+    return this.interrupted && this.interrupted.generation === this.lease.generation ? 'local-input' : null
+  }
+
+  /** The device asking the current human controller for control, while that request is still valid. */
+  get handoffRequest(): string | null {
+    const request = this.handoff
+    if (!request || request.generation !== this.lease.generation) return null
+    if (this.now() - request.at > HANDOFF_REQUEST_MS) return null
+    if (this.lease.controller.kind !== 'human' || this.lease.controller.deviceId === request.deviceId) return null
+    return request.deviceId
+  }
+
+  /** Whether this session can notice the person using the real mouse and keyboard without being told. */
+  get detectsLocalInput(): boolean {
+    return this.grant.target.kind === 'app' || !!this.backend.localInputActive
+  }
+
+  /** The person's own mouse or keyboard use wins: the agent or remote controller is paused and local control begins. */
+  private async yieldToLocalInput(deviceId: string | null): Promise<void> {
+    if (this.grant.target.kind !== 'display' || deviceId === 'local' || !this.backend.localInputActive) return
+    let active = false
+    try {
+      active = await this.backend.localInputActive(this.grant.target)
+    } catch {
+      return
+    }
+    if (!active || this.closed) return
+    const result = takeControl(this.lease, 'local', { local: true })
+    if (!result.ok) return
+    this.lease = result.state
+    this.latest = null
+    this.backend.releaseInput(this.grant.target)
+    this.interrupted = { generation: this.lease.generation }
+    refuse(LOCAL_INPUT_MESSAGE)
+  }
+
+  /** Another device asks the human controller for control. It becomes the controller only if they approve. */
+  requestHandoff(deviceId: string) {
+    this.alive()
+    const owner = this.lease.controller
+    if (owner.kind !== 'human') refuse('Nobody else is controlling this computer. Take control directly.')
+    else if (owner.deviceId === deviceId) refuse('This device already controls the computer.')
+    this.handoff = { deviceId, generation: this.lease.generation, at: this.now() }
+  }
+
+  /** The controller approves the pending request: the requester controls from a new generation. */
+  approveHandoff(deviceId: string) {
+    this.alive()
+    const requester = this.handoffRequest
+    if (!requester) refuse('No device is asking for control.')
+    const result = handOff(this.lease, deviceId, requester!)
+    if (!result.ok) refuse(REFUSALS[result.refused])
+    else {
+      this.lease = result.state
+      this.latest = null
+      this.handoff = null
+      this.backend.releaseInput(this.grant.target)
+    }
+  }
+
+  declineHandoff(deviceId: string) {
+    const owner = this.lease.controller
+    if (owner.kind === 'human' && owner.deviceId === deviceId) this.handoff = null
   }
   get state(): Readonly<LeaseState> {
     return this.lease
@@ -207,6 +283,7 @@ export class ComputerSession {
       const latest = this.latest
       if (!latest || latest.id !== observationId) refuse('That observation is out of date. Observe the screen again.')
       validateAction(action, latest!.width, latest!.height)
+      await this.yieldToLocalInput(null)
       const admitted = admitAgentAction(this.lease, runId, generation)
       if (!admitted.ok) return refuse(REFUSALS[admitted.refused])
       this.lease = admitted.state
@@ -247,6 +324,7 @@ export class ComputerSession {
     else {
       this.lease = result.state
       this.latest = null
+      this.backend.releaseInput(this.grant.target)
     }
   }
 
@@ -259,6 +337,8 @@ export class ComputerSession {
     if (!humanInputReady(this.lease)) refuse('The agent is finishing its last action. Try again in a moment.')
     if (this.now() - frame.capturedAt > COMPUTER_FRAME_STALE_MS) refuse('The screen is stale. Wait for a fresh frame.')
     validateAction(action, Infinity, Infinity)
+    // The person at the computer outranks a remote controller.
+    await this.yieldToLocalInput(deviceId)
     try {
       await this.backend.perform(this.grant.target, action)
     } catch (error) {

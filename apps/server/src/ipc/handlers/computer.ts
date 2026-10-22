@@ -95,7 +95,16 @@ export const registerComputerHandlers: RegisterHandlers = ({
     const session = ready().session(threadId)
     if (!session) return null
     const { controller, generation, paused } = session.state
-    return { target: session.target, controller, generation, paused, runtime: session.runtime }
+    return {
+      target: session.target,
+      controller,
+      generation,
+      paused,
+      runtime: session.runtime,
+      interruption: session.interruption,
+      handoffRequest: session.handoffRequest,
+      detectsLocalInput: session.detectsLocalInput,
+    }
   }
   return {
     'computer.status': {
@@ -286,6 +295,8 @@ export const registerComputerHandlers: RegisterHandlers = ({
             return local.releaseInput(command.target)
           case 'apps':
             return local instanceof ComputerRouter ? local.listApps() : []
+          case 'localInput':
+            return (await local.localInputActive?.(command.target)) === true
         }
       },
     },
@@ -309,6 +320,32 @@ export const registerComputerHandlers: RegisterHandlers = ({
       args: z.tuple([id]),
       run: (threadId: string) => {
         viewer(threadId, true).takeControl(device(), { local: device() === 'local' })
+        return summary(threadId)
+      },
+    },
+    // A second device never takes control from the first: it asks, and the device in control answers.
+    'computer.requestHandoff': {
+      args: z.tuple([id]),
+      run: (threadId: string) => {
+        viewer(threadId, true).requestHandoff(device())
+        return summary(threadId)
+      },
+    },
+    'computer.approveHandoff': {
+      args: z.tuple([id]),
+      run: (threadId: string) => {
+        const session = viewer(threadId, true)
+        const requester = session.handoffRequest
+        if (requester && !ready().viewerAccess(threadId, requester).input)
+          throw new Error('That device is no longer allowed to control this computer.')
+        session.approveHandoff(device())
+        return summary(threadId)
+      },
+    },
+    'computer.declineHandoff': {
+      args: z.tuple([id]),
+      run: (threadId: string) => {
+        viewer(threadId, true).declineHandoff(device())
         return summary(threadId)
       },
     },

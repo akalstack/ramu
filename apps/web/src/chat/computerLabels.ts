@@ -1,8 +1,4 @@
 import type { ComputerSessionSummary } from '@ramu/shared/api'
+import { computerControllerLabel } from '@ramu/shared/computerControl'
 
-export function controllerLabel(session: ComputerSessionSummary): string {
-  if (session.paused) return 'Control paused'
-  if (session.controller.kind === 'human') return 'You are in control'
-  if (session.controller.kind === 'agent') return 'Agent control'
-  return 'Ready'
-}
+export const controllerLabel = (session: ComputerSessionSummary): string => computerControllerLabel(session)

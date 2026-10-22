@@ -15,7 +15,17 @@ module.exports = {
     appBundleId: 'app.ramu.desktop',
     appCategoryType: 'public.app-category.developer-tools',
     // CFBundleIconName selects the Liquid Glass icon in Assets.car (macOS 26+); older systems use icon.icns.
-    extendInfo: { CFBundleName: 'Ramu', CFBundleDisplayName: 'Ramu', CFBundleIconName: 'Ramu' },
+    // The usage descriptions are what macOS shows in its Screen Recording and Accessibility prompts for computer use.
+    extendInfo: {
+      CFBundleName: 'Ramu',
+      CFBundleDisplayName: 'Ramu',
+      CFBundleIconName: 'Ramu',
+      NSScreenCaptureUsageDescription:
+        'Ramu shows you the screen your agent is working on and lets you step in. Nothing is recorded or kept.',
+      NSAppleEventsUsageDescription: 'Ramu sends mouse and keyboard input to the computer you let an agent use.',
+      NSAccessibilityUsageDescription:
+        'Ramu uses Accessibility to operate the apps you let an agent use and to read their on-screen text.',
+    },
     icon: join(repoRoot, 'assets', 'icon'),
     // The detached Node daemon and Claude SDK executables must run outside ASAR.
     asar: false,
@@ -24,7 +34,18 @@ module.exports = {
       /^\/(electron\.vite\.config\.ts|vitest\.config\.ts|forge\.config\.cjs|components\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig.*|\.npmrc|\.gitignore|\.editorconfig|\.ramu.*)$/,
       /^\/node_modules\/\.cache(\/|$)/,
     ],
-    ...(process.env.RAMU_SIGN_IDENTITY ? { osxSign: { identity: process.env.RAMU_SIGN_IDENTITY } } : {}),
+    // Hardened runtime with the entitlements file, so the signed app has its own stable Screen Recording and Accessibility identity.
+    ...(process.env.RAMU_SIGN_IDENTITY
+      ? {
+          osxSign: {
+            identity: process.env.RAMU_SIGN_IDENTITY,
+            optionsForFile: () => ({
+              hardenedRuntime: true,
+              entitlements: join(repoRoot, 'apps', 'desktop', 'build', 'entitlements.mac.plist'),
+            }),
+          },
+        }
+      : {}),
     ...(process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER
       ? {
           osxNotarize: {
