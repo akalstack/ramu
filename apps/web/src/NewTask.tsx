@@ -40,6 +40,7 @@ import { hostStorageFor } from './hostStorage'
 import { draftKey, draftStore, loadDraft, useDraftPersistence } from './composer/drafts'
 import { notifyError } from './chat/Notifications'
 import { useWorkspaceDraft } from './composer/useWorkspaceDraft'
+import { loadRouteChoice, saveRouteChoice, type RouteCandidate } from './composer/routeChoice'
 import { useAgentDraft } from './composer/useAgentDraft'
 import { clearWorkspaceDraft } from './composer/workspaceDraft'
 import { useHost } from './workspace/HostProvider'
@@ -266,7 +267,7 @@ export function NewTask({
   const general = projectId === NO_PROJECT || auto
   // Auto drafts share the project-free model and workspace scope until a destination is resolved.
   const scopeProject = auto ? NO_PROJECT : projectId
-  const [choices, setChoices] = useState<{ projectId: string; reason: string }[] | null>(null)
+  const [choices, setChoicesState] = useState<RouteCandidate[] | null>(null)
   const [routeNote, setRouteNote] = useState<string | null>(null)
   const routeRevision = useRef(0)
   const repos = ws.repos[projectId] ?? []
@@ -356,12 +357,28 @@ export function NewTask({
     setIssue(null)
   }, [host.id, projectId, ws.composing, ws.composingWorkspace])
 
+  const setChoices = (next: RouteCandidate[] | null) => {
+    setChoicesState(next)
+    saveRouteChoice(draftStore(host.id), prompt, next)
+  }
+
   // A pending routing answer belongs to the exact prompt, destination and host it was asked for.
   useEffect(() => {
     routeRevision.current++
-    setChoices(null)
+    // A saved candidate list returns only for this exact prompt, and only while Auto is the destination.
+    if (auto && !ws.projects.length) return
+    const saved = auto
+      ? loadRouteChoice(
+          draftStore(host.id),
+          prompt,
+          ws.projects.map((p) => p.id),
+        )
+      : null
+    setChoicesState(saved)
+    if (!saved) saveRouteChoice(draftStore(host.id), prompt, null)
     setRouteNote(null)
-  }, [prompt, projectId, host.id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompt, projectId, host.id, ws.projects.length > 0])
 
   const title = titleFrom(prompt) || (attachments.length ? `Discuss ${attachments[0]!.name}` : '')
   const namingIntent: BranchNamingIntent = {

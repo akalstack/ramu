@@ -6,6 +6,10 @@ People may want larger text, a different appearance, quieter notifications or si
 
 **Easier for the person:** A preference is set once for the right scope, and the person sees where a value comes from without opening each device.
 
+## Already in place
+
+The shared resolver (`@ramu/shared/preferenceScopes`) is used by Settings → Appearance on mobile, which shows the effective source and explains that All devices and All mobile devices need a sync transport. Interface text size (Default, Large, Larger) is stored on this phone and scales the app's own text on top of the OS size; the other fields still wait for the transport below.
+
 ## Copy and interaction
 
 Use **Apply to** as the scope label, with these choices:

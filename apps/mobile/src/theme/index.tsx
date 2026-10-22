@@ -1,4 +1,4 @@
-import { readAppearance, saveAppearance } from '../storage'
+import { readAppearance, readTextSize, saveAppearance, saveTextSize, type TextSize } from '../storage'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Appearance, Platform, useColorScheme } from 'react-native'
 
@@ -87,12 +87,17 @@ export const font = {
 } as const
 
 export type Appearance = 'system' | 'light' | 'dark'
+export type { TextSize }
+/** Multiplies the app's own sizes on top of the OS text size, which RN already applies. */
+export const TEXT_SCALE: Record<TextSize, number> = { default: 1, large: 1.12, larger: 1.25 }
 
 interface ThemeValue {
   c: Palette
   scheme: 'light' | 'dark'
   appearance: Appearance
   setAppearance: (a: Appearance) => void
+  textSize: TextSize
+  setTextSize: (size: TextSize) => void
 }
 
 const ThemeContext = createContext<ThemeValue | null>(null)
@@ -104,14 +109,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     Appearance.setColorScheme(appearance === 'system' ? 'unspecified' : appearance)
   }, [appearance])
+  const [textSize, updateTextSize] = useState<TextSize>(readTextSize)
+  const setTextSize = (value: TextSize) => {
+    saveTextSize(value)
+    updateTextSize(value)
+  }
   const setAppearance = (value: Appearance) => {
     saveAppearance(value)
     updateAppearance(value)
   }
   const scheme = appearance === 'system' ? (system === 'light' ? 'light' : 'dark') : appearance
   const value = useMemo(
-    () => ({ c: scheme === 'light' ? light : dark, scheme, appearance, setAppearance }),
-    [scheme, appearance],
+    () => ({ c: scheme === 'light' ? light : dark, scheme, appearance, setAppearance, textSize, setTextSize }),
+    [scheme, appearance, textSize],
   )
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }
