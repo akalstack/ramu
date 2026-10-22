@@ -29,7 +29,7 @@ import {
   type LucideProps,
 } from 'lucide-react-native'
 import type { TaskStatus } from '@ramu/shared/types'
-import { font, radius, space, useTheme } from '../theme'
+import { font, radius, space, TEXT_SCALE, useTheme } from '../theme'
 import type { ComputerStatus } from '../runtime/types'
 import { Glass } from './Glass'
 import { MaterialSheet } from './MaterialSheet'
@@ -67,7 +67,7 @@ export function T({
   mono?: boolean
   copyable?: string | boolean
 }) {
-  const { c } = useTheme()
+  const { c, textSize } = useTheme()
   const value =
     typeof copyable === 'string' ? copyable : copyable && typeof rest.children === 'string' ? rest.children : undefined
   const copy =
@@ -91,7 +91,15 @@ export function T({
     <Text
       {...rest}
       onLongPress={copy}
-      style={[{ color: c[tone], fontSize: size, fontWeight: weight, fontFamily: mono ? font.mono : undefined }, own]}
+      style={[
+        {
+          color: c[tone],
+          fontSize: size * TEXT_SCALE[textSize],
+          fontWeight: weight,
+          fontFamily: mono ? font.mono : undefined,
+        },
+        own,
+      ]}
     />
   )
 }

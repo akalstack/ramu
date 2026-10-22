@@ -25,6 +25,22 @@ export function saveAppearance(value: string) {
   if (Platform.OS === 'web') localStorage.setItem(preferenceKey, value)
   else new File(Paths.document, preferenceKey).write(value)
 }
+const textSizeKey = 'ramu-text-size'
+export type TextSize = 'default' | 'large' | 'larger'
+/** The interface text size chosen on this phone; absent means the OS setting alone decides. */
+export function readTextSize(): TextSize {
+  try {
+    const value =
+      Platform.OS === 'web' ? localStorage.getItem(textSizeKey) : new File(Paths.document, textSizeKey).textSync()
+    return value === 'large' || value === 'larger' ? value : 'default'
+  } catch {
+    return 'default'
+  }
+}
+export function saveTextSize(value: TextSize) {
+  if (Platform.OS === 'web') localStorage.setItem(textSizeKey, value)
+  else new File(Paths.document, textSizeKey).write(value)
+}
 /** Serialize writes so a slower save cannot overwrite a newer draft or computer list. */
 export function readLocal<T>(fallback: T): T {
   try {

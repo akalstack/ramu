@@ -2,7 +2,7 @@ import { Alert, Platform, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import Constants from 'expo-constants'
 import { Check, Plus, RefreshCw } from 'lucide-react-native'
-import { font, space, useTheme, type Appearance } from '../../theme'
+import { font, space, useTheme, type Appearance, type TextSize } from '../../theme'
 import { useStore, type Language } from '../../runtime/store'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
@@ -45,8 +45,9 @@ function ScopeNote({ field, explicit }: { field: string; explicit: boolean }) {
 }
 
 function AppearancePage() {
-  const { appearance, setAppearance } = useTheme()
+  const { appearance, setAppearance, textSize, setTextSize } = useTheme()
   const { language, setLanguage, drafts, setDraft } = useStore()
+  const t = useT()
   return (
     <>
       <SectionLabel>Theme</SectionLabel>
@@ -63,6 +64,21 @@ function AppearancePage() {
         />
       </Card>
       <ScopeNote field="appearance" explicit={appearance !== 'system'} />
+      <SectionLabel>{t.textSizeLabel}</SectionLabel>
+      <Card style={{ marginHorizontal: space.l }}>
+        <Segmented<TextSize>
+          style={{ margin: space.m }}
+          value={textSize}
+          onChange={setTextSize}
+          options={[
+            { key: 'default', label: t.textSizeDefault },
+            { key: 'large', label: t.textSizeLarge },
+            { key: 'larger', label: t.textSizeLarger },
+          ]}
+        />
+      </Card>
+      <Hint>{t.textSizeHint}</Hint>
+      <ScopeNote field="textSize" explicit={textSize !== 'default'} />
       <SectionLabel>Language</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <Segmented<Language>
