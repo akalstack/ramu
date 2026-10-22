@@ -131,6 +131,40 @@ describe('computer frame sharing', () => {
   })
 })
 
+describe('computer frame waiting', () => {
+  const changing = () => {
+    let data = 'AAAA'
+    const { backend } = fake()
+    backend.capture = async () => ({ mimeType: 'image/png', data, width: 200, height: 100, scale: 2 })
+    backend.frameInterval = () => 20
+    return { backend, change: (next: string) => (data = next) }
+  }
+
+  it('returns a waiting viewer as soon as the screen changes, long before the wait ends', async () => {
+    const { backend, change } = changing()
+    const service = new ComputerService(backend)
+    const session = service.grant('t', grant)
+    const first = await session.view()
+    setTimeout(() => change('BBBB'), 60)
+    const started = Date.now()
+    const next = await session.view(first.hash, 5000)
+    expect(next.hash).not.toBe(first.hash)
+    expect(next.capture.data).toBe('BBBB')
+    expect(Date.now() - started).toBeLessThan(2000)
+    service.revoke('t')
+  })
+
+  it('ends a waiting viewer when its grant is revoked instead of leaving it hanging', async () => {
+    const { backend } = changing()
+    const service = new ComputerService(backend)
+    const session = service.grant('t', grant)
+    const first = await session.view()
+    const waiting = session.view(first.hash, 5000)
+    setTimeout(() => service.revoke('t'), 60)
+    await expect(waiting).rejects.toThrow(/closed/)
+  })
+})
+
 describe('computer viewers', () => {
   it('lets the owning host in and others only with an explicit grant', () => {
     const service = new ComputerService(fake().backend)
