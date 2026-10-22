@@ -17,7 +17,7 @@ Follow [Architecture](ARCHITECTURE.md) and [UI](UI.md). Extend the current usage
 - Window labels and scope explanations are covered by shared English/Indonesian tests, and desktop and mobile both localize reset text. Routing and presentation share provider-aware model-scope applicability; validate additional provider model identities with live evidence.
 - Validate account detail event refresh and old-host handling against real paired hosts. Physical network-loss and upgrade acceptance remain.
 - Verify on native devices that the icon-only header action and per-provider window counts fit at large text, and that the Access & Fallback link preserves the selected host and localized offline wording.
-- Extend focused native component tests to effective next-message account identity; run physical iOS/Android accessibility and composer/keyboard acceptance. The host's `agent.nextRoute` projection feeds the desktop and mobile thread labels (older hosts keep the local estimate/selection) and is covered by a server test; native component tests of the mobile label and device acceptance remain.
+- Run physical iOS/Android accessibility and composer/keyboard acceptance. The host's `agent.nextRoute` projection feeds the desktop and mobile thread labels (older hosts keep the local estimate/selection); a server test and a mobile component test (switch, held, stays, unknown and old host) cover it, so only device acceptance remains.
 
 ## Acceptance and verification
 

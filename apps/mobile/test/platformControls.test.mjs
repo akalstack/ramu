@@ -4275,3 +4275,69 @@ for (const os of ['ios', 'android']) {
     assert.ok(!nodes(tree).some((node) => node.type === 'T' && node.props.children === 'Approval'))
   })
 }
+
+test('the thread usage chip follows the host-reported next route and keeps the selection when unknown, held or old', async () => {
+  const presentation = await import('../../../packages/shared/src/usage/presentation.ts')
+  const providers = await import('../../../packages/shared/src/providers/providers.ts')
+  const { isMethodMissing } = await import('../src/runtime/goalVerify.ts')
+  const claude = { provider: 'claude-code', window: 'five_hour', usedPercent: 15, updatedAt: Date.now(), status: 'ok' }
+  const codex = { provider: 'codex', window: 'five_hour', usedPercent: 80, updatedAt: Date.now(), status: 'ok' }
+  const run = async (answer) => {
+    const hooks = hookHarness()
+    const store = {
+      language: 'en',
+      computers: [{ id: 'a', name: 'Laptop' }],
+      appPreferences: {},
+      usage: { a: [claude, codex] },
+      isOnline: () => true,
+      invoke: async (_host, method) => {
+        assert.equal(method, 'agent.nextRoute')
+        return answer()
+      },
+    }
+    const { ThreadUsageChip, PlanUsageSheet } = load('components/PlanUsage.tsx', 'android', {
+      react: hooks.react,
+      'expo-router': { useRouter: () => ({ push() {} }) },
+      '@ramu/shared/usage/presentation': presentation,
+      '@ramu/shared/providers/providers': providers,
+      '../runtime/goalVerify': { isMethodMissing },
+      '../runtime/store': { useStore: () => store },
+      '../runtime/types': { providerNames: { 'claude-code': 'Claude', codex: 'Codex' } },
+    })
+    const render = () =>
+      hooks.render(() =>
+        ThreadUsageChip({ hostId: 'a', provider: 'claude-code', model: 'sonnet', sessionId: 'session' }),
+      )
+    render()
+    await settle()
+    const tree = render()
+    hooks.dispose()
+    return {
+      label: nodes(tree).find((node) => node.type === 'Pressable').props.accessibilityLabel,
+      sheet: nodes(tree).find((node) => node.type === PlanUsageSheet).props,
+    }
+  }
+
+  const switched = await run(async () => ({
+    state: 'switch',
+    provider: 'codex',
+    model: 'gpt',
+    reason: 'limit',
+    held: null,
+  }))
+  assert.match(switched.label, /Codex, 80% used/)
+  assert.equal(switched.sheet.provider, 'codex')
+
+  for (const answer of [
+    async () => ({ state: 'switch', provider: 'codex', model: 'gpt', reason: 'limit', held: 'message' }),
+    async () => ({ state: 'stays' }),
+    async () => ({ state: 'unknown' }),
+    async () => {
+      throw Error('Unknown method agent.nextRoute')
+    },
+  ]) {
+    const kept = await run(answer)
+    assert.match(kept.label, /Claude, 15% used/)
+    assert.equal(kept.sheet.provider, 'claude-code')
+  }
+})
