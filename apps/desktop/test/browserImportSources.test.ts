@@ -17,13 +17,13 @@ it('offers macOS Chrome, Edge and Firefox as supported when installed, and says 
   expect(byId.chrome!.reason).toBeUndefined()
 })
 
-it('keeps Windows and Linux unsupported with a specific reason, and reads no files', () => {
+it('keeps Windows unsupported with a specific reason, supports Linux Chromium/Firefox, and reads no files', () => {
   const exists = vi.fn((_path: unknown) => true)
   const windows = browserImportSources('win32', {}, exists)
   expect(windows.every((source) => !source.supported)).toBe(true)
   expect(windows.find((source) => source.id === 'chrome')!.reason).toMatch(/protected credentials/)
   const linux = browserImportSources('linux', {}, exists)
-  expect(linux.every((source) => !source.supported && source.reason)).toBe(true)
+  expect(linux.every((source) => source.supported && !source.reason)).toBe(true)
   // Discovery only asks whether an app exists.
   expect(exists.mock.calls.every(([path]) => typeof path === 'string')).toBe(true)
 })

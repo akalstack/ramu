@@ -6,6 +6,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   chromiumKey,
+  chromiumLinuxKey,
+  linuxKeyringPassword,
   chromiumProfiles,
   decryptChromiumValue,
   firefoxProfiles,
@@ -116,6 +118,34 @@ describe('Chromium', () => {
     expect(decryptChromiumValue(encrypt('hello', key, true), key, true)).toBe('hello')
     expect(decryptChromiumValue(Buffer.from('v11xxxxxxxxxxxxxxxx'), key, false)).toBeNull()
     expect(decryptChromiumValue(encrypt('hello', key, false), chromiumKey('wrong'), false)).not.toBe('hello')
+  })
+
+  it('decrypts Linux v10 (peanuts) and v11 (keyring) values and skips v11 without a keyring secret', () => {
+    const v10 = chromiumLinuxKey('peanuts')
+    const v11 = chromiumLinuxKey('keyring-secret')
+    const withPrefix = (value: Buffer, prefix: string) => Buffer.concat([Buffer.from(prefix), value.subarray(3)])
+    const a = withPrefix(encrypt('one', v10, false), 'v10')
+    const b = withPrefix(encrypt('two', v11, false), 'v11')
+    expect(decryptChromiumValue(a, { v10, v11 }, false)).toBe('one')
+    expect(decryptChromiumValue(b, { v10, v11 }, false)).toBe('two')
+    expect(decryptChromiumValue(b, { v10 }, false)).toBeNull()
+  })
+
+  it('reads the Linux keyring secret and falls back to null when unavailable', async () => {
+    const seen: string[][] = []
+    expect(
+      await linuxKeyringPassword('chrome', async (file, args) => {
+        seen.push([file, ...args])
+        if (args[2] === 'chrome') throw new Error('none')
+        return 'secret'
+      }),
+    ).toBe('secret')
+    expect(seen.map((call) => call[3])).toEqual(['chrome', 'chromium'])
+    expect(
+      await linuxKeyringPassword('edge', async () => {
+        throw new Error('no tool')
+      }),
+    ).toBeNull()
   })
 
   it('reads encrypted and plain cookies, converts the expiry, and counts what it could not decrypt', () => {
