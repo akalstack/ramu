@@ -1,5 +1,11 @@
 import { providerAccountId } from '../providers/providerBinaries'
-import { providerName, supportsProviderAccounts, providerAccountOrder } from '@ramu/shared/providers/providers'
+import { launchCompatibility } from '../providers/launchCompatibility'
+import {
+  AGENT_PROVIDERS,
+  providerName,
+  supportsProviderAccounts,
+  providerAccountOrder,
+} from '@ramu/shared/providers/providers'
 import {
   DEFAULT_FALLBACK_PREFERENCES,
   type SwitchThreshold,
@@ -79,6 +85,13 @@ export class FallbackRouter {
 
   /** Chats that already had their one quiet retry of a low-confidence limit match since their last message. */
   readonly lowConfidenceRetried = new Set<string>()
+
+  /** Providers proven incompatible on this host, skipped as automatic destinations. */
+  private blockedProviders(): Promise<ReadonlySet<AgentProvider>> {
+    return process.env.RAMU_FAKE_AGENT === '1'
+      ? Promise.resolve(new Set())
+      : launchCompatibility.blockedProviders(AGENT_PROVIDERS)
+  }
 
   /** Apply user changes to model, effort or access. */
   async configure(id: string, settings: AgentSettings): Promise<AgentSessionInfo> {
@@ -183,6 +196,7 @@ export class FallbackRouter {
       switchAt: policy.switchAt,
       now: Date.now(),
       attemptedAccounts: this.attemptedAccounts.get(id),
+      blocked: await this.blockedProviders(),
     })
     if (!decision) return { state: 'stays' }
     const { provider, model, accountId } = decision.step
@@ -227,6 +241,7 @@ export class FallbackRouter {
     tried?: ReadonlySet<string>,
   ): string | null {
     if (!settings.autoFallback || !supportsProviderAccounts(settings.provider)) return null
+    if (launchCompatibility.isBlocked(settings.provider)) return null
     const accounts = providerAccountOrder(routing.prefs.providerBinaries, settings.provider)
     if (accounts.length < 2) return null
     return nextAccount(settings, accounts, {
@@ -309,6 +324,7 @@ export class FallbackRouter {
       accounts: routing.accounts,
       catalogs,
       switchAt: routing.prefs.fallback.switchAt,
+      blocked: await this.blockedProviders(),
     })
   }
 
@@ -351,6 +367,7 @@ export class FallbackRouter {
       switchAt: policy.switchAt,
       now: Date.now(),
       attemptedAccounts: this.attemptedAccounts.get(id),
+      blocked: await this.blockedProviders(),
     })
     const hold = this.holds.get(id)
     if (!decision) {
@@ -468,6 +485,7 @@ export class FallbackRouter {
         return
       }
       this.attemptedAccounts.delete(id)
+      const blocked = await this.blockedProviders()
       const next = () =>
         nextStep(policy.order, {
           usage: routing?.usage ?? [],
@@ -475,6 +493,7 @@ export class FallbackRouter {
           catalogs,
           switchAt: policy.switchAt,
           attempted,
+          blocked,
         })
       // A conversation that does not fit another provider's handoff budget is never sent truncated: skip that model, and
       // if nothing else is left, hold the thread at the limit with the reason.
@@ -508,12 +527,17 @@ export class FallbackRouter {
         if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
         const reason = tooLarge
           ? `The conversation is too large to carry to ${providerName(tooLarge)} in one handoff, so ${providerName(s.provider)} is the only option.`
-          : rejected
+          : (rejected ??
+            (blocked.size
+              ? `${[...blocked].map(providerName).join(', ')} cannot run on this host with this Ramu release. Update it or change its executable path in Settings → Providers.`
+              : undefined))
         if (this.host.waitForGoalProvider(id, reason)) return
         this.host.fail(
           id,
           configured
-            ? 'Every fallback option reached a usage limit or is unavailable. Change models or try again after the limit resets.'
+            ? blocked.size
+              ? `Every fallback option reached a usage limit or is unavailable, and ${[...blocked].map(providerName).join(', ')} is not compatible with this Ramu release. Update it in Settings → Providers or change models.`
+              : 'Every fallback option reached a usage limit or is unavailable. Change models or try again after the limit resets.'
             : 'Both providers reached a usage limit. Change models or try again after the limit resets.',
         )
         return
@@ -584,6 +608,7 @@ export class FallbackRouter {
         accounts: routing.accounts,
         catalogs,
         switchAt: policy.switchAt,
+        blocked: await this.blockedProviders(),
       })
       if (decision) {
         settings = this.withStep(settings, decision.step)

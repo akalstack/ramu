@@ -38,6 +38,7 @@ import type { UserRequests } from './userRequests'
 import type { FallbackRouter } from './fallbackRouter'
 import type { SessionStore } from './sessionStore'
 import type { SubagentRunner } from './subagentRunner'
+import { launchCompatibility, ProviderIncompatibleError } from '../providers/launchCompatibility'
 import type { AgentTasks } from './agentTasks'
 import type { AgentService } from '../agent'
 import type { Db } from '../db'
@@ -416,6 +417,9 @@ export class SessionProcess {
             this.codexHookAtLaunch.set(id, hook)
             runner.setTools?.(connection)
           }
+          // The main-thread boundary: a proven incompatible runtime fails here with its fix and the draft stays queued.
+          if (launchCompatibility.applies(s.provider) && process.env.RAMU_FAKE_AGENT !== '1')
+            await launchCompatibility.assertLaunchable(s.provider)
           if (this.host.runners.get(id) === runner)
             await runner.start(
               s.provider === 'codex' || s.provider === 'claude-code' || !connection?.instructions
@@ -429,7 +433,13 @@ export class SessionProcess {
           this.halt(id)
           // A runtime that cannot continue its saved session still gets the whole conversation, as when switching providers.
           // A returning provider's session is the one a delta resumes, so any start failure there gets the same fallback.
-          if ((e instanceof ResumeUnavailable || deltaResume) && resume && !this.host.shutdown()) {
+          // A blocked launch never retries as a lost session: it would only fail the same way.
+          if (
+            !(e instanceof ProviderIncompatibleError) &&
+            (e instanceof ResumeUnavailable || deltaResume) &&
+            resume &&
+            !this.host.shutdown()
+          ) {
             await this.host.draining.get(id)
             this.db.prepare('UPDATE agent_sessions SET provider_session_id = NULL WHERE id = ?').run(id)
             this.sessions.forget(id, s.provider, s.settings.accountId)

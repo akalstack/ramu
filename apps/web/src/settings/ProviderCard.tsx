@@ -23,6 +23,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { AgentProvider } from '@ramu/shared/types'
+import { useState } from 'react'
 import { t } from '../i18n'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { SettingsField } from './SettingsScope'
@@ -30,6 +31,8 @@ import type { useAccountUsage } from './Usage'
 import { SECONDARY_BUTTON_CLASS } from './constants'
 import { ProviderAddAccount, type ProviderPrefs } from './ProviderAccountControls'
 import { ProviderLoginRow } from './ProviderLoginRow'
+import { ProviderCompatibility } from './ProviderCompatibility'
+import { compatibilityPlan } from './compatibilityPlan'
 
 const BROWSE_BUTTON_CLASS = `${SECONDARY_BUTTON_CLASS} icon p-0 size-(--action-size) flex-none justify-center`
 
@@ -53,6 +56,9 @@ export function ProviderCard({
   onMcpSharing,
   onUpdate,
   onBrowse,
+  stale = false,
+  onCheckAgain,
+  onUpdateRamu,
 }: {
   provider: AgentProvider
   status: ProviderStatus | undefined
@@ -77,7 +83,12 @@ export function ProviderCard({
   onMcpSharing?: (id: string, on: boolean) => void
   onUpdate: () => void
   onBrowse: (key: 'binary' | 'harness') => void
+  /** The host could not be reached; the status is its last known result. */
+  stale?: boolean
+  onCheckAgain: () => void
+  onUpdateRamu?: () => void
 }) {
+  const [advanced, setAdvanced] = useState(false)
   const accounts = supportsProviderAccounts(provider),
     config = { [provider]: preferences ?? { binary: '' } },
     order = accounts ? providerAccountRows(config, provider) : ['default'],
@@ -95,7 +106,8 @@ export function ProviderCard({
         ? preferences?.defaultAccountEnabled !== false
         : preferences?.accounts?.find((a) => a.id === id)?.enabled !== false,
     onCount = order.filter(on).length,
-    canUpdate = !((provider === 'codex' || provider === 'antigravity') && preferences?.binary?.trim())
+    canUpdate = !((provider === 'codex' || provider === 'antigravity') && preferences?.binary?.trim()),
+    plan = compatibilityPlan(status, { customBinary: !!preferences?.binary?.trim(), canUpdate })
   return (
     <Card
       role="region"
@@ -213,7 +225,7 @@ export function ProviderCard({
                 </span>
               </span>
               <span className="flex flex-none items-center gap-2.5">
-                {(status?.updateAvailable ||
+                {((status?.updateAvailable && status.updateCompatibility?.status !== 'incompatible') ||
                   updating === provider ||
                   (provider === 'antigravity' && !status?.installed)) && (
                   <Button
@@ -251,29 +263,26 @@ export function ProviderCard({
             </a>
           )}
           {status?.compatibility && status.installed && (
-            <p
-              className={`small text-caption ${status.compatibility.status === 'incompatible' ? 'text-bad' : 'muted text-muted-foreground'}`}
-              role={status.compatibility.status === 'incompatible' ? 'alert' : 'status'}
-            >
-              {status.compatibility.status === 'supported'
-                ? t('Compatible with this Ramu release.')
-                : status.compatibility.status === 'unverified'
-                  ? t('Unverified: no compatibility rule covers this version. It can still be used.')
-                  : status.compatibility.status === 'limited'
-                    ? t('Limited: some features are unavailable with this version.')
-                    : t('Incompatible with this Ramu release.')}
-              {status.compatibility.affects?.length ? ` ${status.compatibility.affects.join(', ')}.` : ''}
-              {status.compatibility.recommend
-                ? ` ${t('Recommended version: {0}', { '0': status.compatibility.recommend })}`
-                : ''}
-            </p>
+            <ProviderCompatibility
+              status={status}
+              plan={plan}
+              stale={stale}
+              busy={updating !== null || !!status.updating}
+              onUpdate={onUpdate}
+              onUpdateRamu={onUpdateRamu}
+              onCheckAgain={onCheckAgain}
+              onChangePath={() => {
+                setAdvanced(true)
+                requestAnimationFrame(() => document.getElementById(`provider-${provider}`)?.focus())
+              }}
+            />
           )}
           {[status?.versionError, status?.error, status?.updateError].filter(Boolean).map((message) => (
             <p key={message} className="error text-bad small text-caption" role="alert">
               {message}
             </p>
           ))}
-          <Collapsible>
+          <Collapsible open={advanced} onOpenChange={setAdvanced}>
             <CollapsibleTrigger render={<Button size="sm" variant="ghost" className="small text-caption" />}>
               {t('Advanced')}
             </CollapsibleTrigger>
