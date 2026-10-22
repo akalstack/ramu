@@ -1357,6 +1357,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Additional sub-agents wait for an available slot.": "Sub-agent tambahan menunggu slot tersedia.",
   "Agent notifications": "Notifikasi agen",
   "Continue threads after restart": "Lanjutkan thread setelah mulai ulang",
+  "Allow this thread to see and control your main display. Revoke it any time. Ramu cannot tell when you use your own mouse or keyboard, so choose Take control before you do.": "Izinkan thread ini melihat dan mengendalikan layar utama Anda. Cabut kapan saja. Ramu tidak dapat mengetahui saat Anda memakai mouse atau keyboard sendiri, jadi pilih Ambil kendali sebelum melakukannya.",
+  "macOS asks for Screen Recording and Accessibility the first time. Ramu cannot tell when you use your own mouse or keyboard while an agent works, so choose Take control first. Turning this off ends every thread’s access.": "macOS meminta Perekaman Layar dan Aksesibilitas saat pertama kali. Ramu tidak dapat mengetahui saat Anda memakai mouse atau keyboard sendiri ketika agen bekerja, jadi pilih Ambil kendali terlebih dahulu. Mematikan ini mengakhiri akses semua thread.",
   "Keep working while asking questions": "Tetap bekerja sambil bertanya",
   "Trim long Claude threads before they go cold": "Ringkas thread Claude yang panjang sebelum dingin",
   "When a long Claude thread sits idle and its prompt cache is about to lapse, summarize it so the next message is cheaper to resume. Costs one summary turn.": "Saat thread Claude yang panjang diam dan cache prompt-nya hampir habis, ringkas agar pesan berikutnya lebih murah dilanjutkan. Memakai satu giliran ringkasan.",

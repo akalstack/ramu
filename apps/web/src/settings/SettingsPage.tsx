@@ -54,6 +54,27 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
 
 /** Every individual setting, so search finds "Primary color" and jumps to it, not just the page it lives on. */
 const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string }[] = [
+  {
+    section: 'browser',
+    title: 'Computer use',
+    words:
+      'computer screen display desktop control agent native app accessibility screen recording permission lock awake share phone',
+  },
+  {
+    section: 'browser',
+    title: 'Limit access to one app',
+    words: 'computer use open computer use app scoped install calculator accessibility',
+  },
+  {
+    section: 'browser',
+    title: 'Let app drags use your real pointer',
+    words: 'computer use drag pointer mouse window move select text',
+  },
+  {
+    section: 'browser',
+    title: 'Keep this computer awake',
+    words: 'computer use sleep awake caffeinate screen lock',
+  },
   { section: 'browser', title: 'Open clicked links in', words: 'browser links system integrated web external' },
   {
     section: 'browser',

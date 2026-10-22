@@ -295,7 +295,9 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
         ) : (
           <>
             <span className="text-caption text-muted-foreground">
-              {t('Allow this thread to see and control your main display. Revoke it any time.')}
+              {t(
+                'Allow this thread to see and control your main display. Revoke it any time. Ramu cannot tell when you use your own mouse or keyboard, so choose Take control before you do.',
+              )}
             </span>
             {runtimes.length > 1 && (
               <Dropdown

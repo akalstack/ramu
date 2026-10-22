@@ -116,7 +116,7 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
       <ScreenSharing hostId={hostId} enabled={!!status?.enabled} />
       <p className="m-0 text-caption text-muted-foreground">
         {t(
-          'macOS asks for Screen Recording and Accessibility the first time. Turning this off ends every thread’s access.',
+          'macOS asks for Screen Recording and Accessibility the first time. Ramu cannot tell when you use your own mouse or keyboard while an agent works, so choose Take control first. Turning this off ends every thread’s access.',
         )}
       </p>
       {error && (
