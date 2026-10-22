@@ -1,6 +1,7 @@
 // GitHub pull requests and issues through the `gh` CLI, which brings the user's own sign-in.
 // Like git.ts, every call uses an argument array (never a shell string) and an explicit working directory.
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { execFile } from 'node:child_process'
 import type {
   ForgeAccessReport,
@@ -9,6 +10,7 @@ import type {
   ForgeCheck,
   ForgeCheckState,
   ForgeConnectionSummary,
+  ForgeRepositoryAccount,
   ForgeRepositorySummary,
   ForgeStatus,
   IssueLink,
@@ -25,6 +27,18 @@ import { githubApiBase, parseForgeRemote, redactSecrets, type ForgeRemote } from
 import type { ForgeAccountStore } from './forgeAccounts'
 import { findExecutable } from '../providers/providerBinaries'
 import { branchExists, commitBranchInfo, currentBranch, git, headOid, publishRemote } from './git'
+import {
+  GithubApiError,
+  apiRequest,
+  createPull,
+  findPullRequest,
+  graphql,
+  issueDirect,
+  jobLog,
+  listIssuesDirect,
+  repositoriesDirect,
+  type ApiAccess,
+} from './githubApi'
 
 export class ForgeError extends Error {
   constructor(
@@ -153,6 +167,44 @@ export async function gh(cwd: string, args: string[]): Promise<string> {
   })
 }
 
+/**
+ * A saved token for this checkout's GitHub repository, used when the host has no `gh`. Null means `gh` is available
+ * (or no saved token applies); several saved accounts without a choice is an error, never a silent pick.
+ */
+async function directAccess(cwd: string): Promise<ApiAccess | null> {
+  if (ghExecutable() || !accountStore) return null
+  const remote = await forgeRemoteOf(cwd)
+  if (!remote) return null
+  const account = await accountStore.resolve(remote.origin, remote.owner, remote.repo)
+  if (account.kind === 'ambiguous')
+    throw new ForgeError(
+      `Several GitHub accounts are saved for ${remote.origin}. Choose which one this repository uses in Settings → Git.`,
+      'choose-account',
+    )
+  return account.kind === 'saved'
+    ? { origin: remote.origin, token: account.token, owner: remote.owner, repo: remote.repo }
+    : null
+}
+
+/** The saved token for an origin when no repository decides it: its selection, or the only one saved. */
+async function savedAccessFor(origin: string): Promise<ApiAccess> {
+  const account = await accountStore!.resolve(origin)
+  if (account.kind === 'ambiguous')
+    throw new ForgeError(
+      `Several GitHub accounts are saved for ${origin}. Choose one in Settings → Git.`,
+      'choose-account',
+    )
+  if (account.kind !== 'saved')
+    throw new ForgeError('Install the GitHub CLI (gh) or save a GitHub token in Settings.', 'no-cli')
+  return { origin, token: account.token, owner: '', repo: '' }
+}
+
+/** A rejected saved token reads like a signed-out CLI: the availability tells the person what to fix. */
+function directFailure(error: unknown): never {
+  if (error instanceof GithubApiError && error.unauthorized) throw new ForgeError(error.message, 'signed-out')
+  throw error
+}
+
 /** `gh auth status` writes to stdout or stderr and exits non-zero when any sign-in is bad, so both are read. */
 function authStatusText(executable: string): Promise<string> {
   return new Promise((resolve) => {
@@ -189,14 +241,34 @@ export async function connectionSummary(canAdminister: boolean): Promise<ForgeCo
 
 /** The saved connection a checkout's GitHub calls use, or null for the detected CLI or when none is configured. */
 export async function resolvedConnectionId(cwd: string): Promise<string | null> {
+  const id = await resolvedAccountChoice(cwd)
+  return id && !id.startsWith('cli') ? id : null
+}
+
+/**
+ * The account identity a checkout's calls use (a connection id, `cli` or `cli:<login>`), read without touching any
+ * token. Null when several saved accounts need a choice, or when it cannot be told.
+ */
+export async function resolvedAccountChoice(cwd: string): Promise<string | null> {
   if (!accountStore) return null
   try {
     const remote = await forgeRemoteOf(cwd)
-    const account = await accountStore.resolve(remote?.origin ?? 'github.com', remote?.owner, remote?.repo)
-    return account.kind === 'saved' ? account.connectionId : null
+    return accountStore.choiceId(remote?.origin ?? 'github.com', remote?.owner, remote?.repo)
   } catch {
     return null
   }
+}
+
+/** The account this checkout's GitHub calls would use, without any network request. */
+export async function repositoryAccount(cwd: string): Promise<ForgeRepositoryAccount> {
+  const remote = await forgeRemoteOf(cwd)
+  // A repository with no remote yet is about to be published to github.com.
+  const origin = remote?.origin ?? 'github.com'
+  const none: ForgeRepositoryAccount = { origin, login: null, source: 'none', ambiguous: false }
+  if (!accountStore) return none
+  const account = await accountStore.resolve(origin, remote?.owner, remote?.repo)
+  if (account.kind === 'ambiguous') return { ...none, ambiguous: true }
+  return { origin, login: account.login, source: account.kind === 'saved' ? 'saved' : 'cli', ambiguous: false }
 }
 
 const unknownCheck = (detail: string | null = null): ForgeCheckResult => ({ state: 'unknown', detail })
@@ -442,11 +514,23 @@ async function remoteBranchName(cwd: string, branch: string): Promise<string> {
 /** The pull request for the checked-out branch, and whether forge features work here at all. */
 export async function pullRequestStatus(cwd: string, url?: string): Promise<ForgeStatus> {
   if (!(await hasRemote(cwd))) return { availability: 'no-remote', pullRequest: null }
-  if (!ghExecutable()) return { availability: 'no-cli', pullRequest: null }
+  let direct: ApiAccess | null = null
+  try {
+    direct = await directAccess(cwd)
+  } catch (error) {
+    if (error instanceof ForgeError && error.availability)
+      return { availability: error.availability, pullRequest: null }
+    throw error
+  }
+  if (!ghExecutable() && !direct) return { availability: 'no-cli', pullRequest: null }
   const branch = await currentBranch(cwd)
   if (!branch) return { availability: 'ready', pullRequest: null }
   try {
     const head = url ?? (await remoteBranchName(cwd, branch))
+    if (direct) {
+      const found = await findPullRequest(direct, { ...(url ? { url } : {}), branch: head }).catch(directFailure)
+      return { availability: 'ready', pullRequest: found ? parsePullRequest(found as RawPullRequest) : null }
+    }
     const raw = JSON.parse(await gh(cwd, ['pr', 'view', head, '--json', PR_FIELDS])) as RawPullRequest
     return { availability: 'ready', pullRequest: parsePullRequest(raw) }
   } catch (error) {
@@ -550,8 +634,107 @@ export async function createPullRequest(cwd: string, input: PullRequestInput): P
   if (!branch) throw new Error('Switch to a branch before opening a pull request.')
   const args = ['pr', 'create', '--head', branch, '--base', input.base, '--title', input.title, '--body', input.body]
   if (input.draft) args.push('--draft')
-  await gh(cwd, args)
+  try {
+    const direct = await directAccess(cwd)
+    if (direct)
+      await createPull(direct, {
+        title: input.title,
+        body: input.body,
+        head: branch,
+        base: input.base,
+        draft: input.draft,
+      }).catch(directFailure)
+    else await gh(cwd, args)
+  } catch (error) {
+    // A lost reply or a timeout does not say whether the pull request was created. Look at the intended branch with the
+    // same account before reporting a failure, so a retry never opens a duplicate.
+    const existing = await pullRequestStatus(cwd).catch(() => null)
+    if (
+      existing?.pullRequest &&
+      existing.pullRequest.state === 'open' &&
+      existing.pullRequest.baseBranch === input.base
+    )
+      return existing
+    throw error
+  }
   return pullRequestStatus(cwd)
+}
+
+interface RawRepository {
+  nameWithOwner?: string
+  description?: string | null
+  isPrivate?: boolean
+  url?: string
+  updatedAt?: string
+}
+
+/** Repository list entries as clone choices. Entries without a name or an https address are dropped. */
+export function parseRepositories(raw: RawRepository[]): ForgeRepositorySummary[] {
+  const found: ForgeRepositorySummary[] = []
+  for (const repository of raw) {
+    const fullName = repository.nameWithOwner
+    if (!fullName || !/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(fullName)) continue
+    let cloneUrl: string
+    try {
+      const url = new URL(repository.url ?? '')
+      if (url.protocol !== 'https:' || url.username || url.password) continue
+      cloneUrl = `${url.origin}/${fullName}.git`
+    } catch {
+      continue
+    }
+    found.push({
+      fullName,
+      description: repository.description?.slice(0, 300) || null,
+      private: repository.isPrivate === true,
+      cloneUrl,
+      updatedAt: repository.updatedAt ? Date.parse(repository.updatedAt) || 0 : 0,
+    })
+  }
+  return found
+}
+
+const REPOSITORY_FIELDS = 'nameWithOwner,description,isPrivate,url,updatedAt'
+
+/**
+ * Repositories to clone: an exact `owner/name` is looked up directly (works for any organization), otherwise the
+ * signed-in account's own repositories, most recently updated first, narrowed by the search text.
+ */
+export async function searchRepositories(search: string, cwd: string = homedir()): Promise<ForgeRepositorySummary[]> {
+  const text = search.trim()
+  const exact = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(text)
+  const direct = await directAccess(cwd).catch(() => null)
+  if (direct || (!ghExecutable() && accountStore)) {
+    const access = direct ?? (await savedAccessFor('github.com'))
+    const found = parseRepositories(await repositoriesDirect(access, exact ? text : null).catch(directFailure))
+    const needle = text.toLowerCase()
+    return (
+      exact || !needle
+        ? found
+        : found.filter((r) => `${r.fullName} ${r.description ?? ''}`.toLowerCase().includes(needle))
+    )
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 50)
+  }
+  if (exact) {
+    const output = await gh(cwd, ['repo', 'view', text, '--json', REPOSITORY_FIELDS]).catch((error) => {
+      if (error instanceof ForgeError) throw error
+      return null
+    })
+    return output ? parseRepositories([JSON.parse(output) as RawRepository]) : []
+  }
+  const listed = parseRepositories(
+    JSON.parse(await gh(cwd, ['repo', 'list', '--limit', '100', '--json', REPOSITORY_FIELDS])) as RawRepository[],
+  )
+  const needle = text.toLowerCase()
+  return (
+    needle
+      ? listed.filter((repository) =>
+          `${repository.fullName} ${repository.description ?? ''}`.toLowerCase().includes(needle),
+        )
+      : listed
+  )
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 50)
 }
 
 /**
@@ -564,6 +747,25 @@ export async function publishRepository(cwd: string, input: PublishRepositoryInp
   if (!(await currentBranch(cwd))) throw new Error('Switch to a branch before publishing.')
   if (!(await headOid(cwd)))
     throw new Error('Commit your changes first. A repository with no commits cannot be published.')
+  const direct = await directAccess(cwd).catch(() => null)
+  if (!ghExecutable() && accountStore) {
+    // Without `gh`: create the repository through the API, add it as origin, then push with the host's own Git credentials.
+    const access = direct ?? (await savedAccessFor('github.com'))
+    const [owner, name] = input.name.includes('/') ? input.name.split('/') : [null, input.name]
+    const me = owner ? await apiRequest<{ login: string }>(access, '/user').catch(directFailure) : null
+    const inOrganization = owner && me && owner.toLowerCase() !== me.login.toLowerCase()
+    const created = await apiRequest<{ clone_url: string }>(
+      access,
+      inOrganization ? `/orgs/${owner}/repos` : '/user/repos',
+      {
+        method: 'POST',
+        body: { name, private: input.visibility !== 'public' },
+      },
+    ).catch(directFailure)
+    await git(cwd, ['remote', 'add', 'origin', created.clone_url])
+    await git(cwd, ['push', '-u', 'origin', (await currentBranch(cwd))!])
+    return
+  }
   await gh(cwd, [
     'repo',
     'create',
@@ -609,11 +811,14 @@ async function failedChecksFeedback(cwd: string, pr: PullRequestInfo): Promise<s
   for (const check of failed) {
     const job = actionsJobId(check.url)
     let log = ''
-    if (job)
-      log = await gh(cwd, ['api', '--allow-escape-sequences', `repos/{owner}/{repo}/actions/jobs/${job}/logs`]).then(
-        failureExcerpt,
-        () => '',
-      )
+    if (job) {
+      const direct = await directAccess(cwd).catch(() => null)
+      log = await (
+        direct
+          ? jobLog(direct, job)
+          : gh(cwd, ['api', '--allow-escape-sequences', `repos/{owner}/{repo}/actions/jobs/${job}/logs`])
+      ).then(failureExcerpt, () => '')
+    }
     sections.push(
       [
         `### ${check.name}${check.url ? ` (${check.url})` : ''}`,
@@ -703,20 +908,27 @@ export async function pullRequestFeedback(cwd: string, kind: PullRequestFeedback
   const { pullRequest: pr } = await pullRequestStatus(cwd, url)
   if (!pr) throw new Error('This branch has no pull request.')
   if (kind === 'checks') return failedChecksFeedback(cwd, pr)
-  const raw = JSON.parse(
-    await gh(cwd, [
-      'api',
-      'graphql',
-      '-F',
-      'owner={owner}',
-      '-F',
-      'repo={repo}',
-      '-F',
-      `number=${pr.number}`,
-      '-f',
-      `query=${REVIEW_QUERY}`,
-    ]),
-  ) as RawReviewData
+  const direct = await directAccess(cwd)
+  const raw = direct
+    ? await graphql<RawReviewData>(direct, REVIEW_QUERY, {
+        owner: direct.owner,
+        repo: direct.repo,
+        number: pr.number,
+      }).catch(directFailure)
+    : (JSON.parse(
+        await gh(cwd, [
+          'api',
+          'graphql',
+          '-F',
+          'owner={owner}',
+          '-F',
+          'repo={repo}',
+          '-F',
+          `number=${pr.number}`,
+          '-f',
+          `query=${REVIEW_QUERY}`,
+        ]),
+      ) as RawReviewData)
   const prompt = reviewFeedbackPrompt(pr, raw)
   if (!prompt) throw new Error(`Pull request #${pr.number} has no open review comments.`)
   return prompt
@@ -737,6 +949,20 @@ interface RawIssue {
 export async function listIssues(cwd: string, search: string): Promise<IssueSummary[]> {
   const args = ['issue', 'list', '--state', 'open', '--limit', '50', '--json', 'number,title,url,labels,updatedAt']
   if (search.trim()) args.push('--search', search.trim())
+  const direct = await directAccess(cwd).catch(() => null)
+  if (direct) {
+    const found = await listIssuesDirect(direct, search).catch((error) => {
+      if (error instanceof GithubApiError && error.unauthorized) return []
+      throw error
+    })
+    return found.map((issue) => ({
+      number: issue.number,
+      title: issue.title,
+      url: issue.url,
+      labels: issue.labels,
+      updatedAt: issue.updatedAt ? Date.parse(issue.updatedAt) : 0,
+    }))
+  }
   // No GitHub remote, a signed-out CLI or no CLI means no issues, not a failure.
   const output = await gh(cwd, args).catch((error) => {
     if (error instanceof ForgeError && error.availability) return null
@@ -780,71 +1006,11 @@ export async function issueDetails(
   cwd: string,
   number: number,
 ): Promise<{ title: string; url: string; prompt: string }> {
-  const raw = JSON.parse(
-    await gh(cwd, ['issue', 'view', String(number), '--json', 'number,title,url,body,labels,comments']),
-  ) as RawIssue
+  const direct = await directAccess(cwd)
+  const raw = direct
+    ? ((await issueDirect(direct, number).catch(directFailure)) as RawIssue)
+    : (JSON.parse(
+        await gh(cwd, ['issue', 'view', String(number), '--json', 'number,title,url,body,labels,comments']),
+      ) as RawIssue)
   return { title: raw.title, url: raw.url, prompt: issuePrompt(raw) }
-}
-
-// ---- Repository search for cloning ----
-
-interface RawRepository {
-  nameWithOwner?: string
-  fullName?: string
-  description?: string | null
-  isPrivate?: boolean
-  url?: string
-  updatedAt?: string
-}
-
-/** Repositories to clone: the signed-in account's own when the search is empty, else a GitHub search. */
-export async function searchRepositories(search: string): Promise<ForgeRepositorySummary[]> {
-  const executable = ghExecutable()
-  if (!executable) throw new ForgeError('Install the GitHub CLI (gh) to search GitHub repositories.', 'no-cli')
-  const query = search.trim()
-  const args = query
-    ? ['search', 'repos', '--limit', '30', '--json', 'fullName,description,isPrivate,url,updatedAt', '--', query]
-    : ['repo', 'list', '--limit', '30', '--json', 'nameWithOwner,description,isPrivate,url,updatedAt']
-  // There is no checkout here, so the account is the one chosen for github.com.
-  const account = await accountEnvironmentFor('github.com', executable)
-  const output = await new Promise<string>((resolve, reject) =>
-    execFile(
-      executable,
-      args,
-      {
-        maxBuffer: MAX_BUFFER,
-        encoding: 'utf8',
-        timeout: 30_000,
-        env: { ...process.env, ...account, GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' },
-      },
-      (error, stdout, stderr) =>
-        error
-          ? reject(
-              new ForgeError(
-                `gh ${args[0]} failed: ${redactSecrets(stderr.trim() || error.message)}`,
-                availabilityFromError(stderr),
-              ),
-            )
-          : resolve(stdout),
-    ),
-  )
-  return parseRepositories(JSON.parse(output) as RawRepository[])
-}
-
-export function parseRepositories(raw: RawRepository[]): ForgeRepositorySummary[] {
-  const found: ForgeRepositorySummary[] = []
-  for (const repository of raw) {
-    const fullName = repository.fullName ?? repository.nameWithOwner
-    if (!fullName || !repository.url || !/^[\w.-]+\/[\w.-]+$/.test(fullName)) continue
-    // HTTPS on github.com only: the credentials are the ones the host's Git already uses.
-    if (!/^https:\/\/github\.com\//.test(repository.url)) continue
-    found.push({
-      fullName,
-      description: repository.description?.slice(0, 300) || null,
-      private: !!repository.isPrivate,
-      cloneUrl: `${repository.url.replace(/\/+$/, '')}.git`,
-      updatedAt: repository.updatedAt ? Date.parse(repository.updatedAt) : 0,
-    })
-  }
-  return found
 }

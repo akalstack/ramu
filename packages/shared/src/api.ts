@@ -85,6 +85,8 @@ import type {
   RuleRevision,
   NativeInstructions,
   ForgeAccessReport,
+  ForgeRepositoryAccount,
+  ForgeRepositorySummary,
   ForgeConnectionSummary,
   ForgeRepositorySummary,
   ForgeSaveConnectionInput,
@@ -825,6 +827,10 @@ export interface RamuMethods {
   /** An opening message that hands failing checks or open review comments to an agent. */
   'forge.pullRequestFeedback'(taskId: string, repoId: string, kind: PullRequestFeedbackKind): string
   'forge.issues'(repoId: string, search: string): IssueSummary[]
+  /** Repositories the host's GitHub account can see (yours when the search is empty), or one `owner/name`; to clone. */
+  'forge.searchRepositories'(search: string): ForgeRepositorySummary[]
+  /** The GitHub account this repository would use, with its source, before anything runs. */
+  'forge.repositoryAccount'(taskId: string, repoId: string): ForgeRepositoryAccount
   'forge.issue'(repoId: string, number: number): { link: IssueLink; prompt: string }
   /** Records the issue a chat was started from, so its pull request can close it. */
   'forge.linkIssue'(taskId: string, link: IssueLink | null): void

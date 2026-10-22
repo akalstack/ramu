@@ -160,12 +160,21 @@ export interface ForgeConnectionSummary {
   selection?: Record<string, string>
 }
 
-/** A GitHub repository offered for cloning. Names the clone URL only; nothing about credentials. */
+/** A GitHub repository the signed-in account can see, for choosing something to clone. */
 export interface ForgeRepositorySummary {
+  /** `owner/name`. */
   fullName: string
   description: string | null
   private: boolean
-  /** HTTPS clone URL. Git on the host uses its own credentials to fetch it. */
+  /** HTTPS clone address. Never carries credentials. */
   cloneUrl: string
   updatedAt: number
+}
+
+/** The account a repository's pull requests, issues and publishing use on its host, and why. */
+export interface ForgeRepositoryAccount {
+  origin: string | null
+  login: string | null
+  source: ForgeAccountSource
+  ambiguous: boolean
 }

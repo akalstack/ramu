@@ -18,7 +18,7 @@ import { useModelSets } from '../../models/ModelSets'
 import { errorText } from '../../workspace/TaskPane'
 import { useHostRuntime, useWorkspace } from '../../workspace/workspace'
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
-import { RepositoryAccess, openGitHubSettings } from './RepositoryAccess'
+import { ForgeAccessPanel } from './ForgeAccessPanel'
 import { startCheckoutChat } from './startCheckoutChat'
 import { useHost } from '../../workspace/HostProvider'
 import { queryInvokerFor } from '../../git/hostQuery'
@@ -117,22 +117,8 @@ export function PullRequestSection({
   if (availability === 'not-github' || availability === 'no-remote') return null
   if (availability !== 'ready')
     return (
-      <div className="m-[0_2px_8px] flex flex-col gap-1.5">
-        <p className="muted text-muted-foreground small text-caption m-0">
-          {availability === 'no-cli'
-            ? t(
-                'Install the GitHub CLI (gh) or save a GitHub token in Settings to open pull requests and follow their checks here.',
-              )
-            : t(
-                'Sign in with the GitHub CLI or save a GitHub token in Settings to open pull requests and follow their checks here.',
-              )}
-        </p>
-        <span className="flex flex-wrap gap-1.5">
-          <Button variant="secondary" size="sm" onClick={openGitHubSettings}>
-            {t('Set up GitHub')}
-          </Button>
-        </span>
-        <RepositoryAccess taskId={taskId} repoId={binding.repoId} />
+      <div className="m-[0_2px_8px]">
+        <ForgeAccessPanel taskId={taskId} repoId={binding.repoId} unavailable={availability} />
       </div>
     )
 
@@ -287,7 +273,6 @@ export function PullRequestSection({
               {starting === 'reviews' ? t('Starting…') : t('Address review comments')}
             </Button>
           </div>
-          <RepositoryAccess taskId={taskId} repoId={binding.repoId} />
           {watchQuery.data && (
             <div className="flex flex-col gap-1.5">
               <Dropdown
@@ -312,6 +297,12 @@ export function PullRequestSection({
           )}
         </>
       )}
+      <details className="text-caption">
+        <summary className="cursor-default text-muted-foreground">{t('GitHub access')}</summary>
+        <div className="mt-1.5">
+          <ForgeAccessPanel taskId={taskId} repoId={binding.repoId} />
+        </div>
+      </details>
     </div>
   )
 }
