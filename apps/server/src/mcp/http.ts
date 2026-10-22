@@ -8,6 +8,7 @@ import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js'
 import type { SharedMcpConnection } from '@ramu/shared/mcp'
 import type { HostSecretReader } from './stdio'
 import { SharedMcpConnectionError } from './errors'
+import { HostOAuthProvider, OAUTH_REFERENCE_NAME, type OAuthRecordStore, type StoredOAuth } from './oauth'
 
 const privateV4 = new BlockList()
 for (const [address, prefix] of [
@@ -58,7 +59,7 @@ export function sharedMcpLookup(allowPrivate: boolean, resolve = lookup): Lookup
 }
 
 /** Each upstream session gets its own TLS pool and exact-origin fetch boundary. */
-export function sharedMcpHttpFetch(endpoint: string, allowPrivate = false, dispatcher?: Dispatcher) {
+export function sharedMcpHttpFetch(endpoint: string, allowPrivate = false, dispatcher?: Dispatcher, oauth = false) {
   const origin = new URL(endpoint)
   if (origin.protocol !== 'https:' || origin.username || origin.password || origin.search || origin.hash)
     throw new Error('Use an HTTPS MCP URL without credentials, query parameters or fragments')
@@ -70,7 +71,8 @@ export function sharedMcpHttpFetch(endpoint: string, allowPrivate = false, dispa
     new Agent({
       connections: 2,
       pipelining: 1,
-      maxOrigins: 1,
+      // Sign-in talks to the authorization server too; each origin still gets the same vetted-address lookup.
+      maxOrigins: oauth ? 4 : 1,
       headersTimeout: 15_000,
       bodyTimeout: 60_000,
       connect: { lookup: sharedMcpLookup(allowPrivate), timeout: 15_000 },
@@ -84,12 +86,32 @@ export function sharedMcpHttpFetch(endpoint: string, allowPrivate = false, dispa
   }
   const fetch: FetchLike = async (input, init = {}) => {
     const url = new URL(input)
-    if (url.origin !== origin.origin || url.username || url.password || url.hash)
+    const sameOrigin = url.origin === origin.origin
+    if (
+      (!sameOrigin && !(oauth && url.protocol === 'https:' && !isIP(url.hostname.replace(/^\[|\]$/g, '')))) ||
+      url.username ||
+      url.password ||
+      url.hash
+    )
       throw new Error('Cross-origin MCP requests are not permitted')
+    // Nothing meant for the MCP server (static headers, its bearer token) follows a request to another origin.
+    const outgoing = new Headers(init.headers)
+    if (!sameOrigin)
+      for (const name of (() => {
+        const names: string[] = []
+        outgoing.forEach((_value, key) => names.push(key))
+        return names
+      })()) {
+        const allowed =
+          name === 'content-type' ||
+          name === 'accept' ||
+          (name === 'authorization' && /^Basic /i.test(outgoing.get(name) ?? ''))
+        if (!allowed) outgoing.delete(name)
+      }
     // No proxy or global dispatcher is used. Redirects, cookies and credential-bearing origin changes are never automatic.
     const response = await request(url, {
       method: init.method,
-      headers: Object.fromEntries(new Headers(init.headers) as unknown as Iterable<[string, string]>),
+      headers: Object.fromEntries(outgoing as unknown as Iterable<[string, string]>),
       body: init.body as string | undefined,
       signal: init.signal,
       dispatcher: agent,
@@ -132,7 +154,29 @@ export async function connectSharedMcpHttp(
   if (connection.transport.type !== 'http') throw new Error('This connection needs a stdio MCP client')
   signal.throwIfAborted()
   const headers = new Headers()
+  const oauthReference = connection.transport.headerSecretRefs[OAUTH_REFERENCE_NAME]
+  const record = oauthReference
+    ? {
+        hostId: connection.hostId,
+        connectionId: connection.id,
+        serviceAccountId: connection.serviceAccountId,
+        reference: oauthReference,
+      }
+    : undefined
+  let authProvider: HostOAuthProvider | undefined
+  if (record) {
+    if (!secrets?.write) throw new Error('Set up a secure host credential store before using signed-in servers')
+    const store = secrets
+    const recordStore: OAuthRecordStore = {
+      load: async () => JSON.parse(await store.read(record)) as StoredOAuth,
+      save: (value) => store.write!(record, JSON.stringify(value)),
+    }
+    // Refresh needs stored tokens; with none, the person has to sign in again rather than a background retry.
+    if (!(await recordStore.load()).tokens) throw new SharedMcpConnectionError('sign-in-required')
+    authProvider = new HostOAuthProvider(recordStore)
+  }
   for (const [name, reference] of Object.entries(connection.transport.headerSecretRefs)) {
+    if (name === OAUTH_REFERENCE_NAME) continue
     if (
       /^(?:host|cookie|set-cookie|proxy-authorization|connection|content-length|origin|referer|accept|mcp-.*)$/i.test(
         name,
@@ -149,9 +193,15 @@ export async function connectSharedMcpHttp(
     headers.set(name, value)
     signal.throwIfAborted()
   }
-  const network = sharedMcpHttpFetch(connection.transport.url, connection.transport.allowPrivateNetwork === true)
+  const network = sharedMcpHttpFetch(
+    connection.transport.url,
+    connection.transport.allowPrivateNetwork === true,
+    undefined,
+    authProvider !== undefined,
+  )
   const transport = new StreamableHTTPClientTransport(new URL(connection.transport.url), {
     fetch: network.fetch,
+    ...(authProvider ? { authProvider } : {}),
     requestInit: { headers, redirect: 'error' },
     reconnectionOptions: {
       maxRetries: 0,

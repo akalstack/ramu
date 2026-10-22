@@ -97,6 +97,21 @@ export class HostCredentialStore {
     }
   }
 
+  /** Replaces the value behind an existing reference in place, for rotating OAuth tokens. The reference stays valid. */
+  async update(scope: HostCredentialScope, reference: string, value: string): Promise<void> {
+    if (!value || Buffer.byteLength(value) > 64 * 1024) throw new Error('Enter a credential of at most 64 KB')
+    let entry: CredentialEntry | undefined
+    try {
+      entry = await this.entry(scope, reference)
+      await entry.setPassword(value, AbortSignal.timeout(10_000))
+      if ((await entry.getPassword(AbortSignal.timeout(10_000))) !== value) throw new Error('Readback failed')
+      this.state = 'available'
+    } catch {
+      this.state = 'unavailable'
+      throw safeError()
+    }
+  }
+
   async read(scope: HostCredentialScope, reference: string): Promise<string> {
     try {
       const entry = await this.entry(scope, reference)

@@ -14,6 +14,7 @@ import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dialog, Dropdown } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
+import { ramu } from '../ipc'
 import { useWorkspace } from '../workspace/workspace'
 import { useModelSets } from '../models/ModelSets'
 import { useAppSettings } from './AppSettings'
@@ -57,7 +58,9 @@ function CredentialFields({
       </p>
       {names.map((entry) => (
         <div key={entry} className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate font-mono text-caption">{entry}</span>
+          <span className="min-w-0 flex-1 truncate font-mono text-caption">
+            {entry === 'mcp-oauth' ? t('OAuth sign-in') : entry}
+          </span>
           <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => onRemove(entry)}>
             {t('Remove')}
           </Button>
@@ -394,12 +397,14 @@ export function McpSettings() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [signingIn, setSigningIn] = useState<string | null>(null)
   const epoch = useRef(0)
   useEffect(() => {
     epoch.current++
     setEditing(null)
     setReview(null)
     setRemoving(null)
+    setSigningIn(null)
     setError('')
     setBusy(false)
     return () => {
@@ -411,6 +416,7 @@ export function McpSettings() {
   useEffect(
     () =>
       on('mcp:changed', () => {
+        setSigningIn(null)
         void refetch()
       }),
     [on, refetch],
@@ -528,6 +534,45 @@ export function McpSettings() {
                         : 'Connect',
                   )}
                 </Button>
+                {connection.transport.type === 'http' && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!canAdminister || busy || !connection.enabled || signingIn === connection.id}
+                    onClick={() =>
+                      void act(async () => {
+                        const started = await invoke('mcp.signIn', connection.id)
+                        if (started) {
+                          setSigningIn(connection.id)
+                          await ramu.invoke('app.openExternal', started.url)
+                        }
+                      })
+                    }
+                  >
+                    {t(
+                      connection.transport.headerSecretRefs['mcp-oauth'] || status === 'sign-in-required'
+                        ? 'Sign in again'
+                        : 'Sign in',
+                    )}
+                  </Button>
+                )}
+                {signingIn === connection.id && (
+                  <>
+                    <span role="status" className="text-caption text-muted-foreground">
+                      {t('Waiting for sign-in in your browser…')}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setSigningIn(null)
+                        void invoke('mcp.cancelSignIn', connection.id)
+                      }}
+                    >
+                      {t('Cancel sign-in')}
+                    </Button>
+                  </>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"

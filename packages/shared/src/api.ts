@@ -638,6 +638,12 @@ export interface RamuMethods {
     projectId: string | null,
   ): Promise<SharedMcpAccountReadiness[]>
   'mcp.approve'(input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }): SharedMcpGrant
+  /**
+   * Starts OAuth sign-in on the host and returns the page to open there, or null when stored tokens already work.
+   * Only the host's own window can run it: the callback is a loopback listener on the host.
+   */
+  'mcp.signIn'(connectionId: string): Promise<{ url: string } | null>
+  'mcp.cancelSignIn'(connectionId: string): void
   /** Write-only: the value is stored on the host and never returned by any method. */
   'mcp.setCredential'(connectionId: string, name: string, value: string): Promise<void>
   'mcp.removeCredential'(connectionId: string, name: string): Promise<void>

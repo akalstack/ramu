@@ -6,6 +6,11 @@ import type { SharedMcpConnection } from '@ramu/shared/mcp'
  * There is deliberately no plaintext, environment-variable or provider-token fallback. */
 export interface HostSecretReader {
   read(input: { hostId: string; connectionId: string; serviceAccountId: string; reference: string }): Promise<string>
+  /** Replaces the value behind an existing reference in place (OAuth refresh), keeping the definition unchanged. */
+  write?(
+    input: { hostId: string; connectionId: string; serviceAccountId: string; reference: string },
+    value: string,
+  ): Promise<void>
 }
 
 /** Only explicitly reviewed local commands may reach this factory. This is host execution, not a sandbox.

@@ -17,6 +17,7 @@ vi.mock('../src/settings/SettingsScope', async () => {
 vi.mock('../src/workspace/workspace', () => ({ useWorkspace: () => ({ composing: 'project' }) }))
 vi.mock('../src/models/ModelSets', () => ({ useModelSets: () => ({ preferences: { sets: [], defaultStepId: '' } }) }))
 vi.mock('../src/settings/AppSettings', () => ({ useAppSettings: () => ({ preferences: { providerBinaries: {} } }) }))
+vi.mock('../src/ipc', () => ({ ramu: { invoke: vi.fn() } }))
 vi.mock('../src/Menu', () => ({ Dialog: () => null, Dropdown: () => null }))
 
 const snapshot: SharedMcpManagement = {
@@ -64,6 +65,11 @@ it('names the server, selected project and providers without claiming native-run
   expect(html).not.toContain('alice') // an unverified service-account ID is not presented as authenticated identity
 })
 
+it('offers OAuth sign-in on a remote server only to the host administrator', () => {
+  expect(render(true)).toMatch(/<button(?![^>]* disabled="")[^>]*>Sign in<\/button>/)
+  expect(render(false)).toMatch(/<button[^>]* disabled=""[^>]*>Sign in<\/button>/)
+})
+
 it('renders administration unavailable for a paired client while preserving status', () => {
   const html = render(false)
   expect(html).toContain('Manage MCP connections and credentials on the host running Ramu')
@@ -85,6 +91,7 @@ it('keeps authentication failures distinct and presents an actionable empty stat
   })
   expect(html).toContain('Sign-in required')
   expect(html).toContain('Sign in to the external service')
+  expect(html).toMatch(/<button[^>]*>Sign in again<\/button>/)
   const empty = render(true, { ...snapshot, connections: [] })
   expect(empty).toContain('No servers connected through Ramu yet.')
 })

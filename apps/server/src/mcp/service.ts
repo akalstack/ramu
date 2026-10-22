@@ -12,7 +12,8 @@ import { HostCredentialStore } from '../credentials/store'
 import { SharedMcpPolicy, type ExternalMcpSession } from './policy'
 import { ExternalMcpGateway, type ExternalMcpGatewayHost } from './gateway'
 import { connectSharedMcpStdio } from './stdio'
-import { connectSharedMcpHttp } from './http'
+import { connectSharedMcpHttp, sharedMcpHttpFetch } from './http'
+import { OAUTH_REFERENCE_NAME, OAuthSignIn } from './oauth'
 import { SharedMcpConnectionError } from './errors'
 import { SharedMcpStorage } from './storage'
 
@@ -28,6 +29,7 @@ export class SharedMcpService {
   private inspections = new Map<string, SharedMcpInspection>()
   private management = new Map<string, ExternalMcpGateway>()
   private busy = new Set<string>()
+  private signIns = new Map<string, OAuthSignIn>()
   private epochs = new Map<string, symbol>()
   private idle = new Map<string, ReturnType<typeof setTimeout>>()
   private closed = false
@@ -47,6 +49,17 @@ export class SharedMcpService {
               accountId: input.serviceAccountId,
             },
             input.reference,
+          ),
+        write: (input, value) =>
+          credentials.update(
+            {
+              hostId: input.hostId,
+              integration: 'mcp',
+              connectionId: input.connectionId,
+              accountId: input.serviceAccountId,
+            },
+            input.reference,
+            value,
           ),
       }),
   ) {
@@ -253,6 +266,7 @@ export class SharedMcpService {
    */
   async setCredential(connectionId: string, name: string, value: string) {
     const connection = this.connection(connectionId)
+    if (name === OAUTH_REFERENCE_NAME) throw new Error('Sign in instead of entering this credential')
     if (!/^[A-Za-z_][A-Za-z0-9_-]{0,127}$/.test(name)) throw new Error('Use a plain name for this credential')
     const reference = await this.credentials.put(this.scopeOf(connection), value)
     const { id: _id, hostId: _hostId, revision: _revision, ...definition } = this.connection(connectionId)
@@ -282,6 +296,93 @@ export class SharedMcpService {
     this.inspections.delete(connectionId)
     void this.release(connectionId)
     this.changed()
+  }
+
+  /**
+   * Starts an OAuth sign-in for a remote server and returns the page to open on this host. The callback listener is
+   * loopback-only and bound to this connection, revision and service account; it lives only until it completes,
+   * is cancelled or times out. Tokens go to the host credential store, never into settings.
+   */
+  async signIn(connectionId: string): Promise<{ url: string } | null> {
+    if (this.closed) throw new Error('Shared MCP management is closed')
+    const connection = this.connection(connectionId)
+    if (connection.transport.type !== 'http') throw new Error('Sign-in applies to remote servers')
+    this.signIns.get(connectionId)?.cancel()
+    const transport = connection.transport
+    const network = sharedMcpHttpFetch(transport.url, transport.allowPrivateNetwork === true, undefined, true)
+    const scope = this.scopeOf(connection)
+    const stillCurrent = () => {
+      try {
+        const current = this.connection(connectionId)
+        return current.revision === connection.revision && current.serviceAccountId === connection.serviceAccountId
+      } catch {
+        return false
+      }
+    }
+    const fail = (reason: string) => {
+      if (!stillCurrent() && !this.policy.snapshot().connections.some((entry) => entry.id === connectionId)) return
+      const current = this.policy.snapshot().connections.find((entry) => entry.id === connectionId)
+      this.checks.set(connectionId, {
+        revision: current?.revision ?? connection.revision,
+        status: 'sign-in-required',
+        checkedAt: Date.now(),
+        reason,
+      })
+      this.changed()
+    }
+    const sign: OAuthSignIn = new OAuthSignIn({
+      stillCurrent,
+      serverUrl: transport.url,
+      fetch: network.fetch,
+      complete: async (record) => {
+        const current = this.connection(connectionId)
+        const reference =
+          current.transport.type === 'http' ? current.transport.headerSecretRefs[OAUTH_REFERENCE_NAME] : undefined
+        const value = JSON.stringify(record)
+        if (reference) await this.credentials.update(scope, reference, value)
+        else {
+          const created = await this.credentials.put(scope, value)
+          const { id: _id, hostId: _hostId, revision: _revision, ...definition } = current
+          if (definition.transport.type !== 'http') throw new Error('Sign-in applies to remote servers')
+          try {
+            this.policy.saveConnection(
+              {
+                ...definition,
+                transport: {
+                  ...definition.transport,
+                  headerSecretRefs: { ...definition.transport.headerSecretRefs, [OAUTH_REFERENCE_NAME]: created },
+                },
+              },
+              connectionId,
+            )
+          } catch (error) {
+            await this.credentials.remove(scope, created).catch(() => {})
+            throw error
+          }
+        }
+        this.inspections.delete(connectionId)
+        await this.release(connectionId)
+        const saved = this.connection(connectionId)
+        this.checks.set(connectionId, {
+          revision: saved.revision,
+          status: 'not-connected',
+          checkedAt: null,
+          reason: 'Signed in. Connect to review the tools.',
+        })
+        this.changed()
+      },
+      failed: fail,
+      close: () => {
+        if (this.signIns.get(connectionId) === sign) this.signIns.delete(connectionId)
+        void network.close()
+      },
+    })
+    this.signIns.set(connectionId, sign)
+    return sign.begin()
+  }
+
+  cancelSignIn(connectionId: string) {
+    this.signIns.get(connectionId)?.cancel()
   }
 
   async removeCredential(connectionId: string, name: string) {
@@ -500,6 +601,7 @@ export class SharedMcpService {
 
   async close() {
     this.closed = true
+    for (const sign of [...this.signIns.values()]) sign.cancel()
     this.epochs.clear()
     for (const timer of this.idle.values()) clearTimeout(timer)
     this.idle.clear()
