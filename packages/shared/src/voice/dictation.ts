@@ -18,16 +18,28 @@ export interface DictationTarget {
   selection: DraftSelection
 }
 
+/** Recording and its audio are capped in memory as well as in time (16 kHz, 16-bit mono for the full five minutes). */
+export const DICTATION_MAX_BYTES = 16_000 * 2 * (DICTATION_MAX_MS / 1000)
+
 export type DictationState =
   | { phase: 'idle' }
+  /** The engine is being prepared and permission may be asked; nothing is recorded yet. */
+  | { phase: 'preparing'; target: DictationTarget }
   | { phase: 'recording'; target: DictationTarget; startedAt: number }
   | { phase: 'limit'; target: DictationTarget; startedAt: number }
   | { phase: 'transcribing'; target: DictationTarget; startedAt: number }
+  /** The draft changed while the take ran; the text waits for Insert at cursor, Copy or Discard and is never placed unasked. */
+  | { phase: 'review'; draftKey: string; text: string }
   | { phase: 'failed'; reason: DictationFailure }
 
-export type DictationFailure = 'permission' | 'unavailable' | 'capture' | 'recognition' | 'empty' | 'interrupted'
+export type DictationFailure =
+  'permission' | 'unavailable' | 'language' | 'model' | 'capture' | 'recognition' | 'empty' | 'interrupted'
 
 export type DictationEvent =
+  | { type: 'prepare'; target: DictationTarget }
+  /** Capture actually began. */
+  | { type: 'recording'; now: number }
+  | { type: 'review'; draftKey: string; text: string }
   | { type: 'start'; target: DictationTarget; now: number }
   | { type: 'tick'; now: number }
   | { type: 'stop' }
@@ -41,10 +53,19 @@ export const IDLE: DictationState = { phase: 'idle' }
 
 /** A take is active while capture or recognition is running or waiting on the person; the draft is frozen then. */
 export const dictationBusy = (state: DictationState): boolean =>
-  state.phase === 'recording' || state.phase === 'limit' || state.phase === 'transcribing'
+  state.phase === 'preparing' ||
+  state.phase === 'recording' ||
+  state.phase === 'limit' ||
+  state.phase === 'transcribing'
 
 export function reduceDictation(state: DictationState, event: DictationEvent): DictationState {
   switch (event.type) {
+    case 'prepare':
+      return dictationBusy(state) ? state : { phase: 'preparing', target: event.target }
+    case 'recording':
+      return state.phase === 'preparing' ? { phase: 'recording', target: state.target, startedAt: event.now } : state
+    case 'review':
+      return state.phase === 'transcribing' ? { phase: 'review', draftKey: event.draftKey, text: event.text } : state
     case 'start':
       // One take at a time; starting again never replaces a take that is still running.
       return dictationBusy(state) ? state : { phase: 'recording', target: event.target, startedAt: event.now }
@@ -57,9 +78,10 @@ export function reduceDictation(state: DictationState, event: DictationEvent): D
         ? { phase: 'transcribing', target: state.target, startedAt: state.startedAt }
         : state
     case 'cancel':
-      return dictationBusy(state) || state.phase === 'failed' ? IDLE : state
+      return dictationBusy(state) || state.phase === 'failed' || state.phase === 'review' ? IDLE : state
     case 'interrupt':
       // Existing text is untouched either way; a system interruption says why, a scope change is silent.
+      if (state.phase === 'review') return event.reason === 'scope' ? IDLE : state
       return !dictationBusy(state)
         ? state
         : event.reason === 'system'
