@@ -9,7 +9,7 @@ import {
 } from '@ramu/shared/computerBridge'
 import { MAIN_DISPLAY } from '../../computer/macos'
 import { ComputerRouter } from '../../computer/router'
-import { installOcu } from '../../computer/ocu'
+import { OCU_VERSION, installOcu } from '../../computer/ocu'
 import { LockedUse } from '../../computer/lockedUse'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
@@ -107,6 +107,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
         // The host's own Keep awake setting decides whether it can sleep while an agent works on it.
         keepAwake: awake.status().active,
         globalPointer: workspace.getAppState<boolean>('computer:globalPointer', false) === true,
+        appVersion: OCU_VERSION,
       }),
     },
     // Lets drags in an app move windows and select text by using the real pointer. Off unless the owner turns it on.

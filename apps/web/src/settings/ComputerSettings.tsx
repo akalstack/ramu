@@ -5,7 +5,7 @@ import { Button } from '@/components/desktop-button'
 import { invokeOn, ramu } from '../ipc'
 import { useComputers } from '../workspace/computers'
 import { t, useLanguage } from '../i18n'
-import { runtimeHelp } from './computerStatus'
+import { appControlHelp, keepAwakeHelp, runtimeHelp } from './computerStatus'
 import { errorText } from '../lib/errors'
 
 type Status = ReturnType<RamuMethods['computer.status']>
@@ -68,14 +68,7 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
       </SettingsRow>
       {status?.enabled && status.apps && (
         <SettingsRow>
-          <SettingsLabel
-            title={t('Limit access to one app')}
-            help={t(
-              status.apps.available
-                ? 'Ready. Choose an app in a thread; it works in the background without moving your cursor.'
-                : (status.apps.detail ?? 'App control is not available on this host.'),
-            )}
-          />
+          <SettingsLabel title={t('Limit access to one app')} help={t(appControlHelp(status))} />
           {!status.apps.available && status.apps.reason === 'not-installed' && (
             <Button size="sm" disabled={busy} onClick={() => void install()}>
               {busy ? t('Installing…') : t('Install')}
@@ -112,6 +105,11 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
           >
             {status.globalPointer ? t('Turn off') : t('Turn on')}
           </Button>
+        </SettingsRow>
+      )}
+      {status?.enabled && (
+        <SettingsRow>
+          <SettingsLabel title={t('Keep this computer awake')} help={t(keepAwakeHelp(status))} />
         </SettingsRow>
       )}
       <LockedUseRow hostId={hostId} visible={!!status?.enabled && !!status.apps?.available} />

@@ -184,6 +184,8 @@ export interface RamuMethods {
     keepAwake: boolean
     /** Whether app drags may use the real pointer (window moves, text selection). */
     globalPointer: boolean
+    /** The pinned Open Computer Use release this host runs; absent on hosts from before it was reported. */
+    appVersion?: string
   }
   /** Installs the pinned Open Computer Use release for app-scoped access. Owning host only. */
   /** Whether the agent can keep working while the Mac is locked (Open Computer Use's Locked Use). */
