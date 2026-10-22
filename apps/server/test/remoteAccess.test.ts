@@ -5,17 +5,23 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DeviceStore, PAIRING_TTL_MS } from '../src/remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from '../src/remote/access'
+import { verifyHost } from '@ramu/shared/hostProof'
 
 const cleanup: (() => Promise<void> | void)[] = []
 afterEach(async () => {
   for (const close of cleanup.splice(0)) await close()
 })
-async function fixture() {
+async function fixture(hostId?: string) {
   let now = Date.now()
   const dir = mkdtempSync(join(tmpdir(), 'ramu-access-'))
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }))
   const devices = new DeviceStore(join(dir, 'devices.json'))
-  const access = new RemoteAccess({ devices, browserOrigins: ['https://companion.example'], now: () => now })
+  const access = new RemoteAccess({
+    devices,
+    browserOrigins: ['https://companion.example'],
+    ...(hostId ? { hostId } : {}),
+    now: () => now,
+  })
   const server: Server = createServer(async (req, res) => {
     const device = await access.accept(req, res)
     if (device === undefined) return
@@ -45,6 +51,7 @@ async function fixture() {
       now += ms
     },
     now: () => now,
+    base: `http://127.0.0.1:${address.port}`,
   }
 }
 
@@ -129,7 +136,13 @@ it('lets a viewer device reach only the computer screen watching methods, never 
   const viewer = f.devices.redeem(f.devices.createCode(f.now(), 'viewer').code, 'Phone', f.now())!.device
   for (const method of ['computer.frame', 'computer.session', 'computer.rtcOffer'])
     expect(deviceMayInvoke(viewer, method)).toBe(true)
-  for (const method of ['computer.input', 'computer.takeControl', 'computer.grantViewer', 'computer.setEnabled', 'computer.revoke'])
+  for (const method of [
+    'computer.input',
+    'computer.takeControl',
+    'computer.grantViewer',
+    'computer.setEnabled',
+    'computer.revoke',
+  ])
     expect(deviceMayInvoke(viewer, method)).toBe(false)
 })
 
@@ -149,4 +162,59 @@ it('renews a device token over HTTP without a gap, and refuses renewal without a
   f.advance(3 * 60_000)
   expect((await events(paired.token)).status).toBe(401)
   expect((await events(renewed.token)).status).toBe(200)
+})
+
+const HOST = 'a'.repeat(32)
+const CHALLENGE = 'challenge-0123456789abcdef'
+
+async function pairedHost(hostId = HOST) {
+  const f = await fixture(hostId)
+  const code = f.devices.createCode(f.now()).code
+  const data = (await (await f.pair(code)).json()) as { token: string; deviceId: string; hostId?: string }
+  const check = (token: string, expectedHostId?: string, baseUrl?: string) =>
+    verifyHost({
+      fetch: (url) => fetch(url.replace('http://base', baseUrl ?? f.base)),
+      baseUrl: 'http://base',
+      deviceId: data.deviceId,
+      token,
+      expectedHostId,
+      challenge: CHALLENGE,
+    })
+  return { f, data, check }
+}
+
+it('binds the host id at pairing and proves it later without any credential on the wire', async () => {
+  const { data, check } = await pairedHost()
+  expect(data.hostId).toBe(HOST)
+  expect(await check(data.token, data.hostId)).toEqual({ state: 'verified', hostId: HOST })
+})
+
+it('does not verify a host that is not the one paired with, or a token it does not hold', async () => {
+  const { data, check } = await pairedHost()
+  expect(await check(data.token, 'b'.repeat(32))).toEqual({ state: 'mismatch' })
+  expect(await check('someone-elses-token', data.hostId)).toEqual({ state: 'mismatch' })
+})
+
+it('reports a host without the endpoint as unsupported and an unreachable address as unreachable', async () => {
+  const f = await fixture()
+  const code = f.devices.createCode(f.now()).code
+  const data = (await (await f.pair(code)).json()) as { token: string; deviceId: string; hostId?: string }
+  expect(data.hostId).toBeUndefined()
+  const asked = (baseUrl: string) =>
+    verifyHost({
+      fetch: (url) => fetch(url.replace('http://base', baseUrl)),
+      baseUrl: 'http://base',
+      deviceId: data.deviceId,
+      token: data.token,
+      challenge: CHALLENGE,
+    })
+  // Without a host id the identity route is absent and falls through to normal authentication.
+  expect((await asked(f.base)).state).not.toBe('verified')
+  expect(await asked('http://127.0.0.1:1')).toEqual({ state: 'unreachable' })
+})
+
+it('refuses unknown devices and malformed challenges alike', async () => {
+  const { f, data } = await pairedHost()
+  expect((await f.request(`/identity?device=nope&challenge=${CHALLENGE}`)).status).toBe(401)
+  expect((await f.request(`/identity?device=${data.deviceId}&challenge=short`)).status).toBe(401)
 })

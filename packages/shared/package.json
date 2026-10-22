@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@noble/hashes": "1.8.0",
     "react-markdown": "catalog:",
     "rehype-raw": "^7.0.0",
     "rehype-sanitize": "^6.0.0",

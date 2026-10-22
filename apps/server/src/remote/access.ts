@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { PAIR_PATH, PROTOCOL_VERSION, RENEW_PATH } from '@ramu/contracts'
+import { CHALLENGE_PATTERN, IDENTITY_PATH, PAIR_PATH, PROTOCOL_VERSION, RENEW_PATH } from '@ramu/contracts'
+import { hostProof } from '@ramu/shared/hostProof'
 import { authorized } from './auth'
 import type { DeviceInfo, DeviceStore } from './devices'
 
@@ -87,6 +88,8 @@ export class RemoteAccess {
       devices: DeviceStore
       legacyToken?: () => string
       browserOrigins: string[]
+      /** The host's durable id, proved to a paired device on request. Absent: the endpoint does not exist (older hosts). */
+      hostId?: string
       now?: () => number
     },
   ) {}
@@ -144,6 +147,20 @@ export class RemoteAccess {
         .writeHead(401, { 'Content-Type': 'application/json' })
         .end(message ? JSON.stringify({ error: message }) : undefined)
     }
+    if (path === IDENTITY_PATH && req.method === 'GET' && this.options.hostId) {
+      const query = new URL(req.url ?? '/', 'http://host').searchParams
+      const deviceId = query.get('device') ?? ''
+      const challenge = query.get('challenge') ?? ''
+      const key = CHALLENGE_PATTERN.test(challenge) ? this.options.devices.presenceKey(deviceId) : null
+      if (!key) {
+        rejected()
+        return
+      }
+      res
+        .writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+        .end(JSON.stringify({ hostId: this.options.hostId, proof: hostProof(key, this.options.hostId, challenge) }))
+      return
+    }
     if (path === PAIR_PATH && req.method === 'POST') {
       let bytes = 0
       const chunks: Buffer[] = []
@@ -175,6 +192,7 @@ export class RemoteAccess {
         JSON.stringify({
           deviceId: paired.device.id,
           token: paired.token,
+          ...(this.options.hostId ? { hostId: this.options.hostId } : {}),
           role: paired.device.role,
           expiresAt: paired.device.expiresAt,
         }),

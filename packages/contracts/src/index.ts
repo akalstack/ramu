@@ -32,6 +32,13 @@ export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES]
 export type RuntimeEndpoint = { kind: 'socket'; path: string } | { kind: 'http'; url: string; token: string }
 
 export const AUTH_SCHEME = 'Bearer'
+/** GET /identity?device=<id>&challenge=<nonce>: the host proves it knows this device's key, without any credential being sent. */
+export const IDENTITY_PATH = '/identity'
+export const CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
+export interface HostIdentityResponse {
+  hostId: string
+  proof: string
+}
 export const PAIR_PATH = '/pair'
 /** POST /renew (authenticated with the current device token) swaps it for a fresh one; see `DeviceStore.renew`. */
 export const RENEW_PATH = '/renew'
@@ -48,6 +55,8 @@ export interface PairRequest {
 export interface PairResponse {
   deviceId: string
   token: string
+  /** The host's durable identifier, bound at this explicit pairing and checked later through IDENTITY_PATH. */
+  hostId?: string
 }
 export const PROTOCOL_HEADER = 'x-ramu-protocol'
 export const MAX_REQUEST_BYTES = 16_000_000

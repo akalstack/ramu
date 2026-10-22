@@ -102,8 +102,10 @@ mkdirSync(userData, { recursive: true })
 // Network clients present either their own device token (see `ramu pair`) or the older shared token.
 const remoteTokens = config.allowLegacyToken ? new TokenStore(config.tokenPath) : null
 const devices = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
+const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
 const remoteAccess = new RemoteAccess({
   devices,
+  hostId,
   browserOrigins: config.browserOrigins,
   ...(remoteTokens ? { legacyToken: () => remoteTokens.current() } : {}),
 })
@@ -114,7 +116,7 @@ const stopPresenceNetwork = runtimeNetwork.subscribe(() => {
   void advertiser.refresh().catch(() => {})
 })
 // Nearby discovery: advertises the bound listener only while access and Discoverable are both on.
-const advertiser = new HostAdvertiser({ hostId: readDiscoveryHostId(join(userData, 'discovery.json')) })
+const advertiser = new HostAdvertiser({ hostId })
 // `--listen` / RAMU_LISTEN wins and cannot be changed from Settings. Otherwise Settings decides, and applies without a restart.
 let network: NetworkSetting = config.listen
   ? {
