@@ -18,6 +18,7 @@ import { useModelSets } from '../../models/ModelSets'
 import { errorText } from '../../workspace/TaskPane'
 import { useHostRuntime, useWorkspace } from '../../workspace/workspace'
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
+import { ForgeAccessPanel } from './ForgeAccessPanel'
 import { startCheckoutChat } from './startCheckoutChat'
 import { useHost } from '../../workspace/HostProvider'
 import { queryInvokerFor } from '../../git/hostQuery'
@@ -116,11 +117,9 @@ export function PullRequestSection({
   if (availability === 'not-github' || availability === 'no-remote') return null
   if (availability !== 'ready')
     return (
-      <p className="muted text-muted-foreground small text-caption m-[0_2px_8px]">
-        {availability === 'no-cli'
-          ? t('Install the GitHub CLI (gh) to open pull requests and follow their checks here.')
-          : t('Run gh auth login in a terminal to open pull requests and follow their checks here.')}
-      </p>
+      <div className="m-[0_2px_8px]">
+        <ForgeAccessPanel taskId={taskId} repoId={binding.repoId} unavailable={availability} />
+      </div>
     )
 
   const handOff = async (kind: PullRequestFeedbackKind) => {
@@ -298,6 +297,12 @@ export function PullRequestSection({
           )}
         </>
       )}
+      <details className="text-caption">
+        <summary className="cursor-default text-muted-foreground">{t('GitHub access')}</summary>
+        <div className="mt-1.5">
+          <ForgeAccessPanel taskId={taskId} repoId={binding.repoId} />
+        </div>
+      </details>
     </div>
   )
 }

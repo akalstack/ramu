@@ -297,3 +297,30 @@ describe('detected GitHub sign-ins', () => {
     expect(JSON.stringify(signedIn)).not.toContain('SECRET')
   })
 })
+
+describe('repositories offered for cloning', () => {
+  it('keeps well-formed https repositories and drops everything else', () => {
+    const repositories = forge.parseRepositories([
+      {
+        nameWithOwner: 'o/r',
+        url: 'https://github.com/o/r',
+        isPrivate: true,
+        description: 'A repo',
+        updatedAt: '2026-01-02T00:00:00Z',
+      },
+      { nameWithOwner: 'o/bad name', url: 'https://github.com/o/bad' },
+      { nameWithOwner: 'o/creds', url: 'https://user:pw@github.com/o/creds' },
+      { nameWithOwner: 'o/ssh', url: 'ssh://git@github.com/o/ssh' },
+      { url: 'https://github.com/o/none' },
+    ])
+    expect(repositories).toEqual([
+      {
+        fullName: 'o/r',
+        description: 'A repo',
+        isPrivate: true,
+        cloneUrl: 'https://github.com/o/r.git',
+        updatedAt: Date.parse('2026-01-02T00:00:00Z'),
+      },
+    ])
+  })
+})

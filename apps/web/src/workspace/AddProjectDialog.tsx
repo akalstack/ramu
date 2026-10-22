@@ -6,6 +6,7 @@ import { Folder, ChevronLeft } from 'lucide-react'
 import { invokerFor } from '../ipc'
 import { ownHostId } from '../hosts'
 import { errorText } from './TaskPane'
+import { CloneFromGitHub } from './CloneFromGitHub'
 import { onFolderPick, onRepoChoice, type FolderPick, type RepoChoice } from './addProject'
 
 const name = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
@@ -162,6 +163,7 @@ function HostFolderDialog() {
           <p className="muted text-muted-foreground small text-caption m-0 p-[2px_6px]">{t('No folders here')}</p>
         )}
       </div>
+      {listing && <CloneFromGitHub host={request.host} parent={listing.path} onCloned={(path) => close(path)} />}
     </Dialog>
   )
 }

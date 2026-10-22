@@ -165,3 +165,22 @@ export interface ForgeConnectionSummary {
   /** The choice per origin: a saved connection id, or `cli` to keep using the detected sign-in. */
   selection?: Record<string, string>
 }
+
+/** A GitHub repository the signed-in account can see, for choosing something to clone. */
+export interface ForgeRepositorySummary {
+  /** `owner/name`. */
+  fullName: string
+  description: string | null
+  isPrivate: boolean
+  /** HTTPS clone address. Never carries credentials. */
+  cloneUrl: string
+  updatedAt: number
+}
+
+/** The account a repository's pull requests, issues and publishing use on its host, and why. */
+export interface ForgeRepositoryAccount {
+  origin: string | null
+  login: string | null
+  source: ForgeAccountSource
+  ambiguous: boolean
+}

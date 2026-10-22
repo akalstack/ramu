@@ -1,6 +1,7 @@
 // GitHub pull requests and issues through the `gh` CLI, which brings the user's own sign-in.
 // Like git.ts, every call uses an argument array (never a shell string) and an explicit working directory.
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { execFile } from 'node:child_process'
 import type {
   ForgeAccessReport,
@@ -9,6 +10,8 @@ import type {
   ForgeCheck,
   ForgeCheckState,
   ForgeConnectionSummary,
+  ForgeRepositoryAccount,
+  ForgeRepositorySummary,
   ForgeStatus,
   IssueLink,
   IssueSummary,
@@ -189,7 +192,19 @@ export async function resolvedConnectionId(cwd: string): Promise<string | null> 
   }
 }
 
-const unknownCheck =(detail: string | null = null): ForgeCheckResult => ({ state: 'unknown', detail })
+/** The account this checkout's GitHub calls would use, without any network request. */
+export async function repositoryAccount(cwd: string): Promise<ForgeRepositoryAccount> {
+  const remote = await forgeRemoteOf(cwd)
+  // A repository with no remote yet is about to be published to github.com.
+  const origin = remote?.origin ?? 'github.com'
+  const none: ForgeRepositoryAccount = { origin, login: null, source: 'none', ambiguous: false }
+  if (!accountStore) return none
+  const account = await accountStore.resolve(origin, remote?.owner, remote?.repo)
+  if (account.kind === 'ambiguous') return { ...none, ambiguous: true }
+  return { origin, login: account.login, source: account.kind === 'saved' ? 'saved' : 'cli', ambiguous: false }
+}
+
+const unknownCheck = (detail: string | null = null): ForgeCheckResult => ({ state: 'unknown', detail })
 
 /** Runs `git ls-remote`: reads refs through the remote's own transport and credentials, and changes nothing. */
 function remoteReachable(cwd: string, remote: string): Promise<ForgeCheckResult> {
@@ -227,9 +242,15 @@ interface RepositoryRead {
 function readOutcome(status: number): ForgeCheckResult {
   if (status === 401) return { state: 'denied', detail: 'The credential was rejected. It may be expired or revoked.' }
   if (status === 403 || status === 429)
-    return { state: 'denied', detail: 'The server refused the request: a permission is missing or the rate limit was reached.' }
+    return {
+      state: 'denied',
+      detail: 'The server refused the request: a permission is missing or the rate limit was reached.',
+    }
   if (status === 404)
-    return { state: 'denied', detail: 'The repository was not found with this account. It may be private or need organization approval.' }
+    return {
+      state: 'denied',
+      detail: 'The repository was not found with this account. It may be private or need organization approval.',
+    }
   return { state: 'failed', detail: `The server answered with status ${status}.` }
 }
 
@@ -264,22 +285,30 @@ export async function checkAccess(
   const account =
     resolution?.kind === 'saved'
       ? { source: 'saved' as const, login: resolution.login, connectionId: resolution.connectionId, ambiguous: false }
-      : { source: 'cli' as const, login: resolution?.kind === 'cli' ? resolution.login : null, connectionId: null, ambiguous: false }
+      : {
+          source: 'cli' as const,
+          login: resolution?.kind === 'cli' ? resolution.login : null,
+          connectionId: null,
+          ambiguous: false,
+        }
   let read: ForgeCheckResult
   let write: ForgeCheckResult = unknownCheck()
   try {
     let body: RepositoryRead | null = null
     if (resolution?.kind === 'saved') {
-      const response = await (options.fetch ?? fetch)(`${githubApiBase(remote.origin)}/repos/${remote.owner}/${remote.repo}`, {
-        headers: {
-          Authorization: `Bearer ${resolution.token}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          'User-Agent': 'Ramu',
+      const response = await (options.fetch ?? fetch)(
+        `${githubApiBase(remote.origin)}/repos/${remote.owner}/${remote.repo}`,
+        {
+          headers: {
+            Authorization: `Bearer ${resolution.token}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'Ramu',
+          },
+          redirect: 'error',
+          signal: AbortSignal.timeout(15_000),
         },
-        redirect: 'error',
-        signal: AbortSignal.timeout(15_000),
-      })
+      )
       if (response.ok) body = (await response.json()) as RepositoryRead
       else read = readOutcome(response.status)
     } else {
@@ -299,7 +328,12 @@ export async function checkAccess(
     read =
       error instanceof ForgeError && error.availability
         ? { state: 'denied', detail: message }
-        : { state: 'failed', detail: /redirect/i.test(message) ? 'The server redirected the request, so the credential was not sent on.' : message.slice(0, 300) }
+        : {
+            state: 'failed',
+            detail: /redirect/i.test(message)
+              ? 'The server redirected the request, so the credential was not sent on.'
+              : message.slice(0, 300),
+          }
   }
   const { remote: name } = await publishRemote(cwd, await currentBranch(cwd)).catch(() => ({ remote: null }))
   const transport = name ? await remoteReachable(cwd, name) : unknownCheck('No remote is configured.')
@@ -521,8 +555,84 @@ export async function createPullRequest(cwd: string, input: PullRequestInput): P
   if (!branch) throw new Error('Switch to a branch before opening a pull request.')
   const args = ['pr', 'create', '--head', branch, '--base', input.base, '--title', input.title, '--body', input.body]
   if (input.draft) args.push('--draft')
-  await gh(cwd, args)
+  try {
+    await gh(cwd, args)
+  } catch (error) {
+    // A lost reply or a timeout does not say whether the pull request was created. Look at the intended branch with the
+    // same account before reporting a failure, so a retry never opens a duplicate.
+    const existing = await pullRequestStatus(cwd).catch(() => null)
+    if (
+      existing?.pullRequest &&
+      existing.pullRequest.state === 'open' &&
+      existing.pullRequest.baseBranch === input.base
+    )
+      return existing
+    throw error
+  }
   return pullRequestStatus(cwd)
+}
+
+interface RawRepository {
+  nameWithOwner?: string
+  description?: string | null
+  isPrivate?: boolean
+  url?: string
+  updatedAt?: string
+}
+
+/** Repository list entries as clone choices. Entries without a name or an https address are dropped. */
+export function parseRepositories(raw: RawRepository[]): ForgeRepositorySummary[] {
+  const found: ForgeRepositorySummary[] = []
+  for (const repository of raw) {
+    const fullName = repository.nameWithOwner
+    if (!fullName || !/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(fullName)) continue
+    let cloneUrl: string
+    try {
+      const url = new URL(repository.url ?? '')
+      if (url.protocol !== 'https:' || url.username || url.password) continue
+      cloneUrl = `${url.origin}/${fullName}.git`
+    } catch {
+      continue
+    }
+    found.push({
+      fullName,
+      description: repository.description?.slice(0, 300) || null,
+      isPrivate: repository.isPrivate === true,
+      cloneUrl,
+      updatedAt: repository.updatedAt ? Date.parse(repository.updatedAt) || 0 : 0,
+    })
+  }
+  return found
+}
+
+const REPOSITORY_FIELDS = 'nameWithOwner,description,isPrivate,url,updatedAt'
+
+/**
+ * Repositories to clone: an exact `owner/name` is looked up directly (works for any organization), otherwise the
+ * signed-in account's own repositories, most recently updated first, narrowed by the search text.
+ */
+export async function searchRepositories(search: string, cwd: string = homedir()): Promise<ForgeRepositorySummary[]> {
+  const text = search.trim()
+  if (/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(text)) {
+    const output = await gh(cwd, ['repo', 'view', text, '--json', REPOSITORY_FIELDS]).catch((error) => {
+      if (error instanceof ForgeError) throw error
+      return null
+    })
+    return output ? parseRepositories([JSON.parse(output) as RawRepository]) : []
+  }
+  const listed = parseRepositories(
+    JSON.parse(await gh(cwd, ['repo', 'list', '--limit', '100', '--json', REPOSITORY_FIELDS])) as RawRepository[],
+  )
+  const needle = text.toLowerCase()
+  return (
+    needle
+      ? listed.filter((repository) =>
+          `${repository.fullName} ${repository.description ?? ''}`.toLowerCase().includes(needle),
+        )
+      : listed
+  )
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 50)
 }
 
 /**

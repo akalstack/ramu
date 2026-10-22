@@ -72,7 +72,7 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
     if (!administrator()) throw new Error('Change GitHub connections on the host running Ramu')
   }
   /** Provider and store errors reach the client only after secrets are stripped. */
-  const redacted = async <T,>(work: () => Promise<T>): Promise<T> => {
+  const redacted = async <T>(work: () => Promise<T>): Promise<T> => {
     try {
       return await work()
     } catch (error) {
@@ -162,6 +162,14 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
     'forge.checkAccess': {
       args: z.tuple([id, id]),
       run: (taskId: string, repoId: string) => forge.checkAccess(gitCwdOf(taskId, repoId)),
+    },
+    'forge.searchRepositories': {
+      args: z.tuple([z.string().max(200)]),
+      run: (search: string) => redacted(() => forge.searchRepositories(search)),
+    },
+    'forge.repositoryAccount': {
+      args: z.tuple([id, id]),
+      run: (taskId: string, repoId: string) => forge.repositoryAccount(gitCwdOf(taskId, repoId)),
     },
     'forge.publishRepository': {
       args: z.tuple([id, id, publishInput]),

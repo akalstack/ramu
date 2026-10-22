@@ -273,6 +273,8 @@ export class PullRequestWatchService {
   }
 
   private async poll(): Promise<void> {
+    // Watches of one pull request read with one account are asked about once per poll, not once per checkout.
+    const statuses = new Map<string, ReturnType<typeof pullRequestStatus>>()
     for (const watch of this.list()) {
       if (this.stopping) return
       if (!this.valid(watch)) {
@@ -280,7 +282,16 @@ export class PullRequestWatchService {
         continue
       }
       try {
-        const { pullRequest: pr, availability } = await pullRequestStatus(watch.cwd, watch.url)
+        // A watch never moves to another identity on its own: when the account it read with is no longer the one
+        // this checkout resolves to, it ends and the person chooses to watch again.
+        if (watch.connectionId && (await resolvedConnectionId(watch.cwd)) !== watch.connectionId) {
+          this.remove((entry) => entry.id === watch.id)
+          continue
+        }
+        const statusKey = `${watch.url}|${watch.connectionId ?? ''}`
+        let pending = statuses.get(statusKey)
+        if (!pending) statuses.set(statusKey, (pending = pullRequestStatus(watch.cwd, watch.url)))
+        const { pullRequest: pr, availability } = await pending
         if (availability !== 'ready') continue
         if (!pr || pr.state !== 'open') {
           this.remove((entry) => entry.id === watch.id)

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { ForgeRepositoryAccount } from '@ramu/shared/types'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Dialog } from '../../Menu'
@@ -33,6 +34,17 @@ export function PublishRepositoryDialog({
   const [isPrivate, setPrivate] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [account, setAccount] = useState<ForgeRepositoryAccount | null>(null)
+  useEffect(() => {
+    let live = true
+    invoke('forge.repositoryAccount', taskId, repoId).then(
+      (next) => live && setAccount(next),
+      () => live && setAccount(null),
+    )
+    return () => {
+      live = false
+    }
+  }, [invoke, taskId, repoId])
 
   const publish = async () => {
     setBusy(true)
@@ -57,7 +69,7 @@ export function PublishRepositoryDialog({
     <Dialog
       title={t('Publish to GitHub')}
       confirmLabel={busy ? t('Publishing…') : t('Publish to GitHub')}
-      confirmDisabled={!NAME_PATTERN.test(name.trim())}
+      confirmDisabled={!NAME_PATTERN.test(name.trim()) || account?.ambiguous === true}
       busy={busy}
       error={error}
       onCancel={() => onDone(false)}
@@ -70,6 +82,13 @@ export function PublishRepositoryDialog({
         <p className="muted text-muted-foreground small text-caption m-0">
           {t('Creates a GitHub repository with the GitHub CLI, adds it as origin and pushes the current branch.')}
         </p>
+        <p role="status" className="muted text-muted-foreground small text-caption m-0">
+          {account?.ambiguous
+            ? t('Several GitHub accounts are saved. Choose one in Settings before publishing.')
+            : account?.login
+              ? t('Publishing as {0}', { '0': account.login })
+              : t('Publishing with the GitHub CLI sign-in on this host.')}
+        </p>
         <label>
           {t('Repository name')}
           <Input autoFocus value={name} maxLength={140} onChange={(event) => setName(event.target.value)} />
@@ -78,6 +97,9 @@ export function PublishRepositoryDialog({
           <Checkbox checked={isPrivate} onCheckedChange={(checked) => setPrivate(checked === true)} />
           {t('Private repository')}
         </label>
+        <p className="muted text-muted-foreground small text-caption m-0">
+          {t('Remote name: origin. Pushes the current branch and sets it to track the new repository.')}
+        </p>
       </fieldset>
     </Dialog>
   )
