@@ -13,7 +13,10 @@ afterEach(async () => {
   for (const close of cleanup.splice(0)) await close()
 })
 
-async function setup(access: 'full' | 'auto' | 'edits' = 'full') {
+async function setup(
+  access: 'full' | 'auto' | 'edits' = 'full',
+  approve?: (detail: string, signal?: AbortSignal) => Promise<boolean>,
+) {
   const terminals = new TerminalService(
     () => {},
     () => {},
@@ -28,7 +31,7 @@ async function setup(access: 'full' | 'auto' | 'edits' = 'full') {
   let current = source
   const server = new McpServer({ name: 'ramu', version: 'test' })
   const registry = new ToolRegistry(server, true)
-  registerBackgroundTerminalTools(registry.server, terminals, source, () => current)
+  registerBackgroundTerminalTools(registry.server, terminals, source, () => current, approve)
   registry.expose()
   const client = new Client({ name: 'test', version: '1' })
   const [left, right] = InMemoryTransport.createLinkedPair()
@@ -57,6 +60,45 @@ it.each(['auto', 'edits'] as const)('does not turn %s MCP trust into arbitrary c
   expect(denied.isError).toBe(true)
   expect(denied.content).toEqual([expect.objectContaining({ text: expect.stringContaining('Full access') })])
   expect(terminals.listBackground('thread')).toEqual([])
+})
+
+it.skipIf(process.platform === 'win32')(
+  'asks the person to approve the exact command outside Full access',
+  async () => {
+    const asked: string[] = []
+    const { call, terminals } = await setup('edits', async (detail) => {
+      asked.push(detail)
+      return !detail.includes('refuse-me')
+    })
+    const refused = await call('background_terminal_launch', { command: 'sleep 100 # refuse-me' })
+    expect(refused.isError).toBe(true)
+    expect(terminals.listBackground('thread')).toEqual([])
+    const allowed = await call('background_terminal_launch', { command: 'sleep 100' })
+    expect(allowed.isError).not.toBe(true)
+    expect(asked).toHaveLength(2)
+    expect(asked[1]).toContain('sleep 100')
+    expect(terminals.listBackground('thread')).toHaveLength(1)
+  },
+)
+
+it('refuses a launch when access changes while the approval is pending', async () => {
+  let release: (value: boolean) => void = () => {}
+  const harness = await setup('edits', () => new Promise<boolean>((resolve) => (release = resolve)))
+  const pending = harness.call('background_terminal_launch', { command: 'sleep 100' })
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  harness.change({ ...harness.source, settings: { ...harness.source.settings, access: 'auto' } })
+  release(true)
+  expect((await pending).isError).toBe(true)
+  expect(harness.terminals.listBackground('thread')).toEqual([])
+})
+
+it.skipIf(process.platform === 'win32')('attributes a command launched by a helper and keeps it after restart', async () => {
+  const { terminals } = await setup()
+  const mine = terminals.launchBackground('thread', null, tmpdir(), 'sleep 100')
+  const helper = terminals.launchBackground('thread', null, tmpdir(), 'sleep 101', 'helper')
+  expect(mine.startedBy).toBeUndefined()
+  expect(helper.startedBy).toBe('helper')
+  expect(terminals.listBackground('thread').find((entry) => entry.id === helper.id)?.startedBy).toBe('helper')
 })
 
 it('revalidates access and checkout at invocation rather than trusting a previously discovered tool', async () => {

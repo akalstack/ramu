@@ -2611,6 +2611,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "More activity": "Aktivitas lainnya",
   "Stop requested by you": "Penghentian diminta oleh Anda",
   "Stop requested by agent": "Penghentian diminta oleh agen",
+  "Started by a sub-agent": "Dimulai oleh sub-agen",
   "Background command stop requested": "Penghentian perintah latar belakang diminta",
   "You requested a stop for {0}": "Anda meminta penghentian {0}",
   "Waiting for the current browser action to finish": "Menunggu tindakan browser saat ini selesai",

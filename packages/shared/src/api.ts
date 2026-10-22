@@ -125,6 +125,8 @@ export interface BackgroundTerminalInfo {
   cursor: number
   /** Who asked it to stop. A command the person stopped must not be relaunched without a new instruction. */
   stoppedBy?: 'user' | 'agent'
+  /** Set when a sub-agent (helper), not the thread's main agent, launched the command. */
+  startedBy?: 'helper'
   capabilities: { inspect: true; stop: boolean; forceStop: boolean; input: boolean }
 }
 
