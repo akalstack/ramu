@@ -691,7 +691,14 @@ const mcpHttp = createServer(async (req, res) => {
     )
   const server = review ? withoutTools(registry.server) : registry.server
   if (!review) registerInteractiveTools(server, interactive, source.id)
-  if (!review) registerBackgroundTerminalTools(server, terminals, source, () => agents.get(source.id))
+  if (!review)
+    registerBackgroundTerminalTools(
+      server,
+      terminals,
+      source,
+      () => agents.get(source.id),
+      (detail, signal) => agents.requestPermission(source.id, 'Background command', detail, signal),
+    )
   if (!review)
     registerBrowserTools(
       server,

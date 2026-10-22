@@ -125,11 +125,23 @@ export function chromiumProfiles(
 /** The key Chromium derives from the "Safe Storage" keychain password on macOS. */
 export const chromiumKey = (password: string): Buffer => pbkdf2Sync(password, 'saltysalt', 1003, 16, 'sha1')
 
-/** Returns the plain value, or null when the value uses a scheme Ramu does not decrypt. */
-export function decryptChromiumValue(encrypted: Buffer, key: Buffer, stripDomainHash: boolean): string | null {
+/** Linux Chromium derives its keys with one iteration. `v10` uses the fixed password "peanuts"; `v11` uses the keyring secret. */
+export const chromiumLinuxKey = (password: string): Buffer => pbkdf2Sync(password, 'saltysalt', 1, 16, 'sha1')
+
+/** Keys by Chromium's value prefix. macOS only has `v10`. */
+export type ChromiumKeys = Partial<Record<'v10' | 'v11', Buffer>>
+
+/** Returns the plain value, or null when the value uses a scheme or key Ramu does not have. */
+export function decryptChromiumValue(
+  encrypted: Buffer,
+  keys: Buffer | ChromiumKeys,
+  stripDomainHash: boolean,
+): string | null {
   if (encrypted.length < 4) return null
   const version = encrypted.toString('latin1', 0, 3)
-  if (version !== 'v10') return null
+  if (version !== 'v10' && version !== 'v11') return null
+  const key = Buffer.isBuffer(keys) ? (version === 'v10' ? keys : undefined) : keys[version]
+  if (!key) return null
   try {
     const decipher = createDecipheriv('aes-128-cbc', key, Buffer.alloc(16, 0x20))
     let plain = Buffer.concat([decipher.update(encrypted.subarray(3)), decipher.final()])
@@ -145,7 +157,7 @@ const CHROMIUM_SAMESITE: Record<number, CookieSameSite> = { 0: 'no_restriction',
 /** Microseconds from 1601-01-01 to 1970-01-01. */
 const CHROME_EPOCH_OFFSET_US = 11_644_473_600_000_000
 
-export function readChromiumCookies(profileDir: string, key: Buffer): CookieRead {
+export function readChromiumCookies(profileDir: string, key: Buffer | ChromiumKeys): CookieRead {
   const database = [join(profileDir, 'Network', 'Cookies'), join(profileDir, 'Cookies')].find((path) =>
     existsSync(path),
   )
@@ -203,4 +215,21 @@ export function keychainPassword(browser: 'chrome' | 'edge', exec: Exec = run): 
   const [service, account] =
     browser === 'chrome' ? ['Chrome Safe Storage', 'Chrome'] : ['Microsoft Edge Safe Storage', 'Microsoft Edge']
   return exec('/usr/bin/security', ['find-generic-password', '-w', '-s', service, '-a', account])
+}
+
+/**
+ * Linux keeps Chromium's "Safe Storage" secret in the desktop keyring (libsecret). A missing tool or refusal returns null:
+ * cookies using that secret are then reported as unreadable instead of the import failing.
+ */
+export async function linuxKeyringPassword(browser: 'chrome' | 'edge', exec: Exec = run): Promise<string | null> {
+  const applications = browser === 'chrome' ? ['chrome', 'chromium'] : ['microsoft-edge']
+  for (const application of applications) {
+    try {
+      const secret = await exec('secret-tool', ['lookup', 'application', application])
+      if (secret) return secret
+    } catch {
+      // Try the next application name, then fall back to v10 cookies only.
+    }
+  }
+  return null
 }

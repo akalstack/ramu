@@ -243,9 +243,11 @@ export function BackgroundTerminals({
       ] ?? 'Unknown',
     )
   const stopLabel = (command: BackgroundTerminalInfo) =>
-    command.stoppedBy
-      ? ` · ${t(command.stoppedBy === 'user' ? 'Stop requested by you' : 'Stop requested by agent')}`
-      : ''
+    `${command.startedBy ? ` · ${t('Started by a sub-agent')}` : ''}${
+      command.stoppedBy
+        ? ` · ${t(command.stoppedBy === 'user' ? 'Stop requested by you' : 'Stop requested by agent')}`
+        : ''
+    }`
   const retry = () => {
     if (refresh.current?.scope === scope) void refresh.current.run()
     if (selected && inspect.current?.key === detailKey) void inspect.current.run()

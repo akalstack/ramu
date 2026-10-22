@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   importDomains,
@@ -17,6 +18,8 @@ import type {
 import type { BrowserProfiles } from './browserProfiles'
 import {
   chromiumKey,
+  chromiumLinuxKey,
+  linuxKeyringPassword,
   chromiumProfiles,
   firefoxProfiles,
   keychainPassword,
@@ -27,8 +30,21 @@ import {
 
 export type ImportSourceId = 'chrome' | 'edge' | 'firefox'
 
-/** Where each supported source keeps its profiles on macOS. Safari and other platforms stay unsupported for now. */
-export function sourceRoot(source: ImportSourceId, home: string): string {
+/** Where each supported source keeps its profiles on macOS and Linux. Safari and Windows stay unsupported. */
+export function sourceRoot(
+  source: ImportSourceId,
+  home: string,
+  platform: NodeJS.Platform = process.platform,
+  exists: (path: string) => boolean = existsSync,
+): string {
+  if (platform === 'linux') {
+    const first = (candidates: string[]) => candidates.find((path) => exists(path)) ?? candidates[0]!
+    return source === 'chrome'
+      ? first([join(home, '.config/google-chrome'), join(home, '.config/chromium')])
+      : source === 'edge'
+        ? join(home, '.config/microsoft-edge')
+        : first([join(home, '.mozilla/firefox'), join(home, 'snap/firefox/common/.mozilla/firefox')])
+  }
   const support = join(home, 'Library/Application Support')
   return source === 'chrome'
     ? join(support, 'Google/Chrome')
@@ -47,6 +63,8 @@ export interface ImporterDeps {
   /** Removes all website data of a profile. */
   clearData(profileId: string): Promise<void>
   keychainPassword?: typeof keychainPassword
+  keyringPassword?: typeof linuxKeyringPassword
+  platform?: NodeJS.Platform
   now?: () => number
 }
 
@@ -72,17 +90,17 @@ export class BrowserImporter {
 
   /** Browser profiles the person can choose from. Reads names only. */
   profiles(source: ImportSourceId): BrowserImportProfile[] {
-    const root = sourceRoot(source, this.deps.home)
+    const root = sourceRoot(source, this.deps.home, this.deps.platform)
     const list = source === 'firefox' ? firefoxProfiles(root) : chromiumProfiles(root)
     return list.map(({ id, name }) => ({ id, name }))
   }
 
   /**
-   * Reads a profile's cookies and lists the websites in them. Chromium browsers ask macOS for keychain access here; a refusal
+   * Reads a profile's cookies and lists the websites in them. Chromium browsers ask macOS for keychain access (or read the Linux keyring) here; a refusal
    * is reported, not bypassed. The parsed cookies wait in memory, under a token, for `run` or `cancel`.
    */
   async inspect(source: ImportSourceId, profileId: string): Promise<{ token: string; domains: BrowserImportDomain[] }> {
-    const root = sourceRoot(source, this.deps.home)
+    const root = sourceRoot(source, this.deps.home, this.deps.platform)
     const found = (source === 'firefox' ? firefoxProfiles(root) : chromiumProfiles(root)).find(
       (entry) => entry.id === profileId,
     )
@@ -91,7 +109,13 @@ export class BrowserImporter {
     if (this.pending.size >= MAX_PENDING) throw new Error('Finish or cancel the import you started first.')
     let read: CookieRead
     if (source === 'firefox') read = readFirefoxCookies(found.dir)
-    else {
+    else if ((this.deps.platform ?? process.platform) === 'linux') {
+      const secret = await (this.deps.keyringPassword ?? linuxKeyringPassword)(source)
+      read = readChromiumCookies(found.dir, {
+        v10: chromiumLinuxKey('peanuts'),
+        ...(secret ? { v11: chromiumLinuxKey(secret) } : {}),
+      })
+    } else {
       const password = await (this.deps.keychainPassword ?? keychainPassword)(source)
       read = readChromiumCookies(found.dir, chromiumKey(password))
     }

@@ -20,6 +20,7 @@ const recordSchema = z.object({
   endedAt: z.number().nonnegative().nullable(),
   exitCode: z.number().int().nullable(),
   cursor: z.number().int().nonnegative(),
+  startedBy: z.literal('helper').optional(),
   output: z.string().max(64_000),
 })
 

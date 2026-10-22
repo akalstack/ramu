@@ -15,6 +15,7 @@ interface BackgroundMeta {
   stopRequested: boolean
   forced: boolean
   stoppedBy?: 'user' | 'agent'
+  startedBy?: 'helper'
 }
 
 interface Entry extends TerminalInfo {
@@ -57,6 +58,7 @@ export class TerminalService {
     rows: number,
     command?: string,
     id = randomUUID(),
+    startedBy?: 'helper',
   ): Entry {
     const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh')
     const win = process.platform === 'win32'
@@ -71,7 +73,15 @@ export class TerminalService {
     const entry: Entry = { id, taskId, repoId, cwd, exited: false, pty, shell, output: '', cursor: 0 }
     if (command) {
       entry.background = true
-      entry.bg = { command, startedAt: Date.now(), endedAt: null, exitCode: null, stopRequested: false, forced: false }
+      entry.bg = {
+        command,
+        startedAt: Date.now(),
+        endedAt: null,
+        exitCode: null,
+        stopRequested: false,
+        forced: false,
+        ...(startedBy ? { startedBy } : {}),
+      }
     }
     this.terms.set(entry.id, entry)
     pty.onData((d) => {
@@ -105,7 +115,13 @@ export class TerminalService {
    * Starts a persistent command for a thread. Launching the same command in the same folder while it still runs returns
    * the running one, so a retried request never starts a second server.
    */
-  launchBackground(taskId: string, repoId: string | null, cwd: string, command: string): BackgroundTerminalInfo {
+  launchBackground(
+    taskId: string,
+    repoId: string | null,
+    cwd: string,
+    command: string,
+    startedBy?: 'helper',
+  ): BackgroundTerminalInfo {
     this.assertTaskAvailable(taskId)
     const text = command.trim()
     if (!text || text.length > MAX_COMMAND) throw new Error('Command must be 1 to 4000 characters.')
@@ -126,13 +142,14 @@ export class TerminalService {
       exitCode: null,
       cursor: 0,
       output: '',
+      ...(startedBy ? { startedBy } : {}),
       capabilities: { inspect: true, stop: false, forceStop: false, input: false },
     }
     // Record intent before spawning. A storage failure must never leave an untracked command running.
     this.storage?.save(prepared)
     this.history.set(id, prepared)
     try {
-      const entry = this.start(taskId, repoId, cwd, 80, 24, text, id)
+      const entry = this.start(taskId, repoId, cwd, 80, 24, text, id, startedBy)
       this.checkpoint(entry, true)
       return backgroundInfo(entry)
     } catch (error) {
@@ -426,6 +443,7 @@ function backgroundInfo(e: Entry): BackgroundTerminalInfo {
     exitCode: bg.exitCode,
     cursor: e.cursor,
     ...(bg.stoppedBy ? { stoppedBy: bg.stoppedBy } : {}),
+    ...(bg.startedBy ? { startedBy: bg.startedBy } : {}),
     capabilities: {
       inspect: true,
       stop: !e.exited,
