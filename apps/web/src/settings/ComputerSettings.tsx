@@ -1,4 +1,5 @@
-import { useCallback, useContext, useEffect, useState } from 'react'
+import { Check } from 'lucide-react'
+import { useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { SettingsScopeContext } from './SettingsScope'
 import { SETTINGS_FORM_CLASS } from './constants'
 import { ownHostId } from '../hosts'
@@ -9,18 +10,21 @@ import { Button } from '@/components/desktop-button'
 import { invokeOn, ramu } from '../ipc'
 import { useComputers } from '../workspace/computers'
 import { t, useLanguage } from '../i18n'
-import { appControlHelp, keepAwakeHelp, runtimeHelp } from './computerStatus'
+import { KeepAwakeSettings } from './KeepAwakeSettings'
+import type { DraftProps } from './ToggleRow'
+import { appControlHelp, runtimeHelp } from './computerStatus'
 import { errorText } from '../lib/errors'
 
 type Status = ReturnType<RamuMethods['computer.status']>
 
 /** Turning this on lets you grant a thread the main display. Nothing is shared until you do, per thread. */
-export function ComputerSettings({ hostId }: { hostId: string }) {
+export function ComputerSettings({ hostId, awakeControl }: { hostId: string; awakeControl?: ReactNode }) {
   useLanguage()
   const [status, setStatus] = useState<Status | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [revision, setRevision] = useState(0)
+  const [setupStarted, setSetupStarted] = useState(false)
   const refresh = useCallback(async () => {
     setStatus(await invokeOn(hostId, 'computer.status'))
   }, [hostId])
@@ -32,6 +36,20 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
       active = false
     }
   }, [refresh])
+  useEffect(() => {
+    if (!status?.apps?.available) return
+    const check = () => {
+      if (document.visibilityState !== 'hidden') void refresh().catch(() => {})
+    }
+    const timer = setInterval(check, 3000)
+    window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', check)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [status?.apps?.available, refresh])
   const toggle = async () => {
     if (!status) return
     setBusy(true)
@@ -49,10 +67,23 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
     setBusy(true)
     setError('')
     try {
-      await invokeOn(hostId, 'computer.installApps')
+      setSetupStarted(false)
+      if (status?.apps?.available && status.appPermissions === undefined) {
+        await ramu.invoke('background.restart')
+        await refresh()
+        return
+      }
+      if (status?.apps?.available && status.appPermissions === null && !status.appUpdate?.updateAvailable) {
+        await refresh()
+        return
+      }
+      if (status?.apps?.available && !status.appUpdate?.updateAvailable) await invokeOn(hostId, 'computer.openSetup')
+      else await invokeOn(hostId, 'computer.installApps')
+      setSetupStarted(true)
       await refresh()
     } catch (reason) {
       setError(t(errorText(reason)))
+      await refresh().catch(() => {})
     } finally {
       setBusy(false)
     }
@@ -69,16 +100,47 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
           onCheckedChange={() => void toggle()}
         />
       </SettingsRow>
-      {status?.enabled && status.apps && (
+      {status?.apps && (
         <SettingsRow>
-          <SettingsLabel title={t('Limit access to one app')} help={t(appControlHelp(status))} />
-          {((!status.apps.available && status.apps.reason === 'not-installed') ||
-            status.appUpdate?.updateAvailable) && (
-            <Button size="sm" disabled={busy} onClick={() => void install()}>
-              {busy ? t('Installing…') : status.appUpdate?.updateAvailable ? t('Update') : t('Install')}
+          <SettingsLabel title={t('App control')} help={t(appControlHelp(status))} />
+          {!(!status.apps.available && status.apps.reason === 'unsupported') && (
+            <Button
+              size="sm"
+              disabled={
+                busy ||
+                hostId !== ownHostId() ||
+                (!!status.appPermissions?.allGranted && !status.appUpdate?.updateAvailable)
+              }
+              onClick={() => void install()}
+            >
+              {busy ? (
+                t('Setting up…')
+              ) : status.appUpdate?.updateAvailable ? (
+                t('Update')
+              ) : status.apps.available && status.appPermissions === undefined ? (
+                t('Restart service')
+              ) : status.appPermissions?.allGranted ? (
+                <>
+                  <Check size={14} />
+                  {t('Permissions granted')}
+                </>
+              ) : status.apps.available && status.appPermissions === null ? (
+                t('Retry permission check')
+              ) : status.apps.available ? (
+                t('Set up permissions')
+              ) : (
+                t('Install & set up')
+              )}
             </Button>
           )}
         </SettingsRow>
+      )}
+      {setupStarted && !status?.appPermissions?.allGranted && (
+        <p role="status" className="text-caption text-muted-foreground">
+          {t(
+            'Permission setup started on this Mac. Follow Open Computer Use’s prompts to allow Accessibility and Screen Recording, then return here.',
+          )}
+        </p>
       )}
       {status?.enabled && status.apps?.available && (
         <SettingsRow>
@@ -109,11 +171,7 @@ export function ComputerSettings({ hostId }: { hostId: string }) {
           />
         </SettingsRow>
       )}
-      {status?.enabled && (
-        <SettingsRow>
-          <SettingsLabel title={t('Keep this computer awake')} help={t(keepAwakeHelp(status))} />
-        </SettingsRow>
-      )}
+      {status?.enabled && awakeControl}
       <LockedUseRow
         key={`locked:${revision}`}
         hostId={hostId}
@@ -343,7 +401,7 @@ function LockedUseRow({ hostId, visible }: { hostId: string; visible: boolean })
 }
 
 /** Settings → Computer use: the selected host's computer access, kept apart from the browser settings. */
-export function ComputerUseSettings() {
+export function ComputerUseSettings(props: DraftProps) {
   useLanguage()
   const scope = useContext(SettingsScopeContext)
   const hostId = scope?.primaryId ?? ownHostId()
@@ -355,7 +413,7 @@ export function ComputerUseSettings() {
     )
   return (
     <div className={SETTINGS_FORM_CLASS}>
-      <ComputerSettings key={`computer:${hostId}`} hostId={hostId} />
+      <ComputerSettings key={`computer:${hostId}`} hostId={hostId} awakeControl={<KeepAwakeSettings {...props} />} />
     </div>
   )
 }

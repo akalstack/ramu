@@ -238,7 +238,6 @@ export class AgentService {
       routing: (...a) => parts.router.routing(...a),
       runnerFactory: (provider) => this.runnerFactory(provider),
       usesRunner: (provider) => this.usesRunner(provider),
-      providerTitle: (id, title) => this.onProviderTitle?.(id, title),
       get runners() {
         return parts.registry.runners
       },

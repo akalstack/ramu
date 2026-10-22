@@ -187,7 +187,7 @@ export function SettingsPanel({
             )}
             {page === 'editor' && <EditorSettings {...draftProps} />}
             {page === 'browser' && <BrowserSettings {...draftProps} />}
-            {page === 'computer' && <ComputerUseSettings />}
+            {page === 'computer' && <ComputerUseSettings {...draftProps} />}
             {page === 'access' && <AccessSettings {...draftProps} />}
             {page === 'memory' && (
               <>

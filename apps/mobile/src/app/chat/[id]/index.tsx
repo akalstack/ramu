@@ -6,17 +6,18 @@ import {
   ArrowDown,
   Inbox,
   Check,
-  Ellipsis,
   CircleArrowUp,
   CircleCheck,
   Folder,
   GitBranch,
   GitCompareArrows,
   MessageCircleQuestion,
+  Globe,
   Monitor,
   SquareTerminal,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
+import { useThreadToolActivity } from '../../../runtime/useThreadToolActivity'
 import { useChat, useStore } from '../../../runtime/store'
 import { foldTurns } from '../../../runtime/turns'
 import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runtime/limitTray'
@@ -25,7 +26,8 @@ import { looseInvoke, setHostSetting } from '../../../runtime/settingsModel'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
-import { Header, HeaderButton, Screen, PageFlatList, nativeScrollEdge } from '../../../components/Screen'
+import { Header, HeaderButton, HeaderMenu, Screen, PageFlatList } from '../../../components/Screen'
+import { ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
 import { BrowserActivity } from '../../../components/BrowserActivity'
@@ -45,6 +47,7 @@ import { ConnectionDot, Row, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { OfflineBanner, PendingBubble } from '../../../components/Outbox'
+import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
 import { Arrive, Presence, Shimmer, useReducedMotion } from '../../../components/Motion'
 import { ChatActionsSheet } from '../../../components/ChatActions'
@@ -65,6 +68,7 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets()
   const scroll = useRef<FlatList<import('../../../runtime/types').TranscriptItem>>(null)
   const [contentScreenFocused, setContentScreenFocused] = useState(false)
+  const toolActivity = useThreadToolActivity(chat, contentScreenFocused)
   const [visibleContentRows, setVisibleContentRows] = useState<Set<string>>(() => new Set())
   const contentViewability = useRef({ itemVisiblePercentThreshold: 1 }).current
   const contentViewabilityChanged = useRef(({ viewableItems }: { viewableItems: { item: { id: string } }[] }) => {
@@ -124,13 +128,8 @@ export default function ChatScreen() {
   const cover = ios ? coverFor(keyboard.height) : 0
   metrics.current.cover = cover
   // scrollToEnd ignores contentInset, so on iOS it stops `cover` points short; aim past the inset instead.
-  // Where the list rests with its first row just below the header. Learned from real scroll events (the header's inset is
-  // not a fixed 44 pt); until one arrives, a slightly generous guess keeps a short chat from sliding under the bar.
-  // iOS: the list's top inset is set here, not left to UIKit's automatic adjustment. The automatic inset arrives after the
-  // first layout when the header is configured during render, so a fresh chat sat under the bar until it was scrolled.
-  // The bar is 54 pt from iOS 26 (44 pt before); the list rests at minus that inset.
-  const barHeight = Platform.OS === 'ios' && Number(Platform.Version) >= 26 ? 54 : 44
-  const topInset = ios ? insets.top + barHeight : 0
+  // Native scroll-edge chrome overlays the list; UIKit supplies its top inset.
+  const topInset = ios ? insets.top + (Number(Platform.Version) >= 26 ? 54 : 44) : 0
   const restTop = useRef(-topInset)
   restTop.current = -topInset
   const toEnd = (animated: boolean) => {
@@ -173,6 +172,8 @@ export default function ChatScreen() {
   }>()
   const [refresh, setRefresh] = useState(0)
   const [sheet, setSheet] = useState(false)
+  const [usageOpen, setUsageOpen] = useState(false)
+  const [tool, setTool] = useState<'browser' | 'computer' | null>(null)
   const [backgroundFor, setBackgroundFor] = useState<string | null>(null)
   const [actions, setActions] = useState<'closed' | 'menu' | 'rename'>('closed')
   const [busy, setBusy] = useState(false)
@@ -519,6 +520,7 @@ export default function ChatScreen() {
   const openTerminal = () => router.push({ pathname: '/chat/[id]/terminal', params: { id: chat.id } })
   // Thread actions that belong to this screen sit above the shared ones (pin, rename, archive…) in the same sheet.
   const chatExtras = [
+    { icon: GitCompareArrows, label: 'Usage', onPress: () => setUsageOpen(true) },
     // Which computer runs the thread: information only, so it has no action.
     { icon: Monitor, label: `${computer?.name ?? 'Host unavailable'} · ${computer?.status ?? 'offline'}` },
     {
@@ -527,6 +529,12 @@ export default function ChatScreen() {
       onPress: () => router.push({ pathname: '/explorer', params: { computer: chat.computerId, ctx: chat.taskId } }),
     },
     { icon: SquareTerminal, label: 'Terminal', onPress: openTerminal },
+    ...(chat.taskId
+      ? [
+          { icon: Globe, label: translate(store.language, 'Browser'), onPress: () => setTool('browser') },
+          { icon: Monitor, label: translate(store.language, 'Computer'), onPress: () => setTool('computer') },
+        ]
+      : []),
     {
       icon: SquareTerminal,
       label: translate(store.language, 'Background terminals'),
@@ -551,6 +559,7 @@ export default function ChatScreen() {
   return (
     <Screen>
       <Header
+        scrollEdge
         align="left"
         title={chat.title}
         subtitle={
@@ -590,14 +599,6 @@ export default function ChatScreen() {
         right={
           !chat.pending ? (
             <>
-              <HeaderButton
-                icon={Folder}
-                label="Explorer"
-                systemIcon="folder"
-                onPress={() =>
-                  router.push({ pathname: '/explorer', params: { computer: chat.computerId, ctx: chat.taskId } })
-                }
-              />
               {chat.projectId !== STANDALONE ? (
                 <HeaderButton
                   icon={GitBranch}
@@ -605,15 +606,76 @@ export default function ChatScreen() {
                   systemIcon="arrow.triangle.branch"
                   onPress={() => setSheet(true)}
                 />
-              ) : null}
-              <HeaderButton
-                icon={Ellipsis}
+              ) : (
+                <HeaderButton
+                  icon={Folder}
+                  label="Explorer"
+                  systemIcon="folder"
+                  onPress={() =>
+                    router.push({ pathname: '/explorer', params: { computer: chat.computerId, ctx: chat.taskId } })
+                  }
+                />
+              )}
+              <HeaderMenu
                 label="Thread actions"
-                systemIcon="ellipsis"
                 onPress={() => setActions('menu')}
+                actions={[
+                  ...chatExtras
+                    .filter((extra) => extra.onPress)
+                    .map((extra) => ({
+                      label: extra.label,
+                      onPress: extra.onPress!,
+                      icon:
+                        extra.icon === Globe
+                          ? ('globe' as const)
+                          : extra.icon === Monitor
+                            ? ('desktopcomputer' as const)
+                            : extra.icon === Folder
+                              ? ('folder' as const)
+                              : extra.icon === SquareTerminal
+                                ? ('terminal' as const)
+                                : extra.label === 'Usage'
+                                  ? ('chart.bar' as const)
+                                  : ('tray' as const),
+                    })),
+                  {
+                    label: chat.pinnedAt !== null ? 'Unpin' : 'Pin to top',
+                    icon: 'pin',
+                    onPress: () => {
+                      void store
+                        .invoke(chat.computerId, 'tasks.pin', chat.taskId, chat.pinnedAt === null)
+                        .then(() => store.refresh(chat.computerId))
+                        .catch((error) => say(String(error)))
+                    },
+                  },
+                  { label: 'Rename', icon: 'pencil', onPress: () => setActions('rename') },
+                  {
+                    label: chat.status === 'archived' ? 'Unarchive' : 'Archive',
+                    icon: 'archivebox',
+                    onPress: () => {
+                      void store
+                        .invoke(chat.computerId, 'tasks.archive', chat.taskId, chat.status !== 'archived')
+                        .then(() => store.refresh(chat.computerId))
+                        .catch((error) => say(String(error)))
+                    },
+                  },
+                  { label: 'More thread actions…', icon: 'ellipsis', onPress: () => setActions('menu') },
+                ]}
               />
             </>
           ) : null
+        }
+      />
+      <PlanUsageSheet
+        hosts={[chat.computerId]}
+        open={usageOpen}
+        onClose={() => setUsageOpen(false)}
+        provider={chat.provider}
+        accountId={chat.settings?.accountId}
+        context={
+          <View style={{ padding: space.m }}>
+            <ContextMeter computerId={chat.computerId} sessionId={chat.sessionId} />
+          </View>
         }
       />
       <MessageMenu.Provider
@@ -688,12 +750,8 @@ export default function ChatScreen() {
         <CancelPendingSettings.Provider value={() => setStaged(null)}>
           <RowToggle.Provider value={holdScroll}>
             <PageFlatList
-              // As in T3 Code: a list that gets its first rows is mounted fresh, so UIKit applies the header inset while attaching it.
-              // Inserting into an attached, empty list under a transparent header can leave short content one header-height too high.
               key={pageRows.length ? 'filled' : 'empty'}
               ref={scroll}
-              // As in the T3 Code app: UIKit derives the top inset from the transparent header ("automatic") and no manual top inset is
-              // given, so the native scroll-edge effect has a region to draw into. Only the composer/keyboard space is set by hand.
               contentInsetAdjustmentBehavior="automatic"
               automaticallyAdjustsScrollIndicatorInsets
               ListHeaderComponent={
@@ -758,7 +816,7 @@ export default function ChatScreen() {
                 // (resting at the top before it is measured) used to switch following off, so a chat opened at its top.
                 if (!settling.current && userScrolling.current) following.current = gap < 40
                 setAway(gap > 80)
-                setScrolled(contentOffset.y > 8 - (ios ? topInset : insets.top + 44))
+                setScrolled(contentOffset.y > 8 - topInset)
               }}
               scrollEventThrottle={16}
               onScrollBeginDrag={() => {
@@ -838,7 +896,7 @@ export default function ChatScreen() {
                 </Glass>
               </Presence>
             ) : null}
-            {nativeScrollEdge ? null : <TopFade visible={scrolled} color={c.window} />}
+            {ios ? null : <TopFade visible={scrolled} color={c.window} />}
             <KeyboardLift keyboard={keyboard}>
               <BottomFade height={composerHeight * 0.75} color={c.window} />
               {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
@@ -852,16 +910,45 @@ export default function ChatScreen() {
                 <Composer
                   activity={
                     <>
-                      <ThreadActivity chat={chat} />
-                      <BrowserActivity key={`browser:${chat.computerId}:${chat.taskId}`} chat={chat} />
-                      <ComputerActivity key={`computer:${chat.computerId}:${chat.taskId}`} chat={chat} />
-                      <BackgroundTerminals
-                        key={`${chat.computerId}:${chat.taskId}`}
+                      <ComputerUseNotice chat={chat} />
+                      <ThreadActivity
                         chat={chat}
-                        open={backgroundFor === chat.id}
-                        onOpen={() => setBackgroundFor(chat.id)}
-                        onClose={() => setBackgroundFor((current) => (current === chat.id ? null : current))}
-                      />
+                        actions={[
+                          ...(toolActivity.browser
+                            ? [
+                                {
+                                  label: translate(store.language, 'Browser'),
+                                  icon: Globe,
+                                  onPress: () => setTool('browser'),
+                                },
+                              ]
+                            : []),
+                          ...(toolActivity.computer
+                            ? [
+                                {
+                                  label: translate(store.language, 'Computer'),
+                                  icon: Monitor,
+                                  onPress: () => setTool('computer'),
+                                },
+                              ]
+                            : []),
+                          ...(toolActivity.terminal
+                            ? [{ label: 'Terminal', icon: SquareTerminal, onPress: openTerminal }]
+                            : []),
+                          ...(toolActivity.usage ||
+                          (store.usage[chat.computerId] ?? []).some((reading) => reading.provider === chat.provider)
+                            ? [{ label: 'Usage', icon: GitCompareArrows, onPress: () => setUsageOpen(true) }]
+                            : []),
+                        ]}
+                      >
+                        <BackgroundTerminals
+                          key={`${chat.computerId}:${chat.taskId}`}
+                          chat={chat}
+                          open={backgroundFor === chat.id}
+                          onOpen={() => setBackgroundFor(chat.id)}
+                          onClose={() => setBackgroundFor((current) => (current === chat.id ? null : current))}
+                        />
+                      </ThreadActivity>
                     </>
                   }
                   running={running}
@@ -903,7 +990,6 @@ export default function ChatScreen() {
                             .catch(() => {})
                       : undefined
                   }
-                  meter={<ContextMeter computerId={chat.computerId} sessionId={chat.sessionId} />}
                   onToggleGoal={() => store.toggleGoal(chat.id)}
                   onClearGoal={() => store.clearGoal(chat.id)}
                   onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
@@ -1023,6 +1109,18 @@ export default function ChatScreen() {
           onClose={() => setActions('closed')}
         />
       ) : null}
+      <BrowserActivity
+        key={`browser:${chat.computerId}:${chat.taskId}`}
+        chat={chat}
+        open={tool === 'browser'}
+        onClose={() => setTool(null)}
+      />
+      <ComputerActivity
+        key={`computer:${chat.computerId}:${chat.taskId}`}
+        chat={chat}
+        open={tool === 'computer'}
+        onClose={() => setTool(null)}
+      />
       <Sheet open={sheet} onClose={() => setSheet(false)} title={branch || 'Source control'}>
         {(
           [

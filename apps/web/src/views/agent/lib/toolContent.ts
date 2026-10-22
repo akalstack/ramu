@@ -1,6 +1,6 @@
 import type { AgentContent } from '@ramu/shared/types'
 
-/** Keep visual results visible even when the tool group and its details are closed. */
+/** Separate visual results from text and metadata within the same tool disclosure. */
 export function splitToolContent(content: AgentContent[] = []) {
   const images: AgentContent[] = []
   const details: AgentContent[] = []

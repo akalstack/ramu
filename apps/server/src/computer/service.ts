@@ -5,6 +5,17 @@ import { ComputerSession } from './session'
 /** Sessions keyed by thread. A grant is bound to one target; a different target needs a new matching grant. */
 export class ComputerService {
   private sessions = new Map<string, ComputerSession>()
+  private accessRequests = new Map<string, 'pending' | 'denied'>()
+  accessRequest(runId: string) {
+    return this.accessRequests.get(runId)
+  }
+  beginAccessRequest(runId: string) {
+    this.accessRequests.set(runId, 'pending')
+  }
+  finishAccessRequest(runId: string, denied: boolean) {
+    if (denied) this.accessRequests.set(runId, 'denied')
+    else this.accessRequests.delete(runId)
+  }
   constructor(
     readonly backend: ComputerBackend,
     private readonly now: () => number = Date.now,
@@ -57,6 +68,11 @@ export class ComputerService {
     return { observe: !!entry, input: !!entry?.input }
   }
 
+  /** Thread metadata only; grants and evidence remain private to the service. */
+  sessionThreads(): string[] {
+    return [...this.sessions.keys()]
+  }
+
   session(threadId: string): ComputerSession | undefined {
     return this.sessions.get(threadId)
   }
@@ -70,6 +86,7 @@ export class ComputerService {
 
   /** The run exited or Stop was pressed: revoke its lease and queued actions; the grant stays for the next run. */
   endRun(threadId: string, runId: string) {
+    this.accessRequests.delete(runId)
     this.sessions.get(threadId)?.stop(runId)
     void this.evidence.clear(threadId)
   }

@@ -17,7 +17,7 @@ import {
   routingSnapshot,
 } from '../runtime/routingDraft'
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, View } from 'react-native'
+import { Keyboard, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -35,7 +35,7 @@ import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { STANDALONE } from '../runtime/types'
 import { useT } from '../i18n'
-import { Header, Screen } from '../components/Screen'
+import { Header, PageScrollView, Screen } from '../components/Screen'
 import { useKeyboardInset } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
 import { Composer, type ModelChoice } from '../components/Composer'
@@ -221,9 +221,17 @@ export default function NewChat() {
   const branchChoice = currentBranchChoice(choice.branch, branchTitle, namingIntent)
   const reviewKey = JSON.stringify([selected, projectId, branchTitle, namingIntent, branchPrefix, branchChoice])
   const [reviewed, setReviewed] = useState<{ key: string; plan: WorktreePlanEntry[] } | null>(null)
-  const [picker, setPicker] = useState<'project' | 'mode' | 'host' | 'choice' | null>(null)
+  type Picker = 'project' | 'mode' | 'host' | 'choice' | null
+  const [picker, setPickerState] = useState<Picker>(params.project ? null : 'project')
+  const setPicker = (next: Picker) => {
+    if (next) Keyboard.dismiss()
+    setPickerState(next)
+  }
   useEffect(() => {
-    if (choices?.length) setPicker('choice')
+    if (choices?.length) {
+      Keyboard.dismiss()
+      setPickerState('choice')
+    }
   }, [choices])
   // Starts on the computer's default model step (Settings › Models), like the desktop; a pick here overrides it.
   const preset = store.defaults[selected]
@@ -389,34 +397,129 @@ export default function NewChat() {
   const choiceLabels = routingChoiceLabels(
     list.map((p) => ({ id: rawId(p.id), name: p.name, host: pc?.name ?? selected, root: p.root })),
   )
-  useEffect(() => {
-    // Let the sheet finish presenting before the picker slides up over it.
-    if (params.project || auto) return
-    const timer = setTimeout(() => setPicker('project'), 450)
-    return () => clearTimeout(timer)
-  }, [params.project, auto])
+
+  const projectPicker = (
+    <>
+      {computers.length > 1 ? (
+        <Row onPress={() => setPicker('host')}>
+          <Monitor size={17} color={c.soft} />
+          <T numberOfLines={1}>{pc?.name ?? t.computers}</T>
+          <ChevronDown size={14} color={c.muted} />
+        </Row>
+      ) : null}
+      {store.appPreferences[selected]?.autoProjectSelection !== false ? (
+        <Row
+          onPress={() => {
+            setProjectId(null)
+            setAuto(true)
+            store.setDraft(routingSelectionKey(selected), JSON.stringify({ version: 1, auto: true, projectId: null }))
+            setPicker(null)
+          }}
+        >
+          <Folder size={17} color={c.soft} />
+          <View style={{ flex: 1 }}>
+            <T weight="500">Auto</T>
+            <T size={font.caption} tone="muted">
+              Pick the project from your first message
+            </T>
+          </View>
+          {auto && projectId === null ? <Check size={16} color={c.accent} /> : null}
+        </Row>
+      ) : null}
+      {list.map((p) => (
+        <Row
+          key={p.id}
+          onPress={() => {
+            setProjectId(p.id)
+            setAuto(false)
+            store.setDraft(routingSelectionKey(selected), JSON.stringify({ version: 1, auto: false, projectId: p.id }))
+            setPicker(null)
+          }}
+        >
+          {p.kind === 'workspace' ? <Folder size={17} color={c.soft} /> : <FolderGit2 size={17} color={c.soft} />}
+          <View style={{ flex: 1 }}>
+            <T weight="500">{p.name}</T>
+            <T size={font.caption} tone="muted">
+              {p.root}
+            </T>
+          </View>
+          {p.id === projectId ? <Check size={16} color={c.accent} /> : null}
+        </Row>
+      ))}
+      <Row
+        onPress={() => {
+          setProjectId(STANDALONE)
+          setAuto(false)
+          store.setDraft(
+            routingSelectionKey(selected),
+            JSON.stringify({ version: 1, auto: false, projectId: STANDALONE }),
+          )
+          setPicker(null)
+        }}
+      >
+        <MessageCircle size={17} color={c.soft} />
+        <View style={{ flex: 1 }}>
+          <T weight="500">Standalone</T>
+          <T size={font.caption} tone="muted">
+            No project folder
+          </T>
+        </View>
+        {projectId === STANDALONE ? <Check size={16} color={c.accent} /> : null}
+      </Row>
+      <Row
+        onPress={() => {
+          setPicker(null)
+          store.select(selected)
+          router.push('/folders')
+        }}
+      >
+        <Monitor size={17} color={c.muted} />
+        <T tone="muted">Add a folder on {pc?.name}…</T>
+      </Row>
+    </>
+  )
 
   return (
     <Screen bg="canvas" scrollable={false}>
-      <Header modal title={t.newChat} subtitle={pc?.name} />
-      <View style={{ flex: 1, paddingBottom: keyboardInset }}>
+      <Header
+        align="center"
+        title={picker === 'project' ? (store.language === 'id' ? 'Pilih proyek' : 'Choose a project') : t.newChat}
+      />
+      {picker === 'project' ? (
+        <PageScrollView
+          style={{ flex: 1 }}
+          contentInsetAdjustmentBehavior="never"
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, space.l) }}
+        >
+          {projectPicker}
+        </PageScrollView>
+      ) : null}
+      <View style={{ flex: 1, paddingBottom: keyboardInset, display: picker === 'project' ? 'none' : 'flex' }}>
         {/* Nothing here scrolls: the hero simply centers in the space above the composer. */}
-        <View style={{ flex: 1, justifyContent: 'center', padding: space.l }}>
-          <View style={{ alignItems: 'center', gap: space.s }}>
-            {/* The desktop's start screen: the animated mark (tap it) over the same question. */}
-            <View style={{ marginBottom: space.s }}>
-              <AnimatedMark size={56} />
+        {keyboardInset === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', padding: space.l }}>
+            <View style={{ alignItems: 'flex-start', gap: space.s }}>
+              {/* The desktop's start screen: the animated mark (tap it) over the same question. */}
+              <View style={{ marginBottom: space.s }}>
+                <AnimatedMark size={56} />
+              </View>
+              <T size={font.hero} weight="600" style={{ letterSpacing: -0.5, textAlign: 'left' }}>
+                {project ? `What should we work on in ${project.name}?` : 'What should we work on?'}
+              </T>
+              {offline ? (
+                <T tone="muted">{`${pc?.name} is offline. The thread waits in the outbox and starts when it reconnects.`}</T>
+              ) : null}
             </View>
-            <T size={font.hero} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
-              {project ? `What should we work on in ${project.name}?` : 'What should we work on?'}
-            </T>
-            <T tone="muted" style={{ textAlign: 'center' }}>
-              {offline
-                ? `${pc?.name} is offline. The thread waits in the outbox and starts when it reconnects.`
-                : `Runs on ${pc?.name} with your host's providers.`}
+          </View>
+        ) : (
+          <View style={{ flex: 1, justifyContent: 'center', padding: space.l, gap: space.s }}>
+            <AnimatedMark size={32} />
+            <T size={24} weight="600">
+              {store.language === 'id' ? 'Apa yang ingin kita kerjakan?' : 'What should we work on?'}
             </T>
           </View>
-        </View>
+        )}
         <View style={{ paddingBottom: Math.max(insets.bottom, space.s) }}>
           {agentDraft.defaults?.requested ||
           agentDraft.blocked ||
@@ -456,7 +559,7 @@ export default function NewChat() {
                   }
                 : undefined
             }
-            autoFocus={projectId !== null || auto}
+            autoFocus={picker === null && (projectId !== null || auto)}
             header={
               <>
                 {computers.length > 1 && (
@@ -655,80 +758,6 @@ export default function NewChat() {
             </Row>
           )
         })}
-      </Sheet>
-      <Sheet open={picker === 'project'} onClose={() => setPicker(null)} title="Project">
-        {store.appPreferences[selected]?.autoProjectSelection !== false ? (
-          <Row
-            onPress={() => {
-              setProjectId(null)
-              setAuto(true)
-              store.setDraft(routingSelectionKey(selected), JSON.stringify({ version: 1, auto: true, projectId: null }))
-              setPicker(null)
-            }}
-          >
-            <Folder size={17} color={c.soft} />
-            <View style={{ flex: 1 }}>
-              <T weight="500">Auto</T>
-              <T size={font.caption} tone="muted">
-                Pick the project from your first message
-              </T>
-            </View>
-            {auto && projectId === null ? <Check size={16} color={c.accent} /> : null}
-          </Row>
-        ) : null}
-        {list.map((p) => (
-          <Row
-            key={p.id}
-            onPress={() => {
-              setProjectId(p.id)
-              setAuto(false)
-              store.setDraft(
-                routingSelectionKey(selected),
-                JSON.stringify({ version: 1, auto: false, projectId: p.id }),
-              )
-              setPicker(null)
-            }}
-          >
-            {p.kind === 'workspace' ? <Folder size={17} color={c.soft} /> : <FolderGit2 size={17} color={c.soft} />}
-            <View style={{ flex: 1 }}>
-              <T weight="500">{p.name}</T>
-              <T size={font.caption} tone="muted">
-                {p.root}
-              </T>
-            </View>
-            {p.id === projectId ? <Check size={16} color={c.accent} /> : null}
-          </Row>
-        ))}
-        <Row
-          onPress={() => {
-            setProjectId(STANDALONE)
-            setAuto(false)
-            store.setDraft(
-              routingSelectionKey(selected),
-              JSON.stringify({ version: 1, auto: false, projectId: STANDALONE }),
-            )
-            setPicker(null)
-          }}
-        >
-          <MessageCircle size={17} color={c.soft} />
-          <View style={{ flex: 1 }}>
-            <T weight="500">Standalone</T>
-            <T size={font.caption} tone="muted">
-              No project folder
-            </T>
-          </View>
-          {projectId === STANDALONE ? <Check size={16} color={c.accent} /> : null}
-        </Row>
-        <Row
-          onPress={() => {
-            setPicker(null)
-            store.select(selected)
-            router.push('/folders')
-          }}
-        >
-          <Monitor size={17} color={c.muted} />
-          <T tone="muted">Add a folder on {pc?.name}…</T>
-        </Row>
       </Sheet>
 
       <Sheet open={picker === 'mode'} onClose={() => setPicker(null)} title="Workspace">

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { OCU_VERSION, ocuUpdateStatus } from '../src/computer/ocu'
+import { OCU_VERSION, ocuUpdateStatus, setupOcu, ocuPermissions } from '../src/computer/ocu'
 
 let root: string
 beforeEach(() => {
@@ -37,3 +37,37 @@ it('leaves custom executable updates to the owning host', () => {
   vi.stubEnv('RAMU_OCU_PATH', '/custom/ocu')
   expect(ocuUpdateStatus()).toMatchObject({ managed: false, updateAvailable: false })
 })
+
+it.skipIf(process.platform !== 'darwin')(
+  'launches doctor and reports missing installs or launch failures',
+  async () => {
+    const start = vi.fn(async () => {})
+    await setupOcu('/managed/ocu', start)
+    expect(start).toHaveBeenCalledWith('/managed/ocu', ['doctor'])
+    await expect(setupOcu(null, start)).rejects.toThrow('Install Open Computer Use first.')
+    start.mockRejectedValueOnce(new Error('Could not launch setup'))
+    await expect(setupOcu('/managed/ocu', start)).rejects.toThrow('Could not launch setup')
+  },
+)
+
+it.skipIf(process.platform !== 'darwin')(
+  'reads permissions without onboarding and never infers readiness from installation',
+  async () => {
+    const read = vi.fn(async () =>
+      JSON.stringify({ allGranted: true, accessibilityTrusted: true, screenCaptureGranted: true }),
+    )
+    await expect(ocuPermissions('/managed/ocu', read)).resolves.toMatchObject({ allGranted: true })
+    expect(read).toHaveBeenCalledWith('/managed/ocu', ['doctor', '--json'])
+    read.mockResolvedValueOnce(
+      JSON.stringify({ allGranted: false, accessibilityTrusted: true, screenCaptureGranted: false }),
+    )
+    await expect(ocuPermissions('/managed/ocu', read)).resolves.toMatchObject({
+      allGranted: false,
+      screenCaptureGranted: false,
+    })
+    read.mockResolvedValueOnce('{}')
+    await expect(ocuPermissions('/managed/ocu', read)).resolves.toBeNull()
+    read.mockRejectedValueOnce(new Error('Unavailable'))
+    await expect(ocuPermissions('/managed/ocu', read)).resolves.toBeNull()
+  },
+)

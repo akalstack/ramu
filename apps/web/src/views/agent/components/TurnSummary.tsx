@@ -19,12 +19,12 @@ export function TurnSummary({ label, children }: { label: string; children: Reac
         render={
           <Marker
             variant="border"
-            className="cursor-pointer gap-1.5 rounded-none border-0 border-b border-line bg-transparent p-0 pt-1.5 pb-2 text-left text-chat font-normal hover:border-border hover:text-soft"
+            className="cursor-pointer gap-1.5 rounded-none border-0 border-b border-line bg-transparent p-0 pt-1.5 pb-2 text-left text-chat font-normal text-muted-foreground hover:border-border hover:text-soft"
             render={<button type="button" />}
           />
         }
       >
-        <MarkerContent className="flex-none">{label}</MarkerContent>
+        <MarkerContent className="flex-none text-muted-foreground">{label}</MarkerContent>
         <MarkerIcon>
           {open ? (
             <ChevronDown size={14} className={CARET_CLASS} />

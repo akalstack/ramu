@@ -1,24 +1,33 @@
-import { useState } from 'react'
-import { Pressable, View } from 'react-native'
+import { useState, type ReactNode } from 'react'
+import { Pressable, ScrollView, View } from 'react-native'
 import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { mobileThreadActivity } from '../runtime/threadActivity'
 import { goalActivityLabel, type ActivityKind } from '@ramu/shared/chat/threadActivity'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
-import { font, space } from '../theme'
-import { Button, Sheet, T } from './ui'
+import { font, space, useTheme } from '../theme'
+import { Button, Sheet, T, type Icon } from './ui'
 import { Helpers } from './Helpers'
 import { InputRequests } from './InputRequests'
 import { GoalQueueTray } from './Composer'
 import { LimitTray } from './LimitTray'
-export function ThreadActivity({ chat }: { chat: Chat }) {
+export function ThreadActivity({
+  chat,
+  actions = [],
+  children,
+}: {
+  chat: Chat
+  children?: ReactNode
+  actions?: { label: string; icon: Icon; onPress(): void }[]
+}) {
+  const { c } = useTheme()
   const store = useStore()
   const online = store.isOnline(chat.computerId)
   const id = store.language === 'id'
   const activity = mobileThreadActivity(chat, online)
   const [opened, setOpened] = useState<ActivityKind | 'more' | null>(null)
   const primary = activity.model.primary
-  if (!primary) return null
+  if (!primary && !actions.length && !children) return null
   const label = (kind: ActivityKind | 'more'): string =>
     ({
       connection: id ? 'Terputus · aktivitas terakhir' : 'Offline · last-known activity',
@@ -54,17 +63,35 @@ export function ThreadActivity({ chat }: { chat: Chat }) {
   const secondary = activity.model.secondary.filter((kind) => kind !== 'working').slice(0, 1)
   const kinds = [
     ...new Set<ActivityKind | 'more'>([
-      primaryKind,
+      ...(primary && (primary !== 'working' || chat.compacting) ? [primaryKind] : []),
       ...secondary,
       ...(activity.groups.length || activity.model.secondary.length > 1 ? ['more' as const] : []),
     ]),
   ]
   return (
     <>
-      <View
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ alignItems: 'center', paddingHorizontal: space.s }}
         accessibilityLabel={id ? 'Aktivitas thread' : 'Thread activity'}
-        style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: space.s }}
+        style={{ flexGrow: 0 }}
       >
+        {actions.map(({ label, icon: I, onPress }) => (
+          <Pressable
+            key={label}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            onPress={onPress}
+            style={{ minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: space.s }}
+          >
+            <I size={14} color={c.muted} />
+            <T size={font.caption} tone="muted" numberOfLines={1}>
+              {label}
+            </T>
+          </Pressable>
+        ))}
+        {children}
         {kinds.map((kind) => (
           <Pressable
             key={kind}
@@ -81,8 +108,13 @@ export function ThreadActivity({ chat }: { chat: Chat }) {
             </T>
           </Pressable>
         ))}
-      </View>
-      <Sheet open={opened !== null} onClose={() => setOpened(null)} title={opened ? label(opened) : ''}>
+      </ScrollView>
+      <Sheet
+        presentation="screen"
+        open={opened !== null}
+        onClose={() => setOpened(null)}
+        title={opened ? label(opened) : ''}
+      >
         {opened === 'more' || opened === 'connection' || opened === 'working' ? (
           <View style={{ padding: space.m, gap: space.s }}>
             {!online ? (

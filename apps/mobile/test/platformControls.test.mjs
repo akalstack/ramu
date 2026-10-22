@@ -24,13 +24,20 @@ import * as agentDraftModel from '../../../packages/shared/src/workspace/agentDe
 const require = createRequire(import.meta.url)
 const palette = new Proxy({}, { get: (_, key) => String(key) })
 const theme = {
-  useTheme: () => ({ c: palette, scheme: 'light' }),
+  useTheme: () => ({ c: palette, scheme: 'light', textSize: 'normal' }),
+  TEXT_SCALE: { normal: 1 },
   font: { body: 15, control: 13, caption: 12 },
   radius: { s: 8, m: 12, full: 999 },
   space: { s: 8, m: 12, l: 16, xl: 24 },
 }
 const components = new Proxy({}, { get: (_, key) => String(key) })
-const Toolbar = Object.assign(() => {}, { SearchBarSlot: 'NativeSearchSlot', Button: 'ToolbarButton' })
+const Toolbar = Object.assign(() => {}, {
+  SearchBarSlot: 'NativeSearchSlot',
+  Button: 'ToolbarButton',
+  Menu: 'ToolbarMenu',
+  MenuAction: 'ToolbarMenuAction',
+  View: 'ToolbarView',
+})
 const Stack = { SearchBar: 'NativeSearch', Screen: 'StackScreen', Toolbar }
 
 // Render the actual TSX at the native boundary, without needing a device for event regressions.
@@ -42,6 +49,9 @@ function load(file, os, overrides = {}, globals = {}) {
     View: 'View',
     ActivityIndicator: 'ActivityIndicator',
     ScrollView: 'ScrollView',
+    KeyboardAvoidingView: 'KeyboardAvoidingView',
+    Modal: 'Modal',
+    Keyboard: { dismiss() {} },
     Image: 'Image',
     Pressable: 'Pressable',
     Text: 'Text',
@@ -63,6 +73,14 @@ function load(file, os, overrides = {}, globals = {}) {
     'lucide-react-native': components,
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     'react-native-screens/experimental': {},
+    '../runtime/useDictation': {
+      useVoiceSettings: () => [{}],
+      useVoiceCapability: () => ({}),
+      useMicControl: () => ({ kind: 'hidden' }),
+      useDictation: () => ({ snapshot: { state: { phase: 'idle' } }, session: { cancel() {} } }),
+    },
+    '@ramu/shared/voice/dictation': { dictationBusy: () => false },
+    '../runtime/computerUse': { useComputerUse: () => ({ session: undefined, refresh() {} }) },
     'expo-glass-effect': {
       isGlassEffectAPIAvailable: () => true,
       isLiquidGlassAvailable: () => true,
@@ -139,6 +157,7 @@ for (const os of ['ios', 'android']) {
       isOnline: () => true,
       invoke: async (...args) => {
         calls.push(args)
+        if (args[1] === 'hostBrowser.status') return { available: false }
         return {
           available: true,
           tabs: [
@@ -161,11 +180,22 @@ for (const os of ['ios', 'android']) {
         },
       },
     })
-    const render = () => hooks.render(() => BrowserActivity({ chat: { computerId: 'a', taskId: 'thread' } }))
+    let open = false
+    const render = () =>
+      hooks.render(() =>
+        BrowserActivity({
+          chat: { computerId: 'a', taskId: 'thread' },
+          open,
+          onClose: () => {
+            open = false
+          },
+        }),
+      )
     const button = (title) => nodes(render()).find((node) => node.type === 'Button' && node.props.title === title)
     render()
     assert.equal(calls.length, 0)
-    button('Browser').props.onPress()
+    assert.equal(button('Browser'), undefined)
+    open = true
     render()
     await settle()
     assert.deepEqual(calls, [
@@ -188,6 +218,32 @@ for (const os of ['ios', 'android']) {
     hooks.dispose()
   })
 }
+
+test('the phone opens its host browser directly inside the menu screen', async () => {
+  const hooks = hookHarness()
+  const store = {
+    language: 'en',
+    computers: [{ id: 'a', name: 'Laptop' }],
+    isOnline: () => true,
+    invoke: async (_host, method) =>
+      method === 'hostBrowser.status' ? { enabled: true, available: false } : { available: true, tabs: [] },
+  }
+  const { BrowserActivity } = load('components/BrowserActivity.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': { useStore: () => store },
+    '@ramu/shared/browserLinks': browserLinks,
+  })
+  const render = () =>
+    hooks.render(() => BrowserActivity({ chat: { computerId: 'a', taskId: 'thread' }, open: true, onClose() {} }))
+  render()
+  await settle()
+  const tree = render()
+  assert.equal(find(tree, 'Sheet').props.presentation, 'screen')
+  assert.equal(find(tree, 'Sheet').props.scroll, false)
+  assert.equal(find(tree, 'BrowserViewer').props.embedded, true)
+  assert.ok(!nodes(tree).some((node) => node.type === 'Button' && node.props.title === 'View host browser'))
+  hooks.dispose()
+})
 
 test('a destination clarification keeps the composer draft instead of acknowledging a send', async () => {
   const hooks = hookHarness()
@@ -446,6 +502,141 @@ test('Android pairing actions use filled buttons, while iOS keeps glass', () => 
   assert.equal(android.Header({ title: 'Settings' }).props.options.headerTitleAlign, 'left')
 })
 
+test('iOS composite titles use a bounded leading item in the native bar', () => {
+  const { Header, Screen } = load('components/Screen.tsx', 'ios')
+  const tree = Header({ title: 'A long thread title', subtitle: 'host · project' })
+  const options = find(tree, 'StackScreen').props.options
+  assert.equal(options.headerTransparent, false)
+  assert.equal(options.header, undefined)
+  const title = nodes(tree).find((node) => node.props?.children === 'A long thread title')
+  const subtitle = nodes(tree).find((node) => node.props?.children === 'host · project')
+  assert.equal(title.props.size, 14)
+  assert.equal(title.props.numberOfLines, 1)
+  assert.equal(subtitle.props.numberOfLines, 1)
+  assert.equal(title.props.style.textAlign, 'left')
+  assert.equal(subtitle.props.style.textAlign, 'left')
+  assert.ok(nodes(tree).some((node) => node.type === 'ToolbarButton' && node.props.icon === 'chevron.left'))
+  assert.equal(Screen({ children: 'body', scrollable: false }).props.style.paddingTop, undefined)
+})
+
+test('native chat toolbar actions receive taps and keep their supplied symbols', () => {
+  let opened = false
+  const screen = load('components/Screen.tsx', 'ios', {
+    './ui': { tap() {}, T: 'T', Button: 'Button', IconButton: 'IconButton' },
+  })
+  const { jsx, jsxs } = require('react/jsx-runtime')
+  const actions = jsxs(require('react').Fragment, {
+    children: [
+      jsx(screen.HeaderButton, {
+        icon: 'GitBranch',
+        label: 'Source Control',
+        systemIcon: 'arrow.triangle.branch',
+        onPress() {},
+      }),
+      jsx(screen.HeaderMenu, {
+        label: 'Thread actions',
+        actions: [
+          {
+            label: 'Browser',
+            onPress: () => {
+              opened = true
+            },
+          },
+        ],
+        onPress() {},
+      }),
+    ],
+  })
+  const tree = screen.Header({ title: 'Thread', scrollEdge: true, right: actions })
+  const native = nodes(tree).filter((node) => node.type === 'ToolbarButton')
+  assert.equal(native.length, 2)
+  assert.equal(native[1].props.accessibilityLabel, 'Source Control')
+  const menu = find(tree, 'ToolbarMenu')
+  assert.equal(menu.props.icon, 'ellipsis')
+  find(menu, 'ToolbarMenuAction').props.onPress()
+  assert.equal(opened, true)
+  const options = find(tree, 'StackScreen').props.options
+  assert.equal(options.headerTransparent, true)
+  assert.ok(nodes(tree).some((node) => node.props?.transparent === true))
+  assert.ok(
+    nodes(tree).some(
+      (node) =>
+        node.props?.blurEffect === 'systemChromeMaterial' && node.props?.largeStyle?.backgroundColor === 'transparent',
+    ),
+  )
+  assert.equal(options.headerStyle.backgroundColor, 'window')
+  assert.equal(options.scrollEdgeEffects.top, 'hard')
+  assert.ok(nodes(tree).some((node) => node.props?.style?.width > 0 && node.props.style.width <= 160))
+})
+
+test('computer video does not evaluate WebRTC exports when its native module is absent', () => {
+  let touched = false
+  const video = load('components/useComputerVideo.ts', 'ios', {
+    'react-native': { NativeModules: {} },
+    'react-native-webrtc': {
+      get RTCPeerConnection() {
+        touched = true
+        throw new Error('Missing native module')
+      },
+    },
+  })
+  assert.equal(video.webrtc(), null)
+  assert.equal(video.webrtc(), null)
+  assert.equal(touched, false)
+})
+
+test('a linked development build can use WebRTC and initialization failure falls back to image frames', () => {
+  const hooks = hookHarness()
+  const native = {
+    RTCPeerConnection: class {
+      constructor() {
+        throw new Error('Video cannot start')
+      }
+    },
+  }
+  const video = load('components/useComputerVideo.ts', 'ios', {
+    react: hooks.react,
+    'react-native': { NativeModules: { WebRTCModule: {} } },
+    'react-native-webrtc': native,
+    '../runtime/store': {
+      useStore: () => ({
+        invoke: async () => {
+          throw new Error('No video request expected')
+        },
+      }),
+    },
+  })
+  assert.equal(video.webrtc(), native)
+  const render = () => hooks.render(() => video.useComputerVideo('host', 'thread', true, true))
+  render()
+  assert.equal(render().status, 'failed')
+  hooks.dispose()
+})
+
+test('complex panels use a full-screen keyboard-aware layout on both platforms', () => {
+  for (const os of ['ios', 'android']) {
+    const ui = load('components/ui.tsx', os)
+    const sheet = ui.Sheet({
+      open: true,
+      title: 'Questions',
+      presentation: 'screen',
+      onClose() {},
+      children: 'answer form',
+    })
+    const modal = sheet.type(sheet.props)
+    assert.equal(modal.props.presentationStyle, 'fullScreen')
+    assert.equal(modal.props.visible, true)
+    const body = nodes(modal).find((node) => typeof node.type === 'function')
+    const keyboard = body.type(body.props)
+    assert.equal(keyboard.type, 'KeyboardAvoidingView')
+    assert.equal(keyboard.props.behavior, 'padding')
+    const scroll = find(keyboard, 'ScrollView')
+    assert.equal(scroll.props.style.flex, 1)
+    assert.equal(scroll.props.keyboardShouldPersistTaps, 'handled')
+    assert.equal(nodes(keyboard).find((node) => node.type === ui.IconButton).props.label, 'Close')
+  }
+})
+
 test('Android surfaces have no blanket shadow; iOS uses native Liquid Glass', () => {
   const android = load('components/Glass.tsx', 'android').Glass({ radius: 24 })
   const ios = load('components/Glass.tsx', 'ios').Glass({ radius: 24 })
@@ -463,12 +654,13 @@ test('appearance overrides reach native controls and System releases the overrid
     react: {
       memo: (component) => component,
       createContext: () => ({ Provider: 'ThemeProvider' }),
-      useState: () => [
-        preference,
+      useState: (initial) => [
+        initial === undefined ? undefined : typeof initial === 'function' && initial.name === 'readAppearance' ? preference : typeof initial === 'function' ? initial() : initial,
         (next) => {
           preference = next
         },
       ],
+      useRef: (value) => ({ current: value }),
       useMemo: (compute) => compute(),
       useEffect: (effect) => effect(),
     },
@@ -622,6 +814,71 @@ test('scroll-edge support uses the public native registry and safely falls back 
     },
   })
   assert.equal(screen.nativeScrollEdge, false)
+})
+
+test('new thread switches projects and composer in one flow without losing the draft identity', () => {
+  const hooks = hookHarness()
+  let keyboard = 0
+  const store = {
+    selected: 'a',
+    language: 'en',
+    computers: [{ id: 'a', name: 'Laptop', status: 'online' }],
+    projects: [{ id: 'a:ramu', name: 'ramu', computerId: 'a', root: '/work/ramu', kind: 'repository' }],
+    invoke: async () => ({}),
+    subscribe: () => () => {},
+    drafts: {},
+    defaults: {},
+    appPreferences: {},
+    isOnline: () => true,
+    setDraft: (key, value) => {
+      store.drafts[key] = value
+    },
+  }
+  const { default: NewChat } = load('app/new.tsx', 'ios', {
+    react: hooks.react,
+    'expo-router': { useRouter: () => ({ replace() {} }), useLocalSearchParams: () => ({}) },
+    '@ramu/shared/workspaceDefaults': workspaceDefaults,
+    '@ramu/shared/workspace/explorer': explorerScopes,
+    '../runtime/workspaces': workspaceChoices,
+    '../runtime/useWorkspaces': { useWorkspaces: () => ({ rows: [] }) },
+    '../runtime/store': { useStore: () => store },
+    '../runtime/types': { STANDALONE: 'no-project' },
+    '../i18n': { useT: () => ({ newChat: 'New thread' }) },
+    '../components/Keyboard': { useKeyboardInset: () => keyboard },
+  })
+  const render = () => hooks.render(() => NewChat())
+  let tree = render()
+  assert.equal(find(tree, 'Header').props.title, 'Choose a project')
+  const project = nodes(find(tree, 'PageScrollView')).find(
+    (node) => node.type === 'Row' && nodes(node).some((child) => child.props?.children === 'ramu'),
+  )
+  project.props.onPress()
+  tree = render()
+  assert.equal(find(tree, 'Header').props.title, 'New thread')
+  let composer = find(tree, 'Composer')
+  const draftKey = composer.props.draftKey
+  store.drafts[draftKey] = 'Keep this task'
+  assert.equal(composer.props.autoFocus, true)
+  nodes(composer.props.header)
+    .find((node) => node.props?.label === 'ramu')
+    .props.onPress()
+  tree = render()
+  assert.equal(find(tree, 'Header').props.title, 'Choose a project')
+  assert.equal(nodes(tree).filter((node) => node.type === 'Sheet' && node.props.open).length, 0)
+  nodes(find(tree, 'PageScrollView'))
+    .find((node) => node.type === 'Row' && nodes(node).some((child) => child.props?.children === 'ramu'))
+    .props.onPress()
+  keyboard = 300
+  tree = render()
+  composer = find(tree, 'Composer')
+  assert.equal(composer.props.draftKey, draftKey)
+  assert.equal(store.drafts[draftKey], 'Keep this task')
+  assert.ok(nodes(tree).some((node) => node.type === 'AnimatedMark' && node.props.size === 32))
+  assert.ok(nodes(tree).some((node) => node.props?.children === 'What should we work on?'))
+  assert.ok(
+    !nodes(tree).some((node) => typeof node.props?.children === 'string' && node.props.children.startsWith('Runs on ')),
+  )
+  hooks.dispose()
 })
 
 test('a new-thread form keeps its chosen host when the global selection changes', async () => {
@@ -927,6 +1184,9 @@ function hookHarness() {
   }
 }
 const settle = async () => {
+  for (let i = 0; i < 8; i++) await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await new Promise((resolve) => setTimeout(resolve, 0))
   for (let i = 0; i < 8; i++) await Promise.resolve()
 }
 const deferred = () => {
@@ -2266,6 +2526,10 @@ for (const os of ['ios', 'android']) {
     assert.equal(store.drafts['a:new:a:p'], 'Keep my request')
     listeners.get('a')('workspace:changed', {})
     const oldRequest = requests.at(-1)
+    nodes(find(tree, 'Composer').props.header)
+      .find((node) => node.props?.icon === 'FolderGit2' || node.props?.icon === 'Folder')
+      .props.onPress()
+    tree = render()
     nodes(tree)
       .find((node) => node.key === 'a:q')
       .props.onPress()
@@ -4340,4 +4604,313 @@ test('the thread usage chip follows the host-reported next route and keeps the s
     assert.match(kept.label, /Claude, 15% used/)
     assert.equal(kept.sheet.provider, 'claude-code')
   }
+})
+
+test('Threads, Inbox and Schedules give UIKit separate material and transparent scroll-edge appearances', () => {
+  const screen = load('components/Screen.tsx', 'ios')
+  for (const title of ['Threads', 'Inbox', 'Schedules']) {
+    const tree = screen.Header({ title, large: true, back: false })
+    assert.ok(nodes(tree).some((node) => node.props?.transparent === true))
+    assert.ok(
+      nodes(tree).some(
+        (node) =>
+          node.props?.blurEffect === 'systemChromeMaterial' &&
+          node.props?.largeStyle?.backgroundColor === 'transparent',
+      ),
+    )
+    assert.equal(find(tree, 'StackScreen').props.options.scrollEdgeEffects.top, 'hard')
+  }
+})
+
+test('native scroll-edge surfaces use the screen background and preserve list layout styles', () => {
+  const screen = load('components/Screen.tsx', 'ios', { 'react-native': { FlatList: 'FlatList' } })
+  const list = screen.PageFlatList({ data: [], style: { flex: 1 } })
+  const view = find(list, 'FlatList')
+  assert.equal(view.props.style[0].backgroundColor, 'window')
+  assert.equal(view.props.style[1].flex, 1)
+})
+
+test('the project picker uses the centered native title and menu actions preserve icons', () => {
+  const screen = load('components/Screen.tsx', 'ios')
+  const centered = screen.Header({ title: 'Choose a project', align: 'center' })
+  assert.equal(find(centered, 'StackScreen').props.options.headerTransparent, false)
+  assert.ok(!nodes(centered).some((node) => node.type === 'ToolbarView'))
+  assert.ok(nodes(centered).some((node) => node.props?.children === 'Choose a project'))
+  const menu = require('react/jsx-runtime').jsx(screen.HeaderMenu, {
+    label: 'Actions',
+    onPress() {},
+    actions: [{ label: 'Usage', icon: 'chart.bar', onPress() {} }],
+  })
+  const tree = screen.Header({ title: 'Thread', right: menu })
+  assert.equal(find(tree, 'ToolbarMenuAction').props.icon, 'chart.bar')
+})
+
+for (const accepted of [true, false]) {
+  test(`composer clears visually before delivery, but consumes the saved draft only on acceptance (accepted: ${accepted})`, async () => {
+    const hooks = hookHarness()
+    let acknowledge,
+      nativeClears = 0,
+      cleared = 0
+    const store = {
+      selected: 'a',
+      computers: [{ id: 'a', status: 'online' }],
+      projects: [],
+      chats: [],
+      missingMethods: {},
+      appPreferences: {},
+      drafts: { 'a:chat:one': 'Do the work' },
+      isOnline: () => true,
+      setDraft(key, value) {
+        store.drafts[key] = value
+      },
+      clearComposerDraft() {
+        cleared++
+        return true
+      },
+    }
+    const { Composer } = load('components/Composer.tsx', 'ios', {
+      react: hooks.react,
+      './ui': new Proxy({}, { get: (_, key) => (key === 'tap' ? () => {} : String(key)) }),
+      '@ramu/shared/chat/composerDraft': {
+        composerDraft: (text) => ({ chips: [], segments: [{ kind: 'text', source: text }] }),
+      },
+      '../runtime/store': { useStore: () => store },
+      '../i18n': { useT: () => ({ queue: 'Queue', steer: 'Steer' }) },
+      '../runtime/goalVerify': { offersVerify: () => false },
+      './ComposerSuggest': { useComposerSuggest: () => ({ visible: false }) },
+    })
+    const render = () =>
+      hooks.render(() =>
+        Composer({
+          computerId: 'a',
+          draftKey: 'a:chat:one',
+          running: true,
+          model: { provider: 'claude-code', model: 'opus' },
+          onModel() {},
+          onSend: () =>
+            new Promise((resolve) => {
+              acknowledge = resolve
+            }),
+        }),
+      )
+    const tree = render()
+    find(tree, 'TextInput').props.ref.current = {
+      clear() {
+        nativeClears++
+      },
+    }
+    const steer = nodes(tree).find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Steer')
+    assert.ok(steer)
+    assert.ok(nodes(tree).some((node) => node.type === 'IconButton' && node.props.label === 'Queue'))
+    assert.ok(!nodes(tree).some((node) => node.type === 'ThreadUsageChip'))
+    steer.props.onPress()
+    await settle()
+    assert.equal(nativeClears, 1)
+    assert.equal(store.drafts['a:chat:one'], 'Do the work')
+    assert.equal(find(render(), 'TextInput').props.editable, false)
+    acknowledge(accepted)
+    await settle()
+    assert.equal(nativeClears, 1)
+    if (!accepted)
+      assert.ok(JSON.stringify(nodes(render()).map((node) => node.props?.children)).includes('Do the work'))
+    assert.equal(cleared, accepted ? 1 : 0)
+    hooks.dispose()
+  })
+}
+
+test('mobile composer tools remain reachable in a horizontal row without a generic Working action', () => {
+  const hooks = hookHarness()
+  const { ThreadActivity } = load('components/ThreadActivity.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': { useStore: () => ({ language: 'en', isOnline: () => true }) },
+    '../runtime/threadActivity': {
+      mobileThreadActivity: () => ({
+        model: { primary: 'working', secondary: [], counts: { active: 0 } },
+        requests: [],
+        groups: [],
+        helpers: [],
+        advisors: [],
+      }),
+    },
+  })
+  let opened = ''
+  const tree = hooks.render(() =>
+    ThreadActivity({
+      chat: { computerId: 'a', queue: [] },
+      actions: [
+        {
+          label: 'Browser',
+          icon: 'Globe',
+          onPress: () => {
+            opened = 'browser'
+          },
+        },
+        { label: 'Computer', icon: 'Monitor', onPress() {} },
+      ],
+    }),
+  )
+  assert.equal(find(tree, 'ScrollView').props.horizontal, true)
+  assert.ok(!nodes(tree).some((node) => node.props?.children === 'Working'))
+  const browser = nodes(tree).find((node) => node.props?.accessibilityLabel === 'Browser')
+  browser.props.onPress()
+  assert.equal(opened, 'browser')
+  assert.ok(nodes(tree).some((node) => node.props?.accessibilityLabel === 'Computer'))
+  hooks.dispose()
+})
+
+test('native headers distinguish their normal dark surface from the transparent scroll-edge appearance', () => {
+  const screen = load('components/Screen.tsx', 'ios')
+  for (const props of [
+    { title: 'Chat', scrollEdge: true },
+    { title: 'Threads', large: true, back: false },
+  ]) {
+    const tree = screen.Header(props)
+    const appearance = nodes(tree).find((node) => node.props?.largeStyle?.backgroundColor === 'transparent')
+    assert.ok(appearance)
+    assert.equal(appearance.props.style.backgroundColor, 'window')
+    assert.equal(appearance.props.blurEffect, 'systemChromeMaterial')
+  }
+})
+
+test('tool activity shortcuts follow actual tabs and sessions and ignore late reads after navigation', async () => {
+  const hooks = hookHarness()
+  let browser = false,
+    computer = false,
+    terminal = false,
+    update
+  const store = {
+    isOnline: () => true,
+    invoke: async (_host, method) => {
+      if (method === 'hostBrowser.status') return { enabled: true }
+      if (method === 'hostBrowser.list') return browser ? [{ id: 'tab' }] : []
+      if (method === 'computer.session') return computer ? { target: { id: 'app:Chrome' } } : null
+      if (method === 'agent.context') return computer ? { percent: 31 } : null
+      if (method === 'term.list') return terminal ? [{ exited: false }] : []
+    },
+    subscribe: (_host, listener) => {
+      update = listener
+      return () => {}
+    },
+  }
+  const { useThreadToolActivity } = load(
+    'runtime/useThreadToolActivity.ts',
+    'ios',
+    {
+      react: hooks.react,
+      './store': { useStore: () => store },
+    },
+    { setInterval: () => 1, clearInterval() {} },
+  )
+  let chat = { computerId: 'a', taskId: 'one', sessionId: 'session' }
+  const render = () => hooks.render(() => useThreadToolActivity(chat, true))
+  render()
+  await settle()
+  let state = render()
+  assert.equal(state.browser, false)
+  assert.equal(state.computer, false)
+  assert.equal(state.terminal, false)
+  assert.equal(state.usage, false)
+  browser = computer = terminal = true
+  update('hostBrowser:changed')
+  await settle()
+  state = render()
+  assert.equal(state.browser, true)
+  assert.equal(state.computer, true)
+  assert.equal(state.terminal, true)
+  assert.equal(state.usage, true)
+  browser = computer = terminal = false
+  update('term:changed')
+  await settle()
+  state = render()
+  assert.equal(state.browser, false)
+  assert.equal(state.computer, false)
+  assert.equal(state.terminal, false)
+  assert.equal(state.usage, false)
+  chat = { computerId: 'b', taskId: 'two', sessionId: 'other' }
+  assert.equal(render().browser, false)
+  hooks.dispose()
+})
+
+test('iOS 26 large titles retain the transparent native surface required by UIKit', () => {
+  const screen = load('components/Screen.tsx', 'ios', { 'react-native': { Platform: { OS: 'ios', Version: 26 } } })
+  const home = screen.Header({ title: 'Threads', large: true, back: false })
+  assert.equal(find(home, 'StackScreen').props.options.headerStyle.backgroundColor, 'transparent')
+  const chat = screen.Header({ title: 'Thread', scrollEdge: true })
+  assert.equal(find(chat, 'StackScreen').props.options.headerStyle.backgroundColor, 'window')
+})
+
+test('unchanged computer-use polls preserve context identity and do not notify consumers with new state', async () => {
+  const hooks = hookHarness()
+  let poll,
+    rows = [{ threadId: 'one', target: { name: 'Chrome' }, controller: { kind: 'agent' } }]
+  const store = { computers: [{ id: 'a', status: 'online' }], invoke: async () => JSON.parse(JSON.stringify(rows)) }
+  const { ComputerUseProvider } = load(
+    'runtime/computerUse.tsx',
+    'ios',
+    {
+      react: { ...require('react'), ...hooks.react },
+      './store': { useStore: () => store },
+      'react-native': { AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) } },
+    },
+    {
+      setInterval: (callback) => {
+        poll = callback
+        return 1
+      },
+      clearInterval() {},
+    },
+  )
+  const render = () => hooks.render(() => ComputerUseProvider({ children: 'threads' }))
+  render()
+  await settle()
+  const before = render().props.value
+  await poll()
+  await settle()
+  assert.equal(render().props.value, before)
+  rows = []
+  await poll()
+  await settle()
+  assert.notEqual(render().props.value, before)
+  assert.equal(render().props.value.sessions.a.length, 0)
+  hooks.dispose()
+})
+
+test('computer-use stop revokes only the displayed thread and refreshes the shared indicator', async () => {
+  const hooks = hookHarness(),
+    calls = []
+  let refreshed = 0,
+    stoppedPropagation = false
+  const { ComputerUseNotice } = load('components/ComputerUseNotice.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': {
+      useStore: () => ({ language: 'en', isOnline: () => true, invoke: async (...args) => calls.push(args) }),
+    },
+    '../runtime/useDictation': {
+      useVoiceSettings: () => [{}],
+      useVoiceCapability: () => ({}),
+      useMicControl: () => ({ kind: 'hidden' }),
+      useDictation: () => ({ snapshot: { state: { phase: 'idle' } }, session: { cancel() {} } }),
+    },
+    '@ramu/shared/voice/dictation': { dictationBusy: () => false },
+    '../runtime/computerUse': {
+      useComputerUse: () => ({
+        session: { target: { name: 'Chrome' }, controller: { kind: 'agent' }, paused: false },
+        refresh: async () => {
+          refreshed++
+        },
+      }),
+    },
+  })
+  const tree = hooks.render(() => ComputerUseNotice({ chat: { computerId: 'a', taskId: 'one' } }))
+  assert.ok(JSON.stringify(nodes(tree).map((node) => node.props?.children)).includes('Chrome'))
+  find(tree, 'Pressable').props.onPress({
+    stopPropagation() {
+      stoppedPropagation = true
+    },
+  })
+  await settle()
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['a', 'computer.revoke', 'one']])
+  assert.equal(refreshed, 1)
+  assert.equal(stoppedPropagation, true)
+  hooks.dispose()
 })

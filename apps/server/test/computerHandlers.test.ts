@@ -4,6 +4,14 @@ import { ComputerService } from '../src/computer/service'
 import { registerComputerHandlers } from '../src/ipc/handlers/computer'
 import type { HandlerContext } from '../src/ipc/types'
 
+const ocu = vi.hoisted(() => ({ install: vi.fn(async () => '1.1.2'), setup: vi.fn(async () => {}) }))
+vi.mock('../src/computer/ocu', () => ({
+  installOcu: ocu.install,
+  setupOcu: ocu.setup,
+  ocuPermissions: async () => null,
+  ocuUpdateStatus: () => ({ installedVersion: null, supportedVersion: '1.1.2', updateAvailable: false, managed: true }),
+}))
+
 vi.mock('../src/computer/lockedUse', () => ({
   LockedUse: class {
     async status() {
@@ -15,7 +23,7 @@ vi.mock('../src/computer/lockedUse', () => ({
   },
 }))
 
-function setup(deviceId: string | undefined, admin: boolean, text?: string) {
+function setup(deviceId: string | undefined, admin: boolean, text?: string, eligible = () => false) {
   const backend: ComputerBackend = {
     status: () => ({ available: true, computer: { id: 'local', name: 'Mac' } }),
     capture: async () => ({
@@ -33,7 +41,7 @@ function setup(deviceId: string | undefined, admin: boolean, text?: string) {
   const computer = new ComputerService(backend)
   const methods = registerComputerHandlers({
     computer,
-    host: { canAdministerIntegrations: () => admin, browserDevice: () => deviceId },
+    host: { canAdministerIntegrations: () => admin, browserDevice: () => deviceId, browserGrantEligible: eligible },
     workspace: {
       getTask: () => ({}),
       listTasks: () => [{ id: 't1' }],
@@ -57,7 +65,7 @@ describe('computer handlers', () => {
       target: { id: 'display:main' },
     })
     const remote = setup('phone', false)
-    expect(() => remote.call('computer.setEnabled', true)).toThrow(/owning host/)
+    expect(() => remote.call('computer.setEnabled', true)).toThrow(/owner device/)
   })
 
   it('resets access and pointer defaults and revokes active sessions and viewer grants', async () => {
@@ -67,7 +75,7 @@ describe('computer handlers', () => {
     await owner.call('computer.grant', 't1', { observe: true, input: true })
     owner.computer.grantViewer('t1', 'phone', true)
     await owner.call('computer.resetDefaults')
-    expect(owner.call('computer.status')).toMatchObject({ enabled: false, globalPointer: false })
+    expect(await owner.call('computer.status')).toMatchObject({ enabled: false, globalPointer: false })
     expect(owner.computer.session('t1')).toBeUndefined()
     expect(owner.computer.viewerAccess('t1', 'phone')).toEqual({ observe: false, input: false })
     const remote = setup('phone', false)
@@ -79,6 +87,21 @@ describe('computer handlers', () => {
     owner.call('computer.setEnabled', true)
     await owner.call('computer.grant', 't1', { observe: true, input: true })
     await expect(owner.call('computer.installApps')).rejects.toThrow(/Stop computer use/)
+  })
+
+  it('lets a paired owner phone share a target, view it, take control, and stop without a second device grant', async () => {
+    let paired = true
+    const phone = setup('phone', false, undefined, () => paired)
+    phone.call('computer.setEnabled', true)
+    await phone.call('computer.grant', 't1', { observe: true, input: true })
+    expect(await phone.call('computer.frame', 't1')).toMatchObject({ width: 100 })
+    expect(phone.call('computer.takeControl', 't1')).toMatchObject({ controller: { kind: 'human', deviceId: 'phone' } })
+    paired = false
+    await expect(phone.call('computer.frame', 't1')).rejects.toThrow(/not granted/)
+    paired = true
+    phone.call('computer.revoke', 't1')
+    expect(phone.computer.session('t1')).toBeUndefined()
+    await expect(phone.call('computer.installApps')).rejects.toThrow(/owning host/)
   })
 
   it('lets a paired device watch only after an explicit viewer grant, and drive only with input', async () => {
@@ -121,4 +144,34 @@ describe('computer handlers', () => {
     owner.call('computer.setEnabled', false)
     expect(owner.computer.session('t1')).toBeUndefined()
   })
+})
+
+it('opens permission setup after installation and can reopen it without reinstalling', async () => {
+  ocu.install.mockClear()
+  ocu.setup.mockClear()
+  const owner = setup('local', true)
+  await expect(owner.call('computer.installApps')).resolves.toEqual({ version: '1.1.2' })
+  expect(ocu.install).toHaveBeenCalledOnce()
+  expect(ocu.setup).toHaveBeenCalledOnce()
+  expect(ocu.install.mock.invocationCallOrder[0]).toBeLessThan(ocu.setup.mock.invocationCallOrder[0]!)
+  await owner.call('computer.openSetup')
+  expect(ocu.install).toHaveBeenCalledOnce()
+  expect(ocu.setup).toHaveBeenCalledTimes(2)
+  const phone = setup('phone', false)
+  await expect(phone.call('computer.openSetup')).rejects.toThrow(/owning host/)
+  expect(ocu.setup).toHaveBeenCalledTimes(2)
+})
+
+it('lists computer access only for an owner and removes only the revoked thread', async () => {
+  const owner = setup('local', true)
+  owner.call('computer.setEnabled', true)
+  await owner.call('computer.grant', 't1', { observe: true, input: true })
+  await owner.call('computer.grant', 't2', { observe: true, input: true })
+  expect(owner.call('computer.sessions')).toEqual(
+    expect.arrayContaining([expect.objectContaining({ threadId: 't1' }), expect.objectContaining({ threadId: 't2' })]),
+  )
+  owner.call('computer.revoke', 't1')
+  expect(owner.call('computer.sessions')).toEqual([expect.objectContaining({ threadId: 't2' })])
+  expect(() => setup('viewer', false).call('computer.sessions')).toThrow(/Pair an owner/)
+  expect(setup('phone', false, undefined, () => true).call('computer.sessions')).toEqual([])
 })

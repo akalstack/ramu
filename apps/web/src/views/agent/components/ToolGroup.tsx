@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { t as translate, useLanguage } from '../../../i18n'
+import { isViewImageTool, toolImageName } from '../lib/toolImage'
 import { splitToolContent } from '../lib/toolContent'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { toolKind, KIND_VERB } from '@ramu/shared/chat/agentTools'
@@ -106,9 +107,13 @@ export function ToolGroup({
               const bash = category === 'execute'
               const call = ramuTool(t)
               const row = call ? describeRamuTool(call, r?.summary) : undefined
-              const humanTitle = row
-                ? `${translate(toolRunning ? row.running : row.done)}${row.subject ? ` ${row.subject}` : ''}`
-                : (t.title?.trim() ?? toolFallbackTitle(t, toolRunning) ?? undefined)
+              const { images, details } = splitToolContent(r?.content ?? t.content)
+              const imageTitle = images.length || isViewImageTool(t.name) ? toolImageName(t) : undefined
+              const humanTitle =
+                imageTitle ??
+                (row
+                  ? `${translate(toolRunning ? row.running : row.done)}${row.subject ? ` ${row.subject}` : ''}`
+                  : (t.title?.trim() ?? toolFallbackTitle(t, toolRunning) ?? undefined))
               const inputText = t.input ?? (humanTitle === summary ? undefined : summary)
               const failed = r ? r.isError || r.status === 'failed' : t.status === 'failed'
               const state = failed
@@ -121,7 +126,7 @@ export function ToolGroup({
                       ? 'Stopped'
                       : 'Completed'
               // Threads recorded before tool references were read keep a placeholder for them; it says nothing.
-              const shown = splitToolContent(r?.content ?? t.content).details.filter(
+              const shown = details.filter(
                 (item) => !(item.type === 'unsupported' && item.label === 'Unsupported content: tool_reference'),
               )
               const movable = !!onBackground && t.name === 'Bash' && toolRunning
@@ -169,7 +174,7 @@ export function ToolGroup({
                         <RamuToolBody row={row} tool={t} result={r} />
                       ) : (
                         <>
-                          {inputText && (
+                          {inputText && !imageTitle && (
                             <div className="tool-input p-[8px_12px] space-y-1">
                               <span className="text-caption font-medium text-muted-foreground">
                                 {translate('Input')}
@@ -183,7 +188,7 @@ export function ToolGroup({
                             <div className="tool-rich-content p-[8px_12px]">
                               <AgentContentView content={shown} taskId={taskId} plainText={bash} />
                             </div>
-                          ) : (
+                          ) : !images.length ? (
                             <ShadowPre>
                               {r
                                 ? r.summary || translate('No output')
@@ -191,7 +196,7 @@ export function ToolGroup({
                                   ? translate('Running…')
                                   : translate('No output')}
                             </ShadowPre>
-                          )}
+                          ) : null}
                           {t.locations?.length ? (
                             <div className="tool-locations px-3 pb-2 text-caption text-muted-foreground">
                               {t.locations.map((location, i) => (
@@ -204,6 +209,11 @@ export function ToolGroup({
                           ) : null}
                         </>
                       )}
+                      {images.length > 0 && (
+                        <div className="tool-images p-3" data-tool-image-id={t.toolUseId}>
+                          <AgentContentView content={images} taskId={taskId} />
+                        </div>
+                      )}
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
@@ -212,14 +222,6 @@ export function ToolGroup({
           </div>
         </CollapsibleContent>
       </Collapsible>
-      {tools.map((tool) => {
-        const { images } = splitToolContent(results.get(tool.toolUseId)?.content ?? tool.content)
-        return images.length ? (
-          <div key={tool.toolUseId} className="tool-images my-2" data-tool-image-id={tool.toolUseId}>
-            <AgentContentView content={images} taskId={taskId} />
-          </div>
-        ) : null
-      })}
     </>
   )
 }

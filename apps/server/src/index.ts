@@ -796,13 +796,25 @@ const mcpHttp = createServer(async (req, res) => {
       (detail, signal) => agents.requestPermission(source.id, 'Ramu integrated browser', detail, signal),
       () => browserAccessEpochs.get(source.id) ?? 0,
     )
-  if (!review && workspace.getAppState<boolean>('computer:enabled', false) === true)
+  if (!review)
     registerComputerTools(
       server,
       computer,
       source,
       () => agents.get(source.id),
       () => browserTokens.get(source.id) === token,
+      {
+        request: (detail, signal) => agents.requestPermission(source.id, 'Computer use', detail, signal),
+        grant: async (app) => {
+          await origin.run({ network: false }, () => dispatcher.invoke('computer.setEnabled', [true]))
+          await origin.run({ network: false }, () =>
+            dispatcher.invoke('computer.grant', [
+              source.taskId,
+              { observe: true, input: true, ...(app ? { app } : {}) },
+            ]),
+          )
+        },
+      },
     )
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
@@ -1084,8 +1096,7 @@ agents.toolConnection = (session) => {
       if (review) return {}
       const integrated =
         (browserPreferences?.providerOverrides[session.provider] ?? browserPreferences?.agentBrowser) === 'integrated'
-      const computerOn = workspace.getAppState<boolean>('computer:enabled', false) === true
-      const parts = [...(integrated ? [INTEGRATED_BROWSER_GUIDE] : []), ...(computerOn ? [COMPUTER_GUIDE] : [])]
+      const parts = [...(integrated ? [INTEGRATED_BROWSER_GUIDE] : []), COMPUTER_GUIDE]
       return parts.length ? { browserInstructions: parts.join('\n\n') } : {}
     })(),
     ...(mcpConfigDirs.length ? { mcpConfigDirs } : {}),

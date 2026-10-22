@@ -118,7 +118,14 @@ export function TopFade({ visible, color }: { visible: boolean; color?: string }
   return (
     <Animated.View
       pointerEvents="none"
-      style={{ position: 'absolute', left: 0, right: 0, top: 0, height: insets.top + 44 + 20, opacity }}
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: 0,
+        height: insets.top + 44 + 20,
+        opacity,
+      }}
     >
       {Array.from({ length: steps }, (_, i) => (
         <View

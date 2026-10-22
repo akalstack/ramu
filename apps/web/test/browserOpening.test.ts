@@ -22,6 +22,8 @@ vi.mock('../src/views/searchEngine', () => ({ useSearchEngine: () => ({ template
 vi.mock('../src/components/desktop-button', () => ({ Button: 'button' }))
 vi.mock('../src/components/desktop-input', () => ({ Input: 'input' }))
 vi.mock('../src/views/BrowserTabChip', () => ({ BrowserTabChip: 'tab' }))
+import { Children, isValidElement, type ReactElement } from 'react'
+import { BrowserDownloads } from '../src/views/BrowserDownloads'
 import { LocalBrowserView as BrowserView } from '../src/views/BrowserView'
 import { requestBrowserNavigation, takeBrowserNavigation } from '../src/views/browserNavigation'
 
@@ -81,4 +83,20 @@ it('does not let another thread consume an explicit link for a shared pane', () 
   requestBrowserNavigation('view', 'thread', 'https://clicked.test')
   expect(takeBrowserNavigation('view', 'other-thread')).toBeUndefined()
   expect(takeBrowserNavigation('view', 'thread')).toBe('https://clicked.test')
+})
+
+it('offers a new tab and downloads in the address toolbar even with no tabs', async () => {
+  const tree = BrowserView({ taskId: 'thread', view: { kind: 'browser', id: 'view' }, visible: true })
+  const descendants = (node: unknown): ReactElement<Record<string, unknown>>[] => {
+    if (!isValidElement<Record<string, unknown>>(node)) return []
+    return [node, ...Children.toArray(node.props.children as never).flatMap(descendants)]
+  }
+  const toolbar = descendants(tree).find((node) => node.type === 'form')!
+  const controls = descendants(toolbar)
+  expect(controls.some((node) => node.type === BrowserDownloads)).toBe(true)
+  const add = controls.find((node) => node.props['aria-label'] === 'New browser tab')!
+  expect(add.props.type).toBe('button')
+  await (add.props.onClick as () => Promise<void>)()
+  await settle()
+  expect(state.invoke).toHaveBeenCalledWith('browser.open', 'host', 'thread', 'https://search.test', 'default')
 })

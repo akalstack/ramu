@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { controllerLabel } from '../src/chat/computerLabels'
-import { appControlHelp, keepAwakeHelp, runtimeHelp } from '../src/settings/computerStatus'
+import { appControlHelp, runtimeHelp } from '../src/settings/computerStatus'
 
 const runtime = { id: 'local', name: 'Mac' }
 const target = { id: 'display:main', kind: 'display' as const, name: 'Main display' }
@@ -45,12 +45,8 @@ const status = (patch = {}) => ({
   apps: ready,
   keepAwake: true,
   globalPointer: false,
+  appPermissions: null,
   ...patch,
-})
-
-it('says whether the computer is being held awake', () => {
-  expect(keepAwakeHelp(status())).toMatch(/will not sleep/)
-  expect(keepAwakeHelp(status({ keepAwake: false }))).toMatch(/may sleep.*Keep awake in Settings/)
 })
 
 it('shows the Open Computer Use release only when the host reports it', () => {
@@ -60,4 +56,18 @@ it('shows the Open Computer Use release only when the host reports it', () => {
     'Install it.',
   )
   expect(appControlHelp(status({ apps: null }))).toMatch(/not available/)
+})
+
+it('distinguishes installed, missing permissions and granted permissions', () => {
+  expect(appControlHelp(status())).toContain('Permission status could not be checked')
+  expect(
+    appControlHelp(
+      status({ appPermissions: { allGranted: false, accessibilityTrusted: true, screenCaptureGranted: false } }),
+    ),
+  ).toContain('Allow Screen Recording')
+  expect(
+    appControlHelp(
+      status({ appPermissions: { allGranted: true, accessibilityTrusted: true, screenCaptureGranted: true } }),
+    ),
+  ).toContain('Permissions granted')
 })

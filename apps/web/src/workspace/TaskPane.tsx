@@ -500,7 +500,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                     )}
                   </Button>
                 )}
-                <HideWorkspaceButton onHide={() => ws.toggleRightPanel(taskId)} />
+                <HideWorkspaceButton onHide={() => ws.hideWorkspace(taskId)} />
               </div>
               <div
                 className="editor-area flex-1 min-h-0 min-w-0 flex flex-col"

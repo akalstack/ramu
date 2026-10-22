@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Pressable, RefreshControl, View } from 'react-native'
+import { Platform, Pressable, RefreshControl, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Activity,
@@ -19,14 +19,7 @@ import { useAutomation } from '../../../runtime/automation'
 import { buildInbox, INBOX_TABS, type InboxChat, type InboxTab } from '../../../runtime/inbox'
 import { STANDALONE, type Chat } from '../../../runtime/types'
 import { ago, useT, type Strings } from '../../../i18n'
-import {
-  Header,
-  LargeTitle,
-  PageScrollView,
-  Screen,
-  nativeScrollEdge,
-  useScrolledUnderBar,
-} from '../../../components/Screen'
+import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../../components/Screen'
 import { TopFade } from '../../../components/Glass'
 import { InboxThread } from '../../../components/InputRequests'
 import { Chips, Group, Nothing, RecapCard, Section } from '../../../components/InboxParts'
@@ -422,7 +415,7 @@ export default function InboxScreen() {
         <Chips value={tab} onChange={choose} options={chips} />
         {body}
       </PageScrollView>
-      {nativeScrollEdge ? null : <TopFade visible={edge.scrolled} />}
+      {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}
     </Screen>
   )
 }

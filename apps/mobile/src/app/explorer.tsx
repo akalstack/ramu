@@ -389,9 +389,10 @@ export default function Explorer() {
   return (
     <Screen>
       <Header
+        scrollEdge
         title={t.explorerTitle}
         subtitle={
-          <T size={font.caption} tone="muted">
+          <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
             {scope
               ? `${store.computers.find((h) => h.id === scope.host)?.name ?? t.hostUnavailable} · ${scope.label ?? (scope.context.startsWith('project:') ? t.currentCheckout : t.threadFiles)}`
               : project
@@ -427,6 +428,7 @@ export default function Explorer() {
       />
       {!scope ? (
         <PageFlatList
+          contentInsetAdjustmentBehavior="automatic"
           data={project ? [] : store.projects}
           keyExtractor={(project) => project.id}
           renderItem={({ item }) => (
@@ -494,30 +496,6 @@ export default function Explorer() {
         />
       ) : (
         <>
-          <TextInput
-            accessibilityLabel={t.searchCheckout}
-            placeholder={t.searchFilePaths}
-            placeholderTextColor={c.muted}
-            value={query}
-            onChangeText={setQuery}
-            style={{ margin: space.m, padding: space.m, color: c.text, backgroundColor: c.fill, borderRadius: 8 }}
-          />
-          {!online ? (
-            <T tone="muted" style={{ padding: space.m }}>
-              {t.explorerOffline}
-            </T>
-          ) : null}
-          {error ? (
-            <T tone="bad" style={{ padding: space.m }}>
-              {error}
-            </T>
-          ) : null}
-          {matches.length > EXPLORER_SEARCH_LIMIT ? (
-            <T tone="muted" style={{ padding: space.m }}>
-              {t.explorerMoreMatches}
-            </T>
-          ) : null}
-          {loading ? <ActivityIndicator color={c.accent} /> : null}
           <PageFlatList
             ref={list}
             onScroll={(event) => {
@@ -535,6 +513,31 @@ export default function Explorer() {
             contentInsetAdjustmentBehavior="automatic"
             ListHeaderComponent={
               <View style={{ paddingHorizontal: space.m, gap: space.s }}>
+                <TextInput
+                  accessibilityLabel={t.searchCheckout}
+                  placeholder={t.searchFilePaths}
+                  placeholderTextColor={c.muted}
+                  value={query}
+                  onChangeText={setQuery}
+                  style={{ margin: space.m, padding: space.m, color: c.text, backgroundColor: c.fill, borderRadius: 8 }}
+                />
+                {!online ? (
+                  <T tone="muted" style={{ padding: space.m }}>
+                    {t.explorerOffline}
+                  </T>
+                ) : null}
+                {error ? (
+                  <T tone="bad" style={{ padding: space.m }}>
+                    {error}
+                  </T>
+                ) : null}
+                {matches.length > EXPLORER_SEARCH_LIMIT ? (
+                  <T tone="muted" style={{ padding: space.m }}>
+                    {t.explorerMoreMatches}
+                  </T>
+                ) : null}
+                {loading ? <ActivityIndicator color={c.accent} /> : null}
+
                 {bindings.map((binding) => (
                   <View key={binding.repoId}>
                     <T weight="500">

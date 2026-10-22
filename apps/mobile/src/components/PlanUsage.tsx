@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Pressable, View, useWindowDimensions } from 'react-native'
 import { Gauge } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
@@ -95,7 +95,9 @@ export function PlanUsageSheet({
   onClose,
   provider,
   accountId,
+  context,
 }: {
+  context?: ReactNode
   hosts: string[]
   open: boolean
   onClose: () => void
@@ -202,6 +204,7 @@ export function PlanUsageSheet({
   }
   return (
     <Sheet open={open} onClose={onClose} title={store.language === 'id' ? 'Penggunaan paket' : 'Plan usage'}>
+      {context}
       <T tone="muted" style={{ padding: space.m }}>
         {store.language === 'id' ? 'Dibagikan antar thread pada akun ini' : 'Shared across threads on this account'}
       </T>

@@ -1,3 +1,4 @@
+import { ComputerUseProvider } from '../runtime/computerUse'
 import { LiveActivityMonitor } from '../components/LiveActivityMonitor'
 import { StartupScreen } from '../components/StartupScreen'
 import { PushRouting } from '../components/PushRouting'
@@ -62,7 +63,7 @@ function Navigator() {
           <Stack.Screen name="chat/[id]/terminal" />
           <Stack.Screen name="terminal" />
           <Stack.Screen name="chat/[id]/scm" />
-          <Stack.Screen name="new" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="new" options={{ presentation: 'card' }} />
           <Stack.Screen name="schedule-edit" options={{ presentation: 'modal' }} />
           <Stack.Screen name="computers" options={{ presentation: 'modal' }} />
           <Stack.Screen name="folders" options={{ presentation: 'modal' }} />
@@ -80,7 +81,9 @@ export default function RootLayout() {
       <ThemeProvider>
         <StoreProvider>
           <AutomationProvider>
-            <Navigator />
+            <ComputerUseProvider>
+              <Navigator />
+            </ComputerUseProvider>
           </AutomationProvider>
         </StoreProvider>
       </ThemeProvider>

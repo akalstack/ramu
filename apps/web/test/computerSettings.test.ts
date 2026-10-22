@@ -34,6 +34,7 @@ beforeEach(() => {
     enabled: false,
     runtime: { available: true, computer: { name: 'Mac' } },
     apps: null,
+    appPermissions: null,
     keepAwake: false,
     globalPointer: false,
   }
@@ -56,4 +57,41 @@ it('uses a switch for pointer drags and an action button for a tested runtime up
   expect(html).toContain('role="switch" aria-label="Let app drags use your real pointer"')
   expect(html).toContain('Update</button>')
   expect(html).toContain('Update to the tested version 1.1.2')
+})
+
+it.each([true, false])('offers permission setup while computer access is %s', (available) => {
+  state.status = {
+    ...state.status,
+    apps: { available },
+    appPermissions: { allGranted: false, accessibilityTrusted: false, screenCaptureGranted: false },
+  }
+  const html = renderToStaticMarkup(createElement(ComputerSettings, { hostId: 'local' }))
+  expect(html).toContain(available ? 'Set up permissions</button>' : 'Install &amp; set up</button>')
+})
+
+it('shows a completed permission state without offering a setup action', () => {
+  state.status = {
+    ...state.status,
+    apps: { available: true },
+    appPermissions: { allGranted: true, accessibilityTrusted: true, screenCaptureGranted: true },
+  }
+  const html = renderToStaticMarkup(createElement(ComputerSettings, { hostId: 'local' }))
+  expect(html).toContain('Permissions granted')
+  expect(html).not.toContain('Set up permissions')
+  expect(html).toContain('disabled=""')
+  expect(html).toContain('App control')
+})
+
+it('offers a service restart when an older host omits permission status', () => {
+  state.status = { ...state.status, apps: { available: true }, appPermissions: undefined }
+  const html = renderToStaticMarkup(createElement(ComputerSettings, { hostId: 'local' }))
+  expect(html).toContain('Restart service</button>')
+  expect(html).not.toContain('Set up permissions</button>')
+})
+
+it('retries an unreadable permission snapshot without offering onboarding', () => {
+  state.status = { ...state.status, apps: { available: true }, appPermissions: null }
+  const html = renderToStaticMarkup(createElement(ComputerSettings, { hostId: 'local' }))
+  expect(html).toContain('Retry permission check</button>')
+  expect(html).not.toContain('Set up permissions</button>')
 })

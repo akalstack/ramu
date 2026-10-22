@@ -9,14 +9,6 @@ export function runtimeHelp(status: Status | null): string {
   return `Ready on ${status.runtime.computer.name}. Each thread still needs your approval before the agent can see or control the screen.`
 }
 
-/** What Keep awake is doing for computer use right now; an agent stops when the Mac sleeps. */
-export function keepAwakeHelp(status: Status | null): string {
-  if (!status) return 'Checking…'
-  return status.keepAwake
-    ? 'On. This computer will not sleep while an agent works on it. The screen may still turn off.'
-    : 'Off. This computer may sleep when idle and stop the agent. Turn on Keep awake in Settings → System.'
-}
-
 /** App control's state, with the pinned release when the host reports it. */
 export function appControlHelp(status: Status | null): string {
   const apps = status?.apps
@@ -25,5 +17,18 @@ export function appControlHelp(status: Status | null): string {
     return `Open Computer Use ${status.appUpdate.installedVersion} is installed. Update to the tested version ${status.appUpdate.supportedVersion}.`
   if (!apps.available) return apps.detail ?? 'App control is not available on this host.'
   const version = status.appVersion ? ` Open Computer Use ${status.appVersion}.` : ''
-  return `Ready.${version} Choose an app in a thread; it works in the background without moving your cursor.`
+  if (status.appPermissions === undefined)
+    return `Installed.${version} Restart the background service to check permissions.`
+  if (!status.appPermissions)
+    return `Installed.${version} Permission status could not be checked. Try again to read the current permissions.`
+  if (!status.appPermissions.allGranted) {
+    const missing = [
+      !status.appPermissions.accessibilityTrusted && 'Accessibility',
+      !status.appPermissions.screenCaptureGranted && 'Screen Recording',
+    ]
+      .filter(Boolean)
+      .join(' and ')
+    return `Allow ${missing} to finish setup.${version}`
+  }
+  return `Permissions granted.${version} Choose an app from a thread’s Computer menu to let the agent work in it.`
 }

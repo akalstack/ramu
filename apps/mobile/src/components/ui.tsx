@@ -4,6 +4,7 @@ import {
   Dimensions,
   Easing,
   Modal,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -26,6 +27,7 @@ import {
   CircleDot,
   CircleHelp,
   Loader,
+  X,
   type LucideProps,
 } from 'lucide-react-native'
 import type { TaskStatus } from '@ramu/shared/types'
@@ -111,6 +113,7 @@ export function IconButton({
   size = 36,
   tone = 'soft',
   filled,
+  disabled,
   style,
 }: {
   icon: Icon
@@ -119,6 +122,7 @@ export function IconButton({
   size?: number
   tone?: Tone
   filled?: boolean
+  disabled?: boolean
   style?: StyleProp<ViewStyle>
 }) {
   const { c } = useTheme()
@@ -126,6 +130,8 @@ export function IconButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      disabled={disabled}
+      accessibilityState={{ disabled: !!disabled }}
       hitSlop={6}
       onPress={() => {
         tap()
@@ -133,6 +139,7 @@ export function IconButton({
       }}
       style={({ pressed }) => [
         {
+          opacity: disabled ? 0.4 : 1,
           width: size,
           height: size,
           borderRadius: radius.s,
@@ -379,6 +386,8 @@ type SheetProps = {
   children: ReactNode
   /** `false`: the content scrolls itself (a FlatList), so the sheet must not wrap it in a ScrollView. */
   scroll?: boolean
+  /** Complex workflows use a full-screen layout with room for keyboard input. */
+  presentation?: 'sheet' | 'screen'
 }
 
 /** What every sheet shows: an optional drag handle (iOS draws its own; Android's Material sheet has one), the title, the content. */
@@ -406,7 +415,12 @@ function SheetBody({
         </T>
       ) : null}
       {scroll ? (
-        <ScrollView bounces={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: space.m }}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{ paddingBottom: space.m }}
+        >
           {children}
         </ScrollView>
       ) : (
@@ -421,6 +435,7 @@ function SheetBody({
  * and swipe-to-dismiss). Elsewhere it is built on Modal so it runs in Expo Go; on iOS it floats inset from the edges on glass.
  */
 export function Sheet(props: SheetProps) {
+  if (props.presentation === 'screen') return <ScreenSheet {...props} />
   if (Platform.OS === 'android')
     return (
       <MaterialSheet open={props.open} onClose={props.onClose}>
@@ -428,6 +443,59 @@ export function Sheet(props: SheetProps) {
       </MaterialSheet>
     )
   return <FloatingSheet {...props} />
+}
+
+/** A task surface rather than a bottom drawer: the keyboard resizes its scrollable content. */
+function ScreenSheet({ open, onClose, ...props }: SheetProps) {
+  return (
+    <Modal visible={open} presentationStyle="fullScreen" animationType="slide" onRequestClose={onClose}>
+      <SafeAreaProvider>
+        <ScreenSheetBody {...props} onClose={onClose} />
+      </SafeAreaProvider>
+    </Modal>
+  )
+}
+function ScreenSheetBody({ title, children, scroll = true, onClose }: Omit<SheetProps, 'open'>) {
+  const { c } = useTheme()
+  const insets = useSafeAreaInsets()
+  return (
+    <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: c.window }}>
+      <View accessibilityViewIsModal style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+        <View
+          style={{
+            minHeight: 56,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: space.l,
+            gap: space.m,
+          }}
+        >
+          <T
+            accessibilityRole="header"
+            size={font.heading}
+            weight="600"
+            numberOfLines={1}
+            style={{ flex: 1, minWidth: 0 }}
+          >
+            {title}
+          </T>
+          <IconButton icon={X} label="Close" onPress={onClose} />
+        </View>
+        {scroll ? (
+          <ScrollView
+            style={{ flex: 1 }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            contentContainerStyle={{ paddingBottom: space.l }}
+          >
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={{ flex: 1 }}>{children}</View>
+        )}
+      </View>
+    </KeyboardAvoidingView>
+  )
 }
 
 /** The floating glass panel, sitting just above the home indicator. */
@@ -507,7 +575,9 @@ function FloatingSheet({ open, onClose, title, children, scroll }: SheetProps) {
             transform: [{ translateY }],
           }}
         >
-          <SheetPanel>{body}</SheetPanel>
+          <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <SheetPanel>{body}</SheetPanel>
+          </KeyboardAvoidingView>
         </Animated.View>
       </SafeAreaProvider>
     </Modal>

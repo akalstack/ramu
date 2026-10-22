@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { NativeModules, Platform } from 'react-native'
 import { useStore } from '../runtime/store'
 
 export interface ComputerVideo {
@@ -14,7 +15,12 @@ const CONNECT_TIMEOUT_MS = 12_000
 
 /** The native WebRTC module is only in an EAS development or production build; Expo Go has none and gets the image frames. */
 export function webrtc(): typeof import('react-native-webrtc') | null {
+  // Metro reports failed native module imports before a surrounding catch can hide the red screen.
+  // Probe the same registration the package uses before evaluating any of its native components.
+  if (Platform.OS === 'web' || !NativeModules.WebRTCModule) return null
   try {
+    // Load only after the native registration check; a static import crashes builds without WebRTC.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const module = require('react-native-webrtc') as typeof import('react-native-webrtc')
     return typeof module.RTCPeerConnection === 'function' ? module : null
   } catch {
@@ -41,13 +47,19 @@ export function useComputerVideo(
     }
     let mounted = true
     let peerId: string | null = null
-    const pc = new native.RTCPeerConnection({ iceServers: [] })
+    let pc: InstanceType<typeof native.RTCPeerConnection>
+    try {
+      pc = new native.RTCPeerConnection({ iceServers: [] })
+      pc.addTransceiver('video', { direction: 'recvonly' })
+    } catch {
+      setState({ ...OFF, status: 'failed' })
+      return
+    }
     const fail = () =>
       mounted && setState((previous) => ({ ...OFF, width: previous.width, height: previous.height, status: 'failed' }))
     const timer = setTimeout(() => {
       if (mounted) setState((previous) => (previous.status === 'live' ? previous : { ...OFF, status: 'failed' }))
     }, CONNECT_TIMEOUT_MS)
-    pc.addTransceiver('video', { direction: 'recvonly' })
     ;(pc as any).addEventListener('track', (event: any) => {
       const stream = event.streams?.[0] ?? new native.MediaStream([event.track])
       if (mounted) setState((previous) => ({ ...previous, status: 'live', streamURL: stream.toURL() }))

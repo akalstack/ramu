@@ -25,7 +25,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Stack, useRouter } from 'expo-router'
 import { ScrollViewMarker } from 'react-native-screens/experimental'
-import { ChevronLeft, X } from 'lucide-react-native'
+import { ChevronLeft, MoreHorizontal, X } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { Glass, floatingChrome } from './Glass'
 import { Button, IconButton, T, tap, type Icon } from './ui'
@@ -65,9 +65,10 @@ export function PageScrollView({
   return horizontal ? view : <PrimaryScroll>{view}</PrimaryScroll>
 }
 export function PageFlatList<T>({ ref, ...props }: FlatListProps<T> & { ref?: Ref<FlatList<T>> }) {
+  const { c } = useTheme()
   return (
     <PrimaryScroll>
-      <FlatList {...props} ref={ref} />
+      <FlatList {...props} ref={ref} style={[{ backgroundColor: c.window }, props.style]} />
     </PrimaryScroll>
   )
 }
@@ -99,6 +100,17 @@ export function HeaderButton({ icon: I, label, onPress }: HeaderButtonProps) {
   )
 }
 
+export type HeaderMenuAction = {
+  label: string
+  onPress(): void
+  destructive?: boolean
+  icon?: ComponentProps<typeof Stack.Toolbar.MenuAction>['icon']
+}
+/** A native menu anchored to the toolbar button; other platforms retain their existing action surface. */
+export function HeaderMenu({ label, onPress }: { label: string; actions: HeaderMenuAction[]; onPress(): void }) {
+  return <HeaderButton icon={MoreHorizontal} label={label} onPress={onPress} />
+}
+
 /** Groups bar buttons into one glass capsule, like the trailing items of an iOS 26 navigation bar. */
 function ButtonGroup({ children }: { children: ReactNode }) {
   if (!floatingChrome) return <View style={{ flexDirection: 'row', alignItems: 'center' }}>{children}</View>
@@ -127,7 +139,8 @@ export function Header({
   modal,
   large,
   collapsed = true,
-  align = Platform.OS === 'android' ? 'left' : 'center',
+  align = 'left',
+  scrollEdge = false,
 }: {
   title?: ReactNode
   subtitle?: ReactNode
@@ -137,8 +150,10 @@ export function Header({
   modal?: boolean
   large?: boolean
   collapsed?: boolean
-  /** Android uses the standard left-aligned app bar by default. */
+  /** Titles and subtitles share the leading edge unless a screen explicitly opts into centering. */
   align?: 'left' | 'center'
+  /** Native material appears over scrolling content; forms keep a reserved opaque bar. */
+  scrollEdge?: boolean
 }) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -147,6 +162,127 @@ export function Header({
   // Centered between the back button and up to two trailing items (one glass capsule).
   const titleWidth = Math.max(120, Math.min(220, width - 220))
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'))
+  const nativeItems = (children: ReactNode): ReactNode[] =>
+    Children.toArray(children).flatMap<ReactNode>((child, index) => {
+      if (!isValidElement(child)) return []
+      if (child.type === Fragment) return nativeItems((child.props as { children?: ReactNode }).children)
+      if (child.type === HeaderMenu) {
+        const props = child.props as { label: string; actions: HeaderMenuAction[] }
+        return [
+          <Stack.Toolbar.Menu key={props.label} icon="ellipsis" accessibilityLabel={props.label} tintColor={c.text}>
+            {props.actions.map((action) => (
+              <Stack.Toolbar.MenuAction
+                key={action.label}
+                icon={action.icon}
+                destructive={action.destructive}
+                onPress={action.onPress}
+              >
+                {action.label}
+              </Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>,
+        ]
+      }
+      if (child.type !== HeaderButton)
+        return [
+          <Stack.Toolbar.View key={index} hidesSharedBackground>
+            {child}
+          </Stack.Toolbar.View>,
+        ]
+      const props = child.props as HeaderButtonProps
+      const symbols = {
+        Settings: 'gearshape',
+        Pengaturan: 'gearshape',
+        'Source Control': 'arrow.triangle.branch',
+        Changes: 'doc.text.magnifyingglass',
+        Terminal: 'terminal',
+        'Source control actions': 'ellipsis',
+      } as const
+      const icon = props.systemIcon ?? symbols[props.label as keyof typeof symbols] ?? 'ellipsis'
+      return [
+        <Stack.Toolbar.Button
+          key={props.label}
+          icon={icon}
+          accessibilityLabel={props.label}
+          tintColor={c.text}
+          onPress={() => {
+            tap()
+            props.onPress?.()
+          }}
+        >
+          {props.label}
+        </Stack.Toolbar.Button>,
+      ]
+    })
+  // Keep the native bar and native back button. The title is a leading toolbar item, not UIKit's centered titleView.
+  if (Platform.OS === 'ios' && align !== 'center' && (!large || subtitle)) {
+    const count = (children: ReactNode): number =>
+      Children.toArray(children).reduce<number>((total, child) => {
+        if (!isValidElement(child)) return total
+        const props = child.props as { children?: ReactNode }
+        return total + (child.type === Fragment || child.type === View ? count(props.children) : 1)
+      }, 0)
+    const available = Math.max(48, Math.min(220, width - 96 - (back || modal ? BAR + 12 : 0) - count(right) * 52))
+    return (
+      <>
+        <Stack.Screen
+          options={{
+            headerShown: true,
+            headerTransparent: scrollEdge,
+            headerTitle: '',
+            headerBackVisible: false,
+            headerStyle: { backgroundColor: c.window },
+            scrollEdgeEffects: scrollEdges,
+            headerTintColor: c.text,
+            headerShadowVisible: false,
+          }}
+        />
+        {scrollEdge ? (
+          <Stack.Header
+            transparent
+            blurEffect="systemChromeMaterial"
+            style={{ backgroundColor: c.window, color: c.text, shadowColor: 'transparent' }}
+            largeStyle={{ backgroundColor: 'transparent', shadowColor: 'transparent' }}
+          />
+        ) : null}
+        <Stack.Title>{''}</Stack.Title>
+        <Stack.Toolbar placement="left">
+          {back || modal ? (
+            <Stack.Toolbar.Button
+              icon={modal ? 'xmark' : 'chevron.left'}
+              tintColor={c.text}
+              accessibilityLabel={modal ? 'Close' : 'Back'}
+              onPress={close}
+            >
+              {modal ? 'Close' : 'Back'}
+            </Stack.Toolbar.Button>
+          ) : null}
+          <Stack.Toolbar.View hidesSharedBackground>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, width: available }}>
+              {left}
+              <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start', gap: 1 }}>
+                {typeof title === 'string' ? (
+                  <T size={14} weight="600" numberOfLines={1} style={{ width: '100%', textAlign: 'left' }}>
+                    {title}
+                  </T>
+                ) : (
+                  title
+                )}
+                {typeof subtitle === 'string' ? (
+                  <T size={11} tone="muted" numberOfLines={1} style={{ width: '100%', textAlign: 'left' }}>
+                    {subtitle}
+                  </T>
+                ) : (
+                  subtitle
+                )}
+              </View>
+            </View>
+          </Stack.Toolbar.View>
+        </Stack.Toolbar>
+        {right ? <Stack.Toolbar placement="right">{nativeItems(right)}</Stack.Toolbar> : null}
+      </>
+    )
+  }
   if (Platform.OS === 'android') {
     return (
       <Stack.Screen
@@ -195,49 +331,17 @@ export function Header({
     )
   }
   if (Platform.OS === 'ios') {
-    const nativeItems = (children: ReactNode): ReactNode[] =>
-      Children.toArray(children).flatMap<ReactNode>((child, index) => {
-        if (!isValidElement(child)) return []
-        if (child.type === Fragment) return nativeItems((child.props as { children?: ReactNode }).children)
-        if (child.type !== HeaderButton)
-          return [
-            <Stack.Toolbar.View key={index} hidesSharedBackground>
-              {child}
-            </Stack.Toolbar.View>,
-          ]
-        const props = child.props as HeaderButtonProps
-        const symbols = {
-          Settings: 'gearshape',
-          Pengaturan: 'gearshape',
-          'Source Control': 'arrow.triangle.branch',
-          Changes: 'doc.text.magnifyingglass',
-          Terminal: 'terminal',
-          'Source control actions': 'ellipsis',
-        } as const
-        const icon = props.systemIcon ?? symbols[props.label as keyof typeof symbols] ?? 'ellipsis'
-        return [
-          <Stack.Toolbar.Button
-            key={props.label}
-            icon={icon}
-            accessibilityLabel={props.label}
-            tintColor={c.text}
-            onPress={() => {
-              tap()
-              props.onPress?.()
-            }}
-          >
-            {props.label}
-          </Stack.Toolbar.Button>,
-        ]
-      })
+    // iOS 26 large titles require a transparent native bar; their scroll view supplies the native edge treatment.
+    const underlap = !!large || scrollEdge
+    const background = large && Number(Platform.Version) >= 26 ? 'transparent' : c.window
     return (
       <>
         <Stack.Screen
           options={{
             headerShown: true,
             headerTintColor: c.text,
-            headerStyle: { backgroundColor: 'transparent' },
-            headerTransparent: true,
+            headerStyle: { backgroundColor: background },
+            headerTransparent: underlap,
             headerShadowVisible: false,
             scrollEdgeEffects: { top: 'hard', bottom: 'hidden', left: 'hidden', right: 'hidden' },
             headerBackVisible: back && !modal,
@@ -245,8 +349,10 @@ export function Header({
           }}
         />
         <Stack.Header
-          transparent
-          style={{ backgroundColor: 'transparent', color: c.text, shadowColor: 'transparent' }}
+          transparent={underlap}
+          blurEffect={underlap ? 'systemChromeMaterial' : undefined}
+          style={{ backgroundColor: background, color: c.text, shadowColor: 'transparent' }}
+          largeStyle={{ backgroundColor: 'transparent', shadowColor: 'transparent' }}
         />
         {!back && typeof title !== 'string' ? (
           <Stack.Title>{''}</Stack.Title>
@@ -331,23 +437,13 @@ export function Header({
   )
 }
 
-export function Screen({
-  children,
-  bg,
-  scrollable = true,
-}: {
-  children: ReactNode
-  bg?: 'window' | 'canvas'
-  scrollable?: boolean
-}) {
+export function Screen({ children, bg }: { children: ReactNode; bg?: 'window' | 'canvas'; scrollable?: boolean }) {
   const { c } = useTheme()
-  const insets = useSafeAreaInsets()
   return (
     <View
       style={{
         flex: 1,
         backgroundColor: c[bg ?? 'window'],
-        paddingTop: Platform.OS === 'ios' && !scrollable ? insets.top + BAR : 0,
       }}
     >
       {children}

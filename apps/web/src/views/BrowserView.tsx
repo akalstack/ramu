@@ -32,17 +32,33 @@ const controllerText = (controller: BrowserTabInfo['controller']) =>
  * pane's rectangle; this component owns the address bar and reports where the pane is. Hiding or closing the pane
  * never destroys the page: only the tab's own close does.
  */
-export function BrowserView(props: { taskId: string; view: Extract<ViewDescriptor, { kind: 'browser' }>; visible: boolean }) {
+export function BrowserView(props: {
+  taskId: string
+  view: Extract<ViewDescriptor, { kind: 'browser' }>
+  visible: boolean
+}) {
   const host = useHost()
   const [hosted, setHosted] = useState(!host.isLocal)
   useEffect(() => {
     let active = true
-    const refresh = () => { void host.invoke('hostBrowser.status').then(status => { if (active) setHosted(!host.isLocal || !!status.enabled) }).catch(() => {}) }
+    const refresh = () => {
+      void host
+        .invoke('hostBrowser.status')
+        .then((status) => {
+          if (active) setHosted(!host.isLocal || !!status.enabled)
+        })
+        .catch(() => {})
+    }
     refresh()
-    const off = bridge.on('hostBrowser:changed', (_payload, from) => { if (from === host.id || (!from && host.isLocal)) refresh() })
-    return () => { active = false; off() }
+    const off = bridge.on('hostBrowser:changed', (_payload, from) => {
+      if (from === host.id || (!from && host.isLocal)) refresh()
+    })
+    return () => {
+      active = false
+      off()
+    }
   }, [host])
-  return hosted ? <HostBrowserView key={`${host.id}:${props.taskId}`} {...props}/> : <LocalBrowserView {...props}/>
+  return hosted ? <HostBrowserView key={`${host.id}:${props.taskId}`} {...props} /> : <LocalBrowserView {...props} />
 }
 
 export function LocalBrowserView({
@@ -386,17 +402,6 @@ export function LocalBrowserView({
               actions={tabActions}
             />
           ))}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t('New browser tab')}
-            title={t('New browser tab')}
-            disabled={busy}
-            onClick={() => void newTab()}
-          >
-            <Plus size={14} />
-          </Button>
         </div>
       )}
       {websiteDialog && (
@@ -489,6 +494,24 @@ export function LocalBrowserView({
           onChange={(event) => setAddress(event.target.value)}
           className="min-w-0 flex-1"
         />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('New browser tab')}
+          title={t('New browser tab')}
+          disabled={busy}
+          onClick={() => void newTab()}
+        >
+          <Plus size={14} />
+        </Button>
+        <BrowserDownloads
+          key={`${host}:${taskId}`}
+          host={host}
+          taskId={taskId}
+          tabId={tabId}
+          human={tab?.controller === 'human' && !!tab.inputReady}
+        />
         {tab && (tab.controller !== 'human' || tab.paused) && (
           <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => void take()}>
             <Hand size={14} />
@@ -541,13 +564,7 @@ export function LocalBrowserView({
                       : '')}
         </p>
       )}
-      <BrowserDownloads
-        key={`${host}:${taskId}`}
-        host={host}
-        taskId={taskId}
-        tabId={tabId}
-        human={tab?.controller === 'human' && !!tab.inputReady}
-      />
+
       <div ref={area} className="min-h-0 flex-1" aria-label={t('Page')}>
         {tab && covered && (
           <p className="m-0 p-6 text-center text-muted-foreground">{t('The page returns when this dialog closes.')}</p>

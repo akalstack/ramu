@@ -10,6 +10,8 @@ it('exposes a labelled hide action and runs it when clicked', () => {
   const html = renderToStaticMarkup(createElement(HideWorkspaceButton, { onHide }))
   expect(html).toContain('aria-label="Hide workspace"')
   expect(html).toContain('title="Hide workspace"')
+  expect(html).toContain('text-muted-foreground')
+  expect(html).toContain('hover:text-foreground')
   HideWorkspaceButton({ onHide }).props.onClick()
   expect(onHide).toHaveBeenCalledOnce()
 })

@@ -7,7 +7,7 @@ export function HideWorkspaceButton({ onHide }: { onHide: () => void }) {
     <Button
       variant="ghost"
       size="icon-sm"
-      className="flex-none"
+      className="flex-none text-muted-foreground hover:text-foreground"
       aria-label={t('Hide workspace')}
       title={t('Hide workspace')}
       onClick={onHide}

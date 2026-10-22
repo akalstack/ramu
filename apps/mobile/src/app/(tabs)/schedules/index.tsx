@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { RefreshControl, View } from 'react-native'
+import { Platform, RefreshControl, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { CalendarClock, Plus } from 'lucide-react-native'
 import { font, space, useTheme } from '../../../theme'
@@ -13,7 +13,6 @@ import {
   LargeTitle,
   PageScrollView,
   Screen,
-  nativeScrollEdge,
   useScrolledUnderBar,
 } from '../../../components/Screen'
 import { TopFade } from '../../../components/Glass'
@@ -49,13 +48,7 @@ export default function SchedulesScreen() {
   const actions = useTabActions({ icon: Plus, label: t.newSchedule, systemIcon: 'plus', onPress: create })
   return (
     <Screen>
-      <Header
-        back={false}
-        large
-        collapsed={edge.scrolled}
-        title={t.schedules}
-        right={actions}
-      />
+      <Header back={false} large collapsed={edge.scrolled} title={t.schedules} right={actions} />
       <PageScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
@@ -100,7 +93,7 @@ export default function SchedulesScreen() {
           </View>
         ) : null}
       </PageScrollView>
-      {nativeScrollEdge ? null : <TopFade visible={edge.scrolled} />}
+      {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}
     </Screen>
   )
 }

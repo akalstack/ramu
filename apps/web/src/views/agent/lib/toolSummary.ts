@@ -1,3 +1,4 @@
+import { isViewImageTool, toolImageName } from './toolImage'
 import { t as translate } from '../../../i18n'
 import { toolKind, KIND_LABEL, KIND_VERB } from '@ramu/shared/chat/agentTools'
 import { describeRamuTool, ramuTool } from '@ramu/shared/chat/ramuTools'
@@ -23,8 +24,7 @@ export function toolFallbackTitle(tool: ToolUse, running: boolean): string | nul
     }
     return `${translate(running ? 'Searching tools' : 'Searched tools')}${query.trim() ? ` “${query.trim()}”` : ''}`
   }
-  if (/^[{[]/.test(tool.summary.trim()))
-    return `${translate(toolVerb('Used', running))} ${toolLabel(tool.name)}`
+  if (/^[{[]/.test(tool.summary.trim())) return `${translate(toolVerb('Used', running))} ${toolLabel(tool.name)}`
   return null
 }
 
@@ -56,6 +56,10 @@ export function describeTools(tools: ToolUse[], results: Map<string, ToolResult>
     if (call) {
       const row = describeRamuTool(call, results.get(first.toolUseId)?.summary)
       return `${translate(running ? row.running : row.done)}${n > 1 ? ` ×${n}` : row.subject ? ` ${row.subject}` : ''}`
+    }
+    if (isViewImageTool(first.name)) {
+      const subject = n === 1 ? toolImageName(first) : undefined
+      return `${translate(running ? 'Viewing' : 'Viewed')} ${subject ?? translate('{count} images', { count: n })}`
     }
     const name = key
     const v = VERBS[name]

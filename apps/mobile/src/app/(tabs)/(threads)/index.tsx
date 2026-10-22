@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Pressable, ScrollView as HScroll, View } from 'react-native'
+import { Platform, Pressable, ScrollView as HScroll, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import {
   Check,
@@ -18,14 +18,7 @@ import { font, radius, space, useTheme } from '../../../theme'
 import { useStore, type OutboxItem } from '../../../runtime/store'
 import { STANDALONE, type Chat, type MobileProject } from '../../../runtime/types'
 import { useT } from '../../../i18n'
-import {
-  Header,
-  LargeTitle,
-  Screen,
-  nativeScrollEdge,
-  useScrolledUnderBar,
-  PageFlatList,
-} from '../../../components/Screen'
+import { Header, LargeTitle, Screen, useScrolledUnderBar, PageFlatList } from '../../../components/Screen'
 import { PlanUsageSummary } from '../../../components/PlanUsage'
 import { ChatRow } from '../../../components/ChatRow'
 import { ProjectActionsSheet } from '../../../components/ChatActions'
@@ -462,7 +455,7 @@ export default function Threads() {
         }
       />
 
-      {nativeScrollEdge ? null : <TopFade visible={edge.scrolled} />}
+      {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}
       {projectMenu ? <ProjectActionsSheet project={projectMenu} open onClose={() => setProjectMenu(null)} /> : null}
       <Sheet open={hostSheet} onClose={() => setHostSheet(false)} title={t.homeHost}>
         {[

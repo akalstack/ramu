@@ -85,16 +85,15 @@ export function readLocal<T>(fallback: T): T {
   }
 }
 export function writeLocal(value: unknown, options?: { replaceBackups?: boolean }) {
-  const text = JSON.stringify(value)
-  if (Platform.OS === 'web') localStorage.setItem(key, text)
+  if (Platform.OS === 'web') localStorage.setItem(key, JSON.stringify(value))
   else {
     const legacy = new File(Paths.document, `${key}.json`)
     // A readable legacy file is the recovery source only until the first new commit succeeds.
     if (legacy.exists) JSON.parse(legacy.textSync())
-    writeLocalCommit(commits, JSON.parse(text) as Record<string, unknown>, legacy.exists)
+    writeLocalCommit(commits, value as Record<string, unknown>, legacy.exists)
     if (legacy.exists) legacy.delete()
     // Forget host must remove its device-local copies from both recovery slots.
-    if (options?.replaceBackups) writeLocalCommit(commits, JSON.parse(text) as Record<string, unknown>)
+    if (options?.replaceBackups) writeLocalCommit(commits, value as Record<string, unknown>)
   }
 }
 const tokenKey = (id: string) => `ramu.token.${id}`

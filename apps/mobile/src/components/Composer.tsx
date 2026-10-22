@@ -4,7 +4,6 @@ import { Alert, FlatList, Linking, Pressable, StyleSheet, Text, TextInput, View 
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { isMethodMissing } from '../runtime/goalVerify'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
-import { ThreadUsageChip } from './PlanUsage'
 import { StepSlider } from './StepSlider'
 import { SuggestionList, useComposerSuggest } from './ComposerSuggest'
 import {
@@ -58,8 +57,6 @@ export interface ModelChoice {
   effort: string
   settings?: Pick<AgentSettings, 'access' | 'autoFallback' | 'serviceTier' | 'accountId'>
 }
-
-const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
 
 export function modelLabel(m: ModelChoice) {
   return m.model || providerNames[m.provider]
@@ -469,7 +466,6 @@ export function Composer({
   onStop,
   queuePaused,
   onResumeQueue,
-  meter,
   goal = null,
   queue = [],
   onToggleGoal,
@@ -514,8 +510,6 @@ export function Composer({
   queue?: QueuedMessage[]
   queuePaused?: boolean
   onResumeQueue?: () => void
-  /** Shown after the model chip, e.g. the context meter. */
-  meter?: ReactNode
   onToggleGoal?: () => void
   onClearGoal?: () => void
   /** Sets the goal's verification command (null removes it). The shield button shows only on hosts that have it. */
@@ -540,6 +534,12 @@ export function Composer({
   limited?: boolean
   onCancelEdit?: () => void
 }) {
+  const textInput = useRef<TextInput>(null)
+  useEffect(() => {
+    if (!autoFocus) return
+    const frame = requestAnimationFrame(() => textInput.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [autoFocus])
   const { c } = useTheme()
   const t = useT()
   const store = useStore()
@@ -776,7 +776,7 @@ export function Composer({
       setContext((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next))
     }, [draftKey, storedContext]),
   )
-  const [mode, setMode] = useState<'queue' | 'steer'>('queue')
+  const mode = 'steer' as const
   useEffect(() => {
     if (restore) setText(restore.text)
   }, [restore])
@@ -785,8 +785,9 @@ export function Composer({
   }, [text, draftKey])
   const has = text.trim().length > 0 || attachments.length > 0 || context.length > 0
   const viewOnly = store.computers?.find((computer) => computer.id === pc)?.access === 'viewer'
-  const submit = async () => {
+  const submit = async (sendMode: 'queue' | 'steer' = mode) => {
     if (!has || viewOnly || sending.current || uploading || dictating) return
+
     sending.current = true
     setBusy(true)
     const submittedOwner = origin.current
@@ -795,6 +796,12 @@ export function Composer({
       attachments: JSON.stringify(attachments),
       context: JSON.stringify(context),
       mentions: JSON.stringify(mentions),
+    }
+    let clearedVisually = false
+    const restoreInput = () => {
+      if (!clearedVisually || origin.current !== submittedOwner) return
+      setText(text)
+      textInput.current?.setNativeProps?.({ text })
     }
     try {
       const sent = text.trim()
@@ -825,26 +832,42 @@ export function Composer({
           throw new Error(t.savedAttachmentMissing)
         if (origin.current !== submittedOwner) return
       }
+      // Keep the saved draft intact while showing immediate feedback. Let the native field paint before synchronous outbox persistence.
+      textInput.current?.clear()
+      setText('')
+      setCaret(0)
+      setForced(undefined)
+      clearedVisually = true
+      await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+      if (origin.current !== submittedOwner) return
       const accepted = await onSend(
         expanded,
-        running ? mode : 'send',
+        running ? sendMode : 'send',
         attachments.map((a) => a.id),
         merged,
       )
       // Destination clarification is still composing; retain the reviewed draft and its attachments.
-      if (accepted === false) return
+      if (accepted === false) {
+        restoreInput()
+        return
+      }
       if (origin.current !== submittedOwner) return
-      if (draftKey && !store.clearComposerDraft(draftKey, submittedDraft)) return
+      if (draftKey && !store.clearComposerDraft(draftKey, submittedDraft)) {
+        restoreInput()
+        return
+      }
       setText('')
       setAttachments([])
       setContext([])
       setMentions([])
       setCaret(0)
+      setForced(undefined)
       if (draftKey) {
         store.setDraft(draftKey, '')
         store.setDraft(`${draftKey}:restored-attachments`, '')
       }
     } catch (error) {
+      restoreInput()
       Alert.alert('Could not send', error instanceof Error ? error.message : String(error))
     } finally {
       sending.current = false
@@ -977,7 +1000,6 @@ export function Composer({
             edit(value)
             if (forced) setForced(undefined)
           }}
-          editable={!dictating}
           onSelectionChange={(event) => {
             setCaret(event.nativeEvent.selection.start)
             selectionEnd.current = event.nativeEvent.selection.end
@@ -985,7 +1007,8 @@ export function Composer({
           }}
           selection={forced}
           multiline
-          autoFocus={autoFocus}
+          editable={!busy && !viewOnly && !dictating}
+          ref={textInput}
           placeholder={placeholder ?? t.messagePlaceholder}
           placeholderTextColor={c.placeholder}
           style={{
@@ -1039,39 +1062,17 @@ export function Composer({
             />
           ) : null}
           <ModelChip value={model} onChange={onModel} computerId={computerId} limited={limited} />
-          {computerId ? (
-            <ThreadUsageChip
-              hostId={computerId}
-              provider={model.provider}
-              model={model.model}
-              accountId={model.settings?.accountId}
-              sessionId={limitChat?.sessionId}
-            />
-          ) : null}
-          {meter}
+
           <View style={{ flex: 1 }} />
-          {running && has ? (
-            <Pressable
-              onPress={() => {
-                tap()
-                setMode((m) => (m === 'queue' ? 'steer' : 'queue'))
-              }}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 4,
-                height: 34,
-                paddingHorizontal: space.m - 2,
-                borderRadius: radius.full,
-                backgroundColor: c.fill,
-                marginRight: 4,
-              }}
-            >
-              {mode === 'steer' ? <CornerDownRight size={13} color={c.warn} /> : <ListPlus size={13} color={c.soft} />}
-              <T size={font.control} weight="500" tone={mode === 'steer' ? 'warn' : 'soft'}>
-                {mode === 'steer' ? t.steer : t.queue}
-              </T>
-            </Pressable>
+          {running && has && !offline ? (
+            <IconButton
+              icon={ListPlus}
+              label={t.queue}
+              size={34}
+              tone="muted"
+              onPress={() => void submit('queue')}
+              disabled={busy || uploading || viewOnly || dictating}
+            />
           ) : null}
           {running && !has && !offline ? (
             <Pressable
@@ -1114,8 +1115,9 @@ export function Composer({
           ) : (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={offline ? 'Add to outbox' : limited ? t.queue : 'Send'}
+              accessibilityLabel={offline ? 'Add to outbox' : limited ? t.queue : running ? t.steer : 'Send'}
               disabled={!has || viewOnly || busy || uploading || dictating}
+
               onPress={() => {
                 tap()
                 submit()
@@ -1131,6 +1133,8 @@ export function Composer({
             >
               {offline ? (
                 <Clock size={16} color={has ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
+              ) : running ? (
+                <CornerDownRight size={18} color={has ? c.primaryInk : c.placeholder} />
               ) : (
                 <ArrowUp size={18} color={has ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
               )}

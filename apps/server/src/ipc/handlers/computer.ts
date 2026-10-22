@@ -9,7 +9,7 @@ import {
 } from '@ramu/shared/computerBridge'
 import { MAIN_DISPLAY } from '../../computer/macos'
 import { ComputerRouter } from '../../computer/router'
-import { installOcu, ocuUpdateStatus } from '../../computer/ocu'
+import { installOcu, ocuUpdateStatus, ocuPermissions, setupOcu } from '../../computer/ocu'
 import { LockedUse } from '../../computer/lockedUse'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
@@ -67,6 +67,14 @@ export const registerComputerHandlers: RegisterHandlers = ({
       throw new Error('Computer use setup and grants must be reviewed on the owning host.')
     return ready()
   }
+  // A paired owner already administers threads and terminals. Per-thread computer choices use that same identity.
+  const owner = () => {
+    if (!host.canAdministerIntegrations?.()) {
+      const id = host.browserDevice?.()
+      if (!id || !host.browserGrantEligible?.(id)) throw new Error('Pair an owner device to use this computer.')
+    }
+    return ready()
+  }
   const allowedRuntimes = () => workspace.getAppState<string[]>('computer:runtimes', [])
   /** A broker is a paired owner device the host's owner explicitly allowed; the local device never brokers. */
   const brokerDevice = () => {
@@ -85,8 +93,10 @@ export const registerComputerHandlers: RegisterHandlers = ({
   const enabled = () => workspace.getAppState<boolean>('computer:enabled', false) === true
   const viewer = (threadId: string, input: boolean) => {
     const service = ready()
-    const access = service.viewerAccess(thread(threadId), device())
-    if (!(input ? access.input : access.observe))
+    const who = device()
+    const pairedOwner = who !== 'local' && !!host.browserGrantEligible?.(who)
+    const access = service.viewerAccess(thread(threadId), who)
+    if (!pairedOwner && !(input ? access.input : access.observe))
       throw new Error('This device was not granted access to this computer.')
     const session = service.session(threadId)
     if (!session) throw new Error('No computer is granted to this thread.')
@@ -110,7 +120,8 @@ export const registerComputerHandlers: RegisterHandlers = ({
   return {
     'computer.status': {
       args: z.tuple([]),
-      run: () => ({
+      run: async () => ({
+        appPermissions: await ocuPermissions(),
         enabled: enabled(),
         runtime: computer ? computer.status() : ({ available: false, reason: 'unsupported' } as const),
         apps: computer?.backend instanceof ComputerRouter ? computer.backend.appStatus() : null,
@@ -132,7 +143,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
     'computer.setEnabled': {
       args: z.tuple([z.boolean()]),
       run: (value: boolean) => {
-        const service = admin()
+        const service = owner()
         workspace.setAppState('computer:enabled', value)
         if (value) service.backend.warm?.()
         if (!value) for (const task of workspace.listTasks()) service.revoke(task.id)
@@ -154,10 +165,19 @@ export const registerComputerHandlers: RegisterHandlers = ({
         installingApps = true
         try {
           if (computer?.backend instanceof ComputerRouter) await computer.backend.closeApps()
-          return { version: await installOcu() }
+          const version = await installOcu()
+          await setupOcu()
+          return { version }
         } finally {
           installingApps = false
         }
+      },
+    },
+    'computer.openSetup': {
+      args: z.tuple([]),
+      run: async () => {
+        admin()
+        await setupOcu()
       },
     },
     'computer.resetDefaults': {
@@ -175,7 +195,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
     'computer.apps': {
       args: z.union([z.tuple([]), z.tuple([id])]),
       run: async (runtime?: string) => {
-        const service = admin()
+        const service = owner()
         if (runtime && runtime !== 'local') {
           if (!allowedRuntimes().includes(runtime) || !broker)
             throw new Error('That computer is not allowed to share its screen.')
@@ -195,7 +215,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
         }),
       ]),
       run: async (threadId: string, scope: { observe: boolean; input: boolean; app?: string; runtime?: string }) => {
-        const service = admin()
+        const service = owner()
         if (installingApps) throw new Error('Wait for the Open Computer Use update to finish.')
         if (!enabled()) throw new Error('Turn on computer use in Settings first.')
         const remoteId = scope.runtime && scope.runtime !== 'local' ? scope.runtime : null
@@ -227,6 +247,8 @@ export const registerComputerHandlers: RegisterHandlers = ({
           const status = backend.status()
           if (!status.available) throw new Error(status.detail ?? 'Computer use is not available on that computer.')
         }
+        owner()
+        if (!enabled() || installingApps) throw new Error('Computer access changed. Choose the target again.')
         service.grant(
           thread(threadId),
           { target, observe: scope.observe, input: scope.input && scope.observe },
@@ -238,7 +260,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
     'computer.runtimes': {
       args: z.tuple([]),
       run: () => {
-        admin()
+        owner()
         const local = ready().status()
         const allowed = allowedRuntimes()
         return [
@@ -327,7 +349,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
         }
       },
     },
-    'computer.revoke': { args: z.tuple([id]), run: (threadId: string) => admin().revoke(thread(threadId)) },
+    'computer.revoke': { args: z.tuple([id]), run: (threadId: string) => owner().revoke(thread(threadId)) },
     'computer.grantViewer': {
       args: z.tuple([id, id, z.boolean()]),
       run: (threadId: string, deviceId: string, input: boolean) => {
@@ -345,6 +367,20 @@ export const registerComputerHandlers: RegisterHandlers = ({
       run: (threadId: string, deviceId: string) => admin().revokeViewer(thread(threadId), deviceId),
     },
     'computer.viewers': { args: z.tuple([id]), run: (threadId: string) => admin().listViewers(thread(threadId)) },
+    'computer.sessions': {
+      args: z.tuple([]),
+      run: () =>
+        owner()
+          .sessionThreads()
+          .flatMap((threadId) => {
+            try {
+              thread(threadId)
+              return [{ threadId, ...summary(threadId)! }]
+            } catch {
+              return []
+            }
+          }),
+    },
     'computer.session': { args: z.tuple([id]), run: (threadId: string) => summary(thread(threadId)) },
     'computer.takeControl': {
       args: z.tuple([id]),

@@ -1,27 +1,14 @@
 import { useEffect, useState, useSyncExternalStore, type ComponentProps } from 'react'
 import { View } from 'react-native'
 import { useRouter } from 'expo-router'
-import {
-  Check,
-  Folder,
-  FolderGit2,
-  MessagesSquare,
-  Monitor,
-  Plus,
-  RefreshCw,
-  Settings,
-  SquarePen,
-  SquareTerminal,
-} from 'lucide-react-native'
+import { Check, Monitor, Plus, RefreshCw, Settings, SquarePen, SquareTerminal } from 'lucide-react-native'
 import { font, space, useTheme } from '../theme'
 import { counts, useStore } from '../runtime/store'
-import { STANDALONE } from '../runtime/types'
 import { useT } from '../i18n'
 import { HeaderButton } from './Screen'
 import { ConnectionDot, Row, SectionLabel, Sheet, T, tap, type Icon } from './ui'
 
-// Sheets that every tab opens from its header: the computer menu and the project picker for a new thread.
-// They are mounted once at the root, so a tab only calls `openComputerMenu()` or `openNewThread()`.
+// Shared host and connection sheets. New thread uses one native-stack page for its project list and composer.
 
 function signal<V>(initial: V) {
   let value = initial
@@ -46,10 +33,8 @@ function signal<V>(initial: V) {
 /** Why an action that needs a computer cannot run: none paired, pairing revoked, or the computer is unreachable. */
 export type NeedComputer = 'none' | 'revoked' | 'offline'
 const computerMenu = signal(false)
-const newThread = signal(false)
 const needComputer = signal<NeedComputer | null>(null)
 export const openComputerMenu = () => computerMenu.set(true)
-export const openNewThread = () => newThread.set(true)
 export const openNeedComputer = (reason: NeedComputer) => needComputer.set(reason)
 
 /** Let a closing sheet finish before the next screen or sheet appears over it. */
@@ -131,70 +116,6 @@ function ComputerMenu() {
   )
 }
 
-function NewThreadSheet() {
-  const { c } = useTheme()
-  const t = useT()
-  const router = useRouter()
-  const store = useStore()
-  const open = newThread.use()
-  const close = () => newThread.set(false)
-  const pc = store.computers.find((x) => x.id === store.selected)
-  const start = (project: string) => {
-    close()
-    later(() => router.push({ pathname: '/new', params: { project, computer: store.selected } }))
-  }
-  return (
-    <Sheet open={open} onClose={close} title={t.newChat}>
-      {store.computers.length > 1 &&
-        store.computers.map((computer) => (
-          <Row key={computer.id} onPress={() => store.select(computer.id)}>
-            <Monitor size={17} color={c.soft} />
-            <View style={{ flex: 1 }}>
-              <T weight="500">{computer.name}</T>
-              <T size={font.caption} tone="muted">
-                {t[computer.status]}
-              </T>
-            </View>
-            {computer.id === store.selected ? <Check size={16} color={c.accent} /> : null}
-          </Row>
-        ))}
-      {store.projects
-        .filter((p) => p.computerId === store.selected)
-        .map((p) => (
-          <Row key={p.id} onPress={() => start(p.id)}>
-            {p.kind === 'workspace' ? <Folder size={17} color={c.soft} /> : <FolderGit2 size={17} color={c.soft} />}
-            <View style={{ flex: 1 }}>
-              <T weight="500" numberOfLines={1}>
-                {p.name}
-              </T>
-              <T size={font.caption} tone="muted" numberOfLines={1}>
-                {p.root}
-              </T>
-            </View>
-          </Row>
-        ))}
-      <Row onPress={() => start(STANDALONE)}>
-        <MessagesSquare size={17} color={c.soft} />
-        <View style={{ flex: 1 }}>
-          <T weight="500">Standalone</T>
-          <T size={font.caption} tone="muted">
-            No project folder
-          </T>
-        </View>
-      </Row>
-      <Row
-        onPress={() => {
-          close()
-          later(() => router.push('/folders'))
-        }}
-      >
-        <Monitor size={17} color={c.muted} />
-        <T tone="muted">Add a folder on {pc?.name}…</T>
-      </Row>
-    </Sheet>
-  )
-}
-
 /** The answer to a tap that cannot work yet: say why, and offer the fix, instead of doing nothing. */
 function NeedComputerSheet() {
   const { c } = useTheme()
@@ -248,7 +169,6 @@ export function Overlays() {
   return (
     <>
       <ComputerMenu />
-      <NewThreadSheet />
       <NeedComputerSheet />
     </>
   )
@@ -257,11 +177,12 @@ export function Overlays() {
 /** Starts a thread: the project picker, or the reason there is no computer to start one on. */
 export function useStartThread() {
   const { computers, selected } = useStore()
+  const router = useRouter()
   return () => {
     const pc = computers.find((x) => x.id === selected)
     if (!pc) openNeedComputer('none')
     else if (pc.status === 'revoked') openNeedComputer('revoked')
-    else openNewThread()
+    else router.push('/new')
   }
 }
 

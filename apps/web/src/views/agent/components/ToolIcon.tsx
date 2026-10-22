@@ -1,6 +1,8 @@
+import { isViewImageTool } from '../lib/toolImage'
 import { toolKind } from '@ramu/shared/chat/agentTools'
 import {
   Wrench,
+  Eye,
   Globe,
   FilePenLine,
   FileMinus2,
@@ -43,21 +45,23 @@ export function ToolIcon({
 }) {
   const kind = toolKind(tool)
   const ramu = ramuTool(tool)
-  const Icon = ramu
-    ? RAMU_ICONS[describeRamuTool(ramu).icon]
-    : content?.some((c) => c.type === 'image') || /image/i.test(tool.name)
-      ? ImageIcon
-      : {
-          read: BookOpen,
-          edit: FilePenLine,
-          delete: FileMinus2,
-          move: ArrowRightLeft,
-          search: Search,
-          execute: SquareTerminal,
-          think: Brain,
-          fetch: Globe,
-          switch_mode: Settings2,
-          other: Wrench,
-        }[kind]
+  const Icon = isViewImageTool(tool.name)
+    ? Eye
+    : ramu
+      ? RAMU_ICONS[describeRamuTool(ramu).icon]
+      : content?.some((c) => c.type === 'image') || /image/i.test(tool.name)
+        ? ImageIcon
+        : {
+            read: BookOpen,
+            edit: FilePenLine,
+            delete: FileMinus2,
+            move: ArrowRightLeft,
+            search: Search,
+            execute: SquareTerminal,
+            think: Brain,
+            fetch: Globe,
+            switch_mode: Settings2,
+            other: Wrench,
+          }[kind]
   return <Icon size={14} className={className} aria-hidden="true" />
 }

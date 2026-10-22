@@ -204,6 +204,8 @@ export interface RamuMethods {
     globalPointer: boolean
     /** The pinned Open Computer Use release this host runs; absent on hosts from before it was reported. */
     appVersion?: string
+    /** Runtime permission snapshot; null when it cannot be checked. */
+    appPermissions?: { allGranted: boolean; accessibilityTrusted: boolean; screenCaptureGranted: boolean } | null
     appUpdate?: {
       installedVersion: string | null
       supportedVersion: string
@@ -218,6 +220,8 @@ export interface RamuMethods {
   'computer.lockedUseEnable'(): ComputerLockedUse
   'computer.lockedUseDisable'(): ComputerLockedUse
   'computer.installApps'(): { version: string }
+  /** Opens OCU doctor/onboarding on the owning Mac. Does not grant macOS permissions automatically. */
+  'computer.openSetup'(): void
   'computer.resetDefaults'(): void
   /** Computers whose screen a thread can use: this host and paired computers the owner allowed. */
   'computer.runtimes'(): ComputerRuntimeInfo[]
@@ -240,6 +244,8 @@ export interface RamuMethods {
   'computer.grantViewer'(threadId: string, deviceId: string, input: boolean): void
   'computer.revokeViewer'(threadId: string, deviceId: string): void
   'computer.viewers'(threadId: string): { deviceId: string; input: boolean }[]
+  /** Current per-thread computer access on this host. Owning and paired owner devices only. */
+  'computer.sessions'(): (ComputerSessionSummary & { threadId: string })[]
   'computer.session'(threadId: string): ComputerSessionSummary | null
   'computer.takeControl'(threadId: string): ComputerSessionSummary | null
   'computer.requestHandoff'(threadId: string): ComputerSessionSummary | null

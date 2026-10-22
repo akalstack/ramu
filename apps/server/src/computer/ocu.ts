@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from 'node:child_process'
+import { execFile, execFileSync, spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -192,6 +192,55 @@ export function ocuUpdateStatus(): {
     updateAvailable: !!installedVersion && installedVersion !== OCU_VERSION && !process.env.RAMU_OCU_PATH,
     managed: !process.env.RAMU_OCU_PATH,
   }
+}
+
+/** Read the runtime's own permissions without opening its onboarding UI. */
+export async function ocuPermissions(
+  executable: string | null = ocuExecutable(),
+  read: (file: string, args: string[]) => Promise<string> = (file, args) =>
+    new Promise((resolve, reject) => {
+      execFile(file, args, { encoding: 'utf8', timeout: 10_000, maxBuffer: 64 * 1024 }, (error, stdout) =>
+        error ? reject(error) : resolve(stdout),
+      )
+    }),
+): Promise<{ allGranted: boolean; accessibilityTrusted: boolean; screenCaptureGranted: boolean } | null> {
+  if (!executable || process.platform !== 'darwin') return null
+  try {
+    const raw = JSON.parse(await read(executable, ['doctor', '--json']))
+    if (
+      typeof raw.accessibilityTrusted !== 'boolean' ||
+      typeof raw.screenCaptureGranted !== 'boolean' ||
+      typeof raw.allGranted !== 'boolean'
+    )
+      return null
+    return {
+      allGranted: raw.allGranted && raw.accessibilityTrusted && raw.screenCaptureGranted,
+      accessibilityTrusted: raw.accessibilityTrusted,
+      screenCaptureGranted: raw.screenCaptureGranted,
+    }
+  } catch {
+    return null
+  }
+}
+
+/** Starts OCU's own macOS doctor/onboarding UI. Never changes TCC grants itself. */
+export async function setupOcu(
+  executable: string | null = ocuExecutable(),
+  start: (file: string, args: string[]) => Promise<void> = (file, args) =>
+    new Promise((resolve, reject) => {
+      const child = spawn(file, args, { stdio: 'ignore', detached: true })
+      child.once('error', () =>
+        reject(new Error('Open Computer Use setup could not start. Try Set up permissions again.')),
+      )
+      child.once('spawn', () => {
+        child.unref()
+        resolve()
+      })
+    }),
+): Promise<void> {
+  if (process.platform !== 'darwin') throw new Error('App-scoped computer use currently supports macOS.')
+  if (!executable) throw new Error('Install Open Computer Use first.')
+  await start(executable, ['doctor'])
 }
 
 /**

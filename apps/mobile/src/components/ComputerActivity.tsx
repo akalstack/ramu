@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppState, Image, Modal, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native'
+import { AppState, Image, Modal, ScrollView, TextInput, View, useWindowDimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Monitor } from 'lucide-react-native'
 import { translate } from '@ramu/shared/i18n'
 import { COMPUTER_FRAME_STALE_MS, type ComputerAction } from '@ramu/shared/computerBridge'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
@@ -26,7 +25,17 @@ const MODE_LABEL = { tap: 'Tap', scroll: 'Scroll', drag: 'Drag', pan: 'Pan view'
 const TAP_SLOP = 10
 
 /** The phone watches and steers the owning computer's screen. Nothing runs here; the host keeps every grant. */
-function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: ComputerSessionSummary; onClose(): void }) {
+function ComputerViewer({
+  chat,
+  session,
+  onClose,
+  embedded = false,
+}: {
+  chat: Chat
+  session: ComputerSessionSummary
+  onClose(): void
+  embedded?: boolean
+}) {
   const store = useStore()
   const { c: theme } = useTheme()
   const t = (text: string) => translate(store.language, text)
@@ -164,323 +173,401 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
         : stale
           ? t('Last frame')
           : t('Live')
-  return (
-    <Modal
-      visible
-      animationType="slide"
-      supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
-      onRequestClose={onClose}
-    >
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.canvas }}>
+  const Container = embedded ? View : SafeAreaView
+  const content = (
+    <Container style={{ flex: 1, backgroundColor: theme.canvas }}>
+      {!embedded && (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: space.m }}>
           <T weight="600">
             {current.target.name} · {t(label(current))}
           </T>
           <Button kind="ghost" title={t('Close')} onPress={onClose} />
         </View>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.m, gap: space.s }}>
-          <T tone="muted" accessibilityLiveRegion="polite">
-            {status}
-          </T>
-          {human ? (
-            <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }} accessibilityRole="radiogroup">
-              {(['tap', 'scroll', 'drag', 'pan'] as const).map((choice) => (
-                <Button
-                  key={choice}
-                  kind={mode === choice ? 'primary' : 'secondary'}
-                  title={t(MODE_LABEL[choice])}
-                  accessibilityLabel={`${t(MODE_LABEL[choice])}${mode === choice ? `, ${t('Selected')}` : ''}`}
-                  onPress={() => setMode(choice)}
-                />
-              ))}
+      )}
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.m, gap: space.s }}>
+        <T tone="muted" accessibilityLiveRegion="polite">
+          {status}
+        </T>
+        {human ? (
+          <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }} accessibilityRole="radiogroup">
+            {(['tap', 'scroll', 'drag', 'pan'] as const).map((choice) => (
               <Button
-                kind="secondary"
-                title={`${zoom}×`}
-                accessibilityLabel={t('Zoom')}
-                onPress={() => setZoom((value) => (value >= 3 ? 1 : value + 1))}
+                key={choice}
+                kind={mode === choice ? 'primary' : 'secondary'}
+                title={t(MODE_LABEL[choice])}
+                accessibilityLabel={`${t(MODE_LABEL[choice])}${mode === choice ? `, ${t('Selected')}` : ''}`}
+                onPress={() => setMode(choice)}
               />
-            </View>
-          ) : null}
-          {surface ? (
-            <ScrollView
-              horizontal
-              nestedScrollEnabled
-              scrollEnabled={mode === 'pan' || !human}
-              showsHorizontalScrollIndicator={zoom > 1}
-            >
-              <ScrollView
-                nestedScrollEnabled
-                scrollEnabled={mode === 'pan' || !human}
-                showsVerticalScrollIndicator={zoom > 1}
-              >
-                <View
-                  accessible
-                  accessibilityRole="button"
-                  accessibilityLabel={t('Computer screen')}
-                  accessibilityHint={human ? t('Activate to click the middle of the screen') : undefined}
-                  accessibilityActions={human && !stale ? [{ name: 'activate' }] : []}
-                  onAccessibilityAction={() =>
-                    send({ kind: 'click', x: Math.floor(surface.width / 2), y: Math.floor(surface.height / 2) })
-                  }
-                  onLayout={(event) => setLayout(event.nativeEvent.layout)}
-                  onTouchStart={(event) => {
-                    touchStart.current = { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }
-                  }}
-                  onTouchEnd={(event) => {
-                    const from = touchStart.current
-                    touchStart.current = null
-                    if (!from || !human || mode === 'pan') return
-                    const to = { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }
-                    const start = frameOffset(from, layout, surface)
-                    const end = frameOffset(to, layout, surface)
-                    if (!start || !end) return
-                    const moved = Math.hypot(to.x - from.x, to.y - from.y) > TAP_SLOP
-                    if (mode === 'tap') {
-                      if (!moved) send({ kind: 'click', ...end })
-                    } else if (!moved) {
-                      return
-                    } else if (mode === 'scroll') {
-                      // Dragging the finger up moves the content up, as on the phone itself.
-                      send({ kind: 'scroll', x: start.x, y: start.y, dx: start.x - end.x, dy: start.y - end.y })
-                    } else {
-                      send({ kind: 'drag', fromX: start.x, fromY: start.y, toX: end.x, toY: end.y })
-                    }
-                  }}
-                  style={{ width: (window.width - space.m * 2) * zoom }}
-                >
-                  {live && video.streamURL && webrtc() ? (
-                    (() => {
-                      const { RTCView } = webrtc()!
-                      return (
-                        <RTCView
-                          streamURL={video.streamURL}
-                          objectFit="contain"
-                          style={{
-                            width: '100%',
-                            aspectRatio: video.width / video.height,
-                            maxHeight: maxHeight * zoom,
-                          }}
-                        />
-                      )
-                    })()
-                  ) : frame ? (
-                    <Image
-                      source={{ uri: frame.uri }}
-                      resizeMode="contain"
-                      style={{
-                        width: '100%',
-                        aspectRatio: frame.width / frame.height,
-                        maxHeight: maxHeight * zoom,
-                        opacity: stale ? 0.5 : 1,
-                      }}
-                    />
-                  ) : null}
-                </View>
-              </ScrollView>
-            </ScrollView>
-          ) : null}
-          <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
-            {human ? (
-              <Button
-                title={t('Give control to agent')}
-                onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.giveToAgent', taskId))}
-              />
-            ) : (
-              <Button
-                title={t('Take control')}
-                onPress={() =>
-                  void act(async () => {
-                    setAsked(false)
-                    try {
-                      await io.current.invoke(chat.computerId, 'computer.takeControl', taskId)
-                    } catch (reason) {
-                      if (!needsHandoff(reason instanceof Error ? reason.message : String(reason))) throw reason
-                      await io.current.invoke(chat.computerId, 'computer.requestHandoff', taskId)
-                      setAsked(true)
-                    }
-                  })
-                }
-              />
-            )}
+            ))}
             <Button
-              kind="ghost"
-              title={t('Stop computer use')}
-              onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.stop', taskId))}
+              kind="secondary"
+              title={`${zoom}×`}
+              accessibilityLabel={t('Zoom')}
+              onPress={() => setZoom((value) => (value >= 3 ? 1 : value + 1))}
             />
           </View>
-          {asked ? <T tone="muted">{t('Waiting for the device in control to allow it.')}</T> : null}
-          {current.handoffRequest ? (
-            <View style={{ gap: space.s }} accessibilityLiveRegion="polite">
-              <T>{t('Another device is asking for control')}</T>
-              <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
-                <Button
-                  title={t('Allow control')}
-                  onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.approveHandoff', taskId))}
-                />
-                <Button
-                  kind="ghost"
-                  title={t('Decline')}
-                  onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.declineHandoff', taskId))}
-                />
+        ) : null}
+        {surface ? (
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            scrollEnabled={mode === 'pan' || !human}
+            showsHorizontalScrollIndicator={zoom > 1}
+          >
+            <ScrollView
+              nestedScrollEnabled
+              scrollEnabled={mode === 'pan' || !human}
+              showsVerticalScrollIndicator={zoom > 1}
+            >
+              <View
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel={t('Computer screen')}
+                accessibilityHint={human ? t('Activate to click the middle of the screen') : undefined}
+                accessibilityActions={human && !stale ? [{ name: 'activate' }] : []}
+                onAccessibilityAction={() =>
+                  send({ kind: 'click', x: Math.floor(surface.width / 2), y: Math.floor(surface.height / 2) })
+                }
+                onLayout={(event) => setLayout(event.nativeEvent.layout)}
+                onTouchStart={(event) => {
+                  touchStart.current = { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }
+                }}
+                onTouchEnd={(event) => {
+                  const from = touchStart.current
+                  touchStart.current = null
+                  if (!from || !human || mode === 'pan') return
+                  const to = { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }
+                  const start = frameOffset(from, layout, surface)
+                  const end = frameOffset(to, layout, surface)
+                  if (!start || !end) return
+                  const moved = Math.hypot(to.x - from.x, to.y - from.y) > TAP_SLOP
+                  if (mode === 'tap') {
+                    if (!moved) send({ kind: 'click', ...end })
+                  } else if (!moved) {
+                    return
+                  } else if (mode === 'scroll') {
+                    // Dragging the finger up moves the content up, as on the phone itself.
+                    send({ kind: 'scroll', x: start.x, y: start.y, dx: start.x - end.x, dy: start.y - end.y })
+                  } else {
+                    send({ kind: 'drag', fromX: start.x, fromY: start.y, toX: end.x, toY: end.y })
+                  }
+                }}
+                style={{ width: (window.width - space.m * 2) * zoom }}
+              >
+                {live && video.streamURL && webrtc() ? (
+                  (() => {
+                    const { RTCView } = webrtc()!
+                    return (
+                      <RTCView
+                        streamURL={video.streamURL}
+                        objectFit="contain"
+                        style={{
+                          width: '100%',
+                          aspectRatio: video.width / video.height,
+                          maxHeight: maxHeight * zoom,
+                        }}
+                      />
+                    )
+                  })()
+                ) : frame ? (
+                  <Image
+                    source={{ uri: frame.uri }}
+                    resizeMode="contain"
+                    style={{
+                      width: '100%',
+                      aspectRatio: frame.width / frame.height,
+                      maxHeight: maxHeight * zoom,
+                      opacity: stale ? 0.5 : 1,
+                    }}
+                  />
+                ) : null}
               </View>
+            </ScrollView>
+          </ScrollView>
+        ) : null}
+        <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
+          {human ? (
+            <Button
+              title={t('Give control to agent')}
+              onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.giveToAgent', taskId))}
+            />
+          ) : (
+            <Button
+              title={t('Take control')}
+              onPress={() =>
+                void act(async () => {
+                  setAsked(false)
+                  try {
+                    await io.current.invoke(chat.computerId, 'computer.takeControl', taskId)
+                  } catch (reason) {
+                    if (!needsHandoff(reason instanceof Error ? reason.message : String(reason))) throw reason
+                    await io.current.invoke(chat.computerId, 'computer.requestHandoff', taskId)
+                    setAsked(true)
+                  }
+                })
+              }
+            />
+          )}
+          <Button
+            kind="ghost"
+            title={t('Stop computer use')}
+            onPress={() =>
+              void act(async () => {
+                await io.current.invoke(chat.computerId, 'computer.revoke', taskId)
+                onClose()
+              })
+            }
+          />
+        </View>
+        {asked ? <T tone="muted">{t('Waiting for the device in control to allow it.')}</T> : null}
+        {current.handoffRequest ? (
+          <View style={{ gap: space.s }} accessibilityLiveRegion="polite">
+            <T>{t('Another device is asking for control')}</T>
+            <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
+              <Button
+                title={t('Allow control')}
+                onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.approveHandoff', taskId))}
+              />
+              <Button
+                kind="ghost"
+                title={t('Decline')}
+                onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.declineHandoff', taskId))}
+              />
             </View>
-          ) : null}
-          {showsLocalInputLimit(current) ? <T tone="muted">{t(LOCAL_INPUT_LIMIT)}</T> : null}
-          {human && (
-            <View style={{ gap: space.s }}>
-              <TextInput
-                accessibilityLabel={t('Type on the computer')}
-                value={text}
-                onChangeText={setText}
-                maxLength={2000}
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="send"
-                onSubmitEditing={() => {
+          </View>
+        ) : null}
+        {showsLocalInputLimit(current) ? <T tone="muted">{t(LOCAL_INPUT_LIMIT)}</T> : null}
+        {human && (
+          <View style={{ gap: space.s }}>
+            <TextInput
+              accessibilityLabel={t('Type on the computer')}
+              value={text}
+              onChangeText={setText}
+              maxLength={2000}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="send"
+              onSubmitEditing={() => {
+                if (!text) return
+                send({ kind: 'type', text })
+                setText('')
+              }}
+              blurOnSubmit={false}
+              style={{
+                color: theme.text,
+                borderWidth: 1,
+                borderColor: theme.line,
+                borderRadius: 6,
+                padding: space.s,
+                fontSize: font.body,
+              }}
+            />
+            <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
+              <Button
+                title={t('Send text')}
+                disabled={!text || stale}
+                onPress={() => {
                   if (!text) return
                   send({ kind: 'type', text })
                   setText('')
                 }}
-                blurOnSubmit={false}
-                style={{
-                  color: theme.text,
-                  borderWidth: 1,
-                  borderColor: theme.line,
-                  borderRadius: 6,
-                  padding: space.s,
-                  fontSize: font.body,
-                }}
               />
-              <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
+              {(['Enter', 'Tab', 'Escape', 'Backspace', 'ArrowUp', 'ArrowDown'] as const).map((key) => (
                 <Button
-                  title={t('Send text')}
-                  disabled={!text || stale}
-                  onPress={() => {
-                    if (!text) return
-                    send({ kind: 'type', text })
-                    setText('')
-                  }}
-                />
-                {(['Enter', 'Tab', 'Escape', 'Backspace', 'ArrowUp', 'ArrowDown'] as const).map((key) => (
-                  <Button
-                    key={key}
-                    kind="secondary"
-                    title={key}
-                    disabled={stale}
-                    onPress={() => send({ kind: 'key', key })}
-                  />
-                ))}
-                <Button
+                  key={key}
                   kind="secondary"
-                  title={t('Scroll up')}
+                  title={key}
                   disabled={stale}
-                  onPress={() =>
-                    frame &&
-                    send({
-                      kind: 'scroll',
-                      x: Math.floor(frame.width / 2),
-                      y: Math.floor(frame.height / 2),
-                      dx: 0,
-                      dy: -300,
-                    })
-                  }
+                  onPress={() => send({ kind: 'key', key })}
                 />
-                <Button
-                  kind="secondary"
-                  title={t('Scroll down')}
-                  disabled={stale}
-                  onPress={() =>
-                    frame &&
-                    send({
-                      kind: 'scroll',
-                      x: Math.floor(frame.width / 2),
-                      y: Math.floor(frame.height / 2),
-                      dx: 0,
-                      dy: 300,
-                    })
-                  }
-                />
-              </View>
+              ))}
+              <Button
+                kind="secondary"
+                title={t('Scroll up')}
+                disabled={stale}
+                onPress={() =>
+                  frame &&
+                  send({
+                    kind: 'scroll',
+                    x: Math.floor(frame.width / 2),
+                    y: Math.floor(frame.height / 2),
+                    dx: 0,
+                    dy: -300,
+                  })
+                }
+              />
+              <Button
+                kind="secondary"
+                title={t('Scroll down')}
+                disabled={stale}
+                onPress={() =>
+                  frame &&
+                  send({
+                    kind: 'scroll',
+                    x: Math.floor(frame.width / 2),
+                    y: Math.floor(frame.height / 2),
+                    dx: 0,
+                    dy: 300,
+                  })
+                }
+              />
             </View>
-          )}
-        </ScrollView>
-      </SafeAreaView>
+          </View>
+        )}
+      </ScrollView>
+    </Container>
+  )
+  return embedded ? (
+    content
+  ) : (
+    <Modal
+      visible
+      animationType="slide"
+      supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+      onRequestClose={onClose}
+    >
+      {content}
     </Modal>
   )
 }
-
 /** Shows only when the host has computer use on and the owner shared this thread's screen with this device. */
-export function ComputerActivity({ chat }: { chat: Chat }) {
+export function ComputerActivity({ chat, open, onClose }: { chat: Chat; open: boolean; onClose(): void }) {
   const store = useStore()
   const t = (key: string) => translate(store.language, key)
-  const [open, setOpen] = useState(false)
-  const [viewing, setViewing] = useState(false)
   const [session, setSession] = useState<ComputerSessionSummary | null>(null)
-  const [available, setAvailable] = useState(false)
+  const [runtime, setRuntime] = useState<ReturnType<import('@ramu/shared/api').RamuMethods['computer.status']> | null>(
+    null,
+  )
+  const [apps, setApps] = useState<string[]>([])
+  const [runtimes, setRuntimes] = useState<import('@ramu/shared/api').ComputerRuntimeInfo[]>([])
+  const [selected, setSelected] = useState('local')
   const [status, setStatus] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [revision, refresh] = useState(0)
   const io = useRef(store)
   io.current = store
   const online = store.isOnline(chat.computerId)
+  const viewOnly = store.computers.find((computer) => computer.id === chat.computerId)?.access === 'viewer'
   useEffect(() => {
-    if (!chat.taskId || !online) return
-    let active = true
-    void io.current.invoke(chat.computerId, 'computer.status').then(
-      (result) => active && setAvailable(result.enabled && result.runtime.available),
-      () => active && setAvailable(false),
-    )
-    return () => {
-      active = false
-    }
-  }, [chat.computerId, chat.taskId, online])
-  useEffect(() => {
-    if (!open || !available || !chat.taskId || !online) return
+    if (!open || !chat.taskId || !online || viewOnly) return
     let active = true
     setStatus('')
-    void io.current.invoke(chat.computerId, 'computer.session', chat.taskId).then(
-      (result) => active && setSession(result),
-      (reason) => {
+    void Promise.all([
+      io.current.invoke(chat.computerId, 'computer.status'),
+      io.current.invoke(chat.computerId, 'computer.session', chat.taskId),
+      io.current.invoke(chat.computerId, 'computer.runtimes'),
+    ])
+      .then(([runtime, session, runtimes]) => {
         if (!active) return
-        setSession(null)
-        setStatus(reason instanceof Error ? reason.message : String(reason))
+        setRuntime(runtime)
+        setSession(session)
+        setRuntimes(runtimes)
+      })
+      .catch((reason) => {
+        if (active) setStatus(reason instanceof Error ? reason.message : String(reason))
+      })
+    return () => {
+      active = false
+    }
+  }, [open, chat.computerId, chat.taskId, online, viewOnly, revision])
+  useEffect(() => {
+    if (!open || !online || viewOnly) return
+    let active = true
+    setApps([])
+    void io.current.invoke(chat.computerId, 'computer.apps', selected).then(
+      (apps) => {
+        if (active) setApps(apps)
       },
+      () => {},
     )
     return () => {
       active = false
     }
-  }, [open, available, chat.computerId, chat.taskId, online])
-  if (!chat.taskId || !available) return null
+  }, [open, chat.computerId, online, viewOnly, selected, revision])
+  if (!chat.taskId) return null
   const host = store.computers.find((computer) => computer.id === chat.computerId)?.name ?? chat.computerId
+  const grant = async (app?: string) => {
+    if (busy) return
+    setBusy(true)
+    setStatus('')
+    try {
+      if (!runtime?.enabled) await store.invoke(chat.computerId, 'computer.setEnabled', true)
+      const granted = await store.invoke(chat.computerId, 'computer.grant', chat.taskId!, {
+        observe: true,
+        input: true,
+        runtime: selected,
+        ...(app ? { app } : {}),
+      })
+      setSession(granted)
+    } catch (reason) {
+      setStatus(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
   return (
-    <>
-      <Button kind="ghost" icon={Monitor} title={t('Computer')} onPress={() => setOpen(true)} />
-      {viewing && session && <ComputerViewer chat={chat} session={session} onClose={() => setViewing(false)} />}
-      <Sheet open={open} onClose={() => setOpen(false)} title={`${t('Computer')} · ${host}`}>
-        <View style={{ padding: space.m, gap: space.m }}>
-          <T tone="muted">
-            {t(
-              'Viewing needs the computer’s owner to allow this device for the thread. Grants and permissions stay on that computer.',
-            )}
+    <Sheet presentation="screen" open={open} onClose={onClose} title={`${t('Computer')} · ${host}`} scroll={!session}>
+      {open && session ? (
+        <ComputerViewer
+          key={`${session.runtime.id}:${session.target.id}`}
+          chat={chat}
+          session={session}
+          embedded
+          onClose={() => {
+            setSession(null)
+            refresh((value) => value + 1)
+          }}
+        />
+      ) : (
+        <View style={{ padding: space.l, gap: space.m }}>
+          <T>
+            {t('Choose what this thread can view and control. You can take control or stop computer use at any time.')}
           </T>
-          {!online ? <T tone="muted">{t('Offline')}</T> : null}
-          {session ? (
-            <>
-              <T weight="600">
-                {session.target.name} · {t(label(session))}
-              </T>
-              <Button
-                title={t('View computer')}
-                disabled={!online}
-                onPress={() => {
-                  setOpen(false)
-                  setViewing(true)
-                }}
-              />
-            </>
+          {viewOnly ? (
+            <T tone="muted">{t('Pair an owner device to use this computer.')}</T>
+          ) : !online ? (
+            <T tone="muted">{t('Reconnect to use this computer.')}</T>
           ) : (
-            <T tone="muted">{status || t('No computer is shared with this device for this thread.')}</T>
+            <>
+              {runtimes.length > 1 && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+                  {runtimes.map((entry) => (
+                    <Button
+                      key={entry.id}
+                      title={entry.name}
+                      kind={selected === entry.id ? 'secondary' : 'ghost'}
+                      disabled={!entry.online || busy}
+                      onPress={() => setSelected(entry.id)}
+                    />
+                  ))}
+                </View>
+              )}
+              <Button
+                title={t('Use main display')}
+                disabled={busy || !runtime || (selected === 'local' && !runtime.runtime.available)}
+                onPress={() => void grant()}
+              />
+              {apps.length ? <T weight="600">{t('Or limit access to one app')}</T> : null}
+              {apps.map((app) => (
+                <Button key={app} kind="secondary" title={app} disabled={busy} onPress={() => void grant(app)} />
+              ))}
+              {runtime && !runtime.runtime.available ? (
+                <T tone="muted">
+                  {runtime.runtime.detail ??
+                    t('Allow Screen Recording and Accessibility on this computer, then check again.')}
+                </T>
+              ) : null}
+            </>
           )}
+          {status ? <T tone="bad">{t(status)}</T> : null}
+          <Button
+            kind="ghost"
+            title={t('Check again')}
+            disabled={!online || busy}
+            onPress={() => refresh((value) => value + 1)}
+          />
         </View>
-      </Sheet>
-    </>
+      )}
+    </Sheet>
   )
 }
