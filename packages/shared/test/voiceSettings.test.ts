@@ -1,3 +1,4 @@
+import type { VoiceReadiness } from '../src/voice/engine'
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_VOICE_SETTINGS,
@@ -7,7 +8,7 @@ import {
   resolveSpeechLanguage,
 } from '../src/voice/settings'
 
-const cap = (readiness: Parameters<typeof micControl>[1] extends infer C ? NonNullable<C>['readiness'] : never) => ({
+const cap = (readiness: VoiceReadiness) => ({
   readiness,
   languages: ['en-US', 'id-ID'],
   onDevice: true,
