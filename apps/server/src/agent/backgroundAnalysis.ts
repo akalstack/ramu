@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import type { Options } from '@anthropic-ai/claude-agent-sdk'
 import {
   DEFAULT_FALLBACK_PREFERENCES,
+  type Attachment,
   type AgentSettings,
   type AgentProvider,
   type CommitStyle,
@@ -47,6 +48,8 @@ export interface BackgroundAnalysisHost
 const DEFER_MAX_MS = 45 * 60_000
 
 export interface AnalyzeOptions {
+  /** Images or documents the provider reads together with the prompt. */
+  attachments?: Attachment[]
   timeoutMs?: number
   signal?: AbortSignal
   /**
@@ -149,7 +152,7 @@ export class BackgroundAnalysis {
     prompt: string,
     settings: AgentSettings,
     maxLength = 100000,
-    { timeoutMs = 90_000, signal, defer }: AnalyzeOptions = {},
+    { timeoutMs = 90_000, signal, defer, attachments }: AnalyzeOptions = {},
   ): Promise<{ message: string; provider: AgentProvider; model: string }> {
     if (this.host.shutdown()) throw new Error('Background service is stopping')
     if (
@@ -216,7 +219,7 @@ export class BackgroundAnalysis {
                   },
                   true,
                 )
-                void runner.start(prompt, null).catch(reject)
+                void runner.start(prompt, null, attachments).catch(reject)
               })
               text = await timeout(result, timeoutMs, 'Background analysis timed out')
             } finally {
@@ -244,7 +247,7 @@ export class BackgroundAnalysis {
                 ...(chosen.effort ? { effort: chosen.effort as Options['effort'] } : {}),
               },
             })
-            input.push(prompt)
+            input.push(prompt, attachments)
             input.close()
             let cancel!: () => void
             const cancelled = new Promise<never>((_resolve, reject) => {

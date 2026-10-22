@@ -18,18 +18,17 @@ const DIRECTIONS = [
 const roles = z.array(z.string().max(40)).max(40)
 type LockedArg = { light: string[]; dark: string[] }
 
-const GENERATE_ARGS = z.tuple([
-  z.string().trim().min(1).max(2000),
-  z.unknown(),
-  z.object({ light: roles, dark: roles }).optional(),
-  z.string().max(2000).optional(),
-])
+const brief = z.string().trim().min(1).max(2000)
+const lockedRoles = z.object({ light: roles, dark: roles }).optional()
+const references = z.array(z.string().min(1).max(100)).max(3).optional()
+const GENERATE_ARGS = z.tuple([brief, z.unknown(), lockedRoles, z.string().max(2000).optional(), references])
+const CANDIDATE_ARGS = z.tuple([brief, z.unknown(), lockedRoles, references])
 
 /**
  * Theme drafts from the host's provider. This only makes candidate data: the device validates, previews and applies it,
  * and nothing here touches an installed theme or any file.
  */
-export const registerThemeHandlers: RegisterHandlers = ({ workspace, agents, storedPreferences }) => {
+export const registerThemeHandlers: RegisterHandlers = ({ workspace, agents, storedPreferences, attachmentStore }) => {
   const settings = () => {
     const modelPrefs = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
     const step = modelPrefs?.sets
@@ -42,7 +41,15 @@ export const registerThemeHandlers: RegisterHandlers = ({ workspace, agents, sto
     }
   }
 
-  const draft = async (brief: string, rawSeed: unknown, rawLocked?: LockedArg, feedback?: string) => {
+  const draft = async (
+    brief: string,
+    rawSeed: unknown,
+    rawLocked?: LockedArg,
+    feedback?: string,
+    referenceIds: string[] = [],
+  ) => {
+    // Only images count: a reference is a picture to take a mood from, never a document to read instructions from.
+    const images = attachmentStore.resolve(referenceIds).filter((file) => file.mimeType.startsWith('image/'))
     const seed = parseTheme(rawSeed)
     if (!seed.ok) throw new Error(seed.error)
     const locked = rawLocked ? (rawLocked as typeof NO_LOCKED_ROLES) : NO_LOCKED_ROLES
@@ -53,10 +60,10 @@ export const registerThemeHandlers: RegisterHandlers = ({ workspace, agents, sto
     let last: { theme: RamuTheme; provider: string; model: string } | undefined
     for (let round = 0; round <= REPAIR_ROUNDS; round++) {
       const reply = await agents.analyze(
-        themePrompt({ brief, seed: seed.theme, locked, feedback, previous, issues }),
+        themePrompt({ brief, seed: seed.theme, locked, feedback, previous, issues, images: images.length }),
         model,
         40_000,
-        { timeoutMs: 90_000, defer: false },
+        { timeoutMs: 90_000, defer: false, ...(images.length ? { attachments: images } : {}) },
       )
       const read = readGeneratedTheme(reply.message, seed.theme, locked, id)
       if (!read.ok) {
@@ -75,16 +82,16 @@ export const registerThemeHandlers: RegisterHandlers = ({ workspace, agents, sto
   return {
     'theme.generate': {
       args: GENERATE_ARGS,
-      run: (brief: string, rawSeed: unknown, rawLocked?: LockedArg, feedback?: string) =>
-        draft(brief, rawSeed, rawLocked, feedback),
+      run: (brief: string, rawSeed: unknown, rawLocked?: LockedArg, feedback?: string, referenceIds?: string[]) =>
+        draft(brief, rawSeed, rawLocked, feedback, referenceIds),
     },
     /** Three differently-directed drafts at once, to choose between. Each costs a draft's usage. */
     'theme.candidates': {
-      args: GENERATE_ARGS,
-      run: (brief: string, rawSeed: unknown, rawLocked?: LockedArg) =>
-        Promise.allSettled(DIRECTIONS.map((direction) => draft(brief, rawSeed, rawLocked, direction))).then((results) =>
-          results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : [])),
-        ),
+      args: CANDIDATE_ARGS,
+      run: (brief: string, rawSeed: unknown, rawLocked?: LockedArg, referenceIds?: string[]) =>
+        Promise.allSettled(
+          DIRECTIONS.map((direction) => draft(brief, rawSeed, rawLocked, direction, referenceIds)),
+        ).then((results) => results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []))),
     },
   }
 }

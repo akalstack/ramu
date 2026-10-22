@@ -949,12 +949,15 @@ export interface RamuMethods {
     seed: RamuTheme,
     locked?: { light: ThemeRole[]; dark: ThemeRole[] },
     feedback?: string,
+    /** Up to three reference images (ids from `attachments.add`) the model looks at for mood and palette. */
+    referenceIds?: string[],
   ): { theme: RamuTheme; issues: ThemeIssue[]; provider: string; model: string }
   /** Up to three drafts in different directions for a brief, to choose between. Each uses a draft's provider usage. */
   'theme.candidates'(
     brief: string,
     seed: RamuTheme,
     locked?: { light: ThemeRole[]; dark: ThemeRole[] },
+    referenceIds?: string[],
   ): { theme: RamuTheme; issues: ThemeIssue[]; provider: string; model: string }[]
   /** Keep the chat's current provider despite the usage threshold: for the next message, for this chat until its limit resets, or clear. */
   'agent.holdProvider'(sessionId: string, scope: 'message' | 'chat' | null): void

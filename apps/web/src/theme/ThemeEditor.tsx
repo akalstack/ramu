@@ -21,6 +21,8 @@ import { t } from '../i18n'
 import { resolvedAppearance } from '../appearance'
 import { endTrial, keepTheme, selectedTheme, startTrial } from './themes'
 
+const MAX_REFERENCES = 3
+
 const GROUPS: { title: string; roles: { role: ThemeRole; label: string }[] }[] = [
   {
     title: 'Surfaces',
@@ -165,6 +167,10 @@ export function ThemeEditor({
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState<string | null>(null)
   const generation = useRef(0)
+  // Up to three pictures the model looks at for mood and palette. They are sent only with a request, never stored in the theme.
+  const [references, setReferences] = useState<{ id: string; name: string }[]>([])
+  const [uploading, setUploading] = useState(false)
+  const referencePicker = useRef<HTMLInputElement>(null)
   // Directions tried for the current wish; a few is enough to compare, and Undo steps back between them.
   const [directions, setDirections] = useState(0)
   const [candidates, setCandidates] = useState<RamuTheme[]>([])
@@ -177,11 +183,46 @@ export function ThemeEditor({
     setDraft(next)
     startTrial(next)
   }
+  const addReferences = async (files: File[]) => {
+    setUploading(true)
+    try {
+      const room = MAX_REFERENCES - references.length
+      const added = await Promise.all(
+        files
+          .filter((file) => file.type.startsWith('image/'))
+          .slice(0, room)
+          .map(async (file) => {
+            if (!file.size || file.size > 10 * 1024 * 1024)
+              throw new Error(`${file.name}: ${t('Images must be nonempty and no larger than 10 MB.')}`)
+            const encoded = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(String(reader.result).split(',')[1]!)
+              reader.onerror = () => reject(new Error(file.name))
+              reader.readAsDataURL(file)
+            })
+            const attachment = await invoke('attachments.add', file.name, encoded)
+            return { id: attachment.id, name: file.name }
+          }),
+      )
+      setReferences((current) => [...current, ...added].slice(0, MAX_REFERENCES))
+    } catch (error) {
+      notifyError(errorText(error), t('Reference image'))
+    } finally {
+      setUploading(false)
+    }
+  }
   const generate = async (feedback?: string) => {
     const mine = ++generation.current
     setGenerating(true)
     try {
-      const result = await invoke('theme.generate', brief.trim(), draft, locked, feedback)
+      const result = await invoke(
+        'theme.generate',
+        brief.trim(),
+        draft,
+        locked,
+        feedback,
+        references.map((reference) => reference.id),
+      )
       if (mine !== generation.current) return
       // The result keeps this draft's identity, so Undo returns to the previous colors and Keep updates one theme.
       commit({ ...result.theme, id: draft.id, name: draft.name === t('My theme') ? result.theme.name : draft.name })
@@ -197,7 +238,13 @@ export function ThemeEditor({
     const mine = ++generation.current
     setGenerating(true)
     try {
-      const results = await invoke('theme.candidates', brief.trim(), draft, locked)
+      const results = await invoke(
+        'theme.candidates',
+        brief.trim(),
+        draft,
+        locked,
+        references.map((reference) => reference.id),
+      )
       if (mine !== generation.current) return
       if (!results.length) throw new Error(t('No usable themes came back. Try again or change the wish.'))
       setCandidates(results.map((result) => result.theme))
@@ -287,6 +334,45 @@ export function ThemeEditor({
             >
               {t('Another direction')}
             </Button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={referencePicker}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
+            hidden
+            onChange={(event) => {
+              const files = [...(event.target.files ?? [])]
+              event.target.value = ''
+              if (files.length) void addReferences(files)
+            }}
+          />
+          <Button
+            variant="ghost"
+            disabled={uploading || generating || references.length >= MAX_REFERENCES}
+            onClick={() => referencePicker.current?.click()}
+          >
+            {uploading ? t('Adding…') : t('Add reference image')}
+          </Button>
+          {references.map((reference) => (
+            <span key={reference.id} className="inline-flex items-center gap-1 text-caption text-muted-foreground">
+              <span className="max-w-[160px] truncate">{reference.name}</span>
+              <button
+                type="button"
+                className="bg-transparent p-0 border-0 underline"
+                aria-label={`${t('Remove reference image')} ${reference.name}`}
+                onClick={() => setReferences((current) => current.filter((entry) => entry.id !== reference.id))}
+              >
+                {t('Remove')}
+              </button>
+            </span>
+          ))}
+          {references.length > 0 && (
+            <span className="text-caption text-muted-foreground">
+              {t('Reference images are sent to the host’s provider with your next request.')}
+            </span>
           )}
         </div>
         {(generated || locked.light.length + locked.dark.length > 0) && (
