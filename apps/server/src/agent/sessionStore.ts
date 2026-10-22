@@ -22,6 +22,9 @@ export interface SessionStoreHost {
   onEvent(sessionId: string, event: AgentEvent, seq?: number, revision?: number): void
 }
 
+/** The most serialized transcript rows `changes` replays before it sends a snapshot instead. */
+export const MAX_CHANGE_BYTES = 4_000_000
+
 /** Reads and writes a session's rows and event log. Holds no session state beyond the event revision counter. */
 export class SessionStore {
   constructor(
@@ -153,6 +156,7 @@ export class SessionStore {
     cursor: number,
     knownLastSeq: number,
     limit = 2000,
+    maxBytes = MAX_CHANGE_BYTES,
   ): {
     reset: boolean
     cursor: number
@@ -175,7 +179,9 @@ export class SessionStore {
           .prepare('SELECT seq, event FROM agent_events WHERE session_id = ? AND rev > ? ORDER BY rev LIMIT ?')
           .all(id, cursor, limit + 1) as { seq: number; event: string }[])
       : []
-    if (!usable || changed.length > limit) {
+    // A replay is bounded by rows and by serialized size; past either, the client gets the authoritative snapshot.
+    const tooLarge = changed.length > limit || changed.reduce((total, row) => total + row.event.length, 0) > maxBytes
+    if (!usable || tooLarge) {
       const all = this.db.prepare('SELECT seq, event FROM agent_events WHERE session_id = ? ORDER BY seq').all(id) as {
         seq: number
         event: string

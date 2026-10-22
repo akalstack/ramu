@@ -91,6 +91,14 @@ describe('agent.changes', () => {
     expect(svc.changes(id, head.cursor, head.lastSeq, 10).reset).toBe(false)
   })
 
+  it('also bounds a change set by its serialized size', async () => {
+    const { svc, id, record } = await start()
+    const head = svc.changes(id, 0, 0)
+    record({ kind: 'text', text: 'x'.repeat(5000) } as AgentEvent)
+    expect(svc.changes(id, head.cursor, head.lastSeq, 2000, 1000).reset).toBe(true)
+    expect(svc.changes(id, head.cursor, head.lastSeq, 2000, 100_000).reset).toBe(false)
+  })
+
   it('gives rows saved before the upgrade a baseline so their first read is a clean snapshot', () => {
     db.exec(`INSERT INTO agent_sessions (id, task_id, provider, cwd, additional_dirs, covers, state, created_at)
       VALUES ('old', 't', 'codex', '/w', '[]', '[]', 'idle', 0);
