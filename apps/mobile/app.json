@@ -12,6 +12,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Connect to the Ramu workspace on your paired host.",
+        "NSMicrophoneUsageDescription": "Ramu records only while you dictate a message, and recognizes speech on this iPhone. Audio is never uploaded or kept.",
+        "NSSpeechRecognitionUsageDescription": "Ramu turns your dictated message into text on this iPhone. Audio never leaves the device.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true,
           "NSAllowsArbitraryLoads": true
@@ -21,6 +23,7 @@
     },
     "android": {
       "package": "dev.ramu.mobile",
+      "permissions": ["android.permission.RECORD_AUDIO"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon-foreground.png",
         "monochromeImage": "./assets/icon-monochrome.png",
@@ -53,7 +56,7 @@
         "@config-plugins/react-native-webrtc",
         {
           "cameraPermission": "Ramu does not use the camera for screen video.",
-          "microphonePermission": "Ramu does not use the microphone for screen video."
+          "microphonePermission": "Ramu records only while you dictate a message, and recognizes speech on this iPhone. Audio is never uploaded or kept."
         }
       ],
       [
