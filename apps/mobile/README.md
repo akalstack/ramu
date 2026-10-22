@@ -11,7 +11,7 @@ LAN/VPN. The production app has no seeded hosts or simulated conversations.
    device**. Review [remote access and device privileges](../../SECURITY.md#remote-access). Choose the reachable address in the QR selector. For a headless host,
    use `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`.
 3. Install a development build once: from EAS with `pnpm --filter @ramu/mobile eas:ios` (or `eas:android`), or locally with `pnpm --filter @ramu/mobile build:ios` (or `build:android`). Then run `pnpm dev:mobile` and open **Hosts → Pair**.
-   Scan the desktop's QR offer, or enter its address and ten-character pairing code.
+   **Pair a host** opens on **Nearby hosts**: the phone lists hosts that have **Discoverable on this network** on (the camera stays off). Pick one and enter the pairing code from that host. Choose **Scan QR code** to use the camera, or **Enter manually** for the address and ten-character pairing code; both stay one tap away while browsing, when nothing is found and after the Local Network permission is refused. Browsing stops when you leave the screen, change method or background the app. It needs the development build (the `RamuDiscovery` native module); Expo Go and web show discovery as unavailable.
    Review the address and explicitly allow HTTP only on a trusted network.
 4. Select a project or Standalone, then send an instruction. Provider installation
    and sign-in belong to the host; the model picker reads that host's catalog.

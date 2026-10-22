@@ -3129,4 +3129,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Visible as {0} on {1}": "Terlihat sebagai {0} di {1}",
   "Not visible right now ({0}). Pairing by address or QR code still works.": "Tidak terlihat saat ini ({0}). Pairing lewat alamat atau kode QR tetap berfungsi.",
   "no network to advertise on": "tidak ada jaringan untuk menyiarkan",
+  "Paired, but this host has not answered yet. Ramu keeps the access and connects when it is reachable; you do not need the code again.": "Sudah dipasangkan, tetapi host ini belum menjawab. Ramu menyimpan aksesnya dan terhubung saat host dapat dijangkau; Anda tidak perlu kode lagi.",
 }

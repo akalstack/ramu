@@ -104,6 +104,8 @@ export interface Computer {
   running: number
   needsInput: number
   pairedAt: number | null
+  /** The pairing code was accepted but the host has not answered a normal request since. The grant is kept. */
+  grantedUnreachable?: boolean
 }
 export interface Computers {
   /** Shared browsing filter. Null means all hosts; it never changes command routing. */

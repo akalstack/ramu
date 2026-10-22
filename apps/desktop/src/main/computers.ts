@@ -50,6 +50,8 @@ export interface ComputerDeps {
 export class ComputerRegistry {
   private scope: string | null = null
   private readonly live = new Map<string, Live>()
+  /** Hosts whose pairing was accepted but whose first authenticated request could not reach them yet. */
+  private readonly unverified = new Set<string>()
   private readonly local: { status: ComputerStatus; running: number; needsInput: number } = {
     status: 'connected',
     running: 0,
@@ -291,6 +293,7 @@ export class ComputerRegistry {
           needsInput: live?.needsInput ?? 0,
           pairedAt: server.pairedAt,
           ...(server.ssh ? { ssh: server.ssh.target } : {}),
+          ...(this.grantedUnreachable(server.id, live?.status) ? { grantedUnreachable: true } : {}),
         }
       }),
     ]
@@ -300,6 +303,16 @@ export class ComputerRegistry {
       scope: this.scope && this.exists(this.scope) ? this.scope : null,
       deviceName: this.deps.deviceName,
     }
+  }
+
+  /** True from a pairing that could not be confirmed until the host first answers; a refusal clears it too. */
+  private grantedUnreachable(id: string, status: ComputerStatus | undefined): boolean {
+    if (!this.unverified.has(id)) return false
+    if (status === 'connected' || status === 'rejected') {
+      this.unverified.delete(id)
+      return false
+    }
+    return true
   }
 
   /** Pairs with a code, proves the new token works, then connects. */
@@ -319,6 +332,9 @@ export class ComputerRegistry {
       })) as { hostname?: string } | undefined
     // Like Tailscale and NetBird: unless you name it, a computer is called what it calls itself.
     const saved = this.deps.servers.add(url, label?.trim() || status?.hostname, token)
+    // Access was granted but never confirmed by a normal request: say so until the host answers, instead of
+    // showing a connected host or asking for the spent code again.
+    if (!status) this.unverified.add(saved.id)
     // Pairing an address again replaces its entry under a new id.
     const ids = new Set(this.deps.servers.list().map((server) => server.id))
     for (const [id, live] of this.live)
@@ -326,6 +342,7 @@ export class ComputerRegistry {
         this.clearCount(id)
         live.stop()
         this.live.delete(id)
+        this.unverified.delete(id)
       }
     this.connect(saved.id)
     this.deps.changed()
@@ -373,6 +390,7 @@ export class ComputerRegistry {
     this.live.get(id)?.stop()
     this.live.delete(id)
     this.deps.servers.forget(id)
+    this.unverified.delete(id)
     this.deps.changed()
   }
 

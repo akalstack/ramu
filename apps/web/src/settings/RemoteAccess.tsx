@@ -768,6 +768,13 @@ function Computers({ state }: { state: ComputerList }) {
                 <StatusDot status={computer.status} />
                 <span>{activityText(computer) || statusText(computer.status)}</span>
               </span>
+              {computer.grantedUnreachable && (
+                <p role="status" className="m-0 basis-full text-caption text-muted-foreground">
+                  {t(
+                    'Paired, but this host has not answered yet. Ramu keeps the access and connects when it is reachable; you do not need the code again.',
+                  )}
+                </p>
+              )}
               <div className="flex flex-none items-center gap-1">
                 {computer.id !== state.current && (computer.local || computer.status === 'connected') && (
                   <Button

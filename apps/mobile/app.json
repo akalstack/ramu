@@ -11,11 +11,12 @@
       "bundleIdentifier": "dev.ramu.mobile",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Connect to the Ramu workspace on your paired host.",
+        "NSLocalNetworkUsageDescription": "Find Ramu hosts on your network and connect to the workspace on your paired host.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true,
           "NSAllowsArbitraryLoads": true
-        }
+        },
+        "NSBonjourServices": ["_ramu._tcp"]
       },
       "icon": "../../assets/Ramu.icon"
     },
@@ -25,7 +26,12 @@
         "foregroundImage": "./assets/icon-foreground.png",
         "monochromeImage": "./assets/icon-monochrome.png",
         "backgroundColor": "#232327"
-      }
+      },
+      "permissions": [
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.CHANGE_WIFI_MULTICAST_STATE",
+        "android.permission.NEARBY_WIFI_DEVICES"
+      ]
     },
     "web": {
       "bundler": "metro",

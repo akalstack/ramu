@@ -154,6 +154,12 @@ it('keeps a spent pairing credential when the first request cannot reach the hos
   const paired = await registry.pair('10.0.0.2:7788', 'ABCDE-FGHJK', undefined)
   expect(paired.name).toBe('10.0.0.2')
   expect(servers.endpoint(paired.id)?.token).toBe('tok')
+  // The grant is flagged until the host answers, and a confirmed pairing is never flagged.
+  expect(paired.grantedUnreachable).toBe(true)
+  expect(registry.list(LOCAL).computers.find((computer) => computer.id === paired.id)?.grantedUnreachable).toBe(true)
+  registry.forget(paired.id)
+  const confirmed = await registry.pair('10.0.0.3:7788', 'ABCDE-FGHJK', 'Verified')
+  expect(confirmed.grantedUnreachable).toBeUndefined()
 })
 
 it('forgets a host and stops its connection, but never this host', () => {
