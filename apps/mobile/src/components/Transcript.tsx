@@ -34,6 +34,7 @@ import { formatDuration } from '../runtime/turns'
 import { Arrive, Breathe, Collapse, Disclosure } from './Motion'
 import { InteractiveVisibility } from './InteractiveVisibility'
 import { ProviderIcon } from './Logos'
+import { ThemeProposal } from './ThemeProposal'
 
 const toolIcons: Record<ToolKind, Icon> = {
   read: FileCode2,
@@ -324,6 +325,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <InteractiveBlock reference={item.reference} chat={chat} />
     case 'image':
       return <ImageBlock uri={item.uri} alt={item.alt} />
+    case 'theme':
+      return <ThemeProposal theme={item.theme} />
     case 'tool':
       return <ToolRow item={item} />
     case 'tools':

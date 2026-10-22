@@ -105,6 +105,16 @@ test('transcript restores tool outcomes, resolved questions and permissions with
   assert.equal(items.find((i) => i.kind === 'permission').decision, 'allow')
 })
 
+test('a theme an agent drafts becomes a transcript item the phone can preview', () => {
+  const theme = { schema: 1, id: 'dusk', name: 'Dusk', light: {}, dark: {} }
+  const items = transcript([
+    { kind: 'user', text: 'make it calmer' },
+    { kind: 'theme', theme },
+  ])
+  const found = items.find((item) => item.kind === 'theme')
+  assert.equal(found.theme.name, 'Dusk')
+})
+
 test('loopback HTTP addresses do not require a warning or consent, private LAN HTTP still does', () => {
   for (const host of ['localhost', '127.0.0.1', '127.1.2.3', '[::1]']) {
     assert.equal(needsHttpConsent(`http://${host}:7421`), false)

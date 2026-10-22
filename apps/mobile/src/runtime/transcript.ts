@@ -129,6 +129,7 @@ export function transcript(events: AgentEvent[], seqs?: number[]): TranscriptIte
         raw: e.text,
       })
     else if (e.kind === 'interactive') items.push({ kind: 'interactive', id, reference: e.reference })
+    else if (e.kind === 'theme') items.push({ kind: 'theme', id, theme: e.theme })
     else if (e.kind === 'text') items.push({ kind: 'text', id, text: e.text })
     else if (e.kind === 'error') items.push({ kind: 'text', id, text: `Error: ${e.message}` })
     else if (e.kind === 'content') {

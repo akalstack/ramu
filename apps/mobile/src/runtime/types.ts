@@ -48,6 +48,8 @@ export type TranscriptItem = (
   /** An image the agent returned (MCP or tool content). */
   | { kind: 'interactive'; id: string; reference: import('@ramu/shared/interactive').InteractiveReference }
   | { kind: 'image'; id: string; uri: string; alt?: string }
+  /** A theme the agent drafted with `propose_theme`; the person previews it before anything changes. */
+  | { kind: 'theme'; id: string; theme: import('@ramu/shared/theme').RamuTheme }
   | { kind: 'text'; id: string; text: string }
   | TranscriptTool
   | { kind: 'tools'; id: string; tools: TranscriptTool[] }
