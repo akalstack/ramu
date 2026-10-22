@@ -6,7 +6,7 @@ import { font, space, useTheme, type Appearance, type TextSize } from '../../the
 import { useStore, type Language } from '../../runtime/store'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
-import { PUSH_CATEGORIES, PUSH_MUTED_KEY, isCategoryOn, type PushCategory } from '../../runtime/pushCategories'
+import { PUSH_CATEGORIES, PUSH_MUTED_KEY, isCategoryOn, parseSwitched, type PushCategory } from '../../runtime/pushCategories'
 import { useT } from '../../i18n'
 import { Header, Screen, PageScrollView as ScrollView } from '../../components/Screen'
 import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
@@ -139,6 +139,17 @@ function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings
             ))}
           </Card>
           <Hint>{t.alertsNeedHost}</Hint>
+          <ScopeControl
+            field="notifyCompletion"
+            overridden={parseSwitched(drafts[PUSH_MUTED_KEY]).length > 0}
+            inheritedLabel={t.alertsDefaults}
+            onUseInherited={() => {
+              // Back to each alert's own default; permission and registration are untouched.
+              for (const category of parseSwitched(drafts[PUSH_MUTED_KEY]))
+                setPushCategory(category, !isCategoryOn(drafts[PUSH_MUTED_KEY], category))
+            }}
+          />
+          <Hint>{t.alertsPermissionSeparate}</Hint>
         </>
       ) : null}
       <HostGroups section="notifications" host={host} name={name} />
