@@ -9,6 +9,7 @@ import type {
   ForgeCheck,
   ForgeCheckState,
   ForgeConnectionSummary,
+  ForgeRepositorySummary,
   ForgeStatus,
   IssueLink,
   IssueSummary,
@@ -97,8 +98,17 @@ function cliToken(executable: string, origin: string, login: string): Promise<st
 export async function accountEnvironment(cwd: string, executable: string): Promise<Record<string, string>> {
   if (!accountStore) return {}
   const remote = await forgeRemoteOf(cwd)
-  const origin = remote?.origin ?? 'github.com'
-  const account = await accountStore.resolve(origin, remote?.owner, remote?.repo)
+  return accountEnvironmentFor(remote?.origin ?? 'github.com', executable, remote?.owner, remote?.repo)
+}
+
+async function accountEnvironmentFor(
+  origin: string,
+  executable: string,
+  owner?: string,
+  repo?: string,
+): Promise<Record<string, string>> {
+  if (!accountStore) return {}
+  const account = await accountStore.resolve(origin, owner, repo)
   if (account.kind === 'ambiguous')
     throw new ForgeError(
       `Several GitHub accounts are saved for ${origin}. Choose which one this repository uses in Settings → Git.`,
@@ -189,7 +199,7 @@ export async function resolvedConnectionId(cwd: string): Promise<string | null> 
   }
 }
 
-const unknownCheck =(detail: string | null = null): ForgeCheckResult => ({ state: 'unknown', detail })
+const unknownCheck = (detail: string | null = null): ForgeCheckResult => ({ state: 'unknown', detail })
 
 /** Runs `git ls-remote`: reads refs through the remote's own transport and credentials, and changes nothing. */
 function remoteReachable(cwd: string, remote: string): Promise<ForgeCheckResult> {
@@ -227,9 +237,15 @@ interface RepositoryRead {
 function readOutcome(status: number): ForgeCheckResult {
   if (status === 401) return { state: 'denied', detail: 'The credential was rejected. It may be expired or revoked.' }
   if (status === 403 || status === 429)
-    return { state: 'denied', detail: 'The server refused the request: a permission is missing or the rate limit was reached.' }
+    return {
+      state: 'denied',
+      detail: 'The server refused the request: a permission is missing or the rate limit was reached.',
+    }
   if (status === 404)
-    return { state: 'denied', detail: 'The repository was not found with this account. It may be private or need organization approval.' }
+    return {
+      state: 'denied',
+      detail: 'The repository was not found with this account. It may be private or need organization approval.',
+    }
   return { state: 'failed', detail: `The server answered with status ${status}.` }
 }
 
@@ -264,22 +280,30 @@ export async function checkAccess(
   const account =
     resolution?.kind === 'saved'
       ? { source: 'saved' as const, login: resolution.login, connectionId: resolution.connectionId, ambiguous: false }
-      : { source: 'cli' as const, login: resolution?.kind === 'cli' ? resolution.login : null, connectionId: null, ambiguous: false }
+      : {
+          source: 'cli' as const,
+          login: resolution?.kind === 'cli' ? resolution.login : null,
+          connectionId: null,
+          ambiguous: false,
+        }
   let read: ForgeCheckResult
   let write: ForgeCheckResult = unknownCheck()
   try {
     let body: RepositoryRead | null = null
     if (resolution?.kind === 'saved') {
-      const response = await (options.fetch ?? fetch)(`${githubApiBase(remote.origin)}/repos/${remote.owner}/${remote.repo}`, {
-        headers: {
-          Authorization: `Bearer ${resolution.token}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          'User-Agent': 'Ramu',
+      const response = await (options.fetch ?? fetch)(
+        `${githubApiBase(remote.origin)}/repos/${remote.owner}/${remote.repo}`,
+        {
+          headers: {
+            Authorization: `Bearer ${resolution.token}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'Ramu',
+          },
+          redirect: 'error',
+          signal: AbortSignal.timeout(15_000),
         },
-        redirect: 'error',
-        signal: AbortSignal.timeout(15_000),
-      })
+      )
       if (response.ok) body = (await response.json()) as RepositoryRead
       else read = readOutcome(response.status)
     } else {
@@ -299,7 +323,12 @@ export async function checkAccess(
     read =
       error instanceof ForgeError && error.availability
         ? { state: 'denied', detail: message }
-        : { state: 'failed', detail: /redirect/i.test(message) ? 'The server redirected the request, so the credential was not sent on.' : message.slice(0, 300) }
+        : {
+            state: 'failed',
+            detail: /redirect/i.test(message)
+              ? 'The server redirected the request, so the credential was not sent on.'
+              : message.slice(0, 300),
+          }
   }
   const { remote: name } = await publishRemote(cwd, await currentBranch(cwd)).catch(() => ({ remote: null }))
   const transport = name ? await remoteReachable(cwd, name) : unknownCheck('No remote is configured.')
@@ -755,4 +784,67 @@ export async function issueDetails(
     await gh(cwd, ['issue', 'view', String(number), '--json', 'number,title,url,body,labels,comments']),
   ) as RawIssue
   return { title: raw.title, url: raw.url, prompt: issuePrompt(raw) }
+}
+
+// ---- Repository search for cloning ----
+
+interface RawRepository {
+  nameWithOwner?: string
+  fullName?: string
+  description?: string | null
+  isPrivate?: boolean
+  url?: string
+  updatedAt?: string
+}
+
+/** Repositories to clone: the signed-in account's own when the search is empty, else a GitHub search. */
+export async function searchRepositories(search: string): Promise<ForgeRepositorySummary[]> {
+  const executable = ghExecutable()
+  if (!executable) throw new ForgeError('Install the GitHub CLI (gh) to search GitHub repositories.', 'no-cli')
+  const query = search.trim()
+  const args = query
+    ? ['search', 'repos', '--limit', '30', '--json', 'fullName,description,isPrivate,url,updatedAt', '--', query]
+    : ['repo', 'list', '--limit', '30', '--json', 'nameWithOwner,description,isPrivate,url,updatedAt']
+  // There is no checkout here, so the account is the one chosen for github.com.
+  const account = await accountEnvironmentFor('github.com', executable)
+  const output = await new Promise<string>((resolve, reject) =>
+    execFile(
+      executable,
+      args,
+      {
+        maxBuffer: MAX_BUFFER,
+        encoding: 'utf8',
+        timeout: 30_000,
+        env: { ...process.env, ...account, GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' },
+      },
+      (error, stdout, stderr) =>
+        error
+          ? reject(
+              new ForgeError(
+                `gh ${args[0]} failed: ${redactSecrets(stderr.trim() || error.message)}`,
+                availabilityFromError(stderr),
+              ),
+            )
+          : resolve(stdout),
+    ),
+  )
+  return parseRepositories(JSON.parse(output) as RawRepository[])
+}
+
+export function parseRepositories(raw: RawRepository[]): ForgeRepositorySummary[] {
+  const found: ForgeRepositorySummary[] = []
+  for (const repository of raw) {
+    const fullName = repository.fullName ?? repository.nameWithOwner
+    if (!fullName || !repository.url || !/^[\w.-]+\/[\w.-]+$/.test(fullName)) continue
+    // HTTPS on github.com only: the credentials are the ones the host's Git already uses.
+    if (!/^https:\/\/github\.com\//.test(repository.url)) continue
+    found.push({
+      fullName,
+      description: repository.description?.slice(0, 300) || null,
+      private: !!repository.isPrivate,
+      cloneUrl: `${repository.url.replace(/\/+$/, '')}.git`,
+      updatedAt: repository.updatedAt ? Date.parse(repository.updatedAt) : 0,
+    })
+  }
+  return found
 }

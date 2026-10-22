@@ -85,6 +85,7 @@ import type {
   NativeInstructions,
   ForgeAccessReport,
   ForgeConnectionSummary,
+  ForgeRepositorySummary,
   ForgeSaveConnectionInput,
   ForgeSavedConnection,
   PullRequestWatchStatus,
@@ -796,6 +797,8 @@ export interface RamuMethods {
   'forge.setRepositoryAccount'(taskId: string, repoId: string, account: string | null): void
   /** API reads, writes and Git transport for this repository, separately; nothing is pushed. */
   'forge.checkAccess'(taskId: string, repoId: string): ForgeAccessReport
+  /** GitHub repositories to clone: the account's own when the search is empty. */
+  'forge.searchRepositories'(search: string): ForgeRepositorySummary[]
   'rules.list'(): Rule[]
   'rules.save'(input: RuleInput): Rule
   'rules.remove'(ruleId: string): void

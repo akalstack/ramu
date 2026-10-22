@@ -101,3 +101,10 @@ export function accessLines(report: ForgeAccessReport): { label: string; text: s
     { label: t('Git transport (fetch)'), text: checkText(report.transport) },
   ]
 }
+
+/** Who a new repository is created for: the GitHub CLI's active account, since publishing runs through `gh`. */
+export function publishAccount(summary: ForgeConnectionSummary): string | null {
+  const active = summary.accounts.find((account) => account.active && account.state === 'ok')
+  const usable = active ?? summary.accounts.find((account) => account.state === 'ok')
+  return usable ? t('Publishing as {0} on {1}', { '0': usable.login, '1': usable.host }) : null
+}

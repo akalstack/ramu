@@ -6,10 +6,13 @@ import { Header, Screen, GlassButton, PageScrollView as ScrollView } from '../co
 import { Row, T } from '../components/ui'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
+import { useT } from '../i18n'
+import type { ForgeRepositorySummary } from '@ramu/shared/types'
 export default function HostFolders() {
   const store = useStore(),
     router = useRouter(),
-    { c } = useTheme()
+    { c } = useTheme(),
+    t = useT()
   const computerId = store.selected
   const [roots, setRoots] = useState<string[]>([])
   const [listing, setListing] = useState<{
@@ -20,7 +23,9 @@ export default function HostFolders() {
   const [name, setName] = useState(''),
     [url, setUrl] = useState(''),
     [error, setError] = useState(''),
-    [busy, setBusy] = useState(false)
+    [busy, setBusy] = useState(false),
+    [search, setSearch] = useState(''),
+    [found, setFound] = useState<ForgeRepositorySummary[] | null>(null)
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true)
     try {
@@ -92,6 +97,41 @@ export default function HostFolders() {
                 })
               }
             />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder={t.githubSearch}
+              accessibilityLabel={t.githubSearch}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholderTextColor={c.muted}
+              style={{ padding: space.m, backgroundColor: c.fill, color: c.text, fontSize: font.body }}
+            />
+            <GlassButton
+              title={busy ? t.githubSearching : t.githubSearchButton}
+              disabled={busy}
+              onPress={() =>
+                void run(async () =>
+                  setFound(await store.invoke(computerId, 'forge.searchRepositories', search.trim())),
+                )
+              }
+            />
+            {found && !found.length ? <T tone="muted">{t.githubNoRepositories}</T> : null}
+            {found?.length ? <T tone="muted">{t.githubPickHint}</T> : null}
+            {found?.map((repository) => (
+              <Row
+                key={repository.fullName}
+                onPress={() => {
+                  setUrl(repository.cloneUrl)
+                  setName(repository.fullName.split('/')[1] ?? '')
+                }}
+              >
+                <T style={{ flex: 1 }}>
+                  {repository.fullName}
+                  {repository.private ? ` · ${t.githubPrivate}` : ''}
+                </T>
+              </Row>
+            ))}
             <TextInput
               value={url}
               onChangeText={setUrl}

@@ -1,8 +1,11 @@
 import { t, useLanguage } from '../i18n'
 import { Checkbox } from '@/components/ui/checkbox'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Dialog } from '../Menu'
-import { Folder, ChevronLeft } from 'lucide-react'
+import { Folder, ChevronLeft, Lock } from 'lucide-react'
+import type { ForgeRepositorySummary } from '@ramu/shared/types'
+import { Button } from '@/components/desktop-button'
+import { Input } from '@/components/desktop-input'
 import { invokerFor } from '../ipc'
 import { ownHostId } from '../hosts'
 import { errorText } from './TaskPane'
@@ -88,6 +91,139 @@ function RepoChoiceDialog() {
   )
 }
 
+/**
+ * Search GitHub through the host's account and clone the chosen repository into the folder being browsed. A pasted
+ * Git URL stays available. The host does the clone with its own Git credentials; a failed clone keeps its folder.
+ */
+function CloneFromGitHub({
+  host,
+  parent,
+  onCloned,
+  onBack,
+}: {
+  host: string
+  parent: string
+  onCloned: (path: string) => void
+  onBack: () => void
+}) {
+  useLanguage()
+  const [query, setQuery] = useState('')
+  const [url, setUrl] = useState('')
+  const [results, setResults] = useState<ForgeRepositorySummary[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [cloning, setCloning] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const request = useRef(0)
+  useEffect(() => {
+    // Debounced; a slow older search never replaces a newer one.
+    const mine = ++request.current
+    setSearching(true)
+    const timer = setTimeout(
+      () => {
+        invokerFor(host)('forge.searchRepositories', query.trim()).then(
+          (found) => {
+            if (mine !== request.current) return
+            setResults(found)
+            setError('')
+            setSearching(false)
+          },
+          (reason) => {
+            if (mine !== request.current) return
+            setResults([])
+            setError(errorText(reason))
+            setSearching(false)
+          },
+        )
+      },
+      query ? 350 : 0,
+    )
+    return () => clearTimeout(timer)
+  }, [host, query])
+  const clone = async (cloneUrl: string, folder: string) => {
+    setCloning(cloneUrl)
+    setError('')
+    try {
+      onCloned(await invokerFor(host)('folders.clone', parent, folder, cloneUrl))
+    } catch (reason) {
+      setError(errorText(reason))
+    } finally {
+      setCloning(null)
+    }
+  }
+  const folderOf = (value: string) =>
+    value
+      .replace(/\/+$/, '')
+      .replace(/\.git$/, '')
+      .split(/[/:]/)
+      .pop() ?? ''
+  return (
+    <div className="flex flex-col gap-2">
+      <Button variant="ghost" size="sm" className="self-start" onClick={onBack}>
+        <ChevronLeft size={14} /> {t('Back to folders')}
+      </Button>
+      <p className="muted text-muted-foreground small text-caption m-0 truncate" title={parent}>
+        {t('Clone into {0}', { '0': parent })}
+      </p>
+      <Input
+        autoFocus
+        value={query}
+        placeholder={t('Search GitHub repositories')}
+        aria-label={t('Search GitHub repositories')}
+        onChange={(event) => setQuery(event.target.value)}
+      />
+      {error && (
+        <p role="alert" className="m-0 text-caption text-bad">
+          {error}
+        </p>
+      )}
+      <div
+        className="flex flex-col gap-0.5 max-h-[min(40vh,320px)] overflow-y-auto overscroll-contain"
+        aria-busy={searching}
+      >
+        {results?.map((repository) => (
+          <button
+            key={repository.fullName}
+            type="button"
+            disabled={!!cloning}
+            className="[&:hover]:bg-hover flex w-full flex-col items-start gap-0.5 p-[4px_6px] rounded-(--radius-s) cursor-default border-0 bg-transparent text-left text-body disabled:opacity-60"
+            onClick={() => void clone(repository.cloneUrl, folderOf(repository.fullName))}
+          >
+            <span className="flex items-center gap-1.5 font-semibold">
+              {repository.fullName}
+              {repository.private && <Lock size={12} aria-label={t('Private repository')} />}
+            </span>
+            {repository.description && (
+              <span className="text-caption text-muted-foreground">{repository.description}</span>
+            )}
+          </button>
+        ))}
+        {results && !results.length && !searching && !error && (
+          <p className="muted text-muted-foreground small text-caption m-0 p-[2px_6px]">{t('No repositories found')}</p>
+        )}
+      </div>
+      <form
+        className="flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (url.trim()) void clone(url.trim(), folderOf(url.trim()))
+        }}
+      >
+        <Input
+          value={url}
+          placeholder={t('Or paste a Git URL')}
+          aria-label={t('Or paste a Git URL')}
+          autoCapitalize="none"
+          spellCheck={false}
+          onChange={(event) => setUrl(event.target.value)}
+        />
+        <Button type="submit" variant="secondary" size="sm" disabled={!!cloning || !folderOf(url.trim())}>
+          {cloning ? t('Cloning…') : t('Clone')}
+        </Button>
+      </form>
+    </div>
+  )
+}
+
 type Listing = { path: string; parent: string | null; folders: { name: string; path: string }[] }
 
 /** Browses folders on the host this window is connected to, since a native picker would open on that machine instead. */
@@ -97,6 +233,7 @@ function HostFolderDialog() {
   const [roots, setRoots] = useState<string[]>([])
   const [listing, setListing] = useState<Listing | null>(null)
   const [error, setError] = useState('')
+  const [cloning, setCloning] = useState(false)
   const browse = (path: string, host = request?.host) =>
     invokerFor(host ?? ownHostId())('folders.list', path)
       .then((next) => {
@@ -109,6 +246,7 @@ function HostFolderDialog() {
       onFolderPick((next) => {
         setRequest(next)
         setListing(null)
+        setCloning(false)
         setError('')
         // The folders are on the host the project is added to, which may not be the one on screen.
         invokerFor(next.host)('folders.roots')
@@ -133,15 +271,36 @@ function HostFolderDialog() {
     <Dialog
       title={t('Choose a folder on the host')}
       confirmLabel={t('Add this folder')}
-      confirmDisabled={!listing}
+      confirmDisabled={!listing || cloning}
+      footerLeading={
+        listing && !cloning ? (
+          <Button variant="ghost" size="sm" className="mr-auto" onClick={() => setCloning(true)}>
+            {t('Clone from GitHub')}
+          </Button>
+        ) : undefined
+      }
       onCancel={() => close(null)}
       onConfirm={() => listing && close(listing.path)}
     >
-      <p className="muted text-muted-foreground small text-caption m-[0_0_8px] truncate" title={listing?.path}>
+      {cloning && listing ? (
+        <CloneFromGitHub
+          host={request.host}
+          parent={listing.path}
+          onCloned={(path) => close(path)}
+          onBack={() => setCloning(false)}
+        />
+      ) : null}
+      <p
+        className="muted text-muted-foreground small text-caption m-[0_0_8px] truncate"
+        title={listing?.path}
+        hidden={cloning}
+      >
         {listing?.path ?? t('Choose where to start browsing')}
       </p>
       {error && <p className="m-[0_0_8px] text-caption text-bad">{error}</p>}
-      <div className="flex flex-col gap-0.5 max-h-[min(50vh,420px)] overflow-y-auto overscroll-contain">
+      <div
+        className={`flex flex-col gap-0.5 max-h-[min(50vh,420px)] overflow-y-auto overscroll-contain${cloning ? ' hidden' : ''}`}
+      >
         {listing && (
           <button
             type="button"

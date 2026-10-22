@@ -100,13 +100,7 @@ export interface ForgeCliAccount {
  * `forge.checkAccess` reports that per repository.
  */
 export type ForgeConnectionState =
-  | 'connected'
-  | 'unverified'
-  | 'expired'
-  | 'missing-permission'
-  | 'rate-limited'
-  | 'offline'
-  | 'unsupported-server'
+  'connected' | 'unverified' | 'expired' | 'missing-permission' | 'rate-limited' | 'offline' | 'unsupported-server'
 
 /** A credential Ramu saved on the execution host for one GitHub server. Never carries the token or its reference. */
 export interface ForgeSavedConnection {
@@ -164,4 +158,14 @@ export interface ForgeConnectionSummary {
   canAdminister?: boolean
   /** The choice per origin: a saved connection id, or `cli` to keep using the detected sign-in. */
   selection?: Record<string, string>
+}
+
+/** A GitHub repository offered for cloning. Names the clone URL only; nothing about credentials. */
+export interface ForgeRepositorySummary {
+  fullName: string
+  description: string | null
+  private: boolean
+  /** HTTPS clone URL. Git on the host uses its own credentials to fetch it. */
+  cloneUrl: string
+  updatedAt: number
 }

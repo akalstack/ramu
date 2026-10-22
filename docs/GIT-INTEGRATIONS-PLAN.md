@@ -16,7 +16,7 @@ Ramu already has GitHub PR discovery/creation, checks, review feedback, issues a
 
 ## Already in place
 
-Settings → Git starts with a **Hosting accounts** group: GitHub shows the host's detected `gh` sign-ins (`forge.connections`, read-only, never the token) with **Check connection** and per-account details, and GitLab, Bitbucket Cloud and Azure DevOps are informational **Coming soon** rows with no setup or backend activity. Remaining: saved credentials, per-repository access checks, multiple-account selection and overrides, deep links from Source Control, replace/disconnect, and the adapter boundary.
+Behavior that ships (saved tokens, account selection and per-repository overrides, **Check access**, the Settings deep link, clone search and the publish account line) is described in [Pull requests and issues](PULL-REQUESTS.md#hosting-accounts). Remaining: the adapter boundary, mobile status/setup guidance, the publish remote picker, watch deduplication by host/account/repository, Browser/device sign-in, and the acceptance below.
 
 ## Settings and interaction
 
@@ -58,9 +58,9 @@ Route existing GitHub watches through the adapter boundary with host/account/rep
 
 Cancellation and timeouts must distinguish failed from unknown outcomes. After a create request loses its response, reconcile against the intended repository and branch before offering retry; do not duplicate a PR or retry through another account. Preserve partial push/create/watch outcomes and existing Git locks. Enforce capabilities and authorization on the server as well as in UI.
 
-**Publish to GitHub (implemented).** A repository with no remote publishes through `forge.publishRepository` (private by default, `gh repo create --source --push`); a repository with a remote or no commits explains the next step, and a created-but-unpushed repository is finished by the ordinary Publish branch rather than recreated. Remaining: show the signed-in account in the dialog once the connection summary exists, and an optional remote picker when several remotes have none named `origin`.
+**Publish to GitHub (implemented).** A repository with no remote publishes through `forge.publishRepository` (private by default, `gh repo create --source --push`); a repository with a remote or no commits explains the next step, and a created-but-unpushed repository is finished by the ordinary Publish branch rather than recreated. The dialog names the account; remaining: an optional remote picker when several remotes have none named `origin`.
 
-Then after the GitHub connection and existing flows work, add GitHub-backed repository search/clone and publish through the existing project/host-folder flow. Keep a pasted Git URL available. Clone destinations belong to the workspace host; cancelled/failed clones preserve inspectable state. Publishing previews account, destination, visibility (private by default), remote name and push scope before executing; a partial publish must be reconcilable without recreating the repository. Full review/merge dashboards, automatic merging, stacks, webhooks and cross-host credential brokering are deferred.
+GitHub-backed repository search/clone ships through the host-folder flow with a pasted Git URL still available; local desktop projects still use the native folder dialog, so clone there is a follow-up. Clone destinations belong to the workspace host; cancelled/failed clones preserve inspectable state. Publishing previews account, destination, visibility (private by default), remote name and push scope before executing; a partial publish must be reconcilable without recreating the repository. Full review/merge dashboards, automatic merging, stacks, webhooks and cross-host credential brokering are deferred.
 
 ## Implementation and acceptance
 

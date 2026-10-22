@@ -1,6 +1,18 @@
 # Pull requests and issues
 
-Ramu works with GitHub through the [GitHub CLI](https://cli.github.com) (`gh`), so it uses your existing sign-in and never stores a token. Install `gh` and run `gh auth login` once. Repositories that are not on GitHub simply don't show these controls.
+Ramu works with GitHub through the [GitHub CLI](https://cli.github.com) (`gh`). It reuses the sign-ins `gh` already holds, so install `gh` and run `gh auth login` once, or save a token in Settings. Repositories that are not on GitHub simply don't show these controls.
+
+## Hosting accounts
+
+**Settings → Git → Hosting accounts** shows which GitHub sign-ins the host has. **Connect** saves a personal access token for github.com or a GitHub Enterprise server. Prefer a fine-grained token limited to the repositories you need.
+
+- The token is verified against its server first, stored by the host in its OS credential store, and sent only to that server. It is never shown again, written to settings, or passed as a process argument. Replacing a token keeps the old one until the new one verifies. **Disconnect** deletes only Ramu's saved token; it does not sign out `gh` or change Git credentials, and revoking the token itself is done on GitHub.
+- Only the machine running the host can add, replace or remove tokens: paired clients, viewers and agents cannot. A locked credential store blocks saving but never existing `gh` use.
+- Existing `gh` sign-ins keep working until you choose otherwise. With one saved connection for a server it is used; with several, choose a default per server or pin one to a repository, otherwise Ramu asks rather than guessing. A saved token covers pull requests, issues and checks; Git push and fetch keep using your own Git credentials.
+- In **Source Control**, **Check access** reports API reads, writes and Git transport separately, without a test commit or push, and links to the Settings row when something is missing. When GitHub is not usable, **Set up GitHub** opens that row.
+- **Publish to GitHub** names the account it will create the repository under. **Add project → Clone from GitHub** (on a paired host) and the mobile host folder screen search the account's repositories and clone with the host's Git credentials; a pasted Git URL still works.
+
+GitLab, Bitbucket Cloud and Azure DevOps appear as informational **Coming soon** rows with no setup.
 
 ## Start a thread from an issue
 

@@ -1,6 +1,12 @@
 import { useStore } from './runtime/store'
 
 const en = {
+  githubSearch: "Search GitHub repositories",
+  githubSearchButton: "Search GitHub",
+  githubSearching: "Searching…",
+  githubNoRepositories: "No repositories found",
+  githubPrivate: "Private",
+  githubPickHint: "Choose a repository to fill the clone URL and folder name.",
   dictate: "Dictate message",
   dictateStop: "Stop and transcribe",
   dictateCancel: "Cancel recording",
@@ -414,6 +420,12 @@ const en = {
 }
 
 const id: typeof en = {
+  githubSearch: "Cari repositori GitHub",
+  githubSearchButton: "Cari di GitHub",
+  githubSearching: "Mencari…",
+  githubNoRepositories: "Repositori tidak ditemukan",
+  githubPrivate: "Privat",
+  githubPickHint: "Pilih repositori untuk mengisi URL clone dan nama folder.",
   dictate: "Dikte pesan",
   dictateStop: "Berhenti dan transkripsikan",
   dictateCancel: "Batalkan rekaman",

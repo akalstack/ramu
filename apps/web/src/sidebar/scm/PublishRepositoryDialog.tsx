@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Dialog } from '../../Menu'
 import { t, useLanguage } from '../../i18n'
 import { errorText } from '../../workspace/TaskPane'
 import { useHost } from '../../workspace/HostProvider'
+import { publishAccount } from '../../settings/hostingStatus'
 
 const NAME_PATTERN = /^([A-Za-z0-9-]{1,39}\/)?[A-Za-z0-9._-]{1,100}$/
 
@@ -33,6 +34,18 @@ export function PublishRepositoryDialog({
   const [isPrivate, setPrivate] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [account, setAccount] = useState<string | null>(null)
+  useEffect(() => {
+    // Name the account the repository will be created under; an older host without the method shows nothing.
+    let current = true
+    invoke('forge.connections').then(
+      (summary) => current && setAccount(publishAccount(summary)),
+      () => {},
+    )
+    return () => {
+      current = false
+    }
+  }, [invoke])
 
   const publish = async () => {
     setBusy(true)
@@ -70,6 +83,7 @@ export function PublishRepositoryDialog({
         <p className="muted text-muted-foreground small text-caption m-0">
           {t('Creates a GitHub repository with the GitHub CLI, adds it as origin and pushes the current branch.')}
         </p>
+        {account && <p className="m-0 text-caption">{account}</p>}
         <label>
           {t('Repository name')}
           <Input autoFocus value={name} maxLength={140} onChange={(event) => setName(event.target.value)} />

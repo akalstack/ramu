@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { connectionHeadline } from '../src/settings/hostingStatus'
+import { accessLines, connectionHeadline, publishAccount } from '../src/settings/hostingStatus'
 
 vi.mock('../src/i18n', () => ({
   t: (value: string, args: Record<string, string> = {}) =>
@@ -32,4 +32,26 @@ it('prefers the in-use account, and reports an expired sign-in instead of a conn
     connectionHeadline(summary([account({ login: 'other', active: false }), account({ login: 'me' })]), false),
   ).toContain('as me')
   expect(connectionHeadline(summary([account({ state: 'invalid' })]), false)).toContain('expired')
+})
+
+it('names who a new repository is published as, and nothing when no sign-in works', () => {
+  const summary = (accounts: ReturnType<typeof account>[]) => ({ cli: 'signed-in' as const, accounts, checkedAt: 1 })
+  expect(publishAccount(summary([account({ login: 'me' })]))).toBe('Publishing as me on github.com')
+  expect(publishAccount(summary([account({ state: 'invalid' })]))).toBeNull()
+})
+
+it('reports API reads, writes and transport on separate lines', () => {
+  const lines = accessLines({
+    origin: 'github.com',
+    account: { source: 'saved', login: 'me', connectionId: 'c', ambiguous: false },
+    api: { read: { state: 'ok', detail: null }, write: { state: 'denied', detail: 'No push' } },
+    transport: { state: 'failed', detail: 'Permission denied (publickey)' },
+    checkedAt: 1,
+  })
+  expect(lines.map((line) => line.text)).toEqual([
+    'Saved token for me',
+    'Works',
+    'Not allowed: No push',
+    'Failed: Permission denied (publickey)',
+  ])
 })

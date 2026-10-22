@@ -163,6 +163,10 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id]),
       run: (taskId: string, repoId: string) => forge.checkAccess(gitCwdOf(taskId, repoId)),
     },
+    'forge.searchRepositories': {
+      args: z.tuple([z.string().max(200)]),
+      run: (search: string) => redacted(() => forge.searchRepositories(search)),
+    },
     'forge.publishRepository': {
       args: z.tuple([id, id, publishInput]),
       run: (taskId: string, repoId: string, input: PublishRepositoryInput) =>
