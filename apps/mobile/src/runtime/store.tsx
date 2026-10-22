@@ -38,6 +38,7 @@ import { transcript, visibleText } from './transcript'
 import type { Language } from './settingsModel'
 import { PUSH_MUTED_KEY, registerCategories, type PushCategory, withCategory } from './pushCategories'
 import { GOAL_VERIFY_METHOD, isMethodMissing } from './goalVerify'
+import { mergeTranscript, transcriptRows } from './transcriptChanges'
 import { STANDALONE, type Chat, type Computer, type MobileProject } from './types'
 
 export type { Language }
@@ -220,6 +221,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const connections = useRef(new Map<string, { client: HostClient; controller: AbortController; generation: number }>())
   const generations = useRef(new Map<string, number>())
   const eventRows = useRef(new Map<string, Map<number, AgentEvent>>())
+  // The host's change counter for each transcript held in `eventRows`, so a refresh reads only what changed.
+  const changeCursors = useRef(new Map<string, number>())
+  const changesSupported = useRef(new Map<string, boolean>())
   const listeners = useRef(new Map<string, Set<(channel: keyof PushEvents, payload: any) => void>>())
   const refreshing = useRef(new Map<string, Promise<void>>())
   const buffers = useRef(new Map<string, PushEvents['agent:event'][]>())
@@ -510,8 +514,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                   })
                 return
               }
+              const readTranscript = async () => {
+                if (!session) return { revision: 0, events: [] as { seq: number; event: AgentEvent }[] }
+                const key = scoped(id, session.id)
+                if (changesSupported.current.get(id) !== false) {
+                  try {
+                    const held = eventRows.current.get(key)
+                    const result = await invoke(
+                      id,
+                      'agent.changes',
+                      session.id,
+                      held ? (changeCursors.current.get(key) ?? 0) : 0,
+                      held ? Math.max(0, ...held.keys()) : 0,
+                    )
+                    // Rows that arrived live while this read was in flight are in the map now; apply over those.
+                    const rows = mergeTranscript(eventRows.current.get(key), result)
+                    changeCursors.current.set(key, result.cursor)
+                    return { revision: result.revision, events: transcriptRows(rows) }
+                  } catch (error) {
+                    // A host from before agent.changes sends the whole transcript every time.
+                    if (!isMethodMissing(error)) throw error
+                    changesSupported.current.set(id, false)
+                  }
+                }
+                return invoke(id, 'agent.snapshot', session.id)
+              }
               const [snapshot, bindings, goal] = await Promise.all([
-                session ? invoke(id, 'agent.snapshot', session.id) : Promise.resolve({ revision: 0, events: [] }),
+                readTranscript(),
                 invoke(id, 'tasks.bindings', task.id),
                 session ? invoke(id, 'agent.goal', session.id) : Promise.resolve(null),
               ])
@@ -1013,6 +1042,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       connection?.client.close()
       connections.current.delete(id)
       for (const key of eventRows.current.keys()) if (key.startsWith(`${id}:`)) eventRows.current.delete(key)
+      for (const key of changeCursors.current.keys()) if (key.startsWith(`${id}:`)) changeCursors.current.delete(key)
+      changesSupported.current.delete(id)
       listeners.current.delete(id)
       buffers.current.delete(id)
       setNotifications((n) => n.filter((x) => x.computerId !== id))
