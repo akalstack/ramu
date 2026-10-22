@@ -51,6 +51,8 @@ Use existing client-runtime/server test suites and focused fixtures; keep deskto
 
 Audit missing events across reconnect, snapshot/live races, host restart and lost command replies. Specify transport-independent outcomes: current, synchronizing, disconnected, authorization rejected and outcome unknown. Preserve drafts and queued messages through every transition. Establish repeatable baseline ranges and an explicit budget for acceptable variation before comparing candidates; do not choose success thresholds after seeing results.
 
+**Audit finding (2026-10-22): agent transcripts cannot resume by sequence alone.** `SessionRecorder.record` updates rows in place for streamed text, tool use and result, sub-agent progress and turn diffs, so a client that resumes "after seq N" would miss edits to rows at or below N. Web and mobile therefore re-read the whole transcript on reconnect (`agent.events`), which is correct but sends every row again. A bounded replay needs a per-row revision (a monotonic change counter stored with each row), reporting changed rows since a cursor, with the existing snapshot fallback for rewinds and expired cursors. Add that to the agent event store before wiring `planResume`; terminal output is append-only and can use its cursor directly. The restart epoch is already announced on `/events`, so clients can tell a host restart from a plain reconnect.
+
 ### 2. Add a negotiated WebSocket session through existing services
 
 - Define versioned, validated envelopes in `packages/contracts`: handshake/capabilities, request ID, response/error, event/subscription identity and cancellation. Preserve existing method argument encoding. Keep correlation IDs distinct from mutation idempotency keys and subscription cursors.
