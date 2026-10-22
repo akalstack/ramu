@@ -116,6 +116,9 @@ export interface ProjectSetupSource {
   enabled: boolean
 }
 
+/** `project`: chosen for this project only. `host`: chosen for every project. `default`: nobody has chosen. */
+export type ProjectShareScope = 'project' | 'host' | 'default'
+
 /** A declared server. Values of env vars and headers are never read into this record, only their names. */
 export interface ProjectMcpServer {
   /** Stable per transport, so the same server declared for several providers or repositories is one entry. */
@@ -130,6 +133,8 @@ export interface ProjectMcpServer {
   nativeProviders: AgentProvider[]
   /** Ramu gives it to every provider and account. Remote servers default to on, local commands to off. */
   shared: boolean
+  /** Where the choice that applies in this project was made: for this project, for every project, or not at all. */
+  shareScope: ProjectShareScope
   /** Why it cannot be shared, when it cannot. */
   shareBlocked?: string
   scope: 'user' | 'project'
@@ -149,6 +154,7 @@ export interface ProjectSkill {
   nativeProviders: AgentProvider[]
   /** Ramu copies it to every provider and account that does not have it. Off unless turned on. */
   shared: boolean
+  shareScope: ProjectShareScope
   /** Why it cannot be shared, when it cannot. */
   shareBlocked?: string
   scope: 'user' | 'project'

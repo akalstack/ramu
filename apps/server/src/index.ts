@@ -346,7 +346,9 @@ learning.sharedSkills = ({ projectId, provider, accountId, cwd }) => {
     ...(project?.root ? [project.root] : []),
     ...(projectId ? workspace.listRepositories(projectId).map((repo) => repo.root) : []),
   ]
-  return sharedSessionSkills([...new Set(dirs)], provider, accountEnvironment(provider, accountId), sharing)
+  return sharedSessionSkills([...new Set(dirs)], provider, accountEnvironment(provider, accountId), sharing, {
+    projectId,
+  })
 }
 const summaries = new SummaryService(db, workspace, agents, memory, learning, (created) =>
   send('summaries:changed', { created }),
@@ -1023,6 +1025,7 @@ agents.toolConnection = (session) => {
       return parts.length ? { browserInstructions: parts.join('\n\n') } : {}
     })(),
     ...(mcpConfigDirs.length ? { mcpConfigDirs } : {}),
+    ...(projectId && projectId !== NO_PROJECT ? { sharingProjectId: projectId } : {}),
     ...(skillsDir ? { skillsDir } : {}),
   }
 }

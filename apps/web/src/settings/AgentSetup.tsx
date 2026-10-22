@@ -52,11 +52,14 @@ function fromText(sources: ProjectSetupSource[]) {
   return places.length > 2 ? t('{places} and {count} more', { places: shown, count: places.length - 2 }) : shown
 }
 
-type Shareable = Pick<ProjectMcpServer, 'shared' | 'shareBlocked' | 'nativeProviders'>
+type Shareable = Pick<ProjectMcpServer, 'shared' | 'shareBlocked' | 'nativeProviders' | 'shareScope'>
 
 /** One line on who has it now: shared, only some providers, or off everywhere. */
 function reach(item: Shareable) {
-  if (item.shared) return t('Shared with every provider and account')
+  if (item.shared)
+    return item.shareScope === 'project'
+      ? t('Shared with every provider and account in this project')
+      : t('Shared with every provider and account')
   if (item.shareBlocked) return t(item.shareBlocked)
   if (!item.nativeProviders.length) return t('Turned off in every provider')
   return t('Only in {providers}', { providers: item.nativeProviders.map(providerName).join(', ') })
@@ -72,6 +75,7 @@ function ShareRow({
   label,
   disabled,
   onShare,
+  onWiden,
 }: {
   name: string
   detail: string
@@ -81,6 +85,8 @@ function ShareRow({
   label: string
   disabled: boolean
   onShare(shared: boolean): void
+  /** Offered when the choice covers this project only: extends it to every project. */
+  onWiden?(): void
 }) {
   return (
     <SettingsRow>
@@ -94,6 +100,19 @@ function ShareRow({
         </span>
         <span className="block small text-caption text-muted-foreground">
           {reach(item)} · {t('From {places}', { places: fromText(sources) })}
+          {onWiden && item.shared && item.shareScope === 'project' && (
+            <>
+              {' · '}
+              <button
+                type="button"
+                className="cursor-pointer border-0 bg-transparent p-0 text-caption text-brand underline-offset-2 hover:underline disabled:cursor-default disabled:no-underline"
+                disabled={disabled}
+                onClick={onWiden}
+              >
+                {t('Share with every project')}
+              </button>
+            </>
+          )}
         </span>
       </span>
       <Switch
@@ -121,10 +140,12 @@ function Skills({
   skills,
   disabled,
   onShare,
+  onWiden,
 }: {
   skills: ProjectSkill[]
   disabled: boolean
   onShare(name: string, shared: boolean): void
+  onWiden(name: string): void
 }) {
   const paged = usePaged(skills, 10)
   return (
@@ -140,6 +161,7 @@ function Skills({
           label={t('Share {name} with every provider and account', { name: skill.name })}
           disabled={disabled}
           onShare={(shared) => onShare(skill.name, shared)}
+          onWiden={() => onWiden(skill.name)}
         />
       ))}
       {paged.more}
@@ -229,14 +251,26 @@ export function AgentSetup() {
         sources={server.sources}
         label={t('Share {name} with every provider and account', { name: server.name })}
         disabled={locked}
-        onShare={(shared) => void share(server.key, () => invoke('mcp.share', server.key, shared))}
+        onShare={(shared) => void share(server.key, () => invoke('mcp.share', server.key, shared, projectId))}
+        onWiden={() =>
+          void share(server.key, async () => {
+            await invoke('mcp.share', server.key, true)
+            await invoke('mcp.share', server.key, null, projectId)
+          })
+        }
       />
     ))
   const skillList = (scopeName: 'user' | 'project') => (
     <Skills
       skills={skillsIn(scopeName)}
       disabled={locked}
-      onShare={(name, shared) => void share(name, () => invoke('skills.share', name, shared))}
+      onShare={(name, shared) => void share(name, () => invoke('skills.share', name, shared, projectId))}
+      onWiden={(name) =>
+        void share(name, async () => {
+          await invoke('skills.share', name, true)
+          await invoke('skills.share', name, null, projectId)
+        })
+      }
     />
   )
   const projectName = projects.data?.find((project) => project.id === projectId)?.name
@@ -267,7 +301,7 @@ export function AgentSetup() {
       <SettingsGroupTitle>{t('MCP servers')}</SettingsGroupTitle>
       <p className={`${CAPTION} mb-4`}>
         {t(
-          'Tools agents can call. Share a server to give it to every provider and account, using the sign-in it already has. New threads pick up changes.',
+          'Tools agents can call. Share a server to give it to every provider and account in this project, using the sign-in it already has. New threads pick up changes.',
         )}
       </p>
       {data && mcp('user').length + mcp('project').length === 0 && (
@@ -308,7 +342,7 @@ export function AgentSetup() {
       <SettingsGroupTitle className="mt-8">{t('Skills')}</SettingsGroupTitle>
       <p className={`${CAPTION} mb-4`}>
         {t(
-          'Instructions agents can load. Share a skill to copy it to every provider and account that does not have it. Your original files are not changed.',
+          'Instructions agents can load. Share a skill to copy it to every provider and account in this project that does not have it. Your original files are not changed.',
         )}
       </p>
       {(data?.skills.length ?? 0) > 10 && (

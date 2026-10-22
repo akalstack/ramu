@@ -466,6 +466,8 @@ export interface McpConnection {
   skillsDir?: string
   /** Original project/repository directories whose MCP definitions belong to this workspace. */
   mcpConfigDirs?: string[]
+  /** The project whose per-project sharing choices apply to this chat's shared servers and skills. */
+  sharingProjectId?: string
   /** Codex only: a hook asks Ramu before each of Codex's own sub-agents starts, so Ramu can send it elsewhere. */ interceptSubagents?: boolean
   /** Claude only: Ramu's advisor replaces Claude Code's own, which is turned off. */
   replaceAdvisor?: boolean

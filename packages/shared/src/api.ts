@@ -634,10 +634,13 @@ export interface RamuMethods {
   'mcp.disconnect'(connectionId: string): Promise<void>
   'mcp.remove'(connectionId: string): Promise<void>
   'mcp.checkCredentialStore'(): Promise<'available' | 'unavailable' | 'not-checked'>
-  /** Give a declared server to every provider and account, or stop. Takes effect for new sessions. */
-  'mcp.share'(key: string, shared: boolean): void
+  /**
+   * Give a declared server to every provider and account, or stop. With a project the choice covers that project
+   * only; `null` removes that choice (or the host-wide one). Takes effect for new sessions.
+   */
+  'mcp.share'(key: string, shared: boolean | null, projectId?: string): void
   /** Copy a skill from the person's own provider folder to every provider and account. Applies to new threads. */
-  'skills.share'(name: string, shared: boolean): void
+  'skills.share'(name: string, shared: boolean | null, projectId?: string): void
   'providers.loginCommand'(
     provider: ProviderStatus['provider'],
     configuration?: ProviderConfiguration,

@@ -341,7 +341,17 @@ function collect(roots: { label: string; path: string }[], env: NodeJS.ProcessEn
 /** Host choices about which declared servers Ramu gives to every provider and account. Keyed by `mcpServerKey`. */
 export type McpSharing = Record<string, boolean>
 export const MCP_SHARING_KEY = 'agent-setup:mcp-sharing:v1'
-const isShared = (key: string, transport: Transport, sharing: McpSharing) => sharing[key] ?? sharedByDefault(transport)
+/** A project's own choice sits beside the host-wide one under `<projectId>/<key>` and wins inside that project. */
+export const projectSharingKey = (projectId: string, key: string) => `${projectId}/${key}`
+const isShared = (key: string, transport: Transport, sharing: McpSharing, projectId?: string | null) =>
+  (projectId ? sharing[projectSharingKey(projectId, key)] : undefined) ?? sharing[key] ?? sharedByDefault(transport)
+/** Where the choice that applies in a project was made. */
+const shareScope = (key: string, sharing: Record<string, boolean>, projectId: string | null | undefined) =>
+  projectId && sharing[projectSharingKey(projectId, key)] !== undefined
+    ? ('project' as const)
+    : sharing[key] !== undefined
+      ? ('host' as const)
+      : ('default' as const)
 
 const order = (providers: Iterable<AgentProvider>) => AGENT_PROVIDERS.filter((p) => [...providers].includes(p))
 
@@ -366,7 +376,7 @@ export function discoverProjectSetup(
     const declared = entry.declared.find((d) => d.enabled) ?? entry.declared[0]!
     const blocked = shareBlocker(declared)
     const enabled = entry.declared.some((d) => d.enabled)
-    const shared = enabled && !blocked && isShared(key, declared.transport, sharing)
+    const shared = enabled && !blocked && isShared(key, declared.transport, sharing, projectId)
     return {
       key,
       name: entry.name,
@@ -380,6 +390,7 @@ export function discoverProjectSetup(
       sources: entry.sources,
       nameConflict: false,
       shared,
+      shareScope: shareScope(key, sharing, projectId),
       ...(blocked ? { shareBlocked: blocked } : {}),
       managedConnectionId: managed.find(({ transport: m }) =>
         declared.transport.type === 'http'
@@ -404,7 +415,7 @@ export function discoverProjectSetup(
           /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skill.name) && skill.name.length <= 64
             ? undefined
             : 'Its name must be lowercase words joined by hyphens.'
-        const shared = !blocked && skillSharing[skill.name] === true
+        const shared = !blocked && isSkillShared(skill.name, skillSharing, projectId)
         return {
           ...(blocked ? { shareBlocked: blocked } : {}),
           ...skill,
@@ -412,6 +423,7 @@ export function discoverProjectSetup(
           providers: shared ? [...AGENT_PROVIDERS] : order(providers),
           nameConflict: digests.size > 1,
           shared,
+          shareScope: shareScope(skill.name, skillSharing, projectId),
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name)),
@@ -457,7 +469,7 @@ export function sharedSessionServers(
   dirs: string[],
   provider: AgentProvider,
   accountEnv: NodeJS.ProcessEnv,
-  options: { env?: NodeJS.ProcessEnv; home?: string; sharing?: McpSharing } = {},
+  options: { env?: NodeJS.ProcessEnv; home?: string; sharing?: McpSharing; projectId?: string | null } = {},
 ): Declared[] {
   const env = options.env ?? process.env,
     home = options.home ?? homedir(),
@@ -469,7 +481,7 @@ export function sharedSessionServers(
   const result: Declared[] = []
   for (const [key, entry] of found.servers) {
     const declared = entry.declared.find((d) => d.enabled)
-    if (!declared || shareBlocker(declared) || !isShared(key, declared.transport, sharing)) continue
+    if (!declared || shareBlocker(declared) || !isShared(key, declared.transport, sharing, options.projectId)) continue
     if (skip.has(declared.name) || result.some((s) => s.name === declared.name)) continue
     result.push(declared)
   }
@@ -524,7 +536,10 @@ export function codexDisabledSkills(toml: string): Set<string> {
   return disabled
 }
 
-interface FoundSkill extends Omit<ProjectSkill, 'providers' | 'nativeProviders' | 'shared' | 'nameConflict'> {
+interface FoundSkill extends Omit<
+  ProjectSkill,
+  'providers' | 'nativeProviders' | 'shared' | 'shareScope' | 'nameConflict'
+> {
   providers: Set<AgentProvider>
   digests: Set<string>
   /** Real skill folders, project copies first; the first is the one shared with other providers. */
@@ -618,6 +633,9 @@ function collectSkills(roots: { label: string; path: string }[], env: NodeJS.Pro
 /** Host choices about which skills Ramu gives to every provider and account, by skill name. Off unless turned on. */
 export type SkillSharing = Record<string, boolean>
 export const SKILL_SHARING_KEY = 'agent-setup:skill-sharing:v1'
+/** Skills are off unless turned on; a project's own choice wins inside that project. */
+const isSkillShared = (name: string, sharing: SkillSharing, projectId?: string | null) =>
+  (projectId ? sharing[projectSharingKey(projectId, name)] : undefined) ?? sharing[name] === true
 
 /**
  * Skill folders Ramu adds to one provider account's skill export: each shared skill this account does not already
@@ -628,7 +646,7 @@ export function sharedSessionSkills(
   provider: AgentProvider,
   accountEnv: NodeJS.ProcessEnv,
   sharing: SkillSharing,
-  options: { env?: NodeJS.ProcessEnv; home?: string } = {},
+  options: { env?: NodeJS.ProcessEnv; home?: string; projectId?: string | null } = {},
 ): { name: string; dir: string }[] {
   if (!Object.values(sharing).some(Boolean)) return []
   const env = options.env ?? process.env,
@@ -638,7 +656,7 @@ export function sharedSessionSkills(
   // What this account loads itself, read through its own folders.
   const own = collectSkills(roots, accountEnv, home).skills
   return [...all.values()].flatMap((skill) =>
-    sharing[skill.name] === true && !own.get(skill.name)?.providers.has(provider)
+    isSkillShared(skill.name, sharing, options.projectId) && !own.get(skill.name)?.providers.has(provider)
       ? [{ name: skill.name, dir: skill.folders[0]! }]
       : [],
   )
