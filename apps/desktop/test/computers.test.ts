@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type { RuntimeEndpoint } from '@ramu/contracts'
 import { ComputerRegistry, LOCAL, type ComputerDeps } from '../src/main/computers'
 import { RemoteServers } from '../src/main/remoteServers'
+import { deviceProofKey, hostProof } from '@ramu/shared/hostProof'
 
 const dirs: string[] = []
 beforeEach(() => {
@@ -371,4 +372,49 @@ it('rotates a host token after connecting, once a month, and keeps the old one w
   expect(declined.deps.renew).toHaveBeenCalledTimes(1)
   expect(declined.servers.endpoint(second.id)?.token).toBe('keep')
   expect(declined.servers.renewedAt(second.id)).toBeNull()
+})
+
+const HOST = 'c'.repeat(32)
+function answeringAs(hostId: string, token = 'tok') {
+  const seen: string[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      seen.push(url)
+      const challenge = new URL(url).searchParams.get('challenge')!
+      return Response.json({ hostId, proof: hostProof(deviceProofKey(token), hostId, challenge) })
+    }),
+  )
+  return seen
+}
+
+it('moves a saved host to a new address only after the address proves it is the paired host', async () => {
+  const { servers, registry } = setup()
+  const saved = servers.add('10.0.0.2:7788', 'Studio', 'tok', Date.now(), undefined, { deviceId: 'dev1', hostId: HOST })
+  const seen = answeringAs(HOST)
+  expect(await registry.reviewAddress(saved.id, '10.0.0.9:7788')).toBe('moved')
+  expect(servers.get(saved.id)?.url).toBe('http://10.0.0.9:7788')
+  // Only the device id and a challenge were sent; no credential travelled to the new address.
+  expect(seen[0]).toMatch(/^http:\/\/10\.0\.0\.9:7788\/identity\?device=dev1&challenge=[0-9a-f]{32}$/)
+  vi.unstubAllGlobals()
+})
+
+it('keeps the working address when the new one is another host, or the pairing predates host identity', async () => {
+  const { servers, registry } = setup()
+  const saved = servers.add('10.0.0.2:7788', 'Studio', 'tok', Date.now(), undefined, { deviceId: 'dev1', hostId: HOST })
+  answeringAs('d'.repeat(32))
+  expect(await registry.reviewAddress(saved.id, '10.0.0.9:7788')).toBe('mismatch')
+  expect(servers.get(saved.id)?.url).toBe('http://10.0.0.2:7788')
+  const old = servers.add('10.0.0.3:7788', 'Old', 'tok')
+  expect(await registry.reviewAddress(old.id, '10.0.0.8:7788')).toBe('unsupported')
+  expect(servers.get(old.id)?.url).toBe('http://10.0.0.3:7788')
+  expect(await registry.reviewAddress(saved.id, '10.0.0.2:7788')).toBe('unchanged')
+  vi.unstubAllGlobals()
+})
+
+it('recognizes a nearby result by the host id bound at pairing', () => {
+  const { servers, registry } = setup()
+  const saved = servers.add('10.0.0.2:7788', 'Studio', 'tok', Date.now(), undefined, { hostId: HOST })
+  expect(registry.byHostId(HOST)).toBe(saved.id)
+  expect(registry.byHostId('e'.repeat(32))).toBeNull()
 })

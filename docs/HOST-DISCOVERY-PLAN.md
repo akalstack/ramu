@@ -23,7 +23,7 @@ The server advertiser (`apps/server/src/remote/discovery.ts`), the shared contra
 
 Still to do for the experience:
 
-- **Review new address** for an already-paired host whose address changed, and the existing-pairing indicator on a result: both need verified host identity (item 1 below). Until then `pairedHostId` is always empty and a changed address is paired again explicitly.
+- **Verified identity (desktop in place, phone pending).** Pairing now returns the host's durable id (`hostId`) and the desktop keeps it with the saved host with the device id. A host proves it is that host through `GET /identity?device=<id>&challenge=<nonce>`: it answers with an HMAC keyed by the device's own key (the SHA-256 of its token, which the host already stores), so no credential or secret crosses the wire and an address that cannot prove it is never trusted (`packages/shared/src/hostProof.ts`). On desktop a nearby result whose id matches a saved pairing reads **Already paired**, and at a different address offers **Use this address for …**, which moves the saved host only after that proof (`computers.reviewAddress`); a mismatch, an older pairing or an unreachable address changes nothing. Remaining: the same on the phone, and route learning for several addresses of one host.
 - Interface selection for the browser follows the host's interfaces; confirm on a multi-adapter desktop that traffic stays on the chosen interfaces.
 - Mobile native acceptance: iOS Local Network prompt and the refusal code (`-72008` is assumed), Android multicast lock and Nearby Wi-Fi permission, and the build config (`NSBonjourServices`, Android permissions) in a development build.
 

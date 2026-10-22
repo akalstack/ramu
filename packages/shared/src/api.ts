@@ -192,6 +192,9 @@ export interface ComputerRuntimeInfo {
 type ComputerFrameMeta = import('./computerBridge').ComputerFrameMeta
 type ComputerAction = import('./computerBridge').ComputerAction
 
+/** Why a changed address was or was not adopted: only `moved` changes anything. */
+export type ReviewAddressResult = 'moved' | 'unchanged' | 'mismatch' | 'unsupported' | 'unreachable'
+
 export interface RamuMethods {
   'computer.status'(): {
     enabled: boolean
@@ -537,6 +540,8 @@ export interface RamuMethods {
   'computers.setScreenSharing'(id: string, enabled: boolean): string[]
   'computers.forget'(id: string): Computers
   'computers.retry'(id: string): Computers
+  /** Moves a saved host to a new address after that address proves it is the host paired with; otherwise changes nothing. */
+  'computers.reviewAddress'(id: string, url: string): ReviewAddressResult
   'computers.update'(
     id: string,
     changes: { name?: string; enabled?: boolean; retryMode?: 'events' | 'periodic' },

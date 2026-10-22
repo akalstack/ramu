@@ -493,7 +493,7 @@ async function main() {
   await presence.start()
   const ssh = new SshComputers(servers)
   // Browsing is started and stopped by the Connect-to-a-host panel; nothing listens otherwise.
-  const nearby = new NearbyBrowser()
+  const nearby = new NearbyBrowser({ verifiedHost: (hostId) => computers.byHostId(hostId) })
   const computers = new ComputerRegistry({
     servers,
     ssh,
@@ -1048,6 +1048,10 @@ async function main() {
       if (typeof args[0] !== 'string') throw new Error('Invalid host')
       computers.retry(args[0])
       return computers.list(self)
+    }
+    if (method === 'computers.reviewAddress') {
+      if (typeof args[0] !== 'string' || typeof args[1] !== 'string') throw new Error('Invalid host address')
+      return computers.reviewAddress(args[0], args[1])
     }
     if (method === 'computers.update') {
       if (typeof args[0] !== 'string' || !args[1] || typeof args[1] !== 'object' || Array.isArray(args[1]))

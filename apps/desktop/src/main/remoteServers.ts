@@ -22,6 +22,9 @@ interface StoredServer {
   enabled?: boolean
   retryMode?: 'events' | 'periodic'
   ssh?: SshRoute
+  /** What pairing bound: this device's id on the host and the host's own durable id. Absent for older pairings. */
+  deviceId?: string
+  hostId?: string
 }
 interface StoredFile {
   servers: StoredServer[]
@@ -34,6 +37,12 @@ export interface SavedServer {
   enabled: boolean
   retryMode: 'events' | 'periodic'
   ssh?: SshRoute
+  /** The host's durable id, bound at pairing; absent when the host predates it. */
+  hostId?: string
+}
+export interface PairedIdentity {
+  deviceId?: string
+  hostId?: string
 }
 export interface ComputerUpdate {
   name?: string
@@ -117,7 +126,7 @@ export class RemoteServers {
   }
 
   list(): SavedServer[] {
-    return this.read().servers.map(({ id, name, url, pairedAt, enabled, retryMode, ssh }) => ({
+    return this.read().servers.map(({ id, name, url, pairedAt, enabled, retryMode, ssh, hostId }) => ({
       id,
       name,
       url,
@@ -125,6 +134,7 @@ export class RemoteServers {
       enabled: enabled !== false,
       retryMode: retryMode === 'periodic' ? 'periodic' : 'events',
       ...(ssh ? { ssh } : {}),
+      ...(hostId ? { hostId } : {}),
     }))
   }
   get(id: string): SavedServer | undefined {
@@ -139,8 +149,20 @@ export class RemoteServers {
           enabled: server.enabled !== false,
           retryMode: server.retryMode === 'periodic' ? 'periodic' : 'events',
           ...(server.ssh ? { ssh: server.ssh } : {}),
+          ...(server.hostId ? { hostId: server.hostId } : {}),
         }
       : undefined
+  }
+
+  /** The saved computer a host id was bound to at pairing, if any. A hint only: it never authorizes a credential. */
+  byHostId(hostId: string): SavedServer | undefined {
+    return this.list().find((server) => server.hostId === hostId)
+  }
+
+  /** This device's id on the host, kept in the main process to ask the host for its identity proof. */
+  deviceIdOf(id: string): string | undefined {
+    this.load()
+    return this.records.get(id)?.deviceId
   }
 
   /** What it takes to connect to a saved computer. */
@@ -164,7 +186,14 @@ export class RemoteServers {
   }
 
   /** Saves a computer after it accepted a pairing code. Pairing the same address again replaces the old entry. */
-  add(address: string, name: string | undefined, token: string, now = Date.now(), ssh?: SshRoute): SavedServer {
+  add(
+    address: string,
+    name: string | undefined,
+    token: string,
+    now = Date.now(),
+    ssh?: SshRoute,
+    identity: PairedIdentity = {},
+  ): SavedServer {
     const url = parseRemoteUrl(address),
       file = this.read()
     const sealed = this.sealer.available
@@ -176,6 +205,8 @@ export class RemoteServers {
       token: sealed ? this.sealer.seal(token) : token,
       sealed,
       ...(ssh ? { ssh } : {}),
+      ...(identity.deviceId ? { deviceId: identity.deviceId } : {}),
+      ...(identity.hostId ? { hostId: identity.hostId } : {}),
     }
     // The same tunnel target replaces its entry even when the local tunnel port changed.
     this.write({
@@ -189,6 +220,7 @@ export class RemoteServers {
       enabled: true,
       retryMode: 'events',
       ...(ssh ? { ssh } : {}),
+      ...(identity.hostId ? { hostId: identity.hostId } : {}),
     }
   }
 

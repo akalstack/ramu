@@ -36,7 +36,7 @@ export interface ComputerDeps {
     args?: unknown[],
     options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<any>
-  pair(url: string, code: string, deviceName: string): Promise<{ token: string }>
+  pair(url: string, code: string, deviceName: string): Promise<{ token: string; deviceId?: string; hostId?: string }>
   /** Swaps a computer's token for a fresh one; null when it declines (an older host, or no longer paired). */
   renew(url: string, token: string): Promise<{ token: string } | null>
   /** Computers reached over SSH keep a tunnel; the registry asks for it before connecting. */
@@ -319,7 +319,7 @@ export class ComputerRegistry {
   async pair(address: string, code: string, label: string | undefined): Promise<Computer> {
     const { parseRemoteUrl } = await import('@ramu/contracts')
     const url = parseRemoteUrl(address)
-    const { token } = await this.deps.pair(url, code.trim(), this.deps.deviceName)
+    const { token, deviceId, hostId } = await this.deps.pair(url, code.trim(), this.deps.deviceName)
     // The code is spent once the token exists. If the first request fails, keep the credential and let the normal
     // connection retry reach the host, rather than discarding a valid grant the person cannot get again.
     const status = (await this.deps
@@ -331,7 +331,10 @@ export class ComputerRegistry {
         return undefined
       })) as { hostname?: string } | undefined
     // Like Tailscale and NetBird: unless you name it, a computer is called what it calls itself.
-    const saved = this.deps.servers.add(url, label?.trim() || status?.hostname, token)
+    const saved = this.deps.servers.add(url, label?.trim() || status?.hostname, token, Date.now(), undefined, {
+      deviceId,
+      hostId,
+    })
     // Access was granted but never confirmed by a normal request: say so until the host answers, instead of
     // showing a connected host or asking for the spent code again.
     if (!status) this.unverified.add(saved.id)
@@ -379,6 +382,46 @@ export class ComputerRegistry {
     this.connect(saved.id)
     this.deps.changed()
     return this.list(LOCAL).computers.find((computer) => computer.id === saved.id)!
+  }
+
+  /** The saved computer whose pairing was bound to this host id, to mark a nearby result as already paired. */
+  byHostId(hostId: string): string | null {
+    return this.deps.servers.byHostId(hostId)?.id ?? null
+  }
+
+  /**
+   * Moves a saved computer to a new address, but only after that address proves it is the host this device paired
+   * with. Nothing is sent to it except this device's id and a fresh challenge; a different or silent host leaves the
+   * working address alone and the person pairs again deliberately.
+   */
+  async reviewAddress(
+    id: string,
+    address: string,
+  ): Promise<'moved' | 'unchanged' | 'mismatch' | 'unsupported' | 'unreachable'> {
+    if (id === LOCAL) throw new Error('This host has no address to review')
+    const saved = this.deps.servers.get(id)
+    const endpoint = this.deps.servers.endpoint(id)
+    const deviceId = this.deps.servers.deviceIdOf(id)
+    if (!saved || !endpoint || saved.ssh) throw new Error('That host is no longer saved')
+    const { parseRemoteUrl } = await import('@ramu/contracts')
+    const url = parseRemoteUrl(address)
+    if (url === saved.url) return 'unchanged'
+    if (!saved.hostId || !deviceId) return 'unsupported'
+    const { verifyHost } = await import('@ramu/shared/hostProof')
+    const { randomBytes } = await import('node:crypto')
+    const result = await verifyHost({
+      fetch: (target, init) => fetch(target, { ...init, redirect: 'error', signal: AbortSignal.timeout(8000) }),
+      baseUrl: url,
+      deviceId,
+      token: endpoint.token,
+      expectedHostId: saved.hostId,
+      challenge: randomBytes(16).toString('hex'),
+    })
+    if (result.state !== 'verified') return result.state
+    this.deps.servers.setUrl(id, url)
+    this.connect(id)
+    this.deps.changed()
+    return 'moved'
   }
 
   forget(id: string) {

@@ -6,6 +6,8 @@ import { Dropdown } from '../Menu'
 import { invoke } from '../ipc'
 import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
+import { useComputers } from '../workspace/computers'
+import type { ReviewAddressResult } from '@ramu/shared/api'
 
 const POLL_MS = 1500
 
@@ -30,7 +32,11 @@ export function NearbyHosts({
   const [state, setState] = useState<NearbyHostsState>({ status: 'searching', hosts: [], timedOut: false })
   const [failed, setFailed] = useState<string | null>(null)
   const [selected, setSelected] = useState<{ key: string; url: string } | null>(null)
+  const [moved, setMoved] = useState<ReviewAddressResult | null>(null)
+  const [moving, setMoving] = useState(false)
+  const computers = useComputers()
   const live = useRef(true)
+  useEffect(() => setMoved(null), [selected?.key, selected?.url])
 
   const start = useCallback(() => {
     setFailed(null)
@@ -76,6 +82,23 @@ export function NearbyHosts({
   const hosts = state.hosts
   const review = reviewSelection(hosts, selected?.key ?? null, selected?.url ?? null)
   const current = hosts.find((host) => host.key === selected?.key)
+  // A result whose host id matches a saved pairing, advertised at an address the saved host does not use.
+  const paired = current?.pairedHostId
+    ? computers?.computers.find((computer) => computer.id === current.pairedHostId)
+    : undefined
+  const newAddress = !!paired && !!selected && !!paired.url && shown(paired.url) !== shown(selected.url)
+  const useAddress = async () => {
+    if (!paired || !selected) return
+    setMoving(true)
+    try {
+      const result = await invoke('computers.reviewAddress', paired.id, selected.url)
+      if (live.current) setMoved(result)
+    } catch (error) {
+      if (live.current) setFailed(errorText(error))
+    } finally {
+      if (live.current) setMoving(false)
+    }
+  }
   const routeOptions = (current?.routes ?? []).map((route) => ({
     value: route.url,
     label: route.interfaceName ? `${shown(route.url)} · ${route.interfaceName}` : shown(route.url),
@@ -147,6 +170,31 @@ export function NearbyHosts({
               {t('Its address changed. Review the new one before continuing.')}
             </p>
           )}
+          {paired && (
+            <p role="status" className="m-0 text-caption text-muted-foreground">
+              {moved === 'moved'
+                ? t('{0} now uses this address.', { 0: paired.name })
+                : moved === 'mismatch'
+                  ? t(
+                      'That address did not prove it is {0}, so nothing changed. Pair it again to add it as a new host.',
+                      {
+                        0: paired.name,
+                      },
+                    )
+                  : moved === 'unsupported'
+                    ? t('{0} was paired before Ramu could check hosts. Pair it again to use this address.', {
+                        0: paired.name,
+                      })
+                    : moved === 'unreachable'
+                      ? t('Could not reach that address to check it. Nothing changed.')
+                      : newAddress
+                        ? t('You already paired {0}, which is saved at {1}. This is a different address.', {
+                            0: paired.name,
+                            1: shown(paired.url ?? ''),
+                          })
+                        : t('You already paired {0}.', { 0: paired.name })}
+            </p>
+          )}
           {routeOptions.length > 1 && (
             <Dropdown
               label={t('Address')}
@@ -161,7 +209,12 @@ export function NearbyHosts({
               {t('This host does not encrypt the connection. Pair only on a network you trust.')}
             </p>
           )}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            {newAddress && moved !== 'moved' && (
+              <Button variant="secondary" disabled={moving} onClick={() => void useAddress()}>
+                {moving ? t('Checking…') : t('Use this address for {0}', { 0: paired!.name })}
+              </Button>
+            )}
             <Button
               variant="default"
               disabled={!routeOptions.some((option) => option.value === selected.url)}

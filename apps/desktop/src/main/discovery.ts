@@ -98,7 +98,7 @@ const DENIED = new Set(['EPERM', 'EACCES', 'EHOSTUNREACH', 'ENETUNREACH'])
 const QUERY_DELAYS_MS = [0, 1000, 3000, 9000, 30_000, 60_000]
 
 export class NearbyBrowser {
-  private tracker = new DiscoveryTracker()
+  private tracker: DiscoveryTracker
   private collector = new DnsSdCollector()
   private session = 0
   private link: BrowseLink | null = null
@@ -114,9 +114,13 @@ export class NearbyBrowser {
       interfaces?: () => Interfaces
       /** Called whenever the list or status changes, for pushing to the window. */
       changed?: () => void
+      /** The saved host a pairing bound to this advertised id; a recognition hint, never a credential decision. */
+      verifiedHost?: (hostId: string) => string | null
       limitMs?: number
     } = {},
-  ) {}
+  ) {
+    this.tracker = new DiscoveryTracker(options.verifiedHost ? { verifiedHost: options.verifiedHost } : {})
+  }
 
   state(): NearbyState {
     return { status: this.status, hosts: this.status === 'idle' ? [] : this.tracker.hosts(), timedOut: this.timedOut }
