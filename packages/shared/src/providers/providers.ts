@@ -69,6 +69,8 @@ export interface ProviderStatus {
   signIn?: Record<string, ProviderSignIn>
   /** Runtime compatibility for this host, apart from install, sign-in and update state. Absent on older hosts. */
   compatibility?: CompatibilityResult
+  /** The newer release's compatibility under the same policy, present only when an update is available and a rule covers it. */
+  updateCompatibility?: CompatibilityResult
 }
 
 /**

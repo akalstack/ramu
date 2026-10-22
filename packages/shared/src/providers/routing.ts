@@ -99,6 +99,8 @@ export interface RouteContext {
   /** All enabled logins and their readings, before considering a different model. */
   accounts?: { configuration: ProviderConfiguration; usage: UsageReading[] }
   attemptedAccounts?: ReadonlySet<string>
+  /** Providers whose runtime is proven incompatible on this host: never an automatic destination, and not a usage limit. */
+  blocked?: ReadonlySet<AgentProvider>
 }
 
 /** The first chain entry that is available, not tried yet and under the threshold. */
@@ -106,7 +108,7 @@ export function nextStep(chain: FallbackStep[], context: RouteContext): (Fallbac
   const now = context.now ?? Date.now()
   for (const entry of chain) {
     const step = resolveStep(entry, context.catalogs)
-    if (!step || context.attempted?.has(stepKey(step))) continue
+    if (!step || context.attempted?.has(stepKey(step)) || context.blocked?.has(step.provider)) continue
     if (context.accounts) {
       for (const accountId of providerAccountOrder(context.accounts.configuration, step.provider)) {
         const usage = context.accounts.usage.filter((reading) => (reading.accountId ?? 'default') === accountId)
@@ -246,8 +248,10 @@ export function nextAccount(
     switchAt: SwitchThreshold
     now?: number
     attempted?: ReadonlySet<string>
+    blocked?: ReadonlySet<AgentProvider>
   },
 ): string | null {
+  if (context.blocked?.has(settings.provider)) return null
   const model =
     resolveStep({ id: '', provider: settings.provider, model: settings.model, effort: null }, context.catalogs)
       ?.model ?? settings.model

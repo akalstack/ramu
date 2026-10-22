@@ -28,8 +28,7 @@ type Release = { version: string; checkedAt: string; downloadUrl?: string }
 type Cache = Partial<Record<AgentProvider, Release>>
 export { parseProviderVersion }
 import { newerVersion } from '@ramu/shared/version'
-import { evaluateCompatibility } from '@ramu/shared/providers/compatibility'
-import { COMPATIBILITY_POLICY, COMPATIBILITY_RUNTIME } from './compatibilityPolicy'
+import { launchCompatibility } from './launchCompatibility'
 import { installAntigravity } from './antigravityInstall'
 export { newerVersion }
 export function providerSetup(
@@ -83,7 +82,10 @@ export class ProviderService {
   settingsChanged() {
     const config = this.preferences().providerBinaries ?? {}
     const key = JSON.stringify(config)
-    if (key !== this.statusConfiguration) this.statusCache = undefined
+    if (key !== this.statusConfiguration) {
+      this.statusCache = undefined
+      launchCompatibility.invalidate()
+    }
     this.statusConfiguration = key
     configureProviderBinaries(config)
     this.generation++
@@ -102,7 +104,11 @@ export class ProviderService {
         let statuses = await this.status(undefined, true, false)
         if (!this.closed && generation === this.generation) {
           for (const status of statuses)
-            if (status.updateAvailable && this.preferences().providerBinaries[status.provider]?.autoUpdate)
+            if (
+              status.updateAvailable &&
+              status.updateCompatibility?.status !== 'incompatible' &&
+              this.preferences().providerBinaries[status.provider]?.autoUpdate
+            )
               await this.update(status.provider).catch(() => {})
           if (statuses.some((status) => this.preferences().providerBinaries[status.provider]?.autoUpdate))
             statuses = await this.status()
@@ -200,6 +206,15 @@ export class ProviderService {
   update(provider: AgentProvider): Promise<ProviderStatus> {
     const pending = this.updating.get(provider)
     if (pending) return pending
+    // Never install a release this policy already knows cannot work; the card explains the manual path instead.
+    const known = this.releases[provider]?.version
+    const target = launchCompatibility.target(provider, known ?? null)
+    if (target?.status === 'incompatible')
+      return Promise.reject(
+        new Error(
+          `The latest ${provider} release (${known}) is not compatible with this Ramu release. Install a compatible version manually${target.recommend ? ` (${target.recommend})` : ''}.`,
+        ),
+      )
     const controller = new AbortController()
     const update = async () => {
       const config = this.preferences().providerBinaries
@@ -234,6 +249,7 @@ export class ProviderService {
           ),
         )
       this.statusCache = undefined
+      launchCompatibility.invalidate(provider)
       return (await this.status()).find((status) => status.provider === provider)!
     }
     const work = (
@@ -357,6 +373,11 @@ export class ProviderService {
             }),
           )
         }
+        const compatibility = installed ? launchCompatibility.observe(provider, binary, version) : null
+        const updateCompatibility =
+          installed && version && release && newerVersion(release.version, version)
+            ? launchCompatibility.target(provider, release.version)
+            : null
         const setup = providerSetup(provider, version)
         const quoted =
           process.platform === 'win32'
@@ -374,16 +395,8 @@ export class ProviderService {
           version,
           enabled: providerEnabled(config, provider),
           ...(signIn ? { signIn } : {}),
-          ...(installed && COMPATIBILITY_RUNTIME[provider]
-            ? {
-                compatibility: evaluateCompatibility(
-                  COMPATIBILITY_POLICY,
-                  provider,
-                  COMPATIBILITY_RUNTIME[provider],
-                  version,
-                ),
-              }
-            : {}),
+          ...(compatibility ? { compatibility } : {}),
+          ...(updateCompatibility ? { updateCompatibility } : {}),
           accountsSupported: supportsProviderAccounts(provider),
           updating: this.updating.has(provider),
           ...(this.updateErrors.has(provider) ? { updateError: this.updateErrors.get(provider) } : {}),

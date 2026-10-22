@@ -42,6 +42,8 @@ export interface CompatibilityResult {
   affects?: string[]
   recommend?: string
   evidence?: string
+  /** When the runtime was observed, so a stale result stays visibly stale. */
+  checkedAt?: string
 }
 
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/

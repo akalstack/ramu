@@ -18,9 +18,12 @@ import { providerStatusQuery } from './providerStatusQuery'
 export function ProviderSettings({
   value,
   onChange,
+  onOpenSection,
 }: {
   value: AppPreferences
   onChange: (value: AppPreferences) => void
+  /** Opens another Settings page, used by Update Ramu. */
+  onOpenSection?: (section: 'system') => void
 }) {
   const invoke = useSettingsInvoke()
   useLanguage()
@@ -229,6 +232,9 @@ export function ProviderSettings({
             mcpSharing={canShare ? (id) => sharing(provider, id) : undefined}
             onMcpSharing={(id, on) => void setSharing(provider, id, on)}
             onUpdate={() => void update(provider)}
+            stale={statusQuery.isError && !!statusQuery.data}
+            onCheckAgain={() => void refresh()}
+            onUpdateRamu={onOpenSection ? () => onOpenSection('system') : undefined}
             onBrowse={(key) => void browse(provider, key)}
           />
         )

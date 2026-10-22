@@ -48,18 +48,16 @@ Revalidate at a new process/session boundary for main threads, helpers, advisors
 
 All observations, policy decisions and mutations belong to the execution host. Remote and mobile clients must not probe the viewing device or redirect an update to it. Discard late results from a previous host/path selection. Existing host permissions still govern updates; viewing a warning grants no new administration rights.
 
-## Delivery and acceptance
+## Remaining delivery
 
-1. Already in place: the bundled policy (`apps/server/src/providers/compatibilityPolicy.ts`), the deterministic evaluator and validator (`packages/shared/src/providers/compatibility.ts`), the additive `ProviderStatus.compatibility` field and a status line in the Codex provider card. Codex has no rules yet, so it reports Unverified. Remaining: reproduce at least one Codex mismatch and a working version without paid calls and add those rules with evidence; leave other integrations Unverified until audited.
-2. Deliver the representative task through existing provider cards, recovery controls and the shared launch guard. Include target compatibility in update recommendations and auto-update decisions. Preserve old-host rendering and offline cached status.
-3. Extend policies to Claude SDK/executable, Cursor SDK, both OpenCode runners and Antigravity only after targeted protocol/SDK checks. Apply the same decision to all background/helper/fallback entry points and verify remote/mobile status and recovery.
-4. Document shipped behavior in Providers, remove delivered work from this plan and the roadmap, and delete the plan when no work remains.
+Delivered behavior (policy, evaluator, status line and actions in the provider card, shared launch guard, routing skip, identity-keyed coalesced probe cache, update-target evaluation) is in [Providers](PROVIDERS.md#runtime-compatibility). What remains needs real runtimes:
 
-Focused shared/server tests in existing suites cover range boundaries, prereleases/date versions, unknown/probe failures, rule conflicts, bundled SDK identity, executable changes at the same path, stale/coalesced probes, offline operation and recommended/latest disagreement. Cover blocked destinations across direct launches and automatic routing, no retry loops, preserved queued work, optional capability disagreement, old hosts and host isolation. Use protocol integration tests where a real runtime boundary matters; simulated fixtures alone cannot establish supported versions.
+1. Reproduce at least one Codex mismatch and a working version without paid calls, and add those rules with evidence (`compatibilityPolicy.ts`). Until then Codex stays Unverified and no launch is blocked.
+2. Extend policies to Claude SDK/executable, Cursor SDK (recommend **Update Ramu**), both OpenCode runners and Antigravity only after targeted protocol/SDK checks, adding each provider to `COMPATIBILITY_RUNTIME`. Claude and OpenCode launch outside the shared `validateSettings` runner path for some entry points; confirm each is covered when its rules land.
+3. Mobile has no provider settings card yet; surface the same status and recovery when it does.
+4. Record live runtime versions, Ramu build, platform, probe/task and outcome for each supported rule; credentials and paid calls need a separately authorized acceptance run. Verify keyboard/focus, screen-reader status text, light/dark and narrow layouts, and the representative task end to end (old Codex, update or fix the path, check again, send the preserved draft).
 
-Web/mobile tests cover visible states and useful actions, localization, stale responses after host/path changes, old-host missing fields and draft preservation. Manually verify keyboard/focus, screen-reader status text, light/dark and narrow layouts. Record live runtime versions, Ramu build, platform, probe/task and outcome for each supported policy; credentials and any paid model calls need a separately authorized acceptance run. No automated real-account mutation is required for a status check.
-
-Run affected package tests/typechecks during implementation. Desktop-facing changes require `pnpm build` followed by the existing single `pnpm test:desktop-smoke`; add no second desktop startup/e2e suite. This documentation-only plan requires local link and formatting/whitespace checks.
+Run affected package tests/typechecks. Desktop-facing changes require `pnpm build` then the single `pnpm test:desktop-smoke`. Delete this plan when no work remains.
 
 ## T3 reference and later options
 

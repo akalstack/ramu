@@ -166,7 +166,7 @@ export function SettingsPanel({
             {page === 'providers' && (
               <>
                 <SettingsGroupTitle>{t('Providers')}</SettingsGroupTitle>
-                <ProviderSettings value={appDraft} onChange={setAppDraft} />
+                <ProviderSettings value={appDraft} onChange={setAppDraft} onOpenSection={setPage} />
                 <div className={`${SETTINGS_FORM_CLASS} mt-8`}>
                   <SettingsGroupTitle>{t('Usage')}</SettingsGroupTitle>
                   <ToggleRow

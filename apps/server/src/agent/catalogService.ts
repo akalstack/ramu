@@ -1,6 +1,7 @@
 import { classifyLegacyCatalog } from '../providers/modelLifecycle'
 import { providerAccountId } from '../providers/providerBinaries'
 import { acpModels } from '../providers/acp'
+import { launchCompatibility } from '../providers/launchCompatibility'
 import { providerName, providerEnabled } from '@ramu/shared/providers/providers'
 import type { AppPreferences, AgentSettings, AgentProvider, ProviderCatalog } from '@ramu/shared/types'
 import { codexModels } from '../providers/codex'
@@ -57,6 +58,9 @@ export class CatalogService {
       throw new Error(
         `The ${providerName(settings.provider)} account "${account.name || account.id}" is turned off in Settings → Providers.`,
       )
+    // One decision at every new process boundary: main threads, helpers, advisors, background work and fallback targets.
+    if (launchCompatibility.applies(settings.provider) && process.env.RAMU_FAKE_AGENT !== '1')
+      await launchCompatibility.assertLaunchable(settings.provider)
     let catalog = (await this.host.catalog()).find((c) => c.provider === settings.provider)
     // A retained chat may belong to a different profile than today's default.
     if (
