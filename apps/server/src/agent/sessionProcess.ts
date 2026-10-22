@@ -1,3 +1,4 @@
+import { UPDATE_EVENT_SQL } from './eventRevision'
 import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
 import { requestOutcomes } from '@ramu/shared/chat/questions'
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from './agentRunner'
@@ -291,9 +292,7 @@ export class SessionProcess {
     if (built.overBudget) return 'too-large'
     if (marked && undelivered) {
       const patched = { ...marked, handoffInfo: built.info }
-      this.db
-        .prepare('UPDATE agent_events SET event = ? WHERE session_id = ? AND seq = ?')
-        .run(JSON.stringify(patched), id, at + 1)
+      this.db.prepare(UPDATE_EVENT_SQL).run(JSON.stringify(patched), id, id, at + 1)
       this.host.emit(id, patched, at + 1)
     } else
       this.host.record(id, {

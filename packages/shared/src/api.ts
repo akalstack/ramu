@@ -205,7 +205,10 @@ export interface RamuMethods {
   'computer.apps'(runtime?: string): string[]
   'computer.setEnabled'(enabled: boolean): void
   'computer.setGlobalPointer'(enabled: boolean): void
-  'computer.grant'(threadId: string, scope: { observe: boolean; input: boolean; app?: string; runtime?: string }): ComputerSessionSummary | null
+  'computer.grant'(
+    threadId: string,
+    scope: { observe: boolean; input: boolean; app?: string; runtime?: string },
+  ): ComputerSessionSummary | null
   'computer.revoke'(threadId: string): void
   'computer.grantViewer'(threadId: string, deviceId: string, input: boolean): void
   'computer.revokeViewer'(threadId: string, deviceId: string): void
@@ -218,7 +221,9 @@ export interface RamuMethods {
   'computer.frame'(
     threadId: string,
     since?: string,
-  ): ComputerFrameMeta & { id: string; hash: string } & ({ unchanged: true } | { unchanged?: undefined; mimeType: string; data: string })
+  ): ComputerFrameMeta & { id: string; hash: string } & (
+      { unchanged: true } | { unchanged?: undefined; mimeType: string; data: string }
+    )
   /** Smooth video of the main display over WebRTC: send the viewer's offer, get the host's answer and the picture size. */
   'computer.rtcOffer'(
     threadId: string,
@@ -228,12 +233,20 @@ export interface RamuMethods {
   'computer.rtcClose'(threadId: string, peerId: string): void
   'computer.input'(threadId: string, generation: number, capturedAt: number, action: ComputerAction): void
   'computer.disconnect'(threadId: string): void
-  'hostBrowser.status'(): { available: boolean; enabled?: boolean; location?: 'execution-host-chromium'; reason?: string }
+  'hostBrowser.status'(): {
+    available: boolean
+    enabled?: boolean
+    location?: 'execution-host-chromium'
+    reason?: string
+  }
   'hostBrowser.setup'(): void
   'hostBrowser.profiles'(): BrowserProfileCatalog
   'hostBrowser.profileCreate'(name: string): BrowserProfileInfo
   'hostBrowser.profileRename'(id: string, name: string): void
-  'hostBrowser.profileReview'(id: string, remove: boolean): { token: string; id: string; name: string; tabs: number; remove: boolean }
+  'hostBrowser.profileReview'(
+    id: string,
+    remove: boolean,
+  ): { token: string; id: string; name: string; tabs: number; remove: boolean }
   'hostBrowser.profileConfirm'(token: string): void
   'hostBrowser.disable'(): void
   'hostBrowser.grants'(): { device: string; thread: string; expires: number }[]
@@ -247,14 +260,32 @@ export interface RamuMethods {
   'hostBrowser.answerDialog'(taskId: string, tabId: string, dialogId: string, accept: boolean, text?: string): void
   'hostBrowser.frame'(taskId: string, tabId: string): import('./browserBridge').BrowserScreenshot
   'hostBrowser.read'(taskId: string, tabId: string): import('./browserBridge').BrowserPageSnapshot
-  'hostBrowser.upload'(taskId: string, tabId: string, generation: number, snapshot: number, ref: number, path: string, workspaceRoot?: number): { ok: boolean; reason?: string }
+  'hostBrowser.upload'(
+    taskId: string,
+    tabId: string,
+    generation: number,
+    snapshot: number,
+    ref: number,
+    path: string,
+    workspaceRoot?: number,
+  ): { ok: boolean; reason?: string }
   'hostBrowser.downloads'(taskId: string): import('./browserBridge').BrowserDownloadInfo[]
   'hostBrowser.allowDownload'(taskId: string, tabId: string): void
   'hostBrowser.cancelDownload'(taskId: string, downloadId: string): void
-  'hostBrowser.saveDownload'(taskId: string, downloadId: string, path: string, workspaceRoot?: number): { path: string; workspaceRoot: number; bytes: number }
+  'hostBrowser.saveDownload'(
+    taskId: string,
+    downloadId: string,
+    path: string,
+    workspaceRoot?: number,
+  ): { path: string; workspaceRoot: number; bytes: number }
   'hostBrowser.take'(taskId: string, tabId: string): BrowserTabInfo
   'hostBrowser.release'(taskId: string, tabId: string): BrowserTabInfo
-  'hostBrowser.input'(taskId: string, tabId: string, generation: number, input: import('./browserBridge').BrowserHumanInput): void
+  'hostBrowser.input'(
+    taskId: string,
+    tabId: string,
+    generation: number,
+    input: import('./browserBridge').BrowserHumanInput,
+  ): void
   'hostBrowser.navigate'(taskId: string, tabId: string, url: string): BrowserTabInfo
   'hostBrowser.disconnect'(): void
   /** Host-owned tab metadata only; no frame, profile credentials or control grant. */
@@ -737,6 +768,18 @@ export interface RamuMethods {
   'agent.events'(sessionId: string): AgentEvent[]
   /** Sequenced persisted events for race-free remote hydration. */
   'agent.snapshot'(sessionId: string): { revision: number; events: { seq: number; event: AgentEvent }[] }
+  /** Only the transcript rows that changed since `cursor` (a prior `cursor` from this call or a snapshot's revision counter); `reset` means a full snapshot. */
+  'agent.changes'(
+    sessionId: string,
+    cursor: number,
+    knownLastSeq: number,
+  ): {
+    reset: boolean
+    cursor: number
+    lastSeq: number
+    revision: number
+    events: { seq: number; event: AgentEvent }[]
+  }
   'term.list'(taskId: string): TerminalInfo[]
   /** Starts a persistent command in the thread's folder; repeating a running one returns it instead of starting another. */
   'term.background.launch'(taskId: string, repoId: string | null, command: string): BackgroundTerminalInfo

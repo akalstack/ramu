@@ -17,7 +17,7 @@ const events = () =>
 const record = (event: AgentEvent) =>
   db
     .prepare(
-      'INSERT INTO agent_events VALUES (?, (SELECT COALESCE(MAX(seq),0)+1 FROM agent_events WHERE session_id=?), ?)',
+      'INSERT INTO agent_events (session_id, seq, event) VALUES (?, (SELECT COALESCE(MAX(seq),0)+1 FROM agent_events WHERE session_id=?), ?)',
     )
     .run('session', 'session', JSON.stringify(event))
 const capture = async (request: string, write: () => void) => {

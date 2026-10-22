@@ -60,7 +60,7 @@ it('migrates legacy worktree conversations without losing bindings, transcripts,
     INSERT INTO tasks VALUES ('current', 'project', 'Current conversation', 'current', 'idle', NULL, 3);
     INSERT INTO bindings VALUES ('chat', 'repo', 'worktree', '/isolated/Repo', 'ramu/existing', 'main', 'ready', NULL);
     INSERT INTO agent_sessions VALUES ('session', 'chat', NULL, 'codex', '/isolated', '[]', '["/isolated/Repo"]', 'idle', 'native-thread', 4, '{"provider":"codex","model":"saved-model","effort":"high","access":"ask","autoFallback":false}');
-    INSERT INTO agent_events VALUES ('session', 1, '{"kind":"user","text":"Keep my conversation"}');
+    INSERT INTO agent_events (session_id, seq, event) VALUES ('session', 1, '{"kind":"user","text":"Keep my conversation"}');
     PRAGMA user_version = 3;
   `)
   legacy.prepare('UPDATE tasks SET ui_state = ? WHERE id = ?').run(savedUi, 'chat')

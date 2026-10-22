@@ -299,6 +299,17 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     )
     if (!columns.has('files')) db.exec('ALTER TABLE interactive_versions ADD COLUMN files TEXT;')
   },
+  // A per-session change counter on every event row, so a client can read only what changed since a cursor.
+  (db) => {
+    const columns = new Set(
+      (db.prepare('PRAGMA table_info(agent_events)').all() as { name: string }[]).map((c) => c.name),
+    )
+    if (!columns.has('rev')) {
+      db.exec('ALTER TABLE agent_events ADD COLUMN rev INTEGER NOT NULL DEFAULT 0;')
+      db.exec('UPDATE agent_events SET rev = seq;')
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS agent_events_rev ON agent_events(session_id, rev);')
+  },
 ]
 
 export type Db = DatabaseSync

@@ -66,14 +66,41 @@ export function useAgentStream(sessionId: string) {
         setQueuePaused(!!queue.paused)
       }
     }
-    const hydrate = async () => {
-      const requestedAt = revision
-      const [s, evs] = await Promise.all([invoke('agent.get', sessionId), invoke('agent.events', sessionId)])
+    // What this client already holds: the host's change counter, so a reconnect reads only the rows that changed.
+    let cursor = 0
+    let changesSupported = true
+    const read = async (requestedAt: number) => {
+      if (changesSupported) {
+        try {
+          const result = await invoke('agent.changes', sessionId, cursor, Math.max(0, ...stored.keys()))
+          if (cancelled) return
+          if (result.reset) {
+            const kept = new Set(result.events.map((row) => row.seq))
+            for (const [seq, item] of [...stored])
+              if (!kept.has(seq) && item.revision <= requestedAt) stored.delete(seq)
+          }
+          for (const row of result.events)
+            if ((stored.get(row.seq)?.revision ?? -1) <= requestedAt)
+              stored.set(row.seq, { event: row.event, revision: requestedAt })
+          cursor = result.cursor
+          return
+        } catch (e) {
+          // A host from before agent.changes reads the whole transcript every time.
+          if (/unknown method/i.test(errorText(e))) changesSupported = false
+          else throw e
+        }
+      }
+      const evs = await invoke('agent.events', sessionId)
       if (cancelled) return
       evs.forEach((event, index) => {
         if ((stored.get(index + 1)?.revision ?? -1) <= requestedAt)
           stored.set(index + 1, { event, revision: requestedAt })
       })
+    }
+    const hydrate = async () => {
+      const requestedAt = revision
+      const [s] = await Promise.all([invoke('agent.get', sessionId), read(requestedAt)])
+      if (cancelled) return
       setSession({ ...s, state: latestState ?? s.state })
       refreshEvents()
       setHydrating(false)

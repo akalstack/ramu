@@ -284,7 +284,7 @@ describe('agent changes and batched feedback', () => {
     const id = await service.begin(review.taskId, { cwd, covers: [cwd], additionalDirs: [] })
     service.bind(id, 'session')
     expect(service.list('session').map((r) => r.id)).toEqual([review.id])
-    db.prepare('INSERT INTO agent_events VALUES (?,?,?)').run(
+    db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?,?,?)').run(
       'session',
       1,
       JSON.stringify({ kind: 'tool-use', toolUseId: 'check', name: 'Bash', summary: 'pnpm test' }),
@@ -442,7 +442,7 @@ describe('agent changes and batched feedback', () => {
       { kind: 'tool-use', toolUseId: 'missing', name: 'Bash', summary: 'pnpm build' },
     ]
     events.forEach((e, i) =>
-      db.prepare('INSERT INTO agent_events VALUES (?,?,?)').run('session', i + 1, JSON.stringify(e)),
+      db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?,?,?)').run('session', i + 1, JSON.stringify(e)),
     )
     const replied = service.agentReply(review.id, comment.id, 'Fixed and checked', true)
     expect(replied.comments[0]?.replies?.[0]).toMatchObject({ author: 'ai', text: 'Fixed and checked' })
@@ -455,7 +455,7 @@ describe('agent changes and batched feedback', () => {
     expect(service.get(review.id).comments[0]?.state).toBe('draft')
   })
   it('keeps results, notes and snapshots on the same run across follow-ups', async () => {
-    const insert = db.prepare('INSERT INTO agent_events VALUES (?,?,?)')
+    const insert = db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?,?,?)')
     insert.run('session', 1, JSON.stringify({ kind: 'result', text: 'Earlier result', isError: false, costUsd: null }))
     await service.beforeFollowup('session')
     const firstId = (db.prepare("SELECT id FROM change_reviews WHERE state='recording'").get() as { id: string }).id
@@ -484,19 +484,19 @@ describe('agent changes and batched feedback', () => {
     expect(submit).not.toHaveBeenCalled()
   })
   it('preserves event boundaries across follow-ups', async () => {
-    db.prepare('INSERT INTO agent_events VALUES (?,?,?)').run(
+    db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?,?,?)').run(
       'session',
       1,
       JSON.stringify({ kind: 'tool-use', toolUseId: 'old', name: 'Bash', summary: 'old command' }),
     )
     const id = await service.begin(review.taskId, { cwd, covers: [cwd], additionalDirs: [] })
     service.bind(id, 'session')
-    db.prepare('INSERT INTO agent_events VALUES (?,?,?)').run(
+    db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?,?,?)').run(
       'session',
       2,
       JSON.stringify({ kind: 'tool-use', toolUseId: 'new', name: 'Bash', summary: 'pnpm test' }),
     )
-    db.prepare('INSERT INTO agent_events VALUES (?,?,?)').run(
+    db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?,?,?)').run(
       'session',
       3,
       JSON.stringify({ kind: 'tool-result', toolUseId: 'new', isError: true, summary: '1 test failed' }),

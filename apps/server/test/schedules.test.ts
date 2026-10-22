@@ -286,7 +286,7 @@ const recordResult = (isError: boolean, text: string, seq = 1) => {
   db.prepare(
     "INSERT OR IGNORE INTO agent_sessions(id,task_id,provider,cwd,state,created_at) VALUES ('session',?,'codex','/tmp','idle',1)",
   ).run(taskId)
-  db.prepare('INSERT INTO agent_events VALUES (?, ?, ?)').run(
+  db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)').run(
     'session',
     seq,
     JSON.stringify({ kind: 'result', isError, text, costUsd: null }),

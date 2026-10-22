@@ -573,6 +573,10 @@ export class AgentService {
     return this.parts.store.snapshot(...args)
   }
 
+  changes(...args: Parameters<SessionStore['changes']>) {
+    return this.parts.store.changes(...args)
+  }
+
   events(...args: Parameters<SessionStore['events']>) {
     return this.parts.store.events(...args)
   }

@@ -35,10 +35,10 @@ beforeEach(async () => {
   db.prepare(
     "INSERT INTO agent_sessions (id,task_id,provider,cwd,state,created_at,settings) VALUES ('session',?,'claude-code',?,'idle',?, '{}')",
   ).run(taskId, dir, Date.now())
-  db.prepare("INSERT INTO agent_events VALUES ('session',1,?)").run(
+  db.prepare("INSERT INTO agent_events (session_id, seq, event) VALUES ('session',1,?)").run(
     JSON.stringify({ kind: 'user', text: 'Update all callers' }),
   )
-  db.prepare("INSERT INTO agent_events VALUES ('session',2,?)").run(
+  db.prepare("INSERT INTO agent_events (session_id, seq, event) VALUES ('session',2,?)").run(
     JSON.stringify({ kind: 'text', text: 'One caller is still unfinished' }),
   )
   analyze = vi.fn(async () => ({ message: JSON.stringify({ items: [item()] }) }))
@@ -107,7 +107,7 @@ it('does not accept nonexistent source events or unsupported resolution evidence
 })
 it('reconciles later completion evidence and respects the off switch', async () => {
   const first = await service.refresh()
-  db.prepare("INSERT INTO agent_events VALUES ('session',3,?)").run(
+  db.prepare("INSERT INTO agent_events (session_id, seq, event) VALUES ('session',3,?)").run(
     JSON.stringify({ kind: 'text', text: 'All callers updated and tested' }),
   )
   analyze.mockResolvedValue({
@@ -168,7 +168,7 @@ it('does not call the model again until the thread or the model changes, and alw
   await service.refresh(false)
   expect(analyze).toHaveBeenCalledTimes(2)
   expect(service.snapshot().generatedAt).toBeTypeOf('number')
-  db.prepare("INSERT INTO agent_events VALUES ('session',3,?)").run(JSON.stringify({ kind: 'text', text: 'Done now' }))
+  db.prepare("INSERT INTO agent_events (session_id, seq, event) VALUES ('session',3,?)").run(JSON.stringify({ kind: 'text', text: 'Done now' }))
   await service.refresh(false)
   expect(analyze).toHaveBeenCalledTimes(3)
   await service.refresh()
@@ -179,7 +179,7 @@ it('announces the daily recap once a day, only for the scheduled run and only wh
   ws.setAppState('app-preferences', { recapsEnabled: true, recapTime: '08:00', timezone: 'UTC' })
   const addEvent = (seq: number) =>
     db
-      .prepare("INSERT INTO agent_events VALUES ('session',?,?)")
+      .prepare("INSERT INTO agent_events (session_id, seq, event) VALUES ('session',?,?)")
       .run(seq, JSON.stringify({ kind: 'text', text: `More work ${seq}` }))
   await service.refresh() // the user pressed Refresh: they are already looking
   expect(digest).not.toHaveBeenCalled()

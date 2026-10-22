@@ -1,3 +1,4 @@
+import { INSERT_EVENT_SQL, UPDATE_EVENT_SQL } from './eventRevision'
 import { permissionKey, PermissionApprovals, commandPatterns } from './permissionApprovals'
 import { goalContinues } from '@ramu/shared/chat/goalHold'
 import { isStaleProgress } from '@ramu/shared/chat/agentTasks'
@@ -125,9 +126,7 @@ export class SessionRecorder {
       if (previous) {
         const earlier = JSON.parse(previous.event) as Extract<AgentEvent, { kind: 'compaction' }>
         const merged = { ...earlier, ...event, at: earlier.at }
-        this.db
-          .prepare('UPDATE agent_events SET event = ? WHERE session_id = ? AND seq = ?')
-          .run(JSON.stringify(merged), id, previous.seq)
+        this.db.prepare(UPDATE_EVENT_SQL).run(JSON.stringify(merged), id, id, previous.seq)
         this.host.emit(id, merged, previous.seq)
         return
       }
@@ -141,9 +140,7 @@ export class SessionRecorder {
       if (previous) {
         const earlier = JSON.parse(previous.event) as Extract<AgentEvent, { kind: 'question-state' }>
         const merged = { ...earlier, ...event, answers: { ...earlier.answers, ...event.answers } }
-        this.db
-          .prepare('UPDATE agent_events SET event = ? WHERE session_id = ? AND seq = ?')
-          .run(JSON.stringify(merged), id, previous.seq)
+        this.db.prepare(UPDATE_EVENT_SQL).run(JSON.stringify(merged), id, id, previous.seq)
         this.host.emit(id, merged, previous.seq)
         return
       }
@@ -194,19 +191,12 @@ export class SessionRecorder {
         if (event.kind === 'agent' && previous.event && isStaleProgress(JSON.parse(previous.event) as AgentTask, event))
           return
         if (event.kind === 'tool-use' && previous.event) event.at = (JSON.parse(previous.event) as AgentEvent).at
-        this.db
-          .prepare('UPDATE agent_events SET event = ? WHERE session_id = ? AND seq = ?')
-          .run(JSON.stringify(event), id, previous.seq)
+        this.db.prepare(UPDATE_EVENT_SQL).run(JSON.stringify(event), id, id, previous.seq)
         this.host.emit(id, event, previous.seq)
         return
       }
     }
-    this.db
-      .prepare(
-        `INSERT INTO agent_events (session_id, seq, event)
-         VALUES (?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM agent_events WHERE session_id = ?), ?)`,
-      )
-      .run(id, id, JSON.stringify(event))
+    this.db.prepare(INSERT_EVENT_SQL).run(id, id, id, JSON.stringify(event))
     const { seq } = this.db.prepare('SELECT MAX(seq) AS seq FROM agent_events WHERE session_id=?').get(id) as {
       seq: number
     }

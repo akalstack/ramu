@@ -278,7 +278,7 @@ it('recalls original visible evidence by sequence without transferring provider 
 })
 
 it('discovers cross-thread recall and skill selection through real deferred MCP with validated defaults', async () => {
-  db.prepare('INSERT INTO agent_events VALUES (?, ?, ?)').run(
+  db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)').run(
     'other',
     1,
     JSON.stringify({ kind: 'text', text: 'Authentication uses refresh rotation.' }),
@@ -508,7 +508,7 @@ describe('refreshing the checkpoint when a provider crosses its early-switch thr
     )
   const seed = () => {
     trace.forEach((event, i) =>
-      db.prepare('INSERT INTO agent_events VALUES (?, ?, ?)').run('s', i + 1, JSON.stringify(event)),
+      db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)').run('s', i + 1, JSON.stringify(event)),
     )
   }
   beforeEach(() => {
@@ -624,9 +624,9 @@ describe('refreshing the checkpoint when a provider crosses its early-switch thr
       { kind: 'tool-use', toolUseId: 'suite', name: 'shell', summary: 'run suite' },
       { kind: 'result', isError: false, text: 'done', costUsd: null },
     )
-    db.prepare('INSERT INTO agent_events VALUES (?, ?, ?)').run('s', 6, JSON.stringify(trace[5]))
-    db.prepare('INSERT INTO agent_events VALUES (?, ?, ?)').run('s', 7, JSON.stringify(trace[6]))
-    db.prepare('INSERT INTO agent_events VALUES (?, ?, ?)').run('s', 8, JSON.stringify(trace[7]))
+    db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)').run('s', 6, JSON.stringify(trace[5]))
+    db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)').run('s', 7, JSON.stringify(trace[6]))
+    db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)').run('s', 8, JSON.stringify(trace[7]))
     reply('Set AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY first')
     await refresh.tick()
     expect(refresh.checkpoint('s')?.summary).toBe('Older')

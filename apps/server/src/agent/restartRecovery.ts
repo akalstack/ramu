@@ -1,3 +1,4 @@
+import { UPDATE_EVENT_SQL } from './eventRevision'
 import type { AppPreferences, AgentTask, AgentEvent, AgentSessionState } from '@ramu/shared/types'
 import { questionState } from '@ramu/shared/chat/questions'
 import { helperRecoverySources, type HelperHistoryLoader } from './helperHistory'
@@ -225,9 +226,7 @@ export class RestartRecovery {
         event.kind === 'tool-use'
           ? { ...match.event, toolUseId: event.toolUseId, agentId: event.agentId }
           : { ...event, at: match.event.at }
-      this.db
-        .prepare('UPDATE agent_events SET event = ? WHERE session_id = ? AND seq = ?')
-        .run(JSON.stringify(merged), id, match.seq)
+      this.db.prepare(UPDATE_EVENT_SQL).run(JSON.stringify(merged), id, id, match.seq)
       this.host.emit(id, merged, match.seq)
     }
   }

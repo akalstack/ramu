@@ -1,0 +1,103 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { AgentService } from '../src/agent'
+import { openDb, type Db } from '../src/db'
+import { fakeQuery } from '../src/providers/fakeAgent'
+import { DEFAULT_AGENT_SETTINGS, type AgentEvent } from '@ramu/shared/types'
+
+let db: Db
+let tmp: string
+let cwd: string
+
+beforeEach(() => {
+  db = openDb(':memory:')
+  tmp = mkdtempSync(join(tmpdir(), 'ramu-changes-'))
+  cwd = realpathSync(tmp)
+  mkdirSync(cwd, { recursive: true })
+  db.exec(`INSERT INTO projects (id, name, created_at) VALUES ('p', 'P', 0); INSERT INTO repositories VALUES ('r', 'p', 'repo', '${cwd}');
+           INSERT INTO tasks (id, project_id, title, mode, status, created_at) VALUES ('t', 'p', 'T', 'current', 'idle', 0);`)
+})
+afterEach(() => rmSync(tmp, { recursive: true, force: true }))
+
+const until = async (cond: () => boolean, ms = 5000) => {
+  const start = Date.now()
+  while (!cond()) {
+    if (Date.now() - start > ms) throw new Error('timed out')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
+describe('agent.changes', () => {
+  const start = async () => {
+    const svc = new AgentService(db, () => {}, fakeQuery)
+    const session = svc.start('t', { cwd, additionalDirs: [], covers: [cwd] }, 'hello', DEFAULT_AGENT_SETTINGS)
+    await until(() => svc.get(session.id).state === 'idle')
+    const record = (event: AgentEvent) =>
+      (svc as unknown as { record(id: string, event: AgentEvent): void }).record(session.id, event)
+    return { svc, id: session.id, record }
+  }
+
+  it('sends a full snapshot first, then only what changed, including rows edited in place', async () => {
+    const { svc, id, record } = await start()
+    const first = svc.changes(id, 0, 0)
+    expect(first.reset).toBe(true)
+    expect(first.events.length).toBeGreaterThan(0)
+    expect(first.events.map((row) => row.seq)).toEqual(svc.snapshot(id).events.map((row) => row.seq))
+
+    // Nothing changed: an empty, non-reset answer.
+    const quiet = svc.changes(id, first.cursor, first.lastSeq)
+    expect(quiet).toMatchObject({ reset: false, events: [] })
+
+    record({ kind: 'text', text: 'draft', messageId: 'm1' } as AgentEvent)
+    const appended = svc.changes(id, first.cursor, first.lastSeq)
+    expect(appended.reset).toBe(false)
+    expect(appended.events).toHaveLength(1)
+
+    // An earlier row edited in place shows up even though its sequence is not new.
+    record({ kind: 'text', text: 'final', messageId: 'm1' } as AgentEvent)
+    const edited = svc.changes(id, appended.cursor, appended.lastSeq)
+    expect(edited.reset).toBe(false)
+    expect(edited.events).toEqual([{ seq: appended.events[0]!.seq, event: expect.objectContaining({ text: 'final' }) }])
+    expect(edited.cursor).toBeGreaterThan(appended.cursor)
+    expect(edited.lastSeq).toBe(appended.lastSeq)
+  })
+
+  it('resets for a cursor from the future or a client holding rows that no longer exist', async () => {
+    const { svc, id } = await start()
+    const head = svc.changes(id, 0, 0)
+    expect(svc.changes(id, head.cursor + 5, head.lastSeq).reset).toBe(true)
+    expect(svc.changes(id, head.cursor, head.lastSeq + 3).reset).toBe(true)
+  })
+
+  it('resets after a rewind removed rows the client still holds', async () => {
+    const { svc, id } = await start()
+    await svc.send(id, 'second')
+    await until(() => svc.get(id).state === 'idle' && svc.events(id).filter((e) => e.kind === 'user').length === 2)
+    const before = svc.changes(id, 0, 0)
+    const secondUser = before.events.filter((row) => row.event.kind === 'user')[1]!
+    await svc.rewind(id, secondUser.seq)
+    const after = svc.changes(id, before.cursor, before.lastSeq)
+    expect(after.reset).toBe(true)
+    expect(after.events.length).toBeLessThan(before.events.length)
+  })
+
+  it('bounds a large change set by falling back to a snapshot', async () => {
+    const { svc, id, record } = await start()
+    const head = svc.changes(id, 0, 0)
+    for (let i = 0; i < 5; i++) record({ kind: 'text', text: `row ${i}` } as AgentEvent)
+    expect(svc.changes(id, head.cursor, head.lastSeq, 3).reset).toBe(true)
+    expect(svc.changes(id, head.cursor, head.lastSeq, 10).reset).toBe(false)
+  })
+
+  it('gives rows saved before the upgrade a baseline so their first read is a clean snapshot', () => {
+    db.exec(`INSERT INTO agent_sessions (id, task_id, provider, cwd, additional_dirs, covers, state, created_at)
+      VALUES ('old', 't', 'codex', '/w', '[]', '[]', 'idle', 0);
+      INSERT INTO agent_events (session_id, seq, event) VALUES ('old', 1, '{"kind":"user","text":"hi"}');`)
+    const svc = new AgentService(db, () => {}, fakeQuery)
+    const result = svc.changes('old', 0, 0)
+    expect(result).toMatchObject({ reset: true, lastSeq: 1 })
+    expect(result.events).toHaveLength(1)
+  })
+})

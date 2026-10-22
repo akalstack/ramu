@@ -142,6 +142,49 @@ export class SessionStore {
     }
   }
 
+  /**
+   * The rows that changed since `cursor` (a revision the client already holds), including rows edited in place, so
+   * a reconnecting client need not re-read the whole transcript. A cursor the server cannot honor gets a full
+   * snapshot flagged `reset`: none yet, one from the future, a client that holds later rows than exist (a rewind),
+   * or more changes than the bound.
+   */
+  changes(
+    id: string,
+    cursor: number,
+    knownLastSeq: number,
+    limit = 2000,
+  ): {
+    reset: boolean
+    cursor: number
+    lastSeq: number
+    revision: number
+    events: { seq: number; event: AgentEvent }[]
+  } {
+    this.get(id)
+    const head = this.db
+      .prepare(
+        'SELECT COALESCE(MAX(rev), 0) AS rev, COALESCE(MAX(seq), 0) AS seq FROM agent_events WHERE session_id = ?',
+      )
+      .get(id) as { rev: number; seq: number }
+    const parse = (rows: { seq: number; event: string }[]) =>
+      rows.map((row) => ({ seq: row.seq, event: JSON.parse(row.event) as AgentEvent }))
+    const base = { cursor: head.rev, lastSeq: head.seq, revision: this.eventRevision }
+    const usable = cursor > 0 && cursor <= head.rev && knownLastSeq <= head.seq
+    const changed = usable
+      ? (this.db
+          .prepare('SELECT seq, event FROM agent_events WHERE session_id = ? AND rev > ? ORDER BY rev LIMIT ?')
+          .all(id, cursor, limit + 1) as { seq: number; event: string }[])
+      : []
+    if (!usable || changed.length > limit) {
+      const all = this.db.prepare('SELECT seq, event FROM agent_events WHERE session_id = ? ORDER BY seq').all(id) as {
+        seq: number
+        event: string
+      }[]
+      return { reset: true, ...base, events: parse(all) }
+    }
+    return { reset: false, ...base, events: parse(changed) }
+  }
+
   events(id: string): AgentEvent[] {
     const rows = this.db.prepare('SELECT event FROM agent_events WHERE session_id = ? ORDER BY seq').all(id) as {
       event: string
