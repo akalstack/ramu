@@ -76,7 +76,7 @@ export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
               : { type: 'stdio', command: transport.command, args: transport.args, cwd: cwd!, envSecretRefs: {} },
         })
         if (sharing()[key] ?? transport.type === 'http')
-          workspace.setAppState<McpImports>(MCP_IMPORTS_KEY, {
+          workspace.setAppState(MCP_IMPORTS_KEY, {
             ...workspace.getAppState<McpImports>(MCP_IMPORTS_KEY, {}),
             [connection.id]: { key, wasShared: true, applied: false },
           })
