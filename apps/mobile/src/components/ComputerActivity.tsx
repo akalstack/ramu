@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppState, Image, Modal, Pressable, ScrollView, TextInput, View } from 'react-native'
+import { AppState, Image, Modal, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Monitor } from 'lucide-react-native'
 import { translate } from '@ramu/shared/i18n'
 import { COMPUTER_FRAME_STALE_MS, type ComputerAction } from '@ramu/shared/computerBridge'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
+import {
+  LOCAL_INPUT_LIMIT,
+  computerControllerLabel,
+  frameOffset,
+  needsHandoff,
+  showsLocalInputLimit,
+} from '@ramu/shared/computerControl'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
@@ -13,14 +20,7 @@ import { useComputerVideo, webrtc } from './useComputerVideo'
 
 type Frame = { uri: string; width: number; height: number; capturedAt: number; generation: number }
 
-const label = (session: ComputerSessionSummary) =>
-  session.paused
-    ? 'Control paused'
-    : session.controller.kind === 'human'
-      ? 'You are in control'
-      : session.controller.kind === 'agent'
-        ? 'Agent control'
-        : 'Ready'
+const label = computerControllerLabel
 
 /** The phone watches and steers the owning computer's screen. Nothing runs here; the host keeps every grant. */
 function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: ComputerSessionSummary; onClose(): void }) {
@@ -35,6 +35,10 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
   const [text, setText] = useState('')
   const [error, setError] = useState('')
   const [layout, setLayout] = useState({ width: 1, height: 1 })
+  const [asked, setAsked] = useState(false)
+  // Landscape gets the whole height; the frame is fitted inside the box so touches map through the letterbox bars.
+  const window = useWindowDimensions()
+  const maxHeight = Math.max(200, window.height - 160)
   const [current, setCurrent] = useState(session)
   const taskId = chat.taskId!
   const video = useComputerVideo(
@@ -142,7 +146,12 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
           ? t('Last frame')
           : t('Live')
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible
+      animationType="slide"
+      supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+      onRequestClose={onClose}
+    >
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.canvas }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: space.m }}>
           <T weight="600">
@@ -160,19 +169,14 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
               accessibilityRole="button"
               accessibilityLabel={t('Computer screen')}
               onLayout={(event) => setLayout(event.nativeEvent.layout)}
-              onPress={(event) =>
-                send({
-                  kind: 'click',
-                  x: Math.min(
-                    video.width - 1,
-                    Math.max(0, Math.round((event.nativeEvent.locationX / layout.width) * video.width)),
-                  ),
-                  y: Math.min(
-                    video.height - 1,
-                    Math.max(0, Math.round((event.nativeEvent.locationY / layout.height) * video.height)),
-                  ),
-                })
-              }
+              onPress={(event) => {
+                const point = frameOffset(
+                  { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY },
+                  layout,
+                  video,
+                )
+                if (point) send({ kind: 'click', ...point })
+              }}
             >
               {(() => {
                 const { RTCView } = webrtc()!
@@ -180,7 +184,7 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
                   <RTCView
                     streamURL={video.streamURL}
                     objectFit="contain"
-                    style={{ width: '100%', aspectRatio: video.width / video.height }}
+                    style={{ width: '100%', aspectRatio: video.width / video.height, maxHeight }}
                   />
                 )
               })()}
@@ -191,24 +195,19 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
               accessibilityRole="button"
               accessibilityLabel={t('Computer screen')}
               onLayout={(event) => setLayout(event.nativeEvent.layout)}
-              onPress={(event) =>
-                send({
-                  kind: 'click',
-                  x: Math.min(
-                    frame.width - 1,
-                    Math.max(0, Math.round((event.nativeEvent.locationX / layout.width) * frame.width)),
-                  ),
-                  y: Math.min(
-                    frame.height - 1,
-                    Math.max(0, Math.round((event.nativeEvent.locationY / layout.height) * frame.height)),
-                  ),
-                })
-              }
+              onPress={(event) => {
+                const point = frameOffset(
+                  { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY },
+                  layout,
+                  frame,
+                )
+                if (point) send({ kind: 'click', ...point })
+              }}
             >
               <Image
                 source={{ uri: frame.uri }}
-                resizeMode="stretch"
-                style={{ width: '100%', aspectRatio: frame.width / frame.height, opacity: stale ? 0.5 : 1 }}
+                resizeMode="contain"
+                style={{ width: '100%', aspectRatio: frame.width / frame.height, maxHeight, opacity: stale ? 0.5 : 1 }}
               />
             </Pressable>
           ) : null}
@@ -221,7 +220,18 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
             ) : (
               <Button
                 title={t('Take control')}
-                onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.takeControl', taskId))}
+                onPress={() =>
+                  void act(async () => {
+                    setAsked(false)
+                    try {
+                      await io.current.invoke(chat.computerId, 'computer.takeControl', taskId)
+                    } catch (reason) {
+                      if (!needsHandoff(reason instanceof Error ? reason.message : String(reason))) throw reason
+                      await io.current.invoke(chat.computerId, 'computer.requestHandoff', taskId)
+                      setAsked(true)
+                    }
+                  })
+                }
               />
             )}
             <Button
@@ -230,6 +240,24 @@ function ComputerViewer({ chat, session, onClose }: { chat: Chat; session: Compu
               onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.stop', taskId))}
             />
           </View>
+          {asked ? <T tone="muted">{t('Waiting for the device in control to allow it.')}</T> : null}
+          {current.handoffRequest ? (
+            <View style={{ gap: space.s }} accessibilityLiveRegion="polite">
+              <T>{t('Another device is asking for control')}</T>
+              <View style={{ flexDirection: 'row', gap: space.s, flexWrap: 'wrap' }}>
+                <Button
+                  title={t('Allow control')}
+                  onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.approveHandoff', taskId))}
+                />
+                <Button
+                  kind="ghost"
+                  title={t('Decline')}
+                  onPress={() => void act(() => io.current.invoke(chat.computerId, 'computer.declineHandoff', taskId))}
+                />
+              </View>
+            </View>
+          ) : null}
+          {showsLocalInputLimit(current) ? <T tone="muted">{t(LOCAL_INPUT_LIMIT)}</T> : null}
           {human && (
             <View style={{ gap: space.s }}>
               <TextInput

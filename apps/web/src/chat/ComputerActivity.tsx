@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Monitor } from 'lucide-react'
 import type { ComputerSessionSummary } from '@ramu/shared/api'
 import { COMPUTER_FRAME_STALE_MS, type ComputerAction } from '@ramu/shared/computerBridge'
+import { LOCAL_INPUT_LIMIT, needsHandoff, showsLocalInputLimit } from '@ramu/shared/computerControl'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { useHost } from '../workspace/HostProvider'
@@ -14,6 +15,45 @@ import { useComputerVideo } from './useComputerVideo'
 import { ComputerSharing } from './ComputerSharing'
 import { ComposerTraySection } from '../composer/ComposerTraySection'
 
+type Invoke = ReturnType<typeof useHost>['invoke']
+
+/** Takes control; when another device holds it, asks that device instead of taking it. Returns whether it asked. */
+async function takeOrRequest(invoke: Invoke, taskId: string): Promise<'asked' | 'taken'> {
+  try {
+    await invoke('computer.takeControl', taskId)
+    return 'taken'
+  } catch (reason) {
+    if (!needsHandoff(reason instanceof Error ? reason.message : String(reason))) throw reason
+    await invoke('computer.requestHandoff', taskId)
+    return 'asked'
+  }
+}
+
+/** Shown to the devices that can answer: another device wants control and only the one in control can allow it. */
+function HandoffNotice({
+  taskId,
+  session,
+  run,
+}: {
+  taskId: string
+  session: ComputerSessionSummary
+  run: (work: () => Promise<unknown>) => Promise<void>
+}) {
+  const { invoke } = useHost()
+  if (!session.handoffRequest) return null
+  return (
+    <div role="status" className="flex flex-wrap items-center gap-2 text-caption">
+      <span>{t('Another device is asking for control')}</span>
+      <Button size="sm" onClick={() => void run(() => invoke('computer.approveHandoff', taskId))}>
+        {t('Allow control')}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => void run(() => invoke('computer.declineHandoff', taskId))}>
+        {t('Decline')}
+      </Button>
+    </div>
+  )
+}
+
 type Frame = { data: string; mimeType: string; width: number; height: number; capturedAt: number; generation: number }
 
 /** Polling stops with the dialog: an observation-only viewer costs nothing when it is closed. */
@@ -22,11 +62,13 @@ function Viewer({
   session,
   onClose,
   run,
+  onAsked,
 }: {
   taskId: string
   session: ComputerSessionSummary
   onClose(): void
   run: (work: () => Promise<unknown>) => Promise<void>
+  onAsked(): void
 }) {
   const { invoke } = useHost()
   const [frame, setFrame] = useState<Frame | null>(null)
@@ -206,11 +248,22 @@ function Viewer({
               </Button>
             </>
           ) : (
-            <Button size="sm" onClick={() => void run(() => invoke('computer.takeControl', taskId))}>
+            <Button
+              size="sm"
+              onClick={() =>
+                void run(async () => {
+                  if ((await takeOrRequest(invoke, taskId)) === 'asked') onAsked()
+                })
+              }
+            >
               {t('Take control')}
             </Button>
           )}
         </div>
+        <HandoffNotice taskId={taskId} session={session} run={run} />
+        {showsLocalInputLimit(session) && (
+          <span className="text-caption text-muted-foreground">{t(LOCAL_INPUT_LIMIT)}</span>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -224,6 +277,7 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
   const [session, setSession] = useState<ComputerSessionSummary | null>(null)
   const [error, setError] = useState('')
   const [viewing, setViewing] = useState(false)
+  const [asked, setAsked] = useState(false)
   const [apps, setApps] = useState<string[]>([])
   const [appHint, setAppHint] = useState('')
   const [keepAwake, setKeepAwake] = useState(true)
@@ -251,6 +305,7 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
   }, [load, taskId, visible])
   const run = async (work: () => Promise<unknown>) => {
     setError('')
+    setAsked(false)
     try {
       await work()
     } catch (reason) {
@@ -279,7 +334,11 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => void run(() => invoke('computer.takeControl', taskId))}
+                  onClick={() =>
+                    void run(async () => {
+                      if ((await takeOrRequest(invoke, taskId)) === 'asked') setAsked(true)
+                    })
+                  }
                 >
                   {t('Take control')}
                 </Button>
@@ -291,6 +350,15 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
                 {t('Revoke access')}
               </Button>
             </div>
+            <HandoffNotice taskId={taskId} session={session} run={run} />
+            {asked && (
+              <span className="text-caption text-muted-foreground">
+                {t('Waiting for the device in control to allow it.')}
+              </span>
+            )}
+            {showsLocalInputLimit(session) && (
+              <span className="text-caption text-muted-foreground">{t(LOCAL_INPUT_LIMIT)}</span>
+            )}
           </>
         ) : (
           <>
@@ -356,7 +424,15 @@ export function ComputerActivity({ taskId, visible }: { taskId: string | undefin
           </span>
         )}
       </div>
-      {viewing && session && <Viewer taskId={taskId} session={session} run={run} onClose={() => setViewing(false)} />}
+      {viewing && session && (
+        <Viewer
+          taskId={taskId}
+          session={session}
+          run={run}
+          onAsked={() => setAsked(true)}
+          onClose={() => setViewing(false)}
+        />
+      )}
     </ComposerTraySection>
   )
 }

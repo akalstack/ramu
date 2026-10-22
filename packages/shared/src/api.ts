@@ -154,11 +154,11 @@ export interface ComputerSessionSummary {
   /** The computer whose screen this is; `local` is the host itself. */
   runtime: { id: string; name: string }
   /** Control passed to the person at the computer because they used its mouse or keyboard. Cleared at the next change of owner. */
-  interruption: 'local-input' | null
+  interruption?: 'local-input' | null
   /** The device asking the human controller for control, if any. */
-  handoffRequest: string | null
+  handoffRequest?: string | null
   /** False when mouse and keyboard use on the computer cannot be noticed, so the person must take control explicitly. */
-  detectsLocalInput: boolean
+  detectsLocalInput?: boolean
 }
 
 export interface ComputerLockedUse {

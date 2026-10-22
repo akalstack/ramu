@@ -2886,4 +2886,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Chromium could not start with its sandbox enabled. Check host permissions and dependencies, then retry Setup.": "Chromium tidak dapat berjalan dengan sandbox aktif. Periksa izin dan dependensi host, lalu ulangi penyiapan.",
   "Chromium installation did not finish. Check host storage and network access, then retry Setup.": "Pemasangan Chromium belum selesai. Periksa penyimpanan dan akses jaringan host, lalu ulangi penyiapan.",
   "Browser download staging could not be cleaned. Restart Ramu to retry; unsaved files are never opened automatically.": "Penyimpanan sementara unduhan browser tidak dapat dibersihkan. Mulai ulang Ramu untuk mencoba lagi; berkas yang belum disimpan tidak pernah dibuka otomatis.",
+  "Paused: you are using this computer’s mouse or keyboard": "Dijeda: Anda sedang memakai mouse atau keyboard komputer ini",
+  "Another device is asking for control": "Perangkat lain meminta kendali",
+  "Allow control": "Izinkan kendali",
+  "Decline": "Tolak",
+  "Request control": "Minta kendali",
+  "Waiting for the device in control to allow it.": "Menunggu perangkat yang memegang kendali mengizinkan.",
+  "Ramu cannot tell when you use this computer’s mouse or keyboard. Take control before using it yourself.": "Ramu tidak dapat mendeteksi saat Anda memakai mouse atau keyboard komputer ini. Ambil kendali sebelum memakainya sendiri.",
 }
