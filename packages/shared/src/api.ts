@@ -10,6 +10,7 @@ import type { AppUpdateStatus } from './updates'
 import type { AgentSetupSnapshot } from './agentSetup'
 import type { ProviderConfiguration, ProviderStatus } from './providers/providers'
 import type { LimitRetryResult } from './chat/providerWait'
+import type { VoiceBridge } from './voice/bridge'
 import type {
   SharedMcpConnection,
   SharedMcpGrant,
@@ -1045,4 +1046,6 @@ export interface RamuBridge {
   setDeviceState(key: string, value: string | null): void
   /** The on-disk path of a file or folder dropped onto the window ('' when it has none). */
   pathForFile(file: File): string
+  /** Local dictation. Only the desktop shell has it; audio never leaves this computer. */
+  readonly voice?: VoiceBridge
 }

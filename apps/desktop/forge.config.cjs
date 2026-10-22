@@ -23,6 +23,10 @@ module.exports = {
       NSScreenCaptureUsageDescription:
         'Ramu shows you the screen your agent is working on and lets you step in. Nothing is recorded or kept.',
       NSAppleEventsUsageDescription: 'Ramu sends mouse and keyboard input to the computer you let an agent use.',
+      NSMicrophoneUsageDescription:
+        'Ramu records only while you dictate a message, and recognizes speech on this Mac. Audio is never uploaded or kept.',
+      NSSpeechRecognitionUsageDescription:
+        'Ramu turns your dictated message into text on this Mac. Audio never leaves your computer.',
       NSAccessibilityUsageDescription:
         'Ramu uses Accessibility to operate the apps you let an agent use and to read their on-screen text.',
     },

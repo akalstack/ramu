@@ -99,9 +99,11 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> & {
   onChange: (value: string, caret: number) => void
   placeholder: string
   autoFocus?: boolean
+  /** The draft is frozen, e.g. while a dictation take is running, so the insertion point cannot move under it. */
+  readOnly?: boolean
 }
 export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function ComposerInput(
-  { value, onChange, placeholder, autoFocus, onKeyDown, onPaste, ...props },
+  { value, onChange, placeholder, autoFocus, readOnly, onKeyDown, onPaste, ...props },
   forwarded,
 ) {
   const root = useRef<HTMLDivElement>(null),
@@ -203,9 +205,10 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
         data-draft={value}
         data-empty={!value || undefined}
         data-placeholder={placeholder}
-        contentEditable
+        contentEditable={!readOnly}
         role="textbox"
         aria-multiline="true"
+        aria-readonly={readOnly || undefined}
         aria-label={placeholder}
         suppressContentEditableWarning
         onInput={() => {

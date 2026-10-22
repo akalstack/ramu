@@ -17,6 +17,8 @@ import { ElectronGuestFactory } from './electronGuest'
 import { browserMethod, isBrowserMethod } from './browserMethods'
 import { isHostInvokeAllowed, isSettingsActionAllowed, routeInvoke, routeTaskCommand, activityChannel } from './hostInvoke'
 import { DeviceState } from './deviceState'
+import { DesktopVoice } from './voice'
+import { voiceErrorMessage } from '@ramu/shared/voice/bridge'
 import { partitionHostEntries } from './partitionStorage'
 import { newerVersion } from '@ramu/shared/version'
 import { DesktopUpdater } from './desktopUpdater'
@@ -41,6 +43,7 @@ import {
   ipcMain,
   clipboard,
   safeStorage,
+  systemPreferences,
   powerMonitor,
   nativeTheme,
   WebContentsView,
@@ -157,6 +160,16 @@ async function main() {
   )
     await setLoginService(true)
 
+  // Dictation: main owns the microphone permission, the single recording lease and the local recognizer.
+  const voice = new DesktopVoice({
+    dir: join(userData, 'voice'),
+    microphone: {
+      status: () => (process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('microphone') : 'unknown'),
+      ask: () => (process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : Promise.resolve(false)),
+    },
+  })
+  voice.cleanupOrphans()
+
   // Every window, including each paired computer's own partition, gets the same policy.
   const secure = (ses: Session) => {
     if (!process.env.ELECTRON_RENDERER_URL) {
@@ -171,7 +184,19 @@ async function main() {
         })
       })
     }
-    ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+    // Only the shell page that holds the recording lease may capture audio, and never video or from a guest page.
+    ses.setPermissionRequestHandler((wc, permission, callback, details) => {
+      const media = details as { mediaTypes?: string[]; isMainFrame?: boolean }
+      callback(
+        permission === 'media' &&
+          !!wc &&
+          wc.getType() === 'window' &&
+          voice.holds(wc.id) &&
+          media.isMainFrame !== false &&
+          !!media.mediaTypes?.length &&
+          media.mediaTypes.every((type) => type === 'audio'),
+      )
+    })
   }
   const contentDocuments = new ContentDocuments()
   session.defaultSession.protocol.handle('ramu-content', (request) => contentDocuments.response(request.url))
@@ -1081,6 +1106,37 @@ async function main() {
       return updateView(updateStatus!)
     }
     return runtimeInvoke(target, method, args)
+  })
+
+  // Dictation bridge. Only the shell window's own main frame; audio and the lease never reach a guest page or a host.
+  const voiceSender = (event: Electron.IpcMainInvokeEvent) => {
+    if (event.sender !== win.webContents || event.senderFrame !== event.sender.mainFrame)
+      throw new Error('Untrusted IPC sender')
+    return event.sender.id
+  }
+  const voiceText = (value: unknown, max = 40) => {
+    if (typeof value !== 'string' || value.length > max) throw new Error(voiceErrorMessage('recognition'))
+    return value
+  }
+  win.webContents.on('destroyed', () => voice.release(win.webContents.id))
+  ipcMain.handle('ramu:voice:capability', (event, language: unknown) => {
+    voiceSender(event)
+    return voice.capability(voiceText(language))
+  })
+  ipcMain.handle('ramu:voice:begin', (event, language: unknown) =>
+    voice.begin(voiceSender(event), voiceText(language)),
+  )
+  ipcMain.handle('ramu:voice:transcribe', (event, token: unknown, pcm: unknown, language: unknown) => {
+    const owner = voiceSender(event)
+    if (!(pcm instanceof ArrayBuffer) && !ArrayBuffer.isView(pcm)) throw new Error(voiceErrorMessage('empty'))
+    const bytes = pcm instanceof ArrayBuffer ? new Uint8Array(pcm) : new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength)
+    return voice.transcribe(owner, voiceText(token, 80), bytes, voiceText(language))
+  })
+  ipcMain.handle('ramu:voice:cancel', (event, token: unknown) => voice.cancel(voiceSender(event), voiceText(token, 80)))
+  ipcMain.handle('ramu:voice:settings', (event) => {
+    voiceSender(event)
+    // Microphone first; speech recognition lives on the same privacy page family.
+    void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone')
   })
 
   // Device-wide UI state: read synchronously by each page at startup, written through and fanned out to the other windows.

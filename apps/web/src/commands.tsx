@@ -104,6 +104,14 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
   // uses inside the editor (⌘L, ⌘K, ⌘.) are left alone so editing behaves as expected.
   const cmds: Command[] = [
     {
+      id: 'composer.dictate',
+      title: t('Dictate message'),
+      category: t('Composer'),
+      keys: 'mod+shift+m',
+      run: () => window.dispatchEvent(new CustomEvent('ramu:dictate')),
+      when: () => !!window.ramu?.voice,
+    },
+    {
       id: 'palette.commands',
       title: t('Show all commands'),
       category: t('View'),

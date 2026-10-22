@@ -13,5 +13,8 @@
     <!-- Computer use sends Quartz events through osascript; the OS still asks the person for Accessibility itself. -->
     <key>com.apple.security.automation.apple-events</key>
     <true/>
+    <!-- Dictation records the microphone only while the person is recording; the OS still asks for permission. -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
   </dict>
 </plist>
