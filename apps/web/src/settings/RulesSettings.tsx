@@ -14,6 +14,7 @@ import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { SettingsCard, SettingsCardList } from './cards'
 import { ruleCharacters, ruleDuplicates, ruleScopeCosts } from '@ramu/shared/rules'
+import { NativeInstructions } from './NativeInstructions'
 import { duplicateNote, ruleReach, ruleTokens, scopeCostLine } from './rulesView'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 
@@ -361,6 +362,7 @@ export function RulesSettings() {
           onSaved={() => void refetch()}
         />
       )}
+      <NativeInstructions projects={projects.data ?? []} />
     </>
   )
 }

@@ -2,7 +2,9 @@ import type {
   SharedMcpConnection,
   SharedMcpGrant,
   SharedMcpInspection,
+  SharedMcpAccountReadiness,
   SharedMcpManagement,
+  SharedMcpPolicyState,
   SharedMcpProviderAccount,
   SharedMcpSelection,
 } from '@ramu/shared/mcp'
@@ -70,8 +72,87 @@ export class SharedMcpService {
           ...(check?.revision === connection.revision ? { reason: check.reason, toolCount: check.toolCount } : {}),
         }
       }),
+      readiness: this.readiness(state),
       uncertainCalls: this.storage.outcomes().filter((call) => call.outcome === 'unknown').length,
     }
+  }
+
+  /** The connections that could reach a login: enabled and offered for its provider. */
+  private applicable(state: SharedMcpPolicyState, provider: SharedMcpProviderAccount['provider']) {
+    return state.connections.filter((connection) => connection.enabled && connection.providers.includes(provider))
+  }
+
+  /** Readiness per set-up login, from the last verified catalog and the approvals; nothing is contacted here. */
+  private readiness(state: SharedMcpPolicyState): SharedMcpAccountReadiness[] {
+    return state.accounts.map((account) => {
+      const connections = this.applicable(state, account.provider).map((connection) => {
+        const check = this.checks.get(connection.id)
+        const current = check?.revision === connection.revision ? check : undefined
+        const inspection = this.inspections.get(connection.id)
+        let status: SharedMcpAccountReadiness['status'] = 'not-checked'
+        if (current?.status === 'sign-in-required' || current?.status === 'insufficient-permission')
+          status = 'sign-in-required'
+        else if (current?.status === 'unsupported') status = 'unsupported'
+        else if (current?.status === 'connected' && inspection?.revision === connection.revision)
+          status = this.policy.hasApproval(
+            account.provider,
+            account.accountId,
+            connection.id,
+            inspection.catalogRevision,
+          )
+            ? 'ready'
+            : 'approval-needed'
+        return { connectionId: connection.id, name: connection.name, status, checkedAt: current?.checkedAt ?? null }
+      })
+      const order: SharedMcpAccountReadiness['status'][] = [
+        'sign-in-required',
+        'approval-needed',
+        'unsupported',
+        'not-checked',
+        'ready',
+      ]
+      const worst = connections.length
+        ? order.find((status) => connections.some((entry) => entry.status === status))!
+        : 'unsupported'
+      const reasons: Record<SharedMcpAccountReadiness['status'], string> = {
+        ready: 'Every shared connection for this login is checked and approved.',
+        'approval-needed': 'Review access for this login on a connection.',
+        'sign-in-required': 'A connection needs its service sign-in before this login can use it.',
+        unsupported: 'No shared connection is enabled for this provider.',
+        'not-checked': 'A connection has not been checked since Ramu started or changed it.',
+      }
+      const times = connections.flatMap((entry) => (entry.checkedAt === null ? [] : [entry.checkedAt]))
+      return {
+        provider: account.provider,
+        accountId: account.accountId,
+        status: worst,
+        checkedAt: times.length ? Math.max(...times) : null,
+        reason: reasons[worst],
+        connections: connections.map(({ connectionId, name, status }) => ({ connectionId, name, status })),
+      }
+    })
+  }
+
+  /** Check every connection a login could use again, one at a time; a failure is kept as that connection's status. */
+  async recheckAccount(provider: SharedMcpProviderAccount['provider'], accountId: string, projectId: string | null) {
+    const state = this.policy.snapshot()
+    if (!state.accounts.some((entry) => entry.provider === provider && entry.accountId === accountId))
+      throw new Error('Unknown provider account')
+    for (const connection of this.applicable(state, provider)) {
+      const scoped =
+        connection.scope.hostWide || (projectId !== null && connection.scope.projectIds.includes(projectId))
+      try {
+        await this.check(connection.id, {
+          provider,
+          accountId,
+          projectId: scoped ? projectId : (connection.scope.projectIds[0] ?? null),
+        })
+      } catch {
+        // check() recorded the failure on the connection, which the readiness above reports.
+      }
+    }
+    this.changed()
+    return this.readiness(this.policy.snapshot())
   }
 
   save(input: Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>, connectionId?: string) {

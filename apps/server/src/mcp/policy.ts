@@ -288,6 +288,25 @@ export class SharedMcpPolicy {
     return { status: 'approved', connectionId, revision: connection.revision, catalogRevision }
   }
 
+  /** Whether an approval for this login matches the connection's current revision and a verified catalog. */
+  hasApproval(
+    provider: SharedMcpProviderAccount['provider'],
+    accountId: string,
+    connectionId: string,
+    catalogRevision: string,
+  ) {
+    const connection = this.connection(connectionId)
+    return this.state.grants.some(
+      (entry) =>
+        entry.connectionId === connection.id &&
+        entry.revision === connection.revision &&
+        entry.catalogRevision === catalogRevision &&
+        entry.provider === provider &&
+        entry.accountIds.includes(accountId) &&
+        subset(entry.scope, connection.scope),
+    )
+  }
+
   private matchingGrants(session: ExternalMcpSession, connection: SharedMcpConnection, catalogRevision: string) {
     return this.state.grants.filter(
       (entry) =>

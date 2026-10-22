@@ -217,3 +217,31 @@ it('retains a removable definition when credential cleanup fails and clears only
   expect(manager.list().connections).toEqual([])
   expect(values.size).toBe(0)
 })
+
+it('reports each login as not checked, approval needed or ready, and unsupported without a connection', async () => {
+  const { invoke, input, status } = fixture()
+  for (const accountId of ['a', 'b'])
+    invoke('mcp.account', { provider: 'codex', accountId, shareApprovals: accountId === 'a' })
+  const readiness = (accountId: string) => status().readiness?.find((entry) => entry.accountId === accountId)
+  expect(readiness('a')?.status).toBe('unsupported')
+  const connection = invoke('mcp.save', input) as SharedMcpConnection
+  expect(readiness('a')).toMatchObject({ status: 'not-checked', checkedAt: null })
+  const selection = { provider: 'codex' as const, accountId: 'a', projectId: 'project' }
+  const inspection = (await invoke('mcp.check', connection.id, selection)) as SharedMcpInspection
+  expect(readiness('a')).toMatchObject({ status: 'approval-needed' })
+  invoke('mcp.approve', {
+    connectionId: connection.id,
+    revision: inspection.revision,
+    catalogRevision: inspection.catalogRevision,
+    provider: 'codex',
+    accountId: 'a',
+    scope: input.scope,
+    tools: [{ name: 'inspect_environment', action: 'read', approval: 'connection' }],
+  })
+  expect(readiness('a')).toMatchObject({ status: 'ready', checkedAt: inspection.checkedAt })
+  // b did not opt in to sharing, so the grant is not its approval.
+  expect(readiness('b')?.status).toBe('approval-needed')
+  const again = (await invoke('mcp.recheckAccount', 'codex', 'a', 'project')) as { accountId: string; status: string }[]
+  expect(again.find((entry) => entry.accountId === 'a')?.status).toBe('ready')
+  await expect(invoke('mcp.recheckAccount', 'codex', 'missing', null)).rejects.toThrow('Unknown provider account')
+})

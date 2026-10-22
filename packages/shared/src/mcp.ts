@@ -55,6 +55,21 @@ export interface SharedMcpInspection {
   tools: { name: string; description?: string; inputSchema: Record<string, unknown> }[]
 }
 
+/**
+ * Whether one provider login can use the shared connections that apply to its provider. A grant, a provider sign-in or a
+ * quota reading alone never makes it ready: only a verified catalog with a matching approval does.
+ */
+export interface SharedMcpAccountReadiness {
+  provider: AgentProvider
+  accountId: string
+  status: 'ready' | 'approval-needed' | 'sign-in-required' | 'unsupported' | 'not-checked'
+  /** When the newest connection check behind this status ran; null when nothing was checked. */
+  checkedAt: number | null
+  reason: string
+  /** The connections behind the status, so a row can say which one needs attention. */
+  connections: { connectionId: string; name: string; status: SharedMcpAccountReadiness['status'] }[]
+}
+
 export interface SharedMcpManagement {
   hostId: string
   credentialStore: 'not-checked' | 'available' | 'unavailable'
@@ -74,6 +89,8 @@ export interface SharedMcpManagement {
     reason?: string
     toolCount?: number
   }[]
+  /** One entry per provider login set up for shared approvals. Absent on hosts that predate readiness. */
+  readiness?: SharedMcpAccountReadiness[]
   uncertainCalls: number
 }
 
