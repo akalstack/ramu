@@ -450,6 +450,17 @@ function nativeNames(provider: AgentProvider, dirs: string[], accountEnv: NodeJS
   return names
 }
 
+/** One declared server by key, as its file declares it, for an explicit import. Reads known files only. */
+export function findDeclaredServer(
+  roots: { label: string; path: string }[],
+  key: string,
+  env: NodeJS.ProcessEnv = process.env,
+  home = homedir(),
+): Declared | undefined {
+  const entry = collect(roots, env, home).servers.get(key)
+  return entry?.declared.find((d) => d.enabled) ?? entry?.declared[0]
+}
+
 let sharingSource: (() => McpSharing) | undefined
 /**
  * Set once at host startup so provider runners can read the sharing choices without a service reference. Until then

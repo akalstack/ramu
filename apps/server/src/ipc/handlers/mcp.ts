@@ -53,6 +53,17 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
       run: (input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }) =>
         admin().approve(input),
     },
+    /** Write-only: the value is stored in the host's credential store and never returned or listed. */
+    'mcp.setSecret': {
+      args: z.tuple([id, z.enum(['header', 'env']), z.string().min(1).max(128), z.string().min(1).max(65536)]),
+      run: (connectionId: string, kind: 'header' | 'env', name: string, value: string) =>
+        admin().setSecret(connectionId, kind, name, value),
+    },
+    'mcp.removeSecret': {
+      args: z.tuple([id, z.enum(['header', 'env']), z.string().min(1).max(128)]),
+      run: (connectionId: string, kind: 'header' | 'env', name: string) =>
+        admin().removeSecret(connectionId, kind, name),
+    },
     'mcp.disconnect': { args: z.tuple([id]), run: (id: string) => admin().disconnect(id) },
     'mcp.remove': { args: z.tuple([id]), run: (id: string) => admin().remove(id) },
     'mcp.checkCredentialStore': {

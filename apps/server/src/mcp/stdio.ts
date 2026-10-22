@@ -8,6 +8,9 @@ export interface HostSecretReader {
   read(input: { hostId: string; connectionId: string; serviceAccountId: string; reference: string }): Promise<string>
 }
 
+/** Variables a secret reference may not set: runtime startup hooks and Ramu/provider control credentials. */
+export const RESERVED_ENV = /^(?:RAMU_|CODEX_|CLAUDE_|NODE_OPTIONS$|NODE_PATH$|LD_|DYLD_)/i
+
 /** Only explicitly reviewed local commands may reach this factory. This is host execution, not a sandbox.
  * The MCP SDK spawns an argument array without a shell and inherits only its small platform environment allowlist.
  * It does not inherit provider/gateway bearer tokens or arbitrary process environment values. */
@@ -19,10 +22,9 @@ export async function connectSharedMcpStdio(
   if (connection.transport.type !== 'stdio') throw new Error('This connection needs an HTTP MCP client')
   signal.throwIfAborted()
   const env: Record<string, string> = {}
-  const reserved = /^(?:RAMU_|CODEX_|CLAUDE_|NODE_OPTIONS$|NODE_PATH$|LD_|DYLD_)/i
   for (const [name, reference] of Object.entries(connection.transport.envSecretRefs)) {
     // Secret references cannot inject runtime startup hooks or Ramu/provider control credentials.
-    if (!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(name) || reserved.test(name))
+    if (!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(name) || RESERVED_ENV.test(name))
       throw new Error('This environment variable is not supported for external MCP servers')
     if (!secrets) throw new Error('Set up a secure host credential store before using environment secrets')
     try {

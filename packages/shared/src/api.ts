@@ -631,6 +631,16 @@ export interface RamuMethods {
     projectId: string | null,
   ): Promise<SharedMcpAccountReadiness[]>
   'mcp.approve'(input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }): SharedMcpGrant
+  /** Write-only: store one header or environment secret on the host. Nothing reads the value back. */
+  'mcp.setSecret'(connectionId: string, kind: 'header' | 'env', name: string, value: string): Promise<void>
+  /** Remove one secret from a connection and delete its stored value. */
+  'mcp.removeSecret'(connectionId: string, kind: 'header' | 'env', name: string): Promise<void>
+  /**
+   * Import a server declared in a provider's files or the project's folders as a Shared MCP definition for that
+   * project. Copies the command and arguments only: environment and header values stay behind and are entered as
+   * write-only secrets. Nothing runs and no provider file changes.
+   */
+  'mcp.import'(key: string, projectId: string, providers: SharedMcpProviderAccount['provider'][]): SharedMcpConnection
   'mcp.disconnect'(connectionId: string): Promise<void>
   'mcp.remove'(connectionId: string): Promise<void>
   'mcp.checkCredentialStore'(): Promise<'available' | 'unavailable' | 'not-checked'>

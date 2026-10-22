@@ -3,11 +3,14 @@ import { useQuery } from '@tanstack/react-query'
 import type { AgentProvider } from '@ramu/shared/types'
 import type { ProjectMcpServer, ProjectSetupSource, ProjectSkill } from '@ramu/shared/mcp'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
+import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
-import { Dropdown } from '../Menu'
+import { Dialog, Dropdown } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { ProviderIcon } from '../models/ProviderIcon'
@@ -76,6 +79,7 @@ function ShareRow({
   disabled,
   onShare,
   onWiden,
+  extra,
 }: {
   name: string
   detail: string
@@ -87,6 +91,8 @@ function ShareRow({
   onShare(shared: boolean): void
   /** Offered when the choice covers this project only: extends it to every project. */
   onWiden?(): void
+  /** An item-specific action beside the switch. */
+  extra?: ReactNode
 }) {
   return (
     <SettingsRow>
@@ -115,13 +121,90 @@ function ShareRow({
           )}
         </span>
       </span>
-      <Switch
-        aria-label={label}
-        checked={item.shared}
-        disabled={disabled || !!item.shareBlocked || !item.nativeProviders.length}
-        onCheckedChange={onShare}
-      />
+      <span className="flex flex-none items-center gap-2">
+        {extra}
+        <Switch
+          aria-label={label}
+          checked={item.shared}
+          disabled={disabled || !!item.shareBlocked || !item.nativeProviders.length}
+          onCheckedChange={onShare}
+        />
+      </span>
     </SettingsRow>
+  )
+}
+
+/**
+ * Previews what importing a declared server into Shared MCP copies (its address or command, never its values) and
+ * where it will apply, then asks before saving. Nothing runs and no provider file changes.
+ */
+function ImportDialog({
+  server,
+  projectName,
+  hostName,
+  busy,
+  error,
+  onCancel,
+  onImport,
+}: {
+  server: ProjectMcpServer
+  projectName: string
+  hostName: string
+  busy: boolean
+  error: string
+  onCancel(): void
+  onImport(providers: AgentProvider[]): void
+}) {
+  const [providers, setProviders] = useState<AgentProvider[]>(
+    server.nativeProviders.length ? server.nativeProviders : [...AGENT_PROVIDERS],
+  )
+  const secretNames = [...server.envKeys, ...server.headerKeys]
+  return (
+    <Dialog
+      title={t('Connect {name} through Ramu', { name: server.name })}
+      confirmLabel={t('Import')}
+      busy={busy}
+      error={error}
+      confirmDisabled={!providers.length}
+      onCancel={onCancel}
+      onConfirm={() => onImport(providers)}
+    >
+      <p>{t('Connection host: {host}', { host: hostName })}</p>
+      <p>
+        {server.transport.type === 'http'
+          ? t('Remote server: {target}', { target: server.transport.url })
+          : t('Runs on the host: {target}', {
+              target: [server.transport.command, ...server.transport.args].join(' '),
+            })}
+      </p>
+      <p>{t('Applies to {project} only. Widen it later in the server’s settings.', { project: projectName })}</p>
+      {secretNames.length > 0 && (
+        <p>
+          {t(
+            'Its values for {names} stay in the original file. Ramu copies none of them; enter them as write-only secrets after importing.',
+            { names: secretNames.join(', ') },
+          )}
+        </p>
+      )}
+      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend>{t('Providers')}</legend>
+        {AGENT_PROVIDERS.map((provider) => (
+          <Field key={provider} orientation="horizontal">
+            <Checkbox
+              id={`import-${provider}`}
+              checked={providers.includes(provider)}
+              onCheckedChange={(checked) =>
+                setProviders((current) =>
+                  checked ? [...current, provider] : current.filter((entry) => entry !== provider),
+                )
+              }
+            />
+            <FieldLabel htmlFor={`import-${provider}`}>{providerName(provider)}</FieldLabel>
+          </Field>
+        ))}
+      </fieldset>
+      <p>{t('Importing does not connect or run anything. Review its tools when you connect.')}</p>
+    </Dialog>
   )
 }
 
@@ -192,11 +275,13 @@ export function AgentSetup() {
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [importing, setImporting] = useState<ProjectMcpServer | null>(null)
   const epoch = useRef(0)
   useEffect(() => {
     epoch.current++
     setPicked(undefined)
     setPending(null)
+    setImporting(null)
     setError('')
   }, [hostKey])
   const projectId =
@@ -252,6 +337,15 @@ export function AgentSetup() {
         label={t('Share {name} with every provider and account', { name: server.name })}
         disabled={locked}
         onShare={(shared) => void share(server.key, () => invoke('mcp.share', server.key, shared, projectId))}
+        extra={
+          server.managedConnectionId ? (
+            <span className="text-caption text-muted-foreground">{t('Connected through Ramu')}</span>
+          ) : (
+            <Button size="sm" variant="ghost" disabled={locked} onClick={() => setImporting(server)}>
+              {t('Connect through Ramu')}
+            </Button>
+          )
+        }
         onWiden={() =>
           void share(server.key, async () => {
             await invoke('mcp.share', server.key, true)
@@ -333,6 +427,25 @@ export function AgentSetup() {
             ))}
           </ul>
         </details>
+      )}
+
+      {importing && projectId && (
+        <ImportDialog
+          server={importing}
+          projectName={projectName ?? ''}
+          hostName={scope?.available.find((host) => host.id === scope.primaryId)?.name ?? t('This host')}
+          busy={pending !== null}
+          error={error}
+          onCancel={() => {
+            if (pending === null) setImporting(null)
+          }}
+          onImport={(providers) =>
+            void share(importing.key, async () => {
+              await invoke('mcp.import', importing.key, projectId, providers)
+              setImporting(null)
+            })
+          }
+        />
       )}
 
       <McpSettings />

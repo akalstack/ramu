@@ -5,6 +5,7 @@ import type { SharedMcpConnection, SharedMcpInspection, SharedMcpSelection } fro
 import { AGENT_PROVIDERS, providerName, providerAccountRows } from '@ramu/shared/providers/providers'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
+import { Textarea } from '@/components/ui/textarea'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
@@ -41,6 +42,8 @@ function ConnectionEditor({
   error,
   onSave,
   onCancel,
+  onSecret,
+  onRemoveSecret,
 }: {
   initial?: SharedMcpConnection
   projects: Project[]
@@ -51,6 +54,9 @@ function ConnectionEditor({
   error?: string
   onSave(value: Definition): void
   onCancel(): void
+  /** Stores one write-only secret on the host; the value is never shown again. */
+  onSecret(kind: 'header' | 'env', name: string, value: string): Promise<boolean>
+  onRemoveSecret(kind: 'header' | 'env', name: string): void
 }) {
   const id = useId()
   const form = useRef<HTMLFormElement>(null)
@@ -60,8 +66,25 @@ function ConnectionEditor({
   const [scope, setScope] = useState(
     initial?.scope ?? { projectIds: defaultProject ? [defaultProject] : [], hostWide: false },
   )
-  // Existing stdio definitions are kept intact; adding local commands belongs in the advanced editor.
-  const editable = !initial || initial.transport.type === 'http'
+  const [kind, setKind] = useState<'http' | 'stdio'>(initial?.transport.type ?? 'http')
+  const stdio = initial?.transport.type === 'stdio' ? initial.transport : undefined
+  const [command, setCommand] = useState(stdio?.command ?? '')
+  const [args, setArgs] = useState((stdio?.args ?? []).join('\n'))
+  const [cwd, setCwd] = useState(stdio?.cwd ?? '')
+  const [secretName, setSecretName] = useState('')
+  const [secretValue, setSecretValue] = useState('')
+  const secretKind = kind === 'http' ? 'header' : 'env'
+  const savedSecrets = initial
+    ? Object.keys(
+        initial.transport.type === 'http' ? initial.transport.headerSecretRefs : initial.transport.envSecretRefs,
+      )
+    : []
+  const saveSecret = async () => {
+    if (await onSecret(secretKind, secretName.trim(), secretValue)) {
+      setSecretName('')
+      setSecretValue('')
+    }
+  }
   const save = () =>
     onSave({
       name,
@@ -69,16 +92,23 @@ function ConnectionEditor({
       enabled: initial?.enabled ?? true,
       scope,
       providers,
-      transport: editable
-        ? {
-            type: 'http',
-            url,
-            headerSecretRefs: initial?.transport.type === 'http' ? initial.transport.headerSecretRefs : {},
-            ...(initial?.transport.type === 'http' && initial.transport.allowPrivateNetwork
-              ? { allowPrivateNetwork: true }
-              : {}),
-          }
-        : initial!.transport,
+      transport:
+        kind === 'http'
+          ? {
+              type: 'http',
+              url,
+              headerSecretRefs: initial?.transport.type === 'http' ? initial.transport.headerSecretRefs : {},
+              ...(initial?.transport.type === 'http' && initial.transport.allowPrivateNetwork
+                ? { allowPrivateNetwork: true }
+                : {}),
+            }
+          : {
+              type: 'stdio',
+              command: command.trim(),
+              args: args.split('\n').filter((line) => line.length > 0),
+              cwd: cwd.trim(),
+              envSecretRefs: stdio?.envSecretRefs ?? {},
+            },
     })
   return (
     <Dialog
@@ -88,7 +118,12 @@ function ConnectionEditor({
       onConfirm={() => form.current?.requestSubmit()}
       busy={busy}
       error={error}
-      confirmDisabled={!name.trim() || !providers.length || (!scope.hostWide && !scope.projectIds.length)}
+      confirmDisabled={
+        !name.trim() ||
+        !providers.length ||
+        (!scope.hostWide && !scope.projectIds.length) ||
+        (kind === 'stdio' && (!command.trim() || !cwd.trim()))
+      }
     >
       <form
         ref={form}
@@ -109,7 +144,54 @@ function ConnectionEditor({
               required
             />
           </Field>
-          {editable && (
+          {!initial && (
+            <Field>
+              <FieldLabel htmlFor={`${id}-kind`}>{t('Kind of server')}</FieldLabel>
+              <Dropdown
+                label={t('Kind of server')}
+                value={kind}
+                options={[
+                  { value: 'http', label: t('Remote server (URL)') },
+                  { value: 'stdio', label: t('Local command on this host') },
+                ]}
+                onChange={(value) => setKind(value as 'http' | 'stdio')}
+              />
+            </Field>
+          )}
+          {kind === 'stdio' && (
+            <>
+              <Field>
+                <FieldLabel htmlFor={`${id}-command`}>{t('Program (full path)')}</FieldLabel>
+                <Input
+                  id={`${id}-command`}
+                  placeholder="/usr/local/bin/my-mcp-server"
+                  value={command}
+                  onChange={(event) => setCommand(event.target.value)}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${id}-args`}>{t('Arguments (one per line)')}</FieldLabel>
+                <Textarea
+                  id={`${id}-args`}
+                  rows={3}
+                  value={args}
+                  onChange={(event) => setArgs(event.target.value)}
+                  spellCheck={false}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${id}-cwd`}>{t('Working folder (full path)')}</FieldLabel>
+                <Input id={`${id}-cwd`} value={cwd} onChange={(event) => setCwd(event.target.value)} required />
+              </Field>
+              <p className="m-0 text-caption text-muted-foreground">
+                {t('Runs on {host} without a shell, only when you connect or an agent calls a tool.', {
+                  host: hostName,
+                })}
+              </p>
+            </>
+          )}
+          {kind === 'http' && (
             <Field>
               <FieldLabel htmlFor={`${id}-url`}>{t('Server URL')}</FieldLabel>
               <Input
@@ -122,6 +204,54 @@ function ConnectionEditor({
               />
             </Field>
           )}
+          <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+            <legend>
+              {secretKind === 'header' ? t('Request headers (secret)') : t('Environment variables (secret)')}
+            </legend>
+            {!initial && (
+              <p className="m-0 text-caption text-muted-foreground">
+                {t(
+                  'Save the server first, then add its secrets. Values are stored on the host and cannot be read back.',
+                )}
+              </p>
+            )}
+            {savedSecrets.map((secret) => (
+              <div key={secret} className="flex items-center gap-2">
+                <code className="min-w-0 flex-1 truncate">{secret}</code>
+                <span className="text-caption text-muted-foreground">{t('Stored')}</span>
+                <Button type="button" size="sm" variant="ghost" onClick={() => onRemoveSecret(secretKind, secret)}>
+                  {t('Remove')}
+                </Button>
+              </div>
+            ))}
+            {initial && (
+              <div className="flex flex-wrap items-end gap-2">
+                <Input
+                  aria-label={secretKind === 'header' ? t('Header name') : t('Variable name')}
+                  placeholder={secretKind === 'header' ? 'Authorization' : 'API_TOKEN'}
+                  value={secretName}
+                  onChange={(event) => setSecretName(event.target.value)}
+                  autoComplete="off"
+                />
+                <Input
+                  type="password"
+                  aria-label={t('Secret value')}
+                  placeholder={t('Secret value')}
+                  value={secretValue}
+                  onChange={(event) => setSecretValue(event.target.value)}
+                  autoComplete="off"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={!secretName.trim() || !secretValue}
+                  onClick={() => void saveSecret()}
+                >
+                  {savedSecrets.includes(secretName.trim()) ? t('Replace secret') : t('Add secret')}
+                </Button>
+              </div>
+            )}
+          </fieldset>
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
             <legend>{t('Providers')}</legend>
             {AGENT_PROVIDERS.map((provider) => (
@@ -278,7 +408,9 @@ export function McpSettings() {
     <div className="flex flex-col gap-3">
       <SettingsGroupTitle className="m-0">{t('Connected through Ramu')}</SettingsGroupTitle>
       <p className="m-0 text-caption text-muted-foreground">
-        {t('Add a remote server no provider has yet. Ramu connects it and lets you review its tools first.')}
+        {t(
+          'Add a remote server or a local command no provider has yet. Ramu connects it and lets you review its tools first.',
+        )}
       </p>
       {(error || query.error || projects.error) && (
         <Alert variant="destructive">
@@ -383,7 +515,11 @@ export function McpSettings() {
       {editing && (
         <ConnectionEditor
           key={`${hostKey}:${editing === 'new' ? 'new' : editing.id}`}
-          initial={editing === 'new' ? undefined : editing}
+          initial={
+            editing === 'new'
+              ? undefined
+              : (data?.connections.find(({ connection }) => connection.id === editing.id)?.connection ?? editing)
+          }
           projects={projects.data ?? []}
           defaultProject={
             projects.data?.some((project) => project.id === ws.composing) ? (ws.composing ?? undefined) : undefined
@@ -393,6 +529,18 @@ export function McpSettings() {
           busy={busy}
           error={error}
           onSave={save}
+          onSecret={async (kind, name, value) => {
+            if (editing === 'new') return false
+            let stored = false
+            await act(async () => {
+              await invoke('mcp.setSecret', editing.id, kind, name, value)
+              stored = true
+            })
+            return stored
+          }}
+          onRemoveSecret={(kind, name) => {
+            if (editing !== 'new') void act(() => invoke('mcp.removeSecret', editing.id, kind, name))
+          }}
           onCancel={() => {
             if (!busy) setEditing(null)
           }}

@@ -11,7 +11,7 @@ import type {
 import { HostCredentialStore } from '../credentials/store'
 import { SharedMcpPolicy, type ExternalMcpSession } from './policy'
 import { ExternalMcpGateway, type ExternalMcpGatewayHost } from './gateway'
-import { connectSharedMcpStdio } from './stdio'
+import { connectSharedMcpStdio, RESERVED_ENV } from './stdio'
 import { connectSharedMcpHttp } from './http'
 import { SharedMcpConnectionError } from './errors'
 import { SharedMcpStorage } from './storage'
@@ -312,6 +312,77 @@ export class SharedMcpService {
     const grant = this.policy.approve(input)
     this.changed()
     return grant
+  }
+
+  /**
+   * Write-only: keeps one header or environment secret under a fresh reference and publishes it by saving the
+   * definition, so the connection needs a new review. The previous value is deleted only after the new one is in
+   * place; if any step fails the working connection is left as it was and the new value is discarded.
+   */
+  async setSecret(id: string, kind: 'header' | 'env', name: string, value: string) {
+    const first = this.connection(id)
+    this.assertSecretSlot(first, kind, name)
+    const scope = {
+      hostId: first.hostId,
+      integration: 'mcp' as const,
+      connectionId: id,
+      accountId: first.serviceAccountId,
+    }
+    const reference = await this.credentials.put(scope, value)
+    let previous: string | undefined
+    try {
+      const current = this.connection(id)
+      if (current.revision !== first.revision) throw new Error('This connection changed. Reload it and try again.')
+      previous = this.refsOf(current)[name]
+      this.saveRefs(current, { ...this.refsOf(current), [name]: reference })
+    } catch (error) {
+      await this.credentials.remove(scope, reference).catch(() => {})
+      throw error
+    }
+    if (previous) await this.credentials.remove(scope, previous).catch(() => {})
+  }
+
+  /** Removes one secret from the definition, then deletes the stored value. */
+  async removeSecret(id: string, kind: 'header' | 'env', name: string) {
+    const current = this.connection(id)
+    this.assertSecretSlot(current, kind, name)
+    const { [name]: reference, ...rest } = this.refsOf(current)
+    if (!reference) return
+    this.saveRefs(current, rest)
+    await this.credentials
+      .remove(
+        { hostId: current.hostId, integration: 'mcp', connectionId: id, accountId: current.serviceAccountId },
+        reference,
+      )
+      .catch(() => {})
+  }
+
+  private refsOf(connection: SharedMcpConnection) {
+    return connection.transport.type === 'http'
+      ? connection.transport.headerSecretRefs
+      : connection.transport.envSecretRefs
+  }
+
+  private assertSecretSlot(connection: SharedMcpConnection, kind: 'header' | 'env', name: string) {
+    if ((kind === 'header') !== (connection.transport.type === 'http'))
+      throw new Error('This connection does not take that kind of secret')
+    if (!/^[A-Za-z_][A-Za-z0-9_-]{0,127}$/.test(name)) throw new Error('Use a plain name for the secret')
+    if (kind === 'env' && (!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(name) || RESERVED_ENV.test(name)))
+      throw new Error('This environment variable is not supported for external MCP servers')
+  }
+
+  private saveRefs(connection: SharedMcpConnection, refs: Record<string, string>) {
+    const { id, hostId: _host, revision: _revision, ...definition } = connection
+    this.save(
+      {
+        ...definition,
+        transport:
+          connection.transport.type === 'http'
+            ? { ...connection.transport, headerSecretRefs: refs }
+            : { ...connection.transport, envSecretRefs: refs },
+      },
+      id,
+    )
   }
 
   async disconnect(id: string) {
